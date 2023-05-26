@@ -8614,7 +8614,8 @@ int ObTransformPreProcess::transform_cast_multiset_for_stmt(ObDMLStmt *&stmt,
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr is NULL", K(ret));
-        } else if (OB_FAIL(transform_cast_multiset_for_expr(expr,
+        } else if (OB_FAIL(transform_cast_multiset_for_expr(*stmt,
+                                                            expr,
                                                             is_happened))) {
           LOG_WARN("transform expr failed", K(ret));
         } else if (OB_FAIL(relation_exprs.at(i).set(expr))) {
@@ -8632,7 +8633,8 @@ int ObTransformPreProcess::transform_cast_multiset_for_stmt(ObDMLStmt *&stmt,
   return ret;
 }
 
-int ObTransformPreProcess::transform_cast_multiset_for_expr(ObRawExpr *&expr,
+int ObTransformPreProcess::transform_cast_multiset_for_expr(ObDMLStmt &stmt,
+                                                            ObRawExpr *&expr,
                                                             bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -8676,7 +8678,8 @@ int ObTransformPreProcess::transform_cast_multiset_for_expr(ObRawExpr *&expr,
         //      create type tbl1 as table of obj1;
         //      cast(multiset(select '1.1','2.2' from dual) as tbl1)
         //    =>cast(multiset(select obj1('1.1','2.2') from dual) as tbl1)
-        if (OB_FAIL(add_constructor_to_multiset(subquery_expr,
+        if (OB_FAIL(add_constructor_to_multiset(stmt,
+                                                subquery_expr,
                                                 coll_type->get_element_type(),
                                                 trans_happened))) {
           LOG_WARN("failed to add constuctor to multiset", K(ret));
@@ -8693,14 +8696,16 @@ int ObTransformPreProcess::transform_cast_multiset_for_expr(ObRawExpr *&expr,
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      OZ (SMART_CALL(transform_cast_multiset_for_expr(expr->get_param_expr(i),
+      OZ (SMART_CALL(transform_cast_multiset_for_expr(stmt,
+                                                      expr->get_param_expr(i),
                                                       trans_happened)));
     }
   }
   return ret;
 }
 
-int ObTransformPreProcess::add_constructor_to_multiset(ObQueryRefRawExpr *multiset_expr,
+int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
+                                                       ObQueryRefRawExpr *multiset_expr,
                                                        const pl::ObPLDataType &elem_type,
                                                        bool& trans_happened)
 {
@@ -8806,6 +8811,16 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObQueryRefRawExpr *multis
       object_expr->set_udt_id(object_type->get_user_type_id());
       object_expr->set_result_type(res_type);
       object_expr->set_func_name(object_type->get_name());
+      object_expr->set_coll_schema_version(elem_info->get_schema_version());
+      // Add udt info to dependency
+      if (object_expr->need_add_dependency()) {
+        ObSchemaObjVersion udt_schema_version;
+        if (OB_FAIL(object_expr->get_schema_object_version(udt_schema_version))) {
+          LOG_WARN("failed to get schema version", K(ret));
+        } else if (OB_FAIL(stmt.add_global_dependency_table(udt_schema_version))) {
+          LOG_WARN("failed to add dependency", K(ret));
+        }
+      }
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < object_type->get_member_count(); ++i) {

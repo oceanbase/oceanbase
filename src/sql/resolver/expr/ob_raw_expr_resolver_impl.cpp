@@ -372,6 +372,32 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
                     c_expr->set_udt_id(udt_id);
                   }
                 }
+
+                if (OB_SUCC(ret) && NULL != ctx_.stmt_) {
+                  ObStmt *stmt = ctx_.stmt_;
+                  uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+                  const ObUDTTypeInfo *udt_info = NULL;
+                  if (OB_FAIL(ctx_.schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
+                    LOG_WARN("failed to get udt info", K(ret));
+                  } else if (OB_ISNULL(udt_info)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("get null udt info", K(ret));
+                  } else if (udt_info->get_schema_version() != common::OB_INVALID_VERSION) {
+                    ObSchemaObjVersion udt_schema_version;
+                    udt_schema_version.object_id_ = udt_id;
+                    udt_schema_version.object_type_ = share::schema::DEPENDENCY_TYPE;
+                    udt_schema_version.version_ = udt_info->get_schema_version();
+                    uint64_t dep_obj_id = ctx_.view_ref_id_;
+                    if (OB_FAIL(stmt->add_global_dependency_table(udt_schema_version))) {
+                      LOG_WARN("failed to add global dependency", K(ret));
+                    } else if (stmt->add_ref_obj_version(dep_obj_id, db_id,
+                                                         ObObjectType::VIEW,
+                                                         udt_schema_version,
+                                                         ctx_.expr_factory_.get_allocator())) {
+                      LOG_WARN("failed to add ref obj version", K(ret));
+                    }
+                  }
+                }
               }
             }
           }
