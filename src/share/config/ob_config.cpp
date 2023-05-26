@@ -23,6 +23,8 @@ namespace oceanbase
 {
 namespace common
 {
+ObMemAttr g_config_mem_attr = SET_USE_500("ConfigChecker");
+
 const char *log_archive_config_keywords[] =
 {
   "MANDATORY",
@@ -67,7 +69,8 @@ ObConfigItem::ObConfigItem()
 ObConfigItem::~ObConfigItem()
 {
   if (NULL != ck_) {
-    delete ck_;
+    ObConfigChecker *ck = const_cast<ObConfigChecker*>(ck_);
+    OB_DELETE(ObConfigChecker, "unused", ck);
   }
 }
 
@@ -343,9 +346,9 @@ bool ObConfigIntegralItem::parse_range(const char *range)
         parse(p_left + 1, valid);
         if (valid) {
           if (*p_left == '(') {
-            add_checker(new(std::nothrow) ObConfigGreaterThan(p_left + 1));
+            add_checker(OB_NEW(ObConfigGreaterThan, g_config_mem_attr, p_left + 1));
           } else if (*p_left == '[') {
-            add_checker(new(std::nothrow) ObConfigGreaterEqual(p_left + 1));
+            add_checker(OB_NEW(ObConfigGreaterEqual, g_config_mem_attr, p_left + 1));
           }
         }
       }
@@ -354,9 +357,9 @@ bool ObConfigIntegralItem::parse_range(const char *range)
         parse(p_middle + 1, valid);
         if (valid) {
           if (')' == ch_right) {
-            add_checker(new(std::nothrow) ObConfigLessThan(p_middle + 1));
+            add_checker(OB_NEW(ObConfigLessThan, g_config_mem_attr, p_middle + 1));
           } else if (']' == ch_right) {
-            add_checker(new(std::nothrow) ObConfigLessEqual(p_middle + 1));
+            add_checker(OB_NEW(ObConfigLessEqual, g_config_mem_attr, p_middle + 1));
           }
         }
       }
@@ -470,18 +473,18 @@ bool ObConfigDoubleItem::parse_range(const char *range)
       parse(p_left + 1, valid);
       if (valid) {
         if (*p_left == '(') {
-          add_checker(new(std::nothrow) ObConfigGreaterThan(p_left + 1));
+          add_checker(OB_NEW(ObConfigGreaterThan, g_config_mem_attr, p_left + 1));
         } else if (*p_left == '[') {
-          add_checker(new(std::nothrow) ObConfigGreaterEqual(p_left + 1));
+          add_checker(OB_NEW(ObConfigGreaterEqual, g_config_mem_attr, p_left + 1));
         }
       }
 
       parse(p_middle + 1, valid);
       if (valid) {
         if (')' == ch_right) {
-          add_checker(new(std::nothrow) ObConfigLessThan(p_middle + 1));
+          add_checker(OB_NEW(ObConfigLessThan, g_config_mem_attr, p_middle + 1));
         } else if (']' == ch_right) {
-          add_checker(new(std::nothrow) ObConfigLessEqual(p_middle + 1));
+          add_checker(OB_NEW(ObConfigLessEqual, g_config_mem_attr, p_middle + 1));
         }
       }
       bool_ret = true;

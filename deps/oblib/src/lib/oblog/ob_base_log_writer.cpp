@@ -65,7 +65,8 @@ int ObBaseLogWriter::init(
   } else if (OB_UNLIKELY(!log_cfg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_STDERR("Invalid argument.\n");
-  } else if (NULL == (log_items_ = (ObIBaseLogItem**) malloc(sizeof(ObIBaseLogItem*) * log_cfg.max_buffer_item_cnt_))) {
+  } else if (NULL == (log_items_ = (ObIBaseLogItem**) ob_malloc(sizeof(ObIBaseLogItem*) * log_cfg.max_buffer_item_cnt_,
+                                                                attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_STDERR("Fail to allocate memory, max_buffer_item_cnt=%lu.\n", log_cfg.max_buffer_item_cnt_);
   } else if (0 != pthread_mutex_init(&thread_mutex_, NULL)) {
@@ -183,7 +184,7 @@ void ObBaseLogWriter::destroy()
   is_inited_ = false;
 
   if (NULL != log_items_) {
-    free(log_items_);
+    ob_free(log_items_);
     log_items_ = NULL;
   }
   if (OB_NOT_NULL(log_write_cond_)) {

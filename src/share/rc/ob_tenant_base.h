@@ -74,6 +74,7 @@ namespace storage {
     class ObTabletGCService;
   }
   class ObLobManager;
+  class ObTableScanIterator;
 }
 namespace transaction {
   class ObTenantWeakReadService; // 租户弱一致性读服务
@@ -177,9 +178,11 @@ namespace detector
 // 实例的初始化和销毁逻辑由MTL_BIND接口指定。
 // 使用MTL接口可以获取实例。
 using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTransCtx>;
+using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
       ObPartTransCtxObjPool*,                        \
+      ObTableScanIteratorObjPool*,                   \
       common::ObTenantIOManager*,                    \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \
@@ -276,6 +279,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 #define MTL_UNREGISTER_THREAD_DYNAMIC(th) \
   share::ObTenantEnv::get_tenant() == nullptr ? OB_ERR_UNEXPECTED : share::ObTenantEnv::get_tenant()->unregister_module_thread_dynamic(th)
 #define MTL_IS_MINI_MODE() share::ObTenantEnv::get_tenant()->is_mini_mode()
+#define MTL_CPU_COUNT() share::ObTenantEnv::get_tenant()->unit_max_cpu()
 
 // 注意MTL_BIND调用需要在租户创建之前，否则会导致租户创建时无法调用到绑定的函数。
 #define MTL_BIND(INIT, DESTROY) \
@@ -379,13 +383,15 @@ public:
   }
 
   int update_thread_cnt(double tenant_unit_cpu);
-  int64_t update_memory_size(int64_t memory_size)
+  double unit_max_cpu() const { return unit_max_cpu_; }
+  double unit_min_cpu() const { return unit_min_cpu_; }
+  int64_t set_unit_memory_size(int64_t memory_size)
   {
-    int64_t orig_size = memory_size_;
-    memory_size_ = memory_size;
+    int64_t orig_size = unit_memory_size_;
+    unit_memory_size_ = memory_size;
     return orig_size;
   }
-  int64_t get_memory_size() { return memory_size_; }
+  int64_t unit_memory_size() const { return unit_memory_size_; }
   bool update_mini_mode(bool mini_mode)
   {
     bool orig_mode = mini_mode_;
@@ -505,6 +511,10 @@ protected:
   bool created_;
   share::ObTenantModuleInitCtx *mtl_init_ctx_;
   share::ObTenantRole::Role tenant_role_value_;
+  // max/min cpu read from unit
+  double unit_max_cpu_;
+  double unit_min_cpu_;
+  int64_t unit_memory_size_;
 
 private:
   common::hash::ObHashSet<int64_t> tg_set_;
@@ -515,7 +525,6 @@ private:
   ObCgroupCtrl *cgroups_;
   bool enable_tenant_ctx_check_;
   int64_t thread_count_;
-  int64_t memory_size_;
   bool mini_mode_;
 };
 

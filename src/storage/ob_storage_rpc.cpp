@@ -1749,7 +1749,7 @@ int ObLobQueryP::process_read()
     }
     if (OB_NOT_NULL(iter)) {
       iter->reset();
-      common::sop_return(ObLobQueryIter, iter);
+      OB_DELETE(ObLobQueryIter, "unused", iter);
     }
   }
   return ret;

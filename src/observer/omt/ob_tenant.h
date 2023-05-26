@@ -422,9 +422,7 @@ public:
   share::ObUnitInfoGetter::ObUnitStatus get_unit_status();
 
   void set_unit_max_cpu(double cpu);
-  OB_INLINE double unit_max_cpu() const { return unit_max_cpu_; }
   void set_unit_min_cpu(double cpu);
-  OB_INLINE double unit_min_cpu() const { return unit_min_cpu_; }
   OB_INLINE int64_t total_worker_cnt() const { return total_worker_cnt_; }
   int64_t min_worker_cnt() const;
   int64_t max_worker_cnt() const;
@@ -550,10 +548,6 @@ protected:
   ObTenantMeta tenant_meta_;
 
 protected:
-  // max/min cpu read from unit
-  double unit_max_cpu_;
-  double unit_min_cpu_;
-
   // number of active workers the tenant has owned. Only active
   // workers can make progress.
   int64_t token_cnt_ CACHE_ALIGNED;

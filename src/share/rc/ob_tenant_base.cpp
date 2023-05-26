@@ -54,10 +54,12 @@ ObTenantBase::ObTenantBase(const uint64_t id, bool enable_tenant_ctx_check)
     created_(false),
     mtl_init_ctx_(nullptr),
     tenant_role_value_(share::ObTenantRole::Role::PRIMARY_TENANT),
+    unit_max_cpu_(0),
+    unit_min_cpu_(0),
+    unit_memory_size_(0),
     cgroups_(nullptr),
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
     thread_count_(0),
-    memory_size_(0),
     mini_mode_(false)
 {
 }
@@ -374,7 +376,7 @@ int64_t ObTenantBase::get_max_session_num(const int64_t rl_max_session_num)
     max_session_num = rl_max_session_num;
   } else {
     /* As test, one session occupies 100K bytes*/
-    max_session_num = max(100, (memory_size_ * 5 / 100) / (100<<10));
+    max_session_num = max(100, (unit_memory_size_ * 5 / 100) / (100<<10));
   }
   return max_session_num;
 }

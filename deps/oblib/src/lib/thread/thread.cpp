@@ -198,19 +198,19 @@ void Thread::wait()
   int ret = 0;
   if (pth_ != 0) {
     if (2 <= ATOMIC_AAF(&join_concurrency_, 1)) {
-      abort();
+      ob_abort();
     }
     if (0 != (ret = pthread_join(pth_, nullptr))) {
       LOG_ERROR("pthread_join failed", K(ret), K(errno));
 #ifndef OB_USE_ASAN
       dump_pth();
-      abort();
+      ob_abort();
 #endif
     }
     destroy_stack();
     runnable_ = nullptr;
     if (1 <= ATOMIC_AAF(&join_concurrency_, -1)) {
-      abort();
+      ob_abort();
     }
   }
 }
