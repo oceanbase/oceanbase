@@ -419,7 +419,7 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
     SANITY_POISON((void*)upper_align((int64_t)obj->data_ + size, 8),
                                      alloc_size - size + sizeof(AOBJECT_TAIL_MAGIC_CODE));
   }
-  if (OB_UNLIKELY(nullptr == obj) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+  if (OB_UNLIKELY(nullptr == obj) && TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
     int level = ObFreeLogPrinter::get_level();
     ObFreeLogPrinter::get_instance().enable_free_log(attr.tenant_id_,
                                                      attr.ctx_id_, level);
@@ -473,7 +473,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     SANITY_UNPOISON(obj->data_, size);
     SANITY_POISON((void*)upper_align((int64_t)obj->data_ + size, 8),
                                      alloc_size - size + sizeof(AOBJECT_TAIL_MAGIC_CODE));
-  } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+  } else if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
     int level = ObFreeLogPrinter::get_level();
     ObFreeLogPrinter::get_instance().enable_free_log(attr.tenant_id_,
                                                      attr.ctx_id_, level);
