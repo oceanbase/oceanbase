@@ -3695,7 +3695,8 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
             LOG_WARN("var index is invalid", K(var_idx), K(obj_access_expr->get_var_indexs()), K(ret));
           } else if (obj_access_expr->get_var_indexs().at(var_idx) == idx) {
             need_modify = true;
-            if (obj_access_expr->get_var_indexs().count() != 2) {
+            if (obj_access_expr->get_var_indexs().count() != 2
+                || !obj_access_expr->get_access_idxs().at(1).elem_type_.is_obj_type()) {
               can_array_binding = false;
             } else if (2 == obj_access_expr->get_access_idxs().count()) {
               // do nothing ...
