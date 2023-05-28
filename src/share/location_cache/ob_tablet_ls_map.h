@@ -54,7 +54,8 @@ private:
 
 private:
   static const int64_t MAX_ACCESS_TIME_UPDATE_THRESHOLD = 10000000; // 10s
-  static const int64_t BUCKETS_CNT = 1 << 16;
+  static const int64_t BUCKETS_CNT = 1 << 16;   // 64K
+  static const int64_t LOCK_SLOT_CNT = 1 << 10; // 1K
 
 private:
   bool is_inited_;
