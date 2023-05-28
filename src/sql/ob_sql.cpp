@@ -1245,7 +1245,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
             LOG_WARN("failed to write string", K(ret));
           } else if (OB_FAIL(sess.store_query_string(trimed_stmt))) {
             LOG_WARN("store query string fail", K(ret));
-          } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false))) {
+          } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, true))) {
             LOG_WARN("generate syntax tree failed", K(sql), K(ret));
           } else if (is_mysql_mode() && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
             ret = OB_ER_UNSUPPORTED_PS;
@@ -2156,6 +2156,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
     bool use_plan_cache = session->get_local_ob_enable_plan_cache();
     context.self_add_plan_ = false;
     PlanCacheMode mode = remote_sql_info.use_ps_ ? PC_PS_MODE : PC_TEXT_MODE;
+    mode = remote_sql_info.sql_from_pl_ ? PC_PL_MODE : mode;
     context.cur_sql_ = trimed_stmt;
     pc_ctx = new (pc_ctx) ObPlanCacheCtx(trimed_stmt,
                                          mode,
@@ -2237,6 +2238,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
         remote_sql_info.ps_params_->pop_back();
       }
       PlanCacheMode mode = remote_sql_info.use_ps_ ? PC_PS_MODE : PC_TEXT_MODE;
+      mode = remote_sql_info.sql_from_pl_ ? PC_PL_MODE : mode;
       if (OB_FAIL(handle_physical_plan(trimed_stmt, context, tmp_result, *pc_ctx, get_plan_err))) {
         if (OB_ERR_PROXY_REROUTE == ret) {
           LOG_DEBUG("fail to handle physical plan", K(ret));
@@ -2800,8 +2802,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   ObStmtOraNeedPrivs stmt_ora_need_privs;
   stmt_need_privs.need_privs_.set_allocator(&allocator);
   stmt_ora_need_privs.need_privs_.set_allocator(&allocator);
-  // TODO: @linlin.xll remove ori_bl_key after eval_udf use identical sql ctx.
-  ObPlanBaseKeyGuard guard(sql_ctx.spm_ctx_.bl_key_);
+
   _LOG_DEBUG("start to generate physical plan for query.(query = %.*s)",
               parse_result.input_sql_len_, parse_result.input_sql_);
   if (OB_FAIL(sanity_check(sql_ctx))) { //check sql_ctx.session_info_ and sql_ctx.schema_guard_
@@ -3939,6 +3940,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                          || OB_ERR_CONSTRUCT_MUST_RETURN_SELF == ret
                          || OB_ERR_ONLY_FUNC_CAN_PIPELINED == ret
                          || OB_ERR_NO_ATTR_FOUND == ret
+                         || OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK == ret
                          || OB_ERR_NON_INT_LITERAL == ret
                          || OB_ERR_PARSER_INIT == ret
                          || OB_NOT_SUPPORTED == ret)) {
@@ -4317,6 +4319,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       if (OB_SUCC(ret) && phy_plan->is_remote_plan()
           && !phy_plan->contains_temp_table()
           && !enable_send_plan) {
+        pctx->get_remote_sql_info().sql_from_pl_ = PC_PL_MODE == pc_ctx.mode_;
         //处理远程plan转发SQL的情况
         ParamStore &param_store = pctx->get_param_store_for_update();
         if (OB_NOT_NULL(ps_params)) {

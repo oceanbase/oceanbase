@@ -1005,7 +1005,6 @@ int ObDupTableLSHandler::replay(const void *buffer,
     DUP_TABLE_LOG(WARN, "refresh dup table ls failed", K(tmp_ret), K(ls_id_), K(lsn), K(ts_ns));
   }
 
-  DUP_TABLE_LOG(DEBUG, "finish replay log", K(ret), K(ls_id_), K(lsn), K(ts_ns)); // for debug
   return ret;
 }
 

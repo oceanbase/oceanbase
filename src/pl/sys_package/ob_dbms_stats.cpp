@@ -2811,6 +2811,7 @@ int ObDbmsStats::set_table_prefs(sql::ObExecContext &ctx,
   param.allocator_ = &ctx.get_allocator();
   ObSEArray<uint64_t, 4> table_ids;
   ObStatPrefs *stat_pref = NULL;
+  bool use_size_auto = false;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx, params.at(0), params.at(1), dummy_param, param))) {
@@ -2841,7 +2842,7 @@ int ObDbmsStats::set_table_prefs(sql::ObExecContext &ctx,
   } else if (OB_FAIL(stat_pref->dump_pref_name_and_value(opt_name, opt_value))) {
     LOG_WARN("failed to dump pref name and value");
   } else if (0 == opt_name.case_compare("METHOD_OPT") &&
-             OB_FAIL(parse_method_opt(ctx, param.allocator_, param.column_params_, opt_value))) {
+             OB_FAIL(parse_method_opt(ctx, param.allocator_, param.column_params_, opt_value, use_size_auto))) {
     LOG_WARN("failed to parse method opt", K(ret));
   } else if (OB_FAIL(ObDbmsStatsPreferences::set_prefs(ctx, table_ids, opt_name, opt_value))) {
     LOG_WARN("failed to set prefs", K(ret));
@@ -3995,14 +3996,12 @@ int ObDbmsStats::parse_granularity_and_method_opt(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   //virtual table(not include real agent table) doesn't gather histogram.
   bool is_vt = is_virtual_table(param.table_id_);
-  ObGranularityType granu_type = ObGranularityType::GRANULARITY_INVALID;
-  if (OB_FAIL(ObDbmsStatsUtils::parse_granularity(param.granularity_, granu_type))) {
-    LOG_WARN("failed to parse granularity");
-  } else if (OB_FAIL(resovle_granularity(granu_type, param)))  {
-    LOG_WARN("failed to resovle granularity", K(granu_type));
-  } else if (0 == param.method_opt_.case_compare("Z") && !is_vt) {
+  bool use_size_auto = false;
+  if (0 == param.method_opt_.case_compare("Z") && !is_vt) {
     if (OB_FAIL(set_default_column_params(param.column_params_))) {
       LOG_WARN("failed to set default column params", K(ret));
+    } else {
+      use_size_auto = true;
     }
   } else {
     // method_opt => null, do not gather histogram, gather basic column stat
@@ -4011,12 +4010,19 @@ int ObDbmsStats::parse_granularity_and_method_opt(ObExecContext &ctx,
       param.method_opt_.assign_ptr(method_opt_str, strlen(method_opt_str));
     }
     if (OB_FAIL(ObDbmsStats::parse_method_opt(ctx, param.allocator_,
-                                              param.column_params_, param.method_opt_))) {
+                                              param.column_params_,
+                                              param.method_opt_,
+                                              use_size_auto))) {
       LOG_WARN("failed to parse method opt", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(process_not_size_manual_column(ctx, param))) {
+    ObGranularityType granu_type = ObGranularityType::GRANULARITY_INVALID;
+    if (OB_FAIL(ObDbmsStatsUtils::parse_granularity(param.granularity_, granu_type))) {
+      LOG_WARN("failed to parse granularity");
+    } else if (OB_FAIL(resovle_granularity(granu_type, use_size_auto, param)))  {
+      LOG_WARN("failed to resovle granularity", K(granu_type));
+    } else if (OB_FAIL(process_not_size_manual_column(ctx, param))) {
       LOG_WARN("failed to process not size manual column", K(ret));
     }
   }
@@ -4168,9 +4174,11 @@ int ObDbmsStats::parse_set_column_stats_options(ObExecContext &ctx,
 int ObDbmsStats::parse_method_opt(sql::ObExecContext &ctx,
                                   ObIAllocator *allocator,
                                   ObIArray<ObColumnStatParam> &column_params,
-                                  const ObString &method_opt)
+                                  const ObString &method_opt,
+                                  bool &use_size_auto)
 {
   int ret = OB_SUCCESS;
+  use_size_auto = false;
   if (OB_ISNULL(allocator) || OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(allocator), K(ctx.get_my_session()));
@@ -4200,7 +4208,7 @@ int ObDbmsStats::parse_method_opt(sql::ObExecContext &ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(child_node));
       } else if (T_FOR_ALL == child_node->type_) {
-        if (OB_FAIL(parser_for_all_clause(child_node, column_params))) {
+        if (OB_FAIL(parser_for_all_clause(child_node, column_params, use_size_auto))) {
           LOG_WARN("failed to parser for all clause", K(ret));
         } else {/*do nothing*/}
       } else if (T_FOR_COLUMNS == child_node->type_) {
@@ -4217,9 +4225,11 @@ int ObDbmsStats::parse_method_opt(sql::ObExecContext &ctx,
 }
 
 int ObDbmsStats::parser_for_all_clause(const ParseNode *for_all_node,
-                                       ObIArray<ObColumnStatParam> &column_params)
+                                       ObIArray<ObColumnStatParam> &column_params,
+                                       bool &use_size_auto)
 {
   int ret = OB_SUCCESS;
+  use_size_auto = false;
   if (OB_ISNULL(for_all_node) || OB_UNLIKELY(for_all_node->type_ != T_FOR_ALL)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(for_all_node), K(ret));
@@ -4243,6 +4253,8 @@ int ObDbmsStats::parser_for_all_clause(const ParseNode *for_all_node,
     if (OB_SUCC(ret) && NULL != for_all_node->children_[1]) {
       if (OB_FAIL(parse_size_clause(for_all_node->children_[1], size_conf))) {
         LOG_WARN("failed to parse size clause", K(ret));
+      } else {
+        use_size_auto = size_conf.is_auto();
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
@@ -6054,7 +6066,9 @@ bool ObDbmsStats::need_gather_index_stats(const ObTableStatParam &param)
  *
  * @return
  */
-int ObDbmsStats::resovle_granularity(ObGranularityType granu_type, ObTableStatParam &param)
+int ObDbmsStats::resovle_granularity(ObGranularityType granu_type,
+                                     const bool use_size_auto,
+                                     ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
   if (ObGranularityType::GRANULARITY_AUTO == granu_type) {
@@ -6064,7 +6078,7 @@ int ObDbmsStats::resovle_granularity(ObGranularityType granu_type, ObTableStatPa
     // refine auto granularity based on subpart type
     if (ObPartitionLevel::PARTITION_LEVEL_TWO == param.part_level_ &&
         !(is_range_part(param.subpart_stat_param_.part_type_) || is_list_part(param.subpart_stat_param_.part_type_))) {
-      param.subpart_stat_param_.gather_histogram_ = false;
+      param.subpart_stat_param_.gather_histogram_ = !use_size_auto;
     }
   } else if (ObGranularityType::GRANULARITY_ALL == granu_type) {
     param.global_stat_param_.set_gather_stat(false);

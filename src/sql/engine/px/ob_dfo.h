@@ -182,6 +182,21 @@ public:
   TO_STRING_KV(K_(p2p_sequence_ids), K_(target_addrs));
 };
 
+struct ObQCMonitoringInfo {
+  OB_UNIS_VERSION(1);
+public:
+  int init(const ObExecContext &exec_ctx);
+  int assign(const ObQCMonitoringInfo &other);
+  void reset();
+public:
+  common::ObString sql_;
+  // in nested px situation, it is the current px coordinator's thread id
+  int64_t qc_tid_;
+  // no need to deserialize
+  static constexpr int64_t LIMIT_LENGTH = 100;
+  TO_STRING_KV(K_(sql), K_(qc_tid));
+};
+
 // PX 端描述每个 SQC 的数据结构
 class ObPxSqcMeta
 {
@@ -317,6 +332,7 @@ public:
     partition_pruning_table_locations_.reset();
     access_external_table_files_.reset();
     allocator_.reset();
+    monitoring_info_.reset();
   }
   // SQC 端收到 InitSQC 消息后通过 data_channel 信息是否为空
   // 来判断 data channel 是否已经预分配好，是否要走轻量调度
@@ -347,6 +363,8 @@ public:
   ObP2PDhMapInfo &get_p2p_dh_map_info() { return p2p_dh_map_info_;};
   void set_sqc_count(int64_t sqc_cnt) { sqc_count_ = sqc_cnt; }
   int64_t get_sqc_count() const { return sqc_count_;}
+  ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
+  const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
                K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
@@ -358,6 +376,7 @@ private:
   uint64_t qc_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;
+  ObQCMonitoringInfo monitoring_info_;
   // The partition location information of the all table_scan op and dml op
   // used for px worker execution
   // no need serialize

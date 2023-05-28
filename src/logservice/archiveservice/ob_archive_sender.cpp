@@ -285,7 +285,11 @@ int ObArchiveSender::do_consume_send_task_()
   // As task issued flag is marked, no matter task is handled succ or fail
   // the flag should be dealed.
   if (OB_FAIL(get_send_task_(task, task_exist))) {
-    ARCHIVE_LOG(WARN, "get send task failed", K(ret));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      ARCHIVE_LOG(WARN, "get send task failed", K(ret));
+    } else {
+      ARCHIVE_LOG(TRACE, "get send task failed", K(ret));
+    }
   } else if (! task_exist) {
   } else if (FALSE_IT(handle(*task, consume_status))) {
   } else {

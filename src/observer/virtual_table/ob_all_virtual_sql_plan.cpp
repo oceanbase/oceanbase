@@ -139,7 +139,7 @@ int ObAllVirtualSqlPlan::fill_cells(ObSqlPlanItem *plan_item)
   ObObj *cells = cur_row_.cells_;
   ObString ipstr;
   common::ObAddr addr;
-
+  #define REFINE_LENGTH(len) ((len) > MAX_LENGTH ? MAX_LENGTH : (len))
   if (OB_ISNULL(cells) || OB_ISNULL(plan_item)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(cells));
@@ -237,7 +237,7 @@ int ObAllVirtualSqlPlan::fill_cells(ObSqlPlanItem *plan_item)
       break;
     }
     case OPTIMIZER: {
-      cells[cell_idx].set_varchar(plan_item->optimizer_, plan_item->optimizer_len_);
+      cells[cell_idx].set_varchar(plan_item->optimizer_, REFINE_LENGTH(plan_item->optimizer_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
@@ -291,19 +291,19 @@ int ObAllVirtualSqlPlan::fill_cells(ObSqlPlanItem *plan_item)
       break;
     }
     case OTHER_TAG: {
-      cells[cell_idx].set_varchar(plan_item->other_tag_, plan_item->other_tag_len_);
+      cells[cell_idx].set_varchar(plan_item->other_tag_, REFINE_LENGTH(plan_item->other_tag_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
     }
     case PARTITION_START: {
-      cells[cell_idx].set_varchar(plan_item->partition_start_, plan_item->partition_start_len_);
+      cells[cell_idx].set_varchar(plan_item->partition_start_, REFINE_LENGTH(plan_item->partition_start_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
     }
     case PARTITION_STOP: {
-      cells[cell_idx].set_varchar(plan_item->partition_stop_, plan_item->partition_stop_len_);
+      cells[cell_idx].set_varchar(plan_item->partition_stop_, REFINE_LENGTH(plan_item->partition_stop_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
@@ -313,7 +313,7 @@ int ObAllVirtualSqlPlan::fill_cells(ObSqlPlanItem *plan_item)
       break;
     }
     case OTHER: {
-      cells[cell_idx].set_varchar(plan_item->other_, plan_item->other_len_);
+      cells[cell_idx].set_varchar(plan_item->other_, REFINE_LENGTH(plan_item->other_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
@@ -337,31 +337,31 @@ int ObAllVirtualSqlPlan::fill_cells(ObSqlPlanItem *plan_item)
       break;
     }
     case ACCESS_PREDICATES: {
-      cells[cell_idx].set_varchar(plan_item->access_predicates_, plan_item->access_predicates_len_);
+      cells[cell_idx].set_varchar(plan_item->access_predicates_, REFINE_LENGTH(plan_item->access_predicates_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
     }
     case FILTER_PREDICATES: {
-      cells[cell_idx].set_varchar(plan_item->filter_predicates_, plan_item->filter_predicates_len_);
+      cells[cell_idx].set_varchar(plan_item->filter_predicates_, REFINE_LENGTH(plan_item->filter_predicates_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
     }
     case STARTUP_PREDICATES: {
-      cells[cell_idx].set_varchar(plan_item->startup_predicates_, plan_item->startup_predicates_len_);
+      cells[cell_idx].set_varchar(plan_item->startup_predicates_, REFINE_LENGTH(plan_item->startup_predicates_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
     }
     case PROJECTION: {
-      cells[cell_idx].set_varchar(plan_item->projection_, plan_item->projection_len_);
+      cells[cell_idx].set_varchar(plan_item->projection_, REFINE_LENGTH(plan_item->projection_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
     }
     case SPECIAL_PREDICATES: {
-      cells[cell_idx].set_varchar(plan_item->special_predicates_, plan_item->special_predicates_len_);
+      cells[cell_idx].set_varchar(plan_item->special_predicates_, REFINE_LENGTH(plan_item->special_predicates_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
@@ -377,13 +377,13 @@ int ObAllVirtualSqlPlan::fill_cells(ObSqlPlanItem *plan_item)
       break;
     }
     case REMARKS: {
-      cells[cell_idx].set_varchar(plan_item->remarks_, plan_item->remarks_len_);
+      cells[cell_idx].set_varchar(plan_item->remarks_, REFINE_LENGTH(plan_item->remarks_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;
     }
     case OTHER_XML: {
-      cells[cell_idx].set_varchar(plan_item->other_xml_, plan_item->other_xml_len_);
+      cells[cell_idx].set_varchar(plan_item->other_xml_, REFINE_LENGTH(plan_item->other_xml_len_));
       cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                          ObCharset::get_default_charset()));
       break;

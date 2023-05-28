@@ -144,6 +144,7 @@ typedef struct _ParseNode
       uint32_t is_multiset_ : 1; // for cast(multiset(...) as ...)
       uint32_t is_forbid_anony_parameter_ : 1; // 1 表示禁止匿名块参数化
       uint32_t is_input_quoted_ : 1; // indicate name_ob input whether with double quote
+      uint32_t is_forbid_parameter_ : 1; //1 indicate forbid parameter
       uint32_t reserved_;
     };
   };
@@ -216,6 +217,7 @@ typedef struct _PLParseInfo
   bool is_pl_parse_;//用于标识当前parser逻辑是否为PLParse调用
   bool is_pl_parse_expr_; //用于标识当前parser逻辑是否在解析PLParser的expr
   bool is_forbid_pl_fp_;
+  bool is_inner_parse_;
   int last_pl_symbol_pos_; //上一个pl变量的结束位置
   int plsql_line_;
   /*for mysql pl*/

@@ -24,11 +24,12 @@ void PalfOptions::reset()
 {
   disk_options_.reset();
   compress_options_.reset();
+  rebuild_replica_log_lag_threshold_ = 0;
 }
 
 bool PalfOptions::is_valid() const
 {
-  return disk_options_.is_valid() && compress_options_.is_valid();
+  return disk_options_.is_valid() && compress_options_.is_valid() && (rebuild_replica_log_lag_threshold_ >= 0);
 }
 
 void PalfDiskOptions::reset()

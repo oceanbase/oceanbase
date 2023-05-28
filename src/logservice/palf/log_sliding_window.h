@@ -415,7 +415,6 @@ private:
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
-  static const int64_t INITIAL_LAST_ACK_TS = 0;      // last_ack_ts默认值为0
   static const int64_t APPEND_CNT_ARRAY_SIZE = 32;   // append次数统计数组的size
   static const uint64_t APPEND_CNT_ARRAY_MASK = APPEND_CNT_ARRAY_SIZE - 1;
   static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 140000;   // 切为PERIOD_FREEZE_MODE的append count下界

@@ -1462,6 +1462,10 @@ int ObPLComposite::copy_element(const ObObj &src,
                                    need_new_allocator));
       CK (OB_NOT_NULL(dest_composite));
       if (src.get_ext() == dest.get_ext()) {
+        OX (dest.set_extend(reinterpret_cast<int64_t>(src_composite),
+                            src.get_meta().get_extend_type(),
+                            src.get_val_len()));
+        OZ (ObUserDefinedType::destruct_obj(dest, session));
         OZ (ObPLComposite::deep_copy(*dest_composite,
                                    src_composite,
                                    allocator,

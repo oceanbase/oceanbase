@@ -601,7 +601,25 @@ stmt:
   | drop_index_stmt         { $$ = $1; check_question_mark($$, result); }
   | kill_stmt               { $$ = $1; question_mark_issue($$, result); }
   | help_stmt               { $$ = $1; check_question_mark($$, result); }
-  | create_view_stmt        { $$ = $1; check_question_mark($$, result); }
+  | create_view_stmt
+  {
+    $$ = $1;
+
+    if (OB_UNLIKELY(NULL == $$ || NULL == result)) {
+      yyerror(NULL, result, "node or result is NULL\n");
+      YYABORT_UNEXPECTED;
+    } else if (OB_UNLIKELY(!result->pl_parse_info_.is_pl_parse_ && 0 != result->question_mark_ctx_.count_)) {
+      if (result->pl_parse_info_.is_inner_parse_) {
+        result->extra_errno_ = OB_PARSER_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK;
+        YYABORT;
+      } else {
+        yyerror(NULL, result, "Unknown column '?'\n");
+        YYABORT_PARSE_SQL_ERROR;
+      }
+    } else {
+      $$->value_ = result->question_mark_ctx_.count_;
+    }
+  }
   | create_tenant_stmt      { $$ = $1; check_question_mark($$, result); }
   | create_standby_tenant_stmt { $$ = $1; check_question_mark($$, result); }
   | alter_tenant_stmt       { $$ = $1; check_question_mark($$, result); }

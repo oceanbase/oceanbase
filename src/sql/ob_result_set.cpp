@@ -792,6 +792,8 @@ int ObResultSet::close()
     if (OB_FAIL(my_session_.reset_tx_variable_if_remote_trans(
                 physical_plan_->get_plan_type()))) {
       LOG_WARN("fail to reset tx_read_only if it is remote trans", K(ret));
+    } else {
+      my_session_.set_last_plan_id(physical_plan_->get_plan_id());
     }
     // 无论如何必须执行do_close_plan
     if (OB_UNLIKELY(OB_SUCCESS != (do_close_plan_ret = do_close_plan(errcode_,

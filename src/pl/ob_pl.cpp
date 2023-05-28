@@ -1859,7 +1859,6 @@ int ObPL::get_pl_function(ObExecContext &ctx,
   ObPLFunction* routine = NULL;
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
-    ObPlanBaseKeyGuard guard(ctx.get_sql_ctx()->spm_ctx_.bl_key_);
     uint64_t database_id = OB_INVALID_ID;
     ctx.get_my_session()->get_database_id(database_id);
 
@@ -1993,7 +1992,6 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     CK (OB_NOT_NULL(local_routine));
   } else { // standalone routine
     static const ObString PLSQL = ObString("PL/SQL");
-    ObPlanBaseKeyGuard guard(ctx.get_sql_ctx()->spm_ctx_.bl_key_);
 
     uint64_t database_id = OB_INVALID_ID;
     ctx.get_my_session()->get_database_id(database_id);

@@ -29,6 +29,8 @@ OB_SERIALIZE_MEMBER(ObP2PDhMapInfo,
                     p2p_sequence_ids_,
                     target_addrs_);
 
+OB_SERIALIZE_MEMBER(ObQCMonitoringInfo, sql_, qc_tid_);
+
 OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     execution_id_,
                     qc_id_,
@@ -63,7 +65,8 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     access_external_table_files_,
                     px_detectable_ids_,
                     p2p_dh_map_info_,
-                    sqc_count_);
+                    sqc_count_,
+                    monitoring_info_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -93,6 +96,29 @@ OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
 OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResInfo, ch_total_info_, sqc_id_, task_count_);
 OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResArgs, info_, batch_size_);
 
+int ObQCMonitoringInfo::init(const ObExecContext &exec_ctx) {
+  int ret = OB_SUCCESS;
+  qc_tid_ = GETTID();
+  if (OB_NOT_NULL(exec_ctx.get_sql_ctx())) {
+    sql_ = exec_ctx.get_sql_ctx()->cur_sql_;
+  }
+  if (sql_.length() > ObQCMonitoringInfo::LIMIT_LENGTH) {
+    sql_.set_length(ObQCMonitoringInfo::LIMIT_LENGTH);
+  }
+  return ret;
+}
+
+int ObQCMonitoringInfo::assign(const ObQCMonitoringInfo &other) {
+  int ret = OB_SUCCESS;
+  sql_ = other.sql_;
+  qc_tid_ = other.qc_tid_;
+  return ret;
+}
+
+void ObQCMonitoringInfo::reset() {
+  sql_.reset();
+}
+
 int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
 {
   int ret = OB_SUCCESS;
@@ -121,6 +147,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     LOG_WARN("failed to assgin to table location keys.", K(ret));
   } else if (OB_FAIL(p2p_dh_map_info_.assign(other.p2p_dh_map_info_))) {
     LOG_WARN("fail to assign p2p dh map info", K(ret));
+  } else if (OB_FAIL(monitoring_info_.assign(other.monitoring_info_))) {
+    LOG_WARN("fail to assign qc monitoring info", K(ret));
   } else {
     execution_id_ = other.execution_id_;
     qc_id_ = other.qc_id_;

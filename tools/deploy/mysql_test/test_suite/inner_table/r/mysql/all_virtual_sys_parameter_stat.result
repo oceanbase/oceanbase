@@ -334,6 +334,7 @@ _px_max_message_pool_pct
 _px_max_pipeline_depth
 _px_message_compression
 _px_object_sampling
+_rebuild_replica_log_lag_threshold
 _recyclebin_object_purge_frequency
 _resource_limit_max_session_num
 _resource_limit_spec

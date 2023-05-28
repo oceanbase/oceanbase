@@ -903,8 +903,12 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
   char *llc_hex_buf = NULL;
   int64_t llc_comp_size = 0;
   int64_t llc_hex_size = 0;
-  if (OB_FAIL(get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str, print_params)) ||
-      OB_FAIL(get_valid_obj_str(stat.get_max_value(), max_meta, allocator, max_str, print_params))) {
+  if (OB_UNLIKELY(ObHistType::INVALID_TYPE != stat.get_histogram().get_type() &&
+                  stat.get_histogram().get_bucket_cnt() == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(stat));
+  } else if (OB_FAIL(get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str, print_params)) ||
+             OB_FAIL(get_valid_obj_str(stat.get_max_value(), max_meta, allocator, max_str, print_params))) {
     LOG_WARN("failed to get valid obj str", K(stat.get_min_value()), K(stat.get_max_value()));
   } else if (OB_FAIL(get_obj_binary_hex_str(stat.get_min_value(), allocator, b_min_str)) ||
              OB_FAIL(get_obj_binary_hex_str(stat.get_max_value(), allocator, b_max_str))) {

@@ -1206,11 +1206,13 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
                                          const share::SCN &scn,
                                          const bool for_replay,
                                          const DupTabletSetIDArray &unique_id_array,
-                                         bool &merge_confirmed)
+                                         bool &modify_readable_set)
 {
   int ret = OB_SUCCESS;
 
-  merge_confirmed = false;
+  bool clean_readable = false;
+
+  modify_readable_set = false;
   SpinWLockGuard guard(dup_tablets_lock_);
 
   for (int i = 0; OB_SUCC(ret) && i < unique_id_array.count(); i++) {
@@ -1221,19 +1223,36 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
       ret = OB_INVALID_ARGUMENT;
       DUP_TABLE_LOG(WARN, "invalid common header", K(ret), K(logging_common_header));
     } else if (OB_FAIL(get_target_tablet_set_(logging_common_header, logging_tablet_set))) {
-      DUP_TABLE_LOG(WARN, "get target tablet set failed", K(ret), KPC(logging_tablet_set),
-                    K(logging_common_header));
+      if (clean_readable && OB_ENTRY_NOT_EXIST == ret && logging_common_header.is_readable_set()) {
+        DUP_TABLE_LOG(INFO, "the tablet set has been removed in this log", K(ret),
+                      KPC(logging_tablet_set), K(logging_common_header), K(scn), K(sync_result));
+        ret = OB_SUCCESS;
+      } else {
+        DUP_TABLE_LOG(WARN, "get target tablet set failed", K(ret), KPC(logging_tablet_set),
+                      K(logging_common_header), K(scn), K(sync_result));
+      }
     } else if (logging_common_header.is_readable_set()) {
       // try return empty readable set
-      if (OB_FAIL(check_and_recycle_empty_readable_set(logging_tablet_set))) {
+      bool need_remove = false;
+      if (OB_FAIL(check_and_recycle_empty_readable_set(logging_tablet_set, need_remove))) {
         DUP_TABLE_LOG(WARN, "try return empty readable tablet set", K(ret),
                       KPC(logging_tablet_set));
+      }
+      if (need_remove) {
+        modify_readable_set = true;
       }
     } else if (logging_tablet_set->get_change_status()->is_change_logging()) {
       if (OB_SUCC(ret) && sync_result) {
         if (OB_FAIL(try_exec_special_op_(logging_tablet_set, scn, for_replay))) {
           DUP_TABLE_LOG(WARN, "try to execute special opertion for dup tablet set", K(ret),
                         KPC(logging_tablet_set));
+        } else if(logging_common_header.need_clean_all_readable_set())
+        {
+         clean_readable = true;
+        }
+
+        if (logging_common_header.is_old_set() && !logging_tablet_set->empty()) {
+          modify_readable_set = true;
         }
       }
       if (OB_SUCC(ret)) {
@@ -1251,7 +1270,7 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
         } else if (OB_FAIL(merge_into_readable_tablets_(logging_tablet_set, for_replay))) {
           DUP_TABLE_LOG(WARN, "merge into readable tablet set failed", K(ret));
         } else {
-          merge_confirmed = true;
+          modify_readable_set = true;
         }
       }
     }
@@ -1262,6 +1281,11 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
       DUP_TABLE_LOG(WARN, "clean unlog tablets failed", K(ret), K(ls_id_), K(for_replay),
                     K(sync_result), K(is_master()), K(unique_id_array));
     }
+  }
+
+  if (unique_id_array.count() > 0) {
+    DUP_TABLE_LOG(INFO, "tablet log sync", K(ret), K(sync_result), K(for_replay), K(is_master()),
+                  K(unique_id_array), K(scn), K(modify_readable_set));
   }
 
   return ret;
@@ -1334,7 +1358,8 @@ int ObLSDupTabletsMgr::merge_into_readable_tablets_(DupTabletChangeMap *change_m
 
   // an empty set first merge into readable list, return it to free pool
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(check_and_recycle_empty_readable_set(change_map_ptr))) {
+    bool need_remove = false;
+    if (OB_FAIL(check_and_recycle_empty_readable_set(change_map_ptr, need_remove))) {
       DUP_TABLE_LOG(WARN, "return empty readable failed", K(ret), KPC(change_map_ptr));
     }
   }
@@ -2162,21 +2187,23 @@ int ObLSDupTabletsMgr::return_tablet_set(DupTabletChangeMap *need_free_set)
   return ret;
 }
 
-// remove emptry readable set
-int ObLSDupTabletsMgr::check_and_recycle_empty_readable_set(DupTabletChangeMap *readable_set)
+// remove empty readable set
+int ObLSDupTabletsMgr::check_and_recycle_empty_readable_set(DupTabletChangeMap *readable_set,
+                                                            bool &need_remove)
 {
   int ret = OB_SUCCESS;
 
+  need_remove = false;
   if (OB_ISNULL(readable_set) || !readable_set->get_common_header().is_readable_set()) {
     ret = OB_ERR_UNEXPECTED;
     DUP_TABLE_LOG(WARN, "unexpected tablet set", K(ret), KPC(readable_set));
   } else if (readable_set->empty()) {
-    DUP_TABLE_LOG(INFO, "try to remove empty readable tablet set from list", K(ret),
+    need_remove = true;
+    DUP_TABLE_LOG(INFO, "try to remove empty readable tablet set from list", K(ret), K(need_remove),
                   KPC(readable_set));
     if (OB_ISNULL(readable_tablets_list_.remove(readable_set))) {
       ret = OB_ERR_UNEXPECTED;
-      DUP_TABLE_LOG(WARN, "remove empty readable set from list failed", K(ret),
-                    KPC(readable_set));
+      DUP_TABLE_LOG(WARN, "remove empty readable set from list failed", K(ret), KPC(readable_set));
     } else if (OB_FAIL(return_tablet_set(readable_set))) {
       DUP_TABLE_LOG(WARN, "return empty readable set failed", K(ret), KPC(readable_set));
     }
@@ -2194,7 +2221,7 @@ int ObLSDupTabletsMgr::clean_readable_tablets_(const share::SCN &min_reserve_tab
     DUP_TABLE_LOG(WARN, "invalid argument", K(ret), K(ls_id_), K(min_reserve_tablet_scn));
   } else {
 
-    DUP_TABLE_LOG(INFO, "try to clean durable readable tablets", K(ret), K(ls_id_),
+    DUP_TABLE_LOG(INFO, "try to clean all readable tablets", K(ret), K(ls_id_),
                   K(min_reserve_tablet_scn), K(readable_tablets_list_.get_size()));
 
     DLIST_FOREACH_REMOVESAFE(readable_set, readable_tablets_list_)
@@ -2230,7 +2257,7 @@ int ObLSDupTabletsMgr::clean_durable_confirming_tablets_(const share::SCN &min_r
 
     DLIST_FOREACH_REMOVESAFE(need_confirm_set, need_confirm_new_queue_)
     {
-      DUP_TABLE_LOG(INFO, "try to clean one durable tablet set", K(ret), K(min_reserve_tablet_scn),
+      DUP_TABLE_LOG(INFO, "try to clean one confirming tablet set", K(ret), K(min_reserve_tablet_scn),
                     KPC(need_confirm_set));
       if (!need_confirm_set->need_reserve(min_reserve_tablet_scn)) {
         if (OB_ISNULL(need_confirm_new_queue_.remove(need_confirm_set))) {

@@ -41,12 +41,16 @@ private:
   int resolve_table_info(const ParseNode *table_node,
                          ObAnalyzeStmt &analyze_stmt);
   int resolve_partition_info(const ParseNode *part_node,
-                             ObAnalyzeStmt &analyze_stmt);
+                             ObAnalyzeStmt &analyze_stmt,
+                             bool &is_hist_subpart);
   int resolve_statistic_info(const ParseNode *statistic_node,
+                             const bool is_hist_subpart,
                              ObAnalyzeStmt &analyze_stmt);
   int resolve_for_clause_info(const ParseNode *for_clause_node,
+                              const bool is_hist_subpart,
                               ObAnalyzeStmt &analyze_stmt);
   int resolve_for_clause_element(const ParseNode *for_clause_node,
+                                 const bool is_hist_subpart,
                                  ObAnalyzeStmt &analyze_stmt);
   int resolve_sample_clause_info(const ParseNode *sample_clause_node,
                                  ObAnalyzeStmt &analyze_stmt);

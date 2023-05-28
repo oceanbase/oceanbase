@@ -230,12 +230,20 @@ private:
     if (true == matched_type) {
       if (OB_FAIL(curr_entry_.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
       } else if (OB_FAIL(handle_each_log_group_entry_(curr_entry_, replayable_point_scn, info))) {
-        PALF_LOG(WARN, "handle_each_log_group_entry_ failed", KPC(this), K(info), K(replayable_point_scn));
+        if (OB_ITER_END != ret) {
+          PALF_LOG(WARN, "handle_each_log_group_entry_ failed", KPC(this), K(info), K(replayable_point_scn));
+        } else {
+          PALF_LOG(TRACE, "handle_each_log_group_entry_ failed", KPC(this), K(info), K(replayable_point_scn));
+        }
       }
     } else if (OB_FAIL(actual_entry.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
       PALF_LOG(TRACE, "deserialize entry failed", K(ret), KPC(this));
     } else if (OB_FAIL(handle_each_log_group_entry_(actual_entry, replayable_point_scn, info))) {
-      PALF_LOG(WARN, "handle_each_log_group_entry_ failed", KPC(this), K(actual_entry), K(info), K(replayable_point_scn));
+      if (OB_ITER_END != ret) {
+        PALF_LOG(WARN, "handle_each_log_group_entry_ failed", KPC(this), K(actual_entry), K(info), K(replayable_point_scn));
+      } else {
+        PALF_LOG(TRACE, "handle_each_log_group_entry_ failed", KPC(this), K(actual_entry), K(info), K(replayable_point_scn));
+      }
     } else {
       ret = OB_EAGAIN;
       advance_read_lsn_(actual_entry.get_payload_offset());
@@ -357,6 +365,13 @@ private:
     curr_entry_is_padding_ = false;
     padding_entry_size_ = 0;
     padding_entry_scn_.reset();
+  }
+
+  bool need_clean_cache_(const int ret) const
+  {
+    // NB: several storage devices cannot guarantee linear consistency reading in scenarios where 4K is overwritten,
+    // therefore, we should clean the cache of IteratorStorage, and re-read data from disk in next time.
+    return OB_INVALID_DATA == ret || OB_CHECKSUM_ERROR == ret;
   }
 private:
 static constexpr int MAX_READ_TIMES_IN_EACH_NEXT = 2;
@@ -622,13 +637,14 @@ int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(replayable_point_scn), KPC(this));
   } else if (OB_FAIL(get_next_entry_(replayable_point_scn, info))) {
-    // NB: if the data which has been corrupted, clean cache.
-    // NB: if the accum_checksum_ is not match, return OB_CHECKSUM_ERROR.
-    if (OB_INVALID_DATA == ret) {
-      PALF_LOG(WARN, "read invalid data, need clean cache", K(ret), KPC(this));
+    // NB: if the data which has been corrupted or accum_checksum_ is not match, clean cache.
+    if (need_clean_cache_(ret)) {
+      PALF_LOG(WARN, "read invalid data, need clean cache, maybe storage device cann't guarantee linear consistency reading",
+               K(ret), KPC(this));
+    // NB: several storage devices cannot guarantee linear consistency reading in scenarios where 4K is overwritten,
+    // therefore, we should clean the cache of IteratorStorage, and re-read data from disk in next time.
       log_storage_->reuse(log_storage_->get_lsn(curr_read_pos_));
       curr_read_buf_end_pos_ = curr_read_buf_start_pos_ = curr_read_pos_ = 0;
-      PALF_LOG(WARN, "read invalid data, has clean cache", K(ret), KPC(this));
     }
     if (OB_ITER_END != ret) {
       PALF_LOG(WARN, "get_next_entry_ failed", K(ret), KPC(this));

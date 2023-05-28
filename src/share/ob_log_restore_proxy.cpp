@@ -304,7 +304,7 @@ int ObLogRestoreProxyUtil::try_init(const uint64_t tenant_id,
       }
     }
   }
-  if (OB_FAIL(ret) && (-ER_BAD_DB_ERROR == ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("proxy connect to primary oceanbase db failed, then try connect to sys db");
     (void)destroy();
     if (OB_SUCC(init(tenant_id, server_list, user_name, user_password, ORACLE_DB))) {

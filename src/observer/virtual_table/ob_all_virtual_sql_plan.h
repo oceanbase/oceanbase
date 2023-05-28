@@ -103,6 +103,7 @@ private:
   const static int64_t KEY_IP_IDX        = 2;
   const static int64_t KEY_PORT_IDX      = 3;
   const static int64_t ROWKEY_COUNT      = 4;
+  const static int64_t MAX_LENGTH        = 4000;
 
   struct PlanInfo {
     PlanInfo();

@@ -370,16 +370,9 @@ int ObExprUDF::process_out_params(const ObObj *objs_stack,
         } else {
           OZ (deep_copy_obj(*pkg_allocator, obj, obj));
         }
-        OZ (ObSPIService::spi_set_package_variable(
-              &exec_ctx,
-              NULL,
-              params_desc.at(i).get_package_id(),
-              params_desc.at(i).get_index(),
-              iparams.at(i)));
-        int tmp_ret = OB_SUCCESS;
-        tmp_ret = pl::ObUserDefinedType::destruct_obj(iparams.at(i), exec_ctx.get_my_session());
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
+      OZ (ObSPIService::spi_update_package_change_info(&plctx, params_desc.at(i).get_package_id(),
+                                                       params_desc.at(i).get_index()));
     }
   }
   return ret;

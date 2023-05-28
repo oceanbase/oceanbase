@@ -879,7 +879,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
                                         : (param_all_same_cs_type &= param_all_same_cs_level));
       in_op->set_param_is_ext_type_oracle(param_all_is_ext);
       //now only support c1 in (1,2,3,4,5...) to vecotrized
-      if (param_all_const && !expr.get_param_expr(0)->is_const_or_param_expr()) {
+      if (param_all_const && expr.get_param_expr(0)->is_vectorize_result()) {
         in_op->set_param_can_vectorized();
       }
     }

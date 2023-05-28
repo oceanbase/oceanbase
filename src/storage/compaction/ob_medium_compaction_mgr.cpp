@@ -543,6 +543,7 @@ int ObMediumCompactionInfoList::inner_deep_copy_node(
   } else if (OB_UNLIKELY(!inner_is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is invalid", K(ret), KPC(this));
+    medium_info_list_.remove(new_info);
   } else {
     LOG_TRACE("success to deep copy append medium info", K(ret), KPC(new_info));
   }
@@ -613,6 +614,7 @@ int ObMediumCompactionInfoList::deserialize(
       LOG_WARN("list count should be zero in old version medium list", K(ret), K(list_count));
     }
   } else if (FALSE_IT(info_ = deserialize_info)) {
+  } else if (FALSE_IT(allocator_ = &allocator)) { // set allocator to call reset() when deserialize failed
   } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, new_pos, &last_medium_scn_))) {
     LOG_WARN("failed to deserialize wait_check_medium_scn", K(ret), K(data_len));
   } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, new_pos, &list_count))) {
@@ -622,8 +624,8 @@ int ObMediumCompactionInfoList::deserialize(
     LOG_WARN("unexpected list count", K(ret), K(list_count));
   } else if (list_count > 0) {
     void *alloc_buf = nullptr;
-    ObMediumCompactionInfo *new_info = nullptr;
     for (int i = 0; OB_SUCC(ret) && i < list_count; ++i) {
+      ObMediumCompactionInfo *new_info = nullptr;
       if (OB_ISNULL(alloc_buf = allocator.alloc(sizeof(ObMediumCompactionInfo)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret));
@@ -645,11 +647,11 @@ int ObMediumCompactionInfoList::deserialize(
     } // end of for
   }
   if (OB_FAIL(ret)) {
+    reset();
   } else if (OB_UNLIKELY(!inner_is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is invalid", K(ret), KPC(this));
   } else {
-    allocator_ = &allocator;
     compat_ = MEDIUM_LIST_VERSION;
     is_inited_ = true;
     pos = new_pos;

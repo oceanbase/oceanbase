@@ -1,0 +1,113 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY BASIC.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+
+--disable_warnings
+drop table if exists geo;
+--enable_warnings
+
+create table geo(id int primary key auto_increment, g geometry not null srid 4326, j json);
+insert into geo(g, j) values(ST_GeomFromText('POINT(1 1)', 4326), '["hello"]');
+select id,st_astext(g),j from geo order by id;
+truncate table geo;
+drop table geo;
+
+--echo # column(UINT32_MAX),insert(all valid srid is allowed)
+--error 3548
+create table geo(g geometry not null srid 432);
+create table geo(g geometry not null);
+insert into geo values(ST_GeomFromText('POINT(1 1)', 0));
+insert into geo values(ST_GeomFromText('POINT(1 1)'));
+insert into geo values(ST_GeomFromText('POINT(1 1)', 4326));
+--error 3548
+insert into geo values(ST_GeomFromText('POINT(1 1)', 43));
+drop table geo;
+
+--echo # column(4326),insert(4326 srid is allowed)
+create table geo(g geometry not null srid 4326);
+--error 3643
+insert into geo values(ST_GeomFromText('POINT(1 1)', 0));
+--error 3643
+insert into geo values(ST_GeomFromText('POINT(1 1)'));
+insert into geo values(ST_GeomFromText('POINT(1 1)', 4326));
+--error 3548
+insert into geo values(ST_GeomFromText('POINT(1 1)', 43));
+drop table geo;
+
+--echo # column(0),insert(0 srid is allowed)
+create table geo(g geometry not null srid 0);
+insert into geo values(ST_GeomFromText('POINT(1 1)', 0));
+insert into geo values(ST_GeomFromText('POINT(1 1)'));
+--error 3643
+insert into geo values(ST_GeomFromText('POINT(1 1)', 4326));
+--error 3548
+insert into geo values(ST_GeomFromText('POINT(1 1)', 43));
+
+# bug batch insert may crash
+--disable_warnings
+drop table if exists gis_point;
+--enable_warnings
+
+create table if not exists gis_point (
+        x decimal(19,16),
+        y decimal(19,16),
+        poi POINT not null srid 4326,
+        index `xy_index` (x, y) local,
+        index `poi_index` (poi) local
+        );
+
+insert into gis_point values (1,1,ST_srid(point(1,1), 4326)), (2,2,ST_srid(point(2,2), 4326));
+insert into gis_point values (3,3,ST_srid(point(3,3), 4326)), (4,4,ST_srid(point(5,5), 4326));
+insert into gis_point values (6,6,ST_srid(point(6,6), 4326)), (7,7,ST_srid(point(7,7), 4326));
+insert into gis_point values (1,1,ST_srid(point(1,1), 4326)), (2,2,ST_srid(point(2,2), 4326));
+insert into gis_point values (3,3,ST_srid(point(3,3), 4326)), (4,4,ST_srid(point(5,5), 4326));
+insert into gis_point values (6,6,ST_srid(point(6,6), 4326)), (7,7,ST_srid(point(7,7), 4326));
+insert into gis_point values (1,1,ST_srid(point(1,1), 4326)), (2,2,ST_srid(point(2,2), 4326));
+insert into gis_point values (3,3,ST_srid(point(3,3), 4326)), (4,4,ST_srid(point(5,5), 4326));
+insert into gis_point values (6,6,ST_srid(point(6,6), 4326)), (7,7,ST_srid(point(7,7), 4326));
+insert into gis_point values (1,1,ST_srid(point(1,1), 4326)), (2,2,ST_srid(point(2,2), 4326));
+insert into gis_point values (3,3,ST_srid(point(3,3), 4326)), (4,4,ST_srid(point(5,5), 4326));
+insert into gis_point values (6,6,ST_srid(point(6,6), 4326)), (7,7,ST_srid(point(7,7), 4326));
+
+select x, y, st_astext(poi) from gis_point;
+
+drop table if exists gis_point;
+
+#
+create table if not exists gis_point (
+        x decimal(19,16),
+        y decimal(19,16),
+        poi POINT not null srid 4326,
+        index `xy_index` (x, y) local,
+        index `poi_index` (poi) local
+        );
+
+DROP PROCEDURE IF EXISTS geom_insert;
+delimiter //;
+CREATE PROCEDURE geom_insert (IN n int)
+BEGIN
+ DECLARE i INT DEFAULT 0;
+ declare x double;
+ declare y double;
+ WHILE i<n DO
+     SET y=rand()*(180) - 90;
+     SET x=rand()*360 - 180;
+     insert into gis_point values (x,y,ST_srid(point(x,y), 4326)),
+     (x,y,ST_srid(point(x,y), 4326));
+        SET i=i+1;
+ END WHILE;
+END//
+
+delimiter ;//
+
+call geom_insert(10000);
+
+# return 4016 if bug ocurr
+--replace_regex /[1-9][0-9]*/ /
+explain select x,y,st_astext(poi) from gis_point order by x,y desc limit 1;
+
+drop table if exists gis_point;

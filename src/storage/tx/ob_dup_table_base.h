@@ -647,7 +647,7 @@ public:
   {
     set_special_op_(DUP_SPECIAL_OP_CLEAN_ALL_READABLE_SET);
   }
-  bool need_clean_all_readable_set()
+  bool need_clean_all_readable_set() const
   {
     return DUP_SPECIAL_OP_CLEAN_ALL_READABLE_SET == sp_op_type_;
   }

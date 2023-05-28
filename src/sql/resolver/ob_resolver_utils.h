@@ -344,7 +344,8 @@ public:
                            const ObSQLMode mode,
                            bool is_from_pl = false);
 
-  static int set_string_val_charset(ObObjParam &val,
+  static int set_string_val_charset(ObIAllocator &allocator,
+                                    ObObjParam &val,
                                     ObString &charset,
                                     ObObj &result_val,
                                     bool is_strict_mode,

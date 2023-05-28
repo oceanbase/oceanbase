@@ -7348,7 +7348,8 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
           if (OB_FAIL(ObOptimizerUtil::intersect(valid_addrs, intersect_addrs, candidate_addrs))) {
             LOG_WARN("failed to intersect addrs", K(ret));
           } else if (OB_FALSE_IT(can_reselect_replica = can_reselect_replica &&
-                                                        valid_addrs.count() == candidate_addrs.count())) {
+                                                        valid_addrs.count() == candidate_addrs.count() &&
+                                                        valid_addrs.count() == intersect_addrs.count())) {
             // do nothing
           } else if (OB_FAIL(intersect_addrs.assign(candidate_addrs))) {
             LOG_WARN("failed to assign addrs", K(ret));

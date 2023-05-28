@@ -194,7 +194,7 @@ public:
     debug_mode_(session_info_.is_pl_debug_on() && func_ast.is_routine()),
     oracle_mode_(oracle_mode)
     {
-      goto_label_map_.create(func_ast.get_body()->get_stmts().count(), ObModIds::OB_PL);
+      goto_label_map_.create(func_ast.get_body()->get_stmts().count(), "PlCodeGen");
     }
 
   virtual ~ObPLCodeGenerator() {}

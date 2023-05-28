@@ -7351,6 +7351,11 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
+  } else if (is_local_tx_()) {
+    can_read = false;
+    trans_version.set_min();
+    is_determined_state = false;
+    ret = OB_SUCCESS;
   } else {
     SCN min_snapshot = SCN::max_scn();
     ObStateInfo tmp_state_info;

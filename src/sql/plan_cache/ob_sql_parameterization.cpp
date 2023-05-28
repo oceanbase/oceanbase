@@ -260,7 +260,8 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
           || (T_IEEE754_INFINITE == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_IEEE754_NAN == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_SFU_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
-          || (T_FLOAT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)) {
+          || (T_FLOAT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || true == ctx.tree_->is_forbid_parameter_) {
         ctx.is_fast_parse_const_ = false;
       } else {
         ctx.is_fast_parse_const_ = (IS_DATATYPE_OP(ctx.tree_->type_)
@@ -672,6 +673,12 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
               "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
         }
       } //if is_fast_parse_const end
+    }
+
+    // sql with charset need not ps parameterize
+    if (OB_SUCC(ret) && T_QUESTIONMARK == ctx.tree_->type_ && OB_NOT_NULL(ctx.tree_->children_)
+        && OB_NOT_NULL(ctx.tree_->children_[0]) && ctx.tree_->children_[0]->type_ == T_CHARSET) {
+      ctx.sql_info_->ps_need_parameterized_ = false;
     }
 
     //判断insert中values()在tree中的哪一层，当某结点value_father_level_处于VALUE_VECTOR_LEVEL时,

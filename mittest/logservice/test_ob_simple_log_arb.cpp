@@ -711,6 +711,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
 TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_upgrade_when_no_leader");
+//  OB_LOGGER.set_log_level("TRACE");
   MockLocCB loc_cb;
   int ret = OB_SUCCESS;
   PALF_LOG(INFO, "begin test_2f1a_upgrade_when_no_leader");
@@ -749,7 +750,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
             palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
 
   // waiting for leader revoke
-  while (leader.palf_handle_impl_->state_mgr_.role_ == common::ObRole::LEADER) {
+  while (leader.palf_handle_impl_->state_mgr_.role_ == LEADER) {
     sleep(1);
   }
 
@@ -758,11 +759,11 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
   unblock_all_net(leader_idx);
 
   // waiting for leader takeover
-  while (leader.palf_handle_impl_->state_mgr_.role_ != common::ObRole::LEADER) {
+  while (!leader.palf_handle_impl_->state_mgr_.is_leader_active()) {
     sleep(1);
   }
   // waiting for upgrading
-  is_upgraded(leader, another_f_idx);
+  is_upgraded(leader, id);
 
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();

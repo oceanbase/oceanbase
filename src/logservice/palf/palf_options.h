@@ -162,16 +162,19 @@ public:
 struct PalfOptions
 {
   PalfOptions() : disk_options_(),
-                  compress_options_()
+                  compress_options_(),
+                  rebuild_replica_log_lag_threshold_(0)
   {}
   ~PalfOptions() { reset(); }
   void reset();
   bool is_valid() const;
   TO_STRING_KV(K(disk_options_),
-               K(compress_options_));
+               K(compress_options_),
+               K(rebuild_replica_log_lag_threshold_));
 public:
   PalfDiskOptions disk_options_;
   PalfTransportCompressOptions compress_options_;
+  int64_t rebuild_replica_log_lag_threshold_;
 };
 
 struct PalfThrottleOptions

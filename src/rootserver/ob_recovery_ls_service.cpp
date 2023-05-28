@@ -887,7 +887,11 @@ void ObRecoveryLSService::try_update_primary_ip_list()
       LOG_WARN("get servcie attr password failed", K(service_attr));
     } else if (OB_FAIL(service_attr.get_user_str_(user_and_tenant))) {
       LOG_WARN("get user str failed", K(service_attr.user_.user_name_), K(service_attr.user_.tenant_name_));
-    } else if (OB_FAIL(proxy.try_init(tenant_id_/*standby*/, service_attr.addr_, user_and_tenant.ptr(), passwd))) {
+    } else if (OB_FAIL(proxy.init(tenant_id_/*standby*/,
+                       service_attr.addr_,
+                       user_and_tenant.ptr(),
+                       passwd,
+                       service_attr.user_.mode_ == ObCompatibilityMode::MYSQL_MODE ? OB_SYS_DATABASE_NAME : OB_ORA_SYS_SCHEMA_NAME))) {
       LOG_WARN("proxy fail to connect to primary", K_(tenant_id), K(service_attr.addr_), K(user_and_tenant));
       bool cur_primary_state = false;
       if (cur_primary_state != primary_is_avaliable_) {
