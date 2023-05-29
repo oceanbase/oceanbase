@@ -157,6 +157,7 @@ public:
   bool is_aggregate_query();
   int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name);
   int init_agg_cell_proj(int64_t size);
+  int init_agg_results(int64_t size);
 private:
   int get_aggregate_result(table::ObTableQueryResult *&next_result); 
   virtual int get_normal_result(table::ObTableQueryResult *&next_result);

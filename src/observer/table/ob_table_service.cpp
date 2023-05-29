@@ -1958,6 +1958,15 @@ int ObNormalTableQueryResultIterator::init_agg_cell_proj(int64_t size) {
   return ret;
 }
 
+int ObNormalTableQueryResultIterator::init_agg_results(int64_t size) {
+  int ret = OB_SUCCESS;
+  if (agg_results_.empty() && OB_FAIL(agg_results_.prepare_allocate(size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate aggregate result", K(ret), K(size));
+  }
+  return ret;
+}
+
 int ObNormalTableQueryResultIterator::add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name)
 {
   int ret = OB_SUCCESS;
@@ -2360,8 +2369,9 @@ ObNormalTableQueryResultIterator *ObTableServiceQueryCtx::get_normal_result_iter
       LOG_WARN("failed to allocate result iterator");
     }
   }
-  if (normal_result_iterator_->is_aggregate_query()) {
+  if (normal_result_iterator_->is_aggregate_query()) { //init
     normal_result_iterator_->init_agg_cell_proj(query.get_aggregations().count());
+    normal_result_iterator_->init_agg_results(query.get_aggregations().count());
   }
   return normal_result_iterator_;
 }
