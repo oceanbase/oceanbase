@@ -2337,7 +2337,7 @@ int ObRawExprUtils::transform_query_udt_column_expr(const ObSQLSessionInfo& sess
     c_expr->set_param(val);
     if (OB_FAIL(sys_makexml->set_param_exprs(c_expr, hidden_blob_expr))) {
       LOG_WARN("set param expr fail", K(ret));
-    } else if (FALSE_IT(sys_makexml->set_func_name(ObString::make_string("sys_makexml")))) {
+    } else if (FALSE_IT(sys_makexml->set_func_name(ObString::make_string("SYS_MAKEXML")))) {
     } else if (OB_FAIL(sys_makexml->formalize(&session))) {
       LOG_WARN("failed to formalize", K(ret));
     } else {
