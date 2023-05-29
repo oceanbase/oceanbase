@@ -251,6 +251,7 @@ public:
   T_DEF_INT_INFT(svr_stream_cached_count, OB_CLUSTER_PARAMETER, 16, 1, "cached svr stream object count");
   T_DEF_INT_INFT(fetch_stream_cached_count, OB_CLUSTER_PARAMETER, 16, 1, "cached fetch stream object count");
 
+  T_DEF_BOOL(enable_compatible_charset, OB_CLUSTER_PARAMETER, 0,  "0:disabled, 1:enabled");
   // region
   DEF_STR(region, OB_CLUSTER_PARAMETER, "default_region", "OB region");
 
