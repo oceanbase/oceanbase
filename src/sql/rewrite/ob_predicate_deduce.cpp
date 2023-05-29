@@ -630,6 +630,7 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
   ObSEArray<ObRawExpr *, 4> candi_exprs;
   int64_t param_idx = -1;
   ObRawExpr *param_expr = NULL;
+  const TableItem* table_item = NULL;
   if (OB_ISNULL(pred) || OB_ISNULL(param_expr = pred->get_param_expr(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("prediate is invalid", K(ret), K(pred), K(param_expr));
@@ -652,6 +653,15 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
       } else if (!ObOptimizerUtil::find_item(target_exprs, real_expr)) {
         // do nothing
       } else if (ObOptimizerUtil::find_item(first_params, expr)) {
+        // do nothing
+      } else if (OB_ISNULL(table_item = stmt_.get_table_item_by_id(
+                                              static_cast<const ObColumnRefRawExpr*>(real_expr)->get_table_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (T_OP_IN == pred->get_expr_type() &&
+                 (!table_item->is_basic_table() ||
+                  has_raw_const_equal_condition(i))) {
+        // deduce IN predicates for column parameters that only have basic tables and do not contain const equal predicates and IN predicates
         // do nothing
       } else if (param_expr->get_result_type().get_type() != expr->get_result_type().get_type()) {
         need_check_type_safe = is_type_safe(param_idx, i);
@@ -754,6 +764,10 @@ int ObPredicateDeduce::find_similar_expr(ObRawExpr *pred,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("general predicate is null", K(ret));
     } else if (general_preds.at(i) == pred) {
+      is_similar = true;
+    } else if (T_OP_IN == pred->get_expr_type() &&
+               T_OP_IN == general_preds.at(i)->get_expr_type()) {
+      // deduce IN predicates for column parameters that only have basic tables and do not contain const equal predicates and IN predicates
       is_similar = true;
     } else if (general_preds.at(i)->get_expr_type() == pred->get_expr_type() &&
                general_preds.at(i)->get_param_count() == pred->get_param_count()) {
@@ -976,4 +990,17 @@ bool ObPredicateDeduce::find_equal_expr(const ObIArray<ObRawExpr *> &exprs,
     *idx = target_idx;
   }
   return bret;
+}
+
+bool ObPredicateDeduce::has_raw_const_equal_condition(int64_t param_idx)
+{
+  bool has_const_condition = false;
+  for (int64_t i = 0; !has_const_condition && i < N; ++i) {
+    if (!has(graph_, param_idx, i, EQ) || i == param_idx) {
+      // do nothing
+    } else if (is_raw_const(i)) {
+      has_const_condition = true;
+    }
+  }
+  return has_const_condition;
 }
