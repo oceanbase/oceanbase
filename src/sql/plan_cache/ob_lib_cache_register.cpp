@@ -28,7 +28,6 @@ namespace oceanbase
 namespace common
 {
 class ObIAllocator;
-class MemoryContext;
 }
 namespace sql
 {

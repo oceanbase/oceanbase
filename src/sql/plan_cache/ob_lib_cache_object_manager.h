@@ -29,12 +29,13 @@ class ObLCObjectManager
 {
 public:
   typedef common::hash::ObHashMap<ObCacheObjID, ObILibCacheObject*> IdCacheObjectMap;
-  
+
   ObLCObjectManager() : object_id_(0) {}
   int init(int64_t hash_bucket, uint64_t tenant_id);
   int alloc(ObCacheObjGuard& guard,
             ObLibCacheNameSpace ns,
-            uint64_t tenant_id);
+            uint64_t tenant_id,
+            lib::MemoryContext &parent_context);
   int destroy_cache_obj(const bool is_leaked,
                         const uint64_t object_id);
   void free(ObILibCacheObject *&obj, const CacheRefHandleID ref_handle)
@@ -75,14 +76,14 @@ private:
    *                                   cache node
    *                            |          |          |
    *                        cache_obj  cache_obj  cache_obj
-   * 
+   *
    * In the library cache, each key corresponds to a cache node structure, which is very
    * inconvenient when traversing the output of the virtual table, so a map of key-cache_obj
    * is used to facilitate traversal.
    */
   IdCacheObjectMap cache_obj_map_;
   /**
-   * 
+   *
    * All cache_obj objects created by the alloc method will have their reference count incremented
    * and added to alloc_cache_obj_map_. when the free method is called, if the reference count of the
    * cache_obj object decreases to 0, it will be removed from alloc_cache_obj_map_. the role of
