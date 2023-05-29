@@ -84,15 +84,22 @@ void ObDDLTransController::run1()
       } else {
         // ignore ret continue
         for (int64_t i = 0; i < tenant_ids.count(); i++) {
+          ObZone zone;
+          ObArray<ObAddr> server_list;
+          uint64_t tenant_id = tenant_ids.at(i);
+          int64_t schema_version = OB_INVALID_VERSION;
           int64_t start_time = ObTimeUtility::current_time();
           ObCurTraceId::init(GCONF.self_addr_);
-          if (OB_FAIL(GCTX.root_service_->get_ddl_service().publish_schema(tenant_ids.at(i)))) {
-            LOG_WARN("refresh_schema fail", KR(ret), K(tenant_ids.at(i)));
-          } else if (OB_FAIL(broadcast_consensus_version(tenant_ids.at(i)))) {
-            LOG_WARN("fail to broadcast consensus version", KR(ret), K(tenant_ids.at(i)));
+
+          if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_unit_manager().get_tenant_unit_servers(tenant_id, zone, server_list))) {
+            LOG_WARN("get alive server failed", KR(ret));
+          } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().publish_schema_and_get_schema_version(tenant_id, server_list, &schema_version))) {
+            LOG_WARN("fail to publish_schema", KR(ret), K(tenant_id));
+          } else if (OB_FAIL(broadcast_consensus_version(tenant_id, schema_version, server_list))) {
+            LOG_WARN("fail to broadcast consensus version", KR(ret), K(tenant_id), K(schema_version));
           } else {
             int64_t end_time = ObTimeUtility::current_time();
-            LOG_INFO("refresh_schema", KR(ret), K(tenant_ids.at(i)), K(end_time - start_time));
+            LOG_INFO("refresh_schema", KR(ret), K(tenant_id), K(end_time - start_time));
           }
          }
       }
@@ -103,13 +110,11 @@ void ObDDLTransController::run1()
   }
 }
 
-int ObDDLTransController::broadcast_consensus_version(const int64_t tenant_id)
+int ObDDLTransController::broadcast_consensus_version(const int64_t tenant_id,
+                                                      const int64_t schema_version,
+                                                      const ObArray<ObAddr> &server_list)
 {
   int ret = OB_SUCCESS;
-  ObZone zone;
-  ObTimeoutCtx ctx;
-  ObArray<ObAddr> server_list;
-  int64_t schema_version = OB_INVALID_VERSION;
   obrpc::ObBroadcastConsensusVersionArg arg;
   rootserver::ObBroadcstConsensusVersionProxy proxy(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::broadcast_consensus_version);
   if (!inited_) {
@@ -124,25 +129,22 @@ int ObDDLTransController::broadcast_consensus_version(const int64_t tenant_id)
   } else if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rootservice is null", KR(ret));
-  } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_unit_manager().get_tenant_unit_servers(tenant_id, zone, server_list))) {
-    LOG_WARN("get alive server failed", KR(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
-                         tenant_id, schema_version))) {
-    LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
-    LOG_WARN("fail to set default timeout ctx", KR(ret));
+  } else if (OB_INVALID_VERSION == schema_version) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid schema_version", KR(ret), K(schema_version));
   } else {
     arg.set_tenant_id(tenant_id);
     arg.set_consensus_version(schema_version);
+    const int64_t rpc_timeout = GCONF.rpc_timeout;
     FOREACH_X(s, server_list, OB_SUCC(ret)) {
       if (OB_ISNULL(s)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("s is null", KR(ret));
       } else {
         // overwrite ret
-        if (OB_FAIL(proxy.call(*s, ctx.get_timeout(), arg))) {
+        if (OB_FAIL(proxy.call(*s, rpc_timeout, arg))) {
           LOG_WARN("send broadcast consensus version rpc failed", KR(ret),
-              K(ctx.get_timeout()), K(schema_version), K(arg), "server", *s);
+              K(rpc_timeout), K(schema_version), K(arg), "server", *s);
           ret = OB_SUCCESS;
         }
       }

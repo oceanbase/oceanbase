@@ -24517,7 +24517,7 @@ int ObDDLService::alter_tablegroup(const ObAlterTablegroupArg &arg)
   return ret;
 }
 
-int ObDDLService::refresh_schema(uint64_t tenant_id)
+int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_version /*NULL*/)
 {
   int ret = OB_SUCCESS;
   int64_t refresh_count = 0;
@@ -24573,6 +24573,8 @@ int ObDDLService::refresh_schema(uint64_t tenant_id)
           LOG_WARN("increase sequence_id failed", K(ret));
         } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
           LOG_WARN("fail to set refresh schema info", K(ret), K(schema_info));
+        } else if (OB_NOT_NULL(publish_schema_version)) {
+          *publish_schema_version = schema_version;
         }
       }
     }
@@ -24642,14 +24644,16 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
         }
         if (found) {
           // refresh schema sync and report error
-          timeout = THIS_WORKER.get_timeout_remain();
+          if (OB_FAIL(ObShareUtil::get_ctx_timeout(rpc_timeout, timeout))) {
+            LOG_WARN("fail to get timeout", KR(ret));
+          }
         } else {
           // refresh schema async and ignore error
           timeout = std::min(THIS_WORKER.get_timeout_remain(), rpc_timeout);
         }
         arg.force_refresh_ = found;
         // overwrite ret
-        if (OB_FAIL(proxy.call(*s, timeout, arg))) {
+        if (FAILEDx(proxy.call(*s, timeout, arg))) {
           LOG_WARN("send switch schema rpc failed", KR(ret),
               K(timeout), K(schema_version), K(schema_info), K(arg), "server", *s);
           if (!found) { // ignore servers that are not in addrs
@@ -24705,6 +24709,26 @@ int ObDDLService::publish_schema(uint64_t tenant_id,
     LOG_WARN("refresh schema failed", K(ret));
   } else if (OB_FAIL(notify_refresh_schema(addrs))) {
     LOG_WARN("notify refresh schema failed", K(ret));
+  }
+
+  return ret;
+}
+
+int ObDDLService::publish_schema_and_get_schema_version(uint64_t tenant_id,
+                                                        const ObAddrIArray &addrs,
+                                                        int64_t *schema_version /*NULL*/)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  const int64_t TIMEOUT = 10L * 1000L * 1000L; // 10s
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_FAIL(refresh_schema(tenant_id, schema_version))) {
+    LOG_WARN("refresh schema failed", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, TIMEOUT))) {// 10s for notify_refresh_schema
+    LOG_WARN("fail to set default timeout ctx", KR(ret));
+  } else if (OB_FAIL(notify_refresh_schema(addrs))) {
+    LOG_WARN("notify refresh schema failed", KR(ret));
   }
 
   return ret;
