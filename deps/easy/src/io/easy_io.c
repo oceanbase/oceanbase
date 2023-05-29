@@ -111,7 +111,7 @@ easy_io_t *easy_eio_create(easy_io_t *eio, int io_thread_count)
     eio->tcp_defer_accept = 1;
     eio->do_signal = 1;
     eio->tcp_keepalive = 1;  // open tcp_keepAlive
-    eio->send_qlen = EASY_CONN_DOING_REQ_CNT * 16;
+    eio->send_qlen = EASY_CONN_DOING_REQ_CNT;
     eio->support_ipv6 = easy_socket_support_ipv6();
     eio->listen_backlog = 1024;
     eio->ssl = NULL;
