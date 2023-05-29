@@ -1570,7 +1570,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       SHARE_SCHEMA_LOG(WARN, "print parser name failed", K(ret));
     }
   }
-  if (OB_SUCCESS == ret && !is_index_tbl && !is_no_table_options(sql_mode)) {
+  if (OB_SUCCESS == ret && !is_index_tbl && !is_no_table_options(sql_mode) && !table_schema.is_external_table()) {
     if (OB_FAIL(print_table_definition_store_format(table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print store format", K(ret), K(table_schema));
     }
@@ -1584,7 +1584,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       SHARE_SCHEMA_LOG(WARN, "fail to print expire info", K(ret), K(expire_str));
     }
   }
-  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)) {
+  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)
+      && !table_schema.is_external_table()) {
     int64_t paxos_replica_num = OB_INVALID_COUNT;
     if (OB_FAIL(table_schema.get_paxos_replica_num(schema_guard_, paxos_replica_num))) {
       LOG_WARN("fail to get paxos replica num", K(ret));
@@ -1599,7 +1600,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     } // no more to do
   }
   if (OB_SUCCESS == ret && !strict_compat_ && table_schema.get_block_size() >= 0
-      && !is_no_key_options(sql_mode) && !is_no_table_options(sql_mode)) {
+      && !is_no_key_options(sql_mode) && !is_no_table_options(sql_mode)
+      && !table_schema.is_external_table()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                 is_index_tbl ? "BLOCK_SIZE %ld " : "BLOCK_SIZE = %ld ",
                                 table_schema.get_block_size()))) {
@@ -1615,7 +1617,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       SHARE_SCHEMA_LOG(WARN, "fail to print global/local", K(ret), K(table_schema));
     }
   }
-  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)) {
+  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)
+      && !table_schema.is_external_table()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "USE_BLOOM_FILTER = %s ",
                                 table_schema.is_use_bloomfilter() ? "TRUE" : "FALSE"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print use bloom filter", K(ret), K(table_schema));
@@ -1623,18 +1626,20 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   }
 
   if (OB_SUCCESS == ret && !is_index_tbl && table_schema.is_enable_row_movement()
-      && !is_no_table_options(sql_mode)) {
+      && !is_no_table_options(sql_mode) && !table_schema.is_external_table()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ENABLE ROW MOVEMENT "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print row movement option", K(ret), K(table_schema));
     }
   }
-  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)) {
+  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)
+      && !table_schema.is_external_table()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "TABLET_SIZE = %ld ",
                                 table_schema.get_tablet_size()))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print tablet_size", K(ret), K(table_schema));
     }
   }
-  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)) {
+  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)
+      && !table_schema.is_external_table()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "PCTFREE = %ld ",
                                 table_schema.get_pctfree()))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print pctfree", K(ret), K(table_schema));
@@ -4888,7 +4893,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
         SHARE_SCHEMA_LOG(WARN, "fail to print NULL_IF", K(ret));
       } else {
         --pos;
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n)"))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n) "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print )", K(ret));
         }
       }

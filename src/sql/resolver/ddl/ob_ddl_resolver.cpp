@@ -2353,6 +2353,19 @@ int ObDDLResolver::check_format_valid(const ObExternalFileFormat &format, bool &
                K(format.csv_format_.line_term_str_), K(format.csv_format_.field_term_str_));
     }
   }
+  if (OB_SUCC(ret)) {
+     if (!format.csv_format_.line_term_str_.empty()
+         && (format.csv_format_.line_term_str_[0] == format.csv_format_.field_escaped_char_
+             || format.csv_format_.line_term_str_[0] == format.csv_format_.field_enclosed_char_)) {
+       ret = OB_WRONG_FIELD_TERMINATORS;
+       LOG_WARN("invalid line terminator", K(ret));
+     } else if (!format.csv_format_.field_term_str_.empty()
+                && (format.csv_format_.field_term_str_[0] == format.csv_format_.field_escaped_char_
+                    || format.csv_format_.field_term_str_[0] == format.csv_format_.field_enclosed_char_)) {
+       ret = OB_WRONG_FIELD_TERMINATORS;
+       LOG_WARN("invalid field terminator", K(ret));
+     }
+  }
   return ret;
 }
 
