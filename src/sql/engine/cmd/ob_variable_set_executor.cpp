@@ -644,6 +644,16 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
         extra_var_value.assign(extra_var_value_buf, pos);
         should_update_extra_var = true;
       }
+    } else if (set_var.var_name_ == OB_SV_MAX_READ_STALE_TIME) {
+      int64_t max_read_stale_time = 0;
+      if (OB_FAIL(val.get_int(max_read_stale_time))) {
+        LOG_WARN("fail to get int value", K(ret), K(val));
+      } else if (max_read_stale_time != ObSysVarFactory::INVALID_MAX_READ_STALE_TIME &&
+                 max_read_stale_time < GCONF.weak_read_version_refresh_interval) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                       "max_read_stale_time is smaller than weak_read_version_refresh_interval");
+      }
     }
 
     if (OB_SUCC(ret) && should_update_extra_var) {

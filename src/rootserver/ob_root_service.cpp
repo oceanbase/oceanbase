@@ -8999,7 +8999,8 @@ int ObRootService::check_weak_read_version_refresh_interval(int64_t refresh_inte
         LOG_WARN("get value failed", KR(ret), K(tenant_id), K(obj));
       } else if (OB_FAIL(obj.get_int(session_max_stale_time))) {
         LOG_WARN("get int failed", KR(ret), K(tenant_id), K(obj));
-      } else if (refresh_interval > session_max_stale_time) {
+      } else if (session_max_stale_time != share::ObSysVarFactory::INVALID_MAX_READ_STALE_TIME
+                 && refresh_interval > session_max_stale_time) {
         valid = false;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT,
                        "weak_read_version_refresh_interval is larger than ob_max_read_stale_time");

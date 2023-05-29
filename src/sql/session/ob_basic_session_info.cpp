@@ -2590,9 +2590,17 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       break;
     }
     case SYS_VAR_OB_MAX_READ_STALE_TIME: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache_.set_ob_max_read_stale_time(int_val));
+      int64_t max_read_stale_time = 0;
+      if (OB_FAIL(val.get_int(max_read_stale_time))) {
+        LOG_WARN("fail to get int value", K(ret), K(val));
+      } else if (max_read_stale_time != ObSysVarFactory::INVALID_MAX_READ_STALE_TIME &&
+                 max_read_stale_time < GCONF.weak_read_version_refresh_interval) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                       "max_read_stale_time is smaller than weak_read_version_refresh_interval");
+      } else {
+        sys_vars_cache_.set_ob_max_read_stale_time(max_read_stale_time);
+      }
       break;
     }
     case SYS_VAR_RUNTIME_FILTER_TYPE: {
@@ -3015,9 +3023,17 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       break;
     }
     case SYS_VAR_OB_MAX_READ_STALE_TIME: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache.set_base_ob_max_read_stale_time(int_val));
+      int64_t max_read_stale_time = 0;
+      if (OB_FAIL(val.get_int(max_read_stale_time))) {
+        LOG_WARN("fail to get int value", K(ret), K(val));
+      } else if (max_read_stale_time != ObSysVarFactory::INVALID_MAX_READ_STALE_TIME &&
+                 max_read_stale_time < GCONF.weak_read_version_refresh_interval) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                       "max_read_stale_time is smaller than weak_read_version_refresh_interval");
+      } else {
+        sys_vars_cache.set_base_ob_max_read_stale_time(max_read_stale_time);
+      }
       break;
     }
     case SYS_VAR_RUNTIME_FILTER_TYPE: {
