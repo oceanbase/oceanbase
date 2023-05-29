@@ -246,7 +246,7 @@ int ElectionProposer::register_renew_lease_task_()
     } else if (role_ != ObRole::LEADER) {
       LOG_RENEW_LEASE(ERROR, "unexpected role status");
     } else if (OB_UNLIKELY(leader_revoke_if_lease_expired_(RoleChangeReason::LeaseExpiredToRevoke))) {
-      LOG_RENEW_LEASE(ERROR, "leader lease expired, leader revoked");
+      LOG_RENEW_LEASE(WARN, "leader lease expired, leader revoked");
     } else if (prepare_success_ballot_ != ballot_number_) {// 需要进行leader prepare推大用于续约的ballot number
       LOG_RENEW_LEASE(INFO, "prepare_success_ballot_ not same as ballot_number_, maybe in Leader Prepare phase, gie up renew lease this time");
     } else {
