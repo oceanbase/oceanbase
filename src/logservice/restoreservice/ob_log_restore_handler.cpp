@@ -505,7 +505,7 @@ int ObLogRestoreHandler::get_restore_error(share::ObTaskId &trace_id, int &ret_c
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   if (OB_FAIL(get_restore_error_unlock_(trace_id, ret_code, error_exist))) {
-    CLOG_LOG(ERROR, "fail to get restore error");
+    CLOG_LOG(WARN, "fail to get restore_error");
   }
   return ret;
 }
