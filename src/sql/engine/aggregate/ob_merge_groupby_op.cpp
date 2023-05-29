@@ -408,7 +408,7 @@ int ObMergeGroupByOp::find_candidate_key(ObRollupNDVInfo &ndv_info)
 {
   int ret = OB_SUCCESS;
   int64_t n_group = MY_SPEC.group_exprs_.count();
-  uint64_t candicate_ndv = 0;
+  uint64_t candidate_ndv = 0;
   ObPxSqcHandler *sqc_handle = ctx_.get_sqc_handler();
   ndv_info.dop_ = 1;
   // ndv_info.max_keys_ = 0;
@@ -420,22 +420,25 @@ int ObMergeGroupByOp::find_candidate_key(ObRollupNDVInfo &ndv_info)
     ObPxRpcInitSqcArgs &sqc_args = sqc_handle->get_sqc_init_arg();
     ndv_info.dop_ = sqc_args.sqc_.get_total_task_count();
   }
+  const bool is_mysql_mode = lib::is_mysql_mode();
   for (int64_t i = 0; i < MY_SPEC.rollup_exprs_.count() + 1 && OB_SUCC(ret); ++i) {
     if (0 == n_group && i == MY_SPEC.rollup_exprs_.count()) {
       break;
     }
-    candicate_ndv = ndv_calculator_[i].estimate();
-    if (candicate_ndv >= ObRollupKeyPieceMsgCtx::FAR_GREATER_THAN_RATIO * ndv_info.dop_) {
-      ndv_info.ndv_ = candicate_ndv;
+    candidate_ndv = ndv_calculator_[i].estimate();
+    if ((is_mysql_mode && MY_SPEC.is_duplicate_rollup_expr_[i]) ||
+          (candidate_ndv >= ObRollupKeyPieceMsgCtx::FAR_GREATER_THAN_RATIO * ndv_info.dop_)) {
+      ndv_info.ndv_ = candidate_ndv;
       ndv_info.n_keys_ = 0 == n_group ? i + 1 : i + n_group;
       break;
     }
   }
   if (0 == ndv_info.n_keys_) {
     // can't found, use all groupby keys
-    ndv_info.ndv_ = candicate_ndv;
+    ndv_info.ndv_ = candidate_ndv;
     ndv_info.n_keys_ = all_groupby_exprs_.count();
   }
+  LOG_INFO("find candidate rollup key", K(ndv_info));
   return ret;
 }
 
