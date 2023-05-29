@@ -130,19 +130,19 @@ int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacke
   int ret = common::OB_SUCCESS;
   int64_t pos = 0;
   if (OB_FAIL(pkt.decode(resp_buf, resp_sz))) {
-    RPC_OBRPC_LOG(WARN, "decode packet fail", K(ret));
+    RPC_OBRPC_LOG(WARN, "decode packet fail", KP(resp_buf), K(resp_sz), K(pos));
   } else {
     UNIS_VERSION_GUARD(pkt.get_unis_version());
     const char* payload = pkt.get_cdata();
     int64_t limit = pkt.get_clen();
     if (OB_FAIL(rcode.deserialize(payload, limit, pos))) {
       rcode.rcode_ = common::OB_DESERIALIZE_ERROR;
-      RPC_OBRPC_LOG(WARN, "deserialize result code fail", K(ret));
+      RPC_OBRPC_LOG(WARN, "deserialize result code fail", KP(payload), K(limit), K(resp_sz), K(pos));
     } else {
       if (rcode.rcode_ != common::OB_SUCCESS) {
         ret = rcode.rcode_;
       } else if (OB_FAIL(common::serialization::decode(payload, limit, pos, result))) {
-        RPC_OBRPC_LOG(WARN, "deserialize result fail", K(ret));
+        RPC_OBRPC_LOG(WARN, "deserialize result fail", KP(payload), K(limit), K(resp_sz), K(pos));
       } else {
         ret = rcode.rcode_;
       }
@@ -152,7 +152,7 @@ int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacke
 }
 
 int rpc_decode_ob_packet(ObRpcMemPool& pool, const char* buf, int64_t sz, ObRpcPacket*& ret_pkt);
-int rpc_encode_ob_packet(ObRpcMemPool& pool, ObRpcPacket* pkt, char*& buf, int64_t& sz);
+int rpc_encode_ob_packet(ObRpcMemPool& pool, ObRpcPacket* pkt, char*& buf, int64_t& sz, int64_t reserve_buf_size);
 
 }; // end namespace obrpc
 }; // end namespace oceanbase

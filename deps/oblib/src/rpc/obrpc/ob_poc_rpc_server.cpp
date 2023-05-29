@@ -50,6 +50,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
   if (OB_FAIL(tmp_pkt.decode(buf, sz))) {
     RPC_LOG(ERROR, "decode packet fail", K(ret));
   } else {
+    ObCurTraceId::set(tmp_pkt.get_trace_id());
     obrpc::ObRpcPacketCode pcode = tmp_pkt.get_pcode();
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
@@ -108,18 +109,55 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
 {
   int ret = OB_SUCCESS;
   int sys_err = 0;
-  char* buf = NULL;
+  char reserve_buf[2048]; // reserve stack memory for response packet buf
+  char* buf = reserve_buf;
   int64_t sz = 0;
   if (NULL == pkt) {
-    RPC_LOG(DEBUG, "resp pkt is null", K(pkt));
-  } else if (OB_FAIL(rpc_encode_ob_packet(pool_, pkt, buf, sz))) {
-    RPC_LOG(WARN, "rpc_encode_ob_packet fail", K(pkt));
+    // do nothing
+  } else if (OB_FAIL(rpc_encode_ob_packet(pool_, pkt, buf, sz, sizeof(reserve_buf)))) {
+    RPC_LOG(WARN, "rpc_encode_ob_packet fail", KP(pkt), K(sz));
     buf = NULL;
     sz = 0;
   }
   if ((sys_err = pn_resp(resp_id_, buf, sz, resp_expired_abs_us_)) != 0) {
     RPC_LOG(WARN, "pn_resp fail", K(resp_id_), K(sys_err));
   }
+}
+
+int ObPocServerHandleContext::resp_error(uint64_t resp_id, int err_code, const char* b, const int64_t sz)
+{
+  int ret = OB_SUCCESS;
+  ObRpcResultCode rcode;
+  rcode.rcode_ = err_code;
+  char tmp_buf[sizeof(rcode)];
+  int64_t pos = 0;
+  if (OB_FAIL(rcode.serialize(tmp_buf, sizeof(tmp_buf), pos))) {
+    RPC_LOG(ERROR, "serialize rcode fail", K(pos));
+  } else {
+    ObRpcPacket res_pkt;
+    res_pkt.set_content(tmp_buf, pos);
+    if (b != NULL && sz > 0) {
+      int tmp_ret = OB_SUCCESS;
+      ObRpcPacket recv_pkt;
+      if (OB_TMP_FAIL(recv_pkt.decode(b, sz))) {
+        RPC_LOG_RET(ERROR, tmp_ret, "decode packet fail");
+      } else {
+        res_pkt.set_pcode(recv_pkt.get_pcode());
+        res_pkt.set_chid(recv_pkt.get_chid());
+        res_pkt.set_trace_id(recv_pkt.get_trace_id());
+        res_pkt.set_dst_cluster_id(recv_pkt.get_src_cluster_id());
+        int64_t receive_ts = ObTimeUtility::current_time();
+        res_pkt.set_request_arrival_time(receive_ts);
+      }
+    }
+    res_pkt.set_resp();
+    res_pkt.set_unis_version(0);
+    res_pkt.calc_checksum();
+    ObRpcMemPool pool;
+    ObPocServerHandleContext dummy(pool, resp_id, OB_INVALID_TIMESTAMP);
+    dummy.resp(&res_pkt);
+  }
+  return ret;
 }
 
 void ObPocServerHandleContext::set_peer_unsafe()
@@ -148,6 +186,8 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
   if (NULL == b || sz <= easy_head_size) {
     tmp_ret = OB_INVALID_DATA;
     RPC_LOG(WARN, "rpc request is invalid", K(tmp_ret), K(b), K(sz));
+    b = NULL;
+    sz = 0;
   } else {
     b = b + easy_head_size;
     sz = sz - easy_head_size;
@@ -159,11 +199,14 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
     }
   }
   if (OB_SUCCESS != tmp_ret) {
-    int sys_err = 0;
-    if ((sys_err = pn_resp(resp_id, NULL, 0, OB_INVALID_TIMESTAMP)) != 0) {
-      RPC_LOG(WARN, "pn_resp fail", K(resp_id), K(sys_err));
+    if (OB_TMP_FAIL(ObPocServerHandleContext::resp_error(resp_id, tmp_ret, b, sz))) {
+      int sys_err = 0;
+      if ((sys_err = pn_resp(resp_id, NULL, 0, OB_INVALID_TIMESTAMP)) != 0) {
+        RPC_LOG(WARN, "pn_resp fail", K(resp_id), K(sys_err));
+      }
     }
   }
+  ObCurTraceId::reset();
   return ret;
 }
 

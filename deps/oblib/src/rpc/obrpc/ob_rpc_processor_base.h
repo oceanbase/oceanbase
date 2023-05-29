@@ -114,6 +114,7 @@ protected:
   void set_result_compress_type(common::ObCompressorType t) { result_compress_type_ = t; }
 protected:
   int part_response(const int retcode, bool is_last);
+  int part_response_error(rpc::ObRequest* req, const int retcode);
   int do_response(const Response &rsp);
   void compress_result(const char *src_buf, int64_t src_len,
                        char *dst_buf, int64_t dst_len, ObRpcPacket *pkt);

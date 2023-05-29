@@ -86,12 +86,15 @@ int rpc_decode_ob_packet(ObRpcMemPool& pool, const char* buf, int64_t sz, ObRpcP
   return ret;
 }
 
-int rpc_encode_ob_packet(ObRpcMemPool& pool, ObRpcPacket* pkt, char*& buf, int64_t& sz)
+int rpc_encode_ob_packet(ObRpcMemPool& pool, ObRpcPacket* pkt, char*& buf, int64_t& sz, int64_t reserve_buf_size)
 {
   int ret = common::OB_SUCCESS;
   int64_t pos = 0;
   int64_t encode_size = pkt->get_encoded_size();
-  if (NULL == (buf = (char*)pool.alloc(encode_size))) {
+  if (NULL == buf || encode_size > reserve_buf_size) {
+    buf = (char*)pool.alloc(encode_size);
+  }
+  if (NULL == buf) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc encode buffer fail", K(encode_size));
   } else if (OB_FAIL(pkt->encode_header(buf, encode_size, pos))) {

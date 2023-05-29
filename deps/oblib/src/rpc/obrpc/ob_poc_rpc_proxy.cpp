@@ -39,7 +39,7 @@ int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
       RPC_LOG_RET(WARN, send_ret_, "pnio error", KP(buf), K(sz), K(io_err));
     }
   } else if (NULL == buf || sz <= easy_head_size) {
-    send_ret_ = OB_ERR_UNEXPECTED;
+    send_ret_ = OB_TIMEOUT;
     RPC_LOG_RET(WARN, send_ret_, "response is null", KP(buf), K(sz), K(io_err));
   } else {
     buf = buf + easy_head_size;
@@ -132,6 +132,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
     } else if (OB_FAIL(rpc_decode_ob_packet(pool_, buf, sz, ret_pkt))) {
       ucb_->on_invalid();
       RPC_LOG(WARN, "rpc_decode_ob_packet fail", K(ret));
+    } else if (OB_FALSE_IT(ObCurTraceId::set(ret_pkt->get_trace_id()))) {
     } else if (OB_FAIL(ucb_->decode(ret_pkt))) {
       ucb_->on_invalid();
       RPC_LOG(WARN, "ucb.decode fail", K(ret));
@@ -146,6 +147,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
     }
   }
   pool_.destroy();
+  ObCurTraceId::reset();
   return ret;
 }
 
