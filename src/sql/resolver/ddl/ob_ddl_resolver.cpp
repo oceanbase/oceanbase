@@ -10391,5 +10391,46 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
   return ret;
 }
 
+int ObDDLResolver::deep_copy_string_in_part_expr(ObPartitionedStmt* stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null stmt");
+  } else if (OB_FAIL(append(exprs, stmt->get_part_fun_exprs()))) {
+    LOG_WARN("failed to append part fun exprs", K(ret));
+  } else if (OB_FAIL(append(exprs, stmt->get_subpart_fun_exprs()))) {
+    LOG_WARN("failed to append subpart fun exprs", K(ret));
+  } else if (exprs.count() > 0 && OB_FAIL(deep_copy_column_expr_name(*allocator_, exprs))) {
+    LOG_WARN("failed to deep copy column expr name");
+  }
+  return ret;
+}
+
+int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
+                                              ObIArray<ObRawExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> column_exprs;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(exprs, column_exprs))) {
+    LOG_WARN("failed to extract column exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+      ObColumnRefRawExpr* column_expr = NULL;
+      if (OB_ISNULL(column_exprs.at(i)) || !column_exprs.at(i)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(i), K(column_exprs));
+      } else if (OB_FALSE_IT(column_expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(i)))) {
+      } else if (OB_FAIL(ob_write_string(allocator, column_expr->get_column_name(), column_expr->get_column_name()))) {
+        LOG_WARN("failed to write string");
+      } else if (OB_FAIL(ob_write_string(allocator, column_expr->get_database_name(), column_expr->get_database_name()))) {
+        LOG_WARN("failed to write string");
+      }
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
