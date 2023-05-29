@@ -255,7 +255,8 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
           || (T_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_CAST_ARGUMENT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_DOUBLE == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
-          || (T_FLOAT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)) {
+          || (T_FLOAT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || true == ctx.tree_->is_forbid_parameter_) {
         ctx.is_fast_parse_const_ = false;
       } else {
         ctx.is_fast_parse_const_ = (IS_DATATYPE_OP(ctx.tree_->type_)

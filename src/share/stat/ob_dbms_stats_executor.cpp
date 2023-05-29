@@ -649,7 +649,7 @@ int ObDbmsStatsExecutor::init_opt_stat(ObIAllocator &allocator,
       LOG_WARN("memory is not enough", K(ret), K(ptr));
     } else {
       col_stat = new (ptr) ObOptColumnStat(allocator);
-      col_stat->set_table_id(param.column_params_.at(i).need_basic_static_ ? param.table_id_: -1);
+      col_stat->set_table_id(param.column_params_.at(i).need_basic_stat() ? param.table_id_: -1);
       col_stat->set_partition_id(part_info.part_id_);
       col_stat->set_stat_level(extra.type_);
       col_stat->set_column_id(param.column_params_.at(i).column_id_);

@@ -152,7 +152,7 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
       const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i + 1);
       ObOptColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {
         ObObj obj;
         if (OB_FAIL(datum.to_obj_enhance(obj, col_desc.col_type_))) {
@@ -167,7 +167,7 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
       const ObStorageDatum &datum = datum_row.storage_datums_[i];
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
       ObOptColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {
         ObObj obj;
         if (OB_FAIL(datum.to_obj_enhance(obj, col_desc.col_type_))) {
@@ -181,7 +181,7 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
       const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt];
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
       ObOptColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {
         ObObj obj;
         if (OB_FAIL(datum.to_obj_enhance(obj, col_desc.col_type_))) {

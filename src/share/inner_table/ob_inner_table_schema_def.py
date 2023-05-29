@@ -12137,11 +12137,11 @@ def_table_schema(
                     left join (
                       select tenant_id,
                              table_id,
-                             sum(row_cnt) as row_cnt,
-                             sum(row_cnt * avg_row_len) / sum(row_cnt) as avg_row_len,
-                             sum(row_cnt * avg_row_len) as data_size
+                             row_cnt,
+                             avg_row_len,
+                             row_cnt * avg_row_len as data_size
                       from oceanbase.__all_table_stat
-                      group by tenant_id, table_id) ts
+                      where partition_id = -1 or partition_id = table_id) ts
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
                     where a.tenant_id = 0
@@ -29565,12 +29565,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -29738,12 +29738,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -29908,12 +29908,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -30953,9 +30953,9 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               SUM(ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
-        GROUP BY TENANT_ID, TABLE_ID) TS
+        WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
       AND T.TENANT_ID = TS.TENANT_ID
       WHERE T.PART_LEVEL = 0
@@ -31110,9 +31110,9 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               SUM(ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
-        GROUP BY TENANT_ID, TABLE_ID) TS
+        WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
       AND T.TENANT_ID = TS.TENANT_ID
       WHERE T.PART_LEVEL = 0
@@ -35420,14 +35420,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 
@@ -35563,14 +35561,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 
@@ -35702,14 +35698,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 

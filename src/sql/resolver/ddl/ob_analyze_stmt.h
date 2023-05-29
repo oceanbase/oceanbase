@@ -99,6 +99,8 @@ public:
   int set_part_ids(ObIArray<int64_t> &part_ids);
   int set_subpart_ids(ObIArray<int64_t> &subpart_ids);
 
+  void set_gather_subpart_hist(bool gather_subpart_hist) { gather_subpart_hist_ = gather_subpart_hist; }
+
 
   TO_STRING_KV(K_(tenant_id),
                K_(table_id),
@@ -108,7 +110,9 @@ public:
                K_(partition_infos),
                K_(subpartition_infos),
                K_(part_ids),
-               K_(subpart_ids));
+               K_(subpart_ids),
+               K_(gather_subpart_hist));
+
 private:
   uint64_t tenant_id_;
   ObString database_name_;
@@ -136,6 +140,7 @@ private:
   common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> subpart_ids_;
   common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> all_partition_infos_;
   common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> all_subpartition_infos_;
+  bool gather_subpart_hist_;
   DISALLOW_COPY_AND_ASSIGN(ObAnalyzeStmt);
 };
 

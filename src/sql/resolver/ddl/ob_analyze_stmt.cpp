@@ -37,7 +37,8 @@ ObAnalyzeStmt::ObAnalyzeStmt()
     parallel_degree_(1),
     is_drop_(false),
     part_ids_(),
-    subpart_ids_()
+    subpart_ids_(),
+    gather_subpart_hist_(false)
 {
 }
 
@@ -96,6 +97,7 @@ int ObAnalyzeStmt::fill_table_stat_param(ObExecContext &ctx, common::ObTableStat
     param.global_stat_param_.need_modify_ = partition_name_.empty();
     param.part_stat_param_.need_modify_ = !partition_infos_.empty();
     param.subpart_stat_param_.need_modify_ = !subpartition_infos_.empty();
+    param.subpart_stat_param_.gather_histogram_ = gather_subpart_hist_;
   }
 
   LOG_TRACE("link bug", K(param));

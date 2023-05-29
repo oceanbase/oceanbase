@@ -239,10 +239,12 @@ public:
   static int parse_method_opt(sql::ObExecContext &ctx,
                               ObIAllocator *allocator,
                               ObIArray<ObColumnStatParam> &column_params,
-                              const ObString &method_opt);
+                              const ObString &method_opt,
+                              bool &use_size_auto);
 
   static int parser_for_all_clause(const ParseNode *for_all_node,
-                                   ObIArray<ObColumnStatParam> &column_params);
+                                   ObIArray<ObColumnStatParam> &column_params,
+                                   bool &use_size_auto);
 
   static int parser_for_columns_clause(const ParseNode *for_col_node,
                                        ObIArray<ObColumnStatParam> &column_params,
@@ -564,7 +566,10 @@ private:
 
   static bool is_func_index(const ObTableStatParam &index_param);
 
-  static int resovle_granularity(ObGranularityType granu_type, ObTableStatParam &param);
+  static int resovle_granularity(ObGranularityType granu_type,
+                                 const bool use_size_auto,
+                                 ObTableStatParam &param);
+
   static void decide_modified_part(ObTableStatParam &param, const bool cascade_parts);
 
 };

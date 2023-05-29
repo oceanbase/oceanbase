@@ -100,13 +100,13 @@ int ObStatMaxValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   if (OB_ISNULL(col_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column param is null", K(ret));
-  } else if (!col_param_->need_truncate_str_ &&
+  } else if (!col_param_->need_truncate_str() &&
              OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " MAX(\"%.*s\")" : " MAX(`%.*s`)",
                                      col_param_->column_name_.length(),
                                      col_param_->column_name_.ptr()))) {
     LOG_WARN("failed to print max(col) expr", K(ret));
-  } else if (col_param_->need_truncate_str_ &&
+  } else if (col_param_->need_truncate_str() &&
              OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " MAX(SUBSTR(\"%.*s\", 1, %ld))" :
                                      " MAX(SUBSTR(`%.*s`, 1, %ld))",
@@ -137,13 +137,13 @@ int ObStatMinValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   if (OB_ISNULL(col_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column param is null", K(ret));
-  } else if (!col_param_->need_truncate_str_ &&
+  } else if (!col_param_->need_truncate_str() &&
              OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " MIN(\"%.*s\")" : " MIN(`%.*s`)",
                                      col_param_->column_name_.length(),
                                      col_param_->column_name_.ptr()))) {
     LOG_WARN("failed to print max(col) expr", K(ret));
-  } else if (col_param_->need_truncate_str_ &&
+  } else if (col_param_->need_truncate_str() &&
              OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " MIN(SUBSTR(\"%.*s\", 1, %ld))" :
                                      " MIN(SUBSTR(`%.*s`, 1, %ld))",
@@ -239,7 +239,7 @@ int ObStatLlcBitmap::decode(ObObj &obj)
 bool ObStatTopKHist::is_needed() const
 {
   return NULL != col_param_ &&
-         col_param_->need_basic_static_ &&
+         col_param_->need_basic_stat() &&
          col_param_->bucket_num_ > 1;
 }
 
@@ -261,7 +261,7 @@ int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
     }
     double err_rate = 1.0 / (1000 * (bkt_num / MIN_BUCKET_SIZE));
     if (OB_SUCC(ret)) {
-      if (!col_param_->need_truncate_str_ &&
+      if (!col_param_->need_truncate_str() &&
           OB_FAIL(databuff_printf(buf, buf_len, pos,
                                   lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, \"%.*s\", %ld)" :
                                   " TOP_K_FRE_HIST(%lf, `%.*s`, %ld)",
@@ -270,7 +270,7 @@ int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
                                   col_param_->column_name_.ptr(),
                                   bkt_num))) {
         LOG_WARN("failed to print buf topk hist expr", K(ret));
-      } else if (col_param_->need_truncate_str_ &&
+      } else if (col_param_->need_truncate_str() &&
                  OB_FAIL(databuff_printf(buf, buf_len, pos,
                                   lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, SUBSTR(\"%.*s\", 1, %ld), %ld)" :
                                   " TOP_K_FRE_HIST(%lf, SUBSTR(`%.*s`, 1, %ld), %ld)",
@@ -682,7 +682,7 @@ int ObStatHybridHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NULL"))) {
       LOG_WARN("failed to print buf", K(ret));
     } else {/*do nothing*/}
-  } else if (!col_param_->need_truncate_str_ &&
+  } else if (!col_param_->need_truncate_str() &&
              OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " HYBRID_HIST(\"%.*s\", %ld)" :
                                      " HYBRID_HIST(`%.*s`, %ld)",
@@ -690,7 +690,7 @@ int ObStatHybridHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
                                      col_param_->column_name_.ptr(),
                                      col_param_->bucket_num_))) {
     LOG_WARN("failed to print buf", K(ret));
-  } else if (col_param_->need_truncate_str_ &&
+  } else if (col_param_->need_truncate_str() &&
              OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " HYBRID_HIST(SUBSTR(\"%.*s\", 1, %ld), %ld)" :
                                      " HYBRID_HIST(SUBSTR(`%.*s`, 1, %ld), %ld)",
@@ -720,7 +720,9 @@ int ObStatHybridHist::decode(ObObj &obj, ObIAllocator &allocator)
   } else {
     col_stat_->get_histogram().get_buckets().reset();
     col_stat_->get_histogram().set_bucket_cnt(hybrid_hist.get_buckets().count());
-    if (OB_FAIL(col_stat_->get_histogram().prepare_allocate_buckets(allocator, hybrid_hist.get_buckets().count()))) {
+    if (hybrid_hist.get_buckets().empty()) {
+      //do nothing, maybe the sample data is all null
+    } else if (OB_FAIL(col_stat_->get_histogram().prepare_allocate_buckets(allocator, hybrid_hist.get_buckets().count()))) {
       LOG_WARN("failed to prepare allocate buckets", K(ret));
     } else if (OB_FAIL(col_stat_->get_histogram().assign_buckets(hybrid_hist.get_buckets()))) {
       LOG_WARN("failed to assign buckets", K(ret));

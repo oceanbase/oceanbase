@@ -282,6 +282,7 @@ ObPartitionParallelRanger::ObPartitionParallelRanger(ObArenaAllocator &allocator
     sample_cnt_(0),
     parallel_target_count_(0),
     is_micro_level_(false),
+    col_cnt_(0),
     is_inited_(false)
 {
 }
@@ -309,6 +310,7 @@ void ObPartitionParallelRanger::reset()
   sample_cnt_ = 0;
   parallel_target_count_ = 0;
   is_micro_level_ = false;
+  col_cnt_ = 0;
   is_inited_ = false;
 }
 
@@ -336,6 +338,7 @@ int ObPartitionParallelRanger::init(ObRangeSplitInfo &range_info, const bool for
   if (OB_SUCC(ret)) {
     store_range_ = range_info.store_range_;
     parallel_target_count_ = range_info.parallel_target_count_;
+    col_cnt_ = store_range_->get_start_key().get_obj_cnt();
     is_inited_ = true;
     STORAGE_LOG(DEBUG, "succ to init partition parallel ranger", K(*this));
   }
@@ -684,6 +687,35 @@ int ObPartitionParallelRanger::split_ranges(
   return ret;
 }
 
+int ObPartitionParallelRanger::build_bound_rowkey(const bool is_max, common::ObIAllocator &allocator, common::ObStoreRowkey &new_rowkey)
+{
+  int ret = OB_SUCCESS;
+  char *ptr = nullptr;
+
+  if (OB_UNLIKELY(col_cnt_ == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected col cnt", K(ret));
+  } else if (OB_ISNULL(ptr = reinterpret_cast<char *>(allocator.alloc(sizeof(ObObj) * col_cnt_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "Failed to allocate memory", K(ret), K(sizeof(ObObj) * col_cnt_));
+  } else {
+    ObObj *obj_ptr = reinterpret_cast<ObObj *>(ptr);
+    for (int64_t i = 0; i < col_cnt_; i++) {
+      if (is_max) {
+        obj_ptr[i].set_max_value();
+      } else {
+        obj_ptr[i].set_min_value();
+      }
+    }
+
+    if (OB_FAIL(new_rowkey.assign(obj_ptr, col_cnt_))) {
+      STORAGE_LOG(WARN, "Failed to assign new rowkey", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObPartitionParallelRanger::build_new_rowkey(const ObStoreRowkey &rowkey,
                                                 const bool for_compaction,
                                                 ObIAllocator &allocator,
@@ -736,13 +768,21 @@ int ObPartitionParallelRanger::construct_single_range(ObIAllocator &allocator,
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid keys to construct range", K(ret), K(start_key), K(end_key));
   } else if (start_key.is_min()) {
-    range.get_start_key().set_min();
+    if (for_compaction) {
+      range.get_start_key().set_min();
+    } else if (OB_FAIL(build_bound_rowkey(false /* is max */, allocator, range.get_start_key()))) {
+      STORAGE_LOG(WARN, "fail to build bound rowkey", K(ret));
+    }
   } else if (OB_FAIL(build_new_rowkey(start_key, for_compaction, allocator, range.get_start_key()))) {
     STORAGE_LOG(WARN, "Failed to deep copy macro start endkey", K(ret), K(start_key));
   }
   if (OB_FAIL(ret)) {
   } else if (end_key.is_max()) {
-    range.get_end_key().set_max();
+    if (for_compaction) {
+      range.get_end_key().set_max();
+    } else if (OB_FAIL(build_bound_rowkey(true /* is max */, allocator, range.get_end_key()))) {
+      STORAGE_LOG(WARN, "fail to build bound rowkey", K(ret));
+    }
   } else if (OB_FAIL(build_new_rowkey(end_key, for_compaction, allocator, range.get_end_key()))) {
     STORAGE_LOG(WARN, "Failed to deep copy macro end endkey", K(ret), K(start_key));
   }
@@ -988,6 +1028,7 @@ int ObPartitionRangeSpliter::split_ranges(ObRangeSplitInfo &range_info,
   if (OB_UNLIKELY(!range_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to split ranges", K(ret), K(range_info));
+  } else if (FALSE_IT(parallel_ranger_.set_col_cnt(range_info.store_range_->get_start_key().get_obj_cnt()))) {
   } else if (range_info.parallel_target_count_ == 1
       || range_info.store_range_->is_single_rowkey()) {
     if (OB_FAIL(build_single_range(for_compaction, range_info, allocator, range_array))) {

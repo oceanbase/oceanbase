@@ -930,6 +930,12 @@ int ObParser::parse_sql(const ObString &stmt,
       LOG_WARN("failed to fast parameterize", K(stmt), K(ret));
     }
   }
+  if (OB_SUCC(ret) &&
+      parse_result.enable_compatible_comment_ &&
+      parse_result.mysql_compatible_comment_) {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("the sql is invalid", K(ret), K(stmt));
+  }
   if (OB_FAIL(ret) && !no_throw_parser_error) {
     auto err_charge_sql_mode = lib::is_oracle_mode();
     LOG_WARN("failed to parse the statement",

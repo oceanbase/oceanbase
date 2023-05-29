@@ -144,6 +144,7 @@ typedef struct _ParseNode
       uint32_t is_multiset_ : 1; // for cast(multiset(...) as ...)
       uint32_t is_forbid_anony_parameter_ : 1; // 1 表示禁止匿名块参数化
       uint32_t is_input_quoted_ : 1; // indicate name_ob input whether with double quote
+      uint32_t is_forbid_parameter_ : 1; //1 indicate forbid parameter
       uint32_t reserved_;
     };
   };
