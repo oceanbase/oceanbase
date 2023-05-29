@@ -1209,18 +1209,10 @@ int ObTenantTabletScheduler::restart_schedule_timer_task(
   bool is_exist = false;
   if (OB_FAIL(TG_TASK_EXIST(tg_id, timer_task, is_exist))) {
     LOG_ERROR("failed to check merge schedule task exist", K(ret));
-  } else if (is_exist) {
-    if (OB_FAIL(TG_WAIT_R(tg_id))) {
-      LOG_WARN("failed to wait schedule task before restart", K(ret), K(tg_id), K(schedule_interval));
-    } else if (OB_FAIL(TG_STOP_R(tg_id))) {
-      LOG_WARN("failed to stop schedule task before restart", K(ret), K(tg_id), K(schedule_interval));
-    } else if (OB_FAIL(TG_START(tg_id))) {
-      LOG_WARN("failed to restart schedule task", K(ret), K(tg_id), K(schedule_interval));
-    }
-  }
-
-  if (FAILEDx(TG_SCHEDULE(tg_id, timer_task, schedule_interval, true/*repeat*/))) {
-    LOG_WARN("Fail to schedule minor merge scan task", K(ret));
+  } else if (is_exist && OB_FAIL(TG_CANCEL_R(tg_id, timer_task))) {
+    LOG_WARN("failed to cancel task", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(tg_id, timer_task, schedule_interval, true/*repeat*/))) {
+    LOG_WARN("Fail to schedule timer task", K(ret));
   }
   return ret;
 }
