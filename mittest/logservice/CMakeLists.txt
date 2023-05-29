@@ -2,7 +2,8 @@ set(OBLOGSVR_TEST_SRCS
   env/ob_simple_log_server.cpp
   env/ob_simple_arb_server.cpp
   env/ob_simple_log_cluster_testbase.cpp
-  env/ob_simple_log_cluster_env.cpp)
+  env/ob_simple_log_cluster_env.cpp
+  env/mock_election.cpp)
 
 add_library(oblogsvr_test ${OBLOGSVR_TEST_SRCS})
 target_include_directories(oblogsvr_test PUBLIC
@@ -30,5 +31,7 @@ ob_unittest_clog(test_ob_simple_log_single_replica_func test_ob_simple_log_singl
 ob_unittest_clog(test_ob_simple_arb_server_single_replica test_ob_simple_arb_server_single_replica.cpp)
 ob_unittest_clog(test_ob_simple_arb_server_mutil_replica test_ob_simple_arb_server_mutil_replica.cpp)
 ob_unittest_clog(test_ob_simple_log_data_intergrity test_ob_simple_log_data_intergrity.cpp)
+ob_unittest_clog(test_ob_simple_log_config_change_mock_ele test_ob_simple_log_config_change_mock_ele.cpp)
+ob_unittest_clog(test_ob_simple_log_arb_mock_ele test_ob_simple_log_arb_mock_ele.cpp)
 
 add_subdirectory(archiveservice)

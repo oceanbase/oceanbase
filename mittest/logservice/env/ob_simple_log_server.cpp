@@ -290,6 +290,8 @@ int ObSimpleLogServer::init_log_service_()
   } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &ls_service_,
       &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_))) {
     SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
+  } else if (OB_FAIL(mock_election_map_.init())) {
+    SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
   } else {
     palf_env_ = log_service_.get_palf_env();
     palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = OB_SERVER_TENANT_ID;
