@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX STORAGE
 #define protected public
 #define private public
+#define UNITTEST
 
 #include "env/ob_simple_cluster_test_base.h"
 #include "storage/tx_storage/ob_ls_service.h"
