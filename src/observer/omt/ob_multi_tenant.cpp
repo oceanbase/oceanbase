@@ -2024,6 +2024,27 @@ int ObMultiTenant::get_tenant_worker_time(const uint64_t tenant_id, int64_t &wor
   return ret;
 }
 
+int ObMultiTenant::get_tenant_cpu_time(const uint64_t tenant_id, int64_t &cpu_time) const
+{
+  int ret = OB_SUCCESS;
+  ObTenant *tenant = nullptr;
+  cpu_time = 0;
+  if (GCONF.enable_cgroup) {
+    ret = GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time);
+  } else {
+    if (!lock_.try_rdlock()) {
+      ret = OB_EAGAIN;
+    } else {
+      if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+      } else {
+        cpu_time = tenant->get_ru_cputime();
+      }
+      lock_.unlock();
+    }
+  }
+  return ret;
+}
+
 
 int ObMultiTenant::get_tenant_cpu(
     const uint64_t tenant_id, double &min_cpu, double &max_cpu) const

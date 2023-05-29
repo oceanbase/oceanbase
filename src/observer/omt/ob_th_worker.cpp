@@ -107,7 +107,7 @@ ObThWorker::ObThWorker()
       priority_limit_(RQ_LOW), is_lq_yield_(false),
       query_start_time_(0), last_check_time_(0),
       can_retry_(true), need_retry_(false),
-      has_add_to_cgroup_(false), last_wakeup_ts_(0), is_blocking_(nullptr)
+      has_add_to_cgroup_(false), last_wakeup_ts_(0), is_blocking_(nullptr), ru_cputime_(0)
 {
 }
 
@@ -312,6 +312,16 @@ void ObThWorker::set_th_worker_thread_name(uint64_t tenant_id)
   }
 }
 
+void ObThWorker::update_ru_cputime()
+{
+  struct rusage ru;
+  getrusage(RUSAGE_THREAD, &ru);
+  int64_t ru_utime =
+      ru.ru_utime.tv_sec * 1000000 + ru.ru_utime.tv_usec
+      + ru.ru_stime.tv_sec * 1000000 + ru.ru_stime.tv_usec;
+  tenant_->add_ru_cputime(ru_utime - ru_cputime_);
+  ru_cputime_ = ru_utime;
+}
 void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t &worker_level)
 {
   int ret = OB_SUCCESS;
@@ -408,6 +418,9 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
                   process_request(*req);
                   req_end_time = ObTimeUtility::current_time();
                   tenant_->add_worker_time(req_end_time - req_start_time);
+                  if (!GCONF.enable_cgroup) {
+                    update_ru_cputime();
+                  }
                   query_enqueue_time_ = INT64_MAX;
                   query_start_time_ = INT64_MAX;
                 } else {
