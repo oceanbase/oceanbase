@@ -29,6 +29,7 @@ public:
   static int set_default_timeout_ctx(common::ObTimeoutCtx &ctx, const int64_t default_timeout);
   // priority to get timeout: ctx > worker > default_timeout
   static int get_abs_timeout(const int64_t default_timeout, int64_t &abs_timeout);
+  static int get_ctx_timeout(const int64_t default_timeout, int64_t &timeout);
   // data version must up to 4.1 with arbitration service
   // params[in]  tenant_id, which tenant to check
   // params[out] is_compatible, whether it is up to 4.1
