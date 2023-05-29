@@ -1385,7 +1385,7 @@ int ObRootService::submit_update_all_server_task(const ObAddr &server)
   }
 
   // FIXME: @wanhong.wwh: If self is RS and self status change, submit_update_rslist_task
-  if (OB_SUCC(ret) && server == self_addr_) {
+  if (OB_SUCC(ret)) {
     if (!in_service()) {
       LOG_INFO("self is not RS, need not submit update rslist task in update_all_server_task",
           K(server));
