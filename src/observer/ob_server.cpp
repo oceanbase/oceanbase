@@ -475,6 +475,26 @@ void ObServer::destroy()
   FLOG_INFO("[OBSERVER_NOTICE] destroy observer begin");
   if (is_arbitration_mode()) {
   } else if (!has_destroy_ && has_stopped_) {
+    FLOG_INFO("begin destroy signal worker");
+    sig_worker_->destroy();
+    FLOG_INFO("signal worker destroyed");
+
+    FLOG_INFO("begin destroy signal handle");
+    signal_handle_->destroy();
+    FLOG_INFO("signal handle destroyed");
+
+    FLOG_INFO("begin to destroy ObLogger");
+    OB_LOGGER.destroy();
+    FLOG_INFO("ObLogger destroyed");
+
+    FLOG_INFO("active session history task destroyed");
+    ObClockGenerator::destroy();
+    FLOG_INFO("clock generator destroyed");
+
+    FLOG_INFO("opt stat manager destroyed");
+    ObOptStatManager::get_instance().destroy();
+    FLOG_INFO("opt stat manager destroyed");
+
     FLOG_INFO("begin to destroy active session history task");
     ObActiveSessHistTask::get_instance().destroy();
     FLOG_INFO("active session history task destroyed");
@@ -985,6 +1005,14 @@ int ObServer::stop()
     FLOG_INFO("end to stop imc tasks", KR(ret));
 #endif
 
+    FLOG_INFO("begin stop signal worker");
+    sig_worker_->stop();
+    FLOG_INFO("stop signal worker success");
+
+    FLOG_INFO("begin stop signal handle");
+    signal_handle_->stop();
+    FLOG_INFO("stop signal handle success");
+
     FLOG_INFO("begin to stop server blacklist");
     TG_STOP(lib::TGDefIDs::Blacklist);
     FLOG_INFO("server blacklist stopped");
@@ -1121,9 +1149,16 @@ int ObServer::stop()
     bl_service_.stop();
     FLOG_INFO("blacklist service stopped");
 
+    FLOG_INFO("begin to stop tenant timezone manager");
+    tenant_timezone_mgr_.stop();
+    FLOG_INFO("tenant timezone manager stopped");
     //FLOG_INFO("begin stop partition scheduler");
     //ObPartitionScheduler::get_instance().stop_merge();
     //FLOG_INFO("partition scheduler stopped", KR(ret));
+
+    FLOG_INFO("begin to stop opt stat manager ");
+    ObOptStatManager::get_instance().stop();
+    FLOG_INFO("opt stat manager  stopped");
 
     FLOG_INFO("begin to stop server checkpoint slog handler");
     ObServerCheckpointSlogHandler::get_instance().stop();
@@ -1234,6 +1269,15 @@ int ObServer::wait()
 
   if (is_arbitration_mode()) {
   } else {
+
+    FLOG_INFO("begin wait signal worker");
+    sig_worker_->wait();
+    FLOG_INFO("wait signal worker success");
+
+    FLOG_INFO("begin wait signal handle");
+    signal_handle_->wait();
+    FLOG_INFO("wait signal handle success");
+
     FLOG_INFO("begin to wait active session hist task");
     ObActiveSessHistTask::get_instance().wait();
     FLOG_INFO("wait active session hist task success");
@@ -1375,6 +1419,14 @@ int ObServer::wait()
     FLOG_INFO("begin to wait blacklist service");
     bl_service_.wait();
     FLOG_INFO("wait blacklist service success");
+
+    FLOG_INFO("begin to wait tenant timezone manager");
+    tenant_timezone_mgr_.wait();
+    FLOG_INFO("wait tenant timezone manager success");
+
+    FLOG_INFO("begin to wait opt stat manager");
+    ObOptStatManager::get_instance().wait();
+    FLOG_INFO("wait opt stat manager success");
 
     FLOG_INFO("begin to wait server checkpoint slog handler");
     ObServerCheckpointSlogHandler::get_instance().wait();

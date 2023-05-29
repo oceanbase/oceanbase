@@ -91,6 +91,21 @@ int ObOptStatManager::init(ObMySQLProxy *proxy,
   return ret;
 }
 
+void ObOptStatManager::stop()
+{
+  refresh_stat_task_queue_.stop();
+}
+
+void ObOptStatManager::wait()
+{
+  refresh_stat_task_queue_.wait();
+}
+
+void ObOptStatManager::destroy()
+{
+  refresh_stat_task_queue_.destroy();
+}
+
 int ObOptStatManager::add_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &analyze_arg)
 {
   int ret = OB_SUCCESS;

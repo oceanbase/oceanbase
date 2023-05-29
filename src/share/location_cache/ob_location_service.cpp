@@ -319,12 +319,14 @@ void ObLocationService::stop()
 {
   ls_location_service_.stop();
   tablet_ls_service_.stop();
+  vtable_location_service_.stop();
 }
 
 void ObLocationService::wait()
 {
   ls_location_service_.wait();
   tablet_ls_service_.wait();
+  vtable_location_service_.wait();
 }
 
 int ObLocationService::destroy()
@@ -334,6 +336,8 @@ int ObLocationService::destroy()
     LOG_WARN("destroy ls_location_service failed", KR(ret));
   } else if (OB_FAIL(tablet_ls_service_.destroy())) {
     LOG_WARN("destroy tablet_ls_service failed", KR(ret));
+  } else if(OB_FAIL(vtable_location_service_.destroy())){
+    LOG_WARN("destroy vtable_location_service failed", KR(ret));
   } else {
     stopped_ = true;
     inited_ = false;

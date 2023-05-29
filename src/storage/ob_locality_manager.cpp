@@ -53,6 +53,7 @@ void ObLocalityManager::destroy()
     TG_DESTROY(lib::TGDefIDs::LocalityReload);
     locality_info_.destroy();
     server_locality_cache_.destroy();
+    refresh_locality_task_queue_.destroy();
     STORAGE_LOG(INFO, "ObLocalityManager destroy finished");
   }
 }
