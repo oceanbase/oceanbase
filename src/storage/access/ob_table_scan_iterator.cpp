@@ -573,7 +573,7 @@ int ObTableScanIterator::check_ls_offline_after_read()
   auto &acc_ctx = ctx_guard_.get_store_ctx().mvcc_acc_ctx_;
 
   if (acc_ctx.tx_table_guard_.check_ls_offline()) {
-    ret = OB_NOT_MASTER;
+    ret = OB_LS_OFFLINE;
     STORAGE_LOG(WARN, "ls offline during the read operation", K(ret), K(acc_ctx.snapshot_));
   }
 
