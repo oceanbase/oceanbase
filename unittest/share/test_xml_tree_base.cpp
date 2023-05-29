@@ -130,7 +130,7 @@ public:
   ObString get_prefix() { return ObString(); }
   ObString get_encoding() { return ObString(); }
   uint16_t get_standalone() { return 0; }
-  ObIMulModeBase* attribute_at(int64_t pos) { return nullptr; }
+  ObIMulModeBase* attribute_at(int64_t pos, ObIMulModeBase* buffer = nullptr) { return nullptr; }
   bool has_flags(ObMulModeNodeFlag flag) { return false; }
   bool get_unparse() { return false; }
   bool get_is_empty() { return false; }
@@ -218,7 +218,7 @@ public:
     return ret;
   }
 
-  virtual ObIMulModeBase* at(int64_t pos)
+  virtual ObIMulModeBase* at(int64_t pos, ObIMulModeBase* buffer = nullptr)
   {
     ObLibTreeNodeBase* tmp = ObLibContainerNode::member(pos);
     TXmlNodeBase* res = nullptr;
