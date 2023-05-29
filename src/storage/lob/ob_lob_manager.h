@@ -229,6 +229,7 @@ public:
                       uint64_t len,
                       int64_t timeout,
                       ObLobLocatorV2 &lob);
+  inline bool can_write_inrow(uint64_t len) { return len <= LOB_IN_ROW_MAX_LENGTH; }
 private:
   // private function
   int write_inrow_inner(ObLobAccessParam& param, ObString& data, ObString& old_data);
