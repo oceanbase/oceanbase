@@ -141,6 +141,7 @@ public:
        is_first_result_(true),
        has_more_rows_(true),
        is_query_sync_(false),
+       allocator_(ObModIds::TABLE_PROC),
        agg_cell_proj_(allocator_),
        agg_results_(allocator_)
   {
@@ -155,15 +156,16 @@ public:
   void set_query_sync() { is_query_sync_ = true ; }
   bool is_aggregate_query();
   int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name);
+  int init_agg_cell_proj(int64_t size);
 private:
   int get_aggregate_result(table::ObTableQueryResult *&next_result); 
   virtual int get_normal_result(table::ObTableQueryResult *&next_result);
 private:
-  int aggregate_max(uint64_t idx, const ObNewRow* row);
-  int aggregate_min(uint64_t idx, const ObNewRow* row);
-  int aggregate_count(uint64_t idx, const ObNewRow* row, const ObString& key_word);
-  int aggregate_sum(uint64_t idx, const ObNewRow* row);
-  int aggregate_avg(uint64_t idx, const ObNewRow* row, int64_t& count, double& count_double);
+  int aggregate_max(uint64_t idx, ObNewRow *&row);
+  int aggregate_min(uint64_t idx, ObNewRow *&row);
+  int aggregate_count(uint64_t idx, ObNewRow *&row, const ObString &key_word);
+  int aggregate_sum(uint64_t idx, ObNewRow *&row);
+  int aggregate_avg(uint64_t idx, ObNewRow *&row, int64_t &count, double &count_double);
 private:
   table::ObTableQueryResult *one_result_;
   const ObTableQuery *query_;

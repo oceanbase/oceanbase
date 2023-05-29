@@ -642,11 +642,12 @@ struct ObTableAggregationType
 {
   enum Type
   {
-    MAX = 0,
-    MIN = 1,
-    COUNT = 2,
-    SUM = 3,
-    AVG = 4,
+    INVAILD = 0,
+    MAX = 1,
+    MIN = 2,
+    COUNT = 3,
+    SUM = 4,
+    AVG = 5,
   };
 };
 
@@ -654,14 +655,17 @@ class ObTableAggregation
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableAggregation() {}; // todo@dazhi
+  ObTableAggregation()
+    :type_(ObTableAggregationType::Type::INVAILD),
+    column_()
+  {};
   ~ObTableAggregation() {};
   ObTableAggregationType::Type get_type() const { return type_; }
   const common::ObString &get_column() const { return column_; }
   TO_STRING_KV(K_(type), K_(column));
-protected:
-	ObTableAggregationType::Type type_; // e.g. max
-	common::ObString column_; // e.g. age
+private:
+  ObTableAggregationType::Type type_; // e.g. max
+  common::ObString column_; // e.g. age
 };
 
 /// A table query
