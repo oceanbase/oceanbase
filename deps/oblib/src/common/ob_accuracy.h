@@ -117,6 +117,24 @@ public:
   static bool is_default_number_int(const ObAccuracy &accuracy)
   { return -1 == accuracy.get_precision() && 0 == accuracy.get_scale(); }
 
+  // for ObNumberType/ObUNumberType and !is_default_number()
+  int64_t get_fixed_number_precision() const {
+    int64_t precision = get_precision();
+    if (is_default_number_int(*this)) {
+      precision = DEFAULT_NUMBER_PRECISION_FOR_INTEGER;
+    }
+    return precision;
+  }
+
+  // for ObNumberType/ObUNumberType and !is_default_number()
+  int64_t get_fixed_number_scale() const {
+    int64_t scale = get_scale();
+    if (is_default_number_int(*this)) {
+      scale = DEFAULT_NUMBER_SCALE_FOR_INTEGER;
+    }
+    return scale;
+  }
+
 public:
   OB_INLINE ObAccuracy &operator =(const ObAccuracy &other)
   {
