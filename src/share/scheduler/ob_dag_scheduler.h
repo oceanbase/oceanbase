@@ -475,7 +475,7 @@ public:
   {
     return OB_SUCCESS;
   }
-  virtual bool is_ha_dag_net() const { return true; }
+  virtual bool is_ha_dag_net() const { return false; }
 public:
   friend class ObTenantDagScheduler;
 

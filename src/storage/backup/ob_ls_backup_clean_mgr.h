@@ -69,6 +69,7 @@ public:
   int fill_comment(char *buf, const int64_t buf_len) const override;
   int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   bool is_valid() const override { return param_.is_valid(); }
+  bool is_ha_dag_net() const override { return true; }
   ObLSBackupCleanDagNetInitParam &get_param() { return param_;} 
   INHERIT_TO_STRING_KV("share::ObIDagNet", share::ObIDagNet, K_(param));
 private:
