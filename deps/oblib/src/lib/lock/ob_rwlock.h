@@ -34,7 +34,7 @@ public:
     }
   }
   bool acquired() const { return acquired_; }
-    
+
 private:
     const T& lock_;
     mutable bool acquired_;
@@ -76,12 +76,12 @@ class ObRWLock
 public:
   ObRWLock(LockMode lockMode = NO_PRIORITY);
   ~ObRWLock();
-  ObRLock* rlock() const { return rlock_; }
-  ObWLock* wlock() const { return wlock_; }
+  ObRLock* rlock() const { return const_cast<ObRLock*>(&rlock_); }
+  ObWLock* wlock() const { return const_cast<ObWLock*>(&wlock_); }
 private:
-  ObRLock* rlock_;
-  ObWLock* wlock_;
   pthread_rwlock_t rwlock_;
+  ObRLock rlock_;
+  ObWLock wlock_;
 };
 
 class ObRLockGuard

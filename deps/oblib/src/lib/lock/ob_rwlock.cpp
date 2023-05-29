@@ -47,6 +47,8 @@ int ObWLock::unlock() const
 }
 
 ObRWLock::ObRWLock(LockMode lockMode)
+  : rlock_(&rwlock_),
+    wlock_(&rwlock_)
 {
   pthread_rwlockattr_t attr;
   pthread_rwlockattr_init(&attr);
@@ -56,14 +58,9 @@ ObRWLock::ObRWLock(LockMode lockMode)
     pthread_rwlockattr_setkind_np(&attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
   }
   pthread_rwlock_init(&rwlock_, &attr);
-  auto mattr = SET_USE_500("RWLock");
-  rlock_ = OB_NEW(ObRLock, mattr, &rwlock_);
-  wlock_ = OB_NEW(ObWLock, mattr, &rwlock_);
 }
 
 ObRWLock::~ObRWLock()
 {
   pthread_rwlock_destroy(&rwlock_);
-  OB_DELETE(ObRLock, "unused", rlock_);
-  OB_DELETE(ObWLock, "unused", wlock_);
 }
