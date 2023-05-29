@@ -1362,7 +1362,8 @@ bool ObQueryRefRawExpr::inner_same_as(
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
       bool_ret = (get_ref_id() == u_expr.get_ref_id() &&
                   ref_stmt_ == u_expr.ref_stmt_ &&
-                  is_multiset_ == is_multiset_);
+                  is_set_ == u_expr.is_set_ &&
+                  is_multiset_ == u_expr.is_multiset_);
     }
   }
   return bool_ret;
@@ -1372,7 +1373,9 @@ bool ObExprEqualCheckContext::compare_query(const ObQueryRefRawExpr &left,
                                             const ObQueryRefRawExpr &right)
 {
   return left.get_ref_id() == right.get_ref_id() &&
-      left.get_ref_stmt() == right.get_ref_stmt();
+      left.get_ref_stmt() == right.get_ref_stmt() &&
+      left.is_set() == right.is_set() &&
+      left.is_multiset() == right.is_multiset();
 }
 
 int ObQueryRefRawExpr::do_visit(ObRawExprVisitor &visitor)
