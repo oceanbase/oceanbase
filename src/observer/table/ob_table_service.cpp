@@ -2012,9 +2012,6 @@ int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryRe
   } else if (aggregations->empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected empty empty aggregations", K(ret));
-  } else if (agg_results_.empty() && agg_results_.prepare_allocate(aggregations->count())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate aggregate result", K(ret), K(aggregations->count()));
   } else {
     // for aggregate_avg
     double* sum_double = nullptr;
