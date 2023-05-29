@@ -1481,6 +1481,7 @@ int ObExprGeneratorImpl::visit_pl_assoc_index_expr(ObOpRawExpr &expr,
     pl_assoc_index->set_row_dimension(ObExprOperator::NOT_ROW_DIMENSION);
     pl_assoc_index->set_out_of_range_set_err(assoc_index_expr.get_out_of_range_set_err());
     pl_assoc_index->set_parent_expr_type(assoc_index_expr.get_parent_type());
+    pl_assoc_index->set_is_index_by_varchar(assoc_index_expr.is_index_by_varchar());
   }
   return ret;
 }

@@ -2477,13 +2477,10 @@ int ObPLResolver::adjust_routine_param_type(ObPLDataType &type)
       } break;
       case ObIntervalTC: {
         if (data_type.get_meta_type().is_interval_ym()) {
-          data_type.set_scale(default_accuracy.get_scale());
+          ObScale scale = ObIntervalScaleUtil::interval_ym_scale_to_ob_scale(9);
+          data_type.set_scale(scale);
         } else {
-          int8_t day_scale = ObIntervalScaleUtil::ob_scale_to_interval_ds_day_scale(
-              static_cast<int8_t>(default_accuracy.get_scale()));
-          int8_t fs_scale = ObIntervalScaleUtil::ob_scale_to_interval_ds_second_scale(
-              static_cast<int8_t>(default_accuracy.get_scale()));
-          ObScale scale = ObIntervalScaleUtil::interval_ds_scale_to_ob_scale(day_scale, fs_scale);
+          ObScale scale = ObIntervalScaleUtil::interval_ds_scale_to_ob_scale(9, 9);
           data_type.set_scale(scale);
         }
       } break;

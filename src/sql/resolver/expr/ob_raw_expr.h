@@ -4084,9 +4084,11 @@ class ObPLAssocIndexRawExpr : public ObOpRawExpr
 {
 public:
   ObPLAssocIndexRawExpr(common::ObIAllocator &alloc)
-    : ObOpRawExpr(alloc), for_write_(false),
+    : ObOpRawExpr(alloc),
+    parent_type_(pl::parent_expr_type::EXPR_UNKNOWN),
+    for_write_(false),
     out_of_range_set_err_(true),
-    parent_type_(pl::parent_expr_type::EXPR_UNKNOWN) {}
+    is_index_by_varchar_(false) {}
   ObPLAssocIndexRawExpr()
     : ObOpRawExpr(), for_write_(false) {}
   virtual ~ObPLAssocIndexRawExpr() {}
@@ -4095,6 +4097,8 @@ public:
   inline bool get_write() const { return for_write_; }
   inline bool get_out_of_range_set_err() const { return out_of_range_set_err_; }
   inline void set_out_of_range_set_err(bool is_set_err) { out_of_range_set_err_ = is_set_err; }
+  inline bool is_index_by_varchar() const { return is_index_by_varchar_; }
+  inline void set_is_index_by_varchar(bool index_by_varchar) { is_index_by_varchar_ = index_by_varchar; }
   inline void set_parent_type(pl::parent_expr_type type) { parent_type_ = type; }
   inline pl::parent_expr_type get_parent_type() const { return parent_type_; }
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
@@ -4108,11 +4112,17 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLAssocIndexRawExpr);
 private:
-  bool for_write_;
-  // set ret to out of range or not.
-  bool out_of_range_set_err_;
   // hack,  0: parent expr is prior, 1 parent expr is
   pl::parent_expr_type parent_type_;
+  union {
+    uint64_t expr_flag_;
+    struct {
+      uint64_t for_write_ : 1;
+      uint64_t out_of_range_set_err_ : 1; // set ret to out of range or not.
+      uint64_t is_index_by_varchar_ : 1; // assoc type index type is varchar
+      uint64_t reserved_:61;
+    };
+  };
 };
 
 class ObObjAccessRawExpr : public ObOpRawExpr

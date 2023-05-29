@@ -127,7 +127,7 @@ int ObExprObjAccess::assign(const ObExprOperator &other)
   return ret;
 }
 
-#define GET_VALID_INT64_PARAM(obj) \
+#define GET_VALID_INT64_PARAM(obj, skip_check_error) \
   do { \
     if (OB_SUCC(ret)) { \
       int64_t param_value = 0; \
@@ -144,9 +144,13 @@ int ObExprObjAccess::assign(const ObExprOperator &other)
           } \
         } \
       } else if (obj.is_null()) { \
-        ret = OB_ERR_NUMERIC_OR_VALUE_ERROR; \
-        LOG_WARN("ORA-06502: PL/SQL: numeric or value error: NULL index table key value",\
+        if (!skip_check_error) {  \
+          ret = OB_ERR_NUMERIC_OR_VALUE_ERROR; \
+          LOG_WARN("ORA-06502: PL/SQL: numeric or value error: NULL index table key value",\
                  K(ret), K(obj), K(i)); \
+        } else {  \
+          param_value = OB_INVALID_INDEX; \
+        }  \
       } else { \
         ret = OB_ERR_UNEXPECTED; \
         LOG_WARN("obj param is invalid type", K(obj), K(i)); \
@@ -167,12 +171,12 @@ int ObExprObjAccess::ExtraInfo::init_param_array(const ParamStore &param_store,
     CK (param_idxs_.at(i) >= 0 && param_idxs_.at(i) < param_store.count());
     if (OB_SUCC(ret)) {
       const ObObjParam &obj_param = param_store.at(param_idxs_.at(i));
-      GET_VALID_INT64_PARAM(obj_param);
+      GET_VALID_INT64_PARAM(obj_param, false);
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
     const ObObj &obj = objs_stack[i];
-    GET_VALID_INT64_PARAM(obj);
+    GET_VALID_INT64_PARAM(obj, (i == param_num - 1 && pl::ObCollectionType::NEXT_PROPERTY == property_type_));
   }
   return ret;
 }

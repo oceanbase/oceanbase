@@ -2555,6 +2555,7 @@ int ObPLAssocIndexRawExpr::assign(const ObRawExpr &other)
       for_write_ = tmp.for_write_;
       out_of_range_set_err_ = tmp.out_of_range_set_err_;
       parent_type_ = tmp.parent_type_;
+      is_index_by_varchar_ = tmp.is_index_by_varchar_;
     }
   }
   return ret;

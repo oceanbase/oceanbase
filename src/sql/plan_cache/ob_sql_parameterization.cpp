@@ -1249,8 +1249,10 @@ int ObSqlParameterization::construct_not_param(const ObString &no_param_sql,
                                                 int32_t &idx)
 {
   int ret = OB_SUCCESS;
-  CK (OB_NOT_NULL(pc_param));
-  if (OB_SUCC(ret)) {
+  if (OB_ISNULL(pc_param)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_PC_LOG(WARN, "invalid argument", K(ret));
+  } else {
     int32_t len = (int32_t)pc_param->node_->pos_ - idx;
     if (len > buf_len - pos) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -1275,8 +1277,10 @@ int ObSqlParameterization::construct_neg_param(const ObString &no_param_sql,
                                                 int32_t &idx)
 {
   int ret = OB_SUCCESS;
-  CK (OB_NOT_NULL(pc_param));
-  if (OB_SUCC(ret)) {
+  if (OB_ISNULL(pc_param)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_PC_LOG(WARN, "invalid argument", K(ret));
+  } else {
     int32_t len = (int32_t)pc_param->node_->pos_ - idx;
     if (len > buf_len - pos) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -1300,8 +1304,10 @@ int ObSqlParameterization::construct_trans_neg_param(const ObString &no_param_sq
                                                       int32_t &idx)
 {
   int ret = OB_SUCCESS;
-  CK (OB_NOT_NULL(pc_param));
-  if (OB_SUCC(ret)) {
+  if (OB_ISNULL(pc_param)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_PC_LOG(WARN, "invalid argument", K(ret));
+  } else {
     int32_t len = (int32_t)pc_param->node_->pos_ - idx;
     if (len > buf_len - pos) {
       ret = OB_BUF_NOT_ENOUGH;
