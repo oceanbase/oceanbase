@@ -16590,10 +16590,13 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     }
   }
   if (OB_INVALID_ID != task_id) {
-    schema_service_->get_ddl_trans_controller().remove_task(task_id);
+    int tmp_ret = schema_service_->get_ddl_trans_controller().remove_task(task_id);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("remove_task fail", KR(ret), KR(tmp_ret), K(tenant_id), K(table_id), K(task_id));
+    }
   }
   int64_t trans_end = ObTimeUtility::current_time();
-  LOG_INFO("truncate cost after truncate_in_trans finish", KR(ret), K(task_id),
+  LOG_INFO("truncate cost after truncate_in_trans finish", KR(ret), K(tenant_id) , K(task_id),
            "trans_cost", trans_end - start_time,
            "fetch_schema_cost", before_wait_task - before_fetch_schema,
            "wait_task_cost", wait_task - before_wait_task,
@@ -16886,7 +16889,7 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
               KR(ret), K(arg.table_name_), K(table_id), K(orig_table_schema.get_schema_version()));
     }
     int64_t finish_truncate_table = ObTimeUtility::current_time();
-    LOG_INFO("truncate cost after finish truncate", KR(ret), "cost_ts", finish_truncate_table - start_time);
+    LOG_INFO("truncate cost after finish truncate", KR(ret), K(tenant_id), K(table_id), "cost_ts", finish_truncate_table - start_time);
   }
   return ret;
 }
