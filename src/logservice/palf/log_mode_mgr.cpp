@@ -286,7 +286,8 @@ bool LogModeMgr::is_state_changed() const
         bool_ret = (is_reach_majority || is_need_retry || is_epoch_changed);
         if (true == bool_ret) {
           PALF_LOG(INFO, "is_state_changed", K_(palf_id), K_(self), "state", state2str_(state_),
-              K(is_reach_majority), K(is_need_retry), K(is_epoch_changed));
+              K(is_reach_majority), K(is_need_retry), K(is_epoch_changed), K_(follower_list),
+              K_(majority_cnt), K_(ack_list), K_(last_submit_req_ts));
         }
         break;
       }
@@ -468,15 +469,21 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
           change_done = (true == is_reconfirm)? true: can_finish_change_mode_();
           if (change_done) {
             applied_mode_meta_ = accepted_mode_meta_;
-            if (OB_FAIL(set_resend_mode_meta_list_())) {
+            const bool need_inc_ref_scn = applied_mode_meta_.ref_scn_.is_valid() &&
+                AccessMode::APPEND == applied_mode_meta_.access_mode_;
+            if (need_inc_ref_scn && OB_FAIL(sw_->inc_update_scn_base(applied_mode_meta_.ref_scn_))) {
+              PALF_LOG(ERROR, "inc_update_base_log_ts failed", KR(ret), K_(palf_id), K_(self),
+                  K_(applied_mode_meta));
+            } else if (need_inc_ref_scn && sw_->get_max_scn() < ref_scn) {
+              change_done = false;
+              ret = OB_ERR_UNEXPECTED;
+              PALF_LOG(ERROR, "inc_update_base_log_ts failed", KR(ret), K_(palf_id), K_(self),
+                  K_(applied_mode_meta), KPC(sw_));
+            } else if (OB_FAIL(set_resend_mode_meta_list_())) {
               PALF_LOG(WARN, "set_resend_mode_meta_list_ failed", K(ret), K_(palf_id), K_(self));
             } else if (OB_FAIL(resend_applied_mode_meta_())) {
               PALF_LOG(WARN, "resend_applied_mode_meta_ failed", K(ret), K_(palf_id), K_(self));
-            } else if (applied_mode_meta_.ref_scn_.is_valid() && AccessMode::APPEND == applied_mode_meta_.access_mode_ &&
-                OB_FAIL(sw_->inc_update_scn_base(applied_mode_meta_.ref_scn_))) {
-              PALF_LOG(ERROR, "inc_update_base_log_ts failed", KR(ret), K_(palf_id), K_(self),
-                  K_(applied_mode_meta));
-            }
+            } else { }
           }
         } else {
           PALF_LOG(INFO, "mode_meta hasn't been flushed in leader", K(ret), K_(palf_id), K_(self),
@@ -568,7 +575,8 @@ int LogModeMgr::resend_applied_mode_meta_()
   int ret = OB_SUCCESS;
   const int64_t proposal_id = state_mgr_->get_proposal_id();
   const bool is_applied_mode_meta = true;
-  if (OB_FAIL(log_engine_->submit_change_mode_meta_req(resend_mode_meta_list_, proposal_id,
+  if (resend_mode_meta_list_.is_valid() &&
+      OB_FAIL(log_engine_->submit_change_mode_meta_req(resend_mode_meta_list_, proposal_id,
         is_applied_mode_meta, applied_mode_meta_))) {
     PALF_LOG(WARN, "submit_prepare_meta_req failed", K(ret), K_(palf_id), K_(self),
         K_(resend_mode_meta_list), K(proposal_id), K(is_applied_mode_meta), K_(applied_mode_meta));
