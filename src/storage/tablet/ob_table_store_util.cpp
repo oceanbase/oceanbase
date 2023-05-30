@@ -584,9 +584,7 @@ int ObMemtableArray::build(
   return ret;
 }
 
-int ObMemtableArray::rebuild(
-    const share::SCN &clog_checkpoint_scn,
-    common::ObIArray<ObTableHandleV2> &handle_array)
+int ObMemtableArray::rebuild(common::ObIArray<ObTableHandleV2> &handle_array)
 {
   int ret = OB_SUCCESS;
 
@@ -595,9 +593,7 @@ int ObMemtableArray::rebuild(
     LOG_ERROR("ObMemtableArray not inited", K(ret), KPC(this), K(handle_array));
   } else {
     ObITable *last_memtable = get_table(count() - 1);
-    SCN last_memtable_end_scn = (NULL == last_memtable)
-                              ? clog_checkpoint_scn // memtable was filtered when tablet was initialized, use ckpt scn to filter again
-                              : last_memtable->get_end_scn();
+    SCN end_scn = (NULL == last_memtable) ? SCN::min_scn() : last_memtable->get_end_scn();
 
     for (int64_t i = 0; OB_SUCC(ret) && i < handle_array.count(); ++i) {
       memtable::ObMemtable *memtable = nullptr;
@@ -608,11 +604,8 @@ int ObMemtableArray::rebuild(
       } else if (FALSE_IT(memtable = reinterpret_cast<memtable::ObMemtable *>(table))) {
       } else if (memtable->is_empty()) {
         FLOG_INFO("Empty memtable discarded", KPC(memtable));
-      } else if (memtable->get_end_scn() == last_memtable_end_scn && memtable == last_memtable) {
-        // fix issue 41996395
-        // if last memtable is freezing, its end scn may still be INT64_MAX, which will cause the new active memtable to be filtered.
-        continue;
-      } else if (memtable->get_end_scn() <= last_memtable_end_scn) {
+      } else if (table->get_end_scn() < end_scn) {
+      } else if (table->get_end_scn() == end_scn && table == last_memtable) { //fix issue 41996395
       } else if (OB_FAIL(add_table(table))) {
         LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
       }
