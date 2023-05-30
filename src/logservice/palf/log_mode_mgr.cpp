@@ -755,6 +755,8 @@ int LogModeMgr::after_flush_mode_meta(const bool is_applied_mode_meta, const Log
       applied_mode_meta_ = (mode_meta.proposal_id_ > applied_mode_meta_.proposal_id_)?
           mode_meta: applied_mode_meta_;
     }
+    PALF_LOG(INFO, "after_flush_mode_meta success", K(ret), K_(palf_id), K_(self),
+        K(is_applied_mode_meta), K(mode_meta), K_(accepted_mode_meta), K_(applied_mode_meta));
   }
   return ret;
 }
@@ -774,11 +776,10 @@ int LogModeMgr::ack_mode_meta(const common::ObAddr &server, const int64_t propos
         K(proposal_id), K_(new_proposal_id), "state", state2str_(state_));
   } else if (OB_FAIL(ack_list_.add_server(server))) {
     PALF_LOG(WARN, "add_server failed", K(ret), K_(palf_id), K_(self), K(server));
-  } else {
-    PALF_LOG(INFO, "ack_mode_meta success", K(ret), K_(palf_id), K_(self), K(server),
-        K(proposal_id), K_(follower_list), K_(majority_cnt), K_(ack_list));
-  }
+  } else { }
   (void) resend_mode_meta_list_.remove_learner(server);
+  PALF_LOG(INFO, "ack_mode_meta finish", K(ret), K_(palf_id), K_(self), K(server),
+      K(proposal_id), K_(follower_list), K_(majority_cnt), K_(ack_list), K_(resend_mode_meta_list));
   return ret;
 }
 

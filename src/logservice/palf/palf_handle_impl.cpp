@@ -2390,19 +2390,20 @@ int PalfHandleImpl::receive_mode_meta(const common::ObAddr &server,
   } else if (true == is_applied_mode_meta && OB_SUCCESS != (lock_ret = lock_.wrlock())) {
   } else if (false == mode_mgr_.can_receive_mode_meta(proposal_id, mode_meta, has_accepted)) {
     PALF_LOG(WARN, "can_receive_mode_meta failed", KR(ret), KPC(this), K(proposal_id), K(mode_meta));
-  } else if (true == has_accepted && false == is_applied_mode_meta) {
+  } else if (true == has_accepted) {
     if (OB_FAIL(log_engine_.submit_change_mode_meta_resp(server, proposal_id))) {
       PALF_LOG(WARN, "submit_change_mode_meta_resp failed", KR(ret), KPC(this), K(proposal_id), K(mode_meta));
     }
-  } else if (true == has_accepted && true == is_applied_mode_meta) {
-    // update LogModeMgr::applied_mode_meta requires wlock
-    (void) mode_mgr_.after_flush_mode_meta(is_applied_mode_meta, mode_meta);
+    if (true == is_applied_mode_meta) {
+      // update LogModeMgr::applied_mode_meta requires wlock
+      (void) mode_mgr_.after_flush_mode_meta(is_applied_mode_meta, mode_meta);
+    }
   } else if (OB_FAIL(mode_mgr_.receive_mode_meta(server, proposal_id, is_applied_mode_meta, mode_meta))) {
     PALF_LOG(WARN, "receive_mode_meta failed", KR(ret), KPC(this), K(server), K(proposal_id),
         K(mode_meta));
-  } else {
-    PALF_LOG(INFO, "receive_mode_meta success", KR(ret), KPC(this), K(server), K(proposal_id), K(mode_meta));
-  }
+  } else { }
+  PALF_LOG(INFO, "receive_mode_meta finish", KR(ret), KPC(this), K(server), K(proposal_id),
+      K(is_applied_mode_meta), K(mode_meta));
   if (OB_SUCCESS == lock_ret) {
     if (is_applied_mode_meta) {
       lock_.wrunlock();

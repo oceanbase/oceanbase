@@ -82,11 +82,13 @@ TEST_F(TestObSimpleLogClusterAccessMode, basic_change_access_mode)
 
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, palf::AccessMode::FLASHBACK, share::SCN::min_scn()));
+  EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->mode_mgr_.resend_mode_meta_list_.is_valid());
   EXPECT_EQ(OB_NOT_MASTER, submit_log(leader, 1, id));
   // base_ts: 0.5 hour later
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
+  EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->mode_mgr_.resend_mode_meta_list_.is_valid());
   // check all member's applied access_mode
   sleep(1);
   std::vector<PalfHandleImplGuard*> palf_list;
@@ -113,9 +115,11 @@ TEST_F(TestObSimpleLogClusterAccessMode, basic_change_access_mode)
   // can not APPEND -> FLASHBACK
   EXPECT_EQ(OB_STATE_NOT_MATCH, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::FLASHBACK, ref_scn));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::RAW_WRITE, ref_scn));
+  EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->mode_mgr_.resend_mode_meta_list_.is_valid());
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
+  EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->mode_mgr_.resend_mode_meta_list_.is_valid());
   lsn_array.clear();
   scn_arrary.clear();
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 50, id, lsn_array, scn_arrary));

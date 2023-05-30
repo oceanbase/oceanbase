@@ -93,7 +93,8 @@ public:
   TO_STRING_KV(K_(palf_id), K_(self), K_(applied_mode_meta), K_(accepted_mode_meta),
       K_(last_submit_mode_meta), "state", state2str_(state_), K_(new_proposal_id), K_(local_max_lsn),
       K_(local_max_log_pid), K_(max_majority_accepted_pid), K_(max_majority_lsn),
-      K_(max_majority_accepted_mode_meta), K_(follower_list), K_(ack_list), K_(majority_cnt));
+      K_(max_majority_accepted_mode_meta), K_(follower_list), K_(ack_list), K_(majority_cnt),
+      K_(last_submit_req_ts), K_(resend_mode_meta_list));
 
 private:
   void reset_status_();
