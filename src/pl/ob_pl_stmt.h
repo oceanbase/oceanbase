@@ -1541,7 +1541,7 @@ public:
        analyze_flag_(0)
   {}
 
-  virtual ~ObPLCompileUnitAST() {}
+  virtual ~ObPLCompileUnitAST();
 
   inline UnitType get_type() const { return type_; }
   inline void set_type(UnitType type) { type_ = type; }
@@ -1910,7 +1910,13 @@ public:
       in_handler_scope_(false),
       is_contain_goto_stmt_(false),
       is_autonomous_block_(false) {}
-  virtual ~ObPLStmtBlock() {}
+  virtual ~ObPLStmtBlock() {
+    for (int64_t i = 0; i < stmts_.count(); ++i) {
+      if (NULL != stmts_.at(i)) {
+        stmts_.at(i)->~ObPLStmt();
+      }
+    }
+  }
 
   int accept(ObPLStmtVisitor &visitor) const;
   virtual int64_t get_child_size() const { return stmts_.count(); }
@@ -2030,7 +2036,14 @@ class ObPLIfStmt : public ObPLStmt
 {
 public:
   ObPLIfStmt() : ObPLStmt(PL_IF), cond_(OB_INVALID_INDEX), then_(NULL), else_(NULL) {}
-  virtual ~ObPLIfStmt() {}
+  virtual ~ObPLIfStmt() {
+    if (NULL != then_) {
+      then_->~ObPLStmtBlock();
+    }
+    if (NULL != else_) {
+      else_->~ObPLStmtBlock();
+    }
+  }
 
   int accept(ObPLStmtVisitor &visitor) const;
   virtual int64_t get_child_size() const { return NULL == else_ ? 1 : 2; }
@@ -2058,7 +2071,11 @@ public:
       : ObPLStmt(PL_CASE),
         case_expr_idx_(OB_INVALID_INDEX), case_var_idx_(OB_INVALID_INDEX),
         when_(allocator), else_(nullptr) {}
-  virtual ~ObPLCaseStmt() {}
+  virtual ~ObPLCaseStmt() {
+    if (NULL != else_) {
+      else_->~ObPLStmtBlock();
+    }
+  }
 
   virtual int64_t get_child_size() const override { return when_.count() + 1; }
   virtual const ObPLStmt *get_child_stmt(int64_t i) const override {
@@ -2207,7 +2224,11 @@ class ObPLLoop : public ObPLStmt
 {
 public:
   ObPLLoop(ObPLStmtType type) : ObPLStmt(type), body_(NULL) {}
-  virtual ~ObPLLoop() {}
+  virtual ~ObPLLoop() {
+    if (NULL != body_) {
+      body_->~ObPLStmtBlock();
+    }
+  }
 
   virtual int64_t get_child_size() const { return 1; }
   virtual const ObPLStmt *get_child_stmt(int64_t i) const { return 0 == i ? body_ : NULL; }
@@ -2467,7 +2488,10 @@ public:
   inline const hash::ObHashMap<int64_t, int64_t>& get_tab_to_subtab_map() const { return tab_to_subtab_; }
   inline hash::ObHashMap<int64_t, int64_t>& get_tab_to_subtab_map() { return tab_to_subtab_; }
 
-  inline int create_tab_to_subtab() { return tab_to_subtab_.create(16, ObModIds::OB_PL_TEMP); }
+  inline int create_tab_to_subtab()
+  {
+    return tab_to_subtab_.create(16, ObModIds::OB_PL_TEMP, ObModIds::OB_HASH_NODE, MTL_ID());
+  }
 
   int accept(ObPLStmtVisitor &visitor) const;
 
