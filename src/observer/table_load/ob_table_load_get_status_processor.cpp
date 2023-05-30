@@ -24,6 +24,8 @@ int ObTableLoadGetStatusP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
@@ -59,6 +61,8 @@ int ObTableLoadGetStatusPeerP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);

@@ -65,6 +65,10 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
     if (OB_FAIL(param.normalize())) {
       LOG_WARN("fail to normalize param", KR(ret));
     }
+    // check tenant
+    else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check tenant", KR(ret), K(param.tenant_id_));
+    }
     // check support
     else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_))) {
       LOG_WARN("fail to check support direct load", KR(ret), K(param.table_id_));

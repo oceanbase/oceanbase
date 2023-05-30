@@ -18,6 +18,7 @@ class ObTableLoadService
 {
 public:
   static int mtl_init(ObTableLoadService *&service);
+  static int check_tenant();
   static int check_support_direct_load(uint64_t table_id);
   static ObTableLoadTableCtx *alloc_ctx();
   static void free_ctx(ObTableLoadTableCtx *table_ctx);
