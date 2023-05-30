@@ -8150,6 +8150,8 @@ def_table_schema(
 )
 
 # table_id = 11117: used for __all_virtual_tablet_stat on column_store branch
+# table_id = 11118: used for __all_virtual_ddl_sim_point on enhance_ddl_quality branch
+# table_id = 11119: used for __all_virtual_ddl_sim_point_stat on enhance_ddl_quality branch
 
 ################################################################
 ################################################################
