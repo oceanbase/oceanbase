@@ -152,7 +152,7 @@ int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
     if (type_array[0].is_oracle_temporal_type()) {
       type_array[1].set_calc_type(ObVarcharType);
       type_array[1].set_calc_collation_type(nls_param.nls_collation_);
-    } else {
+    } else if (!type_array[1].is_varchar_or_char()) {
       type_array[1].set_calc_type_default_varchar();
     }
   }

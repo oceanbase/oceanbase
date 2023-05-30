@@ -8450,7 +8450,9 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
     } else if (expr->has_flag(CNT_VOLATILE_CONST) || !expr->is_const_expr()) {
       //do nothing
     } else if (expr->is_static_const_expr()) { //static const expr
-      if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
+      if (ObOptimizerUtil::find_item(static_const_exprs, expr)) {
+        //do nothing, skip dup exprs
+      } else if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
                                         *ctx_->expr_factory_,
                                         *ctx_->session_info_,
                                         expr,
@@ -8467,6 +8469,8 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
         stmt->get_rollup_exprs().at(i) = remove_const_expr;
         trans_happened = true;
       }
+    }  else if (ObOptimizerUtil::find_item(exec_param_exprs, expr)) {
+      //do nothing, skip dup exprs
     } else if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
                                       *ctx_->expr_factory_,
                                       *ctx_->session_info_,
