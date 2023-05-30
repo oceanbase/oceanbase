@@ -101,12 +101,8 @@ int ObMPConnect::deserialize()
       if (hsr_.is_jdbc_client_mode()) {
         conn->is_jdbc_client_ = true;
       }
-      if (OB_FAIL(extract_user_tenant(hsr_.get_username()))) {
-        LOG_WARN("parse user@tenant fail", K(ret), "str", hsr_.get_username());
-      } else {
-        db_name_ = hsr_.get_database();
-        LOG_DEBUG("database name", K(hsr_.get_database()));
-      }
+      db_name_ = hsr_.get_database();
+      LOG_DEBUG("database name", K(hsr_.get_database()));
     }
 
     deser_ret_ = ret;  // record deserialize ret code.
@@ -229,6 +225,8 @@ int ObMPConnect::process()
   } else {
     if (OB_FAIL(conn->ret_)) {
       LOG_WARN("connection fail at obsm_handle process", K(conn->ret_));
+    } else if (OB_FAIL(extract_user_tenant(hsr_.get_username()))) {
+      LOG_WARN("parse user@tenant fail", K(ret), "str", hsr_.get_username());
     } else if ((SS_INIT == GCTX.status_ || SS_STARTING == GCTX.status_)
                && !tenant_name_.empty()
                && 0 != tenant_name_.compare(OB_SYS_TENANT_NAME)) {
