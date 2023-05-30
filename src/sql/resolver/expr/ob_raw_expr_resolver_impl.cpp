@@ -2467,28 +2467,10 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());
           if (param.is_ext()) {
-/*            CK (OB_NOT_NULL(ctx_.session_info_), OB_NOT_NULL(ctx_.schema_checker_));
-            if (OB_SUCC(ret)) {
-              const share::schema::ObUDTTypeInfo *udt_info = NULL;
-              OZ (ctx_.schema_checker_->get_udt_info(param.get_udt_id(), udt_info), K(param.get_udt_id()));
-              CK (OB_NOT_NULL(udt_info));
-              if (OB_SUCC(ret)) {
-                if (udt_info->is_collection()) {
-*/
-            //TODO: @ryan.ly 这里缺省认为一定是collection
-                  if (OB_SUCC(ret)) {
-                      c_expr->set_meta_type(param.get_meta());
-                      c_expr->set_expr_obj_meta(param.get_param_meta());
-                      c_expr->set_udt_id(param.get_udt_id());
-                      c_expr->set_param(param);
-                  }
-/*                } else {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("Record not support in sql yet", K(*udt_info), K(ret));
-                }
-              }
-            }
-*/
+              c_expr->set_meta_type(param.get_meta());
+              c_expr->set_expr_obj_meta(param.get_param_meta());
+              c_expr->set_udt_id(param.get_udt_id());
+              c_expr->set_param(param);
           } else {
             c_expr->set_meta_type(ObSQLUtils::is_oracle_empty_string(param)
                                   ? param.get_param_meta() : param.get_meta());
