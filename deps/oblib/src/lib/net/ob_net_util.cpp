@@ -78,7 +78,7 @@ int ObNetUtil::get_local_addr_ipv6(const char *dev_name, char *ipv6, int len,
       ifa_tmp = ifa_tmp->ifa_next;
     } // while end
 
-    // if dev_name is invalid, than level will keep its initial value(-1)
+    // if dev_name is invalid, then level will keep its initial value(-1)
     if (level == -1) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid devname specified by -i", "devname", dev_name, "info",
