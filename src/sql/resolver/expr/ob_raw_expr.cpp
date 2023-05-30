@@ -2408,6 +2408,7 @@ bool ObAggFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
             if (order_items_.count() == a_expr->order_items_.count()) {
               for (int64_t i = 0; bool_ret && i < order_items_.count(); ++i) {
                 if (OB_ISNULL(order_items_.at(i).expr_) || OB_ISNULL(a_expr->order_items_.at(i).expr_) ||
+                    order_items_.at(i).order_type_ != a_expr->order_items_.at(i).order_type_ ||
                     !order_items_.at(i).expr_->same_as(*(a_expr->order_items_.at(i).expr_), check_context)) {
                   bool_ret = false;
                 }
