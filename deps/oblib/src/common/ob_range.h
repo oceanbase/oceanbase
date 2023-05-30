@@ -567,6 +567,22 @@ public:
 
 };
 
+class ObNewRangeCmp
+{
+public:
+  ObNewRangeCmp() {}
+
+  // caller ensures no intersection between any two ranges
+  OB_INLINE bool operator() (const ObNewRange *a, const ObNewRange *b) const
+  {
+    int cmp = 0;
+    if (OB_NOT_NULL(a) && OB_NOT_NULL(b)) {
+      cmp = a->compare_with_startkey2(*b);
+    }
+    return cmp < 0;
+  }
+};
+
 template <typename Allocator>
 int ObNewRange::deserialize(Allocator &allocator, const char *buf, const int64_t data_len,
                             int64_t &pos)
