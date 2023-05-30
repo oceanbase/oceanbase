@@ -27213,7 +27213,8 @@ def_table_schema(
            convert(A.CLUSTER_NAME, char(128)) AS CLUSTER_NAME,
            convert(A.REVERSE_CLUSTER_NAME, char(128)) AS REVERSE_CLUSTER_NAME,
            convert(A.REVERSE_HOST_IP, char(2000)) AS REVERSE_HOST,
-           A.REVERSE_HOST_PORT AS REVERSE_PORT
+           A.REVERSE_HOST_PORT AS REVERSE_PORT,
+           convert(A.REVERSE_USER_NAME, char(128)) AS REVERSE_USERNAME
     FROM OCEANBASE.__ALL_DBLINK A;
 """.replace("\n", " "),
     normal_columns = [
