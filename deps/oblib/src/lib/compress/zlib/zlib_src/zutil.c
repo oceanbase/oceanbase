@@ -1,14 +1,9 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
+/* zutil.c -- target dependent utility functions for the compression library
+ * Copyright (C) 1995-2005, 2010, 2011, 2012 Jean-loup Gailly.
+ * For conditions of distribution and use, see copyright notice in zlib.h
  */
+
+/* @(#) $Id$ */
 
 #include "zutil.h"
 #ifndef Z_SOLO
