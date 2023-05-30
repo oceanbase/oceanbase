@@ -379,7 +379,8 @@ public:
                                       const common::ObDataTypeCastParams &dtc_params,
                                       ObExecContext *exec_ctx,
                                       ExprConstrantArray *expr_constraints = NULL,
-                                      const ParamsIArray *params = NULL);
+                                      const ParamsIArray *params = NULL,
+                                      const bool use_in_optimization = false);
   /**
    * @brief
    * @param range_columns: columns used to extract range, index column or partition column
@@ -401,7 +402,8 @@ public:
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamsIArray *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,
-                                      const bool ignore_calc_failure = true);
+                                      const bool ignore_calc_failure = true,
+                                      const bool use_in_optimization = false);
 
   //  final_extract_query_range extracts the final query range of its physical plan.
   //  It will get the real-time value of some const which are unknow during physical plan generating.
@@ -598,6 +600,7 @@ private:
   int preliminary_extract(const ObRawExpr *node,
                           ObKeyPart *&out_key_part,
                           const common::ObDataTypeCastParams &dtc_params,
+                          const bool use_in_optimization = false,
                           const bool is_single_in = false);
   int pre_extract_basic_cmp(const ObRawExpr *node,
                             ObKeyPart *&out_key_part,

@@ -253,6 +253,7 @@ _enable_easy_keepalive
 _enable_fulltext_index
 _enable_hash_join_hasher
 _enable_hash_join_processor
+_enable_in_range_optimization
 _enable_newsort
 _enable_new_sql_nio
 _enable_oracle_priv_check

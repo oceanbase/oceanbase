@@ -41,6 +41,7 @@ enum InType
   T_NOT_IN_KEY_PART
 };
 class ObKeyPart;
+const int64_t MAX_EXTRACT_IN_COLUMN_NUMBER = 6;
 
 class ObKeyPartId
 {
@@ -172,8 +173,38 @@ struct InParamMeta
     TO_STRING_KV(K_(pos), K_(vals));
 };
 
-typedef ObSEArray<int64_t, OB_MAX_ROWKEY_COLUMN_NUMBER, ModulePageAllocator> OffsetsArr;
-typedef ObSEArray<InParamMeta *, OB_MAX_ROWKEY_COLUMN_NUMBER, ModulePageAllocator> InParamsArr;
+struct InParamValsWrapper
+{
+  InParamValsWrapper(): param_vals_() { }
+  int assign(const InParamValsWrapper &other) { return param_vals_.assign(other.param_vals_); }
+  inline bool operator==(const InParamValsWrapper &other) const
+  {
+    bool bret = param_vals_.count() == other.param_vals_.count();
+    for (int64_t i = 0; bret && i < other.param_vals_.count(); ++i) {
+      if (param_vals_.at(i) != other.param_vals_.at(i)) {
+        bret = false;
+      }
+    }
+    return bret;
+  }
+  inline bool operator!=(const InParamValsWrapper &other) const
+  {
+    return !(*this == other);
+  }
+  inline uint64_t hash() const
+  {
+    uint64_t hash_code = 0;
+    for (int64_t i = 0; i < param_vals_.count(); ++i) {
+      hash_code = common::murmurhash(&param_vals_.at(i), sizeof(param_vals_.at(i)), hash_code);
+    }
+    return hash_code;
+  }
+  ObSEArray<ObObj, 4> param_vals_;
+  TO_STRING_KV(K_(param_vals));
+};
+
+typedef ObSEArray<int64_t, MAX_EXTRACT_IN_COLUMN_NUMBER, ModulePageAllocator> OffsetsArr;
+typedef ObSEArray<InParamMeta *, MAX_EXTRACT_IN_COLUMN_NUMBER, ModulePageAllocator> InParamsArr;
 struct ObInKeyPart
 {
   ObInKeyPart()

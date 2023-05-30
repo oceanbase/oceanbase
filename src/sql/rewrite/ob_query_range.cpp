@@ -251,7 +251,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const ObDataTypeCastParams &dtc_params,
                                                   ObExecContext *exec_ctx,
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
-                                                  const ParamsIArray *params /* = NULL */)
+                                                  const ParamsIArray *params /* = NULL */,
+                                                  const bool use_in_optimization /* = false */)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
@@ -268,6 +269,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
       GET_ALWAYS_TRUE_OR_FALSE(true, root);
     } else {
       if (OB_FAIL(preliminary_extract(expr_root, root, dtc_params,
+                                      use_in_optimization,
                                       T_OP_IN == expr_root->get_expr_type()))) {
         LOG_WARN("gen table range failed", K(ret));
       } else if (query_range_ctx_->cur_expr_is_precise_ && root != NULL) {
@@ -686,7 +688,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
                                                   const ParamsIArray *params /* = NULL */,
                                                   const bool phy_rowid_for_table_loc /* = false*/,
-                                                  const bool ignore_calc_failure /* = true*/)
+                                                  const bool ignore_calc_failure /* = true*/,
+                                                  const bool use_in_optimization /* = false */)
 {
   int ret = OB_SUCCESS;
   ObKeyPartList and_ranges;
@@ -695,7 +698,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
   ObKeyPartList geo_ranges;
   bool has_geo_expr = false;
 
-  SQL_REWRITE_LOG(DEBUG, "preliminary extract", K(range_columns), K(root_exprs));
+  SQL_REWRITE_LOG(DEBUG, "preliminary extract", K(range_columns), K(root_exprs), K(use_in_optimization));
   ObSEArray<ObRawExpr *, 16> candi_exprs;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx,
@@ -2899,6 +2902,8 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
   if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(l_expr), K(r_expr));
+  } else if (OB_UNLIKELY(l_expr->get_param_count() > MAX_EXTRACT_IN_COLUMN_NUMBER)) {
+    // do nothiing
   } else if (OB_FAIL(idx_pos_map.create(l_expr->get_param_count(), "IdxKeyMap", "IdxKeyMap"))) {
     LOG_WARN("fail to init hashmap", K(ret));
   } else if (OB_FAIL(idx_param_map.create(l_expr->get_param_count(), "IdxParamMap", "IdxParamMap"))) {
@@ -3626,6 +3631,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
 int ObQueryRange::preliminary_extract(const ObRawExpr *node,
                                       ObKeyPart *&out_key_part,
                                       const ObDataTypeCastParams &dtc_params,
+                                      const bool use_in_optimization /* = false */,
                                       const bool is_single_in /* = false */)
 {
   int ret = OB_SUCCESS;
@@ -3668,7 +3674,7 @@ int ObQueryRange::preliminary_extract(const ObRawExpr *node,
         LOG_WARN("extract not_btw failed", K(ret));
       }
     } else if (T_OP_IN  == node->get_expr_type()) {
-      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
+      if (use_in_optimization && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
         if (OB_FAIL(pre_extract_in_op(b_expr, out_key_part, dtc_params))) {
           LOG_WARN("extract single in_op failed", K(ret));
         } else if (!out_key_part->is_always_true() && !out_key_part->is_always_false()) {
@@ -5544,6 +5550,8 @@ int ObQueryRange::union_in_with_in(ObKeyPartList &or_list,
       }
     } else if (OB_FAIL(cur1->in_keypart_->union_in_key(cur2->in_keypart_))) {
       LOG_WARN("failed to union in key", K(ret));
+    } else if (cur1->and_next_ != NULL && cur1->and_next_->equal_to(cur2->and_next_)) {
+      // keep and_next_
     } else {
       cur1->and_next_ = NULL;
     }
