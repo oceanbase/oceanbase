@@ -780,7 +780,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
       LOG_WARN("And query range failed", K(ret));
     } else if (OB_UNLIKELY(NULL == temp_result)) {
       // no range left
-    } else if (contain_in_ && OB_FAIL(rebuild_in_graph(temp_result))) {
+    } else if (contain_in_ && !query_range_ctx_->need_final_extract_ &&
+               OB_FAIL(rebuild_in_graph(temp_result))) {
       LOG_WARN("failed to rebuild and graph for in key", K(ret));
     } else if (OB_FAIL(refine_large_range_graph(temp_result))) {
       LOG_WARN("failed to refine large range graph", K(ret));
@@ -810,7 +811,7 @@ int ObQueryRange::rebuild_in_graph(ObKeyPart *&out_key_part)
     LOG_WARN("get unexpected null", K(ret));
   } else {
     ObKeyPartList or_list;
-    if (OB_FAIL(split_general_or(out_key_part, or_list))) {
+    if (OB_FAIL(split_or(out_key_part, or_list))) {
       LOG_WARN("failed to split general or", K(ret));
     } else {
       ObKeyPartList res_arr;
