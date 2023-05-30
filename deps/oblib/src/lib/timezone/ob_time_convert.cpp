@@ -2682,6 +2682,9 @@ int ObTimeConverter::time_to_ob_time(int64_t value, ObTime &ob_time)
     ob_time.mode_ |= DT_MODE_NEG;
     value = -value;
   }
+  if(value > TIME_MAX_VAL) {
+    value = TIME_MAX_VAL;
+  }
   int64_t secs = USEC_TO_SEC(value);
   ob_time.parts_[DT_HOUR] = static_cast<int32_t>(secs / SECS_PER_HOUR);
   secs %= SECS_PER_HOUR;
