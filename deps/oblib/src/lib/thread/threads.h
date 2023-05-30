@@ -47,6 +47,7 @@ public:
     int ret = OB_SUCCESS;
     return ret;
   }
+  virtual uint64_t id() const = 0;
 };
 
 class Threads

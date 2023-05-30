@@ -118,7 +118,6 @@ public:
   virtual ~TGHelper() {}
   virtual void tg_create_cb(int) = 0;
   virtual void tg_destroy_cb(int) = 0;
-  virtual uint64_t id() const = 0;
 };
 
 extern TGHelper *&get_tenant_tg_helper();

@@ -89,7 +89,7 @@ T* ObDITls<T, tag>::get_instance()
     static const char* label = get_label();
     di_tls.instance_ = (T*)PLACE_HOLDER;
     // add tenant
-    ObMemAttr attr(OB_SERVER_TENANT_ID, label);
+    ObMemAttr attr(ob_thread_tenant_id(), label);
     SET_USE_500(attr);
     di_tls.instance_ = OB_NEW(T, attr);
   }
@@ -160,7 +160,7 @@ T* ObDITls<T[N], tag>::get_instance()
   if (OB_LIKELY(!di_tls.is_valid() && !is_thread_in_exit)) {
     static const char* label = get_label();
     di_tls.instance_ = (T*)PLACE_HOLDER;
-    ObMemAttr attr(OB_SERVER_TENANT_ID, label);
+    ObMemAttr attr(ob_thread_tenant_id(), label);
     SET_USE_500(attr);
     // add tenant
     if (OB_NOT_NULL(di_tls.instance_ = (T*)ob_malloc(sizeof(T) * N, attr))) {

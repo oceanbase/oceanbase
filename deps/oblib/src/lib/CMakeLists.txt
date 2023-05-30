@@ -26,6 +26,7 @@ ob_set_subtarget(oblib_lib charset
 ob_set_subtarget(oblib_lib common
   ob_abort.cpp
   ob_date_unit_type.cpp
+  ob_define.cpp
   ob_lib_config.cpp
   ob_name_id_def.cpp
   ob_replica_define.cpp

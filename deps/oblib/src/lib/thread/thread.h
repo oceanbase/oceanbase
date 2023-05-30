@@ -47,6 +47,8 @@ public:
   static Thread &current();
 
   bool has_set_stop() const;
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
 
   OB_INLINE static int64_t update_loop_ts(int64_t t)
   {
@@ -81,6 +83,7 @@ private:
 private:
   pthread_t pth_;
   Runnable runnable_;
+  uint64_t tenant_id_;
 #ifndef OB_USE_ASAN
   void *stack_addr_;
 #endif
