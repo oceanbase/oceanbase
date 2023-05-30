@@ -149,6 +149,9 @@ public:
     int64_t hazard = hlist_.hazard();
     return  hazard == INT64_MAX? 0: hazard;
   }
+  int64_t get_max_cached_memstore_size() const {
+    return arena_.get_max_cached_memstore_size();
+  }
   int64_t get_mem_total_memstore_used() const { return arena_.hold(); }
   void log_frozen_memstore_info(char* buf, int64_t limit) {
     if (NULL != buf && limit > 0) {

@@ -950,6 +950,7 @@ int ObTenantFreezer::get_tenant_mem_usage_(ObTenantFreezeCtx &ctx)
   int64_t active_memstore_used = 0;
   int64_t total_memstore_used = 0;
   int64_t total_memstore_hold = 0;
+  int64_t max_cached_memstore_size = 0;
 
   const uint64_t tenant_id = MTL_ID();
   if (OB_FAIL(allocator_mgr_->get_tenant_memstore_allocator(tenant_id,
@@ -963,10 +964,12 @@ int ObTenantFreezer::get_tenant_mem_usage_(ObTenantFreezeCtx &ctx)
     total_memstore_used = tenant_allocator->get_mem_total_memstore_used();
     total_memstore_hold = get_tenant_memory_hold(tenant_id,
                                                  ObCtxIds::MEMSTORE_CTX_ID);
+    max_cached_memstore_size = tenant_allocator->get_max_cached_memstore_size();
   }
   ctx.active_memstore_used_ = active_memstore_used;
   ctx.total_memstore_used_ = total_memstore_used;
   ctx.total_memstore_hold_ = total_memstore_hold;
+  ctx.max_cached_memstore_size_ = max_cached_memstore_size;
 
   return ret;
 }
@@ -1272,10 +1275,10 @@ bool ObTenantFreezer::need_freeze_(const ObTenantFreezeCtx &ctx)
 {
   bool need_freeze = false;
   // 1. trigger by active memstore used.
-  if (ctx.active_memstore_used_ > ctx.memstore_freeze_trigger_) {
+  if (ctx.active_memstore_used_ > ctx.memstore_freeze_trigger_ + ctx.max_cached_memstore_size_) {
     need_freeze = true;
     LOG_INFO("[TenantFreezer] A minor freeze is needed by active memstore used.",
-             K(ctx.active_memstore_used_), K(ctx.memstore_freeze_trigger_));
+             K(ctx.active_memstore_used_), K(ctx.memstore_freeze_trigger_), K(ctx.max_cached_memstore_size_));
   }
   return need_freeze;
 }
@@ -1317,6 +1320,7 @@ int ObTenantFreezer::do_minor_freeze_(const ObTenantFreezeCtx &ctx)
   LOG_INFO("[TenantFreezer] A minor freeze is needed",
            "active_memstore_used_", ctx.active_memstore_used_,
            "memstore_freeze_trigger", ctx.memstore_freeze_trigger_,
+           "max_cached_memstore_size", ctx.max_cached_memstore_size_,
            "mem_tenant_remain", get_tenant_memory_remain(MTL_ID()),
            "mem_tenant_limit", get_tenant_memory_limit(MTL_ID()),
            "mem_tenant_hold", get_tenant_memory_hold(MTL_ID()),

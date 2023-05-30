@@ -47,7 +47,8 @@ ObTenantFreezeCtx::ObTenantFreezeCtx()
     kvcache_mem_(0),
     active_memstore_used_(0),
     total_memstore_used_(0),
-    total_memstore_hold_(0)
+    total_memstore_hold_(0),
+    max_cached_memstore_size_(0)
 {
 }
 
@@ -62,6 +63,7 @@ void ObTenantFreezeCtx::reset()
   active_memstore_used_ = 0;
   total_memstore_used_ = 0;
   total_memstore_hold_ = 0;
+  max_cached_memstore_size_ = 0;
 }
 
 ObTenantInfo::ObTenantInfo()

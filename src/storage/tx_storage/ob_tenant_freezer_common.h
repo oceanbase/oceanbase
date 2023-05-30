@@ -75,6 +75,8 @@ public:
   int64_t active_memstore_used_;
   int64_t total_memstore_used_;
   int64_t total_memstore_hold_;
+
+  int64_t max_cached_memstore_size_;
 private:
   DISABLE_COPY_ASSIGN(ObTenantFreezeCtx);
 };
