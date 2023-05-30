@@ -321,25 +321,19 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
   return ret;
 }
 
-void ObMPStmtExecute::reset_collection_param_for_arraybinding()
+void ObMPStmtExecute::reset_complex_param_memory(ParamStore *params, ObSQLSessionInfo &session_info)
 {
-  if (OB_NOT_NULL(arraybinding_params_)) {
-    for (int64_t i = 0; i < arraybinding_params_->count(); ++i) {
-      ObObjParam &obj = arraybinding_params_->at(i);
-      ObPLCollection *coll = NULL;
-      if (obj.is_ext()
-          && OB_NOT_NULL(coll = reinterpret_cast<ObPLCollection*>(obj.get_ext()))) {
-        if (OB_NOT_NULL(coll->get_allocator())) {
-          coll->get_allocator()->reset();
+  if (OB_NOT_NULL(params)) {
+    for (int64_t i = 0; i < params->count(); ++i) {
+      ObObjParam &obj = params->at(i);
+      if (obj.is_pl_extend()) {
+        int ret = ObUserDefinedType::destruct_obj(obj, &session_info);
+        if (OB_SUCCESS != ret) {
+          LOG_WARN("fail to destruct obj", K(ret), K(i));
         }
-        coll->set_data(NULL);
-        coll->set_count(0);
-        coll->set_first(OB_INVALID_INDEX);
-        coll->set_last(OB_INVALID_INDEX);
       }
     }
   }
-  return ;
 }
 
 int ObMPStmtExecute::send_eof_packet_for_arraybinding(ObSQLSessionInfo &session_info)
@@ -1680,7 +1674,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         }
       }
       // 释放数组内存避免内存泄漏
-      reset_collection_param_for_arraybinding();
+      reset_complex_param_memory(arraybinding_params_, session);
       OZ (response_result_for_arraybinding(session, exception_array));
     } else {
       need_response_error = false;
@@ -1710,6 +1704,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         }
         ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
+      reset_complex_param_memory(params_, session);
     }
     if (enable_trace_log) {
       ObThreadLogLevelUtils::clear();

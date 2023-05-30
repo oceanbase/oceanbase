@@ -242,7 +242,7 @@ private:
     sql::ObSQLSessionInfo *session_info, sql::ParamTypeInfoArray &param_type_infos);
   int check_param_value_for_arraybinding(ObObjParam &param);
   int construct_execute_param_for_arraybinding(int64_t pos);
-  void reset_collection_param_for_arraybinding();
+  void reset_complex_param_memory(ParamStore *params, sql::ObSQLSessionInfo &session_info);
   int save_exception_for_arraybinding(
     int64_t pos, int error_code, ObIArray<ObSavedException> &exception_array);
   //int after_do_process_for_arraybinding(ObMySQLResultSet &result);
