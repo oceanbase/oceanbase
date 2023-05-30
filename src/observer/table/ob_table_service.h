@@ -141,7 +141,7 @@ public:
        is_first_result_(true),
        has_more_rows_(true),
        is_query_sync_(false),
-       allocator_(ObModIds::TABLE_PROC),
+       allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE),
        agg_cell_proj_(allocator_),
        agg_results_(allocator_)
   {
@@ -158,6 +158,7 @@ public:
   int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name);
   int init_agg_cell_proj(int64_t size);
   int init_agg_results(int64_t size);
+  int get_aggregate_row(const ObIArray<table::ObTableAggregation> *&aggregations, ObNewRow *&row, double *&sums, int64_t *&counts);
 private:
   int get_aggregate_result(table::ObTableQueryResult *&next_result); 
   virtual int get_normal_result(table::ObTableQueryResult *&next_result);
@@ -228,8 +229,9 @@ public:
     destroy_result_iterator(part_service);
     ObTableServiceGetCtx::reset_get_ctx();
   }
-  ObNormalTableQueryResultIterator *get_normal_result_iterator(const ObTableQuery &query,
-                                                               table::ObTableQueryResult &one_result);
+  int get_normal_result_iterator(const ObTableQuery &query,
+                                 table::ObTableQueryResult &one_result,
+                                 table::ObTableQueryResultIterator *&query_result);
   table::ObHTableFilterOperator *get_htable_result_iterator(const ObTableQuery &query,
                                                             table::ObTableQueryResult &one_result);
   void destroy_result_iterator(storage::ObPartitionService *part_service);
