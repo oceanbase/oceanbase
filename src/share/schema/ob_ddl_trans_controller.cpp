@@ -64,9 +64,9 @@ ObDDLTransController::~ObDDLTransController()
 
 void ObDDLTransController::run1()
 {
-  int ret = OB_SUCCESS;
   lib::set_thread_name("DDLTransCtr");
   while (!has_set_stop()) {
+    int ret = OB_SUCCESS;
     ObArray<uint64_t> tenant_ids;
     {
       SpinWLockGuard guard(lock_);
@@ -80,6 +80,7 @@ void ObDDLTransController::run1()
       }
     }
     if (OB_SUCC(ret) && tenant_ids.count() > 0) {
+      LOG_INFO("refresh_schema tenants", K(tenant_ids));
       if (OB_ISNULL(GCTX.root_service_)) {
       } else {
         // ignore ret continue
@@ -99,7 +100,7 @@ void ObDDLTransController::run1()
             LOG_WARN("fail to broadcast consensus version", KR(ret), K(tenant_id), K(schema_version));
           } else {
             int64_t end_time = ObTimeUtility::current_time();
-            LOG_INFO("refresh_schema", KR(ret), K(tenant_id), K(end_time - start_time));
+            LOG_INFO("refresh_schema", KR(ret), K(tenant_id), K(end_time - start_time), K(schema_version));
           }
          }
       }
