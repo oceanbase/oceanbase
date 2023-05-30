@@ -2224,7 +2224,6 @@ int ObNormalTableQueryResultIterator::aggregate_sum(uint64_t idx, ObNewRow *&row
           agg_result.set_int(value.get_int());
           break;
         }
-        break;
         //unsigned int
         case ObUTinyIntType:
         case ObUSmallIntType:
