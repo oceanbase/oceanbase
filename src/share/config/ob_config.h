@@ -113,20 +113,18 @@ public:
     ret = databuff_printf(value_reboot_str_, sizeof(value_reboot_str_), pos, "%s", str);
     return ret == OB_SUCCESS;
   }
-  bool set_dump_value(const char *str)
+  virtual bool set_dump_value(const char *str)
   {
-    int64_t pos = 0;
-    int ret = OB_SUCCESS;
-    ret = databuff_printf(value_dump_str_, sizeof(value_dump_str_), pos, "%s", str);
-    return ret == OB_SUCCESS;
+    UNUSED(str);
+    return false;
   }
-  void set_dump_value_updated()
+  virtual void set_dump_value_updated()
   {
-    dump_value_updated_ = true;
+    // do nothing
   }
-  bool dump_value_updated() const
+  virtual bool dump_value_updated() const
   {
-    return dump_value_updated_;
+    return false;
   }
   void set_value_updated()
   {
@@ -156,13 +154,11 @@ public:
     ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
     return value_str_;
   }
-  const char *spfile_str() const
+  virtual const char *spfile_str() const
   {
     const char *ret = nullptr;
     ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
-    if (dump_value_updated()) {
-      ret = value_dump_str_;
-    } else if (reboot_effective() && is_initial_value_set()) {
+    if (reboot_effective() && is_initial_value_set()) {
       ret = value_reboot_str_;
     } else {
       ret = value_str_;
@@ -215,11 +211,9 @@ protected:
   bool inited_;
   bool initial_value_set_;
   bool value_updated_;
-  bool dump_value_updated_;
   bool value_valid_;
   char value_str_[OB_MAX_CONFIG_VALUE_LEN];
   char value_reboot_str_[OB_MAX_CONFIG_VALUE_LEN];
-  char value_dump_str_[OB_MAX_CONFIG_VALUE_LEN];
   const char* name_str_;
   const char* info_str_;
   const char* range_str_;
@@ -871,11 +865,42 @@ public:
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_VERSION;
   }
+  bool set_dump_value(const char *str) override
+  {
+    int64_t pos = 0;
+    int ret = OB_SUCCESS;
+    ret = databuff_printf(value_dump_str_, sizeof(value_dump_str_), pos, "%s", str);
+    return ret == OB_SUCCESS;
+  }
+  void set_dump_value_updated() override
+  {
+    dump_value_updated_ = true;
+  }
+  bool dump_value_updated() const override
+  {
+    return dump_value_updated_;
+  }
+  const char *spfile_str() const override
+  {
+    const char *ret = nullptr;
+    ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+    if (dump_value_updated()) {
+      ret = value_dump_str_;
+    } else if (reboot_effective() && is_initial_value_set()) {
+      ret = value_reboot_str_;
+    } else {
+      ret = value_str_;
+    }
+    return ret;
+  }
   ObConfigVersionItem &operator = (int64_t value);
 
 protected:
   virtual bool set(const char *str) override;
   virtual int64_t parse(const char *str, bool &valid) const override;
+
+  char value_dump_str_[32]; // 32 is enough for version like 4.2.0.0
+  bool dump_value_updated_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigVersionItem);
