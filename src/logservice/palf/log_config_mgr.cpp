@@ -1956,7 +1956,7 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
   constexpr bool need_purge_throttling = true;
   constexpr bool need_remote_check = false;
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
-  LSN prev_log_end_lsn = prev_end_lsn_;
+  LSN prev_log_end_lsn;
   if (new_member_list.get_member_number() == 0) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num,
@@ -1967,6 +1967,8 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
     ret = OB_SUCCESS;
     PALF_LOG(INFO, "PALF is in FLASHBACK mode, skip log barrier", K(ret), K_(palf_id), K_(self), \
         "accepted_mode_meta", mode_mgr_->get_accepted_mode_meta());
+  } else if (OB_FAIL(get_log_barrier_(unused_lsn, prev_log_end_lsn, unused_id))) {
+    PALF_LOG(WARN, "get_log_barrier_ failed", KR(ret), K_(palf_id), K_(self));
   } else if (FALSE_IT(ret = (first_committed_end_lsn >= prev_log_end_lsn)? OB_SUCCESS: OB_EAGAIN)) {
   } else if (OB_EAGAIN == ret) {
     // committed_end_lsn do not change during 2s, skip the reconfiguration

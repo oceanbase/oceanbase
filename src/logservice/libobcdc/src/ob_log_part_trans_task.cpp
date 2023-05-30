@@ -424,7 +424,7 @@ int MutatorRow::parse_columns_(
               LOG_DEBUG("handle_lob_v2_data", K(column_stored_idx), K(lob_common), K(obj));
 
               if (! is_out_row) {
-                LOG_DEBUG("is_lob_storage in row", K(column_id), K(is_lob_storage), K(lob_common), K(obj));
+                LOG_DEBUG("is_lob_storage in row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common), K(obj));
                 obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
               } else {
                 const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
@@ -432,9 +432,8 @@ int MutatorRow::parse_columns_(
                 const ObLobDataOutRowCtx *lob_data_out_row_ctx =
                   reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
 
-                // TODO remove
-                LOG_DEBUG("is_lob_storage out row", K(column_id), K(is_lob_storage), K(lob_data), K(obj),
-                    KPC(lob_data_out_row_ctx));
+                LOG_DEBUG("is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
+                    K(lob_data), K(obj), KPC(lob_data_out_row_ctx));
 
                 if (is_parse_new_col) {
                   ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));

@@ -85,7 +85,7 @@ class ObContextMgr
 public:
   typedef common::ObSortedVector<ObContextSchema *> ContextInfos;
   typedef common::hash::ObPointerHashMap<ObContextHashWrapper, ObContextSchema *,
-                                         ObGetContextKey> ObContextMap;
+                                         ObGetContextKey, 128> ObContextMap;
   typedef ContextInfos::iterator ContextIter;
   typedef ContextInfos::const_iterator ConstContextIter;
   ObContextMgr();

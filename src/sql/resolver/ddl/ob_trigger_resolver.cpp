@@ -1133,11 +1133,11 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
       }
       if (OB_SUCC(ret) && lib::is_oracle_mode()) {
         if (is_alter_compile) {
-          OZ (ObPLCompiler::update_schema_object_dep_info(package_body_ast,
+          OZ (ObPLCompiler::update_schema_object_dep_info(package_body_ast.get_dependency_table(),
                                                           trigger_info.get_tenant_id(),
+                                                          trigger_info.get_owner_id(),
                                                           trigger_info.get_trigger_id(),
                                                           trigger_info.get_schema_version(),
-                                                          trigger_info.get_owner_id(),
                                                           trigger_info.get_object_type()));
         } else {
           ObString dep_attr;

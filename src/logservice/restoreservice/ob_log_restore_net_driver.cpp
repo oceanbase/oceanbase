@@ -201,8 +201,10 @@ int ObLogRestoreNetDriver::scan_ls(const share::ObLogRestoreSourceType &type)
           }
         } else if (OB_FAIL(check_ls_stale_(id, proposal_id, is_stale))) {
           LOG_WARN("check_ls_stale_ failed", K(id));
-        } else if (!is_stale) {
-          // do nothing
+        } else if (! is_stale) {
+          if (OB_FAIL(refresh_error_context_(id))) {
+            LOG_WARN("refresh error context failed", K(id));
+          }
         } else if (OB_FAIL(fetcher_->remove_ls(id)) && OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("remove ls failed", K(id), K(is_stale));
         } else {
@@ -557,6 +559,18 @@ int ObLogRestoreNetDriver::get_ls_count_in_fetcher_(int64_t &count)
   return ret;
 }
 
+int ObLogRestoreNetDriver::refresh_error_context_(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObRemoteFetchContext context;
+  GET_RESTORE_HANDLER_CTX(ls_id) {
+    if (OB_FAIL(restore_handler->refresh_error_context())) {
+      LOG_WARN("refresh error failed");
+    }
+  }
+  return ret;
+}
+
 int ObLogRestoreNetDriver::set_restore_log_upper_limit()
 {
   int ret = OB_SUCCESS;
@@ -568,6 +582,19 @@ int ObLogRestoreNetDriver::set_restore_log_upper_limit()
   } else if (OB_FAIL(fetcher_->update_fetching_log_upper_limit(upper_limit_scn))) {
     LOG_WARN("set restore log upper limit failed", K(upper_limit_scn));
   }
+  return ret;
+}
+
+int ObLogRestoreNetDriver::set_compressor_type(const common::ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+
+  if (NULL == fetcher_) {
+    // do nothing
+  } else if (OB_FAIL(fetcher_->update_compressor_type(compressor_type))) {
+    LOG_WARN("ObLogFetcher update_compressor_type failed", K(compressor_type));
+  }
+
   return ret;
 }
 
@@ -596,6 +623,7 @@ void ObLogRestoreNetDriver::LogErrHandler::destroy()
 void ObLogRestoreNetDriver::LogErrHandler::handle_error(const share::ObLSID &ls_id,
       const ErrType &err_type,
       share::ObTaskId &trace_id,
+      const palf::LSN &lsn,
       const int err_no,
       const char *fmt, ...)
 {
@@ -607,7 +635,19 @@ void ObLogRestoreNetDriver::LogErrHandler::handle_error(const share::ObLSID &ls_
     LOG_WARN("LogErrHandler not init", K(inited_));
   } else {
     GET_RESTORE_HANDLER_CTX(ls_id) {
-      // restore_handler->mark_error(trace_id, err_no, restore_err_type);
+      if (palf::LSN(palf::LOG_INVALID_LSN_VAL) == lsn ) {
+        palf::LSN tmp_lsn = palf::LSN(palf::PALF_INITIAL_LSN_VAL);
+        palf::PalfHandleGuard palf_handle_guard;
+        if (OB_FAIL(OB_FAIL(MTL(ObLogService*)->open_palf(ls_id, palf_handle_guard)))) {
+          LOG_WARN("open palf failed", K(ls_id));
+        } else if (OB_FAIL(palf_handle_guard.get_end_lsn(tmp_lsn))) {
+          LOG_WARN("get end lsn failed", K(ls_id));
+        } else {
+          restore_handler->mark_error(trace_id, err_no, tmp_lsn, restore_err_type);
+        }
+      } else {
+        restore_handler->mark_error(trace_id, err_no, lsn, restore_err_type);
+      }
     }
   }
 }

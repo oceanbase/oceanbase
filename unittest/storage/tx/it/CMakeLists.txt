@@ -10,6 +10,7 @@ endfunction()
 tx_it_test(test_tx)
 tx_it_test(test_tx_free_route)
 tx_it_test(test_tx_ctx)
+tx_it_test(test_register_mds)
 #tx_it_test(test_tx_perf)
 
 

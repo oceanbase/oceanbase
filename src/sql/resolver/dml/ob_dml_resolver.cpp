@@ -1581,6 +1581,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_for_pivot_ = !need_analyze_aggr;
     ctx.is_for_dynamic_sql_ = params_.is_dynamic_sql_;
     ctx.is_for_dbms_sql_ = params_.is_dbms_sql_;
+    ctx.view_ref_id_ = view_ref_id_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -4854,7 +4855,6 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
               if (!synonym_name.empty()) {
                 // bug: 31827906
                 item->alias_name_ = synonym_name;
-                item->database_name_ = synonym_db_name;
               } else {
                 item->alias_name_ = tbl_name;
               }
@@ -4919,7 +4919,6 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
             if (!synonym_name.empty()) {
               // bug: 31827906
               item->alias_name_ = synonym_name;
-              item->database_name_ = synonym_db_name;
             } else {
               item->alias_name_ = tbl_name;
             }
@@ -6350,8 +6349,8 @@ int ObDMLResolver::resolve_limit_clause(const ParseNode *node)
       }
     } else {
       if (limit_node != NULL) {
-        if (limit_node->type_ != T_QUESTIONMARK && limit_node->type_ != T_INT
-            && limit_node->type_ != T_COLUMN_REF) {
+        if (limit_node->type_ != T_INT && limit_node->type_ != T_UINT64
+            && limit_node->type_ != T_QUESTIONMARK && limit_node->type_ != T_COLUMN_REF) {
           ret = OB_ERR_RESOLVE_SQL;
           LOG_WARN("Wrong type of limit value");
         } else {
@@ -10682,6 +10681,7 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
       ObRawExpr *check_constraint_expr = NULL;
       ObConstraint tmp_constraint;
       ObSEArray<ObQualifiedName, 1> columns;
+      ObString constraint_str;
       if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_CHECK
           && (*iter)->get_constraint_type() != CONSTRAINT_TYPE_NOT_NULL) {
         continue;
@@ -10717,8 +10717,13 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
                  (*iter)->is_no_validate() &&
                  (!resolve_check_for_optimizer || !(*iter)->get_rely_flag())) {
         continue;
+      } else if (ob_write_string(*params_.allocator_, (*iter)->get_check_expr_str(), constraint_str)) {
+        LOG_WARN("failed to write string", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
+                 *params_.allocator_, params_.session_info_->get_dtc_params(), constraint_str))) {
+        LOG_WARN("failed to convert sql text", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
-                 (*iter)->get_check_expr_str(), *(params_.allocator_), node))) {
+                 constraint_str, *(params_.allocator_), node))) {
         LOG_WARN("parse expr node from string failed", K(ret));
       } else if (OB_FAIL(ObResolverUtils::resolve_check_constraint_expr(
                  params_, node, *table_schema, tmp_constraint, check_constraint_expr, NULL, &columns))) {

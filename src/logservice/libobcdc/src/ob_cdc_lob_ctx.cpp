@@ -27,9 +27,14 @@ int ObLobColCtx::init(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(seq_no_cnt <= 0)) {
+  if (OB_UNLIKELY(seq_no_cnt < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(seq_no_cnt));
+  } else if (OB_UNLIKELY(seq_no_cnt == 0)) {
+    // 1. Update LOB column data from in_row to out_row, the del_seq_no_cnt is 0
+    // 2. Update LOB column data from out_row to empty string, the insert_seq_no_cnt is 0
+    set_col_value(COLUMN_VALUE_IS_EMPTY, 0);
+    LOG_DEBUG("seq_no_cnt is 0, use empty string as lob_column_value", KPC(this));
   } else {
     ObString **fragment_cb_array =
       static_cast<ObString **>(allocator.alloc(seq_no_cnt * sizeof(ObString*)));
@@ -55,7 +60,7 @@ int ObLobColCtx::set_col_value(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(buf), K(buf_len));
   } else {
@@ -124,14 +129,16 @@ void ObLobDataGetCtx::inc_lob_col_value_count(bool &is_lob_col_value_handle_done
   if (is_insert()) {
     total_value_count = 1;
   } else if (is_update()) {
-    if (nullptr != old_lob_data_) {
-      total_value_count = 2;
-    } else {
-      total_value_count = 1;
+    if (nullptr != old_lob_data_ && old_lob_data_->byte_size_ > 0) {
+      total_value_count += 1;
+    }
+    if (nullptr != new_lob_data_ && new_lob_data_->byte_size_ > 0) {
+      total_value_count += 1;
     }
   }
 
   is_lob_col_value_handle_done = (total_value_count == ATOMIC_AAF(&lob_col_value_handle_done_count_, 1));
+  LOG_DEBUG("inc_lob_col_value_count", K(total_value_count), K_(lob_col_value_handle_done_count));
 }
 
 int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
@@ -150,9 +157,9 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
     }
 
     (void)common::databuff_printf(buf, buf_len, pos,
-        "column_id=%ld, dml=%s, ref_cnt[new=%d, old=%d], ",
-        column_id_, print_dml_flag(dml_flag_), new_lob_col_ctx_.col_ref_cnt_,
-        old_lob_col_ctx_.col_ref_cnt_);
+        "column_id=%ld, dml=%s, ref_cnt[new=%d, old=%d], handle_cnt=%d, ",
+        column_id_, print_dml_flag(dml_flag_), new_lob_col_ctx_.get_col_ref_cnt(),
+        old_lob_col_ctx_.get_col_ref_cnt(), lob_col_value_handle_done_count_);
 
     if (nullptr != new_lob_data_) {
       (void)common::databuff_printf(buf, buf_len, pos,

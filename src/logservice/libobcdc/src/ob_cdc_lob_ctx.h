@@ -48,9 +48,9 @@ struct ObLobColCtx
 
   void set_col_ref_cnt(const uint32_t col_ref_cnt) { ATOMIC_SET(&col_ref_cnt_, col_ref_cnt); }
   uint32_t dec_col_ref_cnt() { return ATOMIC_SAF(&col_ref_cnt_, 1); }
+  uint32_t get_col_ref_cnt() const { return ATOMIC_LOAD(&col_ref_cnt_); }
 
-  TO_STRING_KV(
-      K_(col_ref_cnt));
+  TO_STRING_KV("col_ref_cnt", get_col_ref_cnt());
 
   common::ObString **fragment_cb_array_;
   common::ObString lob_column_value_;

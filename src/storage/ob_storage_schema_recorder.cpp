@@ -297,6 +297,7 @@ int ObStorageSchemaRecorder::get_schema(
   int ret = OB_SUCCESS;
   const ObTableSchema *t_schema = NULL;
 
+  int64_t tenant_schema_version = OB_INVALID_VERSION;
   if (OB_UNLIKELY(table_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K_(tablet_id), K(table_version));
@@ -306,12 +307,16 @@ int ObStorageSchemaRecorder::get_schema(
         KP_(storage_schema), KP_(allocator));
   } else if (OB_FAIL(MTL(ObTenantSchemaService*)->get_schema_service()->get_tenant_schema_guard(MTL_ID(), *schema_guard_))) {
     LOG_WARN("failed to get tenant schema guard", K(ret), K(table_id_));
+  } else if (OB_FAIL(schema_guard_->get_schema_version(MTL_ID(), tenant_schema_version))) {
+    LOG_WARN("fail to get schema version", KR(ret), K(tenant_schema_version));
   } else if (OB_FAIL(schema_guard_->get_table_schema(MTL_ID(), table_id_, t_schema))
              || NULL == t_schema
              || table_version > t_schema->get_schema_version()) {
     // The version is checked here, so there is no need to check whether it is full
+    int tmp_ret = ret;
     ret = OB_SCHEMA_ERROR;
-    LOG_WARN("failed to get schema",  K(ret), K_(tablet_id), K(table_version), KPC(t_schema));
+    LOG_WARN("failed to get schema", KR(tmp_ret), KR(ret), K(table_id), K_(tablet_id),
+             K(tenant_schema_version), K(table_version), KPC(t_schema));
     if (NULL != t_schema) {
       LOG_WARN("current schema version", K(t_schema->get_schema_version()));
     }

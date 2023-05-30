@@ -63,6 +63,8 @@
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/ob_file_system_router.h"
+#include "storage/access/ob_table_scan_iterator.h"
+#include "storage/lob/ob_lob_manager.h"
 #include "ob_mittest_utils.h"
 #include "storage/mock_disk_usage_report.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
@@ -97,7 +99,7 @@ static int server_obj_pool_mtl_new(common::ObServerObjectPool<T> *&pool)
   int ret = common::OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
   pool = MTL_NEW(common::ObServerObjectPool<T>, "TntSrvObjPool", tenant_id, false,
-                 MTL_IS_MINI_MODE());
+                 MTL_IS_MINI_MODE(), MTL_CPU_COUNT());
   if (OB_ISNULL(pool)) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -673,6 +675,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObMultiVersionGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTableLockService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(server_obj_pool_mtl_new<transaction::ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<transaction::ObPartTransCtx>);
+      MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
     }
     if (OB_FAIL(ret)) {
 

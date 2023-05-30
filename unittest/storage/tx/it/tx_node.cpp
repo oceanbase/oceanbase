@@ -80,7 +80,7 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   ls_id_(ls_id),
   tenant_id_(1001),
   tenant_(tenant_id_),
-  fake_part_trans_ctx_pool_(1001, false, false),
+  fake_part_trans_ctx_pool_(1001, false, false, 4),
   memtable_(NULL),
   msg_consumer_(ObString("TxNode"),
                 &msg_queue_,
@@ -172,6 +172,7 @@ int ObTxNode::start() {
     ls_tx_data_table_ptr = &fake_tx_table_.tx_data_table_;
     mock_ls_.tx_table_.is_inited_ = true;
     mock_ls_.tx_table_.online();
+    mock_ls_.ls_meta_.clog_checkpoint_scn_ = share::SCN::max_scn();
   } else {
     abort();
   }

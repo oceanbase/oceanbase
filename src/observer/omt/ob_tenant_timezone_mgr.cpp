@@ -105,7 +105,6 @@ ObTenantTimezoneMgr::ObTenantTimezoneMgr()
 
 ObTenantTimezoneMgr::~ObTenantTimezoneMgr()
 {
-  TG_DESTROY(lib::TGDefIDs::TIMEZONE_MGR);
 }
 
 ObTenantTimezoneMgr &ObTenantTimezoneMgr::get_instance()
@@ -149,8 +148,19 @@ void ObTenantTimezoneMgr::init(tenant_timezone_map_getter tz_map_getter)
   is_inited_ = true;
 }
 
+void ObTenantTimezoneMgr::stop()
+{
+  TG_STOP(lib::TGDefIDs::TIMEZONE_MGR);
+}
+
+void ObTenantTimezoneMgr::wait()
+{
+  TG_WAIT(lib::TGDefIDs::TIMEZONE_MGR);
+}
+
 void ObTenantTimezoneMgr::destroy()
 {
+  TG_DESTROY(lib::TGDefIDs::TIMEZONE_MGR);
   timezone_map_.destroy();
 }
 

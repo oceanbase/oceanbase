@@ -69,7 +69,6 @@ private:
   __MemoryContext__ *mem_context_;
   ObMemAttr attr_;
   const bool use_pm_;
-  lib::ObTenantCtxAllocatorGuard ta_;
   void *pm_;
   lib::ISetLocker *locker_;
   lib::SetDoNothingLocker do_nothing_locker_;

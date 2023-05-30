@@ -105,9 +105,9 @@ class ObDbLinkMgr
 {
   typedef common::ObSortedVector<ObDbLinkSchema *> DbLinkSchemas;
   typedef common::hash::ObPointerHashMap<uint64_t, ObDbLinkSchema *,
-      ObGetDbLinkKey> DbLinkIdMap;
+      ObGetDbLinkKey, 128> DbLinkIdMap;
   typedef common::hash::ObPointerHashMap<ObDbLinkNameHashWrapper, ObDbLinkSchema *,
-      ObGetDbLinkKey> DbLinkNameMap;
+      ObGetDbLinkKey, 128> DbLinkNameMap;
   typedef DbLinkSchemas::iterator DbLinkIter;
   typedef DbLinkSchemas::const_iterator ConstDbLinkIter;
 

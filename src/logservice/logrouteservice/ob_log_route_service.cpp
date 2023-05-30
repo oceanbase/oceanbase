@@ -39,6 +39,7 @@ ObLogRouteService::ObLogRouteService() :
     all_svr_cache_(),
     ls_route_timer_task_(*this),
     timer_(),
+    err_handler_(NULL),
     timer_id_(-1),
     tg_id_(-1),
     background_refresh_time_sec_(0),
@@ -59,6 +60,7 @@ int ObLogRouteService::init(ObISQLClient *proxy,
     const common::ObRegion &prefer_region,
     const int64_t cluster_id,
     const bool is_across_cluster,
+    logfetcher::IObLogErrHandler *err_handler,
     const char *external_server_blacklist,
     const int64_t background_refresh_time_sec,
     const int64_t all_server_cache_update_interval_sec,
@@ -96,7 +98,7 @@ int ObLogRouteService::init(ObISQLClient *proxy,
   } else if (OB_FAIL(svr_blacklist_.init(external_server_blacklist, false/*is_sql_server*/))) {
     LOG_WARN("ObLogSvrBlacklist init failed", KR(ret), K(cluster_id), K(is_across_cluster),
         K(external_server_blacklist));
-  } else if (OB_FAIL(systable_queryer_.init(cluster_id, is_across_cluster, *proxy))) {
+  } else if (OB_FAIL(systable_queryer_.init(cluster_id, is_across_cluster, *proxy, err_handler))) {
     LOG_WARN("systable_queryer_ init failed", KR(ret), K(cluster_id), K(is_across_cluster));
   } else if (OB_FAIL(all_svr_cache_.init(systable_queryer_, prefer_region,
           all_server_cache_update_interval_sec, all_zone_cache_update_interval_sec))) {
@@ -196,6 +198,7 @@ void ObLogRouteService::destroy()
     systable_queryer_.destroy();
     all_svr_cache_.destroy();
     svr_blacklist_.destroy();
+    err_handler_ = NULL;
 
     cluster_id_ = OB_INVALID_CLUSTER_ID;
     background_refresh_time_sec_ = 0;

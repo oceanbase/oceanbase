@@ -696,18 +696,21 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
       // For CREATE TABLE statements, the database character set and collation are used as default
       // values for table definitions if the table character set and collation are not specified.
       // To override this, provide explicit CHARACTER SET and COLLATE table options.
-      int64_t coll_cs_db_int64 = -1;
-      int64_t coll_db_int64 = -1;
-      if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, coll_cs_db_int64))) {
-        SQL_RESV_LOG(WARN, "fail to get sys variable character_set_database", K(ret));
-      } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_COLLATION_DATABASE, coll_db_int64))) {
-        SQL_RESV_LOG(WARN, "fail to get sys variable collation_database", K(ret));
-      } else if (!ObCharset::is_valid_collation(coll_cs_db_int64) || !ObCharset::is_valid_collation(coll_db_int64)) {
+      const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+      ObString database_name;
+      uint64_t database_id = OB_INVALID_ID;
+      const ObDatabaseSchema *database_schema = NULL;
+      int tmp_ret = 0;
+      if (OB_SUCCESS != (tmp_ret = schema_checker_->get_database_id(tenant_id, database_name_, database_id)))  {
+        SQL_RESV_LOG(WARN, "fail to get database_id.", K(tmp_ret), K(database_name_), K(tenant_id));
+      } else if (OB_SUCCESS != (tmp_ret = schema_checker_->get_database_schema(tenant_id, database_id, database_schema))) {
+        LOG_WARN("failed to get db schema", K(tmp_ret), K(database_id));
+      } else if (OB_ISNULL(database_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        SQL_RESV_LOG(WARN, "invalid collation type", K(ret), K(coll_cs_db_int64), K(coll_db_int64));
+        LOG_WARN("unexpected error. db schema is null", K(ret), K(database_schema));
       } else {
-        charset_type_ = ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_cs_db_int64));
-        collation_type_ = static_cast<ObCollationType>(coll_db_int64);
+        charset_type_ = database_schema->get_charset_type();
+        collation_type_ = database_schema->get_collation_type();
       }
     } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type_, collation_type_))) {
       SQL_RESV_LOG(WARN, "fail to fill collation info", K(ret));
@@ -2349,6 +2352,19 @@ int ObDDLResolver::check_format_valid(const ObExternalFileFormat &format, bool &
       LOG_WARN("LINE_DELIMITER or FIELD_DELIMITER cann't be a substring of the other's", K(ret),
                K(format.csv_format_.line_term_str_), K(format.csv_format_.field_term_str_));
     }
+  }
+  if (OB_SUCC(ret)) {
+     if (!format.csv_format_.line_term_str_.empty()
+         && (format.csv_format_.line_term_str_[0] == format.csv_format_.field_escaped_char_
+             || format.csv_format_.line_term_str_[0] == format.csv_format_.field_enclosed_char_)) {
+       ret = OB_WRONG_FIELD_TERMINATORS;
+       LOG_WARN("invalid line terminator", K(ret));
+     } else if (!format.csv_format_.field_term_str_.empty()
+                && (format.csv_format_.field_term_str_[0] == format.csv_format_.field_escaped_char_
+                    || format.csv_format_.field_term_str_[0] == format.csv_format_.field_enclosed_char_)) {
+       ret = OB_WRONG_FIELD_TERMINATORS;
+       LOG_WARN("invalid field terminator", K(ret));
+     }
   }
   return ret;
 }

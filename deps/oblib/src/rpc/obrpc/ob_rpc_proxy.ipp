@@ -296,25 +296,59 @@ int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void *pkt)
   }
 
   if (OB_SUCC(ret)) {
-    ObRpcPacket  *rpkt  = reinterpret_cast<ObRpcPacket*>(pkt);
-    const char   *buf   = rpkt->get_cdata();
-    const int64_t len   = rpkt->get_clen();
-    int64_t       pos   = 0;
+    ObRpcPacket  *rpkt = reinterpret_cast<ObRpcPacket*>(pkt);
+    const char   *buf  = rpkt->get_cdata();
+    int64_t      len   = rpkt->get_clen();
+    int64_t      pos   = 0;
     UNIS_VERSION_GUARD(rpkt->get_unis_version());
+    char *uncompressed_buf = NULL;
 
     if (OB_FAIL(rpkt->verify_checksum())) {
       RPC_OBRPC_LOG(ERROR, "verify checksum fail", K(*rpkt), K(ret));
-    } else if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
-      RPC_OBRPC_LOG(WARN, "decode result code fail", K(*rpkt), K(ret));
-    } else if (rcode_.rcode_ != OB_SUCCESS) {
-      // RPC_OBRPC_LOG(WARN, "execute rpc fail", K_(rcode));
-    } else if (OB_FAIL(result_.deserialize(buf, len, pos))) {
-      RPC_OBRPC_LOG(WARN, "decode packet fail", K(ret));
-    } else {
-      //do nothing
+    }
+    if (OB_SUCC(ret)) {
+      const common::ObCompressorType &compressor_type = rpkt->get_compressor_type();
+      if (common::INVALID_COMPRESSOR != compressor_type) {
+        // uncompress
+        const int32_t original_len = rpkt->get_original_len();
+        common::ObCompressor *compressor = NULL;
+        int64_t dst_data_size = 0;
+        if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type, compressor))) {
+          RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret), K(compressor_type));
+        } else if (NULL == (uncompressed_buf =
+                                   static_cast<char *>(common::ob_malloc(original_len, common::ObModIds::OB_RPC)))) {
+          ret = common::OB_ALLOCATE_MEMORY_FAILED;
+          RPC_OBRPC_LOG(WARN, "Allocate memory failed", K(ret));
+        } else if (OB_FAIL(compressor->decompress(buf, len, uncompressed_buf, original_len, dst_data_size))) {
+          RPC_OBRPC_LOG(WARN, "decompress failed", K(ret));
+        } else if (dst_data_size != original_len) {
+          ret = common::OB_ERR_UNEXPECTED;
+          RPC_OBRPC_LOG(ERROR, "decompress len not match", K(ret), K(dst_data_size), K(original_len));
+        } else {
+          RPC_OBRPC_LOG(DEBUG, "uncompress result success", K(compressor_type), K(len), K(original_len));
+          // replace buf
+          buf = uncompressed_buf;
+          len = original_len;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(rcode_.deserialize(buf, len, pos))) {
+        RPC_OBRPC_LOG(WARN, "decode result code fail", K(*rpkt), K(ret));
+      } else if (rcode_.rcode_ != OB_SUCCESS) {
+        // RPC_OBRPC_LOG(WARN, "execute rpc fail", K_(rcode));
+      } else if (OB_FAIL(result_.deserialize(buf, len, pos))) {
+        RPC_OBRPC_LOG(WARN, "decode packet fail", K(ret));
+      } else {
+        // do nothing
+      }
+    }
+    // free the uncompress buffer
+    if (NULL != uncompressed_buf) {
+      common::ob_free(uncompressed_buf);
+      uncompressed_buf = NULL;
     }
   }
-
   return ret;
 }
 template <class pcodeStruct>
@@ -446,7 +480,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input &args,
           ret = common::OB_ERR_UNEXPECTED;
           RPC_OBRPC_LOG(ERROR, "decompress len not match", K(ret), K(dst_data_size), K(original_len));
         } else {
-          RPC_OBRPC_LOG(DEBUG, "uncompress result success", K(compressor_type), K(len), K(original_len));
+          RPC_OBRPC_LOG(INFO, "uncompress result success", K(compressor_type), K(len), K(original_len));
           // replace buf
           buf = uncompressed_buf;
           len = original_len;

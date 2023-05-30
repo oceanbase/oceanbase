@@ -163,9 +163,9 @@ class ObSynonymMgr
 public:
   typedef common::ObSortedVector<ObSimpleSynonymSchema *> SynonymInfos;
   typedef common::hash::ObPointerHashMap<uint64_t, ObSimpleSynonymSchema *,
-                                         ObGetSynonymKey> ObSynonymIdMap;
+                                         ObGetSynonymKey, 128> ObSynonymIdMap;
   typedef common::hash::ObPointerHashMap<ObSynonymHashWrapper, ObSimpleSynonymSchema *,
-                                         ObGetSynonymKey> ObSynonymNameMap;
+                                         ObGetSynonymKey, 128> ObSynonymNameMap;
   typedef SynonymInfos::iterator SynonymIter;
   typedef SynonymInfos::const_iterator ConstSynonymIter;
   ObSynonymMgr();

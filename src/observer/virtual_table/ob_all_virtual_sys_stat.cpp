@@ -233,13 +233,10 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
       stat_events.get(ObStatEventIds::OBSERVER_PARTITION_TABLE_UPATER_CORE_QUEUE_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
           = 0;
     }
-    if (NULL != GCTX.cgroup_ctrl_) {
-      int64_t cpu_time = 0;
-      if (!OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time))) {
-        stat_events.get(ObStatEventIds::CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
-            = cpu_time;
-      }
-    }
+    int64_t cpu_time = 0;
+    GCTX.omt_->get_tenant_cpu_time(tenant_id, cpu_time);
+    stat_events.get(ObStatEventIds::CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
+        = cpu_time;
     ret = ret_bk;
   }
   return ret;

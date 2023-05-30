@@ -23,6 +23,7 @@
 #include "ob_log_sys_ls_task_handler.h"  // IObLogSysLsTaskHandler
 #include "ob_log_task_pool.h"         // ObLogTransTaskPool
 #include "ob_log_instance.h"          // IObLogErrHandler
+#include "logservice/restoreservice/ob_log_restore_net_driver.h"   // logfetcher::LogErrHandler
 
 using namespace oceanbase::common;
 
@@ -91,6 +92,7 @@ int ObLogFetcher::init(
 {
   int ret = OB_SUCCESS;
   int64_t max_cached_ls_fetch_ctx_count = cfg.active_ls_count;
+  LogFetcherErrHandler *fake_err_handler = NULL; // TODO: CDC need to process error handler
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -115,6 +117,7 @@ int ObLogFetcher::init(
         prefer_region,
         cluster_id,
         false/*is_across_cluster*/,
+        fake_err_handler,
         cfg.server_blacklist.str(),
         cfg.log_router_background_refresh_interval_sec,
         cfg.all_server_cache_update_interval_sec,

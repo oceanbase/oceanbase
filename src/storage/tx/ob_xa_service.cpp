@@ -255,8 +255,8 @@ int ObXAService::revert_xa_ctx(ObXACtx *xa_ctx)
 
 #define INSERT_XA_STANDBY_TRANS_SQL "\
   insert into %s (tenant_id, gtrid, bqual, format_id, \
-  trans_id, coordinator, scheduler_ip, scheduler_port, flag) \
-  values (%lu, x'%.*s', x'%.*s', %ld, %ld, %ld, '%s', %d, %ld)"
+  trans_id, coordinator, scheduler_ip, scheduler_port, state, flag) \
+  values (%lu, x'%.*s', x'%.*s', %ld, %ld, %ld, '%s', %d, %d, %ld)"
 
 void ObXAService::insert_record_for_standby(const uint64_t tenant_id,
                                             const ObXATransID &xid,
@@ -298,7 +298,7 @@ void ObXAService::insert_record_for_standby(const uint64_t tenant_id,
                                     trans_id.get_id(),
                                     coordinator.id(),
                                     scheduler_ip_buf, sche_addr.get_port(),
-                                    (long)0))) {
+                                    ObXATransState::ACTIVE, (long)0))) {
     TRANS_LOG(WARN, "generate insert xa trans sql fail", K(ret), K(sql));
   } else if (OB_FAIL(mysql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute insert record sql failed", KR(ret), K(exec_tenant_id), K(tenant_id));

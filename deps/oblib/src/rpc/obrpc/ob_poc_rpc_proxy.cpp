@@ -24,6 +24,11 @@ namespace oceanbase
 namespace obrpc
 {
 const int easy_head_size = 16;
+
+common::ObCompressorType get_proxy_compressor_type(ObRpcProxy& proxy) {
+  return proxy.get_compressor_type();
+}
+
 int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
 {
   if (PNIO_OK != io_err) {
@@ -34,7 +39,7 @@ int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
       RPC_LOG_RET(WARN, send_ret_, "pnio error", KP(buf), K(sz), K(io_err));
     }
   } else if (NULL == buf || sz <= easy_head_size) {
-    send_ret_ = OB_ERR_UNEXPECTED;
+    send_ret_ = OB_TIMEOUT;
     RPC_LOG_RET(WARN, send_ret_, "response is null", KP(buf), K(sz), K(io_err));
   } else {
     buf = buf + easy_head_size;
@@ -80,19 +85,24 @@ ObAsyncRespCallback* ObAsyncRespCallback::create(ObRpcMemPool& pool, UAsyncCB* u
   UAsyncCB* cb = NULL;
   ObAsyncRespCallback* pcb = NULL;
   if (NULL == (pcb = (ObAsyncRespCallback*)pool.alloc(sizeof(ObAsyncRespCallback)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     RPC_LOG(WARN, "alloc resp callback fail", K(ret));
   } else {
     if (NULL != ucb) {
       if (NULL == (cb = ucb->clone(sp_alloc))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        pcb = NULL;
         RPC_LOG(WARN, "ucb.clone fail", K(ret));
       } else {
         cb->low_level_cb_ = pcb;
         if (cb != ucb) {
           cb->set_cloned(true);
         }
+        new(pcb)ObAsyncRespCallback(pool, cb);
       }
+    } else {
+      new(pcb)ObAsyncRespCallback(pool, NULL);
     }
-    new(pcb)ObAsyncRespCallback(pool, cb);
   }
   return pcb;
 }
@@ -122,6 +132,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
     } else if (OB_FAIL(rpc_decode_ob_packet(pool_, buf, sz, ret_pkt))) {
       ucb_->on_invalid();
       RPC_LOG(WARN, "rpc_decode_ob_packet fail", K(ret));
+    } else if (OB_FALSE_IT(ObCurTraceId::set(ret_pkt->get_trace_id()))) {
     } else if (OB_FAIL(ucb_->decode(ret_pkt))) {
       ucb_->on_invalid();
       RPC_LOG(WARN, "ucb.decode fail", K(ret));
@@ -136,6 +147,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
     }
   }
   pool_.destroy();
+  ObCurTraceId::reset();
   return ret;
 }
 

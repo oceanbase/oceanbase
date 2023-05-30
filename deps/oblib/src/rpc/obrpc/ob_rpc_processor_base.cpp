@@ -488,7 +488,10 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
         RPC_OBRPC_LOG(WARN, "response data fail", K(ret));
       }
     } else {
-      RPC_REQ_OP.response_result(req_, NULL);
+      int response_retcode = retcode != OB_SUCCESS ? retcode : ret;
+      if (part_response_error(req_, response_retcode) != OB_SUCCESS) {
+        RPC_REQ_OP.response_result(req_, NULL);
+      }
       req_ = NULL;
     }
 
@@ -501,6 +504,28 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
   return ret;
 }
 
+int ObRpcProcessorBase::part_response_error(rpc::ObRequest* req, const int retcode)
+{
+  int ret = OB_SUCCESS;
+  const int64_t sessid = sc_ ? sc_->sessid() : 0;
+  bool is_last = true;
+  ObRpcResultCode rcode;
+  char tbuf[sizeof(rcode)];
+  rcode.rcode_ = retcode;
+  LOG_INFO("execute part_response_error", K(retcode));
+  int64_t pos = 0;
+  if (OB_FAIL(rcode.serialize(tbuf, sizeof(tbuf), pos))) {
+    RPC_OBRPC_LOG(WARN, "serialize result code fail", K(ret));
+  } else {
+    ObRpcPacket pkt;
+    pkt.set_content(tbuf, pos);
+    Response err_rsp(sessid, is_stream_, is_last, bad_routing_, &pkt);
+    if (OB_FAIL(do_response(err_rsp))) {
+      RPC_OBRPC_LOG(WARN, "response data fail", K(ret));
+    }
+  }
+  return ret;
+}
 int ObRpcProcessorBase::flush(int64_t wait_timeout)
 {
   int ret = OB_SUCCESS;
@@ -542,10 +567,12 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
     reuse();
     set_ob_request(*req);
     if (!rpc_pkt_) {
-      RPC_REQ_OP.response_result(req, NULL);
+      ret = OB_ERR_UNEXPECTED;
+      if (part_response_error(req, ret) != OB_SUCCESS) {
+        RPC_REQ_OP.response_result(req, NULL);
+      }
       req_ = NULL;
       is_stream_end_ = true;
-      ret = OB_ERR_UNEXPECTED;
       RPC_OBRPC_LOG(ERROR, "rpc packet is NULL in stream", K(ret));
     } else if (rpc_pkt_->is_stream_last()) {
       ret = OB_ITER_END;

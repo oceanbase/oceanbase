@@ -241,6 +241,8 @@ void ObPartTransCtx::destroy()
     mds_cache_.destroy();
     exec_info_.destroy();
 
+    big_segment_info_.reset();
+
     reset_log_cbs_();
 
     timeout_task_.destroy();
@@ -1944,19 +1946,21 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
       // do nothing
     }  else if (ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type) {
       tmp_array.reset();
+      share::SCN notify_redo_scn =
+          log_cb->get_first_part_scn().is_valid() ? log_cb->get_first_part_scn() : log_ts;
       if (OB_FAIL(log_cb->get_mds_range().copy_to(tmp_array))) {
         TRANS_LOG(WARN, "copy mds log array failed", K(ret));
       } else if (OB_FAIL(log_cb->get_mds_range().move_to(exec_info_.multi_data_source_))) {
         TRANS_LOG(WARN, "move MDS range into exec_info failed", K(ret));
       } else if (FALSE_IT(mds_cache_.clear_submitted_iterator())) {
         //do nothing
-      } else if (OB_FAIL(notify_data_source_(NotifyType::ON_REDO, log_ts, false, tmp_array))) {
+      } else if (OB_FAIL(notify_data_source_(NotifyType::ON_REDO, notify_redo_scn, false, tmp_array))) {
         TRANS_LOG(WARN, "notify data source for ON_REDO", K(ret));
       } else {
         log_cb->get_mds_range().reset();
       }
     } else if (ObTxLogType::TX_BIG_SEGMENT_LOG == log_type) {
-      remove_unsynced_segment_cb_(log_cb);
+      remove_unsynced_segment_cb_(log_cb->get_log_ts());
     } else if (ObTxLogType::TX_ACTIVE_INFO_LOG == log_type) {
       if (log_ts > start_working_log_ts_) {
         exec_info_.data_complete_ = true;
@@ -2242,7 +2246,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
       TRANS_LOG(ERROR, "fix redo lsns failed", KR(ret), K(*this));
     }
     if (is_contain(log_cb->get_cb_arg_array(), ObTxLogType::TX_BIG_SEGMENT_LOG)) {
-      remove_unsynced_segment_cb_(log_cb);
+      remove_unsynced_segment_cb_(log_cb->get_log_ts());
     }
     if (ObTxLogType::TX_ROLLBACK_TO_LOG == log_type) {
       ObTxData *tx_data = log_cb->get_tx_data();
@@ -3461,7 +3465,7 @@ int ObPartTransCtx::submit_big_segment_log_()
 
   // if one part of big segment log submit into palf failed , the transaction must drive into abort
   // phase.
-  while (OB_SUCC(ret)) {
+  while (OB_SUCC(ret) && big_segment_info_.segment_buf_.is_active()) {
     const char *submit_buf = nullptr;
     int64_t submit_buf_len = 0;
     ObTxLogBlockHeader log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_, exec_info_.scheduler_);
@@ -3471,6 +3475,7 @@ int ObPartTransCtx::submit_big_segment_log_()
       if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
         TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
       }
+    } else if (OB_FALSE_IT(log_cb->copy(*big_segment_info_.submit_log_cb_template_))) {
 
     } else if (OB_FALSE_IT(ret = (log_block.acquire_segment_log_buf(
                                submit_buf, submit_buf_len, log_block_header, source_log_type,
@@ -3514,9 +3519,7 @@ int ObPartTransCtx::prepare_big_segment_submit_(ObTxLogCb *segment_cb,
   if (!base_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KPC(segment_cb), K(base_scn));
-  } else if (!big_segment_info_.segment_buf_.is_active()
-             || big_segment_info_.submit_log_cb_template_
-                    == big_segment_info_.unsynced_segment_part_cbs_.get_first()) {
+  } else if (!big_segment_info_.segment_buf_.is_active()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "inactive segment buf", K(ret), K(big_segment_info_), KPC(this));
   } else if (OB_NOT_NULL(big_segment_info_.submit_log_cb_template_)) {
@@ -3524,14 +3527,16 @@ int ObPartTransCtx::prepare_big_segment_submit_(ObTxLogCb *segment_cb,
                            share::mtl_malloc(sizeof(ObTxLogCb), "BigSegmentCb")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc log cb template for big segment failed", K(ret), K(big_segment_info_));
+  } else if (OB_FALSE_IT(new (big_segment_info_.submit_log_cb_template_) ObTxLogCb())) {
   }
 
   if (OB_SUCC(ret)) {
     if (OB_NOT_NULL(segment_cb)) {
-      // *big_segment_info_.submit_log_cb_template_ = *segment_cb;
       big_segment_info_.submit_log_cb_template_->get_cb_arg_array().reuse();
-      if (OB_FAIL(big_segment_info_.submit_log_cb_template_->get_cb_arg_array().push_back(
-              ObTxCbArg(segment_log_type, nullptr)))) {
+      if (OB_FAIL(big_segment_info_.submit_log_cb_template_->copy(*segment_cb))) {
+        TRANS_LOG(WARN, "copy form log cb failed", K(ret), KPC(segment_cb));
+      } else if (OB_FAIL(big_segment_info_.submit_log_cb_template_->get_cb_arg_array().push_back(
+                     ObTxCbArg(segment_log_type, nullptr)))) {
         TRANS_LOG(WARN, "record segment log type in big_segment_info_", K(ret),
                   K(big_segment_info_));
       }
@@ -3547,14 +3552,38 @@ int ObPartTransCtx::prepare_big_segment_submit_(ObTxLogCb *segment_cb,
 // {
 //
 // }
-void ObPartTransCtx::add_unsynced_segment_cb_(ObTxLogCb *log_cb)
+int ObPartTransCtx::add_unsynced_segment_cb_(ObTxLogCb *log_cb)
 {
-  big_segment_info_.unsynced_segment_part_cbs_.add_last(log_cb);
+  int ret = OB_SUCCESS;
+  ObTxLogCbRecord cb_record(*log_cb);
+  if (!is_follower_()) {
+    big_segment_info_.segment_buf_.set_prev_part_id(log_cb->get_log_ts().get_val_for_gts());
+  }
+
+  if (OB_FAIL(big_segment_info_.unsynced_segment_part_cbs_.push_back(cb_record))) {
+    TRANS_LOG(WARN, "push back into unsynced_segment_part_cbs_ failed", K(ret), KPC(log_cb));
+  }
+  return ret;
 }
 
-void ObPartTransCtx::remove_unsynced_segment_cb_(ObTxLogCb *log_cb)
+int ObPartTransCtx::remove_unsynced_segment_cb_(const share::SCN &remove_scn)
 {
-  big_segment_info_.unsynced_segment_part_cbs_.remove(log_cb);
+  int ret = OB_SUCCESS;
+  // big_segment_info_.unsynced_segment_part_cbs_.remove(log_cb);
+  int remove_index = -1;
+  for (int i = 0; i < big_segment_info_.unsynced_segment_part_cbs_.count() && OB_SUCC(ret); i++) {
+    if (big_segment_info_.unsynced_segment_part_cbs_[i].self_scn_ == remove_scn) {
+      remove_index = i;
+    }
+  }
+
+  if (OB_SUCC(ret) && remove_index >= 0) {
+    if (OB_FAIL(big_segment_info_.unsynced_segment_part_cbs_.remove(remove_index))) {
+      TRANS_LOG(WARN, "remove unsynced log_cb failed", K(ret));
+    }
+  }
+
+  return ret;
 }
 
 share::SCN ObPartTransCtx::get_min_unsyncd_segment_scn_()
@@ -3562,17 +3591,18 @@ share::SCN ObPartTransCtx::get_min_unsyncd_segment_scn_()
   share::SCN min_scn;
   min_scn.invalid_scn();
 
-  if (!big_segment_info_.unsynced_segment_part_cbs_.is_empty()) {
-    ObTxLogCb *cur_cb = big_segment_info_.unsynced_segment_part_cbs_.get_first();
-    int64_t cb_cnt = big_segment_info_.unsynced_segment_part_cbs_.get_size();
+  if (!big_segment_info_.unsynced_segment_part_cbs_.empty()) {
+    const int64_t cb_cnt = big_segment_info_.unsynced_segment_part_cbs_.count();
     for (int64_t i = 0; i < cb_cnt; i++) {
       if (!min_scn.is_valid()) {
-        min_scn = cur_cb->get_log_ts();
+        min_scn = big_segment_info_.unsynced_segment_part_cbs_[i].self_scn_;
       } else {
-        min_scn = share::SCN::min(min_scn, cur_cb->get_log_ts());
+        min_scn =
+            share::SCN::min(min_scn, big_segment_info_.unsynced_segment_part_cbs_[i].self_scn_);
       }
-      if (cur_cb->get_first_part_scn().is_valid()) {
-        min_scn = share::SCN::min(min_scn, cur_cb->get_first_part_scn());
+      if (big_segment_info_.unsynced_segment_part_cbs_[i].first_part_scn_.is_valid()) {
+        min_scn = share::SCN::min(min_scn,
+                                  big_segment_info_.unsynced_segment_part_cbs_[i].first_part_scn_);
       }
     }
   }
@@ -3728,6 +3758,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   } else {
     if (is_contain(cb_arg_array, ObTxLogType::TX_REDO_LOG) ||
         is_contain(cb_arg_array, ObTxLogType::TX_ROLLBACK_TO_LOG) ||
+        is_contain(cb_arg_array, ObTxLogType::TX_BIG_SEGMENT_LOG) ||
         is_contain(cb_arg_array, ObTxLogType::TX_MULTI_DATA_SOURCE_LOG)) {
       if (!is_contain(cb_arg_array, ObTxLogType::TX_COMMIT_INFO_LOG)) {
         ret = exec_info_.redo_lsns_.push_back(log_cb->get_lsn());
@@ -3755,6 +3786,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   {
     add_unsynced_segment_cb_(log_cb);
     if (big_segment_info_.segment_buf_.is_completed()) {
+      TRANS_LOG(INFO, "reuse big_segment_info_",K(ret),K(big_segment_info_),KPC(log_cb));
       big_segment_info_.reuse();
     }
   }
@@ -4152,6 +4184,20 @@ int ObPartTransCtx::push_replayed_log_ts(SCN log_ts_ns, const palf::LSN &offset)
     exec_info_.max_durable_lsn_ = offset;
   }
 
+  if (OB_SUCC(ret)) {
+    if (big_segment_info_.segment_buf_.is_completed()
+        && big_segment_info_.unsynced_segment_part_cbs_.count() > 0) {
+      // if (big_segment_info_.submit_log_cb_template_
+      //     == big_segment_info_.unsynced_segment_part_cbs_.get_first()) {
+        remove_unsynced_segment_cb_(big_segment_info_.unsynced_segment_part_cbs_[0].self_scn_);
+        big_segment_info_.reuse();
+      // } else {
+      //   ret = OB_ERR_UNEXPECTED;
+      //   TRANS_LOG(ERROR, "unexpectd unsynced_segment_part_cbs_", K(ret), K(log_ts_ns),
+      //             K(big_segment_info_), KPC(this));
+      // }
+    }
+  }
   return ret;
 }
 
@@ -4176,13 +4222,17 @@ int ObPartTransCtx::iter_next_log_for_replay(ObTxLogBlock &log_block,
           ret = OB_ALLOCATE_MEMORY_FAILED;
           TRANS_LOG(WARN, "alloc log cb template for big segment failed", K(ret), K(log_scn),
                     K(big_segment_info_));
+        } else {
+          new (big_segment_info_.submit_log_cb_template_) ObTxLogCb();
         }
       }
 
       if (OB_SUCC(ret)) {
         big_segment_info_.submit_log_cb_template_->set_log_ts(log_scn);
-        big_segment_info_.submit_log_cb_template_->set_first_part_scn(log_scn);
-        add_unsynced_segment_cb_(big_segment_info_.submit_log_cb_template_);
+        if (!big_segment_info_.submit_log_cb_template_->get_first_part_scn().is_valid()) {
+          big_segment_info_.submit_log_cb_template_->set_first_part_scn(log_scn);
+          add_unsynced_segment_cb_(big_segment_info_.submit_log_cb_template_);
+        }
       }
 
     } else if (OB_NO_NEED_UPDATE == ret) {
@@ -4194,22 +4244,6 @@ int ObPartTransCtx::iter_next_log_for_replay(ObTxLogBlock &log_block,
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (log_header.get_tx_log_type() != ObTxLogType::TX_BIG_SEGMENT_LOG
-        && big_segment_info_.unsynced_segment_part_cbs_.get_size() > 0) {
-      if (big_segment_info_.submit_log_cb_template_
-          == big_segment_info_.unsynced_segment_part_cbs_.get_first())
-
-      {
-        // remove_unsynced_segment_cb_(big_segment_info_.submit_log_cb_template_);
-        big_segment_info_.reuse();
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "unexpectd unsynced_segment_part_cbs_", K(ret), K(log_scn), K(log_header),
-                  K(big_segment_info_), KPC(this));
-      }
-    }
-  }
   return ret;
 }
 
@@ -4230,6 +4264,9 @@ int ObPartTransCtx::replay_one_part_of_big_segment(const palf::LSN &offset,
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   }
 
+  if (OB_SUCC(ret) && OB_FAIL(check_and_merge_redo_lsns_(offset))) {
+    TRANS_LOG(WARN, "check and merge redo lsns failed", K(ret), K(trans_id_), K(timestamp), K(offset));
+  }
   return ret;
 }
 
@@ -5088,7 +5125,7 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else if (OB_FAIL(deep_copy_mds_array(log.get_data(), false))) {
     TRANS_LOG(WARN, "deep copy mds array failed", K(ret));
-  } 
+  }
 
   if (OB_SUCC(ret)) {
     if (is_incomplete_replay_ctx_) {
@@ -5098,12 +5135,19 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
     }
   }
 
+  share::SCN notify_redo_scn =
+      OB_NOT_NULL(big_segment_info_.submit_log_cb_template_)
+              && big_segment_info_.submit_log_cb_template_->get_first_part_scn().is_valid()
+          ? big_segment_info_.submit_log_cb_template_->get_first_part_scn()
+          : timestamp;
+
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(
-                 notify_data_source_(NotifyType::REGISTER_SUCC, timestamp, true, log.get_data()))) {
+  } else if (OB_FAIL(notify_data_source_(NotifyType::REGISTER_SUCC, notify_redo_scn, true,
+                                         log.get_data()))) {
     TRANS_LOG(WARN, "notify data source for REGISTER_SUCC failed", K(ret));
-  } else if (OB_FAIL(notify_data_source_(NotifyType::ON_REDO, timestamp, true, log.get_data()))) {
+  } else if (OB_FAIL(
+                 notify_data_source_(NotifyType::ON_REDO, notify_redo_scn, true, log.get_data()))) {
     TRANS_LOG(WARN, "notify data source for ON_REDO failed", K(ret));
   }
 
@@ -5644,7 +5688,10 @@ int ObPartTransCtx::update_rec_log_ts_(bool for_replay, const SCN &rec_log_ts)
     }
   }
 
-  if (min_big_segment_rec_scn.is_valid()) {
+
+  if (min_big_segment_rec_scn.is_valid() && !rec_log_ts_.is_valid()) {
+    rec_log_ts_ = min_big_segment_rec_scn;
+  } else if (min_big_segment_rec_scn.is_valid() && rec_log_ts_.is_valid()) {
     rec_log_ts_ = share::SCN::min(min_big_segment_rec_scn, rec_log_ts_);
   }
 
@@ -5917,7 +5964,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
       } else if (OB_FAIL(exec_info_.multi_data_source_.reserve(
                      exec_info_.multi_data_source_.count() + log_cb->get_mds_range().count()))) {
         TRANS_LOG(WARN, "reserve mds space failed", K(ret));
-      } else if (OB_FAIL(log_block.add_new_log(log))) {
+      } else if (OB_FAIL(log_block.add_new_log(log, &big_segment_info_.segment_buf_))) {
         // do not handle ret code OB_BUF_NOT_ENOUGH, one log entry should be
         // enough to hold multi source data, if not, take it as an error.
         TRANS_LOG(WARN, "add new log failed", KR(ret), K(*this));
@@ -5928,12 +5975,13 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
             barrier_type = logservice::ObReplayBarrierType::PRE_BARRIER;
           }
           share::SCN base_scn;
-          base_scn.min_scn();
+          base_scn.set_min();
           if (OB_FAIL(prepare_big_segment_submit_(log_cb, base_scn, barrier_type,
                                                   ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
             TRANS_LOG(WARN, "prepare big segment failed", K(ret), KPC(this));
           } else {
             ret = OB_LOG_TOO_LARGE;
+            TRANS_LOG(INFO, "construct big multi data source",K(ret),K(trans_id_),K(ls_id_),K(log));
           }
         }
       } else if (need_pre_replay_barrier
@@ -6137,6 +6185,9 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       ret = OB_NOT_MASTER;
       TRANS_LOG(WARN, "can not register mds on a follower", K(ret), K(data_source_type), K(len),
                 KPC(this));
+    } else if (is_committing_()) {
+      ret = OB_TRANS_HAS_DECIDED;
+      TRANS_LOG(WARN, "can not register mds in committing part_ctx", K(ret), KPC(this));
     } else if (OB_ISNULL(ptr = mtl_malloc(len, "MultiTxData"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "allocate memory failed", KR(ret), K(data_source_type), K(len));
@@ -6147,9 +6198,11 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
         TRANS_LOG(WARN, "init tx buffer node failed", KR(ret), K(data_source_type), K(*this));
       } else if (OB_FAIL(tmp_array.push_back(node))) {
         TRANS_LOG(WARN, "push back notify node  failed", KR(ret));
+#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
       } else if (tmp_array.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE) {
-        ret = OB_INVALID_ARGUMENT;
+        ret = OB_LOG_TOO_LARGE;
         TRANS_LOG(WARN, "too large mds buf node", K(ret), K(tmp_array.get_serialize_size()));
+#endif
       } else if (OB_FAIL(mds_cache_.insert_mds_node(node))) {
         TRANS_LOG(WARN, "register multi source data failed", KR(ret), K(data_source_type),
                   K(*this));

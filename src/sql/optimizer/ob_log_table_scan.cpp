@@ -1889,6 +1889,10 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
     ctx.partition_count_ = table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
     ctx.hash_part_ = table_schema->is_hash_part() || table_schema->is_hash_subpart()
                      || table_schema->is_key_subpart() || table_schema->is_key_subpart();
+    //Before GI is adapted to the real agent table, block gi cannot be assigned to it
+    if (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())) {
+      ctx.set_force_partition();
+    }
   } else { /*do nothing*/ }
 
   return ret;

@@ -46,10 +46,12 @@ bool ObConfigIpChecker::check(const ObConfigItem &t) const
 ObConfigConsChecker:: ~ObConfigConsChecker()
 {
   if (NULL != left_) {
-    delete left_;
+    ObConfigChecker *left = const_cast<ObConfigChecker*>(left_);
+    OB_DELETE(ObConfigChecker, "unused", left);
   }
   if (NULL != right_) {
-    delete right_;
+    ObConfigChecker *right = const_cast<ObConfigChecker*>(right_);
+    OB_DELETE(ObConfigChecker, "unused", right);
   }
 }
 bool ObConfigConsChecker::check(const ObConfigItem &t) const

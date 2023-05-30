@@ -37,11 +37,6 @@ ObDASGroupScanOp::~ObDASGroupScanOp()
     //Memory of lookupop come from op_alloc,We do not need free,just set ptr to null.
     group_lookup_op_ = nullptr;
   }
-
-  if (result_iter_ != nullptr && result_iter_->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table group scan iter is not released, maybe some bug occured",
-              KPC(scan_ctdef_), K(scan_param_), KPC(scan_rtdef_));
-  }
 }
 
 int ObDASGroupScanOp::rescan()
@@ -69,10 +64,21 @@ int ObDASGroupScanOp::rescan()
 int ObDASGroupScanOp::release_op()
 {
   int ret = OB_SUCCESS;
-  OZ(ObDASScanOp::release_op());
+  int group_ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObDASScanOp::release_op())) {
+    LOG_WARN("release das scan op fail", K(ret));
+  }
+
   if (nullptr != group_lookup_op_) {
-    if (OB_FAIL(group_lookup_op_->revert_iter())) {
-      LOG_WARN("revert lookup iterator failed", K(ret));
+    group_ret = group_lookup_op_->revert_iter();
+    if (OB_SUCCESS != group_ret) {
+      LOG_WARN("revert lookup iterator failed", K(group_ret));
+    }
+    //Only cover ret code when DASScanOp release success.
+    //In current implement group lookup op revert always return OB_SUCCESS.
+    if (OB_SUCCESS == ret) {
+      ret = group_ret;
     }
   }
   group_lookup_op_ = NULL;
@@ -259,18 +265,6 @@ int ObDASGroupScanOp::decode_task_result(ObIDASTaskResult *task_result)
 }
 ObGroupLookupOp::~ObGroupLookupOp()
 {
-  const ObNewRowIterator *lookup_iter = get_lookup_storage_iter();
-  if (lookup_iter != nullptr && lookup_iter->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "lookup_iter iter is not released, maybe some bug occured",
-              KPC(lookup_ctdef_), K(scan_param_), KPC(index_ctdef_),
-              K(lookup_rowkey_cnt_), K(lookup_row_cnt_));
-  }
-  const ObNewRowIterator *rowkey_iter = static_cast<ObGroupScanIter *>(get_rowkey_iter())->get_iter();
-  if (rowkey_iter != nullptr && rowkey_iter->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "rowkey_iter iter is not released, maybe some bug occured",
-              KPC(lookup_ctdef_), K(scan_param_), KPC(index_ctdef_),
-              K(lookup_rowkey_cnt_), K(lookup_row_cnt_));
-  }
 }
 
 int ObGroupLookupOp::init_group_range(int64_t cur_group_idx, int64_t group_size)
@@ -371,11 +365,11 @@ int ObGroupLookupOp::set_lookup_scan_group(int64_t group_id)
 int ObGroupLookupOp::revert_iter()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLocalIndexLookupOp::revert_iter())) {
-    LOG_WARN("revert ObLocalIndexLookupOp fail",K(ret));
-  } else {
-    group_iter_.reset();
-  }
+  /*
+   * ObLookupOp will call ObLocalIndexLookupOp::revert_iter();
+   * We do not need revert twice!
+  */
+  group_iter_.reset();
   return ret;
 }
 

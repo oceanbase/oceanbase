@@ -15,6 +15,7 @@
 
 #include "observer/ob_server_struct.h"          // GCTX
 #include "share/ob_ls_id.h"                     // ObLSID
+#include "lib/compress/ob_compress_util.h"      // ObCompressorType
 #include "logservice/palf/lsn.h"                // LSN
 #include "logservice/palf/log_group_entry.h"    // LogGroupEntry
 #include "logservice/palf/log_entry.h"          // LogEntry
@@ -236,6 +237,9 @@ public:
   void set_flag(int8_t flag) { flag_ |= flag; }
   int8_t get_flag() const { return flag_; }
 
+  void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
+  common::ObCompressorType get_compressor_type() const { return compressor_type_; }
+
   TO_STRING_KV(K_(rpc_ver),
       K_(ls_id),
       K_(start_lsn),
@@ -243,7 +247,8 @@ public:
       K_(client_pid),
       K_(client_id),
       K_(progress),
-      K_(flag));
+      K_(flag),
+      K_(compressor_type));
 
   OB_UNIS_VERSION(1);
 
@@ -262,6 +267,7 @@ private:
   // server B can hardly locate log in archive.
   int64_t progress_;
   int8_t flag_;
+  common::ObCompressorType compressor_type_;
 };
 
 // Statistics for LS
@@ -478,11 +484,15 @@ public:
   void set_flag(int8_t flag) { flag_ |= flag; }
   int8_t get_flag() const { return flag_; }
 
+  void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
+  common::ObCompressorType get_compressor_type() const { return compressor_type_; }
+
   TO_STRING_KV(K_(rpc_ver),
       K_(ls_id),
       K_(miss_log_array),
       K_(client_pid),
-      K_(flag));
+      K_(flag),
+      K_(compressor_type));
   OB_UNIS_VERSION(1);
 
 private:
@@ -492,6 +502,7 @@ private:
   uint64_t client_pid_;  // Process ID.
   ObCdcRpcId client_id_;
   int8_t flag_;
+  common::ObCompressorType compressor_type_;
 };
 
 } // namespace obrpc

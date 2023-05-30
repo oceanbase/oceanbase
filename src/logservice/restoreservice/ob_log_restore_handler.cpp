@@ -52,9 +52,12 @@ const char *type_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS
   "Invalid restore status",
   " ",
   "There is a gap between the log source and standby",
-  "Log conflicts, the standby with the same LSN is different from the log source",
-  "Log source cannot be accessed, the user name or password of the replication account may be incorrect",
+  "Log conflicts, the standby with the same LSN is different from the log source when submit log",
+  "Log conflicts, the standby with the same LSN is different from the log source when fetch log",
+  "Log source can not be accessed, the replication account may be incorrect or the privelege is insufficient",
   "Log source is unreachable, the log source access point may be unavailable",
+  "Fetch log time out",
+  "Restore suspend, the standby has synchronized to recovery until scn",
   "Unexpected exceptions",
 };
 
@@ -310,6 +313,7 @@ int ObLogRestoreHandler::clean_source()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SUBMIT_LOG_ERROR);
 int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
                                    const palf::LSN &lsn,
                                    const SCN &scn,
@@ -346,14 +350,20 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
         CLOG_LOG(INFO, "submit log to end, just skip", K(ret), K(lsn), KPC(this));
       } else {
         opts.proposal_id = proposal_id_;
-        ret = palf_handle_.raw_write(opts, lsn, buf, buf_size);
-        if (OB_SUCC(ret)) {
-          context_.max_fetch_lsn_ = lsn + buf_size;
-          context_.max_fetch_scn_ = scn;
-          context_.last_fetch_ts_ = ObTimeUtility::fast_current_time();
-          if (parent_->set_to_end(scn)) {
-            // To stop and clear all restore log tasks and restore context, reset context and advance issue version
-            CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+        // errsim fake error
+        if (ERRSIM_SUBMIT_LOG_ERROR) {
+          ret = ERRSIM_SUBMIT_LOG_ERROR;
+          CLOG_LOG(TRACE, "errsim submit log error");
+        } else {
+          ret = palf_handle_.raw_write(opts, lsn, buf, buf_size);
+          if (OB_SUCC(ret)) {
+            context_.max_fetch_lsn_ = lsn + buf_size;
+            context_.max_fetch_scn_ = scn;
+            context_.last_fetch_ts_ = ObTimeUtility::fast_current_time();
+            if (parent_->set_to_end(scn)) {
+              // To stop and clear all restore log tasks and restore context, reset context and advance issue version
+              CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+            }
           }
         }
       }
@@ -446,8 +456,6 @@ int ObLogRestoreHandler::need_schedule(bool &need_schedule,
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(parent_)) {
     // do nothing
-  } else if (OB_SUCCESS != context_.error_context_.ret_code_) {
-    // error exist, no need schedule
   } else {
     need_schedule = is_strong_leader(role_) && ! restore_to_end_unlock_();
     proposal_id = proposal_id_;
@@ -483,10 +491,11 @@ void ObLogRestoreHandler::mark_error(share::ObTaskId &trace_id,
     CLOG_LOG(WARN, "get end_lsn failed", K(id_));
   } else if (end_lsn < lsn) {
     CLOG_LOG(WARN, "end_lsn smaller than error lsn, just skip", K(id_), K(end_lsn), K(lsn), KPC(parent_), KPC(this));
-  } else if (OB_SUCCESS == context_.error_context_.ret_code_) {
+  } else if (OB_SUCCESS == context_.error_context_.ret_code_ || OB_TIMEOUT == context_.error_context_.ret_code_) {
     context_.error_context_.error_type_ = error_type;
     context_.error_context_.ret_code_ = ret_code;
     context_.error_context_.trace_id_.set(trace_id);
+    context_.error_context_.err_lsn_ = lsn;
     CLOG_LOG(ERROR, "fatal error occur in restore", KPC(parent_), KPC(this));
   }
 }
@@ -495,6 +504,15 @@ int ObLogRestoreHandler::get_restore_error(share::ObTaskId &trace_id, int &ret_c
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
+  if (OB_FAIL(get_restore_error_unlock_(trace_id, ret_code, error_exist))) {
+    CLOG_LOG(WARN, "fail to get restore_error");
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::get_restore_error_unlock_(share::ObTaskId &trace_id, int &ret_code, bool &error_exist)
+{
+  int ret = OB_SUCCESS;
   error_exist = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -751,6 +769,25 @@ int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info) const
   return ret;
 }
 
+int ObLogRestoreHandler::refresh_error_context()
+{
+  int ret = OB_SUCCESS;
+  palf::LSN end_lsn;
+  WLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (! is_strong_leader(role_)) {
+    CLOG_LOG(INFO, "not leader, no need refresh error context", K(id_));
+  } else if (OB_FAIL(palf_handle_.get_end_lsn(end_lsn))) {
+    CLOG_LOG(WARN, "get end_lsn failed", K(id_));
+  } else if (end_lsn > context_.error_context_.err_lsn_ && OB_SUCCESS != context_.error_context_.ret_code_) {
+    context_.error_context_.ret_code_ = OB_SUCCESS;
+    context_.error_context_.err_lsn_ = palf::LSN(palf::LOG_INVALID_LSN_VAL);
+    CLOG_LOG(INFO, "flush error context to success", K(id_), K(context_), K(end_lsn), KPC(parent_), KPC(this));
+  }
+  return ret;
+}
+
 bool ObLogRestoreHandler::restore_to_end() const
 {
   RLockGuard guard(lock_);
@@ -863,16 +900,19 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
     CLOG_LOG(WARN, "fail to get end lsn when get ls restore status info");
   } else if (OB_FAIL(palf_handle_.get_end_scn(scn))) {
     CLOG_LOG(WARN, "fail to get end scn");
-  } else if (OB_FAIL(get_restore_error(trace_id, ret_code, error_exist))) {
+  } else if (OB_FAIL(get_restore_error_unlock_(trace_id, ret_code, error_exist))) {
     CLOG_LOG(WARN, "fail to get restore error");
   } else if (error_exist) {
     CLOG_LOG(TRACE, "start to mark restore sync error", K(trace_id), K(ret_code), K(context_.error_context_.error_type_));
-    if (OB_FAIL(get_err_code_and_message_(ret_code, context_.error_context_.error_type_, sync_status, restore_status_info.comment_))) {
+    if (OB_FAIL(get_err_code_and_message_(ret_code, context_.error_context_.error_type_, sync_status))) {
       CLOG_LOG(WARN, "fail to get err code and message", K(ret_code), K(context_.error_context_.error_type_), K(sync_status));
     } else {
       restore_status_info.sync_status_ = sync_status;
     }
-  } else if (!error_exist) {
+  } else if (restore_to_end_unlock_()) {
+    restore_status_info.sync_status_ = RestoreSyncStatus::RESTORE_SYNC_SUSPEND;
+    CLOG_LOG(TRACE, "restore suspend", K(error_exist), K(restore_status_info.sync_status_));
+  } else {
     restore_status_info.sync_status_ = RestoreSyncStatus::RESTORE_SYNC_NORMAL;
     CLOG_LOG(TRACE, "error is not exist, restore sync is normal", K(error_exist), K(restore_status_info.sync_status_));
   }
@@ -892,22 +932,44 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
 
 int ObLogRestoreHandler::get_err_code_and_message_(int ret_code,
     ObLogRestoreErrorContext::ErrorType error_type,
-    RestoreSyncStatus &sync_status,
-    ObSqlString &comment)
+    RestoreSyncStatus &sync_status)
 {
   int ret = OB_SUCCESS;
-  if (OB_ERR_OUT_OF_LOWER_BOUND == ret_code) {
-    sync_status = RestoreSyncStatus::RESTORE_SYNC_STANDBY_LOG_NOT_MATCH;
-  } else if (OB_ERR_UNEXPECTED == ret_code && error_type == ObLogRestoreErrorContext::ErrorType::SUBMIT_LOG) {
+
+  // RESTORE_SYNC_SOURCE_HAS_A_GAP
+  if ((OB_ERR_OUT_OF_LOWER_BOUND == ret_code
+    || OB_ARCHIVE_ROUND_NOT_CONTINUOUS == ret_code
+    || OB_ARCHIVE_LOG_RECYCLED == ret_code)
+    && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
     sync_status = RestoreSyncStatus::RESTORE_SYNC_SOURCE_HAS_A_GAP;
-  } else if (-ER_CONNECT_FAILED == ret_code && error_type == ObLogRestoreErrorContext::ErrorType::FETCH_LOG) {
+  }
+  // RESTORE_SYNC_SUBMIT_LOG_NOT_MATCH
+  else if (OB_ERR_UNEXPECTED == ret_code && ObLogRestoreErrorContext::ErrorType::SUBMIT_LOG == error_type) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_SUBMIT_LOG_NOT_MATCH;
+  }
+  // RESTORE_SYNC_FETCH_LOG_NOT_MATCH
+  else if ((OB_INVALID_DATA == ret_code || OB_CHECKSUM_ERROR == ret_code)
+    && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_FETCH_LOG_NOT_MATCH;
+  }
+  // RESTORE_SYNC_CHECK_NETWORK
+  else if (-ER_CONNECT_FAILED == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
     sync_status = RestoreSyncStatus::RESTORE_SYNC_CHECK_NETWORK;
-  } else if (-ER_ACCESS_DENIED_ERROR == ret_code && error_type == ObLogRestoreErrorContext::ErrorType::FETCH_LOG) {
+  }
+  // RESTORE_SYNC_CHECK_USER_OR_PASSWORD
+  else if ((-ER_ACCESS_DENIED_ERROR == ret_code || -ER_TABLEACCESS_DENIED_ERROR == ret_code)
+    && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
     sync_status = RestoreSyncStatus::RESTORE_SYNC_CHECK_USER_OR_PASSWORD;
-  } else {
+  }
+  // RESTORE_SYNC_FETCH_LOG_TIME_OUT
+  else if (OB_TIMEOUT == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_FETCH_LOG_TIME_OUT;
+  }
+  // RESTORE_SYNC_NOT_AVAILABLE
+  else if (OB_SUCCESS != ret_code) {
     sync_status = RestoreSyncStatus::RESTORE_SYNC_NOT_AVAILABLE;
   }
-  CLOG_LOG(TRACE, "get err code and message succ", K(sync_status), K(comment));
+  CLOG_LOG(TRACE, "get error code and message succ", K(sync_status));
   return ret;
 }
 

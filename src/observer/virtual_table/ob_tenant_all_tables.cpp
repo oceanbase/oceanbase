@@ -22,7 +22,8 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_struct.h"
 #include "common/ob_store_format.h"
-
+#include "observer/ob_sql_client_decorator.h"
+#include "deps/oblib/src/lib/mysqlclient/ob_mysql_result.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -31,6 +32,40 @@ namespace oceanbase
 {
 namespace observer
 {
+
+#define TABLE_STATUS_SQL  "select /*+ leading(a) no_use_nl(ts)*/" \
+                    "cast( coalesce(ts.row_cnt,0) as unsigned) as table_rows," \
+                    "cast( coalesce(ts.data_size,0) as unsigned) as data_length," \
+                    "cast(a.gmt_create as datetime) as create_time," \
+                    "cast(a.gmt_modified as datetime) as update_time " \
+                    "from " \
+                    "(" \
+                    "select tenant_id," \
+                           "database_id," \
+                           "table_id," \
+                           "table_name," \
+                           "table_type," \
+                           "gmt_create," \
+                           "gmt_modified " \
+                    "from oceanbase.__all_table) a " \
+                    "join oceanbase.__all_database b " \
+                    "on a.database_id = b.database_id " \
+                    "and a.tenant_id = b.tenant_id " \
+                    "left join (" \
+                      "select tenant_id," \
+                             "table_id," \
+                             "row_cnt," \
+                             "avg_row_len," \
+                             "row_cnt * avg_row_len as data_size " \
+                      "from oceanbase.__all_table_stat " \
+                      "where partition_id = -1 or partition_id = table_id) ts " \
+                    "on a.table_id = ts.table_id " \
+                    "and a.tenant_id = ts.tenant_id " \
+                    "and a.table_type in (0, 1, 2, 3, 4, 14) " \
+                    "and b.database_name != '__recyclebin' " \
+                    "and b.in_recyclebin = 0 " \
+                    "and 0 = sys_privilege_check('table_acc', effective_tenant_id(), b.database_name, a.table_name) " \
+                    "where a.table_id = %ld "
 
 ObTenantAllTables::ObTenantAllTables()
     : ObVirtualTableIterator(),
@@ -91,10 +126,14 @@ int ObTenantAllTables::inner_open()
                                                                database_id_,
                                                                table_schemas_))) {
           SERVER_LOG(WARN, "fail to get table schemas in database", K(ret), K(tenant_id_), K(database_id_));
+        } else if (table_schemas_.empty()) {
+          // do nothing
         } else if (OB_FAIL(seq_values_.create(FETCH_SEQ_NUM_ONCE,
                                               ObModIds::OB_AUTOINCREMENT,
                                               ObModIds::OB_AUTOINCREMENT))) {
           SERVER_LOG(WARN, "failed to create seq values ObHashMap", K(ret), LITERAL_K(FETCH_SEQ_NUM_ONCE));
+        } else if (OB_FAIL(tables_statistics_.create(table_schemas_.count(), "TableStat", "TableStat"))) {
+          LOG_WARN("failed to create table stat ObHashMap", K(ret), K(table_schemas_.count()));
         } else {
           bool fetch_inc = false;
           bool fetch_stat = false;
@@ -119,7 +158,9 @@ int ObTenantAllTables::inner_open()
               case UPDATE_TIME:
               case CHECKSUM: {
                 if (!fetch_stat) {
-                  //FIXME: fetch table statistic from other system tables.
+                  if (OB_FAIL(get_table_stats())) {
+                    LOG_WARN("failed to fetch table stats", K(ret));
+                  }
                   fetch_stat = true;
                 }
                 break;
@@ -163,6 +204,65 @@ int ObTenantAllTables::get_sequence_value()
   if (OB_SUCC(ret) && OB_FAIL(share::ObAutoincrementService::get_instance().get_sequence_values(
               tenant_id_, order_autokeys, noorder_autokeys, seq_values_))) {
     SERVER_LOG(WARN, "failed to get sequence value", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantAllTables::get_table_stats()
+{
+  int ret = OB_SUCCESS;
+  for(int64_t i = 0; OB_SUCC(ret) && i < table_schemas_.count(); ++i) {
+    const ObTableSchema *table_schema = table_schemas_.at(i);
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "table schema is NULL", K(ret), K(i), K(tenant_id_), K(database_id_));
+    } else {
+      TableStatistics tab_stat;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_, false, OB_INVALID_TIMESTAMP, false);
+      ObSqlString sql;
+      if (OB_ISNULL(session_) || OB_ISNULL(sql_proxy_) || OB_ISNULL(sql_proxy_->get_pool())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(session_), K(sql_proxy_));
+      } else if (OB_FAIL(sql.append_fmt(TABLE_STATUS_SQL, table_schema->get_table_id()))) {
+        LOG_WARN("failed to append sql", K(ret));
+      } else {
+        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+          sqlclient::ObMySQLResult *result = NULL;
+          if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id_, sql.ptr()))) {
+            LOG_WARN("execute sql failed", "sql", sql.ptr(), K(ret));
+          } else if (OB_ISNULL(result = res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to execute ", "sql", sql.ptr(), K(ret));
+          }
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(result->next())) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("get next row failed", K(ret));
+              }
+            } else {
+              EXTRACT_UINT_FIELD_TO_CLASS_MYSQL(*result, table_rows, tab_stat, int64_t);
+              EXTRACT_UINT_FIELD_TO_CLASS_MYSQL(*result, data_length, tab_stat, int64_t);
+              EXTRACT_LAST_DDL_TIME_FIELD_TO_INT_MYSQL(*result, create_time, tab_stat, int64_t);
+              EXTRACT_LAST_DDL_TIME_FIELD_TO_INT_MYSQL(*result, update_time, tab_stat, int64_t);
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(tables_statistics_.set_refactored(table_schema->get_table_id(), tab_stat))) {
+            if (ret == OB_HASH_EXIST) {
+              ret = OB_SUCCESS;
+              LOG_WARN("the table stat is already fetched", K(table_schema->get_table_id()), K(tab_stat));
+            } else {
+              LOG_WARN("failed to set table stat", K(ret));
+            }
+          }
+        }
+        LOG_TRACE("succeed to get table stats", K(table_schema->get_table_id()), K(tab_stat));
+      }
+    }
   }
   return ret;
 }

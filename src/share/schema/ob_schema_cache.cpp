@@ -460,7 +460,7 @@ int ObSchemaCache::init()
     LOG_WARN("init gts tenant schema cache failed", K(ret));
   } else {
     lib::ContextParam param;
-    param.set_mem_attr(OB_SERVER_TENANT_ID, "SchemaSysCache")
+    param.set_mem_attr(OB_SERVER_TENANT_ID, "SchemaSysCache", ObCtxIds::SCHEMA_SERVICE)
       .set_properties(lib::ALLOC_THREAD_SAFE)
       .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE)
       .set_parallel(1);
@@ -598,7 +598,7 @@ int ObSchemaCache::put_sys_schema(
       ObSchemaCacheValue tmp_cache_value(cache_key.schema_type_, &schema);
       int64_t deep_copy_size = tmp_cache_value.size();
       // schema cache which is need_use_sys_cache() use malloc() to ensure thread safety
-      ObMemAttr attr(OB_SERVER_TENANT_ID, "SchemaSysCache");
+      ObMemAttr attr(OB_SERVER_TENANT_ID, "SchemaSysCache", ObCtxIds::SCHEMA_SERVICE);
       void *tmp_ptr = mem_context_->allocf(deep_copy_size, attr);
       ObIKVCacheValue *kv_cache_value = NULL;
       if (NULL == tmp_ptr) {

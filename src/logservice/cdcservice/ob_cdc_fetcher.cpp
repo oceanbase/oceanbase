@@ -555,8 +555,8 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
             // exit
             reach_max_lsn = true;
           }
-        } else if (OB_ALREADY_IN_NOARCHIVE_MODE == ret) {
-          // archive is not on
+        } else if (OB_ALREADY_IN_NOARCHIVE_MODE == ret || OB_ENTRY_NOT_EXIST == ret) {
+          // archive is not on or lsn less than the start_lsn in archive
           ret = OB_ERR_OUT_OF_LOWER_BOUND;
         } else {
           // other error code, retry because various error code would be returned, retry could fix some problem

@@ -147,13 +147,13 @@ class ObOutlineMgr
 {
   typedef common::ObSortedVector<ObSimpleOutlineSchema *> OutlineInfos;
   typedef common::hash::ObPointerHashMap<uint64_t, ObSimpleOutlineSchema *,
-      ObGetOutlineKeyV3> OutlineIdMap;
+      ObGetOutlineKeyV3, 128> OutlineIdMap;
   typedef common::hash::ObPointerHashMap<ObOutlineNameHashWrapper, ObSimpleOutlineSchema *,
-      ObGetOutlineKeyV3> OutlineNameMap;
+      ObGetOutlineKeyV3, 128> OutlineNameMap;
   typedef common::hash::ObPointerHashMap<ObOutlineSignatureHashWrapper, ObSimpleOutlineSchema *,
-      ObGetOutlineKeyV3> SignatureMap;
+      ObGetOutlineKeyV3, 128> SignatureMap;
   typedef common::hash::ObPointerHashMap<ObOutlineSqlIdHashWrapper, ObSimpleOutlineSchema *,
-      ObGetOutlineKeyV3> SqlIdMap;
+      ObGetOutlineKeyV3, 128> SqlIdMap;
   typedef OutlineInfos::iterator OutlineIter;
   typedef OutlineInfos::const_iterator ConstOutlineIter;
 public:

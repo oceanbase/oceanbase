@@ -1436,7 +1436,12 @@ TEST_F(TestXmlBin, test_print_ns)
 {
   int ret = 0;
   ObCollationType type = CS_TYPE_UTF8MB4_GENERAL_CI;
-  common::ObString xml_text("<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:template match=\"/\"><note>test</note></xsl:template></xsl:stylesheet>");
+  common::ObString xml_text(
+    "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\">"
+      "<xsl:template match=\"/\">"
+        "<note>test</note>"
+      "</xsl:template>"
+    "</xsl:stylesheet>");
 
   ObArenaAllocator allocator(ObModIds::TEST);
   ObXmlDocument* doc = nullptr;
@@ -1447,7 +1452,9 @@ TEST_F(TestXmlBin, test_print_ns)
 
   ObStringBuffer buf_str(&allocator);
   ObXmlBin bin(ctx);
-  doc->print_document(buf_str, type, ObXmlFormatType::NO_FORMAT);
+  ret = doc->print_document(buf_str, type, ObXmlFormatType::NO_FORMAT);
+  ASSERT_EQ(ret, 0);
+
 
   ObStringBuffer buf_str_bin(&allocator);
   ASSERT_EQ(bin.parse_tree(doc), 0);
@@ -1622,6 +1629,36 @@ TEST_F(TestXmlBin, read_by_key)
     ASSERT_EQ(xbin.get_children("b", result1, nullptr), 0);
   }
 
+}
+
+TEST_F(TestXmlBin, print_empty_element)
+{
+  int ret = 0;
+  ObCollationType type = CS_TYPE_UTF8MB4_GENERAL_CI;
+  common::ObString xml_text(
+    "<></>"
+  );
+
+  ObArenaAllocator allocator(ObModIds::TEST);
+
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ObXmlDocument root(M_UNPARSED, ctx);
+  ObXmlElement child1(M_UNPARSED, ctx);
+
+  ASSERT_EQ(root.add_element(&child1), 0);
+  ObXmlDocument* doc = &root;
+
+  {
+    ObXmlBin xbin(ctx);
+    ObArray<ObIMulModeBase*> result1;
+    ASSERT_EQ(xbin.parse_tree(doc), 0);
+    ASSERT_EQ(xbin.set_child_at(0), 0);
+
+    ObStringBuffer buf_str_bin(&allocator);
+    ASSERT_EQ(xbin.print_xml(buf_str_bin, 0, 0 ,0), 0);
+    cout << buf_str_bin.ptr() << endl;
+  }
 }
 
 } // common

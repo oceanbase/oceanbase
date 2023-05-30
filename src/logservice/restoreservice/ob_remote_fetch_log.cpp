@@ -102,5 +102,10 @@ void ObRemoteFetchLogImpl::update_restore_upper_limit()
 {
   (void)net_driver_->set_restore_log_upper_limit();
 }
+
+void ObRemoteFetchLogImpl::set_compressor_type(const common::ObCompressorType &compressor_type)
+{
+  (void)net_driver_->set_compressor_type(compressor_type);
+}
 } // namespace logservice
 } // namespace oceanbase

@@ -137,6 +137,9 @@ public:
   void set_start_refresh(bool start) { start_refresh_ = start; }
   bool is_usable() { return usable_; }
   void set_usable() { usable_ = true; }
+
+  void stop();
+  void wait();
   void destroy();
 
 private:

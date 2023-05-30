@@ -80,6 +80,7 @@
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h" // ObTenantSSTableMergeInfoMgr
+#include "storage/access/ob_table_scan_iterator.h"
 #include "share/io/ob_io_manager.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
@@ -292,13 +293,21 @@ static int server_obj_pool_mtl_new(common::ObServerObjectPool<T> *&pool)
   int ret = common::OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
   pool = MTL_NEW(common::ObServerObjectPool<T>, "TntSrvObjPool", tenant_id, false/*regist*/,
-                 MTL_IS_MINI_MODE());
+                 MTL_IS_MINI_MODE(), MTL_CPU_COUNT());
   if (OB_ISNULL(pool)) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
   } else {
     ret = pool->init();
   }
   return ret;
+}
+
+template<typename T>
+static void server_obj_pool_mtl_destroy(common::ObServerObjectPool<T> *&pool)
+{
+  using Pool = common::ObServerObjectPool<T>;
+  MTL_DELETE(Pool, "TntSrvObjPool", pool);
+  pool = nullptr;
 }
 
 static int start_mysql_queue(QueueThread *&qthread)
@@ -340,14 +349,6 @@ static int start_mysql_queue(QueueThread *&qthread)
     }
   }
   return ret;
-}
-
-template<typename T>
-static void server_obj_pool_mtl_destroy(common::ObServerObjectPool<T> *&pool)
-{
-  using Pool = common::ObServerObjectPool<T>;
-  MTL_DELETE(Pool, "TntSrvObjPool", pool);
-  pool = nullptr;
 }
 
 int ObMultiTenant::init(ObAddr myaddr,
@@ -449,6 +450,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObPlanCache::mtl_init, nullptr, ObPlanCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObPsCache::mtl_init, nullptr, ObPsCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(server_obj_pool_mtl_new<ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObPartTransCtx>);
+    MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
     MTL_BIND(ObDetectManager::mtl_init, ObDetectManager::mtl_destroy);
     if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
       MTL_BIND2(nullptr, nullptr, start_mysql_queue, mtl_stop_default,
@@ -974,7 +976,7 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id, unit.config_.log_disk_size()))) {
       LOG_WARN("fail to update tenant log disk size", K(ret), K(tenant_id));
-  } else if (FALSE_IT(tenant->update_memory_size(unit.config_.memory_size()))) {
+  } else if (FALSE_IT(tenant->set_unit_memory_size(unit.config_.memory_size()))) {
     // unreachable
   } else {
     if (tenant->unit_min_cpu() != min_cpu) {
@@ -2019,6 +2021,27 @@ int ObMultiTenant::get_tenant_worker_time(const uint64_t tenant_id, int64_t &wor
     lock_.unlock();
   }
 
+  return ret;
+}
+
+int ObMultiTenant::get_tenant_cpu_time(const uint64_t tenant_id, int64_t &cpu_time) const
+{
+  int ret = OB_SUCCESS;
+  ObTenant *tenant = nullptr;
+  cpu_time = 0;
+  if (GCONF.enable_cgroup) {
+    ret = GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time);
+  } else {
+    if (!lock_.try_rdlock()) {
+      ret = OB_EAGAIN;
+    } else {
+      if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+      } else {
+        cpu_time = tenant->get_ru_cputime();
+      }
+      lock_.unlock();
+    }
+  }
   return ret;
 }
 

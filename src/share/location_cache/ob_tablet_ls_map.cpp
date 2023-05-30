@@ -35,14 +35,14 @@ int ObTabletLSMap::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTabletLSMap init twice", KR(ret));
   } else if (OB_ISNULL(buckets_lock_ =
-      (ObQSyncLock*)ob_malloc(sizeof(ObQSyncLock) * BUCKETS_CNT, mem_attr))) {
+      (ObQSyncLock*)ob_malloc(sizeof(ObQSyncLock) * LOCK_SLOT_CNT, mem_attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate ObQSyncLock memory, ", KR(ret), LITERAL_K(BUCKETS_CNT));
+    LOG_WARN("Fail to allocate ObQSyncLock memory, ", KR(ret), LITERAL_K(LOCK_SLOT_CNT));
   } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObTabletLSCache*) * BUCKETS_CNT, mem_attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate ObTabletLSCache memory, ", KR(ret), LITERAL_K(BUCKETS_CNT));
   } else {
-    for (int64_t i = 0 ; i < BUCKETS_CNT && OB_SUCC(ret); ++i) {
+    for (int64_t i = 0 ; i < LOCK_SLOT_CNT && OB_SUCC(ret); ++i) {
       new(buckets_lock_ + i) ObQSyncLock();
       if (OB_FAIL((buckets_lock_ + i)->init(mem_attr))) {
         LOG_WARN("buckets_lock_ init fail", KR(ret), K(OB_SERVER_TENANT_ID));
@@ -73,7 +73,7 @@ void ObTabletLSMap::destroy()
     ObTabletLSCache *tablet_ls_cache = nullptr;
     ObTabletLSCache *next_ls = nullptr;
     for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
-      ObQSyncLockWriteGuard guard(buckets_lock_[i]);
+      ObQSyncLockWriteGuard guard(buckets_lock_[i % LOCK_SLOT_CNT]);
       tablet_ls_cache = ls_buckets_[i];
       while (OB_NOT_NULL(tablet_ls_cache)) {
         next_ls = (ObTabletLSCache*)tablet_ls_cache->next_;
@@ -85,7 +85,7 @@ void ObTabletLSMap::destroy()
     ls_buckets_ = NULL;
   }
   if (OB_NOT_NULL(buckets_lock_)) {
-    for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
+    for (int64_t i = 0; i < LOCK_SLOT_CNT; ++i) {
       if (OB_NOT_NULL(buckets_lock_ + i)) {
         (buckets_lock_ + i)->~ObQSyncLock();
       }
@@ -109,7 +109,7 @@ int ObTabletLSMap::update(const ObTabletLSCache &tablet_ls_cache)
   } else {
     const ObTabletLSKey &key = tablet_ls_cache.get_cache_key();
     pos = key.hash() % BUCKETS_CNT;
-    ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
+    ObQSyncLockWriteGuard guard(buckets_lock_[pos % LOCK_SLOT_CNT]);
     curr = ls_buckets_[pos];
     while (OB_NOT_NULL(curr)) {
       if (key == curr->get_cache_key()) {
@@ -159,7 +159,7 @@ int ObTabletLSMap::get(
     LOG_WARN("ObTabletLSMap not init", KR(ret), K(key));
   } else {
     pos = key.hash() % BUCKETS_CNT;
-    ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
+    ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos % LOCK_SLOT_CNT]);
     curr = ls_buckets_[pos];
     while (OB_NOT_NULL(curr)) {
       if (key == curr->get_cache_key()) {
@@ -186,7 +186,7 @@ int ObTabletLSMap::get_all(common::ObIArray<ObTabletLSCache> &cache_array)
   int ret = OB_SUCCESS;
   ObTabletLSCache *tablet_ls_cache = NULL;
   for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
-    ObQSyncLockReadGuard guard(buckets_lock_[i]);
+    ObQSyncLockReadGuard guard(buckets_lock_[i % LOCK_SLOT_CNT]);
     tablet_ls_cache = ls_buckets_[i];
     // foreach bucket
     while (OB_NOT_NULL(tablet_ls_cache) && OB_SUCC(ret)) {
@@ -212,7 +212,7 @@ int ObTabletLSMap::del(const ObTabletLSKey &key)
     LOG_WARN("ObTabletLSMap not init", KR(ret), K(key));
   } else {
     pos = key.hash() % BUCKETS_CNT;
-    ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
+    ObQSyncLockWriteGuard guard(buckets_lock_[pos % LOCK_SLOT_CNT]);
     tablet_ls_cache = ls_buckets_[pos];
     while (OB_NOT_NULL(tablet_ls_cache)) {
       if (key == tablet_ls_cache->get_cache_key()) {

@@ -584,12 +584,14 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       routine->get_has_parallel_affect_factor()) {
     // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
     // udf内部有tcl语句时，该标记为true
-    last_insert_id_ = session_info.get_local_last_insert_id();
     const ObString stash_savepoint_name("PL stash savepoint");
     OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
     OX (has_stash_savepoint_ = true);
   }
-  if (is_autonomous_) {
+  if (OB_SUCC(ret) && is_function_or_trigger && lib::is_mysql_mode()) {
+    last_insert_id_ = session_info.get_local_last_insert_id();
+  }
+  if (OB_SUCC(ret) && is_autonomous_) {
     has_inner_dml_write_ = session_info.has_exec_inner_dml();
     session_info.set_has_exec_inner_dml(false);
 
@@ -2018,6 +2020,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
       LOG_DEBUG("get pl function from plan cache success", KPC(routine));
     }
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {  // not in cache, compile it...
+      bool need_update_schema = false;
       {
         ObBucketHashWLockGuard guard(codegen_lock_, routine_id);
         // check again after get lock.
@@ -2036,6 +2039,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
               && routine->get_can_cached()) {
             OZ (add_pl_lib_cache(routine, pc_ctx));
           }
+          OX (need_update_schema = true);
           LOG_DEBUG("get func by compile",
                      K(package_id), K(routine_id), KPC(routine));
         }
@@ -2047,6 +2051,14 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         OZ (ctx.get_sql_ctx()->schema_guard_->get_routine_info(tenant_id, routine_id, routine_info));
         CK (OB_NOT_NULL(routine_info));
         OZ (error_info.delete_error(routine_info));
+        if (need_update_schema) {
+          OZ (ObPLCompiler::update_schema_object_dep_info(routine->get_dependency_table(),
+                                                          routine->get_tenant_id(),
+                                                          routine->get_owner(),
+                                                          routine_id,
+                                                          routine_info->get_schema_version(),
+                                                          routine_info->get_object_type()));
+        }
       }
     }
   }

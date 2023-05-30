@@ -72,6 +72,7 @@ int ObCdcLSFetchLogP::process()
     ret = OB_ERR_UNEXPECTED;
     EXTLOG_LOG(ERROR, "cdc_service is null", KR(ret));
   } else {
+    set_result_compress_type(req.get_compressor_type());
     ret = cdc_service->fetch_log(req, resp, get_send_timestamp(), get_receive_timestamp());
   }
 
@@ -92,6 +93,7 @@ int ObCdcLSFetchMissingLogP::process()
     ret = OB_ERR_UNEXPECTED;
     EXTLOG_LOG(ERROR, "cdc_service is null", KR(ret));
   } else {
+    set_result_compress_type(req.get_compressor_type());
     ret = cdc_service->fetch_missing_log(req, resp, get_send_timestamp(), get_receive_timestamp());
   }
 

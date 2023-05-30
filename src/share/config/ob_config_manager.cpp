@@ -73,6 +73,21 @@ int ObConfigManager::init(ObMySQLProxy &sql_proxy, const ObAddr &server)
   return ret;
 }
 
+void ObConfigManager::stop()
+{
+  TG_STOP(lib::TGDefIDs::CONFIG_MGR);
+}
+
+void ObConfigManager::wait()
+{
+  TG_WAIT(lib::TGDefIDs::CONFIG_MGR);
+}
+
+void ObConfigManager::destroy()
+{
+  TG_DESTROY(lib::TGDefIDs::CONFIG_MGR);
+}
+
 int ObConfigManager::reload_config()
 {
   int ret = OB_SUCCESS;

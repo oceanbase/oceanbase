@@ -41,11 +41,12 @@ struct ObLogRestoreErrorContext
   ErrorType error_type_;
   int ret_code_;
   share::ObTaskId trace_id_;
+  palf::LSN err_lsn_;
   ObLogRestoreErrorContext() { reset(); }
   virtual ~ObLogRestoreErrorContext() { reset(); }
   void reset();
   ObLogRestoreErrorContext &operator=(const ObLogRestoreErrorContext &other);
-  TO_STRING_KV(K_(ret_code), K_(trace_id));
+  TO_STRING_KV(K_(ret_code), K_(trace_id), K_(error_type), K_(err_lsn));
 };
 
 struct ObRestoreLogContext

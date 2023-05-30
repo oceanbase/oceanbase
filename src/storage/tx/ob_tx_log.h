@@ -28,6 +28,8 @@
 #include "share/scn.h"
 //#include <cstdint>
 
+// #define OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+
 namespace oceanbase
 {
 
@@ -1005,6 +1007,7 @@ public:
   // static const int MIN_LOG_BLOCK_HEADER_SIZE;
   static const logservice::ObLogBaseType DEFAULT_LOG_BLOCK_TYPE; // TRANS_LOG
   static const int32_t DEFAULT_BIG_ROW_BLOCK_SIZE;
+  static const int64_t BIG_SEGMENT_SPILT_SIZE;
 
   NEED_SERIALIZE_AND_DESERIALIZE;
   ObTxLogBlock();
@@ -1022,7 +1025,9 @@ public:
            int skip_pos,
            ObTxLogBlockHeader &block_header); // init before replay
   ~ObTxLogBlock() { reset(); }
-  int get_next_log(ObTxLogHeader &header, ObTxBigSegmentBuf * big_segment_buf = nullptr);
+  int get_next_log(ObTxLogHeader &header,
+                   ObTxBigSegmentBuf *big_segment_buf = nullptr,
+                   bool *contain_big_segment = nullptr);
   const ObTxCbArgArray &get_cb_arg_array() const { return cb_arg_array_; }
   template <typename T>
   int deserialize_log_body(T &tx_log_body); // make cur_log_type_ is UNKNOWN
@@ -1095,7 +1100,7 @@ int ObTxLogBlock::deserialize_log_body(T &tx_log_body)
         TRANS_LOG(WARN, "deserialize log body from big segment buf failed", K(ret), K(tx_log_body),
                   KPC(this));
       } else {
-        big_segment_buf_->reset();
+        // big_segment_buf_->reset();
         big_segment_buf_ = nullptr;
       }
     } else if (OB_FAIL(tx_log_body.deserialize(replay_buf_, len_, tmp_pos))) {
@@ -1129,6 +1134,10 @@ int ObTxLogBlock::add_new_log(T &tx_log_body, ObTxBigSegmentBuf *big_segment_buf
     TRANS_LOG(DEBUG, "insert redo_log type into cb_arg_array_", K(tx_log_body), KPC(this));
   } else if (OB_FAIL(tx_log_body.before_serialize())) {
     TRANS_LOG(WARN, "before serialize failed", K(ret), K(tx_log_body), K(*this));
+  } else if (ObTxLogTypeChecker::can_be_spilt(T::LOG_TYPE)
+             && BIG_SEGMENT_SPILT_SIZE
+                    < header.get_serialize_size() + tx_log_body.get_serialize_size() + tmp_pos) {
+    ret = OB_BUF_NOT_ENOUGH;
   } else if (len_ < header.get_serialize_size() + tx_log_body.get_serialize_size() + tmp_pos) {
     ret = OB_BUF_NOT_ENOUGH;
   } else if (OB_FAIL(header.serialize(fill_buf_.get_buf(), len_, tmp_pos))) {

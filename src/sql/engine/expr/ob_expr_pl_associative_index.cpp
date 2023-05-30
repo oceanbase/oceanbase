@@ -23,7 +23,8 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObExprPLAssocIndex, ObExprOperator),
                     info_.for_write_,
                     info_.out_of_range_set_err_,
-                    info_.parent_expr_type_);
+                    info_.parent_expr_type_,
+                    info_.is_index_by_varchar_);
 
 ObExprPLAssocIndex::ObExprPLAssocIndex(ObIAllocator &alloc)
   : ObExprOperator(alloc, T_FUN_PL_ASSOCIATIVE_INDEX, N_PL_ASSOCIATIVE_INDEX, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
@@ -85,6 +86,7 @@ int ObExprPLAssocIndex::cg_expr(ObExprCGCtx &op_cg_ctx,
     info.for_write_ = assoc_idx_expr.get_write();
     info.out_of_range_set_err_ = assoc_idx_expr.get_out_of_range_set_err();
     info.parent_expr_type_ = assoc_idx_expr.get_parent_type();
+    info.is_index_by_varchar_ = assoc_idx_expr.is_index_by_varchar();
 
     rt_expr.extra_ = info.v_;
     rt_expr.eval_func_ = &eval_assoc_idx;

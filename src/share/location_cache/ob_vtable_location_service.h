@@ -77,6 +77,9 @@ public:
       ObIAliveServerTracer &server_tracer,
       ObRsMgr &rs_mgr,
       obrpc::ObCommonRpcProxy &rpc_proxy);
+  void stop();
+  void wait();
+  int destroy();
   int vtable_get(
       const uint64_t tenant_id,
       const uint64_t table_id,

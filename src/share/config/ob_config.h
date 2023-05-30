@@ -49,6 +49,7 @@ enum ObConfigItemType{
   OB_CONF_ITEM_TYPE_VERSION = 11,
 };
 
+extern ObMemAttr g_config_mem_attr;
 class ObConfigItem
 {
 public:
@@ -62,7 +63,7 @@ public:
             const ObParameterAttr attr = ObParameterAttr());
   void add_checker(const ObConfigChecker *new_ck)
   {
-    ck_ = new(std::nothrow) ObConfigConsChecker(ck_, new_ck);
+    ck_ = OB_NEW(ObConfigConsChecker, g_config_mem_attr, ck_, new_ck);
   }
   bool check() const
   {

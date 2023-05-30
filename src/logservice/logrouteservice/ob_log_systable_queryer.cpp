@@ -17,6 +17,7 @@
 #include "lib/mysqlclient/ob_mysql_result.h" // ObMySQLResult
 #include "lib/string/ob_sql_string.h"      // ObSqlString
 #include "share/inner_table/ob_inner_table_schema_constants.h" // OB_***_TNAME
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::share;
 namespace oceanbase
@@ -27,7 +28,8 @@ ObLogSysTableQueryer::ObLogSysTableQueryer() :
     is_inited_(false),
     is_across_cluster_(false),
     cluster_id_(OB_INVALID_CLUSTER_ID),
-    sql_proxy_(NULL)
+    sql_proxy_(NULL),
+    err_handler_(NULL)
 {
 
 }
@@ -39,7 +41,8 @@ ObLogSysTableQueryer::~ObLogSysTableQueryer()
 
 int ObLogSysTableQueryer::init(const int64_t cluster_id,
     const bool is_across_cluster,
-    common::ObISQLClient &sql_proxy)
+    common::ObISQLClient &sql_proxy,
+    logfetcher::IObLogErrHandler *err_handler)
 {
   int ret = OB_SUCCESS;
 
@@ -51,6 +54,7 @@ int ObLogSysTableQueryer::init(const int64_t cluster_id,
     cluster_id_ = cluster_id;
     sql_proxy_ = &sql_proxy;
     is_inited_ = true;
+    err_handler_ = err_handler;
   }
 
   return ret;
@@ -62,6 +66,7 @@ void ObLogSysTableQueryer::destroy()
   is_across_cluster_ = false;
   cluster_id_ = OB_INVALID_CLUSTER_ID;
   sql_proxy_ = NULL;
+  err_handler_ = NULL;
 }
 
 int ObLogSysTableQueryer::get_ls_log_info(
@@ -232,11 +237,13 @@ int ObLogSysTableQueryer::get_all_zone_type_info(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_SYS_QUERY_FAILED);
 int ObLogSysTableQueryer::do_query_(const uint64_t tenant_id,
     ObSqlString &sql,
     ObISQLClient::ReadResult &result)
 {
   int ret = OB_SUCCESS;
+  ObTaskId trace_id(*ObCurTraceId::get_trace_id());
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -252,6 +259,14 @@ int ObLogSysTableQueryer::do_query_(const uint64_t tenant_id,
     if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
       LOG_WARN("execute sql failed", KR(ret), K(tenant_id), "sql", sql.ptr());
     }
+  }
+  if (OB_SUCC(ret) && ERRSIM_FETCH_LOG_SYS_QUERY_FAILED) {
+    ret = ERRSIM_FETCH_LOG_SYS_QUERY_FAILED;
+    LOG_WARN("errsim do query error", K(ERRSIM_FETCH_LOG_SYS_QUERY_FAILED));
+  }
+  if (OB_NOT_NULL(err_handler_) && (-ER_CONNECT_FAILED == ret || -ER_ACCESS_DENIED_ERROR == ret)) {
+    err_handler_->handle_error(share::SYS_LS, logfetcher::IObLogErrHandler::ErrType::FETCH_LOG, trace_id,
+      palf::LSN(palf::LOG_INVALID_LSN_VAL)/*no need to pass lsn*/, ret, "%s");
   }
 
   return ret;

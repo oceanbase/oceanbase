@@ -108,7 +108,7 @@ class ObSAuditMgr
 public:
   typedef common::ObSortedVector<ObSAuditSchema *> AuditInfos;
   typedef common::hash::ObPointerHashMap<ObAuditHashWrapper, ObSAuditSchema *,
-                                         ObGetAuditKey> ObAuditMap;
+                                         ObGetAuditKey, 128> ObAuditMap;
   typedef AuditInfos::iterator AuditIter;
   typedef AuditInfos::const_iterator ConstAuditIter;
   ObSAuditMgr();

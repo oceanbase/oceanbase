@@ -1,4 +1,5 @@
 alter system flush plan cache global;
+set ob_enable_plan_cache = false;
 drop table if exists build_in_func_test_table;
 result_format: 4
 create table build_in_func_test_table (varchar_c varchar(128) primary key, date_c datetime(6),v varchar(128));
@@ -468,7 +469,7 @@ def					length(trim('aba' from 'aba'))	8	20	1	Y	32896	0	63
 +--------------------------------+
 select trim('aba' from 'aba') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim('aba' from 'aba')	253	20	0	Y	0	0	45
+def					trim('aba' from 'aba')	253	12	0	Y	0	0	45
 +------------------------+
 | trim('aba' from 'aba') |
 +------------------------+
@@ -500,7 +501,7 @@ def					trim('o!' from 'hhhhello!')	253	36	7	Y	0	0	45
 +-----------------------------+
 select trim('h' from 'hhhhaaaahhhh')  from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim('h' from 'hhhhaaaahhhh')	253	36	4	Y	0	0	45
+def					trim('h' from 'hhhhaaaahhhh')	253	48	4	Y	0	0	45
 +-------------------------------+
 | trim('h' from 'hhhhaaaahhhh') |
 +-------------------------------+
@@ -2600,7 +2601,7 @@ def					abs(10)	8	2	2	N	32897	0	63
 +---------+
 select abs(-10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-10)	8	2	2	N	32897	0	63
+def					abs(-10)	8	3	2	N	32897	0	63
 +----------+
 | abs(-10) |
 +----------+
@@ -2616,7 +2617,7 @@ def					abs(-0)	8	2	1	N	32897	0	63
 +---------+
 select abs(0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(0)	8	2	1	N	32897	0	63
+def					abs(0)	8	1	1	N	32897	0	63
 +--------+
 | abs(0) |
 +--------+
@@ -2624,7 +2625,7 @@ def					abs(0)	8	2	1	N	32897	0	63
 +--------+
 select abs(1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(1)	8	2	1	N	32897	0	63
+def					abs(1)	8	1	1	N	32897	0	63
 +--------+
 | abs(1) |
 +--------+
@@ -2640,7 +2641,7 @@ def					abs(-1)	8	2	1	N	32897	0	63
 +---------+
 select abs(-1000000000000);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-1000000000000)	8	2	13	N	32897	0	63
+def					abs(-1000000000000)	8	14	13	N	32897	0	63
 +---------------------+
 | abs(-1000000000000) |
 +---------------------+
@@ -2648,7 +2649,7 @@ def					abs(-1000000000000)	8	2	13	N	32897	0	63
 +---------------------+
 select abs(1000000000000);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(1000000000000)	8	2	13	N	32897	0	63
+def					abs(1000000000000)	8	13	13	N	32897	0	63
 +--------------------+
 | abs(1000000000000) |
 +--------------------+
@@ -2664,7 +2665,7 @@ def					abs(0.1)	246	4	3	N	32897	1	63
 +----------+
 select abs(-0.1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0.1)	246	4	3	N	32897	1	63
+def					abs(-0.1)	246	5	3	N	32897	1	63
 +-----------+
 | abs(-0.1) |
 +-----------+
@@ -2672,7 +2673,7 @@ def					abs(-0.1)	246	4	3	N	32897	1	63
 +-----------+
 select abs(-11.10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-11.10)	246	6	5	N	32897	2	63
+def					abs(-11.10)	246	7	5	N	32897	2	63
 +-------------+
 | abs(-11.10) |
 +-------------+
@@ -2704,7 +2705,7 @@ def					abs(Null)	5	23	0	Y	32896	31	63
 +-----------+
 select abs(5-5);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(5-5)	8	3	1	N	32897	0	63
+def					abs(5-5)	8	2	1	N	32897	0	63
 +----------+
 | abs(5-5) |
 +----------+
@@ -2712,7 +2713,7 @@ def					abs(5-5)	8	3	1	N	32897	0	63
 +----------+
 select abs(-0.1*3);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0.1*3)	246	5	3	N	32897	1	63
+def					abs(-0.1*3)	246	6	3	N	32897	1	63
 +-------------+
 | abs(-0.1*3) |
 +-------------+
@@ -2729,7 +2730,7 @@ def					unhex('434445')	253	3	3	Y	128	0	63
 +-----------------+
 select unhex('C434445');
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					unhex('C434445')	253	3	4	Y	128	0	63
+def					unhex('C434445')	253	4	4	Y	128	0	63
 +------------------+
 | unhex('C434445') |
 +------------------+
@@ -2761,7 +2762,7 @@ def					unhex(null)	253	0	0	Y	128	0	63
 +-------------+
 select unhex('123');
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					unhex('123')	253	3	2	Y	128	0	63
+def					unhex('123')	253	2	2	Y	128	0	63
 +--------------+
 | unhex('123') |
 +--------------+
@@ -2777,7 +2778,7 @@ def					unhex(cast(repeat('123',5) as char(1024)))	251	536870911	8	Y	144	0	63
 +--------------------------------------------+
 select unhex('');
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					unhex('')	253	3	0	Y	128	0	63
+def					unhex('')	253	0	0	Y	128	0	63
 +-----------+
 | unhex('') |
 +-----------+

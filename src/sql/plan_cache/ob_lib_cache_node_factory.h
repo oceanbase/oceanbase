@@ -34,7 +34,8 @@ public:
   void destroy_cache_node(ObILibCacheNode* node);
   int create_cache_node(ObLibCacheNameSpace ns,
                         ObILibCacheNode*& node,
-                        uint64_t tenant_id);
+                        uint64_t tenant_id,
+                        lib::MemoryContext &parent_context);
   template<typename ClassT>
   static int create(lib::MemoryContext &mem_ctx, ObILibCacheNode*& node, ObPlanCache *lib_cache);
 

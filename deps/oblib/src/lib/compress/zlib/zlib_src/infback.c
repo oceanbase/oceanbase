@@ -1,13 +1,13 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
+/* infback.c -- inflate using a call-back interface
+ * Copyright (C) 1995-2011 Mark Adler
+ * For conditions of distribution and use, see copyright notice in zlib.h
+ */
+
+/*
+   This code is largely copied from inflate.c.  Normally either infback.o or
+   inflate.o would be linked into an application--not both.  The interface
+   with inffast.c is retained so that optimized assembler-coded versions of
+   inflate_fast() can be used with either inflate.c or infback.c.
  */
 
 #include "zutil.h"

@@ -90,6 +90,23 @@ int ObVTableLocationService::init(
   return ret;
 }
 
+void ObVTableLocationService::stop()
+{
+  update_queue_.stop();
+}
+
+void ObVTableLocationService::wait()
+{
+  update_queue_.wait();
+}
+
+int ObVTableLocationService::destroy()
+{
+  int ret = OB_SUCCESS;
+  update_queue_.destroy();
+  vtable_cache_.destroy();
+  return ret;
+}
 //TODO: 1.remove ObPartitionLocation 2.add auto renew 3.cached by tenant_id
 int ObVTableLocationService::vtable_get(
     const uint64_t tenant_id,

@@ -649,6 +649,7 @@ DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info m
 //DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
 DEFINE_ERROR(OB_ARBITRATION_INFO_QUERY_FAILED, -4758, -1, "HY000", "the arbitration service may be unavailable, please check and retry");
 DEFINE_ERROR(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, -4759, -1, "HY000", "An error was ignored when accessing virtual table, actual error code: %d");
+DEFINE_ERROR(OB_LS_OFFLINE, -4760, -1, "HY000", "log stream is offline");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -1699,6 +1700,8 @@ DEFINE_ERROR(OB_TRANS_LIVE_TOO_MUCH_TIME, -6280, -1, "HY000", "Transaction cost 
 DEFINE_ERROR(OB_TRANS_COMMIT_TOO_MUCH_TIME, -6281, -1, "HY000", "Transaction commit cost too much");
 DEFINE_ORACLE_ERROR(OB_TRANS_TOO_MANY_PARTICIPANTS, -6282, 6002, "40000", "too many transaction participants", 24761, "transaction rolled back: too many transaction participants");
 
+DEFINE_ERROR(OB_LOG_ALREADY_SPLIT, -6283, -1, "HY000", "The big log entry has been split into multiple part");
+
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");
 DEFINE_ERROR(OB_LSR_THREAD_STOPPED, -6302, -1, "HY000", "log scan runnable thread stop");
@@ -1785,6 +1788,7 @@ DEFINE_ERROR(OB_TABLET_TRANSFER_SEQ_NOT_MATCH, -7113, -1, "HY000", "compare tabl
 DEFINE_ERROR(OB_TRANSFER_DETECT_ACTIVE_TRANS, -7114, -1, "HY000", "transfer detect active trans");
 DEFINE_ERROR(OB_TRANSFER_SRC_LS_NOT_EXIST, -7115, -1, "HY000", "transfer src ls does not exist");
 DEFINE_ERROR(OB_TRANSFER_SRC_TABLET_NOT_EXIST, -7116, -1, "HY000", "transfer src tablet does not exist");
+DEFINE_ERROR(OB_LS_NEED_REBUILD, -7117, -1, "HY000", "ls need rebuild");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for gis  -7201 ---- -7300

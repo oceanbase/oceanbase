@@ -212,6 +212,7 @@ int ObSimpleLogClusterTestEnv::delete_paxos_group(const int64_t id)
       CLOG_LOG(WARN, "remove_ls failed", K(ret));
       break;
     }
+    svr->remove_mock_election(id);
     svr->revert_palf_env(palf_env);
   }
   return ret;
@@ -220,14 +221,16 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, int64_t &lea
 {
   PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
-  return create_paxos_group(id, palf_base_info, NULL, leader_idx, leader);
+  const bool with_mock_election = false;
+  return create_paxos_group(id, palf_base_info, NULL, leader_idx, with_mock_election, leader);
 }
 
 int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader)
 {
   PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
-  return create_paxos_group(id, palf_base_info, loc_cb, leader_idx, leader);
+  const bool with_mock_election = false;
+  return create_paxos_group(id, palf_base_info, loc_cb, leader_idx, with_mock_election, leader);
 }
 
 int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const share::SCN &create_scn, int64_t &leader_idx, PalfHandleImplGuard &leader)
@@ -236,7 +239,8 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const share:
   PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
   palf_base_info.prev_log_info_.scn_ = create_scn;
-  return create_paxos_group(id, palf_base_info, NULL, leader_idx, leader);
+  const bool with_mock_election = false;
+  return create_paxos_group(id, palf_base_info, NULL, leader_idx, with_mock_election, leader);
 }
 
 int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const LSN &lsn, int64_t &leader_idx, PalfHandleImplGuard &leader)
@@ -245,20 +249,28 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const LSN &l
   PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
   palf_base_info.curr_lsn_ = lsn;
-  return create_paxos_group(id, palf_base_info, NULL, leader_idx, leader);
+  const bool with_mock_election = false;
+  return create_paxos_group(id, palf_base_info, NULL, leader_idx, with_mock_election, leader);
 }
 
 int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBaseInfo &palf_base_info, int64_t &leader_idx, PalfHandleImplGuard &leader)
 {
-  return create_paxos_group(id, palf_base_info, NULL, leader_idx, leader);
+  const bool with_mock_election = false;
+  return create_paxos_group(id, palf_base_info, NULL, leader_idx, with_mock_election, leader);
 }
 
-int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBaseInfo &palf_base_info, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader)
+int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id,
+                                                  const PalfBaseInfo &palf_base_info,
+                                                  palf::PalfLocationCacheCb *loc_cb,
+                                                  int64_t &leader_idx,
+                                                  const bool with_mock_election,
+                                                  PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
   for (auto svr : get_cluster()) {
     ObTenantEnv::set_tenant(svr->get_tenant_base());
     IPalfHandleImpl* handle = NULL;
+    MockElection *mock_election = NULL;
     share::ObLSID sid(id);
     if (svr->get_palf_env() == NULL) {
       ret = OB_ERR_UNEXPECTED;
@@ -267,6 +279,20 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBa
       CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
       break;
     } else {
+      if (with_mock_election) {
+        if (OB_FAIL(svr->create_mock_election(id, mock_election))) {
+          CLOG_LOG(WARN, "create_mock_election failed", K(ret), K(id), KPC(svr));
+          break;
+        } else {
+          common::ObAddr leader_addr;
+          const ObMemberList &member_list = get_member_list();
+          member_list.get_server_by_index(0, leader_addr);
+          PalfHandleImpl *palf_handle_impl = dynamic_cast<PalfHandleImpl*>(handle);
+          mock_election->set_leader(leader_addr, 1);
+          palf_handle_impl->state_mgr_.election_ = mock_election;
+          palf_handle_impl->config_mgr_.election_ = mock_election;
+        }
+      }
       handle->set_location_cache_cb(loc_cb);
       const ObMemberList &member_list = get_member_list();
       GlobalLearnerList learner_list;
@@ -285,13 +311,35 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBa
   return ret;
 }
 
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_mock_election(
+    const int64_t id,
+    int64_t &leader_idx,
+    PalfHandleImplGuard &leader)
+{
+  PalfBaseInfo palf_base_info;
+  palf_base_info.generate_by_default();
+  const bool with_mock_election = true;
+  return create_paxos_group(id, palf_base_info, NULL, leader_idx, with_mock_election, leader);
+}
+
 int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
     const int64_t id,
     int64_t &arb_replica_idx,
     int64_t &leader_idx,
     PalfHandleImplGuard &leader)
 {
-  return create_paxos_group_with_arb(id, NULL, arb_replica_idx, leader_idx, leader);
+  const bool with_mock_election = false;
+  return create_paxos_group_with_arb(id, NULL, arb_replica_idx, leader_idx, with_mock_election, leader);
+}
+
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb_mock_election(
+    const int64_t id,
+    int64_t &arb_replica_idx,
+    int64_t &leader_idx,
+    PalfHandleImplGuard &leader)
+{
+  const bool with_mock_election = true;
+  return create_paxos_group_with_arb(id, NULL, arb_replica_idx, leader_idx, with_mock_election, leader);
 }
 
 int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
@@ -299,6 +347,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
     palf::PalfLocationCacheCb *loc_cb,
     int64_t &arb_replica_idx,
     int64_t &leader_idx,
+    const bool with_mock_election,
     PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
@@ -318,43 +367,60 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
   if (-1 == arb_replica_idx) {
     ret = OB_NOT_SUPPORTED;
     PALF_LOG(ERROR, "there is not any arb server");
+  } else if (OB_FAIL(member_list.get_member_by_index(arb_replica_idx, arb_replica))) {
+    PALF_LOG(ERROR, "get_member_by_index failed", K(ret), K(arb_replica_idx));
   } else {
-    if (OB_FAIL(member_list.get_member_by_index(arb_replica_idx, arb_replica))) {
-      PALF_LOG(ERROR, "get_member_by_index failed", K(ret), K(arb_replica_idx));
-    } else {
-      member_list.remove_member(arb_replica);
-      for (auto svr : get_cluster()) {
-        ObTenantEnv::set_tenant(svr->get_tenant_base());
-        IPalfHandleImpl *handle = NULL;
-        share::ObLSID sid(id);
-        if (svr->get_palf_env() == NULL) {
-          ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR, "svr is null", KPC(svr));
-          break;
-        } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
-          CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
-        } else if (!svr->is_arb_server() && OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1, learner_list))) {
-          CLOG_LOG(ERROR, "set_initial_member_list failed", K(ret), K(id), KPC(svr));
-        } else {
-          handle->set_location_cache_cb(loc_cb);
-          handle->set_paxos_member_region_map(get_member_region_map());
-          CLOG_LOG(INFO, "set_initial_member_list success", K(member_list));
+    member_list.remove_member(arb_replica);
+    for (auto svr : get_cluster()) {
+      ObTenantEnv::set_tenant(svr->get_tenant_base());
+      IPalfHandleImpl *handle = NULL;
+      MockElection *mock_election = NULL;
+      share::ObLSID sid(id);
+      if (svr->get_palf_env() == NULL) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "svr is null", KPC(svr));
+        break;
+      } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
+        CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
+      } else if (!svr->is_arb_server() && OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1, learner_list))) {
+        CLOG_LOG(ERROR, "set_initial_member_list failed", K(ret), K(id), KPC(svr));
+      } else {
+        common::ObAddr leader_addr;
+        member_list.get_server_by_index(0, leader_addr);
+        if (with_mock_election) {
+          if (OB_FAIL(svr->create_mock_election(id, mock_election))) {
+            CLOG_LOG(WARN, "create_mock_election failed", K(ret), K(id), KPC(svr));
+            break;
+          } else if (false == svr->is_arb_server()) {
+            PalfHandleImpl *palf_handle_impl = dynamic_cast<PalfHandleImpl*>(handle);
+            mock_election->set_leader(leader_addr, 1);
+            palf_handle_impl->state_mgr_.election_ = mock_election;
+            palf_handle_impl->config_mgr_.election_ = mock_election;
+          } else {
+            palflite::PalfHandleLite *palf_handle_lite = dynamic_cast<palflite::PalfHandleLite*>(handle);
+            mock_election->set_leader(leader_addr, 1);
+            palf_handle_lite->state_mgr_.election_ = mock_election;
+            palf_handle_lite->config_mgr_.election_ = mock_election;
+          }
         }
-        if (NULL == svr->get_palf_env()) {
-          ret = OB_ERR_UNEXPECTED;
-          ObSimpleLogServer *log_p = dynamic_cast<ObSimpleLogServer*>(svr);
-          ObSimpleArbServer *arb_p = dynamic_cast<ObSimpleArbServer*>(svr);
-          CLOG_LOG(ERROR, "palf env is nullptr", K(ret), K(svr->is_arb_server()), KPC(svr), KP(log_p), K(arb_p), KPC(log_p), KPC(arb_p));
-        } else {
-        }
-        if (NULL != handle) {
-          svr->get_palf_env()->revert_palf_handle_impl(handle);
-        }
+        handle->set_location_cache_cb(loc_cb);
+        handle->set_paxos_member_region_map(get_member_region_map());
+        CLOG_LOG(INFO, "set_initial_member_list success", K(member_list));
       }
-      if (OB_SUCC(ret)) {
-        ret = get_leader(id, leader, leader_idx);
-        ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+      if (NULL == svr->get_palf_env()) {
+        ret = OB_ERR_UNEXPECTED;
+        ObSimpleLogServer *log_p = dynamic_cast<ObSimpleLogServer*>(svr);
+        ObSimpleArbServer *arb_p = dynamic_cast<ObSimpleArbServer*>(svr);
+        CLOG_LOG(ERROR, "palf env is nullptr", K(ret), K(svr->is_arb_server()), KPC(svr), KP(log_p), K(arb_p), KPC(log_p), KPC(arb_p));
+      } else {
       }
+      if (NULL != handle) {
+        svr->get_palf_env()->revert_palf_handle_impl(handle);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ret = get_leader(id, leader, leader_idx);
+      ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
     }
   }
   return ret;

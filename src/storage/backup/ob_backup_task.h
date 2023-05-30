@@ -110,6 +110,7 @@ class ObBackupDagNet : public share::ObIDagNet
 public:
   explicit ObBackupDagNet(const ObBackupDagNetSubType &sub_type);
   virtual ~ObBackupDagNet();
+  bool is_ha_dag_net() const override { return true; }
   ObBackupDagNetSubType get_sub_type() const { return sub_type_; };
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(sub_type));
 protected:

@@ -620,7 +620,7 @@ int ObLobManager::query_inrow_get_iter(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("data length is not enough.", K(ret), K(byte_offset), K(param.len_));
   } else {
-    ObLobQueryIter* iter = common::sop_borrow(ObLobQueryIter);
+    ObLobQueryIter* iter = OB_NEW(ObLobQueryIter, ObMemAttr(MTL_ID(), "LobQueryIter"));
     if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("alloc lob meta scan iterator fail", K(ret));
@@ -660,7 +660,7 @@ int ObLobManager::query(
         LOG_WARN("fail to get inrow query iter", K(ret));
         if (OB_NOT_NULL(result)) {
           result->reset();
-          common::sop_return(ObLobQueryIter, result);
+          OB_DELETE(ObLobQueryIter, "unused", result);
           result = nullptr;
         }
       }
@@ -676,7 +676,7 @@ int ObLobManager::query(
         LOG_WARN("fail to get inrow query iter", K(ret));
         if (OB_NOT_NULL(result)) {
           result->reset();
-          common::sop_return(ObLobQueryIter, result);
+          OB_DELETE(ObLobQueryIter, "unused", result);
           result = nullptr;
         }
       }
@@ -688,7 +688,7 @@ int ObLobManager::query(
       common::ObAddr dst_addr;
       ObLobCtx lob_ctx = lob_ctx_;
       param.lob_data_ = reinterpret_cast<ObLobData*>(lob_common->buffer_);
-      ObLobQueryIter* iter = common::sop_borrow(ObLobQueryIter);
+      ObLobQueryIter* iter = OB_NEW(ObLobQueryIter, ObMemAttr(MTL_ID(), "LobQueryIter"));
       if (OB_ISNULL(iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("alloc lob meta scan iterator fail", K(ret));
@@ -707,7 +707,7 @@ int ObLobManager::query(
         result = iter;
       } else if (OB_NOT_NULL(iter)) {
         iter->reset();
-        common::sop_return(ObLobQueryIter, iter);
+        OB_DELETE(ObLobQueryIter, "unused", iter);
       }
     }
   }
@@ -866,11 +866,11 @@ int ObLobManager::compare(ObLobAccessParam& param_left,
   }
   if (OB_NOT_NULL(iter_left)) {
     iter_left->reset();
-    common::sop_return(ObLobQueryIter, iter_left);
+    OB_DELETE(ObLobQueryIter, "unused", iter_left);
   }
   if (OB_NOT_NULL(iter_right)) {
     iter_right->reset();
-    common::sop_return(ObLobQueryIter, iter_right);
+    OB_DELETE(ObLobQueryIter, "unused", iter_right);
   }
   return ret;
 }
@@ -1456,7 +1456,7 @@ int ObLobManager::append(
             }
             if (OB_NOT_NULL(iter)) {
               iter->reset();
-              common::sop_return(ObLobQueryIter, iter);
+              OB_DELETE(ObLobQueryIter, "unused", iter);
             }
           }
         }
@@ -2137,7 +2137,7 @@ int ObLobManager::write_inrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uint
       }
       if (OB_NOT_NULL(iter)) {
         iter->reset();
-        common::sop_return(ObLobQueryIter, iter);
+        OB_DELETE(ObLobQueryIter, "unused", iter);
       }
     }
   }
@@ -2387,7 +2387,7 @@ int ObLobManager::write_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uin
       }
       if (OB_NOT_NULL(iter)) {
         iter->reset();
-        common::sop_return(ObLobQueryIter, iter);
+        OB_DELETE(ObLobQueryIter, "unused", iter);
       }
     }
   }
@@ -2506,7 +2506,7 @@ int ObLobManager::write(ObLobAccessParam& param, ObString& data)
         }
         if (OB_NOT_NULL(iter)) {
           iter->reset();
-          common::sop_return(ObLobQueryIter, iter);
+          OB_DELETE(ObLobQueryIter, "unused", iter);
         }
       }
     }

@@ -92,7 +92,7 @@ class ObTablespaceMgr
 public:
   typedef common::ObSortedVector<ObTablespaceSchema *> TablespaceInfos;
   typedef common::hash::ObPointerHashMap<ObTablespaceHashWrapper, ObTablespaceSchema *,
-                                         ObGetTablespaceKey> ObTablespaceMap;
+                                         ObGetTablespaceKey, 128> ObTablespaceMap;
   typedef TablespaceInfos::iterator TablespaceIter;
   typedef TablespaceInfos::const_iterator ConstTablespaceIter;
   ObTablespaceMgr();

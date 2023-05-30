@@ -24,6 +24,10 @@
 #include "observer/ob_heartbeat_handler.h" // ObServerHealthStatus
 namespace oceanbase
 {
+namespace common
+{
+class ObMySQLTransaction;
+};
 namespace rootserver
 {
 class ObHeartbeatService : public ObTenantThreadHelper,
@@ -122,6 +126,10 @@ private:
           const ObIArray<T> &array,
           const common::ObAddr &server,
           int64_t &idx);
+  int end_trans_and_refresh_server_(
+      const ObAddr &server,
+      const bool commit,
+      common::ObMySQLTransaction &trans);
   bool is_inited_;
   common::ObMySQLProxy *sql_proxy_;
   obrpc::ObSrvRpcProxy *srv_rpc_proxy_;
@@ -137,8 +145,6 @@ private:
   common::ObArray<common::ObZone> inactive_zone_list_;
   ObHBResponseArray hb_responses_; // send_heartbeat() write it and manage_heartbeat() read it
   bool need_process_hb_responses_; // true if send rpc, and will be reset if responses are processed
-  bool need_update_server_tracer_;
-  bool is_rs_server_info_updated_;
   static bool is_service_enabled_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHeartbeatService);

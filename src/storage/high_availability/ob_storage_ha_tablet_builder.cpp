@@ -1129,7 +1129,8 @@ int ObStorageHATabletsBuilder::update_local_tablet_(
     LOG_WARN("tablet should not be inner tablet, can not update", K(ret), K(tablet_info));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == tablet_info.status_) {
     //do nothing
-  } else if (OB_FAIL(ls->get_tablet(tablet_info.tablet_id_, tablet_handle))) {
+  } else if (OB_FAIL(ls->get_tablet(tablet_info.tablet_id_, tablet_handle,
+      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_info));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1958,7 +1959,7 @@ int ObStorageHATabletBuilderUtil::get_tablet_(
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
+  if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id), KPC(ls));
   }
   return ret;

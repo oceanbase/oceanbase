@@ -17,6 +17,7 @@
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "share/ob_define.h"
 #include "share/schema/ob_schema_struct.h"
+#include "lib/container/ob_vector.h"
 
 namespace oceanbase
 {
@@ -126,10 +127,10 @@ public:
   typedef common::ObSortedVector<ObDirectorySchema *> DirectoryInfos;
   typedef common::hash::ObPointerHashMap<ObDirectoryNameHashKey,
                                          ObDirectorySchema *,
-                                         ObGetDirectoryKey> ObDirectoryNameMap;
+                                         ObGetDirectoryKey, 128> ObDirectoryNameMap;
   typedef common::hash::ObPointerHashMap<uint64_t,
                                          ObDirectorySchema *,
-                                         ObGetDirectoryKey> ObDirectoryIdMap;
+                                         ObGetDirectoryKey, 128> ObDirectoryIdMap;
   typedef DirectoryInfos::iterator DirectoryIter;
   typedef DirectoryInfos::const_iterator ConstDirectoryIter;
 private:

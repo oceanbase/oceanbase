@@ -443,10 +443,9 @@ private:
                                   const share::SCN &base_scn,
                                   logservice::ObReplayBarrierType barrier_type,
                                   const ObTxLogType & segment_log_type);
-  void add_unsynced_segment_cb_(ObTxLogCb *log_cb);
-  void remove_unsynced_segment_cb_(ObTxLogCb *log_cb);
+  int add_unsynced_segment_cb_(ObTxLogCb *log_cb);
+  int remove_unsynced_segment_cb_(const share::SCN &remove_scn);
   share::SCN get_min_unsyncd_segment_scn_();
-  void replay_part_in_big_segment(share::SCN part_scn);
 
   int compensate_abort_log_();
   int validate_commit_info_log_(const ObTxCommitInfoLog &commit_info_log);

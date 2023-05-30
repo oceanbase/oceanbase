@@ -80,7 +80,7 @@ int ObLogFetcher::init(
     ObILogFetcherLSCtxAddInfoFactory &ls_ctx_add_info_factory,
     ILogFetcherHandler &log_handler,
     ObISQLClient *proxy,
-    IObLogErrHandler *err_handler)
+    logfetcher::IObLogErrHandler *err_handler)
 {
   int ret = OB_SUCCESS;
 
@@ -103,6 +103,7 @@ int ObLogFetcher::init(
         prefer_region,
         cluster_id,
         false/*is_across_cluster*/,
+        err_handler,
         cfg.server_blacklist.str(),
         cfg.log_router_background_refresh_interval_sec,
         cfg.all_server_cache_update_interval_sec,
@@ -360,7 +361,7 @@ int ObLogFetcher::add_ls(
   }
   // Push LS into ObLogLSFetchMgr
   else if (OB_FAIL(ls_fetch_mgr_.add_ls(tls_id, start_parameters, is_loading_data_dict_baseline_data_,
-      fetching_mode_, archive_dest_))) {
+      fetching_mode_, archive_dest_, *err_handler_))) {
     LOG_ERROR("add partition by part fetch mgr fail", KR(ret), K(tls_id), K(start_parameters),
         K(is_loading_data_dict_baseline_data_));
   } else if (OB_FAIL(ls_fetch_mgr_.get_ls_fetch_ctx(tls_id, ls_fetch_ctx))) {
@@ -516,6 +517,20 @@ int ObLogFetcher::update_fetching_log_upper_limit(const share::SCN &upper_limit_
   } else if (FALSE_IT(upper_limit_ts_ns = upper_limit_scn.convert_to_ts() * 1000L)) {
   } else if (OB_FAIL(progress_controller_.set_global_upper_limit(upper_limit_ts_ns))) {
     LOG_WARN("set_global_upper_limit failed", K(upper_limit_scn), K(upper_limit_ts_ns));
+  }
+
+  return ret;
+}
+
+int ObLogFetcher::update_compressor_type(const common::ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("LogFetcher is not inited", KR(ret));
+  } else if (OB_FAIL(rpc_.update_compressor_type(compressor_type))) {
+    LOG_WARN("ObLogRpc update_compressor_type failed", K(compressor_type));
   }
 
   return ret;

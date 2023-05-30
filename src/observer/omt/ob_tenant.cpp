@@ -569,8 +569,6 @@ ObTenant::ObTenant(const int64_t id,
     : ObTenantBase(id, true),
       meta_lock_(),
       tenant_meta_(),
-      unit_max_cpu_(0),
-      unit_min_cpu_(0),
       token_cnt_(0),
       total_worker_cnt_(0),
       gc_thread_(0),
@@ -647,7 +645,7 @@ int ObTenant::init(const ObTenantMeta &meta)
     set_unit_min_cpu(meta.unit_.config_.min_cpu());
     set_unit_max_cpu(meta.unit_.config_.max_cpu());
     const int64_t memory_size = static_cast<double>(tenant_meta_.unit_.config_.memory_size());
-    update_memory_size(memory_size);
+    set_unit_memory_size(memory_size);
     constexpr static int64_t MINI_MEM_UPPER = 1L<<30; // 1G
     update_mini_mode(memory_size <= MINI_MEM_UPPER);
 

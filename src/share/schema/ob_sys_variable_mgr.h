@@ -107,7 +107,7 @@ class ObSysVariableMgr
 {
 public:
   typedef common::ObSortedVector<ObSimpleSysVariableSchema *> SysVariableInfos;
-  typedef common::hash::ObPointerHashMap<ObSysVariableHashWrapper, ObSimpleSysVariableSchema *, ObGetSysVariableKey> ObSysVariableMap;
+  typedef common::hash::ObPointerHashMap<ObSysVariableHashWrapper, ObSimpleSysVariableSchema *, ObGetSysVariableKey, 128> ObSysVariableMap;
   typedef SysVariableInfos::iterator SysVariableIter;
   typedef SysVariableInfos::const_iterator ConstSysVariableIter;
   ObSysVariableMgr();

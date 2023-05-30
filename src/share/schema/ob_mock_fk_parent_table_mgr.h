@@ -93,7 +93,7 @@ public:
   typedef common::ObSortedVector<ObSimpleMockFKParentTableSchema *> MockFKParentTableInfos;
   typedef common::hash::ObPointerHashMap<ObMockFKParentTableHashWrapper,
                                          ObSimpleMockFKParentTableSchema *,
-                                         ObGetMockFKParentTableKey> MockFKParentTableMap;
+                                         ObGetMockFKParentTableKey, 128> MockFKParentTableMap;
   typedef MockFKParentTableInfos::iterator MockFKParentTableIter;
   typedef MockFKParentTableInfos::const_iterator ConstMockFKParentTableIter;
   ObMockFKParentTableMgr();

@@ -429,23 +429,18 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
         session_info_.set_database_id(old_db_id);
       }
     }
-
-    OZ (update_schema_object_dep_info(func_ast,
-                                      proc->get_tenant_id(),
-                                      proc->get_routine_id(),
-                                      proc->get_schema_version(),
-                                      proc->get_owner_id(),
-                                      proc->get_object_type()));
     int64_t final_end = ObTimeUtility::current_time();
     LOG_INFO(">>>>>>>>Final Time: ", K(id), K(final_end - cg_end));
   }
   return ret;
 }
 
-int ObPLCompiler::update_schema_object_dep_info(ObPLCompileUnitAST &ast,
+int ObPLCompiler::update_schema_object_dep_info(ObIArray<ObSchemaObjVersion> &dp_tbl,
                                                 uint64_t tenant_id,
-                                                uint64_t dep_obj_id, uint64_t schema_version,
-                                                uint64_t owner_id, ObObjectType dep_obj_type)
+                                                uint64_t owner_id,
+                                                uint64_t dep_obj_id,
+                                                uint64_t schema_version,
+                                                ObObjectType dep_obj_type)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = nullptr;
@@ -473,7 +468,7 @@ int ObPLCompiler::update_schema_object_dep_info(ObPLCompileUnitAST &ast,
                                               dep_obj_type));
       ObSArray<ObDependencyInfo> dep_infos;
       ObString dummy;
-      OZ (ObDependencyInfo::collect_dep_infos(ast.get_dependency_table(),
+      OZ (ObDependencyInfo::collect_dep_infos(dp_tbl,
                                               dep_infos,
                                               dep_obj_type,
                                               0, dummy, dummy));
@@ -717,11 +712,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OX (package.set_can_cached(package_ast.get_can_cached()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
   session_info_.set_for_trigger_package(saved_trigger_flag);
-  OZ (update_schema_object_dep_info(package_ast,
+  OZ (update_schema_object_dep_info(package_ast.get_dependency_table(),
                                     package_info.get_tenant_id(),
+                                    package_info.get_owner_id(),
                                     package_info.get_package_id(),
                                     package_info.get_schema_version(),
-                                    package_info.get_owner_id(),
                                     package_info.get_object_type()));
   if (OB_SUCC(ret)) {
     ObErrorInfo error_info;

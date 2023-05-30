@@ -101,8 +101,10 @@ public:
   OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
   OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
   OB_INLINE bool is_blocking() const { return OB_NOT_NULL(is_blocking_) && (0 != *is_blocking_); }
+
 private:
   void set_th_worker_thread_name(uint64_t tenant_id);
+  void update_ru_cputime();
   void process_request(rpc::ObRequest &req);
 
   void th_created();
@@ -135,6 +137,7 @@ private:
 
   int64_t last_wakeup_ts_;
   uint8_t* is_blocking_;
+  int64_t ru_cputime_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
 }; // end of class ObThWorker

@@ -741,8 +741,8 @@ void test_big_commit_info_log(int64_t log_size)
   }
 
   int64_t TOTAL_PART_COUNT =
-      fill_commit_state.get_serialize_size() / common::OB_MAX_LOG_ALLOWED_SIZE;
-  if (fill_commit_state.get_serialize_size() % common::OB_MAX_LOG_ALLOWED_SIZE > 0) {
+      fill_commit_state.get_serialize_size() / ObTxLogBlock::BIG_SEGMENT_SPILT_SIZE;
+  if (fill_commit_state.get_serialize_size() % ObTxLogBlock::BIG_SEGMENT_SPILT_SIZE > 0) {
     TOTAL_PART_COUNT++;
   }
   TRANS_LOG(INFO, "TOTAL PART COUNT", K(TOTAL_PART_COUNT), K(part_count));

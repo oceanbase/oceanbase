@@ -45,7 +45,8 @@ int ObLCObjectManager::init(int64_t hash_bucket, uint64_t tenant_id)
 
 int ObLCObjectManager::alloc(ObCacheObjGuard& guard,
                              ObLibCacheNameSpace ns,
-                             uint64_t tenant_id)
+                             uint64_t tenant_id,
+                             MemoryContext &parent_context)
 {
   int ret = OB_SUCCESS;
   lib::MemoryContext entity = NULL;
@@ -60,7 +61,7 @@ int ObLCObjectManager::alloc(ObCacheObjGuard& guard,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("out of the max type", K(ret), K(ns));
   } else if (FALSE_IT(mem_attr.label_ = LC_NS_TYPE_LABELS[ns])) {
-  } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(entity,
+  } else if (OB_FAIL(parent_context->CREATE_CONTEXT(entity,
                      lib::ContextParam().set_mem_attr(mem_attr)))) {
     LOG_WARN("create entity failed", K(ret), K(mem_attr));
   } else if (OB_ISNULL(entity)) {
@@ -187,4 +188,3 @@ void ObLCObjectManager::inner_free(ObILibCacheObject *cache_obj)
 
 } // namespace common
 } // namespace oceanbase
-

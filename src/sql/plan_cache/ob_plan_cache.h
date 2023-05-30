@@ -441,6 +441,7 @@ private:
   int64_t mem_low_pct_;                      // low water mark percentage
   int64_t mem_used_;                         // mem used now
   int64_t bucket_num_;
+  lib::MemoryContext root_context_;
   common::ObMalloc inner_allocator_;
   common::ObAddr host_;
   ObPlanCacheStat pc_stat_;

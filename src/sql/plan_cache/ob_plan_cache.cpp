@@ -322,6 +322,10 @@ void ObPlanCache::destroy()
     if (OB_SUCCESS != (cache_evict_all_obj())) {
       SQL_PC_LOG_RET(WARN, OB_ERROR, "fail to evict all lib cache cache");
     }
+    if (root_context_ != NULL) {
+      DESTROY_CONTEXT(root_context_);
+      root_context_ = NULL;
+    }
     inited_ = false;
   }
 }
@@ -331,7 +335,13 @@ int ObPlanCache::init(int64_t hash_bucket, uint64_t tenant_id)
   int ret = OB_SUCCESS;
   if (!inited_) {
     ObPCMemPctConf default_conf;
-    if (OB_FAIL(co_mgr_.init(hash_bucket, tenant_id))) {
+    ObMemAttr attr(tenant_id, "PlanCache", ObCtxIds::PLAN_CACHE_CTX_ID);
+    lib::ContextParam param;
+    param.set_properties(lib::ADD_CHILD_THREAD_SAFE | lib::ALLOC_THREAD_SAFE)
+      .set_mem_attr(attr);
+    if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(root_context_, param))) {
+      SQL_PC_LOG(WARN, "failed to create context", K(ret));
+    } else if (OB_FAIL(co_mgr_.init(hash_bucket, tenant_id))) {
       SQL_PC_LOG(WARN, "failed to init lib cache manager", K(ret));
     } else if (OB_FAIL(cache_key_node_map_.create(hash::cal_next_prime(hash_bucket),
                                                   ObModIds::OB_HASH_BUCKET_PLAN_CACHE,
@@ -357,6 +367,12 @@ int ObPlanCache::init(int64_t hash_bucket, uint64_t tenant_id)
       tenant_id_ = tenant_id;
       ref_handle_mgr_.set_tenant_id(tenant_id_);
       inited_ = true;
+    }
+    if (OB_FAIL(ret)) {
+      if (root_context_ != NULL) {
+        DESTROY_CONTEXT(root_context_);
+        root_context_ = NULL;
+      }
     }
   }
   return ret;
@@ -1306,8 +1322,9 @@ int ObPlanCache::create_node_and_add_cache_obj(ObILibCacheKey *cache_key,
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret), K(cache_key), K(cache_obj));
   } else if (OB_FAIL(cn_factory_.create_cache_node(cache_key->namespace_,
-                                                        cache_node,
-                                                        tenant_id_))) {
+                                                   cache_node,
+                                                   tenant_id_,
+                                                   root_context_))) {
     SQL_PC_LOG(WARN, "failed to create cache node", K(ret), K_(cache_key->namespace), K_(tenant_id));
   } else {
     // reference count after constructing cache node
@@ -1846,7 +1863,7 @@ int ObPlanCache::add_stat_for_cache_obj(ObILibCacheCtx &ctx, ObILibCacheObject *
 int ObPlanCache::alloc_cache_obj(ObCacheObjGuard& guard, ObLibCacheNameSpace ns, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(co_mgr_.alloc(guard, ns, tenant_id))) {
+  if (OB_FAIL(co_mgr_.alloc(guard, ns, tenant_id, root_context_))) {
     LOG_WARN("failed to alloc cache obj", K(ret));
   }
   return ret;

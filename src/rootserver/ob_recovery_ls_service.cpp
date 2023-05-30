@@ -316,8 +316,12 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
   }
   while (OB_SUCC(ret)) {
     transaction::ObTxLogHeader tx_header;
-    if (OB_FAIL(tx_log_block.get_next_log(tx_header))) {
-      if (OB_ITER_END == ret) {
+    bool contain_big_segment = false;
+    if (OB_FAIL(tx_log_block.get_next_log(tx_header, nullptr, &contain_big_segment))) {
+      if (OB_ITER_END == ret || contain_big_segment) {
+        if (contain_big_segment) {
+          LOG_INFO("skip process a big segment log", KR(ret), K(tx_log_block));
+        }
         ret = OB_SUCCESS;
         break;
       } else {

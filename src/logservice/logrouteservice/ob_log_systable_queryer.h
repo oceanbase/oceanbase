@@ -16,6 +16,7 @@
 #include "ob_ls_log_stat_info.h"   // ObLSLogInfo
 #include "ob_all_server_info.h"    // ObAllServerInfo
 #include "ob_all_zone_info.h"      // ObAllZoneInfo, ObAllZoneTypeInfo
+#include "src/logservice/logfetcher/ob_log_fetcher_err_handler.h"
 
 namespace oceanbase
 {
@@ -37,7 +38,8 @@ public:
   virtual ~ObLogSysTableQueryer();
   int init(const int64_t cluster_id,
       const bool is_across_cluster,
-      common::ObISQLClient &sql_proxy);
+      common::ObISQLClient &sql_proxy,
+      logfetcher::IObLogErrHandler *err_handler);
   bool is_inited() const { return is_inited_; }
   void destroy();
 
@@ -99,6 +101,7 @@ private:
   bool is_across_cluster_;             // whether the SQL query across cluster
   int64_t cluster_id_;                 // ClusterID
   common::ObISQLClient *sql_proxy_;    // sql_proxy to use
+  logfetcher::IObLogErrHandler *err_handler_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogSysTableQueryer);
 };

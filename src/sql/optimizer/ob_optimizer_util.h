@@ -164,6 +164,7 @@ public:
   static int get_non_const_expr_size(const ObIArray<ObRawExpr *> &exprs,
                                      const EqualSets &equal_sets,
                                      const common::ObIArray<ObRawExpr *> &const_exprs,
+                                     const ObIArray<ObRawExpr *> &exec_ref_exprs,
                                      int64_t &number);
 
   static bool is_sub_expr(const ObRawExpr *sub_expr, const ObRawExpr *expr);

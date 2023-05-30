@@ -45,7 +45,7 @@ void ObLobTextIterCtx::reuse()
   iter_count_ = 0;
   if (OB_NOT_NULL(lob_query_iter_)) {
     lob_query_iter_->reset();
-    sop_return(ObLobQueryIter, lob_query_iter_);
+    OB_DELETE(ObLobQueryIter, "unused", lob_query_iter_);
     lob_query_iter_ = NULL;
   }
 }
@@ -57,7 +57,7 @@ ObTextStringIter::~ObTextStringIter()
   if (is_outrow_ && OB_NOT_NULL(ctx_)) {
     if (OB_NOT_NULL(ctx_->lob_query_iter_)) {
       ctx_->lob_query_iter_->reset();
-      common::sop_return(ObLobQueryIter, ctx_->lob_query_iter_);
+      OB_DELETE(ObLobQueryIter, "unused", ctx_->lob_query_iter_);
       ctx_->lob_query_iter_ = NULL;
     }
   }
@@ -530,7 +530,7 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
       if (ret == OB_ITER_END) {
         state_ = TEXTSTRING_ITER_END; // iter finished
         ctx_->lob_query_iter_->reset();
-        common::sop_return(ObLobQueryIter, ctx_->lob_query_iter_);
+        OB_DELETE(ObLobQueryIter, "unused", ctx_->lob_query_iter_);
         ctx_->lob_query_iter_ = NULL;
         ret = OB_SUCCESS;
       } else {

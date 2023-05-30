@@ -927,7 +927,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   //----End of functions for managing row level security----
 
   // refresh local schema busy wait
-  virtual int refresh_schema(const uint64_t tenant_id);
+  virtual int refresh_schema(const uint64_t tenant_id, int64_t *schema_version = NULL);
   // notify other servers to refresh schema (call switch_schema  rpc)
   virtual int notify_refresh_schema(const common::ObAddrIArray &addrs);
 
@@ -990,6 +990,10 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
 
   virtual int publish_schema(const uint64_t tenant_id);
+
+  virtual int publish_schema_and_get_schema_version(const uint64_t tenant_id,
+                                                    const common::ObAddrIArray &addrs,
+                                                    int64_t *schema_version = NULL);
 
   int force_set_locality(
       share::schema::ObSchemaGetterGuard &schema_guard,

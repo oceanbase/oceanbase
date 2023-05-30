@@ -287,12 +287,15 @@ int ObSimpleLogServer::init_log_service_()
   std::string clog_dir = clog_dir_ + "/tenant_1";
   allocator_ = OB_NEW(ObTenantMutilAllocator, "TestBase", node_id_);
   ObMemAttr attr(1, "SimpleLog");
+  ObMemAttr ele_attr(1, ObNewModIds::OB_ELECTION);
   net_keepalive_ = MTL_NEW(MockNetKeepAliveAdapter, "SimpleLog");
 
   if (OB_FAIL(net_keepalive_->init(&deliver_))) {
   } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &ls_service_,
       &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_))) {
     SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
+  } else if (OB_FAIL(mock_election_map_.init(ele_attr))) {
+    SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
   } else {
     palf_env_ = log_service_.get_palf_env();
     palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = OB_SERVER_TENANT_ID;

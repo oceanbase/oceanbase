@@ -737,7 +737,6 @@ void TestLobManager::scan_lob_meta(
   }
   if (iter != NULL) {
     iter->reset();
-    // common::sop_return(ObLobMetaScanIter, iter);
   }
   // ASSERT_EQ(0, out_data.length());
 
@@ -1744,7 +1743,7 @@ TEST_F(TestLobManager, inrow_bin_reverse_query)
       }
     }
     iter->reset();
-    common::sop_return(ObLobQueryIter, iter);
+    OB_DELETE(ObLobQueryIter, "unused", iter);
     allocator.free(read_buf);
   }
 
@@ -1775,7 +1774,7 @@ TEST_F(TestLobManager, inrow_bin_reverse_query)
       }
     }
     iter->reset();
-    common::sop_return(ObLobQueryIter, iter);
+    OB_DELETE(ObLobQueryIter, "unused", iter);
     allocator.free(read_buf);
   }
 
@@ -1843,7 +1842,7 @@ TEST_F(TestLobManager, inrow_utf8_reverse_query)
       }
     }
     iter->reset();
-    common::sop_return(ObLobQueryIter, iter);
+    OB_DELETE(ObLobQueryIter, "unused", iter);
     allocator.free(read_buf);
   }
 

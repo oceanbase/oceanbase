@@ -208,5 +208,28 @@ int ObTxLogCb::on_failure()
   return ret;
 }
 
+int ObTxLogCb::copy(const ObTxLogCb &other)
+{
+  int ret = OB_SUCCESS;
+  log_ts_ = other.log_ts_;
+  lsn_ = other.lsn_;
+  submit_ts_ = other.submit_ts_;
+  is_inited_ = other.is_inited_;
+  ls_id_ = other.ls_id_;
+  trans_id_ = other.trans_id_;
+  ctx_ = other.ctx_;
+  callbacks_ = other.callbacks_;
+  is_callbacked_ = other.is_callbacked_;
+
+  // without txdata
+  mds_range_ = other.mds_range_;
+  if (OB_FAIL(cb_arg_array_.assign(other.cb_arg_array_))) {
+    TRANS_LOG(WARN, "assign cb_arg_array_ failed", K(ret), KPC(this));
+  }
+  first_part_scn_ = other.first_part_scn_;
+
+  return ret;
+}
+
 } // transaction
 } // oceanbase

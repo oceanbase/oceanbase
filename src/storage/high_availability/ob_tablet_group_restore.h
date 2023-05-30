@@ -143,6 +143,7 @@ public:
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
   virtual int deal_with_cancel() override;
+  bool is_ha_dag_net() const override { return true; }
 
   ObTabletGroupRestoreCtx *get_restore_ctx() { return ctx_; }
   common::ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }

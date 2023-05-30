@@ -102,7 +102,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_major)
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   common::ObMember dummy_member;
-	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, leader));
+	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, false, leader));
   ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
 
@@ -233,7 +233,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_leader)
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   common::ObMember dummy_member;
-	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, leader));
+	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, false, leader));
   ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
 
@@ -351,7 +351,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_follower)
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   common::ObMember dummy_member;
-	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, leader));
+	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, false, leader));
   ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
 
@@ -484,7 +484,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_4f1a_degrade_upgrade)
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   common::ObMember dummy_member;
   std::vector<PalfHandleImplGuard*> palf_list;
-	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, leader));
+	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, false, leader));
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));

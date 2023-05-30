@@ -422,9 +422,7 @@ public:
   share::ObUnitInfoGetter::ObUnitStatus get_unit_status();
 
   void set_unit_max_cpu(double cpu);
-  OB_INLINE double unit_max_cpu() const { return unit_max_cpu_; }
   void set_unit_min_cpu(double cpu);
-  OB_INLINE double unit_min_cpu() const { return unit_min_cpu_; }
   OB_INLINE int64_t total_worker_cnt() const { return total_worker_cnt_; }
   int64_t min_worker_cnt() const;
   int64_t max_worker_cnt() const;
@@ -433,6 +431,7 @@ public:
 
   OB_INLINE void add_idle_time(int64_t idle_time) { IGNORE_RETURN ATOMIC_FAA(reinterpret_cast<uint64_t *>(&idle_us_), idle_time); }
   OB_INLINE void add_worker_time(int64_t req_time) { IGNORE_RETURN ATOMIC_FAA(reinterpret_cast<uint64_t *>(&worker_us_), req_time); }
+  OB_INLINE void add_ru_cputime(int64_t ru_utime) { IGNORE_RETURN ATOMIC_FAA(reinterpret_cast<uint64_t *>(&ru_cputime_us_), ru_utime); }
   int rdlock(common::ObLDHandle &handle);
   int wrlock(common::ObLDHandle &handle);
   int try_rdlock(common::ObLDHandle &handle);
@@ -488,6 +487,8 @@ public:
   OB_INLINE bool user_sched_enabled() const { return !disable_user_sched_; }
   OB_INLINE double get_token_usage() const { return token_usage_; }
   OB_INLINE int64_t get_worker_time() const { return ATOMIC_LOAD(&worker_us_); }
+  OB_INLINE int64_t get_ru_cputime() const { return ATOMIC_LOAD(&ru_cputime_us_); }
+  int64_t get_rusage_time();
   // sql throttle
   void update_sql_throttle_metrics(const ObSqlThrottleMetrics &metrics)
   { st_metrics_ = metrics; }
@@ -550,10 +551,6 @@ protected:
   ObTenantMeta tenant_meta_;
 
 protected:
-  // max/min cpu read from unit
-  double unit_max_cpu_;
-  double unit_min_cpu_;
-
   // number of active workers the tenant has owned. Only active
   // workers can make progress.
   int64_t token_cnt_ CACHE_ALIGNED;
@@ -618,6 +615,7 @@ public:
   // idle time between two checkpoints
   int64_t worker_us_ CACHE_ALIGNED;
   int64_t idle_us_ CACHE_ALIGNED;
+  int64_t ru_cputime_us_ CACHE_ALIGNED;
 }; // end of class ObTenant
 
 OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const

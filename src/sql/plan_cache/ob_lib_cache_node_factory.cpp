@@ -27,7 +27,8 @@ namespace sql
 
 int ObLCNodeFactory::create_cache_node(ObLibCacheNameSpace ns,
                                        ObILibCacheNode*& node,
-                                       uint64_t tenant_id)
+                                       uint64_t tenant_id,
+                                       MemoryContext &parent_context)
 {
   int ret = OB_SUCCESS;
   lib::MemoryContext entity = NULL;
@@ -41,8 +42,8 @@ int ObLCNodeFactory::create_cache_node(ObLibCacheNameSpace ns,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("out of the max type", K(ret), K(ns));
   } else if (FALSE_IT(mem_attr.label_ = LC_NS_TYPE_LABELS[ns])) {
-  } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(entity,
-                                              lib::ContextParam().set_mem_attr(mem_attr)))) {
+  } else if (OB_FAIL(parent_context->CREATE_CONTEXT(entity,
+                                                    lib::ContextParam().set_mem_attr(mem_attr)))) {
     LOG_WARN("create entity failed", K(ret), K(mem_attr));
   } else if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;

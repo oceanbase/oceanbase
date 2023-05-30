@@ -20,7 +20,7 @@
 
 #include "ob_log_config.h"                // ObLogFetcherConfig
 #include "observer/ob_srv_network_frame.h"
-
+#include "logservice/data_dictionary/ob_data_dict_utils.h"
 
 /// The rpc proxy executes the RPC function with two error codes:
 /// 1. proxy function return value ret
@@ -51,9 +51,11 @@
           int64_t max_rpc_proc_time = \
                   ATOMIC_LOAD(&ObLogRpc::g_rpc_process_handler_time_upper_limit); \
           proxy.set_server((SVR)); \
-          if (OB_FAIL(proxy.dst_cluster_id(cluster_id_).by(tenant_id).group_id(share::OBCG_CDCSERVICE).trace_time(true).timeout((TIMEOUT))\
-              .max_process_handler_time(static_cast<int32_t>(max_rpc_proc_time))\
-              .RPC((REQ), (ARG)))) { \
+          if (OB_FAIL(proxy.dst_cluster_id(cluster_id_).by(tenant_id).group_id(share::OBCG_CDCSERVICE) \
+                                  .compressed(ATOMIC_LOAD(&compressor_type_)) \
+                                  .trace_time(true).timeout((TIMEOUT))\
+                                  .max_process_handler_time(static_cast<int32_t>(max_rpc_proc_time))\
+                                  .RPC((REQ), (ARG)))) { \
             LOG_ERROR("rpc fail: " #RPC, "tenant_id", tenant_id, "svr", (SVR), "rpc_ret", ret, \
                 "result_code", proxy.get_result_code().rcode_, "req", (REQ)); \
           } \
@@ -80,7 +82,8 @@ ObLogRpc::ObLogRpc() :
     ssl_key_expired_time_(0),
     client_id_(),
     cfg_(nullptr),
-    external_info_val_()
+    external_info_val_(),
+    compressor_type_(common::INVALID_COMPRESSOR)
 {
   external_info_val_[0] = '\0';
 }
@@ -120,6 +123,7 @@ int ObLogRpc::async_stream_fetch_log(const uint64_t tenant_id,
   if (1 == cfg_->test_mode_switch_fetch_mode) {
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_TEST_SWITCH_MODE);
   }
+  req.set_compressor_type(ATOMIC_LOAD(&compressor_type_));
   SEND_RPC(async_stream_fetch_log, tenant_id, svr, timeout, req, &cb);
   LOG_TRACE("rpc: async fetch stream log", KR(ret), K(svr), K(timeout), K(req));
   return ret;
@@ -136,6 +140,7 @@ int ObLogRpc::async_stream_fetch_missing_log(const uint64_t tenant_id,
   if (1 == cfg_->test_mode_force_fetch_archive) {
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_FETCH_ARCHIVE);
   }
+  req.set_compressor_type(ATOMIC_LOAD(&compressor_type_));
   SEND_RPC(async_stream_fetch_miss_log, tenant_id, svr, timeout, req, &cb);
   LOG_TRACE("rpc: async fetch stream missing_log", KR(ret), K(svr), K(timeout), K(req));
   return ret;
@@ -184,6 +189,7 @@ void ObLogRpc::destroy()
   client_id_.reset();
   cfg_ = nullptr;
   external_info_val_[0] = '\0';
+  compressor_type_ = common::INVALID_COMPRESSOR;
 }
 
 int ObLogRpc::reload_ssl_config()
@@ -278,11 +284,37 @@ void ObLogRpc::configure(const ObLogFetcherConfig &cfg)
   LOG_INFO("[CONFIG]", K(rpc_process_handler_time_upper_limit_msec));
 }
 
-int ObLogRpc::init_client_id_() {
+int ObLogRpc::update_compressor_type(const common::ObCompressorType &compressor_type)
+{
   int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogRpc is not inited", KR(ret), K(cluster_id_));
+  } else {
+    ATOMIC_SET(&compressor_type_, compressor_type);
+
+    if (REACH_TIME_INTERVAL_THREAD_LOCAL(10 * _SEC_)) {
+      const char *compressor_type_name = nullptr;
+
+      if (compressor_type_ < common::MAX_COMPRESSOR) {
+        compressor_type_name = common::all_compressor_name[compressor_type];
+      }
+      LOG_INFO("update compressor type success", K_(compressor_type), K(compressor_type_name));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogRpc::init_client_id_()
+{
+  int ret = OB_SUCCESS;
+
   if (OB_FAIL(client_id_.init(getpid(), get_self_addr()))) {
     LOG_ERROR("init client id failed", KR(ret));
   }
+
   return ret;
 }
 

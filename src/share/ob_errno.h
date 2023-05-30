@@ -451,6 +451,7 @@ constexpr int OB_MIGRATE_NOT_COMPATIBLE = -4756;
 constexpr int OB_CLUSTER_INFO_MAYBE_REMAINED = -4757;
 constexpr int OB_ARBITRATION_INFO_QUERY_FAILED = -4758;
 constexpr int OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE = -4759;
+constexpr int OB_LS_OFFLINE = -4760;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -1321,6 +1322,7 @@ constexpr int OB_TRANS_FREE_ROUTE_NOT_SUPPORTED = -6279;
 constexpr int OB_TRANS_LIVE_TOO_MUCH_TIME = -6280;
 constexpr int OB_TRANS_COMMIT_TOO_MUCH_TIME = -6281;
 constexpr int OB_TRANS_TOO_MANY_PARTICIPANTS = -6282;
+constexpr int OB_LOG_ALREADY_SPLIT = -6283;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
 constexpr int OB_NO_LOG = -6303;
@@ -1395,6 +1397,7 @@ constexpr int OB_TABLET_TRANSFER_SEQ_NOT_MATCH = -7113;
 constexpr int OB_TRANSFER_DETECT_ACTIVE_TRANS = -7114;
 constexpr int OB_TRANSFER_SRC_LS_NOT_EXIST = -7115;
 constexpr int OB_TRANSFER_SRC_TABLET_NOT_EXIST = -7116;
+constexpr int OB_LS_NEED_REBUILD = -7117;
 constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
 constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
 constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
@@ -2297,6 +2300,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CLUSTER_INFO_MAYBE_REMAINED__USER_ERROR_MSG "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it."
 #define OB_ARBITRATION_INFO_QUERY_FAILED__USER_ERROR_MSG "the arbitration service may be unavailable, please check and retry"
 #define OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE__USER_ERROR_MSG "An error was ignored when accessing virtual table, actual error code: %d"
+#define OB_LS_OFFLINE__USER_ERROR_MSG "log stream is offline"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3293,6 +3297,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANS_LIVE_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction cost too much without commit or rollback"
 #define OB_TRANS_COMMIT_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction commit cost too much"
 #define OB_TRANS_TOO_MANY_PARTICIPANTS__USER_ERROR_MSG "too many transaction participants"
+#define OB_LOG_ALREADY_SPLIT__USER_ERROR_MSG "The big log entry has been split into multiple part"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
 #define OB_NO_LOG__USER_ERROR_MSG "no log ever scanned"
@@ -3367,6 +3372,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_DETECT_ACTIVE_TRANS__USER_ERROR_MSG "transfer detect active trans"
 #define OB_TRANSFER_SRC_LS_NOT_EXIST__USER_ERROR_MSG "transfer src ls does not exist"
 #define OB_TRANSFER_SRC_TABLET_NOT_EXIST__USER_ERROR_MSG "transfer src tablet does not exist"
+#define OB_LS_NEED_REBUILD__USER_ERROR_MSG "ls need rebuild"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -4378,6 +4384,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CLUSTER_INFO_MAYBE_REMAINED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4757, Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it."
 #define OB_ARBITRATION_INFO_QUERY_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4758, the arbitration service may be unavailable, please check and retry"
 #define OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4759, An error was ignored when accessing virtual table, actual error code: %d"
+#define OB_LS_OFFLINE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4760, log stream is offline"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5374,6 +5381,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANS_LIVE_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6280, Transaction cost too much without commit or rollback"
 #define OB_TRANS_COMMIT_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6281, Transaction commit cost too much"
 #define OB_TRANS_TOO_MANY_PARTICIPANTS__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back: too many transaction participants"
+#define OB_LOG_ALREADY_SPLIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6283, The big log entry has been split into multiple part"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LSR_THREAD_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6302, log scan runnable thread stop"
 #define OB_NO_LOG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6303, no log ever scanned"
@@ -5448,6 +5456,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_DETECT_ACTIVE_TRANS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7114, transfer detect active trans"
 #define OB_TRANSFER_SRC_LS_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7115, transfer src ls does not exist"
 #define OB_TRANSFER_SRC_TABLET_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7116, transfer src tablet does not exist"
+#define OB_LS_NEED_REBUILD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7117, ls need rebuild"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
@@ -5909,7 +5918,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2077];
+extern int g_all_ob_errnos[2080];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

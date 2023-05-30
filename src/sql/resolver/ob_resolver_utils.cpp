@@ -2570,7 +2570,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           OZ (parse_interval_precision(tmp_ptr, leading_precision, is_from_pl ? 9 : 2));
           OZ (parse_interval_ds_type(to_pos + 1, part_end));
           OZ (parse_interval_precision(to_pos + 1, second_precision,
-                                       DATE_UNIT_SECOND == part_end ? 6 : 0));
+                                                  is_from_pl ? 9 : (DATE_UNIT_SECOND == part_end ? 6 : 0)));
         } else {  // interval 'xxx' day (x)
           char *comma_pos = strchr(tmp_ptr, ',');
           OZ (parse_interval_ds_type(tmp_ptr, part_begin));
@@ -2579,10 +2579,14 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             *comma_pos = ')';
             OZ (parse_interval_precision(tmp_ptr, leading_precision, is_from_pl ? 9 : 2));
             *comma_pos = '(';
-            OZ (parse_interval_precision(comma_pos, second_precision, 6));
+            OZ (parse_interval_precision(comma_pos, second_precision, is_from_pl ? 9 : 6));
           } else {
             OZ (parse_interval_precision(tmp_ptr, leading_precision, is_from_pl ? 9 : 2));
-            second_precision = DATE_UNIT_SECOND == part_end ? 6 : 0;
+            if (OB_SUCC(ret) && is_from_pl) {
+              second_precision = 9;
+            } else {
+              second_precision = DATE_UNIT_SECOND == part_end ? 6 : 0;
+            }
           }
         }
       }
@@ -6495,6 +6499,10 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
       OZ (schema_guard.get_routine_info(tenant_id,
                                         udf_raw_expr.get_udf_id(),
                                         routine_info));
+      if (OB_FAIL(ret)) {
+        ret = OB_ERR_PRIVATE_UDF_USE_IN_SQL;
+        LOG_WARN("function 'string' may not be used in SQL", K(ret), K(udf_raw_expr));
+      }
     }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {

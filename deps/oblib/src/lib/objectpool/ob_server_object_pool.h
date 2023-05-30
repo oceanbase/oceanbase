@@ -283,19 +283,21 @@ public:
    * 因为是全局单例，所以是在程序启动时机完成了这些工作
    * TODO: 改为按需分配
    */
-  ObServerObjectPool(const int64_t tenant_id, const bool regist, const bool is_mini_mode)
-    : tenant_id_(tenant_id), regist_(regist), is_mini_mode_(is_mini_mode), arena_num_(0),
+  ObServerObjectPool(const int64_t tenant_id, const bool regist, const bool is_mini_mode,
+                     const int64_t cpu_count)
+    : tenant_id_(tenant_id), regist_(regist), is_mini_mode_(is_mini_mode),
+      cpu_count_(cpu_count), arena_num_(0),
       arena_(NULL), cnt_per_arena_(0), item_size_(0), buf_(nullptr), is_inited_(false)
   {}
 
   int init()
   {
     int ret = OB_SUCCESS;
-    const bool is_mini = (lib::is_mini_mode() || is_mini_mode_);
-    arena_num_ = static_cast<int32_t>(is_mini ? get_cpu_count()/2 : get_cpu_count());
+    const bool is_mini = is_mini_mode_;
+    arena_num_ = min(64/*upper_bound*/, max(4/*lower_bound*/, static_cast<int32_t>(cpu_count_) * 2));
     //If the assignment logic of buf_ below is not reached, buf_ will not be initialized
     buf_ = NULL;
-    cnt_per_arena_ = is_mini ? 16 : 128;
+    cnt_per_arena_ = is_mini ? 8 : 64;
     int64_t s = (sizeof(T) + sizeof(Meta)); // Each cached object header has a Meta field to store necessary information and linked list pointers
     item_size_ = upper_align(s, CACHE_ALIGN_SIZE); // Align according to the cache line to ensure that there will be no false sharing between objects
     ObMemAttr attr(tenant_id_, ObModIds::OB_SERVER_OBJECT_POOL);
@@ -400,6 +402,7 @@ private:
   const int64_t tenant_id_;
   const bool regist_;
   const bool is_mini_mode_;
+  const int64_t cpu_count_;
   int32_t arena_num_;
   ObPoolArenaHead *arena_;
   int64_t cnt_per_arena_;
@@ -413,7 +416,8 @@ inline ObServerObjectPool<T>& get_server_object_pool() {
   class Wrapper {
   public:
     Wrapper()
-      : instance_(OB_SERVER_TENANT_ID, true/*regist*/, false/*is_mini_mode*/)
+      : instance_(OB_SERVER_TENANT_ID, true/*regist*/, lib::is_mini_mode(),
+                  get_cpu_count())
     {
       instance_.init(); // is_inited_ will be checked all invokes
     }

@@ -82,6 +82,7 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
   arb_opts.self_ = addr;
   arb_opts.negotiation_enable_ = 0;
   arb_opts.mittest_ = true;
+  ObMemAttr ele_attr(1, ObNewModIds::OB_ELECTION);
   int ret = OB_SUCCESS;
   tenant_base_ = OB_NEW(ObTenantBase, "TestBase", node_id);
   auto malloc = ObMallocAllocator::get_instance();
@@ -117,6 +118,8 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
   } else if (OB_FAIL(palf_env_mgr_.init(logserver_dir.c_str(), addr,
           srv_network_frame_.get_req_transport()))) {
     CLOG_LOG(WARN, "PalfEnvLiteMgr init failed", K(ret), K(addr), K(clog_dir.c_str()));
+  } else if (OB_FAIL(mock_election_map_.init(ele_attr))) {
+    SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
   } else if (OB_FAIL(timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr_))) {
     CLOG_LOG(WARN, "timer init failed", K(ret), K(addr), K(clog_dir.c_str()));
   } else {

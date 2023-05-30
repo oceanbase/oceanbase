@@ -16,6 +16,7 @@
 #include "lib/container/ob_iarray.h"     // Array
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/compress/ob_compress_util.h" // ObCompressorType
 #include "logservice/logfetcher/ob_log_fetcher_ls_ctx_additional_info_factory.h"
 #include "logservice/logfetcher/ob_log_fetcher_err_handler.h"
 #include "logservice/logfetcher/ob_log_fetcher_ls_ctx_default_factory.h"
@@ -81,6 +82,8 @@ public:
   // set the max scn can be restored
   int set_restore_log_upper_limit();
 
+  int set_compressor_type(const common::ObCompressorType &compressor_type);
+
 private:
   // TODO LogFetcher如何区分LogRestoreSource变化了, 比如从cluster 1的tenant A, 变为了cluster 2的tenant B
   // LogFetcher需要提供接口, 区分不同cluster_id, tenant_id
@@ -109,6 +112,7 @@ private:
 
   int check_ls_stale_(const share::ObLSID &id, const int64_t proposal_id, bool &is_stale);
   int get_ls_count_in_fetcher_(int64_t &count);
+  int refresh_error_context_(const share::ObLSID &ls_id);
 
 private:
   class LogErrHandler : public logfetcher::IObLogErrHandler
@@ -122,6 +126,7 @@ private:
       virtual void handle_error(const share::ObLSID &ls_id,
           const ErrType &err_type,
           share::ObTaskId &trace_id,
+          const palf::LSN &lsn,
           const int err_no,
           const char *fmt, ...) override;
     private:

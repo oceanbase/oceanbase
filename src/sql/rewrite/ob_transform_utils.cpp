@@ -13059,6 +13059,7 @@ int ObTransformUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
   ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
   need_transform = false;
   bool from_base = false;
+  bool from_xml = false;
   bool view_table_do_transform = (stmt->get_stmt_type() == stmt::T_INSERT ||
                                   stmt->get_stmt_type() == stmt::T_UPDATE ||
                                   stmt->get_stmt_type() == stmt::T_MERGE);
@@ -13095,16 +13096,45 @@ int ObTransformUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
       from_base = true;
       if (table->view_base_item_ == NULL) {
         // do nothing or return error
-      } else if (OB_FAIL(ctx->schema_checker_->get_table_schema(ctx->session_info_->get_effective_tenant_id(),
-                                                         table->view_base_item_->ref_id_, base_table_schema))) {
-        LOG_WARN("failed to get table schema", K(ret));
-      } else if (OB_ISNULL(base_table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table should not be null", K(table->view_base_item_->ref_id_));
-      } else if (OB_FAIL(base_table_schema->get_column_schema_in_same_col_group(udt_expr.get_column_id(),
-                                                                       udt_expr.get_udt_set_id(),
-                                                                       hidden_cols))) {
-        LOG_WARN("failed to get column schema", K(ret));
+      } else {
+        ObSelectStmt *real_stmt = NULL;
+        if (OB_ISNULL(real_stmt = table->ref_query_->get_real_stmt())) {
+          // case : view definition is set_op
+          // Bug :
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("real stmt is NULL", K(ret));
+        } else {
+          SelectItem &t_col = real_stmt->get_select_item((udt_expr.get_column_id() - OB_APP_MIN_COLUMN_ID));
+
+          if (t_col.expr_->get_expr_type() == T_FUN_SYS_MAKEXML) { // xmltype special case
+            if (t_col.expr_->get_param_count() != 2) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid xml generated table column", K(ret), K(t_col.expr_));
+            } else if (!t_col.expr_->get_param_expr(1)->is_column_ref_expr()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid xml generated table column", K(ret), K(t_col.expr_->get_param_expr(1)->is_column_ref_expr()));
+            } else {
+              from_xml = true;
+              col_expr = static_cast<ObColumnRefRawExpr*>(t_col.expr_->get_param_expr(1));
+            }
+          } else if (t_col.expr_->get_expr_type() == T_REF_COLUMN) {
+            int64_t col_id = dynamic_cast<ObColumnRefRawExpr*>(t_col.expr_)->get_column_id();
+            if (OB_FAIL(ctx->schema_checker_->get_table_schema(ctx->session_info_->get_effective_tenant_id(),
+                                                              table->view_base_item_->ref_id_, base_table_schema))) {
+              LOG_WARN("failed to get table schema", K(ret));
+            } else if (OB_ISNULL(base_table_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("table should not be null", K(table->view_base_item_->ref_id_));
+            } else if (OB_FAIL(base_table_schema->get_column_schema_in_same_col_group(col_id,
+                                                                            udt_expr.get_udt_set_id(),
+                                                                            hidden_cols))) {
+              LOG_WARN("failed to get column schema", K(ret));
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid view column type", K(ret), K(t_col.expr_));
+          }
+        }
       }
     } else if (OB_FAIL(table_schema->get_column_schema_in_same_col_group(udt_expr.get_column_id(),
                                                                        udt_expr.get_udt_set_id(),
@@ -13112,12 +13142,16 @@ int ObTransformUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
       LOG_WARN("failed to get column schema", K(ret));
     }
     if(OB_FAIL(ret)) {
-    } else if (hidden_cols.count() != 1) {
+    } else if (!from_xml && hidden_cols.count() != 1) {
       // xmltype only 1 hidden column currently
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("hidden cols count is not expected", K(table->ref_id_), K(hidden_cols.count()));
     } else if (from_base) {
-      column_item = stmt->get_column_item_by_base_id(table->table_id_, hidden_cols.at(0)->get_column_id());
+      if (from_xml) {
+        column_item = stmt->get_column_item_by_base_id(table->table_id_, col_expr->get_column_id());
+      } else {
+        column_item = stmt->get_column_item_by_base_id(table->table_id_, hidden_cols.at(0)->get_column_id());
+      }
     } else {
       column_item = stmt->get_column_item(table->table_id_, hidden_cols.at(0)->get_column_id());
     }
@@ -13131,15 +13165,17 @@ int ObTransformUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
         col_expr = column_item->expr_;
         need_transform = true;
       }
-    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *hidden_cols.at(0), col_expr))) {
+    } else if (!from_xml && OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *hidden_cols.at(0), col_expr))) {
       LOG_WARN("build column expr failed", K(ret));
     } else if (OB_ISNULL(col_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create raw expr for dummy output", K(ret));
     } else {
-      col_expr->set_table_id(table->table_id_);
-      col_expr->set_explicited_reference();
-      col_expr->set_column_attr(udt_expr.get_table_name(), col_expr->get_column_name());
+      if (!from_xml) {
+        col_expr->set_table_id(table->table_id_);
+        col_expr->set_explicited_reference();
+        col_expr->set_column_attr(udt_expr.get_table_name(), col_expr->get_column_name());
+      }
       ColumnItem column_item;
       column_item.expr_ = col_expr;
       column_item.table_id_ = col_expr->get_table_id();

@@ -372,6 +372,32 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
                     c_expr->set_udt_id(udt_id);
                   }
                 }
+
+                if (OB_SUCC(ret) && NULL != ctx_.stmt_) {
+                  ObStmt *stmt = ctx_.stmt_;
+                  uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+                  const ObUDTTypeInfo *udt_info = NULL;
+                  if (OB_FAIL(ctx_.schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
+                    LOG_WARN("failed to get udt info", K(ret));
+                  } else if (OB_ISNULL(udt_info)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("get null udt info", K(ret));
+                  } else if (udt_info->get_schema_version() != common::OB_INVALID_VERSION) {
+                    ObSchemaObjVersion udt_schema_version;
+                    udt_schema_version.object_id_ = udt_id;
+                    udt_schema_version.object_type_ = share::schema::DEPENDENCY_TYPE;
+                    udt_schema_version.version_ = udt_info->get_schema_version();
+                    uint64_t dep_obj_id = ctx_.view_ref_id_;
+                    if (OB_FAIL(stmt->add_global_dependency_table(udt_schema_version))) {
+                      LOG_WARN("failed to add global dependency", K(ret));
+                    } else if (stmt->add_ref_obj_version(dep_obj_id, db_id,
+                                                         ObObjectType::VIEW,
+                                                         udt_schema_version,
+                                                         ctx_.expr_factory_.get_allocator())) {
+                      LOG_WARN("failed to add ref obj version", K(ret));
+                    }
+                  }
+                }
               }
             }
           }
@@ -1260,7 +1286,10 @@ int ObRawExprResolverImpl::process_xml_attributes_values_node(const ParseNode *n
       ObRawExpr *para_key_expr = NULL;
       ObString col_name;
       para_expr = NULL;
-      if (OB_FAIL(get_column_raw_text_from_node(expr_value_node, col_name))) {
+      if (expr_value_node->type_ != T_COLUMN_REF && expr_value_node->type_ != T_OBJ_ACCESS_REF) {
+        ret = OB_ERR_XMLELEMENT_ALIASED;
+        LOG_WARN("get column raw text failed", K(ret));
+      } else if (OB_FAIL(get_column_raw_text_from_node(expr_value_node, col_name))) {
         // bugfix: 49298642
         // parameter 1 of function xmlelement without aliased
         ret = OB_ERR_XMLELEMENT_ALIASED;
@@ -2467,28 +2496,10 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());
           if (param.is_ext()) {
-/*            CK (OB_NOT_NULL(ctx_.session_info_), OB_NOT_NULL(ctx_.schema_checker_));
-            if (OB_SUCC(ret)) {
-              const share::schema::ObUDTTypeInfo *udt_info = NULL;
-              OZ (ctx_.schema_checker_->get_udt_info(param.get_udt_id(), udt_info), K(param.get_udt_id()));
-              CK (OB_NOT_NULL(udt_info));
-              if (OB_SUCC(ret)) {
-                if (udt_info->is_collection()) {
-*/
-            //TODO: @ryan.ly 这里缺省认为一定是collection
-                  if (OB_SUCC(ret)) {
-                      c_expr->set_meta_type(param.get_meta());
-                      c_expr->set_expr_obj_meta(param.get_param_meta());
-                      c_expr->set_udt_id(param.get_udt_id());
-                      c_expr->set_param(param);
-                  }
-/*                } else {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("Record not support in sql yet", K(*udt_info), K(ret));
-                }
-              }
-            }
-*/
+              c_expr->set_meta_type(param.get_meta());
+              c_expr->set_expr_obj_meta(param.get_param_meta());
+              c_expr->set_udt_id(param.get_udt_id());
+              c_expr->set_param(param);
           } else {
             c_expr->set_meta_type(ObSQLUtils::is_oracle_empty_string(param)
                                   ? param.get_param_meta() : param.get_meta());
