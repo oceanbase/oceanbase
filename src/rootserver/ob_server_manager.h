@@ -10,6 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
+
 #ifndef OCEANBASE_ROOTSERVER_OB_SERVER_MANAGER_H_
 #define OCEANBASE_ROOTSERVER_OB_SERVER_MANAGER_H_
 
@@ -56,6 +60,9 @@ class ObIServerChangeCallback
 public:
   virtual int on_server_change() = 0;
 };
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
 class ObServerManager : public share::ObIServerTrace
 {
 public:

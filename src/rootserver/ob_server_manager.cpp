@@ -10,6 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
+// server manager is deprecated, please do not use it!!! USE SVR_TRACER INSTEAD!!!
+
 #define USING_LOG_PREFIX RS
 
 #include "ob_server_manager.h"
