@@ -3280,8 +3280,7 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
             } else if (OB_FAIL(check_basic_column_generated(column_expr, del_upd_stmt,
                                                             is_generated_column))) {
               LOG_WARN("check column generated failed", K(ret));
-            } else if (is_generated_column && !session_info_->is_for_trigger_package()) {
-              //兼容oracle，如果是创建trigger过程中发现该错误，不报错，在执行阶段会报错
+            } else if (is_generated_column) {
               ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
               if (!is_oracle_mode()) {
                 ColumnItem *orig_col_item = NULL;
