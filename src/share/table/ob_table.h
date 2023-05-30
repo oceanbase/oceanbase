@@ -638,17 +638,14 @@ private:
   ObString filter_string_;
 };
 
-struct ObTableAggregationType
+enum ObTableAggregationType
 {
-  enum Type
-  {
-    INVAILD = 0,
-    MAX = 1,
-    MIN = 2,
-    COUNT = 3,
-    SUM = 4,
-    AVG = 5,
-  };
+  INVAILD = 0,
+  MAX = 1,
+  MIN = 2,
+  COUNT = 3,
+  SUM = 4,
+  AVG = 5,
 };
 
 class ObTableAggregation
@@ -656,15 +653,15 @@ class ObTableAggregation
   OB_UNIS_VERSION(1);
 public:
   ObTableAggregation()
-    :type_(ObTableAggregationType::Type::INVAILD),
+    :type_(ObTableAggregationType::INVAILD),
     column_()
   {};
   ~ObTableAggregation() {};
-  ObTableAggregationType::Type get_type() const { return type_; }
+  ObTableAggregationType get_type() const { return type_; }
   const common::ObString &get_column() const { return column_; }
   TO_STRING_KV(K_(type), K_(column));
 private:
-  ObTableAggregationType::Type type_; // e.g. max
+  ObTableAggregationType type_; // e.g. max
   common::ObString column_; // e.g. age
 };
 

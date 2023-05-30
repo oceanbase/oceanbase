@@ -2381,19 +2381,18 @@ int ObTableServiceQueryCtx::get_normal_result_iterator(
     if (NULL == normal_result_iterator_) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate result iterator");
-      return ret;
     }
   }
-  if (normal_result_iterator_->is_aggregate_query()) { //init
-    if (OB_FAIL(normal_result_iterator_->init_agg_cell_proj(query.get_aggregations().count()))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate result for agg_cell_proj");
-    } else if (OB_FAIL(normal_result_iterator_->init_agg_results(query.get_aggregations().count()))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for agg_results");
-    }
+  if (OB_SUCC(ret)) {
+    if (normal_result_iterator_->is_aggregate_query()) { //init
+      if (OB_FAIL(normal_result_iterator_->init_agg_cell_proj(query.get_aggregations().count()))) {
+        LOG_WARN("failed to allocate result for agg_cell_proj");
+      } else if (OB_FAIL(normal_result_iterator_->init_agg_results(query.get_aggregations().count()))) {
+        LOG_WARN("failed to allocate memory for agg_results");
+      }
+    }   
+    query_result = normal_result_iterator_; 
   }
-  query_result = normal_result_iterator_;
   return ret;
 }
 
