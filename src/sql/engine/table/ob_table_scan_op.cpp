@@ -953,7 +953,11 @@ int ObTableScanOp::update_output_tablet_id()
     } else {
       data_tablet_loc = scan_result_.get_tablet_loc();
     }
-    if (OB_NOT_NULL(data_tablet_loc)) {
+    if (OB_ISNULL(data_tablet_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("data tablet loc is null, value of pdml partition id will not be set", K(ret),
+               K(MY_SPEC.should_scan_index()), K(MY_SPEC.ref_table_id_));
+    } else {
       if (MY_SPEC.partition_id_calc_type_ == 0) {
         output_id = data_tablet_loc->tablet_id_.id();
       } else if (MY_SPEC.partition_id_calc_type_ == 1) {

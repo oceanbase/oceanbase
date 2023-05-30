@@ -80,6 +80,7 @@ public:
   int64_t get_repartition_ref_table_id() { return repartition_ref_table_id_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+  virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
 
   void set_used_by_external_table() { used_by_external_table_ = true; }
   bool is_used_by_external_table() const { return used_by_external_table_; }

@@ -371,7 +371,7 @@ Outputs & filters:
       range_key([t_p4.c1]), range[5 ; MAX),
       range_cond([t_p4.c1 >= 5])
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -427,7 +427,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -469,7 +469,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -661,7 +661,7 @@ Outputs & filters:
   8 - output([t_p.c1]), filter(nil), rowset=256
       dop=10
   9 - output([t_p.c1]), filter(nil), rowset=256
- 10 - output([t_p.c1], [PARTITION_ID]), filter(nil), rowset=256
+ 10 - output([t_p.c1]), filter(nil), rowset=256
       access([t_p.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
@@ -1948,7 +1948,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -1994,7 +1994,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -2114,7 +2114,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p4.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true

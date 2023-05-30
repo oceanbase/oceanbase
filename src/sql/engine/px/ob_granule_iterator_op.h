@@ -127,6 +127,7 @@ public:
   // for partition join filter
   ObPxBFStaticInfo bf_info_;
   ObHashFunc hash_func_;
+  //TODO: shanting. remove this expr in 4.3
   ObExpr *tablet_id_expr_;
   // end for partition join filter
   int64_t repart_pruning_tsc_idx_;
