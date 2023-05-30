@@ -2027,6 +2027,7 @@ int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryRe
     int64_t* counts = static_cast<int64_t *>(allocator_.alloc(sizeof(int64_t) * aggregations->count()));  
     // check for allocate
     if (OB_ISNULL(sums) || OB_ISNULL(counts)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory for sum_double and count_num", K(ret), K(sums), K(counts));
     } else {
       MEMSET(sums, 0, sizeof(double) * aggregations->count());
