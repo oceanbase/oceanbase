@@ -671,6 +671,7 @@ int ObPhysicalCopyFinishTask::get_macro_block_copy_info(
 int ObPhysicalCopyFinishTask::process()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy finish task do not init", K(ret));
@@ -729,7 +730,7 @@ int ObPhysicalCopyFinishTask::prepare_data_store_desc_(
     LOG_WARN("prepare sstable index builder get invalid argument", K(ret), K(tablet_id), K(cluster_version), KP(sstable_param));
   } else if (OB_FAIL(get_merge_type_(sstable_param, merge_type))) {
     LOG_WARN("failed to get merge type", K(ret), KPC(sstable_param));
-  } else if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle))) {
+  } else if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -900,7 +901,8 @@ int ObPhysicalCopyFinishTask::create_sstable_with_index_builder_()
       //TODO(lingchuan) column_count should not be in parameters
       if (OB_FAIL(get_merge_type_(sstable_param_, merge_type))) {
         LOG_WARN("failed to get merge type", K(ret), K(copy_ctx_));
-      } else if (OB_FAIL(ls_->get_tablet(copy_ctx_.tablet_id_, tablet_handle))) {
+      } else if (OB_FAIL(ls_->get_tablet(copy_ctx_.tablet_id_, tablet_handle,
+          ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
         LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1316,7 +1318,8 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
-  } else if (OB_FAIL(ls_->get_tablet(tablet_id_, tablet_handle))) {
+  } else if (OB_FAIL(ls_->get_tablet(tablet_id_, tablet_handle,
+      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id_));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1405,7 +1408,8 @@ int ObTabletCopyFinishTask::trim_tablet_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
-  } else if (OB_FAIL(ls_->get_tablet(tablet_id_, tablet_handle))) {
+  } else if (OB_FAIL(ls_->get_tablet(tablet_id_, tablet_handle,
+      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id_));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;

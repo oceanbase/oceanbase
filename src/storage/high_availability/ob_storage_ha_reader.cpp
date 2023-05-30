@@ -614,7 +614,8 @@ int ObCopyMacroBlockObProducer::init(
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", KR(ret), K(tenant_id), K(ls_id), KPC(ls));
-  } else if (OB_FAIL(ls->get_tablet(table_key.get_tablet_id(), tablet_handle_))) {
+  } else if (OB_FAIL(ls->get_tablet(table_key.get_tablet_id(), tablet_handle_,
+      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet handle", K(ret), K(table_key), K(ls_id));
   } else if (OB_UNLIKELY(nullptr == (tablet = tablet_handle_.get_obj()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1665,7 +1666,8 @@ int ObCopySSTableInfoObProducer::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("copy sstable info ob producer init get invalid argument",
         K(ret), K(tablet_sstable_info), KP(ls));
-  } else if (OB_FAIL(ls->get_tablet(tablet_sstable_info.tablet_id_, tablet_handle_))) {
+  } else if (OB_FAIL(ls->get_tablet(tablet_sstable_info.tablet_id_, tablet_handle_,
+      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       status_ = ObCopyTabletStatus::TABLET_NOT_EXIST;
       ret = OB_SUCCESS;
@@ -2225,7 +2227,7 @@ int ObCopySSTableMacroObProducer::init(
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle_.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", KR(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
+  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else if (OB_FAIL(copy_table_key_array_.assign(copy_table_key_array))) {
     LOG_WARN("failed to assign sstable array", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(copy_table_key_array));
@@ -2345,7 +2347,7 @@ int ObCopySSTableMacroRangeObProducer::init(
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", KR(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
+  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
     ret = OB_ERR_UNEXPECTED;

@@ -2319,6 +2319,8 @@ int ObTabletMigrationTask::generate_migration_tasks_()
     LOG_WARN("failed to add tablet copy finish task as child", K(ret), KPC(ctx_));
   } else if (OB_FAIL(dag_->add_task(*tablet_copy_finish_task))) {
     LOG_WARN("failed to add tablet copy finish task", K(ret), KPC(ctx_));
+  } else {
+    LOG_INFO("generate sstable migration tasks", KPC(copy_tablet_ctx_), K(copy_table_key_array_));
   }
   return ret;
 }

@@ -297,7 +297,7 @@ int ObTabletBackfillTXDag::init(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
+  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else {
     dag_net_id_ = dag_net_id;
