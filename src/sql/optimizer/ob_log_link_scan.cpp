@@ -19,6 +19,17 @@ ObLogLinkScan::ObLogLinkScan(ObLogPlan &plan)
   : ObLogLink(plan)
 {}
 
+int ObLogLinkScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(all_exprs, select_exprs_))) {
+    LOG_WARN("failed to push back select exprs", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get op exprs", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
 int ObLogLinkScan::allocate_expr_post(ObAllocExprContext &ctx)
 {
   int ret = OB_SUCCESS;

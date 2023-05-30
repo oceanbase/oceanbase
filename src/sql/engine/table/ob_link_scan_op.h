@@ -18,6 +18,7 @@ class ObLinkScanSpec : public ObLinkSpec
 public:
   explicit ObLinkScanSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
   bool has_for_update_;
+  common::ObFixedArray<ObExpr*, common::ObIAllocator> select_exprs_;
 };
 
 class ObLinkScanOp : public ObLinkOp

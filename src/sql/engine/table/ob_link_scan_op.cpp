@@ -35,10 +35,10 @@ namespace sql
 {
 
 ObLinkScanSpec::ObLinkScanSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
-  : ObLinkSpec(alloc, type), has_for_update_(false)
+  : ObLinkSpec(alloc, type), has_for_update_(false), select_exprs_(alloc)
 {}
 
-OB_SERIALIZE_MEMBER((ObLinkScanSpec, ObLinkSpec));
+OB_SERIALIZE_MEMBER((ObLinkScanSpec, ObLinkSpec), has_for_update_, select_exprs_);
 
 ObLinkScanOp::ObLinkScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
   : ObLinkOp(exec_ctx, spec, input),
@@ -305,9 +305,10 @@ int ObLinkScanOp::fetch_row()
       reset_result();
     }
   } else {
-    const ObIArray<ObExpr *> &output = spec_.output_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < output.count(); i++) {
-      ObExpr *expr = output.at(i);
+    const ObIArray<ObExpr *> &select_exprs =
+          (MY_SPEC.select_exprs_.empty() ? spec_.output_ : MY_SPEC.select_exprs_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
+      ObExpr *expr = select_exprs.at(i);
       if (!expr->is_const_expr()) {
         ObObj value;
         ObObj new_value;
