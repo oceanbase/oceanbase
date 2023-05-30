@@ -375,9 +375,13 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
 
 int LockForReadFunctor::check_for_standby(const transaction::ObTransID &tx_id)
 {
-  return MTL(transaction::ObTransService *)->check_for_standby(ls_id_, tx_id,
-                                                               lock_for_read_arg_.mvcc_acc_ctx_.snapshot_.version_,
-                                                               can_read_, trans_version_, is_determined_state_);
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(MTL(transaction::ObTransService *)->check_for_standby(ls_id_, tx_id,
+                                                                    lock_for_read_arg_.mvcc_acc_ctx_.snapshot_.version_,
+                                                                    can_read_, trans_version_, is_determined_state_))) {
+    lock_for_read_arg_.mvcc_acc_ctx_.is_standby_read_ = true;
+  }
+  return ret;
 }
 
 int CleanoutTxStateFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx)
