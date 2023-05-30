@@ -200,9 +200,9 @@ int ObDirectReceiveOp::setup_next_scanner()
           // 这里要做到err_msg不为空的时候才给用户返回err_msg，否则就给用户返回ret默认的错误信息，
           // 因此直接写FORWARD_USER_ERROR(ret, err_msg)就可以了。
           FORWARD_USER_ERROR(ret, err_msg);
-          LOG_WARN("while fetching first scanner, the remote rcode is not OB_SUCCESS",
-                   K(ret), K(err_msg),
-                   "dst_addr", to_cstring(resp_handler->get_dst_addr()));
+          LOG_WARN("error occurring in the remote sql execution, "
+                   "please use the current TRACE_ID to grep the original error message on the remote_addr.",
+                   K(ret), "remote_addr", resp_handler->get_dst_addr());
         } else {
           scanner_ = scanner;
           first_request_received_ = true;

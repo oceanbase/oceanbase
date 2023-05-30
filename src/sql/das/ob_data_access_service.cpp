@@ -608,7 +608,9 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   }
   // task_resp's error code indicate the last valid op result.
   if (OB_FAIL(task_resp.get_err_code())) {
-    LOG_WARN("error occurring in remote das task", K(ret), K(task_resp));
+    LOG_WARN("error occurring in remote das task, "
+             "please use the current TRACE_ID to grep the original error message on the remote_addr.",
+             K(ret), "remote_addr", task_resp.get_runner_svr());
     OB_ASSERT(op_results.count() <= task_ops.count());
   } else {
     // decode last op result

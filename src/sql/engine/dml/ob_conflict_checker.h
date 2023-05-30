@@ -31,14 +31,19 @@ public:
   ObRowkeyCstCtdef(common::ObIAllocator &alloc)
     :  constraint_name_(),
        rowkey_expr_(alloc),
-       calc_exprs_(alloc)
+       calc_exprs_(alloc),
+       rowkey_accuracys_(alloc)
   {
   }
   virtual ~ObRowkeyCstCtdef() = default;
-  TO_STRING_KV(K_(constraint_name), K_(rowkey_expr), K_(calc_exprs));
+  TO_STRING_KV(K_(constraint_name),
+               K_(rowkey_expr),
+               K_(rowkey_accuracys),
+               K_(calc_exprs));
   ObString constraint_name_;  // 冲突时打印表名用
   ExprFixedArray rowkey_expr_; // 索引表的主键
   ExprFixedArray calc_exprs_; // 计算逐渐信息依赖的表达式
+  AccuracyFixedArray rowkey_accuracys_;
 };
 
 enum ObNewRowSource
@@ -214,6 +219,7 @@ private:
 
   int init_das_scan_rtdef();
 
+  int get_tmp_string_buffer(common::ObIAllocator *&allocator);
 public:
   common::ObArrayWrap<ObConflictRowMapCtx> conflict_map_array_;
   ObEvalCtx &eval_ctx_; // 用于表达式的计算
@@ -227,6 +233,7 @@ public:
   ObDASRef das_ref_;
   ObDASTabletLoc *local_tablet_loc_;
   ObDASTableLoc *table_loc_;
+  lib::MemoryContext tmp_mem_ctx_;
 };
 }  // namespace sql
 }  // namespace oceanbase
