@@ -2873,6 +2873,8 @@ int ObTransformPredicateMoveAround::transform_predicates(
         LOG_WARN("failed to deduce special predicates", K(ret));
       } else if (!is_pullup) {
         // do nothing
+      } else if (stmt.is_select_stmt() && static_cast<ObSelectStmt &>(stmt).is_scala_group_by()) {
+        // do nothing
       } else if (OB_FAIL(deducer.deduce_aggr_bound_predicates(
                            *ctx_, target_exprs, aggr_bound_preds))) {
         LOG_WARN("faield to deduce semantic predicates", K(ret));
