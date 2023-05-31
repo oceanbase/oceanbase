@@ -287,7 +287,7 @@ int ObJoinFilterOpInput::construct_msg_details(
         LOG_WARN("fail to prepare allocate col cnt", K(ret));
       } else if (OB_FAIL(in_msg.cmp_funcs_.assign(spec.null_first_cmp_funcs_))) {
         LOG_WARN("fail to init cmp funcs", K(ret));
-      } else if (OB_FAIL(in_msg.hash_funcs_.assign(spec.hash_funcs_))) {
+      } else if (OB_FAIL(in_msg.hash_funcs_for_insert_.assign(spec.hash_funcs_))) {
         LOG_WARN("fail to init cmp funcs", K(ret));
       } else if (OB_FAIL(in_msg.need_null_cmp_flags_.assign(spec.need_null_cmp_flags_))) {
         LOG_WARN("fail to init cmp flags", K(ret));
