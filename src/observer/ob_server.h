@@ -317,7 +317,7 @@ public:
   volatile bool need_ctas_cleanup_; //true: ObCTASCleanUpTask should traverse all table schemas to find the one need be dropped
 private:
   //thread to deal signals
-  char sig_buf_[sizeof(ObSignalWorker) + sizeof(ObSignalHandle)];
+  char sig_buf_[sizeof(ObSignalWorker) + sizeof(ObSignalHandle)] __attribute__((__aligned__(16)));
   ObSignalWorker *sig_worker_;
   ObSignalHandle *signal_handle_;
 
