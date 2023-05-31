@@ -45,7 +45,7 @@ public:
 
   int32_t rcode_;
   char msg_[common::OB_MAX_ERROR_MSG_LEN];
-  common::ObSEArray<common::ObWarningBuffer::WarningItem, 2> warnings_;
+  common::ObSEArray<common::ObWarningBuffer::WarningItem, 1> warnings_;
 };
 
 } // end of namespace obrpc

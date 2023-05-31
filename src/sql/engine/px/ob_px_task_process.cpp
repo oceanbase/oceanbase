@@ -125,6 +125,8 @@ int ObPxTaskProcess::process()
 {
   ObActiveSessionGuard::get_stat().in_px_execution_ = true;
   int ret = OB_SUCCESS;
+  common::ob_setup_default_tsi_warning_buffer();
+  common::ob_reset_tsi_warning_buffer();
   enqueue_timestamp_ = ObTimeUtility::current_time();
   process_timestamp_ = enqueue_timestamp_;
   ObExecRecord exec_record;
@@ -456,6 +458,9 @@ int ObPxTaskProcess::do_process()
   if (OB_NOT_NULL(arg_.exec_ctx_)) {
     DAS_CTX(*arg_.exec_ctx_).get_location_router().refresh_location_cache(true, ret);
   }
+
+  // for forward warning msg and user error msg
+  (void)record_user_error_msg(ret);
   // for transaction
   (void)record_tx_desc();
   // for exec feedback info
@@ -482,6 +487,35 @@ int ObPxTaskProcess::do_process()
 
   LOG_TRACE("notify SQC task exit", K(dfo_id), K(sqc_id), K(task_id), K(ret));
 
+  return ret;
+}
+
+int ObPxTaskProcess::record_user_error_msg(int retcode)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(arg_.sqc_task_ptr_));
+  if (OB_SUCC(ret)) {
+    ObPxUserErrorMsg &rcode =  arg_.sqc_task_ptr_->get_err_msg();
+    rcode.rcode_ = retcode;
+    common::ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+    if (wb) {
+      if (retcode != common::OB_SUCCESS) {
+        (void)snprintf(rcode.msg_, common::OB_MAX_ERROR_MSG_LEN, "%s", wb->get_err_msg());
+      }
+      //always add warning buffer
+      bool not_null = true;
+      for (uint32_t idx = 0; OB_SUCC(ret) && not_null && idx < wb->get_readable_warning_count(); idx++) {
+        const common::ObWarningBuffer::WarningItem *item = wb->get_warning_item(idx);
+        if (item != NULL) {
+          if (OB_FAIL(rcode.warnings_.push_back(*item))) {
+            RPC_OBRPC_LOG(WARN, "Failed to add warning", K(ret));
+          }
+        } else {
+          not_null = false;
+        }
+      }
+    }
+  }
   return ret;
 }
 

@@ -699,15 +699,15 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     ObPxTerminateMsgProc terminate_msg_proc(coord_info_, listener);
     ObPxFinishSqcResultP sqc_finish_msg_proc(ctx_, terminate_msg_proc);
     ObPxInitSqcResultP sqc_init_msg_proc(ctx_, terminate_msg_proc);
-    ObBarrierPieceMsgP barrier_piece_msg_proc(ctx_, terminate_msg_proc);
-    ObWinbufPieceMsgP winbuf_piece_msg_proc(ctx_, terminate_msg_proc);
-    ObDynamicSamplePieceMsgP sample_piece_msg_proc(ctx_, terminate_msg_proc);
-    ObRollupKeyPieceMsgP rollup_key_piece_msg_proc(ctx_, terminate_msg_proc);
-    ObRDWFPieceMsgP rd_wf_piece_msg_proc(ctx_, terminate_msg_proc);
-    ObInitChannelPieceMsgP init_channel_piece_msg_proc(ctx_, terminate_msg_proc);
-    ObReportingWFPieceMsgP reporting_wf_piece_msg_proc(ctx_, terminate_msg_proc);
     ObPxQcInterruptedP interrupt_proc(ctx_, terminate_msg_proc);
-    ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc(ctx_, terminate_msg_proc);
+    dtl::ObDtlPacketEmptyProc<ObBarrierPieceMsg>  barrier_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObWinbufPieceMsg> winbuf_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObDynamicSamplePieceMsg> sample_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObRollupKeyPieceMsg> rollup_key_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObRDWFPieceMsg> rd_wf_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObInitChannelPieceMsg> init_channel_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObReportingWFPieceMsg> reporting_wf_piece_msg_proc;
+    dtl::ObDtlPacketEmptyProc<ObOptStatsGatherPieceMsg> opt_stats_gather_piece_msg_proc;
 
     // 这个注册会替换掉旧的proc.
     (void)msg_loop_.clear_all_proc();

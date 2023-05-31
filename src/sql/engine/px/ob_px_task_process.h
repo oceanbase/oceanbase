@@ -115,6 +115,7 @@ private:
   { ObExecStatUtils::record_exec_timestamp(*this, is_first, exec_timestamp); }
   int record_tx_desc();
   int record_exec_feedback_info();
+  int record_user_error_msg(int retcode);
   void release();
   /* variables */
   const observer::ObGlobalContext &gctx_;

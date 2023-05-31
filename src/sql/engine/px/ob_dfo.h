@@ -911,7 +911,8 @@ public:
       interm_result_ids_(),
       tx_desc_(NULL),
       is_use_local_thread_(false),
-      fb_info_()
+      fb_info_(),
+      err_msg_()
   {
 
   }
@@ -1004,6 +1005,8 @@ public:
   void set_use_local_thread(bool flag) { is_use_local_thread_ = flag; }
   bool is_use_local_thread() { return is_use_local_thread_; }
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
+  const ObPxUserErrorMsg &get_err_msg() const { return err_msg_; }
+  ObPxUserErrorMsg &get_err_msg() { return err_msg_; }
 public:
   // 小于等于0表示设置了rc 值, task default ret值为1
   static const int64_t TASK_DEFAULT_RET_VALUE = 1;
@@ -1032,6 +1035,7 @@ public:
   transaction::ObTxDesc *tx_desc_; // transcation information
   bool is_use_local_thread_;
   ObExecFeedbackInfo fb_info_; //for feedback info
+  ObPxUserErrorMsg err_msg_; // for error msg & warning msg
 };
 
 class ObPxRpcInitTaskArgs
@@ -1108,7 +1112,7 @@ public:
   ObPhysicalPlan *des_phy_plan_;
   ObOpSpec *op_spec_root_;
   ObOperator *static_engine_root_;
-  ObPxTask *sqc_task_ptr_; // 指针指向 SQC SubCoord 中的对应 task 内存
+  ObPxTask *sqc_task_ptr_; // 指针指向 SQC Ctx task 数组中对应的 task
   ObIAllocator *des_allocator_;
   ObPxSqcHandler *sqc_handler_; // 指向 SQC Handler 内存
 };

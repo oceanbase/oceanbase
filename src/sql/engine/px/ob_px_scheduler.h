@@ -171,17 +171,17 @@ public:
   int on_sqc_init_fail(ObDfo &dfo, ObPxSqcMeta &sqc);
   int on_interrupted(ObExecContext &ctx, const common::ObInterruptCode &pkt);
   int startup_msg_loop(ObExecContext &ctx);
-  // begin DATAHUB msg processing
-  int on_piece_msg(ObExecContext &ctx, const ObBarrierPieceMsg &pkt);
-  int on_piece_msg(ObExecContext &ctx, const ObWinbufPieceMsg &pkt);
-  int on_piece_msg(ObExecContext &ctx, const ObDynamicSamplePieceMsg &pkt);
-  int on_piece_msg(ObExecContext &ctx, const ObRollupKeyPieceMsg &pkt);
-  int on_piece_msg(ObExecContext &ctx, const ObRDWFPieceMsg &pkt);
-  int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt);
-  int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt);
-  int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt);
-  // end DATAHUB msg processing
-
+  // Begin Datahub processing
+  // Don't need to process datahub message in terminate message processor
+  int on_piece_msg(ObExecContext &ctx, const ObBarrierPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  int on_piece_msg(ObExecContext &ctx, const ObWinbufPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  int on_piece_msg(ObExecContext &ctx, const ObDynamicSamplePieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  int on_piece_msg(ObExecContext &ctx, const ObRollupKeyPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  int on_piece_msg(ObExecContext &ctx, const ObRDWFPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt) { UNUSED(ctx); UNUSED(pkt); return common::OB_NOT_SUPPORTED; }
+  // End Datahub processing
   ObPxCoordInfo &coord_info_;
   ObIPxCoordEventListener &listener_;
 };

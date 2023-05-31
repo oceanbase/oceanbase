@@ -124,19 +124,6 @@ private:
   ObSqcCtx &sqc_ctx_;
 };
 
-
-//update the error code if it is OB_HASH_NOT_EXIST or OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER
-OB_INLINE void update_error_code(int &current_error_code, const int new_error_code)
-{
-  if (new_error_code != ObPxTask::TASK_DEFAULT_RET_VALUE) {
-    if ((OB_SUCCESS == current_error_code) ||
-        ((OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == current_error_code ||
-            OB_GOT_SIGNAL_ABORTING == current_error_code) &&
-            OB_SUCCESS != new_error_code)) {
-      current_error_code = new_error_code;
-    }
-  }
-}
 }
 }
 
