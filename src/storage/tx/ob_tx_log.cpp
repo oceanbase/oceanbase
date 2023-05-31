@@ -1368,7 +1368,7 @@ int ObTxLogBlock::update_next_log_pos_()
     if (OB_FAIL(serialization::decode(replay_buf_, len_, tmp_pos, version))) {
       TRANS_LOG(WARN, "deserialize UNIS_VERSION error", K(ret), K(*this), K(tmp_pos), K(version));
     } else if (OB_FAIL(serialization::decode(replay_buf_, len_, tmp_pos, body_size))) {
-      TRANS_LOG(WARN, "deserialize body_size error", K(ret), K(*this), K(tmp_pos), K(version));
+      TRANS_LOG(WARN, "deserialize body_size error", K(ret), K(*this), K(tmp_pos), K(body_size));
     } else if (tmp_pos + body_size > len_) {
       ret = OB_SIZE_OVERFLOW;
       TRANS_LOG(WARN, "has not enough space for deserializing tx_log_body", K(body_size),

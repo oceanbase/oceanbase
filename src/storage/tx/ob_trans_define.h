@@ -1670,7 +1670,6 @@ public:
   // for xa
   ObXATransID xid_;
   bool need_checksum_;
-  common::ObSEArray<common::ObTabletID, MAX_TABLET_MODIFY_RECORD_COUNT> tablet_modify_record_;
   bool is_sub2pc_;
 };
 

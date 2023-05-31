@@ -368,6 +368,7 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(2), dup_table_trx_read_committed)
   std::string tmp_event_val;
   ASSERT_EQ(OB_SUCCESS, wait_event_finish("INSERT_TRX_COMMIT", tmp_event_val, 30 * 1000 * 1000));
   check_dup_table_insert_readable(this, 1, true /*expected_follower_read*/);
+  ASSERT_EQ(OB_SUCCESS, finish_event("ZONE2_READ_INSERT_COMMITTED", ""));
 }
 
 TEST_F(GET_ZONE_TEST_CLASS_NAME(3), dup_table_trx_read_committed)
@@ -377,11 +378,19 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(3), dup_table_trx_read_committed)
   ASSERT_EQ(OB_SUCCESS,
             wait_event_finish("INSERT_TRX_COMMIT", tmp_event_val, 30 * 1000 * 1000, 100));
   check_dup_table_insert_readable(this, 1, true /*expected_follower_read*/);
+  ASSERT_EQ(OB_SUCCESS, finish_event("ZONE3_READ_INSERT_COMMITTED", ""));
 }
 
 TEST_F(GET_ZONE_TEST_CLASS_NAME(1), remove_dup_table)
 {
   int ret = OB_SUCCESS;
+
+  std::string tmp_event_val;
+  ASSERT_EQ(OB_SUCCESS,
+            wait_event_finish("ZONE2_READ_INSERT_COMMITTED", tmp_event_val, 30 * 1000 * 1000));
+  ASSERT_EQ(OB_SUCCESS,
+            wait_event_finish("ZONE3_READ_INSERT_COMMITTED", tmp_event_val, 30 * 1000 * 1000));
+
   WRITE_SQL_BY_CONN(static_test_conn_, "drop table Persons");
   GET_LS(static_basic_arg_.tenant_id_, static_basic_arg_.ls_id_num_, ls_handle);
 
