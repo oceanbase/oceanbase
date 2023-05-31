@@ -189,12 +189,12 @@ public:
   int assign(const ObQCMonitoringInfo &other);
   void reset();
 public:
-  common::ObString sql_;
+  common::ObString cur_sql_;
   // in nested px situation, it is the current px coordinator's thread id
   int64_t qc_tid_;
   // no need to deserialize
   static constexpr int64_t LIMIT_LENGTH = 100;
-  TO_STRING_KV(K_(sql), K_(qc_tid));
+  TO_STRING_KV(K_(cur_sql), K_(qc_tid));
 };
 
 // PX 端描述每个 SQC 的数据结构
