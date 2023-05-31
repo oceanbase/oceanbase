@@ -1898,7 +1898,7 @@
 ## 4. 检查集群状态
 #def check_cluster_status(query_cur):
 #  # 4.1 检查是否非合并状态
-#  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where STATUS != 'IDLE'""")
+#  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
@@ -2068,6 +2068,28 @@
 #      else:
 #        logging.info('check backup destination success')
 #
+#def check_server_version(query_cur):
+#    sql = """select distinct(substring_index(build_version, '_', 1)) from __all_server""";
+#    (desc, results) = query_cur.exec_query(sql);
+#    if len(results) != 1:
+#      fail_list.append("servers build_version not match")
+#    else:
+#      logging.info("check server version success")
+#
+## 14. 检查server是否可服务
+#def check_observer_status(query_cur):
+#  (desc, results) = query_cur.exec_query("""select count(*) from oceanbase.__all_server where (start_service_time <= 0 or status != "active")""")
+#  if results[0][0] > 0 :
+#    fail_list.append('{0} observer not available , please check'.format(results[0][0]))
+#  logging.info('check observer status success')
+#
+## 15  检查schema是否刷新成功
+#def check_schema_status(query_cur):
+#  (desc, results) = query_cur.exec_query("""select if (a.cnt = b.cnt, 1, 0) as passed from (select count(*) as cnt from oceanbase.__all_virtual_server_schema_info where refreshed_schema_version > 1 and refreshed_schema_version % 8 = 0) as a join (select count(*) as cnt from oceanbase.__all_server join oceanbase.__all_tenant) as b""")
+#  if results[0][0] != 1 :
+#    fail_list.append('{0} schema not available, please check'.format(results[0][0]))
+#  logging.info('check schema status success')
+#
 ## last check of do_check, make sure no function execute after check_fail_list
 #def check_fail_list():
 #  if len(fail_list) != 0 :
@@ -2106,6 +2128,9 @@
 #      check_archive_job_exist(query_cur)
 #      check_archive_dest_exist(query_cur)
 #      check_backup_dest_exist(query_cur)
+#      check_observer_status(query_cur)
+#      check_schema_status(query_cur)
+#      check_server_version(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
