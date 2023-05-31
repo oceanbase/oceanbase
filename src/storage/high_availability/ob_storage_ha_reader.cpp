@@ -1359,6 +1359,9 @@ int ObCopySSTableInfoRestoreReader::inner_get_backup_sstable_metas_(
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(sstable_meta_backup_path.get_obstr(),
       restore_base_info_->backup_dest_.get_storage_info(), sstable_meta_index, backup_sstable_meta_array))) {
     LOG_WARN("failed to read sstable meta", K(ret), KPC(restore_base_info_));
+  } else if (data_type.is_major_backup() && backup_sstable_meta_array.count() > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("major tablet should only has one sstable", K(ret), K(tablet_id), K(sstable_meta_index), K(backup_sstable_meta_array));
   }
   return ret;
 }
