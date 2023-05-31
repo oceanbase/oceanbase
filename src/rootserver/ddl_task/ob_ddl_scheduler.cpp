@@ -415,6 +415,170 @@ int ObDDLTaskHeartBeatMananger::get_inactive_ddl_task_ids(ObArray<ObDDLTaskID>& 
   return ret;
 }
 
+int ObRedefCallback::modify_info(ObTableRedefinitionTask &redef_task,
+                                ObDDLTaskQueue &task_queue,
+                                ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!redef_task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("redef task is not valid", K(ret), K(redef_task));
+  } else if (OB_FAIL(update_redef_task_info(redef_task))) {
+    LOG_WARN("update redef task info failed", K(ret));
+  } else {
+    ObString message;
+    const int64_t serialize_param_size = redef_task.get_serialize_param_size();
+    if (serialize_param_size > 0) {
+      char *buf = nullptr;
+      int64_t pos = 0;
+      common::ObArenaAllocator allocator("DdLSchedulerTmp");
+      if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(serialize_param_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(serialize_param_size));
+      } else if (OB_FAIL(redef_task.serialize_params_to_message(buf, serialize_param_size, pos))) {
+        LOG_WARN("serialize params to message failed", K(ret));
+      } else {
+        message.reset();
+        message.assign(buf, serialize_param_size);
+        if (OB_FAIL(ObDDLTaskRecordOperator::update_message(trans,
+                                                            redef_task.get_tenant_id(),
+                                                            redef_task.get_task_id(),
+                                                            message))) {
+          LOG_WARN("update task message failed", K(ret), K(redef_task.get_tenant_id()),
+                                                 K(redef_task.get_task_id()), K(message));
+        } else if (OB_FAIL(update_task_info_in_queue(redef_task, task_queue))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            bool exist = false;
+            if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(*GCTX.sql_proxy_, redef_task.get_task_id(), exist))) {
+              LOG_WARN("check task id exist fail", K(ret), K(task_id));
+            } else {
+              if (exist) {
+                ret = OB_EAGAIN;
+                LOG_INFO("entry exist, the ddl scheduler hasn't recovered the task yet", K(ret), K(redef_task.get_task_id()));
+              } else {
+                LOG_WARN("this task does not exist int hash table", K(ret), K(redef_task.get_task_id()));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAbortRedefCallback::update_redef_task_info(ObTableRedefinitionTask& redef_task)
+{
+  int ret = OB_SUCCESS;
+  redef_task.set_is_abort(true);
+  return ret;
+}
+
+int ObAbortRedefCallback::update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
+                                                  ObDDLTaskQueue &ddl_task_queue)
+{
+  return ddl_task_queue.abort_task(ObDDLTaskID(redef_task.get_tenant_id(),redef_task.get_task_id()));
+}
+
+int ObCopyTableDepCallback::set_infos(common::hash::ObHashMap<ObString, bool> *infos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(infos)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("infos is nullptr", K(ret));
+  } else {
+    infos_ = infos;
+  }
+  return ret;
+}
+
+int ObCopyTableDepCallback::update_redef_task_info(ObTableRedefinitionTask& redef_task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(infos_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("infos is nullptr", K(ret));
+  } else if (infos_->size() != 5) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("infos count error", K(ret), K(infos_->size()));
+  } else {
+    bool is_copy_constraints = false;
+    bool is_copy_indexes = false;
+    bool is_copy_triggers = false;
+    bool is_copy_foreign_keys = false;
+    bool is_ignore_errors = false;
+    if (OB_FAIL(infos_->get_refactored("is_copy_constraints", is_copy_constraints))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(infos_->get_refactored("is_copy_indexes", is_copy_indexes))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(infos_->get_refactored("is_copy_triggers", is_copy_triggers))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(infos_->get_refactored("is_copy_foreign_keys", is_copy_foreign_keys))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(infos_->get_refactored("is_ignore_errors", is_ignore_errors))) {
+      LOG_WARN("get item failed", K(ret));
+    } else {
+      redef_task.set_is_copy_constraints(is_copy_constraints);
+      redef_task.set_is_copy_indexes(is_copy_indexes);
+      redef_task.set_is_copy_triggers(is_copy_triggers);
+      redef_task.set_is_copy_foreign_keys(is_copy_foreign_keys);
+      redef_task.set_is_ignore_errors(is_ignore_errors);
+    }
+  }
+  return ret;
+}
+
+int ObCopyTableDepCallback::update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
+                                                    ObDDLTaskQueue &ddl_task_queue)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(infos_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("infos is nullptr", K(ret));
+  } else if (infos_->size() != 5) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("infos count error", K(ret), K(infos_->size()));
+  } else {
+    bool is_copy_constraints = false;
+    bool is_copy_indexes = false;
+    bool is_copy_triggers = false;
+    bool is_copy_foreign_keys = false;
+    bool is_ignore_errors = false;
+    if (OB_FAIL(infos_->get_refactored("is_copy_constraints", is_copy_constraints))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(infos_->get_refactored("is_copy_indexes", is_copy_indexes))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(infos_->get_refactored("is_copy_triggers", is_copy_triggers))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(infos_->get_refactored("is_copy_foreign_keys", is_copy_foreign_keys))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(infos_->get_refactored("is_ignore_errors", is_ignore_errors))) {
+      LOG_WARN("get item failed", K(ret));
+    } else if (OB_FAIL(ddl_task_queue.update_task_copy_deps_setting(ObDDLTaskID(redef_task.get_tenant_id(),redef_task.get_task_id()),
+                                                                    is_copy_constraints,
+                                                                    is_copy_indexes,
+                                                                    is_copy_triggers,
+                                                                    is_copy_foreign_keys,
+                                                                    is_ignore_errors))) {
+      LOG_WARN("update_task_copy_deps_setting failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObFinishRedefCallback::update_redef_task_info(ObTableRedefinitionTask& redef_task)
+{
+  int ret = OB_SUCCESS;
+  redef_task.set_is_do_finish(true);
+  return ret;
+}
+
+int ObFinishRedefCallback::update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
+                                                  ObDDLTaskQueue &ddl_task_queue)
+{
+  return ddl_task_queue.update_task_process_schedulable(ObDDLTaskID(redef_task.get_tenant_id(),redef_task.get_task_id()));
+}
+
 int ObPrepareAlterTableArgParam::init(const uint64_t session_id,
                                       const ObSQLMode &sql_mode,
                                       const ObString &ddl_stmt_str,
@@ -906,81 +1070,53 @@ int ObDDLScheduler::prepare_alter_table_arg(const ObPrepareAlterTableArgParam &p
   return ret;
 }
 
-template<typename F>
-int ObDDLScheduler::update_task_info(const ObDDLTaskID &task_id,
-                                     ObMySQLTransaction &trans,
-                                     ObDDLTaskRecord &task_record,
-                                     ObTableRedefinitionTask *ddl_task,
-                                     common::ObArenaAllocator &allocator,
-                                     F &&modify_info)
+int ObDDLScheduler::get_task_record(const ObDDLTaskID &task_id,
+                                    ObISQLClient &trans,
+                                    ObDDLTaskRecord &task_record,
+                                    common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!task_id.is_valid() || !task_record.is_valid())) {
+  if (OB_UNLIKELY(!task_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("task_id is invalid", K(ret), K(task_id), K(task_record));
-  } else if (OB_FAIL(ddl_task->init(task_record))) {
-    LOG_WARN("ddl_task init failed", K(ret));
-  } else if (OB_FAIL(ddl_task->set_trace_id(task_record.trace_id_))) {
-    LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(ddl_task->convert_to_record(task_record, allocator))) {
-    LOG_WARN("convert to ddl task record failed", K(ret), KP(ddl_task));
-  } else if (OB_UNLIKELY(!task_record.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ddl task record is invalid", K(ret), K(task_record));
+    LOG_WARN("invalid arg", K(ret), K(task_id));
   } else {
-    ObString message;
-    message.assign(task_record.message_.ptr(), task_record.message_.length());
-    if (OB_FAIL(ObDDLTaskRecordOperator::update_message(trans, task_id.tenant_id_, task_id.task_id_, message))) {
-      LOG_WARN("update task message failed", K(ret), K(task_id.tenant_id_), K(task_id.task_id_), K(message));
-    } else {
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(modify_info())) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            bool exist = false;
-            if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(root_service_->get_sql_proxy(), task_id.task_id_, exist))) {
-              LOG_WARN("check task id exist fail", K(ret), K(task_id));
-            } else {
-              if (exist) {
-                ret = OB_EAGAIN;
-                LOG_INFO("entry exist, the ddl scheduler hasn't recovered the task yet", K(ret), K(task_id));
-              } else {
-                LOG_WARN("this task does not exist int hash table", K(ret), K(task_id));
-              }
-            }
+    task_record.reset();
+    if (OB_FAIL(task_queue_.modify_task(task_id, [&task_record, &allocator](ObDDLTask &task) -> int {
+          int ret = OB_SUCCESS;
+          ObTableRedefinitionTask *table_redefinition_task = static_cast<ObTableRedefinitionTask*>(&task);
+          if (OB_UNLIKELY(!table_redefinition_task->is_valid())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("table rdefinition task is not valid", K(ret));
+          } else if (OB_FAIL(table_redefinition_task->convert_to_record(task_record, allocator))) {
+            LOG_WARN("convert to ddl task record failed", K(ret), K(*table_redefinition_task));
           }
+          return ret;
+        }))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id.task_id_,
+                                                                    root_service_->get_sql_proxy(),
+                                                                    allocator,
+                                                                    task_record))) {
+          LOG_WARN("get ddl task record failed", K(ret), K(task_id));
+        } else {
+          LOG_INFO("get ddl task record success", K(ret), K(task_record));
         }
+      } else {
+        LOG_WARN("failed to modify task", K(ret));
       }
     }
   }
   return ret;
 }
 
-int ObDDLScheduler::reschedule_ddl_task(const ObDDLTaskID &task_id, ObDDLTaskRecord &task_record)
+int ObDDLScheduler::modify_redef_task(const ObDDLTaskID &task_id, ObRedefCallback &cb)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator(lib::ObLabel("reschedule"));
-  if (OB_UNLIKELY(!task_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(task_id));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id.task_id_,
-                                                                  root_service_->get_sql_proxy(),
-                                                                  allocator,
-                                                                  task_record))) {
-    LOG_WARN("get single ddl task failed", K(ret), K(task_id.task_id_));
-  } else if (OB_FAIL(schedule_ddl_task(task_record))) {
-    LOG_WARN("failed to schedule ddl task", K(ret), K(task_record));
-  }
-  return ret;
-}
-
-int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
-{
-  int ret = OB_SUCCESS;
-  share::ObTaskId trace_id;
-  ObDDLTask *ddl_task = nullptr;
   int64_t table_task_status = 0;
   int64_t table_execution_id = 0;
   ObMySQLTransaction trans;
+  common::ObArenaAllocator allocator(lib::ObLabel("task_info"));
   if (OB_UNLIKELY(!task_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(task_id));
@@ -993,38 +1129,30 @@ int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
                                                                 table_execution_id))) {
     LOG_WARN("select for update failed", K(ret), K(task_id.tenant_id_), K(task_id.task_id_));
   } else {
+    bool need_reschedule = false;
+    ObDDLTaskRecord task_record;
     HEAP_VAR(ObTableRedefinitionTask, redefinition_task) {
-      ObDDLTaskRecord task_record;
-      common::ObArenaAllocator allocator(lib::ObLabel("abort_task"));
-      task_record.reset();
-      if (OB_FAIL(task_queue_.modify_task(task_id, [&task_record, &allocator](ObDDLTask &task) -> int {
-            int ret = OB_SUCCESS;
-            ObTableRedefinitionTask *table_redefinition_task = static_cast<ObTableRedefinitionTask*>(&task);
-            if (OB_UNLIKELY(!table_redefinition_task->is_valid())) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("table rdefinition task is not valid", K(ret));
-            } else if (OB_FAIL(table_redefinition_task->convert_to_record(task_record, allocator))) {
-              LOG_WARN("convert to ddl task record failed", K(ret), K(*table_redefinition_task));
-            }
-            return ret;
-          }))) {
-        LOG_WARN("failed to modify task", K(ret));
+      if (OB_FAIL(get_task_record(task_id, trans, task_record, allocator))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(reschedule_ddl_task(task_id, task_record))) {
-            LOG_WARN("reschedule ddl task failed", K(tmp_ret), K(task_id));
-          } else {
-            ret = OB_EAGAIN;
-            LOG_INFO("schedule ddl task again success, please abort again", K(ret));
-          }
+          need_reschedule = true;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to set redefinition task info", K(ret), K(task_id));
         }
-      } else {
-        redefinition_task.set_is_abort(true);
-        if (OB_FAIL(update_task_info(task_id, trans, task_record,
-                                    &redefinition_task,
-                                    allocator,
-                                    [&task_id, this]() -> int { return task_queue_.abort_task(task_id); }))) {
-          LOG_WARN("update task info failed", K(ret), K(task_id));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(redefinition_task.init(task_record))) {
+        LOG_WARN("fail to init redefinition_task", K(ret), K(task_record));
+      } else if (OB_FAIL(redefinition_task.set_trace_id(task_record.trace_id_))) {
+        LOG_WARN("set trace id failed", K(ret));
+      } else if (OB_FAIL(cb.modify_info(redefinition_task, task_queue_, trans))) {
+        LOG_WARN("fail to modify info", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        if (need_reschedule) {
+          if (OB_FAIL(schedule_ddl_task(task_record))) {
+            LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+          }
         }
       }
     }
@@ -1035,6 +1163,16 @@ int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
     if (OB_SUCCESS != tmp_ret) {
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     }
+  }
+  return ret;
+}
+
+int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
+{
+  int ret = OB_SUCCESS;
+  ObAbortRedefCallback cb;
+  if (OB_FAIL(modify_redef_task(task_id, cb))) {
+    LOG_WARN("fail to modify redef task", K(ret), K(task_id));
   }
   return ret;
 }
@@ -1047,70 +1185,25 @@ int ObDDLScheduler::copy_table_dependents(const ObDDLTaskID &task_id,
                                           const bool is_ignore_errors)
 {
   int ret = OB_SUCCESS;
-  ObDDLTask *task = nullptr;
-  int64_t table_task_status = 0;
-  int64_t table_execution_id = 0;
-  ObMySQLTransaction trans;
-  if (OB_UNLIKELY(!task_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(task_id));
-  } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), task_id.tenant_id_))) {
-    LOG_WARN("start transaction failed", K(ret));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans,
-                                                                task_id.tenant_id_,
-                                                                task_id.task_id_,
-                                                                table_task_status,
-                                                                table_execution_id))) {
-    LOG_WARN("select for update failed", K(ret), K(task_id.tenant_id_), K(task_id.task_id_));
-  } else {
-    HEAP_VAR(ObTableRedefinitionTask, redefinition_task) {
-      ObDDLTaskRecord task_record;
-      common::ObArenaAllocator allocator(lib::ObLabel("copy_table_dep"));
-      task_record.reset();
-      if (OB_FAIL(task_queue_.modify_task(task_id, [&task_record, &allocator](ObDDLTask &task) -> int {
-            int ret = OB_SUCCESS;
-            ObTableRedefinitionTask *table_redefinition_task = static_cast<ObTableRedefinitionTask*>(&task);
-            if (OB_UNLIKELY(!table_redefinition_task->is_valid())) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("table rdefinition task is not valid", K(ret));
-            } else if (OB_FAIL(table_redefinition_task->convert_to_record(task_record, allocator))) {
-              LOG_WARN("convert to ddl task record failed", K(ret), K(*table_redefinition_task));
-            }
-            return ret;
-          }))) {
-        LOG_WARN("failed to modify task", K(ret));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(reschedule_ddl_task(task_id, task_record))) {
-            LOG_WARN("reschedule ddl task failed", K(tmp_ret), K(task_id));
-          } else {
-            ret = OB_EAGAIN;
-            LOG_INFO("schedule ddl task again success, please copy table deps again", K(ret));
-          }
-        }
-      } else {
-        redefinition_task.set_is_copy_constraints(is_copy_constraints);
-        redefinition_task.set_is_copy_indexes(is_copy_indexes);
-        redefinition_task.set_is_copy_triggers(is_copy_triggers);
-        redefinition_task.set_is_copy_foreign_keys(is_copy_foreign_keys);
-        redefinition_task.set_is_ignore_errors(is_ignore_errors);
-        if (OB_FAIL(update_task_info(task_id, trans, task_record,
-                                    &redefinition_task,
-                                    allocator,
-                                    [&task_id, &is_copy_constraints, &is_copy_indexes, &is_copy_triggers, &is_copy_foreign_keys,
-                                    &is_ignore_errors, this]() -> int { return task_queue_.update_task_copy_deps_setting(task_id,
-                                                                      is_copy_constraints, is_copy_indexes, is_copy_triggers, is_copy_foreign_keys, is_ignore_errors); }))) {
-          LOG_WARN("update task info failed", K(ret), K(task_id));
-        }
-      }
-    }
-  }
-  if (trans.is_started()) {
-    bool commit = (OB_SUCCESS == ret);
-    int tmp_ret = trans.end(commit);
-    if (OB_SUCCESS != tmp_ret) {
-      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-    }
+  ObCopyTableDepCallback cb;
+  common::hash::ObHashMap<ObString, bool> infos;
+  lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "TableDep");
+  SET_USE_500(attr);
+  if (OB_FAIL(infos.create(5, attr, attr))) {
+    LOG_WARN("fail to create map", K(ret));
+  } else if (OB_FAIL(infos.set_refactored("is_copy_constraints", is_copy_constraints))) {
+    LOG_WARN("set item failed", K(ret));
+  } else if (OB_FAIL(infos.set_refactored("is_copy_indexes", is_copy_indexes))) {
+    LOG_WARN("set item failed", K(ret));
+  } else if (OB_FAIL(infos.set_refactored("is_copy_triggers", is_copy_triggers))) {
+    LOG_WARN("set item failed", K(ret));
+  } else if (OB_FAIL(infos.set_refactored("is_copy_foreign_keys", is_copy_foreign_keys))) {
+    LOG_WARN("set item failed", K(ret));
+  } else if (OB_FAIL(infos.set_refactored("is_ignore_errors", is_ignore_errors))) {
+    LOG_WARN("set item failed", K(ret));
+  } else if (FALSE_IT(cb.set_infos(&infos))) {
+  } else if (OB_FAIL(modify_redef_task(task_id, cb))) {
+    LOG_WARN("fail to modify redef task", K(ret), K(task_id));
   }
   return ret;
 }
@@ -1118,64 +1211,9 @@ int ObDDLScheduler::copy_table_dependents(const ObDDLTaskID &task_id,
 int ObDDLScheduler::finish_redef_table(const ObDDLTaskID &task_id)
 {
   int ret = OB_SUCCESS;
-  ObDDLTask *task = nullptr;
-  int64_t table_task_status = 0;
-  int64_t table_execution_id = 0;
-  ObMySQLTransaction trans;
-  if (OB_UNLIKELY(!task_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(task_id));
-  } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), task_id.tenant_id_))) {
-    LOG_WARN("start transaction failed", K(ret));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans,
-                                                                task_id.tenant_id_,
-                                                                task_id.task_id_,
-                                                                table_task_status,
-                                                                table_execution_id))) {
-    LOG_WARN("select for update failed", K(ret), K(task_id));
-  } else {
-    HEAP_VAR(ObTableRedefinitionTask, redefinition_task) {
-      ObDDLTaskRecord task_record;
-      common::ObArenaAllocator allocator(lib::ObLabel("finish_redef"));
-      task_record.reset();
-      if (OB_FAIL(task_queue_.modify_task(task_id, [&task_record, &allocator](ObDDLTask &task) -> int {
-            int ret = OB_SUCCESS;
-            ObTableRedefinitionTask *table_redefinition_task = static_cast<ObTableRedefinitionTask*>(&task);
-            if (OB_UNLIKELY(!table_redefinition_task->is_valid())) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("table rdefinition task is not valid", K(ret));
-            } else if (OB_FAIL(table_redefinition_task->convert_to_record(task_record, allocator))) {
-              LOG_WARN("convert to ddl task record failed", K(ret), K(*table_redefinition_task));
-            }
-            return ret;
-          }))) {
-        LOG_WARN("failed to modify task", K(ret));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(reschedule_ddl_task(task_id, task_record))) {
-            LOG_WARN("reschedule ddl task failed", K(tmp_ret), K(task_id));
-          } else {
-            ret = OB_EAGAIN;
-            LOG_INFO("schedule ddl task again success, please finish redef table again", K(ret));
-          }
-        }
-      } else {
-        redefinition_task.set_is_do_finish(true);
-        if (OB_FAIL(update_task_info(task_id, trans, task_record,
-                                          &redefinition_task,
-                                          allocator,
-                                          [&task_id, this]() -> int { return task_queue_.update_task_process_schedulable(task_id); }))) {
-          LOG_WARN("update task info failed", K(ret), K(task_id));
-        }
-      }
-    }
-  }
-  if (trans.is_started()) {
-    bool commit = (OB_SUCCESS == ret);
-    int tmp_ret = trans.end(commit);
-    if (OB_SUCCESS != tmp_ret) {
-      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-    }
+  ObFinishRedefCallback cb;
+  if (OB_FAIL(modify_redef_task(task_id, cb))) {
+    LOG_WARN("fail to modify redef task", K(ret), K(task_id));
   }
   return ret;
 }
