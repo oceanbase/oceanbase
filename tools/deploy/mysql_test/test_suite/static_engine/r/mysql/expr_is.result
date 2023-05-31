@@ -550,3 +550,20 @@ select c26, c26 is not true, c26 is not false, c26 is not null, c26 is not unkno
 drop table t1;
 
 
+CREATE TABLE `t1` (
+  `c1` int(11) DEFAULT NULL,
+  `c2` varbinary(25) NOT NULL,
+  `c3` bigint(4) DEFAULT NULL,
+  `c4` varbinary(15) NOT NULL,
+  `c5` int(11) NOT NULL,
+  `c6` decimal(10,8) NOT NULL DEFAULT '3.14159200',
+  PRIMARY KEY (`c4`),
+  UNIQUE KEY `c5` (`c5`) BLOCK_SIZE 16384 LOCAL
+);
+
+SELECT null AS a FROM t1 GROUP BY a with ROLLUP HAVING a IS not NULL;
++------+
+| a    |
++------+
++------+
+drop table t1;

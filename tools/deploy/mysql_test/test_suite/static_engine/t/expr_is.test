@@ -1,10 +1,7 @@
 # owner: dachuan.sdc
 # owner group: SQL2
 --result_format 4
-connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
-connection conn_admin;
---sleep 2
-connection default;
+
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
@@ -81,9 +78,6 @@ insert into t1 values(11, 11,
     '2019-12-01 12:00:00', '2019-12-01 12:00:00',
     '11', '11.0');
 
-connection conn_admin;
---sleep 2
-connection default;
 set @@ob_enable_plan_cache = 0;
 
 
@@ -100,5 +94,16 @@ drop table t1;
 
 
 
-connection conn_admin;
---sleep 2
+CREATE TABLE `t1` (
+  `c1` int(11) DEFAULT NULL,
+  `c2` varbinary(25) NOT NULL,
+  `c3` bigint(4) DEFAULT NULL,
+  `c4` varbinary(15) NOT NULL,
+  `c5` int(11) NOT NULL,
+  `c6` decimal(10,8) NOT NULL DEFAULT '3.14159200',
+  PRIMARY KEY (`c4`),
+  UNIQUE KEY `c5` (`c5`) BLOCK_SIZE 16384 LOCAL
+);
+
+SELECT null AS a FROM t1 GROUP BY a with ROLLUP HAVING a IS not NULL;
+drop table t1;
