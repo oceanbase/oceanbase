@@ -172,6 +172,11 @@ public:
   }
   inline int32_t get_param_num() { return params_num_; }
   inline void set_param_num(int32_t num) { params_num_ = num; }
+  static int store_params_value_to_str(ObIAllocator &alloc,
+                                       sql::ObSQLSessionInfo &session,
+                                       ParamStore *params,
+                                       char *&params_value,
+                                       int64_t &params_value_len);
 
 protected:
   virtual int deserialize()  { return common::OB_SUCCESS; }

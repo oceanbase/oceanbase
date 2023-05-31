@@ -572,33 +572,43 @@ int ObMPStmtExecute::before_process()
 
 int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc, sql::ObSQLSessionInfo &session)
 {
+  return store_params_value_to_str(alloc, session, params_, params_value_, params_value_len_);
+}
+
+int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc,
+                                               sql::ObSQLSessionInfo &session,
+                                               ParamStore *params,
+                                               char *&params_value,
+                                               int64_t &params_value_len)
+{
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   int64_t length = OB_MAX_SQL_LENGTH;
-  CK (OB_NOT_NULL(params_));
-  CK (OB_NOT_NULL(params_value_ = static_cast<char *>(alloc.alloc(OB_MAX_SQL_LENGTH))));
-  for (int i = 0; OB_SUCC(ret) && i < params_->count(); ++i) {
-    const common::ObObjParam &param = params_->at(i);
+  CK (OB_NOT_NULL(params));
+  CK (OB_ISNULL(params_value));
+  CK (OB_NOT_NULL(params_value = static_cast<char *>(alloc.alloc(OB_MAX_SQL_LENGTH))));
+  for (int i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
+    const common::ObObjParam &param = params->at(i);
     if (param.is_ext()) {
       pos = 0;
-      params_value_ = NULL;
-      params_value_len_ = 0;
+      params_value = NULL;
+      params_value_len = 0;
       break;
     } else {
-      OZ (param.print_sql_literal(params_value_, length, pos, alloc, TZ_INFO(&session)));
-      if (i != params_->count() - 1) {
-        OZ (databuff_printf(params_value_, length, pos, alloc, ","));
+      OZ (param.print_sql_literal(params_value, length, pos, alloc, TZ_INFO(&session)));
+      if (i != params->count() - 1) {
+        OZ (databuff_printf(params_value, length, pos, alloc, ","));
       }
     }
   }
   if (OB_FAIL(ret)) {
-    params_value_ = NULL;
-    params_value_len_ = 0;
+    params_value = NULL;
+    params_value_len = 0;
     // The failure of store_params_value_to_str does not affect the execution of SQL,
     // so the error code is ignored here
     ret = OB_SUCCESS;
   } else {
-    params_value_len_ = pos;
+    params_value_len = pos;
   }
   return ret;
 }

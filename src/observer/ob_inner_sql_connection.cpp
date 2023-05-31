@@ -46,6 +46,7 @@
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "observer/mysql/obmp_stmt_execute.h"
 
 namespace oceanbase
 {
@@ -508,6 +509,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObArenaAllocator alloc;
 
   // some statistics must be recorded for plan stat, even though sql audit disabled
   bool first_record = (1 == audit_record.try_cnt_);
@@ -530,11 +532,22 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   if (enable_sql_audit) {
     ret = process_audit_record(result_set, sql_ctx, session, last_ret, execution_id,
               ps_stmt_id, has_tenant_resource, ps_sql, is_from_pl);
+    if (is_from_pl && NULL != result_set.get_exec_context().get_physical_plan_ctx()) {
+      ObMPStmtExecute::store_params_value_to_str(alloc, session,
+        &result_set.get_exec_context().get_physical_plan_ctx()->get_param_store_for_update(),
+        audit_record.params_value_, audit_record.params_value_len_);
+    }
   }
   ObSQLUtils::handle_audit_record(false, sql::PSCursor == audit_record.exec_timestamp_.exec_type_
                                          ? EXECUTE_PS_EXECUTE :
                                            (is_from_pl ? EXECUTE_PL_EXECUTE : EXECUTE_INNER),
                                   session, sql_ctx.is_sensitive_);
+
+  // 临时allocator 申请的内存，需要在这里 置 NULL
+  {
+    audit_record.params_value_ = NULL;
+    audit_record.params_value_len_ = 0;
+  }
   return ret;
 }
 
