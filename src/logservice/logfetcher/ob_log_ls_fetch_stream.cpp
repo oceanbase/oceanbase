@@ -851,7 +851,10 @@ int FetchStream::read_group_entry_(
       if (OB_NEED_RETRY == ret) {
         LOG_INFO("LogHander handle_group_entry failed, need_retry", KR(ret), K(tenant_id), K(ls_id), K(proposal_id),
             K(group_start_lsn), K(group_entry));
-      } else if (OB_IN_STOP_STATE != ret) {
+      } else if (OB_IN_STOP_STATE == ret) {
+        LOG_INFO("LogHander handle_group_entry is stopped", KR(ret), K(tenant_id), K(ls_id), K(proposal_id),
+            K(group_start_lsn), K(group_entry));
+      } else {
         LOG_ERROR("LogHander handle_group_entry failed", KR(ret), K(tenant_id), K(ls_id), K(proposal_id),
             K(group_start_lsn), K(group_entry));
         if (OB_NOT_NULL(ls_fetch_ctx_)) {
@@ -1148,12 +1151,16 @@ int FetchStream::handle_fetch_log_result_(
       is_stream_valid = false;
       stream_invalid_reason = "LogNotSync";
       ret = OB_SUCCESS;
-    } else if (OB_NEED_RETRY == ret) {
+    } else if ((OB_NEED_RETRY == ret) || (OB_IN_STOP_STATE == ret)) {
+      // 1. OB_NEED_RETRY: handle_group_entry may return
+      // 2. OB_IN_STOP_STATE: handle_group_entry may return
+      // ...
       is_stream_valid = false;
       stream_invalid_reason = "NeedRetry";
 
       if (OB_UNLIKELY(ls_fetch_ctx_->is_discarded())) {
         kickout_info.kick_out_reason_ = DISCARDED;
+        LOG_INFO("[STAT] [FETCH_STREAM] [RECYCLE_FETCH_TASK]", KPC(ls_fetch_ctx_));
       }
       ret = OB_SUCCESS;
     } else if (OB_SUCCESS == ret) {
@@ -1364,12 +1371,12 @@ int FetchStream::read_log_(
         decode_log_entry_time += (get_timestamp() - begin_time);
 
         if (OB_FAIL(read_group_entry_(group_entry, group_start_lsn, buffer, kick_out_info, tsi, stop_flag))) {
-          if (OB_IN_STOP_STATE != ret) {
-            if (OB_NEED_RETRY != ret) {
-              LOG_ERROR("read group entry failed", KR(ret), KPC_(ls_fetch_ctx));
-            }
-            ls_fetch_ctx_->reset_memory_storage();
+          if (OB_IN_STOP_STATE != ret && OB_NEED_RETRY != ret) {
+            LOG_ERROR("read group entry failed", KR(ret), KPC_(ls_fetch_ctx));
           }
+
+          // If failed, reset memory storage
+          ls_fetch_ctx_->reset_memory_storage();
         }
 
         // update log process

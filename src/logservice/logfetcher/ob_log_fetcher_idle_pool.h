@@ -59,6 +59,7 @@ public:
       const LogFetcherUser &log_fetcher_user,
       const int64_t thread_num,
       const ObLogFetcherConfig &cfg,
+      void *fetcher_host,
       IObLogErrHandler &err_handler,
       IObLSWorker &stream_worker,
       IObLogStartLSNLocator &start_lsn_locator);
@@ -86,6 +87,7 @@ private:
 private:
   bool                      inited_;
   int                       tg_id_;
+  void                      *fetcher_host_;
   LogFetcherUser            log_fetcher_user_;
   const ObLogFetcherConfig  *cfg_;
   IObLogErrHandler          *err_handler_;
