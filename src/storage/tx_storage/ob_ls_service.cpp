@@ -556,8 +556,10 @@ int ObLSService::replay_update_ls(const ObLSMeta &ls_meta)
   } else if (OB_FAIL(check_ls_exist(ls_meta.ls_id_, ls_is_existed))) {
     LOG_WARN("fail to check log stream existence", K(ret), K(ls_meta));
   } else if (!ls_is_existed) {
-    ret = OB_LS_NOT_EXIST;
-    LOG_WARN("ls not exit", K(ret), K(ls_meta));
+    LOG_WARN("ls not exit, update will create a new one", K(ls_meta));
+    if (OB_FAIL(replay_create_ls_(ls_meta))) {
+      LOG_WARN("fail to create ls for replay", K(ret), K(ls_meta));
+    }
   } else if (OB_FAIL(replay_update_ls_(ls_meta))) {
     LOG_WARN("fail to update ls for replay", K(ret), K(ls_meta));
   }
