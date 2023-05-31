@@ -1,4 +1,4 @@
-set_source_files_properties(ob_avx512_64bit_sort.cpp  PROPERTIES COMPILE_FLAGS -mavx512f COMPILE_FLAGS -mavx512dq)
+set_source_files_properties(ob_avx512_64bit_sort.cpp  PROPERTIES COMPILE_OPTIONS "-Wno-unknown-pragmas;-mavx512f;-mavx512dq"  )
 
 ob_set_subtarget(ob_storage_simd common
   ob_avx512_64bit_sort.cpp
