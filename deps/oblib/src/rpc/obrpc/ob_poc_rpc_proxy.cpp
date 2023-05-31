@@ -78,33 +78,29 @@ private:
   ObRpcMemPool& pool_;
 };
 
-ObAsyncRespCallback* ObAsyncRespCallback::create(ObRpcMemPool& pool, UAsyncCB* ucb)
+int ObAsyncRespCallback::create(ObRpcMemPool& pool, UAsyncCB* ucb, ObAsyncRespCallback*& pcb)
 {
   int ret = OB_SUCCESS;
   ObPocSPAlloc sp_alloc(pool);
   UAsyncCB* cb = NULL;
-  ObAsyncRespCallback* pcb = NULL;
-  if (NULL == (pcb = (ObAsyncRespCallback*)pool.alloc(sizeof(ObAsyncRespCallback)))) {
+  pcb = NULL;
+  if (NULL == ucb) {
+    // do nothing and not to allocate ObAsyncRespCallback object
+  } else if (NULL == (pcb = (ObAsyncRespCallback*)pool.alloc(sizeof(ObAsyncRespCallback)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     RPC_LOG(WARN, "alloc resp callback fail", K(ret));
+  } else if (NULL == (cb = ucb->clone(sp_alloc))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    pcb = NULL;
+    RPC_LOG(WARN, "ucb.clone fail", K(ret));
   } else {
-    if (NULL != ucb) {
-      if (NULL == (cb = ucb->clone(sp_alloc))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        pcb = NULL;
-        RPC_LOG(WARN, "ucb.clone fail", K(ret));
-      } else {
-        cb->low_level_cb_ = pcb;
-        if (cb != ucb) {
-          cb->set_cloned(true);
-        }
-        new(pcb)ObAsyncRespCallback(pool, cb);
-      }
-    } else {
-      new(pcb)ObAsyncRespCallback(pool, NULL);
+    cb->low_level_cb_ = pcb;
+    if (cb != ucb) {
+      cb->set_cloned(true);
     }
+    new(pcb)ObAsyncRespCallback(pool, cb);
   }
-  return pcb;
+  return ret;
 }
 
 int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
