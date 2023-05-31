@@ -2491,7 +2491,17 @@ int ObPartitionLogService::get_log(const common::ObAddr& server, const uint64_t 
         } else {
           round_start_log_id = round_end_log_id;
           if (REACH_TIME_INTERVAL(50 * 1000)) {
-            CLOG_LOG(INFO, "submit fetch log task succ", K_(partition_key), K(*task));
+            CLOG_LOG(INFO,
+                "submit fetch log task succ",
+                K_(partition_key),
+                K(server),
+                K(cluster_id),
+                K(round_start_log_id),
+                K(round_end_log_id),
+                K(fetch_type),
+                K(replica_type),
+                K(proposal_id),
+                K(network_limit));
           }
         }
         if (OB_FAIL(ret) && NULL != task) {
