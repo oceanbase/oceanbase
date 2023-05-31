@@ -507,6 +507,8 @@ private:
 
   int set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
                            const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
+
+  int check_window_functions_order(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)

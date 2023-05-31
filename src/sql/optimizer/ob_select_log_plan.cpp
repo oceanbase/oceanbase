@@ -5691,6 +5691,7 @@ int ObSelectLogPlan::adjust_window_functions(const ObLogicalOperator *top,
       if (OB_FAIL(ObOptimizerUtil::get_non_const_expr_size(winfunc_exprs.at(i)->get_partition_exprs(),
                                                            equal_sets,
                                                            top->get_output_const_exprs(),
+                                                           get_onetime_query_refs(),
                                                            non_const_exprs))) {
         LOG_WARN("failed to get non const expr size", K(ret));
       } else if (OB_FAIL(expr_entries.push_back(std::pair<int64_t, int64_t>(-non_const_exprs, i)))) {

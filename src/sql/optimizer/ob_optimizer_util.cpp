@@ -2848,13 +2848,14 @@ int ObOptimizerUtil::get_nested_exprs(ObIArray<ObQueryRefRawExpr *> &exprs,
 int ObOptimizerUtil::get_non_const_expr_size(const ObIArray<ObRawExpr *> &exprs,
                                              const EqualSets &equal_sets,
                                              const ObIArray<ObRawExpr *> &const_exprs,
+                                             const ObIArray<ObRawExpr *> &exec_ref_exprs,
                                              int64_t &number)
 {
   int ret = OB_SUCCESS;
   bool is_const = false;
   number = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    if (OB_FAIL(is_const_expr(exprs.at(i), equal_sets, const_exprs, is_const))) {
+    if (OB_FAIL(is_const_expr(exprs.at(i), equal_sets, const_exprs, exec_ref_exprs, is_const))) {
       LOG_WARN("failed to check is const expr", K(ret));
     } else if (!is_const) {
       ++number;

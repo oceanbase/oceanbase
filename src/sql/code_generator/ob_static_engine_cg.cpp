@@ -5647,6 +5647,8 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpe
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_window_functions_order(op.get_window_exprs()))) {
+    LOG_WARN("failed to check window functions order", K(ret));
   } else if (OB_FAIL(spec.wf_infos_.prepare_allocate(op.get_window_exprs().count()))) {
     LOG_WARN("failed to prepare_allocate the window function.", K(ret));
   } else if (OB_FAIL(append_array_no_dup(all_expr, spec.get_child()->output_))) {
@@ -7184,5 +7186,25 @@ int ObStaticEngineCG::set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> 
   return ret;
 }
 
+int ObStaticEngineCG::check_window_functions_order(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t partition_count = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < winfunc_exprs.count(); ++i) {
+    ObWinFunRawExpr * win_expr = winfunc_exprs.at(i);
+    if (OB_ISNULL(win_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (i == 0) {
+      partition_count = win_expr->get_partition_exprs().count();
+    } else if (partition_count < win_expr->get_partition_exprs().count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("earlier partition by exprs must be subsets of the later partition by exprs", K(ret));
+    } else {
+      partition_count = win_expr->get_partition_exprs().count();
+    }
+  }
+  return ret;
+}
 } // end namespace sql
 } // end namespace oceanbase
