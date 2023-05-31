@@ -888,7 +888,7 @@ private:
   int sync_log_succ_(const bool for_replay);
 
 private:
-  void after_submit_log(const bool for_replay);
+  void after_submit_log(const bool submit_result, const bool for_replay);
 
 #define LOG_OPERATOR_INIT_CHECK                                                                  \
   if (OB_SUCC(ret)) {                                                                            \

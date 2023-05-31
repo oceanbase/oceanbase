@@ -101,6 +101,7 @@ class DupTabletSetChangeStatus
   OB_UNIS_VERSION(1);
 
 public:
+
   void init()
   {
     reset();
@@ -114,6 +115,7 @@ public:
     need_confirm_scn_.reset();
     readable_version_.set_min();
     trx_ref_ = 0;
+    is_logging = false;
   }
 
   DupTabletSetChangeStatus() { reset(); }
@@ -143,6 +145,10 @@ public:
   bool is_unlog() const { return !tablet_change_scn_.is_valid(); }
   bool is_free() const { return flag_ == DupTabletSetChangeFlag::UNUSED; }
   bool is_modifiable() const { return flag_ == DupTabletSetChangeFlag::TEMPORARY; }
+
+  void set_logging() { is_logging = true; }
+  void clean_logging() { is_logging = false; }
+  bool check_logging() const { return is_logging; }
 
   bool is_change_logging() const { return flag_ == DupTabletSetChangeFlag::CHANGE_LOGGING; }
   bool is_confirming() const { return flag_ == DupTabletSetChangeFlag::CONFIRMING; }
@@ -261,6 +267,7 @@ public:
   share::SCN need_confirm_scn_;
   share::SCN readable_version_;
   int64_t trx_ref_;
+  bool is_logging;
 };
 
 struct DupTabletSetAttribute
@@ -332,6 +339,10 @@ public:
   {
     return dup_set_attr_.change_status_.need_reserve(scn);
   }
+
+  bool is_logging() const { return dup_set_attr_.change_status_.check_logging(); }
+  void set_logging() { dup_set_attr_.change_status_.set_logging(); }
+  void clean_logging() { dup_set_attr_.change_status_.clean_logging(); }
 
   TO_STRING_KV(K(dup_set_attr_), K(DupTabletIdMap::size()), K(DupTabletIdMap::created()));
 
