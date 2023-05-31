@@ -1193,6 +1193,7 @@ int ObComplementMergeTask::process()
   int tmp_ret = OB_SUCCESS;
   ObIDag *tmp_dag = get_dag();
   ObComplementDataDag *dag = nullptr;
+  ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   if (OB_ISNULL(tmp_dag) || ObDagType::DAG_TYPE_DDL != tmp_dag->get_type()) {
@@ -1204,21 +1205,32 @@ int ObComplementMergeTask::process()
   } else if (OB_FAIL(guard.switch_to(param_->tenant_id_))) {
     LOG_WARN("switch to tenant failed", K(ret), K(param_->tenant_id_));
   } else if (context_->is_major_sstable_exist_) {
-    const ObSSTable *first_major_sstable = nullptr;
-    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param_->ls_id_, param_->dest_tablet_id_, first_major_sstable))) {
-      LOG_WARN("check if major sstable exist failed", K(ret), K(*param_));
-    } else if (OB_ISNULL(first_major_sstable)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
-    } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->ls_id_,
-                                                            param_->dest_tablet_id_,
-                                                            param_->dest_table_id_,
-                                                            1 /* execution_id */,
-                                                            param_->task_id_,
-                                                            first_major_sstable->get_meta().get_col_checksum()))) {
-      LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
-    } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(param_->tenant_id_, param_->ls_id_, param_->dest_tablet_id_))) {
-      LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+      LOG_WARN("failed to get log stream", K(ret), K(*param_));
+    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                                 param_->dest_tablet_id_,
+                                                 tablet_handle,
+                                                 ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+      LOG_WARN("get tablet handle failed", K(ret), K(*param_));
+    } else if (OB_ISNULL(tablet_handle.get_obj())) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("tablet handle is null", K(ret), K(*param_));
+    } else {
+      const ObSSTable *first_major_sstable = static_cast<ObSSTable *>(
+        tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
+      if (OB_ISNULL(first_major_sstable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
+      } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->ls_id_,
+                                                              param_->dest_tablet_id_,
+                                                              param_->dest_table_id_,
+                                                              1 /* execution_id */,
+                                                              param_->task_id_,
+                                                              first_major_sstable->get_meta().get_col_checksum()))) {
+        LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
+      } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(param_->tenant_id_, param_->ls_id_, param_->dest_tablet_id_))) {
+        LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
+      }
     }
   } else if (OB_FAIL(add_build_hidden_table_sstable())) {
     LOG_WARN("fail to build new sstable and write macro redo", K(ret));
