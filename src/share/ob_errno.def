@@ -719,7 +719,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_WRONG_COLUMN_NAME, -5164, ER_WRONG_COLUMN_NAME, "4200
 DEFINE_ERROR_EXT(OB_ERR_COLUMN_SPEC, -5165, ER_WRONG_FIELD_SPEC, "42000", "Incorrect column specifier", "Incorrect column specifier for column '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_DB_DROP_EXISTS, -5166, ER_DB_DROP_EXISTS, "HY000", "Can't drop database;database doesn't exist", "Can't drop database '%.*s'; database doesn't exist");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_DATA_TOO_LONG, -5167, ER_DATA_TOO_LONG, "22001", "Data too long for column", "Data too long for column '%.*s' at row %ld", 12899, "value too large for column", "value too large for column '%.*s' at row %ld");
-DEFINE_OTHER_MSG_FMT(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, OB_ERR_DATA_TOO_LONG, "Data too long for column '%.*s' at row %ld", "value too large for column %.*s (actual: %ld, maximum: %ld)")
+DEFINE_OTHER_MSG_FMT(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, OB_ERR_DATA_TOO_LONG, "value too large for column %.*s (actual: %ld, maximum: %ld)", "value too large for column %.*s (actual: %ld, maximum: %ld)")
 DEFINE_ERROR_EXT(OB_ERR_WRONG_VALUE_COUNT_ON_ROW, -5168, ER_WRONG_VALUE_COUNT_ON_ROW, "21S01", "column count does not match value count", "column count does not match value count at row '%d'");
 DEFINE_ERROR(OB_ERR_CREATE_USER_WITH_GRANT, -5169, ER_CANT_CREATE_USER_WITH_GRANT, "42000", "You are not allowed to create a user with GRANT");
 DEFINE_ERROR_EXT(OB_ERR_NO_DB_PRIVILEGE, -5170, ER_DBACCESS_DENIED_ERROR, "42000", "Access denied for user to database", "Access denied for user '%.*s'@'%.*s' to database '%.*s'");
