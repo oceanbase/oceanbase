@@ -422,7 +422,7 @@ int ObDupTableLogOperator::on_success()
   if (OB_SUCC(ret)) {
     // It will clear scn or lsn
     if (OB_FAIL(sync_log_succ_(false))) {
-      DUP_TABLE_LOG(WARN, "invoke sync_log_succ failed", K(ret));
+      DUP_TABLE_LOG(ERROR, "invoke sync_log_succ failed", K(ret));
     }
     // if (OB_FAIL(retry_submit_log_block_())) {
     //   if (OB_ITER_END != ret) {
@@ -453,7 +453,8 @@ int ObDupTableLogOperator::on_failure()
     } else if (OB_FAIL(tablet_mgr_ptr_->tablet_log_synced(
                    false /*sync_result*/, logging_scn_, false /*for_replay*/,
                    logging_tablet_set_ids_, modify_readable))) {
-      DUP_TABLE_LOG(WARN, "tablets mgr on_failure failed", K(ret));
+      DUP_TABLE_LOG(ERROR, "tablets mgr on_failure failed", K(ret), K(logging_scn_),
+                    K(logging_lease_addrs_), K(logging_tablet_set_ids_), K(modify_readable));
     } else {
       reuse();
     }

@@ -111,7 +111,7 @@ struct DupTabletSetChangeStatus
   {
     return flag_ == DupTabletSetChangeFlag::TEMPORARY
            || flag_ == DupTabletSetChangeFlag::CHANGE_LOGGING
-           || (flag_ == DupTabletSetChangeFlag::CONFIRMING && need_confirm_scn_ <= readable_version_)
+           || flag_ == DupTabletSetChangeFlag::CONFIRMING
            || flag_ == DupTabletSetChangeFlag::CONFIRMED;
     // TODO submit log if readable_version has changed.
   }
