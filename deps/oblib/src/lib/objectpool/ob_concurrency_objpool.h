@@ -36,12 +36,15 @@ public:
 
   static int choose_blk_size(int obj_size)
   {
-    static const int MIN_SLICE_CNT = 64;
+    static const int MIN_SLICE_CNT = 32;
+    const int64_t OB_MALLOC_HIGH_BLOCK_SIZE = (1LL << 18) - 128;        //256KB
     int blk_size = OB_MALLOC_NORMAL_BLOCK_SIZE;  // default blk size is 8KB
     if (obj_size <= 0) {
     } else if (MIN_SLICE_CNT <= (OB_MALLOC_NORMAL_BLOCK_SIZE / obj_size)) {
     } else if (MIN_SLICE_CNT <= (OB_MALLOC_MIDDLE_BLOCK_SIZE / obj_size)) {
       blk_size = OB_MALLOC_MIDDLE_BLOCK_SIZE;
+    } else if (MIN_SLICE_CNT <= (OB_MALLOC_HIGH_BLOCK_SIZE / obj_size)) {
+      blk_size = OB_MALLOC_HIGH_BLOCK_SIZE;
     } else {
       blk_size = OB_MALLOC_BIG_BLOCK_SIZE;
     }
