@@ -20,6 +20,7 @@
 #include "rootserver/ob_tenant_info_loader.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "logservice/ob_log_service.h"          // ObLogService
+#include "storage/tx/ob_ts_mgr.h" // OB_TS_MGR
 
 namespace oceanbase
 {
@@ -398,14 +399,93 @@ int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time_us, sha
   return ret;
 }
 
+int ObTenantInfoLoader::get_readable_scn(share::SCN &readable_scn)
+{
+  int ret = OB_SUCCESS;
+  readable_scn.set_min();
+
+  if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), nullptr, readable_scn))) {
+    LOG_WARN("failed to get gts as readable_scn", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObTenantInfoLoader::check_is_standby_normal_status(bool &is_standby_normal_status)
+{
+  int ret = OB_SUCCESS;
+  is_standby_normal_status = false;
+
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    is_standby_normal_status = false;
+  } else {
+    // user tenant
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      is_standby_normal_status = tenant_info.is_standby() && tenant_info.is_normal_status();
+    }
+  }
+  return ret;
+}
+
+int ObTenantInfoLoader::check_is_primary_normal_status(bool &is_primary_normal_status)
+{
+  int ret = OB_SUCCESS;
+  is_primary_normal_status = false;
+
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    is_primary_normal_status = true;
+  } else {
+    // user tenant
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      is_primary_normal_status = tenant_info.is_primary() && tenant_info.is_normal_status();
+    }
+  }
+  return ret;
+}
+
+int ObTenantInfoLoader::get_replayable_scn(share::SCN &replayable_scn)
+{
+  int ret = OB_SUCCESS;
+  replayable_scn.set_min();
+
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    // there isn't replayable_scn for SYS/META tenant
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("there isn't replayable_scn for SYS/META tenant", KR(ret));
+  } else {
+    // user tenant
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      replayable_scn = tenant_info.get_replayable_scn();
+    }
+  }
+  return ret;
+}
+
 int ObTenantInfoLoader::get_tenant_info(share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
   tenant_info.reset();
 
-  if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
-    LOG_WARN("failed to get tenant info", KR(ret));
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    // there isn't tenant info for SYS/META tenant
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("there isn't tenant info for SYS/META tenant", KR(ret));
+  } else {
+    // user tenant
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    }
   }
+
   return ret;
 }
 
