@@ -111,12 +111,13 @@ int ObMultiTenantOperator::execute(common::ObNewRow *&row)
         uint64_t tenant_id = tenant_ids_.at(tenant_idx_);
         int process_ret = OB_SUCCESS;
         if (tenant_ == nullptr) {
-          if (OB_FAIL(GCTX.omt_->get_tenant_with_tenant_lock(tenant_id, handle_, tenant_))) {
+          if (OB_FAIL(GCTX.omt_->get_active_tenant_with_tenant_lock(tenant_id, handle_, tenant_))) {
             LOG_WARN("get_tenant_with_tenant_lock", K(ret), K(tenant_id));
           }
         } else {
+          // check iter tenant
           if (tenant_->id() != tenant_id) {
-            LOG_ERROR("ObMultiTenantOperator::reset", K(tenant_id), K(tenant_->id()));
+            LOG_ERROR("ObMultiTenantOperator tenant mismatch", K(tenant_ids_), K(tenant_idx_), K(tenant_id), K(tenant_->id()));
             abort();
           }
         }
@@ -126,8 +127,8 @@ int ObMultiTenantOperator::execute(common::ObNewRow *&row)
         }
         if (OB_SUCC(ret)) {
           if (process_ret == OB_SUCCESS) {
-            break;
             // succ do nothing
+            break;
           } else if (process_ret == OB_ITER_END) {
             {
               // release last tenant obj
