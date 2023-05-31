@@ -1437,6 +1437,9 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
       set_2pc_upstream_(ls_id_);
       TRANS_LOG(INFO, "set upstream to self", K(*this));
     }
+    // set upstream state when recover tx ctx table
+    set_upstream_state(get_downstream_state());
+
     if (ObTxState::REDO_COMPLETE == get_downstream_state()) {
       sub_state_.set_info_log_submitted();
     }
