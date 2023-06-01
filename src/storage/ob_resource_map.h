@@ -212,7 +212,7 @@ int ObResourceMap<Key, Value>::init(
     const int64_t page_size)
 {
   int ret = common::OB_SUCCESS;
-  ObMemAttr attr = SET_USE_500(ObMemAttr(tenant_id, label));
+  auto attr = SET_USE_500(ObMemAttr(tenant_id, label));
   const int64_t bkt_num = common::hash::cal_next_prime(bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
@@ -230,7 +230,7 @@ int ObResourceMap<Key, Value>::init(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "lock buckets isn't equal to map buckets, which could cause concurrency issues", K(ret),
         K(bkt_num), K(map_.bucket_count()));
-  } else if (OB_FAIL(allocator_.init(page_size, "ResourceMap", tenant_id, total_limit))) {
+  } else if (OB_FAIL(allocator_.init(total_limit, hold_limit, page_size))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else {
     allocator_.set_attr(attr);
