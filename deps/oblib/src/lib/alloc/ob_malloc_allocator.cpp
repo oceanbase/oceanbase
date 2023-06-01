@@ -704,10 +704,12 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
       ObTenantCtxAllocator *ctx_allocator = tas[ctx_id];
       if (NULL == ctx_allocator) {
         ctx_allocator = &ta[ctx_id];
-        bool has_unfree = ctx_allocator->check_has_unfree();
+        char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
+        bool has_unfree = ctx_allocator->check_has_unfree(first_label);
         if (has_unfree) {
-          LOG_ERROR("tenant memory leak!!!", K(tenant_id),
-                    K(ctx_id), "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id));
+          LOG_ERROR("tenant memory leak!!!", K(tenant_id), K(ctx_id),
+                    "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
+                    "label", first_label);
           tas[ctx_id] = ctx_allocator;
         }
       }
