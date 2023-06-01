@@ -139,7 +139,7 @@ private:
   int64_t stack_size_;
   bool stop_;
   // protect for thread count changing.
-  common::SpinRWLock lock_;
+  common::SpinRWLock lock_ __attribute__((__aligned__(16)));
   // tenant ctx
   IRunWrapper *run_wrapper_;
   // thread cgroups
