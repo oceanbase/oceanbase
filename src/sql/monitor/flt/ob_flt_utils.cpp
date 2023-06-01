@@ -411,7 +411,6 @@ namespace sql
       }
     // update trace_id by server self
     } else {
-      LOG_INFO("chestelew cleint  not support flt");
       // update trace_id in query granularity
       if (sess.is_query_trc_granuality()) {
         FLT_BEGIN_TRACE();

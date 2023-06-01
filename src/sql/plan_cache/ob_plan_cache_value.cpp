@@ -1545,7 +1545,7 @@ int ObPlanCacheValue::handle_varchar_charset(ObCharsetType charset_type,
                                              ParseNode *&node)
 {
   int ret = OB_SUCCESS;
-  if (T_VARCHAR == node->type_
+  if ((T_HEX_STRING == node->type_ || T_VARCHAR == node->type_)
       && CHARSET_INVALID != charset_type) {
     ParseNode *charset_node = new_node(&allocator, T_CHARSET, 0);
     ParseNode *varchar_node = new_non_terminal_node(&allocator, T_VARCHAR, 2, charset_node, node);
@@ -1567,6 +1567,7 @@ int ObPlanCacheValue::handle_varchar_charset(ObCharsetType charset_type,
         varchar_node->str_len_ = node->str_len_;
         varchar_node->raw_text_ = node->raw_text_;
         varchar_node->text_len_ = node->text_len_;
+        varchar_node->type_ = T_VARCHAR;
 
         node = varchar_node;
       }
