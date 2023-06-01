@@ -79,7 +79,7 @@ public:
   void wait();   // wait all running task finish
   void destroy();
 public:
-  int schedule(ObTimerTask &task, const int64_t delay, bool repeate = false);
+  int schedule(ObTimerTask &task, const int64_t delay, bool repeate = false, bool immediate = false);
   int schedule_repeate_task_immediately(ObTimerTask &task, const int64_t delay);
   bool task_exist(const common::ObTimerTask &task);
   int task_exist(const common::ObTimerTask &task, bool &exist)

@@ -154,14 +154,13 @@ bool ObTimer::task_exist(const ObTimerTask &task)
   return ret;
 }
 
-int ObTimer::schedule(ObTimerTask &task, const int64_t delay, const bool repeate /*=false*/)
+int ObTimer::schedule(ObTimerTask &task, const int64_t delay, const bool repeate /*=false*/, const bool immediate /*=false*/)
 {
   int ret = OB_SUCCESS;
-  const bool schedule_immediately = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
-    ret = schedule_task(task, delay, repeate, schedule_immediately);
+    ret = schedule_task(task, delay, repeate, immediate);
   }
   return ret;
 }

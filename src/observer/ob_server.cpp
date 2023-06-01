@@ -929,7 +929,11 @@ int ObServer::start()
     FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
 
     bool timezone_usable = false;
-    tenant_timezone_mgr_.set_start_refresh(true);
+    if (FAILEDx(tenant_timezone_mgr_.start())) {
+      LOG_ERROR("fail to start tenant timezone mgr", KR(ret));
+    } else {
+      FLOG_INFO("success to start tenant timezone mgr");
+    }
     while (OB_SUCC(ret) && !stop_ && !timezone_usable) {
       timezone_usable = tenant_timezone_mgr_.is_usable();
       if (!timezone_usable) {

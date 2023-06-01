@@ -28,21 +28,11 @@ namespace omt {
 void ObTenantTimezoneMgr::AddTenantTZTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  int64_t delay = SLEEP_USECONDS;
-  const bool repeat = false;
   if (OB_ISNULL(tenant_tz_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("update all tenant task, tenant tz mgr is null", K(ret));
-  } else if (tenant_tz_mgr_->get_start_refresh()) {
-    if (OB_FAIL(tenant_tz_mgr_->update_timezone_map())) {
-      LOG_WARN("tenant timezone mgr update tenant timezone map failed", K(ret));
-    }
-  } else {
-    delay = 1 * 500 * 1000;
-  }
-
-  if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, *this, delay, repeat))) {
-    LOG_ERROR("schedule timezone update task failed", K(ret));
+  } else if (OB_FAIL(tenant_tz_mgr_->update_timezone_map())) {
+    LOG_WARN("tenant timezone mgr update tenant timezone map failed", K(ret));
   }
 }
 
@@ -52,15 +42,8 @@ void ObTenantTimezoneMgr::DeleteTenantTZTask::runTimerTask()
   if (OB_ISNULL(tenant_tz_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("delete tenant task, tenant tz mgr is null", K(ret));
-  } else if (tenant_tz_mgr_->get_start_refresh()) {
-    if (OB_FAIL(tenant_tz_mgr_->remove_nonexist_tenant())) {
-      LOG_WARN("remove nonexist tenants failed", K(ret));
-    }
-  }
-  const int64_t delay = SLEEP_USECONDS;
-  const bool repeat = false;
-  if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, *this, delay, repeat))) {
-    LOG_ERROR("schedule timezone delete task failed", K(ret));
+  } else if (OB_FAIL(tenant_tz_mgr_->remove_nonexist_tenant())) {
+    LOG_WARN("remove nonexist tenants failed", K(ret));
   }
 }
 
@@ -81,15 +64,8 @@ void ObTenantTimezoneMgr::UpdateTenantTZTask::runTimerTask()
   if (OB_ISNULL(tenant_tz_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("delete tenant task, tenant tz mgr is null", K(ret));
-  } else if (tenant_tz_mgr_->get_start_refresh()) {
-    if (OB_FAIL(tenant_tz_mgr_->timezone_map_.foreach_refactored(update_op))) {
-      LOG_WARN("update tenant time zone failed", K(ret));
-    }
-  }
-  const int64_t delay = SLEEP_USECONDS;
-  const bool repeat = false;
-  if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, *this, delay, repeat))) {
-    LOG_ERROR("schedule timezone delete task failed", K(ret));
+  } else if (OB_FAIL(tenant_tz_mgr_->timezone_map_.foreach_refactored(update_op))) {
+    LOG_WARN("update tenant time zone failed", K(ret));
   }
 }
 
@@ -97,7 +73,7 @@ ObTenantTimezoneMgr::ObTenantTimezoneMgr()
     : allocator_("TenantTZ"), is_inited_(false), self_(), sql_proxy_(nullptr),
       rwlock_(ObLatchIds::TIMEZONE_LOCK),
       timezone_map_(), add_task_(this), delete_task_(this), update_task_(this),
-      start_refresh_(false), usable_(false),
+      usable_(false),
       schema_service_(nullptr)
 {
   tenant_tz_map_getter_ = ObTenantTimezoneMgr::get_tenant_timezone_default;
@@ -117,27 +93,32 @@ int ObTenantTimezoneMgr::init(ObMySQLProxy &sql_proxy, const ObAddr &server,
                               share::schema::ObMultiVersionSchemaService &schema_service)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(TG_START(lib::TGDefIDs::TIMEZONE_MGR))) {
-    LOG_WARN("fail to init timer", K(ret));
-  } else {
-    sql_proxy_ = &sql_proxy;
-    self_ = server;
-    schema_service_ = &schema_service;
-    is_inited_ = true;
-  }
-  const int64_t delay = 0;
-  const bool repeat = false;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(add_tenant_timezone(OB_SYS_TENANT_ID))) {
+  sql_proxy_ = &sql_proxy;
+  self_ = server;
+  schema_service_ = &schema_service;
+  is_inited_ = true;
+  if (OB_FAIL(add_tenant_timezone(OB_SYS_TENANT_ID))) {
     LOG_WARN("add tenant timezone info failed", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, add_task_, delay, repeat))) {
-    LOG_WARN("schedual time zone mgr failed", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, delete_task_, delay, repeat))) {
-    LOG_WARN("schedual time zone mgr failed", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, update_task_, delay, repeat))) {
-    LOG_WARN("schedual time zone mgr failed", K(ret));
   } else {
     tenant_tz_map_getter_ = ObTenantTimezoneMgr::get_tenant_timezone_static;
+  }
+  return ret;
+}
+
+int ObTenantTimezoneMgr::start()
+{
+  int ret = OB_SUCCESS;
+  const int64_t delay = SLEEP_USECONDS;
+  const bool repeat = true;
+  const bool immediate = true;
+  if (OB_FAIL(TG_START(lib::TGDefIDs::TIMEZONE_MGR))) {
+    LOG_WARN("fail to start timer", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, add_task_, delay, repeat, immediate))) {
+    LOG_WARN("schedual time zone mgr failed", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, delete_task_, delay, repeat, immediate))) {
+    LOG_WARN("schedual time zone mgr failed", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, update_task_, delay, repeat, immediate))) {
+    LOG_WARN("schedual time zone mgr failed", K(ret));
   }
   return ret;
 }

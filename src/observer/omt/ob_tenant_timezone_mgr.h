@@ -66,7 +66,6 @@ private:
     int update_tenant_map(common::ObIArray<uint64_t> &latest_tenant_ids);
 
     ObTenantTimezoneMgr *tenant_tz_mgr_;
-    const uint64_t SLEEP_USECONDS = 5000000;
   };
   class DeleteTenantTZTask : public common::ObTimerTask
   {
@@ -78,7 +77,6 @@ private:
     void runTimerTask(void) override;
 
     ObTenantTimezoneMgr *tenant_tz_mgr_;
-    const uint64_t SLEEP_USECONDS = 60000000;
   };
   class UpdateTenantTZOp
   {
@@ -100,7 +98,6 @@ private:
     UpdateTenantTZTask &operator=(const UpdateTenantTZTask &) = delete;
     void runTimerTask(void) override;
     ObTenantTimezoneMgr *tenant_tz_mgr_;
-    const uint64_t SLEEP_USECONDS = 5000000;
   };
   friend AddTenantTZTask;
   friend DeleteTenantTZTask;
@@ -119,6 +116,7 @@ public:
           share::schema::ObMultiVersionSchemaService &schema_service);
   // init interface for liboblog only.
   void init(tenant_timezone_map_getter tz_map_getter);
+  int start();
   int add_tenant_timezone(uint64_t tenant_id);
   int del_tenant_timezone(uint64_t tenant_id);
 
@@ -133,8 +131,6 @@ public:
   int update_timezone_map();
   int delete_tenant_timezone();
   bool is_inited() { return is_inited_; }
-  bool get_start_refresh() { return start_refresh_; }
-  void set_start_refresh(bool start) { start_refresh_ = start; }
   bool is_usable() { return usable_; }
   void set_usable() { usable_ = true; }
 
@@ -163,12 +159,12 @@ private:
   AddTenantTZTask add_task_;
   DeleteTenantTZTask delete_task_;
   UpdateTenantTZTask update_task_;
-  bool start_refresh_;
   bool usable_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
 public:
   // tenant timezone getter, observer and liboblog init it during start up.
   tenant_timezone_map_getter tenant_tz_map_getter_;
+  const uint64_t SLEEP_USECONDS = 5000000;
 };
 
 } // omt
