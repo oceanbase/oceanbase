@@ -907,78 +907,84 @@ int ObTableColumns::resolve_view_definition(
         LOG_WARN("parse view definition failed", K(select_sql), K(ret));
       } else {
         ObSchemaChecker schema_checker;
-        if (OB_FAIL(schema_checker.init(const_cast<ObSchemaGetterGuard &>(*schema_guard)))) {
-          LOG_WARN("fail to init schema checker", K(ret));
+        ObResolverParams resolver_ctx;
+        resolver_ctx.allocator_ = allocator;
+        resolver_ctx.schema_checker_ = &schema_checker;
+        resolver_ctx.session_info_ = const_cast<ObSQLSessionInfo*>(session);
+        resolver_ctx.expr_factory_ = &expr_factory;
+        resolver_ctx.stmt_factory_ = &stmt_factory;
+        resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
+        if (OB_ISNULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("create query context failed", K(ret));
         } else {
-          ObResolverParams resolver_ctx;
-          resolver_ctx.allocator_ = allocator;
-          resolver_ctx.schema_checker_ = &schema_checker;
-          resolver_ctx.session_info_ = const_cast<ObSQLSessionInfo*>(session);
-          resolver_ctx.expr_factory_ = &expr_factory;
-          resolver_ctx.stmt_factory_ = &stmt_factory;
-          resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
-          if (OB_ISNULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create query context failed", K(ret));
+          // set # of question marks
+          resolver_ctx.query_ctx_->question_marks_count_ = static_cast<int64_t> (parse_result.question_mark_ctx_.count_);
+          resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(schema_guard);
+          uint64_t session_id = 0;
+          if (session->get_session_type() != ObSQLSessionInfo::INNER_SESSION) {
+            session_id = session->get_sessid_for_table();
           } else {
-            // set # of question marks
-            resolver_ctx.query_ctx_->question_marks_count_ = static_cast<int64_t> (parse_result.question_mark_ctx_.count_);
+            session_id = OB_INVALID_ID;
           }
-          if (OB_SUCC(ret)) {
-            ObSelectResolver select_resolver(resolver_ctx);
-            ParseNode *select_stmt_node = parse_result.result_tree_->children_[0];
-            if (OB_UNLIKELY(NULL == select_stmt_node || select_stmt_node->type_ != T_SELECT)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid select_stmt_node", K(ret), K(select_stmt_node),
-                       K(select_stmt_node->type_));
-            } else if (OB_FAIL(select_resolver.resolve(*select_stmt_node))) {
-              LOG_WARN("resolve view definition failed", K(ret));
-              if (can_rewrite_error_code(ret)) {
-                ret = OB_ERR_VIEW_INVALID;
-              } else {
-                LOG_WARN("failed to resolve view", K(ret));
-              }
-              if (throw_error) {
-                LOG_USER_ERROR(OB_ERR_VIEW_INVALID, db_name.length(), db_name.ptr(),
-                              table_name.length(), table_name.ptr());
-              } else {
-                LOG_USER_WARN(OB_ERR_VIEW_INVALID, db_name.length(), db_name.ptr(),
-                             table_name.length(), table_name.ptr());
-              }
-            } else if (OB_UNLIKELY(NULL == select_resolver.get_basic_stmt())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid stmt", K(ret));
+          if (OB_FAIL(resolver_ctx.schema_checker_->init(resolver_ctx.query_ctx_->sql_schema_guard_, session_id))) {
+            LOG_WARN("init schema checker failed", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObSelectResolver select_resolver(resolver_ctx);
+          ParseNode *select_stmt_node = parse_result.result_tree_->children_[0];
+          if (OB_UNLIKELY(NULL == select_stmt_node || select_stmt_node->type_ != T_SELECT)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid select_stmt_node", K(ret), K(select_stmt_node),
+                      K(select_stmt_node->type_));
+          } else if (OB_FAIL(select_resolver.resolve(*select_stmt_node))) {
+            LOG_WARN("resolve view definition failed", K(ret));
+            if (can_rewrite_error_code(ret)) {
+              ret = OB_ERR_VIEW_INVALID;
             } else {
-              // 取出视图展开后的stmt
-              select_stmt = static_cast<ObSelectStmt*>(select_resolver.get_basic_stmt());
-              TableItem *view_item = NULL;
-              if (OB_UNLIKELY(select_stmt->get_table_size() != 1)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("table count should equals 1", K(ret));
-              } else if (OB_ISNULL(view_item = select_stmt->get_table_item(0))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("view item is null");
-              } else if (OB_UNLIKELY(NULL == (select_stmt = static_cast<ObSelectStmt*>(view_item->ref_query_)))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("select_stmt should not NULL", K(ret));
-              } else { /*do-nothing*/ }
+              LOG_WARN("failed to resolve view", K(ret));
             }
-          }
-          int tmp_ret = OB_SUCCESS;
-          bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
-          if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
-            LOG_WARN("failed to resolve view", K(ret));
-          } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
-            // do nothing
-          } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos, *allocator, *session))) {
-            LOG_WARN("failed to add recompile view task", K(tmp_ret));
-            if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
-              tmp_ret = OB_SUCCESS; //ignore
+            if (throw_error) {
+              LOG_USER_ERROR(OB_ERR_VIEW_INVALID, db_name.length(), db_name.ptr(),
+                            table_name.length(), table_name.ptr());
+            } else {
+              LOG_USER_WARN(OB_ERR_VIEW_INVALID, db_name.length(), db_name.ptr(),
+                            table_name.length(), table_name.ptr());
             }
+          } else if (OB_UNLIKELY(NULL == select_resolver.get_basic_stmt())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid stmt", K(ret));
+          } else {
+            // 取出视图展开后的stmt
+            select_stmt = static_cast<ObSelectStmt*>(select_resolver.get_basic_stmt());
+            TableItem *view_item = NULL;
+            if (OB_UNLIKELY(select_stmt->get_table_size() != 1)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("table count should equals 1", K(ret));
+            } else if (OB_ISNULL(view_item = select_stmt->get_table_item(0))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("view item is null");
+            } else if (OB_UNLIKELY(NULL == (select_stmt = static_cast<ObSelectStmt*>(view_item->ref_query_)))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("select_stmt should not NULL", K(ret));
+            } else { /*do-nothing*/ }
           }
-          if (OB_SUCCESS == ret) {
-            ret = tmp_ret;
+        }
+        int tmp_ret = OB_SUCCESS;
+        bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
+        if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
+          LOG_WARN("failed to resolve view", K(ret));
+        } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
+          // do nothing
+        } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos, *allocator, *session))) {
+          LOG_WARN("failed to add recompile view task", K(tmp_ret));
+          if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
+            tmp_ret = OB_SUCCESS; //ignore
           }
+        }
+        if (OB_SUCCESS == ret) {
+          ret = tmp_ret;
         }
       }
     }
