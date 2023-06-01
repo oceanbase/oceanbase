@@ -158,7 +158,7 @@ int ObComplementDataParam::split_task_ranges(
     ObArrayArray<ObStoreRange> multi_range_split_array;
     ObParallelBlockRangeTaskParams params;
     params.parallelism_ = hint_parallelism;
-    params.expected_task_load_ = tablet_size / 1024 / 1024;
+    params.expected_task_load_ = tablet_size / 1024 / 1024 <= 0 ? sql::OB_EXPECTED_TASK_LOAD : tablet_size / 1024 / 1024;
     if (OB_FAIL(ranges.push_back(range))) {
       LOG_WARN("push back range failed", K(ret));
     } else if (OB_FAIL(tablet_service->get_multi_ranges_cost(tablet_id,
