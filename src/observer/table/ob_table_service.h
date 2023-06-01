@@ -25,6 +25,9 @@ public:
   ObTableService() {}
   virtual ~ObTableService() = default;
   int init();
+  void stop();
+  void wait();
+  void destroy();
   table::ObTableApiSessPoolMgr& get_sess_mgr() { return sess_pool_mgr_; }
 private:
   table::ObTableApiSessPoolMgr sess_pool_mgr_;

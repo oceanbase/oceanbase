@@ -49,17 +49,35 @@ int ObDDLTransController::init(share::schema::ObMultiVersionSchemaService *schem
   return ret;
 }
 
-ObDDLTransController::~ObDDLTransController()
+void ObDDLTransController::stop()
 {
   ObThreadPool::stop();
   wait_cond_.signal();
+}
+
+void ObDDLTransController::wait()
+{
+  wait_cond_.signal();
   ObThreadPool::wait();
-  ObThreadPool::destroy();
-  tasks_.destroy();
-  tenants_.destroy();
-  tenant_for_ddl_trans_new_lock_.destroy();
-  schema_service_ = NULL;
-  inited_ = false;
+}
+
+void ObDDLTransController::destroy()
+{
+  if (inited_) {
+    inited_ = false;
+    stop();
+    wait();
+    ObThreadPool::destroy();
+    tasks_.destroy();
+    tenants_.destroy();
+    tenant_for_ddl_trans_new_lock_.destroy();
+    schema_service_ = NULL;
+  }
+}
+
+ObDDLTransController::~ObDDLTransController()
+{
+  destroy();
 }
 
 void ObDDLTransController::run1()

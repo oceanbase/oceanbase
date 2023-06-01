@@ -474,9 +474,14 @@ public:
     }
     return ret;
   }
-  void destroy() {
+  void stop() {
     TG_STOP(lib::TGDefIDs::BRPC);
+  }
+  void wait() {
     TG_WAIT(lib::TGDefIDs::BRPC);
+  }
+  void destroy() {
+    TG_DESTROY(lib::TGDefIDs::BRPC);
   }
   void run1() {
     int64_t idx = (int64_t)get_thread_idx();

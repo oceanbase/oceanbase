@@ -61,6 +61,8 @@ public:
   };
 public:
   int init();
+  void stop();
+  void wait();
   void destroy();
   int get_session_pool(uint64_t tenant_id, ObTableApiSessPoolGuard &guard);
   int get_sess_info(uint64_t tenant_id, uint64_t user_id, ObTableApiSessGuard &guard);

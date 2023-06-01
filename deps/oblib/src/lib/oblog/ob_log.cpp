@@ -497,11 +497,19 @@ ObLogger::~ObLogger()
   (void)pthread_mutex_destroy(&file_size_mutex_);
   (void)pthread_mutex_destroy(&file_index_mutex_);
 }
-
-void ObLogger::destroy()
+void ObLogger::stop()
 {
   ObBaseLogWriter::stop();
+}
+void ObLogger::wait()
+{
   ObBaseLogWriter::wait();
+}
+void ObLogger::destroy()
+{
+  stop_append_log_ = true;
+  enable_async_log_ = false;
+  enable_log_limit_ = false;
   ObBaseLogWriter::destroy();
   if (error_allocator_) {
     error_allocator_->~ObFIFOAllocator();

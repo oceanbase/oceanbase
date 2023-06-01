@@ -259,19 +259,28 @@ ObTableStoreStatMgr::~ObTableStoreStatMgr()
   destroy();
 }
 
-void ObTableStoreStatMgr::destroy()
+void ObTableStoreStatMgr::stop()
 {
   TG_STOP(lib::TGDefIDs::TableStatRpt);
+}
+void ObTableStoreStatMgr::wait()
+{
   TG_WAIT(lib::TGDefIDs::TableStatRpt);
-  report_task_.destroy();
-  report_cursor_ = 0;
-  pending_cursor_ = 0;
-  lru_head_ = NULL;
-  lru_tail_ = NULL;
-  cur_cnt_ = 0;
-  limit_cnt_ = 0;
-  quick_map_.destroy();
-  is_inited_ = false;
+}
+void ObTableStoreStatMgr::destroy()
+{
+  if(is_inited_){
+    is_inited_ = false;
+    TG_DESTROY(lib::TGDefIDs::TableStatRpt);
+    report_task_.destroy();
+    report_cursor_ = 0;
+    pending_cursor_ = 0;
+    lru_head_ = NULL;
+    lru_tail_ = NULL;
+    cur_cnt_ = 0;
+    limit_cnt_ = 0;
+    quick_map_.destroy();
+  }
 }
 
 int ObTableStoreStatMgr::init(const int64_t limit_cnt)

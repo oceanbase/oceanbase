@@ -24,3 +24,18 @@ int ObTableService::init()
   }
   return ret;
 }
+
+void ObTableService::stop()
+{
+  sess_pool_mgr_.stop();
+}
+
+void ObTableService::wait()
+{
+  sess_pool_mgr_.wait();
+}
+
+void ObTableService::destroy()
+{
+  sess_pool_mgr_.destroy();
+}

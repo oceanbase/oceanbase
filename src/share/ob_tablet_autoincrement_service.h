@@ -100,6 +100,7 @@ class ObTabletAutoincrementService
 public:
   static ObTabletAutoincrementService &get_instance();
   int init();
+  void destroy();
   int get_tablet_cache_interval(const uint64_t tenant_id,
                                 ObTabletCacheInterval &interval);
   int get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq);

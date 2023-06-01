@@ -35,7 +35,9 @@ public:
   ~ObUnixDomainListener();
   int init();
   int run();
+  void stop();
   void wait();
+  void destroy();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUnixDomainListener);
 private:

@@ -46,7 +46,14 @@ int ObTableApiSessPoolMgr::init()
 
   return ret;
 }
-
+void ObTableApiSessPoolMgr::stop()
+{
+  timer_.stop();
+}
+void ObTableApiSessPoolMgr::wait()
+{
+  timer_.wait();
+}
 void ObTableApiSessPoolMgr::destroy()
 {
   if (is_inited_) {

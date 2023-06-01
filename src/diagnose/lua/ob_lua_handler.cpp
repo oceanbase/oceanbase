@@ -115,11 +115,26 @@ int ObLuaHandler::process(const char* lua_code)
 
 ObUnixDomainListener::~ObUnixDomainListener()
 {
+  destroy();
+}
+
+void ObUnixDomainListener::stop()
+{
   if (IS_INIT) {
-    if (!ATOMIC_SET(&stop_, true)) {
-      // set stop successfully
-      wait();
-    }
+    ATOMIC_STORE(&stop_, true);
+  }
+}
+
+void ObUnixDomainListener::wait()
+{
+  if (IS_INIT) {
+    worker_.join();
+  }
+}
+
+void ObUnixDomainListener::destroy()
+{
+  if (IS_INIT) {
     is_inited_ = false;
   }
 }
@@ -241,9 +256,4 @@ int ObUnixDomainListener::run()
     }
   }
   return ret;
-}
-
-void ObUnixDomainListener::wait()
-{
-  worker_.join();
 }
