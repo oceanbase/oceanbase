@@ -7506,8 +7506,7 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
     } else if (OB_ISNULL(escape_str.ptr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Escape str should not be NULL", K(ret));
-    } else if (OB_UNLIKELY((lib::is_oracle_mode() && 1 != escape_str.length())
-     || (!lib::is_oracle_mode() && 1 > escape_str.length()))) {
+    } else if (OB_UNLIKELY(1 > escape_str.length())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("failed to check escape length", K(escape_str), K(escape_str.length()));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");

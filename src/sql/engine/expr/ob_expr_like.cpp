@@ -208,16 +208,15 @@ int ObExprLike::check_pattern_valid(const T &pattern,
       } else if (pre_char_is_escape) {
         // If pre char is escape char, then the following char must be '_' or '%'
         // Eg: select 1 from t1 where 'a' like 'a_a%' escape 'a'; -- it's ok
-        if (1 != char_len) {
-          ret = OB_ERR_INVALID_CHAR_FOLLOWING_ESCAPE_CHAR;
-          LOG_WARN("missing or illegal character following the escape character",
-                   K(escape_val), K(pattern_val), K(ret));
-        } else if ('%' == *buf_start || '_' == *buf_start) {
+        ObString percent_str = ObCharsetUtils::get_const_str(coll_type, '%');
+        ObString underline_str = ObCharsetUtils::get_const_str(coll_type, '_');
+        const ObString pattern_char = ObString(char_len, buf_start);
+        if (0 == pattern_char.compare(percent_str) || 0 == pattern_char.compare(underline_str)) {
           // it's ok
         } else {
           ret = OB_ERR_INVALID_CHAR_FOLLOWING_ESCAPE_CHAR;
           LOG_WARN("missing or illegal character following the escape character",
-                    K(escape_val), K(pattern_val), K(ret));
+                    K(escape_val), K(pattern_val), K(pattern_char), K(ret));
         }
         pre_char_is_escape = false;
       }
@@ -361,6 +360,7 @@ int ObExprLike::set_instr_info(ObIAllocator *exec_allocator,
           //when there are "_" or escape in pattern
           //the case can not be optimized.
           use_instr_mode = false;
+        // since cs_type is CS_TYPE_UTF8MB4_BIN, length of '%' must be 1.
         } else if ((1 == char_len && '%' == *buf_start)) { //percent sign
           percent_sign_exist = true;
           if (OB_LIKELY(instr_len > 0)) {
@@ -822,12 +822,16 @@ struct ObNonInstrModeMatcher
   inline int64_t operator() (const ObCollationType coll_type,
                         const ObString &text_val,
                         const ObString &pattern_val,
-                        int32_t escape_wc)
+                        int32_t escape_wc,
+                        int &ret)
   {
     int64_t res = 0;
     if (OB_UNLIKELY(text_val.length() <= 0 && pattern_val.length() <= 0)) {
       // empty string
       res = 1;
+    } else if (OB_UNLIKELY(CS_TYPE_UTF8MB4_BIN != coll_type && escape_wc == static_cast<int32_t>('%'))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "escape %");
     } else {
       bool b = ObCharset::wildcmp(coll_type, text_val, pattern_val, escape_wc,
                                   static_cast<int32_t>('_'), static_cast<int32_t>('%'));
@@ -867,7 +871,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
             res_datums[i].set_int(res);
           } else {
             res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
-                                                          pattern_val, escape_wc));
+                                                          pattern_val, escape_wc, ret));
           }
         } else { // text tc
           ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -886,7 +890,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
             res_datums[i].set_int(res);
           } else {
             res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_val,
-                                                          pattern_val, escape_wc));
+                                                          pattern_val, escape_wc, ret));
           }
         }
       }
@@ -909,7 +913,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
               res_datums[i].set_int(res);
             } else {
               res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
-                                                            pattern_val, escape_wc));
+                                                            pattern_val, escape_wc, ret));
             }
           } else { // text tc
             ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -929,7 +933,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
                 res_datums[i].set_int(res);
               } else {
                 res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_val,
-                                                              pattern_val, escape_wc));
+                                                              pattern_val, escape_wc, ret));
               }
             }
           }
