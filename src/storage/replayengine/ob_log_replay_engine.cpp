@@ -332,7 +332,7 @@ int ObLogReplayEngine::add_partition(const ObPartitionKey& pkey)
     ObIPartitionGroupGuard guard;
 
     if (OB_FAIL(partition_service_->get_partition(pkey, guard))) {
-      REPLAY_LOG(ERROR, "get partition failed", K(pkey), K(ret));
+      REPLAY_LOG(WARN, "get partition failed, may be garbaged", K(pkey), K(ret));
     } else if (OB_ISNULL(partition = guard.get_partition_group())) {  // do not check partiiton->is_valid()
       ret = OB_ERR_UNEXPECTED;
       REPLAY_LOG(ERROR, "replay engine add partition error, partition not exist", K(ret), K(pkey));
