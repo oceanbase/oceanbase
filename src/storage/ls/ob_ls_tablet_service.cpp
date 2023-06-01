@@ -4309,7 +4309,11 @@ int ObLSTabletService::process_lob_row(
                                  ? ObString(0, nullptr) : new_obj.get_string();
           ObLobLocatorV2 new_lob(new_lob_str, new_obj.has_lob_header());
           if (OB_FAIL(ret)) {
-          } else if (new_obj.is_null() || new_obj.is_nop_value() || new_lob.is_full_temp_lob() || new_lob.is_persist_lob()) {
+          } else if (new_obj.is_null() ||
+                     new_obj.is_nop_value() ||
+                     new_lob.is_full_temp_lob() ||
+                     new_lob.is_persist_lob() ||
+                     (new_lob.is_lob_disk_locator() && new_lob.has_inrow_data())) {
             ObLobCommon *lob_common = nullptr;
             ObLobAccessParam lob_param;
             if (OB_FAIL(new_lob.get_lob_data_byte_len(lob_param.update_len_))) {
