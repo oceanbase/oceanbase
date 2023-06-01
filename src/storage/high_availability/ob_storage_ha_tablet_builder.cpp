@@ -2085,7 +2085,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
                             true/*need_check_sstable*/,
                             true/*allow_duplicate_sstable*/,
                             &medium_info_list,
-                            ObMergeType::MAJOR_MERGE/*merge_type*/);
+                            ObMergeType::MEDIUM_MERGE/*merge_type*/);
     if (tablet->get_storage_schema().get_version() < storage_schema.get_version()) {
       SERVER_EVENT_ADD("storage_ha", "schema_change_need_merge_tablet_meta",
                       "tenant_id", MTL_ID(),
