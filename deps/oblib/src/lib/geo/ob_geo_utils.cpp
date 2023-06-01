@@ -136,6 +136,8 @@ ObGeoType ObGeoTypeUtil::get_geo_type_by_name(ObString &name)
     geo_type = ObGeoType::MULTIPOLYGON;
   } else if (0 == name.case_compare("geometrycollection")) {
     geo_type = ObGeoType::GEOMETRYCOLLECTION;
+  } else if (0 == name.case_compare("geometry")) {
+    geo_type = ObGeoType::GEOMETRY;
   } else {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "get type by name failed", K(geo_type));
   }
