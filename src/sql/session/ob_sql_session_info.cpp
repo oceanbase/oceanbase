@@ -1107,15 +1107,6 @@ const ObAuditRecordData& ObSQLSessionInfo::get_final_audit_record(ObExecuteMode 
     audit_record_.request_memory_used_ = THIS_WORKER.get_sql_arena_allocator().total();
   }
 
-  if (OB_SUCC(ret) && OB_INVALID_STMT_ID != audit_record_.ps_stmt_id_) {
-    ObPsStmtId inner_stmt_id = OB_INVALID_STMT_ID;
-    if (OB_SUCC(get_inner_ps_stmt_id(audit_record_.ps_stmt_id_, inner_stmt_id))) {
-      audit_record_.ps_inner_stmt_id_ = inner_stmt_id;
-    } else {
-      ret = OB_SUCCESS;
-    }
-  }
-
   return audit_record_;
 }
 

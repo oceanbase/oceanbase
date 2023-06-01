@@ -335,6 +335,7 @@ int ObMPStmtPrepare::do_process(
   bool is_diagnostics_stmt = false;
   bool need_response_error = true;
   const ObString& sql = ctx_.multi_stmt_item_.get_sql();
+  ObPsStmtId inner_stmt_id = OB_INVALID_ID;
 
   // NOTE: result must be protected by req_timeinfo_guard
   ObReqTimeGuard req_timeinfo_guard;
@@ -382,6 +383,8 @@ int ObMPStmtPrepare::do_process(
               "run stmt_query failed, check if need retry", K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K(sql));
           ret = cli_ret;
         }
+      } else if (OB_FAIL(session.get_inner_ps_stmt_id(result.get_statement_id(), inner_stmt_id))) {
+        LOG_WARN("ps : get inner stmt id fail.", K(ret), K(result.get_statement_id()));
       } else {
         if (enable_perf_event) {
           exec_start_timestamp_ = ObTimeUtility::current_time();
@@ -471,6 +474,7 @@ int ObMPStmtPrepare::do_process(
     audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
     audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
     audit_record.ps_stmt_id_ = result.get_statement_id();
+    audit_record.ps_inner_stmt_id_ = inner_stmt_id;
     audit_record.tenant_id_ = session.get_effective_tenant_id();
     audit_record.update_stage_stat();
     bool need_retry = (THIS_THWORKER.need_retry() || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());

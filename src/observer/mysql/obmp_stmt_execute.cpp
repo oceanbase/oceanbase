@@ -599,6 +599,7 @@ int ObMPStmtExecute::do_process(
   int ret = OB_SUCCESS;
   ObAuditRecordData& audit_record = session.get_audit_record();
   bool is_diagnostics_stmt = false;
+  ObPsStmtId inner_stmt_id = OB_INVALID_ID;
   bool need_response_error = is_arraybinding_ ? false : true;
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
@@ -674,6 +675,8 @@ int ObMPStmtExecute::do_process(
           if (OB_ERR_PROXY_REROUTE == ret && !is_arraybinding_) {
             need_response_error = true;
           }
+        } else if (OB_FAIL(session.get_inner_ps_stmt_id(stmt_id_, inner_stmt_id))) {
+          LOG_WARN("ps : get inner stmt id fail.", K(ret), K(stmt_id_));
         } else {
           if (enable_perf_event) {
             exec_start_timestamp_ = ObTimeUtility::current_time();
@@ -767,6 +770,7 @@ int ObMPStmtExecute::do_process(
         audit_record.sql_ = const_cast<char*>(ctx_.cur_sql_.ptr());
         audit_record.sql_len_ = min(ctx_.cur_sql_.length(), OB_MAX_SQL_LENGTH);
         audit_record.ps_stmt_id_ = stmt_id_;
+        audit_record.ps_inner_stmt_id_ = inner_stmt_id;
 
         ObPhysicalPlanCtx* plan_ctx = result.get_exec_context().get_physical_plan_ctx();
         if (OB_NOT_NULL(plan_ctx)) {

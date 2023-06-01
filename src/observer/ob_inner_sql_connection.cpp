@@ -576,6 +576,7 @@ int ObInnerSQLConnection::process_record(ObInnerSQLResult& res, sql::ObSQLSessio
   audit_record.user_group_ = THIS_WORKER.get_group_id();
   audit_record.execution_id_ = execution_id;
   audit_record.ps_stmt_id_ = ps_stmt_id;
+  audit_record.ps_inner_stmt_id_ = ps_stmt_id;
   MEMCPY(audit_record.sql_id_, res.sql_ctx().sql_id_, (int32_t)sizeof(audit_record.sql_id_));
   audit_record.affected_rows_ = res.result_set().get_affected_rows();
   audit_record.return_rows_ = res.result_set().get_return_rows();
