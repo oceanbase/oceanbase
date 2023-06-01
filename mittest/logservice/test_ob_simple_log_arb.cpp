@@ -663,6 +663,18 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   sleep(2);
 
+  LogConfigChangeArgs args(ObMember(palf_list[another_f_idx]->palf_handle_impl_->self_, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
+  const int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
+  const int64_t election_epoch = leader.palf_handle_impl_->state_mgr_.get_leader_epoch();
+  LogConfigVersion config_version;
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version));
+
+  // leader appended config meta, but did not apply config meta
+  EXPECT_NE(palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_version_,
+            palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
+  EXPECT_EQ(palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_version_,
+            palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
+
   // block all networks of arb member, and the network from the follower to the leader
   block_net(arb_replica_idx, another_f_idx, true);
   block_net(arb_replica_idx, leader_idx, true);
@@ -672,12 +684,6 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
   while (leader.palf_handle_impl_->state_mgr_.role_ == common::ObRole::LEADER) {
     sleep(1);
   }
-
-  // leader appended config meta, but did not apply config meta
-  EXPECT_NE(palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_version_,
-            palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
-  EXPECT_EQ(palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_version_,
-            palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
 
   // unblock_net
   unblock_net(another_f_idx, leader_idx);
@@ -770,7 +776,6 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
   delete_paxos_group(id);
   PALF_LOG(INFO, "end test_2f1a_upgrade_when_no_leader", K(id));
 }
-
 
 } // end unittest
 } // end oceanbase

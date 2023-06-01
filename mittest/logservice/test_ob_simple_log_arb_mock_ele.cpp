@@ -80,7 +80,7 @@ std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
 {
   int ret = OB_SUCCESS;
-	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   const int64_t TIMEOUT_US = 10 * 1000 * 1000L;
   SET_CASE_LOG_FILE(TEST_NAME, "switch_leader_during_degrading");
   PALF_LOG(INFO, "begin test switch_leader_during_degrading", K(id));
@@ -131,6 +131,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
 
     // A can not degrades B successfully
     EXPECT_EQ(OB_NOT_MASTER, a_handle->palf_handle_impl_->config_mgr_.change_config_(degrade_b_args, degrade_b_pid, degrade_b_ele_epoch, degrade_b_version));
+    a_handle->palf_handle_impl_->config_mgr_.end_degrade();
 
     for (auto srv: get_cluster()) {
       srv->set_leader(id, a_addr, 3);
@@ -238,6 +239,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
 
     // A can not degrades B successfully
     EXPECT_EQ(OB_NOT_MASTER, a_handle->palf_handle_impl_->config_mgr_.change_config_(degrade_b_args, degrade_b_pid, degrade_b_ele_epoch, degrade_b_version));
+    a_handle->palf_handle_impl_->config_mgr_.end_degrade();
 
     for (auto srv: get_cluster()) {
       srv->set_leader(id, b_addr, 3);
@@ -293,6 +295,146 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
   PALF_LOG(INFO, "end test switch_leader_to_other_during_degrading", K(id));
 }
 
+// 1. 2F1A, the leader starts to degrade another F
+// 2. after the config log has been accepted by the arb member, the leader revoked
+// 3. the previous leader has been elected as the new leader
+// 4. reconfirm may fail because leader's config_version is not same to that of the follower
+TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_no_leader2)
+{
+  int ret = OB_SUCCESS;
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t TIMEOUT_US = 10 * 1000 * 1000L;
+  SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_degrade_when_no_leader2");
+  PALF_LOG(INFO, "begin test test_2f1a_degrade_when_no_leader2", K(id));
+  {
+    int64_t leader_idx = 0;
+    int64_t arb_replica_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb_mock_election(id, arb_replica_idx, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+
+    const int64_t b_idx = (leader_idx + 1) % 3;
+    const int64_t c_idx = (leader_idx + 2) % 3;
+    const common::ObAddr a_addr = get_cluster()[leader_idx]->get_addr();
+    const common::ObAddr b_addr = get_cluster()[b_idx]->get_addr();
+    const common::ObAddr c_addr = get_cluster()[c_idx]->get_addr();
+    PalfHandleImplGuard *a_handle = palf_list[leader_idx];
+    PalfHandleImplGuard *b_handle = palf_list[b_idx];
+    IPalfHandleImpl *c_ihandle = NULL;
+    get_cluster()[c_idx]->get_palf_env()->get_palf_handle_impl(id, c_ihandle);
+    palflite::PalfHandleLite *c_handle = dynamic_cast<palflite::PalfHandleLite*>(c_ihandle);
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->stop();
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[b_idx])->log_service_.get_arbitration_service()->stop();
+
+    // 1. A tries to degrade B
+    block_net(leader_idx, b_idx);
+    int64_t degrade_b_pid = 0;
+    int64_t degrade_b_ele_epoch = 0;
+    LogConfigVersion degrade_b_version;
+    LogConfigChangeArgs degrade_b_args(ObMember(b_addr, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(degrade_b_pid, degrade_b_ele_epoch, degrade_b_args.type_));
+
+    while (0 == leader.palf_handle_impl_->config_mgr_.state_) {
+      EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(degrade_b_args, degrade_b_pid, degrade_b_ele_epoch, degrade_b_version));
+    }
+    const LSN &leader_last_committed_end_lsn = leader.palf_handle_impl_->sw_.committed_end_lsn_;
+    sleep(2);
+    EXPECT_EQ(leader_last_committed_end_lsn, leader.palf_handle_impl_->sw_.committed_end_lsn_);
+
+    // A sends config meta to C
+    while (-1 == leader.palf_handle_impl_->config_mgr_.last_submit_config_log_time_us_ ||
+           c_handle->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr)) {
+      EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(degrade_b_args, degrade_b_pid, degrade_b_ele_epoch, degrade_b_version));
+      usleep(500);
+    }
+
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+
+    // 2. the leader A revokes and takeover again
+    for (auto srv: get_cluster()) {
+      const ObAddr addr1(ObAddr::IPV4, "0.0.0.0", 0);
+      srv->set_leader(id, addr1);
+    }
+    EXPECT_UNTIL_EQ(false, a_handle->palf_handle_impl_->state_mgr_.is_leader_active());
+
+    // A can not degrades B successfully
+    EXPECT_EQ(OB_NOT_MASTER, a_handle->palf_handle_impl_->config_mgr_.change_config_(degrade_b_args, degrade_b_pid, degrade_b_ele_epoch, degrade_b_version));
+    a_handle->palf_handle_impl_->config_mgr_.end_degrade();
+
+    for (auto srv: get_cluster()) {
+      srv->set_leader(id, a_addr, 3);
+    }
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
+    EXPECT_UNTIL_EQ(true, a_handle->palf_handle_impl_->state_mgr_.is_leader_active());
+    EXPECT_UNTIL_EQ(true, leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.degraded_learnerlist_.contains(b_addr));
+
+    unblock_net(leader_idx, b_idx);
+    get_cluster()[c_idx]->get_palf_env()->revert_palf_handle_impl(c_ihandle);
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test test_2f1a_degrade_when_no_leader2", K(id));
+}
+
+TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_arb_crash)
+{
+  OB_LOGGER.set_log_level("INFO");
+  int ret = OB_SUCCESS;
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t TIMEOUT_US = 10 * 1000 * 1000L;
+  SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_degrade_when_arb_crash");
+  PALF_LOG(INFO, "begin test test_2f1a_degrade_when_arb_crash", K(id));
+  {
+    int64_t leader_idx = 0;
+    int64_t arb_replica_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb_mock_election(id, arb_replica_idx, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+
+    const int64_t b_idx = (leader_idx + 1) % 3;
+    const int64_t c_idx = (leader_idx + 2) % 3;
+    const common::ObAddr a_addr = get_cluster()[leader_idx]->get_addr();
+    const common::ObAddr b_addr = get_cluster()[b_idx]->get_addr();
+    const common::ObAddr c_addr = get_cluster()[c_idx]->get_addr();
+    PalfHandleImplGuard *a_handle = palf_list[leader_idx];
+    PalfHandleImplGuard *b_handle = palf_list[b_idx];
+
+    // block the network from the leader to the arb member
+    block_net(leader_idx, arb_replica_idx);
+    // block the network from the leader to the follower
+    block_net(leader_idx, b_idx);
+    sleep(4);
+    // the leader can not degrade successfully
+    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+
+    // start to degrade B manually, do not allow
+    LogConfigChangeArgs args(ObMember(b_addr, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
+    EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->one_stage_config_change_(args, 10 * 1000 * 1000));
+    EXPECT_EQ(false, leader.palf_handle_impl_->config_mgr_.is_sw_interrupted_by_degrade_);
+    EXPECT_EQ(false, leader.palf_handle_impl_->state_mgr_.is_changing_config_with_arb_);
+
+    // start to degrade B manually, do not allow
+    int64_t degrade_b_pid = 0;
+    int64_t degrade_b_ele_epoch = 0;
+    LogConfigVersion degrade_b_version;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(degrade_b_pid, degrade_b_ele_epoch, args.type_));
+    EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, degrade_b_pid, degrade_b_ele_epoch, degrade_b_version));
+    EXPECT_EQ(true, leader.palf_handle_impl_->config_mgr_.is_sw_interrupted_by_degrade_);
+    EXPECT_EQ(true, leader.palf_handle_impl_->state_mgr_.is_changing_config_with_arb_);
+
+    unblock_net(leader_idx, arb_replica_idx);
+    unblock_net(leader_idx, b_idx);
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test test_2f1a_degrade_when_arb_crash", K(id));
+}
 
 } // end unittest
 } // end oceanbase

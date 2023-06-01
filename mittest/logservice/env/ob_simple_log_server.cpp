@@ -67,6 +67,11 @@ bool MockNetKeepAliveAdapter::is_server_stopped(const common::ObAddr &server)
   return log_deliver_->need_filter_packet_by_blacklist(server);
 }
 
+bool MockNetKeepAliveAdapter::in_black(const common::ObAddr &server)
+{
+  return log_deliver_->need_filter_packet_by_blacklist(server);
+}
+
 uint32_t get_local_addr(const char *dev_name)
 {
   int fd, intrface;

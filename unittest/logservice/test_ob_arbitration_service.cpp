@@ -28,6 +28,7 @@ public:
   ~MockNetKeepAliveAdapter() { }
   bool in_black_or_stopped(const common::ObAddr &server) override final {return false;}
   bool is_server_stopped(const common::ObAddr &server) override final {return false;}
+  bool in_black(const common::ObAddr &server) override final {return false;}
 };
 
 const ObAddr addr1(ObAddr::IPV4, "127.0.0.1", 1000);

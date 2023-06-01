@@ -29,6 +29,7 @@ public:
   virtual ~IObNetKeepAliveAdapter() {}
   virtual bool in_black_or_stopped(const common::ObAddr &server) = 0;
   virtual bool is_server_stopped(const common::ObAddr &server) = 0;
+  virtual bool in_black(const common::ObAddr &server) = 0;
 };
 
 class ObNetKeepAliveAdapter : public IObNetKeepAliveAdapter {
@@ -37,6 +38,7 @@ public:
   ~ObNetKeepAliveAdapter() override;
   bool in_black_or_stopped(const common::ObAddr &server) override final;
   bool is_server_stopped(const common::ObAddr &server) override final;
+  bool in_black(const common::ObAddr &server) override final;
 private:
   int in_black_or_stopped_(const common::ObAddr &server,
                            bool &in_black,

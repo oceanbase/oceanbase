@@ -326,12 +326,10 @@ public:
   virtual int submit_broadcast_leader_info(const int64_t proposal_id) const;
   virtual void reset_status();
   int check_follower_sync_status(const LogConfigChangeArgs &args,
-                                 const ObMemberList &new_member_list,
-                                 const int64_t new_replica_num,
+                                 const LogConfigInfo &new_config_info,
                                  bool &added_member_has_new_version) const;
   int wait_log_barrier_(const LogConfigChangeArgs &args,
-                        const ObMemberList &new_member_list,
-                        const int64_t new_replica_num) const;
+                        const LogConfigInfo &new_config_info) const;
   int sync_meta_for_arb_election_leader();
   bool need_sync_to_degraded_learners() const;
   // ================ Config Change ==================
@@ -436,8 +434,7 @@ private:
                                      bool &has_same_version,
                                      int64_t &last_slide_log_id) const;
   int sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
-                                  const ObMemberList &new_member_list,
-                                  const int64_t new_replica_num,
+                                  const LogConfigInfo &new_config_info,
                                   const bool need_purge_throttling,
                                   const bool need_remote_check,
                                   const int64_t conn_timeout_us,
@@ -446,8 +443,7 @@ private:
                                   LSN &added_member_flushed_end_lsn,
                                   int64_t &added_member_last_slide_log_id) const;
   int check_follower_sync_status_(const LogConfigChangeArgs &args,
-                                  const ObMemberList &new_member_list,
-                                  const int64_t new_replica_num,
+                                  const LogConfigInfo &new_config_info,
                                   bool &added_member_has_new_version) const;
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                          const int64_t proposal_id,
