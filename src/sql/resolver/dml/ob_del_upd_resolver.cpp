@@ -949,7 +949,8 @@ int ObDelUpdResolver::set_base_table_for_view(TableItem &table_item, const bool 
           LOG_WARN("delete join view", K(ret));
         }
       }
-      if (NULL == base) {
+      if (OB_FAIL(ret)) {
+      } else if (NULL == base) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
       } else if (base->is_link_table()) {
