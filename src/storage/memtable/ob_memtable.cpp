@@ -122,6 +122,7 @@ ObMemtable::ObMemtable()
       is_flushed_(false),
       read_barrier_(false),
       write_barrier_(false),
+      allow_freeze_(true),
       write_ref_cnt_(0),
       mode_(lib::Worker::CompatMode::INVALID),
       minor_merged_time_(0),
@@ -270,6 +271,7 @@ void ObMemtable::destroy()
   is_tablet_freeze_ = false;
   is_force_freeze_ = false;
   is_flushed_ = false;
+  allow_freeze_ = true;
   is_inited_ = false;
   contain_hotspot_row_ = false;
   snapshot_version_.set_max();
@@ -2166,7 +2168,13 @@ bool ObMemtable::is_frozen_memtable() const
   //     || ObMemtableState::MINOR_MERGING == state_;
   // Note (yanyuan.cxf) log_frozen_memstore_info() will use this func after local_allocator_ init
   // Now freezer_ and ls_ will not be released before memtable
-  bool bool_ret = OB_NOT_NULL(freezer_) && (freezer_->get_freeze_clock() > freeze_clock_ || is_tablet_freeze_);
+  const uint32_t logstream_freeze_clock = OB_NOT_NULL(freezer_) ? freezer_->get_freeze_clock() : 0;
+  const uint32_t memtable_freeze_clock = get_freeze_clock();
+  if (!allow_freeze() && logstream_freeze_clock > memtable_freeze_clock) {
+    ATOMIC_STORE(&freeze_clock_, logstream_freeze_clock);
+    TRANS_LOG(INFO, "inc freeze_clock because the memtable cannot be freezed", K(memtable_freeze_clock), K(logstream_freeze_clock), KPC(this));
+  }
+  const bool bool_ret = logstream_freeze_clock > get_freeze_clock() || is_tablet_freeze_;
 
   if (bool_ret && 0 == mt_stat_.frozen_time_) {
     mt_stat_.frozen_time_ = ObTimeUtility::current_time();
