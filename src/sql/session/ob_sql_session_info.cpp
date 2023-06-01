@@ -2778,7 +2778,8 @@ int ObSysVarEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const in
     for (int64_t j = 0; OB_SUCC(ret) && j< share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++j) {
       if (ObSysVariables::get_sys_var_id(j) == SYS_VAR_SERVER_UUID ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_PROXY_PARTITION_HIT ||
-          ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID) {
+          ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID ||
+          ObSysVariables::get_sys_var_id(j) == SYS_VAR_VERSION_COMMENT) {
         // no need sync sys var
         continue;
       }
@@ -2798,7 +2799,8 @@ int64_t ObSysVarEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
   for (int64_t j = 0; j< share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++j) {
       if (ObSysVariables::get_sys_var_id(j) == SYS_VAR_SERVER_UUID ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_PROXY_PARTITION_HIT ||
-          ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID) {
+          ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID ||
+          ObSysVariables::get_sys_var_id(j) == SYS_VAR_VERSION_COMMENT) {
       // no need sync sys var
       continue;
     }
@@ -2849,7 +2851,8 @@ int ObSysVarEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* curre
     for (int64_t j = 0; OB_SUCC(ret) && j< share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++j) {
       if (ObSysVariables::get_sys_var_id(j) == SYS_VAR_SERVER_UUID ||
           ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_PROXY_PARTITION_HIT ||
-          ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID) {
+          ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_STATEMENT_TRACE_ID ||
+          ObSysVariables::get_sys_var_id(j) == SYS_VAR_VERSION_COMMENT) {
         // no need sync sys var
         continue;
       }
