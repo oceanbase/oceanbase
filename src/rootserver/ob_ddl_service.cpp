@@ -12471,8 +12471,27 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
         //record new table name set
         //table_item -> table_id
         common::hash::ObHashMap<ObTableItem, uint64_t> new_table_map;
+        ObArray<std::pair<uint64_t, share::schema::ObObjectType>> all_dep_objs;
         if (OB_FAIL(new_table_map.create(32, ObModIds::OB_HASH_BUCKET_RENAME_TABLE_MAP))) {
           LOG_WARN("failed to add create ObHashMap", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < rename_table_arg.rename_table_items_.size(); ++i) {
+            const ObRenameTableItem &rename_item = rename_table_arg.rename_table_items_.at(i);
+            const ObTableSchema *table_schema = nullptr;
+            if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                      rename_item.origin_db_name_,
+                                                      rename_item.origin_table_name_,
+                                                      false,
+                                                      table_schema))) {
+              LOG_WARN("fail to get table schema", K(ret));
+            } else if (nullptr == table_schema) {
+              // skip
+            } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
+                                                                      table_schema->get_table_id(),
+                                                                      trans, all_dep_objs))) {
+              LOG_WARN("failed to collect dep info", K(ret));
+            }
+          }
         }
         for (int32_t i = 0; OB_SUCC(ret) && i < rename_table_arg.rename_table_items_.size(); ++i) {
           const ObRenameTableItem &rename_item = rename_table_arg.rename_table_items_.at(i);
@@ -12684,10 +12703,15 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                   LOG_WARN("failed to append sql", K(ret));
                 }
               }
+              bool need_reset_object_status = false;
               if (OB_SUCC(ret) && OB_NOT_NULL(from_table_schema)) {
-                if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, from_table_schema->get_table_id(),
-                                                                 ddl_operator, *schema_service_))) {
-                  LOG_WARN("failed to modify obj status", K(ret));
+                for (int64_t i = 0; i < all_dep_objs.count(); ++i) {
+                  if (from_table_schema->get_table_id() == all_dep_objs.at(i).first) {
+                    need_reset_object_status = true;
+                    // reset to invalid id and dependencyinfo will not touch
+                    all_dep_objs.at(i).first = OB_INVALID_ID;
+                    // do not break to avoid duplicate obj in all_dep_objs
+                  }
                 }
               }
               if (OB_SUCC(ret) && !is_oracle_mode) {
@@ -12698,6 +12722,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                 } else if (OB_FAIL(ddl_operator.rename_table(*from_table_schema,
                                                              to_table_item.table_name_,
                                                              database_schema->get_database_id(),
+                                                             need_reset_object_status,
                                                              trans,
                                                              &rename_sql))) {
                   LOG_WARN("failed to rename table!", K(rename_item), K(table_id), K(ret));
@@ -12738,6 +12763,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                     if (OB_FAIL(ddl_operator.rename_table(*from_table_schema,
                                                           to_table_item.table_name_,
                                                           database_schema->get_database_id(),
+                                                          false,/*oracle mode can not rename multiple table*/
                                                           trans,
                                                           &rename_sql))) {
                       LOG_WARN("failed to rename table!", K(ret), K(rename_item), K(table_id));
@@ -12772,6 +12798,13 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
             }
           }
         } // end for
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(ObDependencyInfo::modify_all_obj_status(all_dep_objs, trans,
+                                                              tenant_id, ddl_operator,
+                                                              *schema_service_))) {
+            LOG_WARN("failed to modify all obj status", K(ret));
+          }
+        }
         if (OB_SUCC(ret) && !is_oracle_mode) {
           ObArray<ObMockFKParentTableSchema> mock_fk_parent_table_schema_array;
           for (int64_t i = 0; OB_SUCC(ret) && i < rename_table_arg.rename_table_items_.size(); ++i) {
