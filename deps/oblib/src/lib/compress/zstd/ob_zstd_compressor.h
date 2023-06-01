@@ -26,11 +26,11 @@ namespace zstd
 class ObZstdCtxAllocator
 {
 public:
-  ObZstdCtxAllocator();
+  ObZstdCtxAllocator(int64_t tenant_id);
   virtual ~ObZstdCtxAllocator();
   static ObZstdCtxAllocator &get_thread_local_instance()
   {
-    thread_local ObZstdCtxAllocator allocator;
+    thread_local ObZstdCtxAllocator allocator(ob_thread_tenant_id());
     return allocator;
   }
   void *alloc(size_t size);

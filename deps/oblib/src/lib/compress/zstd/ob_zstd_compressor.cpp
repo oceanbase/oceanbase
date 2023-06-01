@@ -41,8 +41,9 @@ static void ob_zstd_free(void *opaque, void *address)
 /**
  * ------------------------------ObZstdCtxAllocator---------------------
  */
-ObZstdCtxAllocator::ObZstdCtxAllocator()
-  : allocator_(ObModIds::OB_COMPRESSOR, OB_MALLOC_BIG_BLOCK_SIZE)
+ObZstdCtxAllocator::ObZstdCtxAllocator(int64_t tenant_id)
+  : allocator_(ObModIds::OB_COMPRESSOR, OB_MALLOC_BIG_BLOCK_SIZE,
+               tenant_id)
 {
 }
 
