@@ -1949,6 +1949,8 @@ void ObT3mTabletMapIterator::reset()
 int ObT3mTabletMapIterator::fetch_tablet_item()
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr = SET_USE_500(ObMemAttr(MTL_ID(), "TabletIterSE"));
+  tablet_items_.set_attr(attr);
   FetchTabletItemOp fetch_op(tablet_map_, tablet_items_);
   if (OB_UNLIKELY(tablet_items_.count() > 0)) {
     ret = OB_ERR_UNEXPECTED;

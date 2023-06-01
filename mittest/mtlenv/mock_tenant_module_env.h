@@ -781,7 +781,10 @@ void MockTenantModuleEnv::destroy()
 
   ObServerCheckpointSlogHandler::get_instance().destroy();
   SLOGGERMGR.destroy();
-  THE_IO_DEVICE->destroy();
+
+  OB_SERVER_BLOCK_MGR.stop();
+  OB_SERVER_BLOCK_MGR.wait();
+  OB_SERVER_BLOCK_MGR.destroy();
 
   ObTsMgr::get_instance().stop();
   ObTsMgr::get_instance().wait();
@@ -799,6 +802,8 @@ void MockTenantModuleEnv::destroy()
   TG_STOP(lib::TGDefIDs::MemDumpTimer);
   TG_WAIT(lib::TGDefIDs::MemDumpTimer);
   TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
+
+  THE_IO_DEVICE->destroy();
 
 
   destroyed_ = true;
