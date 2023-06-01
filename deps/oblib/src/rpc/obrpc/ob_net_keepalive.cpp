@@ -415,6 +415,25 @@ client* create_client(rpc_server *rs)
     c->status_ = CONNECT_OK;
     _LOG_DEBUG("connect ok, addr: %s", addr_to_string(rs->svr_addr_));
   }
+
+  if (OB_SUCC(ret)) {
+    if (AF_INET == addr.ss_family) {
+      struct sockaddr_in self_addr;
+      socklen_t len = sizeof(self_addr);
+      if (0 == getsockname(c->fd_, (struct sockaddr *)&self_addr, &len)) {
+        struct sockaddr_in *dst_addr = (struct sockaddr_in *)(&addr);
+        if (self_addr.sin_port == dst_addr->sin_port && self_addr.sin_addr.s_addr == dst_addr->sin_addr.s_addr) {
+          char str[INET_ADDRSTRLEN];
+          ret = OB_IO_ERROR;
+          _LOG_WARN("connection to %s failed, self connect self", inet_ntop(AF_INET, (const void*)(&addr), str, sizeof(str)));
+        }
+      } else {
+        ret = OB_IO_ERROR;
+        _LOG_WARN("getsockname failed: fd:%d, errno:%d", c->fd_, errno);
+      }
+    }
+  }
+
   if (OB_FAIL(ret)) {
     if (c->fd_ >= 0) close(c->fd_);
     c = NULL;
