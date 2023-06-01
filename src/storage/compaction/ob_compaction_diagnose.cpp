@@ -27,6 +27,7 @@
 #include "rootserver/freeze/ob_major_freeze_util.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "storage/compaction/ob_compaction_util.h"
+#include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/tablet/ob_tablet.h"
 namespace oceanbase
 {
@@ -483,6 +484,15 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
           LOG_WARN("failed to check ls state", K(tmp_ret), KPC(ls), K(need_merge));
         } else if (need_merge) {
           const ObLSID &ls_id = ls->get_ls_id();
+          bool is_leader = false;
+          ObRole role = INVALID_ROLE;
+          if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::get_palf_role(ls_id, role))) {
+            if (OB_LS_NOT_EXIST != tmp_ret) {
+              LOG_WARN("failed to get palf handle role", K(tmp_ret), K(ls_id));
+            }
+          } else if (is_leader_by_election(role)) {
+            is_leader = true;
+          }
           bool weak_read_ts_ready = ObTenantTabletScheduler::check_weak_read_ts_ready(compaction_scn, *ls);
           // check weak read ts
           if (diagnose_major_flag
@@ -505,7 +515,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
           }
 
           // check ls locality change and leader change
-          if (OB_TMP_FAIL(diagnose_ls_merge(MEDIUM_MERGE, ls_id))) {
+          if (is_leader && OB_TMP_FAIL(diagnose_ls_merge(MEDIUM_MERGE, ls_id))) {
             LOG_WARN("failed to diagnose about ls locality change", K(tmp_ret));
           }
           ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);

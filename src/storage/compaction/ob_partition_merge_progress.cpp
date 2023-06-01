@@ -325,9 +325,11 @@ int ObPartitionMergeProgress::get_progress_info(ObCompactionProgress &input_prog
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
+    int64_t estimate_unfinished_data_size = estimate_occupy_size_ - pre_scanned_row_cnt_ * avg_row_length_;
     input_progress.data_size_ = estimate_occupy_size_;
     input_progress.unfinished_data_size_ =
-        0 == estimate_occupy_size_ ? 0 : estimate_occupy_size_ - pre_scanned_row_cnt_ * avg_row_length_;
+        0 == estimate_occupy_size_ ? 0 :
+        (estimate_unfinished_data_size < 0 ? 0 : estimate_unfinished_data_size);
     input_progress.estimated_finish_time_ = estimated_finish_time_;
   }
   return ret;
