@@ -2344,9 +2344,6 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
         break;
       } else if ('\\' == ch) {
         tmp_buf_[tmp_buf_len_++] = '\\';
-        if (in_q_quote) {
-          tmp_buf_[tmp_buf_len_++] = '\\';
-        }
       } else if ('\'' == ch) {
         if ('\'' == raw_sql_.peek()) { // double quote
           ch = raw_sql_.scan();
