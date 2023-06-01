@@ -17,6 +17,7 @@
 #include "lib/thread_local/ob_tsi_utils.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/oblog/ob_log.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {

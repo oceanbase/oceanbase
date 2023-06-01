@@ -14,6 +14,7 @@
 #define OCEANBASE_ALLOCATOR_OB_BLOCK_ALLOC_MGR_H_
 
 #include "lib/allocator/ob_malloc.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
