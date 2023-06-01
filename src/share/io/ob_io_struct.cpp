@@ -207,6 +207,7 @@ bool ObIOMemoryPool<SIZE>::contain(void *ptr)
 ObIOAllocator::ObIOAllocator()
   : is_inited_(false),
     memory_limit_(0),
+    block_count_(0),
     inner_allocator_()
 {
 
@@ -326,7 +327,7 @@ int ObIOAllocator::calculate_pool_block_count(const int64_t memory_limit, int64_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(memory_limit));
   } else {
-    const double DEFAULT_MACRO_POOL_RATIO = 0.05;
+    const double DEFAULT_MACRO_POOL_RATIO = 0.01;
     const int64_t MIN_MACRO_POOL_COUNT = 1;
     const int64_t MAX_MACRO_POOL_COUNT = OB_MAX_SYS_BKGD_THREAD_NUM * 4;
     int64_t macro_pool_count = memory_limit * DEFAULT_MACRO_POOL_RATIO / MACRO_POOL_BLOCK_SIZE;
@@ -346,6 +347,7 @@ int ObIOAllocator::init_macro_pool(const int64_t memory_limit)
   } else if (OB_FAIL(macro_pool_.init(block_count, inner_allocator_))) {
     LOG_WARN("failed to init macro block memory pool", K(ret), K(block_count));
   } else {
+    block_count_ = block_count;
     LOG_INFO("succ to init io macro pool", K(memory_limit), K(block_count));
   }
   return ret;

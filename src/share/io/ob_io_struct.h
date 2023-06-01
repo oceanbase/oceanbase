@@ -89,6 +89,7 @@ public:
   void destroy();
   int update_memory_limit(const int64_t memory_limit);
   int64_t get_allocated_size() const;
+  int64_t get_pre_allocated_count() const { return block_count_; }
   virtual void *alloc(const int64_t size, const lib::ObMemAttr &attr) override;
   virtual void *alloc(const int64_t size) override;
   virtual void free(void *ptr) override;
@@ -102,6 +103,7 @@ private:
   static const int64_t MACRO_POOL_BLOCK_SIZE = 2L * 1024L * 1024L + DIO_READ_ALIGN_SIZE;
   bool is_inited_;
   int64_t memory_limit_;
+  int64_t block_count_;
   ObConcurrentFIFOAllocator inner_allocator_;
   ObIOMemoryPool<MACRO_POOL_BLOCK_SIZE> macro_pool_;
 };

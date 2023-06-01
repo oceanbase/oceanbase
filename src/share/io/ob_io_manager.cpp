@@ -1310,6 +1310,7 @@ void ObTenantIOManager::print_io_status()
       }
       LOG_INFO("[IO STATUS]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "allocated_memory", io_allocator_.get_allocated_size(),
+          "pre_allocated_count", io_allocator_.get_pre_allocated_count(),
           "callback_queues", queue_count_array);
     }
     if (ATOMIC_LOAD(&io_config_.enable_io_tracer_)) {

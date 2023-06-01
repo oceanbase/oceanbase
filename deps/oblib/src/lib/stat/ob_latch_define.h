@@ -313,6 +313,7 @@ LATCH_DEF(HB_RESPONSES_LOCK, 300, "hb responses lock", LATCH_READ_PREFER, 2000, 
 LATCH_DEF(ALL_SERVERS_INFO_IN_TABLE_LOCK, 301, "all servers info in table lock", LATCH_READ_PREFER, 2000, 0, ALL_SERVERS_INFO_IN_TABLE_LOCK_WAIT, "all servers info in table lock")
 LATCH_DEF(OPT_STAT_GATHER_STAT_LOCK, 302, "optimizer stat gather stat lock", LATCH_FIFO, 2000, 0, OPT_STAT_GATHER_STAT_LOCK_WAIT, "optimizer stat gather stat lock")
 LATCH_DEF(DUP_TABLET_LOCK, 303, "dup tablet lock", LATCH_FIFO, 2000, 0, DUP_TABLET_LOCK_WAIT, "dup tablet lock")
+LATCH_DEF(TENANT_IO_POOL_LOCK, 304, "tenant io allocator lock", LATCH_FIFO, 2000, 0, TENANT_IO_POOL_WAIT, "tenant io pool lock")
 
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif
