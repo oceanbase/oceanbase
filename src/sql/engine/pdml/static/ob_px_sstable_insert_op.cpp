@@ -308,6 +308,8 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
         datum.set_uint(next_autoinc_val);
         auto_inc_expr->set_evaluated_projected(eval_ctx_);
         ddl_task_id_ = tablet_seq_caches_.at(curr_tablet_idx_).task_id_;
+        LOG_INFO("update ddl parallel id", K(ret), K(curr_tablet_idx_), K(ddl_task_id_),
+            "cache_interval", tablet_seq_caches_.at(curr_tablet_idx_));
       }
     }
   } else {
