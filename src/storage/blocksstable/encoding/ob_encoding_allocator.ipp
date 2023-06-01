@@ -11,10 +11,10 @@
  */
 
 template <typename EncodingItem>
-ObEncodingPool<EncodingItem>::ObEncodingPool(const int64_t item_size, const char *label)
+ObEncodingPool<EncodingItem>::ObEncodingPool(const int64_t item_size, const ObMemAttr &attr)
   : free_items_(), free_cnt_(0),
     pool_(item_size, common::OB_MALLOC_NORMAL_BLOCK_SIZE,
-      common::ObMalloc(SET_USE_500(label)))
+      common::ObMalloc(attr))
 {
 }
 
@@ -66,19 +66,19 @@ inline void ObEncodingPool<EncodingItem>::free(EncodingItem *item)
 }
 
 template <typename EncodingItem>
-ObEncodingAllocator<EncodingItem>::ObEncodingAllocator(const int64_t *size_array, const char *label)
+ObEncodingAllocator<EncodingItem>::ObEncodingAllocator(const int64_t *size_array, const ObMemAttr &attr)
   : inited_(false),
     size_index_(0),
-    raw_pool_(size_array[size_index_++], label),
-    dict_pool_(size_array[size_index_++], label),
-    rle_pool_(size_array[size_index_++], label),
-    const_pool_(size_array[size_index_++], label),
-    int_diff_pool_(size_array[size_index_++], label),
-    str_diff_pool_(size_array[size_index_++], label),
-    hex_str_pool_(size_array[size_index_++], label),
-    str_prefix_pool_(size_array[size_index_++], label),
-    column_equal_pool_(size_array[size_index_++], label),
-    column_substr_pool_(size_array[size_index_++], label),
+    raw_pool_(size_array[size_index_++], attr),
+    dict_pool_(size_array[size_index_++], attr),
+    rle_pool_(size_array[size_index_++], attr),
+    const_pool_(size_array[size_index_++], attr),
+    int_diff_pool_(size_array[size_index_++], attr),
+    str_diff_pool_(size_array[size_index_++], attr),
+    hex_str_pool_(size_array[size_index_++], attr),
+    str_prefix_pool_(size_array[size_index_++], attr),
+    column_equal_pool_(size_array[size_index_++], attr),
+    column_substr_pool_(size_array[size_index_++], attr),
     pool_cnt_(0)
 {
   for (int64_t i = 0; i < ObColumnHeader::MAX_TYPE; i++) {

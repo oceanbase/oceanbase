@@ -72,13 +72,15 @@ public:
   typedef ObColumnDecoderCtx ObDecoderCtx;
   ObDecoderCtxArray() : ctxs_()
   {
-    ctxs_.set_attr(SET_USE_500("DecoderCtxArray"));
+    ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtxArr");
+    ctxs_.set_attr(attr);
   };
   virtual ~ObDecoderCtxArray()
   {
+    ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
     FOREACH(it, ctxs_) {
       ObDecoderCtx *c = *it;
-      OB_DELETE(ObDecoderCtx, "TLDecoderCtx", c);
+      OB_DELETE(ObDecoderCtx, attr, c);
     }
     ctxs_.reset();
   }
@@ -93,15 +95,16 @@ public:
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret));
     } else {
+      ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
       if (ctxs_.count() < size) {
         for (int64_t i = ctxs_.count(); OB_SUCC(ret) && i < size; ++i) {
-          ObDecoderCtx *ctx = OB_NEW(ObDecoderCtx, "TLDecoderCtx");
+          ObDecoderCtx *ctx = OB_NEW(ObDecoderCtx, attr);
           if (NULL == ctx) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory failed", K(ret));
           } else if (OB_FAIL(ctxs_.push_back(ctx))) {
             LOG_WARN("array push back failed", K(ret));
-            OB_DELETE(ObDecoderCtx, "TLDecoderCtx", ctx);
+            OB_DELETE(ObDecoderCtx, attr, ctx);
           }
         }
         if (OB_SUCC(ret)) {
@@ -129,14 +132,16 @@ class ObTLDecoderCtxArray
 public:
   ObTLDecoderCtxArray() : ctxs_array_()
   {
-    ctxs_array_.set_attr(SET_USE_500("TLDecoderCtxArr"));
+    ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtxArr");
+    ctxs_array_.set_attr(attr);
   }
 
   virtual ~ObTLDecoderCtxArray()
   {
+    ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
     FOREACH(it, ctxs_array_) {
       ObDecoderCtxArray *ctxs = *it;
-      OB_DELETE(ObDecoderCtxArray, "TLDecoderCtx", ctxs);
+      OB_DELETE(ObDecoderCtxArray, attr, ctxs);
     }
   }
 
@@ -149,7 +154,8 @@ public:
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("NULL instance", K(ret));
     } else if (tl_array->ctxs_array_.empty()) {
-      ctxs = OB_NEW(ObDecoderCtxArray, "TLDecoderCtx");
+      ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
+      ctxs = OB_NEW(ObDecoderCtxArray, attr);
       if (NULL == ctxs) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
@@ -164,6 +170,7 @@ public:
   static void free(ObDecoderCtxArray *ctxs)
   {
     int ret = OB_SUCCESS;
+    ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
     ObTLDecoderCtxArray *tl_array = instance();
     if (NULL == tl_array) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -172,10 +179,10 @@ public:
       // do nothing
     } else if (tl_array->ctxs_array_.count() >= MAX_ARRAY_CNT) {
       // reach the threshold, release memory
-      OB_DELETE(ObDecoderCtxArray, "TLDecoderCtx", ctxs);
+      OB_DELETE(ObDecoderCtxArray, attr, ctxs);
     } else if (OB_FAIL(tl_array->ctxs_array_.push_back(ctxs))) {
       LOG_WARN("array push back failed", K(ret));
-      OB_DELETE(ObDecoderCtxArray, "TLDecoderCtx", ctxs);
+      OB_DELETE(ObDecoderCtxArray, attr, ctxs);
     }
   }
 
