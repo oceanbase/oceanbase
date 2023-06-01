@@ -5777,8 +5777,7 @@ int ObPartTransCtx::prepare_mul_data_source_tx_end_(bool is_commit)
   if (OB_SUCC(ret)) {
     ObTxBufferNodeArray tmp_array;
 
-    if (is_commit
-      && mds_cache_.count() > 0
+    if (mds_cache_.count() > 0
       && OB_FAIL(submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
       TRANS_LOG(WARN, "submit multi data souce log failed", K(ret));
     } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
