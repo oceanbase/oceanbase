@@ -3745,6 +3745,7 @@ int ObDDLOperator::update_aux_table(
 int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
                                 const ObString &new_table_name,
                                 const uint64_t new_db_id,
+                                const bool need_reset_object_status,
                                 ObMySQLTransaction &trans,
                                 const ObString *ddl_stmt_str)
 {
@@ -3771,6 +3772,9 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
       LOG_WARN("fail to assign schema", K(ret));
     } else {
       new_table_schema.set_schema_version(new_schema_version);
+    }
+    if (need_reset_object_status) {
+      new_table_schema.set_object_status(ObObjectStatus::INVALID);
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(new_table_schema.set_table_name(new_table_name))) {
