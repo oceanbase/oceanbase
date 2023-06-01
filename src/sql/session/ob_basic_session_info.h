@@ -480,7 +480,7 @@ public:
   uint64_t get_login_tenant_id() const { return tenant_id_; }
   void set_login_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   bool is_tenant_changed() const { return tenant_id_ != effective_tenant_id_; }
-  void set_autocommit(bool autocommit);
+  int set_autocommit(bool autocommit);
   int get_autocommit(bool &autocommit) const
   {
     autocommit = sys_vars_cache_.get_autocommit();
