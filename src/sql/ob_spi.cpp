@@ -1451,6 +1451,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
           // SQL_AUDIT_START
           ObWaitEventDesc max_wait_desc;
           ObWaitEventStat total_wait_desc;
+          ObArenaAllocator allocator;
           const bool enable_perf_event = lib::is_diagnose_info_enabled();
           const bool enable_sql_audit =
             GCONF.enable_sql_audit && ctx->exec_ctx_->get_my_session()->get_local_ob_enable_sql_audit();
@@ -1484,7 +1485,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
               retry_ctrl.set_tenant_local_schema_version(tenant_version);
               retry_ctrl.set_sys_local_schema_version(sys_version);
               spi_result.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard();
-              ObArenaAllocator allocator;
               if (OB_FAIL(inner_open(ctx,
                                     allocator,
                                     sql,
