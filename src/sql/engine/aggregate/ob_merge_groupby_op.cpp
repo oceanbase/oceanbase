@@ -238,10 +238,18 @@ int ObMergeGroupByOp::init()
     } else if (OB_FAIL(init_rollup_distributor())) {
       LOG_WARN("failed to init rollup distributor", K(ret));
     } else {
+      const bool is_mysql_mode = lib::is_mysql_mode();
+      max_partial_rollup_idx_ = all_groupby_exprs_.count();
       // prepare initial group
       if (MY_SPEC.has_rollup_) {
-        for (int64_t i = 0; !has_dup_group_expr_ && i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
+        for (int64_t i = 0; i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
           has_dup_group_expr_ = MY_SPEC.is_duplicate_rollup_expr_.at(i);
+          if (has_dup_group_expr_) {
+            if (is_mysql_mode) {
+              max_partial_rollup_idx_ = i + MY_SPEC.group_exprs_.count() + 1;
+            }
+            break;
+          }
         }
         aggr_processor_.set_op_eval_infos(&eval_infos_);
       }
@@ -420,14 +428,12 @@ int ObMergeGroupByOp::find_candidate_key(ObRollupNDVInfo &ndv_info)
     ObPxRpcInitSqcArgs &sqc_args = sqc_handle->get_sqc_init_arg();
     ndv_info.dop_ = sqc_args.sqc_.get_total_task_count();
   }
-  const bool is_mysql_mode = lib::is_mysql_mode();
   for (int64_t i = 0; i < MY_SPEC.rollup_exprs_.count() + 1 && OB_SUCC(ret); ++i) {
     if (0 == n_group && i == MY_SPEC.rollup_exprs_.count()) {
       break;
     }
     candidate_ndv = ndv_calculator_[i].estimate();
-    if ((is_mysql_mode && MY_SPEC.is_duplicate_rollup_expr_[i]) ||
-          (candidate_ndv >= ObRollupKeyPieceMsgCtx::FAR_GREATER_THAN_RATIO * ndv_info.dop_)) {
+    if (candidate_ndv >= ObRollupKeyPieceMsgCtx::FAR_GREATER_THAN_RATIO * ndv_info.dop_) {
       ndv_info.ndv_ = candidate_ndv;
       ndv_info.n_keys_ = 0 == n_group ? i + 1 : i + n_group;
       break;
@@ -509,6 +515,7 @@ int ObMergeGroupByOp::process_parallel_rollup_key(ObRollupNDVInfo &ndv_info)
       } else {
         partial_rollup_idx_ = MY_SPEC.group_exprs_.count();
       }
+      partial_rollup_idx_ = MIN(max_partial_rollup_idx_, partial_rollup_idx_);
       aggr_processor_.set_partial_rollup_idx(MY_SPEC.group_exprs_.count(), partial_rollup_idx_);
     }
     LOG_DEBUG("debug partial rollup keys", K(partial_rollup_idx_));
