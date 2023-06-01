@@ -181,6 +181,15 @@ int ObLSService::stop()
   return ret;
 }
 
+int ObLSService::wait()
+{
+  int ret = OB_SUCCESS;
+  while(!safe_to_destroy()) {
+    usleep(100 * 1000); // 100 ms
+  }
+  return ret;
+}
+
 int ObLSService::mtl_init(ObLSService* &ls_service)
 {
   observer::ObIMetaReport *reporter = GCTX.ob_service_;

@@ -55,6 +55,7 @@ public:
            observer::ObIMetaReport *reporter);
   int start();
   int stop();
+  int wait();
   void destroy();
   bool safe_to_destroy();
   void inc_ls_safe_destroy_task_cnt();
