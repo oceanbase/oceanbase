@@ -1436,7 +1436,7 @@ DEF_STR(_load_tde_encrypt_engine, OB_CLUSTER_PARAMETER, "NONE",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(local_ip, OB_CLUSTER_PARAMETER, "", "the IP address of the machine on which the ObServer will be installed",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
-DEF_INT(server_id, OB_CLUSTER_PARAMETER, "0", "[1, 18446744073709551615]",
+DEF_INT(observer_id, OB_CLUSTER_PARAMETER, "0", "[1, 18446744073709551615]",
         "the unique id that been assigned by rootservice for each observer in cluster, "
         "default: 0 (invalid id), Range: [1, 18446744073709551615]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));

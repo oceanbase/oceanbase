@@ -1546,7 +1546,7 @@ int ObService::check_server_for_adding_server(
       if (OB_SUCC(ret) && server_empty) {
         uint64_t server_id = arg.get_server_id();
         GCTX.server_id_ = server_id;
-        GCONF.server_id = server_id;
+        GCONF.observer_id = server_id;
         if (OB_ISNULL(GCTX.config_mgr_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("GCTX.config_mgr_ is null", KR(ret));
@@ -1669,7 +1669,7 @@ int ObService::check_server_empty(bool &is_empty)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    uint64_t server_id_in_GCONF = GCONF.server_id;
+    uint64_t server_id_in_GCONF = GCONF.observer_id;
     if (is_empty) {
       if (is_valid_server_id(GCTX.server_id_) || is_valid_server_id(server_id_in_GCONF)) {
         is_empty = false;

@@ -161,8 +161,8 @@ void ObHeartBeatProcess::check_and_update_server_id_(const uint64_t server_id)
           K(GCTX.server_id_), K(server_id));
     }
     if (OB_FAIL(ret)) {
-    } else if (0 == GCONF.server_id) {
-      GCONF.server_id = server_id;
+    } else if (0 == GCONF.observer_id) {
+      GCONF.observer_id = server_id;
       LOG_INFO("receive new server id in GCONF", K(server_id));
       if (OB_SUCCESS != (tmp_ret = TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, server_id_persist_task_, delay, repeat))) {
         server_id_persist_task_.enable_need_retry_flag();
@@ -170,9 +170,9 @@ void ObHeartBeatProcess::check_and_update_server_id_(const uint64_t server_id)
       } else {
         server_id_persist_task_.disable_need_retry_flag();
       }
-    } else if (server_id != GCONF.server_id) {
+    } else if (server_id != GCONF.observer_id) {
       ret = OB_ERR_UNEXPECTED;
-      uint64_t server_id_in_GCONF = GCONF.server_id;
+      uint64_t server_id_in_GCONF = GCONF.observer_id;
       LOG_ERROR("GCONF.server_id is not the same as server_id in RS", KR(ret),
           K(server_id_in_GCONF), K(server_id));
     }

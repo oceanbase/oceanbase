@@ -2275,7 +2275,7 @@ int ObServer::init_global_context()
   (void)gctx_.set_upgrade_stage(obrpc::OB_UPGRADE_STAGE_INVALID);
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
-  gctx_.server_id_ = config_.server_id;
+  gctx_.server_id_ = config_.observer_id;
   if (is_valid_server_id(gctx_.server_id_)) {
     LOG_INFO("this observer has had a valid server_id", K(gctx_.server_id_));
   }
