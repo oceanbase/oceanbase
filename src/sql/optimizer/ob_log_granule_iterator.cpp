@@ -58,9 +58,7 @@ const char *ObLogGranuleIterator::get_name() const
 int ObLogGranuleIterator::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  if (NULL != tablet_id_expr_ && OB_FAIL(all_exprs.push_back(tablet_id_expr_))) {
-    LOG_WARN("failed to append expr", K(ret));
-  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+  if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get exprs", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -109,6 +107,18 @@ int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text,
     }
     END_BUF_PRINT(plan_item.object_alias_,
                   plan_item.object_alias_len_);
+  }
+  return ret;
+}
+
+int ObLogGranuleIterator::allocate_expr_post(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
+    LOG_WARN("failed to allocate expr post", K(ret));
+  } else if (NULL != tablet_id_expr_ &&
+            OB_FAIL(get_plan()->get_optimizer_context().get_all_exprs().append(tablet_id_expr_))) {
+    LOG_WARN("failed to append expr", K(ret));
   }
   return ret;
 }

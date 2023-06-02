@@ -30,6 +30,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
+#include "common/ob_clock_generator.h"
 
 using namespace oceanbase::common;
 

@@ -117,6 +117,7 @@ public:
   int update_tenant_dag_scheduler_config();
   int get_tenant(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
+  int get_active_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
   int update_tenant(uint64_t tenant_id, std::function<int(ObTenant&)> &&func);
   int recv_request(const uint64_t tenant_id, rpc::ObRequest &req);
   int update_tenant_freezer_mem_limit(const uint64_t tenant_id,

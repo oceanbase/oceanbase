@@ -1437,6 +1437,9 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
       set_2pc_upstream_(ls_id_);
       TRANS_LOG(INFO, "set upstream to self", K(*this));
     }
+    // set upstream state when recover tx ctx table
+    set_upstream_state(get_downstream_state());
+
     if (ObTxState::REDO_COMPLETE == get_downstream_state()) {
       sub_state_.set_info_log_submitted();
     }
@@ -6311,8 +6314,6 @@ int ObPartTransCtx::search_unsubmitted_dup_table_redo_()
   if (ls_tx_ctx_mgr_->get_ls_log_adapter()->has_dup_tablet()) {
     if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_COMMIT_INFO_LOG))) {
       TRANS_LOG(WARN, "submit commit info log failed", K(ret), KPC(this));
-      // } else if (OB_FAIL(check_tablet_modify_record_())) {
-      //   TRANS_LOG(WARN, "check the modify tablet failed", K(ret));
     }
   }
   return ret;
@@ -6435,16 +6436,20 @@ int ObPartTransCtx::check_dup_trx_with_submitting_all_redo(ObTxLogBlock &log_blo
   //    c. return OB_EAGAIN
   if (ls_tx_ctx_mgr_->get_ls_log_adapter()->has_dup_tablet()) {
     if (!sub_state_.is_info_log_submitted() && get_downstream_state() < ObTxState::REDO_COMPLETE) {
-
-      ret = submit_pending_log_block_(log_block, helper);
-
-      TRANS_LOG(INFO, "submit all redo log for dup table check", K(ret),
-                K(exec_info_.tablet_modify_record_.count()), KPC(this));
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(check_tablet_modify_record_())) {
-        TRANS_LOG(WARN, "check the modify tablet failed", K(ret));
+      if (exec_info_.redo_lsns_.count() > 0 || exec_info_.prev_record_lsn_.is_valid()
+          || !helper.callbacks_.is_empty()) {
+        set_dup_table_tx_();
       }
+
+      // ret = submit_pending_log_block_(log_block, helper);
+      //
+      // TRANS_LOG(INFO, "submit all redo log for dup table check", K(ret),
+      //           K(exec_info_.tablet_modify_record_.count()), KPC(this));
+      // if (OB_FAIL(ret)) {
+      //   // do nothing
+      // } else if (OB_FAIL(check_tablet_modify_record_())) {
+      //   TRANS_LOG(WARN, "check the modify tablet failed", K(ret));
+      // }
     }
 
   } else {
@@ -6482,65 +6487,65 @@ int ObPartTransCtx::dup_table_tx_pre_commit_()
   return ret;
 }
 
-int ObPartTransCtx::merge_tablet_modify_record_(const common::ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
+// int ObPartTransCtx::merge_tablet_modify_record_(const common::ObTabletID &tablet_id)
+// {
+//   int ret = OB_SUCCESS;
+//
+//   if (exec_info_.tablet_modify_record_.count() >= MAX_TABLET_MODIFY_RECORD_COUNT) {
+//     // do nothing
+//   } else {
+//     bool is_contain = false;
+//     for (int i = 0; i < exec_info_.tablet_modify_record_.count(); i++) {
+//       if (exec_info_.tablet_modify_record_[i] == tablet_id) {
+//         is_contain = true;
+//       }
+//     }
+//     if (!is_contain && OB_FAIL(exec_info_.tablet_modify_record_.push_back(tablet_id))) {
+//       TRANS_LOG(WARN, "push back tablet id failed", K(ret), K(tablet_id),
+//                 K(exec_info_.tablet_modify_record_));
+//     }
+//   }
+//
+//   return ret;
+// }
 
-  if (exec_info_.tablet_modify_record_.count() >= MAX_TABLET_MODIFY_RECORD_COUNT) {
-    // do nothing
-  } else {
-    bool is_contain = false;
-    for (int i = 0; i < exec_info_.tablet_modify_record_.count(); i++) {
-      if (exec_info_.tablet_modify_record_[i] == tablet_id) {
-        is_contain = true;
-      }
-    }
-    if (!is_contain && OB_FAIL(exec_info_.tablet_modify_record_.push_back(tablet_id))) {
-      TRANS_LOG(WARN, "push back tablet id failed", K(ret), K(tablet_id),
-                K(exec_info_.tablet_modify_record_));
-    }
-  }
-
-  return ret;
-}
-
-int ObPartTransCtx::check_tablet_modify_record_()
-{
-  int ret = OB_SUCCESS;
-
-  if (!exec_info_.is_dup_tx_) {
-    bool has_dup_tablet = false;
-    if (!ls_tx_ctx_mgr_->get_ls_log_adapter()->has_dup_tablet()) {
-      has_dup_tablet = false;
-      TRANS_LOG(INFO, "no dup tablet in this ls", K(has_dup_tablet), K(trans_id_), K(ls_id_));
-    } else if (exec_info_.tablet_modify_record_.count() >= MAX_TABLET_MODIFY_RECORD_COUNT) {
-      has_dup_tablet = true;
-      TRANS_LOG(INFO, "too much tablet, consider it as a dup trx", K(ret), K(has_dup_tablet),
-                K(exec_info_.tablet_modify_record_), KPC(this));
-    } else {
-      has_dup_tablet = false;
-      for (int i = 0; i < exec_info_.tablet_modify_record_.count(); i++) {
-
-        if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->check_dup_tablet_in_redo(
-                exec_info_.tablet_modify_record_[i], has_dup_tablet, share::SCN::min_scn(),
-                share::SCN::max_scn()))) {
-          TRANS_LOG(WARN, "check dup tablet failed", K(ret), K(trans_id_), K(ls_id_),
-                    K(exec_info_.tablet_modify_record_[i]));
-        } else if (has_dup_tablet) {
-          TRANS_LOG(INFO, "modify a dup tablet, consider it as a dup trx", K(ret),
-                    K(has_dup_tablet), K(exec_info_.tablet_modify_record_[i]),
-                    K(exec_info_.tablet_modify_record_.count()), KPC(this));
-          break;
-        }
-      }
-    }
-    if (has_dup_tablet) {
-      set_dup_table_tx_();
-    }
-  }
-
-  return ret;
-}
+// int ObPartTransCtx::check_tablet_modify_record_()
+// {
+//   int ret = OB_SUCCESS;
+//
+//   if (!exec_info_.is_dup_tx_) {
+//     bool has_dup_tablet = false;
+//     if (!ls_tx_ctx_mgr_->get_ls_log_adapter()->has_dup_tablet()) {
+//       has_dup_tablet = false;
+//       TRANS_LOG(INFO, "no dup tablet in this ls", K(has_dup_tablet), K(trans_id_), K(ls_id_));
+//     } else if (exec_info_.tablet_modify_record_.count() >= MAX_TABLET_MODIFY_RECORD_COUNT) {
+//       has_dup_tablet = true;
+//       TRANS_LOG(INFO, "too much tablet, consider it as a dup trx", K(ret), K(has_dup_tablet),
+//                 K(exec_info_.tablet_modify_record_), KPC(this));
+//     } else {
+//       has_dup_tablet = false;
+//       for (int i = 0; i < exec_info_.tablet_modify_record_.count(); i++) {
+//
+//         if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->check_dup_tablet_in_redo(
+//                 exec_info_.tablet_modify_record_[i], has_dup_tablet, share::SCN::min_scn(),
+//                 share::SCN::max_scn()))) {
+//           TRANS_LOG(WARN, "check dup tablet failed", K(ret), K(trans_id_), K(ls_id_),
+//                     K(exec_info_.tablet_modify_record_[i]));
+//         } else if (has_dup_tablet) {
+//           TRANS_LOG(INFO, "modify a dup tablet, consider it as a dup trx", K(ret),
+//                     K(has_dup_tablet), K(exec_info_.tablet_modify_record_[i]),
+//                     K(exec_info_.tablet_modify_record_.count()), KPC(this));
+//           break;
+//         }
+//       }
+//     }
+//     if (has_dup_tablet) {
+//       set_dup_table_tx_();
+//     }
+//   }
+//
+//   return ret;
+// }
 
 int ObPartTransCtx::clear_dup_table_redo_sync_result_()
 {
@@ -6596,24 +6601,24 @@ int ObPartTransCtx::retry_dup_trx_before_prepare(const share::SCN &before_prepar
   return ret;
 }
 
-int ObPartTransCtx::merge_tablet_modify_record(const common::ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-
-  CtxLockGuard guard(lock_);
-
-  if (is_exiting_) {
-    // ret = OB_TRANS_CTX_NOT_EXIST;
-    TRANS_LOG(WARN, "merge tablet modify record into a exiting part_ctx", K(ret), K(tablet_id),
-              KPC(this));
-  } else if (!is_follower_()) {
-    ret = OB_NOT_FOLLOWER;
-    TRANS_LOG(WARN, "can not invoke on leader", K(ret), K(tablet_id), KPC(this));
-  } else if (OB_FAIL(merge_tablet_modify_record_(tablet_id))) {
-    TRANS_LOG(WARN, "merge tablet modify record failed", K(ret));
-  }
-  return ret;
-}
+// int ObPartTransCtx::merge_tablet_modify_record(const common::ObTabletID &tablet_id)
+// {
+//   int ret = OB_SUCCESS;
+//
+//   CtxLockGuard guard(lock_);
+//
+//   if (is_exiting_) {
+//     // ret = OB_TRANS_CTX_NOT_EXIST;
+//     TRANS_LOG(WARN, "merge tablet modify record into a exiting part_ctx", K(ret), K(tablet_id),
+//               KPC(this));
+//   } else if (!is_follower_()) {
+//     ret = OB_NOT_FOLLOWER;
+//     TRANS_LOG(WARN, "can not invoke on leader", K(ret), K(tablet_id), KPC(this));
+//   } else if (OB_FAIL(merge_tablet_modify_record_(tablet_id))) {
+//     TRANS_LOG(WARN, "merge tablet modify record failed", K(ret));
+//   }
+//   return ret;
+// }
 
 int ObPartTransCtx::sub_prepare(const ObLSArray &parts,
                                 const MonotonicTs &commit_time,

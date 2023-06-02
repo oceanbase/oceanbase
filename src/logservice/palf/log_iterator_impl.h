@@ -14,11 +14,11 @@
 #define OCEANBASE_LOGSERVICE_LOG_ITERATOR_
 
 #include <type_traits>
-#include "lib/ob_errno.h"
 #include "lib/alloc/alloc_assist.h"
 #include "lib/utility/ob_utility.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"     // TO_STRING_KV
+#include "share/ob_errno.h"                 // OB_PARTIAL_LOG
 #include "log_define.h"                     // LogItemType
 #include "log_block_header.h"               // LogBlockHeader
 #include "lsn.h"                            // LSN
@@ -113,21 +113,34 @@ public:
   //   OB_CHECKSUM_ERROR
   //      - the accumulate checksum calc by accum_checksum_ and the data checksum of LogGroupEntry is not
   //        same as the accumulate checksum of LogGroupEntry
+  //   OB_PARTIAL_LOG
+  //      - this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
   int next(const share::SCN &replayable_point_scn);
 
   // param[in] replayable point scn, iterator will ensure that no log will return when the log scn is greater than
   //           'replayable_point_scn' and the log is raw write
   // param[out] the min log scn of next log, is's valid only when return value is OB_ITER_END
   // param[out] iterate_end_by_replayable_point, return OB_ITER_END whether caused by replayable_point_scn.
-  // @retval
   //   OB_SUCCESS.
   //   OB_INVALID_DATA.
-  //   OB_ITER_END, has iterated to the end of block.
-  //   OB_NEED_RETRY, the data in cache is not integrity, and the integrity data has been truncate from disk,
-  //                  need read data from storage again.(data in cache will not been clean up, therefore,
-  //                  user need used a new iterator to read data again)
-  //   OB_ERR_OUT_LOWER_BOUND, block has been recycled
-  //
+  //   OB_ITER_END
+  //       - has iterated to the end of block.
+  //   OB_NEED_RETRY
+  //      - the data in cache is not integrity, and the integrity data has been truncate from disk,
+  //        need read data from storage again.(data in cache will not been clean up, therefore,
+  //        user need used a new iterator to read data again)
+  //      - if the end_lsn get from get_file_end_lsn is smaller than 'log_tail_' of LogStorage, and it's
+  //        not the exact boundary of LogGroupEntry(for PalfGroupeBufferIterator, or LogEntry for PalfBufferIterator),
+  //        OB_NEED_RETRY may be return.
+  //      - if read_data_from_storage_ is concurrent with the last step of flashback, opening last block on disk may be failed
+  //        due to rename, return OB_NEED_RETRY in this case.(TODO by runlin: retry by myself)
+  //   OB_ERR_OUT_LOWER_BOUND
+  //      - block has been recycled
+  //   OB_CHECKSUM_ERROR
+  //      - the accumulate checksum calc by accum_checksum_ and the data checksum of LogGroupEntry is not
+  //        same as the accumulate checksum of LogGroupEntry
+  //   OB_PARTIAL_LOG
+  //      - this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
   int next(const share::SCN &replayable_point_scn,
            share::SCN &next_min_scn,
            bool &iterate_end_by_replayable_point);
@@ -158,6 +171,8 @@ private:
   //   OB_ITER_END
   //   OB_ERR_OUT_LOWER_BOUND
   //   OB_NEED_RETRY: means the data has been truncate concurrently
+  //   OB_PARTIAL_LOG: this replica has not finished flashback, and iterator start lsn
+  //                   is not the header of LogGroupEntry.
   int get_next_entry_(const SCN &replayable_point_scn,
                       IterateEndInfo &info);
 
@@ -175,6 +190,9 @@ private:
   //      -- means accumulate checksum is not matched.
   //   OB_ITER_END
   //      -- means log entry is iterated end by replayable_point_scn
+  //   OB_PARTIAL_LOG
+    //    -- this replica has not finished flashback, and iterator start lsn is not the header of
+    //       LogGroupEntry.
   int parse_one_entry_(const SCN &replayable_point_scn,
                        IterateEndInfo &info);
 
@@ -210,8 +228,9 @@ private:
         PALF_LOG(TRACE, "iterate end by replayable_point", KPC(this), K(replayable_point_scn), K(info));
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR, "parse LogEntry failed, unexpected error", KPC(this), K(replayable_point_scn), K(info));
+      ret = OB_PARTIAL_LOG;
+      PALF_LOG(WARN, "parse LogEntry failed, may be in flashback mode and this replica has not finished flashback",
+               KPC(this), K(replayable_point_scn), K(info));
     }
     return ret;
   }

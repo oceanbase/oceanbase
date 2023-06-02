@@ -141,6 +141,7 @@ int ObLogFetcher::init(
             log_fetcher_user,
             cfg.idle_pool_thread_num,
             cfg,
+            static_cast<void *>(this),
             *err_handler,
             stream_worker_,
             start_lsn_locator_))) {

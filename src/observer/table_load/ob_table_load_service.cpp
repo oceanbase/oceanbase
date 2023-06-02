@@ -54,7 +54,7 @@ void ObTableLoadService::ObCheckTenantTask::runTimerTask()
       LOG_WARN("fail to get tenant", KR(ret), K(tenant_id_));
     } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
                            tenant->get_unit_status())) {
-      LOG_INFO("tenant unit status not normal, exit", K(tenant_id_), KPC(tenant));
+      LOG_DEBUG("tenant unit status not normal, clear", K(tenant_id_), KPC(tenant));
       // stop all current tasks, release session
       service_.abort_all_ctx();
       // clear all current tasks, release handle
@@ -185,6 +185,21 @@ int ObTableLoadService::mtl_init(ObTableLoadService *&service)
     LOG_WARN("invalid args", KR(ret), KP(service));
   } else if (OB_FAIL(service->init(tenant_id))) {
     LOG_WARN("fail to init table load service", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_tenant()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObTenant *tenant = nullptr;
+  if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
+    LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
+                         tenant->get_unit_status())) {
+    ret = OB_UNIT_IS_MIGRATING;
+    LOG_WARN("unit status not normal", KR(ret), K(tenant->get_unit_status()));
   }
   return ret;
 }

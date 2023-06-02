@@ -158,10 +158,12 @@ int LSNAllocator::inc_update_scn_base(const SCN &ref_scn)
       next.is_need_cut_ = 1;
       if (scn_base_ + last.scn_delta_ > scn) {
         // no need update
+        PALF_LOG(INFO, "inc_update_scn_base success", K_(scn_base),
+            "scn_delta", last.scn_delta_, K(scn));
         break;
       } else if (CAS128(&lsn_ts_meta_, last, next)) {
         scn_base_ = scn;
-        PALF_LOG(INFO, "inc_update_scn_base success", K(scn), K(scn));
+        PALF_LOG(INFO, "inc_update_scn_base success", K_(scn_base), K(scn));
         break;
       } else {
         PAUSE();

@@ -58,12 +58,11 @@ const char *log_archive_encryption_algorithm_values[] =
 // ObConfigItem
 ObConfigItem::ObConfigItem()
     : ck_(NULL), version_(0), dumped_version_(0), inited_(false), initial_value_set_(false),
-      value_updated_(false), dump_value_updated_(false), value_valid_(false), name_str_(nullptr), info_str_(nullptr),
+      value_updated_(false), value_valid_(false), name_str_(nullptr), info_str_(nullptr),
       range_str_(nullptr), lock_()
 {
   MEMSET(value_str_, 0, sizeof(value_str_));
   MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
-  MEMSET(value_dump_str_, 0, sizeof(value_dump_str_));
 }
 
 ObConfigItem::~ObConfigItem()
@@ -989,11 +988,13 @@ ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
                                          const char *range,
                                          const char *info,
                                          const ObParameterAttr attr)
+    : dump_value_updated_(false)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
   init(scope_info, name, def, range, info, attr);
+  MEMSET(value_dump_str_, 0, sizeof(value_dump_str_));
 }
 
 ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
@@ -1002,11 +1003,13 @@ ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
                                          const char *def,
                                          const char *info,
                                          const ObParameterAttr attr)
+    : dump_value_updated_(false)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
   init(scope_info, name, def, "", info, attr);
+  MEMSET(value_dump_str_, 0, sizeof(value_dump_str_));
 }
 
 bool ObConfigVersionItem::set(const char *str)

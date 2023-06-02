@@ -199,7 +199,7 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
               if (OB_ERR_TOO_MANY_ROWS != ret) {
                 int cli_ret = OB_SUCCESS;
                 retry_ctrl.test_and_save_retry_state(GCTX,
-                                                    *ctx.exec_ctx_.get_sql_ctx(),
+                                                    spi_result.get_sql_ctx(),
                                                     *spi_result.get_result_set(),
                                                     ret, cli_ret, true, true, true);
                 ret = cli_ret;

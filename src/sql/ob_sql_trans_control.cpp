@@ -1183,7 +1183,9 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
   can_read = false;
 
   if (!ls_id.is_valid()
-      || !addr.is_valid()) {
+      || !addr.is_valid()
+      || max_stale_time_us == 0
+      || max_stale_time_us <= -2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
   } else if (-1 == max_stale_time_us) {

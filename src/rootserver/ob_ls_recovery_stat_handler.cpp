@@ -99,7 +99,7 @@ int ObLSRecoveryStatHandler::increase_ls_replica_readable_scn_(SCN &readable_scn
   common::ObRole second_role;
   logservice::ObLogService *ls_svr = MTL(logservice::ObLogService*);
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
-  share::ObAllTenantInfo tenant_info;
+  SCN replayable_scn = SCN::base_scn();
   palf::PalfHandleGuard palf_handle_guard;
 
   if (OB_FAIL(check_inner_stat_())) {
@@ -118,8 +118,8 @@ int ObLSRecoveryStatHandler::increase_ls_replica_readable_scn_(SCN &readable_scn
   } else if (OB_FAIL(ls_svr->open_palf(ls_->get_ls_id(), palf_handle_guard))) {
     LOG_WARN("failed to open palf", KR(ret), K_(ls));
   // scn get order: read_scn before replayable_scn before sync_scn
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("failed to get_tenant_info", KR(ret));
+  } else if (OB_FAIL(tenant_info_loader->get_replayable_scn(replayable_scn))) {
+    LOG_WARN("failed to get replayable_scn", KR(ret));
   } else if (OB_FAIL(palf_handle_guard.get_end_scn(sync_scn))) {
     LOG_WARN("failed to get end ts", KR(ret), K_(ls));
   } else if (OB_FAIL(ls_svr->get_palf_role(ls_->get_ls_id(), second_role, second_proposal_id))) {
@@ -130,13 +130,13 @@ int ObLSRecoveryStatHandler::increase_ls_replica_readable_scn_(SCN &readable_scn
     LOG_WARN("not leader", KR(ret), K(first_proposal_id), K(second_proposal_id), K(first_role),
                            K(second_role), KPC_(ls));
   } else {
-    if (sync_scn < tenant_info.get_replayable_scn() && readable_scn == sync_scn
-        && sync_scn.is_valid_and_not_min() && tenant_info.get_replayable_scn().is_valid_and_not_min()
+    if (sync_scn < replayable_scn && readable_scn == sync_scn
+        && sync_scn.is_valid_and_not_min() && replayable_scn.is_valid_and_not_min()
         && readable_scn.is_valid_and_not_min()) {
       // two scenarios
       // 1. when sync scn is pushed forward in switchover
       // 2. wait offline LS
-      sync_scn = readable_scn = tenant_info.get_replayable_scn();
+      sync_scn = readable_scn = replayable_scn;
     }
   }
 

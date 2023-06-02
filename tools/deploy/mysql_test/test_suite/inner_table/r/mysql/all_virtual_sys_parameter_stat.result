@@ -147,6 +147,7 @@ min_observer_version
 mysql_port
 net_thread_count
 obconfig_url
+observer_id
 ob_compaction_schedule_interval
 ob_enable_batched_multi_statement
 ob_event_history_recycle_interval
@@ -194,7 +195,6 @@ server_balance_disk_tolerance_percent
 server_check_interval
 server_cpu_quota_max
 server_cpu_quota_min
-server_id
 server_permanent_offline_time
 sql_login_thread_count
 sql_net_thread_count

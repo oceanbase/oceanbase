@@ -695,7 +695,6 @@ int ObGranuleIteratorOp::do_join_filter_partition_pruning(
 
   if (OB_SUCC(ret) && OB_NOT_NULL(rf_msg_) && rf_msg_->check_ready()) {
     uint64_t hash_val = ObExprJoinFilter::JOIN_FILTER_SEED;
-    ObDatum &datum = MY_SPEC.tablet_id_expr_->locate_expr_datum(eval_ctx_);
     if (MY_SPEC.bf_info_.skip_subpart_) {
       int64_t part_id = OB_INVALID_ID;
       if (OB_FAIL(try_build_tablet2part_id_map())) {
@@ -707,6 +706,7 @@ int ObGranuleIteratorOp::do_join_filter_partition_pruning(
       }
     }
     if (OB_SUCC(ret) && !is_match) {
+      ObDatum datum;
       datum.int_ = &tablet_id;
       datum.len_ = sizeof(tablet_id);
       ObRFBloomFilterMsg *bf_msg = static_cast<ObRFBloomFilterMsg *>(rf_msg_);

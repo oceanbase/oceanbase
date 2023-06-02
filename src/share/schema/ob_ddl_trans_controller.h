@@ -43,6 +43,9 @@ public:
   ObDDLTransController() : inited_(false), schema_service_(NULL) {}
   ~ObDDLTransController();
   int init(share::schema::ObMultiVersionSchemaService *schema_service);
+  void stop();
+  void wait();
+  void destroy();
   static const int DDL_TASK_COND_SLOT = 128;
   int create_task_and_assign_schema_version(const uint64_t tenant_id,
       const uint64_t schema_version_count,

@@ -449,14 +449,13 @@ int ObPxSQCProxy::report(int end_ret) const
   // 第一版暂不支持重试
   int sqc_ret = OB_SUCCESS;
   auto &tasks = sqc_ctx.get_tasks();
-  update_error_code(sqc_ret, end_ret);
   ObSQLSessionInfo *session = NULL;
   CK(OB_NOT_NULL(sqc_arg.exec_ctx_) &&
      OB_NOT_NULL(session = GET_MY_SESSION(*sqc_arg.exec_ctx_)));
   for (int64_t i = 0; i < tasks.count(); ++i) {
     // overwrite ret
     ObPxTask &task = tasks.at(i);
-    update_error_code(sqc_ret, task.get_result());
+    ObPxErrorUtil::update_sqc_error_code(sqc_ret, task.get_result(), task.err_msg_, finish_msg.err_msg_);
     affected_rows += task.get_affected_rows();
     finish_msg.dml_row_info_.add_px_dml_row_info(task.dml_row_info_);
     finish_msg.temp_table_id_ = task.temp_table_id_;
@@ -481,6 +480,7 @@ int ObPxSQCProxy::report(int end_ret) const
 
     OZ(append(finish_msg.interm_result_ids_, task.interm_result_ids_));
   }
+  ObPxErrorUtil::update_error_code(sqc_ret, end_ret);
   if (OB_SUCCESS != ret && OB_SUCCESS == sqc_ret) {
     sqc_ret = ret;
   }

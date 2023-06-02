@@ -97,7 +97,7 @@ ObMicroBlockEncoder::ObMicroBlockEncoder() : ctx_(), header_(NULL),
     buffered_rows_checksum_(0), estimate_size_(0), estimate_size_limit_(0),
     header_size_(0), expand_pct_(DEFAULT_ESTIMATE_REAL_SIZE_PCT),
     row_buf_holder_(blocksstable::OB_ENCODING_LABEL_ROW_BUFFER, OB_MALLOC_MIDDLE_BLOCK_SIZE),
-    encoder_allocator_(encoder_sizes, common::ObModIds::OB_ENCODER_ALLOCATOR),
+    encoder_allocator_(encoder_sizes, ObMemAttr(MTL_ID(), common::ObModIds::OB_ENCODER_ALLOCATOR)),
     string_col_cnt_(0), estimate_base_store_size_(0), length_(0),
     is_inited_(false)
 {

@@ -49,24 +49,42 @@ int ObDDLTransController::init(share::schema::ObMultiVersionSchemaService *schem
   return ret;
 }
 
-ObDDLTransController::~ObDDLTransController()
+void ObDDLTransController::stop()
 {
   ObThreadPool::stop();
   wait_cond_.signal();
+}
+
+void ObDDLTransController::wait()
+{
+  wait_cond_.signal();
   ObThreadPool::wait();
-  ObThreadPool::destroy();
-  tasks_.destroy();
-  tenants_.destroy();
-  tenant_for_ddl_trans_new_lock_.destroy();
-  schema_service_ = NULL;
-  inited_ = false;
+}
+
+void ObDDLTransController::destroy()
+{
+  if (inited_) {
+    inited_ = false;
+    stop();
+    wait();
+    ObThreadPool::destroy();
+    tasks_.destroy();
+    tenants_.destroy();
+    tenant_for_ddl_trans_new_lock_.destroy();
+    schema_service_ = NULL;
+  }
+}
+
+ObDDLTransController::~ObDDLTransController()
+{
+  destroy();
 }
 
 void ObDDLTransController::run1()
 {
-  int ret = OB_SUCCESS;
   lib::set_thread_name("DDLTransCtr");
   while (!has_set_stop()) {
+    int ret = OB_SUCCESS;
     ObArray<uint64_t> tenant_ids;
     {
       SpinWLockGuard guard(lock_);
@@ -80,6 +98,7 @@ void ObDDLTransController::run1()
       }
     }
     if (OB_SUCC(ret) && tenant_ids.count() > 0) {
+      LOG_INFO("refresh_schema tenants", K(tenant_ids));
       if (OB_ISNULL(GCTX.root_service_)) {
       } else {
         // ignore ret continue
@@ -99,7 +118,7 @@ void ObDDLTransController::run1()
             LOG_WARN("fail to broadcast consensus version", KR(ret), K(tenant_id), K(schema_version));
           } else {
             int64_t end_time = ObTimeUtility::current_time();
-            LOG_INFO("refresh_schema", KR(ret), K(tenant_id), K(end_time - start_time));
+            LOG_INFO("refresh_schema", KR(ret), K(tenant_id), K(end_time - start_time), K(schema_version));
           }
          }
       }

@@ -122,7 +122,7 @@ OB_DEF_SERIALIZE(ObRFInFilterMsg)
   int cnt = is_active_? serial_rows_.count() : 0;
   OB_UNIS_ENCODE(cnt);
   OB_UNIS_ENCODE(cmp_funcs_);
-  OB_UNIS_ENCODE(hash_funcs_);
+  OB_UNIS_ENCODE(hash_funcs_for_insert_);
   OB_UNIS_ENCODE(col_cnt_);
   OB_UNIS_ENCODE(max_in_num_);
   OB_UNIS_ENCODE(need_null_cmp_flags_);
@@ -143,7 +143,7 @@ OB_DEF_DESERIALIZE(ObRFInFilterMsg)
   BASE_DESER((ObRFInFilterMsg, ObP2PDatahubMsgBase));
   OB_UNIS_DECODE(row_cnt);
   OB_UNIS_DECODE(cmp_funcs_);
-  OB_UNIS_DECODE(hash_funcs_);
+  OB_UNIS_DECODE(hash_funcs_for_insert_);
   OB_UNIS_DECODE(col_cnt_);
   OB_UNIS_DECODE(max_in_num_);
   OB_UNIS_DECODE(need_null_cmp_flags_);
@@ -173,7 +173,7 @@ OB_DEF_DESERIALIZE(ObRFInFilterMsg)
         } else if (OB_FAIL(serial_rows_.push_back(new_row))) {
           LOG_WARN("fail to push back new row", K(ret));
         } else {
-          ObRFInFilterNode node(&cmp_funcs_, &hash_funcs_, new_row);
+          ObRFInFilterNode node(&cmp_funcs_, &hash_funcs_for_insert_, new_row);
           if (OB_FAIL(rows_set_.set_refactored(node))) {
             LOG_WARN("fail to insert in filter node", K(ret));
           }
@@ -191,7 +191,7 @@ OB_DEF_SERIALIZE_SIZE(ObRFInFilterMsg)
   int cnt = is_active_? serial_rows_.count() : 0;
   OB_UNIS_ADD_LEN(cnt);
   OB_UNIS_ADD_LEN(cmp_funcs_);
-  OB_UNIS_ADD_LEN(hash_funcs_);
+  OB_UNIS_ADD_LEN(hash_funcs_for_insert_);
   OB_UNIS_ADD_LEN(col_cnt_);
   OB_UNIS_ADD_LEN(max_in_num_);
   OB_UNIS_ADD_LEN(need_null_cmp_flags_);
@@ -1221,7 +1221,7 @@ int ObRFInFilterMsg::assign(const ObP2PDatahubMsgBase &msg)
     LOG_WARN("failed to assign base data", K(ret));
   } else if (OB_FAIL(cmp_funcs_.assign(other_msg.cmp_funcs_))) {
     LOG_WARN("fail to assign bf msg", K(ret));
-  } else if (OB_FAIL(hash_funcs_.assign(other_msg.hash_funcs_))) {
+  } else if (OB_FAIL(hash_funcs_for_insert_.assign(other_msg.hash_funcs_for_insert_))) {
     LOG_WARN("fail to assign bf msg", K(ret));
   } else if (OB_FAIL(cur_row_.assign(other_msg.cur_row_))) {
     LOG_WARN("failed to assign filter indexes", K(ret));
@@ -1315,7 +1315,7 @@ int ObRFInFilterMsg::insert_by_row_batch(
 int ObRFInFilterMsg::insert_node()
 {
   int ret = OB_SUCCESS;
-  ObRFInFilterNode node(&cmp_funcs_, &hash_funcs_, &cur_row_);
+  ObRFInFilterNode node(&cmp_funcs_, &hash_funcs_for_insert_, &cur_row_);
   if (OB_FAIL(rows_set_.exist_refactored(node))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -1391,7 +1391,7 @@ int ObRFInFilterMsg::append_row()
         if (OB_FAIL(serial_rows_.push_back(new_row))) {
           LOG_WARN("fail to push back serial rows", K(ret));
         } else {
-          ObRFInFilterNode node(&cmp_funcs_, &hash_funcs_, new_row);
+          ObRFInFilterNode node(&cmp_funcs_, &hash_funcs_for_insert_, new_row);
           if (OB_FAIL(rows_set_.set_refactored(node))) {
             LOG_WARN("fail to insert in filter node", K(ret));
           }
@@ -1405,12 +1405,17 @@ int ObRFInFilterMsg::append_row()
 int ObRFInFilterMsg::ObRFInFilterNode::hash(uint64_t &hash_ret) const
 {
   int ret = OB_SUCCESS;
-  hash_ret = 0;
-  for (int i = 0; i < row_->count() && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(hash_funcs_->at(i).hash_func_(row_->at(i), hash_ret, hash_ret))) {
-      LOG_WARN("fail to calc hash value", K(ret), K(hash_ret));
+  if (OB_ISNULL(hash_funcs_)) {
+    hash_ret = hash_val_;
+  } else {
+    hash_ret = ObExprJoinFilter::JOIN_FILTER_SEED;
+    for (int i = 0; i < row_->count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(hash_funcs_->at(i).hash_func_(row_->at(i), hash_ret, hash_ret))) {
+        LOG_WARN("fail to calc hash value", K(ret), K(hash_ret));
+      }
     }
   }
+
   return ret;
 }
 
@@ -1460,6 +1465,7 @@ int ObRFInFilterMsg::might_contain(const ObExpr &expr,
   int ret = OB_SUCCESS;
   ObDatum *datum = nullptr;
   bool is_match = true;
+  uint64_t hash_val = ObExprJoinFilter::JOIN_FILTER_SEED;
   ObSEArray<ObDatum, 4> cur_row;
   if (OB_UNLIKELY(!is_active_)) {
     res.set_int(1);
@@ -1477,11 +1483,18 @@ int ObRFInFilterMsg::might_contain(const ObExpr &expr,
           LOG_WARN("expr.inner_functions_ is null", K(ret));
         } else if (OB_FAIL(cur_row.push_back(*datum))) {
           LOG_WARN("failed to push back datum", K(ret));
+        } else {
+          ObHashFunc hash_func;
+          hash_func.hash_func_ = reinterpret_cast<ObDatumHashFuncType>(
+              expr.inner_functions_[GET_FUNC(i, ObExprJoinFilter::HASH_ROW)]);
+          if (OB_FAIL(hash_func.hash_func_(*datum, hash_val, hash_val))) {
+            LOG_WARN("fail to calc hash val", K(ret));
+          }
         }
       }
     }
     if (OB_SUCC(ret)) {
-      ObRFInFilterNode node(&cmp_funcs_, &hash_funcs_, &cur_row);
+      ObRFInFilterNode node(&cmp_funcs_, nullptr, &cur_row, hash_val);
       if (OB_FAIL(rows_set_.exist_refactored(node))) {
         if (OB_HASH_NOT_EXIST == ret) {
           is_match = false;
@@ -1557,7 +1570,7 @@ int ObRFInFilterMsg::destroy()
 {
   int ret = OB_SUCCESS;
   rows_set_.destroy();
-  hash_funcs_.reset();
+  hash_funcs_for_insert_.reset();
   cmp_funcs_.reset();
   need_null_cmp_flags_.reset();
   cur_row_.reset();

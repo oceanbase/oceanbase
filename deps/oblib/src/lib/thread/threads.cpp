@@ -222,6 +222,9 @@ int Threads::create_thread(Thread *&thread, std::function<void()> entry)
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     thread = new (buf) Thread(entry, stack_size_);
+    if (nullptr != run_wrapper_) {
+      thread->set_tenant_id(run_wrapper_->id());
+    }
     if (OB_FAIL(thread->start())) {
       thread->~Thread();
       ob_free(thread);

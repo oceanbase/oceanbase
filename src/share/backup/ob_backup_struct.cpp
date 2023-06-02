@@ -4772,7 +4772,7 @@ int ObRestoreSourceServiceAttr::get_password(char *passwd, const int64_t buf_siz
   if (OB_ISNULL(passwd) || OB_UNLIKELY((buf_size <= 0) || (buf_size < OB_MAX_PASSWORD_LENGTH))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parameter when get password", K(passwd), K(STRLEN(passwd)));
-  } else if (OB_FAIL(databuff_printf(passwd, sizeof(passwd), "%s", encrypt_passwd_))) {
+  } else if (OB_FAIL(databuff_printf(passwd, buf_size, "%s", encrypt_passwd_))) {
     LOG_WARN("failed to print encrypt_passwd_ key", K(encrypt_passwd_));
   }
   return ret;

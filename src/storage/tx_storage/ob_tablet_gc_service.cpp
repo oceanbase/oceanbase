@@ -346,21 +346,19 @@ int ObTabletGCHandler::check_tablet_gc_for_standby_(bool &cannot_gc, ObTabletHan
 {
   int ret = OB_SUCCESS;
   cannot_gc = false;
-  SCN readable_scn;
+  SCN readable_scn = SCN::base_scn();
   ObTablet *tablet = NULL;
   rootserver::ObTenantInfoLoader *info = MTL(rootserver::ObTenantInfoLoader*);
   ObTabletTxMultiSourceDataUnit tx_data;
-  share::ObAllTenantInfo tenant_info;
-  if (OB_ISNULL(info)) {
+  if (MTL_IS_PRIMARY_TENANT()) {
+  } else if (OB_ISNULL(info)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "mtl ObTenantRecoveryReportor should not be null", KR(ret));
-  } else if (OB_FAIL(info->get_tenant_info(tenant_info))) {
-    LOG_WARN("fail to get_tennat_info", KPC(info));
-  } else if (tenant_info.is_primary()) {
-  } else if (FALSE_IT(readable_scn = tenant_info.get_standby_scn())) {
+  } else if (OB_FAIL(info->get_readable_scn(readable_scn))) {
+    LOG_WARN("fail to get readable_scn", KPC(info));
   } else if (!readable_scn.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "readable scn is invalid", KR(ret), KPC(this->ls_), K(tenant_info));
+    STORAGE_LOG(WARN, "readable scn is invalid", KR(ret), KPC(this->ls_), K(readable_scn));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tablet is NULL", KR(ret), KPC(this->ls_), K(tablet_handle));

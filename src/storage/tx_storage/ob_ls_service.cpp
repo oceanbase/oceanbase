@@ -17,6 +17,7 @@
 #include "observer/ob_service.h"
 #include "observer/ob_srv_network_frame.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
+#include "share/rc/ob_tenant_base.h"  // MTL_IS_RESTORE_TENANT
 #include "storage/ls/ob_ls.h"
 #include "storage/ls/ob_ls_lock.h"
 #include "storage/ls/ob_ls_meta.h"
@@ -556,8 +557,10 @@ int ObLSService::replay_update_ls(const ObLSMeta &ls_meta)
   } else if (OB_FAIL(check_ls_exist(ls_meta.ls_id_, ls_is_existed))) {
     LOG_WARN("fail to check log stream existence", K(ret), K(ls_meta));
   } else if (!ls_is_existed) {
-    ret = OB_LS_NOT_EXIST;
-    LOG_WARN("ls not exit", K(ret), K(ls_meta));
+    LOG_WARN("ls not exit, update will create a new one", K(ls_meta));
+    if (OB_FAIL(replay_create_ls_(ls_meta))) {
+      LOG_WARN("fail to create ls for replay", K(ret), K(ls_meta));
+    }
   } else if (OB_FAIL(replay_update_ls_(ls_meta))) {
     LOG_WARN("fail to update ls for replay", K(ret), K(ls_meta));
   }
@@ -1317,21 +1320,14 @@ int ObLSService::get_restore_status_(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
-  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
-  share::ObAllTenantInfo tenant_info;
   restore_status = ObLSRestoreStatus::RESTORE_NONE;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(tenant_info_loader)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant info loader should not be NULL", K(ret), KP(tenant_info_loader));
   } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
     restore_status = ObLSRestoreStatus::RESTORE_NONE;
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("failed to get tenant info", K(ret));
-  } else if (FALSE_IT(restore_status = tenant_info.is_restore() ?
+  } else if (FALSE_IT(restore_status = MTL_IS_RESTORE_TENANT() ?
       ObLSRestoreStatus::RESTORE_START : ObLSRestoreStatus::RESTORE_NONE)) {
   }
   return ret;

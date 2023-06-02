@@ -118,7 +118,6 @@ public:
   virtual ~TGHelper() {}
   virtual void tg_create_cb(int) = 0;
   virtual void tg_destroy_cb(int) = 0;
-  virtual uint64_t id() const = 0;
 };
 
 extern TGHelper *&get_tenant_tg_helper();
@@ -177,15 +176,15 @@ public:
     UNUSED(task);
     return common::OB_NOT_SUPPORTED;
   }
-  virtual int schedule(common::ObTimerTask &task, const int64_t delay, bool repeate = false)
+  virtual int schedule(common::ObTimerTask &task, const int64_t delay, bool repeate = false, bool immediate = false)
   {
-    UNUSEDx(task, delay, repeate);
+    UNUSEDx(task, delay, repeate, immediate);
     return common::OB_NOT_SUPPORTED;
   }
   virtual int schedule(int idx, common::ObTimerTask &task,
-                       const int64_t delay, bool repeate = false)
+                       const int64_t delay, bool repeate = false, bool immediate = false)
   {
-    UNUSEDx(idx, task, delay, repeate);
+    UNUSEDx(idx, task, delay, repeate, immediate);
     return common::OB_NOT_SUPPORTED;
   }
   virtual int task_exist(const common::ObTimerTask &task, bool &exist)
@@ -779,13 +778,13 @@ public:
     }
   }
 
-  int schedule(common::ObTimerTask &task, const int64_t delay, bool repeate = false) override
+  int schedule(common::ObTimerTask &task, const int64_t delay, bool repeate = false, bool immediate = false) override
   {
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(timer_)) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      ret = timer_->schedule(task, delay, repeate);
+      ret = timer_->schedule(task, delay, repeate, immediate);
     }
     return ret;
   }
@@ -969,7 +968,7 @@ public:
     }
   }
   int schedule(int idx, common::ObTimerTask &task, const int64_t delay,
-               bool repeate = false) override
+               bool repeate = false, bool immediate = false) override
   {
     int ret = common::OB_SUCCESS;
     if (!is_inited_) {
@@ -979,7 +978,7 @@ public:
     } else if (OB_ISNULL(timers_[idx])) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      ret = timers_[idx]->schedule(task, delay, repeate);
+      ret = timers_[idx]->schedule(task, delay, repeate, immediate);
     }
     return ret;
   }

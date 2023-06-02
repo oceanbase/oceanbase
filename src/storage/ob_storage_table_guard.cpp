@@ -53,9 +53,9 @@ ObStorageTableGuard::~ObStorageTableGuard()
   bool &need_speed_limit = tl_need_speed_limit();
   if (need_control_mem_ && need_speed_limit) {
     bool need_sleep = true;
-    int64_t left_interval = SPEED_LIMIT_MAX_SLEEP_TIME;
+    int64_t left_interval = INT64_MAX;
     if (!for_replay_) {
-      left_interval = min(SPEED_LIMIT_MAX_SLEEP_TIME, store_ctx_.timeout_ - ObTimeUtility::current_time());
+      left_interval = min(left_interval, store_ctx_.timeout_ - ObTimeUtility::current_time());
     }
     if (NULL != memtable_) {
       need_sleep = memtable_->is_active_memtable();
@@ -68,7 +68,8 @@ ObStorageTableGuard::~ObStorageTableGuard()
     bool has_sleep = false;
     int64_t sleep_time = 0;
     int time = 0;
-    int64_t &seq = get_seq();
+    const int64_t &seq = get_seq();
+    int64_t clock = 0;
     if (store_ctx_.mvcc_acc_ctx_.is_write()) {
       ObGMemstoreAllocator* memstore_allocator = NULL;
       if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
@@ -76,6 +77,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
       } else if (OB_ISNULL(memstore_allocator)) {
         LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "get_tenant_mutil_allocator failed", K(store_ctx_.tablet_id_), K(tmp_ret));
       } else {
+        clock = memstore_allocator->get_clock();
         while (need_sleep &&
                !memstore_allocator->check_clock_over_seq(seq) &&
                (left_interval > 0)) {
@@ -106,7 +108,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
     if (REACH_TIME_INTERVAL(100 * 1000L) &&
         sleep_time > 0) {
       int64_t cost_time = ObTimeUtility::current_time() - init_ts_;
-      LOG_INFO("throttle situation", K(sleep_time), K(time), K(seq), K(for_replay_), K(cost_time));
+      LOG_INFO("throttle situation", K(sleep_time), K(clock), K(time), K(seq), K(for_replay_), K(cost_time));
     }
 
     if (for_replay_ && has_sleep) {

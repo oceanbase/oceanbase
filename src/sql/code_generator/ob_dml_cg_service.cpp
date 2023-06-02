@@ -853,6 +853,8 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
                "name", log_constraint_infos->at(i).constraint_name_);
     } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.init(constraint_columns.count()))) {
       LOG_WARN("init rowkey failed", K(ret), K(constraint_columns.count()));
+    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_accuracys_.init(constraint_columns.count()))) {
+      LOG_WARN("init rowkey accuracy failed", K(ret));
     }
 
     for (int64_t j = 0; OB_SUCC(ret) && j < constraint_columns.count(); ++j) {
@@ -886,6 +888,8 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.push_back(expr))) {
           LOG_WARN("fail to push_back expr", K(ret));
+        } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_accuracys_.push_back(col_expr->get_accuracy()))) {
+          LOG_WARN("fail to store rowkey accuracy", K(ret));
         }
       }
     } // end constraint_columns

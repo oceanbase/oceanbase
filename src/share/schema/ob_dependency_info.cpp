@@ -293,6 +293,8 @@ int ObDependencyInfo::insert_schema_object_dependency(common::ObISQLClient &tran
     LOG_WARN("get ref object time failed", K(ret),
                                           K(dep_info.get_ref_obj_type()),
                                           K(dep_info.get_ref_obj_id()));
+  } else if (get_dep_obj_id() == get_ref_obj_id()) {
+    // do nothing. object may depend on self
   } else if (OB_FAIL(gen_dependency_dml(exec_tenant_id, dml))) {
     LOG_WARN("gen table dml failed", K(ret));
   } else {
@@ -333,10 +335,8 @@ int ObDependencyInfo::collect_dep_infos(const ObIArray<ObSchemaObjVersion> &sche
     if (!(ObObjectType::TRIGGER == dep_obj_type && 0 == i)) {
       ObDependencyInfo dep;
       const ObSchemaObjVersion &s_objs = schema_objs.at(i);
-      if (!s_objs.is_valid()
-          // object may depend on self
-          || (is_pl
-          && dep_obj_type == ObSchemaObjVersion::get_schema_object_type(s_objs.object_type_))) {
+      if (!s_objs.is_valid()) {
+        // only collect valid dependency
         continue;
       }
       dep.set_dep_obj_id(OB_INVALID_ID);
@@ -408,40 +408,59 @@ int ObDependencyInfo::collect_all_dep_objs(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-  SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
-    common::sqlclient::ObMySQLResult *result = NULL;
-    if (OB_FAIL(sql.assign_fmt("SELECT dep_obj_id, dep_obj_type FROM %s WHERE tenant_id = %lu AND ref_obj_id = %lu",
-                                      OB_ALL_TENANT_DEPENDENCY_TNAME,
-                                      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                                      ref_obj_id))) {
-      LOG_WARN("failed to assign sql", K(ret));
-    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
-      LOG_WARN("execute sql failed", K(ret), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result is null", K(ret));
-    } else {
-      while (OB_SUCC(result->next())) {
-        int64_t tmp_obj_id = OB_INVALID_ID;
-        int64_t tmp_type = static_cast<int64_t> (share::schema::ObObjectType::INVALID);
-        EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", tmp_obj_id, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_type", tmp_type, int64_t);
-        if (OB_FAIL(ret)) {
-        } else if (tmp_type <= static_cast<int64_t> (share::schema::ObObjectType::INVALID)
-                    || tmp_type >= static_cast<int64_t> (share::schema::ObObjectType::MAX_TYPE)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get wrong obj type", K(ret));
-        } else if (ref_obj_id == tmp_obj_id) {
-          // skip
-        } else if (OB_FAIL(objs.push_back({static_cast<uint64_t> (tmp_obj_id), static_cast<share::schema::ObObjectType> (tmp_type)}))) {
-          LOG_WARN("failed to push back obj", K(ret));
+  const int64_t init_count = objs.count();
+  {
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("SELECT dep_obj_id, dep_obj_type FROM %s WHERE tenant_id = %lu AND ref_obj_id = %lu",
+                                        OB_ALL_TENANT_DEPENDENCY_TNAME,
+                                        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                        ref_obj_id))) {
+        LOG_WARN("failed to assign sql", K(ret));
+      } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret));
+      } else {
+        while (OB_SUCC(result->next())) {
+          int64_t tmp_obj_id = OB_INVALID_ID;
+          int64_t tmp_type = static_cast<int64_t> (share::schema::ObObjectType::INVALID);
+          EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", tmp_obj_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_type", tmp_type, int64_t);
+          if (OB_FAIL(ret)) {
+          } else if (tmp_type <= static_cast<int64_t> (share::schema::ObObjectType::INVALID)
+                      || tmp_type >= static_cast<int64_t> (share::schema::ObObjectType::MAX_TYPE)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get wrong obj type", K(ret));
+          } else if (ref_obj_id == tmp_obj_id) {
+            // skip
+          } else if (has_exist_in_array(objs, {static_cast<uint64_t> (tmp_obj_id), static_cast<share::schema::ObObjectType> (tmp_type)})) {
+            // dedpulicate
+          } else if (OB_FAIL(objs.push_back({static_cast<uint64_t> (tmp_obj_id), static_cast<share::schema::ObObjectType> (tmp_type)}))) {
+            LOG_WARN("failed to push back obj", K(ret));
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
+          LOG_WARN("read dependency info failed", K(ret));
         }
       }
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
-        LOG_WARN("read dependency info failed", K(ret));
+    }
+  }
+  bool is_overflow = false;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recusive", K(ret));
+  } else {
+    for (int64_t i = init_count; OB_SUCC(ret) && i < objs.count(); ++i) {
+      if (OB_FAIL(collect_all_dep_objs(tenant_id, objs.at(i).first, sql_proxy, objs))) {
+        LOG_WARN("failed to collect all dep objs", K(ret), K(objs.count()), K(init_count), K(i));
       }
     }
   }
@@ -456,20 +475,13 @@ int ObDependencyInfo::modify_dep_obj_status(common::ObMySQLTransaction &trans,
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  ObSchemaGetterGuard schema_guard;
-  common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> obj_id_set;
-  const int64_t BKT_NUM = 32;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version < DATA_VERSION_4_1_0_0) {
     // do nothing
-  } else if (OB_FAIL(obj_id_set.create(BKT_NUM))) {
-    LOG_WARN("failed to create hash set ", K(ret));
-  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
   } else if (OB_FAIL(cascading_modify_obj_status(trans, tenant_id, obj_id,
-                                                 schema_guard, ddl_operator,
-                                                 schema_service, obj_id_set))) {
+                                                 ddl_operator,
+                                                 schema_service))) {
     LOG_WARN("failed to modify obj status", K(ret));
   }
   return ret;
@@ -478,70 +490,58 @@ int ObDependencyInfo::modify_dep_obj_status(common::ObMySQLTransaction &trans,
 int ObDependencyInfo::cascading_modify_obj_status(common::ObMySQLTransaction &trans,
                                                   uint64_t tenant_id,
                                                   uint64_t obj_id,
-                                                  ObSchemaGetterGuard &schema_guard,
                                                   rootserver::ObDDLOperator &ddl_operator,
-                                                  share::schema::ObMultiVersionSchemaService &schema_service,
-                                                  common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> &obj_id_set)
+                                                  share::schema::ObMultiVersionSchemaService &schema_service)
 {
   int ret = OB_SUCCESS;
-  bool is_overflow = false;
   ObArray<std::pair<uint64_t, share::schema::ObObjectType>> objs;
-  const bool update_object_status_ignore_version = false;
-  if (OB_FAIL(check_stack_overflow(is_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recusive", K(ret));
-  } else if (OB_FAIL(collect_all_dep_objs(tenant_id, obj_id, trans, objs))) {
+  if (OB_FAIL(collect_all_dep_objs(tenant_id, obj_id, trans, objs))) {
     LOG_WARN("failed to collect all objs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); ++i) {
-      const ObTableSchema *view_schema = NULL;
+  } else if (OB_FAIL(modify_all_obj_status(objs, trans, tenant_id, ddl_operator, schema_service))) {
+    LOG_WARN("failed to modify obj status", K(ret));
+  }
+  return ret;
+}
+
+int ObDependencyInfo::modify_all_obj_status(const ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs,
+                                            common::ObMySQLTransaction &trans,
+                                            uint64_t tenant_id,
+                                            rootserver::ObDDLOperator &ddl_operator,
+                                            share::schema::ObMultiVersionSchemaService &schema_service)
+{
+  int ret = OB_SUCCESS;
+  const bool update_object_status_ignore_version = false;
+  if (OB_ISNULL(schema_service.get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema service", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); ++i) {
+    if (OB_INVALID_ID == objs.at(i).first) {
+      // skipped by ddl
+      continue;
+    }
+    if (OB_SUCC(ret)) {
+      ObRefreshSchemaStatus schema_status;
+      schema_status.tenant_id_ = tenant_id;
       ObObjectStatus new_status = ObObjectStatus::INVALID;
       int64_t refresh_schema_version = OB_INVALID_SCHEMA_VERSION;
       if (share::schema::ObObjectType::VIEW == objs.at(i).second) {
-        if (OB_FAIL(schema_service.gen_new_schema_version(tenant_id, refresh_schema_version))) {
-          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, objs.at(i).first, view_schema))) {
-          LOG_WARN("failed to get view schema", K(ret));
-        } else if (OB_ISNULL(view_schema) || !view_schema->is_view_table()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get wrong schema", K(ret), KP(view_schema));
-        } else if (OB_FAIL(ddl_operator.update_table_status(*view_schema, refresh_schema_version,
-                                                            new_status, update_object_status_ignore_version,
-                                                            trans))) {
-          LOG_WARN("failed to update table status", K(ret));
+        HEAP_VAR(ObTableSchema, view_schema) {
+          if (OB_FAIL(schema_service.get_schema_service()->get_table_schema_from_inner_table(schema_status, objs.at(i).first, trans, view_schema))) {
+            LOG_WARN("failed to get view schema", K(ret));
+          } else if (!view_schema.is_view_table()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get wrong schema", K(ret), K(view_schema));
+          } else if (OB_FAIL(schema_service.gen_new_schema_version(tenant_id, refresh_schema_version))) {
+            LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+          } else if (OB_FAIL(ddl_operator.update_table_status(view_schema, refresh_schema_version,
+                                                              new_status, update_object_status_ignore_version,
+                                                              trans))) {
+            LOG_WARN("failed to update table status", K(ret));
+          }
         }
       } else if (share::schema::ObObjectType::SYNONYM == objs.at(i).second) {
         // TODO:peihan.dph
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); ++i) {
-      // why we need do pre check by using hashset ?
-      /*          obj1 --> obj2 --> obj3
-                  obj1 --> obj3
-        if dependency record its ref relation like this, we should only update obj3 status once.
-      */
-      if (OB_FAIL(obj_id_set.exist_refactored(objs.at(i).first))) {
-        if (OB_HASH_EXIST == ret) {
-          ret = OB_SUCCESS;
-          continue;
-        } else if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          OZ (obj_id_set.set_refactored(objs.at(i).first));
-        } else {
-          LOG_WARN("failed to check hash set", K(ret));
-        }
-      } else {
-        // exist_refactored will not return OB_SUCC
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error occur", K(ret));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(cascading_modify_obj_status(trans, tenant_id, objs.at(i).first,
-                                                     schema_guard, ddl_operator,
-                                                     schema_service, obj_id_set))) {
-        LOG_WARN("failed to modify obj status", K(ret));
       }
     }
   }

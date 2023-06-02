@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_exec_ctx.h"
+#include "observer/table_load/ob_table_load_service.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -42,6 +43,8 @@ int ObTableLoadSqlExecCtx::check_status()
   if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
     ret = OB_SERVER_IS_STOPPING;
     LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else if (OB_FAIL(exec_ctx_->check_status())) {
     LOG_WARN("fail to check exec ctx status", KR(ret));
   }
@@ -58,6 +61,8 @@ int ObTableLoadClientExecCtx::check_status()
   if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
     ret = OB_SERVER_IS_STOPPING;
     LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   }
   return ret;
 }

@@ -947,6 +947,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     int tmp_ret = OB_SUCCESS;
     bool is_leader = false;
     bool could_major_merge = false;
+    bool locality_bad_case = false;
     const int64_t major_frozen_scn = get_frozen_version();
     ObRole role = INVALID_ROLE;
     ObLSLocality ls_locality;
@@ -968,16 +969,18 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
             LOG_WARN("failed to get ls locality", K(ret), K(ls_id));
           } else if (ls_locality.is_valid()) {
             if (!ls_locality.check_exist(GCTX.self_addr())) {
+              locality_bad_case = true;
               ADD_SUSPECT_INFO(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX),
                 "maybe bad case: ls leader is not in ls locality", "leader_addr", GCTX.self_addr(), K(ls_locality));
-            } else {
-              DEL_SUSPECT_INFO(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX));
             }
           }
         }
       } else {
         all_ls_weak_read_ts_ready = false;
       }
+    }
+    if (!locality_bad_case) {
+      DEL_SUSPECT_INFO(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX));
     }
 
     while (OB_SUCC(ret) && schedule_tablet_cnt < SCHEDULE_TABLET_BATCH_CNT) { // loop all tablet in ls

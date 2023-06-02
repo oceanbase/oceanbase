@@ -156,13 +156,16 @@ public:
   static int cascading_modify_obj_status(common::ObMySQLTransaction &trans,
                                          uint64_t tenant_id,
                                          uint64_t obj_id,
-                                         ObSchemaGetterGuard &schema_guard,
                                          rootserver::ObDDLOperator &ddl_operator,
-                                         share::schema::ObMultiVersionSchemaService &schema_service,
-                                         common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> &obj_id_set);
+                                         share::schema::ObMultiVersionSchemaService &schema_service);
   static int modify_dep_obj_status(common::ObMySQLTransaction &trans,
                                    uint64_t tenant_id,
                                    uint64_t obj_id,
+                                   rootserver::ObDDLOperator &ddl_operator,
+                                   share::schema::ObMultiVersionSchemaService &schema_service);
+  static int modify_all_obj_status(const ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs,
+                                   common::ObMySQLTransaction &trans,
+                                   uint64_t tenant_id,
                                    rootserver::ObDDLOperator &ddl_operator,
                                    share::schema::ObMultiVersionSchemaService &schema_service);
 

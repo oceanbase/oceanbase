@@ -365,10 +365,9 @@ int ObGroupLookupOp::set_lookup_scan_group(int64_t group_id)
 int ObGroupLookupOp::revert_iter()
 {
   int ret = OB_SUCCESS;
-  /*
-   * ObLookupOp will call ObLocalIndexLookupOp::revert_iter();
-   * We do not need revert twice!
-  */
+  if (OB_FAIL(ObLocalIndexLookupOp::revert_iter())) {
+    LOG_WARN("revert local index lookup iter from group fail.", K(ret));
+  }
   group_iter_.reset();
   return ret;
 }

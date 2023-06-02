@@ -64,8 +64,7 @@ public:
 
   typedef ObArray<ConfigItem> ConfigItemArray;
 public:
-  ObBaseConfig() : config_file_buf1_(NULL), config_file_buf2_(NULL)
-  {}
+  ObBaseConfig() {}
   int init();
   void destroy();
   int check_all();
@@ -74,11 +73,6 @@ public:
     const int64_t version = 0, const bool check_name = false);
   int load_from_file(const char *config_file, const int64_t version = 0, const bool check_name = false);
   int dump2file(const char *config_file) const;
-protected:
-  // for load_from_file
-  char *config_file_buf1_;
-  // for load_from_buffer
-  char *config_file_buf2_;
 private:
   bool inited_;
   static const int64_t OB_MAX_CONFIG_LENGTH = 5 * 1024 * 1024;  // 5M

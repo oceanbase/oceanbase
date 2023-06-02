@@ -108,7 +108,8 @@ public:
       sort_batch_rows_(),
       first_batch_from_sort_(true),
       dir_id_(-1),
-      group_batch_factor_(8)
+      group_batch_factor_(8),
+      max_partial_rollup_idx_(INT64_MAX)
   {
   }
   void reset();
@@ -251,6 +252,7 @@ private:
   int64_t dir_id_;
   // default is a magic number 8, may use a sophisticated way
   int64_t group_batch_factor_;
+  int64_t max_partial_rollup_idx_;
 };
 
 OB_INLINE int ObMergeGroupByOp::aggregate_group_rows(const int64_t group_id,

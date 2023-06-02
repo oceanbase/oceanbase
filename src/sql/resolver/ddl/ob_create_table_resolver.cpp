@@ -58,7 +58,7 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       is_oracle_temp_table_(false),
       index_arg_(),
       current_index_name_set_(),
-      cur_column_group_id_(0)
+      cur_udt_set_id_(0)
 {
 }
 
@@ -71,9 +71,9 @@ uint64_t ObCreateTableResolver::gen_column_id()
   return ++cur_column_id_;
 }
 
-uint64_t ObCreateTableResolver::gen_column_group_id()
+uint64_t ObCreateTableResolver::gen_udt_set_id()
 {
-  return ++cur_column_group_id_;
+  return ++cur_udt_set_id_;
 }
 
 int64_t ObCreateTableResolver::get_primary_key_size() const
@@ -1411,7 +1411,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
           }
 
           if (OB_SUCC(ret) && column.is_xmltype()) {
-            column.set_udt_set_id(gen_column_group_id());
+            column.set_udt_set_id(gen_udt_set_id());
           }
 
           if (OB_SUCC(ret)) {
@@ -1839,7 +1839,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               column.set_meta_type(xml_meta);
               column.set_sub_data_type(T_OBJ_XML);
               // udt column is varbinary used for null bitmap
-              column.set_udt_set_id(gen_column_group_id());
+              column.set_udt_set_id(gen_udt_set_id());
             } else {
               ret = OB_ERR_INVALID_DATATYPE;
               LOG_WARN("invalid data type", K(ret), K(*expr));

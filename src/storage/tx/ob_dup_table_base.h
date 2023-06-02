@@ -563,7 +563,7 @@ private:
  *  Dup_Table Tablets
  *******************************************************/
 
-class DupTabletCommonHeader
+class DupTabletSetCommonHeader
 {
   OB_UNIS_VERSION(1);
 
@@ -600,14 +600,14 @@ public:
                K(tablet_set_type_),
                K(sp_op_type_));
 
-  DupTabletCommonHeader(const uint64_t id) : unique_id_(id)
+  DupTabletSetCommonHeader(const uint64_t id) : unique_id_(id)
   {
     // set_free();
     // set_invalid_sp_op_type();
     reuse();
   }
-  DupTabletCommonHeader() { reset(); }
-  ~DupTabletCommonHeader() { reset(); }
+  DupTabletSetCommonHeader() { reset(); }
+  ~DupTabletSetCommonHeader() { reset(); }
 
   bool is_valid() const {
     return  unique_id_is_valid() && tablet_set_type_is_valid();
@@ -669,7 +669,7 @@ public:
   }
   // bool contain_special_op(uint64_t special_op) const { return get_special_op_() == special_op; }
   bool no_specail_op() const { return INVALID_SPECIAL_OP == sp_op_type_; }
-  void copy_tablet_set_type(const DupTabletCommonHeader &src_common_header)
+  void copy_tablet_set_type(const DupTabletSetCommonHeader &src_common_header)
   {
     set_unique_id_(src_common_header.get_unique_id());
     set_special_op_(src_common_header.get_special_op());
@@ -712,7 +712,7 @@ private:
   int64_t sp_op_type_;
 };
 
-typedef common::ObSEArray<DupTabletCommonHeader, 3> DupTabletSetIDArray;
+typedef common::ObSEArray<DupTabletSetCommonHeader, 3> DupTabletSetIDArray;
 
 /*******************************************************
  *  Dup_Table Checkpoint
@@ -888,7 +888,7 @@ private:
   int sync_log_succ_(const bool for_replay);
 
 private:
-  void after_submit_log(const bool for_replay);
+  void after_submit_log(const bool submit_result, const bool for_replay);
 
 #define LOG_OPERATOR_INIT_CHECK                                                                  \
   if (OB_SUCC(ret)) {                                                                            \

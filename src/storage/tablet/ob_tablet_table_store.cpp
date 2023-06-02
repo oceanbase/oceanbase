@@ -440,7 +440,7 @@ int ObTabletTableStore::update_memtables()
   } else if (OB_FAIL(tablet_ptr_->get_memtable_mgr()->get_all_memtables(inc_memtables))) {
     LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
   } else if (FALSE_IT(time_guard.click("get_all_memtable"))) {
-  } else if (OB_FAIL(memtables_.rebuild(tablet_ptr_->get_clog_checkpoint_scn(), inc_memtables))) {
+  } else if (OB_FAIL(memtables_.rebuild(inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables", K(ret), K(inc_memtables), KPC(this));
   } else if (FALSE_IT(time_guard.click("memtables_.rebuild"))) {
   } else {

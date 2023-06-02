@@ -1451,6 +1451,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
           // SQL_AUDIT_START
           ObWaitEventDesc max_wait_desc;
           ObWaitEventStat total_wait_desc;
+          ObArenaAllocator allocator;
           const bool enable_perf_event = lib::is_diagnose_info_enabled();
           const bool enable_sql_audit =
             GCONF.enable_sql_audit && ctx->exec_ctx_->get_my_session()->get_local_ob_enable_sql_audit();
@@ -1484,7 +1485,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
               retry_ctrl.set_tenant_local_schema_version(tenant_version);
               retry_ctrl.set_sys_local_schema_version(sys_version);
               spi_result.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard();
-              ObArenaAllocator allocator;
               if (OB_FAIL(inner_open(ctx,
                                     allocator,
                                     sql,
@@ -1713,13 +1713,13 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
                 int cli_ret = OB_SUCCESS;
                 retry_ctrl.test_and_save_retry_state(
                           GCTX,
-                          *ctx->exec_ctx_->get_sql_ctx(),
+                          spi_result.get_sql_ctx(),
                           *spi_result.get_result_set(),
                           ret, cli_ret, true, true, true);
                   LOG_WARN("failed to get_result, check if need retry",
                             K(ret), K(cli_ret), K(retry_ctrl.need_retry()));
                 ret = cli_ret;
-                ctx->exec_ctx_->get_sql_ctx()->clear();
+                spi_result.get_sql_ctx().clear();
                 ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
               }
 	          } /* else if (OB_FAIL(inner_fetch(ctx,
@@ -2691,13 +2691,13 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(
                         GCTX,
-                        *ctx->exec_ctx_->get_sql_ctx(),
+                        spi_result.get_sql_ctx(),
                         *spi_result.get_result_set(),
                         ret, cli_ret, true, true, true);
                 LOG_WARN("failed to get_result, check if need retry",
                           K(ret), K(cli_ret), K(retry_ctrl.need_retry()));
               ret = cli_ret;
-              ctx->exec_ctx_->get_sql_ctx()->clear();
+              spi_result.get_sql_ctx().clear();
               ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
             }
             // todo:@hr351303 确认session标记是否还需要
@@ -3656,13 +3656,13 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
             if (spi_result->get_result_set() != NULL) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
-                                                *ctx->exec_ctx_->get_sql_ctx(),
+                                                spi_result->get_sql_ctx(),
                                                 *spi_result->get_result_set(),
                                                 ret, cli_ret, true, true, true);
                 LOG_WARN("fail to open, check if need retry", K(ret), K(cli_ret),
                   K(retry_ctrl.need_retry()), K(sql_str), K(ps_sql), K(exec_params));
               ret = cli_ret;
-              ctx->exec_ctx_->get_sql_ctx()->clear();
+              spi_result->get_sql_ctx().clear();
               ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
             }
           }
@@ -3778,7 +3778,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
             if (OB_FAIL(ret)) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
-                                                  *ctx->exec_ctx_->get_sql_ctx(),
+                                                  spi_result.get_sql_ctx(),
                                                   *spi_result.get_result_set(),
                                                   ret,
                                                   cli_ret,
@@ -3789,7 +3789,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                       K(ret), K(cli_ret), K(retry_ctrl.need_retry()),
                       K(sql_stmt), K(ps_sql), K(exec_params));
               ret = cli_ret;
-              ctx->exec_ctx_->get_sql_ctx()->clear();
+              spi_result.get_sql_ctx().clear();
               ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
             }
           }
@@ -5305,13 +5305,13 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       int cli_ret = OB_SUCCESS;
       retry_ctrl->test_and_save_retry_state(
                 GCTX,
-                *ctx->exec_ctx_->get_sql_ctx(),
+                spi_result.get_sql_ctx(),
                 *spi_result.get_result_set(),
                 ret, cli_ret, true, true, true);
       LOG_WARN("failed to get_result, check if need retry",
                   K(ret), K(cli_ret), K(retry_ctrl->need_retry()), K(sql), K(ps_sql), K(type));
       ret = cli_ret;
-      ctx->exec_ctx_->get_sql_ctx()->clear();
+      spi_result.get_sql_ctx().clear();
       ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl->need_retry());
     }
   }
@@ -5453,7 +5453,7 @@ int ObSPIService::inner_fetch(ObPLExecCtx *ctx,
           int cli_ret = OB_SUCCESS;
           retry_ctrl.test_and_save_retry_state(
             GCTX,
-            *ctx->exec_ctx_->get_sql_ctx(),
+            spi_result.get_sql_ctx(),
             *result_set, ret, cli_ret, true, true, true);
           if (!for_cursor || (for_cursor && ret != OB_READ_NOTHING)) {
             LOG_WARN("failed to get_result, check if need retry",
@@ -5463,7 +5463,7 @@ int ObSPIService::inner_fetch(ObPLExecCtx *ctx,
         }
       }
     }
-    ctx->exec_ctx_->get_sql_ctx()->clear();
+    spi_result.get_sql_ctx().clear();
     ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
   }
   return ret;

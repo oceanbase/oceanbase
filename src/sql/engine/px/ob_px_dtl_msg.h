@@ -32,6 +32,8 @@ namespace oceanbase
 namespace sql
 {
 
+typedef obrpc::ObRpcResultCode ObPxUserErrorMsg;
+
 struct ObPxTabletInfo
 {
   OB_UNIS_VERSION(1);
@@ -351,7 +353,8 @@ public:
       : dfo_id_(common::OB_INVALID_ID),
         sqc_id_(common::OB_INVALID_ID),
         rc_(common::OB_SUCCESS),
-        task_count_(0) {}
+        task_count_(0),
+        err_msg_() {}
   virtual ~ObPxInitSqcResultMsg() = default;
   void reset() {}
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(task_count));
@@ -360,6 +363,7 @@ public:
   int64_t sqc_id_;
   int rc_; // 错误码
   int64_t task_count_;
+  ObPxUserErrorMsg err_msg_; // for error msg & warning msg
   // No need to serialize
   ObSEArray<ObPxTabletInfo, 8> tablets_info_;
 };
@@ -380,7 +384,8 @@ public:
         dml_row_info_(),
         temp_table_id_(common::OB_INVALID_ID),
         interm_result_ids_(),
-        fb_info_() {}
+        fb_info_(),
+        err_msg_() {}
   virtual ~ObPxFinishSqcResultMsg() = default;
   const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
@@ -393,6 +398,7 @@ public:
     task_monitor_info_array_.reset();
     dml_row_info_.reset();
     fb_info_.reset();
+    err_msg_.reset();
   }
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(sqc_affected_rows));
 public:
@@ -406,6 +412,7 @@ public:
   uint64_t temp_table_id_;
   ObSEArray<uint64_t, 8> interm_result_ids_;
   ObExecFeedbackInfo fb_info_;
+  ObPxUserErrorMsg err_msg_; // for error msg & warning msg
 };
 
 class ObPxFinishTaskResultMsg

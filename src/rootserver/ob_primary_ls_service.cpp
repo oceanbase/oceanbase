@@ -2165,13 +2165,7 @@ void ObPrimaryLSService::do_work()
               LOG_WARN("failed to drop tenant", KR(ret), KR(tmp_ret), K(user_tenant_id));
             }
             MTL_SWITCH(user_tenant_id) {
-              ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
-              if (OB_ISNULL(tenant_info_loader)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("tenant report is null", KR(ret), K(tenant_id_));
-              } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-                LOG_WARN("failed to get tenant info", KR(ret));
-              } else if (!tenant_info.is_primary()) {
+              if (!MTL_IS_PRIMARY_TENANT()) {
                 //standby and restore
                 idle_time_us = 100 * 1000L;
               }

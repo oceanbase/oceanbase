@@ -153,6 +153,53 @@ public:
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 
+class ObRedefCallback
+{
+public:
+  ObRedefCallback() : infos_(nullptr) {}
+  virtual ~ObRedefCallback() = default;
+
+  virtual int modify_info(ObTableRedefinitionTask &redef_task,
+                          ObDDLTaskQueue &task_queue,
+                          ObISQLClient &trans);
+  virtual int update_redef_task_info(ObTableRedefinitionTask& redef_task) = 0;
+  virtual int update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
+                                      ObDDLTaskQueue &ddl_task_queue) = 0;
+protected:
+  common::hash::ObHashMap<ObString, bool> *infos_;
+};
+
+class ObAbortRedefCallback : public ObRedefCallback
+{
+public:
+  ObAbortRedefCallback() = default;
+  virtual ~ObAbortRedefCallback() = default;
+  virtual int update_redef_task_info(ObTableRedefinitionTask& redef_task) override;
+  virtual int update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
+                                      ObDDLTaskQueue &ddl_task_queue) override;
+};
+
+class ObCopyTableDepCallback : public ObRedefCallback
+{
+public:
+  ObCopyTableDepCallback() = default;
+  virtual ~ObCopyTableDepCallback() = default;
+  virtual int update_redef_task_info(ObTableRedefinitionTask& redef_task) override;
+  virtual int update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
+                                      ObDDLTaskQueue &ddl_task_queue) override;
+  int set_infos(common::hash::ObHashMap<ObString, bool> *infos);
+};
+
+class ObFinishRedefCallback : public ObRedefCallback
+{
+public:
+  ObFinishRedefCallback() = default;
+  virtual ~ObFinishRedefCallback() = default;
+  virtual int update_redef_task_info(ObTableRedefinitionTask& redef_task) override;
+  virtual int update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
+                                      ObDDLTaskQueue &ddl_task_queue) override;
+};
+
 /*
  * the only scheduler for all ddl tasks executed in root service
  *
@@ -206,14 +253,11 @@ public:
       const ObDDLTaskKey &task_key,
       const uint64_t autoinc_val,
       const int ret_code);
-  template<typename F>
-  int update_task_info(const ObDDLTaskID &task_id,
-                                      ObMySQLTransaction &trans,
-                                      ObDDLTaskRecord &task_record,
-                                      ObTableRedefinitionTask *ddl_task,
-                                      common::ObArenaAllocator &allocator,
-                                      F &&modify_info);
-
+  int get_task_record(const ObDDLTaskID &task_id,
+                      ObISQLClient &trans,
+                      ObDDLTaskRecord &task_record,
+                      common::ObIAllocator &allocator);
+  int modify_redef_task(const ObDDLTaskID &task_id, ObRedefCallback &cb);
   int abort_redef_table(const ObDDLTaskID &task_id);
 
   int copy_table_dependents(const ObDDLTaskID &task_id,
@@ -225,7 +269,6 @@ public:
   int finish_redef_table(const ObDDLTaskID &task_id);
   int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res);
   int update_ddl_task_active_time(const ObDDLTaskID &task_id);
-  int reschedule_ddl_task(const ObDDLTaskID &task_id, ObDDLTaskRecord &task_record);
   int prepare_alter_table_arg(const ObPrepareAlterTableArgParam &param,
                               const ObTableSchema *target_table_schema,
                               obrpc::ObAlterTableArg &alter_table_arg);

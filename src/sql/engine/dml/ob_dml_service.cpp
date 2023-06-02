@@ -1130,6 +1130,10 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   if (base_ctdef.is_insert_up_) {
     dml_param.write_flag_.set_is_insert_up();
   }
+  if (dml_param.table_param_->get_data_table().is_storage_index_table()
+      && !dml_param.table_param_->get_data_table().can_read_index()) {
+    dml_param.write_flag_.set_is_write_only_index();
+  }
   return ret;
 }
 

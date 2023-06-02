@@ -2454,6 +2454,8 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
     }
   }
   if (OB_PARSER_SUCCESS == errcode) {
+    parse_ctx->scanner_ctx_.sql_end_loc = parse_ctx->stmt_len_ <= parse_ctx->scanner_ctx_.sql_end_loc ?
+                                            parse_ctx->stmt_len_ - 1 : parse_ctx->scanner_ctx_.sql_end_loc;
     sql_str_len = parse_ctx->scanner_ctx_.sql_end_loc - parse_ctx->scanner_ctx_.sql_start_loc + 1;
   }
   if (OB_PARSER_SUCCESS == errcode && sql_str_len > 0) {

@@ -228,6 +228,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
       //           snapshot
       int counter = 0;
       while (OB_SUCC(ret)
+             && !ctx_->is_standby_read_
              && is_determined_state
              && !(iter->is_committed() || iter->is_aborted() || iter->is_elr())) {
         if (OB_FAIL(try_cleanout_tx_node_(iter))) {

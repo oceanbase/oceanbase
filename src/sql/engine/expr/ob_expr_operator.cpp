@@ -4903,6 +4903,7 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
         max_length = MAX(max_length, types_stack[i].get_length());
       }
       type.set_length(static_cast<ObLength>(max_length));
+      type.set_scale(SCALE_UNKNOWN_YET);
     } else {
       int64_t max_scale = 0;
       int64_t max_precision = 0;

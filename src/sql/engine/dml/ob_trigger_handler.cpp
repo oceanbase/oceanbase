@@ -412,7 +412,10 @@ int TriggerHandle::calc_trigger_routine(
       trigger_id, routine_id, params);
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));
-  OX (exec_ctx.get_my_session()->set_for_trigger_package(old_flag));
+  if (exec_ctx.get_my_session()->is_for_trigger_package()) {
+    // whether `ret == OB_SUCCESS`, need to restore flag
+    exec_ctx.get_my_session()->set_for_trigger_package(old_flag);
+  }
   return ret;
 }
 

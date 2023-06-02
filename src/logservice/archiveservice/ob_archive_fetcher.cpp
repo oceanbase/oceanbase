@@ -587,7 +587,7 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
   while (OB_SUCC(ret) && ! iter_end && ! piece_change && ! has_set_stop()) {
     buffer = NULL;
     if (OB_FAIL(iter.next(max_scn))) {
-      if (OB_ITER_END == ret || common::OB_NEED_RETRY == ret) {
+      if (iterator_need_retry_(ret)) {
         ARCHIVE_LOG(TRACE, "iterate log entry to end", K(ret), K(iter));
       } else {
         ARCHIVE_LOG(WARN, "iterate log entry failed", K(ret), K(iter));
@@ -632,7 +632,7 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
       }
     }
   }
-  if (OB_ITER_END == ret || OB_NEED_RETRY == ret) {
+  if (iterator_need_retry_(ret)) {
     ret = OB_SUCCESS;
   }
 
@@ -1250,6 +1250,11 @@ int ObArchiveFetcher::TmpMemoryHelper::reserve_(const int64_t size)
 int64_t ObArchiveFetcher::TmpMemoryHelper::get_reserved_buf_size_() const
 {
   return sizeof(ObArchiveSendTask) + ARCHIVE_FILE_HEADER_SIZE;
+}
+
+bool ObArchiveFetcher::iterator_need_retry_(const int ret) const
+{
+  return OB_NEED_RETRY == ret || OB_ITER_END == ret || OB_PARTIAL_LOG == ret;
 }
 } // namespace archive
 } // namespace oceanbase

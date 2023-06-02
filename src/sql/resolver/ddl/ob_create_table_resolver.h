@@ -67,7 +67,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateTableResolver);
   // function members
   uint64_t gen_column_id();
-  uint64_t gen_column_group_id();
+  uint64_t gen_udt_set_id();
   int64_t get_primary_key_size() const;
   int add_primary_key_part(const common::ObString &column_name, common::ObArray<ObColumnResolveStat> &stats, int64_t &pk_data_length);
   int add_hidden_tablet_seq_col();
@@ -149,7 +149,7 @@ private:
   common::ObSEArray<GenColExpr, 5> gen_col_exprs_;//store generated column and dependent exprs
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
 
-  uint64_t cur_column_group_id_;
+  uint64_t cur_udt_set_id_;
 };
 
 } // end namespace sql

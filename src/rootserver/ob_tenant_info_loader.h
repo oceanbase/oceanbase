@@ -31,6 +31,7 @@ class SCN;
 namespace rootserver
 {
 
+class ObRecoveryLSService;
 class ObAllTenantInfoCache
 {
 public:
@@ -67,6 +68,7 @@ private:
  * Periodically cache tenant info.*/
 class ObTenantInfoLoader : public share::ObReentrantThread
 {
+  friend class ObRecoveryLSService;
 public:
  ObTenantInfoLoader()
      : is_inited_(false),
@@ -90,7 +92,6 @@ public:
    BLOCKING_RUN_IMPLEMENT();
  }
  virtual void run2() override;
- int get_tenant_info(share::ObAllTenantInfo &tenant_info);
  /**
   * @description:
   *    get valid sts, only return sts refreshed after specified_time
@@ -103,9 +104,55 @@ public:
   *       3. sts can not work for current tenant status
   */
  int get_valid_sts_after(const int64_t specified_time_us, share::SCN &standby_scn);
+ /**
+  * @description:
+  *    get tenant standby scn.
+  *       for SYS/META/user tenant: use GTS/STS cache as readable_scn
+  * @param[out] readable_scn
+  */
+ int get_readable_scn(share::SCN &readable_scn);
+
+ /**
+  * @description:
+  *    get tenant replayable_scn.
+  *       for SYS/META tenant: there isn't replayable_scn
+  *       for user tenant: get replayable_scn from __all_tenant_info cache
+  * @param[out] replayable_scn
+  */
+ int get_replayable_scn(share::SCN &replayable_scn);
+
+ /**
+  * @description:
+  *    get tenant is_standby_normal_status
+  *       for SYS/META tenant: return false
+  *       for user tenant: return tenant_info.is_standby() && tenant_info.is_normal_status()
+  * @param[out] is_standby_normal_status
+  */
+ int check_is_standby_normal_status(bool &is_standby_normal_status);
+
+ /**
+  * @description:
+  *    get tenant is_primary_normal_status
+  *       for SYS/META tenant: return true
+  *       for user tenant: return tenant_info.is_primary() && tenant_info.is_normal_status()
+  * @param[out] is_primary_normal_status
+  */
+ int check_is_primary_normal_status(bool &is_primary_normal_status);
+
  int refresh_tenant_info();
  int update_tenant_info_cache(const int64_t new_ora_rowscn, const ObAllTenantInfo &new_tenant_info);
  bool need_refresh(const int64_t refresh_time_interval_us);
+
+protected:
+ /**
+  * @description:
+  *    get tenant info
+  *       for SYS/META tenant: do not support
+  *       for user tenant: tenant_info
+  * @param[out] tenant_info
+  */
+ int get_tenant_info(share::ObAllTenantInfo &tenant_info);
+
 private:
  bool is_sys_ls_leader_();
  void broadcast_tenant_info_content_();

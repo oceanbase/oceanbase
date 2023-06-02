@@ -473,6 +473,11 @@ void ObServer::destroy()
   // Cause ObBackupInfo to lock the mutex that has been destroyed by itself, and finally trigger the core
   // This is essentially an implementation problem of repeated destruction of ObBackupInfo (or one of its members). ObServer also adds a layer of defense here.
   FLOG_INFO("[OBSERVER_NOTICE] destroy observer begin");
+
+  FLOG_INFO("begin to destroy config manager");
+  config_mgr_.destroy();
+  FLOG_INFO("destroy config manager success");
+
   if (is_arbitration_mode()) {
   } else if (!has_destroy_ && has_stopped_) {
     FLOG_INFO("begin destroy signal worker");
@@ -482,10 +487,6 @@ void ObServer::destroy()
     FLOG_INFO("begin destroy signal handle");
     signal_handle_->destroy();
     FLOG_INFO("signal handle destroyed");
-
-    FLOG_INFO("begin to destroy ObLogger");
-    OB_LOGGER.destroy();
-    FLOG_INFO("ObLogger destroyed");
 
     FLOG_INFO("active session history task destroyed");
     ObClockGenerator::destroy();
@@ -514,6 +515,31 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy background thread monitor");
     ObBGThreadMonitor::get_instance().destroy();
     FLOG_INFO("background thread monitor destroyed");
+
+    FLOG_INFO("begin to destroy table store stat mgr");
+    ObTableStoreStatMgr::get_instance().destroy();
+    FLOG_INFO("table store stat mgr destroyed");
+
+
+    FLOG_INFO("begin to destroy unix domain listener");
+    unix_domain_listener_.destroy();
+    FLOG_INFO("unix domain listener destroyed");
+
+    FLOG_INFO("begin to destroy table service");
+    table_service_.destroy();
+    FLOG_INFO("table service destroyed");
+
+    FLOG_INFO("begin to destroy batch rpc");
+    batch_rpc_.destroy();
+    FLOG_INFO("batch rpc destroyed");
+
+    FLOG_INFO("begin to destroy schema service");
+    schema_service_.destroy();
+    FLOG_INFO("schema service destroyed");
+
+    FLOG_INFO("begin to destroy table auto increment service");
+    ObTabletAutoincrementService::get_instance().destroy();
+    FLOG_INFO("table auto increment service destroyed");
 
     FLOG_INFO("begin to destroy server gtimer");
     TG_DESTROY(lib::TGDefIDs::ServerGTimer);
@@ -903,7 +929,11 @@ int ObServer::start()
     FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
 
     bool timezone_usable = false;
-    tenant_timezone_mgr_.set_start_refresh(true);
+    if (FAILEDx(tenant_timezone_mgr_.start())) {
+      LOG_ERROR("fail to start tenant timezone mgr", KR(ret));
+    } else {
+      FLOG_INFO("success to start tenant timezone mgr");
+    }
     while (OB_SUCC(ret) && !stop_ && !timezone_usable) {
       timezone_usable = tenant_timezone_mgr_.is_usable();
       if (!timezone_usable) {
@@ -997,6 +1027,10 @@ int ObServer::stop()
   int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer begin");
 
+  FLOG_INFO("begin to stop config manager");
+  config_mgr_.stop();
+  FLOG_INFO("stop config manager success");
+
   if (is_arbitration_mode()) {
   } else {
 #ifdef ENABLE_IMC
@@ -1048,6 +1082,27 @@ int ObServer::stop()
     FLOG_INFO("begin to stop backup info");
     ObBackupInfoMgr::get_instance().stop();
     FLOG_INFO("backup info stopped");
+
+    FLOG_INFO("begin to stop table store stat mgr");
+    ObTableStoreStatMgr::get_instance().stop();
+    FLOG_INFO("table store stat mgr stopped");
+
+
+    FLOG_INFO("begin to stop unix domain listener");
+    unix_domain_listener_.stop();
+    FLOG_INFO("unix domain listener stopped");
+
+    FLOG_INFO("begin to stop table service");
+    table_service_.stop();
+    FLOG_INFO("table service stopped");
+
+    FLOG_INFO("begin to stop batch rpc");
+    batch_rpc_.stop();
+    FLOG_INFO("batch rpc stopped");
+
+    FLOG_INFO("begin to stop schema service");
+    schema_service_.stop();
+    FLOG_INFO("schema service stopped");
 
     FLOG_INFO("begin to stop ob_service");
     ob_service_.stop();
@@ -1267,6 +1322,10 @@ int ObServer::wait()
     FLOG_INFO("observer stopped");
   }
 
+  FLOG_INFO("begin to wait config manager");
+  config_mgr_.wait();
+  FLOG_INFO("wait config manager success");
+
   if (is_arbitration_mode()) {
   } else {
 
@@ -1285,6 +1344,27 @@ int ObServer::wait()
     FLOG_INFO("begin to wait timer monitor");
     ObTimerMonitor::get_instance().wait();
     FLOG_INFO("wait timer monitor success");
+
+    FLOG_INFO("begin to wait table store stat mgr");
+    ObTableStoreStatMgr::get_instance().wait();
+    FLOG_INFO("wait table store stat mgr success");
+
+
+    FLOG_INFO("begin to wait unix domain listener");
+    unix_domain_listener_.wait();
+    FLOG_INFO("wait unix domain listener success");
+
+    FLOG_INFO("begin to wait table service");
+    table_service_.wait();
+    FLOG_INFO("wait table service success");
+
+    FLOG_INFO("begin to wait batch rpc");
+    batch_rpc_.wait();
+    FLOG_INFO("wait batch rpc success");
+
+    FLOG_INFO("begin to wait schema service");
+    schema_service_.wait();
+    FLOG_INFO("wait schema service success");
 
     FLOG_INFO("begin to wait bg thread monitor");
     ObBGThreadMonitor::get_instance().wait();
@@ -2275,7 +2355,7 @@ int ObServer::init_global_context()
   (void)gctx_.set_upgrade_stage(obrpc::OB_UPGRADE_STAGE_INVALID);
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
-  gctx_.server_id_ = config_.server_id;
+  gctx_.server_id_ = config_.observer_id;
   if (is_valid_server_id(gctx_.server_id_)) {
     LOG_INFO("this observer has had a valid server_id", K(gctx_.server_id_));
   }

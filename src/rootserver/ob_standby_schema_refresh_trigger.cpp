@@ -98,8 +98,8 @@ int ObStandbySchemaRefreshTrigger::check_inner_stat_()
 int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
 {
   int ret = OB_SUCCESS;
-  ObAllTenantInfo tenant_info;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  bool is_standby_normal_status = false;
 
   if (OB_FAIL(check_inner_stat_())) {
     WSTAT("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_));
@@ -109,9 +109,9 @@ int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
   } else if (OB_ISNULL(GCTX.ob_service_) || OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(sql_proxy_) || OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("pointer is null", KR(ret), KP(GCTX.ob_service_), KP(GCTX.schema_service_), KP(sql_proxy_), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("fail to get tenant info", KR(ret), K_(tenant_id));
-  } else if (tenant_info.is_standby() && tenant_info.is_normal_status()) {
+  } else if (OB_FAIL(tenant_info_loader->check_is_standby_normal_status(is_standby_normal_status))) {
+    LOG_WARN("fail to get tenant status", KR(ret), K_(tenant_id));
+  } else if (is_standby_normal_status) {
     ObRefreshSchemaStatus schema_status;
     ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
     if (OB_ISNULL(schema_status_proxy)) {

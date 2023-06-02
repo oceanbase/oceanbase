@@ -2764,10 +2764,11 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
         LOG_WARN("store access index failed", K(ret));
       }
     }
+    if (OB_SUCC(ret) && OB_FAIL(orig_access_indexs_.push_back(access_idx))) {
+      LOG_WARN("failed to assign access indexs", K(ret), K(access_idx));
+    }
   }
-  if (OB_SUCC(ret) && OB_FAIL(orig_access_indexs_.assign(access_idxs))) {
-    LOG_WARN("failed to assign access indexs", K(ret), K(access_idxs));
-  }
+
   return ret;
 }
 

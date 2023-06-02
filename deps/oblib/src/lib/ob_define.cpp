@@ -10,32 +10,5 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SERVER
-#include "ob_table_service.h"
-using namespace oceanbase::observer;
-using namespace oceanbase::common;
-using namespace oceanbase::table;
-
-int ObTableService::init()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(sess_pool_mgr_.init())) {
-    LOG_WARN("fail to init tableapi session pool manager", K(ret));
-  }
-  return ret;
-}
-
-void ObTableService::stop()
-{
-  sess_pool_mgr_.stop();
-}
-
-void ObTableService::wait()
-{
-  sess_pool_mgr_.wait();
-}
-
-void ObTableService::destroy()
-{
-  sess_pool_mgr_.destroy();
-}
+#include "lib/ob_define.h"
+__thread uint64_t tl_thread_tenant_id = oceanbase::common::OB_SERVER_TENANT_ID;

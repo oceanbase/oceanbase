@@ -320,7 +320,7 @@ Outputs & filters:
   8 - output([a.c1], [a.c2]), filter(nil), rowset=256
       (#keys=1, [a.c1]), dop=2
   9 - output([a.c1], [a.c2]), filter(nil), rowset=256
- 10 - output([a.c1], [a.c2], [PARTITION_ID]), filter(nil), rowset=256
+ 10 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.__pk_increment]), range(MIN ; MAX)always true

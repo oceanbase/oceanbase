@@ -262,6 +262,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_ID() share::ObTenantEnv::get_tenant_local()->id()
 // 获取是否为主租户
 #define MTL_IS_PRIMARY_TENANT() share::ObTenantEnv::get_tenant()->is_primary_tenant()
+// 租户是否处于恢复中
+#define MTL_IS_RESTORE_TENANT() share::ObTenantEnv::get_tenant()->is_restore_tenant()
 // 更新租户role
 #define MTL_SET_TENANT_ROLE(tenant_role) share::ObTenantEnv::get_tenant()->set_tenant_role(tenant_role)
 // 获取租户role
@@ -429,15 +431,14 @@ public:
     return ATOMIC_LOAD(&tenant_role_value_);
   }
 
- /**
-  * @description:
-  *    Only when it is clear that it is a standby/restore tenant, it returns not primary tenant.
-  *    The correct value can be obtained after the tenant role loaded in subsequent retry.
-  * @return whether allow strong consistency read write
-  */
   bool is_primary_tenant()
   {
     return share::is_primary_tenant(ATOMIC_LOAD(&tenant_role_value_));
+  }
+
+  bool is_restore_tenant()
+  {
+    return share::is_restore_tenant(ATOMIC_LOAD(&tenant_role_value_));
   }
 
   template<class T>

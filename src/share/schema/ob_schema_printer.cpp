@@ -3202,7 +3202,7 @@ int ObSchemaPrinter::print_database_definiton(
       SHARE_SCHEMA_LOG(WARN, "fail to print default collate", K(ret), K(*database_schema));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !strict_compat_) {
     int64_t paxos_replica_num = OB_INVALID_COUNT;
     if (OB_FAIL(database_schema->get_paxos_replica_num(schema_guard_, paxos_replica_num))) {
       LOG_WARN("fail to get paxos replica num", K(ret));
@@ -3215,12 +3215,12 @@ int ObSchemaPrinter::print_database_definiton(
     } else {} // no more to do
   }
 
-  if (OB_SUCC(ret) && database_schema->is_read_only()) {
+  if (OB_SUCC(ret) && !strict_compat_ && database_schema->is_read_only()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, " READ ONLY"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print database read only", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !strict_compat_) {
     uint64_t tablegroup_id = database_schema->get_default_tablegroup_id();
     if (common::OB_INVALID_ID != tablegroup_id) {
       const ObTablegroupSchema *tablegroup_schema = schema_guard_.get_tablegroup_schema(

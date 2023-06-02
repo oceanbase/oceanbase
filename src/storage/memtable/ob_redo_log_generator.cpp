@@ -378,10 +378,10 @@ bool ObRedoLogGenerator::check_dup_tablet_(const ObITransCallback *callback_ptr)
   if (MutatorType::MUTATOR_ROW == callback_ptr->get_mutator_type()) {
     const ObMvccRowCallback *row_iter = static_cast<const ObMvccRowCallback *>(callback_ptr);
     const ObTabletID &target_tablet = row_iter->get_tablet_id();
-    if (OB_TMP_FAIL(mem_ctx_->get_trans_ctx()->merge_tablet_modify_record_(target_tablet))) {
-      TRANS_LOG_RET(WARN, tmp_ret, "merge tablet modify record failed", K(tmp_ret),
-                    K(target_tablet), KPC(row_iter));
-    }
+    // if (OB_TMP_FAIL(mem_ctx_->get_trans_ctx()->merge_tablet_modify_record_(target_tablet))) {
+    //   TRANS_LOG_RET(WARN, tmp_ret, "merge tablet modify record failed", K(tmp_ret),
+    //                 K(target_tablet), KPC(row_iter));
+    // }
     // check dup table
   }
 

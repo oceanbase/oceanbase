@@ -497,12 +497,12 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       CK (0 < udf_params->count());
       OZ (ns.init_complex_obj(alloc, pl_type, udf_params->at(0), false, false));
     }
-
     try {
       int64_t package_id = info->is_udt_udf_ ?
            share::schema::ObUDTObjectType::mask_object_id(info->udf_package_id_)
            : info->udf_package_id_;
-      OZ(pl_engine->execute(ctx.exec_ctx_,
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(pl_engine->execute(ctx.exec_ctx_,
                             info->is_called_in_sql_ ? allocator
                                                     : alloc,
                             package_id,
@@ -515,13 +515,28 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                             false,
                             true,
                             info->loc_,
-                            info->is_called_in_sql_),
-
-                            info->udf_id_,
-                            info->udf_package_id_,
-                            info->is_udt_udf_,
-                            tmp_result,
-                            package_id);
+                            info->is_called_in_sql_))) {
+        LOG_WARN("fail to execute udf", K(ret), K(info), K(package_id), K(tmp_result));
+        bool has_out_param = false;
+        for (int64_t i = 0; !has_out_param && i < info->params_desc_.count(); ++i) {
+          if (info->params_desc_.at(i).is_out()) {
+            has_out_param = true;
+          }
+        }
+        if (has_out_param) {
+          int tmp = process_out_params(objs,
+                                      expr.arg_cnt_,
+                                      *udf_params,
+                                      alloc,
+                                      ctx.exec_ctx_,
+                                      info->nocopy_params_,
+                                      info->params_desc_,
+                                      info->params_type_);
+          if (OB_SUCCESS != tmp) {
+            LOG_WARN("fail to process out param", K(tmp), K(ret));
+          }
+        }
+      }
     } catch(...) {
       throw;
     }

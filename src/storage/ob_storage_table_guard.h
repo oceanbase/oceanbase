@@ -63,7 +63,6 @@ private:
 private:
   static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;
   static const int64_t GET_TS_INTERVAL = 10 * 1000;
-  static const int64_t SPEED_LIMIT_MAX_SLEEP_TIME = 20 * 1000 * 1000;
   static const int64_t SLEEP_INTERVAL_PER_TIME = 20 * 1000;
 
   ObTablet *tablet_;

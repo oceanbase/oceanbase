@@ -3442,9 +3442,10 @@ int ObBasicSessionInfo::is_select_index_enabled(bool &select_index_enabled) cons
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT, select_index_enabled);
 }
 
-void ObBasicSessionInfo::set_autocommit(bool autocommit)
+int ObBasicSessionInfo::set_autocommit(bool autocommit)
 {
   sys_vars_cache_.set_autocommit(autocommit);
+  return sys_var_inc_info_.add_sys_var_id(SYS_VAR_AUTOCOMMIT);
 }
 
 int ObBasicSessionInfo::get_explicit_defaults_for_timestamp(
@@ -3734,6 +3735,7 @@ bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) co
   {
     case SYS_VAR_SERVER_UUID:
     case SYS_VAR_OB_PROXY_PARTITION_HIT:
+    case SYS_VAR_VERSION_COMMENT:
       not_need_serialize = true;
       break;
     default:

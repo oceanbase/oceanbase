@@ -59,7 +59,7 @@ public:
   void set_invalid(bool value) { is_invalid_ = value; }
   bool is_invalid() const { return is_invalid_; }
   bool is_processed() const { return is_processed_; }
-  const obrpc::ObRpcResultCode get_ret_code() const { return rcode_; }
+  const ObPxUserErrorMsg get_ret_code() const { return rcode_; }
   const common::ObAddr &get_dst() const { return dst_; }
   int64_t get_timeout() const { return timeout_; }
   // to string

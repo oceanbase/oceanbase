@@ -321,25 +321,19 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
   return ret;
 }
 
-void ObMPStmtExecute::reset_collection_param_for_arraybinding()
+void ObMPStmtExecute::reset_complex_param_memory(ParamStore *params, ObSQLSessionInfo &session_info)
 {
-  if (OB_NOT_NULL(arraybinding_params_)) {
-    for (int64_t i = 0; i < arraybinding_params_->count(); ++i) {
-      ObObjParam &obj = arraybinding_params_->at(i);
-      ObPLCollection *coll = NULL;
-      if (obj.is_ext()
-          && OB_NOT_NULL(coll = reinterpret_cast<ObPLCollection*>(obj.get_ext()))) {
-        if (OB_NOT_NULL(coll->get_allocator())) {
-          coll->get_allocator()->reset();
+  if (OB_NOT_NULL(params)) {
+    for (int64_t i = 0; i < params->count(); ++i) {
+      ObObjParam &obj = params->at(i);
+      if (obj.is_pl_extend()) {
+        int ret = ObUserDefinedType::destruct_obj(obj, &session_info);
+        if (OB_SUCCESS != ret) {
+          LOG_WARN("fail to destruct obj", K(ret), K(i));
         }
-        coll->set_data(NULL);
-        coll->set_count(0);
-        coll->set_first(OB_INVALID_INDEX);
-        coll->set_last(OB_INVALID_INDEX);
       }
     }
   }
-  return ;
 }
 
 int ObMPStmtExecute::send_eof_packet_for_arraybinding(ObSQLSessionInfo &session_info)
@@ -578,33 +572,43 @@ int ObMPStmtExecute::before_process()
 
 int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc, sql::ObSQLSessionInfo &session)
 {
+  return store_params_value_to_str(alloc, session, params_, params_value_, params_value_len_);
+}
+
+int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc,
+                                               sql::ObSQLSessionInfo &session,
+                                               ParamStore *params,
+                                               char *&params_value,
+                                               int64_t &params_value_len)
+{
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   int64_t length = OB_MAX_SQL_LENGTH;
-  CK (OB_NOT_NULL(params_));
-  CK (OB_NOT_NULL(params_value_ = static_cast<char *>(alloc.alloc(OB_MAX_SQL_LENGTH))));
-  for (int i = 0; OB_SUCC(ret) && i < params_->count(); ++i) {
-    const common::ObObjParam &param = params_->at(i);
+  CK (OB_NOT_NULL(params));
+  CK (OB_ISNULL(params_value));
+  CK (OB_NOT_NULL(params_value = static_cast<char *>(alloc.alloc(OB_MAX_SQL_LENGTH))));
+  for (int i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
+    const common::ObObjParam &param = params->at(i);
     if (param.is_ext()) {
       pos = 0;
-      params_value_ = NULL;
-      params_value_len_ = 0;
+      params_value = NULL;
+      params_value_len = 0;
       break;
     } else {
-      OZ (param.print_sql_literal(params_value_, length, pos, alloc, TZ_INFO(&session)));
-      if (i != params_->count() - 1) {
-        OZ (databuff_printf(params_value_, length, pos, alloc, ","));
+      OZ (param.print_sql_literal(params_value, length, pos, alloc, TZ_INFO(&session)));
+      if (i != params->count() - 1) {
+        OZ (databuff_printf(params_value, length, pos, alloc, ","));
       }
     }
   }
   if (OB_FAIL(ret)) {
-    params_value_ = NULL;
-    params_value_len_ = 0;
+    params_value = NULL;
+    params_value_len = 0;
     // The failure of store_params_value_to_str does not affect the execution of SQL,
     // so the error code is ignored here
     ret = OB_SUCCESS;
   } else {
-    params_value_len_ = pos;
+    params_value_len = pos;
   }
   return ret;
 }
@@ -1680,7 +1684,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         }
       }
       // 释放数组内存避免内存泄漏
-      reset_collection_param_for_arraybinding();
+      reset_complex_param_memory(arraybinding_params_, session);
       OZ (response_result_for_arraybinding(session, exception_array));
     } else {
       need_response_error = false;
@@ -1710,6 +1714,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         }
         ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
+      reset_complex_param_memory(params_, session);
     }
     if (enable_trace_log) {
       ObThreadLogLevelUtils::clear();
@@ -1771,6 +1776,8 @@ int ObMPStmtExecute::process()
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
     THIS_WORKER.set_session(sess);
+    lib::CompatModeGuard g(sess->get_compatibility_mode() == ORACLE_MODE ?
+                             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.get_raw_audit_record().request_memory_used_ = 0;
@@ -1852,24 +1859,23 @@ int ObMPStmtExecute::process()
     }
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
-  }
-
-  // whether the previous error was reported, a cleanup is to be done here
-  if (NULL != sess && !async_resp_used) {
-    // async remove in ObSqlEndTransCb
-    ObPieceCache *piece_cache = static_cast<ObPieceCache*>(sess->get_piece_cache());
-    if (OB_ISNULL(piece_cache)) {
-      // do nothing
-      // piece_cache not be null in piece data protocol
-    } else {
-      for (uint64_t i = 0; OB_SUCC(ret) && i < params_num_; i++) {
-        if (OB_FAIL(piece_cache->remove_piece(
-                            piece_cache->get_piece_key(stmt_id_, i),
-                            *sess))) {
-          if (OB_HASH_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("remove piece fail", K(stmt_id_), K(i), K(ret));
+    // whether the previous error was reported, a cleanup is to be done here
+    if (!async_resp_used) {
+      // async remove in ObSqlEndTransCb
+      ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache());
+      if (OB_ISNULL(piece_cache)) {
+        // do nothing
+        // piece_cache not be null in piece data protocol
+      } else {
+        for (uint64_t i = 0; OB_SUCC(ret) && i < params_num_; i++) {
+          if (OB_FAIL(piece_cache->remove_piece(
+                              piece_cache->get_piece_key(stmt_id_, i),
+                              session))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("remove piece fail", K(stmt_id_), K(i), K(ret));
+            }
           }
         }
       }

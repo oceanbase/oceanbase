@@ -2371,6 +2371,15 @@ OB_INLINE int64_t &ob_get_arb_tenant_id()
   RLOCAL(int64_t, arb_tenant_id);
   return arb_tenant_id;
 }
+extern __thread uint64_t tl_thread_tenant_id;
+OB_INLINE uint64_t ob_thread_tenant_id()
+{
+  return tl_thread_tenant_id;
+}
+OB_INLINE uint64_t ob_set_thread_tenant_id(uint64_t tenant_id)
+{
+  return tl_thread_tenant_id = tenant_id;
+}
 
 #define GETTID() ob_gettid()
 #define GETTNAME() ob_get_tname()

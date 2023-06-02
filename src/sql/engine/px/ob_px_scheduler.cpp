@@ -172,7 +172,7 @@ int ObPxMsgProc::on_sqc_init_msg(ObExecContext &ctx, const ObPxInitSqcResultMsg 
   } else {
     if (OB_SUCCESS != pkt.rc_) {
       ret = pkt.rc_;
-      update_error_code(coord_info_.first_error_code_, pkt.rc_);
+      ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
       LOG_WARN("fail init sqc, please check remote server log for details",
                "remote_server", sqc->get_exec_addr(), K(pkt), KP(ret));
     } else if (pkt.task_count_ <= 0) {
@@ -380,7 +380,7 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
    * 发送这个finish消息的sqc（包括它的worker）其实已经结束了，需要将它
    * 但是因为出错了，后续的调度流程不需要继续了，后面流程会进行错误处理。
    */
-  update_error_code(coord_info_.first_error_code_, pkt.rc_);
+  ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(pkt.rc_)) {
       LOG_WARN("sqc fail, abort qc", K(pkt), K(ret), "sqc_addr", sqc->get_exec_addr());
@@ -569,7 +569,7 @@ int ObPxTerminateMsgProc::on_sqc_init_msg(ObExecContext &ctx, const ObPxInitSqcR
     if (pkt.rc_ != OB_SUCCESS) {
       LOG_DEBUG("receive error code from sqc init msg", K(coord_info_.first_error_code_), K(pkt.rc_));
     }
-    update_error_code(coord_info_.first_error_code_, pkt.rc_);
+    ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
   }
 
   if (OB_SUCC(ret)) {
@@ -638,7 +638,7 @@ int ObPxTerminateMsgProc::on_sqc_finish_msg(ObExecContext &ctx, const ObPxFinish
     if (pkt.rc_ != OB_SUCCESS) {
       LOG_DEBUG("receive error code from sqc finish msg", K(coord_info_.first_error_code_), K(pkt.rc_));
     }
-    update_error_code(coord_info_.first_error_code_, pkt.rc_);
+    ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
 
     NG_TRACE_EXT(sqc_finish,
                  OB_ID(dfo_id), sqc->get_dfo_id(),
@@ -714,74 +714,6 @@ int ObPxTerminateMsgProc::startup_msg_loop(ObExecContext &ctx)
   UNUSED(ctx);
   LOG_WARN("terminate msg proc on sqc startup loop", K(ret));
   return ret;
-}
-
-int ObPxTerminateMsgProc::on_piece_msg(
-    ObExecContext &ctx,
-    const ObBarrierPieceMsg &pkt)
-{
-  int ret = common::OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(pkt);
-  return ret;
-}
-
-int ObPxTerminateMsgProc::on_piece_msg(
-    ObExecContext &ctx,
-    const ObWinbufPieceMsg &pkt)
-{
-  int ret = common::OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(pkt);
-  return ret;
-}
-
-int ObPxTerminateMsgProc::on_piece_msg(
-    ObExecContext &ctx,
-    const ObDynamicSamplePieceMsg &pkt)
-{
-  int ret = common::OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(pkt);
-  return ret;
-}
-
-int ObPxTerminateMsgProc::on_piece_msg(
-    ObExecContext &ctx,
-    const ObRollupKeyPieceMsg &pkt)
-{
-  int ret = common::OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(pkt);
-  return ret;
-}
-
-int ObPxTerminateMsgProc::on_piece_msg(
-    ObExecContext &,
-    const ObRDWFPieceMsg &)
-{
-  return common::OB_SUCCESS;
-}
-
-int ObPxTerminateMsgProc::on_piece_msg(
-    ObExecContext &,
-    const ObInitChannelPieceMsg &)
-{
-  return common::OB_SUCCESS;
-}
-
-int ObPxTerminateMsgProc::on_piece_msg(
-    ObExecContext &,
-    const ObReportingWFPieceMsg &)
-{
-  return common::OB_SUCCESS;
-}
-
-int ObPxTerminateMsgProc::on_piece_msg(
-    ObExecContext &,
-    const ObOptStatsGatherPieceMsg &)
-{
-  return common::OB_SUCCESS;
 }
 
 int ObPxCoordInfo::init()

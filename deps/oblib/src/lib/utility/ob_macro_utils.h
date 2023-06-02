@@ -603,11 +603,36 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
 #define ob_assert(x) ob_release_assert(x)
 ////////////////////////////////////////////////////////////////
 // interval
+
+#define TC_REACH_TIME_INTERVAL(i) \
+  ({ \
+    bool bret = false; \
+    static thread_local int64_t last_time = 0; \
+    int64_t cur_time = common::ObClockGenerator::getClock(); \
+    if (OB_UNLIKELY((i + last_time) < cur_time)) \
+    { \
+      last_time = cur_time; \
+      bret = true; \
+    } \
+    bret; \
+  })
+
+#define TC_REACH_COUNT_INTERVAL(i) \
+  ({ \
+    bool bret = false; \
+    static thread_local int64_t count = 0; \
+    if (0 == (++count % i)) \
+    { \
+      bret = true; \
+    } \
+    bret; \
+  })
+
 #define REACH_TIME_INTERVAL(i) \
   ({ \
     bool bret = false; \
     static volatile int64_t last_time = 0; \
-    int64_t cur_time = OB_TSC_TIMESTAMP.current_time(); \
+    int64_t cur_time = ObClockGenerator::getClock(); \
     int64_t old_time = last_time; \
     if (OB_UNLIKELY((i + last_time) < cur_time) \
         && old_time == ATOMIC_CAS(&last_time, old_time, cur_time)) \
@@ -639,7 +664,7 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
     types::uint128_t next; \
     static const uint64_t ONE_SECOND = 1 * 1000 *1000; \
     static types::uint128_t last; \
-    const int64_t cur_time = OB_TSC_TIMESTAMP.current_time(); \
+    const int64_t cur_time = common::ObClockGenerator::getClock(); \
     while(true) { \
       LOAD128(tmp, &last); \
       if (tmp.lo + ONE_SECOND > (uint64_t)cur_time) { \
@@ -662,8 +687,8 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
 #define REACH_TIME_INTERVAL_RANGE(i, j) \
   ({ \
     bool bret = false; \
-    static volatile int64_t last_time = OB_TSC_TIMESTAMP.current_time(); \
-    int64_t cur_time = OB_TSC_TIMESTAMP.current_time(); \
+    static volatile int64_t last_time = common::ObClockGenerator::getClock(); \
+    int64_t cur_time = common::ObClockGenerator::getClock(); \
     int64_t old_time = last_time; \
     if ((j + last_time) < cur_time) \
     { \
@@ -696,7 +721,7 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
     types::uint128_t next; \
     static const uint64_t ONE_SECOND = 1 * 1000 * 1000; \
     static types::uint128_t last; \
-    const int64_t cur_time = OB_TSC_TIMESTAMP.current_time(); \
+    const int64_t cur_time = common::ObClockGenerator::getClock(); \
     while(true) { \
       LOAD128(tmp, &last); \
       if (tmp.lo + ONE_SECOND < (uint64_t)cur_time) { \

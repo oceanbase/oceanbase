@@ -47,7 +47,7 @@ template <typename EncodingItem>
 struct ObEncodingPool
 {
   static const int64_t MAX_FREE_ITEM_CNT = 64;
-  ObEncodingPool(const int64_t item_size, const char *label);
+  ObEncodingPool(const int64_t item_size, const ObMemAttr &attr);
   ~ObEncodingPool();
 
   template <typename T>
@@ -67,7 +67,7 @@ class ObEncodingAllocator
 {
 public:
   typedef ObEncodingPool<EncodingItem> Pool;
-  ObEncodingAllocator(const int64_t *size_array, const char *label);
+  ObEncodingAllocator(const int64_t *size_array, const ObMemAttr &attr);
   virtual ~ObEncodingAllocator() {}
   int init();
   bool is_inited() const { return inited_; }
@@ -104,11 +104,9 @@ public:
   allocator_(nullptr)
   {
     int ret = OB_SUCCESS;
-    lib::ObMemAttr attr;
-    attr.label_ = "encoding_alloc";
-    SET_USE_500(attr);
+    lib::ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderAlloc");
     if (nullptr == (allocator_ = OB_NEW(ObDecoderAllocator, attr,
-        decoder_sizes, "encoding_alloc"))) {
+        decoder_sizes, attr))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "allocate ObDecoderAllocator failed", K(ret));
     } else if (OB_FAIL(allocator_->init())) {

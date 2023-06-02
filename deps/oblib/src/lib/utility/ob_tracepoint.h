@@ -26,6 +26,7 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/coro/co_var.h"
 #include "lib/time/ob_tsc_timestamp.h"
+#include "common/ob_clock_generator.h"
 #include "lib/utility/ob_macro_utils.h"
 
 #define TP_COMMA(x) ,

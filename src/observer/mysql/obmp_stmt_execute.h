@@ -172,6 +172,11 @@ public:
   }
   inline int32_t get_param_num() { return params_num_; }
   inline void set_param_num(int32_t num) { params_num_ = num; }
+  static int store_params_value_to_str(ObIAllocator &alloc,
+                                       sql::ObSQLSessionInfo &session,
+                                       ParamStore *params,
+                                       char *&params_value,
+                                       int64_t &params_value_len);
 
 protected:
   virtual int deserialize()  { return common::OB_SUCCESS; }
@@ -242,7 +247,7 @@ private:
     sql::ObSQLSessionInfo *session_info, sql::ParamTypeInfoArray &param_type_infos);
   int check_param_value_for_arraybinding(ObObjParam &param);
   int construct_execute_param_for_arraybinding(int64_t pos);
-  void reset_collection_param_for_arraybinding();
+  void reset_complex_param_memory(ParamStore *params, sql::ObSQLSessionInfo &session_info);
   int save_exception_for_arraybinding(
     int64_t pos, int error_code, ObIArray<ObSavedException> &exception_array);
   //int after_do_process_for_arraybinding(ObMySQLResultSet &result);

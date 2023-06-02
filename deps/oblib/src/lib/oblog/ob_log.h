@@ -334,6 +334,8 @@ public:
   virtual ~ObLogger();
   virtual int init(const ObBaseLogWriterCfg &log_cfg,
                    const bool is_arb_replica);
+  virtual void stop();
+  virtual void wait();
   virtual void destroy();
 
 protected:

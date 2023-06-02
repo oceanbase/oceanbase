@@ -956,6 +956,8 @@ int ObTxCycleTwoPhaseCommitter::replay_prepare_log()
 
   if (ObTxState::PREPARE == state) {
     ret = OB_SUCCESS;
+    set_upstream_state(ObTxState::PREPARE);
+    collected_.reset();
     TRANS_LOG(INFO, "already in prepare state", K(ret), KPC(this), K(state));
   } else if (ObTxState::INIT != state
              && ObTxState::REDO_COMPLETE != state
@@ -980,6 +982,8 @@ int ObTxCycleTwoPhaseCommitter::replay_commit_info_log()
 
   if (ObTxState::REDO_COMPLETE == state) {
     ret = OB_SUCCESS;
+    set_upstream_state(ObTxState::REDO_COMPLETE);
+    collected_.reset();
     TRANS_LOG(DEBUG, "already in redo complete state", K(ret), KPC(this), K(state));
   } else if (ObTxState::INIT != state
              && ObTxState::PREPARE != state
@@ -1004,6 +1008,8 @@ int ObTxCycleTwoPhaseCommitter::replay_commit_log()
 
   if (ObTxState::COMMIT == state) {
     ret = OB_SUCCESS;
+    set_upstream_state(ObTxState::COMMIT);
+    collected_.reset();
     TRANS_LOG(INFO, "already in commit state", K(ret), KPC(this), K(state));
   } else if (ObTxState::PREPARE != state
       && ObTxState::PRE_COMMIT != state) {
@@ -1029,6 +1035,8 @@ int ObTxCycleTwoPhaseCommitter::replay_abort_log()
 
   if (ObTxState::ABORT == state) {
     ret = OB_SUCCESS;
+    set_upstream_state(ObTxState::ABORT);
+    collected_.reset();
     TRANS_LOG(INFO, "already in abort state", K(ret), KPC(this), K(state));
   } else if (ObTxState::INIT != state
       && ObTxState::REDO_COMPLETE != state
@@ -1054,6 +1062,7 @@ int ObTxCycleTwoPhaseCommitter::replay_clear_log()
 
   if (ObTxState::CLEAR == state) {
     ret = OB_SUCCESS;
+    set_upstream_state(ObTxState::CLEAR);
     TRANS_LOG(INFO, "already in clear state", K(ret), KPC(this), K(state));
   } else if (ObTxState::COMMIT != state
       && ObTxState::ABORT != state) {

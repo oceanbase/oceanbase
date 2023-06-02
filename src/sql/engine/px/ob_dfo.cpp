@@ -29,7 +29,7 @@ OB_SERIALIZE_MEMBER(ObP2PDhMapInfo,
                     p2p_sequence_ids_,
                     target_addrs_);
 
-OB_SERIALIZE_MEMBER(ObQCMonitoringInfo, sql_, qc_tid_);
+OB_SERIALIZE_MEMBER(ObQCMonitoringInfo, cur_sql_, qc_tid_);
 
 OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     execution_id_,
@@ -99,24 +99,24 @@ OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResArgs, info_, batch_size_);
 int ObQCMonitoringInfo::init(const ObExecContext &exec_ctx) {
   int ret = OB_SUCCESS;
   qc_tid_ = GETTID();
-  if (OB_NOT_NULL(exec_ctx.get_sql_ctx())) {
-    sql_ = exec_ctx.get_sql_ctx()->cur_sql_;
+  if (OB_NOT_NULL(exec_ctx.get_my_session())) {
+    cur_sql_ = exec_ctx.get_my_session()->get_current_query_string();
   }
-  if (sql_.length() > ObQCMonitoringInfo::LIMIT_LENGTH) {
-    sql_.set_length(ObQCMonitoringInfo::LIMIT_LENGTH);
+  if (cur_sql_.length() > ObQCMonitoringInfo::LIMIT_LENGTH) {
+    cur_sql_.assign(cur_sql_.ptr(), ObQCMonitoringInfo::LIMIT_LENGTH);
   }
   return ret;
 }
 
 int ObQCMonitoringInfo::assign(const ObQCMonitoringInfo &other) {
   int ret = OB_SUCCESS;
-  sql_ = other.sql_;
+  cur_sql_ = other.cur_sql_;
   qc_tid_ = other.qc_tid_;
   return ret;
 }
 
 void ObQCMonitoringInfo::reset() {
-  sql_.reset();
+  cur_sql_.reset();
 }
 
 int ObPxSqcMeta::assign(const ObPxSqcMeta &other)

@@ -356,11 +356,13 @@ public:
 friend class tools::ObAgentTaskGenerator;
 friend class tools::ObAgentTaskWorker;
 friend class ObDDLEpochMgr;
+  virtual void stop();
+  virtual void wait();
+  virtual int destroy();
 
 protected:
   ObMultiVersionSchemaService();
   virtual ~ObMultiVersionSchemaService();
-  virtual int destroy();
 
   virtual int publish_schema(const uint64_t tenant_id) override;
   virtual int init_multi_version_schema_struct(const uint64_t tenant_id) override;

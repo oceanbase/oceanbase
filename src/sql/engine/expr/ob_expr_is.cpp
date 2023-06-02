@@ -167,6 +167,7 @@ int ObExprIsBase::cg_expr_internal(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_
  	UNUSED(op_cg_ctx);
   int ret = OB_SUCCESS;
   const ObOpRawExpr *op_raw_expr = static_cast<const ObOpRawExpr*>(&raw_expr);
+  const ObRawExpr *child = NULL;
   if (rt_expr.arg_cnt_ != 2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("isnot expr should have 2 params", K(ret), K(rt_expr.arg_cnt_));
@@ -174,9 +175,12 @@ int ObExprIsBase::cg_expr_internal(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_
             || OB_ISNULL(rt_expr.args_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children of isnot expr is null", K(ret), K(rt_expr.args_));
+  } else if (OB_ISNULL(child = op_raw_expr->get_param_expr(1))
+             || OB_UNLIKELY(!child->is_const_raw_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is null", K(ret), KPC(child));
   } else {
-    const ObRawExpr *param2 = op_raw_expr->get_param_expr(1);
-    const_param2 = static_cast<const ObConstRawExpr *>(param2);
+    const_param2 = static_cast<const ObConstRawExpr *>(child);
   }
   return ret;
 }

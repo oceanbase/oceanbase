@@ -39,7 +39,9 @@ void TestMasterKeyGetter::SetUp()
 
 void TestMasterKeyGetter::TearDown()
 {
-  ObMasterKeyGetter::instance().destroy();
+  ObMasterKeyGetter::instance().stop();
+  ObMasterKeyGetter::instance().wait();
+  ObMasterKeyGetter::instance().reset();
 }
 
 TEST_F(TestMasterKeyGetter, master_key)

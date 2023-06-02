@@ -3794,6 +3794,13 @@ int ObPLStmt::set_label_idx(int64_t idx)
   return ret;
 }
 
+ObPLCompileUnitAST::~ObPLCompileUnitAST()
+{
+  if (NULL != body_) {
+    body_->~ObPLStmtBlock();
+  }
+}
+
 void ObPLCompileUnitAST::process_default_compile_flag()
 {
   if (compile_flag_.has_flag()) {

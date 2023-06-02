@@ -1757,6 +1757,32 @@ int ObMultiTenant::get_tenant_with_tenant_lock(
   return ret;
 }
 
+int ObMultiTenant::get_active_tenant_with_tenant_lock(
+  const uint64_t tenant_id, ObLDHandle &handle, ObTenant *&tenant) const
+{
+  SpinRLockGuard guard(lock_);
+  ObTenant *tenant_tmp = nullptr;
+  int ret = get_tenant_unsafe(tenant_id, tenant_tmp);
+  if (OB_SUCC(ret)) {
+    if (tenant_tmp->has_stopped()) {
+      ret = OB_TENANT_NOT_IN_SERVER;
+    } else if (OB_FAIL(tenant_tmp->try_rdlock(handle))) {
+      if (tenant_tmp->has_stopped()) {
+        // in some cases this error code is handled specially
+        ret = OB_TENANT_NOT_IN_SERVER;
+        LOG_WARN("fail to try rdlock tenant", K(ret), K(tenant_id));
+      }
+    } else {
+      // assign tenant when get rdlock succ
+      tenant = tenant_tmp;
+    }
+    if (OB_UNLIKELY(tenant_tmp->has_stopped())) {
+      LOG_WARN("get rdlock when tenant has stopped", K(tenant_id), K(lbt()));
+    }
+  }
+  return ret;
+}
+
 int ObMultiTenant::get_tenant_unsafe( const uint64_t tenant_id, ObTenant *&tenant) const
 {
   int ret = OB_SUCCESS;

@@ -6964,10 +6964,28 @@ int ObTransformPreProcess::transform_udt_column_value_xml_parse(ObDmlTableInfo &
   ObConstRawExpr *type_expr = NULL;
   ObConstRawExpr *form_expr = NULL;
   ObConstRawExpr *in_agg_expr = NULL;
-  if (old_expr->is_xml_expr() || ob_is_user_defined_sql_type(old_expr->get_result_type().get_type())) {
+
+  ObObjParam old_expr_type;
+  if (old_expr->get_expr_type() == T_QUESTIONMARK) {
+    const ParamStore &param_store = ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store();
+    ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(old_expr);
+    int64_t param_idx = param_expr->get_value().get_unknown();
+    if (param_idx < 0 || param_idx >= param_store.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+    } else {
+      old_expr_type = param_store.at(param_idx);
+    }
+  } else {
+    old_expr_type.set_meta_type(old_expr->get_result_meta());
+    old_expr_type.set_accuracy(old_expr->get_accuracy());
+  }
+
+  if (OB_FAIL(ret))  {
+  } else if (old_expr->is_xml_expr() || ob_is_user_defined_sql_type(old_expr_type.get_type())) {
     // do nothing
     new_expr = old_expr;
-  } else if (ob_is_xml_pl_type(old_expr->get_data_type(), old_expr->get_udt_id())) {
+  } else if (ob_is_xml_pl_type(old_expr_type.get_type(), old_expr_type.get_udt_id())) {
     // add implicit cast to sql xmltype
     ObCastMode cast_mode = CM_NONE;
     ObExprResType sql_udt_type;
@@ -6981,11 +6999,11 @@ int ObTransformPreProcess::transform_udt_column_value_xml_parse(ObDmlTableInfo &
     } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
       LOG_WARN("failed to add flag", K(ret));
     }
-  } else if (old_expr->get_result_type().is_clob()) {
+  } else if (old_expr_type.is_clob()) {
     // for oracle compatibility
     ret = OB_ERR_INVALID_XML_DATATYPE;
-    LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "ANYDATA", ob_obj_type_str(old_expr->get_result_type().get_type()));
-    LOG_WARN("invalid type, expect ANYDATA", K(ret), K(old_expr->get_result_type().get_type()));
+    LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "ANYDATA", "CLOB");
+    LOG_WARN("invalid type, expect ANYDATA", K(ret), K(old_expr_type.get_type()));
   } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));

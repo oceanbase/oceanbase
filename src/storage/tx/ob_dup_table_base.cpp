@@ -323,6 +323,7 @@ int ObDupTableLogOperator::submit_log_entry()
   LOG_OPERATOR_INIT_CHECK
 
   int64_t max_ser_size = 0;
+  bool submit_result = false;
   DupLogTypeArray type_array;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(prepare_serialize_log_entry_(max_ser_size, type_array))) {
@@ -344,10 +345,14 @@ int ObDupTableLogOperator::submit_log_entry()
                     K(type_array));
     }
 
-    if (OB_FAIL(ret)) {
-      // reuse for serialize failed or submit_log failed
-      reuse();
+    if (OB_SUCC(ret)) {
+      // if not fail, submit_result is true, else is false
+      submit_result = true;
+    } else {
+      submit_result = false;
     }
+    after_submit_log(submit_result,
+                     false  /* for replay */);
   }
   return ret;
 }
@@ -422,7 +427,7 @@ int ObDupTableLogOperator::on_success()
   if (OB_SUCC(ret)) {
     // It will clear scn or lsn
     if (OB_FAIL(sync_log_succ_(false))) {
-      DUP_TABLE_LOG(WARN, "invoke sync_log_succ failed", K(ret));
+      DUP_TABLE_LOG(ERROR, "invoke sync_log_succ failed", K(ret));
     }
     // if (OB_FAIL(retry_submit_log_block_())) {
     //   if (OB_ITER_END != ret) {
@@ -453,7 +458,8 @@ int ObDupTableLogOperator::on_failure()
     } else if (OB_FAIL(tablet_mgr_ptr_->tablet_log_synced(
                    false /*sync_result*/, logging_scn_, false /*for_replay*/,
                    logging_tablet_set_ids_, modify_readable))) {
-      DUP_TABLE_LOG(WARN, "tablets mgr on_failure failed", K(ret));
+      DUP_TABLE_LOG(ERROR, "tablets mgr on_failure failed", K(ret), K(logging_scn_),
+                    K(logging_lease_addrs_), K(logging_tablet_set_ids_), K(modify_readable));
     } else {
       reuse();
     }
@@ -474,7 +480,8 @@ int ObDupTableLogOperator::replay_succ()
   LOG_OPERATOR_INIT_CHECK
 
   if (OB_SUCC(ret)) {
-    after_submit_log(true /*for_replay*/);
+    after_submit_log(true, /* submit_result */
+                     true  /* for_replay */);
 
     if (OB_FAIL(sync_log_succ_(true))) {
       DUP_TABLE_LOG(WARN, "invoke sync_log_succ failed", K(ret));
@@ -792,22 +799,17 @@ int ObDupTableLogOperator::retry_submit_log_block_()
     } else if (OB_FAIL(log_handler_->append(block_buf_, block_buf_pos, share::SCN::min_scn(), false,
                                             this, logging_lsn_, logging_scn_))) {
       DUP_TABLE_LOG(WARN, "append block failed", K(ret), K(ls_id_));
-    } else {
-      after_submit_log(false /*for_replay*/);
-      // DUP_TABLE_LOG(INFO, "submit one part of lease log in palf success", K(ret), K(logging_lsn_),
-      //               K(logging_scn_), K(big_segment_buf_), K(*tablet_mgr_ptr_), K(*lease_mgr_ptr_));
     }
   }
 
   return ret;
 }
 
-void ObDupTableLogOperator::after_submit_log(const bool for_replay)
+void ObDupTableLogOperator::after_submit_log(const bool submit_result, const bool for_replay)
 {
   int ret = OB_SUCCESS;
-
   if (!logging_tablet_set_ids_.empty()) {
-    if (OB_FAIL(tablet_mgr_ptr_->tablet_log_submitted(true, logging_scn_, for_replay,
+    if (OB_FAIL(tablet_mgr_ptr_->tablet_log_submitted(submit_result, logging_scn_, for_replay,
                                                       logging_tablet_set_ids_))) {
       DUP_TABLE_LOG(ERROR, "tablet log submitted failed", K(ret), K(ls_id_), K(logging_scn_),
                     K(logging_tablet_set_ids_));
@@ -815,10 +817,16 @@ void ObDupTableLogOperator::after_submit_log(const bool for_replay)
   }
 
   if (OB_SUCC(ret) && !logging_lease_addrs_.empty()) {
-    if (OB_FAIL(lease_mgr_ptr_->lease_log_submitted(true, logging_scn_, for_replay,
+    if (OB_FAIL(lease_mgr_ptr_->lease_log_submitted(submit_result, logging_scn_, for_replay,
                                                     logging_lease_addrs_))) {
       DUP_TABLE_LOG(ERROR, "lease log submitted failed", K(ret), K(ls_id_), K(logging_scn_),
                     K(logging_lease_addrs_));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!submit_result) {
+      reuse();
     }
   }
 }

@@ -152,8 +152,8 @@ int ObTableLoadManager::remove_all_table_ctx(ObIArray<ObTableLoadTableCtx *> &ta
       }
     }
     if (OB_SUCC(ret)) {
-      table_ctx_map_.destroy();
-      table_handle_map_.destroy();
+      table_ctx_map_.clear();
+      table_handle_map_.clear();
     }
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < table_ctx_array.count(); ++i) {

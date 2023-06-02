@@ -172,6 +172,42 @@ struct InParamMeta
     TO_STRING_KV(K_(pos), K_(vals));
 };
 
+struct InParamValsWrapper
+{
+  InParamValsWrapper(): param_vals_() { }
+  int assign(const InParamValsWrapper &other) { return param_vals_.assign(other.param_vals_); }
+  inline bool operator==(const InParamValsWrapper &other) const
+  {
+    bool bret = param_vals_.count() == other.param_vals_.count();
+    for (int64_t i = 0; bret && i < other.param_vals_.count(); ++i) {
+      if (param_vals_.at(i) != other.param_vals_.at(i)) {
+        bret = false;
+      }
+    }
+    return bret;
+  }
+  inline bool operator!=(const InParamValsWrapper &other) const
+  {
+    return !(*this == other);
+  }
+  inline uint64_t hash() const
+  {
+    uint64_t hash_code = 0;
+    for (int64_t i = 0; i < param_vals_.count(); ++i) {
+      hash_code = common::murmurhash(&param_vals_.at(i), sizeof(param_vals_.at(i)), hash_code);
+    }
+    return hash_code;
+  }
+  inline int hash(uint64_t &hash_code) const
+  {
+    int ret = OB_SUCCESS;
+    hash_code = hash();
+    return ret;
+  }
+  ObSEArray<ObObj, 4> param_vals_;
+  TO_STRING_KV(K_(param_vals));
+};
+
 typedef ObSEArray<int64_t, OB_MAX_ROWKEY_COLUMN_NUMBER, ModulePageAllocator> OffsetsArr;
 typedef ObSEArray<InParamMeta *, OB_MAX_ROWKEY_COLUMN_NUMBER, ModulePageAllocator> InParamsArr;
 struct ObInKeyPart
@@ -206,8 +242,9 @@ struct ObInKeyPart
   bool find_param(const int64_t offset, InParamMeta *&param_meta);
   bool offsets_same_to(const ObInKeyPart *other) const;
   int union_in_key(ObInKeyPart *other);
-  int get_dup_vals(int64_t offset, const ObObj &val, ObIArray<int64_t> &dup_val_idx);
-  InParamMeta* create_param_meta(ObIAllocator &alloc);
+  int get_dup_vals(int64_t offset, const common::ObObj &val, common::ObIArray<int64_t> &dup_val_idx);
+  int remove_in_dup_vals();
+  InParamMeta* create_param_meta(common::ObIAllocator &alloc);
 
   uint64_t table_id_;
   InParamsArr in_params_;
@@ -341,10 +378,11 @@ public:
   // for in keypart, adjust params according to the invalid_offsets
   // and check it can be always true
   int formalize_keypart(bool contain_row);
-  int get_dup_param_and_vals(ObIArray<int64_t> &dup_param_idx,
-                             ObIArray<int64_t> &invalid_val_idx);
-  int remove_in_params(const ObIArray<int64_t> &invalid_param_idx, bool always_true);
-  int remove_in_params_vals(const ObIArray<int64_t> &val_idx);
+  int get_dup_param_and_vals(common::ObIArray<int64_t> &dup_param_idx,
+                             common::ObIArray<int64_t> &invalid_val_idx);
+  int remove_in_params(const common::ObIArray<int64_t> &invalid_param_idx, bool always_true);
+  int remove_in_params_vals(const common::ObIArray<int64_t> &val_idx);
+  int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
 
   int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row);

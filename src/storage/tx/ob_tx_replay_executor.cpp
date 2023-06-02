@@ -557,8 +557,6 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo)
         }
       } else if (FALSE_IT(row_head = mmi_ptr_->get_row_head())) {
         // do nothing
-      } else if (OB_NOT_NULL(ctx_) && OB_FAIL(ctx_->merge_tablet_modify_record(row_head.tablet_id_))) {
-        TRANS_LOG(WARN, "record tablet_id in redo failed", K(ret), K(row_head));
       } else if (OB_FAIL(replay_one_row_in_memtable_(row_head, mmi_ptr_))) {
         if (OB_MINOR_FREEZE_NOT_ALLOW == ret) {
           if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {

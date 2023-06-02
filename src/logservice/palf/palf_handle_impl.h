@@ -1046,8 +1046,7 @@ private:
                                       const int64_t proposal_id,
                                       const int64_t election_epoch,
                                       bool &is_already_finished,
-                                      common::ObMemberList &log_sync_memberlist,
-                                      int64_t &log_sync_repclia_num) const;
+                                      LogConfigInfo &new_config_info) const;
   int one_stage_config_change_(const LogConfigChangeArgs &args, const int64_t timeout_us);
   int check_need_rebuild_(const LSN &base_lsn,
                           const LogInfo &base_prev_log_info,

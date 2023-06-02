@@ -156,7 +156,7 @@ int64_t ObTenantRecoveryReportor::get_idle_time_()
 {
   int ret = OB_SUCCESS;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
-  ObAllTenantInfo tenant_info;
+  bool is_primary_normal_status = false;
   int64_t idle_time = ObTenantRoleTransitionConstants::STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US;
 
   if (IS_NOT_INIT) {
@@ -165,9 +165,9 @@ int64_t ObTenantRecoveryReportor::get_idle_time_()
   } else if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("pointer is null", KR(ret), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("fail to get tenant info", KR(ret), K_(tenant_id));
-  } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
+  } else if (OB_FAIL(tenant_info_loader->check_is_primary_normal_status(is_primary_normal_status))) {
+    LOG_WARN("fail to get tenant status", KR(ret), K_(tenant_id));
+  } else if (is_primary_normal_status) {
     idle_time = ObTenantRoleTransitionConstants::PRIMARY_UPDATE_LS_RECOVERY_STAT_TIME_US;
   }
   return idle_time;
@@ -176,7 +176,7 @@ int64_t ObTenantRecoveryReportor::get_idle_time_()
 int ObTenantRecoveryReportor::submit_tenant_refresh_schema_task_()
 {
   int ret = OB_SUCCESS;
-  ObAllTenantInfo tenant_info;
+  bool is_standby_normal_status = false;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
 
   if (IS_NOT_INIT) {
@@ -185,9 +185,9 @@ int ObTenantRecoveryReportor::submit_tenant_refresh_schema_task_()
   } else if (OB_ISNULL(GCTX.ob_service_) || OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(sql_proxy_) || OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("pointer is null", KR(ret), KP(GCTX.ob_service_), KP(GCTX.schema_service_), KP(sql_proxy_), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("fail to get tenant info", KR(ret), K_(tenant_id));
-  } else if (tenant_info.is_standby() && tenant_info.is_normal_status()) {
+  } else if (OB_FAIL(tenant_info_loader->check_is_standby_normal_status(is_standby_normal_status))) {
+    LOG_WARN("fail to get tenant status", KR(ret), K_(tenant_id));
+  } else if (is_standby_normal_status) {
     ObRefreshSchemaStatus schema_status;
     ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
     if (OB_ISNULL(schema_status_proxy)) {
@@ -246,11 +246,11 @@ int ObTenantRecoveryReportor::update_ls_recovery_stat_()
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("ls is null", KR(ret), KP(ls));
         } else {
-          ObAllTenantInfo tenant_info;
-          if (OB_TMP_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-            LOG_WARN("failed to get_tenant_info", KR(ret), KPC(ls));
-          } else if (OB_TMP_FAIL(ls->update_ls_replayable_point(tenant_info.get_replayable_scn()))) {
-            LOG_WARN("failed to update_ls_replayable_point", KR(tmp_ret), KPC(ls), K(tenant_info));
+          share::SCN replayable_scn = SCN::base_scn();;
+          if (OB_TMP_FAIL(tenant_info_loader->get_replayable_scn(replayable_scn))) {
+            LOG_WARN("failed to get replayable_scn", KR(ret), KPC(ls));
+          } else if (OB_TMP_FAIL(ls->update_ls_replayable_point(replayable_scn))) {
+            LOG_WARN("failed to update_ls_replayable_point", KR(tmp_ret), KPC(ls), K(replayable_scn));
           }
 
           if (ls->is_sys_ls()) {
@@ -333,26 +333,6 @@ int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy 
 
 }
 
-int ObTenantRecoveryReportor::get_tenant_readable_scn(SCN &readable_scn)
-{
-  int ret = OB_SUCCESS;
-  share::ObAllTenantInfo tenant_info;
-  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
-
-  if (OB_ISNULL(tenant_info_loader)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("mtl pointer is null", KR(ret), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("get_tenant_info failed", K(ret));
-  } else if (OB_UNLIKELY(! tenant_info.is_valid())) {
-    ret = OB_EAGAIN;
-    LOG_WARN("tenant info not valid", K(ret), K(tenant_info));
-  } else {
-    readable_scn = tenant_info.get_standby_scn();
-  }
-  return ret;
-}
-
 int ObTenantRecoveryReportor::update_replayable_point_()
 {
   int ret = OB_SUCCESS;
@@ -375,18 +355,18 @@ int ObTenantRecoveryReportor::update_replayable_point_from_tenant_info_()
   int ret = OB_SUCCESS;
   logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
   const int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;
-  ObAllTenantInfo tenant_info;
+  SCN replayable_scn = SCN::base_scn();
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
 
   if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl pointer is null", KR(ret), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("failed to get_tenant_info", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(log_service->update_replayable_point(tenant_info.get_replayable_scn()))) {
-    LOG_WARN("logservice update_replayable_point failed", KR(ret), K(tenant_info));
+  } else if (OB_FAIL(tenant_info_loader->get_replayable_scn(replayable_scn))) {
+    LOG_WARN("failed to get replayable_scn", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(log_service->update_replayable_point(replayable_scn))) {
+    LOG_WARN("logservice update_replayable_point failed", KR(ret), K(replayable_scn));
   } else if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
-    LOG_INFO("update_replayable_point_from_tenant_info_ success", KR(ret), K(tenant_info));
+    LOG_INFO("update_replayable_point_from_tenant_info_ success", KR(ret), K(replayable_scn));
   }
   return ret;
 }

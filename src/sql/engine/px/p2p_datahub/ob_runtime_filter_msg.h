@@ -180,17 +180,20 @@ class ObRFInFilterMsg : public ObP2PDatahubMsgBase
 public:
   struct ObRFInFilterNode {
     ObRFInFilterNode() = default;
-    ObRFInFilterNode(ObCmpFuncs *cmp_funcs, ObHashFuncs *hash_funcs, ObIArray<ObDatum> *row)
-        : cmp_funcs_(cmp_funcs), hash_funcs_(hash_funcs), row_(row) {}
+    ObRFInFilterNode(ObCmpFuncs *cmp_funcs, ObHashFuncs *hash_funcs,
+          ObIArray<ObDatum> *row, int64_t hash_val = 0)
+        : cmp_funcs_(cmp_funcs), hash_funcs_(hash_funcs),
+          row_(row), hash_val_(hash_val) {}
     int hash(uint64_t &hash_ret) const;
     inline bool operator==(const ObRFInFilterNode &other) const;
     ObCmpFuncs *cmp_funcs_;
     ObHashFuncs *hash_funcs_;
     ObIArray<ObDatum> *row_;
+    int64_t hash_val_;
   };
 public:
   ObRFInFilterMsg() : ObP2PDatahubMsgBase(), rows_set_(),
-      cmp_funcs_(allocator_), hash_funcs_(allocator_),
+      cmp_funcs_(allocator_), hash_funcs_for_insert_(allocator_),
       serial_rows_(), need_null_cmp_flags_(allocator_),
       cur_row_(allocator_), col_cnt_(0),
       max_in_num_(0) {}
@@ -227,7 +230,7 @@ private:
 public:
   hash::ObHashSet<ObRFInFilterNode, hash::NoPthreadDefendMode> rows_set_;
   ObCmpFuncs cmp_funcs_;
-  ObHashFuncs hash_funcs_;
+  ObHashFuncs hash_funcs_for_insert_;
   ObSArray<ObFixedArray<ObDatum, common::ObIAllocator> *> serial_rows_;
   ObFixedArray<bool, common::ObIAllocator> need_null_cmp_flags_;
   ObFixedArray<ObDatum, common::ObIAllocator> cur_row_;

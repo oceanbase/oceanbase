@@ -294,7 +294,7 @@ public:
   // newly added for 4.0
 
   int retry_dup_trx_before_prepare(const share::SCN &before_prepare_version);
-  int merge_tablet_modify_record(const common::ObTabletID &tablet_id);
+  // int merge_tablet_modify_record(const common::ObTabletID &tablet_id);
   int set_scheduler(const common::ObAddr &scheduler);
   const common::ObAddr &get_scheduler() const;
   int on_success(ObTxLogCb *log_cb);
@@ -475,8 +475,8 @@ private:
                                              memtable::ObRedoLogSubmitHelper &helper);
   bool is_dup_table_redo_sync_completed_();
   int dup_table_tx_pre_commit_();
-  int merge_tablet_modify_record_(const common::ObTabletID &tablet_id);
-  int check_tablet_modify_record_();
+  // int merge_tablet_modify_record_(const common::ObTabletID &tablet_id);
+  // int check_tablet_modify_record_();
   void set_dup_table_tx_()
   {
     exec_info_.is_dup_tx_ = true;

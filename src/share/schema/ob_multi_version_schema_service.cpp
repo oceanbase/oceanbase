@@ -1649,11 +1649,22 @@ ObMultiVersionSchemaService::~ObMultiVersionSchemaService()
   destroy();
 }
 
+void ObMultiVersionSchemaService::stop()
+{
+  ddl_trans_controller_.stop();
+}
+
+void ObMultiVersionSchemaService::wait()
+{
+  ddl_trans_controller_.wait();
+}
+
 //FIXME: Will there be a memory leak
 int ObMultiVersionSchemaService::destroy()
 {
   int ret = OB_SUCCESS;
   schema_store_map_.destroy();
+  ddl_trans_controller_.destroy();
   return ret;
 }
 

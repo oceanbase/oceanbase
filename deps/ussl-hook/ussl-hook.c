@@ -59,9 +59,25 @@ int ussl_connect(int sockfd, const struct sockaddr *address, socklen_t address_l
       ussl_clear_client_opt(sockfd);
     }
   } else {
+    if (AF_INET == address->sa_family) {
+      struct sockaddr_in self_addr;
+      socklen_t len = sizeof(self_addr);
+      if (0 == getsockname(sockfd, (struct sockaddr *)&self_addr, &len)) {
+        struct sockaddr_in *dst_addr = (struct sockaddr_in *)address;
+        if (self_addr.sin_port == dst_addr->sin_port && self_addr.sin_addr.s_addr == dst_addr->sin_addr.s_addr) {
+          ret = -1;
+          errno = EIO;
+          char str[INET_ADDRSTRLEN];
+          ussl_log_warn("connection to %s failed, self connect self", inet_ntop(AF_INET, (const void*)(address), str, sizeof(str)));
+        }
+      } else {
+        ret = -1;
+        ussl_log_warn("getsockname failed, fd:%d, error:%s", sockfd, strerror(errno));
+      }
+    }
     /* if gid has been set and connect return success, we also let the ret to be -1 and errno to be
      * EINPROGRESS */
-    if (sockfd >= 0 && sockfd < USSL_MAX_FD_NUM && global_gid_arr[sockfd] != UINT64_MAX) {
+    if (ret == 0 && sockfd >= 0 && sockfd < USSL_MAX_FD_NUM && global_gid_arr[sockfd] != UINT64_MAX) {
       ret = -1;
       errno = EINPROGRESS;
     }

@@ -54,13 +54,10 @@ class ObDtlPacketProc
 {
 public:
   ObDtlMsgType get_proc_type() const override { return Packet::type(); }
-  int decode(const ObDtlLinkedBuffer &buffer);
   int process(const ObDtlLinkedBuffer &buffer, bool &transferred) override;
-  virtual int init(const ObDtlLinkedBuffer &buffer) { UNUSED(buffer); return common::OB_SUCCESS; }
-
 private:
+  int decode(const ObDtlLinkedBuffer &buffer);
   virtual int process(const Packet &pkt) = 0;
-
 private:
   Packet pkt_;
 };
@@ -96,6 +93,48 @@ int ObDtlPacketProc<Packet>::process(const ObDtlLinkedBuffer &buffer, bool &tran
   //
   // 无论处理是否成功，都需要reset对应的packet
   pkt_.reset();
+  return ret;
+}
+
+template <class Packet>
+class ObDtlPacketEmptyProc
+    : public ObDtlPacketProcBase
+{
+public:
+  ObDtlPacketEmptyProc() = default;
+  virtual ~ObDtlPacketEmptyProc() = default;
+  ObDtlMsgType get_proc_type() const override { return Packet::type(); }
+  int process(const ObDtlLinkedBuffer &buffer, bool &transferred) override;
+private:
+  int decode(const ObDtlLinkedBuffer &buffer);
+};
+
+template <class Packet>
+int ObDtlPacketEmptyProc<Packet>::decode(const ObDtlLinkedBuffer &buffer)
+{
+  using common::OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  const char *buf = buffer.buf();
+  int64_t size = buffer.size();
+  int64_t &pos = buffer.pos();
+  Packet pkt;
+  if (OB_FAIL(common::serialization::decode(buf, size, pos, pkt))) {
+    SQL_DTL_LOG(WARN, "decode DTL packet fail", K(size), K(pos));
+  }
+  return ret;
+}
+
+template <class Packet>
+int ObDtlPacketEmptyProc<Packet>::process(const ObDtlLinkedBuffer &buffer, bool &transferred)
+{
+  int ret = common::OB_SUCCESS;
+  transferred = false;
+  if (buffer.pos() == buffer.size()) {
+      // last row
+    ret = OB_ITER_END;
+  } else if (OB_FAIL(decode(buffer))) {
+    // do nothing after decode. as we intend to discard the packet
+  }
   return ret;
 }
 

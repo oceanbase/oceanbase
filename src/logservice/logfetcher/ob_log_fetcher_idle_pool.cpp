@@ -32,6 +32,8 @@ namespace logfetcher
 ObLogFetcherIdlePool::ObLogFetcherIdlePool() :
     inited_(false),
     tg_id_(-1),
+    fetcher_host_(nullptr),
+    log_fetcher_user_(LogFetcherUser::UNKNOWN),
     cfg_(nullptr),
     err_handler_(NULL),
     stream_worker_(NULL),
@@ -48,6 +50,7 @@ int ObLogFetcherIdlePool::init(
     const LogFetcherUser &log_fetcher_user,
     const int64_t thread_num,
     const ObLogFetcherConfig &cfg,
+    void *fetcher_host,
     IObLogErrHandler &err_handler,
     IObLSWorker &stream_worker,
     IObLogStartLSNLocator &start_lsn_locator)
@@ -63,6 +66,7 @@ int ObLogFetcherIdlePool::init(
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::LogFetcherIdlePool, tg_id_))) {
     LOG_ERROR("TG_CREATE_TENANT failed", KR(ret), K(thread_num));
   } else {
+    fetcher_host_ = fetcher_host;
     log_fetcher_user_ = log_fetcher_user;
     cfg_ = &cfg;
     err_handler_ = &err_handler;
@@ -90,8 +94,10 @@ void ObLogFetcherIdlePool::destroy()
   err_handler_ = NULL;
   stream_worker_ = NULL;
   start_lsn_locator_ = NULL;
+  fetcher_host_ = nullptr;
+  log_fetcher_user_ = LogFetcherUser::UNKNOWN;
 
-  LOG_INFO("destroy fetcher idle pool succ");
+  LOG_INFO("destroy fetcher idle pool success");
 }
 
 int ObLogFetcherIdlePool::push(LSFetchCtx *task)

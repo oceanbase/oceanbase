@@ -51,6 +51,7 @@ public:
       tx_scn_(-1),
       write_flag_(),
       handle_start_time_(OB_INVALID_TIMESTAMP),
+      is_standby_read_(false),
       lock_wait_start_ts_(0)
   {}
   ~ObMvccAccessCtx() {
@@ -64,6 +65,7 @@ public:
     tx_scn_ = -1;
     write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
+    is_standby_read_ = false;
   }
   void reset() {
     if (is_write() && OB_UNLIKELY(tx_ctx_)) {
@@ -81,6 +83,7 @@ public:
     tx_scn_ = -1;
     write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
+    is_standby_read_ = false;
   }
   bool is_valid() const {
     switch(type_) {
@@ -256,6 +259,8 @@ public: // NOTE: those field should only be accessed by txn relative routine
 
   // this was used for runtime mertic
   int64_t handle_start_time_;
+
+  bool is_standby_read_;
 protected:
   int64_t lock_wait_start_ts_;
 };

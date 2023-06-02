@@ -311,6 +311,12 @@ int ObTabletAutoincrementService::init()
   return ret;
 }
 
+void ObTabletAutoincrementService::destroy()
+{
+  tablet_autoinc_mgr_map_.destroy();
+  node_allocator_.destroy();
+}
+
 int ObTabletAutoincrementService::get_tablet_cache_interval(const uint64_t tenant_id,
                                                             ObTabletCacheInterval &interval)
 {

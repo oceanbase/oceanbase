@@ -103,7 +103,9 @@ TEST(ObBackupDest, oss)
   dest1.reset();
   ASSERT_EQ(OB_SUCCESS, dest1.set(dest.get_root_path().ptr(), dest.get_storage_info()));
   ASSERT_TRUE(dest == dest1);
-  ObMasterKeyGetter::instance().destroy();
+  ObMasterKeyGetter::instance().stop();
+  ObMasterKeyGetter::instance().wait();
+  ObMasterKeyGetter::instance().reset();
 }
 
 TEST(ObBackupDest, oss_encrypt)
@@ -135,7 +137,9 @@ TEST(ObBackupDest, oss_encrypt)
   dest1.reset();
   ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
   ASSERT_TRUE(dest == dest1);
-  ObMasterKeyGetter::instance().destroy();
+  ObMasterKeyGetter::instance().stop();
+  ObMasterKeyGetter::instance().wait();
+  ObMasterKeyGetter::instance().reset();
 }
 
 int main(int argc, char **argv)

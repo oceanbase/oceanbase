@@ -91,7 +91,7 @@ int ObDupTabletScanTask::refresh_dup_tablet_schema_(
     if (OB_FAIL(ls_status_op.get_duplicate_ls_status_info(MTL_ID(), *GCTX.sql_proxy_,
                                                           dup_ls_status_info))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
-        DUP_TABLE_LOG(WARN, "no duplicate ls", K(dup_ls_status_info));
+        DUP_TABLE_LOG(DEBUG, "no duplicate ls", K(dup_ls_status_info));
       } else {
         DUP_TABLE_LOG(WARN, "get duplicate ls status info failed", K(ret), K(dup_ls_status_info));
       }

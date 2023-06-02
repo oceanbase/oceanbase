@@ -55,6 +55,7 @@ Thread::Thread(int64_t stack_size)
 Thread::Thread(Runnable runnable, int64_t stack_size)
     : pth_(0),
       runnable_(runnable),
+      tenant_id_(OB_SERVER_TENANT_ID),
 #ifndef OB_USE_ASAN
       stack_addr_(nullptr),
 #endif
@@ -242,6 +243,7 @@ void Thread::destroy_stack()
 void* Thread::__th_start(void *arg)
 {
   Thread * const th = reinterpret_cast<Thread*>(arg);
+  ob_set_thread_tenant_id(th->get_tenant_id());
   current_thread_ = th;
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);

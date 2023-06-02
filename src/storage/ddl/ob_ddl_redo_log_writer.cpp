@@ -1203,11 +1203,18 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     } else {
       LOG_WARN("failed to wait ddl merge", K(ret), K(ddl_start_scn));
     }
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               tablet_id,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_ISNULL(tablet_handle.get_obj())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("tablet handle is null", K(ret), K(ls_id), K(tablet_id));
   } else {
-    const ObSSTable *first_major_sstable = nullptr;
-    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(ls_id, tablet_id, first_major_sstable))) {
-      LOG_WARN("failed to get first major sstable", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_ISNULL(first_major_sstable)) {
+    ObSSTable *first_major_sstable = static_cast<ObSSTable *>(
+        tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
+    if (OB_ISNULL(first_major_sstable)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("no major after wait merge success", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_UNLIKELY(first_major_sstable->get_key() != table_key)) {

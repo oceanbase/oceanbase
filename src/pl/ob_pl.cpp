@@ -536,7 +536,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
       if (session_info.get_local_autocommit()) {
         OX (reset_autocommit_ = true);
-        OX (session_info.set_autocommit(false));
+        OZ (session_info.set_autocommit(false));
       }
     } else { // MySQL Mode
       // PL/SQL in MySQL mode may need to retry on LOCK_ON_CONFLICT error.
@@ -549,7 +549,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
       if (is_function_or_trigger && session_info.get_local_autocommit()) {
         OX (reset_autocommit_ = true);
-        OX (session_info.set_autocommit(false));
+        OZ (session_info.set_autocommit(false));
       }
     }
 
@@ -576,7 +576,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
     if (is_function_or_trigger && session_info.get_local_autocommit()) {
       OX (reset_autocommit_ = true);
-      OX (session_info.set_autocommit(false));
+      OZ (session_info.set_autocommit(false));
     }
   }
 
@@ -756,7 +756,6 @@ void ObPLContext::destory(
         }
       }
 
-
       // 清理serially package
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS !=
@@ -793,7 +792,12 @@ void ObPLContext::destory(
     }
     // 无论如何都还原autocommit值
     if (reset_autocommit_) {
-      session_info.set_autocommit(true);
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = session_info.set_autocommit(true);
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_ERROR("restore autocommit value failed", K(tmp_ret), K(ret));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
 
@@ -804,7 +808,12 @@ void ObPLContext::destory(
   if (is_top_stack_) {
     // 无论如何都还原autocommit值
     if (reset_autocommit_) {
-      session_info.set_autocommit(true);
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = session_info.set_autocommit(true);
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_ERROR("restore autocommit value failed", K(tmp_ret), K(ret));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
 }

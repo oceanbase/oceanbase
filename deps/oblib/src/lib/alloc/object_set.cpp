@@ -468,10 +468,9 @@ void ObjectSet::do_free_dirty_list()
   }
 }
 
-bool ObjectSet::check_has_unfree(const char **first_label)
+bool ObjectSet::check_has_unfree(char *first_label)
 {
   bool has_unfree = false;
-  if (first_label != NULL) *first_label = NULL;
 
   if (blist_ != NULL) {
     ABlock *free_list_block = nullptr;
@@ -489,8 +488,8 @@ bool ObjectSet::check_has_unfree(const char **first_label)
         while (true) {
           bool tmp_has_unfree = obj->in_use_;
           if (OB_UNLIKELY(tmp_has_unfree)) {
-            if (first_label != NULL) {
-              *first_label = *first_label ?:(char*)&obj->label_[0];
+            if ('\0' == first_label[0]) {
+              STRCPY(first_label, obj->label_);
             }
             if (!has_unfree) {
               has_unfree = true;
@@ -519,8 +518,8 @@ void ObjectSet::reset()
   const bool context_check = mem_context_ != nullptr;
   const static int buf_len = 256;
   char buf[buf_len] = {'\0'};
-  const char *first_label = NULL;
-  bool has_unfree = check_has_unfree(&first_label);
+  char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
+  bool has_unfree = check_has_unfree(first_label);
   if (has_unfree) {
     if (context_check) {
       const StaticInfo &static_info = mem_context_->get_static_info();

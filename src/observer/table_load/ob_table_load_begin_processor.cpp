@@ -51,6 +51,12 @@ int ObTableLoadBeginP::process()
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check tenant", KR(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
     if (OB_FAIL(ObTableLoadSchema::get_table_schema(credential_.tenant_id_,
@@ -271,6 +277,12 @@ int ObTableLoadPreBeginPeerP::process()
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check tenant", KR(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadParam param;
     param.tenant_id_ = credential_.tenant_id_;
@@ -353,6 +365,12 @@ int ObTableLoadConfirmBeginPeerP::process()
 
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret), K_(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check tenant", KR(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {

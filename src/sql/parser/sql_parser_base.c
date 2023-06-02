@@ -151,8 +151,10 @@ int parse_sql_stmt(ParseResult *parse_result)
 void setup_token_pos_info(ParseNode *node, int off, int len)
 {
 #ifdef SQL_PARSER_COMPILATION
-  node->token_off_ = off;
-  node->token_len_ = len;
+  if (node != NULL) {
+    node->token_off_ = off;
+    node->token_len_ = len;
+  }
 #else
   // do nothing
 #endif
