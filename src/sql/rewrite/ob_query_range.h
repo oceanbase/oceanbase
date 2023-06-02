@@ -556,7 +556,8 @@ private:
                             ObItemType cmp_type,
                             const ObExprResType &result_type,
                             ObKeyPart *&out_key_part,
-                            const common::ObDataTypeCastParams &dtc_params);
+                            const common::ObDataTypeCastParams &dtc_params,
+                            bool &is_bound_modified);
   int get_const_key_part(const ObRawExpr *l_expr,
                          const ObRawExpr *r_expr,
                          const ObRawExpr *escape_expr,
@@ -570,7 +571,8 @@ private:
                           ObItemType cmp_type,
                           const ObExprResType &result_type,
                           ObKeyPart *&out_key_part,
-                          const common::ObDataTypeCastParams &dtc_params);
+                          const common::ObDataTypeCastParams &dtc_params,
+                          bool &is_bound_modified);
   int get_rowid_key_part(const ObRawExpr *l_expr,
                          const ObRawExpr *r_expr,
                          const ObRawExpr *escape_expr,
@@ -596,6 +598,10 @@ private:
                        const ObExprResType &result_type,
                        ObKeyPart *&out_key_part,
                        const common::ObDataTypeCastParams &dtc_params);
+  int check_bound(ObKeyPart *key_part,
+                  const ObDataTypeCastParams &dtc_params,
+                  const ObRawExpr *const_expr,
+                  bool &is_bound_modified);
   int add_row_item(ObKeyPart *&row_tail, ObKeyPart *key_part);
   int add_and_item(ObKeyPartList &and_storage, ObKeyPart *key_part);
   int add_or_item(ObKeyPartList &or_storage, ObKeyPart *key_part);

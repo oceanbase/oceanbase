@@ -386,7 +386,7 @@ public:
   int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
 
-  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row);
+  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified);
 
   // copy all except next_ pointer
   int deep_node_copy(const ObKeyPart &other);
