@@ -72,5 +72,17 @@ bool ObNetKeepAliveAdapter::is_server_stopped(const common::ObAddr &server)
   }
   return bool_ret;
 }
+
+bool ObNetKeepAliveAdapter::in_black(const common::ObAddr &server)
+{
+  bool bool_ret = false;
+  bool in_blacklist = false;
+  bool unused_is_server_stopped = false;
+  if (OB_SUCCESS != in_black_or_stopped_(server, in_blacklist, unused_is_server_stopped)) {
+  } else {
+    bool_ret = in_blacklist;
+  }
+  return bool_ret;
+}
 } // end namespace logservice
 } // end namespace oceanbase

@@ -877,21 +877,16 @@ int PalfHandleImpl::check_args_and_generate_config_(const LogConfigChangeArgs &a
                                                     const int64_t proposal_id,
                                                     const int64_t election_epoch,
                                                     bool &is_already_finished,
-                                                    common::ObMemberList &log_sync_memberlist,
-                                                    int64_t &log_sync_repclia_num) const
+                                                    LogConfigInfo &new_config_info) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  LogConfigInfo config_info;
   if (OB_FAIL(config_mgr_.check_args_and_generate_config(args, proposal_id,
-      election_epoch, is_already_finished, config_info))) {
+      election_epoch, is_already_finished, new_config_info))) {
     if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
       PALF_LOG(WARN, "check_args_and_generate_config failed", K(ret), KPC(this), K(args));
     }
-  } else {
-    log_sync_memberlist = config_info.log_sync_memberlist_;
-    log_sync_repclia_num = config_info.log_sync_replica_num_;
-  }
+  } else { }
   return ret;
 }
 
@@ -903,9 +898,8 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
   int64_t proposal_id = INVALID_PROPOSAL_ID;
   int64_t election_epoch = INVALID_PROPOSAL_ID;
   bool is_already_finished = false;
-  ObMemberList new_log_sync_memberlist;
-  int64_t new_log_sync_replica_num = 0;
   int get_lock = OB_EAGAIN;
+  LogConfigInfo new_config_info;
   if (DEGRADE_ACCEPTOR_TO_LEARNER == args.type_) {
     // for concurrent DEGRADE
     if (ATOMIC_BCAS(&has_higher_prio_config_change_, false, true)) {
@@ -928,7 +922,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     PALF_LOG(WARN, "start_change_config failed", KR(ret), KPC(this), K(args));
   } else if (FALSE_IT(doing_degrade = (args.type_ == DEGRADE_ACCEPTOR_TO_LEARNER))) {
   } else if (OB_FAIL(check_args_and_generate_config_(args, proposal_id, election_epoch,
-      is_already_finished, new_log_sync_memberlist, new_log_sync_replica_num))) {
+      is_already_finished, new_config_info))) {
     if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
       PALF_LOG(WARN, "check_args_and_generate_config failed", KR(ret), KPC(this), K(args));
     }
@@ -964,13 +958,12 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
         ret = OB_NOT_MASTER;
         PALF_LOG(WARN, "leader has been switched, try to change config again", KR(ret), KPC(this),
             K(proposal_id), K(curr_proposal_id));
-      } else if (OB_SUCC(config_mgr_.check_follower_sync_status(args, new_log_sync_memberlist,
-          new_log_sync_replica_num, added_member_has_new_version))) {
+      } else if (OB_SUCC(config_mgr_.check_follower_sync_status(args, new_config_info,
+          added_member_has_new_version))) {
       // check log synchronization progress of new memberlist majority synchronically
         break;
       } else if (OB_EAGAIN != ret) {
-        PALF_LOG(WARN, "check_follower_sync_status_ fails", K(ret), K_(palf_id),
-            K(new_log_sync_memberlist), K(new_log_sync_replica_num));
+        PALF_LOG(WARN, "check_follower_sync_status_ fails", K(ret), K_(palf_id), K(new_config_info));
       } else if (is_upgrade_or_degrade(args.type_)) {
         ret = OB_EAGAIN;
         PALF_LOG(WARN, "degrade/upgrade eagain, arb_reason: check_follower_sync_status_ return false",
@@ -1035,8 +1028,14 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     PALF_LOG(INFO, "one_stage_config_change finish", KR(ret), KPC(this), K(args), K(config_version),
         K(timeout_us), K(time_guard));
     ret = (OB_LOG_NOT_SYNC == ret)? OB_EAGAIN: ret;
-    if (OB_TIMEOUT == ret && config_version.is_valid()) {
-      config_mgr_.after_config_change_timeout(config_version);
+    if (OB_FAIL(ret)) {
+      if (config_version.is_valid()) {
+        config_mgr_.after_config_change_timeout(config_version);
+      } else {
+        // encounter unexpected error, reset flag
+        WLockGuard guard(lock_);
+        state_mgr_.reset_changing_config_with_arb();
+      }
     }
   }
   if (OB_SUCCESS == get_lock) {
