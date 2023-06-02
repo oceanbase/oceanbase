@@ -310,6 +310,7 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         default_value.set_uint64(static_cast<uint64_t>(def_val->value_));
         default_value.set_param_meta();
         break;
+      case T_NCHAR: //mysql mode
       case T_CHAR:
       case T_VARCHAR:
       case T_LOB:
@@ -317,11 +318,17 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
                            static_cast<int32_t>(def_val->str_len_));
         if ((OB_FAIL(ob_write_string(*name_pool, tmp_str, str)))) {
           SQL_RESV_LOG(WARN, "Can not malloc space for default value", K(ret));
-          break;
+        } else {
+          ObCollationType coll = session_info_->get_local_collation_connection();
+          if (def_val->type_ == T_NCHAR) {
+            ObString charset(strlen("utf8mb4"), "utf8mb4");
+            ObCharsetType charset_type = ObCharset::charset_type(charset.trim());
+            coll = ObCharset::get_default_collation(charset_type);
+          }
+          default_value.set_varchar(str);
+          default_value.set_collation_type(coll);
+          default_value.set_param_meta();
         }
-        default_value.set_varchar(str);
-        default_value.set_collation_type(session_info_->get_local_collation_connection());
-        default_value.set_param_meta();
         break;
       case T_RAW:
         tmp_str.assign_ptr(const_cast<char *>(def_val->str_value_),
@@ -543,7 +550,6 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
       case T_INTERVAL_YM:
       case T_INTERVAL_DS:
       case T_NVARCHAR2:
-      case T_NCHAR:
       case T_UROWID: {
         //oracle 模式default值直接把用户输入当做string存储，因此不会走到这个路径
         ret = OB_NOT_SUPPORTED;
