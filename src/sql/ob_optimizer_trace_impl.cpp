@@ -270,8 +270,9 @@ int ObOptimizerTraceImpl::append_lower(const char* msg)
   int ret = OB_SUCCESS;
   char *buf = NULL;
   int64_t buf_len = strlen(msg);
+  common::ObArenaAllocator allocator("OptimizerTrace");
   if (buf_len <= 0) {
-  } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(buf_len)))) {
+  } else if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Failed to allocate buffer", "buffer size", buf_len, K(ret));
   } else {

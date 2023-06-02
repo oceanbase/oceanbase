@@ -3180,6 +3180,8 @@ int ObLogPlan::generate_single_join_level_with_DP(ObIArray<JoinOrderArray> &join
             LOG_TRACE("succeed to generate join order", K(left_tree->get_tables()),
                        K(right_tree->get_tables()), K(is_valid_join), K(abort_type));
           }
+          OPT_TRACE_TIME_USED;
+          OPT_TRACE_MEM_USED;
         }
         OPT_TRACE_END_SECTION;
       }

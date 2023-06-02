@@ -322,7 +322,8 @@ ObOptimizerTraceImpl::append(const T* expr)
   char *buf = NULL;
   int64_t buf_len = OB_MAX_SQL_LENGTH;
   int64_t pos = 0;
-  if (OB_ISNULL(buf = (char*)allocator_.alloc(buf_len))) {
+  common::ObArenaAllocator allocator("OptimizerTrace");
+  if (OB_ISNULL(buf = (char*)allocator.alloc(buf_len))) {
     ret = OB_ERR_UNEXPECTED;
     //LOG_WARN("failed to alloc buffer", K(ret));
   } else if (OB_NOT_NULL(expr)) {
@@ -346,8 +347,9 @@ ObOptimizerTraceImpl::append(const T* value)
   int ret = OB_SUCCESS;
   ObString sql;
   ObObjPrintParams print_params;
+  common::ObArenaAllocator allocator("OptimizerTrace");
   // TODO: @zhenling, use a valid schema guard in each query
-  if (OB_FAIL(ObSQLUtils::reconstruct_sql(allocator_,
+  if (OB_FAIL(ObSQLUtils::reconstruct_sql(allocator,
                                           value,
                                           sql,
                                           NULL,
