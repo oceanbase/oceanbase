@@ -3165,10 +3165,12 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
   const ParamStore *params = NULL;
+  ObSQLSessionInfo *session_info = NULL;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(allocator_) ||
-      OB_ISNULL(params = opt_ctx->get_params())) {
+      OB_ISNULL(params = opt_ctx->get_params()) ||
+      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
         K(allocator_), K(params), K(ret));
@@ -3181,11 +3183,13 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
     } else {
       tmp_qr = new(tmp_ptr)ObQueryRange(*allocator_);
       const ObDataTypeCastParams dtc_params =
-            ObBasicSessionInfo::create_dtc_params(opt_ctx->get_session_info());
+            ObBasicSessionInfo::create_dtc_params(session_info);
+      bool is_in_range_optimization_enabled = session_info->is_in_range_optimization_enabled();
       if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
                                                           dtc_params, opt_ctx->get_exec_ctx(),
                                                           &expr_constraints,
-                                                          params))) {
+                                                          params, false, true,
+                                                          is_in_range_optimization_enabled))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }

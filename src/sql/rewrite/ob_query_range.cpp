@@ -251,7 +251,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const ObDataTypeCastParams &dtc_params,
                                                   ObExecContext *exec_ctx,
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
-                                                  const ParamsIArray *params /* = NULL */)
+                                                  const ParamsIArray *params /* = NULL */,
+                                                  const bool use_in_optimization /* = false */)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
@@ -268,6 +269,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
       GET_ALWAYS_TRUE_OR_FALSE(true, root);
     } else {
       if (OB_FAIL(preliminary_extract(expr_root, root, dtc_params,
+                                      use_in_optimization,
                                       T_OP_IN == expr_root->get_expr_type()))) {
         LOG_WARN("gen table range failed", K(ret));
       } else if (query_range_ctx_->cur_expr_is_precise_ && root != NULL) {
@@ -305,7 +307,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
     }
     if (OB_SUCC(ret) && NULL != root) {
       ObSqlBitSet<> key_offsets;
-      if (OB_FAIL(refine_large_range_graph(root))) {
+      if (OB_FAIL(refine_large_range_graph(root, use_in_optimization))) {
         LOG_WARN("failed to refine large range graph", K(ret));
       } else if (OB_FAIL(check_graph_type(*root))) {
         LOG_WARN("check graph type failed", K(ret));
@@ -686,7 +688,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
                                                   const ParamsIArray *params /* = NULL */,
                                                   const bool phy_rowid_for_table_loc /* = false*/,
-                                                  const bool ignore_calc_failure /* = true*/)
+                                                  const bool ignore_calc_failure /* = true*/,
+                                                  const bool use_in_optimization /* = false */)
 {
   int ret = OB_SUCCESS;
   ObKeyPartList and_ranges;
@@ -695,7 +698,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
   ObKeyPartList geo_ranges;
   bool has_geo_expr = false;
 
-  SQL_REWRITE_LOG(DEBUG, "preliminary extract", K(range_columns), K(root_exprs));
+  SQL_REWRITE_LOG(DEBUG, "preliminary extract", K(range_columns), K(root_exprs), K(use_in_optimization));
   ObSEArray<ObRawExpr *, 16> candi_exprs;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx,
@@ -719,6 +722,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
       if (OB_ISNULL(cur_expr)) {
         // continue
       } else if (OB_FAIL(preliminary_extract(cur_expr, temp_result, dtc_params,
+                                             use_in_optimization,
                                              T_OP_IN == cur_expr->get_expr_type()))) {
         LOG_WARN("Generate table range failed", K(ret));
       } else if (NULL == temp_result) {
@@ -783,7 +787,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
     } else if (contain_in_ && !query_range_ctx_->need_final_extract_ &&
                OB_FAIL(rebuild_in_graph(temp_result))) {
       LOG_WARN("failed to rebuild and graph for in key", K(ret));
-    } else if (OB_FAIL(refine_large_range_graph(temp_result))) {
+    } else if (OB_FAIL(refine_large_range_graph(temp_result, use_in_optimization))) {
       LOG_WARN("failed to refine large range graph", K(ret));
     } else if (OB_FAIL(check_graph_type(*temp_result))) {
       LOG_WARN("check graph type failed", K(ret));
@@ -914,7 +918,7 @@ bool ObQueryRange::is_and_next_useless(ObKeyPart *cur_key, ObKeyPart *and_next, 
 }
 
 // if the range size is large then RANGE_MAX_SIZE, remove some ranges according to pos_.offset_
-int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
+int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part, bool use_in_optimization)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObKeyPart*, 8> pre_key_parts;
@@ -924,6 +928,7 @@ int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
   ObSEArray<uint64_t, 8> next_or_count;
   uint64_t cur_range_size = 1;
   bool need_refine = false;
+  int64_t max_range_size = use_in_optimization ? MAX_RANGE_SIZE_NEW : MAX_RANGE_SIZE_OLD;
   if (OB_ISNULL(key_part)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart is null", K(ret), K(key_part));
@@ -937,7 +942,7 @@ int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
     if (OB_FAIL(compute_range_size(key_parts, or_count, next_key_parts, next_or_count,
                                    cur_range_size))) {
       LOG_WARN("failed to compute range size", K(ret));
-    } else if (cur_range_size > MAX_RANGE_SIZE) {
+    } else if (cur_range_size > max_range_size) {
       need_refine = true;
     } else if (OB_FAIL(pre_key_parts.assign(key_parts))) {
       LOG_WARN("failed to assign array", K(ret), K(key_parts));
@@ -947,7 +952,7 @@ int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
       LOG_WARN("failed to assign array", K(ret), K(next_or_count));
     } else { /* do nothing */ }
   }
-  range_size_ = need_refine ? MAX_RANGE_SIZE :
+  range_size_ = need_refine ? max_range_size :
                 cur_range_size < RANGE_BUCKET_SIZE ? RANGE_BUCKET_SIZE : cur_range_size;
   if (OB_SUCC(ret) && need_refine) {
     ObKeyPart *first_keypart = NULL;
@@ -2574,7 +2579,7 @@ int ObQueryRange::pre_extract_single_in_op(const ObOpRawExpr *b_expr,
   } else if (OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("r_expr is null.", K(ret));
-  } else if (r_expr->get_param_count() > 10000) {
+  } else if (r_expr->get_param_count() > MAX_RANGE_SIZE_OLD) {
     // do not extract range over MAX_RANGE_SIZE
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     query_range_ctx_->cur_expr_is_precise_ = false;
@@ -2656,7 +2661,7 @@ int ObQueryRange::pre_extract_complex_in_op(const ObOpRawExpr *b_expr,
   } else if (OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("r_expr is null.", K(ret));
-  } else if (r_expr->get_param_count() > 10000) {
+  } else if (r_expr->get_param_count() > MAX_RANGE_SIZE_OLD) {
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     query_range_ctx_->cur_expr_is_precise_ = false;
   } else {
@@ -2902,6 +2907,8 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
   if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(l_expr), K(r_expr));
+  } else if (OB_UNLIKELY(l_expr->get_param_count() > MAX_EXTRACT_IN_COLUMN_NUMBER)) {
+    // do nothiing
   } else if (OB_FAIL(idx_pos_map.create(l_expr->get_param_count(), "IdxKeyMap", "IdxKeyMap"))) {
     LOG_WARN("fail to init hashmap", K(ret));
   } else if (OB_FAIL(idx_param_map.create(l_expr->get_param_count(), "IdxParamMap", "IdxParamMap"))) {
@@ -3390,7 +3397,8 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
 
 int ObQueryRange::pre_extract_and_or_op(const ObOpRawExpr *m_expr,
                                         ObKeyPart *&out_key_part,
-                                        const ObDataTypeCastParams &dtc_params)
+                                        const ObDataTypeCastParams &dtc_params,
+                                        const bool use_in_optimization)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(m_expr) || OB_ISNULL(query_range_ctx_)) {
@@ -3402,7 +3410,7 @@ int ObQueryRange::pre_extract_and_or_op(const ObOpRawExpr *m_expr,
     for (int64_t i = 0; OB_SUCC(ret) && i < m_expr->get_param_count(); ++i) {
       ObKeyPart *tmp = NULL;
       query_range_ctx_->cur_expr_is_precise_ = false;
-      if (OB_FAIL(preliminary_extract(m_expr->get_param_expr(i), tmp, dtc_params))) {
+      if (OB_FAIL(preliminary_extract(m_expr->get_param_expr(i), tmp, dtc_params, use_in_optimization))) {
         LOG_WARN("preliminary_extract failed", K(ret));
       } else if (T_OP_AND == m_expr->get_expr_type()) {
         if (OB_FAIL(add_and_item(key_part_list, tmp))) {
@@ -3629,6 +3637,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
 int ObQueryRange::preliminary_extract(const ObRawExpr *node,
                                       ObKeyPart *&out_key_part,
                                       const ObDataTypeCastParams &dtc_params,
+                                      const bool use_in_optimization,
                                       const bool is_single_in /* = false */)
 {
   int ret = OB_SUCCESS;
@@ -3671,17 +3680,27 @@ int ObQueryRange::preliminary_extract(const ObRawExpr *node,
         LOG_WARN("extract not_btw failed", K(ret));
       }
     } else if (T_OP_IN  == node->get_expr_type()) {
-      if (OB_FAIL(pre_extract_in_op(b_expr, out_key_part, dtc_params))) {
-        LOG_WARN("extract single in_op failed", K(ret));
-      } else if (!out_key_part->is_always_true() && !out_key_part->is_always_false()) {
-        contain_in_ = true;
+      if (use_in_optimization) {
+        if (OB_FAIL(pre_extract_in_op(b_expr, out_key_part, dtc_params))) {
+          LOG_WARN("extract single in_op failed", K(ret));
+        } else if (!out_key_part->is_always_true() && !out_key_part->is_always_false()) {
+          contain_in_ = true;
+        }
+      } else {
+        if (is_single_in) {
+          if (OB_FAIL(pre_extract_single_in_op(b_expr, out_key_part, dtc_params))) {
+            LOG_WARN("extract single in_op failed", K(ret));
+          }
+        } else if (OB_FAIL(pre_extract_complex_in_op(b_expr, out_key_part, dtc_params))) {
+          LOG_WARN("extract in_op failed", K(ret));
+        }
       }
     } else if (T_OP_NOT_IN  == node->get_expr_type()) {
       if (OB_FAIL(pre_extract_not_in_op(b_expr, out_key_part, dtc_params))) {
         LOG_WARN("extract in_op failed", K(ret));
       }
     } else if (T_OP_AND == node->get_expr_type() || T_OP_OR == node->get_expr_type()) {
-      if (OB_FAIL(pre_extract_and_or_op(b_expr, out_key_part, dtc_params))) {
+      if (OB_FAIL(pre_extract_and_or_op(b_expr, out_key_part, dtc_params, use_in_optimization))) {
         LOG_WARN("extract and_or failed", K(ret));
       }
     } else if (node->is_spatial_expr()) {
@@ -5536,6 +5555,8 @@ int ObQueryRange::union_in_with_in(ObKeyPartList &or_list,
       }
     } else if (OB_FAIL(cur1->in_keypart_->union_in_key(cur2->in_keypart_))) {
       LOG_WARN("failed to union in key", K(ret));
+    } else if (cur1->and_next_ != NULL && cur1->and_next_->equal_to(cur2->and_next_)) {
+      // keep and_next_
     } else {
       cur1->and_next_ = NULL;
     }

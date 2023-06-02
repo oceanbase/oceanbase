@@ -6335,7 +6335,8 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
   ObSqlSchemaGuard *schema_guard = NULL;
   ObSEArray<uint64_t, 8> rowkey_ids;
   if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(join) ||
-      OB_ISNULL(index_scan) || OB_ISNULL(table_scan)) {
+      OB_ISNULL(index_scan) || OB_ISNULL(table_scan) ||
+      OB_ISNULL(optimizer_context_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(join), K(index_scan), K(table_scan), K(ret));
   } else if (OB_UNLIKELY(log_op_def::LOG_JOIN != join->get_type())) {
@@ -6401,6 +6402,7 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params =
             ObBasicSessionInfo::create_dtc_params(optimizer_context_.get_session_info());
+      bool is_in_range_optimization_enabled = optimizer_context_.get_session_info()->is_in_range_optimization_enabled();
       ObQueryRange *query_range = static_cast<ObQueryRange*>(get_allocator().alloc(sizeof(ObQueryRange)));
       const ParamStore *params = get_optimizer_context().get_params();
       if (OB_ISNULL(query_range)) {
@@ -6416,7 +6418,10 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
                                                                  dtc_params,
                                                                  optimizer_context_.get_exec_ctx(),
                                                                  NULL,
-                                                                 params))) {
+                                                                 params,
+                                                                 false,
+                                                                 true,
+                                                                 is_in_range_optimization_enabled))) {
           LOG_WARN("failed to preliminary extract query range", K(ret));
         } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
           LOG_WARN("failed to set range columns", K(ret));
