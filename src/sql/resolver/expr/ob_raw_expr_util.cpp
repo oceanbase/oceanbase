@@ -2010,18 +2010,17 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
     if (OB_SUCC(ret)) {
       OZ (expr->formalize(&session_info));
     }
-    if (OB_SUCC(ret) &&
-        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
-         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
-
-      if (OB_FAIL(check_is_valid_generated_col(expr, expr_factory.get_allocator()))) {
-        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
-                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
-          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
-          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
-        } else {
-          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
-        }
+  }
+  if (OB_SUCC(ret) &&
+      (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+        ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
+    if (OB_FAIL(check_is_valid_generated_col(expr, expr_factory.get_allocator()))) {
+      if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+        ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+        LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
+      } else {
+        LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
       }
     }
   }

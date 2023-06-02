@@ -4409,8 +4409,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                                   *expr_factory,
                                                                   expr,
                                                                   expr_changed));
-      OZ (expr->formalize(session_info));
     }
+    OZ (expr->formalize(session_info));
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
       if (OB_FAIL(ObRawExprUtils::try_modify_udt_col_expr_for_gen_col_recursively(*session_info,
                                                                                   tbl_schema,
@@ -4423,9 +4423,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     if (OB_SUCC(ret) &&
         (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
          ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
-      if (OB_FAIL(expr->formalize(session_info))) {
-        LOG_WARN("fail to formalize expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory->get_allocator()))) {
+      if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory->get_allocator()))) {
         if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
                  && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
           ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
