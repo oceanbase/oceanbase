@@ -25,13 +25,6 @@ extern int64_t global_thread_stack_size;
 namespace oceanbase {
 namespace lib {
 
-enum ThreadCGroup
-{
-  INVALID_CGROUP = 0,
-  FRONT_CGROUP = 1,
-  BACK_CGROUP = 2,
-};
-
 class Threads;
 class IRunWrapper
 {
@@ -59,8 +52,7 @@ public:
         threads_(nullptr),
         stack_size_(global_thread_stack_size),
         stop_(true),
-        run_wrapper_(nullptr),
-        cgroup_(INVALID_CGROUP)
+        run_wrapper_(nullptr)
   {}
   virtual ~Threads();
   static IRunWrapper *&get_expect_run_wrapper();
@@ -87,10 +79,9 @@ public:
   int init();
   // IRunWrapper 用于创建多租户线程时指定租户上下文
   // cgroup_ctrl 和IRunWrapper配合使用，实现多租户线程的CPU隔离
-  void set_run_wrapper(IRunWrapper *run_wrapper, ThreadCGroup cgroup = ThreadCGroup::FRONT_CGROUP)
+  void set_run_wrapper(IRunWrapper *run_wrapper)
   {
     run_wrapper_ = run_wrapper;
-    cgroup_ = cgroup;
   }
   virtual int start();
   virtual void stop();
@@ -105,7 +96,6 @@ public:
     int ret = OB_SUCCESS;
     return ret;
   }
-  ThreadCGroup get_cgroup() { return cgroup_; }
   virtual bool has_set_stop() const
   {
     IGNORE_RETURN lib::Thread::update_loop_ts();
@@ -143,9 +133,6 @@ private:
   common::SpinRWLock lock_ __attribute__((__aligned__(16)));
   // tenant ctx
   IRunWrapper *run_wrapper_;
-  // thread cgroups
-  ThreadCGroup cgroup_;
-  //
 };
 
 using ThreadPool = Threads;

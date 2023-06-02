@@ -1312,7 +1312,7 @@ int ObTenantDagWorker::init(const int64_t check_period)
     COMMON_LOG(WARN, "dag worker is inited twice", K(ret));
   } else if (OB_FAIL(cond_.init(ObWaitEventIds::DAG_WORKER_COND_WAIT))) {
     COMMON_LOG(WARN, "failed to init cond", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::DagWorker, tg_id_, lib::ThreadCGroup::BACK_CGROUP))) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::DagWorker, tg_id_))) {
     COMMON_LOG(WARN, "TG create dag worker failed", K(ret));
   } else {
     check_period_ = check_period;
@@ -1599,7 +1599,7 @@ int ObTenantDagScheduler::init(
 
     get_default_config();
     dag_limit_ = dag_limit;
-    if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::DagScheduler, tg_id_, lib::ThreadCGroup::BACK_CGROUP))) {
+    if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::DagScheduler, tg_id_))) {
       COMMON_LOG(WARN, "TG create dag scheduler failed", K(ret));
     }
 

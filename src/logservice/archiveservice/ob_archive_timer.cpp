@@ -73,7 +73,7 @@ void ObArchiveTimer::destroy()
 int ObArchiveTimer::start()
 {
   int ret = OB_SUCCESS;
-  ObThreadPool::set_run_wrapper(MTL_CTX(), lib::ThreadCGroup::BACK_CGROUP);
+  ObThreadPool::set_run_wrapper(MTL_CTX());
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     ARCHIVE_LOG(ERROR, "ObArchiveTimer not init", K(ret), K(inited_), K(tenant_id_));

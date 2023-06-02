@@ -30,7 +30,7 @@ void set_tenant_tg_helper(TGHelper *tg_helper)
 }
 
 // define TGConfig
-#define TG_DEF(id, name, desc, scope, type, arg...) const ThreadCountPair TGConfig::id = ThreadCountPair(arg);
+#define TG_DEF(id, name, type, arg...) const ThreadCountPair TGConfig::id = ThreadCountPair(arg);
 #include "lib/thread/thread_define.h"
 #undef TG_DEF
 
@@ -44,10 +44,10 @@ void __attribute__((weak)) init_create_func()
 
 void lib_init_create_func()
 {
-  #define TG_DEF(id, name, desc, scope, type, args...)              \
+  #define TG_DEF(id, name, type, args...)              \
     create_funcs_[TGDefIDs::id] = []() {                            \
-      auto ret = OB_NEW(TGCLSMap<TGType::type>::CLS, SET_USE_500("tg"), args); \
-      ret->attr_ = {#name, desc, TGScope::scope, TGType::type};     \
+      auto ret = OB_NEW(TG_##type, SET_USE_500("tg"), args); \
+      ret->attr_ = {#name, TGType::type};     \
       return ret;                                                   \
     };
   #include "lib/thread/thread_define.h"
@@ -64,12 +64,6 @@ TGMgr::TGMgr()
   for (int i = 0; OB_SUCC(ret) && i < TGDefIDs::END; i++) {
     int tg_id = -1;
     ret = create_tg(i, tg_id, 0);
-    if (OB_FAIL(ret)) {
-    } else if (tg_id < 0) {
-      // do-nothing
-    } else {
-      default_tg_id_map_[i] = tg_id;
-    }
   }
   abort_unless(OB_SUCCESS == ret);
 }

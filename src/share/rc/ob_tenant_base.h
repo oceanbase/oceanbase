@@ -416,7 +416,7 @@ public:
   int init(ObCgroupCtrl *cgroup = nullptr);
   void destroy();
   virtual inline uint64_t id() const override { return id_; }
-  ObCgroupCtrl *get_cgroup(lib::ThreadCGroup cgroup);
+  ObCgroupCtrl *get_cgroup();
 
   const ObTenantModuleInitCtx *get_mtl_init_ctx() const { return mtl_init_ctx_; }
 
