@@ -470,6 +470,7 @@ void ObjectSet::do_free_dirty_list()
 
 bool ObjectSet::check_has_unfree(char *first_label)
 {
+  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   bool has_unfree = false;
 
   if (blist_ != NULL) {
