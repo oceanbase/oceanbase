@@ -284,9 +284,9 @@ void* Thread::__th_start(void *arg)
     if (OB_FAIL(ret)) {
       LOG_ERROR("set tenant ctx failed", K(ret));
     } else {
-      const int cache_cnt = !lib::is_mini_mode() ? ObPageManager::DEFAULT_CHUNK_CACHE_CNT :
-        ObPageManager::MINI_MODE_CHUNK_CACHE_CNT;
-      pm.set_max_chunk_cache_cnt(cache_cnt);
+      const int cache_size = !lib::is_mini_mode() ? ObPageManager::DEFAULT_CHUNK_CACHE_SIZE :
+        ObPageManager::MINI_MODE_CHUNK_CACHE_SIZE;
+      pm.set_max_chunk_cache_size(cache_size);
       ObPageManager::set_thread_local_instance(pm);
       MemoryContext *mem_context = GET_TSI0(MemoryContext);
       if (OB_ISNULL(mem_context)) {

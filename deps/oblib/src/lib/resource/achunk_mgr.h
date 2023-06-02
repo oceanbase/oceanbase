@@ -43,55 +43,53 @@ class AChunkList
   DISALLOW_COPY_AND_ASSIGN(AChunkList);
 
 public:
-  static const int DEFAULT_MAX_CHUNK_CACHE_CNT = 500;
+  static const int64_t DEFAULT_MAX_CHUNK_CACHE_SIZE = 1L<<30;
   AChunkList(const bool with_mutex = true)
-    : max_chunk_cache_cnt_(DEFAULT_MAX_CHUNK_CACHE_CNT),
+    : max_chunk_cache_size_(DEFAULT_MAX_CHUNK_CACHE_SIZE),
       mutex_(common::ObLatchIds::ALLOC_CHUNK_LOCK),
-      header_(NULL), pushes_(0), pops_(0), with_mutex_(with_mutex)
+      header_(NULL), hold_(0), pushes_(0), pops_(0), with_mutex_(with_mutex)
   {
     mutex_.enable_record_stat(false);
 #ifdef OB_USE_ASAN
-    max_chunk_cache_cnt_ = 0;
+    max_chunk_cache_size_ = 0;
 #endif
   }
   virtual ~AChunkList()
   {}
 
-  void set_max_chunk_cache_cnt(const int cnt)
+  void set_max_chunk_cache_size(const int64_t max_cache_size)
   {
 #ifdef OB_USE_ASAN
-    UNUSED(cnt);
-    max_chunk_cache_cnt_ = 0;
+    UNUSED(size);
+    max_chunk_cache_size_ = 0;
 #else
-    max_chunk_cache_cnt_ = cnt;
+    max_chunk_cache_size_ = max_cache_size;
 #endif
   }
 
   inline bool push(AChunk *chunk)
   {
     bool bret = false;
-    if (count() < max_chunk_cache_cnt_) {
-      ObDisableDiagnoseGuard disable_diagnose_guard;
-      if (with_mutex_) {
-        mutex_.lock();
+    ObDisableDiagnoseGuard disable_diagnose_guard;
+    if (with_mutex_) {
+      mutex_.lock();
+    }
+    DEFER(if (with_mutex_) {mutex_.unlock();});
+    int64_t hold = chunk->hold();
+    if (hold_ + hold <= max_chunk_cache_size_) {
+      hold_ += hold;
+      pushes_++;
+      if (NULL == header_) {
+        chunk->prev_ = chunk;
+        chunk->next_ = chunk;
+        header_ = chunk;
+      } else {
+        chunk->prev_ = header_->prev_;
+        chunk->next_ = header_;
+        chunk->prev_->next_ = chunk;
+        chunk->next_->prev_ = chunk;
       }
-      if (count() < max_chunk_cache_cnt_) {
-        pushes_++;
-        if (NULL == header_) {
-          chunk->prev_ = chunk;
-          chunk->next_ = chunk;
-          header_ = chunk;
-        } else {
-          chunk->prev_ = header_->prev_;
-          chunk->next_ = header_;
-          chunk->prev_->next_ = chunk;
-          chunk->next_->prev_ = chunk;
-        }
-        bret = true;
-      }
-      if (with_mutex_) {
-        mutex_.unlock();
-      }
+      bret = true;
     }
     return bret;
   }
@@ -103,8 +101,10 @@ public:
       if (with_mutex_) {
         mutex_.lock();
       }
+      DEFER(if (with_mutex_) {mutex_.unlock();});
       if (!OB_ISNULL(header_)) {
         chunk = header_;
+        hold_ -= chunk->hold();
         pops_++;
         if (header_->next_ != header_) {
           header_->prev_->next_ = header_->next_;
@@ -114,9 +114,6 @@ public:
           header_ = NULL;
         }
       }
-      if (with_mutex_) {
-        mutex_.unlock();
-      }
     }
     return chunk;
   }
@@ -124,6 +121,11 @@ public:
   inline int64_t count() const
   {
     return pushes_ - pops_;
+  }
+
+  inline int64_t hold() const
+  {
+    return hold_;
   }
 
   inline int64_t get_pushes() const
@@ -137,9 +139,10 @@ public:
   }
 
 private:
-  int32_t max_chunk_cache_cnt_;
+  int64_t max_chunk_cache_size_;
   ObMutex mutex_;
   AChunk *header_;
+  int64_t hold_;
   int64_t pushes_;
   int64_t pops_;
   const bool with_mutex_;
@@ -171,8 +174,12 @@ class AChunkMgr
   friend class ProtectedStackAllocator;
   friend class ObMemoryCutter;
 private:
-  static const int64_t DEFAULT_LIMIT = 4L << 30;  // 4GB
+  static constexpr int64_t DEFAULT_LIMIT = 4L << 30;  // 4GB
+  static constexpr int64_t ACHUNK_ALIGN_SIZE = INTACT_ACHUNK_SIZE;
+  static constexpr int64_t NORMAL_ACHUNK_SIZE = INTACT_ACHUNK_SIZE;
+  static constexpr int64_t LARGE_ACHUNK_SIZE = INTACT_ACHUNK_SIZE << 1;
 public:
+  static constexpr int64_t DEFAULT_LARGE_CHUNK_CACHE_SIZE = 128L << 20;
   static AChunkMgr &instance();
 
 public:
@@ -186,11 +193,14 @@ public:
   void free_co_chunk(AChunk *chunk);
   static OB_INLINE uint64_t aligned(const uint64_t size);
   static OB_INLINE uint64_t hold(const uint64_t size);
-  void set_max_chunk_cache_cnt(const int cnt)
-  { free_list_.set_max_chunk_cache_cnt(cnt); }
+  void set_max_chunk_cache_size(const int64_t max_cache_size)
+  { free_list_.set_max_chunk_cache_size(max_cache_size); }
+  void set_max_large_chunk_cache_size(const int64_t max_cache_size)
+  { large_free_list_.set_max_chunk_cache_size(max_cache_size); }
 
   inline static AChunk *ptr2chunk(const void *ptr);
   bool update_hold(int64_t bytes, bool high_prio);
+  virtual int madvise(void *addr, size_t length, int advice);
 
   inline void set_limit(int64_t limit);
   inline int64_t get_limit() const;
@@ -203,10 +213,13 @@ public:
   inline int64_t get_free_chunk_pushes() const;
   inline int64_t get_free_chunk_pops() const;
   inline int64_t get_freelist_hold() const;
+  inline int64_t get_large_freelist_hold() const;
   inline int64_t get_maps()  { return maps_; }
   inline int64_t get_unmaps()  { return unmaps_; }
   inline int64_t get_large_maps()  { return large_maps_; }
   inline int64_t get_large_unmaps()  { return large_unmaps_; }
+  inline int64_t get_huge_maps()  { return huge_maps_; }
+  inline int64_t get_huge_unmaps()  { return huge_unmaps_; }
   inline int64_t get_shadow_hold() const { return ATOMIC_LOAD(&shadow_hold_); }
 
 private:
@@ -221,6 +234,7 @@ private:
 
 protected:
   AChunkList free_list_;
+  AChunkList large_free_list_;
   ChunkBitMap *chunk_bitmap_;
 
   int64_t limit_;
@@ -232,6 +246,8 @@ protected:
   int64_t unmaps_;
   int64_t large_maps_;
   int64_t large_unmaps_;
+  int64_t huge_maps_;
+  int64_t huge_unmaps_;
   int64_t shadow_hold_;
 }; // end of class AChunkMgr
 
@@ -277,7 +293,7 @@ inline int64_t AChunkMgr::get_hold() const
 
 inline int64_t AChunkMgr::get_used() const
 {
-  return hold_ - get_freelist_hold();
+  return hold_ - get_freelist_hold() - get_large_freelist_hold();
 }
 
 inline int64_t AChunkMgr::get_free_chunk_count() const
@@ -297,12 +313,19 @@ inline int64_t AChunkMgr::get_free_chunk_pops() const
 
 inline int64_t AChunkMgr::get_freelist_hold() const
 {
-  return free_list_.count() * INTACT_ACHUNK_SIZE;
+  return free_list_.hold();
+}
+
+inline int64_t AChunkMgr::get_large_freelist_hold() const
+{
+  return large_free_list_.hold();
 }
 
 } // end of namespace lib
 } // end of namespace oceanbase
 
 #define CHUNK_MGR (oceanbase::lib::AChunkMgr::instance())
+
+
 
 #endif /* _OCEABASE_LIB_ALLOC_ACHUNK_MGR_H_ */
