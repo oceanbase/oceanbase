@@ -279,9 +279,13 @@ int ObTenantCheckpointSlogHandler::replay_dup_table_ls_meta(const ObMetaDiskAddr
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(dup_ls_meta.deserialize(buf, buf_len, pos))) {
     LOG_WARN("fail to deserialize", K(ret));
-  } else if (OB_FAIL(MTL(ObLSService *)
-                         ->get_ls(dup_ls_meta.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("fail to replay_put_ls", K(ret));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(dup_ls_meta.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_LS_NOT_EXIST == ret) {
+      LOG_INFO("this is possible when writing ls checkpoint but ls is removing", K(dup_ls_meta));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get ls", K(ret), K(dup_ls_meta));
+    }
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(dup_ls_meta));
@@ -642,7 +646,7 @@ int ObTenantCheckpointSlogHandler::inner_replay_create_ls_slog(const ObRedoModul
   } else if (OB_FAIL(MTL(ObLSService *)->replay_create_ls(slog_entry.get_ls_meta()))) {
     LOG_WARN("fail to replay ls meta slog", K(ret), K(param), K(pos));
   } else {
-    LOG_INFO("successfully replay ls meta slog", K(param), K(pos));
+    LOG_INFO("successfully replay create ls slog", K(param), K(pos));
   }
 
   return ret;
@@ -659,7 +663,7 @@ int ObTenantCheckpointSlogHandler::inner_replay_update_ls_slog(const ObRedoModul
   } else if (OB_FAIL(MTL(ObLSService *)->replay_update_ls(slog_entry.get_ls_meta()))) {
     LOG_WARN("fail to replay ls meta slog", K(ret), K(param), K(pos));
   } else {
-    LOG_INFO("successfully replay ls meta slog", K(param), K(pos));
+    LOG_INFO("successfully replay update ls slog", K(param), K(pos));
   }
 
   return ret;
@@ -677,9 +681,13 @@ int ObTenantCheckpointSlogHandler::inner_replay_dup_table_ls_slog(
 
   if (OB_FAIL(slog_entry.deserialize(param.buf_, param.disk_addr_.size(), pos))) {
     LOG_WARN("fail to deserialize slog", K(ret), K(param), K(pos));
-  } else if (OB_FAIL(MTL(ObLSService *)
-                         ->get_ls(slog_entry.get_dup_ls_meta().ls_id_, ls_handle,
-                                  ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(slog_entry.get_dup_ls_meta().ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_LS_NOT_EXIST == ret) {
+      LOG_INFO("this is possible when writing ls checkpoint but ls is removing", K(slog_entry));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get ls", K(ret), K(slog_entry));
+    }
     LOG_WARN("get ls failed", K(ret), K(param), K(pos));
   } else if (OB_ISNULL(ls_ptr = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
