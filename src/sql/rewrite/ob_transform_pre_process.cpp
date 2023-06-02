@@ -6818,10 +6818,10 @@ int ObTransformPreProcess::transform_udt_columns(const ObIArray<ObParentDMLStmt>
   ObSEArray<ObRawExpr*, 1> udt_exprs;
   ObSEArray<ObRawExpr *, 1> from_col_exprs;
   ObSEArray<ObRawExpr *, 1> to_col_exprs;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is NULL", K(ret));
-  } else if (is_mysql_mode()) {
+    LOG_WARN("stmt is NULL", K(ret), K(ctx_), K(ctx_->session_info_));
+  } else if (is_mysql_mode() || ctx_->session_info_->get_ddl_info().is_ddl()) {
     // do nothing
   } else if (OB_FAIL(transform_query_udt_columns_exprs(parent_stmts, stmt, trans_happened))) {
       LOG_WARN("failed to do query udt exprs transform", K(ret));
