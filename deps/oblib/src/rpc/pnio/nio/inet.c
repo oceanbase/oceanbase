@@ -43,7 +43,6 @@ int listen_create(addr_t src) {
   struct sockaddr_in sin;
   ef((fd = socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC, 0)) < 0);
   ef(set_tcp_reuse_addr(fd));
-  ef(set_tcp_reuse_port(fd));
   ef(bind(fd, (const struct sockaddr*)make_sockaddr(&sin, src), sizeof(sin)));
   ef(ussl_listen(fd, 1024));
   return fd;
