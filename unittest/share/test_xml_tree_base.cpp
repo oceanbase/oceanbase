@@ -153,6 +153,11 @@ public:
     return ObLibContainerNode::insert(pos, static_cast<TXmlNodeBase*>(node));
   }
 
+  virtual int get_node_count(ObMulModeNodeType node_type, int &count)
+  {
+    return 0;
+  }
+
   ObMulModeNodeType type() { return M_ELEMENT; }
 
   virtual int remove(int64_t pos)

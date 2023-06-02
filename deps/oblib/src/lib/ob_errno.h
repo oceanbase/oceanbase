@@ -372,6 +372,7 @@ constexpr int OB_BACKUP_META_INDEX_NOT_EXIST = -9076;
 constexpr int OB_BACKUP_DEVICE_OUT_OF_SPACE = -9082;
 constexpr int OB_BACKUP_PWRITE_OFFSET_NOT_MATCH = -9083;
 constexpr int OB_BACKUP_PWRITE_CONTENT_NOT_MATCH = -9084;
+constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_XSLT_PARSE = -9574;
 constexpr int OB_MAX_RAISE_APPLICATION_ERROR         = -20000;
 constexpr int OB_MIN_RAISE_APPLICATION_ERROR         = -20999;

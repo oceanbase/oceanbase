@@ -2079,7 +2079,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_WHEN_CLAUSE, -9545, -1, "HY000", "WHEN clause cannot 
 DEFINE_ORACLE_ERROR(OB_ERR_NEW_OLD_REFERENCES, -9546, -1, "HY000", "NEW or OLD references not allowed in table level triggers", 4082, "NEW or OLD references not allowed in table level triggers");
 DEFINE_PLS_ERROR_EXT(OB_ERR_TYPE_DECL_ILLEGAL, -9547, -1, "HY000", "%%TYPE must be applied to a variable, column, field or attribute, not to other", "%%TYPE must be applied to a variable, column, field or attribute, not to '%.*s'", 206, "%%TYPE must be applied to a variable, column, field or attribute, not to other", "%%TYPE must be applied to a variable, column, field or attribute, not to '%.*s'");
 DEFINE_PLS_ERROR_EXT(OB_ERR_OBJECT_INVALID, -9548, -1, "HY000", "object is invalid", "object '%.*s' is invalid", 905, "object is invalid", "object '%.*s' is invalid");
-DEFINE_ORACLE_ERROR(OB_ERR_XML_PARSE, -9549, -1, "HY000", "XML parsing failed", 31011, "XML parsing failed");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_XML_PARSE, -9549, -1, "HY000", "XML parsing failed", 31011, "XML parsing failed");
 DEFINE_PLS_ERROR_EXT(OB_ERR_EXP_NOT_ASSIGNABLE, -9550, -1, "HY000", "expression cannot be used as an assignment", "expression '%.*s' cannot be used as an assignment", 363, "expression cannot be used as an assignment", "expression '%.*s' cannot be used as an assignment");
 DEFINE_ORACLE_ERROR(OB_ERR_CURSOR_CONTAIN_BOTH_REGULAR_AND_ARRAY, -9551, -1, "HY000", "Cursor contains both regular and array defines which is illegal", 29256, "Cursor contains both regular and array defines which is illegal");
 DEFINE_PLS_ERROR(OB_ERR_STATIC_BOOL_EXPR, -9552, -1, "HY000", "a static boolean expression must be used", 174, "a static boolean expression must be used");

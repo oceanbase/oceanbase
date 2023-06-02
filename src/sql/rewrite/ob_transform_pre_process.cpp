@@ -7027,7 +7027,7 @@ int ObTransformPreProcess::transform_udt_column_value_xml_parse(ObDmlTableInfo &
     type_expr->set_value(val);
     type_expr->set_param(val);
     ObObj well_form;
-    well_form.set_int(1);  // OB_XML_NOT_WELLFORMED
+    well_form.set_int(0);  // OB_XML_NOT_WELLFORMED
     form_expr->set_value(well_form);
     form_expr->set_param(well_form);
     ObObj in_agg;
