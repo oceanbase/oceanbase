@@ -393,11 +393,6 @@ int ObSchemaStatusProxy::del_tenant_schema_status(
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(schema_status_cache_.erase_refactored(tenant_id))) {
-      LOG_WARN("fail to erase schema_status", K(ret), K(tenant_id));
-    }
-  }
   LOG_INFO("[SCHEMA_STATUS] del schema status", K(ret), K(tenant_id));
   return ret;
 }
