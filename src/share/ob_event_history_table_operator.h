@@ -94,6 +94,8 @@ public:
   virtual ~ObEventHistoryTableOperator();
   int init(common::ObMySQLProxy &proxy);
   bool is_inited() const { return inited_; }
+  void stop();
+  void wait();
   void destroy();
   template<typename T1, typename T2, typename T3, typename T4,
       typename T5, typename T6, typename T7>

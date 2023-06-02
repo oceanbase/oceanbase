@@ -203,9 +203,19 @@ int ObEventHistoryTableOperator::init(common::ObMySQLProxy &proxy)
   return ret;
 }
 
-void ObEventHistoryTableOperator::destroy()
+void ObEventHistoryTableOperator::stop()
 {
   stopped_ = true;
+  event_queue_.stop();
+}
+
+void ObEventHistoryTableOperator::wait()
+{
+  event_queue_.wait();
+}
+
+void ObEventHistoryTableOperator::destroy()
+{
   event_queue_.destroy();
   timer_.stop_and_wait();
   // allocator should destroy after event_queue_ destroy

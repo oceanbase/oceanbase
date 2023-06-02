@@ -601,6 +601,14 @@ void ObServer::destroy()
     ObTmpFileManager::get_instance().destroy();
     FLOG_INFO("tmp file manager destroyed");
 
+    FLOG_INFO("begin to destroy disk usage report task");
+    TG_DESTROY(lib::TGDefIDs::DiskUseReport);
+    FLOG_INFO("disk usage report task destroyed");
+
+    FLOG_INFO("begin destroy task controller");
+    ObTaskController::get().destroy();
+    FLOG_INFO("task controller destroyed");
+
     FLOG_INFO("begin to destroy ob server block mgr");
     OB_SERVER_BLOCK_MGR.destroy();
     FLOG_INFO("ob server block mgr destroyed");
@@ -1211,6 +1219,14 @@ int ObServer::stop()
     //ObPartitionScheduler::get_instance().stop_merge();
     //FLOG_INFO("partition scheduler stopped", KR(ret));
 
+    FLOG_INFO("begin to stop tenant srs manager");
+    tenant_srs_mgr_.stop();
+    FLOG_INFO("tenant srs manager stopped");
+
+    FLOG_INFO("begin stop task controller");
+    ObTaskController::get().stop();
+    FLOG_INFO("task controller stopped");
+
     FLOG_INFO("begin to stop opt stat manager ");
     ObOptStatManager::get_instance().stop();
     FLOG_INFO("opt stat manager  stopped");
@@ -1471,6 +1487,18 @@ int ObServer::wait()
     FLOG_INFO("begin to wait ob_service");
     ob_service_.wait();
     FLOG_INFO("wait ob_service success");
+
+    FLOG_INFO("begin to wait disk usage report task");
+    TG_WAIT(lib::TGDefIDs::DiskUseReport);
+    FLOG_INFO("wait disk usage report task success");
+
+    FLOG_INFO("begin to wait tenant srs manager");
+    tenant_srs_mgr_.wait();
+    FLOG_INFO("wait tenant srs manager success");
+
+    FLOG_INFO("begin wait task controller");
+    ObTaskController::get().wait();
+    FLOG_INFO("wait task controller success");
 
     FLOG_INFO("begin to wait ob_server_block_mgr");
     OB_SERVER_BLOCK_MGR.wait();

@@ -49,6 +49,8 @@ public:
   virtual ~ObTaskController();
 
   int init();
+  void stop();
+  void wait();
   void destroy();
   void switch_task(ObTaskType task_id);
   void allow_next_syslog(int64_t count=1);

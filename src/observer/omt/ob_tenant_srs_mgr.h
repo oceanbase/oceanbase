@@ -99,6 +99,8 @@ public:
            share::schema::ObMultiVersionSchemaService *schema_service);
   int add_tenant_srs(const uint64_t tenant_id);
   int get_tenant_srs_guard(uint64_t tenant_id, ObSrsCacheGuard &srs_guard);
+  void stop();
+  void wait();
   void destroy();
   bool is_sys_load_completed() { return is_sys_load_completed_; }
   void set_sys_load_completed() { is_sys_load_completed_ = true; }

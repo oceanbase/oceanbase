@@ -35,6 +35,9 @@ public:
   virtual ~ObHeartBeatProcess();
 
   int init();
+  void stop();
+  void wait();
+  void destroy();
   virtual int init_lease_request(share::ObLeaseRequest &lease_request);
   virtual int do_heartbeat_event(const share::ObLeaseResponse &lease_response);
 

@@ -48,12 +48,21 @@ public:
 
   virtual ~ObSyslogPerErrLimiter() { destroy(); }
   int init();
-
-  void destroy()
+  void stop()
   {
     if (inited_) {
       refresh_thread_.stop();
+    }
+  }
+  void wait()
+  {
+    if (inited_) {
       refresh_thread_.wait();
+    }
+  }
+  void destroy()
+  {
+    if (inited_) {
       refresh_thread_.destroy();
       inited_ = false;
     }
@@ -180,7 +189,7 @@ ObTaskController::ObTaskController()
 
 ObTaskController::~ObTaskController()
 {
-  ObSyslogPerErrLimiter::instance().destroy();
+  destroy();
 }
 
 int ObTaskController::init()
@@ -222,9 +231,19 @@ int ObTaskController::init()
   return ret;
 }
 
+void ObTaskController::stop()
+{
+  OB_LOGGER.set_enable_log_limit(false);
+  ObSyslogPerErrLimiter::instance().stop();
+}
+
+void ObTaskController::wait()
+{
+  ObSyslogPerErrLimiter::instance().wait();
+}
+
 void ObTaskController::destroy()
 {
-
   ObSyslogPerErrLimiter::instance().destroy();
   for (int i = 0; i < MAX_TASK_ID; i++) {
     if (nullptr != limiters_[i]) {

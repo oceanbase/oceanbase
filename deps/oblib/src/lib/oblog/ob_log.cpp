@@ -1553,7 +1553,7 @@ bool ObLogger::is_force_allows() const
 {
   bool bret = false;
   auto log_limiter = (nullptr != tl_log_limiter_) ? tl_log_limiter_ : default_log_limiter_;
-  if (nullptr != log_limiter
+  if (enable_log_limit_ && nullptr != log_limiter
       && log_limiter->is_force_allows()) {
     bret = true;
   }
@@ -1563,7 +1563,7 @@ bool ObLogger::is_force_allows() const
 void ObLogger::check_reset_force_allows()
 {
   auto log_limiter = (nullptr != tl_log_limiter_ ? tl_log_limiter_ : default_log_limiter_);
-  if (nullptr != log_limiter
+  if (enable_log_limit_ && nullptr != log_limiter
       && log_limiter->is_force_allows()) {
     log_limiter->reset_force_allows();
   }
