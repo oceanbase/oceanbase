@@ -1745,7 +1745,7 @@ int ObSQLUtils::check_well_formed_str(const ObString &src_str,
     } else {
       dst_str.assign_ptr(src_str.ptr(), static_cast<int32_t>(well_formed_length));
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && lib::is_mysql_mode()) {
       LOG_USER_WARN(OB_ERR_INVALID_CHARACTER_STRING,
           static_cast<int>(charset_name_len), charset_name,
           static_cast<int>(hex_len), hex_buf);
@@ -3994,9 +3994,11 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
       if (schema_obj.get_schema_type() == TABLE_SCHEMA) {
         ObSchemaGetterGuard schema_guard;
         ObSchemaPrinter schema_printer(schema_guard);
+        ObCharsetType charset_type = CHARSET_INVALID;
+        OZ (exec_ctx_->get_my_session()->get_character_set_results(charset_type));
         OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard, schema_obj.version_));
         OZ (databuff_printf(buf, buf_len, pos, (i != 0) ? ",\n\"" : "\n\""));
-        OZ (schema_printer.print_table_definition(tenant_id_, schema_obj.get_object_id(), buf, buf_len, pos, NULL, LS_DEFAULT, false));
+        OZ (schema_printer.print_table_definition(tenant_id_, schema_obj.get_object_id(), buf, buf_len, pos, NULL, LS_DEFAULT, false, charset_type));
         OZ (databuff_printf(buf, buf_len, pos, "\""));
       }
     }

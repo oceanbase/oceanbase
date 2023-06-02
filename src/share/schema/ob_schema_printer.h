@@ -69,7 +69,8 @@ public:
                              const common::ObTimeZoneInfo *tz_info,
                              const common::ObLengthSemantics default_length_semantics,
                              bool agent_mode,
-                             ObSQLMode sql_mode = SMO_DEFAULT) const;
+                             ObSQLMode sql_mode = SMO_DEFAULT,
+                             ObCharsetType charset_type = ObCharsetType::CHARSET_UTF8MB4) const;
   int print_table_index_stroing(
       const share::schema::ObTableSchema *index_schema,
       const share::schema::ObTableSchema *table_schema,
@@ -136,7 +137,8 @@ public:
                                      const common::ObTimeZoneInfo *tz_info,
                                      const common::ObLengthSemantics default_length_semantics,
                                      bool is_agent_mode = false,
-                                     ObSQLMode sql_mode = SMO_DEFAULT) const;
+                                     ObSQLMode sql_mode = SMO_DEFAULT,
+                                     ObCharsetType charset_type = ObCharsetType::CHARSET_UTF8MB4) const;
   int print_generated_column_definition(const ObColumnSchemaV2 &gen_col,
                                         char *buf,
                                         int64_t buf_len,

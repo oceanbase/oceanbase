@@ -19654,7 +19654,7 @@ static int ob_wildcmp_gb18030_impl(const ObCharsetInfo *cs, const char *str,
       if ((w_len = get_code_and_length(cs, wild_str, wild_end, &w_gb)) == 0)
         return 1;
 
-      if (w_gb == w_many) {
+      if (w_gb != escape_char && w_gb == w_many) {
         result = 1;   
         break;
       }

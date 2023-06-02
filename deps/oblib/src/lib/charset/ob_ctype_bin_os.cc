@@ -248,7 +248,7 @@ int ob_wildcmp_bin_impl(const ObCharsetInfo *cs,
   int result= -1;			 
 
   while (wild_str != wild_end) {
-    while (*wild_str != w_many && *wild_str != w_one) {
+    while ((*wild_str == escape_char) ||  (*wild_str != w_many && *wild_str != w_one)) {
       if (*wild_str == escape_char && wild_str+1 != wild_end) {
 	      wild_str++;
       }

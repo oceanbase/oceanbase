@@ -62,7 +62,8 @@ int ObSchemaPrinter::print_table_definition(const uint64_t tenant_id,
                                           const ObTimeZoneInfo *tz_info,
                                           const common::ObLengthSemantics default_length_semantics,
                                           bool agent_mode,
-                                          ObSQLMode sql_mode) const
+                                          ObSQLMode sql_mode,
+                                          ObCharsetType charset_type) const
 {
   //TODO(yaoying.yyy: refactor this function):consider index_position in
 
@@ -118,7 +119,7 @@ int ObSchemaPrinter::print_table_definition(const uint64_t tenant_id,
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(print_table_definition_columns(*table_schema, buf, buf_len, pos, tz_info, default_length_semantics, agent_mode, sql_mode))) {
+    if (OB_FAIL(print_table_definition_columns(*table_schema, buf, buf_len, pos, tz_info, default_length_semantics, agent_mode, sql_mode, charset_type))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print columns", K(ret), K(*table_schema));
     } else if (OB_FAIL(print_table_definition_rowkeys(*table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print rowkeys", K(ret), K(*table_schema));
@@ -154,7 +155,8 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                                                     const ObTimeZoneInfo *tz_info,
                                                     const common::ObLengthSemantics default_length_semantics,
                                                     bool is_agent_mode,
-                                                    ObSQLMode sql_mode) const
+                                                    ObSQLMode sql_mode,
+                                                    ObCharsetType charset_type) const
 {
   int ret = OB_SUCCESS;
   bool is_first_col = true;
@@ -329,7 +331,11 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                       SHARE_SCHEMA_LOG(WARN, "fail to print sql literal", KPC(col), K(buf), K(buf_len), K(pos), K(ret));
                     }
                   } else if (ob_is_string_tc(default_value.get_type())) {
-                    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(default_value.get_string()))))) {
+                    ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
+                    ObString out_str = default_value.get_string();
+                    if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), collation_type, out_str))) {
+                      SHARE_SCHEMA_LOG(WARN, "fail to convert charset", K(ret));
+                    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(out_str))))) {
                       SHARE_SCHEMA_LOG(WARN, "fail to print default value of string tc", K(ret));
                     }
                   } else if (OB_FAIL(default_value.print_varchar_literal(buf, buf_len, pos, tz_info))) {
