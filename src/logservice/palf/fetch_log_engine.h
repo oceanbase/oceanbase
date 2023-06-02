@@ -99,7 +99,6 @@ public:
   void free_fetch_log_task(FetchLogTask *task);
   int update_replayable_point(const share::SCN &replayable_scn);
 private:
-  bool is_task_queue_timeout_(FetchLogTask *fetch_log_task) const;
   int try_remove_task_from_cache_(FetchLogTask *fetch_log_task);
   int push_task_into_cache_(FetchLogTask *fetch_log_task);
 private:
