@@ -1909,7 +1909,12 @@ int ObSQLSessionInfo::add_changed_package_info(ObExecContext &exec_ctx)
       if (package_state->is_package_info_changed()) {
         ObSEArray<ObString, 4> key;
         ObSEArray<ObObj, 4> value;
-        if (OB_FAIL(package_state->convert_changed_info_to_string_kvs(pl_ctx, key, value))) {
+        bool is_valid = false;
+        if (OB_FAIL(package_state->check_package_state_valid(exec_ctx, is_valid))) {
+          LOG_WARN("check package state failed", K(ret), KPC(package_state));
+        } else if (!is_valid) {
+          LOG_INFO("package state is invalid, ignore this package.", KPC(package_state));
+        } else if (OB_FAIL(package_state->convert_changed_info_to_string_kvs(pl_ctx, key, value))) {
           LOG_WARN("convert package state to string kv failed", K(ret));
         } else {
           ObSessionVariable sess_var;
