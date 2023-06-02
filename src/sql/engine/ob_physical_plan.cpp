@@ -777,9 +777,11 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
   int ret = OB_SUCCESS;
   table_locations_.reset();
   das_table_locations_.reset();
-  if (OB_FAIL(table_locations_.init(infos.count()))) {
+  if (OB_FAIL(table_locations_.prepare_allocate_and_keep_count(infos.count(),
+                                                 allocator_))) {
     LOG_WARN("fail to init table location count", K(ret));
-  } else if (OB_FAIL(das_table_locations_.init(infos.count()))) {
+  } else if (OB_FAIL(das_table_locations_.prepare_allocate_and_keep_count(infos.count(),
+                                                            allocator_))) {
     LOG_WARN("fail to init das table location count", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {

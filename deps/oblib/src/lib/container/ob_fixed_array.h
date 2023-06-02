@@ -258,7 +258,13 @@ public:
   template<typename ... Args>
   inline int prepare_allocate(int64_t capacity, Args && ... args)
   {
-    return inner_prepare_allocate(capacity, args...);
+    return inner_prepare_allocate(capacity, false, args...);
+  }
+
+  template<typename ... Args>
+  inline int prepare_allocate_and_keep_count(int64_t capacity, Args && ... args)
+  {
+    return inner_prepare_allocate(capacity, true, args...);
   }
 
   inline ObFixedArrayImpl(const ObFixedArrayImpl<T, AllocatorT> &other)
@@ -281,7 +287,9 @@ public:
   NEED_SERIALIZE_AND_DESERIALIZE;
 private:
   template<typename ... Args>
-  inline int inner_prepare_allocate(int64_t capacity, Args && ... args)
+  inline int inner_prepare_allocate(int64_t capacity,
+                                    const bool keep_count,
+                                    Args && ... args)
   {
     int ret = OB_SUCCESS;
     if (capacity < 0 || capacity > UINT32_MAX) {
@@ -294,7 +302,9 @@ private:
       for (int64_t i = init_cnt_; i < capacity; i++) {
         new(&data_[i]) T(args...);
       }
-      count_ = static_cast<uint32_t>(capacity > count_ ? capacity : count_);
+      if (!keep_count) {
+        count_ = static_cast<uint32_t>(capacity > count_ ? capacity : count_);
+      }
       init_cnt_ = static_cast<uint32_t>(capacity >init_cnt_ ? capacity : init_cnt_);
     }
     return ret;

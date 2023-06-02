@@ -48,7 +48,6 @@ namespace sql
 {
 ObPlanSet::~ObPlanSet()
 {
-
   // Make sure destory planset before destory pre calculable expression.
   if (OB_ISNULL(pre_cal_expr_handler_)) {
     // have no pre calculable expression, do nothing
@@ -1186,7 +1185,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
         } else {
           if (OB_FAIL(add_physical_plan(OB_PHY_PLAN_LOCAL, pc_ctx, plan))) {
             SQL_PC_LOG(TRACE, "fail to add local plan", K(ret));
-          } else if (OB_SUCC(ret) 
+          } else if (OB_SUCC(ret)
                     && FALSE_IT(direct_local_plan_ = &plan)) {
             // do nothing
           } else {
@@ -1281,6 +1280,9 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     LOG_WARN("pc_allocator has not been initialized.", K(ret));
   } else if (OB_FAIL(ObPlanSet::init_new_set(pc_ctx, plan, outline_param_idx, pc_malloc_))) {
     LOG_WARN("init new set failed", K(ret));
+  } else if (OB_FAIL(table_locations_.prepare_allocate_and_keep_count(sql_ctx.partition_infos_.count(),
+                                                        *plan_cache_value_->get_pcv_set()->get_allocator()))) {
+    LOG_WARN("fail to init table location count", K(ret));
   } else if (OB_FAIL(dist_plans_.init(this))) {
     SQL_PC_LOG(WARN, "failed to init dist plans", K(ret));
   } else {
@@ -1648,7 +1650,7 @@ int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
 
 
 int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
-                                     ObPhysicalPlan *&plan, 
+                                     ObPhysicalPlan *&plan,
                                      bool &get_next)
 {
   int ret = OB_SUCCESS;
@@ -1678,7 +1680,7 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
 }
 
 int ObSqlPlanSet::try_get_remote_plan(ObPlanCacheCtx &pc_ctx,
-                                      ObPhysicalPlan *&plan, 
+                                      ObPhysicalPlan *&plan,
                                       bool &get_next)
 {
   int ret = OB_SUCCESS;

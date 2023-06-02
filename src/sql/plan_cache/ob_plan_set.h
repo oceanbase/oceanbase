@@ -250,7 +250,7 @@ public:
   ObSqlPlanSet()
     : ObPlanSet(PST_SQL_CRSR),
       is_all_non_partition_(true),
-      table_locations_(), // use default behavior for memory release
+      table_locations_(alloc_),
       array_binding_plan_(),
       local_plan_(NULL),
       remote_plan_(NULL),
@@ -262,7 +262,6 @@ public:
       is_contain_virtual_table_(false),
       enable_inner_part_parallel_exec_(false)
       {
-        table_locations_.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "TableLocations"));
       }
 
   virtual ~ObSqlPlanSet() {}
@@ -357,7 +356,7 @@ private:
   bool is_local_plan_opt_allowed(int last_retry_err);
 private:
   bool is_all_non_partition_; //判断该plan对应的表是否均为非分区表
-  common::ObSEArray<ObTableLocation, 1> table_locations_;
+  TableLocationFixedArray table_locations_;
   //used for array binding, only local plan
   ObPhysicalPlan *array_binding_plan_;
   ObPhysicalPlan *local_plan_;
