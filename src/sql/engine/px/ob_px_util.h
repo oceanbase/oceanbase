@@ -201,7 +201,8 @@ private:
                                        int64_t base_table_location_key,
                                        ObDfo &dfo,
                                        common::ObIArray<const ObTableScanSpec *> &scan_ops,
-                                       const ObTableModifySpec* dml_op);
+                                       const ObTableModifySpec* dml_op,
+                                       ObDASTableLoc *dml_loc);
   /**
    * Add the partition information (table_loc) involved in the
    * current phy_op to the corresponding SQC access location

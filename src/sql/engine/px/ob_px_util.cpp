@@ -297,6 +297,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     }
   } else {
     ObDASTableLoc *table_loc = NULL;
+    ObDASTableLoc *dml_full_loc = NULL;
     uint64_t table_location_key = OB_INVALID_INDEX;
     uint64_t ref_table_id = OB_INVALID_ID;
     if (scan_ops.count() > 0) {
@@ -323,6 +324,9 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
                                                     table_location_key,
                                                     ref_table_id,
                                                     table_loc));
+      if (OB_SUCC(ret)) {
+        dml_full_loc = table_loc;
+      }
     } else {
       if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
         // create new table loc for a random dfo distribution for external table
@@ -348,7 +352,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
         LOG_WARN("the location array is empty", K(locations.size()), K(ret));
       } else if (OB_FAIL(build_dfo_sqc(ctx, locations, dfo))) {
         LOG_WARN("fail fill dfo with sqc infos", K(dfo), K(ret));
-      } else if (OB_FAIL(set_dfo_accessed_location(ctx, table_location_key, dfo, scan_ops, dml_op))) {
+      } else if (OB_FAIL(set_dfo_accessed_location(ctx, table_location_key, dfo, scan_ops, dml_op, dml_full_loc))) {
         LOG_WARN("fail to set all table partition for tsc", K(ret));
       } else if (OB_NOT_NULL(table_locations) && !table_locations->empty() &&
             OB_FAIL(build_dynamic_partition_table_location(scan_ops, table_locations, dfo))) {
@@ -657,7 +661,7 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
     } else if (scan_ops.empty()) {
     } else if (FALSE_IT(base_table_location_key = scan_ops.at(0)->get_table_loc_id())) {
     } else if (OB_FAIL(set_dfo_accessed_location(exec_ctx,
-          base_table_location_key, child, scan_ops, NULL))) {
+          base_table_location_key, child, scan_ops, NULL, NULL))) {
       LOG_WARN("fail to set all table partition for tsc", K(ret));
     }
   }
@@ -942,7 +946,8 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
                                                   int64_t base_table_location_key,
                                                   ObDfo &dfo,
                                                   ObIArray<const ObTableScanSpec *> &scan_ops,
-                                                  const ObTableModifySpec *dml_op)
+                                                  const ObTableModifySpec *dml_op,
+                                                  ObDASTableLoc *dml_loc)
 {
   int ret = OB_SUCCESS;
 
@@ -958,13 +963,12 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       LOG_WARN("get single table location id failed", K(ret));
     } else {
       if (dml_op->is_table_location_uncertain()) {
-        CK(OB_NOT_NULL(ctx.get_my_session()));
-        OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
-                                                      ctx.get_allocator(),
-                                                      ctx.get_my_session()->get_effective_tenant_id(),
-                                                      table_location_key,
-                                                      ref_table_id,
-                                                      table_loc));
+        if (OB_ISNULL(dml_loc)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected dml loc", K(ret));
+        } else {
+          table_loc = dml_loc;
+        }
       } else {
         // 通过TSC或者DML获得当前的DFO的partition对应的location信息
         // 后续利用location信息构建对应的SQC meta
