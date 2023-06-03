@@ -117,6 +117,7 @@ private:
 
   bool fast_filter_valid(
       const ObColumnDecoderCtx &ctx,
+      const ObObjType &filter_value_type,
       int32_t &fix_length,
       bool &is_signed_data) const;
 
