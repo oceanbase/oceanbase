@@ -1020,6 +1020,7 @@ private:
   bool need_dump(int64_t extra_size);
   BlockBuffer* new_block();
   void set_io(int64_t size, char *buf) { io_.size_ = size; io_.buf_ = buf; }
+  static void set_io(int64_t size, char *buf, blocksstable::ObTmpFileIOInfo &io) { io.size_ = size; io.buf_ = buf; }
   bool find_block_can_hold(const int64_t size, bool &need_shrink);
   int get_store_row(RowIterator &it, const StoredRow *&sr);
   int load_next_chunk_blocks(ChunkIterator &it);

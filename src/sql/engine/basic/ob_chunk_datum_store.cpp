@@ -2551,19 +2551,20 @@ int ObChunkDatumStore::read_file(
     CK (cur_pos >= file_size);
     OX (ret = OB_ITER_END);
   } else {
-    this->set_io(size, static_cast<char *>(buf));
-    io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
+    blocksstable::ObTmpFileIOInfo tmp_io = io_;
+    set_io(size, static_cast<char *>(buf), tmp_io);
+    tmp_io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     if (0 == read_size
-        && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(io_.fd_, tmp_file_size))) {
+        && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_io.fd_, tmp_file_size))) {
       LOG_WARN("failed to get tmp file size", K(ret));
-    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_, offset, timeout_ms, handle))) {
+    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(tmp_io, offset, timeout_ms, handle))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("read form file failed", K(ret), K(io_), K(offset), K(timeout_ms));
+        LOG_WARN("read form file failed", K(ret), K(tmp_io), K(offset), K(timeout_ms));
       }
     } else if (handle.get_data_size() != size) {
       ret = OB_INNER_STAT_ERROR;
       LOG_WARN("read data less than expected",
-          K(ret), K(io_), "read_size", handle.get_data_size());
+          K(ret), K(tmp_io), "read_size", handle.get_data_size());
     }
   }
   return ret;
@@ -2583,11 +2584,12 @@ int ObChunkDatumStore::aio_read_file(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(size), K(offset), KP(buf));
   } else if (size > 0) {
-    this->set_io(size, static_cast<char *>(buf));
-    io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(io_, offset, handle))) {
+    blocksstable::ObTmpFileIOInfo tmp_io = io_;
+    set_io(size, static_cast<char *>(buf), tmp_io);
+    tmp_io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(tmp_io, offset, handle))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("read form file failed", K(ret), K(io_), K(offset));
+        LOG_WARN("read form file failed", K(ret), K(tmp_io), K(offset));
       }
     }
   }
