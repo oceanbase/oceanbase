@@ -270,5 +270,35 @@ public:
   ObCond cond_;
 };
 
+class IOTaskConsumeCond : public LogIOTask {
+public:
+	IOTaskConsumeCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
+  {
+    int ret = OB_SUCCESS;
+    PALF_LOG(INFO, "do_task_ success");
+    if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
+      PALF_LOG(WARN, "push_task_into_cb_thread_pool failed", K(ret), K(tg_id), KP(this));
+    }
+    return ret;
+  };
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
+  {
+    PALF_LOG(INFO, "before cond_wait");
+    cond_.wait();
+    PALF_LOG(INFO, "after cond_wait");
+    return OB_SUCCESS;
+  }
+  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
+  int init(int64_t palf_id)
+  {
+    palf_id_ = palf_id;
+    return OB_SUCCESS;
+  };
+  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  virtual int64_t get_io_size_() const {return 0;}
+  bool need_purge_throttling_() const {return true;}
+  ObCond cond_;
+};
 } // end namespace unittest
 } // end namespace oceanbase
