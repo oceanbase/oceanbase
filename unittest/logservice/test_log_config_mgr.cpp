@@ -108,6 +108,38 @@ public:
   palf::MockLogReconfirm *mock_reconfirm_;
 };
 
+TEST_F(TestLogConfigMgr, test_set_initial_member_list)
+{
+  LogConfigInfo default_config_info;
+  common::ObMemberList init_member_list;
+  GlobalLearnerList learner_list;
+  LogConfigVersion init_config_version;
+  init_config_version.generate(1, 1);
+  init_member_list.add_server(addr1);
+  init_member_list.add_server(addr2);
+  EXPECT_EQ(OB_SUCCESS, default_config_info.generate(init_member_list, 3, learner_list, init_config_version));
+
+  {
+    LogConfigMgr cm;
+    LogConfigVersion config_version;
+    init_test_log_config_env(addr1, default_config_info, cm);
+    // arb_member overlaps with member_list
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr2, 0), 2, 1, config_version));
+    // invalid replica_num
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr3, 0), 3, 1, config_version));
+    // do not reach majority
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr5, 0), 4, 1, config_version));
+    // overlap with member_list
+    init_member_list.add_server(addr4);
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr4, 0), 4, 1, config_version));
+
+    init_member_list.add_server(addr3);
+    // do not reach majority
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr5, 0), 2, 1, config_version));
+    EXPECT_EQ(OB_SUCCESS, cm.set_initial_member_list(init_member_list, ObMember(addr5, 0), 4, 1, config_version));
+  }
+}
+
 TEST_F(TestLogConfigMgr, test_remove_child_is_not_learner)
 {
   LogConfigMgr cm;

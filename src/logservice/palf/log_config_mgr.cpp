@@ -229,7 +229,7 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
   } else if (!member_list.is_valid() ||
              !arb_member.is_valid() ||
-             (member_list.get_member_number() & 1) != 0 ||
+             (replica_num & 1) != 0 ||
              replica_num <= 0 ||
              replica_num > OB_MAX_MEMBER_NUMBER ||
              INVALID_PROPOSAL_ID == proposal_id ||
@@ -270,7 +270,10 @@ int LogConfigMgr::set_initial_config_info_(const LogConfigInfo &config_info,
   } else {
     LogConfigInfo init_config_info = config_info;
     init_config_info.config_version_ = init_config_version;
-    if (false == check_need_update_memberlist_without_lock_(init_config_version)) {
+    if (false == init_config_info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "initial config info is invalid", K_(palf_id), K(config_info), K(proposal_id));
+    } else if (false == check_need_update_memberlist_without_lock_(init_config_version)) {
       PALF_LOG(INFO, "persistent_config_version_ has been greater than or equal to config_version, \
           no need set_initial_config_info_", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), K_(persistent_config_version), K(init_config_version));
     } else if (OB_FAIL(log_ms_meta_.generate(proposal_id, init_config_info, init_config_info,
