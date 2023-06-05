@@ -106,27 +106,50 @@ int ObTableService::cons_rowkey_infos(const schema::ObTableSchema &table_schema,
 int ObTableService::cons_properties_infos(const schema::ObTableSchema &table_schema,
                                           const ObIArray<ObString> &properties,
                                           ObIArray<uint64_t> &column_ids,
-                                          ObIArray<ObExprResType> *columns_type)
+                                          ObIArray<ObExprResType> *columns_type,
+                                          ObTableServiceQueryCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const schema::ObColumnSchemaV2 *column_schema = NULL;
   ObExprResType column_type;
-  const int64_t N = properties.count();
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
-    const ObString &cname = properties.at(i);
-    if (NULL == (column_schema = table_schema.get_column_schema(cname))) {
-      ret = OB_ERR_COLUMN_NOT_FOUND;
-      LOG_WARN("column not exists", K(ret), K(cname));
-    } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
-      LOG_WARN("failed to add column id", K(ret));
-    } else if (NULL != columns_type) {
-      if (OB_FAIL(cons_column_type(*column_schema, column_type))) {
-        LOG_WARN("failed to cons column type", K(ret));
-      } else if (OB_FAIL(columns_type->push_back(column_type))) {
-        LOG_WARN("failed to push back", K(ret));
+  if (ctx.is_aggregate_query()) {
+    schema::ObTableSchema::const_column_iterator iter = table_schema.column_begin();
+    schema::ObTableSchema::const_column_iterator end = table_schema.column_end();
+    for (int64_t cell_idx = 0; OB_SUCC(ret) && iter != end; ++iter, cell_idx++) {
+      const schema::ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column schema");
+      } else if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
+        LOG_WARN("failed to add column id", K(ret));
+      } else if (ctx.normal_result_iterator_->add_aggregate_proj(cell_idx, column->get_column_name_str())) {
+        LOG_WARN("failed to add aggregate projector", K(ret), K(cell_idx), K(column->get_column_name_str()));
+      } else if (NULL != columns_type) {
+        if (OB_FAIL(cons_column_type(*column, column_type))) {
+          LOG_WARN("failed to cons column type", K(ret));
+        } else if (OB_FAIL(columns_type->push_back(column_type))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       }
     }
-  } // end for
+  } else {
+    const int64_t N = properties.count();
+    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
+      const ObString &cname = properties.at(i);
+      if (NULL == (column_schema = table_schema.get_column_schema(cname))) {
+        ret = OB_ERR_COLUMN_NOT_FOUND;
+        LOG_WARN("column not exists", K(ret), K(cname));
+      } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
+        LOG_WARN("failed to add column id", K(ret));
+      } else if (NULL != columns_type) {
+        if (OB_FAIL(cons_column_type(*column_schema, column_type))) {
+          LOG_WARN("failed to cons column type", K(ret));
+        } else if (OB_FAIL(columns_type->push_back(column_type))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    } // end for
+  }
   return ret;
 }
 
@@ -390,7 +413,7 @@ int ObTableService::multi_insert_or_update(ObTableServiceGetCtx &ctx,
   int ret = OB_SUCCESS;
   const ObTableOperation &one_op = batch_operation.at(0);
   bool can_use_put = true;
-  if (OB_FAIL(insert_or_update_can_use_put(ctx.param_.entity_type_, 
+  if (OB_FAIL(insert_or_update_can_use_put(ctx.param_.entity_type_,
         ctx.param_.table_id_, one_op.entity(), can_use_put))) {
     LOG_WARN("failed to check", K(ret));
   } else if (can_use_put
@@ -1725,7 +1748,8 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
                                            int64_t &schema_version,
                                            uint64_t &index_id,
                                            int64_t &padding_num,
-                                           table::ObHColumnDescriptor *hcolumn_desc)
+                                           table::ObHColumnDescriptor *hcolumn_desc,
+                                           ObTableServiceQueryCtx &ctx)
 {
   int ret = OB_SUCCESS;
   schema::ObSchemaGetterGuard schema_guard;
@@ -1756,7 +1780,9 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("index type is not supported by table api", K(ret), K(table_id), K(index_id));
     } else if (OB_FAIL(cons_rowkey_infos(*table_schema, NULL, index_back ? NULL : &rowkey_columns_type))) {
-    } else if (OB_FAIL(cons_properties_infos(*table_schema, properties, output_column_ids, NULL))) {
+      LOG_WARN("failed to cons rowkey infos", K(ret));
+    } else if (OB_FAIL(cons_properties_infos(*table_schema, properties, output_column_ids, NULL, ctx))) {
+      LOG_WARN("failed to cons properties infos", K(ret));
     } else if (OB_FAIL(table_param.convert(*table_schema, ((NULL == index_schema) ? *table_schema: *index_schema),
                                            output_column_ids, index_back))) {
       LOG_WARN("failed to convert table param", K(ret));
@@ -1912,7 +1938,370 @@ int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx, const ObIArray
   return ret;
 }
 
+bool ObNormalTableQueryResultIterator::is_aggregate_query()
+{
+  bool bret = false;
+  if (OB_NOT_NULL(query_) && query_->is_aggregate_query()) {
+    bret = true;
+  }
+  return bret;
+}
+
+int ObNormalTableQueryResultIterator::init_agg_cell_proj(int64_t size) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(agg_cell_proj_.prepare_allocate(size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret), K(size));
+  } else {
+    for (int64_t i = 0; i < agg_cell_proj_.count(); i++) {
+      agg_cell_proj_.at(i) = -1;
+    }
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::init_agg_results(int64_t size) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(agg_results_.prepare_allocate(size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate aggregate result", K(ret), K(size));
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null query", K(ret));
+  } else {
+    const ObIArray<ObTableAggregation> &aggregations = query_->get_aggregations();
+    if (aggregations.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null aggregations", K(ret));
+    } else {
+      for (int64_t i = 0; i < aggregations.count(); i++) {
+        if (aggregations.at(i).get_column().case_compare(column_name) == 0 || aggregations.at(i).get_column() == "*") {
+          agg_cell_proj_.at(i) = cell_idx;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObNormalTableQueryResultIterator::get_next_result(table::ObTableQueryResult *&next_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_aggregate_query()) && OB_FAIL(get_aggregate_result(next_result))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("failt to get aggregate result", K(ret));
+    }
+  } else if (OB_FAIL(get_normal_result(next_result))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get normal result", K(ret));
+    }
+  } else { /* do nothing */}
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryResult *&next_result)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObTableAggregation> *aggregations = NULL;
+  ObNewRow *row = nullptr;
+  if (OB_ISNULL(one_result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("one_result_ should not be null", K(ret));
+  } else if (OB_ISNULL(query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null query", K(ret));
+  } else if (FALSE_IT(aggregations = &query_->get_aggregations())) { // for set aggregations, never go into this case
+  } else if (aggregations->empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty empty aggregations", K(ret));
+  } else {
+    // for aggregate_avg
+    double* sums = static_cast<double *>(allocator_.alloc(sizeof(double) * aggregations->count()));
+    int64_t* counts = static_cast<int64_t *>(allocator_.alloc(sizeof(int64_t) * aggregations->count()));
+    // check for allocate
+    if (OB_ISNULL(sums) || OB_ISNULL(counts)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for sum_double and count_num", K(ret), K(sums), K(counts));
+    } else {
+      MEMSET(sums, 0, sizeof(double) * aggregations->count());
+      MEMSET(counts, 0, sizeof(int64_t) * aggregations->count());
+      while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
+        if (OB_FAIL(get_aggregate_row(aggregations, row, sums, counts))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get aggregate ", K(ret));
+        }
+      }  // end while
+      if (OB_ITER_END == ret) {
+        for (uint64_t i = 0; i < aggregations->count(); i++) {
+          if (aggregations->at(i).get_type() == ObTableAggregationType::AVG) {
+            const int64_t &count = counts[i];
+            ObObj &agg_result = agg_results_.at(i);
+            if (count != 0) {
+              agg_result.set_double(sums[i] / count);
+            }
+          } else if (aggregations->at(i).get_type() == ObTableAggregationType::COUNT) {
+            if (agg_results_.at(i).is_null()) {   // if count result is null, should be zero
+              agg_results_.at(i).set_int(0);
+            }
+          }
+        }
+        has_more_rows_ = false;
+        if (OB_FAIL(one_result_->add_row(agg_results_))) {
+          LOG_WARN("fail to add aggregation result", K(ret), K(agg_results_));
+        } else if (one_result_->get_row_count() > 0) {
+          ret = OB_SUCCESS;
+          next_result = one_result_;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::get_aggregate_row(const ObIArray<table::ObTableAggregation> *&aggregations, ObNewRow *&row, double *&sums, int64_t *&counts) {
+  int ret = OB_SUCCESS;
+  for (uint64_t i = 0; OB_SUCC(ret) && i < aggregations->count(); i++) {
+    if (agg_cell_proj_.at(i) == -1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the column for aggregation is not exist", K(ret), K(i), K(aggregations->at(i).get_column()));
+      continue;
+    }
+    switch (aggregations->at(i).get_type()) {
+      case ObTableAggregationType::MAX: {
+        ret = aggregate_max(i, row);
+        break;
+      }
+      case ObTableAggregationType::MIN: {
+        ret = aggregate_min(i, row);
+        break;
+      }
+      case ObTableAggregationType::COUNT: {
+        const ObString &key_word = aggregations->at(i).get_column();
+        ret = aggregate_count(i, row, key_word);
+        break;
+      }
+      case ObTableAggregationType::SUM: {
+        ret = aggregate_sum(i, row);
+        break;
+      }
+      case ObTableAggregationType::AVG: {
+        ret = aggregate_avg(i, row, counts[i], sums[i]);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to aggregate result", K(ret), K(i), K(aggregations));
+    }
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_max(uint64_t idx, ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  ObObj &agg_result = agg_results_.at(idx);
+  if (!agg_result.is_null() && !value.is_null()) {
+    int cmp_ret = 0;
+    if (OB_FAIL(agg_result.compare(value, cmp_ret))) {
+      LOG_WARN("fail to compare", K(ret), K(agg_result), K(value));
+    } else if (cmp_ret == ObObjCmpFuncs::CR_LT) {
+      if (OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
+        LOG_WARN("fail to write obj", K(ret), K(agg_result), K(value));
+      }
+    }
+  } else if (!value.is_null() && OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
+    LOG_WARN("fail to write obj", K(ret), K(agg_result), K(value));
+  } else {/* do nothing */}
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_min(uint64_t idx, ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  ObObj &agg_result = agg_results_.at(idx);
+  if (!agg_result.is_null() && !value.is_null()) {
+    int cmp_ret = 0;
+    if (OB_FAIL(agg_result.compare(value, cmp_ret))) {
+      LOG_WARN("fail to compare", K(ret), K(agg_result), K(value));
+    } else if (cmp_ret == ObObjCmpFuncs::CR_GT) {
+      if (OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
+        LOG_WARN("fail to write obj", K(ret), K(agg_result), K(value));
+      }
+    }
+  } else if (!value.is_null() && OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
+    LOG_WARN("fail to write obj", K(ret), K(agg_result), K(value));
+  } else {/* do nothing */}
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_count(uint64_t idx, ObNewRow *&row, const ObString &key_word)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  ObObj &agg_result = agg_results_.at(idx);
+  if (key_word.empty() || key_word == "*") {
+    if (!agg_result.is_null()) {
+      agg_result.set_int(agg_result.get_int() + 1);
+    } else {
+      agg_result.set_int(1);
+    }
+  } else {
+    if (!value.is_null()) {
+      if (!agg_result.is_null()) {
+        agg_result.set_int(agg_result.get_int() + 1);
+      } else {
+        agg_result.set_int(1);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_sum(uint64_t idx, ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  ObObj &agg_result = agg_results_.at(idx);
+  const ObObjType &sum_type = value.get_type();
+  if (!value.is_null()) {
+    if (!agg_result.is_null()) {
+      switch(sum_type) {
+        //signed int
+        case ObTinyIntType:
+        case ObSmallIntType:
+        case ObMediumIntType:
+        case ObInt32Type:
+        case ObIntType: {
+          agg_result.set_int(agg_result.get_int() + value.get_int());
+          break;
+        }
+        //unsigned int
+        case ObUTinyIntType:
+        case ObUSmallIntType:
+        case ObUMediumIntType:
+        case ObUInt32Type:
+        case ObUInt64Type: {
+          agg_result.set_uint64(agg_result.get_uint64() + value.get_uint64());
+          break;
+        }
+        //float and ufloat
+        case ObFloatType:
+        case ObUFloatType: {
+          agg_result.set_double(agg_result.get_double() + value.get_float());
+          break;
+        }
+        //double and udouble
+        case ObDoubleType:
+        case ObUDoubleType: {
+          agg_result.set_double(agg_result.get_double() + value.get_double());
+          break;
+        }
+        default: {
+          LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));
+        }
+      }
+    } else {
+      switch(sum_type) {
+        //signed int
+        case ObTinyIntType:
+        case ObSmallIntType:
+        case ObMediumIntType:
+        case ObInt32Type:
+        case ObIntType: {
+          agg_result.set_int(value.get_int());
+          break;
+        }
+        //unsigned int
+        case ObUTinyIntType:
+        case ObUSmallIntType:
+        case ObUMediumIntType:
+        case ObUInt32Type:
+        case ObUInt64Type: {
+          agg_result.set_uint64(value.get_uint64());
+          break;
+        }
+        //float and ufloat
+        case ObFloatType:
+        case ObUFloatType: {
+          agg_result.set_double(value.get_float());
+          break;
+        }
+        //double and udouble
+        case ObDoubleType:
+        case ObUDoubleType: {
+          agg_result.set_double(value.get_double());
+          break;
+        }
+        default: {
+          LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_avg(uint64_t idx, ObNewRow *&row, int64_t &count, double &count_double)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  const ObObjType &avg_type = value.get_type();
+  if (!value.is_null()) {
+    count++;
+    switch(avg_type) {
+      //signed int
+      case ObTinyIntType:
+      case ObSmallIntType:
+      case ObMediumIntType:
+      case ObInt32Type:
+      case ObIntType: {
+        count_double += value.get_int();
+        break;
+      }
+      //unsigned int
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUMediumIntType:
+      case ObUInt32Type:
+      case ObUInt64Type: {
+        count_double += value.get_uint64();
+        break;
+      }
+      //float and ufloat
+      case ObFloatType:
+      case ObUFloatType: {
+        count_double += value.get_float();
+        break;
+      }
+      //double and udouble
+      case ObDoubleType:
+      case ObUDoubleType: {
+        count_double += value.get_double();
+        break;
+      }
+      default: {
+        LOG_WARN("this data type does not support aggregate avg operation", K(ret), K(avg_type));
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResult *&next_result)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(one_result_)) {
@@ -1983,16 +2372,28 @@ bool ObNormalTableQueryResultIterator::has_more_result() const
   return has_more_rows_;
 }
 
-ObNormalTableQueryResultIterator *ObTableServiceQueryCtx::get_normal_result_iterator(
-    const ObTableQuery &query, table::ObTableQueryResult &one_result)
+int ObTableServiceQueryCtx::get_normal_result_iterator(
+    const ObTableQuery &query, table::ObTableQueryResult &one_result, ObTableQueryResultIterator *&query_result)
 {
+  int ret = OB_SUCCESS;
   if (NULL == normal_result_iterator_) {
     normal_result_iterator_ = OB_NEWx(ObNormalTableQueryResultIterator, param_.allocator_, query, one_result);
     if (NULL == normal_result_iterator_) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate result iterator");
     }
   }
-  return normal_result_iterator_;
+  if (OB_SUCC(ret)) {
+    if (normal_result_iterator_->is_aggregate_query()) { //init
+      if (OB_FAIL(normal_result_iterator_->init_agg_cell_proj(query.get_aggregations().count()))) {
+        LOG_WARN("failed to allocate result for agg_cell_proj");
+      } else if (OB_FAIL(normal_result_iterator_->init_agg_results(query.get_aggregations().count()))) {
+        LOG_WARN("failed to allocate memory for agg_results");
+      }
+    }
+    query_result = normal_result_iterator_;
+  }
+  return ret;
 }
 
 ObHTableFilterOperator *ObTableServiceQueryCtx::get_htable_result_iterator(
@@ -2074,7 +2475,7 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
   const uint64_t table_id = ctx.param_.table_id_;
   uint64_t index_id = OB_INVALID_ID;
   int64_t padding_num = 0;
-  
+
   ObHColumnDescriptor hcolumn_desc;
   ObHColumnDescriptor *p_hcolumn_desc = NULL;
   if (query.get_htable_filter().is_valid()) {
@@ -2089,7 +2490,7 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
       p_hcolumn_desc = &hcolumn_desc;
     }
   } else {
-    if (NULL == (query_result = ctx.get_normal_result_iterator(query, one_result))) {
+    if (OB_FAIL(ctx.get_normal_result_iterator(query, one_result, query_result))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate result iterator", K(ret));
     }
@@ -2101,7 +2502,7 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
                                             *(ctx.table_param_), output_column_ids,
                                             ctx.columns_type_, schema_version,
                                             index_id, padding_num,
-                                            p_hcolumn_desc))) { // @todo optimize, table_param_ can be cached
+                                            p_hcolumn_desc, ctx))) { // @todo optimize, table_param_ can be cached
     LOG_WARN("failed to fill param", K(ret));
   } else if (OB_FAIL(fill_query_scan_ranges(ctx, query,
                                             (table_id != index_id) ? padding_num : -1,
@@ -2144,12 +2545,12 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
 
 /* given the
    1. ttl and max_version
-   2. start k && cq 
+   2. start k && cq
    3. records limit
    return the end k & cq
 */
 
-int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result)
+int ObTableService::execute_ttl_delete(ObTableServiceQueryCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, COMMON_COLUMN_NUM> output_column_ids;
@@ -2160,7 +2561,7 @@ int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableT
   int64_t padding_num = 0;
   table::ObTableQuery query;
   ObTableTTLDeleteRowIterator ttl_row_iter;
-  
+
   if (OB_FAIL(ttl_row_iter.init(ttl_operation))) {
     LOG_WARN("fail to init ttl delete row iterator", K(ret));
   } else if (OB_FAIL(generate_ttl_query(ttl_operation, ctx, query))) {
@@ -2170,7 +2571,7 @@ int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableT
                                             *(ctx.table_param_), output_column_ids,
                                             ctx.columns_type_, schema_version,
                                             index_id, padding_num,
-                                            NULL))) {
+                                            NULL, ctx))) {
     LOG_WARN("failed to fill param", K(ret));
   } else if (OB_FAIL(fill_query_scan_ranges(ctx, query,
                                             (table_id != index_id) ? padding_num : -1,
@@ -2275,7 +2676,7 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
     LOG_WARN("The table api ttl delete row iterator has not been inited, ", K(ret));
   } else {
     if (cur_del_rows_ >= limit_del_rows_) {
-      ret = OB_ITER_END; 
+      ret = OB_ITER_END;
       LOG_DEBUG("finish get next row", K(ret), K(cur_del_rows_), K(limit_del_rows_));
     } else {
       while(OB_SUCC(scan_result_->get_next_row(row))) {
@@ -2313,18 +2714,6 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
   return ret;
 }
 
-void ObTableServiceTTLCtx::destroy_scan_iterator(storage::ObPartitionService *part_service)
-{
-  if (NULL != scan_result_) {
-    if (NULL == part_service) {
-      LOG_ERROR("part_service is NULL, memory leak");
-    } else {
-      part_service->revert_scan_iter(scan_result_);
-      scan_result_ = NULL;
-    }
-  }
-}
-
 void ObTableTTLDeleteRowIterator::reset()
 {
   is_inited_ = false;
@@ -2334,7 +2723,7 @@ void ObTableTTLDeleteRowIterator::reset()
   limit_del_rows_ = 0;
   cur_del_rows_ = 0;
   cur_version_ = 0;
-  cur_rowkey_.reset(); 
+  cur_rowkey_.reset();
   cur_qualifier_.reset();
   max_version_cnt_ = 0;
   ttl_cnt_ = 0;
