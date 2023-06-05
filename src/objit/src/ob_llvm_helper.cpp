@@ -22,6 +22,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/DynamicLibrary.h"
 
+#include "share/ob_define.h"
 #include "objit/ob_llvm_helper.h"
 #include "objit/ob_llvm_di_helper.h"
 #include "lib/oblog/ob_log_module.h"
@@ -51,6 +52,13 @@ typedef llvm::LLVMContext ObIRContext;
 typedef llvm::IRBuilder<> ObIRBuilder;
 typedef llvm::Module ObIRModule;
 typedef llvm::ExecutionEngine ObLLVMExecEngine;
+
+#if !defined(__aarch64__)
+namespace llvm {
+  struct X86MemoryFoldTableEntry;
+  extern const X86MemoryFoldTableEntry* lookupUnfoldTable(unsigned MemOp);
+}
+#endif
 
 namespace oceanbase
 {
@@ -521,10 +529,53 @@ void ObLLVMHelper::final()
 
 int ObLLVMHelper::initialize()
 {
+  int ret = OB_SUCCESS;
+
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
-  return OB_SUCCESS;
+
+#if !defined(__aarch64__)
+  // initialize LLVM X86 unfold table
+  llvm::lookupUnfoldTable(0);
+#endif
+
+  OZ (init_llvm());
+
+  return ret;
+}
+
+int ObLLVMHelper::init_llvm() {
+  int ret = OB_SUCCESS;
+
+  ObArenaAllocator alloc("PlJit", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObLLVMHelper helper(alloc);
+  ObLLVMDIHelper di_helper(alloc);
+  static char init_func_name[] = "pl_init_func";
+
+  OZ (helper.init());
+  OZ (di_helper.init(helper.get_jc()));
+
+  ObSEArray<ObLLVMType, 8> arg_types;
+  ObLLVMType int64_type;
+  ObLLVMFunction init_func;
+  ObLLVMFunctionType ft;
+  ObLLVMBasicBlock block;
+  ObLLVMValue magic;
+
+  OZ (helper.get_llvm_type(ObIntType, int64_type));
+  OZ (arg_types.push_back(int64_type));
+  OZ (ObLLVMFunctionType::get(int64_type, arg_types, ft));
+  OZ (helper.create_function(init_func_name, ft, init_func));
+  OZ (helper.create_block("entry", init_func, block));
+  OZ (helper.set_insert_point(block));
+  OZ (helper.get_int64(OB_SUCCESS, magic));
+  OZ (helper.create_ret(magic));
+
+  OX (helper.compile_module());
+  OX (helper.get_function_address(init_func_name));
+
+  return ret;
 }
 
 void ObLLVMHelper::compile_module(bool optimization)

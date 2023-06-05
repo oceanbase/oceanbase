@@ -449,6 +449,7 @@ public:
 
 private:
   int check_insert_point(bool &is_valid);
+  static int init_llvm();
 
 private:
   common::ObIAllocator &allocator_;
