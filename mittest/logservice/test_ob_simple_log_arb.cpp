@@ -589,9 +589,9 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
     PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
     LogEngine *log_engine = &arb_palf->log_engine_;
-    LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
     LogStorage *meta_storage = &log_engine->log_meta_storage_;
     EXPECT_EQ(OB_SUCCESS, log_engine->append_log_meta_(log_engine->log_meta_));
+    LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
     ASSERT_NE(meta_tail, LSN(log_engine->log_meta_storage_.logical_block_size_));
   }
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());

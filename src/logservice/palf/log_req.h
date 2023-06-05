@@ -105,6 +105,26 @@ public:
   int64_t accepted_mode_pid_;
 };
 
+struct LogBatchFetchResp {
+  OB_UNIS_VERSION(1);
+public:
+  LogBatchFetchResp();
+  LogBatchFetchResp(const int64_t msg_proposal_id,
+                    const int64_t prev_log_proposal_id,
+                    const LSN &prev_lsn,
+                    const LSN &curr_lsn,
+                    const LogWriteBuf &write_buf);
+  ~LogBatchFetchResp();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(msg_proposal_id), K_(prev_log_proposal_id), K_(prev_lsn), K_(curr_lsn), K_(write_buf));
+  int64_t msg_proposal_id_;
+  int64_t prev_log_proposal_id_;
+  LSN prev_lsn_;
+  LSN curr_lsn_;
+  LogWriteBuf write_buf_;
+};
+
 struct NotifyRebuildReq {
   OB_UNIS_VERSION(1);
 public:

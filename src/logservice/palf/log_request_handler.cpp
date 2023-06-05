@@ -191,6 +191,32 @@ int LogRequestHandler::handle_request<LogFetchReq>(
 }
 
 template <>
+int LogRequestHandler::handle_request<LogBatchFetchResp>(
+    const int64_t palf_id,
+    const ObAddr &server,
+    const LogBatchFetchResp &req)
+{
+  int ret = common::OB_SUCCESS;
+  if (false == is_valid_palf_id(palf_id) || false == req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
+  } else {
+    const char *buf = req.write_buf_.write_buf_[0].buf_;
+    const int64_t buf_len = req.write_buf_.write_buf_[0].buf_len_;
+    IPalfHandleImplGuard guard;
+    if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
+      PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
+    } else if (OB_FAIL(guard.get_palf_handle_impl()->receive_batch_log(server, req.msg_proposal_id_,
+        req.prev_log_proposal_id_, req.prev_lsn_, req.curr_lsn_, buf, buf_len))) {
+      PALF_LOG(WARN, "PalfHandleImpl receive_batch_log failed", K(ret), K(server), K(req), KPC(palf_env_impl_));
+    } else {
+      PALF_LOG(TRACE, "PalfHandleImpl receive_batch_log success", K(ret), K(server), K(req), KPC(palf_env_impl_));
+    }
+  }
+  return ret;
+}
+
+template <>
 int LogRequestHandler::handle_request<LogPrepareReq>(
     const int64_t palf_id,
     const ObAddr &server,

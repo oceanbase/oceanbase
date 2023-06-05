@@ -150,6 +150,33 @@ struct FetchLogStat {
                K_(send_cost));
 };
 
+struct BatchFetchParams {
+  BatchFetchParams() { reset(); }
+  ~BatchFetchParams() { reset(); }
+  void reset() {
+    can_batch_count_ = 0;
+    can_batch_size_ = 0;
+    batch_log_buf_ = NULL;
+    last_log_lsn_prev_round_.reset();
+    last_log_end_lsn_prev_round_.reset();
+    last_log_proposal_id_prev_round_ = 0;
+  }
+  TO_STRING_KV(K_(can_batch_count),
+               K_(can_batch_size),
+               KP_(batch_log_buf),
+               K_(last_log_lsn_prev_round),
+               K_(last_log_end_lsn_prev_round),
+               K_(last_log_proposal_id_prev_round),
+               K_(has_consumed_count));
+  int64_t can_batch_count_;
+  int64_t can_batch_size_;
+  char *batch_log_buf_;
+  LSN last_log_lsn_prev_round_;
+  LSN last_log_end_lsn_prev_round_;
+  int64_t last_log_proposal_id_prev_round_;
+  int64_t has_consumed_count_;
+};
+
 struct LSKey {
   LSKey() : id_(-1) {}
   explicit LSKey(const int64_t id) : id_(id) {}
@@ -567,6 +594,13 @@ public:
                           const LSN &lsn,
                           const char *buf,
                           const int64_t buf_len) = 0;
+  virtual int receive_batch_log(const common::ObAddr &server,
+                                const int64_t msg_proposal_id,
+                                const int64_t prev_log_proposal_id,
+                                const LSN &prev_lsn,
+                                const LSN &curr_lsn,
+                                const char *buf,
+                                const int64_t buf_len) = 0;
   virtual int ack_log(const common::ObAddr &server,
                       const int64_t &proposal_id,
                       const LSN &log_end_lsn) = 0;
@@ -911,6 +945,13 @@ public:
                   const LSN &lsn,
                   const char *buf,
                   const int64_t buf_len) override final;
+  int receive_batch_log(const common::ObAddr &server,
+                        const int64_t msg_proposal_id,
+                        const int64_t prev_log_proposal_id,
+                        const LSN &prev_lsn,
+                        const LSN &curr_lsn,
+                        const char *buf,
+                        const int64_t buf_len) override final;
   int ack_log(const common::ObAddr &server,
               const int64_t &proposal_id,
               const LSN &log_end_lsn) override final;
@@ -1015,6 +1056,14 @@ private:
                                const LSN &log_lsn,
                                const LSN &log_end_lsn,
                                const int64_t &log_proposal_id);
+  int receive_log_(const common::ObAddr &server,
+                  const PushLogType push_log_type,
+                  const int64_t &msg_proposal_id,
+                  const LSN &prev_lsn,
+                  const int64_t &prev_log_proposal_id,
+                  const LSN &lsn,
+                  const char *buf,
+                  const int64_t buf_len);
   int fetch_log_from_storage_(const common::ObAddr &server,
                               const FetchLogType fetch_type,
                               const int64_t &msg_proposal_id,
@@ -1024,12 +1073,39 @@ private:
                               const int64_t fetch_log_count,
                               const SCN &replayable_point,
                               FetchLogStat &fetch_stat);
+  int batch_fetch_log_each_round_(const common::ObAddr &server,
+                                  const int64_t msg_proposal_id,
+                                  PalfGroupBufferIterator &iterator,
+                                  const bool is_limitted_by_end_lsn,
+                                  const bool is_dest_in_memberlist,
+                                  const share::SCN& replayable_point,
+                                  const LSN &fetch_end_lsn,
+                                  const LSN &committed_end_lsn,
+                                  const int64_t batch_log_size_threshold,
+                                  BatchFetchParams &batch_fetch_params,
+                                  bool &skip_next,
+                                  bool &is_reach_end,
+                                  FetchLogStat &fetch_stat);
   int submit_fetch_log_resp_(const common::ObAddr &server,
                              const int64_t &msg_proposal_id,
                              const int64_t &prev_log_proposal_id,
                              const LSN &prev_lsn,
                              const LSN &curr_lsn,
                              const LogGroupEntry &curr_group_entry);
+  int submit_fetch_log_resp_(const common::ObAddr &server,
+                             const int64_t &msg_proposal_id,
+                             const int64_t &prev_log_proposal_id,
+                             const LSN &prev_lsn,
+                             const LSN &curr_lsn,
+                             const char *buf,
+                             const int64_t buf_len);
+  int submit_batch_fetch_log_resp_(const common::ObAddr &server,
+                                   const int64_t msg_proposal_id,
+                                   const int64_t prev_log_proposal_id,
+                                   const LSN &prev_lsn,
+                                   const LSN &curr_lsn,
+                                   const char *buf,
+                                   const int64_t buf_len);
   int try_update_proposal_id_(const common::ObAddr &server,
                               const int64_t &proposal_id);
   int get_binary_search_range_(const share::SCN &scn,

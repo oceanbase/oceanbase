@@ -622,6 +622,9 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
     case obrpc::OB_LOG_FETCH_REQ: {
       PROCESS(LogFetchReqP);
     }
+    case obrpc::OB_LOG_BATCH_FETCH_RESP: {
+      PROCESS(LogBatchFetchRespP);
+    }
     case obrpc::OB_LOG_PREPARE_REQ: {
       PROCESS(LogPrepareReqP);
     }

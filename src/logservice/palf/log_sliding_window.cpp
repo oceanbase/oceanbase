@@ -1804,11 +1804,11 @@ void LogSlidingWindow::try_update_committed_lsn_for_fetch_(
   LSN last_committed_end_lsn;
   last_fetch_end_lsn.val_ = ATOMIC_LOAD(&last_fetch_end_lsn_.val_);
   last_committed_end_lsn.val_ = ATOMIC_LOAD(&last_fetch_committed_end_lsn_.val_);
+  int64_t last_fetch_max_log_id = OB_INVALID_LOG_ID;
+  get_last_fetch_info_(last_fetch_end_lsn, last_committed_end_lsn, last_fetch_max_log_id);
   if (!last_fetch_end_lsn.is_valid() || last_committed_end_lsn.is_valid()) {
     // no need update
   } else {
-    int64_t last_fetch_max_log_id = OB_INVALID_LOG_ID;
-    get_last_fetch_info_(last_fetch_end_lsn, last_committed_end_lsn, last_fetch_max_log_id);
     if (last_fetch_end_lsn.is_valid()
         && !last_committed_end_lsn.is_valid()
         && (log_end_lsn >= last_fetch_end_lsn || log_id == last_fetch_max_log_id)) {
@@ -1825,7 +1825,7 @@ void LogSlidingWindow::try_update_committed_lsn_for_fetch_(
           K(log_id), K_(last_fetch_max_log_id), K_(last_fetch_end_lsn),
           K_(last_fetch_committed_end_lsn));
     } else if (last_fetch_end_lsn == last_fetch_end_lsn_
-               || log_id == last_fetch_max_log_id_) {
+               || last_fetch_max_log_id == last_fetch_max_log_id_) {
       LSN committed_end_lsn;
       get_committed_end_lsn_(committed_end_lsn);
       // The order is fatal:

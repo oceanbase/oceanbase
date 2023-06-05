@@ -47,6 +47,11 @@ DEFINE_RPC_PROCESSOR(LogFetchReqP,
                      LogFetchReq,
                      obrpc::OB_LOG_FETCH_REQ);
 
+DEFINE_RPC_PROCESSOR(LogBatchFetchRespP,
+                     obrpc::LogRpcProxyV2,
+                     LogBatchFetchResp,
+                     obrpc::OB_LOG_BATCH_FETCH_RESP);
+
 DEFINE_RPC_PROCESSOR(LogPrepareReqP,
                      obrpc::LogRpcProxyV2,
                      LogPrepareReq,
