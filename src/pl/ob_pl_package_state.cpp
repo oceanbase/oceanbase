@@ -294,6 +294,8 @@ int ObPLPackageState::make_pkg_var_kv_value(ObPLExecCtx &ctx, ObObj &var_val, in
         } else {
           OX (value.set_bool(true));
         }
+      } else if (var->get_type().is_opaque_type()) {
+        value.set_null();
       } else {
         OZ (var->get_type().serialize(resolve_ctx, var_val, value));
       }
