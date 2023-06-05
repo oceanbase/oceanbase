@@ -31,6 +31,27 @@ namespace palf
 namespace election
 {
 
+struct LsBiggestMinClusterVersionEverSeen {// this is for maintain min_cluster_version on arb server
+  LsBiggestMinClusterVersionEverSeen() : version_(0) {}
+  LsBiggestMinClusterVersionEverSeen(const uint64_t version)
+  : version_(version) {};
+  void try_advance(uint64_t new_version) {
+    if (version_ < new_version) {
+      version_ = new_version;
+      ELECT_LOG(INFO, "advance ls ever seen biggest min_cluster_verson");
+    }
+  }
+  int64_t to_string(char *buf, const int64_t len) const {
+    int64_t pos = 0;
+    databuff_printf(buf, len, pos, "%u.", OB_VSN_MAJOR(version_));
+    databuff_printf(buf, len, pos, "%u.", OB_VSN_MINOR(version_));
+    databuff_printf(buf, len, pos, "%u.", OB_VSN_MAJOR_PATCH(version_));
+    databuff_printf(buf, len, pos, "%u", OB_VSN_MINOR_PATCH(version_));
+    return pos;
+  }
+  uint64_t version_;
+};
+
 struct ElectionMsgDebugTs
 {
   OB_UNIS_VERSION(1);
@@ -66,6 +87,7 @@ public:
                   const common::ObAddr &self_addr,
                   const int64_t restart_counter,
                   const int64_t ballot_number,
+                  const LsBiggestMinClusterVersionEverSeen &version,
                   const ElectionMsgType msg_type);
   void reset();
   void set_receiver(const common::ObAddr &addr);
@@ -73,6 +95,7 @@ public:
   int64_t get_ballot_number() const;
   const common::ObAddr &get_sender() const;
   const common::ObAddr &get_receiver() const;
+  const LsBiggestMinClusterVersionEverSeen &get_ls_biggest_min_cluster_version_ever_seen() const;
   ElectionMsgType get_msg_type() const;
   bool is_valid() const;
   ElectionMsgDebugTs get_debug_ts() const;
@@ -80,7 +103,7 @@ public:
   int64_t get_id() const;
   #define MSG_TYPE "msg_type", msg_type_to_string(static_cast<ElectionMsgType>(msg_type_))
   TO_STRING_KV(MSG_TYPE, K_(id), K_(sender), K_(receiver), K_(restart_counter),
-               K_(ballot_number), K_(debug_ts));
+               K_(ballot_number), K_(debug_ts), K_(biggest_min_cluster_version_ever_seen));
   #undef MSG_TYPE
 protected:
   int64_t id_;
@@ -88,11 +111,13 @@ protected:
   common::ObAddr receiver_;
   int64_t restart_counter_;
   int64_t ballot_number_;
+  LsBiggestMinClusterVersionEverSeen biggest_min_cluster_version_ever_seen_;
   int64_t msg_type_;
   ElectionMsgDebugTs debug_ts_;
 };
 OB_SERIALIZE_MEMBER_TEMP(inline, ElectionMsgBase, id_, sender_, receiver_,
-                         restart_counter_, ballot_number_, msg_type_, debug_ts_);
+                         restart_counter_, ballot_number_, msg_type_, debug_ts_,
+                         biggest_min_cluster_version_ever_seen_.version_);
 
 class ElectionPrepareRequestMsgMiddle : public ElectionMsgBase
 {
@@ -103,6 +128,7 @@ public:
                                   const common::ObAddr &self_addr,
                                   const int64_t restart_counter,
                                   const int64_t ballot_number,
+                                  const LsBiggestMinClusterVersionEverSeen &version,
                                   const uint64_t inner_priority_seed,
                                   const LogConfigVersion membership_version);
   int set(const ElectionPriority *priority, const common::ObRole role);
@@ -136,9 +162,10 @@ public:
                             const common::ObAddr &self_addr,
                             const int64_t restart_counter,
                             const int64_t ballot_number,
+                            const LsBiggestMinClusterVersionEverSeen &version,
                             const uint64_t inner_priority_seed,
                             const LogConfigVersion membership_version) :
-  ElectionPrepareRequestMsgMiddle(id, self_addr, restart_counter, ballot_number, inner_priority_seed, membership_version) {}
+  ElectionPrepareRequestMsgMiddle(id, self_addr, restart_counter, ballot_number, version, inner_priority_seed, membership_version) {}
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ElectionPrepareRequestMsgMiddle::deserialize(buf, data_len, pos))) {
@@ -163,6 +190,7 @@ class ElectionPrepareResponseMsgMiddle : public ElectionMsgBase
 public:
   ElectionPrepareResponseMsgMiddle();// default constructor is required by deserialization, but not actually worked
   ElectionPrepareResponseMsgMiddle(const common::ObAddr &self_addr,
+                                   const LsBiggestMinClusterVersionEverSeen &version,
                                    const ElectionPrepareRequestMsgMiddle &request);
   void set_accepted(const int64_t ballot_number, const Lease lease);
   void set_rejected(const int64_t ballot_number);
@@ -186,8 +214,9 @@ class ElectionPrepareResponseMsg : public ElectionPrepareResponseMsgMiddle
 public:
   ElectionPrepareResponseMsg() : ElectionPrepareResponseMsgMiddle() {}// default constructor is required by deserialization, but not actually worked
   ElectionPrepareResponseMsg(const common::ObAddr &self_addr,
+                             const LsBiggestMinClusterVersionEverSeen &version,
                              const ElectionPrepareRequestMsgMiddle &request) :
-  ElectionPrepareResponseMsgMiddle(self_addr, request) {}
+  ElectionPrepareResponseMsgMiddle(self_addr, version, request) {}
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ElectionPrepareResponseMsgMiddle::deserialize(buf, data_len, pos))) {
@@ -215,6 +244,7 @@ public:
                                  const common::ObAddr &self_addr,
                                  const int64_t restart_counter,
                                  const int64_t ballot_number,
+                                 const LsBiggestMinClusterVersionEverSeen &version,
                                  const int64_t lease_start_ts_on_proposer,
                                  const int64_t lease_interval,
                                  const LogConfigVersion membership_version);
@@ -241,10 +271,11 @@ public:
                            const common::ObAddr &self_addr,
                            const int64_t restart_counter,
                            const int64_t ballot_number,
+                           const LsBiggestMinClusterVersionEverSeen &version,
                            const int64_t lease_start_ts_on_proposer,
                            const int64_t lease_interval,
                            const LogConfigVersion membership_version) :
-  ElectionAcceptRequestMsgMiddle(id, self_addr, restart_counter, ballot_number,
+  ElectionAcceptRequestMsgMiddle(id, self_addr, restart_counter, ballot_number, version,
                                  lease_start_ts_on_proposer, lease_interval, membership_version) {}
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = OB_SUCCESS;
@@ -272,6 +303,7 @@ public:
   ElectionAcceptResponseMsgMiddle(const common::ObAddr &self_addr,
                                   const uint64_t inner_priority_seed,
                                   const LogConfigVersion &membership_version,
+                                  const LsBiggestMinClusterVersionEverSeen &version,
                                   const ElectionAcceptRequestMsgMiddle &request);
   int set_accepted(const int64_t ballot_number, const ElectionPriority *priority);
   void set_rejected(const int64_t ballot_number);
@@ -315,8 +347,9 @@ public:
   ElectionAcceptResponseMsg(const common::ObAddr &self_addr,
                             const uint64_t inner_priority_seed,
                             const LogConfigVersion &membership_version,
+                            const LsBiggestMinClusterVersionEverSeen &version,
                             const ElectionAcceptRequestMsgMiddle &request) :
-  ElectionAcceptResponseMsgMiddle(self_addr, inner_priority_seed, membership_version, request) {}
+  ElectionAcceptResponseMsgMiddle(self_addr, inner_priority_seed, membership_version, version, request) {}
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ElectionAcceptResponseMsgMiddle::deserialize(buf, data_len, pos))) {
@@ -344,6 +377,7 @@ public:
                                 const common::ObAddr &self_addr,
                                 const int64_t restart_counter,
                                 const int64_t get_ballot_number,
+                                const LsBiggestMinClusterVersionEverSeen &version,
                                 int64_t switch_source_leader_ballot,
                                 const LogConfigVersion membership_version);
   int64_t get_old_ballot_number() const;
@@ -367,9 +401,10 @@ public:
                           const common::ObAddr &self_addr,
                           const int64_t restart_counter,
                           const int64_t get_ballot_number,
+                          const LsBiggestMinClusterVersionEverSeen &version,
                           int64_t switch_source_leader_ballot,
                           const LogConfigVersion membership_version) :
-  ElectionChangeLeaderMsgMiddle(id, self_addr, restart_counter, get_ballot_number,
+  ElectionChangeLeaderMsgMiddle(id, self_addr, restart_counter, get_ballot_number, version,
                                 switch_source_leader_ballot, membership_version) {}
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = OB_SUCCESS;

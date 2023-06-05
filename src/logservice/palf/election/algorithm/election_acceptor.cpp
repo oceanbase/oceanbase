@@ -61,6 +61,7 @@ public:
       T reject_msg = create_reject_message_(p_acceptor->p_election_->get_self_addr(),
                                             p_acceptor->p_election_->inner_priority_seed_,
                                             p_acceptor->p_election_->get_membership_version_(),
+                                            p_acceptor->p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
                                             msg);
       reject_msg.set_rejected(p_acceptor->ballot_number_);
       p_acceptor->p_election_->send_(reject_msg);
@@ -75,18 +76,20 @@ private:
   static ElectionPrepareResponseMsg create_reject_message_(const common::ObAddr &addr,
                                                            const uint64_t inner_priority_seed,
                                                            const LogConfigVersion &membership_version,
+                                                           const LsBiggestMinClusterVersionEverSeen &version,
                                                            const ElectionPrepareRequestMsg &msg)
   {
     UNUSED(inner_priority_seed),
     UNUSED(membership_version);
-    return ElectionPrepareResponseMsg(addr, msg);
+    return ElectionPrepareResponseMsg(addr, version, msg);
   }
   static ElectionAcceptResponseMsg create_reject_message_(const common::ObAddr &addr,
                                                           const uint64_t inner_priority_seed,
                                                           const LogConfigVersion &membership_version,
+                                                          const LsBiggestMinClusterVersionEverSeen &version,
                                                           const ElectionAcceptRequestMsg &msg)
   {
-    return ElectionAcceptResponseMsg(addr, inner_priority_seed, membership_version, msg);
+    return ElectionAcceptResponseMsg(addr, inner_priority_seed, membership_version, version, msg);
   }
 };
 
@@ -153,7 +156,9 @@ int ElectionAcceptor::start()
       last_record_lease_owner = lease_.get_owner();
     }
     if (is_time_window_opened_) {
-      ElectionPrepareResponseMsg prepare_res_accept(p_election_->get_self_addr(), highest_priority_prepare_req_);
+      ElectionPrepareResponseMsg prepare_res_accept(p_election_->get_self_addr(),
+                                                    p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
+                                                    highest_priority_prepare_req_);
       bool can_vote = false;
       if (last_record_lease_valid_state && !lease_valid_state) {// 这个定时任务可能是被延迟致lease到期时触发的，为了在lease到期的第一时间投票
         can_vote = true;
@@ -234,7 +239,8 @@ void ElectionAcceptor::on_prepare_request(const ElectionPrepareRequestMsg &prepa
       } else {
         advance_ballot_number_and_reset_related_states_(prepare_req.get_ballot_number(), phase);
         ElectionPrepareResponseMsg prepare_res_accept(p_election_->get_self_addr(),
-                                                             prepare_req);
+                                                      p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
+                                                      prepare_req);
         prepare_res_accept.set_accepted(ballot_number_, lease_);
         if (CLICK_FAIL(p_election_->msg_handler_->send(prepare_res_accept))) {
           LOG_PHASE(WARN, phase, "send prepare response to leader prepare failed");
@@ -317,6 +323,7 @@ void ElectionAcceptor::on_accept_request(const ElectionAcceptRequestMsg &accept_
     ElectionAcceptResponseMsg accept_res_accept(p_election_->get_self_addr(),
                                                 p_election_->inner_priority_seed_,
                                                 p_election_->get_membership_version_(),
+                                                p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
                                                 accept_req);
     (void) p_election_->refresh_priority_();
     if (CLICK_FAIL(accept_res_accept.set_accepted(ballot_number_,
