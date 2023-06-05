@@ -305,6 +305,8 @@ int dispatch_to_ob_listener(int accept_fd) {
 int tranlate_to_ob_error(int err) {
   int ret = OB_SUCCESS;
   if (PNIO_OK == err) {
+  } else if (PNIO_STOPPED == err) {
+    ret = OB_RPC_SEND_ERROR;
   } else if (PNIO_LISTEN_ERROR == err) {
     ret = OB_SERVER_LISTEN_ERROR;
   } else if (ENOMEM == err || -ENOMEM == err) {
