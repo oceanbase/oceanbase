@@ -384,6 +384,54 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_no_leader
   PALF_LOG(INFO, "end test test_2f1a_degrade_when_no_leader2", K(id));
 }
 
+TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_change_config_fail)
+{
+  OB_LOGGER.set_log_level("INFO");
+  int ret = OB_SUCCESS;
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t TIMEOUT_US = 10 * 1000 * 1000L;
+  SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_change_config_fail");
+  PALF_LOG(INFO, "begin test test_2f1a_change_config_fail", K(id));
+  {
+    int64_t leader_idx = 0;
+    int64_t arb_replica_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb_mock_election(id, arb_replica_idx, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->stop();
+
+    const int64_t b_idx = (leader_idx + 1) % 4;
+    const int64_t c_idx = (leader_idx + 2) % 4;
+    const int64_t d_idx = (leader_idx + 3) % 4;
+    const common::ObAddr a_addr = get_cluster()[leader_idx]->get_addr();
+    const common::ObAddr b_addr = get_cluster()[b_idx]->get_addr();
+    const common::ObAddr c_addr = get_cluster()[c_idx]->get_addr();
+    const common::ObAddr d_addr = get_cluster()[d_idx]->get_addr();
+    PalfHandleImplGuard *a_handle = palf_list[leader_idx];
+    PalfHandleImplGuard *b_handle = palf_list[b_idx];
+    PalfHandleImplGuard *d_handle = palf_list[d_idx];
+
+    LogConfigChangeArgs add_d_arg(common::ObMember(d_addr, 1), 4, ADD_MEMBER);
+    int64_t add_d_pid = 0;
+    int64_t add_d_epoch = 0;
+    LogConfigVersion add_d_version;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(add_d_pid, add_d_epoch, add_d_arg.type_));
+
+    // block the network from the leader to the follower
+    block_net(leader_idx, d_idx);
+    EXPECT_UNTIL_EQ(OB_LOG_NOT_SYNC, leader.palf_handle_impl_->config_mgr_.change_config_(add_d_arg, add_d_pid, add_d_epoch, add_d_version));
+    EXPECT_FALSE(add_d_version.is_valid());
+
+    unblock_net(leader_idx, d_idx);
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test test_2f1a_change_config_fail", K(id));
+}
+
 TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_arb_crash)
 {
   OB_LOGGER.set_log_level("INFO");
