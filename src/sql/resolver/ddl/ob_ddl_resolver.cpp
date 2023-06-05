@@ -5379,7 +5379,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (column.is_xmltype() && ob_is_numeric_type(tmp_default_value.get_type())) {
+    } else if (column.is_xmltype() && (ob_is_numeric_type(tmp_default_value.get_type()) || is_lob(tmp_default_value.get_type()))) {
       ret = OB_ERR_INVALID_XML_DATATYPE;
       LOG_WARN("incorrect cmp type with xml arguments",K(tmp_default_value.get_type()), K(ret));
     } else if (lib::is_oracle_mode() && column.get_meta_type().is_blob() && ob_is_numeric_type(tmp_default_value.get_type())) {
