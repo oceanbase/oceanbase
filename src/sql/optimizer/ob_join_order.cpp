@@ -3184,8 +3184,12 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
       tmp_qr = new(tmp_ptr)ObQueryRange(*allocator_);
       const ObDataTypeCastParams dtc_params =
             ObBasicSessionInfo::create_dtc_params(session_info);
-      bool is_in_range_optimization_enabled = session_info->is_in_range_optimization_enabled();
-      if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
+      bool is_in_range_optimization_enabled = false;
+      if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(opt_ctx->get_global_hint(),
+                                                                    session_info,
+                                                                    is_in_range_optimization_enabled))) {
+        LOG_WARN("failed to check in range optimization enabled", K(ret));
+      } else if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
                                                           dtc_params, opt_ctx->get_exec_ctx(),
                                                           &expr_constraints,
                                                           params, false, true,

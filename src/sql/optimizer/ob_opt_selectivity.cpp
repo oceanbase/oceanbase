@@ -3821,13 +3821,18 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_session_info());
   const ColumnItem* column_item = NULL;
   bool dummy_all_single_value_ranges = true;
-
+  bool is_in_range_optimization_enabled = false;
   if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) ||
-      OB_ISNULL(column_item = log_plan->get_column_item_by_id(table_id, column_id))) {
+      OB_ISNULL(column_item = log_plan->get_column_item_by_id(table_id, column_id)) ||
+      OB_ISNULL(ctx.get_stmt()) || OB_ISNULL(ctx.get_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(log_plan), K(exec_ctx), K(column_item));
   } else if (OB_FAIL(column_items.push_back(*column_item))) {
     LOG_WARN("failed to push back column item", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(ctx.get_stmt()->get_query_ctx()->get_global_hint(),
+                                                                       ctx.get_session_info(),
+                                                                       is_in_range_optimization_enabled))) {
+    LOG_WARN("failed to check in range optimization enabled", K(ret));
   } else if (OB_FAIL(query_range.preliminary_extract_query_range(column_items,
                                                                  quals,
                                                                  dtc_params,
@@ -3836,7 +3841,7 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
                                                                  params,
                                                                  false,
                                                                  true,
-                                                                 ctx.get_session_info()->is_in_range_optimization_enabled()))) {
+                                                                 is_in_range_optimization_enabled))) {
     LOG_WARN("failed to preliminary extract query range", K(ret));
   } else if (!query_range.need_deep_copy()) {
     if (OB_FAIL(query_range.direct_get_tablet_ranges(allocator, *exec_ctx, ranges,

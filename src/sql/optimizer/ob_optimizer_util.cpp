@@ -8678,3 +8678,21 @@ int ObOptimizerUtil::generate_pseudo_trans_info_expr(ObOptimizerContext &opt_ctx
   }
   return ret;
 }
+
+int ObOptimizerUtil::is_in_range_optimization_enabled(const ObGlobalHint &global_hint, ObSQLSessionInfo *session_info, bool &is_enabled)
+{
+  int ret = OB_SUCCESS;
+  bool has_hint = false;
+  bool is_hint_enabled = false;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(ObOptParamHint::ENABLE_IN_RANGE_OPTIMIZATION, is_hint_enabled, has_hint))) {
+    LOG_WARN("failed to check has opt param", K(ret));
+  } else if (has_hint) {
+    is_enabled = is_hint_enabled;
+  } else {
+    is_enabled = session_info->is_in_range_optimization_enabled();
+  }
+  return ret;
+}

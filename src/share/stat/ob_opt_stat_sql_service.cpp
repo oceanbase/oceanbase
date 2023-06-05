@@ -118,7 +118,7 @@
                                                                       "b_endpoint_value," \
                                                                       "endpoint_repeat_cnt) VALUES "
 
-#define DELETE_HISTOGRAM_STAT_SQL "DELETE FROM __all_histogram_stat WHERE "
+#define DELETE_HISTOGRAM_STAT_SQL "DELETE /*+opt_param('enable_in_range_optimization','true')*/ FROM __all_histogram_stat WHERE "
 #define DELETE_COL_STAT_SQL "DELETE FROM __all_column_stat WHERE "
 #define DELETE_TAB_STAT_SQL "DELETE FROM __all_table_stat WHERE "
 #define UPDATE_HISTOGRAM_TYPE_SQL "UPDATE __all_column_stat SET histogram_type = 0, bucket_cnt = 0 WHERE"
@@ -2054,7 +2054,8 @@ int ObOptStatSqlService::fetch_table_rowcnt(const uint64_t tenant_id,
                            ObSchemaUtils::get_real_table_mappings_tid(table_id) : table_id;
   if (OB_FAIL(gen_tablet_list_str(all_tablet_ids, all_ls_ids, tablet_list_str, tablet_ls_list_str))) {
     LOG_WARN("failed to gen tablet list str", K(ret));
-  } else if (OB_FAIL(raw_sql.append_fmt("select tablet_id, max(row_count) from (select cast(tablet_id as unsigned) as tablet_id, cast(inserts - deletes as signed) as row_count "\
+  } else if (OB_FAIL(raw_sql.append_fmt("select /*+opt_param('enable_in_range_optimization','true')*/ tablet_id, max(row_count) from "\
+                                         "(select cast(tablet_id as unsigned) as tablet_id, cast(inserts - deletes as signed) as row_count "\
                                          "from %s where tenant_id = %lu and table_id = %lu and tablet_id in %s union all "\
                                          "select cast(tablet_id as unsigned) as tablet_id, cast(row_count as signed) as row_count from %s, "\
                                          "(select frozen_scn from %s order by frozen_scn desc limit 1) where "\

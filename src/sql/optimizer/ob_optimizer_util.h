@@ -1445,6 +1445,7 @@ public:
                                              const common::ObString &table_name,
                                              ObOpPseudoColumnRawExpr *&expr);
 
+  static int is_in_range_optimization_enabled(const ObGlobalHint &global_hint, ObSQLSessionInfo *session_info, bool &is_enabled);
 private:
   //disallow construct
   ObOptimizerUtil();
