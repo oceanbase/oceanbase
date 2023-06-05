@@ -318,10 +318,6 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
           }
         } catch (...) {
           ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = old_schema_guard;
-          if (NULL != mem_context) {
-            DESTROY_CONTEXT(mem_context);
-            mem_context = NULL;
-          }
           throw;
         }
         if (OB_SUCC(ret)) {
