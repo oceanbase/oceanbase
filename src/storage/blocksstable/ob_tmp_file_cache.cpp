@@ -1004,6 +1004,10 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id, ObTm
             STORAGE_LOG(INFO, "succeed to wash a block", K(*wash_block));
           }
         }
+
+        if (OB_FAIL(ret)) {
+          mb_handle.reset();
+        }
       } else {
         STORAGE_LOG(WARN, "this block has been destoryed", K(*wash_block));
       }
