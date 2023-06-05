@@ -1858,7 +1858,8 @@ int ObTablet::create_memtable(const int64_t schema_version,
   } else if (FALSE_IT(time_guard.click("inner_create_memtable"))) {
   } else if (OB_FAIL(table_store_.update_memtables())) {
     LOG_ERROR("failed to append new memtable to table store", K(ret), KPC(this));
-    abort();
+    ob_usleep(1000 * 1000);
+    ob_abort();
   } else {
     time_guard.click("update_memtables");
   }
