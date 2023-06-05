@@ -8976,6 +8976,52 @@ int ObPLResolver::init_udf_info_of_accessidents(ObIArray<ObObjAccessIdent> &acce
   return ret;
 }
 
+int ObPLResolver::mock_self_param(bool need_rotate,
+                                  ObIArray<ObObjAccessIdent> &obj_access_idents,
+                                  ObIArray<ObObjAccessIdx> &self_access_idxs,
+                                  ObPLFunctionAST &func)
+{
+  int ret = OB_SUCCESS;
+  uint64_t acc_cnt = obj_access_idents.count();
+  const ObUserDefinedType *user_type = NULL;
+  bool need_mock = true;
+  ObRawExpr *self_arg = NULL;
+  if (OB_SUCC(ret) && acc_cnt > 1) {
+    OZ (current_block_->get_namespace().get_pl_data_type_by_name(resolve_ctx_,
+                                    acc_cnt > 2 ? obj_access_idents.at(acc_cnt - 3).access_name_ : ObString(""),
+                                    ObString(""),
+                                    obj_access_idents.at(acc_cnt - 2).access_name_,
+                                    user_type), ret, obj_access_idents);
+    if (OB_SUCC(ret) && OB_NOT_NULL(user_type)) {
+      need_mock = false;
+    }
+    ret = OB_SUCCESS;
+  }
+  if (need_mock) {
+    if (self_access_idxs.at(self_access_idxs.count() - 1).is_udf_type()) {
+      OX (self_arg = self_access_idxs.at(self_access_idxs.count() - 1).get_sysfunc_);
+      CK (OB_NOT_NULL(self_arg));
+    } else {
+      OZ (make_var_from_access(self_access_idxs,
+                               expr_factory_,
+                               &resolve_ctx_.session_info_,
+                               &resolve_ctx_.schema_guard_,
+                               current_block_->get_namespace(),
+                               self_arg), K(obj_access_idents), K(self_access_idxs));
+      OZ (func.add_obj_access_expr(self_arg));
+    }
+    OZ (func.add_expr(self_arg));
+    OZ (obj_access_idents.at(acc_cnt - 1).params_.push_back(std::make_pair(self_arg, 0)));
+    if (OB_SUCC(ret) && need_rotate) {
+      std::rotate(obj_access_idents.at(acc_cnt - 1).params_.begin(),
+                  obj_access_idents.at(acc_cnt - 1).params_.begin()
+                    + obj_access_idents.at(acc_cnt - 1).params_.count() - 1,
+                  obj_access_idents.at(acc_cnt - 1).params_.end());
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::resolve_inner_call(
   const ParseNode *parse_tree, ObPLStmt *&stmt, ObPLFunctionAST &func)
 {
@@ -9036,47 +9082,6 @@ int ObPLResolver::resolve_inner_call(
         OZ (self_access_idxs.assign(access_idxs));
       }
     }
-
-#define MOCK_SELF_PARAM(need_rotate) \
-do { \
-  uint64_t acc_cnt = obj_access_idents.count(); \
-  const ObUserDefinedType *user_type = NULL; \
-  bool need_mock = true; \
-  ObRawExpr *self_arg = NULL; \
-  if (OB_SUCC(ret) && acc_cnt > 1) { \
-    OZ (current_block_->get_namespace().get_pl_data_type_by_name(resolve_ctx_, \
-                                    acc_cnt > 2 ? obj_access_idents.at(acc_cnt - 3).access_name_ : ObString(""), \
-                                    ObString(""), \
-                                    obj_access_idents.at(acc_cnt - 2).access_name_, \
-                                    user_type), ret, obj_access_idents); \
-    if (OB_SUCC(ret) && OB_NOT_NULL(user_type)) { \
-      need_mock = false; \
-    } \
-    ret = OB_SUCCESS; \
-  } \
-  if (need_mock) { \
-    if (self_access_idxs.at(self_access_idxs.count() - 1).is_udf_type()) { \
-      OX (self_arg = self_access_idxs.at(self_access_idxs.count() - 1).get_sysfunc_); \
-      CK (OB_NOT_NULL(self_arg)); \
-    } else { \
-      OZ (make_var_from_access(self_access_idxs, \
-                               expr_factory_, \
-                               &resolve_ctx_.session_info_, \
-                               &resolve_ctx_.schema_guard_, \
-                               current_block_->get_namespace(), \
-                               self_arg), K(obj_access_idents), K(self_access_idxs)); \
-      OZ (func.add_obj_access_expr(self_arg)); \
-    } \
-    OZ (func.add_expr(self_arg)); \
-    OZ (obj_access_idents.at(acc_cnt - 1).params_.push_back(std::make_pair(self_arg, 0))); \
-    if (OB_SUCC(ret) && need_rotate) { \
-      std::rotate(obj_access_idents.at(acc_cnt - 1).params_.begin(), \
-                  obj_access_idents.at(acc_cnt - 1).params_.begin()  \
-                    + obj_access_idents.at(acc_cnt - 1).params_.count() - 1, \
-                  obj_access_idents.at(acc_cnt - 1).params_.end()); \
-    } \
-  } \
-} while(0)
 
     if (OB_SUCC(ret)) {
       int64_t idx_cnt = access_idxs.count();
@@ -9155,7 +9160,7 @@ do { \
                 } else if (routine_info->is_udt_routine()
                            && !(routine_info->is_udt_static_routine() || routine_info->is_udt_cons())) {
                   if (idx_cnt > 1 && idents_cnt > 1) {
-                    MOCK_SELF_PARAM(0 == self_param_pos);
+                    OZ (mock_self_param(0 == self_param_pos, obj_access_idents, self_access_idxs, func));
                   } else {
                     ObConstRawExpr *question_expr = NULL;
                     OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, question_expr));
@@ -9247,7 +9252,7 @@ do { \
                 // member procedure can be used as static procedure, if pass correct argument
                 if (OB_NOT_NULL(self_param)) {
                   CK (0 == self_param_pos || self_param_pos == routine_params.count() - 1);
-                  MOCK_SELF_PARAM(0 == self_param_pos);
+                  OZ(mock_self_param(0 == self_param_pos, obj_access_idents, self_access_idxs, func));
                 }
               }
             }
@@ -9359,7 +9364,7 @@ do { \
       }
     }
   }
-#undef MOCK_SELF_PARAM
+
   return ret;
 }
 

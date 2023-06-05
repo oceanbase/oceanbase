@@ -318,6 +318,10 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
           }
         } catch (...) {
           ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = old_schema_guard;
+          if (NULL != mem_context) {
+            DESTROY_CONTEXT(mem_context);
+            mem_context = NULL;
+          }
           throw;
         }
         if (OB_SUCC(ret)) {
@@ -2420,6 +2424,21 @@ int ObPLExecState::final(int ret)
         }
         if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("faild close cursor. ", K(tmp_ret), K(cursor_id));
+        }
+      }
+    }
+  }
+  // inner call inout参数会深拷一份, 执行异常时需要释放
+  for (int64_t i = 0; OB_SUCCESS != ret && inner_call_ && !func_.is_function() && i < func_.get_arg_count(); ++i) {
+    if (OB_NOT_NULL(ctx_.nocopy_params_) &&
+        ctx_.nocopy_params_->count() > i &&
+        OB_INVALID_INDEX == ctx_.nocopy_params_->at(i) &&
+        func_.get_variables().at(i).is_composite_type() &&
+        i < get_params().count() && get_params().at(i).is_ext()) {
+      if (func_.get_in_args().has_member(i) && func_.get_out_args().has_member(i)) {
+        if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
+            ctx_.exec_ctx_->get_my_session()))) {
+          LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
         }
       }
     }
