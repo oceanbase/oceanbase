@@ -1394,8 +1394,11 @@ public:
 
   static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2);
   static int add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
-                                     ObRawExpr *expr,
-                                     bool is_negative = false);
+                                       ObRawExpr *expr,
+                                       bool is_negative = false);
+  static int add_equal_expr_value_constraint(ObTransformerCtx *trans_ctx,
+                                             ObRawExpr *left,
+                                             ObRawExpr *right);
   static bool check_objparam_negative(const ObObjParam &obj1);
   static int add_param_bool_constraint(ObTransformerCtx *ctx,
                                        ObRawExpr *bool_expr,
@@ -1406,7 +1409,6 @@ public:
                                         bool need_query_compare,
                                         ObTransformerCtx *tran_ctx,
                                         bool in_add_expr);
-  static int add_constraint_for_groupby_expr(ObTransformerCtx *trans_ctx, ObSelectStmt *select_stmt, ObRawExpr* groupby_expr, ObRawExpr* old_expr);
 
   static int add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
                                            ObIArray<ObRawExpr *> &not_null_exprs);

@@ -6184,6 +6184,35 @@ int ObRawExprUtils::build_const_bool_expr(ObRawExprFactory *expr_factory, ObRawE
   return ret;
 }
 
+int ObRawExprUtils::build_ora_decode_expr(ObRawExprFactory *expr_factory,
+                                          const ObSQLSessionInfo &session_info,
+                                          ObRawExpr *&expr,
+                                          ObIArray<ObRawExpr *> &params_exprs)
+{
+  int ret = OB_SUCCESS;
+  expr = NULL;
+  ObSysFunRawExpr *ora_decode = NULL;
+  if (OB_ISNULL(expr_factory) || params_exprs.count() < 3) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), KP(expr_factory), K(params_exprs.count()));
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_ORA_DECODE, ora_decode))) {
+    LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_ISNULL(ora_decode)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new expr is NULL", K(ret), KP(ora_decode));
+  } else if (OB_FAIL(append(ora_decode->get_param_exprs(), params_exprs))) {
+    LOG_WARN("failed to append into ora_decode param exprs", K(ret));
+  } else {
+    ora_decode->set_func_name(ObString::make_string(N_ORA_DECODE));
+    if (OB_FAIL(ora_decode->formalize(&session_info))) {
+      LOG_WARN("failed to formalize ora_decode", K(ret));
+    } else {
+      expr = ora_decode;
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker)
 {
   int ret = OB_SUCCESS;
