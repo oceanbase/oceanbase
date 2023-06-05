@@ -58,6 +58,9 @@ int ObExprXmlAttributes::calc_result_typeN(ObExprResType &type,
           ret = OB_ERR_INVALID_XML_DATATYPE;
           LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "-", ob_obj_type_str(types_stack[i].get_type()));
           LOG_WARN("invalid type, expect char", K(ret), K(types_stack[i].get_type()));
+        } else if (ob_is_nstring(types_stack[i].get_type())) {
+          types_stack[i].set_calc_type(ObVarcharType);
+          types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         } else if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
           types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
