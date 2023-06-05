@@ -191,6 +191,8 @@ public:
   virtual void unblock_all_net(const int64_t id);
   virtual void block_net(const int64_t id1, const int64_t id2, const bool is_single_direction = false);
   virtual void unblock_net(const int64_t id1, const int64_t id2);
+  virtual void block_pcode(const int64_t id1, const ObRpcPacketCode &pcode);
+  virtual void unblock_pcode(const int64_t id1, const ObRpcPacketCode &pcode);
   virtual void set_rpc_loss(const int64_t id1, const int64_t id2, const int loss_rate);
   virtual void reset_rpc_loss(const int64_t id1, const int64_t id2);
   virtual int submit_log(PalfHandleImplGuard &leader, int count, int id);
