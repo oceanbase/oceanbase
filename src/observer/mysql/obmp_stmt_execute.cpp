@@ -1072,6 +1072,22 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
                         NULL/*result*/, &ret, NULL/*func*/, true);
       if (OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))) {
         LOG_WARN("open cursor fail. ", K(ret), K(stmt_id_));
+        if (!THIS_WORKER.need_retry()) {
+          int cli_ret = OB_SUCCESS;
+          retry_ctrl_.test_and_save_retry_state(
+            gctx_, ctx_, result, ret, cli_ret, is_arraybinding_ /*ararybinding only local retry*/);
+          if (OB_ERR_PROXY_REROUTE == ret) {
+            LOG_DEBUG("run stmt_query failed, check if need retry",
+                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
+          } else {
+            LOG_WARN("run stmt_query failed, check if need retry",
+                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
+          }
+          ret = cli_ret;
+        }
+        if (OB_ERR_PROXY_REROUTE == ret && !is_arraybinding_) {
+          need_response_error = true;
+        }
       }
     }
     /*

@@ -453,6 +453,23 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       get_ctx().cur_sql_ = sql_;
       if (OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))) {
         LOG_WARN("cursor open faild.", K(cursor->get_id()));
+        // select do not support arraybinding
+        if (!THIS_WORKER.need_retry()) {
+          int cli_ret = OB_SUCCESS;
+          retry_ctrl.test_and_save_retry_state(
+            gctx_, ctx, result, ret, cli_ret, get_arraybounding() /*ararybinding only local retry*/);
+          if (OB_ERR_PROXY_REROUTE == ret) {
+            LOG_DEBUG("run stmt_query failed, check if need retry",
+                      K(ret), K(cli_ret), K(retry_ctrl.need_retry()), K_(stmt_id));
+          } else {
+            LOG_WARN("run stmt_query failed, check if need retry",
+                    K(ret), K(cli_ret), K(retry_ctrl.need_retry()), K_(stmt_id));
+          }
+          ret = cli_ret;
+        }
+        if (OB_ERR_PROXY_REROUTE == ret && !get_arraybounding()) {
+          need_response_error = true;
+        }
       } else {
         int64_t row_num = 0;
         bool is_fetched = false;
