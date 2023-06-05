@@ -29,7 +29,12 @@ int ObAllVirtualHADiagnose::inner_get_next_row(common::ObNewRow *&row)
       int ret = OB_SUCCESS;
       storage::DiagnoseInfo diagnose_info;
       if (OB_FAIL(ls.diagnose(diagnose_info))) {
-        SERVER_LOG(WARN, "ls stat diagnose info failed", K(ret), K(ls));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          SERVER_LOG(WARN, "ls may have been removed, just skip", K(ls));
+          ret = OB_SUCCESS;
+        } else {
+          SERVER_LOG(WARN, "ls stat diagnose info failed", K(ret), K(ls));
+        }
       } else if (OB_FAIL(insert_stat_(diagnose_info))) {
         SERVER_LOG(WARN, "insert stat failed", K(ret), K(diagnose_info));
       } else if (OB_FAIL(scanner_.add_row(cur_row_))) {

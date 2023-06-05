@@ -1212,6 +1212,22 @@ int ObSimpleLogClusterTestEnv::wait_lsn_until_flushed(const LSN &lsn, PalfHandle
   return ret;
 }
 
+int ObSimpleLogClusterTestEnv::wait_lsn_until_submitted(const LSN &lsn, PalfHandleImplGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t print_log_time = OB_INVALID_TIMESTAMP;
+  LSN max_submit_end_lsn = guard.palf_handle_impl_->sw_.last_submit_end_lsn_;
+  while (lsn > max_submit_end_lsn) {
+    usleep(5 * 1000L);
+    if (palf_reach_time_interval(1 * 1000 * 1000L, print_log_time)) {
+      PALF_LOG(WARN, "wait_lsn_until_submitted", K(ret), K(max_submit_end_lsn), K(lsn));
+    }
+    max_submit_end_lsn = guard.palf_handle_impl_->sw_.last_submit_end_lsn_;
+  }
+  return ret;
+}
+
 void ObSimpleLogClusterTestEnv::wait_all_replcias_log_sync(const int64_t palf_id)
 {
   std::vector<PalfHandleImplGuard*> palf_list;

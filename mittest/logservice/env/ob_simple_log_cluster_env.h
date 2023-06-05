@@ -232,6 +232,8 @@ public:
   virtual int get_palf_env(const int64_t server_idx, PalfEnv *&palf_env);
   virtual int wait_until_has_committed(PalfHandleImplGuard &leader, const LSN &lsn);
   virtual int wait_lsn_until_flushed(const LSN &lsn, PalfHandleImplGuard &guard);
+  //wait until all log task pushed into queue of LogIOWorker
+  virtual int wait_lsn_until_submitted(const LSN &lsn, PalfHandleImplGuard &guard);
   virtual void wait_all_replcias_log_sync(const int64_t palf_id);
   int get_middle_scn(const int64_t log_num, PalfHandleImplGuard &leader, share::SCN &mid_scn, LogEntryHeader &log_entry_header);
   void switch_append_to_raw_write(PalfHandleImplGuard &leader, int64_t &mode_version);

@@ -65,6 +65,7 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_majority)
   loc_cb.leader_ = get_cluster()[leader_idx]->get_addr();
   std::vector<PalfHandleImplGuard*> palf_list;
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  ASSERT_EQ(5, palf_list.size());
 
   const int64_t follower_B_idx = (leader_idx + 1);
   const int64_t follower_C_idx = (leader_idx + 2);
@@ -106,6 +107,8 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_majority)
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
   max_lsn = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
+  wait_lsn_until_flushed(max_lsn, *palf_list[1]);
+  wait_lsn_until_flushed(max_lsn, *palf_list[2]);
   int64_t break_ts = common::ObClockGenerator::getClock();
   int64_t used_time = break_ts- cur_ts;
   PALF_LOG(INFO, "[CASE 1] ", K(used_time));

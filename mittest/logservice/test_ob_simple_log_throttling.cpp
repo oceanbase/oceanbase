@@ -48,7 +48,7 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_sys)
   SET_CASE_LOG_FILE(TEST_NAME, "log_throttling_sys_log_stream");
   int ret = OB_SUCCESS;
   const int64_t id = 1;
-  PALF_LOG(INFO, "begin test throttlin_basic", K(id));
+  PALF_LOG(INFO, "begin test throttling_sy", K(id));
   int64_t leader_idx = 0;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
   PalfHandleImplGuard leader;
@@ -249,9 +249,9 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   ASSERT_EQ(5, throttle.handled_seq_);
   leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 1 * MB));
-  //wait all flush log tasks pushed into queue of LogIOWorker
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
-  usleep(1000 * 1000);
+  //wait all flush log tasks pushed into queue of LogIOWorker
+  wait_lsn_until_submitted(max_lsn_1, leader);
   IOTaskCond io_task_cond_2(id, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_2));
   ASSERT_EQ(7, throttle.submitted_seq_);

@@ -341,9 +341,9 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_leader)
 TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_follower)
 {
   oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_1_0_0;
-  SET_CASE_LOG_FILE(TEST_NAME, "arb_throttling_minor_leader");
+  SET_CASE_LOG_FILE(TEST_NAME, "arb_throttling_minor_follower");
   int ret = OB_SUCCESS;
-  PALF_LOG(INFO, "begin arb_throttling_minor_leader");
+  PALF_LOG(INFO, "begin arb_throttling_minor_follower");
 	int64_t leader_idx = 0;
   int64_t arb_replica_idx = -1;
   PalfHandleImplGuard leader;
@@ -403,8 +403,8 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_follower)
   usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 1 * MB));
 
-  palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
-  usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
+//palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
+ // usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
   PALF_LOG(INFO, "[CASE 3.2] MINOR_FOLLOWER upgrade");
   leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   palf_list[another_f_idx]->palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
