@@ -2414,7 +2414,9 @@ int ObPartTransCtx::generate_prepare_version_()
           TRANS_LOG(WARN, "invalid dup_table_follower_max_read_version_", K(ret),
                     K(dup_table_follower_max_read_version_), KPC(this));
         } else {
-          exec_info_.prepare_version_ = SCN::max(gts, local_max_read_version);
+          // should not overwrite the prepare version of other participants
+          exec_info_.prepare_version_ = SCN::max(SCN::max(gts, local_max_read_version),
+                                                 exec_info_.prepare_version_);
           exec_info_.prepare_version_ =
               SCN::max(exec_info_.prepare_version_, dup_table_follower_max_read_version_);
           TRANS_LOG(INFO,
