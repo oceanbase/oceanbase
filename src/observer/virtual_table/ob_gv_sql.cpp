@@ -280,9 +280,14 @@ int ObGVSql::fill_cells(const ObCacheObject* cache_obj, const ObPlanCache& plan_
       }
       case share::ALL_VIRTUAL_PLAN_STAT_CDE::PARAM_INFOS: {
         if (cache_obj->is_sql_crsr()) {
-          cells[i].set_lob_value(
-              ObLongTextType, plan->stat_.param_infos_.ptr(), static_cast<int32_t>(plan->stat_.param_infos_.length()));
-          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          ObString param_info_lob_str;
+          if (OB_FAIL(ob_write_string(*allocator_, plan->stat_.param_infos_, param_info_lob_str))) {
+            SERVER_LOG(ERROR, "copy param_infos failed", K(ret));
+          } else {
+            cells[i].set_lob_value(
+                ObLongTextType, param_info_lob_str.ptr(), static_cast<int32_t>(param_info_lob_str.length()));
+            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
         } else {
           cells[i].set_null();
         }
