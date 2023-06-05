@@ -259,7 +259,7 @@ TEST_F(TestObSimpleLogClusterAccessMode, prev_log_slide)
   LogConfigVersion config_version;
   const int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
   const int64_t leader_epoch = leader.palf_handle_impl_->state_mgr_.get_leader_epoch();
-  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, leader_epoch, config_version));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, leader_epoch, config_version));
   const LogConfigMeta new_config_meta = leader.palf_handle_impl_->config_mgr_.log_ms_meta_;
   EXPECT_EQ(config_meta.curr_.config_version_, new_config_meta.curr_.config_version_);
   // wait prepare req reaches majority

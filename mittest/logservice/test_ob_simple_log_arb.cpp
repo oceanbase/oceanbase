@@ -388,9 +388,10 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_arb_with_highest_version)
   sleep(2);
 
   LogConfigChangeArgs args(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 0, ADD_LEARNER);
-  const int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
-  const int64_t election_epoch = leader.palf_handle_impl_->state_mgr_.get_leader_epoch();
+  int64_t proposal_id = 0;
+  int64_t election_epoch = 0;
   LogConfigVersion config_version;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(proposal_id, election_epoch, args.type_));
   EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version));
   // learner list and state_ has been changed
   EXPECT_TRUE(config_version.is_valid());
@@ -470,9 +471,10 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_defensive)
 
   // add a member, do not allow to append logs until config log reaches majority
   LogConfigChangeArgs args(added_member, 3, ADD_MEMBER);
-  const int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
-  const int64_t election_epoch = leader.palf_handle_impl_->state_mgr_.get_leader_epoch();
+  int64_t proposal_id = 0;
+  int64_t election_epoch = 0;
   LogConfigVersion config_version;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(proposal_id, election_epoch, args.type_));
   EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version));
   // do not allow to append log when changing config with arb
   EXPECT_TRUE(leader.palf_handle_impl_->state_mgr_.is_changing_config_with_arb());
@@ -654,9 +656,10 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
   sleep(2);
 
   LogConfigChangeArgs args(ObMember(palf_list[another_f_idx]->palf_handle_impl_->self_, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
-  const int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
-  const int64_t election_epoch = leader.palf_handle_impl_->state_mgr_.get_leader_epoch();
+  int64_t proposal_id = 0;
+  int64_t election_epoch = 0;
   LogConfigVersion config_version;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(proposal_id, election_epoch, args.type_));
   EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version));
 
   // leader appended config meta, but did not apply config meta

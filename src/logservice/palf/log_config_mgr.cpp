@@ -766,8 +766,8 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args,
         "role", state_mgr_->get_role(), "state", state_mgr_->get_state());
   } else if (false == mode_mgr_->can_do_paxos_accept()) {
     // do not allow chagne_config when ModeMgr is in prepare state
-    ret = OB_EAGAIN;
-    PALF_LOG(WARN, "is changing access_mode, try again", KR(ret), K_(palf_id), K_(self),
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "is changing access_mode, try again", KR(ret), K_(palf_id), K_(self),
         "role", state_mgr_->get_role(), "state", state_mgr_->get_state());
   } else if (OB_FAIL(check_config_version_matches_state_(args.type_, config_version))) {
     PALF_LOG(WARN, "config_version does not match with state, try again", KR(ret), K_(palf_id), K_(self),
@@ -1925,12 +1925,21 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
   int64_t unused_id = INT64_MAX;
   bool unused_bool = false;
 
+  int64_t curr_ts_us = common::ObTimeUtility::current_time();
   constexpr int64_t conn_timeout_us = 3 * 1000 * 1000L;  // 3s
   constexpr bool need_remote_check = false;
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
   LSN prev_log_end_lsn;
+  start_wait_barrier_time_us_ = (OB_INVALID_TIMESTAMP == start_wait_barrier_time_us_)? \
+      curr_ts_us: start_wait_barrier_time_us_;
   if (new_config_info.log_sync_memberlist_.get_member_number() == 0) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (curr_ts_us - start_wait_barrier_time_us_ > MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION &&
+      args.type_ != LogConfigChangeType::STARTWORKING) {
+    ret = OB_LOG_NOT_SYNC;
+    PALF_LOG(WARN, "waiting for log barrier timeout, skip", KR(ret), K_(palf_id), K_(self),
+        K_(start_wait_barrier_time_us), K(first_committed_end_lsn), K(prev_log_end_lsn));
+    start_wait_barrier_time_us_ = curr_ts_us;
   } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_config_info, need_remote_check,
       conn_timeout_us, first_committed_end_lsn, unused_bool, unused_lsn, unused_id))) {
     PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_config_info));
@@ -1943,7 +1952,7 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
   } else if (FALSE_IT(ret = (first_committed_end_lsn >= prev_log_end_lsn)? OB_SUCCESS: OB_EAGAIN)) {
   } else if (OB_EAGAIN == ret) {
     // committed_end_lsn do not change during 2s, skip the reconfiguration
-    const int64_t curr_ts_us = common::ObTimeUtility::current_time();
+    curr_ts_us = common::ObTimeUtility::current_time();
     if (OB_INVALID_TIMESTAMP == last_wait_barrier_time_us_) {
       last_wait_committed_end_lsn_ = first_committed_end_lsn;
       last_wait_barrier_time_us_ = curr_ts_us;
@@ -1958,15 +1967,6 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
         last_wait_committed_end_lsn_ = first_committed_end_lsn;
         last_wait_barrier_time_us_ = curr_ts_us;
       }
-    }
-    if (OB_INVALID_TIMESTAMP == start_wait_barrier_time_us_) {
-      start_wait_barrier_time_us_ = curr_ts_us;
-    } else if (curr_ts_us - start_wait_barrier_time_us_ > MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION &&
-        args.type_ != LogConfigChangeType::STARTWORKING) {
-      ret = OB_LOG_NOT_SYNC;
-      PALF_LOG(WARN, "waiting for log barrier timeout, skip", KR(ret), K_(palf_id), K_(self),
-          K_(start_wait_barrier_time_us), K(first_committed_end_lsn), K(prev_log_end_lsn));
-      start_wait_barrier_time_us_ = curr_ts_us;
     }
   }
   PALF_LOG(INFO, "waiting for log barrier", K(ret), K_(palf_id), K_(self),
