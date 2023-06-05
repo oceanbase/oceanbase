@@ -53,6 +53,8 @@ typedef llvm::IRBuilder<> ObIRBuilder;
 typedef llvm::Module ObIRModule;
 typedef llvm::ExecutionEngine ObLLVMExecEngine;
 
+#define OB_LLVM_MALLOC_GUARD(mod) lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID() == OB_INVALID_TENANT_ID ? OB_SYS_TENANT_ID : MTL_ID(), mod))
+
 #if !defined(__aarch64__)
 namespace llvm {
   struct X86MemoryFoldTableEntry;
@@ -487,7 +489,7 @@ int ObLLVMSwitch::add_case(const ObLLVMValue &value, ObLLVMBasicBlock &block)
 
 ObLLVMHelper::~ObLLVMHelper()
 {
-  lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlJit"));
+  OB_LLVM_MALLOC_GUARD("PlJit");
   final();
   if (nullptr != jit_) {
     jit_->~ObOrcJit();
@@ -497,8 +499,8 @@ ObLLVMHelper::~ObLLVMHelper()
 
 int ObLLVMHelper::init()
 {
-  lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlJit"));
   int ret = OB_SUCCESS;
+  OB_LLVM_MALLOC_GUARD("PlJit");
 
   if (nullptr == (jc_ = OB_NEWx(core::JitContext, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -519,7 +521,7 @@ int ObLLVMHelper::init()
 
 void ObLLVMHelper::final()
 {
-  lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlJit"));
+  OB_LLVM_MALLOC_GUARD("PlJit");
   if (nullptr != jc_) {
     jc_->~JitContext();
     allocator_.free(jc_);
@@ -548,7 +550,8 @@ int ObLLVMHelper::initialize()
 int ObLLVMHelper::init_llvm() {
   int ret = OB_SUCCESS;
 
-  ObArenaAllocator alloc("PlJit", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  OB_LLVM_MALLOC_GUARD("PlJit");
+  ObArenaAllocator alloc("PlJit", OB_MALLOC_NORMAL_BLOCK_SIZE, OB_SYS_TENANT_ID);
   ObLLVMHelper helper(alloc);
   ObLLVMDIHelper di_helper(alloc);
   static char init_func_name[] = "pl_init_func";
@@ -581,18 +584,18 @@ int ObLLVMHelper::init_llvm() {
 void ObLLVMHelper::compile_module(bool optimization)
 {
   if (optimization) {
-    lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlCodeGen"));
+    OB_LLVM_MALLOC_GUARD("PlCodeGen");
     jc_->optimize();
     LOG_INFO("================Optimized LLVM Module================");
     dump_module();
   }
-  lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlJit"));
+  OB_LLVM_MALLOC_GUARD("PlJit");
   jc_->compile();
 }
 
 void ObLLVMHelper::dump_module()
 {
-  lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlCodeGen"));
+  OB_LLVM_MALLOC_GUARD("PlCodeGen");
   if (OB_ISNULL(jc_)) {
     //do nothing
   } else {
@@ -605,7 +608,7 @@ void ObLLVMHelper::dump_module()
 
 void ObLLVMHelper::dump_debuginfo()
 {
-  lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlCodeGen"));
+  OB_LLVM_MALLOC_GUARD("PlCodeGen");
   if (OB_ISNULL(jit_) || jit_->get_debug_info_size() <= 0) {
     // do nothing ...
   } else {
@@ -615,7 +618,7 @@ void ObLLVMHelper::dump_debuginfo()
 
 int ObLLVMHelper::verify_function(ObLLVMFunction &function)
 {
-  lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlCodeGen"));
+  OB_LLVM_MALLOC_GUARD("PlCodeGen");
   int ret = OB_SUCCESS;
   if (OB_ISNULL(jc_)) {
     ret = OB_NOT_INIT;
@@ -632,7 +635,7 @@ int ObLLVMHelper::verify_function(ObLLVMFunction &function)
 
 int ObLLVMHelper::verify_module()
 {
-  lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID(), "PlCodeGen"));
+  OB_LLVM_MALLOC_GUARD("PlCodeGen");
   int ret = OB_SUCCESS;
   std::string verify_error;
   llvm::raw_string_ostream verify_raw_os(verify_error);
@@ -648,7 +651,7 @@ int ObLLVMHelper::verify_module()
 
 uint64_t ObLLVMHelper::get_function_address(const ObString &name)
 {
-  lib::ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "PlJit"));
+  OB_LLVM_MALLOC_GUARD("PlJit");
   return jc_->TheJIT->get_function_address(std::string(name.ptr(), name.length()));
 }
 
