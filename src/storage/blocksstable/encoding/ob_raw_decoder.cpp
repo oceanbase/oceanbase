@@ -558,7 +558,7 @@ int ObRawDecoder::pushdown_operator(
     case sql::WHITE_OP_LE: {
       int32_t fix_len_tag = 0;
       bool is_signed_data = false;
-      if (fast_filter_valid(col_ctx, fix_len_tag, is_signed_data)) {
+      if (fast_filter_valid(col_ctx, filter.get_objs().at(0).meta_.get_type(), fix_len_tag, is_signed_data)) {
         if (OB_FAIL(fast_comparison_operator(col_ctx, col_data,
           filter, fix_len_tag, is_signed_data, result_bitmap))) {
           LOG_WARN("Failed on fast comparison operator", K(ret), K(col_ctx));
@@ -596,13 +596,17 @@ int ObRawDecoder::pushdown_operator(
 
 bool ObRawDecoder::fast_filter_valid(
     const ObColumnDecoderCtx &ctx,
+    const ObObjType &filter_value_type,
     int32_t &fix_length_tag,
     bool &is_signed_data) const
 {
   bool valid = !ctx.has_extend_value()
               && !ctx.is_bit_packing()
               && ctx.is_fix_length()
-              && raw_fix_fast_filter_funcs_inited;
+              && raw_fix_fast_filter_funcs_inited
+              && ctx.col_header_->get_store_obj_type() == filter_value_type;
+  // vectorized binary filter on situation that filter object type different with
+  // column stored type not supported yet
   if (valid) {
     int64_t fix_len = ctx.col_header_->length_;
     if (fix_len != 1 && fix_len != 2 && fix_len != 4 && fix_len != 8) {

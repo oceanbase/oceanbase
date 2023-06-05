@@ -520,9 +520,12 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
     need_restore_session = true;
   }
   if (OB_SUCC(ret)) {
+    //do not trace dynamic sample sql execute
+    STOP_OPT_TRACE;
     if (OB_FAIL(do_estimate_rowcount(session_info, raw_sql_str))) {
       LOG_WARN("failed to do estimate rowcount", K(ret));
     }
+    RESUME_OPT_TRACE;
   }
   //regardless of whether the above behavior is successful or not, we need to restore session.
   if (need_restore_session) {

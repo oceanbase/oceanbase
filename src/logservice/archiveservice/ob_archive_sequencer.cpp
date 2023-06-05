@@ -90,7 +90,7 @@ void ObArchiveSequencer::destroy()
 int ObArchiveSequencer::start()
 {
   int ret = OB_SUCCESS;
-  ObThreadPool::set_run_wrapper(MTL_CTX(), lib::ThreadCGroup::BACK_CGROUP);
+  ObThreadPool::set_run_wrapper(MTL_CTX());
   if (OB_UNLIKELY(! inited_)) {
     ARCHIVE_LOG(ERROR, "ObArchiveSequencer not init");
     ret = OB_NOT_INIT;

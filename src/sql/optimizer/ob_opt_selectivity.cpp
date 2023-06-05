@@ -3833,7 +3833,10 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
                                                                  dtc_params,
                                                                  ctx.get_opt_ctx().get_exec_ctx(),
                                                                  NULL,
-                                                                 params))) {
+                                                                 params,
+                                                                 false,
+                                                                 true,
+                                                                 ctx.get_session_info()->is_in_range_optimization_enabled()))) {
     LOG_WARN("failed to preliminary extract query range", K(ret));
   } else if (!query_range.need_deep_copy()) {
     if (OB_FAIL(query_range.direct_get_tablet_ranges(allocator, *exec_ctx, ranges,

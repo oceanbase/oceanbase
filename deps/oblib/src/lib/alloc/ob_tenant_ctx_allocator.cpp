@@ -430,7 +430,6 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
                 attr.tenant_id_, attr.ctx_id_,
                 get_global_ctx_info().get_ctx_name(attr.ctx_id_),
                 ta.get_hold(), ta.get_limit(), ta.get_tenant_hold(), ta.get_tenant_limit());
-    ObMallocAllocator::get_instance()->print_tenant_memory_usage(attr.tenant_id_);
     // 49 is the user defined signal to dump memory
     raise(49);
   }

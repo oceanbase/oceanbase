@@ -271,46 +271,49 @@ TEST(TG, async_task_queue)
   ASSERT_FALSE(TG_EXIST(tg_id));
 }
 
-TEST(TG, timer_group)
+class MapQueueThreadHandler : public TGTaskHandler
+{
+public:
+  void handle(void *task) override
+  {}
+  void handle(void *task, volatile bool &is_stopped) override
+  {
+    UNUSED(task);
+    UNUSED(is_stopped);
+    ++handle_count_;
+    ::usleep(50000);
+  }
+
+  int64_t handle_count_ = 0;
+};
+
+TEST(TG, map_queue_thread)
 {
   int tg_id = TGDefIDs::TEST6;
-  TestTimerTask tasks[2];
+  MapQueueThreadHandler handler;
   // start
+  ASSERT_EQ(OB_SUCCESS, TG_SET_HANDLER(tg_id, handler));
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
-  for (int i = 0; i < ARRAYSIZEOF(tasks); i++) {
-    ASSERT_EQ(OB_SUCCESS, TG_SCHEDULE(tg_id, i, tasks[i], 0, true));
-  }
-  ::usleep(40000);
-  for (int i = 0; i < ARRAYSIZEOF(tasks); i++) {
-    ASSERT_TRUE(tasks[i].running_);
-  }
-  ::usleep(60000);
-  for (int i = 0; i < ARRAYSIZEOF(tasks); i++) {
-    ASSERT_EQ(1, tasks[i].task_run_count_);
-  }
+  ASSERT_EQ(OB_SUCCESS, TG_PUSH_TASK(tg_id, &tg_id, 0));
+  ::usleep(50000);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
+  ASSERT_EQ(1, handler.handle_count_);
 
   // restart
+  ASSERT_EQ(OB_SUCCESS, TG_SET_HANDLER(tg_id, handler));
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
-  for (int i = 0; i < ARRAYSIZEOF(tasks); i++) {
-    ASSERT_EQ(OB_SUCCESS, TG_SCHEDULE(tg_id, i, tasks[i], 0, true));
-  }
-  ::usleep(40000);
-  for (int i = 0; i < ARRAYSIZEOF(tasks); i++) {
-    ASSERT_TRUE(tasks[i].running_);
-  }
-  ::usleep(60000);
-  for (int i = 0; i < ARRAYSIZEOF(tasks); i++) {
-    ASSERT_EQ(2, tasks[i].task_run_count_);
-  }
+  ASSERT_EQ(OB_SUCCESS, TG_PUSH_TASK(tg_id, &tg_id, 1));
+  ::usleep(50000);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
+  ASSERT_EQ(2, handler.handle_count_);
 
   ASSERT_TRUE(TG_EXIST(tg_id));
   TG_DESTROY(tg_id);
   ASSERT_FALSE(TG_EXIST(tg_id));
 }
+
 int main(int argc, char *argv[])
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");

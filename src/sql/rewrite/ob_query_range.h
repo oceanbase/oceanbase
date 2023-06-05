@@ -381,7 +381,8 @@ public:
                                       const common::ObDataTypeCastParams &dtc_params,
                                       ObExecContext *exec_ctx,
                                       ExprConstrantArray *expr_constraints = NULL,
-                                      const ParamsIArray *params = NULL);
+                                      const ParamsIArray *params = NULL,
+                                      const bool use_in_optimization = false);
   /**
    * @brief
    * @param range_columns: columns used to extract range, index column or partition column
@@ -403,7 +404,8 @@ public:
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamsIArray *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,
-                                      const bool ignore_calc_failure = true);
+                                      const bool ignore_calc_failure = true,
+                                      const bool use_in_optimization = false);
 
   //  final_extract_query_range extracts the final query range of its physical plan.
   //  It will get the real-time value of some const which are unknow during physical plan generating.
@@ -554,7 +556,8 @@ private:
                             ObItemType cmp_type,
                             const ObExprResType &result_type,
                             ObKeyPart *&out_key_part,
-                            const common::ObDataTypeCastParams &dtc_params);
+                            const common::ObDataTypeCastParams &dtc_params,
+                            bool &is_bound_modified);
   int get_const_key_part(const ObRawExpr *l_expr,
                          const ObRawExpr *r_expr,
                          const ObRawExpr *escape_expr,
@@ -568,7 +571,8 @@ private:
                           ObItemType cmp_type,
                           const ObExprResType &result_type,
                           ObKeyPart *&out_key_part,
-                          const common::ObDataTypeCastParams &dtc_params);
+                          const common::ObDataTypeCastParams &dtc_params,
+                          bool &is_bound_modified);
   int get_rowid_key_part(const ObRawExpr *l_expr,
                          const ObRawExpr *r_expr,
                          const ObRawExpr *escape_expr,
@@ -594,12 +598,17 @@ private:
                        const ObExprResType &result_type,
                        ObKeyPart *&out_key_part,
                        const common::ObDataTypeCastParams &dtc_params);
+  int check_bound(ObKeyPart *key_part,
+                  const ObDataTypeCastParams &dtc_params,
+                  const ObRawExpr *const_expr,
+                  bool &is_bound_modified);
   int add_row_item(ObKeyPart *&row_tail, ObKeyPart *key_part);
   int add_and_item(ObKeyPartList &and_storage, ObKeyPart *key_part);
   int add_or_item(ObKeyPartList &or_storage, ObKeyPart *key_part);
   int preliminary_extract(const ObRawExpr *node,
                           ObKeyPart *&out_key_part,
                           const common::ObDataTypeCastParams &dtc_params,
+                          const bool use_in_optimization,
                           const bool is_single_in = false);
   int pre_extract_basic_cmp(const ObRawExpr *node,
                             ObKeyPart *&out_key_part,
@@ -630,7 +639,8 @@ private:
                             const ObDataTypeCastParams &dtc_params);
   int pre_extract_and_or_op(const ObOpRawExpr *m_expr,
                             ObKeyPart *&out_key_part,
-                            const common::ObDataTypeCastParams &dtc_params);
+                            const common::ObDataTypeCastParams &dtc_params,
+                            const bool use_in_optimization);
   int pre_extract_const_op(const ObRawExpr *node,
                            ObKeyPart *&out_key_part);
   int pre_extract_geo_op(const ObOpRawExpr *geo_expr,
@@ -868,7 +878,7 @@ private:
                               const ObObj *&obj_ptr,
                               ObKeyPart &out_key_part,
                               const ObDataTypeCastParams &dtc_params);
-  int refine_large_range_graph(ObKeyPart *&key_part);
+  int refine_large_range_graph(ObKeyPart *&key_part, bool use_in_optimization = false);
   int compute_range_size(const ObIArray<ObKeyPart*> &key_parts,
                          const ObIArray<uint64_t> &or_count,
                          ObIArray<ObKeyPart*> &next_key_parts,
@@ -891,7 +901,8 @@ private:
                                       ObKeyPart *&out_key_part);
 private:
   static const int64_t RANGE_BUCKET_SIZE = 1000;
-  static const int64_t MAX_RANGE_SIZE = 100000;
+  static const int64_t MAX_RANGE_SIZE_OLD = 10000;
+  static const int64_t MAX_RANGE_SIZE_NEW = 100000;
   static const int64_t MAX_NOT_IN_SIZE = 10; //do not extract range for not in row over this size
   typedef common::ObObjStore<ObKeyPart*, common::ObIAllocator&> KeyPartStore;
 private:

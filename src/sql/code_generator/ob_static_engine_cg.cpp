@@ -2029,11 +2029,6 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       spec.use_dist_das_ = op.is_multi_part_dml();
       spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
       spec.is_returning_ = op.is_returning();
-      // currently direct-insert does not support non-pdml situation
-      // if (GCONF._ob_enable_direct_load) {
-      //   spec.plan_->set_append_table_id(op.get_append_table_id());
-      //   spec.plan_->set_enable_append(op.get_plan()->get_optimizer_context().get_global_hint().has_append());
-      // }
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {

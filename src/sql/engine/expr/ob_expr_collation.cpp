@@ -28,7 +28,7 @@ namespace sql
 //{}
 
 ObExprCharset::ObExprCharset(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_CHARSET, N_CHARSET, 1, NOT_VALID_FOR_GENERATED_COL)
+    :ObStringExprOperator(alloc, T_FUN_SYS_CHARSET, N_CHARSET, 1, VALID_FOR_GENERATED_COL)
 {}
 
 ObExprCharset::~ObExprCharset()
@@ -100,7 +100,7 @@ namespace sql
 //{}
 
 ObExprCollation::ObExprCollation(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_COLLATION, N_COLLATION, 1, NOT_VALID_FOR_GENERATED_COL)
+    :ObStringExprOperator(alloc, T_FUN_SYS_COLLATION, N_COLLATION, 1, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }
@@ -175,7 +175,7 @@ ObExprCoercibility::ObExprCoercibility(ObIAllocator &alloc)
     :ObExprOperator(alloc, T_FUN_SYS_COERCIBILITY,
                     N_COERCIBILITY,
                     1,
-                    NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                    VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   disable_operand_auto_cast();
 }

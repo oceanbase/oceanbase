@@ -270,10 +270,8 @@ void ObTenantBase::destroy_mtl_module()
   created_ = false;
 }
 
-ObCgroupCtrl *ObTenantBase::get_cgroup(lib::ThreadCGroup cgroup)
+ObCgroupCtrl *ObTenantBase::get_cgroup()
 {
-  // TODO
-  UNUSED(cgroup);
   ObCgroupCtrl *cgroup_ctrl = nullptr;
   cgroup_ctrl = cgroups_;
   return cgroup_ctrl;
@@ -283,7 +281,7 @@ int ObTenantBase::pre_run(lib::Threads *th)
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(this);
-  ObCgroupCtrl *cgroup_ctrl = get_cgroup(th->get_cgroup());
+  ObCgroupCtrl *cgroup_ctrl = get_cgroup();
   if (cgroup_ctrl != nullptr) {
     ret = cgroup_ctrl->add_self_to_cgroup(id_);
   }
@@ -296,7 +294,7 @@ int ObTenantBase::end_run(lib::Threads *th)
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(nullptr);
-  ObCgroupCtrl *cgroup_ctrl = get_cgroup(th->get_cgroup());
+  ObCgroupCtrl *cgroup_ctrl = get_cgroup();
   if (cgroup_ctrl != nullptr) {
     ret = cgroup_ctrl->remove_self_from_cgroup(id_);
   }

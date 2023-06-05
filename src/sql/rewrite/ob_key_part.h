@@ -41,6 +41,7 @@ enum InType
   T_NOT_IN_KEY_PART
 };
 class ObKeyPart;
+const int64_t MAX_EXTRACT_IN_COLUMN_NUMBER = 6;
 
 class ObKeyPartId
 {
@@ -204,12 +205,12 @@ struct InParamValsWrapper
     hash_code = hash();
     return ret;
   }
-  ObSEArray<ObObj, 4> param_vals_;
+  ObSEArray<ObObj, MAX_EXTRACT_IN_COLUMN_NUMBER> param_vals_;
   TO_STRING_KV(K_(param_vals));
 };
 
-typedef ObSEArray<int64_t, OB_MAX_ROWKEY_COLUMN_NUMBER, ModulePageAllocator> OffsetsArr;
-typedef ObSEArray<InParamMeta *, OB_MAX_ROWKEY_COLUMN_NUMBER, ModulePageAllocator> InParamsArr;
+typedef ObSEArray<int64_t, MAX_EXTRACT_IN_COLUMN_NUMBER, ModulePageAllocator> OffsetsArr;
+typedef ObSEArray<InParamMeta *, MAX_EXTRACT_IN_COLUMN_NUMBER, ModulePageAllocator> InParamsArr;
 struct ObInKeyPart
 {
   ObInKeyPart()
@@ -385,7 +386,7 @@ public:
   int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
 
-  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row);
+  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified);
 
   // copy all except next_ pointer
   int deep_node_copy(const ObKeyPart &other);

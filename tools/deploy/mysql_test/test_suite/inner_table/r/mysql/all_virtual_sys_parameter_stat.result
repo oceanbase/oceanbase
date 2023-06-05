@@ -264,6 +264,7 @@ _enable_easy_keepalive
 _enable_fulltext_index
 _enable_hash_join_hasher
 _enable_hash_join_processor
+_enable_in_range_optimization
 _enable_newsort
 _enable_new_sql_nio
 _enable_oracle_priv_check
@@ -297,6 +298,7 @@ _max_elr_dependent_trx_count
 _max_malloc_sample_interval
 _max_schema_slot_num
 _max_tablet_cnt_per_gb
+_memory_large_chunk_cache_size
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
 _minor_compaction_interval

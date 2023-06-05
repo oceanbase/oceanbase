@@ -2382,7 +2382,11 @@ int ObPLExecState::final(int ret)
     if (func_.get_variables().at(i).is_composite_type()
         && i < get_params().count() && get_params().at(i).is_ext()) {
       // 纯IN参数直接释放
-      if (func_.get_in_args().has_member(i) && !func_.get_out_args().has_member(i)) {
+      // 如果是sql触发的存储过程执行, udf入参处理时不会做深拷, 此处不负责释放入参内存,
+      // 由对应expr将obj挂到pl ctx上, 解决复杂内存的释放问题
+      if (func_.get_in_args().has_member(i) && !func_.get_out_args().has_member(i) && is_called_from_sql_) {
+        // do nothing
+      } else if (func_.get_in_args().has_member(i) && !func_.get_out_args().has_member(i)) {
         if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
             ctx_.exec_ctx_->get_my_session()))) {
           LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));

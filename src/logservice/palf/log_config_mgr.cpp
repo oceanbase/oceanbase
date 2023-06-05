@@ -239,7 +239,7 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
   } else if (!member_list.is_valid() ||
              !arb_member.is_valid() ||
-             (member_list.get_member_number() & 1) != 0 ||
+             (replica_num & 1) != 0 ||
              replica_num <= 0 ||
              replica_num > OB_MAX_MEMBER_NUMBER ||
              INVALID_PROPOSAL_ID == proposal_id ||

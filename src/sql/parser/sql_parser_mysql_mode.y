@@ -730,7 +730,7 @@ expr
 {
   $$ = $1;
   /* every mysql's item(same as ob's expr) has its own name */
-  if (OB_UNLIKELY((NULL == $$->str_value_)) && $$->type_ != T_VARCHAR) {
+  if (OB_UNLIKELY((NULL == $$->str_value_)) && $$->type_ != T_NCHAR && $$->type_ != T_VARCHAR) {
     dup_string($$, result, @1.first_column, @1.last_column);
   }
 }

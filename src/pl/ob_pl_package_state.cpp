@@ -375,5 +375,40 @@ int ObPLPackageState::remove_user_variables_for_package_state(ObSQLSessionInfo &
   return ret;
 }
 
+int ObPLPackageState::check_package_state_valid(ObExecContext &exec_ctx, bool &valid)
+{
+  int ret = OB_SUCCESS;
+  valid = false;
+  ObSQLSessionInfo *sql_session = exec_ctx.get_my_session();
+  if (OB_ISNULL(sql_session) || OB_ISNULL(sql_session->get_pl_engine())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql session is null.", K(ret));
+  } else if (OB_ISNULL(exec_ctx.get_sql_ctx()) || OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql ctx or schema guard is null.", K(ret));
+  } else {
+    const ObPackageInfo *package_spec_info = NULL;
+    const ObPackageInfo *package_body_info = NULL;
+    if (OB_FAIL(sql_session->get_pl_engine()->get_package_manager().get_package_schema_info(*exec_ctx.get_sql_ctx()->schema_guard_,
+                                                                                            package_id_,
+                                                                                            package_spec_info,
+                                                                                            package_body_info))) {
+      LOG_WARN("package not exist", K(ret), K(package_id_));
+      ret = OB_SUCCESS;
+    } else if (OB_ISNULL(package_spec_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("package info is null", K(ret), K(package_id_));
+    } else {
+      ObPackageStateVersion package_version(common::OB_INVALID_VERSION, common::OB_INVALID_VERSION);
+      package_version.package_version_ = package_spec_info->get_schema_version();
+      if (OB_NOT_NULL(package_body_info)) {
+        package_version.package_body_version_ = package_body_info->get_schema_version();
+      }
+      valid = check_version(package_version);
+    }
+  }
+  return ret;
+}
+
 } // end namespace pl
 } // end namespace oceanbase

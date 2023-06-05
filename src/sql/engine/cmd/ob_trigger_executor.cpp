@@ -59,6 +59,7 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
                            ctx.get_allocator(),
                            arg));
   if (OB_SUCC(ret)) {
+    arg.ddl_stmt_str_.reset();
     OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
   }
   OZ (ctx.get_sql_ctx()->schema_guard_->reset());

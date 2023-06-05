@@ -488,6 +488,16 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
               ret = OB_ER_SP_NOT_VAR_ARG;
               LOG_USER_ERROR(OB_ER_SP_NOT_VAR_ARG, static_cast<int32_t>(i), static_cast<int32_t>(sp_name.length()), sp_name.ptr());
               LOG_WARN("OUT or INOUT argument for routine is not a variable", K(param->get_expr_type()), K(ret));
+            } else if (lib::is_oracle_mode() &&
+                        param->get_expr_type() != T_OP_GET_USER_VAR &&
+                        param->get_expr_type() != T_QUESTIONMARK &&
+                        param->get_expr_type() != T_OP_GET_PACKAGE_VAR &&
+                        !param->is_obj_access_expr()) {
+              ret = OB_ERR_CALL_WRONG_ARG;
+              LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
+            } else if (param->is_obj_access_expr() && !(static_cast<const ObObjAccessRawExpr *>(param))->for_write()) {
+              ret = OB_ERR_CALL_WRONG_ARG;
+              LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
             } else if (param_info->is_sys_refcursor_type()
                       || (param_info->is_pkg_type() && pl_type.is_cursor_type())) {
               OZ (call_proc_info->add_out_param(i,

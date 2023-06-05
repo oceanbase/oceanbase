@@ -1044,6 +1044,7 @@ public:
   int is_force_temp_table_materialize(bool &force_materialize) const;
   int is_temp_table_transformation_enabled(bool &transformation_enabled) const;
   int is_groupby_placement_transformation_enabled(bool &transformation_enabled) const;
+  bool is_in_range_optimization_enabled() const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }

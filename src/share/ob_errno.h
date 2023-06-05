@@ -1541,7 +1541,6 @@ constexpr int OB_ERR_WHEN_CLAUSE = -9545;
 constexpr int OB_ERR_NEW_OLD_REFERENCES = -9546;
 constexpr int OB_ERR_TYPE_DECL_ILLEGAL = -9547;
 constexpr int OB_ERR_OBJECT_INVALID = -9548;
-constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_EXP_NOT_ASSIGNABLE = -9550;
 constexpr int OB_ERR_CURSOR_CONTAIN_BOTH_REGULAR_AND_ARRAY = -9551;
 constexpr int OB_ERR_STATIC_BOOL_EXPR = -9552;

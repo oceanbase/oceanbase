@@ -183,7 +183,7 @@ int ObArchiveLSMgr::init(const uint64_t tenant_id,
 int ObArchiveLSMgr::start()
 {
   int ret = OB_SUCCESS;
-  ObThreadPool::set_run_wrapper(MTL_CTX(), lib::ThreadCGroup::BACK_CGROUP);
+  ObThreadPool::set_run_wrapper(MTL_CTX());
   if (OB_UNLIKELY(! inited_)) {
     ARCHIVE_LOG(ERROR, "ObArchiveLSMgr not init");
     ret = OB_NOT_INIT;

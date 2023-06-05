@@ -1361,7 +1361,7 @@ int ObKeyPart::remove_in_params_vals(const ObIArray<int64_t> &val_idx)
   return ret;
 }
 
-int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool contain_row)
+int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   int64_t start_cmp = 0;
@@ -1379,16 +1379,20 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
     if (start_cmp < 0) {
       // after cast, precise becomes bigger, ( -> [
       normal_keypart_->include_start_ = true;
+      is_bound_modified = true;
     } else if (start_cmp > 0) {
       // after cast, the result becomes smaller, [ -> (
       normal_keypart_->include_start_ = false;
+      is_bound_modified = true;
     }
     if (end_cmp < 0) {
       // after cast, the result becomes bigger, ] -> )
       normal_keypart_->include_end_ = false;
+      is_bound_modified = true;
     } else if (end_cmp > 0) {
       // after cast, the result becomes smaller, ) -> ]
       normal_keypart_->include_end_ = true;
+      is_bound_modified = true;
     }
     normal_keypart_->start_.set_collation_type(pos_.column_type_.get_collation_type());
     normal_keypart_->end_.set_collation_type(pos_.column_type_.get_collation_type());

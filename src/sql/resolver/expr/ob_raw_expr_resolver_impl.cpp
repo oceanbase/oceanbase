@@ -2406,7 +2406,8 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              session_info->get_sql_mode(),
                                              nullptr != ctx_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node.type_, c_expr))) {
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?
+                                                                              T_VARCHAR : node.type_, c_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
   } else if (OB_ISNULL(c_expr)) {
     ret = OB_ERR_UNEXPECTED;
