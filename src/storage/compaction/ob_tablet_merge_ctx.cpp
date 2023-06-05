@@ -44,7 +44,7 @@ ObTabletMergeInfo::ObTabletMergeInfo()
      bloom_filter_block_ctx_(nullptr),
      bloomfilter_block_id_(),
      sstable_merge_info_(),
-     allocator_("MergeContext", OB_MALLOC_MIDDLE_BLOCK_SIZE),
+     allocator_("MergeContext", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID()),
      index_builder_(nullptr)
 {
 }

@@ -190,7 +190,7 @@ ObBasicTabletMergeDag::ObBasicTabletMergeDag(
     compat_mode_(lib::Worker::CompatMode::INVALID),
     ctx_(nullptr),
     param_(),
-    allocator_("MergeDag")
+    allocator_("MergeDag", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
 }
 
@@ -1308,7 +1308,7 @@ int ObTabletMergeFinishTask::try_schedule_compaction_after_mini(
 
 ObTabletMergeTask::ObTabletMergeTask()
   : ObITask(ObITask::TASK_TYPE_MACROMERGE),
-    allocator_(),
+    allocator_("MergeTask", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     idx_(0),
     ctx_(nullptr),
     merger_(nullptr),
