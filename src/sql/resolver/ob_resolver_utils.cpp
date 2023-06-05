@@ -2129,9 +2129,10 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           } else {
             ObCharsetType charset_type = CHARSET_INVALID;
             ObCollationType collation_type = CS_TYPE_INVALID;
+            bool is_hex_string = node->num_child_ == 1 ? true : false;
             if (charset_node != NULL) {
               ObString charset(charset_node->str_len_, charset_node->str_value_);
-              if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, false))) {
+              if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, is_hex_string))) {
                 LOG_WARN("set string val charset failed", K(ret));
               }
             }
