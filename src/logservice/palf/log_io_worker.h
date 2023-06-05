@@ -17,15 +17,17 @@
 #include "lib/queue/ob_lighty_queue.h"              // ObLightyQueue
 #include "lib/utility/ob_macro_utils.h"             // DISALLOW_COPY_AND_ASSIGN
 #include "lib/utility/ob_print_utils.h"             // TO_STRING_KV
-#include "lib/lock/ob_spin_lock.h"                  // SpinLock
 #include "lib/thread/thread_mgr_interface.h"        // TGTaskHandler
 #include "lib/container/ob_fixed_array.h"           // ObSEArrayy
 #include "lib/hash/ob_array_hash_map.h"             // ObArrayHashMap
+#include "lib/atomic/ob_atomic.h"                   // ATOMIC_LOAD
+#include "lib/function/ob_function.h"               // ObFunction
 #include "share/ob_thread_pool.h"                   // ObThreadPool
-#include "common/ob_clock_generator.h"              //ObClockGenerator
+#include "common/ob_clock_generator.h"              // ObClockGenerator
 #include "log_io_task.h"                            // LogBatchIOFlushLogTask
-#include "log_define.h"                             // ALF_SLIDING_WINDOW_SIZE
+#include "log_define.h"                             // PALF_SLIDING_WINDOW_SIZE
 #include "palf_options.h"                           // PalfThrottleOptions
+#include "log_throttle.h"                           // LogWritingThrottle
 namespace oceanbase
 {
 namespace common
@@ -64,145 +66,6 @@ struct LogIOWorkerConfig
   int64_t batch_depth_;
   TO_STRING_KV(K_(io_worker_num), K_(io_queue_capcity), K_(batch_width), K_(batch_depth));
 };
-class LogThrottlingStat
-{
-public:
-  LogThrottlingStat() {reset();}
-  ~LogThrottlingStat() {reset();}
-  void reset();
-  inline bool has_ever_throttled() const;
-  inline void after_throttling(const int64_t throttling_interval, const int64_t throttling_size);
-  inline void start_throttling();
-  inline void stop_throttling();
-  TO_STRING_KV(K_(start_ts),
-               K_(stop_ts),
-               K_(total_throttling_interval),
-               K_(total_throttling_size),
-               K_(total_throttling_task_cnt),
-               K_(total_skipped_size),
-               K_(total_skipped_task_cnt),
-               K_(max_throttling_interval));
-private:
-  int64_t start_ts_;
-  int64_t stop_ts_;
-  int64_t total_throttling_interval_;
-  int64_t total_throttling_size_;
-  int64_t total_throttling_task_cnt_;
-
-//log_size of tasks need for throttling but overlooked
-  int64_t total_skipped_size_;
-//count of tasks need for throttling but overlooked
-  int64_t total_skipped_task_cnt_;
-  int64_t max_throttling_interval_;
-};
-
-inline void LogThrottlingStat::after_throttling(const int64_t throttling_interval,
-                                                const int64_t throttling_size)
-{
-  if (0 == throttling_interval) {
-    total_skipped_size_ += throttling_size;
-    total_skipped_task_cnt_++;
-  } else {
-    total_throttling_interval_ += throttling_interval;
-    total_throttling_size_ += throttling_size;
-    total_throttling_task_cnt_++;
-    max_throttling_interval_ = MAX(max_throttling_interval_, throttling_interval);
-  }
-}
-
-inline bool LogThrottlingStat::has_ever_throttled() const
-{
-  return common::OB_INVALID_TIMESTAMP != start_ts_;
-}
-inline void LogThrottlingStat::start_throttling()
-{
-  reset();
-  start_ts_ = common::ObClockGenerator::getClock();
-}
-inline void LogThrottlingStat::stop_throttling()
-{
-  stop_ts_ = common::ObClockGenerator::getClock();
-}
-
-class LogWritingThrottle
-{
-public:
-  LogWritingThrottle() {reset();}
-  ~LogWritingThrottle() {reset();}
-  void reset();
-  //invoked by gc thread
-  inline void notify_need_writing_throttling(const bool is_need);
-  inline bool need_writing_throttling_notified() const;
-  inline int64_t inc_and_fetch_submitted_seq();
-  inline void dec_submitted_seq();
-  int update_throttling_options(IPalfEnvImpl *palf_env_impl);
-  int throttling(const int64_t io_size, IPalfEnvImpl *palf_env_impl);
-  int after_append_log(const int64_t log_size, const int64_t seq);
-  TO_STRING_KV(K_(last_update_ts),
-               K_(need_writing_throttling_notified),
-               K_(submitted_seq),
-               K_(handled_seq),
-               K_(appended_log_size_cur_round),
-               K_(decay_factor),
-               K_(throttling_options),
-               K_(stat));
-
-private:
-  int update_throtting_options_(IPalfEnvImpl *palf_env_impl, bool &has_recycled_log_disk);
-  inline bool need_throttling_with_options_() const;
-  inline bool need_throttling_() const;
-  //reset throttling related member
-  void clean_up_();
-private:
-  static const int64_t UPDATE_INTERVAL_US = 500 * 1000L;//500ms
-  const int64_t DETECT_INTERVAL_US = 30 * 1000L;//1ms
-  const int64_t THROTTLING_DURATION_US = 1800 * 1000 * 1000L;//1800s
-  const int64_t THROTTLING_CHUNK_SIZE = MAX_LOG_BUFFER_SIZE;
-  //ts of lastest updating writing throttling info
-  int64_t last_update_ts_;
-  //ts when next log can be appended
-  //log_size can be appended during current round, will be reset when unrecyclable_size changed
-  // notified by gc, local meta may not be ready
-  mutable bool need_writing_throttling_notified_;
-  // local meta is ready after need_writing_throttling_locally_ set true
-  //used for meta flush task
-  //max_seq of task ever submitted
-  mutable int64_t submitted_seq_;
-  //max_seq of task ever handled
-  mutable int64_t handled_seq_;
-  int64_t appended_log_size_cur_round_;
-  double decay_factor_;
-  //append_speed during current round, Bytes per usecond
-  PalfThrottleOptions throttling_options_;
-  LogThrottlingStat stat_;
-};
-
-inline void LogWritingThrottle::notify_need_writing_throttling(const bool is_need) {
-  ATOMIC_SET(&need_writing_throttling_notified_, is_need);
-}
-
-inline bool LogWritingThrottle::need_writing_throttling_notified() const {
-  return ATOMIC_LOAD(&need_writing_throttling_notified_);
-}
-
-inline bool LogWritingThrottle::need_throttling_with_options_() const
-{
-  return ATOMIC_LOAD(&need_writing_throttling_notified_) && throttling_options_.need_throttling();
-}
-inline bool LogWritingThrottle::need_throttling_() const
-{
-  return need_throttling_with_options_() && ATOMIC_LOAD(&handled_seq_) >= ATOMIC_LOAD(&submitted_seq_);
-}
-
-int64_t LogWritingThrottle::inc_and_fetch_submitted_seq()
-{
-  return ATOMIC_AAF(&submitted_seq_, 1);
-}
-
-void LogWritingThrottle::dec_submitted_seq()
-{
-  ATOMIC_DEC(&submitted_seq_);
-}
 
 class LogIOWorker : public share::ObThreadPool
 {
@@ -211,8 +74,10 @@ public:
   ~LogIOWorker();
   int init(const LogIOWorkerConfig &config,
            const int64_t tenant_id,
-           int cb_thread_pool_tg_id,
+           const int cb_thread_pool_tg_id,
            ObIAllocator *allocaotr,
+           LogWritingThrottle *throttle,
+           const bool need_ignore_throttle,
            IPalfEnvImpl *palf_env_impl);
   void destroy();
 
@@ -222,7 +87,7 @@ public:
 
  int notify_need_writing_throttling(const bool &need_throtting);
   static constexpr int64_t MAX_THREAD_NUM = 1;
-  TO_STRING_KV(K_(log_io_worker_num), K_(cb_thread_pool_tg_id));
+  TO_STRING_KV(K_(log_io_worker_num), K_(cb_thread_pool_tg_id), K_(purge_throttling_task_handled_seq), K_(purge_throttling_task_submitted_seq));
 private:
   bool need_reduce_(LogIOTask *task);
   int reduce_io_task_(void *task);
@@ -230,11 +95,12 @@ private:
   int handle_io_task_with_throttling_(LogIOTask *io_task);
   int update_throttling_options_();
   int run_loop_();
+  int64_t inc_and_fetch_purge_throttling_submitted_seq_();
+  void dec_purge_throttling_submitted_seq_();
+  bool has_purge_throttling_tasks_() const;
 private:
   static constexpr int64_t QUEUE_WAIT_TIME = 100 * 1000;
 private:
-  typedef common::ObSpinLock SpinLock;
-  typedef common::ObSpinLockGuard SpinLockGuard;
 
   class BatchLogIOFlushLogTaskMgr {
   public:
@@ -256,6 +122,8 @@ private:
     int64_t usable_count_;
     int64_t batch_width_;
   };
+  typedef common::ObSpinLock SpinLock;
+  typedef common::ObSpinLockGuard SpinLockGuard;
 
   // TODO: io_task_queue used to store all LogIOTask objects, and the LogIOWorker
   //       will consume it, at nowdays, the io_task_queue is single consumer and mutil
@@ -271,9 +139,18 @@ private:
   int64_t do_task_count_;
   int64_t print_log_interval_;
   int64_t last_working_time_;
-  LogWritingThrottle throttle_;
-  SpinLock throttling_lock_;
+  LogWritingThrottle *throttle_;
   ObMiniStat::ObStatItem log_io_worker_queue_size_stat_;
+  // Each LogIOTask except LogIOFlushLogTask hold a unique sequence, when 'purge_throttling_task_submitted_seq_' minus
+  // 'purge_throttling_task_handled_seq_' is greater than zero, purge throttling.
+  // 1. Only incrementing 'purge_throttling_submitted_seq_' when submit LogIOTask which need purge throttling.
+  // 2. Set 'purge_throttling_task_handled_seq_' to 'purge_throttling_task_submitted_seq_' after handle the LogIOTask successfully.
+  mutable int64_t purge_throttling_task_submitted_seq_;
+  mutable int64_t purge_throttling_task_handled_seq_;
+  // ignoring throttline whatever(ie: for sys log stream, no need throttling)
+  bool need_ignoring_throttling_;
+  NeedPurgingThrottlingFunc need_purging_throttling_func_;
+  SpinLock lock_;
   bool is_inited_;
 };
 } // end namespace palf

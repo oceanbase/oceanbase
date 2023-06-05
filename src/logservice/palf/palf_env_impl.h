@@ -324,6 +324,10 @@ private:
   int check_tmp_log_dir_exist_(bool &exist) const;
   int remove_stale_incomplete_palf_();
 
+  int init_log_io_worker_config_(const int log_writer_parallelism,
+                                 const int64_t tenant_id,
+                                 LogIOWorkerConfig &config);
+
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;

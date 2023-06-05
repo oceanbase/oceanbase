@@ -198,11 +198,6 @@ int PalfEnvImpl::init(
 {
   int ret = OB_SUCCESS;
   int pret = 0;
-  // TODO by runlin: configurable
-  log_io_worker_config_.io_worker_num_ = 1;
-  log_io_worker_config_.io_queue_capcity_ = 100 * 1024;
-  log_io_worker_config_.batch_width_ = 8;
-  log_io_worker_config_.batch_depth_ = PALF_SLIDING_WINDOW_SIZE;
   const int64_t io_cb_num = PALF_SLIDING_WINDOW_SIZE * 128;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -212,6 +207,10 @@ int PalfEnvImpl::init(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid arguments", K(ret), KP(transport), K(base_dir), K(self), KP(transport),
              KP(log_alloc_mgr), KP(log_block_pool), KP(monitor));
+  } else if (OB_FAIL(init_log_io_worker_config_(options.disk_options_.log_writer_parallelism_,
+                                                tenant_id,
+                                                log_io_worker_config_))) {
+    PALF_LOG(WARN, "init_log_io_worker_config_ failed", K(options));
   } else if (OB_FAIL(fetch_log_engine_.init(this, log_alloc_mgr))) {
     PALF_LOG(ERROR, "FetchLogEngine init failed", K(ret));
   } else if (OB_FAIL(log_rpc_.init(self, cluster_id, tenant_id, transport))) {
@@ -1239,6 +1238,41 @@ int PalfEnvImpl::get_throttling_options(PalfThrottleOptions &options)
   } else {
     (void)disk_options_wrapper_.get_throttling_options(options);
   }
+  return ret;
+}
+
+int PalfEnvImpl::init_log_io_worker_config_(const int log_writer_parallelism,
+                                            const int64_t tenant_id,
+                                            LogIOWorkerConfig &config)
+{
+  int ret = OB_SUCCESS;
+  // log_writer_parallelism only valid when it's user tenant.
+  // to support writing throttling, sys log stream must has dependent LogIOWorker.
+  const int64_t real_log_writer_parallelism = is_user_tenant(tenant_id) ? (log_writer_parallelism  + 1) : 1;
+  auto tmp_upper_align_div = [](const int64_t num, const int64_t align) -> int64_t {
+    return (num + align - 1) / align;
+  };
+
+  constexpr int64_t default_io_queue_cap = 100 * 1024;
+  constexpr int64_t default_io_batch_width = 8;
+  // Due to the uniqueness of the log stream ID, using a hash distribution method can
+  // naturally balance the load in a single-unit environment, therefore, we set the
+  // min io queue capacity to PALF_SLIDING_WINDOW_SIZE * 2, and set default_io_batch_width
+  // to 1.
+  // TODO by zjf225077:
+  // to support load balance in a multi-unit environment, LogIOWorker needs to use
+  // a load factor to ensure that the number of log streams on each LogIOWorker is in
+  // a balanced state.
+  constexpr int64_t default_min_io_queue_cap = PALF_SLIDING_WINDOW_SIZE * 2;
+  constexpr int64_t default_min_batch_width = 1;
+  // Assume that a maximum of 100 * 1024 I/O tasks exist simultaneously in single PalfEnvImpl
+  config.io_worker_num_ = real_log_writer_parallelism;
+  config.io_queue_capcity_ = MAX(default_min_io_queue_cap,
+                                 tmp_upper_align_div(default_io_queue_cap, real_log_writer_parallelism));
+  config.batch_width_ = MAX(default_min_batch_width,
+                            tmp_upper_align_div(default_io_batch_width, real_log_writer_parallelism));
+  config.batch_depth_ = PALF_SLIDING_WINDOW_SIZE;
+  PALF_LOG(INFO, "init_log_io_worker_config_ success", K(config), K(tenant_id), K(log_writer_parallelism));
   return ret;
 }
 

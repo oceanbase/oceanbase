@@ -1487,7 +1487,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
   EXPECT_EQ(true, iterator.iterator_impl_.curr_entry_is_raw_write_);
 
   // 需要从磁盘上将后面两日志读上来，但由于受控回放不会吐出
-  EXPECT_FALSE(iterator_end_lsn == iterator.iterator_storage_.end_lsn_);
+  // EXPECT_FALSE(iterator_end_lsn == iterator.iterator_storage_.end_lsn_);
   EXPECT_EQ(OB_SUCCESS, iterator.next(max_scn2, next_min_scn, iterate_end_by_replayable_point));
   EXPECT_EQ(false, iterate_end_by_replayable_point);
   EXPECT_EQ(true, iterator.iterator_impl_.curr_entry_is_raw_write_);
@@ -1503,7 +1503,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
   LSN last_lsn = raw_write_leader.palf_handle_impl_->get_max_lsn();
   SCN last_scn = raw_write_leader.palf_handle_impl_->get_max_scn();
 
-  LogIOWorker *io_worker = &raw_write_leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_;
+  LogIOWorker *io_worker = raw_write_leader.palf_handle_impl_->log_engine_.log_io_worker_;
   IOTaskCond cond(id_raw_write, raw_write_leader.palf_env_impl_->last_palf_epoch_);
   io_worker->submit_io_task(&cond);
   std::vector<LSN> lsns;

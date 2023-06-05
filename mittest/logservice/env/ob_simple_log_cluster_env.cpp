@@ -431,10 +431,6 @@ int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id, cons
   int ret = OB_SUCCESS;
   const int64_t MB = 1024 * 1024;
   PalfOptions opts;
-  opts.disk_options_.log_disk_usage_limit_size_ = file_block_num * PALF_PHY_BLOCK_SIZE;
-  opts.disk_options_.log_disk_utilization_threshold_ = 80;
-  opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
-  opts.disk_options_.log_disk_throttling_percentage_ = 100;
   auto cluster = get_cluster();
   if (server_id >= 0 && server_id < cluster.size()) {
     ObTenantEnv::set_tenant(cluster[server_id]->get_tenant_base());
@@ -443,7 +439,12 @@ int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id, cons
       ret = OB_NOT_SUPPORTED;
     } else {
       auto palf_env_impl = dynamic_cast<PalfEnvImpl*>(srv->get_palf_env());
-      ret = palf_env_impl->update_options(opts);
+      if (OB_FAIL(palf_env_impl->get_options(opts))) {
+        PALF_LOG(ERROR, "get_optiosn failed", K(ret), K(server_id));
+      } else {
+        opts.disk_options_.log_disk_usage_limit_size_ = file_block_num * PALF_PHY_BLOCK_SIZE;
+        ret = palf_env_impl->update_options(opts);
+      }
     }
   }
   return ret;

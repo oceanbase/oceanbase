@@ -599,6 +599,10 @@ DEF_TIME(standby_db_fetch_log_rpc_timeout, OB_TENANT_PARAMETER, "15s",
         "When the rpc timeout, the log transport service switches to another server of the log restore source tenant to fetch logs. "
         "Range: [2s, +∞)",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_log_writer_parallelism, OB_TENANT_PARAMETER, "3",
+       "[1,8]",
+       "the number of parallel log writer threads that can be used to write redo log entries to disk. ",
+       ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",

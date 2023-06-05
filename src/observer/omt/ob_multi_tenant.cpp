@@ -836,6 +836,12 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(OTC_MGR.add_tenant_config(tenant_id))) {
+      LOG_ERROR("add tenant config fail", K(tenant_id), K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, tenant->id()) {
       WITH_ENTITY(&tenant->ctx()) {
         if (OB_FAIL(tenant->init(meta))) {
@@ -847,8 +853,6 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(OTC_MGR.add_tenant_config(tenant_id))) {
-    LOG_ERROR("add tenant config fail", K(tenant_id), K(ret));
 #ifdef OMT_UNITTEST
    } else if (!is_virtual_tenant_id(tenant_id) &&
        OB_FAIL(OTC_MGR.got_version(tenant_id, common::ObSystemConfig::INIT_VERSION))) {

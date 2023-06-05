@@ -289,6 +289,7 @@ int ObSimpleLogServer::init_log_service_()
   opts.disk_options_.log_disk_utilization_threshold_ = 80;
   opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
   opts.disk_options_.log_disk_throttling_percentage_ = 100;
+  opts.disk_options_.log_writer_parallelism_ = 2;
   std::string clog_dir = clog_dir_ + "/tenant_1";
   allocator_ = OB_NEW(ObTenantMutilAllocator, "TestBase", node_id_);
   ObMemAttr attr(1, "SimpleLog");
