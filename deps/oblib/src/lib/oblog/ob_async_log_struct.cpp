@@ -70,7 +70,7 @@ int ObPLogFileStruct::reopen(const bool redirect_flag)
   if (OB_UNLIKELY(strlen(filename_) <= 0)) {
     LOG_STDERR("invalid argument log_file = %p\n", filename_);
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_UNLIKELY((tmp_fd = ::open(filename_, O_WRONLY | O_CREAT | O_APPEND , LOG_FILE_MODE)) < 0)) {
+  } else if (OB_UNLIKELY((tmp_fd = ::open(filename_, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, LOG_FILE_MODE)) < 0)) {
     LOG_STDERR("open file = %s errno = %d error = %m\n", filename_, errno);
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_UNLIKELY(0 != fstat(tmp_fd, &stat_))) {
@@ -112,7 +112,7 @@ int ObPLogFileStruct::reopen_wf()
   } else {
     char tmp_file_name[MAX_LOG_FILE_NAME_SIZE];
     (void)snprintf(tmp_file_name, sizeof(tmp_file_name), "%s.wf", filename_);
-    if (OB_UNLIKELY((tmp_fd = ::open(tmp_file_name, O_WRONLY | O_CREAT | O_APPEND , LOG_FILE_MODE)) < 0)) {
+    if (OB_UNLIKELY((tmp_fd = ::open(tmp_file_name, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, LOG_FILE_MODE)) < 0)) {
       LOG_STDERR("open file = %s errno = %d error = %m\n", tmp_file_name, errno);
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_UNLIKELY(0 != fstat(tmp_fd, &wf_stat_))) {

@@ -77,6 +77,7 @@ void ObTenantNodeBalancer::run1()
 {
   int ret = OB_SUCCESS;
   lib::set_thread_name("OmtNodeBalancer");
+
   while (!has_set_stop()) {
     TenantUnits units;
     int64_t sys_unit_cnt = 0;

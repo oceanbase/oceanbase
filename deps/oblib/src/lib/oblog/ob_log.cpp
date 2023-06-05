@@ -742,7 +742,7 @@ void ObLogger::rotate_log(const char *filename,
                 tm.tm_hour, tm.tm_min, tm.tm_sec, static_cast<int>(t.tv_usec/1000));
 
         ret = rename(filename, old_log_file); //If failed, TODO
-        int tmp_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, ObPLogFileStruct::LOG_FILE_MODE);
+        int tmp_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, ObPLogFileStruct::LOG_FILE_MODE);
         if (tmp_fd > 0) {
           if (fd > STDERR_FILENO) {
             (void)dup2(tmp_fd, fd);
@@ -786,7 +786,7 @@ void ObLogger::rotate_log(const char *filename,
         }
 
         ret = rename(filename, old_log_file); //If failed, TODO
-        int tmp_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, ObPLogFileStruct::LOG_FILE_MODE);
+        int tmp_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, ObPLogFileStruct::LOG_FILE_MODE);
         if (tmp_fd > 0) {
           if (redirect_flag) {
             (void)dup2(tmp_fd, STDERR_FILENO);
@@ -820,7 +820,7 @@ void ObLogger::rotate_log(const char *filename,
             }
           }
           ret = rename(wf_filename, old_wf_log_file); //If failed, TODO
-          tmp_fd = open(wf_filename, O_WRONLY | O_CREAT | O_APPEND, ObPLogFileStruct::LOG_FILE_MODE);
+          tmp_fd = open(wf_filename, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, ObPLogFileStruct::LOG_FILE_MODE);
           if (tmp_fd > 0) {
             if (wf_fd > STDERR_FILENO) {
               (void)dup2(tmp_fd, wf_fd);

@@ -1264,6 +1264,8 @@ int ObTenant::recv_request(ObRequest &req)
   if (OB_SUCC(ret)) {
     ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
+  } else if (OB_SIZE_OVERFLOW == ret) {
+    IGNORE_RETURN faststack();
   }
 
   return ret;
