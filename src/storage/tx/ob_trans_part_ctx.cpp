@@ -296,6 +296,7 @@ void ObPartTransCtx::default_init_()
   is_ctx_table_merged_ = false;
   mds_cache_.reset();
   start_replay_ts_.reset();
+  start_recover_ts_.reset();
   is_incomplete_replay_ctx_ = false;
   is_submitting_redo_log_for_freeze_ = false;
   start_working_log_ts_ = SCN::min_scn();
@@ -1471,12 +1472,6 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
                                               exec_info_.max_durable_lsn_,
                                               false))) {
         TRANS_LOG(WARN, "insert into retain ctx mgr failed", K(ret), KPC(this));
-      } else if ((exec_info_.trans_type_ == TransType::SP_TRANS
-                  && ObTxState::COMMIT == exec_info_.state_)
-                 || (exec_info_.trans_type_ == TransType::DIST_TRANS
-                     && ObTxState::CLEAR == exec_info_.state_)
-                 || (ObTxState::ABORT == exec_info_.state_)) {
-        set_exiting_();
       }
       if (OB_SUCC(ret)) {
         TRANS_LOG(INFO, "recover retain ctx into mgr success", K(ret), K(trans_id_), K(ls_id_));
@@ -1492,6 +1487,28 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
       }
     }
 
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if ((exec_info_.trans_type_ == TransType::SP_TRANS && ObTxState::COMMIT == exec_info_.state_)
+               || (exec_info_.trans_type_ == TransType::DIST_TRANS
+                   && ObTxState::CLEAR == exec_info_.state_)
+               || (ObTxState::ABORT == exec_info_.state_)) {
+      set_exiting_();
+      TRANS_LOG(INFO, "set exiting with a finished trx in recover", K(ret), KPC(this));
+    }
+
+    if (OB_SUCC(ret)) {
+      if ((ObTxState::COMMIT == exec_info_.state_
+           && exec_info_.max_applying_log_ts_ == exec_info_.max_applied_log_ts_)
+          || ObTxState::CLEAR == exec_info_.state_) {
+        ls_tx_ctx_mgr_->update_max_replay_commit_version(ctx_tx_data_.get_commit_version());
+        //update max_commit_ts for dup table because of migrate or recover
+        MTL(ObTransService *)
+            ->get_tx_version_mgr()
+            .update_max_commit_ts(ctx_tx_data_.get_commit_version(), false);
+      }
+      start_recover_ts_ = exec_info_.max_applying_log_ts_;
+    }
     TRANS_LOG(INFO, "recover tx ctx table info succeed", K(ret), KPC(this), K(ctx_info));
   }
 
