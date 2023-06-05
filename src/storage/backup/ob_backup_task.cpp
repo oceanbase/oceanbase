@@ -4671,8 +4671,6 @@ int ObLSBackupComplementLogTask::inner_process_(
     LOG_WARN("failed to get backup file path", K(ret));
   } else if (OB_FAIL(util.mkdir(backup_path.get_obstr(), backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to make parent dir", K(ret), K(backup_path), K(backup_dest_));
-  } else if (OB_FAIL(write_format_file_())) {
-    LOG_WARN("failed to write format file", K(ret));
   } else if (OB_FAIL(calc_backup_file_range_(archive_dest_id, ls_id, file_list))) {
     LOG_WARN("failed to calc backup file range", K(ret), K(archive_dest_id), K(ls_id));
   } else if (OB_FAIL(backup_complement_log_(file_list))) {

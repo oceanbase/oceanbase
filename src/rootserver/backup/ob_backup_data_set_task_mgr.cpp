@@ -1591,6 +1591,8 @@ int ObBackupSetTaskMgr::write_extern_infos()
   HEAP_VARS_2((ObExternTenantLocalityInfoDesc, locality_info),
       (ObExternBackupSetInfoDesc, backup_set_info)) {
     if (OB_FAIL(ret)) {
+    } else if (job_attr_->plus_archivelog_ && OB_FAIL(write_log_format_file_())) {
+      LOG_WARN("failed to write log format file", K(ret));
     } else if (OB_FAIL(write_extern_locality_info_(locality_info))) {
       LOG_WARN("[DATA_BACKUP]failed to write extern tenant locality info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_backup_set_info_(set_task_attr_, backup_set_info))) { 
@@ -1604,6 +1606,59 @@ int ObBackupSetTaskMgr::write_extern_infos()
     } else if (OB_FAIL(write_deleted_tablet_infos_())) {
       LOG_WARN("[DATA_BACKUP]failed to write deleted tablet infos", K(ret), KPC(job_attr_));
     }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::write_log_format_file_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupFormatDesc format_desc;
+  ObSchemaGetterGuard schema_guard;
+  const ObTenantSchema *tenant_info = NULL;
+  share::ObBackupStore store;
+  ObBackupDest backup_dest;
+  ObBackupDest new_backup_dest;
+  share::ObBackupSetDesc desc;
+  desc.backup_set_id_ = job_attr_->backup_set_id_;
+  desc.backup_type_ = job_attr_->backup_type_;
+  int64_t dest_id = 0;
+  bool is_exist = false;
+
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, job_attr_->backup_path_,
+                                                           backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), KPC(job_attr_));
+  } else if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(backup_dest, desc, new_backup_dest))) {
+    LOG_WARN("failed to set archive dest", K(ret), K(backup_dest));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
+    LOG_WARN("failed to get dest id", K(ret), KPC(job_attr_));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(job_attr_->tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get_tenant_schema_guard", KR(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_FAIL(schema_guard.get_tenant_info(job_attr_->tenant_id_, tenant_info))) {
+    LOG_WARN("failed to get tenant info", K(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_FAIL(format_desc.cluster_name_.assign(GCONF.cluster.str()))) {
+    LOG_WARN("failed to assign cluster name", K(ret));
+  } else if (OB_FAIL(format_desc.tenant_name_.assign(tenant_info->get_tenant_name()))) {
+    LOG_WARN("failed to assign tenant name", K(ret));
+  } else if (OB_FAIL(new_backup_dest.get_backup_path_str(format_desc.path_.ptr(), format_desc.path_.capacity()))) {
+    LOG_WARN("failed to get backup path", K(ret), K(new_backup_dest));
+  } else {
+    format_desc.tenant_id_ = job_attr_->tenant_id_;
+    format_desc.incarnation_ = OB_START_INCARNATION;
+    format_desc.dest_id_ = dest_id;
+    format_desc.dest_type_ = ObBackupDestType::DEST_TYPE_ARCHIVE_LOG;
+    format_desc.cluster_id_ = GCONF.cluster_id;
+  }
+
+  if (FAILEDx(store.init(new_backup_dest))) {
+    LOG_WARN("failed to set archive dest", K(ret), K(backup_dest));
+  } else if (OB_FAIL(store.is_format_file_exist(is_exist))) {
+    LOG_WARN("failed to check is format file exist", K(ret));
+  } else if (is_exist) {// do not recreate the format file
+  } else if (OB_FAIL(store.write_format_file(format_desc))) {
+    LOG_WARN("failed to write format file", K(ret), K(format_desc));
+  } else {
+    LOG_INFO("write log format file succeed", K(format_desc));
   }
   return ret;
 }
