@@ -394,33 +394,48 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
     exit_flag = 3;
   }
 
-  if (bool_ret && check_if_need_log()) {
-    const share::ObLSID &ls_id = tablet_->get_tablet_meta().ls_id_;
-    const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
-    LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "refresh table too much times", K(ret), K(exit_flag), K(ls_id), K(tablet_id), KP(table));
-    if (0 == exit_flag) {
-      LOG_WARN("table is null or not memtable", K(ret), K(ls_id), K(tablet_id), KP(table));
-    } else if (1 == exit_flag) {
-      LOG_WARN("iterator store is expired", K(ret), K(ls_id), K(tablet_id), K(iter.check_store_expire()), K(iter.count()), K(iter));
-    } else if (2 == exit_flag) {
-      LOG_WARN("failed to check_freeze_to_inc_write_ref", K(ret), K(ls_id), K(tablet_id), KPC(table));
-    } else if (3 == exit_flag) {
-      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "check_freeze_to_inc_write_ref costs too much time", K(ret), K(ls_id), K(tablet_id), KPC(table));
-    } else {
-      LOG_WARN("unexpect exit_flag", K(exit_flag), K(ret), K(ls_id), K(tablet_id));
+  if (bool_ret) {
+    bool need_log = false;
+    bool need_log_error = false;
+    check_if_need_log_(need_log, need_log_error);
+    if (need_log) {
+      const share::ObLSID &ls_id = tablet_->get_tablet_meta().ls_id_;
+      const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
+      if (need_log_error) {
+        LOG_ERROR_RET(OB_ERR_TOO_MUCH_TIME, "refresh table too much times", K(ret), K(exit_flag), K(ls_id), K(tablet_id), KP(table));
+      } else {
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "refresh table too much times", K(ret), K(exit_flag), K(ls_id), K(tablet_id), KP(table));
+      }
+      if (0 == exit_flag) {
+        LOG_WARN("table is null or not memtable", K(ret), K(ls_id), K(tablet_id), KP(table));
+      } else if (1 == exit_flag) {
+        LOG_WARN("iterator store is expired", K(ret), K(ls_id), K(tablet_id), K(iter.check_store_expire()), K(iter.count()), K(iter));
+      } else if (2 == exit_flag) {
+        LOG_WARN("failed to check_freeze_to_inc_write_ref", K(ret), K(ls_id), K(tablet_id), KPC(table));
+      } else if (3 == exit_flag) {
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "check_freeze_to_inc_write_ref costs too much time", K(ret), K(ls_id), K(tablet_id), KPC(table));
+      } else {
+        LOG_WARN("unexpect exit_flag", K(exit_flag), K(ret), K(ls_id), K(tablet_id));
+      }
     }
   }
 
   return bool_ret;
 }
 
-bool ObStorageTableGuard::check_if_need_log()
+void ObStorageTableGuard::check_if_need_log_(bool &need_log,
+                                             bool &need_log_error)
 {
-  bool need_log = false;
+  need_log = false;
+  need_log_error = false;
   if ((++retry_count_ % GET_TS_INTERVAL) == 0) {
     const int64_t cur_ts = common::ObTimeUtility::current_time();
     if (0 >= last_ts_) {
       last_ts_ = cur_ts;
+    } else if (cur_ts - last_ts_ >= LOG_ERROR_INTERVAL_US) {
+      last_ts_ = cur_ts;
+      need_log = true;
+      need_log_error = true;
     } else if (cur_ts - last_ts_ >= LOG_INTERVAL_US) {
       last_ts_ = cur_ts;
       need_log = true;
@@ -428,7 +443,6 @@ bool ObStorageTableGuard::check_if_need_log()
       // do nothing
     }
   }
-  return need_log;
 }
 } // namespace storage
 } // namespace oceanbase
