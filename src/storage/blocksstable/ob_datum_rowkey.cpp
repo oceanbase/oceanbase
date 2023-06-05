@@ -140,6 +140,10 @@ OB_DEF_DESERIALIZE(ObDatumRowkey)
     STORAGE_LOG(WARN, "datum row key is not init", K(ret), KP(datums_));
   } else {
     OB_UNIS_DECODE(datum_cnt_);
+    if (datum_cnt_ > OB_INNER_MAX_ROWKEY_COLUMN_NUMBER) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "table store inner max rowkey column number exceed the limit, too large", K(ret), K(datum_cnt_));
+    }
     OB_UNIS_DECODE_ARRAY(datums_, datum_cnt_);
     hash_ = 0;
     group_idx_ = 0;
