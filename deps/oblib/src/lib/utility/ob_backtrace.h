@@ -35,6 +35,7 @@ char *lbt();
 char *lbt(char *buf, int32_t len);
 char *parray(int64_t *array, int size);
 char *parray(char *buf, int64_t len, int64_t *array, int size);
+void addrs_to_offsets(void **buffer, int size);
 } // end namespace common
 } // end namespace oceanbase
 
