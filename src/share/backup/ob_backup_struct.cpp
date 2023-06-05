@@ -4333,17 +4333,22 @@ int ObRestoreSourceServiceAttr::set_service_user(const char *user, const char *t
   return ret;
 }
 
-int ObRestoreSourceServiceAttr::set_service_tenant_id(const char *tenant_id)
+int ObRestoreSourceServiceAttr::set_service_tenant_id(const char *tenant_id_str)
 {
   int ret = OB_SUCCESS;
-  user_.tenant_id_ = atoi(tenant_id);
+  char *p_end = nullptr;
+  if (OB_FAIL(ob_strtoull(tenant_id_str, p_end, user_.tenant_id_))) {
+    LOG_WARN("fail to set service tenant id from string", K(tenant_id_str));
+  }
   return ret;
 }
 
-int ObRestoreSourceServiceAttr::set_service_cluster_id(const char *cluster_id)
+int ObRestoreSourceServiceAttr::set_service_cluster_id(const char *cluster_id_str)
 {
   int ret = OB_SUCCESS;
-  user_.cluster_id_ = atoi(cluster_id);
+  if (OB_FAIL(ob_atoll(cluster_id_str, user_.cluster_id_))) {
+    LOG_WARN("fail to set service cluster id from string", K(cluster_id_str));
+  }
   return ret;
 }
 
@@ -4572,9 +4577,9 @@ int ObRestoreSourceServiceAttr::gen_service_attr_str(char *buf, const int64_t bu
     LOG_WARN("get compatibility mode str failed");
   } else if (OB_FAIL(get_is_encrypted_str_(is_encrypted_str))) {
     LOG_WARN("get encrypted str failed");
-  } else if (OB_FAIL(str.assign_fmt("IP_LIST=%s,USER=%s,PASSWORD=%s,TENANT_ID=%ld,CLUSTER_ID=%ld,COMPATIBILITY_MODE=%s",
-    ip_str.ptr(), user_str.ptr(), passwd_str.ptr(), user_.tenant_id_, user_.cluster_id_, compat_str.ptr()))) {
-    LOG_WARN("fail to assign str");
+  } else if (OB_FAIL(str.assign_fmt("IP_LIST=%s,USER=%s,PASSWORD=%s,TENANT_ID=%ld,CLUSTER_ID=%ld,COMPATIBILITY_MODE=%s,IS_ENCRYPTED=%s",
+    ip_str.ptr(), user_str.ptr(), passwd_str.ptr(), user_.tenant_id_, user_.cluster_id_, compat_str.ptr(), is_encrypted_str.ptr()))) {
+    LOG_WARN("fail to assign str", K(compat_str), K(is_encrypted_str));
   } else if (OB_FAIL(databuff_printf(buf, buf_size, "%.*s", static_cast<int>(str.length()), str.ptr()))) {
     LOG_WARN("fail to print str", K(str));
   }
