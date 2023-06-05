@@ -710,33 +710,42 @@ int ObTransService::get_ls_read_snapshot_version(const share::ObLSID &local_ls_i
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_WEAK_READ_SNAPSHOT_DELAY_US);
-
-int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_time,
+int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_us_for_user,
                                                    SCN &snapshot)
 {
   int ret = OB_SUCCESS;
   bool monotinic_read = true;;
+  SCN wrs_scn;
+
     // server weak read version
   if (!ObWeakReadUtil::enable_monotonic_weak_read(tenant_id_)) {
-    if (OB_FAIL(GCTX.weak_read_service_->get_server_version(tenant_id_, snapshot))) {
+    if (OB_FAIL(GCTX.weak_read_service_->get_server_version(tenant_id_, wrs_scn))) {
       TRANS_LOG(WARN, "get server read snapshot fail", K(ret), KPC(this));
     }
     monotinic_read = false;
     // wrs cluster version
-  } else if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, snapshot))) {
+  } else if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, wrs_scn))) {
     TRANS_LOG(WARN, "get weak read snapshot fail", K(ret), KPC(this));
-  } else if (-1 == max_read_stale_time) {
-    // no need to check barrier version
-    // do nothing
   } else {
-    // check snapshot version barrier which is setted by user system variable
-    const int64_t snapshot_barrier = ObTimeUtility::current_time() - max_read_stale_time
-                                      + abs(ERRSIM_WEAK_READ_SNAPSHOT_DELAY_US);
-    if (snapshot.convert_to_ts() < snapshot_barrier) {
-      TRANS_LOG(WARN, "weak read snapshot too stale", K(snapshot),
-                K(snapshot_barrier), "delta", (snapshot_barrier - snapshot.convert_to_ts()));
-      ret = OB_REPLICA_NOT_READABLE;
+    // do nothing
+  }
+  if (OB_SUCC(ret)) {
+    if (max_read_stale_us_for_user < 0) {
+      // no need to check barrier version
+      snapshot = wrs_scn;
+    } else {
+      // check snapshot version barrier which is setted by user system variable
+      SCN gts_cache;
+      SCN current_scn;
+      if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, NULL, gts_cache))) {
+        TRANS_LOG(WARN, "get ts sync error", K(ret), K(max_read_stale_us_for_user));
+      } else {
+        const int64_t current_time_us = MTL_IS_PRIMARY_TENANT()
+                ? std::max(ObTimeUtility::current_time(), gts_cache.convert_to_ts())
+                : 0 ;
+        current_scn.convert_from_ts(current_time_us - max_read_stale_us_for_user);
+        snapshot = SCN::max(wrs_scn, current_scn);
+      }
     }
   }
   TRANS_LOG(TRACE, "get weak-read snapshot", K(ret), K(snapshot), K(monotinic_read));

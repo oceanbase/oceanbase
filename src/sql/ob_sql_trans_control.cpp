@@ -642,7 +642,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
     SCN snapshot_version = SCN::min_scn();
     if (OB_FAIL(txs->get_weak_read_snapshot_version(session->get_ob_max_read_stale_time(),
-                snapshot_version))) {
+                                                    snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
       int64_t stale_time = session->get_ob_max_read_stale_time();
       int64_t refresh_interval = GCONF.weak_read_version_refresh_interval;
@@ -1188,7 +1188,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       || max_stale_time_us <= -2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
-  } else if (-1 == max_stale_time_us) {
+  } else if (max_stale_time_us < 0) {
     // no need check
     can_read = true;
   } else if (observer::ObServer::get_instance().get_self() == addr) {

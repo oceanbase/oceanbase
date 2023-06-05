@@ -441,7 +441,7 @@ int ObMultiVersionGarbageCollector::study_min_unallocated_WRS(
     transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID());
 
   if (OB_FAIL(MTL(transaction::ObTransService*)->get_weak_read_snapshot_version(
-                max_read_stale_time,
+                -1, // system variable : max read stale time for user
                 min_unallocated_WRS))) {
     MVCC_LOG(WARN, "fail to get weak read snapshot", K(ret));
     if (OB_REPLICA_NOT_READABLE == ret) {
