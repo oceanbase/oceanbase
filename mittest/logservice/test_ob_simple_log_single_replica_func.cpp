@@ -620,7 +620,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_restart)
   sleep(1);
   EXPECT_EQ(OB_ERR_UNEXPECTED, restart_paxos_groups());
   system(log_fd);
-  PALF_LOG(INFO, "first restart_paxos_groups");
+  PALF_LOG(INFO, "first restart_paxos_groups, after meta dir is empty while log dir is not");
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
 
   // 验证切文件过程中宕机重启
@@ -641,7 +641,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_restart)
     EXPECT_EQ(PALF_BLOCK_SIZE, log_storage->curr_block_writable_size_);
     EXPECT_EQ(1, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
   }
-  PALF_LOG(INFO, "second restart_paxos_groups");
+  PALF_LOG(INFO, "second restart_paxos_groups after restart in process of switch block");
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
   {
     PalfHandleImplGuard leader;
@@ -677,7 +677,8 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_restart)
     EXPECT_EQ(OB_SUCCESS, log_storage->update_manifest_(2));
     EXPECT_EQ(2, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
   }
-  // 验证truncate或flashback过程中，修改完manifest后，truncaet/flashback正好将最后一个文件空
+  PALF_LOG(INFO, "fourth restart_paxos_groups after modify manifest while not delete block");
+  // 验证truncate或flashback过程中，修改完manifest后，truncaet/flashback正好将最后一个文件清空
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
   {
     PalfHandleImplGuard leader;
@@ -693,6 +694,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_restart)
     EXPECT_EQ(OB_SUCCESS, log_storage->truncate(LSN(2*PALF_BLOCK_SIZE)));
     EXPECT_EQ(OB_SUCCESS, log_storage->update_manifest_(2));
   }
+  PALF_LOG(INFO, "five restart_paxos_groups after modify manifest and last block is empty");
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
   {
     PalfHandleImplGuard leader;
@@ -707,6 +709,54 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_restart)
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
     wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
     EXPECT_EQ(3, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
+  }
+  PALF_LOG(INFO, "six restart_paxos_groups");
+  // 验证base lsn 大于持久化的committed 位点
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
+    LogIOWorker *iow = leader.palf_handle_impl_->log_engine_.log_io_worker_;
+    int64_t epoch = leader.palf_handle_impl_->log_engine_.palf_epoch_;
+    int64_t palf_id = leader.palf_handle_impl_->palf_id_;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 29, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
+    // 预期log_tail接近文件2的尾部
+    EXPECT_LE(LSN(3*PALF_BLOCK_SIZE) - log_storage->log_tail_, 5*1024*1024);
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_end_lsn()));
+    sleep(1);
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1000));
+    wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
+    EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
+    IOTaskConsumeCond cond(palf_id, epoch);
+    EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&cond));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, MAX_LOG_BODY_SIZE));
+    while (1) {
+      if (leader.palf_handle_impl_->sw_.last_submit_end_lsn_ < leader.palf_handle_impl_->get_max_lsn()) {
+        usleep(5000);
+        leader.palf_handle_impl_->sw_.freeze_mode_ = FEEDBACK_FREEZE_MODE;
+        leader.palf_handle_impl_->sw_.feedback_freeze_last_log_();
+        PALF_LOG(INFO, "has log in sw", "last_submit_end_lsn", leader.palf_handle_impl_->sw_.last_submit_end_lsn_,
+                 "max_lsn", leader.palf_handle_impl_->get_max_lsn());
+      } else {
+        break;
+      }
+    }
+    cond.cond_.signal();
+    EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
+    PALF_LOG(INFO, "after wait_lsn_until_flushed", "end_lsn:", leader.palf_handle_impl_->get_end_lsn(),
+             "max_lsn:", leader.palf_handle_impl_->get_end_lsn());
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+    EXPECT_GE(leader.palf_handle_impl_->get_max_lsn(), LSN(3*PALF_BLOCK_SIZE));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_base_lsn(LSN(3*PALF_BLOCK_SIZE)));
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  PALF_LOG(INFO, "seven restart_paxos_groups after committed lsn is smaller than base lsn");
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 1000));
+    EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
   }
 }
 
@@ -1780,7 +1830,6 @@ TEST_F(TestObSimpleLogClusterSingleReplica, read_block_in_flashback)
   EXPECT_EQ(OB_ITER_END, read_log(leader));
   EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, log_storage->get_block_min_scn(max_block_id, scn));
 }
-
 
 } // namespace unittest
 } // namespace oceanbase

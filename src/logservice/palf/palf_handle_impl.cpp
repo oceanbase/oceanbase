@@ -3660,8 +3660,7 @@ int PalfHandleImpl::construct_palf_base_info_(const LSN &max_committed_lsn,
   int ret = OB_SUCCESS;
   LogInfo prev_log_info;
   const LSN base_lsn = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-  if (false == max_committed_lsn.is_valid()
-      || max_committed_lsn < base_lsn) {
+  if (false == max_committed_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K(max_committed_lsn), K(base_lsn));
     // NB:
@@ -3690,8 +3689,7 @@ int PalfHandleImpl::construct_palf_base_info_for_flashback_(const LSN &start_lsn
   int ret = OB_SUCCESS;
   LogInfo &prev_log_info = palf_base_info.prev_log_info_;
   const LSN base_lsn = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-  if (false == start_lsn.is_valid()
-      || start_lsn < base_lsn) {
+  if (false == start_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K(start_lsn), K(base_lsn));
   } else if (prev_entry_header.is_valid()) {
@@ -4109,6 +4107,13 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
       }
     }
     time_guard.click("while");
+    auto alloc_memory_until_success = [&last_log_buf, &last_log_buf_len]() {
+      while (NULL ==
+          (last_log_buf = static_cast<char*>(mtl_malloc(last_log_buf_len, "PalfHandleImpl")))) {
+        PALF_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "alloc memory for last_log_buf in flashback failed", K(last_log_buf_len));
+        usleep(1000);
+      };
+    };
     // step2. construct new palf base info.
     if (OB_ITER_END == ret) {
       int tmp_ret = OB_SUCCESS;
@@ -4122,10 +4127,7 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
             K(prev_entry_header));
       } else if (FALSE_IT(last_log_buf_len = curr_group_entry.get_group_entry_size())
                  || FALSE_IT(last_log_start_lsn = curr_log_lsn)) {
-      } else if (NULL ==
-          (last_log_buf = static_cast<char*>(ob_malloc(last_log_buf_len, "PalfHandleImpl")))) {
-        tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
-        PALF_LOG(WARN, "alloc memory for last_log_buf in flashback failed", K(ret));
+      } else if (FALSE_IT(alloc_memory_until_success())){
       } else if (OB_TMP_FAIL(curr_group_entry.serialize(last_log_buf, last_log_buf_len, pos))) {
         PALF_LOG(ERROR, "curr_group_entry serialize failed", K(ret));
       } else {
