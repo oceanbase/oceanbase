@@ -23,6 +23,7 @@
 #include "share/ob_local_device.h"
 #include "lib/thread/thread_pool.h"
 #include "lib/file/file_directory_utils.h"
+#include "common/ob_clock_generator.h"
 
 #define ASSERT_SUCC(ret) ASSERT_EQ((ret), ::oceanbase::common::OB_SUCCESS)
 #define ASSERT_FAIL(ret) ASSERT_NE((ret), ::oceanbase::common::OB_SUCCESS)
@@ -1754,7 +1755,7 @@ int IOPerfRunner::do_perf_rolling()
   }
   int64_t pos = 0;
   while (!has_set_stop() && OB_SUCC(ret)) {
-    if (TC_REACH_TIME_INTERVAL(1000L * 1000L)) {
+    if (REACH_TIME_INTERVAL(1000L * 1000L)) {
       ATOMIC_FAA(&io_count_, local_io_count);
       ATOMIC_FAA(&total_io_count_, local_io_count);
       local_io_count = 0;

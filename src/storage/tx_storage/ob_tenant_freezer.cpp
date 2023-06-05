@@ -723,7 +723,7 @@ int ObTenantFreezer::get_tenant_memstore_cond(
 {
   int ret = OB_SUCCESS;
   int64_t unused = 0;
-  int64_t current_time = OB_TSC_TIMESTAMP.current_time();
+  int64_t current_time = ObClockGenerator::getClock();
   RLOCAL_INIT(int64_t, last_refresh_timestamp, 0);
   RLOCAL(int64_t, last_active_memstore_used);
   RLOCAL(int64_t, last_total_memstore_used);
@@ -902,7 +902,7 @@ int ObTenantFreezer::check_tenant_out_of_memstore_limit(bool &is_out_of_mem)
   int ret = OB_SUCCESS;
   RLOCAL(int64_t, last_check_timestamp);
   RLOCAL(bool, last_result);
-  int64_t current_time = OB_TSC_TIMESTAMP.current_time();
+  int64_t current_time = ObClockGenerator::getClock();
   ObTenantFreezeCtx ctx;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
