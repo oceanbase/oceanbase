@@ -654,8 +654,18 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
     } else {
       const ObStorageSchema &storage_schema = tablet_handle.get_obj()->get_storage_schema();
       int64_t column_count = 0;
+      share::schema::ObTableMode table_mode = storage_schema.get_table_mode_struct();
+      share::schema::ObIndexType index_type = storage_schema.get_index_type();
+      int64_t rowkey_column_cnt = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      int64_t schema_version = storage_schema.get_schema_version();
+      common::ObRowStoreType row_store_type = storage_schema.get_row_store_type();
       if (nullptr != first_ddl_sstable) {
         column_count = first_ddl_sstable->get_meta().get_basic_meta().column_cnt_;
+        table_mode = first_ddl_sstable->get_meta().get_basic_meta().table_mode_;
+        index_type = static_cast<share::schema::ObIndexType>(first_ddl_sstable->get_meta().get_basic_meta().index_type_);
+        rowkey_column_cnt = first_ddl_sstable->get_meta().get_basic_meta().rowkey_column_count_;
+        schema_version = first_ddl_sstable->get_meta().get_basic_meta().schema_version_;
+        row_store_type = first_ddl_sstable->get_meta().get_basic_meta().latest_row_store_type_;
       } else {
         if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(column_count))) {
           LOG_WARN("fail to get stored column count in sstable", K(ret));
@@ -674,11 +684,11 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
       } else {
         ObTabletCreateSSTableParam param;
         param.table_key_ = ddl_param.table_key_;
-        param.table_mode_ = storage_schema.get_table_mode_struct();
-        param.index_type_ = storage_schema.get_index_type();
-        param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-        param.schema_version_ = storage_schema.get_schema_version();
-        param.latest_row_store_type_ = storage_schema.get_row_store_type();
+        param.table_mode_ = table_mode;
+        param.index_type_ = index_type;
+        param.rowkey_column_cnt_ = rowkey_column_cnt;
+        param.schema_version_ = schema_version;
+        param.latest_row_store_type_ = row_store_type;
         param.create_snapshot_version_ = ddl_param.snapshot_version_;
         param.ddl_scn_ = ddl_param.start_scn_;
         ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
