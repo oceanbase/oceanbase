@@ -383,10 +383,7 @@ private:
     virtual ~TenantMetaAllocator() = default;
     TO_STRING_KV("used", used(), "total", total());
   protected:
-    virtual void *alloc_align(
-        const int64_t size,
-        const int64_t align,
-        const ObMemAttr &attr) override;
+    virtual void *alloc_align(const int64_t size, const int64_t align) override;
   private:
     TryWashTabletFunc &wash_func_;
   };

@@ -1625,13 +1625,12 @@ int ObTenantMetaMemMgr::GetWashTabletCandidate::operator()(
 
 void *ObTenantMetaMemMgr::TenantMetaAllocator::alloc_align(
     const int64_t size,
-    const int64_t align,
-    const ObMemAttr &attr)
+    const int64_t align)
 {
   int ret = OB_SUCCESS;
   void *ptr = nullptr;
   const int64_t max_wait_ts = ObTimeUtility::fast_current_time() + 1000L * 1000L * 3L; // 3s
-  while (OB_ISNULL(ptr = ObFIFOAllocator::alloc_align(size, align, attr))
+  while (OB_ISNULL(ptr = ObFIFOAllocator::alloc_align(size, align))
         && OB_SUCC(ret)
         && max_wait_ts - ObTimeUtility::fast_current_time() >= 0) {
     ob_usleep(1);
