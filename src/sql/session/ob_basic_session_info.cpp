@@ -70,7 +70,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       sys_var_base_version_(OB_INVALID_VERSION),
       tx_desc_(NULL),
       tx_result_(),
-      unused_read_snapshot_version_(),
+      reserved_read_snapshot_version_(),
       xid_(),
       associated_xa_(false),
       cached_tenant_config_version_(0),
@@ -404,7 +404,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
     sys_var_base_version_ = CACHED_SYS_VAR_VERSION;
   }
   curr_trans_last_stmt_end_time_ = 0;
-  unused_read_snapshot_version_.reset();
+  reserved_read_snapshot_version_.reset();
   check_sys_variable_ = true;
   is_foreign_key_cascade_ = false;
   is_foreign_key_check_exist_ = false;
@@ -4258,7 +4258,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               nested_count_,
               thread_data_.user_name_,
               next_tx_isolation_,
-              unused_read_snapshot_version_,
+              reserved_read_snapshot_version_,
               check_sys_variable_,
               unused_weak_read_snapshot_source,
               database_id_,
@@ -4453,7 +4453,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
               nested_count_,
               thread_data_.user_name_,
               next_tx_isolation_,
-              unused_read_snapshot_version_,
+              reserved_read_snapshot_version_,
               check_sys_variable_,
               unused_weak_read_snapshot_source,
               database_id_,
@@ -4770,7 +4770,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               nested_count_,
               thread_data_.user_name_,
               next_tx_isolation_,
-              unused_read_snapshot_version_,
+              reserved_read_snapshot_version_,
               check_sys_variable_,
               unused_weak_read_snapshot_source,
               database_id_,

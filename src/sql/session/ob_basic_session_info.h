@@ -1237,6 +1237,9 @@ public:
   void set_is_in_user_scope(bool value) { sql_scope_flags_.set_is_in_user_scope(value); }
   bool is_in_user_scope() const { return sql_scope_flags_.is_in_user_scope(); }
   SqlScopeFlags &get_sql_scope_flags() { return sql_scope_flags_; }
+  share::SCN get_reserved_snapshot_version() const { return reserved_read_snapshot_version_; }
+  void set_reserved_snapshot_version(const share::SCN snapshot_version) { reserved_read_snapshot_version_ = snapshot_version; }
+  void reset_reserved_snapshot_version() { reserved_read_snapshot_version_.reset(); }
 
   bool get_check_sys_variable() { return check_sys_variable_; }
   void set_check_sys_variable(bool check_sys_variable) { check_sys_variable_ = check_sys_variable; }
@@ -1990,7 +1993,12 @@ private:
 protected:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxExecResult tx_result_; // TODO: move to QueryCtx/ExecCtx
-  share::SCN unused_read_snapshot_version_;//serialize compatibility preserved
+  // reserved read snapshot version for current or previous stmt in the txn. And
+  // it is used for multi-version garbage colloector to collect ative snapshot.
+  // While it may be empty for the txn with ac = 1 and remote execution whose
+  // snapshot version is generated from remote server(called by start_stmt). So
+  // use it only query is active and version is valid.
+  share::SCN reserved_read_snapshot_version_;
   transaction::ObXATransID xid_;
   bool associated_xa_; // session joined distr-xa-trans by xa-start
   int64_t cached_tenant_config_version_;
