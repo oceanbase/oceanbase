@@ -1432,6 +1432,6 @@ DEF_BOOL(_enable_backtrace_function, OB_CLUSTER_PARAMETER, "True",
 DEF_TIME(_wait_interval_after_truncate, OB_CLUSTER_PARAMETER, "30s", "[0s,)",
         "time interval for waiting other servers to refresh schema after truncate",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "True",
         "Enable extract query range optimization for in predicate",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

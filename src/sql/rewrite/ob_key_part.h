@@ -199,7 +199,7 @@ struct InParamValsWrapper
     }
     return hash_code;
   }
-  ObSEArray<ObObj, 4> param_vals_;
+  ObSEArray<ObObj, MAX_EXTRACT_IN_COLUMN_NUMBER> param_vals_;
   TO_STRING_KV(K_(param_vals));
 };
 
@@ -237,8 +237,9 @@ struct ObInKeyPart
   bool find_param(const int64_t offset, InParamMeta *&param_meta);
   bool offsets_same_to(const ObInKeyPart *other) const;
   int union_in_key(ObInKeyPart *other);
-  int get_dup_vals(int64_t offset, const ObObj &val, ObIArray<int64_t> &dup_val_idx);
-  InParamMeta* create_param_meta(ObIAllocator &alloc);
+  int get_dup_vals(int64_t offset, const common::ObObj &val, common::ObIArray<int64_t> &dup_val_idx);
+  int remove_in_dup_vals();
+  InParamMeta* create_param_meta(common::ObIAllocator &alloc);
 
   uint64_t table_id_;
   InParamsArr in_params_;
@@ -372,10 +373,11 @@ public:
   // for in keypart, adjust params according to the invalid_offsets
   // and check it can be always true
   int formalize_keypart(bool contain_row);
-  int get_dup_param_and_vals(ObIArray<int64_t> &dup_param_idx,
-                             ObIArray<int64_t> &invalid_val_idx);
-  int remove_in_params(const ObIArray<int64_t> &invalid_param_idx, bool always_true);
-  int remove_in_params_vals(const ObIArray<int64_t> &val_idx);
+  int get_dup_param_and_vals(common::ObIArray<int64_t> &dup_param_idx,
+                             common::ObIArray<int64_t> &invalid_val_idx);
+  int remove_in_params(const common::ObIArray<int64_t> &invalid_param_idx, bool always_true);
+  int remove_in_params_vals(const common::ObIArray<int64_t> &val_idx);
+  int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
 
   int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row);

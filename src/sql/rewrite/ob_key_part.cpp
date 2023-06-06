@@ -530,9 +530,9 @@ int ObKeyPart::merge_two_in_keys(ObKeyPart *other, const SameValIdxMap &lr_idx)
 {
   int ret = OB_SUCCESS;
   ObSEArray<InParamMeta *, 4> new_params;
-  if (OB_ISNULL(other)) {
+  if (OB_ISNULL(other) || OB_UNLIKELY(!other->is_in_key()) || OB_UNLIKELY(!is_in_key())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(other), K(key_type_));
   } else if (OB_FAIL(append_array_no_dup(in_keypart_->offsets_,
                                          other->in_keypart_->offsets_))) {
     LOG_WARN("failed to append right offsets", K(ret));
@@ -724,7 +724,7 @@ int InParamMeta::assign(const InParamMeta &other, ObIAllocator &alloc)
   } else if (OB_FAIL(pos_.assign(other.pos_))) {
     LOG_WARN("failed to assign other", K(ret));
   } else if (OB_FAIL(vals_.reserve(other.vals_.count()))) {
-    LOG_WARN("failed to reserve vals count", K(ret));
+    LOG_WARN("failed to reserve vals count", K(ret), K(vals_.count()), K(other.vals_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < other.vals_.count(); ++i) {
       ObObj new_val;
@@ -825,6 +825,63 @@ int ObInKeyPart::get_dup_vals(int64_t offset, const ObObj &val, ObIArray<int64_t
       }
     }
   }
+  return ret;
+}
+
+int ObInKeyPart::remove_in_dup_vals()
+{
+  int ret = OB_SUCCESS;
+  int param_cnt = in_params_.count();
+  int val_cnt = get_param_val_cnt();
+  common::hash::ObHashSet<InParamValsWrapper> distinct_param_val_set;
+  ObSEArray<InParamValsWrapper, 16> distinct_param_val_arr;
+  if (OB_FAIL(distinct_param_val_set.create(val_cnt))) {
+    LOG_WARN("failed to create partition macro id set", K(ret));
+  }
+  bool has_dup = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < val_cnt; ++i) {
+    InParamValsWrapper cur_param_vals;
+    for (int64_t j = 0; OB_SUCC(ret) && j < param_cnt; ++j) {
+      InParamMeta *cur_param = in_params_.at(j);
+      if (OB_ISNULL(cur_param) || OB_UNLIKELY(val_cnt != cur_param->vals_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid argument", K(ret), K(val_cnt), K(cur_param), K(i), K(j));
+      } else if (OB_FAIL(cur_param_vals.param_vals_.push_back(cur_param->vals_.at(i)))) {
+        LOG_WARN("failed to push back val", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_HASH_EXIST == (ret = distinct_param_val_set.set_refactored(cur_param_vals, 0))) {
+      ret = OB_SUCCESS;
+      has_dup = true;
+    } else if (OB_UNLIKELY(OB_SUCCESS != ret)) {
+      LOG_WARN("failed to set range", K(ret));
+    } else if (OB_FAIL(distinct_param_val_arr.push_back(cur_param_vals))) {
+      LOG_WARN("failed to push back param values", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && has_dup) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
+      in_params_.at(i)->vals_.reuse();
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < distinct_param_val_arr.count(); ++i) {
+      const InParamValsWrapper &cur_param_vals = distinct_param_val_arr.at(i);
+      if (OB_UNLIKELY(cur_param_vals.param_vals_.count() != param_cnt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid param cnt", K(ret), K(param_cnt), K(cur_param_vals.param_vals_.count()));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < param_cnt; ++j) {
+          if (OB_ISNULL(in_params_.at(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (OB_FAIL(in_params_.at(j)->vals_.push_back(cur_param_vals.param_vals_.at(j)))) {
+            LOG_WARN("failed to push back val", K(ret));
+          }
+        }
+      }
+    }
+  }
+  LOG_TRACE("succeed to remove duplicated values from in keypart", K(has_dup), K(val_cnt), K(distinct_param_val_arr.count()));
   return ret;
 }
 
@@ -1172,6 +1229,8 @@ int ObKeyPart::formalize_keypart(bool contain_row)
         LOG_WARN("failed to adjust in param", K(ret));
       } else if (OB_FAIL(remove_in_params_vals(invalid_val_idx))) {
         LOG_WARN("failed to adjust in param values", K(ret));
+      } else if (OB_FAIL(remove_in_dup_vals())) {
+        LOG_WARN("failed to remove duplicated values", K(ret));
       }
     }
     if (OB_SUCC(ret) && is_in_key() &&
@@ -1180,6 +1239,18 @@ int ObKeyPart::formalize_keypart(bool contain_row)
         LOG_WARN("failed to convert to always true");
       }
     }
+  }
+  return ret;
+}
+
+int ObKeyPart::remove_in_dup_vals()
+{
+  int ret = OB_SUCCESS;
+  if (!is_in_key()) {
+  } else if (OB_FAIL(in_keypart_->remove_in_dup_vals())) {
+    LOG_WARN("failed to remove in dup values", K(ret));
+  } else if (in_keypart_->get_param_val_cnt() == 0) {
+    ret = convert_to_true_or_false(false);
   }
   return ret;
 }
@@ -1204,7 +1275,10 @@ int ObKeyPart::get_dup_param_and_vals(ObIArray<int64_t> &dup_param_idx, ObIArray
           LOG_WARN("failed to push back removed param idx", K(ret));
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && j < start_param->vals_.count(); ++j) {
-            if (!is_contain(invalid_val_idx, j) &&
+            if (OB_UNLIKELY(start_param->vals_.count() != next_param->vals_.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("values count must be the same", K(ret), K(*start_param), K(*next_param));
+            } else if (!is_contain(invalid_val_idx, j) &&
                 next_param->vals_.at(j) != start_param->vals_.at(j)) {
               ret = invalid_val_idx.push_back(j);
             }
