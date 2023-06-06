@@ -38,8 +38,6 @@ class ObBootstrapStmt;
     DISALLOW_COPY_AND_ASSIGN(name##Executor);              \
   }
 
-DEF_SIMPLE_EXECUTOR(ObAdminZone);
-
 DEF_SIMPLE_EXECUTOR(ObFreeze);
 
 DEF_SIMPLE_EXECUTOR(ObFlushCache);
@@ -192,6 +190,36 @@ private:
       const obrpc::ObServerList &svr_list,
       ObSqlString &sql);
   DISALLOW_COPY_AND_ASSIGN(ObAdminServerExecutor);
+};
+
+class ObAdminZoneExecutor
+{
+public:
+  ObAdminZoneExecutor() {}
+  virtual ~ObAdminZoneExecutor() {}
+  int execute(ObExecContext &ctx, ObAdminZoneStmt &stmt);
+private:
+  // wait leader switch out
+  // @params[in]  sql_proxy, the proxy to use
+  // @params[in]  arg, which zone to stop
+  int wait_leader_switch_out_(
+      ObISQLClient &sql_proxy,
+      const obrpc::ObAdminZoneArg &arg);
+  // construct sql to check waitint-result
+  // @params[in]  arg, which zone to stop
+  // @params[out] sql, the sql builded
+  int construct_wait_leader_switch_sql_(
+      const obrpc::ObAdminZoneArg &arg,
+      ObSqlString &sql);
+  // construct server infos in this zone
+  // @params[in]  sql_proxy, the proxy to use
+  // @params[in]  arg, which zone to stop
+  // @params[out] svr_list, which servers to stop
+  int construct_servers_in_zone_(
+      ObISQLClient &sql_proxy,
+      const obrpc::ObAdminZoneArg &arg,
+      obrpc::ObServerList &svr_list);
+  DISALLOW_COPY_AND_ASSIGN(ObAdminZoneExecutor);
 };
 
 #undef DEF_SIMPLE_EXECUTOR
