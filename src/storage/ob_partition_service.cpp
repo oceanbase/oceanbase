@@ -10125,6 +10125,7 @@ int ObPartitionService::internal_leader_revoke(const ObCbTask& revoke_task)
   int ret = OB_SUCCESS;
   const ObPartitionKey& pkey = revoke_task.pkey_;
   ObIPartitionGroupGuard guard;
+  bool need_retry = false;
   STORAGE_LOG(INFO, "begin internal_leader_revoke", K(pkey), K(revoke_task));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -10160,6 +10161,9 @@ int ObPartitionService::internal_leader_revoke(const ObCbTask& revoke_task)
     }
   } else if (OB_FAIL(txs_->leader_revoke(pkey))) {
     if (OB_NOT_RUNNING != ret) {
+      if (OB_EAGAIN == ret) {
+        need_retry = true;
+      }
       STORAGE_LOG(ERROR, "transaction leader revoke failed", K(ret), K(pkey));
     } else {
       STORAGE_LOG(WARN, "transaction leader revoke failed", K(ret), K(pkey));
@@ -10183,6 +10187,22 @@ int ObPartitionService::internal_leader_revoke(const ObCbTask& revoke_task)
     if ((OB_SYS_TENANT_ID != pkey.get_tenant_id()) && is_normal_pg) {
       (void)clog_mgr_->delete_pg_archive_task(guard.get_partition_group());
     }
+  } else if (need_retry) {
+    // can not switch partition state now, retry later
+    ret = OB_SUCCESS;
+    ObCbTask task;
+    task = revoke_task;
+    task.retry_cnt_++;
+    task.ret_code_ = ret;
+    task.leader_active_arg_.is_elected_by_changing_leader_ = false;
+    // overwrite retcode
+    if (OB_FAIL(push_callback_task(task))) {
+      STORAGE_LOG(WARN, "push callback task failed", K(task), K(ret));
+    } else {
+      STORAGE_LOG(INFO, "push back leader_revoke task successfully", K(task));
+    }
+  } else {
+    // do nothing
   }
   return ret;
 }

@@ -3004,7 +3004,6 @@ int ObPartTransCtx::leader_revoke(const bool first_check, bool& need_release, Ob
   } else if (submit_log_pending_count_ > 0 || is_gts_waiting_ || UINT64_MAX != dup_table_syncing_log_id_) {
     ret = OB_EAGAIN;
     TRANS_LOG(WARN, "submit log pending or gts waiting, need retry", KR(ret), "context", *this);
-    // Update the location cache information of the local partition leader
   } else {
     // after 3.1, preapre version in mt_ctx should be set for xa trans when leader revoke
     if (ObTransVersion::INVALID_TRANS_VERSION != state_.get_prepare_version()) {

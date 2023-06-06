@@ -225,7 +225,7 @@ void ObPartitionTransCtxMgr::print_all_ctx_(const int64_t max_print, const bool 
 
 //          START      LEADER_REVOKE LEADER_ACTIVE BLOCK     STOP    WAIT  REMOVE
 // INIT      F_WORKING  N             N             N         N       N     N
-// F_WORKING N          N             L_WORKING     F_BLOCKED STOPPED N     N
+// F_WORKING N          Y             L_WORKING     F_BLOCKED STOPPED N     N
 // L_WORKING N          F_WORKING     N             L_BLOCKED STOPPED N     N
 // F_BLOCKED N          N             L_BLOCKED     F_BLOCKED STOPPED N     N
 // L_BLOCKED N          F_BLOCKED     N             L_BLOCKED STOPPED N     N
@@ -237,7 +237,7 @@ int ObPartitionTransCtxMgr::StateHelper::switch_state(const int64_t op)
   int ret = OB_SUCCESS;
   static const int64_t N = State::INVALID;
   static const int64_t STATE_MAP[State::MAX][Ops::MAX] = {{State::F_WORKING, N, N, N, N, N, N},
-      {N, N, State::L_WORKING, State::F_BLOCKED, State::STOPPED, N, N},
+      {N, State::F_WORKING, State::L_WORKING, State::F_BLOCKED, State::STOPPED, N, N},
       {N, State::F_WORKING, N, State::L_BLOCKED, State::STOPPED, N, N},
       {N, N, State::L_BLOCKED, State::F_BLOCKED, State::STOPPED, N, N},
       {N, State::F_BLOCKED, N, State::L_BLOCKED, State::STOPPED, N, N},
@@ -3889,19 +3889,24 @@ int ObPartTransCtxMgr::leader_revoke(const ObPartitionKey& partition)
 {
   int ret = OB_SUCCESS;
   const int64_t SLEEP_US = 20000;  // 20ms
+  const int64_t MAX_RETRY_CNT = 10;
   bool need_retry = true;
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtxMgr not inited");
     ret = OB_NOT_INIT;
   } else {
-    for (int64_t retry = 0; need_retry && OB_SUCC(ret); ++retry) {
+    for (int64_t retry = 0; need_retry && retry < MAX_RETRY_CNT && OB_SUCC(ret); ++retry) {
       need_retry = false;
       do {
         DRWLock::RDLockGuard guard(rwlock_);
         if (OB_FAIL(ObTransCtxMgrImpl::leader_revoke(partition, 0 == retry))) {
-          TRANS_LOG(WARN, "participant leader revoke error", KR(ret), K(retry), K(partition));
-          need_retry = (OB_EAGAIN == ret);
+          if (retry == MAX_RETRY_CNT - 1) {
+            TRANS_LOG(ERROR, "participant leader revoke error", KR(ret), K(retry), K(partition));
+          } else {
+            TRANS_LOG(WARN, "participant leader revoke error", KR(ret), K(retry), K(partition));
+            need_retry = (OB_EAGAIN == ret);
+          }
         }
       } while (0);
       if (!is_running_) {

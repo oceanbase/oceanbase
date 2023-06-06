@@ -2933,7 +2933,7 @@ int ObPartitionGroup::try_switch_partition_state(const ObPartitionState state)
       {N, N, N, N, N, N, N, Y, Y, Y, N, N, Y, N},
       {N, N, N, N, N, N, Y, A, A, A, N, N, N, N},
       {N, N, N, N, N, N, Y, A, A, A, N, N, N, N},
-      {N, Y, N, N, N, N, N, NM, N, N, A, N, A, N},
+      {N, Y, N, N, N, N, N, NM, N, Y, A, N, A, N},
       {N, N, N, N, N, N, N, N, N, N, N, Y, Y, N},
       {N, Y, N, N, N, N, N, N, N, N, N, N, Y, N},
       {N, N, N, N, N, N, N, N, N, N, N, N, N, Y},
