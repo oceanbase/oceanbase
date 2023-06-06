@@ -22,6 +22,7 @@
 #include "src/share/restore/ob_log_restore_source.h" //ObLogRestoreSourceItem
 #include "src/share/backup/ob_backup_struct.h" //ObRestoreSourceServiceAttr
 #include "share/restore/ob_log_restore_source_mgr.h" //ObLogRestoreSourceMgr
+#include "share/ob_log_restore_proxy.h"  // ObLogRestoreProxyUtil
 
 namespace oceanbase
 {
@@ -67,8 +68,8 @@ namespace rootserver
 class ObRecoveryLSService : public ObTenantThreadHelper
 {
 public:
-  ObRecoveryLSService() : inited_(false),
-  tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL), primary_is_avaliable_(true) {}
+  ObRecoveryLSService() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL),
+  restore_proxy_(), primary_is_avaliable_(true) {}
   virtual ~ObRecoveryLSService() {}
   int init();
   void destroy();
@@ -104,15 +105,17 @@ private:
  int get_min_data_version_(uint64_t &compatible);
  int process_ls_operator_in_trans_(const share::ObLSAttr &ls_attr,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
+ int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
  void try_update_primary_ip_list();
- bool check_need_update_ip_list(share::ObLogRestoreSourceItem &item);
- int get_restore_source_value(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);
- int do_update_restore_source(ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
- int update_source_inner_table(char *buf, const int64_t buf_size, ObMySQLTransaction &trans, const ObLogRestoreSourceItem &item);
+ bool check_need_update_ip_list_(share::ObLogRestoreSourceItem &item);
+ int get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);
+ int do_update_restore_source_(ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
+ int update_source_inner_table_(char *buf, const int64_t buf_size, ObMySQLTransaction &trans, const ObLogRestoreSourceItem &item);
 private:
   bool inited_;
   uint64_t tenant_id_;
   common::ObMySQLProxy *proxy_;
+  ObLogRestoreProxyUtil restore_proxy_;
   bool primary_is_avaliable_;
 };
 }
