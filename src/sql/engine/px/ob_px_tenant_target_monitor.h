@@ -127,7 +127,7 @@ public:
   int refresh_statistics(bool need_refresh_all);
   bool is_leader();
   uint64_t get_version();
-  int update_peer_target_used(const ObAddr &server, int64_t peer_used);
+  int update_peer_target_used(const ObAddr &server, int64_t peer_used, uint64_t version);
   int get_global_target_usage(const hash::ObHashMap<ObAddr, ServerTargetUsage> *&global_target_usage);
   // if role is follower and find that its version is different with leader's
   // call this function to reset statistics, the param version is from the leader.
@@ -169,7 +169,18 @@ private:
   int64_t parallel_servers_target_; // equal in every server
   uint64_t version_; // for refresh target_info
   hash::ObHashMap<ObAddr, ServerTargetUsage> global_target_usage_; // include self
-  ObSpinLock spin_lock_;
+  // a lock to handle the concurrent access and modification of version_ and usage map.
+  // use write lock before reset map and refresh the version
+  // use read lock before other operations of version_ and usage map.
+  // That means, there may be multiple threads modify the map concurrently,
+  // including insert/update operations, without delete.
+  // The basic principle is that:
+  // 1. When we update the map and find that the key does not exist, we try to insert an entry first,
+  //    if insert failed with OB_HASH_EXIST, that means someone else insert already, we should try update again.
+  //    This update operation will always succeed because we have created read lock and this entry cannot be removed.
+  // 2. When we insert into the map and failed with OB_HASH_EXIST, skip insert if the usage is empty,
+  //    otherwise do a update operation.
+  SpinRWLock spin_lock_;
   int64_t parallel_session_count_;
   ObPxTargetCond target_cond_;
   bool print_debug_log_;
