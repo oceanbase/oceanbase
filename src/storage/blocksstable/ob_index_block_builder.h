@@ -126,12 +126,10 @@ public:
 
 struct ObIndexTreeRootBlockDesc final
 {
-  OB_UNIS_VERSION(1);
 public:
   ObIndexTreeRootBlockDesc()
     :addr_(),
      buf_(nullptr),
-     row_type_(common::ObRowStoreType::MAX_ROW_STORE),
      height_(0),
      is_meta_root_(false) {}
   ~ObIndexTreeRootBlockDesc() = default;
@@ -140,11 +138,10 @@ public:
   void set_empty();
   bool is_mem_type() const { return addr_.is_memory(); }
   bool is_file_type() const { return addr_.is_file(); }
-  TO_STRING_KV(K_(addr), KP_(buf), K_(row_type), K_(height));
+  TO_STRING_KV(K_(addr), KP_(buf), K_(height), K_(is_meta_root));
 public:
   storage::ObMetaDiskAddr addr_;
   char *buf_;
-  ObRowStoreType row_type_;
   int64_t height_;
   bool is_meta_root_;
 };
@@ -201,8 +198,8 @@ public:
       K_(data_column_cnt), K_(data_column_checksums), K_(data_default_column_rows_cnt),
       K_(row_count), K_(max_merged_trans_version), K_(contain_uncommitted_row),
       K_(occupy_size), K_(original_size), K_(data_checksum), K_(use_old_macro_block_count),
-      K_(compressor_type), K_(encrypt_id),
-      K_(master_key_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)));
+      K_(compressor_type), K_(root_row_store_type), K_(nested_offset), K_(nested_size),
+      K_(encrypt_id), K_(master_key_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)));
 public:
   ObIndexTreeRootBlockDesc root_desc_;
   ObIndexTreeRootBlockDesc data_root_desc_;
@@ -226,6 +223,7 @@ public:
   int64_t master_key_id_;
   int64_t nested_offset_;
   int64_t nested_size_;
+  ObRowStoreType root_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMergeRes);
 };
