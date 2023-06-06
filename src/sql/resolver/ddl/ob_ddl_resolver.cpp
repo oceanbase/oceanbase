@@ -2718,7 +2718,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       } else {
         //处理生成列的定义
         if (lib::is_oracle_mode()
-            && (column.get_meta_type().is_blob() || column.get_meta_type().is_clob())
+            && (column.get_meta_type().is_blob() || column.get_meta_type().is_clob() || column.is_xmltype())
             && !is_external_table) {
           ret = OB_ERR_INVALID_VIRTUAL_COLUMN_TYPE;
           LOG_WARN("invalid use of blob/clob type with generate defnition",
