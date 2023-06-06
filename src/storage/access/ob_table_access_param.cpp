@@ -375,6 +375,11 @@ int set_row_scn(
       LOG_WARN("Unexpected trans_idx", K(ret), KPC(store_row), KPC(read_info));
     } else {
       int64_t version = -store_row->storage_datums_[trans_idx].get_int();
+      if (version == share::SCN::max_scn().get_val_for_tx()) {
+        // TODO(handora.qc): remove it as if we confirmed no problem according to row_scn
+        LOG_INFO("use max row scn", KPC(store_row));
+      }
+
       if (version > 0) {
         store_row->storage_datums_[trans_idx].reuse();
         store_row->storage_datums_[trans_idx].set_int(version);

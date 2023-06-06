@@ -878,6 +878,10 @@ int ObMemtable::get(
           TRANS_LOG(WARN, "Failed to iterate row, ", K(ret), K(rowkey));
         } else {
           if (param.need_scn_) {
+            if (row_scn == share::SCN::max_scn().get_val_for_tx()) {
+              // TODO(handora.qc): remove it as if we confirmed no problem according to row_scn
+              TRANS_LOG(INFO, "use max row scn", K(context.store_ctx_->mvcc_acc_ctx_), K(trans_stat_row));
+            }
             for (int64_t i = 0; i < out_cols.count(); i++) {
               if (out_cols.at(i).col_id_ == OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
                 row.storage_datums_[i].set_int(row_scn);
