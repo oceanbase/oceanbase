@@ -4789,6 +4789,7 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
     ObSEArray<ObHiddenColumnItem, 4> pre_calc_exprs;
     ObHiddenColumnItem hidden_column_item;
     int64_t idx = -1;
+    const int64_t dummy_count = -1;
     for (int64_t i = PRE_CALC_RESULT_NULL; OB_SUCC(ret) && i <= PRE_CALC_NOT_PRECISE; ++i) {
       PreCalcExprExpectResult expect_result = static_cast<PreCalcExprExpectResult>(i);
       pre_calc_exprs.reuse();
@@ -4796,7 +4797,15 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
         if (expr_constraints.at(j).expect_result_ == expect_result) {
           hidden_column_item.expr_ = expr_constraints.at(j).pre_calc_expr_;
           hidden_column_item.hidden_idx_ = ++idx;
-          if (OB_FAIL(pre_calc_exprs.push_back(hidden_column_item))) {
+          if (OB_ISNULL(hidden_column_item.expr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect null", K(ret), K(j));
+          } else if (OB_FAIL(hidden_column_item.expr_->extract_info())) {
+            LOG_WARN("failed to extract expr info", K(ret));
+          } else if (OB_UNLIKELY(!ObOptEstUtils::is_calculable_expr(*hidden_column_item.expr_, dummy_count))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect calculable expr", K(ret), KPC(hidden_column_item.expr_));
+          } else if (OB_FAIL(pre_calc_exprs.push_back(hidden_column_item))) {
             LOG_WARN("failed to push back to array", K(ret));
           }
         }
