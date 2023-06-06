@@ -101,6 +101,13 @@ int ObLogRestoreDriverBase::do_schedule()
   return ret;
 }
 
+int ObLogRestoreDriverBase::set_global_recovery_scn(const share::SCN &recovery_scn)
+{
+  int ret = OB_SUCCESS;
+  global_recovery_scn_ = recovery_scn;
+  return ret;
+}
+
 int ObLogRestoreDriverBase::check_replica_status_(storage::ObLS &ls, bool &can_fetch_log)
 {
   int ret = OB_SUCCESS;
@@ -122,7 +129,8 @@ int ObLogRestoreDriverBase::get_upper_resotore_scn(share::SCN &scn)
   if (OB_FAIL(log_service_->get_replayable_point(replayable_point))) {
     ARCHIVE_LOG(WARN, "get replayable point failed", K(ret));
   } else {
-    scn = share::SCN::plus(replayable_point, FETCH_LOG_AHEAD_THRESHOLD_NS);
+    share::SCN advance_scn = share::SCN::plus(replayable_point, FETCH_LOG_AHEAD_THRESHOLD_NS);
+    scn = global_recovery_scn_ <= advance_scn ? global_recovery_scn_ : advance_scn;
   }
   return ret;
 }

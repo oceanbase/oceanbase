@@ -37,6 +37,7 @@ public:
   int init(const uint64_t tenant_id, ObLSService *ls_svr, ObLogService *log_service);
   void destroy();
   int do_schedule();
+  int set_global_recovery_scn(const share::SCN &recovery_scn);
 protected:
   virtual int do_fetch_log_(ObLS &ls) = 0;
   int check_replica_status_(storage::ObLS &ls, bool &can_fetch_log);
@@ -46,6 +47,7 @@ protected:
   uint64_t tenant_id_;
   storage::ObLSService *ls_svr_;
   ObLogService *log_service_;
+  share::SCN global_recovery_scn_;
 };
 } // namespace logservice
 } // namespace oceanbase

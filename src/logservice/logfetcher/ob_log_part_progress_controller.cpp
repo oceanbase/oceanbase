@@ -258,8 +258,7 @@ int PartProgressController::set_global_upper_limit(const int64_t global_upper_li
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not init");
     ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == global_upper_limit
-        || global_upper_limit < ATOMIC_LOAD(&global_fetch_log_upper_limit_))) {
+  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == global_upper_limit)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(global_upper_limit), K(global_fetch_log_upper_limit_));
   } else {

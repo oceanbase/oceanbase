@@ -77,15 +77,17 @@ int ObRemoteFetchLogImpl::do_schedule(const share::ObLogRestoreSourceItem &sourc
   } else if (is_service_log_source_type(source.type_)) {
     RestoreServiceAttr service_attr;
     ObSqlString value;
-  if (OB_FAIL(value.assign(source.value_))) {
-    CLOG_LOG(WARN, "string assign failed", K(source));
-  } else if (OB_FAIL(service_attr.parse_service_attr_from_str(value))) {
-    CLOG_LOG(WARN, "parse_service_attr failed", K(source));
-  } else {
-    ret = net_driver_->do_schedule(service_attr);
-  }
+    if (OB_FAIL(value.assign(source.value_))) {
+      CLOG_LOG(WARN, "string assign failed", K(source));
+    } else if (OB_FAIL(service_attr.parse_service_attr_from_str(value))) {
+      CLOG_LOG(WARN, "parse_service_attr failed", K(source));
+    } else {
+      ret = net_driver_->do_schedule(service_attr);
+      net_driver_->set_global_recovery_scn(source.until_scn_);
+    }
   } else if (is_location_log_source_type(source.type_)) {
     ret = archive_driver_->do_schedule();
+    archive_driver_->set_global_recovery_scn(source.until_scn_);
   } else {
     ret = OB_NOT_SUPPORTED;
   }
