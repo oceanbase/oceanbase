@@ -3657,6 +3657,71 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(ObRawExprFactory *expr_factory,
+                                                    const ObSQLSessionInfo *session,
+                                                    ObRawExpr* &real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(real_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real_ref_expr is null", K(ret));
+  } else if (real_ref_expr->get_result_type().is_ext()) {
+    if (real_ref_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
+      // add implicit cast to sql xmltype
+      ObRawExpr *new_expr = NULL;
+      ObCastMode cast_mode = CM_NONE;
+      ObExprResType sql_udt_type;
+      sql_udt_type.set_sql_udt(ObXMLSqlType); // set subschema id
+      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, session, cast_mode))) {
+        LOG_WARN("get default cast mode failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
+                                            expr_factory, session,
+                                            *real_ref_expr,  sql_udt_type, cast_mode, new_expr))) {
+        LOG_WARN("try add cast expr above failed", K(ret));
+      } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
+        LOG_WARN("failed to add flag", K(ret));
+      } else {
+        real_ref_expr = new_expr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factory,
+                                                    const ObSQLSessionInfo *session,
+                                                    ObRawExpr* &real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(real_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real_ref_expr is null", K(ret));
+  } else if (real_ref_expr->get_result_type().is_user_defined_sql_type()) {
+    if (real_ref_expr->get_result_type().is_xml_sql_type()) {
+      // add implicit cast to sql xmltype
+      ObRawExpr *new_expr = NULL;
+      ObCastMode cast_mode = CM_NONE;
+      ObExprResType pl_udt_type;
+      pl_udt_type.set_ext();
+      pl_udt_type.set_extend_type(pl::PL_OPAQUE_TYPE);
+      pl_udt_type.set_udt_id(T_OBJ_XML);
+      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session, cast_mode))) {
+        LOG_WARN("get default cast mode failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
+                                            expr_factory, session,
+                                            *real_ref_expr,  pl_udt_type, cast_mode, new_expr))) {
+        LOG_WARN("try add cast expr above failed", K(ret));
+      } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
+        LOG_WARN("failed to add flag", K(ret));
+      } else {
+        real_ref_expr = new_expr;
+      }
+    }
+  }
+  return ret;
+}
 
 int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
                                      ObRawExpr *src_expr,

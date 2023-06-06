@@ -881,8 +881,6 @@ private:
   int resolve_pq_distribute_window_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int check_cast_multiset(const ObRawExpr *expr, const ObRawExpr *parent_expr = NULL);
   int replace_col_udt_qname(ObQualifiedName& q_name);
-  int implict_cast_pl_udt_to_sql_udt(ObRawExpr* &real_ref_expr);
-  int implict_cast_sql_udt_to_pl_udt(ObRawExpr* &real_ref_expr);
   int check_column_udt_type(ParseNode *root_node);
   int resolve_table_dynamic_sampling_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
 

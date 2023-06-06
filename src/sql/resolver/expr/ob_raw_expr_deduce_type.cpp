@@ -2177,7 +2177,7 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
     ObExprResTypes types;
     ObCastMode expr_cast_mode = CM_NONE;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
-      const ObRawExpr *param_expr = expr.get_param_expr(i);
+      ObRawExpr *param_expr = expr.get_param_expr(i);
       if (OB_ISNULL(param_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(param_expr));
@@ -2193,6 +2193,15 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
         //前面四个参数都要特殊处理
         if (OB_FAIL(deduce_type_visit_for_special_func(i, *param_expr, types))) {
           LOG_WARN("fail to visit for column_conv", K(ret), K(i));
+        }
+      } else if (lib::is_oracle_mode() && !expr.is_pl_expr() && expr.is_called_in_sql()
+        && T_FUN_SYS_CAST != expr.get_expr_type() && param_expr->get_expr_type() != T_FUN_SYS_CAST
+        && param_expr->get_result_type().get_type() == ObExtendType
+        && param_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
+        if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(expr_factory_, my_session_, param_expr))) {
+          LOG_WARN("add implict cast to pl udt expr failed", K(ret));
+        } else if (OB_FAIL(types.push_back(param_expr->get_result_type()))) {
+          LOG_WARN("push back param type failed", K(ret));
         }
       } else {
         if (OB_FAIL(types.push_back(param_expr->get_result_type()))) {
