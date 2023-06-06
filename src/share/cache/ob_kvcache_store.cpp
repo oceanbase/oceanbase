@@ -776,7 +776,7 @@ int ObKVCacheStore::print_tenant_memblock_info(ObDLink* head)
                 handle->score_))) {
               COMMON_LOG(WARN, "Fail to print tenant memblock info", K(ret), K(ctx_pos));
             }
-            de_handle_ref(handle);
+            de_handle_ref(handle, false /* do_retire */);
           }
           handle = static_cast<ObKVMemBlockHandle *>(link_next(handle));
         }
