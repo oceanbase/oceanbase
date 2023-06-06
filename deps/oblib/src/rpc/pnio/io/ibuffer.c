@@ -1,4 +1,4 @@
-static int64_t MIN_IBUFFER_SIZE = (1<<21) - (1<<15);
+static int64_t MIN_IBUFFER_SIZE = (1<<17) - 128;
 
 static void* ib_alloc(int64_t sz, int mod) {
   return ref_alloc(sz, mod);

@@ -74,6 +74,7 @@ class ObRpcPacketSet
   {
 #define PCODE_DEF(name, id)                     \
   names_[name] = #name;                         \
+  labels_[name] = "[L]"#name;                   \
   pcode_[name] = obrpc::name;                   \
   index_[obrpc::name] = name;
 #include "rpc/obrpc/ob_rpc_packet_list.h"
@@ -99,6 +100,15 @@ public:
     return name;
   }
 
+  const char *label_of_idx(int64_t idx) const
+  {
+    const char *name = "Unknown";
+    if (idx >= 0 && idx < PCODE_COUNT) {
+      name = labels_[idx];
+    }
+    return name;
+  }
+
   ObRpcPacketCode pcode_of_idx(int64_t idx) const
   {
     ObRpcPacketCode pcode = OB_INVALID_RPC_CODE;
@@ -120,6 +130,7 @@ private:
   static ObRpcPacketSet instance_;
 
   const char *names_[PCODE_COUNT];
+  const char *labels_[PCODE_COUNT];
   ObRpcPacketCode pcode_[PCODE_COUNT];
   int64_t index_[OB_PACKET_NUM];
 };

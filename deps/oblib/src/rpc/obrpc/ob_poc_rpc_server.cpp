@@ -53,7 +53,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
     ObCurTraceId::set(tmp_pkt.get_trace_id());
     obrpc::ObRpcPacketCode pcode = tmp_pkt.get_pcode();
     auto &set = obrpc::ObRpcPacketSet::instance();
-    const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
+    const char* pcode_label = set.label_of_idx(set.idx_of_pcode(pcode));
     const int64_t pool_size = sizeof(ObPocServerHandleContext) + sizeof(ObRequest) + sizeof(ObRpcPacket) + alloc_payload_sz;
     int64_t tenant_id = tmp_pkt.get_tenant_id();
     if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
