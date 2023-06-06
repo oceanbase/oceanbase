@@ -2920,7 +2920,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
       if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
                                                           dtc_params, opt_ctx->get_exec_ctx(),
                                                           &expr_constraints,
-                                                          params,
+                                                          params, false, true,
                                                           is_in_range_optimization_enabled))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }

@@ -3565,6 +3565,8 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
                                                                  ctx.get_opt_ctx().get_exec_ctx(),
                                                                  NULL,
                                                                  params,
+                                                                 false,
+                                                                 true,
                                                                  ctx.get_session_info()->is_in_range_optimization_enabled()))) {
     LOG_WARN("failed to preliminary extract query range", K(ret));
   } else if (!query_range.need_deep_copy()) {

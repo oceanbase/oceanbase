@@ -2001,6 +2001,12 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
             b_flag = true;
           }
         }
+      } else if (tmp_key_part->is_always_true()) {
+        // (c1,c2) < (1,2), if c1 is not key but c2 is, then key_part c2 < 2 is returned
+        // however, (0,3) < (1,2) but not satisfy c2 < 2
+        // hence, extract row key part until we meet always true
+        b_flag = true;
+        row_is_precise = false;
       } else if (OB_FAIL(add_row_item(row_tail, tmp_key_part))) {
         LOG_WARN("Add basic query key part failed", K(ret));
       } else {

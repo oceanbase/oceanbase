@@ -6218,6 +6218,8 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
                                                                  optimizer_context_.get_exec_ctx(),
                                                                  NULL,
                                                                  params,
+                                                                 false,
+                                                                 true,
                                                                  is_in_range_optimization_enabled))) {
           LOG_WARN("failed to preliminary extract query range", K(ret));
         } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
