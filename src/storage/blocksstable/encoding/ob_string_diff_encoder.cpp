@@ -32,7 +32,7 @@ ObStringDiffEncoder::ObStringDiffEncoder()
     : string_size_(0), common_size_(0), row_store_size_(0),
     null_cnt_(0), nope_cnt_(0), first_string_(NULL),
     header_(NULL), last_change_diff_row_id_(0),
-    allocator_(blocksstable::OB_ENCODING_LABEL_STRING_DIFF)
+    allocator_(blocksstable::OB_ENCODING_LABEL_STRING_DIFF, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
 }
 

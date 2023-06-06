@@ -306,14 +306,15 @@ int ObMicroBlockEncoder::init_all_col_values(const ObMicroBlockEncodingCtx &ctx)
   if (OB_FAIL(all_col_datums_.reserve(ctx.column_cnt_))) {
     LOG_WARN("reserve array failed", K(ret), "size", ctx.column_cnt_);
   }
+  lib::ObMemAttr attr(MTL_ID(), blocksstable::OB_ENCODING_LABEL_PIVOT);
   for (int64_t i = all_col_datums_.count(); i < ctx.column_cnt_ && OB_SUCC(ret); ++i) {
-    ObColDatums *c = OB_NEW(ObColDatums, blocksstable::OB_ENCODING_LABEL_PIVOT);
+    ObColDatums *c = OB_NEW(ObColDatums, attr);
     if (OB_ISNULL(c)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret), K(ctx));
     } else if (OB_FAIL(all_col_datums_.push_back(c))) {
       LOG_WARN("push back column values failed", K(ret));
-      OB_DELETE(ObColDatums, blocksstable::OB_ENCODING_LABEL_PIVOT, c);
+      OB_DELETE(ObColDatums, attr, c);
     }
   }
   return ret;
