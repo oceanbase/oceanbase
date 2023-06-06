@@ -129,6 +129,9 @@ public:
   {
     return last_read_offset_;
   }
+  int64_t get_extent_idx_from_cache(const int64_t offset) const;
+  void update_extent_idx_cache(
+      const int64_t last_extent_id, const int64_t last_extent_min_offset, const int64_t last_extent_max_offset);
 
   TO_STRING_KV(KP_(buf), K_(size), K_(is_read), K_(has_wait), K_(expect_read_size), K_(last_read_offset), K_(io_flag),
       K_(update_offset_in_file));
@@ -149,6 +152,9 @@ private:
   int64_t last_read_offset_;  // only for more than 8MB read.
   common::ObIODesc io_flag_;
   bool update_offset_in_file_;
+  int64_t last_extent_id_;
+  int64_t last_extent_min_offset_;
+  int64_t last_extent_max_offset_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
@@ -337,10 +343,6 @@ private:
   uint64_t tenant_id_;
   int64_t offset_;  // read offset
   common::ObIAllocator *allocator_;
-  int64_t last_extent_id_;
-  int64_t last_extent_min_offset_;
-  int64_t last_extent_max_offset_;
-  common::SpinRWLock extent_idx_lock_;
   common::SpinRWLock lock_;
   bool is_inited_;
 

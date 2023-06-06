@@ -54,7 +54,10 @@ ObTmpFileIOHandle::ObTmpFileIOHandle()
       expect_read_size_(0),
       last_read_offset_(-1),
       io_flag_(),
-      update_offset_in_file_(false)
+      update_offset_in_file_(false),
+      last_extent_id_(0),
+      last_extent_min_offset_(0),
+      last_extent_max_offset_(INT64_MAX)
 {}
 
 ObTmpFileIOHandle::~ObTmpFileIOHandle()
@@ -193,11 +196,31 @@ void ObTmpFileIOHandle::reset()
   expect_read_size_ = 0;
   last_read_offset_ = -1;
   update_offset_in_file_ = false;
+  last_extent_id_ = 0;
+  last_extent_min_offset_ = 0;
+  last_extent_max_offset_ = INT64_MAX;
 }
 
 bool ObTmpFileIOHandle::is_valid()
 {
   return NULL != tmp_file_ && NULL != buf_ && size_ >= 0;
+}
+
+void ObTmpFileIOHandle::update_extent_idx_cache(
+    const int64_t last_extent_id, const int64_t last_extent_min_offset, const int64_t last_extent_max_offset)
+{
+  last_extent_id_ = last_extent_id;
+  last_extent_min_offset_ = last_extent_min_offset;
+  last_extent_max_offset_ = last_extent_max_offset;
+}
+
+int64_t ObTmpFileIOHandle::get_extent_idx_from_cache(const int64_t offset) const
+{
+  int64_t ith_extent = -1;
+  if (offset >= last_extent_min_offset_ && offset < last_extent_max_offset_) {
+    ith_extent = last_extent_id_;
+  }
+  return ith_extent;
 }
 
 ObTmpFileIOHandle::ObIOReadHandle::ObIOReadHandle() : macro_handle_(), buf_(NULL), offset_(0), size_(0)
@@ -528,19 +551,8 @@ int ObTmpFileMeta::clear()
 }
 
 ObTmpFile::ObTmpFile()
-  : file_meta_(),
-    is_big_(false),
-    tenant_id_(-1),
-    offset_(0),
-    allocator_(NULL),
-    last_extent_id_(0),
-    last_extent_min_offset_(0),
-    last_extent_max_offset_(INT64_MAX),
-    extent_idx_lock_(),
-    lock_(),
-    is_inited_(false)
-{
-}
+    : file_meta_(), is_big_(false), tenant_id_(-1), offset_(0), allocator_(NULL), lock_(), is_inited_(false)
+{}
 
 ObTmpFile::~ObTmpFile()
 {
@@ -557,9 +569,6 @@ int ObTmpFile::clear()
       is_big_ = false;
       tenant_id_ = -1;
       offset_ = 0;
-      last_extent_id_ = 0;
-      last_extent_min_offset_ = 0;
-      last_extent_max_offset_ = INT64_MAX;
       allocator_ = NULL;
       is_inited_ = false;
     }
@@ -609,25 +618,6 @@ int64_t ObTmpFile::find_first_extent(const int64_t offset)
     }
   }
   return first_extent;
-}
-
-void ObTmpFile::update_extent_idx_cache(
-    const int64_t last_extent_id, const int64_t last_extent_min_offset, const int64_t last_extent_max_offset)
-{
-  SpinWLockGuard guard(extent_idx_lock_);
-  last_extent_id_ = last_extent_id;
-  last_extent_min_offset_ = last_extent_min_offset;
-  last_extent_max_offset_ = last_extent_max_offset;
-}
-
-int64_t ObTmpFile::get_extent_idx_from_cache(const int64_t offset) const
-{
-  SpinRLockGuard guard(extent_idx_lock_);
-  int64_t ith_extent = -1;
-  if (offset >= last_extent_min_offset_ && offset < last_extent_max_offset_) {
-    ith_extent = last_extent_id_;
-  }
-  return ith_extent;
 }
 
 int ObTmpFile::aio_read_without_lock(const ObTmpFileIOInfo &io_info, int64_t &offset, ObTmpFileIOHandle &handle)
@@ -692,7 +682,7 @@ int ObTmpFile::once_aio_read_batch_without_lock(
   ObTmpFileExtent *tmp = nullptr;
   common::ObIArray<ObTmpFileExtent *> &extents = file_meta_.get_extents();
 
-  int64_t ith_extent = get_extent_idx_from_cache(offset);
+  int64_t ith_extent = handle.get_extent_idx_from_cache(offset);
   if (OB_UNLIKELY(-1 == ith_extent)) {
     ith_extent = find_first_extent(offset);
   }
@@ -720,7 +710,7 @@ int ObTmpFile::once_aio_read_batch_without_lock(
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(tmp) && OB_LIKELY(ith_extent > 0)) {
-    update_extent_idx_cache(ith_extent - 1, tmp->get_global_start(), tmp->get_global_end());
+    handle.update_extent_idx_cache(ith_extent - 1, tmp->get_global_start(), tmp->get_global_end());
   }
   return ret;
 }
