@@ -242,7 +242,7 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
   server_resource.reset();
   TenantUnits tenant_units;
 
-  if (OB_FAIL(omt_->get_tenant_units(tenant_units, true))) {
+  if (OB_FAIL(omt_->get_tenant_units(tenant_units, false))) {
     LOG_WARN("failed to get tenant units");
   } else {
     for (int64_t i = 0; i < tenant_units.count(); i++) {
