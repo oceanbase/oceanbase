@@ -363,7 +363,7 @@ int ObGlobalIndexBuilder::submit_build_global_index_task(const share::schema::Ob
       // this happens though it could lead to repeated task. The repeated task can be detected
       // in the task itself.
       if (OB_ERR_PRIMARY_KEY_DUPLICATE != ret) {
-        LOG_WARN("fail to execute write sql", K(ret));
+        LOG_WARN("fail to execute write sql", K(ret), K(sql_string));
       } else {
         ret = OB_SUCCESS;
         // There is a chance that RetryGhostIndexTask finds an unavailable index and sends a build index request,
@@ -380,11 +380,12 @@ int ObGlobalIndexBuilder::submit_build_global_index_task(const share::schema::Ob
           } else if (OB_FAIL(schema_guard.get_table_schema(index_tid, latest_index_schema))) {
             LOG_WARN("fail to get table schema", K(ret), K(index_tid));
           } else if (OB_ISNULL(latest_index_schema)) {
-            LOG_INFO("index schema is deleted, skip it");
+            LOG_INFO("index schema is deleted, skip it", K(index_tid));
           } else if (latest_index_schema->get_index_status() == INDEX_STATUS_UNAVAILABLE) {
             skip_set_task_map = false;
             LOG_INFO(
-                "global index record in __all_index_build_stat, but not in task_map, add it to avoid unexpected miss");
+                "global index record in __all_index_build_stat, but not in task_map, add it to avoid unexpected miss",
+                K(index_tid));
           }
         }
       }
@@ -394,7 +395,7 @@ int ObGlobalIndexBuilder::submit_build_global_index_task(const share::schema::Ob
 #endif
     if (OB_SUCC(ret)) {
       if (skip_set_task_map) {
-        LOG_INFO("task is already in task map, skip");
+        LOG_INFO("task is already in task map, skip", K(index_schema->get_table_id()));
       } else {
         task_ptr->tenant_id_ = index_schema->get_tenant_id();
         task_ptr->data_table_id_ = index_schema->get_data_table_id();
@@ -407,6 +408,7 @@ int ObGlobalIndexBuilder::submit_build_global_index_task(const share::schema::Ob
         if (OB_FAIL(task_map_.set_refactored(task_ptr->index_table_id_, task_ptr))) {
           LOG_WARN("fail to set refactored", K(ret));
         }
+        LOG_INFO("set task into task map", K(ret), KPC(task_ptr));
       }
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
@@ -506,9 +508,9 @@ int ObGlobalIndexBuilder::reload_building_indexes()
           }
         } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
                        extract_tenant_id(tmp_task.data_table_id_), tenant_schema_guard, tmp_task.schema_version_))) {
-          LOG_WARN("fail to get tenant schema guard", K(ret), K(tmp_task.data_table_id_));
+          LOG_WARN("fail to get tenant schema guard", K(ret), K(tmp_task));
         } else if (OB_FAIL(tenant_schema_guard.get_table_schema(tmp_task.index_table_id_, table_schema))) {
-          LOG_WARN("fail to get table schema", K(ret));
+          LOG_WARN("fail to get table schema", K(ret), K(tmp_task));
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table not exist",
@@ -532,11 +534,13 @@ int ObGlobalIndexBuilder::reload_building_indexes()
                 LOG_WARN("fail to fill global index task result", K(ret));
               } else if (OB_FAIL(task_map_.set_refactored(task_ptr->index_table_id_, task_ptr))) {
                 if (OB_HASH_EXIST == ret) {
+                  LOG_INFO("global index build task already exist", K(ret), KPC(task_ptr));
                   ret = OB_SUCCESS;
                 } else {
                   LOG_WARN("fail to set task map", K(ret));
                 }
               } else {
+                LOG_INFO("reload global index build task success", K(ret), KPC(task_ptr));
                 task_ptr = nullptr;
               }  // no more to do
               if (nullptr != task_ptr) {
@@ -1074,50 +1078,38 @@ int ObGlobalIndexBuilder::update_build_snapshot_ctx(PROXY& proxy, const common::
   return ret;
 }
 
-int ObGlobalIndexBuilder::update_task_global_index_build_snapshot(ObGlobalIndexTask* task, const int64_t snapshot)
+int ObGlobalIndexBuilder::update_task_global_index_build_snapshot(ObMySQLTransaction& trans, ObGlobalIndexTask* task, const int64_t snapshot)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(NULL == task)) {
+  } else if (OB_UNLIKELY(!trans.is_started() || NULL == task || snapshot <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(task));
+    LOG_WARN("invalid argument", K(ret), K(trans.is_started()), KP(task), K(snapshot));
   } else if (OB_UNLIKELY(GIBS_BUILD_SINGLE_REPLICA != task->status_ || NULL == mysql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task unexpected", K(ret), K(*task), KP(mysql_proxy_));
   } else {
-    ObMySQLTransaction trans;
     int64_t affected_rows = 0;
-    if (OB_FAIL(trans.start(mysql_proxy_))) {
-      LOG_WARN("fail to start transaction", K(ret));
-    } else {
-      ObSqlString sql_string;
-      if (OB_FAIL(sql_string.assign_fmt("UPDATE %s SET SNAPSHOT = %ld "
-                                        "WHERE TENANT_ID = %ld "
-                                        "AND DATA_TABLE_ID = %ld "
-                                        "AND INDEX_TABLE_ID = %ld ",
-              OB_ALL_INDEX_BUILD_STAT_TNAME,
-              snapshot,
-              task->tenant_id_,
-              task->data_table_id_,
-              task->index_table_id_))) {
-        LOG_WARN("fail to assign format", K(ret));
-      } else if (OB_FAIL(trans.write(sql_string.ptr(), affected_rows))) {
-        LOG_WARN("fail to execute sql", K(ret), K(sql_string));
-      } else if (1 != affected_rows) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected affected rows", K(ret), K(snapshot), K(*task));
-      }
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCCESS == ret))) {
-        ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-        LOG_WARN("fail to end trans", K(ret), K(tmp_ret));
-      }
-      if (OB_SUCC(ret)) {
-        task->snapshot_ = snapshot;
-        DEBUG_SYNC(AFTER_GLOBAL_INDEX_GET_SNAPSHOT);
-      }
+    ObSqlString sql_string;
+    if (OB_FAIL(sql_string.assign_fmt("UPDATE %s SET SNAPSHOT = %ld "
+                                      "WHERE TENANT_ID = %ld "
+                                      "AND DATA_TABLE_ID = %ld "
+                                      "AND INDEX_TABLE_ID = %ld "
+                                      "AND SNAPSHOT = %ld ",
+            OB_ALL_INDEX_BUILD_STAT_TNAME,
+            snapshot,
+            task->tenant_id_,
+            task->data_table_id_,
+            task->index_table_id_,
+            0L))) {
+      LOG_WARN("fail to assign format", K(ret));
+    } else if (OB_FAIL(trans.write(sql_string.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute sql", K(ret), K(sql_string));
+    } else if (1 != affected_rows) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected rows", K(ret), K(snapshot), K(*task), K(sql_string));
     }
   }
   return ret;
@@ -1185,15 +1177,15 @@ int ObGlobalIndexBuilder::drive_this_build_single_replica(const share::schema::O
   return ret;
 }
 
-int ObGlobalIndexBuilder::hold_snapshot(const ObGlobalIndexTask* task, const int64_t snapshot)
+int ObGlobalIndexBuilder::hold_snapshot(ObMySQLTransaction& trans, const ObGlobalIndexTask* task, const int64_t snapshot)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
-  } else if (OB_UNLIKELY(nullptr == task || snapshot < 0)) {
+  } else if (OB_UNLIKELY(!trans.is_started() || nullptr == task || snapshot <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(trans.is_started()), KP(task), K(snapshot));
   } else if (OB_UNLIKELY(nullptr == ddl_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl_service ptr is null", K(ret));
@@ -1213,31 +1205,19 @@ int ObGlobalIndexBuilder::hold_snapshot(const ObGlobalIndexTask* task, const int
     info2.tenant_id_ = task->tenant_id_;
     info2.table_id_ = task->index_table_id_;
 
-    ObMySQLTransaction trans;
-    common::ObMySQLProxy& proxy = ddl_service_->get_sql_proxy();
-    if (OB_FAIL(trans.start(&proxy))) {
-      LOG_WARN("fail to start trans", K(ret));
-    } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(trans, info1))) {
+    if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(trans, info1))) {
       LOG_WARN("fail to acquire snapshot", K(ret));
     } else if (!info2.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(info2));
     } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().set_index_building_snapshot(
-                   proxy, info2.table_id_, info2.snapshot_ts_))) {
+                   ddl_service_->get_sql_proxy(),  // do not use the same trans beacuse the table is in tenant space
+                   info2.table_id_,
+                   info2.snapshot_ts_))) {
       LOG_WARN("fail to set index building snapshot", KR(ret), K(info2));
     } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot_for_building_index(
                    trans, info2, info2.table_id_))) {
       LOG_WARN("fail to acquire snapshot", K(ret));
-    }
-    if (trans.is_started()) {
-      bool is_commit = (ret == OB_SUCCESS);
-      int tmp_ret = trans.end(is_commit);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("fail to end trans", K(ret), K(is_commit));
-        if (OB_SUCC(ret)) {
-          ret = tmp_ret;
-        }
-      }
     }
   }
   return ret;
@@ -1255,20 +1235,33 @@ int ObGlobalIndexBuilder::launch_new_build_single_replica(const share::schema::O
     LOG_WARN("invalid argument", K(ret));
   } else {
     int64_t snapshot = 0;
+    ObMySQLTransaction trans;
     if (0 != task->snapshot_) {
       snapshot = task->snapshot_;
     } else if (OB_FAIL(get_global_index_build_snapshot(task, schema_guard, index_schema, snapshot))) {
-      LOG_WARN("fail to get global index build snapshot", K(ret));
-    } else if (OB_FAIL(hold_snapshot(task, snapshot))) {
-      LOG_WARN("fail to hold snapshot", K(ret));
-    } else if (OB_FAIL(update_task_global_index_build_snapshot(task, snapshot))) {
-      LOG_WARN("fail to update global index build snapshot", K(ret));
+      LOG_WARN("fail to get global index build snapshot", K(ret), KPC(task));
+    } else if (OB_FAIL(trans.start(mysql_proxy_))) {
+      LOG_WARN("fail to start trans", K(ret), KPC(task));
     } else {
-    }  // no more to do
+      if (OB_FAIL(hold_snapshot(trans, task, snapshot))) {
+        LOG_WARN("fail to hold snapshot", K(ret), KPC(task), K(snapshot));
+      } else if (OB_FAIL(update_task_global_index_build_snapshot(trans, task, snapshot))) {
+        LOG_WARN("fail to update global index build snapshot", K(ret), KPC(task), K(snapshot));
+      }
+      int tmp_ret = trans.end(OB_SUCCESS == ret);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to end trans", K(tmp_ret), K(ret), KPC(task));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+      if (OB_SUCC(ret)) {
+        task->snapshot_ = snapshot;
+        DEBUG_SYNC(AFTER_GLOBAL_INDEX_GET_SNAPSHOT);
+      }
+    }
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(do_build_single_replica(task, index_schema, snapshot))) {
-      LOG_WARN("fail to do build single replica", K(ret));
+      LOG_WARN("fail to do build single replica", K(ret), KPC(task));
     } else {
       task->build_single_replica_stat_ = BSRT_INVALID;
       task->last_drive_ts_ = ObTimeUtility::current_time();

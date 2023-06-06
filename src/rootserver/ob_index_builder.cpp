@@ -1107,6 +1107,7 @@ int ObRSBuildIndexScheduler::push_task(ObRSBuildIndexTask& task)
     LOG_WARN("fail to generate index build stat record", K(ret));
   } else if (OB_FAIL(task_executor_.push_task(task))) {
     if (OB_LIKELY(OB_ENTRY_EXIST == ret)) {
+      LOG_INFO("build index task already exist", K(ret), K(task));
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("fail to push back task", K(ret));

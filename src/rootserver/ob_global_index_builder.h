@@ -317,7 +317,7 @@ private:
       const share::schema::ObTableSchema*& index_schema, bool& index_schema_exist);
   int get_global_index_build_snapshot(ObGlobalIndexTask* task, share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTableSchema* index_schema, int64_t& snapshot);
-  int hold_snapshot(const ObGlobalIndexTask* task, const int64_t snapshot);
+  int hold_snapshot(ObMySQLTransaction& trans, const ObGlobalIndexTask* task, const int64_t snapshot);
   int release_snapshot(const ObGlobalIndexTask* task);
   int init_build_snapshot_ctx(const common::ObIArray<PartitionServer>& partition_leader_array,
       common::ObIArray<int64_t>& invalid_snapshot_id_array, common::ObIArray<int64_t>& snapshot_array);
@@ -331,7 +331,7 @@ private:
       common::ObIArray<PartitionServer>& partition_leader_array, int64_t& snapshot);
   int generate_original_table_partition_leader_array(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTableSchema* data_schema, common::ObIArray<PartitionServer>& partition_leader_array);
-  int update_task_global_index_build_snapshot(ObGlobalIndexTask* task, const int64_t snapshot);
+  int update_task_global_index_build_snapshot(ObMySQLTransaction& trans, ObGlobalIndexTask* task, const int64_t snapshot);
   int pick_build_snapshot(const common::ObIArray<int64_t>& snapshot_array, int64_t& snapshot);
   int switch_state(ObGlobalIndexTask* task, const GlobalIndexBuildStatus next_status);
 
