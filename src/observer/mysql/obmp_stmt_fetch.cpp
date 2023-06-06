@@ -680,17 +680,9 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session)
   {
     int tmp_ret = OB_SUCCESS;
     //清空WARNING BUFFER
-    pl::ObPLCursorInfo *cursor = session.get_cursor(cursor_id_);
-    if (NULL != cursor
-        && cursor->is_streaming()
-        && NULL != cursor->get_cursor_handler()
-        && NULL != cursor->get_cursor_handler()->get_result_set()) {
-      ObSqlCtx *sql_ctx
-          = cursor->get_cursor_handler()->get_result_set()->get_exec_context().get_sql_ctx();
-      if (NULL != sql_ctx) {
-        tmp_ret = do_after_process(session, *sql_ctx, false/*no asyn response*/);
-      }
-    }
+    ObSqlCtx sql_ctx; // sql_ctx do nothing in do_after_process
+    tmp_ret = do_after_process(session, sql_ctx, false/*no asyn response*/);
+    UNUSED(tmp_ret);
   }
   return ret;
 }
