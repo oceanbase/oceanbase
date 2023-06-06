@@ -442,8 +442,10 @@ int ObTabletTableStore::update_memtables()
   } else if (FALSE_IT(time_guard.click("get_all_memtable"))) {
   } else if (tablet_ptr_->is_ls_inner_tablet() && OB_FAIL(memtables_.rebuild(inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables for ls inner tablet", K(ret), K(inc_memtables), KPC(this));
-  } else if (!tablet_ptr_->is_ls_inner_tablet() && OB_FAIL(memtables_.rebuild(tablet_ptr_->get_clog_checkpoint_scn(), inc_memtables))) {
-    LOG_ERROR("failed to rebuild table store memtables", K(ret),
+  } else if (!tablet_ptr_->is_ls_inner_tablet() && !memtables_.empty() && OB_FAIL(memtables_.rebuild(inc_memtables))) {
+    LOG_ERROR("failed to rebuild table store memtables for normal tablet when current memtable exists", K(ret), K(inc_memtables), KPC(this));
+  } else if (!tablet_ptr_->is_ls_inner_tablet() && memtables_.empty() && OB_FAIL(memtables_.rebuild(tablet_ptr_->get_clog_checkpoint_scn(), inc_memtables))) {
+    LOG_ERROR("failed to rebuild table store memtables for normal tablet when current memtable does not exist", K(ret),
         "clog_checkpoint_scn", tablet_ptr_->get_clog_checkpoint_scn(),
         K(inc_memtables), KPC(this));
   } else if (FALSE_IT(time_guard.click("memtables_.rebuild"))) {
