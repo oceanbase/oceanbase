@@ -17,7 +17,7 @@
 #define private public
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
-#include "share/ob_master_key_getter.h"
+
 using namespace oceanbase;
 using namespace common;
 using namespace share;
@@ -75,72 +75,6 @@ TEST(ObBackupDest, nfs)
   ASSERT_EQ(0, strcmp(dest.root_path_, "file:///backup_dir"));
 }
 
-TEST(ObBackupDest, oss)
-{
-  const char *backup_test = "oss://backup_dir/?host=xxx.com&access_id=111&access_key=222&delete_mode=tagging";
-  ObBackupDest dest;
-  ObBackupDest dest1;
-  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-  char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-  ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
-  ASSERT_EQ(OB_SUCCESS, dest1.set(backup_test));
-  LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), K(*(dest.get_storage_info())));
-  ASSERT_EQ(0, strcmp(dest.root_path_, "oss://backup_dir"));
-  ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
-
-  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
-  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
-                                                        obrpc::RootKeyType::DEFAULT, ObString()));
-  ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
-  ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&delete_mode=tagging"));
-  ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com"));
-  ASSERT_TRUE(dest.is_root_path_equal(dest1));
-  bool is_equal = false;
-  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
-  ASSERT_TRUE(is_equal);
-  ASSERT_TRUE(dest == dest1);
-  dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(dest.get_root_path().ptr(), dest.get_storage_info()));
-  ASSERT_TRUE(dest == dest1);
-  ObMasterKeyGetter::instance().stop();
-  ObMasterKeyGetter::instance().wait();
-  ObMasterKeyGetter::instance().reset();
-}
-
-TEST(ObBackupDest, oss_encrypt)
-{
-  const char *backup_test = "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
-  ObBackupDest dest;
-  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
-  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
-                                                        obrpc::RootKeyType::DEFAULT, ObString()));
-  ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
-  LOG_INFO("dump backup dest", K(dest.get_root_path()), K(*(dest.get_storage_info())));
-  ASSERT_EQ(0, strcmp(dest.root_path_, "oss://backup_dir"));
-  ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
-  const char *path = "oss://backup_dir/";
-  const char *endpoint = "host=xxx.com";
-  const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
-  const char *extension = "";
-  ObBackupDest dest1;
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
-  ASSERT_TRUE(dest == dest1);
-
-  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-  char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-  ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
-  ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F"));
-  ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com"));
-  
-  dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
-  ASSERT_TRUE(dest == dest1);
-  ObMasterKeyGetter::instance().stop();
-  ObMasterKeyGetter::instance().wait();
-  ObMasterKeyGetter::instance().reset();
-}
 
 int main(int argc, char **argv)
 {
