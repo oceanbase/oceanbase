@@ -285,6 +285,7 @@ bool ObPocRpcServer::client_use_pkt_nio() {
 extern "C" {
 void* pkt_nio_malloc(int64_t sz, const char* label) {
   ObMemAttr attr(OB_SERVER_TENANT_ID, label, ObCtxIds::PKT_NIO);
+  SET_USE_500(attr);
   return oceanbase::common::ob_malloc(sz, attr);
 }
 void pkt_nio_free(void *ptr) {

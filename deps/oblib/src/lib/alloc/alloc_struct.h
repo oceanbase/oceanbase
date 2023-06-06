@@ -142,9 +142,7 @@ private:
 
 inline ObMemAttr DoNotUseMe(ObMemAttr &attr)
 {
-#ifdef ENABLE_500_FALLBACK
   attr.use_500_ = true;
-#endif
   return attr;
 }
 
@@ -608,6 +606,9 @@ private:
   static thread_local ObMemAttr tl_mem_attr;
   ObMemAttr old_attr_;
 };
+
+#define FORCE_EXPLICT_500_MALLOC() \
+  OB_UNLIKELY(oceanbase::lib::ObMallocAllocator::get_instance()->force_explict_500_malloc_)
 
 } // end of namespace lib
 } // end of namespace oceanbase

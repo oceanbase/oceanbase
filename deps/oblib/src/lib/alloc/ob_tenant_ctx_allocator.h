@@ -81,8 +81,6 @@ public:
   {
     return reinterpret_cast<ObTenantCtxAllocator*&>(next_);
   }
-  void set_deleted(bool deleted) { deleted_ = deleted; }
-  bool has_deleted() const { return deleted_; }
 
   // will delete it
   virtual void *alloc(const int64_t size)

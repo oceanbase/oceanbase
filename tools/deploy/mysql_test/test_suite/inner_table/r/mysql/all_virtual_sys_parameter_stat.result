@@ -284,6 +284,7 @@ _enable_trace_session_leak
 _enable_transaction_internal_routing
 _fast_commit_callback_count
 _follower_snapshot_read_retry_duration
+_force_explict_500_malloc
 _force_hash_groupby_dump
 _force_hash_join_spill
 _force_skip_encoding_partition_id

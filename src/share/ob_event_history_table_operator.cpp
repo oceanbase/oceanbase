@@ -349,7 +349,7 @@ int ObEventHistoryTableOperator::add_event_to_timer_(const common::ObSqlString &
   ObAddr self_addr = self_addr_;
   common::ObMySQLProxy *proxy = proxy_;
   ObUniqueGuard<ObStringHolder> uniq_holder;
-  if (OB_FAIL(ob_make_unique(uniq_holder))) {
+  if (OB_FAIL(ob_make_unique(uniq_holder, SET_USE_500("EventReHolder")))) {
     SHARE_LOG(WARN, "fail to make unique guard");
   } else if (OB_FAIL(uniq_holder->assign(sql.string()))) {
     SHARE_LOG(WARN, "fail to create unique ownership of string");

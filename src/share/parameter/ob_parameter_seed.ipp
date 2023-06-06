@@ -1493,3 +1493,6 @@ DEF_CAP(_rebuild_replica_log_lag_threshold, OB_TENANT_PARAMETER, "0M", "[0M,)",
 DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "False",
         "Enable extract query range optimization for in predicate",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_force_explict_500_malloc, OB_CLUSTER_PARAMETER, "False",
+         "Force 500 memory for explicit allocation",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
