@@ -5777,13 +5777,15 @@ int ObPartTransCtx::prepare_mul_data_source_tx_end_(bool is_commit)
   if (OB_SUCC(ret)) {
     ObTxBufferNodeArray tmp_array;
 
-    if (mds_cache_.count() > 0
-      && OB_FAIL(submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
+    // We must submit all mds redo before submitting commit or abort log to avoid submitting redo by
+    // freeze after notified tx_end
+    if ((is_commit || (!is_commit && (has_persisted_log_() || is_logging_())))
+        && mds_cache_.count() > 0
+        && OB_FAIL(submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
       TRANS_LOG(WARN, "submit multi data souce log failed", K(ret));
     } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
       TRANS_LOG(WARN, "copy total mds array failed", K(ret));
-    } else if (OB_FAIL(notify_data_source_(NotifyType::TX_END, SCN(), false,
-                                           tmp_array))) {
+    } else if (OB_FAIL(notify_data_source_(NotifyType::TX_END, SCN(), false, tmp_array))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
     }
   }
