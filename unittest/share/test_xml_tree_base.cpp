@@ -103,6 +103,10 @@ public:
     return 0;
   }
 
+  bool is_equal_node(ObIMulModeBase* other) {
+    return false;
+  }
+
   int get_value(ObString& value, int64_t index = -1)  override
   {
     INIT_SUCC(ret);
