@@ -149,7 +149,8 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
       const char *set_sql_mode_sql = NULL;
       if (!is_oracle_mode() && OB_FAIL(ObDblinkService::get_set_sql_mode_cstr(my_session, set_sql_mode_sql, allocator_))) {
       LOG_WARN("failed to get set_sql_mode_sql", K(ret));
-      } else if (OB_FAIL(dblink_proxy->acquire_dblink(dblink_id,
+      } else if (OB_FAIL(dblink_proxy->acquire_dblink(tenant_id_,
+                                                      dblink_id,
                                                       link_type_,
                                                       param_ctx,
                                                       dblink_conn_,

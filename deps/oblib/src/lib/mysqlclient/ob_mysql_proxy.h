@@ -172,7 +172,7 @@ public:
                          const common::ObString &conn_str,
                          const common::ObString &cluster_str,
                          const sqlclient::dblink_param_ctx &param_ctx);
-  int acquire_dblink(uint64_t dblink_id,
+  int acquire_dblink(uint64 tenant_id, uint64_t dblink_id,
                      sqlclient::DblinkDriverProto dblink_type,
                      const sqlclient::dblink_param_ctx &param_ctx,
                      sqlclient::ObISQLConnection *&dblink_conn,
@@ -186,6 +186,7 @@ public:
   int switch_dblink_conn_pool(sqlclient::DblinkDriverProto type, sqlclient::ObISQLConnectionPool *&dblink_conn_pool);
   int set_dblink_pool_charset(uint64_t dblink_id);
   inline sqlclient::ObDbLinkConnectionPool *get_dblink_conn_pool() { return link_pool_; }
+  int clean_dblink_connection(uint64_t tenant_id);
   static int execute_init_sql(sqlclient::ObISQLConnection *dblink_conn, int link_type,
                               const char *set_sql_mode_cstr = NULL);
 private:
