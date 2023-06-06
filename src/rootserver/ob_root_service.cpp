@@ -4985,14 +4985,31 @@ int ObRootService::submit_build_index_task(const obrpc::ObSubmitBuildIndexTaskAr
     } else if (OB_FAIL(deep_copy_index_schema->assign(*index_schema))) {
       LOG_WARN("fail to assign index schema", K(ret), K(*index_schema));
     } else if (FALSE_IT(deep_copy_index_schema->set_schema_version(latest_schema_version))) {
-    } else if (deep_copy_index_schema->is_global_index_table() &&
-               OB_FAIL(global_index_builder_.submit_build_global_index_task(deep_copy_index_schema))) {
-      LOG_WARN("fail to submit build global index task", K(ret), K(*deep_copy_index_schema));
-    } else if (deep_copy_index_schema->is_index_local_storage()) {
-      ObIndexBuilder index_builder(ddl_service_);
-      if (OB_FAIL(index_builder.submit_build_local_index_task(*deep_copy_index_schema))) {
-        LOG_WARN("fail to submit build local index task", K(ret), K(*deep_copy_index_schema));
+    } else if (!global_index_builder_.is_loaded()) {
+      ret = OB_EAGAIN;
+      LOG_INFO("receive ghost retry request, but task not loaded, ignore", K(arg));
+    } else {
+      if (deep_copy_index_schema->is_global_index_table() &&
+          OB_FAIL(global_index_builder_.submit_build_global_index_task(deep_copy_index_schema))) {
+        LOG_WARN("fail to submit build global index task", K(ret), K(*deep_copy_index_schema));
+      } else if (deep_copy_index_schema->is_index_local_storage()) {
+        ObIndexBuilder index_builder(ddl_service_);
+        if (OB_FAIL(index_builder.submit_build_local_index_task(*deep_copy_index_schema))) {
+          LOG_WARN("fail to submit build local index task", K(ret), K(*deep_copy_index_schema));
+        }
       }
+      LOG_INFO("receive ghost retry task",
+          K(ret),
+          K(index_tid),
+          K(latest_schema_version),
+          "is_loaded",
+          global_index_builder_.is_loaded(),
+          "index_status",
+          index_schema->get_index_status(),
+          "is_global_index",
+          index_schema->is_global_index_table(),
+          "is_local_index",
+          index_schema->is_index_local_storage());
     }
   }
   if (deep_copy_index_schema != nullptr) {

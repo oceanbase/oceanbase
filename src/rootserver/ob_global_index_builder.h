@@ -228,6 +228,10 @@ public:
       common::ObAddr& server) override;
   int submit_build_global_index_task(const share::schema::ObTableSchema* index_schema);
   void stop() override;
+  bool is_loaded() const
+  {
+    return loaded_;
+  }
 
 private:
   static const int64_t BUILD_SINGLE_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL;        // 2h

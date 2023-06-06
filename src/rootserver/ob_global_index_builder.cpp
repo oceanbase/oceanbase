@@ -154,6 +154,7 @@ int ObGlobalIndexTask::get_partition_col_checksum_stat(
 
 ObGlobalIndexBuilder::ObGlobalIndexBuilder()
     : inited_(false),
+      loaded_(false),
       rpc_proxy_(NULL),
       mysql_proxy_(NULL),
       server_mgr_(NULL),
@@ -556,12 +557,14 @@ int ObGlobalIndexBuilder::reload_building_indexes()
       }
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
+        loaded_ = true;
       }
       if (OB_SUCCESS == ret) {
         idling_.wakeup();
       }
     }
   }
+  FLOG_INFO("reload_building_indexes finished", K(ret), K(loaded_), K(task_map_.size()));
   return ret;
 }
 
