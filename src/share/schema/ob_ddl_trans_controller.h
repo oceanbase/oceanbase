@@ -51,16 +51,16 @@ public:
       const uint64_t schema_version_count,
       int64_t &task_id,
       ObIArray<int64_t> &schema_version_res);
-  int wait_task_ready(int64_t task_id, int64_t wait_us);
+  int wait_task_ready(uint64_t tenant_id, int64_t task_id, int64_t wait_us);
   int remove_task(int64_t task_id);
-  int check_enable_ddl_trans_new_lock(int64_t tenant_id, bool &res);
-  int set_enable_ddl_trans_new_lock(int64_t tenant_id);
+  int check_enable_ddl_trans_new_lock(uint64_t tenant_id, bool &res);
+  int set_enable_ddl_trans_new_lock(uint64_t tenant_id);
   int broadcast_consensus_version(const int64_t tenant_id,
                                   const int64_t schema_version,
                                   const ObArray<ObAddr> &server_list);
 private:
   virtual void run1() override;
-  int check_task_ready(int64_t task_id, bool &ready);
+  int check_task_ready(uint64_t tenant_id, int64_t task_id, bool &ready);
 private:
   bool inited_;
   common::ObThreadCond cond_slot_[DDL_TASK_COND_SLOT];

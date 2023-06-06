@@ -16510,7 +16510,7 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
     }
   }
   int64_t finish_time = ObTimeUtility::current_time();
-  LOG_INFO("finish generate_table_schema", KR(ret), "cost_ts", finish_time - start_time);
+  LOG_INFO("finish generate_table_schema", KR(ret), "cost_ts", finish_time - start_time, K(task_id));
   return ret;
 }
 
@@ -16641,7 +16641,7 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
 
   int64_t before_wait_task = ObTimeUtility::current_time();
   // Serial Submit
-  if (FAILEDx(schema_service_->get_ddl_trans_controller().wait_task_ready(task_id, THIS_WORKER.get_timeout_remain()))) {
+  if (FAILEDx(schema_service_->get_ddl_trans_controller().wait_task_ready(tenant_id, task_id, THIS_WORKER.get_timeout_remain()))) {
     LOG_WARN("wait_task_ready", KR(ret), K(table_name), K(task_id));
   }
   int64_t wait_task = ObTimeUtility::current_time();
