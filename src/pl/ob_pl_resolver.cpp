@@ -14706,8 +14706,9 @@ int ObPLResolver::replace_object_compare_expr(ObRawExpr *&expr, ObPLCompileUnitA
             if (OB_INVALID_ID == luid || OB_INVALID_ID == ruid) {
               // do nothing, such as: obj1.a > obj2.a
             } else if (luid != ruid) {
-              ret = OB_ERR_UNEXPECTED;
+              ret = OB_NOT_SUPPORTED;
               LOG_WARN("compare between two different udt type", K(ret), K(luid), K(ruid));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "compare between two different composite type");
             } else if (l_type.is_object_type() && r_type.is_object_type()) {
               const ObString &self_name
                             = l->get_access_idxs().at(l->get_access_idxs().count() - 1).var_name_;
