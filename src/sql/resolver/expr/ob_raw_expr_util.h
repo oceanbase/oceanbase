@@ -738,6 +738,10 @@ public:
                                ObItemType type,
                                ObRawExpr *param_expr,
                                ObRawExpr *&exists_expr);
+  static int build_ora_decode_expr(ObRawExprFactory *expr_factory,
+                                   const ObSQLSessionInfo &session_info,
+                                   ObRawExpr *&expr,
+                                   ObIArray<ObRawExpr *> &param_exprs);
   template <typename T>
   static bool find_expr(const common::ObIArray<T> &exprs, const ObRawExpr* expr);
   template <typename T>
