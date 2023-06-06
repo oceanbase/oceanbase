@@ -74,18 +74,16 @@ int ObMySQLResult::print_info() const
   return OB_SUCCESS;
 }
 
-void ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length, 
+int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
                                                   oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType cs_type,
                                                   DblinkDriverProto link_type, bool old_max_length) const
 {
+  int ret = OB_SUCCESS;
   int16_t tmp_precision = precision;
   int16_t tmp_scale = scale;
   int32_t tmp_length = length;
-  // format precision from others to oceanbase
   if (ob_is_nstring(ob_type)) {
     precision = LS_CHAR; // precision is LS_CHAR means national character set (unicode)
-  } else if (ob_is_varchar_or_char(ob_type, cs_type)) {
-    precision = LS_BYTE; // precision is LS_BYTE means ascii character set (non-unicode)
   } else if (ObNumberFloatType == ob_type) {
     precision = tmp_precision; //bit precision, not decimal precision
   } else if (tmp_precision < OB_MIN_NUMBER_PRECISION || tmp_precision > OB_MAX_NUMBER_PRECISION) {
@@ -120,6 +118,12 @@ void ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &s
       length = tmp_length;
     }
   }
+  if (ObDoubleType == ob_type || ObFloatType == ob_type) {
+    precision = -1;
+    scale = -1;
+    length = -1;
+  }
+  return ret;
 }
 
 } // end namespace sqlclient
