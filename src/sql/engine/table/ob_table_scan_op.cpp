@@ -2489,8 +2489,13 @@ int ObTableScanOp::init_ddl_column_checksum()
         if (OB_FAIL(ret)) {
         } else if (!found) {
           // if not found, the column is virtual generated column, in this scene,
-          // no need reshape, because reshape in opt layer.
+          // if is_fixed_len_char_type() is true, need reshape
+          uint64_t VIRTUAL_GEN_FIX_LEN_TAG = 1ULL << 63;
+          if ((MY_SPEC.ddl_output_cids_.at(i) & VIRTUAL_GEN_FIX_LEN_TAG) >> 63) {
+            need_reshape = true;
+          } else {
             need_reshape = false;
+          }
         }
         if (OB_SUCC(ret) && OB_FAIL(col_need_reshape_.push_back(need_reshape))) {
           LOG_WARN("failed to push back col need reshape", K(ret));
@@ -2644,13 +2649,14 @@ int ObTableScanOp::report_ddl_column_checksum()
     const int64_t curr_scan_task_id = scan_task_id_++;
     const ObTabletID &tablet_id = MY_INPUT.tablet_loc_->tablet_id_;
     const uint64_t table_id = MY_CTDEF.scan_ctdef_.ref_table_id_;
+    uint64_t VIRTUAL_GEN_FIXED_LEN_MASK = ~(1ULL << 63);
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ddl_output_cids_.count(); ++i) {
       ObDDLChecksumItem item;
       item.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
       item.tenant_id_ = MTL_ID();
       item.table_id_ = table_id;
       item.ddl_task_id_ = MY_SPEC.plan_->get_ddl_task_id();
-      item.column_id_ = MY_SPEC.ddl_output_cids_.at(i);
+      item.column_id_ = MY_SPEC.ddl_output_cids_.at(i) & VIRTUAL_GEN_FIXED_LEN_MASK;
       item.task_id_ = ctx_.get_px_sqc_id() << 48 | ctx_.get_px_task_id() << 32 | curr_scan_task_id;
       item.checksum_ = i < column_checksum_.count() ? column_checksum_[i] : 0;
     #ifdef ERRSIM

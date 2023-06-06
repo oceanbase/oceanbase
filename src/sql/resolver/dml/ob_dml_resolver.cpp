@@ -6179,19 +6179,7 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
   } else if (ObCharType == column_schema->get_data_type()
              || ObNCharType == column_schema->get_data_type()) {
     if (is_pad_char_to_full_length(session->get_sql_mode())) {
-      // in ddl scene, T_INSERT && is_fixed_len_char_type,
-      // create index will trim virtual generated column in engine layer.
-      // Since we expanded the generated column into a dependent expression,
-      // we need to add trim on its dependent expression in this layer.
-      if (const_cast<ObSQLSessionInfo *>(session)->get_ddl_info().is_ddl() &&
-          stmt::T_INSERT == session->get_stmt_type() && column_schema->is_virtual_generated_column()) {
-        if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema,
-                                                    *params_.expr_factory_,
-                                                    session_info_,
-                                                    expr))) {
-          LOG_WARN("fail to build trime expr for char", K(ret));
-        }
-      } else if (OB_FAIL(ObRawExprUtils::build_pad_expr(*params_.expr_factory_,
+      if (OB_FAIL(ObRawExprUtils::build_pad_expr(*params_.expr_factory_,
                                                  true,
                                                  column_schema,
                                                  expr,
