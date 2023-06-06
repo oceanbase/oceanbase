@@ -112,9 +112,6 @@ public:
   int init(common::ObIAllocator *allocator, const ObMemtableArray &other);
   int build(common::ObIArray<ObTableHandleV2> &handle_array, const int64_t start_pos = 0);
   int rebuild(common::ObIArray<ObTableHandleV2> &handle_array);
-  int rebuild(
-      const share::SCN &clog_checkpoint_scn,
-      common::ObIArray<ObTableHandleV2> &handle_array);
   int prepare_allocate();
   int find(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const;
   int find(const share::SCN &start_scn, const int64_t base_version, ObITable *&table, int64_t &mem_pos) const;
