@@ -452,6 +452,7 @@ public:
   wfile.write(str(ob_sys_var_names_count) + ";")
   wfile.write("""
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
+  const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;
   // 表示当前OB能够使用的sys var id的最大值，正常情况下，不需要申请大于OB_MAX_SYS_VAR_ID的sys var id，
