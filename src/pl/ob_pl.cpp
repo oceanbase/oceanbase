@@ -2720,8 +2720,11 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
           } else {
             // element is composite type
             uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
-            bool is_compatible = false;
-            OZ (ObPLResolver::check_composite_compatible(ctx_, element_type_id, dest_type.get_user_type_id(), is_compatible));
+            bool is_compatible = element_type_id == coll_type->get_element_type().get_user_type_id();
+            if (!is_compatible) {
+              OZ (ObPLResolver::check_composite_compatible(
+                ctx_, element_type_id, dest_type.get_user_type_id(), is_compatible));
+            }
             if (OB_SUCC(ret) && !is_compatible) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("incorrect argument type", K(ret));
@@ -3411,7 +3414,7 @@ int ObPLExecState::execute()
   } else if (OB_ISNULL(reinterpret_cast<void*>(func_.get_action()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("action is NULL", K(ret));
-  } else if (OB_ISNULL(ctx_.exec_ctx_)) {
+  } else if (OB_ISNULL(ctx_.exec_ctx_) || OB_ISNULL(ctx_.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("execute context is null", K(ret));
   } else {
@@ -3509,15 +3512,21 @@ int ObPLExecState::execute()
       } else { /*do nothing*/ }
     }
 
+    if (top_call_
+        && ctx_.exec_ctx_->get_my_session()->is_track_session_info()
+        && ctx_.exec_ctx_->get_my_session()->is_package_state_changed()) {
+      LOG_DEBUG("++++++++ add changed package info to session! +++++++++++");
+      int tmp_ret = ctx_.exec_ctx_->get_my_session()->add_changed_package_info(*ctx_.exec_ctx_);
+      if (tmp_ret != OB_SUCCESS) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to add changed package info", K(ret));
+      } else {
+        ctx_.exec_ctx_->get_my_session()->reset_all_package_changed_info();
+      }
+    }
+
     if (OB_SUCC(ret)) {
       ObSQLSessionInfo *session_info = ctx_.exec_ctx_->get_my_session();
-      if (top_call_
-          && session_info->is_track_session_info()
-          && session_info->is_package_state_changed()) {
-        LOG_DEBUG("++++++++ add changed package info to session! +++++++++++");
-        OZ (session_info->add_changed_package_info(*ctx_.exec_ctx_));
-        OX (session_info->reset_all_package_changed_info());
-      }
     } else if (!inner_call_) {
     }
   }

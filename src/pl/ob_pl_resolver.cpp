@@ -10206,7 +10206,8 @@ int ObPLResolver::resolve_udf_info(
           ? current_block_->get_namespace().get_package_name() : package_name);
 
       bool is_package_body_udf
-        = package_routine_info->get_pkg_id() == current_block_->get_namespace().get_package_id()
+        = !package_routine_info->is_udt_routine()
+          && package_routine_info->get_pkg_id() == current_block_->get_namespace().get_package_id()
           && (ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY == current_block_->get_namespace().get_block_type()
               || ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY == current_block_->get_namespace().get_block_type()
               || ObPLBlockNS::BlockType::BLOCK_ROUTINE == current_block_->get_namespace().get_block_type());
