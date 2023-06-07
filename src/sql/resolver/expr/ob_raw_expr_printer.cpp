@@ -101,7 +101,8 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       && scope_ != T_FIELD_LIST_SCOPE
       && scope_ != T_GROUP_SCOPE
       && scope_ != T_WHERE_SCOPE
-      && scope_ != T_NONE_SCOPE) {
+      && scope_ != T_NONE_SCOPE
+      && scope_ != T_ORDER_SCOPE) {
     //expr is a alias column ref
     //alias column target list
     PRINT_QUOT;
@@ -803,7 +804,21 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("MULTISET");
       break;
     }
-    case T_OP_BOOL:
+    case T_OP_BOOL:{
+      CK(1 == expr->get_param_count());
+      if (print_params_.for_dblink_) {
+        DATA_PRINTF("(case when (");
+        PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(") then 1 else 0 end)");
+      } else if (expr->has_flag(IS_INNER_ADDED_EXPR)) {
+        // ignore print inner added expr
+        PRINT_EXPR(expr->get_param_expr(0));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("bool expr have to be inner expr for now", K(ret), K(*expr));
+      }
+      break;
+    }
     case T_FUN_SYS_REMOVE_CONST: {
       if (expr->has_flag(IS_INNER_ADDED_EXPR)) {
         // ignore print inner added expr
