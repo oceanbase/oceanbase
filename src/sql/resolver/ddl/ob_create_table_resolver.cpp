@@ -1868,6 +1868,25 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               column.set_data_precision(MIN(OB_MAX_DECIMAL_PRECISION, data_precision));
 
             }
+            if (OB_SUCC(ret) && is_mysql_mode() && expr->is_column_ref_expr()) {
+              const ObColumnRefRawExpr *column_expr = static_cast<const ObColumnRefRawExpr*>(expr);
+              const ObTableSchema *table_schema = NULL;
+              const ObColumnSchemaV2 *column_schema = NULL;
+              if (column_expr->get_database_name().empty()) {
+                // do nothing if column_expr is not a real column
+              } else if (OB_FAIL(schema_checker_->get_table_schema(
+                  session_info_->get_effective_tenant_id(), column_expr->get_database_name(),
+                  column_expr->get_table_name(), false /* not index table */, table_schema))) {
+                LOG_WARN("fail to get table schema", K(ret), KPC(column_expr));
+              } else if (OB_FAIL(schema_checker_->get_column_schema(
+                         session_info_->get_effective_tenant_id(), table_schema->get_table_id(),
+                         column_expr->get_column_name(), column_schema, false, false))) {
+                LOG_WARN("get_column_schema failed", K(ret), KPC(column_expr));
+              } else {
+                column.set_orig_default_value(column_schema->get_orig_default_value());
+                column.set_cur_default_value(column_schema->get_cur_default_value());
+              }
+            }
             OZ (adjust_string_column_length_within_max(column, lib::is_oracle_mode()));
             LOG_DEBUG("column expr debug", K(*expr));
           }
