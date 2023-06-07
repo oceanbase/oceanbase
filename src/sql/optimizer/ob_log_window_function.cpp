@@ -342,7 +342,6 @@ int ObLogWindowFunction::compute_op_ordering()
   } else if (!single_part_parallel_) {
     is_local_order_ = (range_dist_parallel_ || is_fully_partition_wise()
                        || (get_sort_keys().empty()
-                           && LOG_EXCHANGE == child->get_type()
                            && child->get_is_local_order())
                       ) && !get_op_ordering().empty();
   }

@@ -10919,8 +10919,8 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
         if (T_PARALLEL == hint_node->type_) {
           ParseNode *parallel_node = nullptr;
           if (1 != hint_node->num_child_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("error unexpected, child num is not valid", K(ret), "child_num", hint_node->num_child_);
+            /* ignore parallel(auto) and parallel(manual)*/
+            LOG_WARN("Unused parallel hint");
           } else if (OB_ISNULL(parallel_node = hint_node->children_[0])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("error unexpected, child of stmt parallel degree node should not be null", K(ret));

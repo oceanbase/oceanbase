@@ -866,28 +866,30 @@ private:
                                         common::ObIArray<ObTableInHint> &hint_tables);
   int resolve_table_relation_in_hint(const ParseNode &table_node, ObTableInHint &table_in_hint);
   int resolve_qb_name_node(const ParseNode *qb_name_node, common::ObString &qb_name);
-  int resolve_table_check_constraint_items(const TableItem *table_item,
-                                           const ObTableSchema *table_schema);
   int resolve_multi_qb_name_list(const ParseNode *qb_name_node, common::ObIArray<QbNameList> &qb_name_list);
   int resolve_qb_name_list(const ParseNode *qb_name_node, ObIArray<ObString> &qb_name_list);
   int get_valid_dist_methods(const ParseNode *dist_methods_node,
                              ObIArray<ObItemType> &dist_methods,
                              bool &is_valid);
+  int resolve_pq_distribute_window_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+  int resolve_table_dynamic_sampling_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+  //////////end of functions for sql hint/////////////
+
+
+  int resolve_table_check_constraint_items(const TableItem *table_item,
+                                           const ObTableSchema *table_schema);
   int find_table_index_infos(const ObString &index_name,
                              const TableItem *table_item,
                              bool &find_it,
                              int64_t &table_id,
                              int64_t &ref_id);
-  int resolve_pq_distribute_window_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int check_cast_multiset(const ObRawExpr *expr, const ObRawExpr *parent_expr = NULL);
   int replace_col_udt_qname(ObQualifiedName& q_name);
   int check_column_udt_type(ParseNode *root_node);
-  int resolve_table_dynamic_sampling_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
 
   int replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_ref_expr);
   bool check_expr_has_colref(ObRawExpr *expr);
 
-  //////////end of functions for sql hint/////////////
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

@@ -111,8 +111,6 @@ int ObJoinOrder::compute_table_location_for_paths(ObIArray<AccessPath *> &access
     } else if (OB_ISNULL(table_partition_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(tbl_part_infos.push_back(table_partition_info_))) {
-      LOG_WARN("failed to push back table partition info", K(ret));
     }
   }
   // compute table location for global index
@@ -147,13 +145,19 @@ int ObJoinOrder::compute_table_location_for_paths(ObIArray<AccessPath *> &access
         } else if (OB_ISNULL(table_partition_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(tbl_part_infos.push_back(table_partition_info))) {
-          LOG_WARN("failed to push back table partition info", K(ret));
         } else {
           table_partition_info->get_table_location().set_use_das(path->use_das_);
           path->table_partition_info_ = table_partition_info;
         }
       }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(path->table_partition_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i));
+    } else if (OB_FAIL(add_var_to_array_no_dup(tbl_part_infos, path->table_partition_info_))) {
+      LOG_WARN("failed to add table partition info", K(ret));
     }
   }
   return ret;
@@ -6090,7 +6094,8 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
     } else {
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
       right_rows /= right_part_cnt;
-      right_cost = right_cost * right_out_parallel / right_part_cnt;
+      const int64_t right_real_parallel = is_partition_wise() ? in_parallel : right_out_parallel;
+      right_cost = right_cost * right_real_parallel / right_part_cnt;
     }
     ObCostNLJoinInfo est_join_info(left_rows,
                                    left_cost,
@@ -6149,6 +6154,7 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
                                             opt_ctx.get_cost_model_type());
       }
       LOG_TRACE("succeed to compute nested loop join cost", K(cost), K(op_cost), K(re_est_for_op),
+          K(in_parallel), K(left_out_parallel), K(right_out_parallel),
           K(left_ex_cost), K(right_ex_cost), K(left_output_rows), K(left_cost), K(right_output_rows), K(right_cost));
     }
   }
@@ -6255,6 +6261,7 @@ int JoinPath::cost_merge_join(int64_t join_parallel,
     } else {
       cost = op_cost + left_child_cost + right_child_cost;
       LOG_TRACE("succeed to compute merge join cost", K(cost), K(op_cost), K(left_child_cost),
+          K(in_parallel), K(left_out_parallel), K(right_out_parallel),
           K(right_child_cost), K(left_output_rows), K(left_cost), K(right_output_rows), K(right_cost));
     }
   }
@@ -6358,6 +6365,7 @@ int JoinPath::cost_hash_join(int64_t join_parallel,
     } else {
       cost = op_cost + left_cost + right_cost + left_ex_cost + right_ex_cost;
       LOG_TRACE("succeed to compute hash join cost", K(cost), K(op_cost), K(re_est_for_op), K(left_ex_cost), K(right_ex_cost),
+         K(in_parallel), K(left_out_parallel), K(right_out_parallel),
          K(left_output_rows), K(left_cost), K(right_output_rows), K(right_cost));
     }
   }
