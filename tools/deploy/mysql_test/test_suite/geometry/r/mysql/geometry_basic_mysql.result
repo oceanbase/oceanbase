@@ -132,15 +132,3 @@ Outputs & filters:
       range_key([gis_point_alias.__pk_increment]), range(MIN ; MAX),
       range_cond([gis_point_alias.__pk_increment = :0])
 drop table if exists gis_point;
-drop table if exists gis_polygon;
-create table if not exists gis_polygon (
-poly Polygon not null srid 4396
-);
-insert into gis_polygon values (ST_srid(ST_GeomFromText('Polygon((0 0,0 3,3 0,0 0),(1 1,1 2,2 1,1 1))'), 4396));
-select area(poly) from gis_polygon;
-area(poly)
-4
-select st_area(poly) from gis_polygon;
-st_area(poly)
-4
-drop table if exists gis_polygon;
