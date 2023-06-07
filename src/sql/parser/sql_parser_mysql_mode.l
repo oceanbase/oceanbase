@@ -1103,6 +1103,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>OPT_PARAM { return OPT_PARAM; }
 <hint>OB_DDL_SCHEMA_VERSION { return OB_DDL_SCHEMA_VERSION; }
 <hint>DYNAMIC_SAMPLING { return DYNAMIC_SAMPLING; }
+<hint>ALLOC_OP_FOR_MONITERING  { return ALLOC_OP_FOR_MONITERING; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

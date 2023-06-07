@@ -1778,6 +1778,11 @@ private:
                       uint64_t table_id,
                       ObLogicalOperator* &scan_op,
                       bool& table_scan_has_exchange);
+  /**
+   * for alloc op for monitering
+   */
+  int alloc_op_for_monitering_post();
+  void alloc_material_for_monitering(int64_t alloc_level);
   //private function, just used for allocating join filter node.
   int allocate_partition_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                      int64_t &filter_id);

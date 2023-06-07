@@ -76,6 +76,32 @@ struct ObOptimizerStatisticsGatheringHint
   int print_osg_hint(PlanText &plan_text) const;
 };
 
+struct ObAllocOpForMoniteringHint 
+{
+  enum OpType
+  {
+    INVALID_TYPE = 0,
+    MATERIAL
+  };
+  enum AllocLevel
+  {
+    INVALID_LEVEL = 0,
+	  ALL,
+    DFO,
+    SPECIAL
+  };
+  ObAllocOpForMoniteringHint() : op_type_(INVALID_TYPE), alloc_level_(INVALID_LEVEL) {}
+  ~ ObAllocOpForMoniteringHint() = default;
+  void reset() {
+    op_type_ = INVALID_TYPE;
+    alloc_level_ = INVALID_LEVEL;
+  }
+  OpType op_type_;
+  AllocLevel alloc_level_;
+
+  TO_STRING_KV(K_(op_type), K_(alloc_level));
+};
+
 struct ObOptParamHint
 {
   ObOptParamHint() {};
@@ -152,6 +178,7 @@ struct ObGlobalHint {
   void merge_opt_features_version_hint(uint64_t opt_features_version);
   void merge_osg_hint(int8_t flag);
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
+  void merge_alloc_op_for_monitering_hint(const ObString& op_type, const ObString& alloc_level);
 
   bool has_hint_exclude_concurrent() const;
   int print_global_hint(PlanText &plan_text) const;
@@ -234,7 +261,8 @@ struct ObGlobalHint {
                K_(ob_ddl_schema_versions),
                K_(osg_hint),
                K_(has_dbms_stats_hint),
-               K_(dynamic_sampling));
+               K_(dynamic_sampling),
+               K_(alloc_op_hint));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -265,6 +293,7 @@ struct ObGlobalHint {
   bool has_dbms_stats_hint_;
   bool flashback_read_tx_uncommitted_;
   int64_t dynamic_sampling_;
+  ObAllocOpForMoniteringHint alloc_op_hint_;
 };
 
 // used in physical plan

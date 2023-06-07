@@ -9692,6 +9692,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
         break;
       }
       case ALLOC_STARTUP_EXPR:
+      case ALLOC_OP_FOR_MONITERING:
       default:
         break;
       }
@@ -11097,6 +11098,7 @@ int ObLogPlan::generate_plan()
                                         ALLOC_GI,
                                         PX_PIPE_BLOCKING,
                                         ALLOC_MONITORING_DUMP,
+                                        ALLOC_OP_FOR_MONITERING,
                                         OPERATOR_NUMBERING,
                                         PX_RESCAN,
                                         EXCHANGE_NUMBERING,

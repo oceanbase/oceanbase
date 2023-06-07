@@ -12553,6 +12553,18 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_ALLOC_OP_FOR_MONITERING: {
+      CHECK_HINT_PARAM(hint_node, 2) {
+        if (NULL != child1->str_value_ && NULL != child0->str_value_) {
+          ObString op_type;
+          ObString alloc_level;
+          op_type.assign_ptr(child0->str_value_, static_cast<int32_t>(child0->str_len_));
+          alloc_level.assign_ptr(child1->str_value_, static_cast<int32_t>(child1->str_len_));
+          global_hint.merge_alloc_op_for_monitering_hint(op_type, alloc_level);
+        }
+      }
+      break;
+    }
     default: {
       resolved_hint = false;
       break;

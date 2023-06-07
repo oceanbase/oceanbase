@@ -1454,6 +1454,9 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       }
       break;
     }
+    case ALLOC_OP_FOR_MONITERING: {
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected access of default branch", K(op), K(ret));
@@ -1588,6 +1591,12 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
           LOG_WARN("failed to gen batch exec param post",  K(ret));
         }
         break;
+      }
+      case ALLOC_OP_FOR_MONITERING: {
+        if(OB_FAIL(alloc_op_for_monitering_post())) {
+          LOG_WARN("failed to alloc op for monitering post",  K(ret));
+        }
+        break; 
       }
       default:
         break;
@@ -5235,4 +5244,61 @@ int ObLogicalOperator::collect_batch_exec_param(void* ctx,
     }
   }
   return ret;
+}
+
+int ObLogicalOperator::alloc_op_for_monitering_post()
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = nullptr;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
+      OB_ISNULL(query_ctx = get_plan()->get_stmt()->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else {
+    const ObAllocOpForMoniteringHint& alloc_op_hint = query_ctx->get_global_hint().alloc_op_hint_;
+    if (ObAllocOpForMoniteringHint::MATERIAL == alloc_op_hint.op_type_) {
+      alloc_material_for_monitering(alloc_op_hint.alloc_level_);
+    } else {
+      LOG_WARN("Allocating other op is not implemented", K(ret), K(alloc_op_hint.op_type_));
+    }
+  }
+  return ret;
+}
+
+void ObLogicalOperator::alloc_material_for_monitering(int64_t alloc_level)
+{
+  if (log_op_def::LOG_MATERIAL == type_ ||
+      (log_op_def::LOG_EXCHANGE == type_ && static_cast<ObLogExchange*>(this)->is_consumer())) {
+    /*do nothing*/
+  } else {
+    switch (alloc_level) {
+      case ObAllocOpForMoniteringHint::ALL: {
+        for (int64_t i = get_num_of_child() - 1; i >= 0; i--) {
+          if (!get_child(i)->is_block_op()) {
+            LOG_DEBUG("Allocate material op at all level!");
+            allocate_material(i);
+          }
+        }
+        break;
+      }
+      case ObAllocOpForMoniteringHint::DFO: {
+        for (int64_t i = get_num_of_child() - 1; i >= 0; i--) {
+          auto child = get_child(i);
+          if (!child->is_block_op()
+              && child->type_ == log_op_def::LOG_EXCHANGE
+              && static_cast<ObLogExchange*>(child)->is_consumer()) {
+            LOG_DEBUG("Allocate material op at dfo level!");
+            allocate_material(i);
+          }
+        }
+        break;
+      }
+      case ObAllocOpForMoniteringHint::SPECIAL: {
+        // TODO
+        break;
+      }
+      default:
+        break;
+    }
+  }
 }

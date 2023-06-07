@@ -115,6 +115,20 @@ int ObGlobalHint::merge_dop_hint(const ObIArray<ObDopHint> &dop_hints)
   return ret;
 }
 
+void ObGlobalHint::merge_alloc_op_for_monitering_hint(const ObString& op_type, const ObString& alloc_level)
+{ 
+  if (0 == op_type.case_compare("material")) {
+    alloc_op_hint_.op_type_ = ObAllocOpForMoniteringHint::MATERIAL;
+  }
+  if (0 == alloc_level.case_compare("all")) {
+    alloc_op_hint_.alloc_level_ = ObAllocOpForMoniteringHint::ALL;
+  } else if (0 == alloc_level.case_compare("dfo")) {
+    alloc_op_hint_.alloc_level_ = ObAllocOpForMoniteringHint::DFO;
+  } else if (0 == alloc_level.case_compare("special")) {
+    alloc_op_hint_.alloc_level_ = ObAllocOpForMoniteringHint::SPECIAL;
+  }
+}
+
 void ObGlobalHint::merge_query_timeout_hint(int64_t hint_time)
 {
   if (hint_time > 0) {
@@ -329,6 +343,7 @@ void ObGlobalHint::reset()
   has_dbms_stats_hint_ = false;
   flashback_read_tx_uncommitted_ = false;
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
+  alloc_op_hint_.reset();
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -357,6 +372,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
+  alloc_op_hint_ = other.alloc_op_hint_;
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -416,6 +432,16 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
       if (OB_FAIL(BUF_PRINTF("%sDOP(%lu, %lu)", outline_indent, dops_.at(i).dfo_, dops_.at(i).dop_))) {
         LOG_WARN("failed to print dop hint", K(ret));
       }
+    }
+  }
+
+  //ALLOC_OP_FOR_MONITERING
+  if (OB_SUCC(ret) && alloc_op_hint_.op_type_ != ObAllocOpForMoniteringHint::INVALID_TYPE
+      && alloc_op_hint_.alloc_level_ != ObAllocOpForMoniteringHint::INVALID_LEVEL) {
+    if (OB_FAIL(BUF_PRINTF("%sLLOC_OP_FOR_MONITERING(%lu, %lu)", outline_indent,
+                                                                   static_cast<uint64_t>(alloc_op_hint_.op_type_),
+                                                                   static_cast<uint64_t>(alloc_op_hint_.alloc_level_)))) {
+      LOG_WARN("failed to print alloc op for monitering hint", K(ret));
     }
   }
 
