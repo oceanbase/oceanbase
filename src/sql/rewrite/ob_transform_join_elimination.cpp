@@ -1703,8 +1703,6 @@ int ObTransformJoinElimination::eliminate_semi_join_self_foreign_key(ObDMLStmt *
       if (OB_ISNULL(semi_info = semi_infos.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(semi_info));
-      } else if (OB_FAIL(preprocess_generate_right_table(*stmt, *semi_info))) {
-        LOG_WARN("failed to preprocess generate right table", K(ret));
       } else if (OB_FAIL(eliminate_semi_join_self_key(stmt,
                                                       semi_info,
                                                       candi_conds,
@@ -1730,23 +1728,6 @@ int ObTransformJoinElimination::eliminate_semi_join_self_foreign_key(ObDMLStmt *
         trans_happened = true;
       }
     }
-  }
-  return ret;
-}
-
-// flatten joined table in right table
-int ObTransformJoinElimination::preprocess_generate_right_table(ObDMLStmt &stmt,
-                                                                SemiInfo &semi_info)
-{
-  int ret = OB_SUCCESS;
-  TableItem *right_table = NULL;
-  if (OB_ISNULL(right_table = stmt.get_table_item_by_id(semi_info.right_table_id_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(right_table), K(ret));
-  } else if (!right_table->is_generated_table()) {
-    /* do nothing */
-  } else if (OB_FAIL(ObTransformUtils::flatten_joined_table(right_table->ref_query_))) {
-    LOG_WARN("failed to faltten joined table", K(ret));
   }
   return ret;
 }

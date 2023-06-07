@@ -615,6 +615,7 @@ OB_NOINLINE int ObMPQuery::process_with_tmp_context(ObSQLSessionInfo &session,
                      force_sync_resp,
                      async_resp_used,
                      need_disconnect);
+    ctx_.first_plan_hash_ = 0;
     ctx_.first_outline_data_.reset();
     ctx_.clear();
   }
