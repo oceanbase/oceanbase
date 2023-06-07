@@ -64,7 +64,10 @@ public:
 
   typedef ObArray<ConfigItem> ConfigItemArray;
 public:
-  ObBaseConfig() {}
+  ObBaseConfig()
+    : inited_(false)
+  {
+  }
   int init();
   void destroy();
   int check_all();

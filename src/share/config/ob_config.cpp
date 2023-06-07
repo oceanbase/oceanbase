@@ -61,8 +61,6 @@ ObConfigItem::ObConfigItem()
       value_updated_(false), value_valid_(false), name_str_(nullptr), info_str_(nullptr),
       range_str_(nullptr), lock_()
 {
-  MEMSET(value_str_, 0, sizeof(value_str_));
-  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
 }
 
 ObConfigItem::~ObConfigItem()
@@ -103,6 +101,8 @@ ObConfigIntListItem::ObConfigIntListItem(ObConfigContainer *container,
                                          const ObParameterAttr attr)
     : value_()
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -153,6 +153,8 @@ ObConfigStrListItem::ObConfigStrListItem(ObConfigContainer *container,
                                          const ObParameterAttr attr)
     : value_()
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -379,6 +381,8 @@ ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer *container,
                                        const ObParameterAttr attr)
     : value_(0)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -393,6 +397,8 @@ ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer *container,
                                        const ObParameterAttr attr)
     : value_(0)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -501,6 +507,8 @@ ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer *container,
                                            const char *info,
                                            const ObParameterAttr attr)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -514,6 +522,8 @@ ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer *container,
                                            const char *info,
                                            const ObParameterAttr attr)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -538,6 +548,8 @@ ObConfigTimeItem::ObConfigTimeItem(ObConfigContainer *container,
                                    const char *info,
                                    const ObParameterAttr attr)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -551,6 +563,8 @@ ObConfigTimeItem::ObConfigTimeItem(ObConfigContainer *container,
                                    const char *info,
                                    const ObParameterAttr attr)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -575,6 +589,8 @@ ObConfigIntItem::ObConfigIntItem(ObConfigContainer *container,
                                  const char *info,
                                  const ObParameterAttr attr)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -588,6 +604,8 @@ ObConfigIntItem::ObConfigIntItem(ObConfigContainer *container,
                                  const char *info,
                                  const ObParameterAttr attr)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -612,6 +630,8 @@ ObConfigMomentItem::ObConfigMomentItem(ObConfigContainer *container,
                                        const ObParameterAttr attr)
     :  value_()
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -645,6 +665,8 @@ ObConfigBoolItem::ObConfigBoolItem(ObConfigContainer *container,
                                    const ObParameterAttr attr)
     : value_(false)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -686,6 +708,8 @@ ObConfigStringItem::ObConfigStringItem(ObConfigContainer *container,
                                        const char *info,
                                        const ObParameterAttr attr)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
@@ -990,11 +1014,13 @@ ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
                                          const ObParameterAttr attr)
     : dump_value_updated_(false)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
+  MEMSET(value_dump_str_, 0, sizeof(value_dump_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
   init(scope_info, name, def, range, info, attr);
-  MEMSET(value_dump_str_, 0, sizeof(value_dump_str_));
 }
 
 ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
@@ -1005,11 +1031,13 @@ ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
                                          const ObParameterAttr attr)
     : dump_value_updated_(false)
 {
+  MEMSET(value_str_, 0, sizeof(value_str_));
+  MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
+  MEMSET(value_dump_str_, 0, sizeof(value_dump_str_));
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
   init(scope_info, name, def, "", info, attr);
-  MEMSET(value_dump_str_, 0, sizeof(value_dump_str_));
 }
 
 bool ObConfigVersionItem::set(const char *str)
