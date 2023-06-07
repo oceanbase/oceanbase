@@ -396,7 +396,7 @@ public:
                  rpc_proxy_(),
                  batch_rpc_(NULL),
                  total_trans_msg_count_(0),
-                 total_trans_resp_msg_count_(0),
+                 total_batch_msg_count_(0),
                  last_stat_ts_(0) {}
   ~ObTransRpc() { destroy(); }
   int init(ObTransService *trans_service,
@@ -448,9 +448,9 @@ private:
   obrpc::ObTxFreeRouteRPCCB<obrpc::OB_TX_FREE_ROUTE_CHECK_ALIVE> tx_free_route_ck_alive_cb_;
   obrpc::ObTxFreeRouteRPCCB<obrpc::OB_TX_FREE_ROUTE_CHECK_ALIVE_RESP> tx_free_route_ck_alive_resp_cb_;
   // statistic info
-  int64_t total_trans_msg_count_;
-  int64_t total_trans_resp_msg_count_;
-  int64_t last_stat_ts_;
+  int64_t total_trans_msg_count_ CACHE_ALIGNED;
+  int64_t total_batch_msg_count_ CACHE_ALIGNED;
+  int64_t last_stat_ts_ CACHE_ALIGNED;
 };
 
 

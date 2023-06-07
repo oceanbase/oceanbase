@@ -122,7 +122,10 @@ public:
             if ((1 == flag) && OB_FAIL(trace_id->serialize(buf, total_size, pos))) {
               header = NULL;
             } else {
-              req.fill_buffer(buf + pos, req_size, filled_size);
+              if (OB_FAIL(req.fill_buffer(buf + pos, req_size, filled_size))) {
+                RPC_LOG(WARN, "fill buffer failed", K(ret), K(req_size), K(total_size));
+                header = NULL;
+              }
             }
           } else {
             freeze(seq);
@@ -161,7 +164,10 @@ public:
             } else if (OB_FAIL(ls.serialize(buf, total_size, pos))) {
               header = NULL;
             } else {
-              req.fill_buffer(buf + pos, req_size, filled_size);
+              if (OB_FAIL(req.fill_buffer(buf + pos, req_size, filled_size))) {
+                RPC_LOG(WARN, "fill buffer failed", K(ret), K(req_size), K(total_size));
+                header = NULL;
+              }
             }
           } else {
             freeze(seq);
