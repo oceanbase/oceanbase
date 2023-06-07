@@ -5148,6 +5148,21 @@ CAST_FUNC_NAME(year, date)
   return ret;
 }
 
+CAST_FUNC_NAME(year, time)
+{
+  EVAL_ARG()
+  {
+    int64_t year_int = 0;
+    uint8_t in_val = child_res->get_year();
+    if (OB_FAIL(ObTimeConverter::year_to_int(in_val, year_int))) {
+      LOG_WARN("year_to_int failed", K(ret), K(in_val));
+    } else if (OB_FAIL(common_int_time(expr, year_int, res_datum))) {
+      LOG_WARN("int to time failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 CAST_FUNC_NAME(year, bit)
 {
   EVAL_ARG()
@@ -5967,6 +5982,25 @@ CAST_FUNC_NAME(time, date)
       } else {
         res_datum.set_date(out_val);
       }
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(time, year)
+{
+  EVAL_ARG()
+  {
+    int warning = OB_SUCCESS;
+    int64_t in_val = child_res->get_time();
+    int64_t int_val = 0;
+    uint8_t year_val = 0;
+    if (OB_FAIL(ObTimeConverter::time_to_int(in_val, int_val))) {
+      LOG_WARN("time_to_int failed", K(ret), K(in_val));
+    } else if (CAST_FAIL(ObTimeConverter::int_to_year(int_val, year_val))) {
+      LOG_WARN("cast int to year failed", K(ret), K(int_val));
+    } else {
+      SET_RES_YEAR(year_val);
     }
   }
   return ret;
@@ -11123,7 +11157,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     time_datetime,/*datetime*/
     time_date,/*date*/
     cast_eval_arg,/*time*/
-    cast_not_support,/*year*/
+    time_year,/*year*/
     time_string,/*string*/
     cast_not_support,/*extend*/
     cast_not_support,/*unknown*/
@@ -11150,7 +11184,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     year_number,/*number*/
     year_datetime,/*datetime*/
     year_date,/*date*/
-    cast_not_support,/*time*/
+    year_time,/*time*/
     cast_eval_arg,/*year*/
     year_string,/*string*/
     cast_not_support,/*extend*/

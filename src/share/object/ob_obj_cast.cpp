@@ -4350,6 +4350,28 @@ static int time_date(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int time_year(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t int_value = 0;
+  uint8_t value = 0;
+  if (OB_UNLIKELY(ObTimeTC != in.get_type_class()
+                  || ObYearTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::time_to_int(in.get_time(), int_value))) {
+    LOG_WARN("time to int failed", K(ret), K(in));
+  } else if (CAST_FAIL(ObTimeConverter::int_to_year(int_value, value))) {
+    LOG_WARN("cast int to year failed", K(ret), K(int_value));
+  } else {
+    SET_RES_YEAR(out);
+  }
+  SET_RES_ACCURACY(DEFAULT_SCALE_FOR_YEAR, DEFAULT_SCALE_FOR_INTEGER, DEFAULT_LENGTH_FOR_NUMERIC);
+  return ret;
+}
+
 static int time_string(const ObObjType expect_type, ObObjCastParams &params,
                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -4656,6 +4678,30 @@ static int year_date(const ObObjType expect_type, ObObjCastParams &params,
     }
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int year_time(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObYearTC != in.get_type_class()
+                  || ObTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    int64_t value = 0;
+    int64_t year_int = 0;
+    if (OB_FAIL(ObTimeConverter::year_to_int(in.get_year(), year_int))) {
+      LOG_WARN("year_to_int failed", K(ret), K(in));
+    } else if (CAST_FAIL(ObTimeConverter::int_to_time(year_int, value))) {
+      LOG_WARN("int to time failed", K(ret));
+    } else {
+      SET_RES_TIME(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
   return ret;
 }
 
@@ -9355,7 +9401,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     time_datetime,/*datetime*/
     time_date,/*date*/
     cast_identity,/*time*/
-    cast_not_support,/*year*/
+    time_year,/*year*/
     time_string,/*string*/
     cast_not_support,/*extend*/
     cast_not_support,/*unknown*/
@@ -9382,7 +9428,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     year_number,/*number*/
     year_datetime,/*datetime*/
     year_date,/*date*/
-    cast_not_support,/*time*/
+    year_time,/*time*/
     cast_identity,/*year*/
     year_string,/*string*/
     cast_not_support,/*extend*/
