@@ -235,8 +235,6 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
     share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
-  ObLogRestoreSourceMgr restore_source_mgr;
-  ObLogRestoreSourceItem item;
 
   DEBUG_SYNC(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY);
 
@@ -251,38 +249,6 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
   } else if (OB_UNLIKELY(switchover_epoch_ != tenant_info.get_switchover_epoch())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant switchover status not valid", KR(ret), K(tenant_info), K_(switchover_epoch));
-  } else if (OB_FAIL(restore_source_mgr.init(tenant_id_, sql_proxy_))) {
-    LOG_WARN("failed to init restore_source_mgr", KR(ret), K_(tenant_id), KP(sql_proxy_));
-  } else if (OB_FAIL(restore_source_mgr.get_source(item))) {
-    LOG_WARN("failed to get_source", KR(ret), K_(tenant_id), K_(tenant_id));
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      // When restore_source fails, in order to proceed switchover. If no restore_source is set,
-      // do not check sync with restore_source
-      LOG_INFO("failed to get_source", KR(ret), K_(tenant_id));
-      ret = OB_SUCCESS;
-    }
-  } else {
-    bool has_sync_to_latest = false;
-    if (OB_FAIL(check_sync_to_latest_(tenant_id_, tenant_info, has_sync_to_latest))) {
-      LOG_WARN("fail to check_sync_to_latest_", KR(ret), K_(tenant_id), K(tenant_info));
-    } else if (!has_sync_to_latest) {
-      if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
-                    tenant_id_, sql_proxy_, tenant_info.get_switchover_epoch(),
-                    share::STANDBY_TENANT_ROLE, share::PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_SWITCHOVER_STATUS,
-                    share::NORMAL_SWITCHOVER_STATUS, switchover_epoch_))) {
-        LOG_WARN("failed to update tenant role", KR(ret), K_(tenant_id), K_(switchover_epoch), K(tenant_info));
-      }
-
-      // Ignore the fallback switchover status error code and report not sync to latest.
-      // A fallback switchover status command needs to be provided.
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("not sync to latest", KR(ret), K(has_sync_to_latest), K_(tenant_id),
-               K_(switchover_epoch), K(tenant_info));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "not sync to latest, switch to primary");
-    }
-  }
-
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(switchover_update_tenant_status(tenant_id_,
                                               true /* switch_to_primary */,
                                               tenant_info.get_tenant_role(),
