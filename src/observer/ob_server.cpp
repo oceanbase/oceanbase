@@ -605,10 +605,6 @@ void ObServer::destroy()
     TG_DESTROY(lib::TGDefIDs::DiskUseReport);
     FLOG_INFO("disk usage report task destroyed");
 
-    FLOG_INFO("begin destroy task controller");
-    ObTaskController::get().destroy();
-    FLOG_INFO("task controller destroyed");
-
     FLOG_INFO("begin to destroy ob server block mgr");
     OB_SERVER_BLOCK_MGR.destroy();
     FLOG_INFO("ob server block mgr destroyed");
@@ -696,6 +692,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy OB_PRIMARY_STANDBY_SERVICE");
     OB_PRIMARY_STANDBY_SERVICE.destroy();
     FLOG_INFO("OB_PRIMARY_STANDBY_SERVICE destroyed");
+
+    FLOG_INFO("begin to destroy rootservice event history");
+    ROOTSERVICE_EVENT_INSTANCE.destroy();
+    FLOG_INFO("rootservice event history destroyed");
 
 
     has_destroy_ = true;
@@ -1112,10 +1112,6 @@ int ObServer::stop()
     schema_service_.stop();
     FLOG_INFO("schema service stopped");
 
-    FLOG_INFO("begin to stop ob_service");
-    ob_service_.stop();
-    FLOG_INFO("ob_service stopped");
-
     FLOG_INFO("begin to stop disk usage report task");
     TG_STOP(lib::TGDefIDs::DiskUseReport);
     FLOG_INFO("disk usage report task stopped");
@@ -1223,10 +1219,6 @@ int ObServer::stop()
     tenant_srs_mgr_.stop();
     FLOG_INFO("tenant srs manager stopped");
 
-    FLOG_INFO("begin stop task controller");
-    ObTaskController::get().stop();
-    FLOG_INFO("task controller stopped");
-
     FLOG_INFO("begin to stop opt stat manager ");
     ObOptStatManager::get_instance().stop();
     FLOG_INFO("opt stat manager  stopped");
@@ -1239,6 +1231,10 @@ int ObServer::stop()
     FLOG_INFO("begin to stop multi tenant");
     multi_tenant_.stop();
     FLOG_INFO("multi tenant stopped");
+
+    FLOG_INFO("begin to stop ob_service");
+    ob_service_.stop();
+    FLOG_INFO("ob_service stopped");
 
     // safe destroy instance should stop after multi_tenant_
     FLOG_INFO("begin to stop safe destroy instance");
@@ -1300,12 +1296,18 @@ int ObServer::stop()
     } else {
       FLOG_INFO("net frame stopped");
     }
+
+    FLOG_INFO("begin to stop global_poc_server");
+    obrpc::global_poc_server.stop();
+    FLOG_INFO("stop global_poc_server success");
+
+    FLOG_INFO("begin to stop rootservice event history");
+    ROOTSERVICE_EVENT_INSTANCE.stop();
+    FLOG_INFO("rootservice event history stopped");
+
   }
 
 
-  FLOG_INFO("begin to stop global_poc_server");
-  obrpc::global_poc_server.stop();
-  FLOG_INFO("stop global_poc_server success");
 
   has_stopped_ = true;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer end", KR(ret));
@@ -1496,10 +1498,6 @@ int ObServer::wait()
     tenant_srs_mgr_.wait();
     FLOG_INFO("wait tenant srs manager success");
 
-    FLOG_INFO("begin wait task controller");
-    ObTaskController::get().wait();
-    FLOG_INFO("wait task controller success");
-
     FLOG_INFO("begin to wait ob_server_block_mgr");
     OB_SERVER_BLOCK_MGR.wait();
     FLOG_INFO("wait ob_server_block_mgr success");
@@ -1545,16 +1543,20 @@ int ObServer::wait()
     FLOG_INFO("wait global election report timer stopped done");
 
 
+    FLOG_INFO("begin to wait global_poc_server");
+    obrpc::global_poc_server.wait();
+    FLOG_INFO("wait global_poc_server success");
+
+    FLOG_INFO("begin to wait rootservice event history");
+    ROOTSERVICE_EVENT_INSTANCE.wait();
+    FLOG_INFO("wait rootservice event history success");
+
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));
     if (OB_SUCCESS != fail_ret) {
       LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer wait() has failure", KR(fail_ret));
     }
   }
-
-  FLOG_INFO("begin to wait global_poc_server");
-  obrpc::global_poc_server.wait();
-  FLOG_INFO("wait global_poc_server success");
 
   return ret;
 }

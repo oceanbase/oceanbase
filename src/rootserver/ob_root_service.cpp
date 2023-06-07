@@ -1018,10 +1018,6 @@ void ObRootService::destroy()
     FLOG_INFO("heartbeat checker destroy");
   }
 
-  ROOTSERVICE_EVENT_INSTANCE.destroy();
-  FLOG_INFO("event table operator destroy");
-
-
   if (OB_FAIL(backup_task_scheduler_.destroy())) {
     FLOG_WARN("root backup task scheduler destroy failed", KR(ret));
     fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
@@ -1268,8 +1264,6 @@ int ObRootService::stop()
       FLOG_INFO("backup_task_scheduler_ stop");
       backup_service_.stop();
       FLOG_INFO("backup_mgr stop");
-      ROOTSERVICE_EVENT_INSTANCE.stop();
-      FLOG_INFO("event table operator stop");
       disaster_recovery_task_mgr_.stop();
       FLOG_INFO("disaster_recovery_task_mgr stop");
       dbms_scheduler::ObDBMSSchedJobMaster::get_instance().stop();
@@ -1316,8 +1310,6 @@ void ObRootService::wait()
   FLOG_INFO("root backup task scheduler exit success");
   backup_service_.wait();
   FLOG_INFO("root backup mgr exit success");
-  ROOTSERVICE_EVENT_INSTANCE.wait();
-  FLOG_INFO("event table operator exit success");
   disaster_recovery_task_mgr_.wait();
   FLOG_INFO("rebalance task mgr exit success");
   TG_WAIT(lib::TGDefIDs::GlobalCtxTimer);
