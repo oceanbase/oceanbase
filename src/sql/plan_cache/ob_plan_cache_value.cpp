@@ -632,7 +632,7 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
   if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret), KP(session));
-  } else if (obj_params != NULL) {
+  } else if (obj_params != NULL && PC_PS_MODE != pc_ctx.mode_ && PC_PL_MODE != pc_ctx.mode_) {
     ObCollationType collation_connection = static_cast<ObCollationType>(
                                            session->get_local_collation_connection());
     int64_t N = raw_params.count();

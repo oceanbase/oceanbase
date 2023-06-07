@@ -592,6 +592,7 @@ public:
                                   uint64_t &object_id,
                                   share::schema::ObObjectType &obj_type,
                                   uint64_t &schema_version);
+  static bool check_need_disconnect_parser_err(const int ret_code);
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);

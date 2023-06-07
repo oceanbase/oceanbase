@@ -1027,7 +1027,10 @@ int ObSql::do_real_prepare(const ObString &sql,
               && !is_inner_sql
               && enable_udr
               && OB_FAIL(ObUDRUtils::match_udr_item(sql, session, allocator, item_guard))) {
-        LOG_WARN("failed to match rewrite rule", K(ret));
+      if (!ObSQLUtils::check_need_disconnect_parser_err(ret)) {
+        ectx.set_need_disconnect(false);
+      }
+      LOG_WARN("failed to match rewrite rule", K(ret));
     } else if (ObStmt::is_dml_stmt(stmt_type)
               && NULL == item_guard.get_ref_obj()
               && !ObStmt::is_show_stmt(stmt_type)
@@ -3000,6 +3003,9 @@ int ObSql::generate_plan(ParseResult &parse_result,
       // and we shouldn't add this plan to plan cache.
       if (NULL != pc_ctx) {
         pc_ctx->should_add_plan_ = (effective_tid==phy_plan->get_tenant_id());
+        if (!pc_ctx->rule_name_.empty() && OB_FAIL(phy_plan->set_rule_name(pc_ctx->rule_name_))) {
+          LOG_WARN("failed to deep copy rule name", K(ret));
+        }
       }
     }
 
@@ -3943,22 +3949,8 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
           //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
         }
       }
-    } else if (OB_LIKELY(OB_ERR_PARSE_SQL == ret
-                         || OB_ERR_EMPTY_QUERY == ret
-                         || OB_SIZE_OVERFLOW == ret
-                         || OB_ERR_ILLEGAL_NAME == ret
-                         || OB_ERR_STR_LITERAL_TOO_LONG == ret
-                         || OB_ERR_NOT_VALID_ROUTINE_NAME == ret
-                         || OB_ERR_CONSTRUCT_MUST_RETURN_SELF == ret
-                         || OB_ERR_ONLY_FUNC_CAN_PIPELINED == ret
-                         || OB_ERR_NO_ATTR_FOUND == ret
-                         || OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK == ret
-                         || OB_ERR_NON_INT_LITERAL == ret
-                         || OB_ERR_PARSER_INIT == ret
-                         || OB_NOT_SUPPORTED == ret)) {
-      // parser返回已知的错误码，不需要断掉与客户端的连接
+    } else if (!ObSQLUtils::check_need_disconnect_parser_err(ret)) {
       exec_ctx.set_need_disconnect(false);
-      //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
     } else {
       // parser返回未知的错误码，需要断掉与客户端的连接
       LOG_WARN("parser error number is unexpected, need disconnect", K(ret));
@@ -4172,8 +4164,6 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
   } else if (OB_FAIL(ob_write_string(phy_plan->get_allocator(),
                                      pc_ctx.sql_ctx_.spm_ctx_.bl_key_.sql_id_,
                                      phy_plan->stat_.sql_id_))) {
-    LOG_WARN("failed to ob write string", K(ret));
-  } else if (pc_ctx.is_rewrite_sql_ && OB_FAIL(phy_plan->set_rule_name(pc_ctx.rule_name_))) {
     LOG_WARN("failed to ob write string", K(ret));
   } else {
     sql::ObUDRMgr *rule_mgr = MTL(sql::ObUDRMgr*);

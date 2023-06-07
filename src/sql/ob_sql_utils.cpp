@@ -4962,6 +4962,27 @@ int ObSQLUtils::find_synonym_ref_obj(const ObString &database_name,
   return ret;
 }
 
+bool ObSQLUtils::check_need_disconnect_parser_err(const int ret_code)
+{
+  bool bret = true;
+  if (OB_LIKELY(OB_ERR_PARSE_SQL == ret_code
+                || OB_ERR_PARSER_SYNTAX == ret_code
+                || OB_ERR_EMPTY_QUERY == ret_code
+                || OB_SIZE_OVERFLOW == ret_code
+                || OB_ERR_ILLEGAL_NAME == ret_code
+                || OB_ERR_STR_LITERAL_TOO_LONG == ret_code
+                || OB_ERR_NOT_VALID_ROUTINE_NAME == ret_code
+                || OB_ERR_CONSTRUCT_MUST_RETURN_SELF == ret_code
+                || OB_ERR_ONLY_FUNC_CAN_PIPELINED == ret_code
+                || OB_ERR_NO_ATTR_FOUND == ret_code
+                || OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK == ret_code
+                || OB_ERR_NON_INT_LITERAL == ret_code
+                || OB_ERR_PARSER_INIT == ret_code
+                || OB_NOT_SUPPORTED == ret_code)) {
+    bret = false;
+  }
+  return bret;
+}
 
 int ObSQLUtils::find_synonym_ref_obj(const uint64_t database_id,
                                      const ObString &object_name,
