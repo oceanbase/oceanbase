@@ -3362,6 +3362,7 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
       case T_FUN_JSON_OBJECTAGG:
         SET_SYMBOL_IF_EMPTY("json_objectagg");
       case T_FUN_PL_AGG_UDF: {
+        ObString database;
         if (OB_ISNULL(expr->get_agg_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), KPC(expr));
@@ -3372,11 +3373,26 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), KPC(expr));
           } else {
-            symbol = static_cast<ObUDFRawExpr*>(udf_expr)->get_func_name();
+            ObUDFRawExpr* udf = static_cast<ObUDFRawExpr*>(udf_expr);
+            database = udf->get_database_name();
+            symbol = udf->get_func_name();
           }
         }
         if (OB_SUCC(ret)) {
-          DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
+          if(!database.empty()){
+            PRINT_QUOT;
+            DATA_PRINTF("%.*s", LEN_AND_PTR(database));
+            PRINT_QUOT;
+            DATA_PRINTF(".");
+          }
+          if (T_FUN_PL_AGG_UDF == type) {
+            PRINT_QUOT;
+            DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
+            PRINT_QUOT;
+          } else {
+            DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
+          }
+          DATA_PRINTF("(");
         }
         // distinct, default 'all', not print
         if (OB_SUCC(ret)) {
