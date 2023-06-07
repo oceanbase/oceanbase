@@ -137,6 +137,12 @@ int ObModifyTenantResolver::resolve(const ParseNode& parse_tree)
       if (OB_UNLIKELY(T_IDENT != parse_tree.children_[3]->type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid parse_tree", K(ret));
+      } else if (0 != session_info_->get_tenant_name().case_compare("sys")) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "normal tenants rename tenant name");
+      } else if (0 == modify_tenant_stmt->get_tenant_name().case_compare("sys")) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename sys tenant name");
       } else {
         new_tenant_name.assign_ptr(
             (char*)(parse_tree.children_[3]->str_value_), static_cast<int32_t>(parse_tree.children_[3]->str_len_));
