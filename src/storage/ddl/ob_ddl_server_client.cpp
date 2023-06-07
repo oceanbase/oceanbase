@@ -287,6 +287,18 @@ int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const i
         } else if (OB_FAIL(result->next())) {
           if (OB_LIKELY(OB_ITER_END == ret)) {
             ret = OB_ENTRY_NOT_EXIST;
+            ObAddr unused_addr;
+            int64_t forward_user_msg_len = 0;
+            ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
+            if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
+                              tenant_id, task_id, -1 /* target_object_id */,
+                              unused_addr, true /* is_ddl_retry_task */,
+                              *GCTX.sql_proxy_, error_message, forward_user_msg_len)) {
+              if (OB_SUCCESS != error_message.ret_code_) {
+                ret = error_message.ret_code_;
+              }
+            }
+            LOG_WARN("ddl task execute end", K(ret));
           } else {
             LOG_WARN("fail to get next row", K(ret));
           }
@@ -295,14 +307,7 @@ int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const i
           EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int);
           EXTRACT_UINT_FIELD_MYSQL(*result, "snapshot_version", snapshot_version, uint64_t);
           share::ObDDLTaskStatus task_cur_status = static_cast<share::ObDDLTaskStatus>(task_status);
-          if (rootserver::ObTableRedefinitionTask::check_task_status_before_pending(task_cur_status)) {
-            LOG_INFO("task status not equal REPENDING, Please Keep Waiting", K(task_status));
-            if (OB_FAIL(sql::ObDDLExecutorUtil::handle_session_exception(session))) {
-              break;
-            } else {
-              ob_usleep(retry_interval);
-            }
-          } else {
+          if (rootserver::ObTableRedefinitionTask::check_task_status_is_pending(task_cur_status)) {
             break;
           }
         }

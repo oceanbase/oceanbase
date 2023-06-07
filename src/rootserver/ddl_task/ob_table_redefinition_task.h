@@ -65,7 +65,7 @@ public:
   virtual bool support_longops_monitoring() const override { return true; }
   virtual void flt_set_task_span_tag() const override;
   virtual void flt_set_status_span_tag() const override;
-  static bool check_task_status_before_pending(const share::ObDDLTaskStatus task_status);
+  static bool check_task_status_is_pending(const share::ObDDLTaskStatus task_status);
   INHERIT_TO_STRING_KV("ObDDLRedefinitionTask", ObDDLRedefinitionTask,
       K(has_rebuild_index_), K(has_rebuild_constraint_), K(has_rebuild_foreign_key_),
       K(is_copy_indexes_), K(is_copy_triggers_), K(is_copy_constraints_),
