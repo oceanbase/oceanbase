@@ -2393,6 +2393,13 @@ void ObChunkDatumStore::Iterator::reset_cursor(const int64_t file_size)
     free_block(free_list_.remove_first(), default_block_size_, force_free);
   }
 
+  if (nullptr != blk_holder_ptr_) {
+    if (blk_holder_ptr_->block_list_.get_size() > 0) {
+      blk_holder_ptr_->release();
+      blk_holder_ptr_ = nullptr;
+    }
+  }
+
   cur_iter_blk_ = nullptr;
   cur_nth_blk_ = -1;
   cur_iter_pos_ = 0;
@@ -2567,7 +2574,12 @@ void ObChunkDatumStore::Iterator::free_block(Block *blk, const int64_t size,
     bool do_phy_free = force_free;
     if (!force_free) {
       try_free_cached_blocks();
-      if (NULL != age_) {
+      if (NULL != blk_holder_ptr_) {
+         // fill iter ptr at pos of age, since we do not use age in shared cache
+        *((int64_t *)((char *)blk + size - sizeof(int64_t))) = reinterpret_cast<int64_t> (this);
+        blk_holder_ptr_->block_list_.add_last(blk);
+        blk->blk_size_ = size;
+      } else if (NULL != age_) {
         STATIC_ASSERT(sizeof(BlockBuffer) >= sizeof(int64_t), "unexpected block buffer size");
         // Save age to the tail of the block, we always allocate one BlockBuffer in tail of block,
         // it's safe to write it here.
@@ -2658,6 +2670,19 @@ int ObChunkDatumStore::Iterator::aio_wait()
     }
   }
   return ret;
+}
+
+void ObChunkDatumStore::IteratedBlockHolder::release()
+{
+  while (block_list_.get_size() > 0) {
+    Block *blk = block_list_.remove_first();
+    Iterator *iter = reinterpret_cast<Iterator *> (*((int64_t *)((char *)blk + blk->blk_size_ - sizeof(int64_t))));
+    if (OB_NOT_NULL(blk) && OB_NOT_NULL(iter)) {
+      iter->free_block(blk, blk->blk_size_, true);
+    } else {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "get unexpected block pair", KP(iter), KP(blk));
+    }
+  }
 }
 
 } // end namespace sql

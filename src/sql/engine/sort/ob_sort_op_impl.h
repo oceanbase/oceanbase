@@ -182,7 +182,7 @@ public:
     } else if (outputted_rows_cnt_ >= topn_cnt_ && !is_fetch_with_ties_) {
       ret = OB_ITER_END;
     } else {
-      iter_age_.inc();
+      blk_holder_.release();
       ret = (this->*next_stored_row_func_)(sr);
       if (OB_UNLIKELY(common::OB_ITER_END == ret) && !need_rewind_) {
         reuse();
@@ -510,7 +510,7 @@ protected:
   int is_equal_part(const ObChunkDatumStore::StoredRow *l, const ObChunkDatumStore::StoredRow *r, bool &is_equal);
   int do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRow *> &rows,
                         const int64_t rows_begin, const int64_t rows_end);
-  void set_iteration_age(ObChunkDatumStore::IterationAge *iter_age);
+  void set_blk_holder(ObChunkDatumStore::IteratedBlockHolder *blk_holder);
   // for topn sort
   int add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
                         const ObChunkDatumStore::StoredRow *&store_row);
@@ -588,7 +588,6 @@ protected:
   uint64_t op_id_;
   ObExecContext *exec_ctx_;
   ObChunkDatumStore::StoredRow **stored_rows_;
-  ObChunkDatumStore::IterationAge iter_age_;
   ObIOEventObserver *io_event_observer_;
   // for window function partition sort
   PartHashNode **buckets_;
@@ -607,6 +606,7 @@ protected:
   common::ObArray<SortStoredRow *> ties_array_;
   ObChunkDatumStore::StoredRow *last_ties_row_;
   common::ObIArray<ObChunkDatumStore::StoredRow *> *rows_;
+  ObChunkDatumStore::IteratedBlockHolder blk_holder_;
 };
 
 class ObInMemoryTopnSortImpl;
