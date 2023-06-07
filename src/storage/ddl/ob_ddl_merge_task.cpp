@@ -610,7 +610,7 @@ int ObTabletDDLUtil::create_ddl_sstable(const ObTabletDDLParam &ddl_param,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(index_block_rebuilder->close())) {
       LOG_WARN("close index block rebuilder failed", K(ret));
-    } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(sstable_index_builder, ddl_param, nullptr/*first_ddl_sstable*/, table_handle))) {
+    } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(sstable_index_builder, ddl_param, first_ddl_sstable, table_handle))) {
       LOG_WARN("create ddl sstable failed", K(ret), K(ddl_param));
     }
   }
