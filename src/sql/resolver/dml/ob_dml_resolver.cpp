@@ -10611,6 +10611,7 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
       ObConstraint tmp_constraint;
       ObSEArray<ObQualifiedName, 1> columns;
       ObString constraint_str;
+      bool has_default;
       if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_CHECK
           && (*iter)->get_constraint_type() != CONSTRAINT_TYPE_NOT_NULL) {
         continue;
@@ -10657,6 +10658,8 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
       } else if (OB_FAIL(ObResolverUtils::resolve_check_constraint_expr(
                  params_, node, *table_schema, tmp_constraint, check_constraint_expr, NULL, &columns))) {
         LOG_WARN("resolve check constraint expr failed", K(ret));
+      } else if (OB_FAIL(resolve_special_expr_static(table_schema, *params_.session_info_, *params_.expr_factory_, check_constraint_expr, has_default, ObResolverUtils::PureFunctionCheckStatus::DISABLE_CHECK))) {
+        LOG_WARN("fail to resolve special exprs", K(ret));
       } else if (table_item->is_basic_table() &&
                  OB_FAIL(resolve_columns_for_partition_expr(check_constraint_expr,
                                                             columns,

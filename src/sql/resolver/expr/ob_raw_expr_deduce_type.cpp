@@ -2176,6 +2176,15 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
   } else {
     ObExprResTypes types;
     ObCastMode expr_cast_mode = CM_NONE;
+    bool is_default_col = false;
+    if (T_FUN_SYS_DEFAULT == expr.get_expr_type()) {
+      if (OB_ISNULL(expr.get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(expr));
+      } else {
+        is_default_col = expr.get_param_expr(0)->is_column_ref_expr();
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
       ObRawExpr *param_expr = expr.get_param_expr(i);
       if (OB_ISNULL(param_expr)) {
@@ -2188,7 +2197,7 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
         ret = OB_ERR_INVALID_COLUMN_NUM;
         LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
       } else if (T_FUN_COLUMN_CONV == expr.get_expr_type()
-                 || T_FUN_SYS_DEFAULT == expr.get_expr_type()) {
+                || (T_FUN_SYS_DEFAULT == expr.get_expr_type() && !is_default_col)) {
         //column_conv(type, collation_type, accuracy_expr, nullable, value)
         //前面四个参数都要特殊处理
         if (OB_FAIL(deduce_type_visit_for_special_func(i, *param_expr, types))) {
