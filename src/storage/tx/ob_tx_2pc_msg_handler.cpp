@@ -645,10 +645,17 @@ int ObPartTransCtx::handle_tx_2pc_prepare_req(const Ob2pcPrepareReqMsg &msg)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DELAY_TX_COMMIT);
+
 int ObPartTransCtx::handle_tx_2pc_prepare_resp(const Ob2pcPrepareRespMsg &msg)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
+
+  if (OB_NOT_INIT == ERRSIM_DELAY_TX_COMMIT) {
+    return ret;
+  }
+
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
   int64_t participant_id = INT64_MAX;
 
@@ -791,6 +798,11 @@ int ObPartTransCtx::handle_tx_2pc_pre_commit_req(const Ob2pcPreCommitReqMsg &msg
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
+
+  if (OB_NOT_SUPPORTED == ERRSIM_DELAY_TX_COMMIT) {
+    return ret;
+  }
+
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
 
   msg_2pc_cache_ = &msg;

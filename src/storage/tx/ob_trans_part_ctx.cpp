@@ -3632,6 +3632,8 @@ share::SCN ObPartTransCtx::get_min_unsyncd_segment_scn_()
   return min_scn;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DELAY_TX_SUBMIT_LOG);
+
 int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
 {
   int ret = OB_SUCCESS;
@@ -3680,6 +3682,9 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
 	    ret = generate_commit_version_();
 	  }
 	}
+        if (OB_SWITCHING_TO_FOLLOWER_GRACEFULLY == ERRSIM_DELAY_TX_SUBMIT_LOG && 1002 == MTL_ID() && 1001 == ls_id_.id()) {
+          ret = ERRSIM_DELAY_TX_SUBMIT_LOG;
+        }
 	if (OB_SUCC(ret) && mt_ctx_.is_prepared()) {
 	  ret = submit_commit_log_();
 	}
@@ -6086,6 +6091,12 @@ int ObPartTransCtx::errism_submit_prepare_log_()
 
   int ret = OB_SUCCESS;
 
+  if (OB_NOT_MASTER == ERRSIM_DELAY_TX_SUBMIT_LOG && is_root()) {
+    ret = ERRSIM_DELAY_TX_SUBMIT_LOG;
+  } else if (OB_BLOCK_FROZEN == ERRSIM_DELAY_TX_SUBMIT_LOG && !is_root()) {
+    ret = ERRSIM_DELAY_TX_SUBMIT_LOG;
+  }
+
 #ifdef ERRSIM
   ret = EN_SUBMIT_TX_PREPARE_LOG;
 #endif
@@ -7119,6 +7130,10 @@ int ObPartTransCtx::tx_keepalive_response_(const int64_t status)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
+
+  if (OB_SWITCHING_TO_FOLLOWER_GRACEFULLY == ERRSIM_DELAY_TX_SUBMIT_LOG) {
+    return ret;
+  }
 
   if ((OB_TRANS_CTX_NOT_EXIST == status || OB_TRANS_ROLLBACKED == status) && can_be_recycled_()) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
