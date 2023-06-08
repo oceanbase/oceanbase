@@ -491,6 +491,7 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
       int response_retcode = retcode != OB_SUCCESS ? retcode : ret;
       if (part_response_error(req_, response_retcode) != OB_SUCCESS) {
         RPC_REQ_OP.response_result(req_, NULL);
+        RPC_OBRPC_LOG(ERROR, "response rpc result failed", K(ret));
       }
       req_ = NULL;
     }
@@ -514,7 +515,10 @@ int ObRpcProcessorBase::part_response_error(rpc::ObRequest* req, const int retco
   rcode.rcode_ = retcode;
   LOG_INFO("execute part_response_error", K(retcode));
   int64_t pos = 0;
-  if (OB_FAIL(rcode.serialize(tbuf, sizeof(tbuf), pos))) {
+  if (req->get_nio_protocol() != rpc::ObRequest::TRANSPORT_PROTO_POC) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_INFO("part_response_error is only supported in pkt-nio farmework", K(req->get_nio_protocol()));
+  } else if (OB_FAIL(rcode.serialize(tbuf, sizeof(tbuf), pos))) {
     RPC_OBRPC_LOG(WARN, "serialize result code fail", K(ret));
   } else {
     ObRpcPacket pkt;
