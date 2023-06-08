@@ -1330,22 +1330,24 @@ int ObTableScanOp::inner_open()
 int ObTableScanOp::inner_close()
 {
   int ret = OB_SUCCESS;
-
   if (das_ref_.has_task()) {
-    ObTaskExecutorCtx &task_exec_ctx = ctx_.get_task_exec_ctx();
-    if (OB_FAIL(fill_storage_feedback_info())) {
-      LOG_WARN("failed to fill storage feedback info", K(ret));
-    } else if (OB_FAIL(das_ref_.close_all_task())) {
-      LOG_WARN("close all das task failed", K(ret));
+    int tmp_ret = fill_storage_feedback_info();
+    if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+      LOG_WARN("fill storage feedback info failed", KR(tmp_ret));
+    }
+    if (OB_FAIL(das_ref_.close_all_task())) {
+      LOG_WARN("close all das task failed", KR(ret));
     }
   }
-  if (OB_SUCC(ret) && MY_SPEC.is_global_index_back()) {
+  if (MY_SPEC.is_global_index_back()) {
+    int save_ret = ret;
     if (OB_ISNULL(global_index_lookup_op_)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments",K(ret));
+      LOG_WARN("invalid arguments", KR(ret));
     } else if (OB_FAIL(global_index_lookup_op_->close())) {
-      LOG_WARN("failed to get next batch",K(ret));
+      LOG_WARN("close global index lookup op failed", KR(ret));
     }
+    ret = (OB_SUCCESS == save_ret) ? ret : save_ret;
   }
   if (OB_SUCC(ret)) {
     fill_sql_plan_monitor_info();
@@ -1354,7 +1356,6 @@ int ObTableScanOp::inner_close()
     iter_end_ = false;
     need_init_before_get_row_ = true;
   }
-
   return ret;
 }
 
