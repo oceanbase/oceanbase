@@ -730,7 +730,9 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
     // do nothing
   }
   if (OB_SUCC(ret)) {
-    if (max_read_stale_us_for_user < 0) {
+    if (monotinic_read
+        || max_read_stale_us_for_user < 0
+        || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
       // no need to check barrier version
       snapshot = wrs_scn;
     } else {
@@ -742,7 +744,7 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
       } else {
         const int64_t current_time_us = MTL_IS_PRIMARY_TENANT()
                 ? std::max(ObTimeUtility::current_time(), gts_cache.convert_to_ts())
-                : 0 ;
+                : gts_cache.convert_to_ts();
         current_scn.convert_from_ts(current_time_us - max_read_stale_us_for_user);
         snapshot = SCN::max(wrs_scn, current_scn);
       }
