@@ -329,6 +329,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
         OZ (destruct_obj(record->get_element()[i], session));
       }
+      OX (src.set_null());
     }
       break;
     default: {
