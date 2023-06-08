@@ -1529,7 +1529,6 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   bool is_oracle_mode = false;
   const bool is_index_tbl = table_schema.is_index_table();
   const uint64_t tenant_id = table_schema.get_tenant_id();
-  const int64_t begin_pos = pos;
   if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
   }
@@ -1746,7 +1745,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       }
     }
   }
-  if (OB_SUCC(ret) && pos > begin_pos) {
+  if (OB_SUCC(ret) && pos > 0) {
     pos -= 1;
     buf[pos] = '\0';      // remove trailer space
   }
