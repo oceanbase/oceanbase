@@ -454,38 +454,42 @@ bool ObDetectManager::ObDetectCallbackNodeExecuteCall::operator()(hash::HashMapP
   ObDetectCallbackNode *node = entry.second;
   int node_cnt = 0; // node_cnt in linked list, remove kv pair if the last node is removed
   while (OB_NOT_NULL(node)) {
+    ret = OB_SUCCESS;
     node_cnt++;
     ObDetectCallbackNode *next_node = node->next_;
     // if a callback can be reentrant, don't set is_executed so that it can be do for several times
     // typical scene: qc detects sqc, if at least 2 sqc failed, both of them should be set not_need_report,
     // the callback should be reentrant and node not set to executed
     if (!node->is_executed()) {
-      if (!node->cb_->reentrant()) {
-        node->set_executed();
-      }
       LIB_LOG(WARN, "[DM] DM found peer not exist, execute detect callback",
               K(node->cb_->get_trace_id()), K(from_svr_addr_),
               K(detectable_id), K(node->cb_->get_detect_callback_type()), K(node->sequence_id_));
       node->cb_->set_from_svr_addr(from_svr_addr_);
       if (OB_FAIL(node->cb_->do_callback())) {
+        // if do_callback failed, reset state to running for next detect loop
+        node->cb_->atomic_set_running(from_svr_addr_);
         LIB_LOG(WARN, "[DM] failed to do_callback",
                 K(node->cb_->get_trace_id()), K(from_svr_addr_), K(detectable_id),
                 K(node->cb_->get_detect_callback_type()), K(node->sequence_id_));
-      }
-      // ref_count > 0 means that cb is still referred by work thread, don‘t remove it from the linked list
-      int64_t ref_count = node->cb_->get_ref_count();
-      if (0 == ref_count) {
-        if (node->next_ != nullptr) {
-          node->next_->prev_ = node->prev_;
+      } else {
+        if (!node->cb_->reentrant()) {
+          node->set_executed();
         }
-        if (node->prev_ != nullptr) {
-          node->prev_->next_ = node->next_;
-        } else {
-          // Prev is empty, which means that the current deleted element is the head of the linked list pointed to by map_value, and head is set to next
-          entry.second = node->next_;
+        // ref_count > 0 means that cb is still referred by work thread, don‘t remove it from the linked list
+        int64_t ref_count = node->cb_->get_ref_count();
+        if (0 == ref_count) {
+          if (node->next_ != nullptr) {
+            node->next_->prev_ = node->prev_;
+          }
+          if (node->prev_ != nullptr) {
+            node->prev_->next_ = node->next_;
+          } else {
+            // Prev is empty, which means that the current deleted element is the head of the linked list pointed to by map_value, and head is set to next
+            entry.second = node->next_;
+          }
+          dm_->delete_cb_node(node);
+          node_cnt--;
         }
-        dm_->delete_cb_node(node);
-        node_cnt--;
       }
     }
     node = next_node;
@@ -499,7 +503,7 @@ void ObDetectManager::ObCheckStateFinishCall::operator()(hash::HashMapPair<ObDet
   ObDetectCallbackNode *node = entry.second;
   // check task has already been marked as finished
   while (OB_NOT_NULL(node)) {
-    ObTaskState state;
+    ObTaskState state = ObTaskState::RUNNING;
     if (OB_SUCCESS == node->cb_->atomic_set_finished(addr_, &state)) {
       if (ObTaskState::FINISHED == state) {
         finished_ = true;

@@ -53,6 +53,20 @@ int ObIDetectCallback::atomic_set_finished(const common::ObAddr &addr, ObTaskSta
   return ret;
 }
 
+int ObIDetectCallback::atomic_set_running(const common::ObAddr &addr)
+{
+  int ret = OB_SEARCH_NOT_FOUND;
+  ARRAY_FOREACH_NORET(peer_states_, idx) {
+    if (peer_states_.at(idx).peer_addr_ == addr) {
+      ATOMIC_SET((int32_t*)&peer_states_.at(idx).peer_state_,
+          (int32_t)ObTaskState::RUNNING);
+      ret = OB_SUCCESS;
+      break;
+    }
+  }
+  return ret;
+}
+
 int64_t ObIDetectCallback::inc_ref_count(int64_t count)
 {
   return ATOMIC_AAF(&ref_count_, count);
@@ -212,11 +226,13 @@ int ObQcDetectCB::atomic_set_finished(const common::ObAddr &addr, ObTaskState *s
   int ret = OB_SEARCH_NOT_FOUND;
   for (int i = 0; i < get_peer_states().count(); ++i) {
     if (get_peer_states().at(i).peer_addr_ == addr) {
-      sql::dtl::ObDtlRpcChannel* dtl_rpc_channel = static_cast<sql::dtl::ObDtlRpcChannel*>(dtl_channels_.at(i));
-      if (dtl_rpc_channel->recv_sqc_fin_res()) {
-        ATOMIC_SET((int32_t*)&get_peer_states().at(i).peer_state_, (int32_t)ObTaskState::FINISHED);
-        if (OB_NOT_NULL(state)) {
+      ATOMIC_SET((int32_t*)&get_peer_states().at(i).peer_state_, (int32_t)ObTaskState::FINISHED);
+      if (OB_NOT_NULL(state)) {
+        sql::dtl::ObDtlRpcChannel* dtl_rpc_channel = static_cast<sql::dtl::ObDtlRpcChannel*>(dtl_channels_.at(i));
+        if (dtl_rpc_channel->recv_sqc_fin_res()) {
           *state = ObTaskState::FINISHED;
+        } else {
+          *state = ObTaskState::RUNNING;
         }
       }
       ret = OB_SUCCESS;

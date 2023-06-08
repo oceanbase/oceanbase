@@ -209,18 +209,19 @@ int ObRFBloomFilterMsg::process_msg_internal(bool &need_free)
 {
   int ret = OB_SUCCESS;
   ObP2PDhKey dh_key(p2p_datahub_id_, px_sequence_id_, task_id_);
-  ObP2PDatahubManager::P2PMsgMergeCall call(*this);
-  ObP2PDatahubManager::P2PRegenerateCall regen_call(*this);
+  ObP2PDatahubManager::P2PMsgSetCall set_call(dh_key, *this);
+  ObP2PDatahubManager::P2PMsgMergeCall merge_call(*this);
   ObP2PDatahubManager::MsgMap &map = PX_P2P_DH.get_map();
   start_time_ = ObTimeUtility::current_time();
 
   bool need_merge = true;
   if (OB_FAIL(generate_receive_count_array(piece_size_, bloom_filter_.get_begin_idx()))) {
+    need_free = true;
     LOG_WARN("fail to generate receive count array", K(ret));
   } else {
     //set msg
     ObP2PDatahubMsgGuard guard(this);
-    if (OB_FAIL(map.set_refactored(dh_key, this))) {
+    if (OB_FAIL(map.set_refactored(dh_key, this, 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/, &set_call))) {
       if (OB_HASH_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -228,25 +229,12 @@ int ObRFBloomFilterMsg::process_msg_internal(bool &need_free)
       }
       need_free = true;
     } else {
-      need_merge = false;
-      // set_refactored success, means this msg is in map, so register check item into dm
-      int reg_ret = ObDetectManagerUtils::p2p_datahub_register_check_item_into_dm(register_dm_info_,
-        dh_key, dm_cb_node_seq_id_);
-      if (OB_SUCCESS != reg_ret) {
-        LOG_WARN("[DM] failed to register check item to dm", K(reg_ret));
-      }
-      LOG_TRACE("[DM] rf register check item to dm", K(reg_ret), K(register_dm_info_),
-          K(dh_key), K(dm_cb_node_seq_id_), K(this));
+      need_merge = false; // set success, not need to merge
     }
-    // create whole bloom filter, no need wait
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(map.atomic_refactored(dh_key, regen_call))) {
-        LOG_WARN("fail to update bloom filter msg", K(ret));
-      }
-    }
+
     // merge piece bloom filter
     if (OB_SUCC(ret) && need_merge) {
-      if (OB_FAIL(map.read_atomic(dh_key, call))) {
+      if (OB_FAIL(map.read_atomic(dh_key, merge_call))) {
         if (OB_HASH_NOT_EXIST != ret) {
           LOG_WARN("fail to merge p2p dh msg", K(ret));
         }

@@ -81,7 +81,10 @@ public:
 
   ObArray<ObPeerTaskState> &get_peer_states() { return peer_states_; }
 
+  // set peer state to finished and get the old state
   virtual int atomic_set_finished(const common::ObAddr &addr, ObTaskState *state=nullptr);
+  // if do_callback failed, reset state to running for next detect loop
+  virtual int atomic_set_running(const common::ObAddr &addr);
   int64_t get_ref_count() { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count(int64_t count = 1);
   int64_t dec_ref_count();

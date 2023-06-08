@@ -196,15 +196,16 @@ public:
     const _value_type *ret = get(const_cast<const _key_type&>(key));
     return const_cast<_value_type*>(ret);
   }
-  inline int set_refactored(const _key_type &key, const _value_type &value, int flag = 0,
-                 int broadcast = 0, int overwrite_key = 0)
+  template <typename _callback = void>
+  int set_refactored(const _key_type &key, const _value_type &value, int flag = 0,
+                 int broadcast = 0, int overwrite_key = 0, _callback *callback = nullptr)
   {
     int ret = OB_SUCCESS;
     pair_type pair;
     if (OB_FAIL(pair.init(key, value))) {
       HASH_WRITE_LOG(HASH_WARNING, "init pair failed, ret=%d", ret);
     } else {
-      ret = ht_.set_refactored(key, pair, flag, broadcast, overwrite_key);
+      ret = ht_.set_refactored(key, pair, flag, broadcast, overwrite_key, callback);
     }
     return ret;
   };

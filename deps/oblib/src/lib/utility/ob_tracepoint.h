@@ -620,6 +620,8 @@ class EventTable
       EN_PX_NOT_ERASE_P2P_DH_MSG = 608,
       EN_PX_SLOW_PROCESS_SQC_FINISH_MSG = 609,
       EN_PX_JOIN_FILTER_NOT_MERGE_MSG = 610,
+      EN_PX_P2P_MSG_REG_DM_FAILED= 611,
+      EN_PX_JOIN_FILTER_HOLD_MSG = 612,
       // please add new trace point after 700 or before 600
 
       // Compaction Related 700-750
