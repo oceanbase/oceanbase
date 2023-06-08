@@ -69,6 +69,7 @@ public:
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(next_available_write_ts),
     K_(write_speed), K_(disk_used_stop_write_threshold), K_(need_stop_write), K_(ref_cnt));
 private:
+  int check_cur_node_is_leader(bool &is_leader);
   int cal_limit(const int64_t bytes, int64_t &next_available_ts);
   int do_sleep(const int64_t next_available_ts,
                const int64_t task_id,
