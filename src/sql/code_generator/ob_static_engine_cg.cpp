@@ -3212,10 +3212,6 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxFifoCoordSpec &spec, 
     LOG_WARN("failed to generate basic transmit spec", K(ret));
   } else if (OB_FAIL(generate_dynamic_sample_spec_if_need(op, spec))) {
     LOG_WARN("generate px_coord_spec for dynamic sample failed", K(ret));
-  } else {
-    if (op.get_plan()->get_optimizer_context().is_online_ddl()) {
-      LOG_INFO("ddl plan", K(*op.get_plan()));
-    }
   }
   return ret;
 }
