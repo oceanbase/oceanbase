@@ -1764,12 +1764,13 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_ONE, sql_info))) {
           SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
-      } else if (0 == func_name.case_compare("substr")
+      } else if ((0 == func_name.case_compare("substr")
+                  || 0 == func_name.case_compare("extract_xml"))
           && (3 == node[1]->num_child_)) {
         const int64_t ARGS_NUMBER_THREE = 3;
         bool mark_arr[ARGS_NUMBER_THREE] = {0, 1, 1}; //0表示参数化, 1 表示不参数化
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_THREE, sql_info))) {
-          SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+          SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
       }else if (0 == func_name.case_compare("weight_string")
           && (5 == node[1]->num_child_)) {
