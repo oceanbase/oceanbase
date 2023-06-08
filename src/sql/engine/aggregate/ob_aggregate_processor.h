@@ -961,6 +961,8 @@ private:
 
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
+  int shadow_truncate_string_for_hybird_hist(const ObObjMeta obj_meta, ObDatum &datum);
+
   OB_INLINE void clear_op_evaluated_flag()
   {
     if (OB_NOT_NULL(op_eval_infos_)) {

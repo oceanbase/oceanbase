@@ -17,7 +17,7 @@
 #include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_stat_item.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
-#include "sql/optimizer/ob_optimizer_util.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 namespace oceanbase {
 namespace common {
@@ -117,14 +117,14 @@ int ObOptOSGColumnStat::set_min_max_datum_to_obj()
     LOG_WARN("failed to get min obj");
   } else if (OB_FAIL(max_val_.get_obj(*max_obj))) {
     LOG_WARN("failed to get max obj");
-  } else if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(min_obj, allocator_, min_obj))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(*min_obj))) {
     LOG_WARN("fail to truncate string", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(max_obj, allocator_, max_obj))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(*max_obj))) {
     LOG_WARN("fail to truncate string", K(ret));
   } else {
     const ObObj &min_val = col_stat_->get_min_value();
     const ObObj &max_val = col_stat_->get_max_value();
-    LOG_TRACE("set min/max val", K(min_obj), K(max_obj), K(min_val), K(max_val));
+    LOG_TRACE("set min/max val", KPC(min_obj), KPC(max_obj), K(min_val), K(max_val));
     if (min_val.is_null() || (!min_obj->is_null() && *min_obj < min_val)) {
       col_stat_->set_min_value(*min_obj);
     }

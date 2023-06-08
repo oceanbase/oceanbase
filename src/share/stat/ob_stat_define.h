@@ -113,8 +113,7 @@ enum ColumnGatherFlag
   NO_NEED_STAT          = 0,
   VALID_OPT_COL         = 1,
   NEED_BASIC_STAT       = 1 << 1,
-  NEED_AVG_LEN          = 1 << 2,
-  NEED_TRUNCATE_STR     = 1 << 3
+  NEED_AVG_LEN          = 1 << 2
 };
 
 enum ObGranularityType
@@ -378,11 +377,9 @@ struct ObColumnStatParam {
   inline void set_valid_opt_col() { gather_flag_ |= ColumnGatherFlag::VALID_OPT_COL; }
   inline void set_need_basic_stat() { gather_flag_ |= ColumnGatherFlag::NEED_BASIC_STAT; }
   inline void set_need_avg_len() { gather_flag_ |= ColumnGatherFlag::NEED_AVG_LEN; }
-  inline void set_need_truncate_str() { gather_flag_ |= ColumnGatherFlag::NEED_TRUNCATE_STR; }
   inline bool is_valid_opt_col() const { return gather_flag_ & ColumnGatherFlag::VALID_OPT_COL; }
   inline bool need_basic_stat() const { return gather_flag_ & ColumnGatherFlag::NEED_BASIC_STAT; }
   inline bool need_avg_len() const { return gather_flag_ & ColumnGatherFlag::NEED_AVG_LEN; }
-  inline bool need_truncate_str() const { return gather_flag_ & ColumnGatherFlag::NEED_TRUNCATE_STR; }
 
   ObString column_name_;
   uint64_t column_id_;

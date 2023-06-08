@@ -3263,11 +3263,6 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
         if (ObColumnStatParam::is_valid_avglen_type(col->get_meta_type().get_type())) {
           col_param.set_need_avg_len();
         }
-        //check need truncate str
-        if (ob_is_string_type(col->get_meta_type().get_type()) &&
-                              col->get_data_length() > OPT_STATS_MAX_VALUE_CHAR_LEN) {
-          col_param.set_need_truncate_str();
-        }
       }
       if (col->is_rowkey_column() && !table_schema.is_heap_table()) {
         col_param.set_is_index_column();

@@ -29,6 +29,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/basic/ob_material_op_impl.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -2538,6 +2539,8 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         ObObj obj;
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
+        } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+          LOG_WARN("fail to truncate string", K(ret));
         } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(obj))) {
           LOG_WARN("failed to process row", K(ret));
         } else {/*do nothing*/}
@@ -2984,6 +2987,8 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         ObObj obj;
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
+        } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+          LOG_WARN("fail to truncate string", K(ret));
         } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(obj))) {
           LOG_WARN("failed to process row", K(ret));
         } else {/*do nothing*/}
@@ -4854,6 +4859,8 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
     ObObj obj;
     if (OB_FAIL(datum->to_obj(obj, obj_meta))) {
       LOG_WARN("failed to obj", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+      LOG_WARN("fail to truncate string", K(ret));
     } else if (OB_FAIL(extra_info->topk_fre_hist_.add_top_k_frequency_item(obj))) {
       LOG_WARN("failed to process row", K(ret));
     } else {/*do nothing*/}
@@ -6048,6 +6055,9 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
         LOG_WARN("get unexpected null", K(ret), K(stored_row));
       } else if (stored_row->cells()[0].is_null()) {
         ++ null_count;
+      } else if (OB_FAIL(shadow_truncate_string_for_hybird_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                                const_cast<ObDatum &>(stored_row->cells()[0])))) {
+        LOG_WARN("failed to shadow truncate string for hybird hist", K(ret));
       } else if (OB_FAIL(prev_row.save_store_row(*stored_row))) {
         LOG_WARN("failed to deep copy limit last rows", K(ret));
       } else {
@@ -6064,6 +6074,9 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
       if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(stored_row));
+      } else if (OB_FAIL(shadow_truncate_string_for_hybird_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                                const_cast<ObDatum &>(stored_row->cells()[0])))) {
+        LOG_WARN("failed to shadow truncate string for hybrid hist", K(ret));
       } else if (OB_FAIL(check_rows_equal(prev_row, *stored_row, aggr_info, is_equal))) {
         LOG_WARN("failed to is order by item equal with prev row", K(ret));
       } else if (is_equal) {
@@ -6128,6 +6141,24 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
       } else if (OB_FAIL(get_hybrid_hist_result(&hybrid_hist, has_lob_header, result))) {
         LOG_WARN("failed to get hybrid hist result", K(ret));
       } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::shadow_truncate_string_for_hybird_hist(const ObObjMeta obj_meta,
+                                                                 ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (ObColumnStatParam::is_valid_opt_col_type(obj_meta.get_type()) && obj_meta.is_string_type() && !datum.is_null()) {
+    const ObString &str = datum.get_string();
+    int64_t truncated_str_len = ObDbmsStatsUtils::get_truncated_str_len(str, obj_meta.get_collation_type());
+    if (OB_UNLIKELY(truncated_str_len < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(datum), K(truncated_str_len));
+    } else {
+      datum.set_string(str.ptr(), static_cast<uint32_t>(truncated_str_len));
+      LOG_TRACE("Succeed to shadow truncate string for hybird hist", K(datum));
     }
   }
   return ret;

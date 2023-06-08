@@ -71,7 +71,7 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
     } else {
       ObOptStatGatherStat gather_stat(task_info);
       ObOptStatGatherStatList::instance().push(gather_stat);
-      ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->total(), gather_stat);
+      ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->used(), gather_stat);
       if (OB_FAIL(running_monitor.add_table_info(param))) {
         LOG_WARN("failed to add table info", K(ret));
       } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {

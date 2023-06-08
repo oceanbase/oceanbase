@@ -100,19 +100,10 @@ int ObStatMaxValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   if (OB_ISNULL(col_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column param is null", K(ret));
-  } else if (!col_param_->need_truncate_str() &&
-             OB_FAIL(databuff_printf(buf, buf_len, pos,
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " MAX(\"%.*s\")" : " MAX(`%.*s`)",
                                      col_param_->column_name_.length(),
                                      col_param_->column_name_.ptr()))) {
-    LOG_WARN("failed to print max(col) expr", K(ret));
-  } else if (col_param_->need_truncate_str() &&
-             OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                     lib::is_oracle_mode() ? " MAX(SUBSTR(\"%.*s\", 1, %ld))" :
-                                     " MAX(SUBSTR(`%.*s`, 1, %ld))",
-                                     col_param_->column_name_.length(),
-                                     col_param_->column_name_.ptr(),
-                                     OPT_STATS_MAX_VALUE_CHAR_LEN))) {
     LOG_WARN("failed to print max(col) expr", K(ret));
   }
   return ret;
@@ -125,6 +116,8 @@ int ObStatMaxValue::decode(ObObj &obj)
   if (OB_ISNULL(col_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col stat is not given", K(ret), K(col_stat_));
+  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+    LOG_WARN("fail to truncate string", K(ret));
   } else {
     col_stat_->set_max_value(obj);
   }
@@ -137,19 +130,10 @@ int ObStatMinValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   if (OB_ISNULL(col_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column param is null", K(ret));
-  } else if (!col_param_->need_truncate_str() &&
-             OB_FAIL(databuff_printf(buf, buf_len, pos,
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " MIN(\"%.*s\")" : " MIN(`%.*s`)",
                                      col_param_->column_name_.length(),
                                      col_param_->column_name_.ptr()))) {
-    LOG_WARN("failed to print max(col) expr", K(ret));
-  } else if (col_param_->need_truncate_str() &&
-             OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                     lib::is_oracle_mode() ? " MIN(SUBSTR(\"%.*s\", 1, %ld))" :
-                                     " MIN(SUBSTR(`%.*s`, 1, %ld))",
-                                     col_param_->column_name_.length(),
-                                     col_param_->column_name_.ptr(),
-                                     OPT_STATS_MAX_VALUE_CHAR_LEN))) {
     LOG_WARN("failed to print max(col) expr", K(ret));
   }
   return ret;
@@ -162,6 +146,8 @@ int ObStatMinValue::decode(ObObj &obj)
   if (OB_ISNULL(col_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col stat is not given", K(ret), K(col_stat_));
+  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+    LOG_WARN("fail to truncate string", K(ret));
   } else {
     col_stat_->set_min_value(obj);
   }
@@ -261,23 +247,12 @@ int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
     }
     double err_rate = 1.0 / (1000 * (bkt_num / MIN_BUCKET_SIZE));
     if (OB_SUCC(ret)) {
-      if (!col_param_->need_truncate_str() &&
-          OB_FAIL(databuff_printf(buf, buf_len, pos,
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                   lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, \"%.*s\", %ld)" :
                                   " TOP_K_FRE_HIST(%lf, `%.*s`, %ld)",
                                   err_rate,
                                   col_param_->column_name_.length(),
                                   col_param_->column_name_.ptr(),
-                                  bkt_num))) {
-        LOG_WARN("failed to print buf topk hist expr", K(ret));
-      } else if (col_param_->need_truncate_str() &&
-                 OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                  lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, SUBSTR(\"%.*s\", 1, %ld), %ld)" :
-                                  " TOP_K_FRE_HIST(%lf, SUBSTR(`%.*s`, 1, %ld), %ld)",
-                                  err_rate,
-                                  col_param_->column_name_.length(),
-                                  col_param_->column_name_.ptr(),
-                                  OPT_STATS_MAX_VALUE_CHAR_LEN,
                                   bkt_num))) {
         LOG_WARN("failed to print buf topk hist expr", K(ret));
       }
@@ -682,24 +657,14 @@ int ObStatHybridHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NULL"))) {
       LOG_WARN("failed to print buf", K(ret));
     } else {/*do nothing*/}
-  } else if (!col_param_->need_truncate_str() &&
-             OB_FAIL(databuff_printf(buf, buf_len, pos,
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " HYBRID_HIST(\"%.*s\", %ld)" :
                                      " HYBRID_HIST(`%.*s`, %ld)",
                                      col_param_->column_name_.length(),
                                      col_param_->column_name_.ptr(),
                                      col_param_->bucket_num_))) {
     LOG_WARN("failed to print buf", K(ret));
-  } else if (col_param_->need_truncate_str() &&
-             OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                     lib::is_oracle_mode() ? " HYBRID_HIST(SUBSTR(\"%.*s\", 1, %ld), %ld)" :
-                                     " HYBRID_HIST(SUBSTR(`%.*s`, 1, %ld), %ld)",
-                                     col_param_->column_name_.length(),
-                                     col_param_->column_name_.ptr(),
-                                     OPT_STATS_MAX_VALUE_CHAR_LEN,
-                                     col_param_->bucket_num_))) {
-    LOG_WARN("failed to print buf", K(ret));
-  } else {/*do nothing*/}
+  }
   return ret;
 }
 

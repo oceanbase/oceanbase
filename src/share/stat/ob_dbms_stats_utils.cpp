@@ -776,5 +776,80 @@ int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
   return ret;
 }
 
+int ObDbmsStatsUtils::truncate_string_for_opt_stats(const ObObj *old_obj,
+                                                    ObIAllocator &alloc,
+                                                    ObObj *&new_obj)
+{
+  int ret = OB_SUCCESS;
+  bool is_truncated = false;
+  if (OB_ISNULL(old_obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else if (ObColumnStatParam::is_valid_opt_col_type(old_obj->get_type()) && old_obj->is_string_type()) {
+    ObString str;
+    if (OB_FAIL(old_obj->get_string(str))) {
+      LOG_WARN("failed to get string", K(ret), K(str));
+    } else {
+      ObObj *tmp_obj = NULL;
+      int64_t truncated_str_len = get_truncated_str_len(str, old_obj->get_collation_type());
+      if (truncated_str_len == str.length()) {
+        //do nothing
+      } else if (OB_UNLIKELY(truncated_str_len < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(old_obj), K(str), K(truncated_str_len));
+      } else if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc buf", K(ret));
+      } else {
+        tmp_obj->set_varchar(str.ptr(), static_cast<int32_t>(truncated_str_len));
+        tmp_obj->set_meta_type(old_obj->get_meta());
+        new_obj = tmp_obj;
+        is_truncated = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_truncated) {
+    new_obj = const_cast<ObObj *>(old_obj);
+  }
+  LOG_TRACE("Succeed to truncate string obj for opt stats", KPC(old_obj), KPC(new_obj), K(is_truncated));
+  return ret;
+}
+
+
+int ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (ObColumnStatParam::is_valid_opt_col_type(obj.get_type()) && obj.is_string_type()) {
+    ObString str;
+    if (OB_FAIL(obj.get_string(str))) {
+      LOG_WARN("failed to get string", K(ret), K(str), K(obj));
+    } else {
+      int64_t truncated_str_len = get_truncated_str_len(str, obj.get_collation_type());
+      if (OB_UNLIKELY(truncated_str_len < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(obj), K(str), K(truncated_str_len));
+      } else {
+        str.assign_ptr(str.ptr(), static_cast<int32_t>(truncated_str_len));
+        obj.set_common_value(str);
+        LOG_TRACE("Succeed to shadow truncate string obj for opt stats", K(obj));
+      }
+    }
+  }
+  return ret;
+}
+
+int64_t ObDbmsStatsUtils::get_truncated_str_len(const ObString &str, const ObCollationType cs_type)
+{
+  int64_t truncated_str_len = 0;
+  int64_t mb_len = ObCharset::strlen_char(cs_type, str.ptr(), str.length());
+  if (mb_len <= OPT_STATS_MAX_VALUE_CHAR_LEN) {//keep origin str
+    truncated_str_len = str.length();
+  } else {//get max truncate str len
+    truncated_str_len = ObCharset::charpos(cs_type, str.ptr(), str.length(), OPT_STATS_MAX_VALUE_CHAR_LEN);
+  }
+  LOG_TRACE("Succeed to get truncated str len", K(str), K(cs_type), K(truncated_str_len));
+  return truncated_str_len;
+}
+
 }
 }
