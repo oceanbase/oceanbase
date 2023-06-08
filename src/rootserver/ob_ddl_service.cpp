@@ -14096,18 +14096,6 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_inde
         if (OB_FAIL(sql::ObResolverUtils::check_unique_index_cover_partition_column(
                     new_table_schema, create_index_arg))) {
           LOG_WARN("fail to check unique key cover partition column", K(ret));
-          if (INDEX_TYPE_UNIQUE_LOCAL == create_index_arg.index_type_ &&
-              OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF == ret) {
-            int tmp_ret = OB_SUCCESS;
-            bool allow = false;
-            if (OB_SUCCESS != (tmp_ret = ObDDLResolver::check_uniq_allow(
-              new_table_schema, create_index_arg, allow))) {
-              LOG_WARN("fail to check uniq allow", K(ret));
-            } else if (allow) {
-              LOG_INFO("uniq index allowd, deduced by constraint", K(ret));
-              ret = OB_SUCCESS;
-            }
-          }
         }
       }
     }

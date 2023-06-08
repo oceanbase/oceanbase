@@ -167,9 +167,6 @@ public:
                                bool need_rewrite_length,
                                const bool is_byte_length = false);
   static int rewrite_text_length_mysql(ObObjType &type, int32_t &length);
-  static int check_uniq_allow(share::schema::ObTableSchema &table_schema,
-                              const obrpc::ObCreateIndexArg &index_arg,
-                              bool &allow);
   // check whether the column is allowed to be primary key.
   int check_add_column_as_pk_allowed(const ObColumnSchemaV2 &column_schema);
   static int get_primary_key_default_value(
@@ -421,13 +418,6 @@ public:
       bool is_oracle_mode,
       bool is_explicit_order);
 protected:
-  static int check_same_substr_expr(ObRawExpr &left, ObRawExpr &right, bool &same);
-  static int check_uniq_allow(ObResolverParams &params,
-                              share::schema::ObTableSchema &table_schema,
-                              const obrpc:: ObCreateIndexArg &index_arg,
-                              ObRawExpr *part_func_expr,
-                              common::ObIArray<ObRawExpr *> &constraint_exprs,
-                              bool &allow);
   static int get_part_str_with_type(
       const bool is_oracle_mode,
       share::schema::ObPartitionFuncType part_func_type,
