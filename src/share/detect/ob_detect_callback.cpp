@@ -21,10 +21,11 @@ namespace common {
 
 const int64_t DM_INTERRUPT_MSG_MAX_LENGTH = 128;
 
-ObIDetectCallback::ObIDetectCallback(const ObArray<ObPeerTaskState> &peer_states)
+ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states)
     : ref_count_(0)
 {
   int ret = OB_SUCCESS;
+  peer_states_.set_attr(ObMemAttr(tenant_id, "DmCbStArr"));
   if (OB_FAIL(peer_states_.assign(peer_states))) {
     alloc_succ_ = false;
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -157,13 +158,16 @@ int ObDmInterruptQcCall::mock_sqc_finish_msg(sql::ObPxSqcMeta &sqc)
   return ret;
 }
 
-ObQcDetectCB::ObQcDetectCB(const ObArray<ObPeerTaskState> &peer_states, const ObInterruptibleTaskID &tid, sql::ObDfo &dfo,
+ObQcDetectCB::ObQcDetectCB(uint64_t tenant_id,
+    const ObArray<ObPeerTaskState> &peer_states,
+    const ObInterruptibleTaskID &tid, sql::ObDfo &dfo,
     const ObArray<sql::dtl::ObDtlChannel *> &dtl_channels)
-    : ObIDetectCallback(peer_states), tid_(tid), dfo_(dfo)
+    : ObIDetectCallback(tenant_id, peer_states), tid_(tid), dfo_(dfo)
 {
   // if ObIDetectCallback constructed succ
   if (alloc_succ_) {
     int ret = OB_SUCCESS;
+    dtl_channels_.set_attr(ObMemAttr(tenant_id, "DmCbDtlArr"));
     if (OB_FAIL(dtl_channels_.assign(dtl_channels))) {
       alloc_succ_ = false;
       ret = OB_ALLOCATE_MEMORY_FAILED;
