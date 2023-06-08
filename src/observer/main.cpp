@@ -589,6 +589,7 @@ int main(int argc, char *argv[])
       observer.destroy();
       ObTaskController::get().destroy();
       ObKVGlobalCache::get_instance().destroy();
+      ObClockGenerator::destroy();
       ObVirtualTenantManager::get_instance().destroy();
     }
     curl_global_cleanup();

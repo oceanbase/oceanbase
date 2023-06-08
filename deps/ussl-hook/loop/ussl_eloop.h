@@ -7,6 +7,7 @@ typedef struct ussl_eloop_t
   ussl_dlink_t ready_link;
 } ussl_eloop_t;
 
+extern int ussl_is_stopped;
 extern int ussl_eloop_init(ussl_eloop_t *ep);
 extern int ussl_eloop_run(ussl_eloop_t *ep);
 extern int ussl_eloop_regist(ussl_eloop_t *ep, ussl_sock_t *s, uint32_t eflag);

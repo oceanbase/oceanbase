@@ -127,7 +127,7 @@ int ussl_setsockopt(int socket, int level, int optname, const void *optval, sock
 {
   int ret = 0;
   if (ATOMIC_BCAS(&is_ussl_bg_thread_started, 0, 1)) {
-    ret = init_bg_thread();
+    ret = ussl_init_bg_thread();
     if (0 != ret) {
       ussl_log_error("start ussl-bk-thread failed!, ret:%d", ret);
       ATOMIC_STORE(&is_ussl_bg_thread_started, 0);
@@ -175,6 +175,15 @@ int ussl_setsockopt(int socket, int level, int optname, const void *optval, sock
     }
   }
   return ret;
+}
+
+void ussl_stop()
+{
+  ATOMIC_STORE(&ussl_is_stopped, 1);
+}
+void ussl_wait()
+{
+  ussl_wait_bg_thread();
 }
 
 int ussl_listen(int socket, int backlog)

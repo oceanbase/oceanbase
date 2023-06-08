@@ -64,8 +64,8 @@ struct AllLsElectionReferenceInfoFactory
 void ObLeaderCoordinator::destroy()
 {
   LC_TIME_GUARD(1_s);
-  recovery_detect_timer_.stop_and_wait();
-  failure_detect_timer_.stop_and_wait();
+  recovery_detect_timer_.destroy();
+  failure_detect_timer_.destroy();
   AllLsElectionReferenceInfoFactory::delete_obj(all_ls_election_reference_info_);
   all_ls_election_reference_info_ = NULL;
   COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl destroy");

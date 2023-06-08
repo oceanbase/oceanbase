@@ -113,6 +113,9 @@ using namespace oceanbase::blocksstable;
 using namespace oceanbase::transaction;
 using namespace oceanbase::logservice;
 
+extern "C" void ussl_stop();
+extern "C" void ussl_wait();
+
 namespace oceanbase
 {
 namespace obrpc
@@ -488,10 +491,6 @@ void ObServer::destroy()
     signal_handle_->destroy();
     FLOG_INFO("signal handle destroyed");
 
-    FLOG_INFO("active session history task destroyed");
-    ObClockGenerator::destroy();
-    FLOG_INFO("clock generator destroyed");
-
     FLOG_INFO("opt stat manager destroyed");
     ObOptStatManager::get_instance().destroy();
     FLOG_INFO("opt stat manager destroyed");
@@ -515,6 +514,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy background thread monitor");
     ObBGThreadMonitor::get_instance().destroy();
     FLOG_INFO("background thread monitor destroyed");
+
+    FLOG_INFO("begin to destroy thread hung detector");
+    common::occam::ObThreadHungDetector::get_instance().destroy();
+    FLOG_INFO("thread hung detector destroyed");
 
     FLOG_INFO("begin to destroy table store stat mgr");
     ObTableStoreStatMgr::get_instance().destroy();
@@ -685,9 +688,9 @@ void ObServer::destroy()
     ObServerBlacklist::get_instance().destroy();
     FLOG_INFO("server blacklist destroy");
 
-    FLOG_INFO("begin to destroy election global timer");
-    palf::election::GLOBAL_REPORT_TIMER.~ObOccamTimer();
-    FLOG_INFO("election global timer destroy");
+    FLOG_INFO("begin to destroy global election report timer");
+    palf::election::GLOBAL_REPORT_TIMER.destroy();
+    FLOG_INFO("global election report timer destroyed");
 
     FLOG_INFO("begin to destroy OB_PRIMARY_STANDBY_SERVICE");
     OB_PRIMARY_STANDBY_SERVICE.destroy();
@@ -1136,6 +1139,10 @@ int ObServer::stop()
     ObBGThreadMonitor::get_instance().stop();
     FLOG_INFO("bgthread monitor stopped");
 
+    FLOG_INFO("begin to stop thread hung detector");
+    common::occam::ObThreadHungDetector::get_instance().stop();
+    FLOG_INFO("thread hung detector stopped");
+
     FLOG_INFO("begin to stop timer");
     TG_STOP(lib::TGDefIDs::ServerGTimer);
     FLOG_INFO("timer stopped");
@@ -1297,6 +1304,10 @@ int ObServer::stop()
       FLOG_INFO("net frame stopped");
     }
 
+    FLOG_INFO("begin to stop ussl");
+    ussl_stop();
+    FLOG_INFO("stop ussl success");
+
     FLOG_INFO("begin to stop global_poc_server");
     obrpc::global_poc_server.stop();
     FLOG_INFO("stop global_poc_server success");
@@ -1305,9 +1316,10 @@ int ObServer::stop()
     ROOTSERVICE_EVENT_INSTANCE.stop();
     FLOG_INFO("rootservice event history stopped");
 
+    FLOG_INFO("begin to stop global election report timer");
+    palf::election::GLOBAL_REPORT_TIMER.stop();
+    FLOG_INFO("global election report timer stopped");
   }
-
-
 
   has_stopped_ = true;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer end", KR(ret));
@@ -1387,6 +1399,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait bg thread monitor");
     ObBGThreadMonitor::get_instance().wait();
     FLOG_INFO("wait bg thread monitor success");
+
+    FLOG_INFO("begin to wait thread hung detector");
+    common::occam::ObThreadHungDetector::get_instance().wait();
+    FLOG_INFO("wait thread hung detector success");
 
 #ifdef ENABLE_IMC
     FLOG_INFO("begin to wait imc tasks");
@@ -1538,10 +1554,14 @@ int ObServer::wait()
     ObServerCheckpointSlogHandler::get_instance().wait();
     FLOG_INFO("wait server checkpoint slog handler success");
 
-    FLOG_INFO("set gctx status stopped");
-    palf::election::GLOBAL_REPORT_TIMER.stop_and_wait();
-    FLOG_INFO("wait global election report timer stopped done");
+    FLOG_INFO("begin to wait global election report timer");
+    palf::election::GLOBAL_REPORT_TIMER.wait();
+    FLOG_INFO("wait global election report timer success");
 
+
+    FLOG_INFO("begin to wait ussl");
+    ussl_wait();
+    FLOG_INFO("wait ussl success");
 
     FLOG_INFO("begin to wait global_poc_server");
     obrpc::global_poc_server.wait();

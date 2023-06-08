@@ -1270,6 +1270,8 @@ int ObRootService::stop()
       FLOG_INFO("dbms sched job master stop");
       TG_STOP(lib::TGDefIDs::GlobalCtxTimer);
       FLOG_INFO("global ctx timer stop");
+      archive_service_.stop();
+      FLOG_INFO("archive service stop");
     }
   }
 
@@ -1314,6 +1316,8 @@ void ObRootService::wait()
   FLOG_INFO("rebalance task mgr exit success");
   TG_WAIT(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer exit success");
+  archive_service_.wait();
+  FLOG_INFO("archive service exit success");
   backup_task_scheduler_.reuse();
   ObUpdateRsListTask::clear_lock();
   THE_RS_JOB_TABLE.reset_max_job_id();
@@ -5062,6 +5066,12 @@ int ObRootService::do_restart()
     FLOG_WARN("backup_lease_service_ start failed", KR(ret));
   } else {
     FLOG_INFO("success to start backup_lease_service_");
+  }
+
+  if (FAILEDx(archive_service_.start())) {
+    FLOG_WARN("archive service start failed", KR(ret));
+  } else {
+    FLOG_INFO("success to start archive service");
   }
 
 

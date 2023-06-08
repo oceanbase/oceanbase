@@ -127,12 +127,40 @@ void ObArchiveSchedulerService::stop()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("not init", K(ret));
+    LOG_WARN("not init", K(ret));
   } else {
     ObRsReentrantThread::stop();
     idling_.wakeup();
     LOG_INFO("stop archive scheduler service");
   }
+}
+
+void ObArchiveSchedulerService::wait()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObRsReentrantThread::wait();
+    LOG_INFO("wait archive scheduler service");
+  }
+}
+
+int ObArchiveSchedulerService::destroy()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    if(OB_FAIL(ObRsReentrantThread::destroy())) {
+      LOG_WARN("ObRsReentrantThread::destroy failed", K(ret));
+    }
+    is_inited_ = false;
+    LOG_INFO("destroy archive scheduler service", K(ret));
+  }
+  return ret;
 }
 
 void ObArchiveSchedulerService::wakeup()

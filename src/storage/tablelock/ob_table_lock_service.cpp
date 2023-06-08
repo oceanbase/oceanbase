@@ -153,6 +153,12 @@ void ObTableLockService::ObOBJLockGarbageCollector::wait()
   LOG_INFO("ObTableLockService::ObOBJLockGarbageCollector waits successfully", KPC(this));
 }
 
+void ObTableLockService::ObOBJLockGarbageCollector::destroy()
+{
+  timer_.destroy();
+  LOG_INFO("ObTableLockService::ObOBJLockGarbageCollector destroys successfully", KPC(this));
+}
+
 int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_right_now()
 {
   int ret = OB_SUCCESS;
@@ -328,6 +334,7 @@ void ObTableLockService::wait()
 
 void ObTableLockService::destroy()
 {
+  obj_lock_garbage_collector_.destroy();
   location_service_ = nullptr;
   sql_proxy_ = nullptr;
   is_inited_ = false;

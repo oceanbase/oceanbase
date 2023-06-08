@@ -111,13 +111,31 @@ private:
   }
   ~ObThreadHungDetector()
   {
+    destroy();
+  }
+public:
+  void stop()
+  {
+    if (back_thread_ != nullptr) {
+      back_thread_->stop();
+    }
+  }
+  void wait()
+  {
+    if (back_thread_ != nullptr) {
+      back_thread_->wait();
+    }
+  }
+  void destroy()
+  {
+    stop();
+    wait();
     if (back_thread_ != nullptr) {
       back_thread_->destroy();
       ob_free(back_thread_);
       back_thread_ = nullptr;
     }
   }
-public:
   static ObThreadHungDetector &get_instance() { static ObThreadHungDetector d; return d; }
   struct ClickPoint
   {
