@@ -488,7 +488,8 @@ struct ObParserErrRec {
 
 struct ObShuffleTaskHandle {
   ObShuffleTaskHandle(ObDataFragMgr &main_datafrag_mgr,
-                      common::ObBitSet<> &main_string_values);
+                      common::ObBitSet<> &main_string_values,
+                      uint64_t tenant_id);
   ~ObShuffleTaskHandle();
   ObArenaAllocator allocator;
   ObDesExecContext exec_ctx;

@@ -51,20 +51,27 @@ public:
   ObArrayHashMap(): lock_(common::ObLatchIds::HASH_MAP_LOCK), size_(0), capacity_(0), items_(NULL) {}
   ~ObArrayHashMap() { destroy(); }
 
-  int init(const lib::ObLabel &label, int64_t capacity)
+  int init(const lib::ObMemAttr attr, int64_t capacity)
   {
     int ret = OB_SUCCESS;
-    if (!label.is_valid() || capacity <= 0) {
+    if (capacity <= 0) {
       ret = OB_INVALID_ARGUMENT;
     } else if (is_inited()) {
       ret = OB_INIT_TWICE;
-    } else if (NULL == (items_ = static_cast<Item *>(ob_malloc(capacity * sizeof(Item), label)))) {
+    } else if (NULL == (items_ = static_cast<Item *>(ob_malloc(capacity * sizeof(Item), attr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       capacity_ = capacity;
       reset();
     }
     return ret;
+  }
+
+  int init(const lib::ObLabel label, int64_t capacity)
+  {
+    ObMemAttr attr;
+    attr.label_ = label;
+    return init(attr, capacity);
   }
 
   void destroy()
@@ -129,7 +136,7 @@ public:
       }
     }
   }
-  
+
   int64_t to_string(char *buf, int64_t buf_len) const
   {
     int64_t pos = 0;

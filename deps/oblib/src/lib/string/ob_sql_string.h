@@ -37,7 +37,13 @@ public:
   virtual ~ObSqlString();
 
   bool is_valid() const;
-  void set_label(const lib::ObLabel &label) { allocator_.set_label(label); }
+  void set_attr(const lib::ObMemAttr &attr) { allocator_.set_attr(attr); }
+  void set_label(const lib::ObLabel &label)
+  {
+    lib::ObMemAttr attr;
+    attr.label_ = label;
+    allocator_.set_attr(attr);
+ }
   void reset();
   void reuse();
   int reserve(const int64_t size);
