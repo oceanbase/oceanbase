@@ -404,7 +404,9 @@ OB_DEF_SERIALIZE_SIZE(ObServerConfig)
 } // end of namespace common
 namespace obrpc {
 bool enable_pkt_nio() {
-  return GCONF._enable_pkt_nio && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+  return GCONF._enable_pkt_nio
+      && (!OBSERVER.is_arbitration_mode())
+      && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
 }
 }
 } // end of namespace oceanbase
