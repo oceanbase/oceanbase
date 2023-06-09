@@ -17,6 +17,8 @@
 #include "lib/utility/utility.h"
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "ob_table_aggregation.h"
+
 namespace oceanbase
 {
 namespace table
@@ -513,9 +515,12 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObString &index_name = query.get_index_name();
   const ObIArray<ObString> &select_columns = query.get_select_columns();
-  const bool select_all_columns = select_columns.empty(); // select all when query column is empty.
+  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query(); // select all when query column is empty.
   const ObColumnSchemaV2 *column_schema = nullptr;
   operation_type_ = ObTableOperationType::Type::SCAN;
+  if (query.is_aggregate_query()) {
+    init_agg_cell_proj(query.get_aggregations().count());
+  }
   // init is_weak_read_,scan_order_
   is_weak_read_ = is_wead_read;
   scan_order_ = query.get_scan_order();
@@ -550,8 +555,9 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
       LOG_WARN("fail to generate key ranges", K(ret));
     } else {
       // select_col_ids用schema序
+      int64_t cell_idx = 0;
       for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
-          OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter) {
+          OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter, cell_idx++) {
         const ObColumnSchemaV2 *column_schema = *iter;
         ObString column_name;
         if (OB_ISNULL(column_schema)) {
@@ -565,6 +571,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
             LOG_WARN("fail to push back column id", K(ret), K(column_schema->get_column_id()));
           } else if (OB_FAIL(query_col_names_.push_back(column_name))) {
             LOG_WARN("fail to push back column name", K(ret), K(column_name));
+          } else if (add_aggregate_proj(cell_idx, column_name, query)) {
+            LOG_WARN("failed to add aggregate projector", K(ret), K(cell_idx), K(column_name));
           } else if (is_index_scan_ && !is_index_back_ &&
               OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
             is_index_back_ = true; // 判断是否需要回表,查询的列不在索引表上即需要回表
@@ -1104,6 +1112,37 @@ int ObTableCtx::init_dml_related_tid()
     }
   }
 
+  return ret;
+}
+
+int ObTableCtx::init_agg_cell_proj(int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(agg_cell_proj_.prepare_allocate(size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret), K(size));
+  } else {
+    for (int64_t i = 0; i < agg_cell_proj_.count(); i++) {
+      agg_cell_proj_.at(i) = -1;
+    }    
+  }
+  return ret;
+}
+
+int ObTableCtx::add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObTableQuery &query)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObTableAggregation> &aggregations = query.get_aggregations();
+  if (aggregations.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null aggregations", K(ret));
+  } else {
+    for (int64_t i = 0; i < aggregations.count(); i++) {
+      if (aggregations.at(i).get_column().case_compare(column_name) == 0 || aggregations.at(i).get_column() == "*") {
+        agg_cell_proj_.at(i) = cell_idx; 
+      }
+    }
+  }
   return ret;
 }
 

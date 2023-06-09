@@ -69,7 +69,7 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   const ObString &schema_comment = tb_ctx.get_table_schema()->get_comment_str();
 
   if (OB_FAIL(one_result.assign_property_names(tb_ctx.get_query_col_names()))) {
-    LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
+      LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));    
   } else if (has_filter) {
     if (is_hkv) {
       ObHTableFilterOperator *htable_result_iter = nullptr;
@@ -103,6 +103,10 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       } else if (OB_FAIL(table_result_iter->parse_filter_string(&allocator))) {
         LOG_WARN("fail to parse table filter string", K(ret));
       } else {
+        if (query.is_aggregate_query()) {
+          table_result_iter->init_aggregation(query.get_aggregations().count());
+          table_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
+        }
         tmp_result_iter = table_result_iter;
       }
     }
@@ -115,6 +119,10 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc normal query result iterator", K(ret));
     } else {
+      if (query.is_aggregate_query()) {
+        normal_result_iter->init_aggregation(query.get_aggregations().count());
+        normal_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
+      }      
       tmp_result_iter = normal_result_iter;
     }
   }

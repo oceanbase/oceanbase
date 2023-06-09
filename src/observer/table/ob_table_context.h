@@ -65,7 +65,8 @@ public:
         expr_factory_(allocator_),
         all_exprs_(false),
         loc_meta_(allocator_),
-        assign_ids_(allocator_)
+        assign_ids_(allocator_),
+        agg_cell_proj_(allocator_)
   {
     // common
     is_init_ = false;
@@ -254,6 +255,7 @@ public:
   int init_trans(transaction::ObTxDesc *trans_desc,
                  const transaction::ObTxReadSnapshot &tx_snapshot);
   int init_das_context(ObDASCtx &das_ctx);
+  const common::ObIArray<uint64_t> &get_agg_projs() const { return agg_cell_proj_; }
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
@@ -273,6 +275,17 @@ private:
   // for update
   int init_assign_ids(ObAssignIds &assign_ids,
                       const ObTableEntity &entity);
+  // Init size of aggregation project array.
+  //
+  // @param [in]  size      The agg size
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int init_agg_cell_proj(int64_t size);
+  // Add schema cell idx to aggregation project array.
+  //
+  // @param [in]  cell_idx      The schema cell idx.
+  // @param [in]  column_name   The schema cell column name.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObTableQuery &query);
 private:
   int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema,
                               sql::ObExprResType &column_type);
@@ -333,6 +346,8 @@ private:
   common::ObArray<sql::ObRawExpr*> old_row_exprs_;
   common::ObArray<sql::ObRawExpr*> full_assign_exprs_;
   ObAssignIds assign_ids_;
+  // agg cell index in schema
+  common::ObFixedArray<uint64_t, common::ObIAllocator> agg_cell_proj_;
   // for increment/append
   common::ObSEArray<common::ObString, 8> expr_strs_;
   common::ObArray<sql::ObRawExpr*> delta_exprs_; // for increment/append
