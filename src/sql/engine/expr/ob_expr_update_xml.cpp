@@ -62,9 +62,6 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
           if (types[i].get_charset_type() != CHARSET_UTF8MB4) {
             types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
-        } else {
-          types[i].set_calc_type(ObVarcharType);
-          types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
       } else {
         // value expr
@@ -86,9 +83,6 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
         if (types[param_num - 1].get_charset_type() != CHARSET_UTF8MB4) {
           types[param_num - 1].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
-      } else {
-        types[param_num - 1].set_calc_type(ObVarcharType);
-        types[param_num - 1].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
       }
     }
   }

@@ -65,8 +65,7 @@ int ObExprExtractValue::calc_result_typeN(ObExprResType &type,
             types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
         } else {
-          types[i].set_calc_type(ObVarcharType);
-          types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+          ret = OB_ERR_INVALID_XPATH_EXPRESSION;
         }
       }
     }
@@ -76,7 +75,8 @@ int ObExprExtractValue::calc_result_typeN(ObExprResType &type,
       type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       type.set_collation_level(CS_LEVEL_IMPLICIT);
       // length == OB_MAX_ORACLE_VARCHAR_LENGTH is not supported by generated key, use OB_MAX_VARCHAR_LENGTH_KEY instead
-      type.set_length(OB_MAX_VARCHAR_LENGTH_KEY);
+      // length == OB_MAX_VARCHAR_LENGTH_KEY is not supported by generated column length check , use MAX_ORACLE_COMMENT_LENGTH instead
+      type.set_length(MAX_ORACLE_COMMENT_LENGTH);
       type.set_length_semantics(LS_BYTE);
     }
   }

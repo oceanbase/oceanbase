@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprExtractXml::ObExprExtractXml(common::ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_XML_EXTRACT, N_EXTRACT_XML, MORE_THAN_ONE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_XML_EXTRACT, N_EXTRACT_XML, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -64,8 +64,7 @@ int ObExprExtractXml::calc_result_typeN(ObExprResType &type,
             types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
         } else {
-          types[i].set_calc_type(ObVarcharType);
-          types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+          ret = OB_ERR_INVALID_XPATH_EXPRESSION;
         }
       }
     }
