@@ -210,7 +210,7 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
 
   // submit a cond task before unblocking net to stop truncating task
   IOTaskCond cond(id, rebuild_server->palf_env_impl_->last_palf_epoch_);
-  LogIOWorker *io_worker = &rebuild_server->palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_;
+  LogIOWorker *io_worker = rebuild_server->palf_handle_impl_->log_engine_.log_io_worker_;
   io_worker->submit_io_task(&cond);
 
   // after unblocking net, old leader will do rebuild

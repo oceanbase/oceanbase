@@ -3782,7 +3782,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                                   *spi_result.get_result_set(),
                                                   ret,
                                                   cli_ret,
-                                                  true,
+                                                  cursor.is_ps_cursor() ? false : true,
                                                   true,
                                                   cursor.is_ps_cursor() ? false : true);
               LOG_WARN("failed to fill_cursor, check if need retry",
@@ -3840,7 +3840,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
           }
           ret = OB_SUCCESS == ret ? close_ret : ret;
           retry_cnt++;
-        } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
+        } while ((!cursor.is_ps_cursor() && RETRY_TYPE_NONE != retry_ctrl.get_retry_type())
+          || (cursor.is_ps_cursor() && RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type()));
         session->set_query_start_time(old_query_start_time);
       }
 

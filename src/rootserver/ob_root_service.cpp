@@ -970,6 +970,13 @@ void ObRootService::destroy()
     FLOG_INFO("finish destroy archive_service_");
   }
 
+  if (OB_FAIL(lost_replica_checker_.destroy())) {
+    FLOG_WARN("lost replica checker failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
+  } else {
+    FLOG_INFO("lost replica checker destroy");
+  }
+
   // continue executing while error happen
   if (OB_FAIL(root_balancer_.destroy())) {
     FLOG_WARN("root balance destroy failed", KR(ret));
@@ -1011,10 +1018,6 @@ void ObRootService::destroy()
     FLOG_INFO("heartbeat checker destroy");
   }
 
-  ROOTSERVICE_EVENT_INSTANCE.destroy();
-  FLOG_INFO("event table operator destroy");
-
-
   if (OB_FAIL(backup_task_scheduler_.destroy())) {
     FLOG_WARN("root backup task scheduler destroy failed", KR(ret));
     fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
@@ -1035,6 +1038,7 @@ void ObRootService::destroy()
 
   dbms_job::ObDBMSJobMaster::get_instance().destroy();
   FLOG_INFO("ObDBMSJobMaster destory");
+
 
   if (OB_FAIL(disaster_recovery_task_mgr_.destroy())) {
     FLOG_WARN("disaster recovery task mgr destroy failed", KR(ret));
@@ -1288,8 +1292,6 @@ void ObRootService::wait()
   FLOG_INFO("log archive exit success");
   empty_server_checker_.wait();
   FLOG_INFO("empty server checker exit success");
-  lost_replica_checker_.wait();
-  FLOG_INFO("lost replica checker exit success");
   lost_replica_checker_.wait();
   FLOG_INFO("lost replica checker exit success");
   thread_checker_.wait();

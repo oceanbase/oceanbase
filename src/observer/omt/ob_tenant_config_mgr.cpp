@@ -283,7 +283,7 @@ int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
     }
   } else {
     ObTenantConfig *new_config = nullptr;
-    new_config = OB_NEW(ObTenantConfig, "TenantConfig", tenant_id);
+    new_config = OB_NEW(ObTenantConfig, SET_USE_500("TenantConfig"), tenant_id);
     if (OB_NOT_NULL(new_config)) {
       if(OB_FAIL(new_config->init(this))) {
         LOG_WARN("new tenant config init failed", K(ret));

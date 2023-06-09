@@ -4934,6 +4934,28 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
   return ret;
 }
 
+int ObDDLService::check_index_on_foreign_key(const ObTableSchema *index_table_schema,
+                                             const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos,
+                                             bool &have_index)
+{
+  int ret = OB_SUCCESS;
+  have_index = false;
+  if (foreign_key_infos.count() <= 0) {
+  } else if (OB_ISNULL(index_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index table schema is nullptr", K(ret));
+  } else {
+    const uint64_t index_table_id = index_table_schema->get_table_id();
+    for (int64_t i = 0;  OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
+      if (foreign_key_infos.at(i).ref_cst_id_ == index_table_id) {
+        have_index = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
                                     const ObTableSchema &origin_table_schema,
                                     ObTableSchema &new_table_schema,
@@ -5121,6 +5143,8 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
           }
           if (OB_SUCC(ret)) {
             const ObTableSchema *index_table_schema = nullptr;
+            bool have_index = false;
+            const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos = origin_table_schema.get_foreign_key_infos();
             if (OB_FAIL(get_index_schema_by_name(
                 origin_table_schema.get_table_id(),
                 origin_table_schema.get_database_id(),
@@ -5132,6 +5156,13 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
               ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
               LOG_WARN("index table schema should not be null", K(*drop_index_arg), K(ret));
               LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, drop_index_arg->index_name_.length(), drop_index_arg->index_name_.ptr());
+            } else if (OB_FAIL(check_index_on_foreign_key(index_table_schema,
+                                                          foreign_key_infos,
+                                                          have_index))) {
+              LOG_WARN("fail to check index on foreign key", K(ret), K(foreign_key_infos), KPC(index_table_schema));
+            } else if (have_index) {
+              ret = OB_ERR_ATLER_TABLE_ILLEGAL_FK;
+              LOG_WARN("cannot delete index with foreign key dependency", K(ret));
             } else if (!drop_index_arg->is_inner_ && index_table_schema->is_unavailable_index()) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("not support to drop a building index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
@@ -5358,6 +5389,10 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
 
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(rename_ori_index_name_set.set_refactored(ori_index_key))) {
+            const ObString &data_table_name = origin_table_schema.get_table_name_str();
+            //To be compatible with Mysql
+            ret = OB_ERR_KEY_DOES_NOT_EXISTS;
+            LOG_USER_ERROR(OB_ERR_KEY_DOES_NOT_EXISTS, ori_index_name.length(), ori_index_name.ptr(), data_table_name.length(), data_table_name.ptr());
             LOG_WARN("set index name to hash set failed", K(ret), K(ori_index_name));
           } else if (OB_FAIL(rename_new_index_name_set.set_refactored(new_index_key))) {
             LOG_WARN("set index name to hash set failed", K(ret), K(new_index_name));
@@ -16479,7 +16514,7 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
     }
   }
   int64_t finish_time = ObTimeUtility::current_time();
-  LOG_INFO("finish generate_table_schema", KR(ret), "cost_ts", finish_time - start_time);
+  LOG_INFO("finish generate_table_schema", KR(ret), "cost_ts", finish_time - start_time, K(task_id));
   return ret;
 }
 
@@ -16610,7 +16645,7 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
 
   int64_t before_wait_task = ObTimeUtility::current_time();
   // Serial Submit
-  if (FAILEDx(schema_service_->get_ddl_trans_controller().wait_task_ready(task_id, THIS_WORKER.get_timeout_remain()))) {
+  if (FAILEDx(schema_service_->get_ddl_trans_controller().wait_task_ready(tenant_id, task_id, THIS_WORKER.get_timeout_remain()))) {
     LOG_WARN("wait_task_ready", KR(ret), K(table_name), K(task_id));
   }
   int64_t wait_task = ObTimeUtility::current_time();

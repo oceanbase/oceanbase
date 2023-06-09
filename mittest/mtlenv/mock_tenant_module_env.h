@@ -728,23 +728,21 @@ int MockTenantModuleEnv::start_()
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "fail to switch to sys tenant", KP(log_service));
     } else {
-      palf::LogIOWorkerConfig log_io_worker_config;
-      log_io_worker_config.io_worker_num_ = 1;
-      log_io_worker_config.io_queue_capcity_ = 100 * 1024;
-      log_io_worker_config.batch_width_ = 8;
-      log_io_worker_config.batch_depth_ = palf::PALF_SLIDING_WINDOW_SIZE;
-
-      palf::LogIOWorker &use_io_worker = log_service->palf_env_->palf_env_impl_.log_io_worker_wrapper_.user_log_io_worker_;
-      if (OB_FAIL(use_io_worker.init(log_io_worker_config, tenant_id,
-                                     log_service->palf_env_->palf_env_impl_.cb_thread_pool_.get_tg_id(),
-                                     log_service->palf_env_->palf_env_impl_.log_alloc_mgr_,
-                                     &log_service->palf_env_->palf_env_impl_))) {
-        STORAGE_LOG(ERROR, "fail to init user_io_worker", KP(log_service));
-      } else if (OB_FAIL(use_io_worker.start())) {
-        STORAGE_LOG(ERROR, "fail to init start", KP(log_service));
+      palf::PalfEnvImpl *palf_env_impl = &log_service->palf_env_->palf_env_impl_;
+      palf::LogIOWorkerWrapper &log_iow_wrapper = palf_env_impl->log_io_worker_wrapper_;
+      palf::LogIOWorkerConfig new_config;
+      const int64_t mock_tenant_id = 1;
+      palf_env_impl->init_log_io_worker_config_(1, mock_tenant_id, new_config);
+      new_config.io_worker_num_ = 4;
+      log_iow_wrapper.destory_and_free_log_io_workers_();
+      if (OB_FAIL(log_iow_wrapper.create_and_init_log_io_workers_(
+        new_config, mock_tenant_id, palf_env_impl->cb_thread_pool_.get_tg_id(), palf_env_impl->log_alloc_mgr_, palf_env_impl))) {
+        STORAGE_LOG(WARN, "failed to create_and_init_log_io_workers_", K(new_config));
+      } else if (FALSE_IT(log_iow_wrapper.log_writer_parallelism_ = new_config.io_worker_num_)) {
+      } else if (FALSE_IT(log_iow_wrapper.is_user_tenant_ = true)) {
+      } else if (OB_FAIL(log_iow_wrapper.start_()))  {
+        STORAGE_LOG(WARN, "failed to start_ log_iow_wrapper", K(new_config));
       } else {
-        //set this to stop user_io_worker
-        log_service->palf_env_->palf_env_impl_.log_io_worker_wrapper_.is_user_tenant_ = true;
       }
     }
   }

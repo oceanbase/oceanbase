@@ -159,6 +159,26 @@ int LogNetService::submit_fetch_log_req(
   return ret;
 }
 
+int LogNetService::submit_batch_fetch_log_resp(
+    const common::ObAddr &server,
+    const int64_t msg_proposal_id,
+    const int64_t prev_log_proposal_id,
+    const LSN &prev_lsn,
+    const LSN &curr_lsn,
+    const LogWriteBuf &write_buf)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogNetService not inited!!!", K(ret), K(palf_id_));
+  } else {
+    LogBatchFetchResp batch_fetch_log_resp(msg_proposal_id, prev_log_proposal_id,
+        prev_lsn, curr_lsn, write_buf);
+    ret = post_request_to_server_(server, batch_fetch_log_resp);
+  }
+  return ret;
+}
+
 int LogNetService::submit_notify_rebuild_req(
   const ObAddr &server,
   const LSN &base_lsn,

@@ -1194,6 +1194,9 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
       } else if (!expr->get_relation_ids().is_subset(table_ids) ||
                   expr->has_flag(CNT_SUB_QUERY)) {
         //do nothing
+      } else if (expr->get_relation_ids().is_empty() &&
+                 !expr->is_const_expr()) {
+        //bug fix:48314988
       } else if (OB_FAIL(table_filters.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (OB_FAIL(all_table_filters.push_back(expr))) {
@@ -1636,8 +1639,7 @@ int ObLogPlan::pushdown_where_filters(JoinedTable* joined_table,
           LOG_WARN("failed to push back expr", K(ret));
         }
       } else if (qual->get_relation_ids().is_empty() &&
-                 !ObOptimizerUtil::has_hierarchical_expr(*qual)) {
-        //where level < 2不能向下推
+                 qual->is_const_expr()) {
         if (OB_FAIL(left_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         } else if (OB_FAIL(right_quals.push_back(qual))) {

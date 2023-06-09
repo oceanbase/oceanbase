@@ -274,8 +274,8 @@ int ObSQLSessionMgr::init()
   } else if (OB_FAIL(sessid_sequence_.init(MAX_LOCAL_SEQ))) {
     LOG_WARN("init sessid sequence failed", K(ret));
   } else if (OB_FAIL(sess_hold_map_.create(BUCKET_COUNT,
-                                           "SessHoldMapBuck",
-                                           "SessHoldMapNode"))) {
+                                           SET_USE_500("SessHoldMapBuck"),
+                                           SET_USE_500("SessHoldMapNode")))) {
     LOG_WARN("failed to init sess_hold_map", K(ret));
   }
   for (uint32_t i = 1; OB_SUCC(ret) && i <= MAX_LOCAL_SEQ; ++i) {

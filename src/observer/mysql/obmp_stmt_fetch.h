@@ -69,7 +69,6 @@ public:
   bool need_close_cursor() { return need_close_cursor_; }
   void set_close_cursor() { need_close_cursor_ = true; }
   void reset_close_cursor() { need_close_cursor_ = false; }
-
   
 protected:
   virtual int deserialize()  { return common::OB_SUCCESS; }

@@ -43,6 +43,8 @@ int ObBatchP::process()
     int64_t trx_batch_cnt = 0;
     int64_t sql_batch_cnt = 0;
     while(NULL != (req = arg_.next(req_pos))) {
+      // rewrite ret
+      ret = OB_SUCCESS;
       const uint32_t flag = (req->type_ >> 24);
       const uint32_t batch_type = ((req->type_ >> 16) & 0xff);
       const uint32_t msg_type = req->type_ & 0xffff;
@@ -88,6 +90,10 @@ int ObBatchP::process()
             RPC_LOG(ERROR, "unknown batch req type", K(req->type_));
             break;
         }
+      }
+      if (OB_FAIL(ret)) {
+        RPC_LOG(WARN, "process batch rpc",
+            K(ret), K(sender), K(ls_id), K(src_cluster_id), K(flag), K(batch_type), K(msg_type), K(trace_id));
       }
     }
     if (REACH_TIME_INTERVAL(3000000)) {

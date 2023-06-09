@@ -230,7 +230,10 @@ int ObShowCreateTable::fill_row_cells_inner(const uint64_t show_table_id,
           } else {
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
             // get auto_increment from auto_increment service, not from table option
-            if (OB_FAIL(schema_printer.print_table_definition(effective_tenant_id_,
+            ObCharsetType charset_type = CHARSET_INVALID;
+            if (OB_FAIL(session_->get_character_set_results(charset_type))) {
+              LOG_WARN("get character set results failed", K(ret));
+            } else if (OB_FAIL(schema_printer.print_table_definition(effective_tenant_id_,
                                                               show_table_id,
                                                               table_def_buf,
                                                               table_def_buf_size,
@@ -238,7 +241,8 @@ int ObShowCreateTable::fill_row_cells_inner(const uint64_t show_table_id,
                                                               TZ_INFO(session_),
                                                               default_length_semantics,
                                                               false,
-                                                              session_->get_sql_mode()))) {
+                                                              session_->get_sql_mode(),
+                                                              charset_type))) {
               SERVER_LOG(WARN, "Generate table definition failed",
                         KR(ret), K(effective_tenant_id_), K(show_table_id));
             }

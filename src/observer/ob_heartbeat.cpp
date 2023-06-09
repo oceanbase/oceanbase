@@ -53,9 +53,7 @@ ObHeartBeatProcess::ObHeartBeatProcess(const ObGlobalContext &gctx,
 }
 
 ObHeartBeatProcess::~ObHeartBeatProcess()
-{
-  TG_DESTROY(lib::TGDefIDs::ObHeartbeat);
-}
+{}
 
 int ObHeartBeatProcess::init()
 {
@@ -78,6 +76,21 @@ int ObHeartBeatProcess::init()
     inited_ = true;
   }
   return ret;
+}
+
+void ObHeartBeatProcess::stop()
+{
+  TG_STOP(lib::TGDefIDs::ObHeartbeat);
+}
+
+void ObHeartBeatProcess::wait()
+{
+  TG_WAIT(lib::TGDefIDs::ObHeartbeat);
+}
+
+void ObHeartBeatProcess::destroy()
+{
+  TG_DESTROY(lib::TGDefIDs::ObHeartbeat);
 }
 
 

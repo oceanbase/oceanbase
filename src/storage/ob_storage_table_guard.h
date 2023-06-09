@@ -59,11 +59,12 @@ private:
       bool &bool_ret);
   int check_freeze_to_inc_write_ref(ObITable *table, bool &bool_ret, bool &for_replace_tablet_meta);
   bool need_to_refresh_table(ObTableStoreIterator &iter);
-  bool check_if_need_log();
+  void check_if_need_log_(bool &need_log, bool &need_log_error);
 private:
-  static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;
+  static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;  // 10s
+  static const int64_t LOG_ERROR_INTERVAL_US = 60 * 1000 * 1000;  // 1min
   static const int64_t GET_TS_INTERVAL = 10 * 1000;
-  static const int64_t SLEEP_INTERVAL_PER_TIME = 20 * 1000;
+  static const int64_t SLEEP_INTERVAL_PER_TIME = 20 * 1000; // 20ms
 
   ObTablet *tablet_;
   ObStoreCtx &store_ctx_;

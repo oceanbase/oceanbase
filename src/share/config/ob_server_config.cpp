@@ -278,7 +278,7 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
   }
 
   int64_t observer_tenant_hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
-  if (observer_tenant_hold > system_memory_) {
+  if (observer_tenant_hold > system_memory_ && false == is_arbitration_mode) {
     if (server_config._ignore_system_memory_over_limit_error) {
       LOG_WARN("the hold of tenant_500 is over the system_memory",
                K(observer_tenant_hold), K_(system_memory));

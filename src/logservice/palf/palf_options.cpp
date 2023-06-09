@@ -38,6 +38,7 @@ void PalfDiskOptions::reset()
   log_disk_utilization_limit_threshold_ = -1;
   log_disk_utilization_threshold_ = -1;
   log_disk_throttling_percentage_ = -1;
+  log_writer_parallelism_ = -1;
 }
 
 bool PalfDiskOptions::is_valid() const
@@ -47,7 +48,8 @@ bool PalfDiskOptions::is_valid() const
     && 1 <=log_disk_utilization_limit_threshold_ && 100 >= log_disk_utilization_limit_threshold_
     && log_disk_utilization_limit_threshold_ > log_disk_utilization_threshold_
     && log_disk_throttling_percentage_ >= MIN_WRITING_THTOTTLING_TRIGGER_PERCENTAGE
-    && log_disk_throttling_percentage_ <= 100;
+    && log_disk_throttling_percentage_ <= 100
+    && log_writer_parallelism_ >= 1 && log_writer_parallelism_ <= 8;
 }
 
 bool PalfDiskOptions::operator==(const PalfDiskOptions &palf_disk_options) const
@@ -55,7 +57,9 @@ bool PalfDiskOptions::operator==(const PalfDiskOptions &palf_disk_options) const
   return log_disk_usage_limit_size_ == palf_disk_options.log_disk_usage_limit_size_
     && log_disk_utilization_threshold_ == palf_disk_options.log_disk_utilization_threshold_
     && log_disk_utilization_limit_threshold_ == palf_disk_options.log_disk_utilization_limit_threshold_
-    && log_disk_throttling_percentage_ == palf_disk_options.log_disk_throttling_percentage_;
+    && log_disk_throttling_percentage_ == palf_disk_options.log_disk_throttling_percentage_
+    && log_writer_parallelism_ == palf_disk_options.log_writer_parallelism_;
+
 }
 
 PalfDiskOptions &PalfDiskOptions::operator=(const PalfDiskOptions &other)
@@ -64,6 +68,7 @@ PalfDiskOptions &PalfDiskOptions::operator=(const PalfDiskOptions &other)
   log_disk_utilization_threshold_ = other.log_disk_utilization_threshold_;
   log_disk_utilization_limit_threshold_ = other.log_disk_utilization_limit_threshold_;
   log_disk_throttling_percentage_ = other.log_disk_throttling_percentage_;
+  log_writer_parallelism_ = other.log_writer_parallelism_;
   return *this;
 }
 

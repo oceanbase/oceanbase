@@ -97,7 +97,7 @@ public:
   void reset();
   void *alloc(const int64_t size);
   void *alloc(const int64_t size, const ObMemAttr &attr);
-  void *alloc_align(const int64_t size, const int64_t align);
+  virtual void *alloc_align(const int64_t size, const int64_t align);
   void free(void *p);
   void set_label(const lib::ObLabel &label) { attr_.label_ = label; }
   void set_attr(const ObMemAttr &attr) { attr_ = attr; }
@@ -127,9 +127,6 @@ public:
     return normal_total() + special_total_;
   }
 
-protected:
-  virtual void *alloc_align(const int64_t size, const int64_t align, const ObMemAttr &attr);
-
 private:
   BasePageHeader *get_page_header(void *p);
   bool check_param(const int64_t size, const int64_t align);
@@ -141,10 +138,10 @@ private:
     return (max_free_size >= size);
   }
   void *try_alloc(const int64_t size, const int64_t align);
-  void alloc_new_normal_page(const ObMemAttr &attr);
-  void *alloc_normal(const int64_t size, const int64_t align, const ObMemAttr &attr);
+  void alloc_new_normal_page();
+  void *alloc_normal(const int64_t size, const int64_t align);
   void free_normal(NormalPageHeader *page, int64_t size);
-  void *alloc_special(const int64_t size, const int64_t align, const ObMemAttr &attr);
+  void *alloc_special(const int64_t size, const int64_t align);
   void free_special(SpecialPageHeader *page);
   int sync_idle(const int64_t idle_size, const int64_t max_size) ;
 private:

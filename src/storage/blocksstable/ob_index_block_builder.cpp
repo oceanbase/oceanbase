@@ -28,83 +28,11 @@ using namespace common;
 using namespace storage;
 namespace blocksstable
 {
-
-DEFINE_SERIALIZE(ObIndexTreeRootBlockDesc)
-{
-  int ret = OB_SUCCESS;
-  int64_t new_pos = pos;
-  const int64_t serialize_size = get_serialize_size();
-  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0 || pos < 0 || serialize_size > buf_len - pos)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_len), K(pos), K(serialize_size));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, new_pos, UNIS_VERSION))) {
-    STORAGE_LOG(WARN, "fail to serialize UNIS_VSERSION", K(ret), K(buf_len), K(new_pos));
-  } else if (OB_FAIL(addr_.serialize(buf, buf_len, new_pos))) {
-    STORAGE_LOG(WARN, "failed to serialize addr", K(ret), K(buf_len), K(new_pos));
-  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, new_pos, row_type_))) {
-    STORAGE_LOG(WARN, "failed to serialize row_type", K(ret), K(buf_len), K(new_pos));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, height_))) {
-    STORAGE_LOG(WARN, "failed to serialize height", K(ret), K(buf_len), K(new_pos));
-  } else if (addr_.is_memory()
-             && OB_FAIL(serialization::encode_vstr(buf, buf_len, new_pos, buf_, addr_.size()))) {
-    STORAGE_LOG(WARN, "failed to serialize buf_", K(ret), K(buf_len), K(new_pos), K(addr_));
-  } else {
-    pos = new_pos;
-  }
-  return ret;
-}
-
-DEFINE_DESERIALIZE(ObIndexTreeRootBlockDesc)
-{
-  int ret = OB_SUCCESS;
-  int64_t len = 0;
-  int64_t version = 0;
-  int64_t new_pos = pos;
-  if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0 || pos < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(buf), K(data_len), K(pos));
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, new_pos, &version))) {
-    STORAGE_LOG(WARN, "deserialize version failed.", KR(ret), K(data_len), K(new_pos));
-  } else if (version != UNIS_VERSION) {
-    ret = OB_VERSION_NOT_MATCH;
-    STORAGE_LOG(WARN, "deserialize version failed.", KR(ret), K(version));
-  } else if (OB_FAIL(addr_.deserialize(buf, data_len, new_pos))) {
-    STORAGE_LOG(WARN, "failed to deserialize addr", K(ret), K(data_len), K(new_pos));
-  } else if (OB_FAIL(serialization::decode_i8(buf, data_len, new_pos, (int8_t *)(&row_type_)))) {
-    STORAGE_LOG(WARN, "failed to deserialize row_type", K(ret), K(data_len), K(new_pos));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &height_))) {
-    STORAGE_LOG(WARN, "failed to deserialize height", K(ret), K(data_len), K(new_pos));
-  } else if (addr_.is_memory()) {
-    buf_ = const_cast<char *>(serialization::decode_vstr(buf, data_len, new_pos, &len));
-    if (OB_ISNULL(buf_)) {
-      ret = OB_ERROR;
-      STORAGE_LOG(WARN, "failed to deserialize buf_", K(ret), K(data_len), K(new_pos), K(addr_), K(buf_), K(buf), K(len));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    pos = new_pos;
-  }
-  return ret;
-}
-
-DEFINE_GET_SERIALIZE_SIZE(ObIndexTreeRootBlockDesc)
-{
-  int64_t serialize_size = addr_.get_serialize_size()
-                           + serialization::encoded_length_i8(row_type_)
-                           + serialization::encoded_length_i64(height_)
-                           + serialization::encoded_length_vi64(UNIS_VERSION);
-  if (addr_.is_memory()) {
-    serialize_size += serialization::encoded_length_vstr(addr_.size());
-  }
-  return serialize_size;
-}
-
 bool ObIndexTreeRootBlockDesc::is_valid() const
 {
   return is_empty()
       || (addr_.is_valid()
         && (is_mem_type() ? (buf_ != nullptr) : (buf_ == nullptr))
-        && row_type_ < common::ObRowStoreType::MAX_ROW_STORE
         && height_ > 0);
 }
 
@@ -112,7 +40,6 @@ void ObIndexTreeRootBlockDesc::set_empty()
 {
   addr_.set_none_addr();
   buf_ = nullptr;
-  row_type_ = FLAT_ROW_STORE;
   height_ = 0;
   is_meta_root_ = false;
 }
@@ -147,7 +74,8 @@ ObSSTableMergeRes::ObSSTableMergeRes()
     encrypt_id_(0),
     master_key_id_(0),
     nested_offset_(0),
-    nested_size_(0)
+    nested_size_(0),
+    root_row_store_type_(ObRowStoreType::MAX_ROW_STORE)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -175,9 +103,25 @@ void ObSSTableMergeRes::reset()
     }
   }
   other_block_ids_.destroy();
+  index_blocks_cnt_ = 0;
+  data_blocks_cnt_ = 0;
   micro_block_cnt_ = 0;
-  nested_size_ = 0;
+  data_column_cnt_ = 0;
+  row_count_ = 0;
+  max_merged_trans_version_ = 0;
+  contain_uncommitted_row_ = false;
+  occupy_size_ = 0;
+  original_size_ = 0;
+  data_checksum_ = 0;
+  use_old_macro_block_count_ = 0;
+  data_column_checksums_.reset();
+  data_default_column_rows_cnt_.reset();
+  compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
+  encrypt_id_ = 0;
+  master_key_id_ = 0;
   nested_offset_ = 0;
+  nested_size_ = 0;
+  root_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
 }
 
 bool ObSSTableMergeRes::is_valid() const
@@ -189,7 +133,8 @@ bool ObSSTableMergeRes::is_valid() const
       && micro_block_cnt_ >= 0
       && data_column_cnt_ > 0
       && nested_offset_ >= 0
-      && nested_size_ >= 0;
+      && nested_size_ >= 0
+      && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE;
 }
 
 int ObSSTableMergeRes::assign(const ObSSTableMergeRes &src)
@@ -219,6 +164,7 @@ int ObSSTableMergeRes::assign(const ObSSTableMergeRes &src)
     master_key_id_ = src.master_key_id_;
     nested_size_ = src.nested_size_;
     nested_offset_ = src.nested_offset_;
+    root_row_store_type_ = src.root_row_store_type_;
     MEMCPY(encrypt_key_, src.encrypt_key_, sizeof(encrypt_key_));
 
     if (OB_FAIL(data_block_ids_.reserve(src.data_block_ids_.count()))) {
@@ -915,6 +861,7 @@ int ObSSTableIndexBuilder::close(const int64_t column_cnt, ObSSTableMergeRes &re
   }
 
   if (OB_SUCC(ret) && OB_LIKELY(!is_closed_)) {
+    res.root_row_store_type_ = index_store_desc_.row_store_type_;
     res.compressor_type_ = index_store_desc_.compressor_type_;
     res.encrypt_id_ = index_store_desc_.encrypt_id_;
     MEMCPY(res.encrypt_key_, index_store_desc_.encrypt_key_,
@@ -1309,7 +1256,6 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
     STORAGE_LOG(WARN, "unexpected null root builder", K(ret), K(root_builder));
   } else {
     ObMetaDiskAddr &root_addr = desc.addr_;
-    desc.row_type_ = index_store_desc_->row_store_type_;
     desc.height_ = root_builder->level_ + 1;
     ObMicroBlockDesc micro_block_desc;
     ObIMicroBlockWriter *micro_writer = root_builder->micro_writer_;
@@ -2301,7 +2247,6 @@ int ObMetaIndexBlockBuilder::build_single_node_tree(
 {
   int ret = OB_SUCCESS;
   ObMetaDiskAddr &root_addr = block_desc.addr_;
-  block_desc.row_type_ = index_store_desc_->row_store_type_;
   block_desc.height_ = 1;
   char *&root_buf = block_desc.buf_;
   const int64_t buf_size = micro_block_desc.buf_size_ + micro_block_desc.header_->header_size_;
@@ -2334,7 +2279,6 @@ ObIndexBlockRebuilder::ObIndexBlockRebuilder()
    mutex_(common::ObLatchIds::INDEX_BUILDER_LOCK),
    index_store_desc_(nullptr),
    block_write_ctx_(),
-   macro_id_set_(),
    root_micro_block_desc_(nullptr),
    macro_meta_list_(nullptr),
    sstable_allocator_(nullptr),
@@ -2352,7 +2296,6 @@ void ObIndexBlockRebuilder::reset()
 {
   index_store_desc_ = nullptr;
   block_write_ctx_.reset();
-  macro_id_set_.destroy();
   root_micro_block_desc_ = nullptr;
   macro_meta_list_ = nullptr;
   sstable_allocator_ = nullptr;
@@ -2368,9 +2311,6 @@ int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObIndexBlockRebuilder has been inited", K(ret));
-  } else if (OB_FAIL(macro_id_set_.create(
-      bucket_num, ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_BUCKET, MTL_ID()))) {
-    STORAGE_LOG(WARN, "fail to create macro id set", K(ret));
   } else if (OB_FAIL(sstable_builder.init_builder_ptrs(sstable_builder_, index_store_desc_,
       sstable_allocator_, root_micro_block_desc_, macro_meta_list_))) {
     STORAGE_LOG(WARN, "fail to init referemce pointer members", K(ret));
@@ -2579,14 +2519,7 @@ int ObIndexBlockRebuilder::append_macro_row(const ObDataMacroBlockMeta &macro_me
     STORAGE_LOG(WARN, "invalid macro meta", K(ret), K(macro_meta));
   } else {
     lib::ObMutexGuard guard(mutex_); // migration will append concurrently
-    if (OB_FAIL(macro_id_set_.set_refactored(macro_meta.val_.macro_id_, 0 /*no override*/))) {
-      if (OB_HASH_EXIST != ret) {
-        STORAGE_LOG(WARN, "fail to put macro id into set", K(ret), K(macro_meta));
-      } else {
-        STORAGE_LOG(INFO, "duplicated macro meta", K(macro_meta));
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_FAIL(ObDataIndexBlockBuilder::add_macro_block_meta(
+    if (OB_FAIL(ObDataIndexBlockBuilder::add_macro_block_meta(
         macro_meta, *macro_meta_list_, *sstable_allocator_))) {
       STORAGE_LOG(WARN, "failed to add macro block meta", K(ret), K(macro_meta));
     } else if (OB_FAIL(block_write_ctx_.add_macro_block_id(macro_meta.val_.macro_id_))) { // inc_ref

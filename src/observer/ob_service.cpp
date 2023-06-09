@@ -316,6 +316,22 @@ void ObService::stop()
     FLOG_INFO("begin to stop meta table checker");
     meta_table_checker_.stop();
     FLOG_INFO("meta table checker stopped");
+
+    FLOG_INFO("begin to stop heartbeat process");
+    heartbeat_process_.stop();
+    FLOG_INFO("heartbeat process stopped");
+
+    FLOG_INFO("begin to stop deadlock event service");
+    DEALOCK_EVENT_INSTANCE.stop();
+    FLOG_INFO("deadlock event service stopped");
+
+    FLOG_INFO("begin to stop server event instance");
+    SERVER_EVENT_INSTANCE.stop();
+    FLOG_INFO("server event instance stopped");
+
+    FLOG_INFO("begin to stop cluster event instance");
+    CLUSTER_EVENT_INSTANCE.stop();
+    FLOG_INFO("cluster event instance stopped");
   }
   FLOG_INFO("[OBSERVICE_NOTICE] observice finish stop", K_(stopped));
 }
@@ -341,6 +357,22 @@ void ObService::wait()
     FLOG_INFO("begin to wait meta table checker");
     meta_table_checker_.wait();
     FLOG_INFO("wait meta table checker success");
+
+    FLOG_INFO("begin to wait heartbeat process");
+    heartbeat_process_.wait();
+    FLOG_INFO("wait heartbeat process success");
+
+    FLOG_INFO("begin to wait deadlock event service");
+    DEALOCK_EVENT_INSTANCE.wait();
+    FLOG_INFO("wait deadlock event service success");
+
+    FLOG_INFO("begin to wait server event instance");
+    SERVER_EVENT_INSTANCE.wait();
+    FLOG_INFO("wait server event instance success");
+
+    FLOG_INFO("begin to wait cluster event instance");
+    CLUSTER_EVENT_INSTANCE.wait();
+    FLOG_INFO("wait cluster event instance success");
   }
   FLOG_INFO("[OBSERVICE_NOTICE] wait ob_service end");
 }
@@ -373,6 +405,13 @@ int ObService::destroy()
     meta_table_checker_.destroy();
     FLOG_INFO("meta table checker destroyed");
 
+    FLOG_INFO("begin to destroy heartbeat process");
+    heartbeat_process_.destroy();
+    FLOG_INFO("heartbeat process destroyed");
+
+    FLOG_INFO("begin to destroy deadlock event service");
+    DEALOCK_EVENT_INSTANCE.destroy();
+    FLOG_INFO("deadlock event service destroyed");
   }
   FLOG_INFO("[OBSERVICE_NOTICE] destroy ob_service end", KR(ret));
   return ret;

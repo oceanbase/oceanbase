@@ -118,7 +118,7 @@ else() # not clang, use gcc
 endif()
 
 if (OB_BUILD_CCLS)
-  # ccls场景采用更大的unity的联合编译单元，ccls是非完整编译，掉用clang AST接口，单元的size和耗时成指数衰减
+  # ccls场景采用更大的unity的联合编译单元，ccls是非完整编译，调用clang AST接口，单元的size和耗时成指数衰减
   set(OB_MAX_UNITY_BATCH_SIZE 200)
   # -DCCLS_LASY_ENABLE 给全局设置上，将采用ccls懒加载模式，主要针对单测case，当添加上-DCCLS_LASY_OFF，首次将会进行检索
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCCLS_LASY_ENABLE")

@@ -74,6 +74,8 @@ DEFINE_RPC_PROXY_POST_FUNCTION(LogPushResp,
                                OB_LOG_PUSH_RESP);
 DEFINE_RPC_PROXY_POST_FUNCTION(LogFetchReq,
                                OB_LOG_FETCH_REQ);
+DEFINE_RPC_PROXY_POST_FUNCTION(LogBatchFetchResp,
+                               OB_LOG_BATCH_FETCH_RESP);
 DEFINE_RPC_PROXY_POST_FUNCTION(LogPrepareReq,
                                OB_LOG_PREPARE_REQ);
 DEFINE_RPC_PROXY_POST_FUNCTION(LogPrepareResp,

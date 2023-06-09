@@ -560,6 +560,16 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
       LOG_WARN("call sql stmt end hook fail", K(tmp_ret));
     }
   }
+
+  if (OB_SUCC(ret)
+      && !ObSQLUtils::is_nested_sql(&exec_ctx)
+      && das_ctx.get_snapshot().core_.version_.is_valid()) {
+    // maintain the read snapshot version on session for multi-version garbage
+    // colloecor. It is maintained for all cases except remote exection with ac
+    // = 1. So we need carefully design the version for the corner case.
+    session->set_reserved_snapshot_version(das_ctx.get_snapshot().core_.version_);
+  }
+
 bool print_log = false;
 #ifndef NDEBUG
  print_log = true;
@@ -642,7 +652,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
     SCN snapshot_version = SCN::min_scn();
     if (OB_FAIL(txs->get_weak_read_snapshot_version(session->get_ob_max_read_stale_time(),
-                snapshot_version))) {
+                                                    snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
       int64_t stale_time = session->get_ob_max_read_stale_time();
       int64_t refresh_interval = GCONF.weak_read_version_refresh_interval;
@@ -909,6 +919,10 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
       LOG_ERROR("set_end_stmt fail", K(tmp_ret));
     }
     ret = COVER_SUCC(tmp_ret);
+  }
+
+  if (OB_SUCC(ret) && !ObSQLUtils::is_nested_sql(&exec_ctx)) {
+    session->reset_reserved_snapshot_version();
   }
 
   bool print_log = false;
@@ -1188,7 +1202,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       || max_stale_time_us <= -2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
-  } else if (-1 == max_stale_time_us) {
+  } else if (max_stale_time_us < 0) {
     // no need check
     can_read = true;
   } else if (observer::ObServer::get_instance().get_self() == addr) {

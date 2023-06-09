@@ -191,6 +191,8 @@ public:
   virtual void unblock_all_net(const int64_t id);
   virtual void block_net(const int64_t id1, const int64_t id2, const bool is_single_direction = false);
   virtual void unblock_net(const int64_t id1, const int64_t id2);
+  virtual void block_pcode(const int64_t id1, const ObRpcPacketCode &pcode);
+  virtual void unblock_pcode(const int64_t id1, const ObRpcPacketCode &pcode);
   virtual void set_rpc_loss(const int64_t id1, const int64_t id2, const int loss_rate);
   virtual void reset_rpc_loss(const int64_t id1, const int64_t id2);
   virtual int submit_log(PalfHandleImplGuard &leader, int count, int id);
@@ -232,6 +234,8 @@ public:
   virtual int get_palf_env(const int64_t server_idx, PalfEnv *&palf_env);
   virtual int wait_until_has_committed(PalfHandleImplGuard &leader, const LSN &lsn);
   virtual int wait_lsn_until_flushed(const LSN &lsn, PalfHandleImplGuard &guard);
+  //wait until all log task pushed into queue of LogIOWorker
+  virtual int wait_lsn_until_submitted(const LSN &lsn, PalfHandleImplGuard &guard);
   virtual void wait_all_replcias_log_sync(const int64_t palf_id);
   int get_middle_scn(const int64_t log_num, PalfHandleImplGuard &leader, share::SCN &mid_scn, LogEntryHeader &log_entry_header);
   void switch_append_to_raw_write(PalfHandleImplGuard &leader, int64_t &mode_version);
@@ -270,5 +274,35 @@ public:
   ObCond cond_;
 };
 
+class IOTaskConsumeCond : public LogIOTask {
+public:
+	IOTaskConsumeCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
+  {
+    int ret = OB_SUCCESS;
+    PALF_LOG(INFO, "do_task_ success");
+    if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
+      PALF_LOG(WARN, "push_task_into_cb_thread_pool failed", K(ret), K(tg_id), KP(this));
+    }
+    return ret;
+  };
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
+  {
+    PALF_LOG(INFO, "before cond_wait");
+    cond_.wait();
+    PALF_LOG(INFO, "after cond_wait");
+    return OB_SUCCESS;
+  }
+  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
+  int init(int64_t palf_id)
+  {
+    palf_id_ = palf_id;
+    return OB_SUCCESS;
+  };
+  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  virtual int64_t get_io_size_() const {return 0;}
+  bool need_purge_throttling_() const {return true;}
+  ObCond cond_;
+};
 } // end namespace unittest
 } // end namespace oceanbase

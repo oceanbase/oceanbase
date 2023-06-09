@@ -1323,7 +1323,8 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
       LOG_WARN("try get udt col ref failed", K(ret), K(udt_col_candidate));
       // should not return error if not found
       ret = OB_SUCCESS;
-    } else if (OB_FAIL(implict_cast_sql_udt_to_pl_udt(udt_col_ref_expr))) {
+    } else if (OB_FAIL(ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(params_.expr_factory_,
+                                        params_.session_info_, udt_col_ref_expr))) {
       LOG_WARN("try add implict cast above sql udt col ref failed",
         K(ret), K(udt_col_candidate), K(udt_col_ref_expr));
     } else {
@@ -1346,68 +1347,6 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
     }
   }
 
-  return ret;
-}
-
-int ObDMLResolver::implict_cast_pl_udt_to_sql_udt(ObRawExpr* &real_ref_expr)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(real_ref_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("real_ref_expr is null", K(ret));
-  } else if (real_ref_expr->get_result_type().is_ext()) {
-    if (real_ref_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
-      // add implicit cast to sql xmltype
-      ObRawExpr *new_expr = NULL;
-      ObCastMode cast_mode = CM_NONE;
-      ObExprResType sql_udt_type;
-      sql_udt_type.set_sql_udt(ObXMLSqlType); // set subschema id
-      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(params_.session_info_, cast_mode))) {
-        LOG_WARN("get default cast mode failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
-                                            params_.expr_factory_, params_.session_info_,
-                                            *real_ref_expr,  sql_udt_type, cast_mode, new_expr))) {
-        LOG_WARN("try add cast expr above failed", K(ret));
-      } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
-        LOG_WARN("failed to add flag", K(ret));
-      } else {
-        real_ref_expr = new_expr;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLResolver::implict_cast_sql_udt_to_pl_udt(ObRawExpr* &real_ref_expr)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(real_ref_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("real_ref_expr is null", K(ret));
-  } else if (real_ref_expr->get_result_type().is_user_defined_sql_type()) {
-    if (real_ref_expr->get_result_type().is_xml_sql_type()) {
-      // add implicit cast to sql xmltype
-      ObRawExpr *new_expr = NULL;
-      ObCastMode cast_mode = CM_NONE;
-      ObExprResType pl_udt_type;
-      pl_udt_type.set_ext();
-      pl_udt_type.set_extend_type(PL_OPAQUE_TYPE);
-      pl_udt_type.set_udt_id(T_OBJ_XML);
-      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(params_.session_info_, cast_mode))) {
-        LOG_WARN("get default cast mode failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
-                                            params_.expr_factory_, params_.session_info_,
-                                            *real_ref_expr,  pl_udt_type, cast_mode, new_expr))) {
-        LOG_WARN("try add cast expr above failed", K(ret));
-      } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
-        LOG_WARN("failed to add flag", K(ret));
-      } else {
-        real_ref_expr = new_expr;
-      }
-    }
-  }
   return ret;
 }
 
@@ -2655,7 +2594,8 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
       report_user_error_msg(ret, expr, q_name);
     } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
       LOG_WARN("push back failed", K(ret));
-    } else if (OB_FAIL(implict_cast_pl_udt_to_sql_udt(real_ref_expr))) {
+    } else if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(params_.expr_factory_,
+                                        params_.session_info_, real_ref_expr))) {
       LOG_WARN("add implict cast to pl udt expr failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
       LOG_WARN("replace column ref expr failed", K(ret));
@@ -6794,20 +6734,7 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
   } else if (ObCharType == column_schema->get_data_type()
              || ObNCharType == column_schema->get_data_type()) {
     if (is_pad_char_to_full_length(session->get_sql_mode())) {
-      // in ddl scene, T_INSERT && is_fixed_len_char_type,
-      // create index will trim virtual generated column in engine layer.
-      // Since we expanded the generated column into a dependent expression,
-      // we need to add trim on its dependent expression in this layer.
-      if (const_cast<ObSQLSessionInfo *>(session)->get_ddl_info().is_ddl()
-          && stmt::T_INSERT == session->get_stmt_type()
-          && column_schema->is_virtual_generated_column()) {
-        if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema,
-                                                    *params_.expr_factory_,
-                                                    session_info_,
-                                                    expr))) {
-          LOG_WARN("fail to build trime expr for char", K(ret));
-        }
-      } else if (OB_FAIL(ObRawExprUtils::build_pad_expr(*params_.expr_factory_,
+      if (OB_FAIL(ObRawExprUtils::build_pad_expr(*params_.expr_factory_,
                                                  true,
                                                  column_schema,
                                                  expr,
@@ -10684,6 +10611,7 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
       ObConstraint tmp_constraint;
       ObSEArray<ObQualifiedName, 1> columns;
       ObString constraint_str;
+      bool has_default;
       if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_CHECK
           && (*iter)->get_constraint_type() != CONSTRAINT_TYPE_NOT_NULL) {
         continue;
@@ -10730,6 +10658,8 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
       } else if (OB_FAIL(ObResolverUtils::resolve_check_constraint_expr(
                  params_, node, *table_schema, tmp_constraint, check_constraint_expr, NULL, &columns))) {
         LOG_WARN("resolve check constraint expr failed", K(ret));
+      } else if (OB_FAIL(resolve_special_expr_static(table_schema, *params_.session_info_, *params_.expr_factory_, check_constraint_expr, has_default, ObResolverUtils::PureFunctionCheckStatus::DISABLE_CHECK))) {
+        LOG_WARN("fail to resolve special exprs", K(ret));
       } else if (table_item->is_basic_table() &&
                  OB_FAIL(resolve_columns_for_partition_expr(check_constraint_expr,
                                                             columns,

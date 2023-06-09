@@ -15,6 +15,9 @@
 #include "lib/signal/ob_signal_handlers.h"
 #include <sys/prctl.h>
 #include <dirent.h>
+#include <unistd.h>
+#include <fstream>
+#include <sys/wait.h>
 #include "lib/profile/ob_trace_id.h"
 #include "lib/utility/utility.h"
 #include "lib/signal/ob_libunwind.h"
@@ -29,6 +32,17 @@ namespace oceanbase
 namespace common
 {
 static const int SIG_SET[] = {SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGURG};
+static constexpr char MINICORE_SHELL_PATH[] = "tools/minicore.sh";
+static constexpr char FASTSTACK_SHELL_PATH[] = "tools/callstack.sh";
+static constexpr char MINICORE_SCRIPT[] = "if [ -e bin/minicore.py ]; then\n"
+"  python bin/minicore.py `cat $(pwd)/run/observer.pid` -c -o core.`cat $(pwd)/run/observer.pid`.mini\n"
+"fi\n"
+"[ $(ls -1 core.*.mini 2>/dev/null | wc -l) -gt 5 ] && ls -1 core.*.mini | sort | head -n 1 | xargs rm -f";
+
+static constexpr char FASTSTACK_SCRIPT[] = "if [ -x \"$(command -v obstack)\" ]; then\n"
+"  obstack `cat $(pwd)/run/observer.pid` > stack.`cat $(pwd)/run/observer.pid`.`date +%Y%m%d%H%M%S`\n"
+"fi\n"
+"[ $(ls -1 stack.* 2>/dev/null | wc -l) -gt 100 ] && ls -1 stack.* | sort | head -n 1 | xargs rm -f";
 
 static inline void handler(int sig, siginfo_t *s, void *p)
 {
@@ -138,92 +152,136 @@ void close_socket_fd()
 
 void coredump_cb(int sig, siginfo_t *si, void *context)
 {
+  int ret = OB_SUCCESS;
   if (g_coredump_num++ < 1) {
+    pid_t pid;
     close_socket_fd();
+    ret = minicoredump(sig, GETTID(), pid);
     send_request_and_wait(VERB_LEVEL_2,
                           syscall(SYS_gettid)/*exclude_id*/);
-    #define MINICORE 0
-    #if MINICORE
-    int pid = 0;
-    if ((pid = fork()) != 0) {
-    #endif
-      // parent or fork failed
-      timespec time = {0, 0};
-      clock_gettime(CLOCK_REALTIME, &time);
-      int64_t ts = time.tv_sec * 1000000 + time.tv_nsec / 1000;
-      // thread_name
-      char tname[16];
-      prctl(PR_GET_NAME, tname);
-      // backtrace
-      char bt[256];
-      int64_t len = 0;
+    // parent or fork failed
+    timespec time = {0, 0};
+    clock_gettime(CLOCK_REALTIME, &time);
+    int64_t ts = time.tv_sec * 1000000 + time.tv_nsec / 1000;
+    // thread_name
+    char tname[16];
+    prctl(PR_GET_NAME, tname);
+    // backtrace
+    char bt[256];
+    int64_t len = 0;
 #ifdef __x86_64__
-      safe_backtrace(bt, sizeof(bt) - 1, &len);
+    safe_backtrace(bt, sizeof(bt) - 1, &len);
 #endif
-      bt[len++] = '\0';
-      // extra
-      const ObFatalErrExtraInfoGuard *extra_info = nullptr; // TODO: May deadlock, ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
-      uint64_t uval[4] = {0};
-      auto *trace_id = ObCurTraceId::get_trace_id();
-      if (trace_id != nullptr) {
-        trace_id->get_uval(uval);
-      }
-      char print_buf[512];
-      const ucontext_t *con = (ucontext_t *)context;
-#if defined(__x86_64__)
-      int64_t ip = con->uc_mcontext.gregs[REG_RIP];
-      int64_t bp = con->uc_mcontext.gregs[REG_RBP]; // stack base
-#else
-      // TODO: ARM
-      int64_t ip = -1;
-      int64_t bp = -1;
-#endif
-      char rlimit_core[32] = "unlimited";
-      if (UINT64_MAX != g_rlimit_core) {
-        safe_snprintf(rlimit_core, sizeof(rlimit_core), "%lu", g_rlimit_core);
-      }
-      char crash_info[128] = "CRASH ERROR!!!";
-      int64_t fatal_error_thread_id = get_fatal_error_thread_id();
-      if (-1 != fatal_error_thread_id) {
-        safe_snprintf(crash_info, sizeof(crash_info),
-                      "Right to Die or Duty to Live's Thread Existed before CRASH ERROR!!!"
-                      "ThreadId=%ld,", fatal_error_thread_id);
-      }
-      ssize_t print_len = safe_snprintf(print_buf, sizeof(print_buf),
-                                       "%s IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, RLIMIT_CORE=%s, "COMMON_FMT", ",
-                                       crash_info, ip, bp, sig, si->si_code, si->si_addr, rlimit_core,
-                                       ts, GETTID(), tname, uval[0], uval[1], uval[2], uval[3],
-                                       (NULL == extra_info) ? NULL : to_cstring(*extra_info), bt);
-      const auto &si_guard = ObSqlInfoGuard::get_cur_guard();
-      char sql[] = "SQL=";
-      char end[] = "\n";
-      struct iovec iov[4];
-      memset(iov, 0, sizeof(iov));
-      iov[0].iov_base = print_buf;
-      iov[0].iov_len = print_len;
-      iov[1].iov_base = sql;
-      iov[1].iov_len = strlen(sql);
-      iov[2].iov_base = NULL != si_guard ? si_guard->sql_.ptr() : NULL;
-      iov[2].iov_len = NULL != si_guard ? si_guard->sql_.length() : 0;
-      iov[3].iov_base = end;
-      iov[3].iov_len = strlen(end);
-      writev(STDERR_FILENO, iov, sizeof(iov) / sizeof(iov[0]));
-
-    #if MINICORE
-    } else {
-      // child
-      prctl(PR_SET_NAME, "minicoredump");
-      int64_t total_size = 0;
-      if (lib::g_mem_cutter != nullptr) {
-        lib::g_mem_cutter->cut(total_size);
-      }
-      DLOG(INFO, "[MINICORE], TOTAL FREED: %ld", total_size);
+    bt[len++] = '\0';
+    // extra
+    const ObFatalErrExtraInfoGuard *extra_info = nullptr; // TODO: May deadlock, ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
+    uint64_t uval[4] = {0};
+    auto *trace_id = ObCurTraceId::get_trace_id();
+    if (trace_id != nullptr) {
+      trace_id->get_uval(uval);
     }
-    #endif
+    char print_buf[512];
+    const ucontext_t *con = (ucontext_t *)context;
+#if defined(__x86_64__)
+    int64_t ip = con->uc_mcontext.gregs[REG_RIP];
+    int64_t bp = con->uc_mcontext.gregs[REG_RBP]; // stack base
+#else
+    // TODO: ARM
+    int64_t ip = -1;
+    int64_t bp = -1;
+#endif
+    char rlimit_core[32] = "unlimited";
+    if (UINT64_MAX != g_rlimit_core) {
+      safe_snprintf(rlimit_core, sizeof(rlimit_core), "%lu", g_rlimit_core);
+    }
+    char crash_info[128] = "CRASH ERROR!!!";
+    int64_t fatal_error_thread_id = get_fatal_error_thread_id();
+    if (-1 != fatal_error_thread_id) {
+      safe_snprintf(crash_info, sizeof(crash_info),
+                    "Right to Die or Duty to Live's Thread Existed before CRASH ERROR!!!"
+                    "ThreadId=%ld,", fatal_error_thread_id);
+    }
+    ssize_t print_len = safe_snprintf(print_buf, sizeof(print_buf),
+                                     "%s IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, RLIMIT_CORE=%s, "COMMON_FMT", ",
+                                     crash_info, ip, bp, sig, si->si_code, si->si_addr, rlimit_core,
+                                     ts, GETTID(), tname, uval[0], uval[1], uval[2], uval[3],
+                                     (NULL == extra_info) ? NULL : to_cstring(*extra_info), bt);
+    const auto &si_guard = ObSqlInfoGuard::get_cur_guard();
+    char sql[] = "SQL=";
+    char end[] = "\n";
+    struct iovec iov[4];
+    memset(iov, 0, sizeof(iov));
+    iov[0].iov_base = print_buf;
+    iov[0].iov_len = print_len;
+    iov[1].iov_base = sql;
+    iov[1].iov_len = strlen(sql);
+    iov[2].iov_base = NULL != si_guard ? si_guard->sql_.ptr() : NULL;
+    iov[2].iov_len = NULL != si_guard ? si_guard->sql_.length() : 0;
+    iov[3].iov_base = end;
+    iov[3].iov_len = strlen(end);
+    writev(STDERR_FILENO, iov, sizeof(iov) / sizeof(iov[0]));
+    if (OB_SUCC(ret)) {
+      int status = 0;
+      waitpid(pid, &status, __WALL);
+    }
   }
   // Reset back to the default handler
   signal(sig, SIG_DFL);
   raise(sig);
+}
+
+int minicoredump(int sig, int64_t tid, pid_t& pid)
+{
+  static constexpr int64_t MIN_INTERVAL = 5 * 60 * 1000 * 1000; // 5min
+  static int64_t last_ts = 0;
+  int64_t now = ObTimeUtility::fast_current_time();
+  int64_t last = ATOMIC_LOAD(&last_ts);
+  int ret = OB_SUCCESS;
+  UNUSED(sig);
+  UNUSED(tid);
+  if (now - last < MIN_INTERVAL) {
+    ret = OB_EAGAIN;
+  } else if (!ATOMIC_BCAS(&last_ts, last, now)) {
+    ret = OB_EAGAIN;
+  } else if (-1 == access("bin/minicore.py", R_OK)) {
+    ret = OB_FILE_NOT_EXIST;
+  } else if (-1 == access(MINICORE_SHELL_PATH, R_OK)) {
+    if (0 == (pid = syscall(__NR_clone, CLONE_VFORK, nullptr, nullptr, nullptr, nullptr))) {
+      IGNORE_RETURN execlp("sh", "sh", "-c", MINICORE_SCRIPT, nullptr);
+      _exit(EXIT_FAILURE);
+    }
+  } else if (-1 != access(MINICORE_SHELL_PATH, X_OK)) {
+    if (0 == (pid = syscall(__NR_clone, CLONE_VFORK, nullptr, nullptr, nullptr, nullptr))) {
+      IGNORE_RETURN execlp("sh", "sh", MINICORE_SHELL_PATH, nullptr);
+      _exit(EXIT_FAILURE);
+    }
+  }
+  return ret;
+}
+
+int faststack()
+{
+  static constexpr int64_t MIN_INTERVAL = 1 * 60 * 1000 * 1000; // 1min
+  static int64_t last_ts = 0;
+  int64_t now = ObTimeUtility::fast_current_time();
+  int64_t last = ATOMIC_LOAD(&last_ts);
+  int ret = OB_SUCCESS;
+  if (now - last < MIN_INTERVAL) {
+    ret = OB_EAGAIN;
+  } else if (!ATOMIC_BCAS(&last_ts, last, now)) {
+    ret = OB_EAGAIN;
+  } else if (-1 == access(FASTSTACK_SHELL_PATH, R_OK)) {
+    if (0 == syscall(__NR_clone, CLONE_VFORK | CLONE_PARENT, nullptr, nullptr, nullptr, nullptr)) {
+      IGNORE_RETURN execlp("sh", "sh", "-c", FASTSTACK_SCRIPT, nullptr);
+      _exit(EXIT_FAILURE);
+    }
+  } else if (-1 != access(FASTSTACK_SHELL_PATH, X_OK)) {
+    if (0 == syscall(__NR_clone, CLONE_VFORK | CLONE_PARENT, nullptr, nullptr, nullptr, nullptr)) {
+      IGNORE_RETURN execlp("sh", "sh", FASTSTACK_SHELL_PATH, nullptr);
+      _exit(EXIT_FAILURE);
+    }
+  }
+  return ret;
 }
 
 } // namespace common

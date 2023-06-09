@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/list/ob_dlist.h"
+#include "observer/ob_server.h"
 #include "share/ob_errno.h"
 #include "share/ob_occam_time_guard.h"
 #include "election_impl.h"
@@ -57,13 +59,14 @@ void DefaultRoleChangeCallBack::operator()(ElectionImpl *election,
 }
 
 ElectionImpl::ElectionImpl()
-    : lock_(common::ObLatchIds::ELECTION_LOCK),
+    : is_inited_(false),
+      is_running_(false),
+      lock_(common::ObLatchIds::ELECTION_LOCK),
       proposer_(this),
       acceptor_(this),
       priority_(nullptr),
       msg_handler_(nullptr),
-      is_inited_(false),
-      is_running_(false),
+      ls_biggest_min_cluster_version_ever_seen_(0),
       event_recorder_(id_, self_addr_, timer_)
 {}
 
@@ -209,6 +212,10 @@ int ElectionImpl::reset_priority()
   return OB_SUCCESS;
 }
 
+void ElectionImpl::handle_message_base_(const ElectionMsgBase &message_base)
+{
+  ls_biggest_min_cluster_version_ever_seen_.try_advance(message_base.get_ls_biggest_min_cluster_version_ever_seen().version_);
+}
 
 int ElectionImpl::handle_message(const ElectionPrepareRequestMsg &msg)
 {
@@ -219,6 +226,7 @@ int ElectionImpl::handle_message(const ElectionPrepareRequestMsg &msg)
   bool need_register_devote_task = false;
   {
     LockGuard lock_guard(lock_);
+    handle_message_base_(msg);
     msg_counter_.add_received_count(msg);
     CHECK_ELECTION_INIT_AND_START();
     if (msg.get_sender() != self_addr_) {
@@ -244,6 +252,7 @@ int ElectionImpl::handle_message(const ElectionAcceptRequestMsg &msg)
   int64_t us_to_expired = 0;
   {
     LockGuard lock_guard(lock_);
+    handle_message_base_(msg);
     msg_counter_.add_received_count(msg);
     CHECK_ELECTION_INIT_AND_START();
     if (msg.get_ballot_number() > proposer_.ballot_number_) {
@@ -271,6 +280,7 @@ int ElectionImpl::handle_message(const ElectionPrepareResponseMsg &msg)
   ELECT_TIME_GUARD(500_ms);
   int ret = OB_SUCCESS;
   LockGuard lock_guard(lock_);
+  handle_message_base_(msg);
   msg_counter_.add_received_count(msg);
   CHECK_ELECTION_INIT_AND_START();
   proposer_.on_prepare_response(msg);
@@ -283,6 +293,7 @@ int ElectionImpl::handle_message(const ElectionAcceptResponseMsg &msg)
   ELECT_TIME_GUARD(500_ms);
   int ret = OB_SUCCESS;
   LockGuard lock_guard(lock_);
+  handle_message_base_(msg);
   msg_counter_.add_received_count(msg);
   CHECK_ELECTION_INIT_AND_START();
   proposer_.on_accept_response(msg);
@@ -295,6 +306,7 @@ int ElectionImpl::handle_message(const ElectionChangeLeaderMsg &msg)
   ELECT_TIME_GUARD(500_ms);
   int ret = OB_SUCCESS;
   LockGuard lock_guard(lock_);
+  handle_message_base_(msg);
   msg_counter_.add_received_count(msg);
   CHECK_ELECTION_INIT_AND_START();
   proposer_.on_change_leader(msg);
@@ -465,6 +477,20 @@ int ElectionImpl::set_inner_priority_seed(const uint64_t seed)
   CLICK();
   inner_priority_seed_ = seed;
   return ret;
+}
+
+uint64_t ElectionImpl::get_ls_biggest_min_cluster_version_ever_seen_() const
+{
+  #define PRINT_WRAPPER K(*this)
+  int ret = OB_SUCCESS;
+  uint64_t ls_biggest_min_cluster_version_ever_seen = 0;
+  if (observer::ObServer::get_instance().is_arbitration_mode()) {
+  } else {
+    ls_biggest_min_cluster_version_ever_seen = std::max(GET_MIN_CLUSTER_VERSION(),
+                                                        ls_biggest_min_cluster_version_ever_seen_.version_);
+  }
+  return ls_biggest_min_cluster_version_ever_seen;
+  #undef PRINT_WRAPPER
 }
 
 }

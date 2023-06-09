@@ -1703,8 +1703,6 @@ int ObTransformJoinElimination::eliminate_semi_join_self_foreign_key(ObDMLStmt *
       if (OB_ISNULL(semi_info = semi_infos.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(semi_info));
-      } else if (OB_FAIL(preprocess_generate_right_table(*stmt, *semi_info))) {
-        LOG_WARN("failed to preprocess generate right table", K(ret));
       } else if (OB_FAIL(eliminate_semi_join_self_key(stmt,
                                                       semi_info,
                                                       candi_conds,
@@ -1730,23 +1728,6 @@ int ObTransformJoinElimination::eliminate_semi_join_self_foreign_key(ObDMLStmt *
         trans_happened = true;
       }
     }
-  }
-  return ret;
-}
-
-// flatten joined table in right table
-int ObTransformJoinElimination::preprocess_generate_right_table(ObDMLStmt &stmt,
-                                                                SemiInfo &semi_info)
-{
-  int ret = OB_SUCCESS;
-  TableItem *right_table = NULL;
-  if (OB_ISNULL(right_table = stmt.get_table_item_by_id(semi_info.right_table_id_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(right_table), K(ret));
-  } else if (!right_table->is_generated_table()) {
-    /* do nothing */
-  } else if (OB_FAIL(ObTransformUtils::flatten_joined_table(right_table->ref_query_))) {
-    LOG_WARN("failed to faltten joined table", K(ret));
   }
   return ret;
 }
@@ -2948,14 +2929,16 @@ int ObTransformJoinElimination::trans_semi_condition_exprs(ObDMLStmt *stmt,
     }
     /*将所有改写的condition转成NOT(join_cond1) OR NOT(join_cond2) OR ...
       OR LNNVL(expr1) OR LNNVL(expr2) OR ...*/
-    if (OB_SUCC(ret) && !new_conditions.empty()) {
-      ObRawExpr *or_expr = NULL;
-      if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, new_conditions, or_expr))) {
+    if (OB_SUCC(ret) ) {
+      ObRawExpr *filter_expr = NULL;
+      if (!new_conditions.empty() && OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, new_conditions, filter_expr))) {
         LOG_WARN("make or expr failed", K(ret));
-      } else if (OB_ISNULL(or_expr)) {
+      } else if (new_conditions.empty() && OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, filter_expr, false))) {
+        LOG_WARN("make or expr failed", K(ret));
+      } else if (OB_ISNULL(filter_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("or expr is null", K(ret));
-      } else if (OB_FAIL(stmt->get_condition_exprs().push_back(or_expr))) {
+      } else if (OB_FAIL(stmt->get_condition_exprs().push_back(filter_expr))) {
         LOG_WARN("failed to push back cond", K(ret));
       } else {/*do nothing*/}
     } else {/*do nothing*/}

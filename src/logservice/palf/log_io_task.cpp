@@ -623,7 +623,7 @@ int BatchLogIOFlushLogTask::push_flush_cb_to_thread_pool_(int tg_id, IPalfEnvImp
       LogIOFlushLogTask *io_task = io_task_array_[i];
       if (NULL == io_task) {
         PALF_LOG(WARN, "io_task is nullptr, may be its' epoch has changed", K(ret), KP(io_task),
-                 KPC(this));
+            KPC(this));
       } else if (FALSE_IT(io_task->push_cb_into_cb_pool_ts_ = current_time)) {
       } else if (OB_FAIL(push_task_into_cb_thread_pool(tg_id, io_task))) {
         // avoid memory leak when push task into cb thread pool failed.

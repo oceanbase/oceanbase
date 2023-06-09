@@ -239,6 +239,10 @@ int ObServerReloadConfig::operator()()
     }
   }
 #ifndef ENABLE_SANITY
+  {
+    ObMallocAllocator::get_instance()->force_explict_500_malloc_ =
+      GCONF._force_explict_500_malloc;
+  }
 #else
   {
     sanity_set_whitelist(GCONF.sanity_whitelist.str());

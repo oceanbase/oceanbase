@@ -2718,7 +2718,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       } else {
         //处理生成列的定义
         if (lib::is_oracle_mode()
-            && (column.get_meta_type().is_blob() || column.get_meta_type().is_clob())
+            && (column.get_meta_type().is_blob() || column.get_meta_type().is_clob() || column.is_xmltype())
             && !is_external_table) {
           ret = OB_ERR_INVALID_VIRTUAL_COLUMN_TYPE;
           LOG_WARN("invalid use of blob/clob type with generate defnition",
@@ -5379,7 +5379,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (column.is_xmltype() && ob_is_numeric_type(tmp_default_value.get_type())) {
+    } else if (column.is_xmltype() && (ob_is_numeric_type(tmp_default_value.get_type()) || is_lob(tmp_default_value.get_type()))) {
       ret = OB_ERR_INVALID_XML_DATATYPE;
       LOG_WARN("incorrect cmp type with xml arguments",K(tmp_default_value.get_type()), K(ret));
     } else if (lib::is_oracle_mode() && column.get_meta_type().is_blob() && ob_is_numeric_type(tmp_default_value.get_type())) {
@@ -10919,8 +10919,8 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
         if (T_PARALLEL == hint_node->type_) {
           ParseNode *parallel_node = nullptr;
           if (1 != hint_node->num_child_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("error unexpected, child num is not valid", K(ret), "child_num", hint_node->num_child_);
+            /* ignore parallel(auto) and parallel(manual)*/
+            LOG_WARN("Unused parallel hint");
           } else if (OB_ISNULL(parallel_node = hint_node->children_[0])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("error unexpected, child of stmt parallel degree node should not be null", K(ret));

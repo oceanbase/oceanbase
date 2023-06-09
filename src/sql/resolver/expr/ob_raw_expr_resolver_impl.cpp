@@ -6291,12 +6291,29 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
                                                           T_OBJ_ACCESS_REF, 2))) {
           LOG_WARN("failed to new parse node", K(ret), K(obj_access_node));
         } else {
-          agg_udf_node->children_[0] = func_node->children_[0];
-          agg_udf_node->children_[1] = func_node->children_[1];
-          agg_udf_node->children_[2] = func_node->children_[2];
-          obj_access_node->children_[0] = agg_udf_node;
-          obj_access_node->children_[1] = NULL;
-          func_node = obj_access_node;
+          // structure of T_FUN_PL_AGG_UDF: refer to sql_parser_oracle_mode.y
+          CK (OB_NOT_NULL(func_node->children_[0])
+              && T_EXPR_LIST == func_node->children_[0]->type_
+              && 2 == func_node->children_[0]->num_child_);
+
+          if (OB_SUCC(ret)) {
+            agg_udf_node->children_[0] = func_node->children_[0]->children_[0]; // restore IDENT node
+            agg_udf_node->children_[1] = func_node->children_[1];
+            agg_udf_node->children_[2] = func_node->children_[2];
+
+            obj_access_node->children_[0] = agg_udf_node;
+            obj_access_node->children_[1] = nullptr;
+
+            if (nullptr != func_node->children_[0]->children_[1]) { // check if database name is present
+              ParseNode *parent_obj_access = nullptr;
+              OZ (ObRawExprUtils::new_parse_node(parent_obj_access, ctx_.expr_factory_,T_OBJ_ACCESS_REF, 2));
+              OX (parent_obj_access->children_[0] = func_node->children_[0]->children_[1]);
+              OX (parent_obj_access->children_[1] = obj_access_node);
+              OX (obj_access_node = parent_obj_access);
+            }
+
+            OX (func_node = obj_access_node);
+          }
         }
       }
       if (OB_FAIL(ret)) {

@@ -48,7 +48,7 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_sys)
   SET_CASE_LOG_FILE(TEST_NAME, "log_throttling_sys_log_stream");
   int ret = OB_SUCCESS;
   const int64_t id = 1;
-  PALF_LOG(INFO, "begin test throttlin_basic", K(id));
+  PALF_LOG(INFO, "begin test throttling_sy", K(id));
   int64_t leader_idx = 0;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
   PalfHandleImplGuard leader;
@@ -73,8 +73,9 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_sys)
   palf_env_impl.disk_options_wrapper_.set_cur_unrecyclable_log_disk_size(unrecyclable_size);
   PalfThrottleOptions throttle_options;
   palf_env_impl.disk_options_wrapper_.get_throttling_options(throttle_options);
-  LogIOWorker *log_io_worker = &(palf_env_impl.log_io_worker_wrapper_.user_log_io_worker_);
-  LogWritingThrottle &throttle = log_io_worker->throttle_;
+  LogIOWorker *log_io_worker = leader.palf_handle_impl_->log_engine_.log_io_worker_;;
+  LogWritingThrottle *throttle = log_io_worker->throttle_;
+  // sys log stream no need throttling
   PalfThrottleOptions invalid_throttle_options;
 
   PALF_LOG(INFO, "prepare for throttling");
@@ -90,9 +91,9 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_sys)
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 2 * MB));
   max_lsn = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
-  ASSERT_EQ(invalid_throttle_options, throttle.throttling_options_);
-  ASSERT_EQ(false, throttle.need_throttling_with_options_());
-  ASSERT_EQ(false, throttle.need_throttling_());
+  ASSERT_EQ(invalid_throttle_options, throttle->throttling_options_);
+  ASSERT_EQ(false, throttle->need_throttling_with_options_not_guarded_by_lock_());
+  ASSERT_EQ(false, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
   int64_t break_ts = common::ObClockGenerator::getClock();
   ASSERT_EQ(true, (break_ts - cur_ts) < 1 * 1000 * 1000);
 
@@ -133,8 +134,8 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   palf_env_impl.disk_options_wrapper_.set_cur_unrecyclable_log_disk_size(unrecyclable_size);
   PalfThrottleOptions throttle_options;
   palf_env_impl.disk_options_wrapper_.get_throttling_options(throttle_options);
-  LogIOWorker *log_io_worker = &(palf_env_impl.log_io_worker_wrapper_.user_log_io_worker_);
-  LogWritingThrottle &throttle = log_io_worker->throttle_;
+  LogIOWorker *log_io_worker = leader.palf_handle_impl_->log_engine_.log_io_worker_;;
+  LogWritingThrottle *throttle = log_io_worker->throttle_;
   PalfThrottleOptions invalid_throttle_options;
 
   PALF_LOG(INFO, "[CASE 1]: test no need throttling while unrecyclable_log_disk_size is no more than trigger_size");
@@ -142,10 +143,10 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   LSN max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   wait_lsn_until_flushed(max_lsn_1, leader);
-  ASSERT_EQ(true, throttle.last_update_ts_ != OB_INVALID_TIMESTAMP);
-  ASSERT_EQ(invalid_throttle_options, throttle.throttling_options_);
-  ASSERT_EQ(false, throttle.need_throttling_with_options_());
-  ASSERT_EQ(false, throttle.need_throttling_());
+  ASSERT_EQ(true, throttle->last_update_ts_ != OB_INVALID_TIMESTAMP);
+  ASSERT_EQ(invalid_throttle_options, throttle->throttling_options_);
+  ASSERT_EQ(false, throttle->need_throttling_with_options_not_guarded_by_lock_());
+  ASSERT_EQ(false, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
 
   PALF_LOG(INFO, "[CASE 2] no need throttling while log_disk_throttling_percentage_ is off");
   usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
@@ -153,9 +154,9 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 31, id, 1 * MB));
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
-  ASSERT_EQ(invalid_throttle_options, throttle.throttling_options_);
-  ASSERT_EQ(false, throttle.need_throttling_with_options_());
-  ASSERT_EQ(false, throttle.need_throttling_());
+  ASSERT_EQ(invalid_throttle_options, throttle->throttling_options_);
+  ASSERT_EQ(false, throttle->need_throttling_with_options_not_guarded_by_lock_());
+  ASSERT_EQ(false, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
 
   PALF_LOG(INFO, "[CASE 3] need throttling");
   LogEntryHeader log_entry_header;
@@ -173,67 +174,67 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
   PALF_LOG(INFO, "case 3: after submit_log", K(before_lsn), K(end_lsn), K(max_lsn_1));
-  ASSERT_EQ(throttle_options, throttle.throttling_options_);
-  ASSERT_EQ(true, throttle.need_throttling_());
-  ASSERT_EQ(true, throttle.stat_.has_ever_throttled());
-  ASSERT_EQ(log_size, throttle.stat_.total_throttling_size_);
-  ASSERT_EQ(1, throttle.stat_.total_throttling_task_cnt_);
-  ASSERT_EQ(0, throttle.stat_.total_skipped_task_cnt_);
-  ASSERT_EQ(0, throttle.stat_.total_skipped_size_);
-  ASSERT_EQ(log_size, throttle.appended_log_size_cur_round_);
-  ASSERT_EQ(5, throttle.submitted_seq_);
-  ASSERT_EQ(5, throttle.handled_seq_);
+  ASSERT_EQ(throttle_options, throttle->throttling_options_);
+  ASSERT_EQ(true, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
+  ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
+  ASSERT_EQ(log_size, throttle->stat_.total_throttling_size_);
+  ASSERT_EQ(1, throttle->stat_.total_throttling_task_cnt_);
+  ASSERT_EQ(0, throttle->stat_.total_skipped_task_cnt_);
+  ASSERT_EQ(0, throttle->stat_.total_skipped_size_);
+  ASSERT_EQ(log_size, throttle->appended_log_size_cur_round_);
+  ASSERT_EQ(5, log_io_worker->purge_throttling_task_submitted_seq_);
+  ASSERT_EQ(5, log_io_worker->purge_throttling_task_handled_seq_);
 
-  PALF_LOG(INFO, "[CASE 4] no need throttling because trigger_percentage is set to 100");
+  PALF_LOG(INFO, "[CASE 4] no need throttling because trigger_percentage is set to 100", KPC(throttle));
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = 100;
   usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * MB));
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
-  ASSERT_EQ(invalid_throttle_options, throttle.throttling_options_);
-  ASSERT_EQ(false, throttle.need_throttling_());
-  ASSERT_EQ(true, throttle.stat_.has_ever_throttled());
-  ASSERT_EQ(log_size, throttle.stat_.total_throttling_size_);
-  ASSERT_EQ(1, throttle.stat_.total_throttling_task_cnt_);
-  ASSERT_EQ(0, throttle.stat_.total_skipped_task_cnt_);
-  ASSERT_EQ(0, throttle.stat_.total_skipped_size_);
-  ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
-  ASSERT_EQ(5, throttle.submitted_seq_);
-  ASSERT_EQ(5, throttle.handled_seq_);
+  ASSERT_EQ(invalid_throttle_options, throttle->throttling_options_);
+  ASSERT_EQ(false, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
+  ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
+  ASSERT_EQ(log_size, throttle->stat_.total_throttling_size_);
+  ASSERT_EQ(1, throttle->stat_.total_throttling_task_cnt_);
+  ASSERT_EQ(0, throttle->stat_.total_skipped_task_cnt_);
+  ASSERT_EQ(0, throttle->stat_.total_skipped_size_);
+  ASSERT_EQ(0, throttle->appended_log_size_cur_round_);
+  ASSERT_EQ(5, log_io_worker->purge_throttling_task_submitted_seq_);
+  ASSERT_EQ(5, log_io_worker->purge_throttling_task_handled_seq_);
 
-  PALF_LOG(INFO, "[CASE 5] no need throttling because log_disk_size is set to 500M");
+  PALF_LOG(INFO, "[CASE 5] no need throttling because log_disk_size is set to 500M", KPC(throttle));
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = 40;
   usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
   palf_env_impl.disk_options_wrapper_.get_throttling_options(throttle_options);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * MB));
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
-  ASSERT_EQ(throttle_options, throttle.throttling_options_);
-  ASSERT_EQ(true, throttle.need_throttling_());
-  ASSERT_EQ(true, throttle.stat_.has_ever_throttled());
+  ASSERT_EQ(throttle_options, throttle->throttling_options_);
+  ASSERT_EQ(true, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
+  ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
   PALF_LOG(INFO, "[CASE 5] no need throttling because log_disk_size is set to 500M", K(throttle));
-  ASSERT_EQ(log_size, throttle.stat_.total_throttling_size_);
-  ASSERT_EQ(1, throttle.stat_.total_throttling_task_cnt_);
-  ASSERT_EQ(0, throttle.stat_.total_skipped_task_cnt_);
-  ASSERT_EQ(0, throttle.stat_.total_skipped_size_);
-  ASSERT_EQ(log_size, throttle.appended_log_size_cur_round_);
-  ASSERT_EQ(5, throttle.submitted_seq_);
-  ASSERT_EQ(5, throttle.handled_seq_);
+  ASSERT_EQ(log_size, throttle->stat_.total_throttling_size_);
+  ASSERT_EQ(1, throttle->stat_.total_throttling_task_cnt_);
+  ASSERT_EQ(0, throttle->stat_.total_skipped_task_cnt_);
+  ASSERT_EQ(0, throttle->stat_.total_skipped_size_);
+  ASSERT_EQ(log_size, throttle->appended_log_size_cur_round_);
+  ASSERT_EQ(5, log_io_worker->purge_throttling_task_submitted_seq_);
+  ASSERT_EQ(5, log_io_worker->purge_throttling_task_handled_seq_);
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ = 500 * MB;
   usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
   palf_env_impl.disk_options_wrapper_.get_throttling_options(throttle_options);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * MB));
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
-  ASSERT_EQ(invalid_throttle_options, throttle.throttling_options_);
-  ASSERT_EQ(false, throttle.need_throttling_());
-  ASSERT_EQ(true, throttle.stat_.has_ever_throttled());
-  ASSERT_EQ(true, OB_INVALID_TIMESTAMP != throttle.stat_.stop_ts_);
-  ASSERT_EQ(log_size, throttle.stat_.total_throttling_size_);
-  ASSERT_EQ(1, throttle.stat_.total_throttling_task_cnt_);
-  ASSERT_EQ(0, throttle.stat_.total_skipped_task_cnt_);
-  ASSERT_EQ(0, throttle.stat_.total_skipped_size_);
-  ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(invalid_throttle_options, throttle->throttling_options_);
+  ASSERT_EQ(false, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
+  ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
+  ASSERT_EQ(true, OB_INVALID_TIMESTAMP != throttle->stat_.stop_ts_);
+  ASSERT_EQ(log_size, throttle->stat_.total_throttling_size_);
+  ASSERT_EQ(1, throttle->stat_.total_throttling_task_cnt_);
+  ASSERT_EQ(0, throttle->stat_.total_skipped_task_cnt_);
+  ASSERT_EQ(0, throttle->stat_.total_skipped_size_);
+  ASSERT_EQ(0, throttle->appended_log_size_cur_round_);
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
 
@@ -245,34 +246,34 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   LogEngine *log_engine = &leader.palf_handle_impl_->log_engine_;
   IOTaskCond io_task_cond_1(id, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_1));
-  ASSERT_EQ(6, throttle.submitted_seq_);
-  ASSERT_EQ(5, throttle.handled_seq_);
+  ASSERT_EQ(6, log_io_worker->purge_throttling_task_submitted_seq_);
+  ASSERT_EQ(5, log_io_worker->purge_throttling_task_handled_seq_);
   leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 1 * MB));
-  //wait all flush log tasks pushed into queue of LogIOWorker
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
-  usleep(1000 * 1000);
+  //wait all flush log tasks pushed into queue of LogIOWorker
+  wait_lsn_until_submitted(max_lsn_1, leader);
   IOTaskCond io_task_cond_2(id, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_2));
-  ASSERT_EQ(7, throttle.submitted_seq_);
-  ASSERT_EQ(5, throttle.handled_seq_);
+  ASSERT_EQ(7, log_io_worker->purge_throttling_task_submitted_seq_);
+  ASSERT_EQ(5, log_io_worker->purge_throttling_task_handled_seq_);
   io_task_cond_1.cond_.signal();
   wait_lsn_until_flushed(max_lsn_1, leader);
   usleep(10 * 1000);
-  ASSERT_EQ(7, throttle.submitted_seq_);
-  ASSERT_EQ(6, throttle.handled_seq_);
+  ASSERT_EQ(7, log_io_worker->purge_throttling_task_submitted_seq_);
+  ASSERT_EQ(6, log_io_worker->purge_throttling_task_handled_seq_);
   io_task_cond_2.cond_.signal();
   usleep(10 * 1000);
-  ASSERT_EQ(7, throttle.submitted_seq_);
-  ASSERT_EQ(7, throttle.handled_seq_);
+  ASSERT_EQ(7, log_io_worker->purge_throttling_task_submitted_seq_);
+  ASSERT_EQ(7, log_io_worker->purge_throttling_task_handled_seq_);
   palf_env_impl.disk_options_wrapper_.get_throttling_options(throttle_options);
-  ASSERT_EQ(true, throttle.need_throttling_());
-  ASSERT_EQ(true, throttle.stat_.has_ever_throttled());
-  ASSERT_EQ(true, throttle.stat_.start_ts_ > cur_ts);
-  ASSERT_EQ(0, throttle.stat_.total_throttling_size_);
-  ASSERT_EQ(0, throttle.stat_.total_throttling_task_cnt_);
-  ASSERT_EQ(10, throttle.stat_.total_skipped_task_cnt_);
-  ASSERT_EQ(10 * (log_size), throttle.stat_.total_skipped_size_);
+  ASSERT_EQ(true, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
+  ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
+  ASSERT_EQ(true, throttle->stat_.start_ts_ > cur_ts);
+  ASSERT_EQ(0, throttle->stat_.total_throttling_size_);
+  ASSERT_EQ(0, throttle->stat_.total_throttling_task_cnt_);
+  ASSERT_EQ(10, throttle->stat_.total_skipped_task_cnt_);
+  ASSERT_EQ(10 * (log_size), throttle->stat_.total_skipped_size_);
   int64_t cur_has_batched_size = log_io_worker->batch_io_task_mgr_.has_batched_size_;
   // no io reduce during writing throttling
   ASSERT_EQ(cur_has_batched_size, prev_has_batched_size);
@@ -287,8 +288,8 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   wait_lsn_until_flushed(max_lsn_2, leader);
   int64_t break_ts = common::ObClockGenerator::getClock();
   EXPECT_EQ(true, (break_ts-cur_ts) < 1 * 1000 * 1000);
-  ASSERT_EQ(false, throttle.need_throttling_());
-  ASSERT_EQ(true, throttle.stat_.has_ever_throttled());
+  ASSERT_EQ(false, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
+  ASSERT_EQ(true, throttle->stat_.has_ever_throttled());
 
 
   palf_env_impl.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_throttling_percentage_ = throttling_percentage;
@@ -321,6 +322,7 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
 
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = 40;
   usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
+
   cur_ts = common::ObClockGenerator::getClock();
   leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 2 * MB));

@@ -106,6 +106,7 @@ private:
       share::ObExternBackupSetInfoDesc &backup_set_info);
   int write_extern_diagnose_info_(const share::ObExternTenantLocalityInfoDesc &locality_info,
       const share::ObExternBackupSetInfoDesc &backup_set_info);
+  int write_log_format_file_();
 
   int write_extern_ls_info_(const ObArray<share::ObBackupLSTaskAttr> &ls_tasks);
   int write_tablet_to_ls_infos_(const ObIArray<share::ObBackupDataTabletToLSInfo> &tablets_to_ls, const int64_t turn_id);

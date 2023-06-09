@@ -1766,9 +1766,8 @@ int ObSortOpImpl::sort()
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (sort_chunks_.get_size() >= 2) {
-    // clear iteration age, make sure no iteration block cached in inner round.
-    set_iteration_age(NULL);
-
+    blk_holder_.release();
+    set_blk_holder(nullptr);
     // do merge sort
     int64_t ways = 0;
     while (OB_SUCC(ret)) {
@@ -1812,8 +1811,7 @@ int ObSortOpImpl::sort()
     }
 
     if (OB_SUCC(ret)) {
-      // set iteration age for batch iteration.
-      set_iteration_age(&iter_age_);
+      set_blk_holder(&blk_holder_);
       next_stored_row_func_ = &ObSortOpImpl::ems_heap_next_stored_row;
     }
   }
@@ -1882,13 +1880,6 @@ int ObSortOpImpl::rewind()
   return ret;
 }
 
-void ObSortOpImpl::set_iteration_age(ObChunkDatumStore::IterationAge *iter_age)
-{
-  DLIST_FOREACH_NORET(chunk, sort_chunks_) {
-    chunk->iter_.set_iteration_age(iter_age);
-  }
-}
-
 int ObSortOpImpl::get_next_batch_stored_rows(int64_t max_cnt, int64_t &read_rows)
 {
   int ret = OB_SUCCESS;
@@ -1896,8 +1887,8 @@ int ObSortOpImpl::get_next_batch_stored_rows(int64_t max_cnt, int64_t &read_rows
     ret = OB_NOT_INIT;
     LOG_WARN("get next batch failed", K(ret));
   } else {
-    iter_age_.inc();
     read_rows = 0;
+    blk_holder_.release();
     for (int64_t i = 0; OB_SUCC(ret) && i < max_cnt; i++) {
       const ObChunkDatumStore::StoredRow *sr = NULL;
       if (OB_FAIL((this->*next_stored_row_func_)(sr))) {
@@ -2320,6 +2311,13 @@ int ObSortOpImpl::adjust_topn_read_rows(ObChunkDatumStore::StoredRow **stored_ro
   }
 
   return ret;
+}
+
+void ObSortOpImpl::set_blk_holder(ObChunkDatumStore::IteratedBlockHolder *blk_holder)
+{
+  DLIST_FOREACH_NORET(chunk, sort_chunks_) {
+    chunk->iter_.set_blk_holder_ptr(blk_holder);
+  }
 }
 
 /************************************* end ObSortOpImpl ********************************/

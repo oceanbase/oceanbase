@@ -587,6 +587,7 @@ int main(int argc, char *argv[])
       }
       print_all_thread("BEFORE_DESTROY");
       observer.destroy();
+      ObTaskController::get().destroy();
       ObKVGlobalCache::get_instance().destroy();
       ObVirtualTenantManager::get_instance().destroy();
     }
@@ -595,8 +596,6 @@ int main(int argc, char *argv[])
   }
 
   LOG_INFO("observer exits", "observer_version", PACKAGE_STRING);
-  OB_LOGGER.stop();
-  OB_LOGGER.wait();
   OB_LOGGER.destroy();
   print_all_thread("AFTER_DESTROY");
   return ret;

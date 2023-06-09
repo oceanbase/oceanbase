@@ -101,7 +101,8 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       && scope_ != T_FIELD_LIST_SCOPE
       && scope_ != T_GROUP_SCOPE
       && scope_ != T_WHERE_SCOPE
-      && scope_ != T_NONE_SCOPE) {
+      && scope_ != T_NONE_SCOPE
+      && scope_ != T_ORDER_SCOPE) {
     //expr is a alias column ref
     //alias column target list
     PRINT_QUOT;
@@ -803,7 +804,21 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("MULTISET");
       break;
     }
-    case T_OP_BOOL:
+    case T_OP_BOOL:{
+      CK(1 == expr->get_param_count());
+      if (print_params_.for_dblink_) {
+        DATA_PRINTF("(case when (");
+        PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(") then 1 else 0 end)");
+      } else if (expr->has_flag(IS_INNER_ADDED_EXPR)) {
+        // ignore print inner added expr
+        PRINT_EXPR(expr->get_param_expr(0));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("bool expr have to be inner expr for now", K(ret), K(*expr));
+      }
+      break;
+    }
     case T_FUN_SYS_REMOVE_CONST: {
       if (expr->has_flag(IS_INNER_ADDED_EXPR)) {
         // ignore print inner added expr
@@ -3362,6 +3377,7 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
       case T_FUN_JSON_OBJECTAGG:
         SET_SYMBOL_IF_EMPTY("json_objectagg");
       case T_FUN_PL_AGG_UDF: {
+        ObString database;
         if (OB_ISNULL(expr->get_agg_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), KPC(expr));
@@ -3372,11 +3388,26 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), KPC(expr));
           } else {
-            symbol = static_cast<ObUDFRawExpr*>(udf_expr)->get_func_name();
+            ObUDFRawExpr* udf = static_cast<ObUDFRawExpr*>(udf_expr);
+            database = udf->get_database_name();
+            symbol = udf->get_func_name();
           }
         }
         if (OB_SUCC(ret)) {
-          DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
+          if(!database.empty()){
+            PRINT_QUOT;
+            DATA_PRINTF("%.*s", LEN_AND_PTR(database));
+            PRINT_QUOT;
+            DATA_PRINTF(".");
+          }
+          if (T_FUN_PL_AGG_UDF == type) {
+            PRINT_QUOT;
+            DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
+            PRINT_QUOT;
+          } else {
+            DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
+          }
+          DATA_PRINTF("(");
         }
         // distinct, default 'all', not print
         if (OB_SUCC(ret)) {
@@ -4623,8 +4654,7 @@ int ObRawExprPrinter::print_xml_attributes_expr(ObSysFunRawExpr *expr)
           PRINT_EXPR(expr->get_param_expr(i));
           ObObj attr_key_obj = static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 1))->get_value();
           ObItemType expr_type = expr->get_param_expr(i + 1)->get_expr_type();
-          if (expr_type == T_REF_COLUMN ||
-              expr_type == T_FUN_SYS_CAST ||
+          if ((T_VARCHAR != expr_type && T_CHAR != expr_type) ||
               attr_key_obj.get_type() == ObObjType::ObUnknownType) {
             DATA_PRINTF(" as evalname ");
             PRINT_EXPR(expr->get_param_expr(i + 1));

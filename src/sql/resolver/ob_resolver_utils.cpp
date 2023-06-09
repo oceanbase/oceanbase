@@ -772,15 +772,18 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
           } else {
             // element is composite type
             uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
-            bool is_compatible = false;
-            OZ (ObPLResolver::check_composite_compatible(
-              NULL == resolve_ctx.params_.secondary_namespace_
-                  ? static_cast<const ObPLINS&>(resolve_ctx)
-                  : static_cast<const ObPLINS&>(*resolve_ctx.params_.secondary_namespace_),
-              element_type_id, dst_pl_type.get_user_type_id(), is_compatible));
+            bool is_compatible = element_type_id == coll_type->get_element_type().get_user_type_id();
+            if (!is_compatible) {
+              OZ (ObPLResolver::check_composite_compatible(
+                NULL == resolve_ctx.params_.secondary_namespace_
+                    ? static_cast<const ObPLINS&>(resolve_ctx)
+                    : static_cast<const ObPLINS&>(*resolve_ctx.params_.secondary_namespace_),
+                element_type_id, coll_type->get_element_type().get_user_type_id(), is_compatible));
+            }
             if (OB_SUCC(ret) && !is_compatible) {
               ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("incorrect argument type", K(ret));
+              LOG_WARN("incorrect argument type",
+                        K(ret), K(element_type_id), K(dst_pl_type), KPC(src_coll));
             }
           }
           OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
@@ -2129,9 +2132,10 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           } else {
             ObCharsetType charset_type = CHARSET_INVALID;
             ObCollationType collation_type = CS_TYPE_INVALID;
+            bool is_hex_string = node->num_child_ == 1 ? true : false;
             if (charset_node != NULL) {
               ObString charset(charset_node->str_len_, charset_node->str_value_);
-              if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, false))) {
+              if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, is_hex_string))) {
                 LOG_WARN("set string val charset failed", K(ret));
               }
             }

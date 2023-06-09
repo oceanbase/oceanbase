@@ -190,13 +190,15 @@ private:
   const AbstractPriority *closest_priority_;
 };
 
-int ElectionPriorityImpl::compare_with(const ElectionPriority &rhs, int &result, ObStringHolder &reason) const
+int ElectionPriorityImpl::compare_with(const ElectionPriority &rhs,
+                                       const uint64_t compare_version,
+                                       int &result,
+                                       ObStringHolder &reason) const
 {
   LC_TIME_GUARD(1_s);
   int ret = OB_SUCCESS;
   // 这里如果转型失败直接抛异常，但设计上转型不会失败
   const ElectionPriorityImpl &rhs_impl = dynamic_cast<const ElectionPriorityImpl &>(rhs);
-  uint64_t compare_version = GET_MIN_CLUSTER_VERSION();
   GetClosestVersionPriority functor1(compare_version);
   GetClosestVersionPriority functor2(compare_version);
   (void) priority_tuple_.for_each(functor1);
@@ -242,8 +244,12 @@ struct RefeshPriority
     LC_TIME_GUARD(1_s);
     int ret = OB_SUCCESS;
     if (CLICK_FAIL(element.refresh(ls_id_))) {
-      ret_ = ret;
-      COORDINATOR_LOG(WARN, "refresh priority failed", KR(ret), K(MTL_ID()), K(ls_id_), K(element));
+      if (OB_NO_NEED_UPDATE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        ret_ = ret;
+        COORDINATOR_LOG(WARN, "refresh priority failed", KR(ret), K(MTL_ID()), K(ls_id_), K(element));
+      }
     }
     return ret;
   }

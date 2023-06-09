@@ -44,7 +44,7 @@ ObTabletMergeInfo::ObTabletMergeInfo()
      bloom_filter_block_ctx_(nullptr),
      bloomfilter_block_id_(),
      sstable_merge_info_(),
-     allocator_("MergeContext", OB_MALLOC_MIDDLE_BLOCK_SIZE),
+     allocator_("MergeContext", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID()),
      index_builder_(nullptr)
 {
 }
@@ -220,7 +220,7 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObTabletMergeCtx &ctx,
     ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
         param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
     param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
-    param.root_row_store_type_ = res.root_desc_.row_type_;
+    param.root_row_store_type_ = res.root_row_store_type_;
     param.data_index_tree_height_ = res.root_desc_.height_;
     param.index_blocks_cnt_ = res.index_blocks_cnt_;
     param.data_blocks_cnt_ = res.data_blocks_cnt_;

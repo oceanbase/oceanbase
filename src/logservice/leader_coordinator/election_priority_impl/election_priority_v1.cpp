@@ -12,6 +12,7 @@
 
 #include "lib/utility/ob_macro_utils.h"
 #include "logservice/ob_log_service.h"
+#include "share/ob_errno.h"
 #include "share/ob_occam_time_guard.h"
 #include "election_priority_impl.h"
 #include "lib/list/ob_dlist.h"
@@ -151,7 +152,8 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
   ObFailureDetector* detector = MTL(ObFailureDetector*);
   LsElectionReferenceInfo election_reference_info;
   SCN scn = SCN::min_scn();
-  if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
+  if (observer::ObServer::get_instance().is_arbitration_mode()) {
+  } else if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "unexpected nullptr");
   } else if (CLICK_FAIL(detector->get_specified_level_event(FailureLevel::FATAL, fatal_failures_))) {

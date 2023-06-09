@@ -742,6 +742,12 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
           OX (cursor->set_sync_cursor());
         }
       }
+    } else if (var->get_type().is_opaque_type()) {
+      if (var_val.is_null()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can not sync package opaque type", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "sync package opaque type");
+      }
     } else {
       OZ (var->get_type().deserialize(resolve_ctx,
                                       var->get_type().is_cursor_type() ?

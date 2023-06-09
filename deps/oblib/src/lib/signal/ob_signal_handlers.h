@@ -21,6 +21,8 @@ namespace oceanbase
 {
 namespace common
 {
+extern int minicoredump(int sig, int64_t tid, pid_t& pid);
+extern int faststack();
 } // namespace common
 } // namespace oceanbase
 

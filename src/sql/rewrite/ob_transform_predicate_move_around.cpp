@@ -1565,7 +1565,8 @@ int ObTransformPredicateMoveAround::pushdown_into_set_stmt(ObSelectStmt *stmt,
         LOG_WARN("assign preds failed", K(ret));
       } else if (OB_FAIL(append(pushdown_preds, invalid_pushdown_preds))) {
         LOG_WARN("failed to append no push down preds", K(ret));
-      } else if (pushdown_preds.count() != pushdown_preds_cnt
+      } else if ((pushdown_preds.count() != pushdown_preds_cnt
+                 || (stmt->is_set_stmt() && ObOptimizerUtil::find_item(transed_stmts_, stmt)))
                  && OB_FAIL(add_var_to_array_no_dup(transed_stmts_, static_cast<ObDMLStmt*>(parent_stmt)))) {
         LOG_WARN("append transed stmt failed", K(ret));
       } else {/*do nothing*/}

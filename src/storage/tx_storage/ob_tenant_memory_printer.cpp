@@ -106,7 +106,6 @@ int ObTenantMemoryPrinter::print_tenant_usage()
           if (is_deleted_tenant) {
             mallocator->print_tenant_memory_usage(id);
             mallocator->print_tenant_ctx_memory_usage(id);
-            mallocator->print_malloc_sample(id);
           }
         }
       }

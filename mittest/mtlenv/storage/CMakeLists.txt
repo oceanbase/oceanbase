@@ -7,7 +7,6 @@ storage_dml_unittest(test_tablet_create_delete_helper test_tablet_create_delete_
 storage_dml_unittest(test_tablet_status test_tablet_status.cpp)
 storage_dml_unittest(test_ls_migration_param test_ls_migration_param.cpp)
 storage_dml_unittest(test_ls_tablet_service test_ls_tablet_service.cpp)
-storage_unittest(test_memtable test_memtable_v2.cpp)
 #storage_dml_unittest(test_lob_manager test_lob_manager.cpp)
 storage_unittest(test_trans test_trans.cpp)
 storage_unittest(test_ls_restore_task_mgr)

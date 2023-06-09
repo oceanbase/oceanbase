@@ -168,6 +168,13 @@ char *parray(char *buf, int64_t len, int64_t *array, int size)
   return buf;
 }
 
+void addrs_to_offsets(void **buffer, int size)
+{
+  for (int64_t i = 0; i < size; i++) {
+    buffer[i] = (void*)get_rel_offset((int64_t)buffer[i]);
+  }
+}
+
 EXTERN_C_BEGIN
 int ob_backtrace_c(void **buffer, int size)
 {

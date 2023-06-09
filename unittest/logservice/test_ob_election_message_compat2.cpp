@@ -764,7 +764,7 @@ TEST_F(TestElectionMsgCompat2, old_to_new) {
   LogConfigVersion config_version;
   config_version.generate(1, 1);
   int64_t pos = 0;
-  unittest::ElectionAcceptRequestMsg msg_request_old(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, 123, 234, config_version);
+  unittest::ElectionAcceptRequestMsg msg_request_old(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, LsBiggestMinClusterVersionEverSeen(CLUSTER_VERSION_4_1_0_0), 123, 234, config_version);
   palf::election::ElectionAcceptRequestMsg msg_request_new;
   ASSERT_EQ(msg_request_old.serialize(buffer, BUFFER_SIZE, pos), OB_SUCCESS);
   int64_t pos2 = 0;
@@ -773,7 +773,7 @@ TEST_F(TestElectionMsgCompat2, old_to_new) {
   ASSERT_EQ(msg_request_new.flag_not_less_than_4_2_, false);
 
   ElectionPriorityImpl priority;
-  unittest::ElectionAcceptResponseMsg msg_response_old(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, config_version, msg_request_old);
+  unittest::ElectionAcceptResponseMsg msg_response_old(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, config_version, LsBiggestMinClusterVersionEverSeen(CLUSTER_VERSION_4_1_0_0), msg_request_old);
   palf::election::ElectionAcceptResponseMsg msg_response_new;
   ASSERT_EQ(msg_response_old.set_accepted(1, &priority), OB_SUCCESS);
   pos = 0;
@@ -794,7 +794,7 @@ TEST_F(TestElectionMsgCompat2, new_to_old_fake_new) {
   int64_t pos = 0;
   ASSERT_EQ(observer::ObServer::get_instance().is_arbitration_mode(), false);
   ASSERT_EQ(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0, true);
-  palf::election::ElectionAcceptRequestMsg msg_request_new(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, 123, 234, config_version);
+  palf::election::ElectionAcceptRequestMsg msg_request_new(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, LsBiggestMinClusterVersionEverSeen(CLUSTER_VERSION_4_1_0_0), 123, 234, config_version);
   ASSERT_EQ(msg_request_new.flag_not_less_than_4_2_, false);
   unittest::ElectionAcceptRequestMsg msg_request_old;
   int64_t serialize_size = msg_request_new.get_serialize_size();
@@ -805,7 +805,7 @@ TEST_F(TestElectionMsgCompat2, new_to_old_fake_new) {
   ASSERT_EQ(pos, pos2);
 
   ElectionPriorityImpl priority;
-  palf::election::ElectionAcceptResponseMsg msg_response_new(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, config_version, msg_request_old);
+  palf::election::ElectionAcceptResponseMsg msg_response_new(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, config_version, LsBiggestMinClusterVersionEverSeen(CLUSTER_VERSION_4_1_0_0), msg_request_old);
   ASSERT_EQ(msg_response_new.flag_not_less_than_4_2_, false);
   unittest::ElectionAcceptResponseMsg msg_response_old;
   ASSERT_EQ(msg_response_new.set_accepted(1, &priority), OB_SUCCESS);
@@ -828,7 +828,7 @@ TEST_F(TestElectionMsgCompat2, new_to_new_real_new) {
   int64_t pos = 0;
   ASSERT_EQ(observer::ObServer::get_instance().is_arbitration_mode(), false);
   ASSERT_EQ(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0, false);
-  palf::election::ElectionAcceptRequestMsg msg_request_src(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, 123, 234, config_version);
+  palf::election::ElectionAcceptRequestMsg msg_request_src(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, LsBiggestMinClusterVersionEverSeen(CLUSTER_VERSION_4_1_0_0), 123, 234, config_version);
   ASSERT_EQ(msg_request_src.flag_not_less_than_4_2_, true);
   palf::election::ElectionAcceptRequestMsg msg_request_dst;
   int64_t serialize_size = msg_request_src.get_serialize_size();
@@ -840,7 +840,7 @@ TEST_F(TestElectionMsgCompat2, new_to_new_real_new) {
   ASSERT_EQ(msg_request_dst.flag_not_less_than_4_2_, true);
 
   ElectionPriorityImpl priority;
-  palf::election::ElectionAcceptResponseMsg msg_response_src(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, config_version, msg_request_dst);
+  palf::election::ElectionAcceptResponseMsg msg_response_src(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, config_version,  LsBiggestMinClusterVersionEverSeen(CLUSTER_VERSION_4_1_0_0), msg_request_dst);
   ASSERT_EQ(msg_response_src.flag_not_less_than_4_2_, true);
   palf::election::ElectionAcceptResponseMsg msg_response_dst;
   ASSERT_EQ(msg_response_src.set_accepted(1, &priority), OB_SUCCESS);

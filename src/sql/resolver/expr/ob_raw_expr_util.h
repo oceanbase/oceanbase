@@ -428,6 +428,14 @@ public:
                                      const ObExprResType &dst_type,
                                      const ObCastMode &cm,
                                      ObRawExpr *&new_expr);
+
+  static int implict_cast_pl_udt_to_sql_udt(ObRawExprFactory *expr_factory,
+                                            const ObSQLSessionInfo *session,
+                                            ObRawExpr* &real_ref_expr);
+
+  static int implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factory,
+                                            const ObSQLSessionInfo *session,
+                                            ObRawExpr* &real_ref_expr);
   // new engine: may create more cast exprs to handle non-system-collation string.
   //             e.g.: utf16->number: utf16->utf8->number (two cast expr)
   //                   utf8_bin->number: utf8->number (just one cat expr)
@@ -730,6 +738,10 @@ public:
                                ObItemType type,
                                ObRawExpr *param_expr,
                                ObRawExpr *&exists_expr);
+  static int build_ora_decode_expr(ObRawExprFactory *expr_factory,
+                                   const ObSQLSessionInfo &session_info,
+                                   ObRawExpr *&expr,
+                                   ObIArray<ObRawExpr *> &param_exprs);
   template <typename T>
   static bool find_expr(const common::ObIArray<T> &exprs, const ObRawExpr* expr);
   template <typename T>

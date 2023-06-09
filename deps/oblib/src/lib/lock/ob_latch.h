@@ -251,7 +251,7 @@ public:
   }
   static thread_local uint32_t* current_locks[16];
   static thread_local uint32_t* current_wait;
-  static thread_local int8_t max_lock_slot_idx;
+  static thread_local uint8_t max_lock_slot_idx;
 private:
   template<typename LowTryLock>
   OB_INLINE int low_lock(

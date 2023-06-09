@@ -79,11 +79,14 @@ public:
     int64_t pos = 0;
     int ret = OB_SUCCESS;
     ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
-    if (OB_FAIL(databuff_printf(value_str_, sizeof(value_str_), pos,
-                                "%.*s", string.length(), string.ptr()))) {
+    const char *ptr = value_ptr();
+    if (nullptr == ptr) {
+      value_valid_ = false;
+    } else if (OB_FAIL(databuff_printf(const_cast<char *>(ptr), value_len(), pos,
+                                       "%.*s", string.length(), string.ptr()))) {
       value_valid_ = false;
     } else {
-      value_valid_ = set(value_str_);
+      value_valid_ = set(ptr);
       if (inited_ && value_valid_) {
         value_updated_ = true;
       }
@@ -95,7 +98,10 @@ public:
     int64_t pos = 0;
     int ret = OB_SUCCESS;
     ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
-    if (OB_FAIL(databuff_printf(value_str_, sizeof(value_str_), pos, "%s", str))) {
+    const char *ptr = value_ptr();
+    if (nullptr == ptr) {
+      value_valid_ = false;
+    } else if (OB_FAIL(databuff_printf(const_cast<char *>(ptr), value_len(), pos, "%s", str))) {
       value_valid_ = false;
     } else {
       value_valid_ = set(str);
@@ -110,7 +116,12 @@ public:
   {
     int64_t pos = 0;
     int ret = OB_SUCCESS;
-    ret = databuff_printf(value_reboot_str_, sizeof(value_reboot_str_), pos, "%s", str);
+    const char *ptr = value_reboot_ptr();
+    if (nullptr == ptr) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      ret = databuff_printf(const_cast<char *>(ptr), value_reboot_len(), pos, "%s", str);
+    }
     return ret == OB_SUCCESS;
   }
   virtual bool set_dump_value(const char *str)
@@ -152,16 +163,16 @@ public:
   const char *str() const
   {
     ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
-    return value_str_;
+    return value_ptr();
   }
   virtual const char *spfile_str() const
   {
     const char *ret = nullptr;
     ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
     if (reboot_effective() && is_initial_value_set()) {
-      ret = value_reboot_str_;
+      ret = value_reboot_ptr();
     } else {
-      ret = value_str_;
+      ret = value_ptr();
     }
     return ret;
   }
@@ -204,6 +215,10 @@ public:
 protected:
   //use current value to do input operation
   virtual bool set(const char *str) = 0;
+  virtual const char *value_ptr() const = 0;
+  virtual const char *value_reboot_ptr() const = 0;
+  virtual uint64_t value_len() const = 0;
+  virtual uint64_t value_reboot_len() const = 0;
 
   const ObConfigChecker *ck_;
   int64_t version_;
@@ -212,15 +227,13 @@ protected:
   bool initial_value_set_;
   bool value_updated_;
   bool value_valid_;
-  char value_str_[OB_MAX_CONFIG_VALUE_LEN];
-  char value_reboot_str_[OB_MAX_CONFIG_VALUE_LEN];
   const char* name_str_;
   const char* info_str_;
   const char* range_str_;
   common::ObLatch lock_;
 private:
   ObParameterAttr attr_;
-  // DISALLOW_COPY_AND_ASSIGN(ObConfigItem);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigItem);
 };
 
 class ObConfigIntListItem
@@ -254,6 +267,22 @@ public:
 protected:
   //use current value to do input operation
   bool set(const char *str);
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
 
   static const int64_t MAX_INDEX_SIZE = 64;
   struct ObInnerConfigIntListItem
@@ -271,6 +300,9 @@ protected:
   };
 
   struct ObInnerConfigIntListItem value_;
+  static const uint64_t VALUE_BUF_SIZE = 32 * MAX_INDEX_SIZE;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigIntListItem);
@@ -323,6 +355,7 @@ public:
 
 public:
   static const int64_t MAX_INDEX_SIZE = 64;
+  static const uint64_t VALUE_BUF_SIZE = 65536UL;
   struct ObInnerConfigStrListItem
   {
     ObInnerConfigStrListItem()
@@ -367,7 +400,7 @@ public:
     bool valid_;
     int64_t size_;
     int64_t idx_list_[MAX_INDEX_SIZE];
-    char value_str_bk_[OB_MAX_CONFIG_VALUE_LEN];
+    char value_str_bk_[VALUE_BUF_SIZE];
     ObLatch rwlock_;
   };
 
@@ -376,6 +409,25 @@ public:
 protected:
   //use current value to do input operation
   bool set(const char *str);
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigStrListItem);
@@ -420,7 +472,7 @@ protected:
 
 private:
   int64_t value_;
-  // DISALLOW_COPY_AND_ASSIGN(ObConfigIntegralItem);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigIntegralItem);
 };
 inline bool ObConfigIntegralItem::set(const char *str)
 {
@@ -483,10 +535,30 @@ protected:
   //use current value to do input operation
   bool set(const char *str);
   double parse(const char *str, bool &valid) const;
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+
+  static const uint64_t VALUE_BUF_SIZE = 64UL;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
   double value_;
-  // DISALLOW_COPY_AND_ASSIGN(ObConfigDoubleItem);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDoubleItem);
 };
 inline ObConfigDoubleItem &ObConfigDoubleItem::operator = (double value)
 {
@@ -537,9 +609,29 @@ public:
 
 protected:
   int64_t parse(const char *str, bool &valid) const;
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  char const *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+
+  static const uint64_t VALUE_BUF_SIZE = 32UL;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
-  //DISALLOW_COPY_AND_ASSIGN(ObConfigCapacityItem);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigCapacityItem);
 };
 inline ObConfigCapacityItem &ObConfigCapacityItem::operator = (int64_t value)
 {
@@ -573,6 +665,29 @@ public:
 
 protected:
   int64_t parse(const char *str, bool &valid) const;
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+
+  static const uint64_t VALUE_BUF_SIZE = 32UL;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTimeItem);
 };
 inline ObConfigTimeItem &ObConfigTimeItem::operator = (int64_t value){
   char buf[2L<<10];
@@ -605,9 +720,29 @@ public:
 
 protected:
   int64_t parse(const char *str, bool &valid) const;
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+
+  static const uint64_t VALUE_BUF_SIZE = 32UL;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
-  //DISALLOW_COPY_AND_ASSIGN(ObConfigIntItem);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigIntItem);
 };
 inline ObConfigIntItem &ObConfigIntItem::operator = (int64_t value)
 {
@@ -640,9 +775,15 @@ public:
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_MOMENT;
   }
+  ObConfigMomentItem &operator=(const char *str)
+  {
+    if (!set_value(str)) {
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig moment item set value failed");
+    }
+    return *this;
+  }
 
 public:
-  static const int64_t MAX_INDEX_SIZE = 64;
   struct ObInnerConfigMomentItem
   {
     ObInnerConfigMomentItem() : disable_(true), hour_(-1), minute_(-1) {}
@@ -653,9 +794,30 @@ public:
     int minute_;
   };
 
+protected:
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+  static const uint64_t VALUE_BUF_SIZE = 64UL;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
+
 private:
   struct ObInnerConfigMomentItem value_;
-  //DISALLOW_COPY_AND_ASSIGN(ObConfigMomentItem);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMomentItem);
 };
 
 class ObConfigBoolItem
@@ -681,10 +843,30 @@ protected:
   //use current value to do input operation
   bool set(const char *str);
   bool parse(const char *str, bool &valid) const;
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+
+  static const uint64_t VALUE_BUF_SIZE = 8UL;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
   bool value_;
-  //DISALLOW_COPY_AND_ASSIGN(ObConfigBoolItem);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigBoolItem);
 };
 
 class ObConfigStringItem : public ObConfigItem
@@ -719,13 +901,40 @@ public:
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_STRING;
   }
+  ObConfigStringItem &operator=(const char *str)
+  {
+    if (!set_value(str)) {
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obconfig string item set value failed");
+    }
+    return *this;
+  }
 
 protected:
   //use current value to do input operation
   bool set(const char *str) { UNUSED(str); return true; }
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+
+  static const uint64_t VALUE_BUF_SIZE = 65536UL;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
-  //DISALLOW_COPY_AND_ASSIGN(ObConfigStringItem);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigStringItem);
 };
 
 //config item like "MANDATORY COMPRESSION=lz4_1.0"
@@ -839,6 +1048,27 @@ protected:
   void process_isolated_option_(const int64_t idx);
   void process_kv_option_(const int64_t key_idx, const char *value);
 
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+
+  static const uint64_t VALUE_BUF_SIZE = 2048UL;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogArchiveOptionsItem);
 };
@@ -898,8 +1128,27 @@ public:
 protected:
   virtual bool set(const char *str) override;
   virtual int64_t parse(const char *str, bool &valid) const override;
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
 
-  char value_dump_str_[32]; // 32 is enough for version like 4.2.0.0
+  static const uint64_t VALUE_BUF_SIZE = 32UL; // 32 is enough for version like 4.2.0.0
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_dump_str_[VALUE_BUF_SIZE];
   bool dump_value_updated_;
 
 private:

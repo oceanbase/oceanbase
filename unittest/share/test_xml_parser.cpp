@@ -2685,6 +2685,7 @@ TEST_F(TestXmlParser, test_xml_bin_to_binary)
   ObXmlParser parser(ctx);
   ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
   ASSERT_NE(nullptr, (doc = parser.document()));
+  doc->set_xml_type(M_CONTENT);
 
   ObString bin;
   ObString text;

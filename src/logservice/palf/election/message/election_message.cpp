@@ -101,11 +101,13 @@ ElectionMsgBase::ElectionMsgBase(const int64_t id,
                                  const common::ObAddr &self_addr,
                                  const int64_t restart_counter,
                                  const int64_t ballot_number,
+                                 const LsBiggestMinClusterVersionEverSeen &version,
                                  const ElectionMsgType msg_type) :
 id_(id),
 sender_(self_addr),
 restart_counter_(restart_counter),
 ballot_number_(ballot_number),
+biggest_min_cluster_version_ever_seen_(version),
 msg_type_(static_cast<int64_t>(msg_type)) {
   debug_ts_.src_construct_ts_ = ObClockGenerator::getRealClock();
 }
@@ -116,6 +118,7 @@ void ElectionMsgBase::reset()
   receiver_.reset();
   restart_counter_ = INVALID_VALUE;
   ballot_number_ = INVALID_VALUE;
+  biggest_min_cluster_version_ever_seen_.version_ = 0;
   msg_type_ = static_cast<int64_t>(ElectionMsgType::INVALID_TYPE);
 }
 
@@ -124,6 +127,9 @@ void ElectionMsgBase::set_receiver(const common::ObAddr &addr) { receiver_ = add
 int64_t ElectionMsgBase::get_restart_counter() const { return restart_counter_; }
 
 int64_t ElectionMsgBase::get_ballot_number() const { return ballot_number_; }
+
+const LsBiggestMinClusterVersionEverSeen &ElectionMsgBase::get_ls_biggest_min_cluster_version_ever_seen() const
+{ return biggest_min_cluster_version_ever_seen_; }
 
 bool ElectionMsgBase::is_valid() const
 {
@@ -155,12 +161,14 @@ ElectionPrepareRequestMsgMiddle::ElectionPrepareRequestMsgMiddle(const int64_t i
                                                                  const common::ObAddr &self_addr,
                                                                  const int64_t restart_counter,
                                                                  const int64_t ballot_number,
+                                                                 const LsBiggestMinClusterVersionEverSeen &version,
                                                                  const uint64_t inner_priority_seed,
                                                                  const LogConfigVersion membership_version) :
 ElectionMsgBase(id,
                 self_addr,
                 restart_counter,
                 ballot_number,
+                version,
                 ElectionMsgType::PREPARE_REQUEST),
 role_(ObRole::INVALID_ROLE),
 is_buffer_valid_(false),
@@ -210,11 +218,13 @@ accepted_(false) {}
 
 ElectionPrepareResponseMsgMiddle::
 ElectionPrepareResponseMsgMiddle(const ObAddr &self_addr,
+                                 const LsBiggestMinClusterVersionEverSeen &version,
                                  const ElectionPrepareRequestMsgMiddle &request) :
 ElectionMsgBase(request.get_id(),
                 self_addr,
                 request.get_restart_counter(),
                 INVALID_VALUE,
+                version,
                 ElectionMsgType::PREPARE_RESPONSE),
 accepted_(false) {
   set_receiver(request.get_sender());
@@ -250,6 +260,7 @@ ElectionAcceptRequestMsgMiddle::ElectionAcceptRequestMsgMiddle(const int64_t id,
                                                                const ObAddr &self_addr,
                                                                const int64_t restart_counter,
                                                                const int64_t ballot_number,
+                                                               const LsBiggestMinClusterVersionEverSeen &version,
                                                                const int64_t lease_start_ts_on_proposer,
                                                                const int64_t lease_interval,
                                                                const LogConfigVersion membership_version) :
@@ -257,6 +268,7 @@ ElectionMsgBase(id,
                 self_addr,
                 restart_counter,
                 ballot_number,
+                version,
                 ElectionMsgType::ACCEPT_REQUEST),
 lease_start_ts_on_proposer_(lease_start_ts_on_proposer),
 lease_interval_(lease_interval),
@@ -289,11 +301,13 @@ ElectionAcceptResponseMsgMiddle::
 ElectionAcceptResponseMsgMiddle(const ObAddr &self_addr,
                                 const uint64_t inner_priority_seed,
                                 const LogConfigVersion &membership_version,
+                                const LsBiggestMinClusterVersionEverSeen &version,
                                 const ElectionAcceptRequestMsgMiddle &request) :
 ElectionMsgBase(request.get_id(),
                 self_addr,
                 request.get_restart_counter(),
                 INVALID_VALUE,
+                version,
                 ElectionMsgType::ACCEPT_RESPONSE),
 lease_started_ts_on_proposer_(request.get_lease_start_ts_on_proposer()),
 lease_interval_(request.get_lease_interval()),
@@ -361,12 +375,14 @@ ElectionChangeLeaderMsgMiddle::ElectionChangeLeaderMsgMiddle(const int64_t id,
                                                              const ObAddr &self_addr,
                                                              const int64_t restart_counter,
                                                              const int64_t ballot_number,
+                                                             const LsBiggestMinClusterVersionEverSeen &version,
                                                              int64_t switch_source_leader_ballot,
                                                              const LogConfigVersion membership_version) :
 ElectionMsgBase(id,
                 self_addr,
                 restart_counter,
                 ballot_number,
+                version,
                 ElectionMsgType::CHANGE_LEADER),
 switch_source_leader_ballot_(switch_source_leader_ballot),
 membership_version_(membership_version) {}

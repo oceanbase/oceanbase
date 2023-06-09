@@ -773,5 +773,97 @@ OB_SERIALIZE_MEMBER(LogGetStatResp, max_scn_, end_lsn_);
 // ================= LogGetStatResp end ================
 
 
+LogBatchFetchResp::LogBatchFetchResp()
+    : msg_proposal_id_(INVALID_PROPOSAL_ID),
+      prev_log_proposal_id_(INVALID_PROPOSAL_ID),
+      prev_lsn_(),
+      curr_lsn_(),
+      write_buf_()
+{
+}
+
+LogBatchFetchResp::LogBatchFetchResp(const int64_t msg_proposal_id,
+                                     const int64_t prev_log_proposal_id,
+                                     const LSN &prev_lsn,
+                                     const LSN &curr_lsn,
+                                     const LogWriteBuf &write_buf)
+    : msg_proposal_id_(msg_proposal_id),
+      prev_log_proposal_id_(prev_log_proposal_id),
+      prev_lsn_(prev_lsn),
+      curr_lsn_(curr_lsn),
+      write_buf_(write_buf)
+{
+}
+
+LogBatchFetchResp::~LogBatchFetchResp()
+{
+  reset();
+}
+
+bool LogBatchFetchResp::is_valid() const
+{
+  return INVALID_PROPOSAL_ID != msg_proposal_id_
+      && true == curr_lsn_.is_valid()
+      && true == write_buf_.is_valid();
+}
+
+void LogBatchFetchResp::reset()
+{
+  msg_proposal_id_ = INVALID_PROPOSAL_ID;
+  prev_log_proposal_id_ = INVALID_PROPOSAL_ID;
+  prev_lsn_.reset();
+  curr_lsn_.reset();
+  write_buf_.reset();
+}
+
+OB_DEF_SERIALIZE(LogBatchFetchResp)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (NULL == buf || pos < 0 || pos > buf_len) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, msg_proposal_id_))
+             || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, prev_log_proposal_id_))
+             || OB_FAIL(prev_lsn_.serialize(buf, buf_len, new_pos))
+             || OB_FAIL(curr_lsn_.serialize(buf, buf_len, new_pos))
+             || OB_FAIL(write_buf_.serialize(buf, buf_len, new_pos))) {
+    PALF_LOG(ERROR, "LogBatchFetchResp serialize failed", K(ret), K(new_pos));
+  } else {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(LogBatchFetchResp)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (NULL == buf || pos < 0 || pos > data_len) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos,
+                                               reinterpret_cast<int64_t *>(&msg_proposal_id_)))
+             || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos,
+                                               reinterpret_cast<int64_t *>(&prev_log_proposal_id_)))
+             || OB_FAIL(prev_lsn_.deserialize(buf, data_len, new_pos))
+             || OB_FAIL(curr_lsn_.deserialize(buf, data_len, new_pos))
+             || OB_FAIL(write_buf_.deserialize(buf, data_len, new_pos))) {
+    PALF_LOG(ERROR, "LogBatchFetchResp deserialize failed", K(ret), K(new_pos));
+  } else {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(LogBatchFetchResp)
+{
+  int64_t size = 0;
+  size += serialization::encoded_length_i64(msg_proposal_id_);
+  size += serialization::encoded_length_i64(prev_log_proposal_id_);
+  size += prev_lsn_.get_serialize_size();
+  size += curr_lsn_.get_serialize_size();
+  size += write_buf_.get_serialize_size();
+  return size;
+}
+
 } // end namespace palf
 } // end namespace oceanbase

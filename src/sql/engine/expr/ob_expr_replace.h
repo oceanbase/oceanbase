@@ -39,6 +39,7 @@ public:
 
   // helper func
   static int replace(common::ObString &result,
+                     const ObCollationType cs_type,
                      const common::ObString &text,
                      const common::ObString &from,
                      const common::ObString &to,

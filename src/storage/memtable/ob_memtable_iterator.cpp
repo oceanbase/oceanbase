@@ -396,6 +396,11 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "Unexpected null columns desc", K(ret), K_(param));
         } else {
+          if (row_scn == share::SCN::max_scn().get_val_for_tx()) {
+            // TODO(handora.qc): remove it as if we confirmed no problem according to row_scn
+            TRANS_LOG(INFO, "use max row scn", KPC(value_iter->get_mvcc_acc_ctx()), K(trans_stat_row));
+          }
+
           for (int64_t i = 0; i < out_cols->count(); i++) {
             if (out_cols->at(i).col_id_ == OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
               row_.storage_datums_[i].reuse();
@@ -1439,9 +1444,11 @@ OB_INLINE int ObReadRow::iterate_row_value_(
         const ObMvccTransNode *tx_node = reinterpret_cast<const ObMvccTransNode *>(tnode);
         const ObTransID snapshot_tx_id = value_iter.get_snapshot_tx_id();
         const ObTransID reader_tx_id = value_iter.get_reader_tx_id();
-        row_scn = tx_node->trans_version_.get_val_for_tx();
-        if (!value_iter.get_mvcc_acc_ctx()->is_standby_read_ && (!(snapshot_tx_id == tx_node->get_tx_id() || reader_tx_id == tx_node->get_tx_id())
-            && tx_node->trans_version_.is_max())) {
+        share::SCN row_version = tx_node->trans_version_;
+        row_scn = row_version.get_val_for_tx();
+        if (!value_iter.get_mvcc_acc_ctx()->is_standby_read_
+            && !(snapshot_tx_id == tx_node->get_tx_id() || reader_tx_id == tx_node->get_tx_id())
+            && row_version.is_max()) {
           TRANS_LOG(ERROR, "meet row scn with undecided value", KPC(tx_node),
                     K(is_committed), K(trans_version), K(value_iter));
         }

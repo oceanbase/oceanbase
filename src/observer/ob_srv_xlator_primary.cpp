@@ -197,6 +197,7 @@ void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(palf::LogPushReqP);
   RPC_PROCESSOR(palf::LogPushRespP);
   RPC_PROCESSOR(palf::LogFetchReqP);
+  RPC_PROCESSOR(palf::LogBatchFetchRespP);
   RPC_PROCESSOR(palf::LogPrepareReqP);
   RPC_PROCESSOR(palf::LogPrepareRespP);
   RPC_PROCESSOR(palf::LogChangeConfigMetaReqP);

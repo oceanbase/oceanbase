@@ -229,10 +229,6 @@ int ObExprLike::calc_with_non_instr_mode(T &result,
   } else if (text_val.length() <= 0 && pattern_val.length() <= 0) {
     // empty string
     result.set_int(1);
-  } else if (OB_UNLIKELY(CS_TYPE_UTF8MB4_BIN != coll_type && escape_wc == static_cast<int32_t>('%'))) {
-    // when cs_type is not utf8mb4_bin and escape = %, there is a bug of wildcmp
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "escape %");
   } else {
     bool b = ObCharset::wildcmp(coll_type, text_val, pattern_val, escape_wc,
                                 static_cast<int32_t>('_'), static_cast<int32_t>('%'));

@@ -94,6 +94,7 @@ private:
         cur_expr_is_precise_(false),
         phy_rowid_for_table_loc_(false),
         ignore_calc_failure_(false),
+        range_optimizer_max_mem_size_(100*1024*1024),
         exec_ctx_(exec_ctx),
         expr_constraints_(expr_constraints),
         params_(params)
@@ -102,21 +103,6 @@ private:
     ~ObQueryRangeCtx()
     {
     }
-    // void clear()
-    // {
-    //   key_part_map_.reset();
-    //   key_part_pos_array_.reset();
-    //   need_final_extract_ = false;
-    // }
-    // void reset()
-    // {
-    //   clear();
-    //   precise_range_exprs_.reset();
-    //   final_exprs_.reset();
-    //   expr_constraints_ = NULL;
-    //   params_ = NULL;
-    //   cur_expr_is_precise_ = false;
-    // }
     //131的原因是最大的rowkey个数是128，距离128最近的素数是131
     common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos*, 131> key_part_map_;
     bool need_final_extract_;
@@ -124,6 +110,7 @@ private:
     bool cur_expr_is_precise_; //当前正在被抽取的表达式是精确的范围，没有被放大
     bool phy_rowid_for_table_loc_;
     bool ignore_calc_failure_;
+    int64_t range_optimizer_max_mem_size_;
     common::ObSEArray<ObRangeExprItem, 4, common::ModulePageAllocator, true> precise_range_exprs_;
     ObExecContext *exec_ctx_;
     ExprConstrantArray *expr_constraints_;
@@ -929,6 +916,9 @@ private:
   bool is_equal_and_;
   common::ObFixedArray<ObEqualOff, common::ObIAllocator> equal_offs_;
   common::ObFixedArray<ExprFinalInfo, common::ObIAllocator> expr_final_infos_;
+  // NOTE: following two members are not allowed to be serialize or deep copy
+  int64_t mem_used_;
+  bool is_reach_mem_limit_;
   friend class ObKeyPart;
 };
 } // namespace sql-

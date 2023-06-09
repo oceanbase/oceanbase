@@ -43,8 +43,7 @@ public:
   int64_t last_renew_time(void) const;
   void reset_idle_conn_to_sys_tenant();
   void set_server_gone(bool gone);
-  const char *get_db_user() const;
-  const char *get_db_pass() const;
+  const char *get_db_user() const;   const char *get_db_pass() const;
   const char *get_db_name() const;
   common::ObAddr &get_server();
   ObMySQLConnectionPool *get_root();
@@ -54,13 +53,15 @@ public:
                K_(free_conn_count),
                K_(busy_conn_count));
   // dblink.
-  int init_dblink(uint64_t dblink_id, const ObAddr &server,
+  int init_dblink(uint64_t tenant_id, uint64_t dblink_id, const ObAddr &server,
                   const ObString &db_tenant, const ObString &db_user,
                   const ObString &db_pass, const ObString &db_name,
                   const common::ObString &conn_str,
                   const common::ObString &cluster_str,
                   ObMySQLConnectionPool *root, int64_t max_allowed_conn_count);
   uint64_t get_dblink_id() const;
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(uint64_t v) { tenant_id_ = v; }
   int free_dblink_session(uint32_t sessid) override;
 private:
   ObSimpleConnectionAllocator<ObMySQLConnection> connection_pool_;
@@ -68,6 +69,7 @@ private:
   ObIConnectionAllocator<ObMySQLConnection> *connection_pool_ptr_;
   ObMySQLConnectionPool *root_;
   uint64_t dblink_id_;
+  uint64_t tenant_id_;
   char db_user_[OB_MAX_USER_NAME_LENGTH + OB_MAX_TENANT_NAME_LENGTH + OB_MAX_CLUSTER_NAME_LENGTH + 1];
   char db_pass_[OB_MAX_PASSWORD_LENGTH];
   char db_name_[OB_MAX_DATABASE_NAME_LENGTH];

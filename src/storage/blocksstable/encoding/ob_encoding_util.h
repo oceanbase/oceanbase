@@ -18,6 +18,7 @@
 #include "common/object/ob_object.h"
 #include "common/ob_action_flag.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -603,8 +604,7 @@ private:
       ret = common::OB_SIZE_OVERFLOW;
       STORAGE_LOG(WARN, "size will overflow", K(ret), K_(size), K(block_cnt), K(cur_cnt));
     } else {
-      common::ObMemAttr ma;
-      ma.label_ = blocksstable::OB_ENCODING_LABEL_PIVOT;
+      common::ObMemAttr ma(MTL_ID(), blocksstable::OB_ENCODING_LABEL_PIVOT);
       for (int64_t i = 0; i < block_cnt && OB_SUCC(ret); ++i) {
         if (NULL == block_list_[cur_cnt + i]) {
           T *block = static_cast<T *>(common::ob_malloc(BLOCK_SIZE, ma));

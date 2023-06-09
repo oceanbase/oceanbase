@@ -106,6 +106,7 @@ public:
                                                      int64_t &paxos_replica_num,
                                                      common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
+  //  get leader from election, used only for non_palf_leader rebuilding.
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int change_replica_num(const common::ObMemberList &member_list,
                                  const int64_t curr_replica_num,
@@ -322,7 +323,7 @@ public:
   // @brief, get global learner list of this paxos group
   // @param[out] common::GlobalLearnerList&
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
-  // @brief, get leader from election, used for non_palf_leader rebuilding
+  // @brief, get leader from election, used only for non_palf_leader rebuilding
   // @param[out] addr: address of leader
   // retval:
   //   OB_SUCCESS

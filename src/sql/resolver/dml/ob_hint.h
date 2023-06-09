@@ -91,6 +91,7 @@ struct ObOptParamHint
     DEF(USE_PART_SORT_MGB,)               \
     DEF(USE_DEFAULT_OPT_STAT,)            \
     DEF(USE_FORCE_BLOCK_SAMPLE,)          \
+    DEF(ENABLE_IN_RANGE_OPTIMIZATION,)    \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

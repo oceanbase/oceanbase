@@ -431,8 +431,6 @@ private:
 
   int left_join_can_be_eliminated(ObDMLStmt *stmt, TableItem *table, bool &can_be_eliminated);
 
-  int preprocess_generate_right_table(ObDMLStmt &stmt, SemiInfo &semi_info);
-
   int eliminate_semi_join_self_key(ObDMLStmt *stmt,
                                    SemiInfo *semi_info,
                                    ObIArray<ObRawExpr*> &conds,

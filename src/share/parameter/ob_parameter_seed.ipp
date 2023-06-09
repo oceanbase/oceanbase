@@ -599,6 +599,10 @@ DEF_TIME(standby_db_fetch_log_rpc_timeout, OB_TENANT_PARAMETER, "15s",
         "When the rpc timeout, the log transport service switches to another server of the log restore source tenant to fetch logs. "
         "Range: [2s, +∞)",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_log_writer_parallelism, OB_TENANT_PARAMETER, "3",
+       "[1,8]",
+       "the number of parallel log writer threads that can be used to write redo log entries to disk. ",
+       ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",
@@ -1347,8 +1351,7 @@ DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
     "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(arbitration_timeout, OB_TENANT_PARAMETER, "5s", "[3s,]",
-        "timeout which will trigger automatic degrading when arbitration replica exists"
-        "Range: [3s,+∞]",
+        "The timeout before automatically degrading when arbitration member exists. Range: [3s,+∞]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ignore_system_memory_over_limit_error, OB_CLUSTER_PARAMETER, "False",
          "When the hold of observer tenant is over the system_memory, print ERROR with False, or WARN with True",
@@ -1487,6 +1490,12 @@ DEF_TIME(_wait_interval_after_truncate, OB_CLUSTER_PARAMETER, "30s", "[0s,)",
 DEF_CAP(_rebuild_replica_log_lag_threshold, OB_TENANT_PARAMETER, "0M", "[0M,)",
         "size of clog files that a replica lag behind leader to trigger rebuild, 0 means never trigger rebuild on purpose. Range: [0, +∞)",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "True",
         "Enable extract query range optimization for in predicate",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_force_explict_500_malloc, OB_CLUSTER_PARAMETER, "False",
+         "Force 500 memory for explicit allocation",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(range_optimizer_max_mem_size, OB_TENANT_PARAMETER, "128M", "[16M,1G]",
+        "to limit the memory consumption for the query range optimizer. Range: [16M,1G]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -53,7 +53,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
     ObCurTraceId::set(tmp_pkt.get_trace_id());
     obrpc::ObRpcPacketCode pcode = tmp_pkt.get_pcode();
     auto &set = obrpc::ObRpcPacketSet::instance();
-    const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
+    const char* pcode_label = set.label_of_idx(set.idx_of_pcode(pcode));
     const int64_t pool_size = sizeof(ObPocServerHandleContext) + sizeof(ObRequest) + sizeof(ObRpcPacket) + alloc_payload_sz;
     int64_t tenant_id = tmp_pkt.get_tenant_id();
     if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
@@ -285,6 +285,7 @@ bool ObPocRpcServer::client_use_pkt_nio() {
 extern "C" {
 void* pkt_nio_malloc(int64_t sz, const char* label) {
   ObMemAttr attr(OB_SERVER_TENANT_ID, label, ObCtxIds::PKT_NIO);
+  SET_USE_500(attr);
   return oceanbase::common::ob_malloc(sz, attr);
 }
 void pkt_nio_free(void *ptr) {
@@ -305,6 +306,8 @@ int dispatch_to_ob_listener(int accept_fd) {
 int tranlate_to_ob_error(int err) {
   int ret = OB_SUCCESS;
   if (PNIO_OK == err) {
+  } else if (PNIO_STOPPED == err) {
+    ret = OB_RPC_SEND_ERROR;
   } else if (PNIO_LISTEN_ERROR == err) {
     ret = OB_SERVER_LISTEN_ERROR;
   } else if (ENOMEM == err || -ENOMEM == err) {

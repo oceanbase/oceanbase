@@ -446,7 +446,7 @@ int ObDbLinkProxy::create_dblink_pool(uint64_t tenant_id, uint64_t dblink_id, Db
   return ret;
 }
 
-int ObDbLinkProxy::acquire_dblink(uint64_t dblink_id,
+int ObDbLinkProxy::acquire_dblink(uint64 tenant_id, uint64_t dblink_id,
                                   DblinkDriverProto dblink_type,
                                   const dblink_param_ctx &param_ctx,
                                   ObISQLConnection *&dblink_conn,
@@ -461,7 +461,8 @@ int ObDbLinkProxy::acquire_dblink(uint64_t dblink_id,
     LOG_WARN("dblink proxy not inited");
   } else if (OB_FAIL(switch_dblink_conn_pool(dblink_type, dblink_pool))) {
     LOG_WARN("failed to get dblink interface", K(ret), K(dblink_type));
-  } else if (OB_FAIL(dblink_pool->acquire_dblink(dblink_id, param_ctx, dblink_conn, sessid, sql_request_level))) {
+  } else if (OB_FAIL(dblink_pool->acquire_dblink(tenant_id, dblink_id, param_ctx, dblink_conn,
+                                                 sessid, sql_request_level))) {
     LOG_WARN("acquire dblink failed", K(ret), K(dblink_id), K(dblink_type));
   } else if (OB_FAIL(prepare_enviroment(dblink_conn, dblink_type, set_sql_mode_cstr))) {
     LOG_WARN("failed to prepare dblink env", K(ret));
@@ -593,6 +594,21 @@ int ObDbLinkProxy::rollback(ObISQLConnection *dblink_conn)
     LOG_WARN("dblink conn is NULL", K(ret));
   } else if (OB_FAIL(dblink_conn->rollback())) {
     LOG_WARN("read from dblink failed", K(ret));
+  }
+  return ret;
+}
+
+
+int ObDbLinkProxy::clean_dblink_connection(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(link_pool_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to switch dblink conn pool", K(ret));
+  } else {
+    if (OB_FAIL(link_pool_->get_mysql_pool().clean_dblink_connection(tenant_id))) {
+      LOG_WARN("clean mysql pool failed", K(ret));
+    }
   }
   return ret;
 }

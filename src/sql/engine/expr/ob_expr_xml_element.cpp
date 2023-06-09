@@ -41,6 +41,10 @@ int ObExprXmlElement::calc_result_typeN(ObExprResType& type,
   if (OB_UNLIKELY(param_num < 3)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(param_num));
+  } else if (!is_called_in_sql()) {
+    ret = OB_ERR_SP_LILABEL_MISMATCH;
+    LOG_WARN("expr call in pl semantics disallowed", K(ret), K(N_XML_ELEMENT));
+    LOG_USER_ERROR(OB_ERR_SP_LILABEL_MISMATCH, static_cast<int>(strlen(N_XML_ELEMENT)), N_XML_ELEMENT);
   } else {
     // check opt_escaping
     if (!ob_is_integer_type(types_stack[0].get_type())) {

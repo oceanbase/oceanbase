@@ -540,8 +540,10 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   int64_t leader_idx = 0;
   PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-  leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.has_batched_size_ = 0;
-  leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.handle_count_ = 0;
+  LogIOWorker *iow = leader.palf_handle_impl_->log_engine_.log_io_worker_;
+
+  iow->batch_io_task_mgr_.has_batched_size_ = 0;
+  iow->batch_io_task_mgr_.handle_count_ = 0;
   std::vector<PalfHandleImplGuard*> palf_list;
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   int64_t lag_follower_idx = (leader_idx + 1) % node_cnt_;
@@ -552,8 +554,8 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10000, leader_idx, 120));
   const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
-  const int64_t has_batched_size = leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.has_batched_size_;
-  const int64_t handle_count = leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.handle_count_;
+  const int64_t has_batched_size = iow->batch_io_task_mgr_.has_batched_size_;
+  const int64_t handle_count = iow->batch_io_task_mgr_.handle_count_;
   const int64_t log_id = leader.palf_handle_impl_->sw_.get_max_log_id();
   PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "batched_size", K(has_batched_size), K(log_id));
 
@@ -567,8 +569,9 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
     PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "follower is lagged", K(max_lsn), K(lag_follower_max_lsn));
     lag_follower_max_lsn = lag_follower.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   }
-  const int64_t follower_has_batched_size = lag_follower.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.has_batched_size_;
-  const int64_t follower_handle_count = lag_follower.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.handle_count_;
+  LogIOWorker *iow_follower = lag_follower.palf_handle_impl_->log_engine_.log_io_worker_;
+  const int64_t follower_has_batched_size = iow_follower->batch_io_task_mgr_.has_batched_size_;
+  const int64_t follower_handle_count = iow_follower->batch_io_task_mgr_.handle_count_;
   EXPECT_EQ(OB_SUCCESS, revert_cluster_palf_handle_guard(palf_list));
 
   int64_t cost_ts = ObTimeUtility::current_time() - start_ts;

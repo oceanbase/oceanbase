@@ -54,6 +54,7 @@ void memory_sanity_abort()
   }
   void *addrs[128];
   int n_addr = ob_backtrace(addrs, sizeof(addrs)/sizeof(addrs[0]));
+  addrs_to_offsets(addrs, n_addr);
   void *vip_addr = NULL;
   for (int i = 0; NULL == vip_addr && i < n_addr; i++) {
     for (int j = 0; NULL == vip_addr && j < sizeof(vips)/sizeof(vips[0]); j++) {

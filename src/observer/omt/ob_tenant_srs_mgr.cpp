@@ -347,8 +347,19 @@ bool ObTenantSrsMgr::is_sys_schema_ready()
   return schema_service_->is_sys_full_schema();
 }
 
+void ObTenantSrsMgr::stop()
+{
+  TG_STOP(lib::TGDefIDs::SRS_MGR);
+}
+
+void ObTenantSrsMgr::wait()
+{
+  TG_WAIT(lib::TGDefIDs::SRS_MGR);
+}
+
 void ObTenantSrsMgr::destroy()
 {
+  TG_DESTROY(lib::TGDefIDs::SRS_MGR);
   tenant_srs_map_.destroy();
 }
 

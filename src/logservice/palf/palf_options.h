@@ -19,15 +19,19 @@ namespace oceanbase
 {
 namespace palf
 {
-// 1. 磁盘空间总大小；
-// 2. 复用百分比；
-// 3. 停写百分比；
+// Following disk options can be set to Palf.
+// 1. log_disk_usage_limit_size_, the total log disk space.
+// 2. log_disk_utilization_threshold_, log_disklog disk utilization threshold before reuse log files.
+// 3. log_disk_utilization_limit_threshold_, maximum of log disk usage percentage before stop submitting or receiving logs.
+// 4. log_disk_throttling_percentage_, the threshold of the size of the log disk when writing_limit will be triggered.
+// 5. log_writer_parallelism, the number of parallel log writer processes that can be used to write redo log entries to disk.
 struct PalfDiskOptions
 {
   PalfDiskOptions() : log_disk_usage_limit_size_(-1),
                       log_disk_utilization_threshold_(-1),
                       log_disk_utilization_limit_threshold_(-1),
-                      log_disk_throttling_percentage_(-1)
+                      log_disk_throttling_percentage_(-1),
+                      log_writer_parallelism_(-1)
   {}
   ~PalfDiskOptions() { reset(); }
   static constexpr int64_t MB = 1024*1024ll;
@@ -39,10 +43,12 @@ struct PalfDiskOptions
   int log_disk_utilization_threshold_;
   int log_disk_utilization_limit_threshold_;
   int64_t log_disk_throttling_percentage_;
+  int log_writer_parallelism_;
   TO_STRING_KV("log_disk_size(MB)", log_disk_usage_limit_size_ / MB,
                "log_disk_utilization_threshold(%)", log_disk_utilization_threshold_,
                "log_disk_utilization_limit_threshold(%)", log_disk_utilization_limit_threshold_,
-               "log_disk_throttling_percentage(%)", log_disk_throttling_percentage_);
+               "log_disk_throttling_percentage(%)", log_disk_throttling_percentage_,
+               "log_writer_parallelism", log_writer_parallelism_);
 };
 
 

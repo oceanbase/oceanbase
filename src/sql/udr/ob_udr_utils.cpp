@@ -9,6 +9,7 @@
 #include "sql/ob_sql.h"
 #include "share/config/ob_server_config.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/udr/ob_udr_analyzer.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/udr/ob_udr_utils.h"
@@ -187,7 +188,7 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
       ParseNode *raw_param = NULL;
       ObPCParam *pc_param = NULL;
       if (dynamic_param_info.raw_param_idx_ >= raw_params.count()) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("invalid idx", K(dynamic_param_info.raw_param_idx_), K(raw_params.count()));
       } else if (OB_ISNULL(pc_param = raw_params.at(dynamic_param_info.raw_param_idx_))) {
         ret = OB_ERR_UNEXPECTED;
@@ -197,7 +198,7 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
         LOG_WARN("node is null", K(ret));
       } else if (T_QUESTIONMARK == raw_param->type_) {
         if (pc_ctx.mode_ != PC_PS_MODE || raw_param->value_ >= pc_ctx.fp_result_.parameterized_params_.count()) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_PARSER_SYNTAX;
           LOG_WARN("invalid argument", K(ret), K(raw_param->value_), K(dynamic_param_info.raw_param_idx_),
           K(pc_ctx.mode_), K(pc_ctx.fp_result_.parameterized_params_.count()));
         } else if (OB_FAIL(param_store.push_back(*pc_ctx.fp_result_.parameterized_params_.at(raw_param->value_)))) {
@@ -242,6 +243,7 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
   bool enable_udr = false;
   is_match_udr = false;
   ObSQLSessionInfo &session = result.get_session();
+  ObExecContext &ectx = result.get_exec_context();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
   if (tenant_config.is_valid()) {
     enable_udr = tenant_config->enable_user_defined_rewrite_rules;
@@ -265,6 +267,10 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
     } else {
       is_match_udr = true;
       LOG_TRACE("succ to match user-defined rule", K(ret));
+    }
+    if (OB_SUCCESS != ret
+      && !ObSQLUtils::check_need_disconnect_parser_err(ret)) {
+      ectx.set_need_disconnect(false);
     }
   }
   return ret;

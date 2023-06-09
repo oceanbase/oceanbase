@@ -172,6 +172,7 @@ px_workers_per_cpu_quota
 query_response_time_flush
 query_response_time_range_base
 query_response_time_stats
+range_optimizer_max_mem_size
 rdma_io_thread_count
 recyclebin_object_expire_time
 redundancy_level
@@ -284,6 +285,7 @@ _enable_trace_session_leak
 _enable_transaction_internal_routing
 _fast_commit_callback_count
 _follower_snapshot_read_retry_duration
+_force_explict_500_malloc
 _force_hash_groupby_dump
 _force_hash_join_spill
 _force_skip_encoding_partition_id
@@ -294,6 +296,7 @@ _io_callback_thread_count
 _large_query_io_percentage
 _lcl_op_interval
 _load_tde_encrypt_engine
+_log_writer_parallelism
 _max_elr_dependent_trx_count
 _max_malloc_sample_interval
 _max_schema_slot_num

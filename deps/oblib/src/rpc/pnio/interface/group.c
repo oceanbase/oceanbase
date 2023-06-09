@@ -347,15 +347,21 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
   if (addr->sin_addr.s_addr == 0 || htons(addr->sin_port) == 0) {
     err = -EINVAL;
     rk_warn("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
-  }
-  pktc_req_t* r = pn_create_pktc_req(pn, gen_pkt_id(), dest, buf, sz, categ_id, expire_us, cb, arg);
-  if (NULL == r) {
-    err = ENOMEM;
+  } else if (expire_us < 0) {
+    err = -EINVAL;
+    rk_error("invalid rpc timeout: %ld, it might be that the up-layer rpc timeout is too large, categ_id=%d", expire_us, categ_id);
+  } else if (LOAD(&pn->is_stop_)) {
+    err = PNIO_STOPPED;
   } else {
-    if (NULL != arg) {
-      *((void**)arg) = r;
+    pktc_req_t* r = pn_create_pktc_req(pn, gen_pkt_id(), dest, buf, sz, categ_id, expire_us, cb, arg);
+    if (NULL == r) {
+      err = ENOMEM;
+    } else {
+      if (NULL != arg) {
+        *((void**)arg) = r;
+      }
+      err = pktc_post(&pn->pktc, r);
     }
-    err = pktc_post(&pn->pktc, r);
   }
   return err;
 }
@@ -375,6 +381,29 @@ PN_API void pn_wait(uint64_t gid)
   for (int tid = 0; tid < pgrp->count; tid++) {
     pn_t *pn = get_pn_for_send(pgrp, tid);
     pthread_join(pn->pd, NULL);
+  }
+}
+
+void pn_release(pn_comm_t* pn_comm)
+{
+  if (NULL == pn_comm) {
+    // do nothing
+    rk_warn("unexpected argument");
+  } else {
+    pn_t* pn = (typeof(pn))pn_comm;
+    // empty pktc->req_queue
+    link_t* l = NULL;
+    pktc_t* pktc = &pn->pktc;
+    while((l = sc_queue_pop(&pktc->req_queue))) {
+      pktc_req_t* req = structof(l, pktc_req_t, link);
+      pktc_post_io(pktc, req);
+    }
+    // destroy pktc socket
+    dlink_for(&pktc->sk_list, p) {
+      pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
+      rk_info("sock destroy: sock=%p, connection=%s", s, T2S(sock_fd, s->fd));
+      sock_destroy((sock_t*)s);
+    }
   }
 }
 

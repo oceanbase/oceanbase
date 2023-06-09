@@ -129,5 +129,6 @@ int eloop_run(eloop_t* ep) {
       last_time = cur_time_us;
     }
   }
+  pn_release(pn);
   return 0;
 }

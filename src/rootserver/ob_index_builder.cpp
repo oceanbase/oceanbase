@@ -127,7 +127,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("can not drop index of table in recyclebin.", K(ret), K(arg));
   } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(tenant_id,
-             table_schema->get_database_id(), is_db_in_recyclebin))) {
+            table_schema->get_database_id(), is_db_in_recyclebin))) {
     LOG_WARN("check database in recyclebin failed", K(ret), K(tenant_id));
   } else if (is_db_in_recyclebin) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
@@ -135,7 +135,6 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
   } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*table_schema))) {
     LOG_WARN("check whether foreign key related table executes ddl failed", K(ret));
   }
-
   if (OB_SUCC(ret)) {
     const uint64_t data_table_id = table_schema->get_table_id();
     const ObTableSchema *index_table_schema = NULL;
@@ -157,12 +156,20 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
         LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(index_table_schema));
       }
     }
-
+    bool have_index = false;
+    const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema->get_foreign_key_infos();
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(index_table_schema)) {
       ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
       LOG_WARN("index table schema should not be null", K(arg.index_name_), K(ret));
       LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, arg.index_name_.length(), arg.index_name_.ptr());
+    } else if (OB_FAIL(ddl_service_.check_index_on_foreign_key(index_table_schema,
+                                                               foreign_key_infos,
+                                                               have_index))) {
+      LOG_WARN("fail to check index on foreign key", K(ret), K(foreign_key_infos), KPC(index_table_schema));
+    } else if (have_index) {
+      ret = OB_ERR_ATLER_TABLE_ILLEGAL_FK;
+      LOG_WARN("cannot delete index with foreign key dependency", K(ret));
     } else if (!arg.is_inner_ && index_table_schema->is_unavailable_index()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support to drop a building index", K(ret), K(arg.is_inner_), KPC(index_table_schema));

@@ -6402,7 +6402,6 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params =
             ObBasicSessionInfo::create_dtc_params(optimizer_context_.get_session_info());
-      bool is_in_range_optimization_enabled = optimizer_context_.get_session_info()->is_in_range_optimization_enabled();
       ObQueryRange *query_range = static_cast<ObQueryRange*>(get_allocator().alloc(sizeof(ObQueryRange)));
       const ParamStore *params = get_optimizer_context().get_params();
       if (OB_ISNULL(query_range)) {
@@ -6413,7 +6412,12 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
         LOG_WARN("get unexpected null", K(ret));
       } else {
         query_range = new(query_range)ObQueryRange(get_allocator());
-        if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
+        bool is_in_range_optimization_enabled = false;
+        if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(optimizer_context_.get_global_hint(),
+                                                                      optimizer_context_.get_session_info(),
+                                                                      is_in_range_optimization_enabled))) {
+          LOG_WARN("failed to check in range optimization enabled", K(ret));
+        } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
                                                                  join_conditions,
                                                                  dtc_params,
                                                                  optimizer_context_.get_exec_ctx(),

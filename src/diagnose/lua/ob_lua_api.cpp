@@ -1406,7 +1406,7 @@ int select_dump_tenant_info(lua_State *L)
       // remain_slice
       gen.next_column(0);
       // token_cnt
-      gen.next_column(t.token_cnt_);
+      gen.next_column(t.worker_count());
       // ass_token_cnt
       gen.next_column(t.worker_count());
       // lq_tokens

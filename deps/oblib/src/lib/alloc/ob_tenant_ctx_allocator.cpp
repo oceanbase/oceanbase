@@ -511,14 +511,6 @@ void ObTenantCtxAllocator::common_free(void *ptr)
     abort_unless(block->obj_set_ != NULL);
 
     ObjectSet *os = block->obj_set_;
-#ifdef ENABLE_500_FALLBACK
-    auto *ta = chunk->block_set_->get_tenant_ctx_allocator();
-    const bool do_free = OB_LIKELY(!ta->has_deleted()) || ta->get_tenant_id() <= OB_USER_TENANT_ID;
-#else
-    const bool do_free = true;
-#endif
-    if (do_free) {
-      os->free_object(obj);
-    }
+    os->free_object(obj);
   }
 }

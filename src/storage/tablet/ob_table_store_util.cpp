@@ -520,8 +520,8 @@ int ObMemtableArray::init(common::ObIAllocator *allocator)
 }
 
 int ObMemtableArray::init(
-  common::ObIAllocator *allocator,
-  const ObMemtableArray &other)
+    common::ObIAllocator *allocator,
+    const ObMemtableArray &other)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -551,8 +551,8 @@ int ObMemtableArray::init(
 }
 
 int ObMemtableArray::build(
-  common::ObIArray<ObTableHandleV2> &handle_array,
-  const int64_t start_pos)
+    common::ObIArray<ObTableHandleV2> &handle_array,
+    const int64_t start_pos)
 {
   int ret = OB_SUCCESS;
 
@@ -601,11 +601,45 @@ int ObMemtableArray::rebuild(common::ObIArray<ObTableHandleV2> &handle_array)
       if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
-      } else if (FALSE_IT(memtable = reinterpret_cast<memtable::ObMemtable *>(table))) {
+      } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
       } else if (memtable->is_empty()) {
         FLOG_INFO("Empty memtable discarded", KPC(memtable));
       } else if (table->get_end_scn() < end_scn) {
       } else if (table->get_end_scn() == end_scn && table == last_memtable) { //fix issue 41996395
+      } else if (OB_FAIL(add_table(table))) {
+        LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMemtableArray::rebuild(
+    const share::SCN &clog_checkpoint_scn,
+    common::ObIArray<ObTableHandleV2> &handle_array)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObMemtableArray not inited", K(ret), KPC(this), K(handle_array));
+  } else if (OB_UNLIKELY(!empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("current memtable array is not empty", K(ret), K(clog_checkpoint_scn), KPC(this));
+  } else {
+    // use clog checkpoint scn to filter memtable handle array
+    for (int64_t i = 0; OB_SUCC(ret) && i < handle_array.count(); ++i) {
+      memtable::ObMemtable *memtable = nullptr;
+      ObITable *table = handle_array.at(i).get_table();
+      if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
+      } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
+      } else if (memtable->is_empty()) {
+        FLOG_INFO("Empty memtable discarded", K(ret), KPC(memtable));
+      } else if (table->get_end_scn() <= clog_checkpoint_scn) {
+        FLOG_INFO("memtable end scn no greater than clog checkpoint scn, should be discarded", K(ret),
+            "end_scn", table->get_end_scn(), K(clog_checkpoint_scn));
       } else if (OB_FAIL(add_table(table))) {
         LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
       }

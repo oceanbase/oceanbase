@@ -28,6 +28,7 @@
 #include "share/ob_occam_timer.h"
 #include "share/rc/ob_tenant_base.h"
 #include "mock_logservice_container/mock_election_user.h"
+#include "observer/ob_server.h"
 #include <iostream>
 #include <vector>
 
@@ -55,6 +56,10 @@ namespace logservice
 {
 namespace coordinator
 {
+int PriorityV0::refresh_(const share::ObLSID &)
+{
+  return OB_SUCCESS;
+}
 int PriorityV1::refresh_(const share::ObLSID &)
 {
   return OB_SUCCESS;
@@ -113,7 +118,7 @@ public:
 };
 
 template <typename TAKEOVER_OP>
-vector<ElectionImpl *> create_election_group(vector<ElectionPriorityImpl> &v_pri, TAKEOVER_OP &&op)
+vector<ElectionImpl *> create_election_group(vector<ElectionPriorityImpl> &v_pri, TAKEOVER_OP &&op, const vector<int> &v_port = {})
 {
   vector<ElectionImpl *> v;
   int election_num = v_pri.size();
@@ -121,8 +126,12 @@ vector<ElectionImpl *> create_election_group(vector<ElectionPriorityImpl> &v_pri
   MemberList member_list;
   ObArray<ObAddr> addr_list;
   static int port = 1;
-  for (int i = 0; i < election_num; ++i)
-    addr_list.push_back(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + i));
+  if (v_port.empty())
+    for (int i = 0; i < election_num; ++i)
+      addr_list.push_back(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + i));
+  else
+    for (int port : v_port)
+      addr_list.push_back(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port));
   palf::LogConfigVersion version;
   version.proposal_id_ = 1;
   version.config_seq_ = 1;
@@ -131,7 +140,7 @@ vector<ElectionImpl *> create_election_group(vector<ElectionPriorityImpl> &v_pri
   int ret = OB_SUCCESS;
   for (int i = 0; i < election_num; ++i) {
     ElectionImpl *election = new ElectionImpl();
-    election->self_addr_ = ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + i);
+    election->self_addr_ = ObAddr(ObAddr::VER::IPV4, "127.0.0.1", addr_list[i].port_);
     v.push_back(election);
   }
   for (auto &election_1 : v) {
@@ -145,7 +154,7 @@ vector<ElectionImpl *> create_election_group(vector<ElectionPriorityImpl> &v_pri
       1,
       &timer,
       &GlobalNetService,
-      ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + index),
+      election->self_addr_,
       true,
       1,
       [election](int64_t, const ObAddr &dest_addr) {
@@ -357,9 +366,148 @@ TEST_F(TestElectionWithPriority, meet_fatal_failure)
     delete election;
   ASSERT_EQ(change_leader_from_prepare_change_leader_cb, false);
 }
+}
+}
 
+
+namespace oceanbase
+{
+namespace palf
+{
+namespace election
+{
+uint64_t ElectionImpl::get_ls_biggest_min_cluster_version_ever_seen_() const// 让port=5555的副本认为自己是A副本
+{
+  #define PRINT_WRAPPER K(*this)
+  int ret = OB_SUCCESS;
+  uint64_t ls_biggest_min_cluster_version_ever_seen = 0;
+  //if (observer::ObServer::get_instance().is_arbitration_mode()) {
+  if (observer::ObServer::get_instance().is_arbitration_mode() || self_addr_.port_ == 5555) {
+    if (CLUSTER_CURRENT_VERSION < ls_biggest_min_cluster_version_ever_seen_.version_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_NONE(ERROR, "ls_biggest_min_cluster_version_ever_seen_ less than arb binary version");
+    } else if (ls_biggest_min_cluster_version_ever_seen_.version_ == 0) {
+      LOG_NONE(WARN, "ls_biggest_min_cluster_version_ever_seen_ not setted yet");
+    }
+    ls_biggest_min_cluster_version_ever_seen = ls_biggest_min_cluster_version_ever_seen_.version_;
+  } else {
+    ls_biggest_min_cluster_version_ever_seen = std::max(GET_MIN_CLUSTER_VERSION(),
+                                                        ls_biggest_min_cluster_version_ever_seen_.version_);
+  }
+  return ls_biggest_min_cluster_version_ever_seen;
+  #undef PRINT_WRAPPER
 }
 }
+}
+namespace unittest
+{
+TEST_F(TestElectionWithPriority, arb_server_split_vote_cause_not_set_priority)// 复现仲裁bug场景
+{
+  // oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_3_2_3_0;// 此时采用V0版本的优先级逻辑比较，投给IP
+  vector<ElectionPriorityImpl> v_pri(4);
+  for (auto &pri : v_pri)
+    init_pri(pri);
+  v_pri[0].priority_tuple_.element<1>().zone_priority_ = 3;//F
+  v_pri[1].priority_tuple_.element<1>().zone_priority_ = 2;//F
+  v_pri[2].priority_tuple_.element<1>().zone_priority_ = 1;//F
+  v_pri[3].priority_tuple_.element<1>().zone_priority_ = 0;//A
+  auto election_group = create_election_group(v_pri, [](){}, {1,2,3,5555/*仲裁*/});
+  election_group[0]->stop();// kill掉一个，还有2F1A
+  election_group[3]->set_inner_priority_seed(0ULL |  static_cast<uint64_t>(palf::election::PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT));
+  election_group[3]->reset_priority();// 移除优先级，模拟A副本，会投票给IP最小的副本
+  this_thread::sleep_for(chrono::seconds(5));// 等待选出第一任Leader
+  ASSERT_EQ(election_group[1]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(election_group[2]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(election_group[3]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(leader_takeover_times, 0);
+  ASSERT_EQ(leader_revoke_times, 0);
+  ASSERT_EQ(devote_to_be_leader_count, 0);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 0);
+  ASSERT_EQ(change_leader_to_be_follower_count, 0);
+  ASSERT_EQ(stop_to_be_follower_count, 0);
+  for (auto &election : election_group)
+    election->stop();
+    this_thread::sleep_for(chrono::seconds(1));
+  for (auto &election : election_group)
+    delete election;
+}
+TEST_F(TestElectionWithPriority, arb_server_won_t_split_vote_cause_set_priority)// 测试修复后的行为
+{
+  oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_3_2_3_0;// 此时采用V0版本的优先级逻辑比较，投给port_number_较大的副本
+  vector<ElectionPriorityImpl> v_pri(4);
+  for (auto &pri : v_pri)
+    init_pri(pri);
+  // 优先级V0
+  v_pri[0].priority_tuple_.element<0>().port_number_ = 3;//F
+  v_pri[1].priority_tuple_.element<0>().port_number_ = 2;//F
+  v_pri[2].priority_tuple_.element<0>().port_number_ = 1;//F
+  v_pri[3].priority_tuple_.element<0>().port_number_ = 0;//A
+  // 优先级V1
+  v_pri[0].priority_tuple_.element<1>().zone_priority_ = 3;//F
+  v_pri[1].priority_tuple_.element<1>().zone_priority_ = 2;//F
+  v_pri[2].priority_tuple_.element<1>().zone_priority_ = 1;//F
+  v_pri[3].priority_tuple_.element<1>().zone_priority_ = 0;//A
+  auto election_group = create_election_group(v_pri, [](){}, {1,2,3,5555/*仲裁*/});
+  election_group[0]->stop();// kill掉一个，还有2F1A
+  election_group[3]->set_inner_priority_seed(0ULL |  static_cast<uint64_t>(palf::election::PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT));
+  this_thread::sleep_for(chrono::seconds(5));// 等待选出第一任Leader
+  ASSERT_EQ(election_group[1]->proposer_.role_, ObRole::LEADER);
+  ASSERT_EQ(election_group[2]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(election_group[3]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(leader_takeover_times, 1);
+  ASSERT_EQ(leader_revoke_times, 0);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 0);
+  ASSERT_EQ(change_leader_to_be_follower_count, 0);
+  ASSERT_EQ(stop_to_be_follower_count, 0);
+
+  // 升级版本号
+  oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_2_0_0;// 此时将根据V1版本的优先级，将leader切换至election 2
+  this_thread::sleep_for(chrono::seconds(2));// 等待执行切主
+  ASSERT_EQ(election_group[1]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(election_group[2]->proposer_.role_, ObRole::LEADER);
+  ASSERT_EQ(election_group[3]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(leader_takeover_times, 2);
+  ASSERT_EQ(leader_revoke_times, 1);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 1);
+  ASSERT_EQ(change_leader_to_be_follower_count, 1);
+  ASSERT_EQ(stop_to_be_follower_count, 0);
+
+  // 给leader断网，触发无主选举
+  GlobalNetService.disconnect_two_side(election_group[2], election_group[1]);
+  GlobalNetService.disconnect_two_side(election_group[2], election_group[3]);
+  this_thread::sleep_for(chrono::seconds(5));// 等待leader卸任
+
+  // 恢复leader的网络，预期无主时，就算是仲裁副本也正确采用了V1版本的优先级
+  GlobalNetService.connect_two_side(election_group[2], election_group[1]);
+  GlobalNetService.connect_two_side(election_group[2], election_group[3]);
+  this_thread::sleep_for(chrono::seconds(5));// 等待无主选举
+
+  ASSERT_EQ(election_group[1]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(election_group[2]->proposer_.role_, ObRole::LEADER);
+  ASSERT_EQ(election_group[3]->proposer_.role_, ObRole::FOLLOWER);
+  ASSERT_EQ(leader_takeover_times, 3);
+  ASSERT_EQ(leader_revoke_times, 2);
+  ASSERT_EQ(devote_to_be_leader_count, 2);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 1);
+  ASSERT_EQ(change_leader_to_be_leader_count, 1);
+  ASSERT_EQ(change_leader_to_be_follower_count, 1);
+  ASSERT_EQ(stop_to_be_follower_count, 0);
+
+  for (auto &election : election_group)
+    election->stop();
+    this_thread::sleep_for(chrono::seconds(1));
+  for (auto &election : election_group)
+    delete election;
+}
+}
+}
+
+
 
 int main(int argc, char **argv)
 {

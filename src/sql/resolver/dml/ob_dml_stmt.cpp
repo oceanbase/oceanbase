@@ -4418,7 +4418,7 @@ int ObDMLStmt::do_formalize_query_ref_exprs_pre()
       } else if (ObOptimizerUtil::find_item(ref_exprs,
                                             exec_param->get_ref_expr(),
                                             &idx)) {
-        exec_param->set_ref_expr(ref_query->get_exec_param(idx));
+        exec_param->set_ref_expr(ref_exprs.at(idx));
       } else if (OB_FAIL(ref_exprs.push_back(exec_param->get_ref_expr()))) {
         LOG_WARN("failed to push back ref exprs");
       }

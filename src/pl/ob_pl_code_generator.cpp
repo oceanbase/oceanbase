@@ -2595,6 +2595,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
           } else {
             ObLLVMValue address;
             ObPLDataType final_type;
+            bool is_no_copy_param = s.get_nocopy_params().count() > 0 && OB_INVALID_INDEX != s.get_nocopy_params().at(i);
             const ObObjAccessRawExpr *obj_access
               = static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i));
             CK (OB_NOT_NULL(obj_access));
@@ -2602,8 +2603,9 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
             OZ (generator_.generate_expr(s.get_param(i),
                                          s,
                                          OB_INVALID_INDEX,
-                                         final_type.is_obj_type() ? address : p_result_obj));
-            if (OB_SUCC(ret) && final_type.is_obj_type()) {
+                                         (final_type.is_obj_type() || !is_no_copy_param) ? address : p_result_obj));
+            if (OB_FAIL(ret)) {
+            } else if (final_type.is_obj_type()) {
               ObLLVMType obj_type;
               ObLLVMType obj_type_ptr;
               ObLLVMValue p_obj;
@@ -2618,6 +2620,24 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               OZ (generator_.get_helper().create_load(ObString("load obj value"), p_obj, src_obj));
               OZ (generator_.extract_datum_ptr_from_objparam(p_result_obj, ObNullType, p_dest_obj));
               OZ (generator_.get_helper().create_store(src_obj, p_dest_obj));
+            } else if (!is_no_copy_param) {
+              ObLLVMValue allocator;
+              ObLLVMValue src_datum;
+              ObLLVMValue dest_datum;
+              int64_t udt_id = s.get_param_expr(i)->get_result_type().get_udt_id();
+              OZ (generator_.extract_allocator_from_context(
+                generator_.get_vars().at(generator_.CTX_IDX), allocator));
+              OZ (generator_.generate_new_objparam(p_result_obj, udt_id));
+              OZ (generator_.extract_obobj_ptr_from_objparam(p_result_obj, dest_datum));
+              OZ (generator_.extract_obobj_ptr_from_objparam(address, src_datum));
+              OZ (final_type.generate_copy(generator_,
+                                            *s.get_namespace(),
+                                            allocator,
+                                            src_datum,
+                                            dest_datum,
+                                            s.get_block()->in_notfound(),
+                                            s.get_block()->in_warning(),
+                                            OB_INVALID_ID));
             }
           }
         }
@@ -7791,8 +7811,9 @@ int ObPLCodeGenerator::generate_out_param(
     ObLLVMValue p_param;
     ObPLDataType pl_type = s.get_variable(param_desc.at(i).out_idx_)->get_type();
     if (pl_type.is_composite_type() || pl_type.is_cursor_type()) {
-      if (param_desc.at(i).is_pure_out()) {
-        // 对于INOUT参数, 复杂类型传递的是指针, 因此什么都不需要做;
+      if ((PL_CALL == s.get_type() && param_desc.at(i).is_out()) ||
+          (PL_EXECUTE == s.get_type() && param_desc.at(i).is_pure_out())) {
+        // 对于INOUT参数, execute immediate复杂类型传递的是指针, 什么都不需要做; inner call场景, inout参数会入参会深拷，这里需要重新拷回
         // 对于OUT参数, 复杂类型构造了新的ObjParam, 这里进行COPY;
         ObLLVMValue into_address;
         ObLLVMValue allocator;
@@ -7818,17 +7839,24 @@ int ObPLCodeGenerator::generate_out_param(
                                   s.get_block()->in_warning(),
                                   OB_INVALID_ID));
         if (OB_SUCC(ret) && PL_CALL == s.get_type()) {
-          ObSEArray<jit::ObLLVMValue, 2> args;
+          const ObPLCallStmt *call_stmt = static_cast<const ObPLCallStmt *>(&s);
+          if (call_stmt->get_nocopy_params().count() > i &&
+              OB_INVALID_INDEX != call_stmt->get_nocopy_params().at(i) &&
+              !param_desc.at(i).is_pure_out()) {
+            // inner call nocopy的inout参数传递是指针, 无需释放
+          } else {
+            ObSEArray<jit::ObLLVMValue, 2> args;
 
-          OZ (args.push_back(get_vars()[CTX_IDX]));
-          OZ (args.push_back(src_datum));
-          if (OB_SUCC(ret)) {
-            jit::ObLLVMValue ret_err;
-            if (OB_FAIL(get_helper().create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err))) {
-              LOG_WARN("failed to create call", K(ret));
-            } else if (OB_FAIL(check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
-              LOG_WARN("failed to check success", K(ret));
-            } else { /*do nothing*/ }
+            OZ (args.push_back(get_vars()[CTX_IDX]));
+            OZ (args.push_back(src_datum));
+            if (OB_SUCC(ret)) {
+              jit::ObLLVMValue ret_err;
+              if (OB_FAIL(get_helper().create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err))) {
+                LOG_WARN("failed to create call", K(ret));
+              } else if (OB_FAIL(check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
+                LOG_WARN("failed to check success", K(ret));
+              } else { /*do nothing*/ }
+            }
           }
         }
       }

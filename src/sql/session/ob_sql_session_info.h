@@ -597,6 +597,7 @@ public:
                                  hash_area_size_(128*1024*1024),
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
+                                 range_optimizer_max_mem_size_(128*1024*1024),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  session_(session)
@@ -616,6 +617,7 @@ public:
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
+    int64_t get_range_optimizer_max_mem_size() const { return range_optimizer_max_mem_size_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -630,6 +632,7 @@ public:
     int64_t hash_area_size_;
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
+    int64_t range_optimizer_max_mem_size_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
@@ -1127,6 +1130,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_udr();
+  }
+  int64_t get_range_optimizer_max_mem_size()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_range_optimizer_max_mem_size();
   }
   int64_t get_tenant_print_sample_ppm()
   {

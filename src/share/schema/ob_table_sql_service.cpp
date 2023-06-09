@@ -2903,8 +2903,6 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       || OB_FAIL(dml.add_column("auto_increment", share::ObRealUInt64(new_table_schema.get_auto_increment())))
       || OB_FAIL(dml.add_column("sub_part_template_flags", new_table_schema.get_sub_part_template_flags()))
       || OB_FAIL(dml.add_column("max_dependency_version", new_table_schema.get_max_dependency_version()))
-      || (new_table_schema.is_interval_part() && OB_FAIL(add_transition_point_val(dml, new_table_schema)))
-      || (new_table_schema.is_interval_part() && OB_FAIL(add_interval_range_val(dml, new_table_schema)))
       || (OB_FAIL(dml.add_column("part_func_type", part_option.get_part_func_type())))
       || (data_version >= DATA_VERSION_4_1_0_0
           && OB_FAIL(dml.add_column("table_flags", new_table_schema.get_table_flags())))
@@ -2917,9 +2915,23 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       ) {
     LOG_WARN("add column failed", K(ret));
   } else {
+    if (new_table_schema.is_interval_part()) {
+      if (OB_FAIL(add_transition_point_val(dml, new_table_schema))
+          || OB_FAIL(add_interval_range_val(dml, new_table_schema))) {
+        LOG_WARN("fail to add interval column info", KR(ret), K(new_table_schema));
+      }
+    } else {
+      bool is_null = true; // maybe unset transition_point
+      if (OB_FAIL(dml.add_column(is_null, "transition_point"))
+          || OB_FAIL(dml.add_column(is_null, "b_transition_point"))
+          || OB_FAIL(dml.add_column(is_null, "interval_range"))
+          || OB_FAIL(dml.add_column(is_null, "b_interval_range"))) {
+        LOG_WARN("fail to reset interval column info", KR(ret), K(new_table_schema));
+      }
+    }
     int64_t affected_rows = 0;
     const char *table_name = NULL;
-    if (OB_FAIL(ObSchemaUtils::get_all_table_name(exec_tenant_id, table_name))) {
+    if (FAILEDx(ObSchemaUtils::get_all_table_name(exec_tenant_id, table_name))) {
       LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
     } else if (OB_FAIL(exec_update(sql_client, tenant_id, table_id,
                                    table_name, dml, affected_rows))) {

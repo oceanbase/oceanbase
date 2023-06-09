@@ -67,7 +67,9 @@ private:
   void reset() override { os_.reset(); }
 private:
   __MemoryContext__ *mem_context_;
+  bool do_not_use_me_;
   ObMemAttr attr_;
+  ObMemAttr nattr_;
   const bool use_pm_;
   void *pm_;
   lib::ISetLocker *locker_;
@@ -111,8 +113,9 @@ private:
       }
       return washed_size;
     }
-  } blk_mgr_;
+  } blk_mgr_, nblk_mgr_;
   ObjectSet os_;
+  ObjectSet nos_;
   bool is_inited_;
 public:
 };
@@ -120,6 +123,7 @@ public:
 inline ObAllocator::ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr &attr, const bool use_pm,
                                 const uint32_t ablock_size)
   : mem_context_(mem_context),
+    do_not_use_me_(false),
     attr_(attr),
     use_pm_(use_pm),
     pm_(nullptr),
@@ -127,8 +131,19 @@ inline ObAllocator::ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr 
     mutex_(common::ObLatchIds::OB_ALLOCATOR_LOCK),
     do_locker_(mutex_),
     os_(mem_context_, ablock_size),
+    nos_(mem_context_, ablock_size),
     is_inited_(false)
 {
+  nattr_ = attr_;
+  do_not_use_me_ = false;
+  if (FORCE_EXPLICT_500_MALLOC()) {
+    do_not_use_me_ = OB_SERVER_TENANT_ID == attr.tenant_id_ && !attr.use_500() &&
+      ob_thread_tenant_id() != OB_SERVER_TENANT_ID;
+    if (do_not_use_me_) {
+      nattr_.tenant_id_ = ob_thread_tenant_id();
+      nattr_.ctx_id_ = ObCtxIds::DO_NOT_USE_ME;
+    }
+  }
 }
 
 inline int ObAllocator::init()
@@ -136,6 +151,7 @@ inline int ObAllocator::init()
   int ret = OB_SUCCESS;
   ObPageManager *pm = nullptr;
   lib::IBlockMgr *blk_mgr = nullptr;
+  lib::IBlockMgr *nblk_mgr = nullptr;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     OB_LOG(ERROR, "init twice", K(ret));
@@ -149,10 +165,17 @@ inline int ObAllocator::init()
     blk_mgr_.set_tenant_id(attr_.tenant_id_);
     blk_mgr_.set_ctx_id(attr_.ctx_id_);
     blk_mgr = &blk_mgr_;
+    if (do_not_use_me_) {
+      nblk_mgr_.set_tenant_id(nattr_.tenant_id_);
+      nblk_mgr_.set_ctx_id(nattr_.ctx_id_);
+      nblk_mgr = &nblk_mgr_;
+    }
   }
   if (OB_SUCC(ret)) {
     os_.set_block_mgr(blk_mgr);
     os_.set_locker(locker_);
+    nos_.set_block_mgr(nblk_mgr);
+    nos_.set_locker(locker_);
     is_inited_ = true;
   }
   return ret;

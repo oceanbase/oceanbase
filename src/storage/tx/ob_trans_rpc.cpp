@@ -380,6 +380,8 @@ int ObTransRpc::post_msg(const ObAddr &server, ObTxMsg &msg)
                                  msg.get_receiver(),
                                  msg))) {
       TRANS_LOG(WARN, "post msg failed", K(ret));
+    } else {
+      total_batch_msg_count_++;
     }
   } else if (OB_FAIL(post_(server, msg))) {
     TRANS_LOG(WARN, "post msg error", K(ret), K(server), K(msg));
@@ -440,6 +442,8 @@ int ObTransRpc::post_msg(const ObLSID &ls_id, ObTxMsg &msg)
                                  msg.get_receiver(),
                                  msg))) {
       TRANS_LOG(WARN, "post msg failed", K(ret));
+    } else {
+      total_batch_msg_count_++;
     }
   } else if (OB_FAIL(post_(server, msg))) {
     TRANS_LOG(WARN, "post msg error", K(ret), K(server), K(msg));
@@ -598,9 +602,9 @@ void ObTransRpc::statistics_()
 {
   const int64_t cur_ts = ObTimeUtility::current_time();
   if (cur_ts - last_stat_ts_ > STAT_INTERVAL) {
-    TRANS_LOG(INFO, "rpc statistics", K_(total_trans_msg_count), K_(total_trans_resp_msg_count));
+    TRANS_LOG(INFO, "rpc statistics", K_(total_trans_msg_count), K_(total_batch_msg_count));
     total_trans_msg_count_ = 0;
-    total_trans_resp_msg_count_ = 0;
+    total_batch_msg_count_ = 0;
     last_stat_ts_ = cur_ts;
   }
 }

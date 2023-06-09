@@ -10291,6 +10291,26 @@ int ObTransformUtils::add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
   return ret;
 }
 
+int ObTransformUtils::add_equal_expr_value_constraint(ObTransformerCtx *trans_ctx,
+                                                      ObRawExpr *left,
+                                                      ObRawExpr *right)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *equal_expr = NULL;
+  if (OB_ISNULL(trans_ctx) || OB_ISNULL(left) || (OB_ISNULL(right)) ||
+      OB_ISNULL(trans_ctx->expr_factory_) || OB_ISNULL(trans_ctx->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL ptr", K(ret), KP(trans_ctx), KP(left), KP(right));
+  } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*trans_ctx->expr_factory_, T_OP_EQ,
+                                                                 left, right, equal_expr))) {
+    LOG_WARN("failed to build common binary_op_expr");
+  } else if (OB_FAIL(equal_expr->formalize(trans_ctx->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(trans_ctx, equal_expr, true))) {
+    LOG_WARN("failed to add param bool constraint", K(ret));
+  }
+  return ret;
+}
 int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
                                                 ObRawExpr *bool_expr,
                                                 const bool is_true,

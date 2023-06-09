@@ -1072,6 +1072,22 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
                         NULL/*result*/, &ret, NULL/*func*/, true);
       if (OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))) {
         LOG_WARN("open cursor fail. ", K(ret), K(stmt_id_));
+        if (!THIS_WORKER.need_retry()) {
+          int cli_ret = OB_SUCCESS;
+          retry_ctrl_.test_and_save_retry_state(
+            gctx_, ctx_, result, ret, cli_ret, is_arraybinding_ /*ararybinding only local retry*/);
+          if (OB_ERR_PROXY_REROUTE == ret) {
+            LOG_DEBUG("run stmt_query failed, check if need retry",
+                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
+          } else {
+            LOG_WARN("run stmt_query failed, check if need retry",
+                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
+          }
+          ret = cli_ret;
+        }
+        if (OB_ERR_PROXY_REROUTE == ret && !is_arraybinding_) {
+          need_response_error = true;
+        }
       }
     }
     /*
@@ -2033,11 +2049,11 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
   int64_t param_size = 0, param_pos = 0;
   CK (OB_NOT_NULL(type_info));
   OZ (get_pl_type_by_type_info(allocator, type_info, pl_type));
+  CK (OB_NOT_NULL(pl_type));
   OZ (pl_type->init_obj(*(ctx_.schema_guard_), allocator, param, param_size));
   OX (param.set_udt_id(pl_type->get_user_type_id()));
   OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, charset, cs_type, ncs_type,
-        tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size,
-        param_pos));
+        tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size, param_pos));
   OX (param.set_need_to_check_extend_type(true));
   return ret;
 }

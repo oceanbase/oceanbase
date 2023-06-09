@@ -842,7 +842,7 @@ int ObStorageHATabletsBuilder::hold_local_reuse_sstable_(
       } else if (OB_FAIL(hold_local_complete_tablet_sstable_(tablet, tables_handle))) {
         LOG_WARN("failed to hold local complete tablet sstable", K(ret), KP(tablet));
       } else {
-        if (!storage_schema.is_valid()
+        if (!storage_schema.is_inited()
           || storage_schema.get_schema_version() < tablet->get_storage_schema().get_schema_version()) {
           storage_schema.reset();
           if (OB_FAIL(storage_schema.init(allocator, tablet->get_storage_schema()))) {

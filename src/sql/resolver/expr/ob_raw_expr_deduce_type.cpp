@@ -1960,7 +1960,12 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                         || ob_is_user_defined_sql_type(param_expr->get_data_type()))
                     && (T_FUN_ORA_JSON_OBJECTAGG != expr.get_expr_type()
                         && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()
-                        && T_FUN_ORA_XMLAGG != expr.get_expr_type()))
+                        && T_FUN_ORA_XMLAGG != expr.get_expr_type()
+                        && T_FUN_GROUP_CUME_DIST != expr.get_expr_type()
+                        && T_FUN_GROUP_DENSE_RANK != expr.get_expr_type()
+                        && T_FUN_GROUP_CONCAT != expr.get_expr_type()
+                        && T_FUN_GROUP_PERCENT_RANK != expr.get_expr_type()
+                        && T_FUN_GROUP_RANK != expr.get_expr_type()))
                 && !(T_FUN_COUNT == expr.get_expr_type() && ob_is_json(param_expr->get_data_type()))
                 && !(T_FUN_COUNT == expr.get_expr_type() && (ob_is_user_defined_sql_type(param_expr->get_data_type()) ||
                                                              ob_is_user_defined_pl_type(param_expr->get_data_type())))
@@ -2171,8 +2176,17 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
   } else {
     ObExprResTypes types;
     ObCastMode expr_cast_mode = CM_NONE;
+    bool is_default_col = false;
+    if (T_FUN_SYS_DEFAULT == expr.get_expr_type()) {
+      if (OB_ISNULL(expr.get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(expr));
+      } else {
+        is_default_col = expr.get_param_expr(0)->is_column_ref_expr();
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
-      const ObRawExpr *param_expr = expr.get_param_expr(i);
+      ObRawExpr *param_expr = expr.get_param_expr(i);
       if (OB_ISNULL(param_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(param_expr));
@@ -2183,11 +2197,20 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
         ret = OB_ERR_INVALID_COLUMN_NUM;
         LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
       } else if (T_FUN_COLUMN_CONV == expr.get_expr_type()
-                 || T_FUN_SYS_DEFAULT == expr.get_expr_type()) {
+                || (T_FUN_SYS_DEFAULT == expr.get_expr_type() && !is_default_col)) {
         //column_conv(type, collation_type, accuracy_expr, nullable, value)
         //前面四个参数都要特殊处理
         if (OB_FAIL(deduce_type_visit_for_special_func(i, *param_expr, types))) {
           LOG_WARN("fail to visit for column_conv", K(ret), K(i));
+        }
+      } else if (lib::is_oracle_mode() && !expr.is_pl_expr() && expr.is_called_in_sql()
+        && T_FUN_SYS_CAST != expr.get_expr_type() && param_expr->get_expr_type() != T_FUN_SYS_CAST
+        && param_expr->get_result_type().get_type() == ObExtendType
+        && param_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
+        if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(expr_factory_, my_session_, param_expr))) {
+          LOG_WARN("add implict cast to pl udt expr failed", K(ret));
+        } else if (OB_FAIL(types.push_back(param_expr->get_result_type()))) {
+          LOG_WARN("push back param type failed", K(ret));
         }
       } else {
         if (OB_FAIL(types.push_back(param_expr->get_result_type()))) {

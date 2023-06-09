@@ -102,7 +102,10 @@ public:
   int init(const common::ObAddr &self);
   void block_net(const ObAddr &src);
   void unblock_net(const ObAddr &src);
+  void block_pcode(const ObRpcPacketCode &pcode);
+  void unblock_pcode(const ObRpcPacketCode &pcode);
   bool need_filter_packet_by_blacklist(const ObAddr &address);
+  bool need_filter_packet_by_pcode_blacklist(const ObRpcPacketCode &pcode);
 	void set_need_drop_packet(const bool need_drop_packet) { need_drop_packet_ = need_drop_packet; }
   void set_rpc_loss(const ObAddr &src, const int loss_rate);
   void reset_rpc_loss(const ObAddr &src);
@@ -111,6 +114,7 @@ public:
   TO_STRING_KV(K_(blacklist), K_(rpc_loss_config));
 protected:
   hash::ObHashSet<ObAddr> blacklist_;
+  hash::ObHashSet<int64_t> pcode_blacklist_;
 	bool need_drop_packet_;
   common::ObSEArray<LossConfig, 4> rpc_loss_config_;
   common::ObAddr self_;
@@ -206,6 +210,8 @@ public:
 	virtual void set_need_drop_packet(const bool need_drop_packet) = 0;
   virtual void block_net(const ObAddr &src) = 0;
   virtual void unblock_net(const ObAddr &src) = 0;
+  virtual void block_pcode(const ObRpcPacketCode &pcode) = 0;
+  virtual void unblock_pcode(const ObRpcPacketCode &pcode) = 0;
   virtual void set_rpc_loss(const ObAddr &src, const int loss_rate) = 0;
   virtual void reset_rpc_loss(const ObAddr &src) = 0;
   virtual int simple_init(const std::string &cluster_name,
@@ -279,6 +285,10 @@ public:
   { deliver_.block_net(src); }
   void unblock_net(const ObAddr &src) override final
   { deliver_.unblock_net(src); }
+  void block_pcode(const ObRpcPacketCode &pcode) override final
+  { deliver_.block_pcode(pcode); }
+  void unblock_pcode(const ObRpcPacketCode &pcode) override final
+  { deliver_.unblock_pcode(pcode); }
   void set_rpc_loss(const ObAddr &src, const int loss_rate) override final
   { deliver_.set_rpc_loss(src, loss_rate); }
   void reset_rpc_loss(const ObAddr &src) override final

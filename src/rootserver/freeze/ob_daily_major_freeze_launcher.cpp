@@ -160,13 +160,14 @@ int ObDailyMajorFreezeLauncher::try_launch_major_freeze()
           // launcher will retry when error code is OB_EAGAIN
           // maybe use a new err code is better(OB_MAJRO_FREEZE_EAGAIN)
           if (OB_EAGAIN == ret) {
+            LOG_WARN("leader switch or ddl confilict, will try to launch major freeze again",
+              KR(ret), K(param), "sleep_us", MAJOR_FREEZE_RETRY_INTERVAL_US * MAJOR_FREEZE_RETRY_LIMIT);
             int64_t usleep_cnt = 0;
             update_last_run_timestamp();
             while (!stop_ && (usleep_cnt < MAJOR_FREEZE_RETRY_LIMIT)) {
               ++usleep_cnt;
               ob_usleep(MAJOR_FREEZE_RETRY_INTERVAL_US);
             }
-            ret = OB_SUCCESS;
           }
         } while (!stop_ && (OB_EAGAIN == ret));
       } else {

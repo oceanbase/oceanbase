@@ -535,6 +535,7 @@ int ObTenantAllTables::inner_get_next_row()
                 }
                 case CREATE_OPTIONS: {
                   int64_t pos = 0;
+                  memset(option_buf_, 0, MAX_TABLE_STATUS_CREATE_OPTION_LENGTH);
                   if (table_schema->is_user_view()) {
                     cells[cell_idx].set_null();
                   } else {

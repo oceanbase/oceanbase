@@ -678,7 +678,17 @@ public:
   private:
     int64_t age_;
   };
+  struct IteratedBlockHolder
+  {
+    IteratedBlockHolder() : block_list_() {}
+    ~IteratedBlockHolder()
+    {
+      release();
+    }
+    void release();
 
+    BlockList block_list_;
+  };
   class Iterator
   {
   public:
@@ -689,6 +699,7 @@ public:
       DISK_ITER_END = 0x02
     };
     friend class ObChunkDatumStore;
+    friend class IteratedBlockHolder;
     Iterator() : start_iter_(false),
                  store_(NULL),
                  cur_iter_blk_(NULL),
@@ -704,7 +715,8 @@ public:
                  read_blk_buf_(NULL),
                  aio_blk_(NULL),
                  aio_blk_buf_(NULL),
-                 age_(NULL) {}
+                 age_(NULL),
+                 blk_holder_ptr_(NULL) {}
     virtual ~Iterator() { reset_cursor(0); }
     int init(ObChunkDatumStore *row_store, const IterationAge *age = NULL);
     void set_iteration_age(const IterationAge *age) { age_ = age; }
@@ -763,10 +775,11 @@ public:
     void free_block(Block *blk, const int64_t size, bool force_free = false);
     void try_free_cached_blocks();
     int64_t get_cur_chunk_row_cnt() const { return chunk_n_rows_;}
+    void set_blk_holder_ptr(IteratedBlockHolder *ptr) { blk_holder_ptr_ = ptr;}
     TO_STRING_KV(KP_(store), KP_(cur_iter_blk),
          K_(cur_chunk_n_blocks), K_(cur_iter_pos), K_(file_size),
          KP_(chunk_mem), KP_(read_blk), KP_(read_blk_buf), KP_(aio_blk),
-         KP_(aio_blk_buf), K_(default_block_size));
+         KP_(aio_blk_buf), K_(default_block_size), KP_(blk_holder_ptr));
   private:
      explicit Iterator(ObChunkDatumStore *row_store);
   protected:
@@ -799,6 +812,7 @@ public:
      IterationAge inner_age_;
      const IterationAge *age_;
      int64_t default_block_size_;
+     IteratedBlockHolder *blk_holder_ptr_;
   };
 
   struct BatchCtx

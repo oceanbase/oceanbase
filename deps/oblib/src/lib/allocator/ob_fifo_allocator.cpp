@@ -276,20 +276,16 @@ bool ObFIFOAllocator::check_magic(void *p, int64_t &size)
 
 void *ObFIFOAllocator::alloc(const int64_t size)
 {
-  return alloc_align(size, 16, attr_);
+  return alloc_align(size, 16);
 }
 
 void *ObFIFOAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
-  return alloc_align(size, 16, attr);
+  UNUSED(attr);
+  return alloc_align(size, 16);
 }
 
 void *ObFIFOAllocator::alloc_align(const int64_t size, const int64_t align)
-{
-  return alloc_align(size, align, attr_);
-}
-
-void *ObFIFOAllocator::alloc_align(const int64_t size, const int64_t align, const ObMemAttr &attr)
 {
   ObLockGuard<ObSpinLock> guard(lock_);
   void *ptr = nullptr;
@@ -298,16 +294,16 @@ void *ObFIFOAllocator::alloc_align(const int64_t size, const int64_t align, cons
   } else if (!check_param(size, align)) {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "ObFIFOAllocator alloc(size, align) parameter Error.", K(size), K(align));
   } else if (is_normal_page_enough(size, align)) {
-    ptr = alloc_normal(size, align, attr);
+    ptr = alloc_normal(size, align);
   } else {
-    ptr = alloc_special(size, align, attr);
+    ptr = alloc_special(size, align);
   }
 
   return ptr;
 }
 
 // get a new page, set current_using_ pointing to it.
-void ObFIFOAllocator::alloc_new_normal_page(const ObMemAttr &attr)
+void ObFIFOAllocator::alloc_new_normal_page()
 {
   if (IS_NOT_INIT || OB_ISNULL(allocator_)) {
     LOG_ERROR_RET(OB_NOT_INIT, "ObFIFOAllocator not init");
@@ -318,7 +314,7 @@ void ObFIFOAllocator::alloc_new_normal_page(const ObMemAttr &attr)
     }
     if (nullptr == new_page) {
       if (total() + page_size_ <= max_size_) {
-        void *ptr = allocator_->alloc(page_size_, attr);
+        void *ptr = allocator_->alloc(page_size_, attr_);
         if (OB_NOT_NULL(ptr)) {
           new_page = new (ptr) NormalPageHeader();
         } else {
@@ -401,7 +397,7 @@ void ObFIFOAllocator::free(void *p)
   }
 }
 
-void *ObFIFOAllocator::alloc_normal(int64_t size, int64_t align, const ObMemAttr &attr)
+void *ObFIFOAllocator::alloc_normal(int64_t size, int64_t align)
 {
   void *ptr = nullptr;
   void *new_space = nullptr;
@@ -410,7 +406,7 @@ void *ObFIFOAllocator::alloc_normal(int64_t size, int64_t align, const ObMemAttr
   } else {
     if (nullptr == current_using_) {
       if (total() + page_size_ <= max_size_) {
-        new_space = allocator_->alloc(page_size_, attr);
+        new_space = allocator_->alloc(page_size_, attr_);
       }
       if (nullptr == new_space) {
         LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "can not allocate new page", K(page_size_));
@@ -427,7 +423,7 @@ void *ObFIFOAllocator::alloc_normal(int64_t size, int64_t align, const ObMemAttr
       ptr = try_alloc(size, align);
       // current_page_do not have enough space.
       if (nullptr == ptr) {
-        alloc_new_normal_page(attr);
+        alloc_new_normal_page();
         ptr = try_alloc(size, align);
       }
       if (ptr != nullptr) {
@@ -469,7 +465,7 @@ void ObFIFOAllocator::free_normal(NormalPageHeader *page, int64_t size)
    |  hole              |
    |--------------------|
 */
-void *ObFIFOAllocator::alloc_special(int64_t size, int64_t align, const ObMemAttr &attr)
+void *ObFIFOAllocator::alloc_special(int64_t size, int64_t align)
 {
   void *ptr = NULL;
 
@@ -482,7 +478,7 @@ void *ObFIFOAllocator::alloc_special(int64_t size, int64_t align, const ObMemAtt
     // these bytes may be before (align 1) AND after user data (align 2).
     // one of them can be zero.
     int64_t real_size = size + sizeof(SpecialPageHeader) + sizeof(AllocHeader) + align - 1;
-    void *new_space = allocator_->alloc(real_size, attr);
+    void *new_space = allocator_->alloc(real_size, attr_);
     if (NULL == new_space) {
       LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "can not alloc a page from underlying allocator", K(real_size));
     } else {

@@ -42,6 +42,7 @@
 #include "lib/oblog/ob_async_log_struct.h"
 #include "lib/utility/ob_defer.h"
 #include "lib/oblog/ob_syslog_rate_limiter.h"
+#include "lib/signal/ob_signal_handlers.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 32
 #define OB_LOG_MAX_SUB_MOD_SIZE 32
@@ -1112,7 +1113,7 @@ inline void ObLogger::check_probe(
             break;
           }
           case ProbeAction::PROBE_STACK: {
-            IGNORE_RETURN raise(60);
+            IGNORE_RETURN faststack();
             break;
           }
           default: {

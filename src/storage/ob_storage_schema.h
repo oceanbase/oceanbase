@@ -98,7 +98,7 @@ class ObStorageSchema : public share::schema::ObMergeSchema, public memtable::Ob
 public:
   ObStorageSchema();
   virtual ~ObStorageSchema();
-
+  bool is_inited() const { return is_inited_; }
   int init(
       common::ObIAllocator &allocator,
       const share::schema::ObTableSchema &input_schema,

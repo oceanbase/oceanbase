@@ -380,23 +380,30 @@ void ObResourceGroup::check_worker_count()
         ++token;
       }
     }
+    int64_t succ_num = 0L;
     token = std::max(token, min_worker_cnt());
     token = std::min(token, max_worker_cnt());
-    if (OB_UNLIKELY(token != token_cnt_)) {
-      const auto diff = token - workers_.get_size();
+    if (OB_UNLIKELY(workers_.get_size() < min_worker_cnt())) {
+      const auto diff = min_worker_cnt() - workers_.get_size();
       const auto now = ObTimeUtility::current_time();
-      int64_t succ_num = 0L;
+      shrink_cnt_ = 0;
       token_change_ts_ = now;
-      token_cnt_ = token;
-      if (workers_.get_size() < min_worker_cnt()) {
-        acquire_more_worker(diff, succ_num);
-        LOG_INFO("worker thread created", K(tenant_->id()), K(token_cnt_), K(token));
-      } else if (diff > 0
-                 && now - token_change_ts_ >= EXPAND_INTERVAL
-                 && ObMallocAllocator::get_instance()->get_tenant_remain(tenant_->id()) > ObMallocAllocator::get_instance()->get_tenant_limit(tenant_->id()) * 0.05) {
+      acquire_more_worker(diff, succ_num);
+      LOG_INFO("worker thread created", K(tenant_->id()), K(token));
+    } else if (OB_UNLIKELY(token > workers_.get_size())) {
+      const auto now = ObTimeUtility::current_time();
+      if (now - token_change_ts_ >= EXPAND_INTERVAL
+          && ObMallocAllocator::get_instance()->get_tenant_remain(tenant_->id()) > ObMallocAllocator::get_instance()->get_tenant_limit(tenant_->id()) * 0.05) {
+        shrink_cnt_ = 0;
+        token_change_ts_ = now;
         acquire_more_worker(1, succ_num);
-        LOG_INFO("worker thread created", K(tenant_->id()), K(token_cnt_), K(token));
+        LOG_INFO("worker thread created", K(tenant_->id()), K(token));
       }
+    } else if (OB_UNLIKELY(token < workers_.get_size())) {
+      const auto now = ObTimeUtility::current_time();
+      shrink_cnt_ = workers_.get_size() - token;
+      token_change_ts_ = now;
+      LOG_INFO("worker thread began to shrink", K(tenant_->id()), K(token), K(shrink_cnt_));
     }
     IGNORE_RETURN workers_lock_.unlock();
   }
@@ -406,18 +413,18 @@ void ObResourceGroup::check_worker_count(ObThWorker &w)
 {
   int ret = OB_SUCCESS;
   int64_t now = 0;
-  if (OB_UNLIKELY(token_cnt_ < workers_.get_size()) &&
+  if (OB_UNLIKELY(shrink_cnt_ > 0) &&
       OB_LIKELY((now = ObTimeUtility::current_time()) - token_change_ts_ > SHRINK_INTERVAL) &&
       OB_SUCC(workers_lock_.trylock())) {
-    if (token_cnt_ < workers_.get_size()) {
+    if (shrink_cnt_ > 0) {
       w.stop();
-      token_cnt_ += 1;
+      shrink_cnt_ -= 1;
       token_change_ts_ = now;
       if (cgroup_ctrl_->is_valid()
           && OB_FAIL(cgroup_ctrl_->remove_self_from_cgroup(tenant_->id()))) {
         LOG_WARN("remove thread from cgroup failed", K(ret), "tenant:", tenant_->id(), K_(group_id));
       }
-      LOG_INFO("worker thread exit", K(tenant_->id()), K(token_cnt_), K(workers_.get_size()));
+      LOG_INFO("worker thread exit", K(tenant_->id()), K(shrink_cnt_), K(workers_.get_size()));
     }
     IGNORE_RETURN workers_lock_.unlock();
   }
@@ -570,7 +577,7 @@ ObTenant::ObTenant(const int64_t id,
     : ObTenantBase(id, true),
       meta_lock_(),
       tenant_meta_(),
-      token_cnt_(0),
+      shrink_cnt_(0),
       total_worker_cnt_(0),
       gc_thread_(0),
       stopped_(true),
@@ -705,6 +712,14 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_threshold_ = 80;
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_limit_threshold_ = 95;
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_throttling_percentage_ = 100;
+    mtl_init_ctx_->palf_options_.disk_options_.log_writer_parallelism_ = 3;
+    ObTenantConfig *config = TENANT_CONF(id_);
+    if (OB_ISNULL(config)) {
+      ret = is_virtual_tenant_id(id_) ? OB_SUCCESS : OB_ENTRY_NOT_EXIST;
+    } else {
+      mtl_init_ctx_->palf_options_.disk_options_.log_writer_parallelism_ = config->_log_writer_parallelism;
+    }
+    LOG_INFO("construct_mtl_init_ctx success", "palf_options", mtl_init_ctx_->palf_options_.disk_options_);
   }
   return ret;
 }
@@ -1264,6 +1279,8 @@ int ObTenant::recv_request(ObRequest &req)
   if (OB_SUCC(ret)) {
     ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
+  } else if (OB_SIZE_OVERFLOW == ret) {
+    IGNORE_RETURN faststack();
   }
 
   return ret;
@@ -1368,23 +1385,30 @@ void ObTenant::check_worker_count()
         ++token;
       }
     }
+    int64_t succ_num = 0L;
     token = std::max(token, min_worker_cnt());
     token = std::min(token, max_worker_cnt());
-    if (OB_UNLIKELY(token != token_cnt_)) {
-      const auto diff = token - workers_.get_size();
+    if (OB_UNLIKELY(workers_.get_size() < min_worker_cnt())) {
+      const auto diff = min_worker_cnt() - workers_.get_size();
       const auto now = ObTimeUtility::current_time();
-      int64_t succ_num = 0L;
+      shrink_cnt_ = 0;
       token_change_ts_ = now;
-      token_cnt_ = token;
-      if (workers_.get_size() < min_worker_cnt()) {
-        acquire_more_worker(diff, succ_num);
-        LOG_INFO("worker thread created", K(id_), K(token_cnt_), K(token));
-      } else if (diff > 0
-                 && now - token_change_ts_ >= EXPAND_INTERVAL
-                 && ObMallocAllocator::get_instance()->get_tenant_remain(id_) > ObMallocAllocator::get_instance()->get_tenant_limit(id_) * 0.05) {
+      acquire_more_worker(diff, succ_num);
+      LOG_INFO("worker thread created", K(id_), K(token));
+    } else if (OB_UNLIKELY(token > workers_.get_size())) {
+      const auto now = ObTimeUtility::current_time();
+      if (now - token_change_ts_ >= EXPAND_INTERVAL
+          && ObMallocAllocator::get_instance()->get_tenant_remain(id_) > ObMallocAllocator::get_instance()->get_tenant_limit(id_) * 0.05) {
+        shrink_cnt_ = 0;
+        token_change_ts_ = now;
         acquire_more_worker(1, succ_num);
-        LOG_INFO("worker thread created", K(id_), K(token_cnt_), K(token));
+        LOG_INFO("worker thread created", K(id_), K(token));
       }
+    } else if (OB_UNLIKELY(token < workers_.get_size())) {
+      const auto now = ObTimeUtility::current_time();
+      shrink_cnt_ = workers_.get_size() - token;
+      token_change_ts_ = now;
+      LOG_INFO("worker thread began to shrink", K(id_), K(token), K(shrink_cnt_));
     }
     IGNORE_RETURN workers_lock_.unlock();
   }
@@ -1409,17 +1433,17 @@ void ObTenant::check_worker_count(ObThWorker &w)
 {
   int ret = OB_SUCCESS;
   int64_t now = 0;
-  if (OB_UNLIKELY(token_cnt_ < workers_.get_size()) &&
+  if (OB_UNLIKELY(shrink_cnt_ > 0) &&
       OB_LIKELY((now = ObTimeUtility::current_time()) - token_change_ts_ > SHRINK_INTERVAL) &&
       OB_SUCC(workers_lock_.trylock())) {
-    if (token_cnt_ < workers_.get_size() && w.is_default_worker()) {
+    if (shrink_cnt_ > 0 && w.is_default_worker()) {
       w.stop();
-      token_cnt_ += 1;
+      shrink_cnt_ -= 1;
       token_change_ts_ = now;
       if (cgroup_ctrl_.is_valid() && OB_FAIL(cgroup_ctrl_.remove_self_from_cgroup(id_))) {
         LOG_WARN("remove thread from cgroup failed", K(ret), K_(id));
       }
-      LOG_INFO("worker thread exit", K(id_), K(token_cnt_), K(workers_.get_size()));
+      LOG_INFO("worker thread exit", K(id_), K(shrink_cnt_), K(workers_.get_size()));
     }
     IGNORE_RETURN workers_lock_.unlock();
   }
@@ -1500,8 +1524,8 @@ void ObTenant::lq_end(ObThWorker &w)
 void ObTenant::lq_wait(ObThWorker &w)
 {
   int64_t last_query_us = ObTimeUtility::current_time() - w.get_last_wakeup_ts();
-  int64_t lq_group_worker_cnt = w.get_group()->get_token_cnt();
-  int64_t default_group_worker_cnt = token_cnt_;
+  int64_t lq_group_worker_cnt = w.get_group()->workers_.get_size();
+  int64_t default_group_worker_cnt = workers_.get_size();
   double large_query_percentage = GCONF.large_query_worker_percentage / 100.0;
   int64_t wait_us = static_cast<int64_t>(last_query_us * lq_group_worker_cnt /
                                         (default_group_worker_cnt * large_query_percentage) -

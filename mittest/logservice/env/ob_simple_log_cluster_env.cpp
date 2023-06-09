@@ -431,10 +431,6 @@ int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id, cons
   int ret = OB_SUCCESS;
   const int64_t MB = 1024 * 1024;
   PalfOptions opts;
-  opts.disk_options_.log_disk_usage_limit_size_ = file_block_num * PALF_PHY_BLOCK_SIZE;
-  opts.disk_options_.log_disk_utilization_threshold_ = 80;
-  opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
-  opts.disk_options_.log_disk_throttling_percentage_ = 100;
   auto cluster = get_cluster();
   if (server_id >= 0 && server_id < cluster.size()) {
     ObTenantEnv::set_tenant(cluster[server_id]->get_tenant_base());
@@ -443,7 +439,12 @@ int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id, cons
       ret = OB_NOT_SUPPORTED;
     } else {
       auto palf_env_impl = dynamic_cast<PalfEnvImpl*>(srv->get_palf_env());
-      ret = palf_env_impl->update_options(opts);
+      if (OB_FAIL(palf_env_impl->get_options(opts))) {
+        PALF_LOG(ERROR, "get_optiosn failed", K(ret), K(server_id));
+      } else {
+        opts.disk_options_.log_disk_usage_limit_size_ = file_block_num * PALF_PHY_BLOCK_SIZE;
+        ret = palf_env_impl->update_options(opts);
+      }
     }
   }
   return ret;
@@ -778,6 +779,22 @@ void ObSimpleLogClusterTestEnv::unblock_net(const int64_t id1, const int64_t id2
   cluster[id1]->unblock_net(addr2);
   cluster[id2]->unblock_net(addr1);
   SERVER_LOG(INFO, "unblock_net success", K(addr1), K(addr2));
+}
+
+void ObSimpleLogClusterTestEnv::block_pcode(const int64_t id1, const ObRpcPacketCode &pcode)
+{
+  auto cluster = get_cluster();
+  ObAddr addr1 = cluster[id1]->get_addr();
+  cluster[id1]->block_pcode(pcode);
+  SERVER_LOG(INFO, "block_pcode success", K(addr1), K(pcode));
+}
+
+void ObSimpleLogClusterTestEnv::unblock_pcode(const int64_t id1, const ObRpcPacketCode &pcode)
+{
+  auto cluster = get_cluster();
+  ObAddr addr1 = cluster[id1]->get_addr();
+  cluster[id1]->unblock_pcode(pcode);
+  SERVER_LOG(INFO, "unblock_pcode success", K(addr1), K(pcode));
 }
 
 // set rpc loss by rate from id1 to id2
@@ -1208,6 +1225,22 @@ int ObSimpleLogClusterTestEnv::wait_lsn_until_flushed(const LSN &lsn, PalfHandle
       PALF_LOG(WARN, "wait_lsn_until_flushed", K(ret), K(max_flushed_end_lsn), K(lsn));
     }
     max_flushed_end_lsn = guard.palf_handle_impl_->sw_.max_flushed_end_lsn_;
+  }
+  return ret;
+}
+
+int ObSimpleLogClusterTestEnv::wait_lsn_until_submitted(const LSN &lsn, PalfHandleImplGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t print_log_time = OB_INVALID_TIMESTAMP;
+  LSN max_submit_end_lsn = guard.palf_handle_impl_->sw_.last_submit_end_lsn_;
+  while (lsn > max_submit_end_lsn) {
+    usleep(5 * 1000L);
+    if (palf_reach_time_interval(1 * 1000 * 1000L, print_log_time)) {
+      PALF_LOG(WARN, "wait_lsn_until_submitted", K(ret), K(max_submit_end_lsn), K(lsn));
+    }
+    max_submit_end_lsn = guard.palf_handle_impl_->sw_.last_submit_end_lsn_;
   }
   return ret;
 }

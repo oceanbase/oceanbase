@@ -2826,20 +2826,37 @@ int ObLobManager::do_delete_one_piece(ObLobAccessParam& param, ObLobQueryResult 
   return ret;
 }
 
-void ObLobManager::fill_zero(char *ptr, uint64_t length, bool is_char,
-  uint32_t byte_len, uint32_t byte_offset, uint32_t char_len)
+int ObLobManager::fill_zero(char *ptr, uint64_t length, bool is_char,
+  const ObCollationType coll_type, uint32_t byte_len, uint32_t byte_offset, uint32_t &char_len)
 {
-  char* dst_start = ptr + byte_offset + char_len;
-  char* src_start = ptr + byte_offset + byte_len;
-  uint32_t cp_len = length - (byte_len + byte_offset);
-  if (cp_len > 0 && char_len != byte_len) {
-    MEMMOVE(dst_start, src_start, cp_len);
-  }
-  if (!is_char) {
-    MEMSET(ptr + byte_offset, 0x00, char_len);
+  int ret = OB_SUCCESS;
+  ObString space = ObCharsetUtils::get_const_str(coll_type, ' ');
+  uint32_t space_len = space.length();
+  uint32_t converted_len = space.length() * char_len;
+  if (converted_len > byte_len) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to fill zero for length invalid", K(ret), K(space_len), K(char_len), K(byte_len));
   } else {
-    MEMSET(ptr + byte_offset, ' ', char_len);
+    char* dst_start = ptr + byte_offset + converted_len;
+    char* src_start = ptr + byte_offset + byte_len;
+    uint32_t cp_len = length - (byte_len + byte_offset);
+    if (cp_len > 0 && dst_start != src_start) {
+      MEMMOVE(dst_start, src_start, cp_len);
+    }
+    if (!is_char) {
+      MEMSET(ptr + byte_offset, 0x00, converted_len);
+    } else {
+      if (space_len > 1) {
+        for (int i = 0; i < char_len; i++) {
+          MEMCPY(ptr + byte_offset + i * space_len, space.ptr(), space_len);
+        }
+      } else {
+        MEMSET(ptr + byte_offset, ' ', char_len);
+      }
+    }
+    char_len = converted_len;
   }
+  return ret;
 }
 
 int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScanIter &meta_iter,
@@ -2925,9 +2942,12 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
           }
           if (param.is_fill_zero_) {
             uint32_t fill_char_len = local_end - local_begin;
-            fill_zero(read_data.ptr(), read_data.length(), is_char, by_len, by_st, fill_char_len);
-            read_data.set_length(read_data.length() - by_len + fill_char_len);
-            new_meta_row.byte_len_ = read_data.length();
+            if (OB_FAIL(fill_zero(read_data.ptr(), read_data.length(), is_char, param.coll_type_, by_len, by_st, fill_char_len))) {
+              LOG_WARN("failed to fill zero", K(ret));
+            } else {
+              read_data.set_length(read_data.length() - by_len + fill_char_len);
+              new_meta_row.byte_len_ = read_data.length();
+            }
           } else {
             read_data.assign_buffer(tmp_buf, result.meta_result_.info_.byte_len_);
             if (OB_FAIL(get_real_data(param, result, read_data))) {
@@ -2957,10 +2977,13 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
           }
           if (param.is_fill_zero_) {
             uint32_t fill_char_len = piece_char_len - local_begin;
-            fill_zero(read_data.ptr(), read_data.length(), is_char,
-                      read_data.length() - by_len, by_len, fill_char_len);
-            read_data.set_length(by_len + fill_char_len);
-            new_meta_row.byte_len_ = read_data.length();
+            if (OB_FAIL(fill_zero(read_data.ptr(), read_data.length(), is_char, param.coll_type_,
+                      read_data.length() - by_len, by_len, fill_char_len))) {
+              LOG_WARN("failed to fill zero", K(ret));
+            } else {
+              read_data.set_length(by_len + fill_char_len);
+              new_meta_row.byte_len_ = read_data.length();
+            }
           } else {
             read_data.assign_ptr(read_data.ptr(), by_len);
             new_meta_row.byte_len_ = by_len;
@@ -2982,9 +3005,12 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
           }
           if (param.is_fill_zero_) {
             uint32_t fill_char_len = local_end;
-            fill_zero(read_data.ptr(), read_data.length(), is_char, by_len, 0, fill_char_len);
-            read_data.set_length(fill_char_len + read_data.length() - by_len);
-            new_meta_row.byte_len_ = read_data.length();
+            if (OB_FAIL(fill_zero(read_data.ptr(), read_data.length(), is_char, param.coll_type_, by_len, 0, fill_char_len))) {
+              LOG_WARN("failed to fill zero", K(ret));
+            } else {
+              read_data.set_length(fill_char_len + read_data.length() - by_len);
+              new_meta_row.byte_len_ = read_data.length();
+            }
           } else {
             read_data.assign_buffer(tmp_buf, result.meta_result_.info_.byte_len_);
             if (OB_FAIL(get_real_data(param, result, read_data))) {
@@ -3121,15 +3147,18 @@ int ObLobManager::erase(ObLobAccessParam& param)
         } else {
           if (param.is_fill_zero_) { // do fill zero
             bool is_char = (param.coll_type_ != CS_TYPE_BINARY);
-            fill_zero(data.ptr(), data.length(), is_char, byte_len, byte_offset, char_len);
-            param.byte_size_ = param.byte_size_ - byte_len + char_len;
-            if (param.lob_data_ != nullptr) {
-              param.lob_data_->byte_size_ = param.byte_size_;
-            }
-            if (OB_NOT_NULL(param.lob_locator_)) {
-              param.lob_locator_->size_ = param.lob_locator_->size_ - byte_len + char_len;
-              if (OB_FAIL(fill_lob_locator_extern(param))) {
-                LOG_WARN("fail to fill lob locator extern", K(ret), KPC(param.lob_locator_));
+            if (OB_FAIL(fill_zero(data.ptr(), data.length(), is_char, param.coll_type_, byte_len, byte_offset, char_len))) {
+              LOG_WARN("failed to fill zero", K(ret));
+            } else {
+              param.byte_size_ = param.byte_size_ - byte_len + char_len;
+              if (param.lob_data_ != nullptr) {
+                param.lob_data_->byte_size_ = param.byte_size_;
+              }
+              if (OB_NOT_NULL(param.lob_locator_)) {
+                param.lob_locator_->size_ = param.lob_locator_->size_ - byte_len + char_len;
+                if (OB_FAIL(fill_lob_locator_extern(param))) {
+                  LOG_WARN("fail to fill lob locator extern", K(ret), KPC(param.lob_locator_));
+                }
               }
             }
           } else { // do erase

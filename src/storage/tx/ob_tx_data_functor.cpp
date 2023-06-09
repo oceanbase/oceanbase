@@ -442,10 +442,14 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxData &tx_data, ObTxCCCtx *tx
         } else {
           (void)tnode_.trans_abort(tx_data.end_scn_);
         }
-      } else if (ObTxData::RUNNING == state || ObTxData::ELR_COMMIT == state) {
+      } else if (ObTxData::RUNNING == state) {
         if (!tx_cc_ctx->prepare_version_.is_max()) {
           // Case 3: data is prepared, we also donot write back the prepare state
         }
+      } else if (ObTxData::ELR_COMMIT == state) {
+        // TODO: make it more clear
+        tnode_.fill_trans_version(commit_version);
+        tnode_.set_elr();
       } else if (ObTxData::COMMIT == state) {
         // Case 4: data is committed, so we should write back the commit state
         if (OB_FAIL(value_.trans_commit(commit_version, tnode_))) {

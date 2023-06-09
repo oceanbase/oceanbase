@@ -13,19 +13,19 @@
 /**
  * ObFuture/ObPromise
  *
- * ObPromise is a promise of "the result(type is specified by template arg T) will be written and 
+ * ObPromise is a promise of "the result(type is specified by template arg T) will be written and
  * only be written once".
  * ObFuture is a read-only handle of ObPromise, once result is written, user could read the result
- * from ObFuture any number of times, before that, all read operation will hung until the written 
+ * from ObFuture any number of times, before that, all read operation will hung until the written
  * done. User could use ObFuture check the result is written or not at any time.
- * 
+ *
  *
  * When to use:
  *   - you want to synchronize between threads, usually could be described that thread A waiting for
- *     a operation which will be done by thread B in the future. 
+ *     a operation which will be done by thread B in the future.
  *
  * When not to use:
- *   - you are crazy about performance, value copy of result is not accepted and condition variable 
+ *   - you are crazy about performance, value copy of result is not accepted and condition variable
  *     is too heavy to you.
  *
  * Memory usage:
@@ -54,8 +54,8 @@
  * ObFuture
  *     1. int get(T *&ptr) const
  *        get the promised result, will hung if result is not ready.
- *        if OB_SUCCESS returned, ptr will pointer to the result, notice that ObFuture is also a 
- *        life time guard of the result, is you do not hold the ObFuture object, do not use ptr get 
+ *        if OB_SUCCESS returned, ptr will pointer to the result, notice that ObFuture is also a
+ *        life time guard of the result, is you do not hold the ObFuture object, do not use ptr get
  *        from this method, althrough it was returned OB_SUCCESS.
  *        err:
  *        - OTHERS : forward from ObThreadCond
@@ -109,7 +109,7 @@ struct DefaultFutureAllocator : public ObIAllocator {
 #ifdef UNIITTEST_DEBUG
     total_alive_num++;
 #endif
-    return ob_malloc(size, "ObFuture");
+    return ob_malloc(size, SET_USE_500("ObFuture"));
   }
   void* alloc(const int64_t size, const ObMemAttr &attr) override {
     UNUSED(attr);

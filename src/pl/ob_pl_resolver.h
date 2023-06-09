@@ -321,6 +321,10 @@ public:
                   sql::ObRawExpr *&expr,
                   bool for_write = false);
   int resolve_inner_call(const ParseNode *parse_tree, ObPLStmt *&stmt, ObPLFunctionAST &func);
+  int mock_self_param(bool need_rotate,
+                      ObIArray<ObObjAccessIdent> &obj_access_idents,
+                      ObIArray<ObObjAccessIdx> &self_access_idxs,
+                      ObPLFunctionAST &func);
   int resolve_sqlcode_or_sqlerrm(sql::ObQualifiedName &q_name,
                                  ObPLCompileUnitAST &unit_ast,
                                  sql::ObRawExpr *&expr);

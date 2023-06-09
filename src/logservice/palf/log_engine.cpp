@@ -1031,6 +1031,24 @@ int LogEngine::submit_fetch_log_req(const ObAddr &server,
   return ret;
 }
 
+int LogEngine::submit_batch_fetch_log_resp(const common::ObAddr &server,
+                                           const int64_t msg_proposal_id,
+                                           const int64_t prev_log_proposal_id,
+                                           const LSN &prev_lsn,
+                                           const LSN &curr_lsn,
+                                           const LogWriteBuf &write_buf)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = log_net_service_.submit_batch_fetch_log_resp(
+        server, msg_proposal_id, prev_log_proposal_id,
+        prev_lsn, curr_lsn, write_buf);
+  }
+  return ret;
+}
+
 int LogEngine::submit_notify_rebuild_req(const ObAddr &server,
                                          const LSN &base_lsn,
                                          const LogInfo &base_prev_log_info)

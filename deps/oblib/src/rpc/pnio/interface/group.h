@@ -67,9 +67,11 @@ PN_API void pn_stop(uint64_t gid);
 PN_API void pn_wait(uint64_t gid);
 extern int64_t pnio_keepalive_timeout;
 pn_comm_t* get_current_pnio();
+void pn_release(pn_comm_t* pn_comm);
 
 #define PNIO_OK                     0
 #define PNIO_ERROR                  (-1)
+#define PNIO_STOPPED                (-45)
 #define PNIO_DISCONNECT             (-46)
 #define PNIO_TIMEOUT                (-47)
 #define PNIO_CONNECT_FAIL           (-49)

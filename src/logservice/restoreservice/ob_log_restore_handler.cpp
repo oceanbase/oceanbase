@@ -781,8 +781,7 @@ int ObLogRestoreHandler::refresh_error_context()
   } else if (OB_FAIL(palf_handle_.get_end_lsn(end_lsn))) {
     CLOG_LOG(WARN, "get end_lsn failed", K(id_));
   } else if (end_lsn > context_.error_context_.err_lsn_ && OB_SUCCESS != context_.error_context_.ret_code_) {
-    context_.error_context_.ret_code_ = OB_SUCCESS;
-    context_.error_context_.err_lsn_ = palf::LSN(palf::LOG_INVALID_LSN_VAL);
+    context_.error_context_.reset();
     CLOG_LOG(INFO, "flush error context to success", K(id_), K(context_), K(end_lsn), KPC(parent_), KPC(this));
   }
   return ret;

@@ -8436,7 +8436,7 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(uint64_t tenant_id,
       }
     } else if (!is_oracle_mode() && OB_FAIL(ObDblinkService::get_set_sql_mode_cstr(session_info, set_sql_mode_sql, alloctor))) {
       LOG_WARN("failed to get set_sql_mode_sql", K(ret));
-    } else if (OB_FAIL(dblink_proxy_->acquire_dblink(dblink_id, link_type, param_ctx,
+    } else if (OB_FAIL(dblink_proxy_->acquire_dblink(tenant_id, dblink_id, link_type, param_ctx,
                                                      dblink_conn,
                                                      session_info->get_sessid(),
                                                      next_sql_req_level,

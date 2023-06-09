@@ -24,7 +24,7 @@ namespace common
 bool USE_CO_LATCH = false;
 thread_local uint32_t* ObLatch::current_locks[16];
 thread_local uint32_t* ObLatch::current_wait = nullptr;
-thread_local int8_t ObLatch::max_lock_slot_idx = 0;
+thread_local uint8_t ObLatch::max_lock_slot_idx = 0;
 
 class ObLatchWaitEventGuard : public ObWaitEventGuard
 {
