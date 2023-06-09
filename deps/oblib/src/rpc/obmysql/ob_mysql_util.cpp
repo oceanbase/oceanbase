@@ -1042,17 +1042,18 @@ int ObMySQLUtil::urowid_cell_str(char *buf, const int64_t len, const ObURowIDDat
   return ret;
 }
 
-int ObMySQLUtil::sql_utd_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos)
+int ObMySQLUtil::sql_utd_cell_str(uint64_t tenant_id, char *buf, const int64_t len, const ObString &val, int64_t &pos)
 {
   INIT_SUCC(ret);
   ret = OB_NOT_SUPPORTED;
   return ret;
 }
 
-int ObMySQLUtil::json_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos)
+int ObMySQLUtil::json_cell_str(uint64_t tenant_id, char *buf, const int64_t len, const ObString &val, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  lib::ObMemAttr mem_attr(tenant_id, "JsonAlloc");
+  ObArenaAllocator allocator(mem_attr);
   ObJsonBin j_bin(val.ptr(), val.length(), &allocator);
   ObIJsonBase *j_base = &j_bin;
   ObJsonBuffer jbuf(&allocator);

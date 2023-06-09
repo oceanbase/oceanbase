@@ -191,7 +191,7 @@ int ObSMUtils::cell_str(
         break;
       }
       case ObJsonTC:{
-        ret = ObMySQLUtil::json_cell_str(buf, len, obj.get_string(), pos);
+        ret = ObMySQLUtil::json_cell_str(MTL_ID(), buf, len, obj.get_string(), pos);
         break;
       }
       case ObGeometryTC: {
@@ -297,7 +297,7 @@ int ObSMUtils::cell_str(
         break;
       }
       case ObUserDefinedSQLTC: {
-        ret = ObMySQLUtil::sql_utd_cell_str(buf, len, obj.get_string(), pos);
+        ret = ObMySQLUtil::sql_utd_cell_str(MTL_ID(), buf, len, obj.get_string(), pos);
         break;
       }
       default:

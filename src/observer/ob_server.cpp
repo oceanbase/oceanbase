@@ -592,6 +592,7 @@ void ObServer::destroy()
     sql_engine_.destroy();
     FLOG_INFO("sql engine destroyed");
 
+
     FLOG_INFO("begin to destroy pl engine");
     pl_engine_.destory();
     FLOG_INFO("pl engine destroyed");
@@ -2297,6 +2298,7 @@ int ObServer::init_sql()
       LOG_ERROR("fail initialize DTL instance", KR(ret));
     }
   }
+
 
   if (OB_SUCC(ret)) {
     LOG_INFO("init sql done");
