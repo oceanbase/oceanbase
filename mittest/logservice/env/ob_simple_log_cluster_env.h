@@ -70,6 +70,7 @@ class MockLSAdapter;
   SERVER_LOG(INFO, "begin unittest"); \
   ::testing::InitGoogleTest(&argc, argv); \
   ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION); \
+  ObClusterVersion::get_instance().update_cluster_version(DATA_CURRENT_VERSION); \
   return RUN_ALL_TESTS();
 
 #define EXPECT_UNTIL_EQ(x, y) while(!(x == y))        \

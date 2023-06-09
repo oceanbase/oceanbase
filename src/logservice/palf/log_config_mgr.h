@@ -203,6 +203,40 @@ public:
   LogConfigChangeType type_;
 };
 
+struct LogReconfigBarrier
+{
+  LogReconfigBarrier()
+    : prev_log_proposal_id_(INVALID_PROPOSAL_ID),
+      prev_lsn_(PALF_INITIAL_LSN_VAL),
+      prev_end_lsn_(PALF_INITIAL_LSN_VAL),
+      prev_mode_pid_(INVALID_PROPOSAL_ID) { }
+  LogReconfigBarrier(const int64_t prev_log_pid,
+                     const LSN &prev_lsn,
+                     const LSN &prev_end_lsn,
+                     const int64_t prev_mode_pid)
+    : prev_log_proposal_id_(prev_log_pid),
+      prev_lsn_(prev_lsn),
+      prev_end_lsn_(prev_end_lsn),
+      prev_mode_pid_(prev_mode_pid) { }
+  ~LogReconfigBarrier() { reset(); }
+
+  void reset()
+  {
+    prev_log_proposal_id_ = INVALID_PROPOSAL_ID;
+    prev_lsn_.reset();
+    prev_end_lsn_.reset();
+    prev_mode_pid_ = INVALID_PROPOSAL_ID;
+  }
+  TO_STRING_KV(K_(prev_log_proposal_id), K_(prev_lsn), K_(prev_end_lsn), K_(prev_mode_pid));
+  // previous log proposal_id for barrier
+  int64_t prev_log_proposal_id_;
+  // previous lsn for barrier
+  LSN prev_lsn_;
+  LSN prev_end_lsn_;
+  // previous mode proposal_id for barrier
+  int64_t prev_mode_pid_;
+};
+
 class LogConfigMgr
 {
 public:
@@ -273,6 +307,25 @@ public:
   //    else return other errno
   virtual int get_log_sync_member_list(common::ObMemberList &member_list,
       int64_t &replica_num) const;
+  // @brief get the paxos member list which is responsible for generating
+  //        committed_end_lsn in the leader, excluding arbitraion member
+  //        and excluding degraded paxos members.
+  // This interface is only used by palf.
+  // @param[in/out] ObMemberList, the output member list
+  // @param[in/out] int64_t, the output replica_num
+  // @param[in/out] bool, whehter the current committed_end_lsn is smaller than
+  //        log barrier of a reconfiguration. If the current committed_end_lsn is
+  //        smaller(larger) than barrier, the output member_list and replica_num will be
+  //        the configuration before(after) the reconfiguration.
+  // @param[in/out] barrier_lsn, log barrier of a reconfiguration (last_submit_end_lsn)
+  // @retval
+  //    return OB_SUCCESS if success
+  //    else return other errno
+  virtual int get_log_sync_member_list_for_generate_committed_lsn(
+      ObMemberList &member_list,
+      int64_t &replica_num,
+      bool &is_before_barrier,
+      LSN &barrier_lsn) const;
   virtual int get_arbitration_member(common::ObMember &arb_member) const;
   virtual int get_prev_member_list(common::ObMemberList &member_list) const;
   virtual int get_children_list(LogLearnerList &children) const;
@@ -287,6 +340,9 @@ public:
   const common::ObAddr &get_parent() const;
   virtual int leader_do_loop_work(bool &need_change_config);
   virtual int switch_state();
+  virtual int wait_log_barrier(const LogConfigChangeArgs &args,
+                               const LogConfigInfo &new_config_info) const;
+  virtual int renew_config_change_barrier();
   // ================= Config Change =================
 
   int check_args_and_generate_config(const LogConfigChangeArgs &args,
@@ -330,8 +386,10 @@ public:
                                  bool &added_member_has_new_version) const;
   int wait_log_barrier_(const LogConfigChangeArgs &args,
                         const LogConfigInfo &new_config_info) const;
+  int wait_log_barrier_before_start_working_(const LogConfigChangeArgs &args);
   int sync_meta_for_arb_election_leader();
-  bool need_sync_to_degraded_learners() const;
+  void set_sync_to_degraded_learners();
+  bool is_sync_to_degraded_learners() const;
   // ================ Config Change ==================
   // ==================== Child ========================
   virtual int register_parent();
@@ -356,8 +414,7 @@ public:
     int64_t pos = 0;
     J_OBJ_START();
     J_KV(K_(palf_id), K_(self), K_(alive_paxos_memberlist), K_(alive_paxos_replica_num),         \
-      K_(log_ms_meta), K_(prev_log_proposal_id),                                                 \
-      K_(prev_lsn), K_(prev_end_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version), \
+      K_(log_ms_meta), K_(checking_barrier), K_(reconfig_barrier), K_(persistent_config_version), \
       K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),                           \
       K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),                 \
       K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),                                \
@@ -424,7 +481,6 @@ private:
   int try_resend_config_log_(const int64_t proposal_id);
   // broadcast leader info to global learners, only called in leader active
   int submit_broadcast_leader_info_(const int64_t proposal_id) const;
-  int get_log_barrier_(LSN &prev_log_lsn, LSN &prev_log_end_lsn, int64_t &prev_log_proposal_id) const;
   int check_servers_lsn_and_version_(const common::ObAddr &server,
                                      const LogConfigVersion &config_version,
                                      const int64_t conn_timeout_us,
@@ -489,10 +545,6 @@ private:
   int64_t alive_paxos_replica_num_;
   // list of all learners, including learners which has been degraded from acceptors
   GlobalLearnerList all_learnerlist_;
-  LogConfigMeta config_meta_;
-  common::ObMemberList applied_alive_paxos_memberlist_;
-  int64_t applied_alive_paxos_replica_num_;
-  GlobalLearnerList applied_all_learnerlist_;
   LogConfigChangeArgs running_args_;
   common::ObRegion region_;
   LogMemberRegionMap paxos_member_region_map_;
@@ -501,13 +553,10 @@ private:
   int64_t palf_id_;
   common::ObAddr self_;
   // ================= Config Change =================
-  // previous log proposal_id for barrier
-  int64_t prev_log_proposal_id_;
-  // previous lsn for barrier
-  LSN prev_lsn_;
-  LSN prev_end_lsn_;
-  // previous mode proposal_id for barrier
-  int64_t prev_mode_pid_;
+  // barrier for reconfiguration
+  LogReconfigBarrier reconfig_barrier_;
+  // barrier for checking log before reconfiguration
+  LogReconfigBarrier checking_barrier_;
   ConfigChangeState state_;
   int64_t last_submit_config_log_time_us_;
   // record ack to membership log

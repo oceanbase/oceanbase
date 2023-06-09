@@ -155,7 +155,6 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
   LogConfigVersion config_version;
   EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(args, proposal_id, ele_epoch, config_version));
   EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.alive_paxos_memberlist_.contains(follower_addr));
-  EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.applied_alive_paxos_memberlist_.contains(follower_addr));
   EXPECT_EQ(leader.palf_handle_impl_->config_mgr_.state_, 1);
 
   // reset status supposing the lease is expried
@@ -409,9 +408,9 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_arb_with_highest_version)
   // only send config log to arb member
   ObMemberList member_list;
   member_list.add_server(get_cluster()[2]->get_addr());
-  const int64_t prev_log_proposal_id = leader.palf_handle_impl_->config_mgr_.prev_log_proposal_id_;
-  const LSN prev_lsn = leader.palf_handle_impl_->config_mgr_.prev_lsn_;
-  const int64_t prev_mode_pid = leader.palf_handle_impl_->config_mgr_.prev_mode_pid_;
+  const int64_t prev_log_proposal_id = leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_log_proposal_id_;
+  const LSN prev_lsn = leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_;
+  const int64_t prev_mode_pid = leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_mode_pid_;
   const LogConfigMeta config_meta = leader.palf_handle_impl_->config_mgr_.log_ms_meta_;
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->log_engine_.submit_change_config_meta_req( \
     member_list, proposal_id, prev_log_proposal_id, prev_lsn, prev_mode_pid, config_meta));
@@ -487,7 +486,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_defensive)
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(proposal_id, election_epoch, args.type_));
   EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version));
   // do not allow to append log when changing config with arb
-  EXPECT_TRUE(leader.palf_handle_impl_->state_mgr_.is_changing_config_with_arb());
+  // EXPECT_TRUE(leader.palf_handle_impl_->state_mgr_.is_changing_config_with_arb());
   while (true) {
     if (OB_SUCC(leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version))) {
       break;
@@ -665,18 +664,17 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   sleep(2);
 
-  LogConfigChangeArgs args(ObMember(palf_list[another_f_idx]->palf_handle_impl_->self_, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
+  const common::ObAddr b_addr = palf_list[another_f_idx]->palf_handle_impl_->self_;
+  LogConfigChangeArgs args(ObMember(b_addr, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
   int64_t proposal_id = 0;
   int64_t election_epoch = 0;
   LogConfigVersion config_version;
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(proposal_id, election_epoch, args.type_));
   EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version));
 
-  // leader appended config meta, but did not apply config meta
-  EXPECT_NE(palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_version_,
-            palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
-  EXPECT_EQ(palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_version_,
-            palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
+  // leader appended config meta
+  EXPECT_FALSE(palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+  EXPECT_TRUE(palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
 
   // block all networks of arb member, and the network from the follower to the leader
   block_net(arb_replica_idx, another_f_idx, true);
@@ -696,8 +694,8 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
   int64_t leader_replica_num = 0;
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.get_log_sync_member_list( \
       leader_member_list, leader_replica_num));
-  EXPECT_EQ(2, leader_member_list.get_member_number());
-  EXPECT_EQ(2, leader_replica_num);
+  EXPECT_EQ(1, leader_member_list.get_member_number());
+  EXPECT_EQ(1, leader_replica_num);
 
   int64_t new_leader_idx = 0;
   PalfHandleImplGuard new_leader;
@@ -755,8 +753,6 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
   EXPECT_EQ(1, leader.palf_handle_impl_->config_mgr_.state_);
   EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version));
   EXPECT_EQ(1, leader.palf_handle_impl_->config_mgr_.state_);
-  EXPECT_NE(palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_version_,
-            palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
 
   // waiting for leader revoke
   while (leader.palf_handle_impl_->state_mgr_.role_ == LEADER) {

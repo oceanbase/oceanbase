@@ -105,6 +105,11 @@ public:
   virtual int set_changing_config_with_arb();
   virtual int reset_changing_config_with_arb();
   virtual bool is_changing_config_with_arb() const;
+  virtual const common::ObAddr &get_broadcast_leader() const { return broadcast_leader_;}
+  virtual bool can_handle_leader_broadcast(const common::ObAddr &server,
+                                           const int64_t &proposal_id) const;
+  virtual int handle_leader_broadcast(const common::ObAddr &server,
+                                      const int64_t &proposal_id);
   TO_STRING_KV(KP(this), K_(self), K_(palf_id), "role", role_to_string(role_), "replica_type",         \
       replica_type_2_str(replica_type_), "state", replica_state_to_string(state_), K_(prepare_meta),   \
       K_(leader), K_(leader_epoch), K_(is_sync_enabled), K_(allow_vote), K_(allow_vote_persisted), K_(pending_end_lsn),          \
@@ -156,6 +161,8 @@ private:
   bool check_leader_log_sync_state_();
   bool need_fetch_log_() const;
   int check_and_try_fetch_log_();
+  bool need_reset_broadcast_leader_() const;
+  void reset_broadcast_leader_();
 private:
   static const uint64_t UNION_ROLE_VAL_MASK = (1ll << 32) - 1;
 private:
@@ -204,6 +211,8 @@ private:
   // is changing config with arbitration member, stop appending logs
   bool is_changing_config_with_arb_;
   int64_t last_set_changing_config_with_arb_time_us_;
+  common::ObAddr broadcast_leader_;
+  int64_t last_recv_leader_broadcast_time_us_;
   bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(LogStateMgr);

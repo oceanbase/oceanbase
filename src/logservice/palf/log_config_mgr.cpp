@@ -31,20 +31,14 @@ LogConfigMgr::LogConfigMgr()
       alive_paxos_memberlist_(),
       alive_paxos_replica_num_(0),
       all_learnerlist_(),
-      config_meta_(),
-      applied_alive_paxos_memberlist_(),
-      applied_alive_paxos_replica_num_(0),
-      applied_all_learnerlist_(),
       running_args_(),
       region_(DEFAULT_REGION_NAME),
       paxos_member_region_map_(),
       lock_(common::ObLatchIds::PALF_CM_CONFIG_LOCK),
       palf_id_(),
       self_(),
-      prev_log_proposal_id_(INVALID_PROPOSAL_ID),
-      prev_lsn_(),
-      prev_end_lsn_(PALF_INITIAL_LSN_VAL),
-      prev_mode_pid_(INVALID_PROPOSAL_ID),
+      reconfig_barrier_(),
+      checking_barrier_(),
       state_(INIT),
       last_submit_config_log_time_us_(OB_INVALID_TIMESTAMP),
       ms_ack_list_(),
@@ -125,7 +119,6 @@ int LogConfigMgr::init(const int64_t palf_id,
     palf_id_ = palf_id;
     self_ = self;
     log_ms_meta_ = log_ms_meta;
-    config_meta_ = log_ms_meta;
     log_engine_ = log_engine;
     sw_ = sw;
     state_mgr_ = state_mgr;
@@ -136,8 +129,6 @@ int LogConfigMgr::init(const int64_t palf_id,
     if (true == log_ms_meta.curr_.is_valid()) {
       if (OB_FAIL(append_config_info_(log_ms_meta.curr_))) {
         PALF_LOG(WARN, "append_config_info_ failed", K(ret), K(palf_id), K(log_ms_meta));
-      } else if (OB_FAIL(apply_config_info_(log_ms_meta.curr_))) {
-        PALF_LOG(WARN, "apply_config_info_ failed", K(ret), K(palf_id), K(log_ms_meta));
       } else if (OB_FAIL(update_election_meta_(log_ms_meta_.curr_))) {
         PALF_LOG(WARN, "update_election_meta_ failed", K(ret), K(palf_id), K(log_ms_meta));
       }
@@ -145,7 +136,7 @@ int LogConfigMgr::init(const int64_t palf_id,
     if (OB_SUCC(ret)) {
       persistent_config_version_ = log_ms_meta_.curr_.config_version_;
       is_inited_ = true;
-      PALF_LOG(INFO, "LogConfigMgr init success", K(ret), K_(palf_id), K_(self), K_(config_meta), KP(this));
+      PALF_LOG(INFO, "LogConfigMgr init success", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), KP(this));
     }
   }
   return ret;
@@ -183,9 +174,8 @@ void LogConfigMgr::destroy()
     last_sync_meta_for_arb_election_leader_time_us_ = OB_INVALID_TIMESTAMP;
     region_ = DEFAULT_REGION_NAME;
     state_ = ConfigChangeState::INIT;
-    prev_mode_pid_ = INVALID_PROPOSAL_ID;
-    prev_lsn_.reset();
-    prev_log_proposal_id_ = INVALID_PROPOSAL_ID;
+    reconfig_barrier_.reset();
+    checking_barrier_.reset();
     persistent_config_version_.reset();
     barrier_print_log_time_ = OB_INVALID_TIMESTAMP;
     self_.reset();
@@ -288,15 +278,12 @@ int LogConfigMgr::set_initial_config_info_(const LogConfigInfo &config_info,
         proposal_id, LSN(PALF_INITIAL_LSN_VAL), proposal_id))) {
       PALF_LOG(WARN, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K(proposal_id), K(initial_config_seq));
     } else {
-      config_meta_ = log_ms_meta_;
       FlushMetaCbCtx cb_ctx;
       cb_ctx.type_ = MetaType::CHANGE_CONFIG_META;
       cb_ctx.proposal_id_ = proposal_id;
       cb_ctx.config_version_ = log_ms_meta_.curr_.config_version_;
       if (OB_FAIL(append_config_info_(log_ms_meta_.curr_))) {
         PALF_LOG(WARN, "append_config_info_ failed", K(ret), K_(palf_id), K_(log_ms_meta));
-      } else if (OB_FAIL(apply_config_info_(log_ms_meta_.curr_))) {
-        PALF_LOG(WARN, "apply_config_info_ failed", K(ret), K_(palf_id), K_(log_ms_meta));
       } else if (OB_FAIL(update_election_meta_(log_ms_meta_.curr_))) {
         PALF_LOG(WARN, "update_election_memberlist_ failed", K(ret));
       } else if (OB_FAIL(log_engine_->submit_flush_change_config_meta_task(cb_ctx, log_ms_meta_))) {
@@ -369,10 +356,10 @@ int LogConfigMgr::get_prev_member_list(ObMemberList &member_list) const
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
-  } else if (OB_FAIL(member_list.deep_copy(config_meta_.prev_.log_sync_memberlist_))) {
+  } else if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.log_sync_memberlist_))) {
     PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta));
-  } else if (config_meta_.prev_.arbitration_member_.is_valid() &&
-      OB_FAIL(member_list.add_member(config_meta_.prev_.arbitration_member_))) {
+  } else if (log_ms_meta_.prev_.arbitration_member_.is_valid() &&
+      OB_FAIL(member_list.add_member(log_ms_meta_.prev_.arbitration_member_))) {
     PALF_LOG(WARN, "add_member failed", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta));
     // no nothing
   }
@@ -384,7 +371,7 @@ int LogConfigMgr::get_global_learner_list(common::GlobalLearnerList &learner_lis
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(learner_list.deep_copy(config_meta_.curr_.learnerlist_))) {
+  } else if (OB_FAIL(learner_list.deep_copy(log_ms_meta_.curr_.learnerlist_))) {
     PALF_LOG(WARN, "deep_copy learner_list failed", KR(ret), K_(palf_id), K_(self));
   } else {
     // pass
@@ -397,7 +384,7 @@ int LogConfigMgr::get_degraded_learner_list(common::GlobalLearnerList &degraded_
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(degraded_learner_list.deep_copy(config_meta_.curr_.degraded_learnerlist_))) {
+  } else if (OB_FAIL(degraded_learner_list.deep_copy(log_ms_meta_.curr_.degraded_learnerlist_))) {
     PALF_LOG(WARN, "deep_copy degraded_learnerlist_ failed", KR(ret), K_(palf_id), K_(self));
   } else {
     // pass
@@ -412,7 +399,7 @@ int LogConfigMgr::get_arbitration_member(common::ObMember &arb_member) const
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
   } else {
-    arb_member = config_meta_.curr_.arbitration_member_;
+    arb_member = log_ms_meta_.curr_.arbitration_member_;
   }
   return ret;
 }
@@ -423,7 +410,7 @@ int LogConfigMgr::get_curr_member_list(ObMemberList &member_list, int64_t &repli
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
-  } else if (OB_FAIL(config_meta_.curr_.get_expected_paxos_memberlist(member_list, replica_num))) {
+  } else if (OB_FAIL(log_ms_meta_.curr_.get_expected_paxos_memberlist(member_list, replica_num))) {
     PALF_LOG(WARN, "get_expected_paxos_memberlist failed", KR(ret), K_(palf_id), K_(self));
   } else {
     // no nothing
@@ -439,10 +426,42 @@ int LogConfigMgr::get_alive_member_list_with_arb(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
-  } else if (OB_FAIL(member_list.deep_copy(applied_alive_paxos_memberlist_))) {
+  } else if (OB_FAIL(member_list.deep_copy(alive_paxos_memberlist_))) {
     PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
   } else {
-    replica_num = applied_alive_paxos_replica_num_;
+    replica_num = alive_paxos_replica_num_;
+  }
+  return ret;
+}
+
+// require rlock of PalfHandleImpl
+int LogConfigMgr::get_log_sync_member_list_for_generate_committed_lsn(
+    ObMemberList &member_list,
+    int64_t &replica_num,
+    bool &is_before_barrier,
+    LSN &barrier_lsn) const
+{
+  int ret = OB_SUCCESS;
+  LSN prev_committed_end_lsn;
+  sw_->get_committed_end_lsn(prev_committed_end_lsn);
+  is_before_barrier = false;
+  barrier_lsn = LSN(PALF_INITIAL_LSN_VAL);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
+  } else if (OB_UNLIKELY(prev_committed_end_lsn < reconfig_barrier_.prev_end_lsn_ &&
+      reconfig_barrier_.prev_end_lsn_.is_valid())) {
+    is_before_barrier = true;
+    barrier_lsn = reconfig_barrier_.prev_end_lsn_;
+    if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.log_sync_memberlist_))) {
+      PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
+    } else {
+      replica_num = log_ms_meta_.prev_.log_sync_replica_num_;
+    }
+  } else if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.log_sync_memberlist_))) {
+    PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
+  } else {
+    replica_num = log_ms_meta_.curr_.log_sync_replica_num_;
   }
   return ret;
 }
@@ -454,10 +473,10 @@ int LogConfigMgr::get_log_sync_member_list(ObMemberList &member_list,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
-  } else if (OB_FAIL(member_list.deep_copy(config_meta_.curr_.log_sync_memberlist_))) {
+  } else if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.log_sync_memberlist_))) {
     PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
   } else {
-    replica_num = config_meta_.curr_.log_sync_replica_num_;
+    replica_num = log_ms_meta_.curr_.log_sync_replica_num_;
   }
   return ret;
 }
@@ -483,7 +502,7 @@ int LogConfigMgr::get_config_version(LogConfigVersion &config_version) const
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    config_version = config_meta_.curr_.config_version_;
+    config_version = log_ms_meta_.curr_.config_version_;
   }
   return ret;
 }
@@ -495,7 +514,7 @@ int LogConfigMgr::get_replica_num(int64_t &replica_num) const
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
-  } else if (OB_FAIL(config_meta_.curr_.get_expected_paxos_memberlist(member_list, replica_num))) {
+  } else if (OB_FAIL(log_ms_meta_.curr_.get_expected_paxos_memberlist(member_list, replica_num))) {
     PALF_LOG(WARN, "get_expected_paxos_memberlist failed", KR(ret), K_(palf_id), K_(self));
   } else {
   }
@@ -507,12 +526,18 @@ int64_t LogConfigMgr::get_accept_proposal_id() const
   return log_ms_meta_.proposal_id_;
 }
 
-bool LogConfigMgr::need_sync_to_degraded_learners() const
+void LogConfigMgr::set_sync_to_degraded_learners()
+{
+  will_upgrade_ = true;
+  last_start_upgrade_time_us_ = common::ObTimeUtility::current_time();
+  PALF_LOG_RET(INFO, OB_SUCCESS, "set_sync_to_degraded_learners to true", K_(palf_id), K_(self));
+}
+
+bool LogConfigMgr::is_sync_to_degraded_learners() const
 {
   // Note: do not need acquire lock
   return will_upgrade_;
 }
-
 
 int LogConfigMgr::submit_broadcast_leader_info(const int64_t proposal_id) const
 {
@@ -582,6 +607,7 @@ int LogConfigMgr::leader_do_loop_work(bool &need_change_config)
     // reset will_upgrade_ flag if it have not been updated for 5s
     if (will_upgrade_ == true && palf_reach_time_interval(5 * 1000 * 1000, last_start_upgrade_time_us_)) {
       will_upgrade_ = false;
+      PALF_LOG_RET(INFO, OB_SUCCESS, "set_sync_to_degraded_learners to false", K_(palf_id), K_(self));
     }
   }
   if (is_leader_active && palf_reach_time_interval(PALF_BROADCAST_LEADER_INFO_INTERVAL_US, last_broadcast_leader_info_time_us_) &&
@@ -744,7 +770,7 @@ int LogConfigMgr::change_config(const LogConfigChangeArgs &args,
   } else {
     ret = change_config_(args, proposal_id, election_epoch, config_version);
     PALF_LOG(INFO, "config_change stat", K_(palf_id), K_(self), K(args), K(proposal_id),
-      K_(prev_log_proposal_id), K_(prev_lsn), K_(prev_end_lsn), K_(prev_mode_pid), K_(state), K(config_version),
+      K_(checking_barrier), K_(reconfig_barrier), K_(state), K(config_version),
       K_(persistent_config_version), K_(ms_ack_list), K_(resend_config_version),
       K_(resend_log_list), K_(log_ms_meta), K_(last_submit_config_log_time_us));
   }
@@ -812,18 +838,15 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args,
         if (is_reach_majority_()) {
           (void) state_mgr_->reset_changing_config_with_arb();
           state_ = INIT;
-          config_meta_ = log_ms_meta_;
-          applied_all_learnerlist_ = all_learnerlist_;
-          applied_alive_paxos_memberlist_ = alive_paxos_memberlist_;
-          applied_alive_paxos_replica_num_ = alive_paxos_replica_num_;
-          (void) update_match_lsn_map_(running_args_, config_meta_.curr_);
+          (void) update_match_lsn_map_(running_args_, log_ms_meta_.curr_);
           ms_ack_list_.reset();
           resend_config_version_ = log_ms_meta_.curr_.config_version_;
           last_submit_config_log_time_us_ = OB_INVALID_TIMESTAMP;
           ret = OB_SUCCESS;
         } else if (need_resend_config_log_()) {
           if (OB_SUCC(submit_config_log_(alive_paxos_memberlist_, curr_proposal_id,
-              prev_log_proposal_id_, prev_lsn_, prev_mode_pid_, log_ms_meta_))) {
+              reconfig_barrier_.prev_log_proposal_id_, reconfig_barrier_.prev_lsn_,
+              reconfig_barrier_.prev_mode_pid_, log_ms_meta_))) {
             PALF_LOG(INFO, "submit_config_log success", KR(ret), K_(palf_id), K_(self));
             ret = OB_EAGAIN;
           } else if (OB_EAGAIN != ret) {
@@ -905,16 +928,31 @@ bool LogConfigMgr::is_reach_majority_() const
 
 bool LogConfigMgr::need_resend_config_log_() const
 {
+  const int64_t RESEND_INTERVAL_US = (state_mgr_->is_changing_config_with_arb())? \
+      PALF_RESEND_CONFIG_LOG_FOR_ARB_INTERVAL_US: PALF_RESEND_CONFIG_LOG_INTERVAL_US;
   int64_t curr_time_us = common::ObTimeUtility::current_time();
   return (last_submit_config_log_time_us_ == OB_INVALID_TIMESTAMP ||
-      curr_time_us - last_submit_config_log_time_us_ > PALF_RESEND_MSLOG_INTERVAL_US);
+      curr_time_us - last_submit_config_log_time_us_ > RESEND_INTERVAL_US);
 }
 
 bool LogConfigMgr::need_recheck_init_state_() const
 {
   int64_t curr_time_us = common::ObTimeUtility::current_time();
   return (last_check_init_state_time_us_ == OB_INVALID_TIMESTAMP ||
-      curr_time_us - last_check_init_state_time_us_ > 100 * 1000);
+      curr_time_us - last_check_init_state_time_us_ > 10 * 1000);
+}
+
+// require wlock of PalfHandleImpl
+int LogConfigMgr::renew_config_change_barrier()
+{
+  int ret = OB_SUCCESS;
+  SpinLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = renew_config_change_barrier_();
+  }
+  return ret;
 }
 
 int LogConfigMgr::renew_config_change_barrier_()
@@ -923,26 +961,17 @@ int LogConfigMgr::renew_config_change_barrier_()
   int64_t prev_log_proposal_id = INVALID_PROPOSAL_ID;
   int64_t prev_mode_pid = INVALID_PROPOSAL_ID;
   LSN prev_log_lsn, prev_log_end_lsn;
-  if (OB_FAIL(get_log_barrier_(prev_log_lsn, prev_log_end_lsn, prev_log_proposal_id))) {
-    PALF_LOG(WARN, "get_log_barrier_ failed", KR(ret), K_(palf_id), K_(self));
-  } else {
-    prev_mode_pid_ = mode_mgr_->get_last_submit_mode_meta().proposal_id_;
-    prev_log_proposal_id_ = prev_log_proposal_id;
-    prev_lsn_ = prev_log_lsn;
-    prev_end_lsn_ = prev_log_end_lsn;
-    PALF_LOG(INFO, "renew_config_change_barrier_ success", KR(ret), K_(palf_id), K_(self),
-        K_(prev_lsn), K_(prev_end_lsn), K_(prev_log_proposal_id), K_(prev_mode_pid));
-  }
-  return ret;
-}
-
-int LogConfigMgr::get_log_barrier_(LSN &prev_log_lsn, LSN &prev_log_end_lsn, int64_t &prev_log_proposal_id) const
-{
-  int ret = OB_SUCCESS;
   int64_t unused_log_id;
-  // log barrier must be last_submit_log_info
-  if (OB_FAIL(sw_->get_last_submit_log_info(prev_log_lsn, prev_log_end_lsn, unused_log_id, prev_log_proposal_id))) {
+  if (OB_FAIL(sw_->get_last_submit_log_info(prev_log_lsn, prev_log_end_lsn,
+      unused_log_id, prev_log_proposal_id))) {
     PALF_LOG(WARN, "get_last_submit_log_info failed", KR(ret), K_(palf_id), K_(self));
+  } else {
+    checking_barrier_.prev_mode_pid_ = mode_mgr_->get_last_submit_mode_meta().proposal_id_;
+    checking_barrier_.prev_log_proposal_id_ = prev_log_proposal_id;
+    checking_barrier_.prev_lsn_ = prev_log_lsn;
+    checking_barrier_.prev_end_lsn_ = prev_log_end_lsn;
+    PALF_LOG(INFO, "renew_config_change_barrier_ success", KR(ret), K_(palf_id), K_(self),
+        K_(checking_barrier));
   }
   return ret;
 }
@@ -964,16 +993,16 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
   } else if (OB_FAIL(get_curr_member_list(curr_member_list, curr_replica_num))) {
     PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), K_(palf_id), K_(self), K(args));
   } else {
-    const ObMemberList &log_sync_member_list = config_meta_.curr_.log_sync_memberlist_;
-    const common::GlobalLearnerList &curr_learner_list = config_meta_.curr_.learnerlist_;
-    const common::GlobalLearnerList &degraded_learnerlist = config_meta_.curr_.degraded_learnerlist_;
+    const ObMemberList &log_sync_member_list = log_ms_meta_.curr_.log_sync_memberlist_;
+    const common::GlobalLearnerList &curr_learner_list = log_ms_meta_.curr_.learnerlist_;
+    const common::GlobalLearnerList &degraded_learnerlist = log_ms_meta_.curr_.degraded_learnerlist_;
     const common::ObMember &member = args.server_;
     const int64_t new_replica_num = args.new_replica_num_;
     const bool is_in_log_sync_memberlist = log_sync_member_list.contains(member);
     const bool is_in_degraded_learnerlist = degraded_learnerlist.contains(member);
     const bool is_in_learnerlist = curr_learner_list.contains(member);
-    const bool is_arb_replica = (config_meta_.curr_.arbitration_member_ == member);
-    const bool has_arb_replica = (config_meta_.curr_.arbitration_member_.is_valid());
+    const bool is_arb_replica = (log_ms_meta_.curr_.arbitration_member_ == member);
+    const bool has_arb_replica = (log_ms_meta_.curr_.arbitration_member_.is_valid());
     switch (args.type_) {
       case CHANGE_REPLICA_NUM:
       {
@@ -1320,9 +1349,12 @@ int LogConfigMgr::pre_sync_config_log_and_mode_meta_(const common::ObMember &ser
 {
   int ret = OB_SUCCESS;
   common::ObMemberList member_list;
-  const int64_t prev_log_proposal_id = (is_arb_replica)? log_ms_meta_.prev_log_proposal_id_: prev_log_proposal_id_;
-  const LSN prev_lsn = (is_arb_replica)? log_ms_meta_.prev_lsn_: prev_lsn_;
-  const int64_t prev_mode_pid = (is_arb_replica)? log_ms_meta_.prev_mode_pid_: prev_mode_pid_;
+  // the log barrier must not be used in normal replica because of compatibility
+  const int64_t prev_log_proposal_id = (is_arb_replica)? log_ms_meta_.prev_log_proposal_id_: \
+      reconfig_barrier_.prev_log_proposal_id_;
+  const LSN prev_lsn = (is_arb_replica)? log_ms_meta_.prev_lsn_: reconfig_barrier_.prev_lsn_;
+  const int64_t prev_mode_pid = (is_arb_replica)? log_ms_meta_.prev_mode_pid_: \
+      reconfig_barrier_.prev_mode_pid_;
   if (false == server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else if (CHANGING == state_ && false == is_arb_replica) {
@@ -1371,55 +1403,30 @@ int LogConfigMgr::append_config_meta_(const int64_t curr_proposal_id,
     PALF_LOG(WARN, "generate_new_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(args));
     // new_member_list contains arb member, stop appending logs and check log barrier
   } else if (FALSE_IT(has_arb_member = new_config_info.arbitration_member_.is_valid())) {
-  } else if (has_arb_member && OB_FAIL(state_mgr_->set_changing_config_with_arb())) {
-    PALF_LOG(ERROR, "set_changing_config_with_arb failed", KR(ret), K_(palf_id), K_(self), K(args));
-  } else if (has_arb_member &&
-            OB_FAIL(wait_log_barrier_(args, new_config_info))) {
-    PALF_LOG(WARN, "wait_log_barrier_ eagain", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
-    if (OB_LOG_NOT_SYNC == ret) {
-      state_mgr_->reset_changing_config_with_arb();
-    }
   } else if (OB_FAIL(update_election_meta_(new_config_info))) {
     if (OB_OP_NOT_ALLOW == ret) {
       ret = OB_EAGAIN;
     } else {
       PALF_LOG(WARN, "update_election_meta_ failed", KR(ret), K_(palf_id), K_(self), K(new_config_info), K_(log_ms_meta));
     }
-  } else if (OB_FAIL(append_config_info_(new_config_info))) {
-    PALF_LOG(WARN, "append_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(new_config_info));
-    // update election meta may need retry, we will not allow appending logs until updating election meta successfully
-  } else if (OB_FAIL(renew_config_change_barrier_())) {
+  } else if (false == has_arb_member && OB_FAIL(renew_config_change_barrier_())) {
     PALF_LOG(WARN, "renew_config_change_barrier_ failed", KR(ret), K_(palf_id), K_(self));
   } else if (OB_FAIL(log_ms_meta_.generate(curr_proposal_id, log_ms_meta_.curr_, new_config_info,
-      prev_log_proposal_id_, prev_lsn_, prev_mode_pid_))) {
+      checking_barrier_.prev_log_proposal_id_, checking_barrier_.prev_lsn_,
+      checking_barrier_.prev_mode_pid_))) {
     PALF_LOG(WARN, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K_(self), K(args));
+  } else if (OB_FAIL(append_config_info_(new_config_info))) {
+    PALF_LOG(WARN, "append_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(new_config_info));
   } else {
-    // 1. For normal config changing, memberlist in memory takes effect right now.
-    // 2. For degrading operation, memberlist in memory will not be changed until the memberlist
-    // is accepted by majority. For example, 2F1A (ABC), A is leader. If log_sync_member_list (A) takes effect
-    // in leader right now, some logs will be committed by A itself before the config log has been committed. If leadership
-    // are switched to B and B executes degrading operation successfully. These committed logs will get lost.
-    // 3. For upgrading operation, memberlist in memory must be changed right now.
-    // For example, 1F1A (AC), A is leader, B has been degraded to learner. If log_sync_member_list (A) still takes effect
-    // when upgrading operation (upgrade B) is executing, some logs will be committed by A itself before the config log has been
-    // committed. If leadership are switched to B and B executes degrading operation successfully, these committed logs
-    // will get lost.
-    // 4. 2F1A, add one member may casue exception like case 2, so we just reject appended logs
-    // when changing config with arbitration members and apply member list
-    // after config log reaches majority to avoid complex scenario
+    // log_ms_meta_ and reconfig_barrier_ must be updated atomically
+    reconfig_barrier_ = checking_barrier_;
+    // Note: can not generate committed_end_lsn while changing configs with arb.
+    // The reason is described in LogSlidingWindow::gen_committed_end_lsn_.
     if (false == has_arb_member) {
-      config_meta_ = log_ms_meta_;
       (void) update_match_lsn_map_(args, new_config_info);
-      if (OB_FAIL(apply_config_info_(new_config_info))) {
-        PALF_LOG(WARN, "apply_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(new_config_info));
-      }
     }
     PALF_LOG(INFO, "append_config_meta_ success", KR(ret), K_(palf_id), K_(self), K(curr_proposal_id),
        K(args), K(new_config_info), K_(log_ms_meta));
-  }
-  // encounter unexpected error, reset flag
-  if (OB_EAGAIN != ret && OB_SUCCESS != ret) {
-    (void) state_mgr_->reset_changing_config_with_arb();
   }
   return ret;
 }
@@ -1462,27 +1469,6 @@ int LogConfigMgr::append_config_info_(const LogConfigInfo &config_info)
   return ret;
 }
 
-// caller hold lock_
-int LogConfigMgr::apply_config_info_(const LogConfigInfo &config_info)
-{
-  int ret = OB_SUCCESS;
-  common::ObMemberList alive_paxos_memberlist;
-  int64_t alive_paxos_replica_num;
-  GlobalLearnerList all_learners;
-  if (OB_FAIL(config_info.convert_to_complete_config(alive_paxos_memberlist, \
-          alive_paxos_replica_num, all_learners))) {
-    PALF_LOG(WARN, "convert_to_complete_config failed", K(ret), K_(palf_id), K(config_info));
-  } else if (OB_FAIL(applied_all_learnerlist_.deep_copy(all_learners))) {
-    PALF_LOG(WARN, "deep_copy failed", K(ret), K_(palf_id), K(all_learners));
-  } else {
-    applied_alive_paxos_memberlist_ = alive_paxos_memberlist;
-    applied_alive_paxos_replica_num_ = alive_paxos_replica_num;
-    PALF_LOG(INFO, "apply_config_info_ success", KR(ret), K_(palf_id), K_(self), K(config_info),
-       K_(applied_alive_paxos_memberlist), K_(applied_alive_paxos_replica_num));
-  }
-  return ret;
-}
-
 int LogConfigMgr::set_resend_log_info_()
 {
   int ret = OB_SUCCESS;
@@ -1513,7 +1499,7 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
   int ret = OB_SUCCESS;
   const LogConfigChangeType cc_type = args.type_;
   const common::ObMember member = args.server_;
-  new_config_info = config_meta_.curr_;
+  new_config_info = log_ms_meta_.curr_;
   int64_t curr_replica_num = -1;
   if (INVALID_PROPOSAL_ID == proposal_id || !args.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1661,26 +1647,28 @@ int LogConfigMgr::confirm_start_working_log(const int64_t proposal_id,
   SpinLockGuard guard(lock_);
   const bool has_finished = (ConfigChangeState::INIT == state_ && config_version.is_valid()) ||
       (ConfigChangeState::CHANGING == state_ && config_version.is_valid() && log_ms_meta_.curr_.config_version_ > config_version);
+  common::ObMember dummy_member;
+  const LogConfigChangeArgs args(dummy_member, 1, STARTWORKING);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret), K_(palf_id), K_(self));
   } else if (is_sw_interrupted_by_degrade_) {
+    ret = OB_EAGAIN;
     PALF_LOG(INFO, "is degrading, skip this startworking", KR(ret), K_(palf_id), K_(self),
         K(config_version), K_(state), K(is_sw_interrupted_by_degrade_));
   } else if (has_finished) {
     ret = OB_SUCCESS;
     PALF_LOG(INFO, "start_working log has reached majority, pass", KR(ret), K_(palf_id), K_(self),
         K(config_version), K_(log_ms_meta), K_(state));
-  } else {
-    common::ObMember dummy_member;
-    const LogConfigChangeArgs args(dummy_member, 1, STARTWORKING);
-    if (OB_FAIL(change_config_(args, proposal_id, election_epoch, config_version))) {
-      if (OB_EAGAIN != ret) {
-        PALF_LOG(INFO, "confirm_start_working_log failed", KR(ret), K_(palf_id), K_(self), K(args));
-      }
-    } else {
-      PALF_LOG(INFO, "confirm_start_working_log success", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta));
+  } else if (ConfigChangeState::INIT == state_ &&
+      OB_FAIL(wait_log_barrier_before_start_working_(args))) {
+    PALF_LOG(WARN, "wait_log_barrier_before_start_working_ failed", KR(ret), K_(palf_id), K_(self), K(args));
+  } else if (OB_FAIL(change_config_(args, proposal_id, election_epoch, config_version))) {
+    if (OB_EAGAIN != ret) {
+      PALF_LOG(INFO, "confirm_start_working_log failed", KR(ret), K_(palf_id), K_(self), K(args));
     }
+  } else {
+    PALF_LOG(INFO, "confirm_start_working_log success", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta));
   }
   return ret;
 }
@@ -1851,11 +1839,8 @@ int LogConfigMgr::receive_config_log(const common::ObAddr &leader, const LogConf
       PALF_LOG(WARN, "LogEngine submit_flush_change_config_meta_task failed", KR(ret), K_(palf_id), K_(self), K(meta));
     } else if (OB_FAIL(append_config_info_(meta.curr_))) {
       PALF_LOG(WARN, "append_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(meta));
-    } else if (OB_FAIL(apply_config_info_(meta.curr_))) {
-      PALF_LOG(WARN, "apply_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(meta));
     } else {
       log_ms_meta_ = meta;
-      config_meta_ = meta;
     }
   }
   return ret;
@@ -1900,9 +1885,10 @@ int LogConfigMgr::try_resend_config_log_(const int64_t proposal_id)
   if (INIT == state_ &&
       resend_log_list_.get_member_number() != 0 &&
       resend_config_version_.is_valid() &&
-      palf_reach_time_interval(PALF_RESEND_MSLOG_INTERVAL_US, last_submit_config_log_time_us_) &&
-      OB_FAIL(log_engine_->submit_change_config_meta_req(resend_log_list_, proposal_id, prev_log_proposal_id_,
-          prev_lsn_, prev_mode_pid_, log_ms_meta_))) {
+      palf_reach_time_interval(PALF_RESEND_CONFIG_LOG_INTERVAL_US, last_submit_config_log_time_us_) &&
+      OB_FAIL(log_engine_->submit_change_config_meta_req(resend_log_list_, proposal_id,
+          reconfig_barrier_.prev_log_proposal_id_, reconfig_barrier_.prev_lsn_,
+          reconfig_barrier_.prev_mode_pid_, log_ms_meta_))) {
     PALF_LOG(WARN, "resend config log failed", KR(ret), K(proposal_id), K(resend_config_version_), K_(log_ms_meta));
   }
   return ret;
@@ -1940,6 +1926,31 @@ int LogConfigMgr::check_follower_sync_status(const LogConfigChangeArgs &args,
   return check_follower_sync_status_(args, new_config_info, added_member_has_new_version);
 }
 
+int LogConfigMgr::wait_log_barrier(const LogConfigChangeArgs &args,
+                                   const LogConfigInfo &new_config_info) const
+{
+  SpinLockGuard guard(lock_);
+  return wait_log_barrier_(args, new_config_info);
+}
+
+int LogConfigMgr::wait_log_barrier_before_start_working_(const LogConfigChangeArgs &args)
+{
+  int ret = OB_SUCCESS;
+  LogConfigInfo config_info;
+  if (OB_FAIL(generate_new_config_info_(state_mgr_->get_proposal_id(), args, config_info))) {
+    PALF_LOG(WARN, "generate_new_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(args));
+  } else if (config_info.arbitration_member_.is_valid() == false) {
+  } else if (OB_FAIL(state_mgr_->set_changing_config_with_arb())) {
+    PALF_LOG(WARN, "set_changing_config_with_arb failed", KR(ret), K_(palf_id), K_(self));
+  } else if (OB_FAIL(renew_config_change_barrier_())) {
+    PALF_LOG(WARN, "renew_config_change_barrier failed", KR(ret), K_(palf_id), K_(self));
+  } else if (OB_FAIL(wait_log_barrier_(args, config_info)) && OB_EAGAIN != ret) {
+    PALF_LOG(WARN, "wait_log_barrier_ failed", KR(ret), K_(palf_id), K_(self), K(args));
+    ret = (OB_LOG_NOT_SYNC == ret)? OB_EAGAIN: ret;
+  }
+  return ret;
+}
+
 int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
                                     const LogConfigInfo &new_config_info) const
 {
@@ -1954,7 +1965,7 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
   constexpr bool need_purge_throttling = true;
   constexpr bool need_remote_check = false;
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
-  LSN prev_log_end_lsn;
+  LSN prev_log_end_lsn = checking_barrier_.prev_end_lsn_;
   start_wait_barrier_time_us_ = (OB_INVALID_TIMESTAMP == start_wait_barrier_time_us_)? \
       curr_ts_us: start_wait_barrier_time_us_;
   if (new_config_info.log_sync_memberlist_.get_member_number() == 0) {
@@ -1972,11 +1983,11 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
     ret = OB_SUCCESS;
     PALF_LOG(INFO, "PALF is in FLASHBACK mode, skip log barrier", K(ret), K_(palf_id), K_(self), \
         "accepted_mode_meta", mode_mgr_->get_accepted_mode_meta());
-  } else if (OB_FAIL(get_log_barrier_(unused_lsn, prev_log_end_lsn, unused_id))) {
-    PALF_LOG(WARN, "get_log_barrier_ failed", KR(ret), K_(palf_id), K_(self));
   } else if (FALSE_IT(ret = (first_committed_end_lsn >= prev_log_end_lsn)? OB_SUCCESS: OB_EAGAIN)) {
   } else if (OB_EAGAIN == ret) {
-    // committed_end_lsn do not change during 2s, skip the reconfiguration
+    // skip the reconfiguration if:
+    // 1. committed_end_lsn do not change during 1s, or
+    // 2. majority of members do not reach the log barrier during 2s
     curr_ts_us = common::ObTimeUtility::current_time();
     if (OB_INVALID_TIMESTAMP == last_wait_barrier_time_us_) {
       last_wait_committed_end_lsn_ = first_committed_end_lsn;
@@ -2035,8 +2046,8 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
   // when quorum has been changed (e.g., 1 -> 2), committed_end_lsn of new memberlist may always be behind the committed_end_lsn of
   // leader, so we relax the condition for adding members which has changed quorum
   } else if (is_add_log_sync_member_list(args.type_) &&
-            (new_config_info.log_sync_replica_num_ / 2) > (config_meta_.curr_.log_sync_replica_num_ / 2) &&
-            config_meta_.curr_.arbitration_member_.is_valid()) {
+            (new_config_info.log_sync_replica_num_ / 2) > (log_ms_meta_.curr_.log_sync_replica_num_ / 2) &&
+            log_ms_meta_.curr_.arbitration_member_.is_valid()) {
     if (added_member_flushed_end_lsn.is_valid() &&
         first_leader_committed_end_lsn - added_member_flushed_end_lsn < LEADER_DEFAULT_GROUP_BUFFER_SIZE &&
         (added_member_last_slide_log_id != INT64_MAX &&
@@ -2159,8 +2170,8 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
 {
   int ret = OB_SUCCESS, tmp_ret = OB_SUCCESS;
   int64_t log_sync_resp_cnt = 0, paxos_resp_cnt = 0;
+  const LogConfigVersion config_version = log_ms_meta_.curr_.config_version_;
   LSN lsn_array[OB_MAX_MEMBER_NUMBER];
-  const LogConfigVersion &config_version = config_meta_.curr_.config_version_;
   const common::ObMemberList new_log_sync_memberlist = new_config_info.log_sync_memberlist_;
   const int64_t new_log_sync_replica_num = new_config_info.log_sync_replica_num_;
   common::ObMemberList new_paxos_memberlist;

@@ -698,7 +698,7 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
     PALF_LOG(INFO, "test_check_config_change_args end case", K(i));
   }
   {
-    // 26. 4F1A, remove(D, 5), remove(D, 5),
+    // 26. 4F1A, remove(D, 5), remove(C, 5),
     PALF_LOG(INFO, "test_check_config_change_args begin case 26");
     LogConfigMgr cm;
     init_test_log_config_env(addr1, four_f_one_a_config_info, cm);
@@ -717,8 +717,6 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
     // memberlist will not be applied right now when there is arb member, so use alive_paxos_memberlist_
     bool member_equal = (cm.alive_paxos_memberlist_.member_addr_equal(expect_member_list));
     EXPECT_TRUE(member_equal);
-    // apply config meta
-    cm.config_meta_ = cm.log_ms_meta_;
     // remove(C, 5)
     cm.reset_status();
     LogConfigChangeArgs remove_c_arg(ObMember(addr3, -1), 5, palf::REMOVE_MEMBER);
@@ -1006,25 +1004,22 @@ TEST_F(TestLogConfigMgr, test_degrade__upgrade_scenario)
     // degrade
     LogConfigChangeArgs args(ObMember(addr2, OB_INVALID_TIMESTAMP), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
     LogConfigVersion de_config_version;
+    EXPECT_EQ(OB_SUCCESS, cm.renew_config_change_barrier());
     EXPECT_EQ(OB_EAGAIN, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
     EXPECT_EQ(1, cm.state_);
-    // member_list will not take effect after append_config_meta_
     EXPECT_FALSE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
-    EXPECT_TRUE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
     // self ack config log
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_version_));
     // reach majority - 1
     EXPECT_EQ(OB_EAGAIN, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
     EXPECT_EQ(1, cm.state_);
     EXPECT_FALSE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
-    EXPECT_TRUE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
     // ack config log
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_version_));
     // degrade success, switch to INIT state
     EXPECT_EQ(OB_SUCCESS, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
     EXPECT_EQ(0, cm.state_);
     EXPECT_FALSE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
-    EXPECT_FALSE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
 
     // upgrade
     LogConfigChangeArgs up_args(ObMember(addr2, OB_INVALID_TIMESTAMP), 0, UPGRADE_LEARNER_TO_ACCEPTOR);
@@ -1033,13 +1028,11 @@ TEST_F(TestLogConfigMgr, test_degrade__upgrade_scenario)
     EXPECT_EQ(1, cm.state_);
     // member_list will not take effect after append_config_meta_
     EXPECT_TRUE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
-    EXPECT_FALSE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
     // self ack config log
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_version_));
     // reach majority - 1
     EXPECT_EQ(OB_EAGAIN, cm.change_config(up_args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
     EXPECT_TRUE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
-    EXPECT_FALSE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
     EXPECT_EQ(1, cm.state_);
     // ack config log
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_version_));
@@ -1047,7 +1040,6 @@ TEST_F(TestLogConfigMgr, test_degrade__upgrade_scenario)
     EXPECT_EQ(OB_SUCCESS, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
     EXPECT_EQ(0, cm.state_);
     EXPECT_TRUE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
-    EXPECT_TRUE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
   }
 }
 
