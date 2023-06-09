@@ -783,10 +783,12 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
      * During the execution phase, when encountering a location exception for the first time,
      * try to refresh the location once synchronously.
      * If it fails, then proceed with statement-level retries.*/
-    if (OB_FAIL(block_renew_tablet_location(tablet_id, ls_loc))) {
-      LOG_WARN("block renew tablet location failed", K(ret), K(tablet_id));
+    int tmp_ret = block_renew_tablet_location(tablet_id, ls_loc);
+    if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+      LOG_WARN("block renew tablet location failed", KR(tmp_ret), K(tablet_id));
     } else {
       tablet_loc.ls_id_ = ls_loc.get_ls_id();
+      ret = OB_SUCCESS;
     }
   }
   ObBLKey bl_key;
@@ -864,8 +866,11 @@ int ObDASLocationRouter::nonblock_get(const ObDASTableLocMeta &loc_meta,
        * During the execution phase, when encountering a location exception for the first time,
        * try to refresh the location once synchronously.
        * If it fails, then proceed with statement-level retries.*/
-      if (OB_FAIL(block_renew_tablet_location(tablet_id, location))) {
-        LOG_WARN("block renew tablet location failed", K(ret), K(tablet_id));
+      int tmp_ret = block_renew_tablet_location(tablet_id, location);
+      if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+        LOG_WARN("block renew tablet location failed", KR(tmp_ret), K(tablet_id));
+      } else {
+        ret = OB_SUCCESS;
       }
     }
   }
@@ -965,12 +970,14 @@ int ObDASLocationRouter::nonblock_get_leader(const uint64_t tenant_id,
      * try to refresh the location once synchronously.
      * If it fails, then proceed with statement-level retries.*/
     ObLSLocation ls_loc;
-    if (OB_FAIL(block_renew_tablet_location(tablet_id, ls_loc))) {
-      LOG_WARN("block renew tablet location failed", K(ret), K(tablet_id));
-    } else if (OB_FAIL(ls_loc.get_leader(tablet_loc.server_))) {
-      LOG_WARN("get leader of ls location failed", K(ret), K(tablet_id), K(ls_loc));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = block_renew_tablet_location(tablet_id, ls_loc)))) {
+      LOG_WARN("block renew tablet location failed", KR(tmp_ret), K(tablet_id));
+    } else if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = ls_loc.get_leader(tablet_loc.server_)))) {
+      LOG_WARN("get leader of ls location failed", KR(tmp_ret), K(tablet_id), K(ls_loc));
     } else {
       tablet_loc.ls_id_ = ls_loc.get_ls_id();
+      ret = OB_SUCCESS;
     }
   }
   save_cur_exec_status(ret);
