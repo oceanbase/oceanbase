@@ -6157,6 +6157,9 @@ int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &ud
   if (OB_SUCC(ret)) {
     func_expr->set_func_name(udf_info.udf_name_);
     udf_info.ref_expr_ = func_expr;
+    if (OB_FAIL(func_expr->extract_info())) {
+      LOG_WARN("fail to extract info of udf", K(ret), K(func_expr));
+    }
   }
   return ret;
 }
