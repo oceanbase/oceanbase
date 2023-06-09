@@ -1298,6 +1298,11 @@ int ObMPConnect::get_tenant_id(uint64_t &tenant_id)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't login meta tenant", KR(ret), K_(tenant_name), K(tenant_id));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "login meta tenant");
+      } else if (!gctx_.schema_service_->is_tenant_refreshed(tenant_id)) {
+        ret = OB_SERVER_IS_INIT;
+        LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
+      } else {
+        // do nothing
       }
     }
   }

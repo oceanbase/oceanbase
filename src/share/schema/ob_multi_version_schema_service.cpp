@@ -3545,6 +3545,18 @@ bool ObMultiVersionSchemaService::is_tenant_not_refreshed(const uint64_t tenant_
   return schema_not_refreshed;
 }
 
+// for obmp_connect
+bool ObMultiVersionSchemaService::is_tenant_refreshed(const uint64_t tenant_id) const
+{
+  bool bret = false;
+  bool schema_not_refreshed = false;
+  int ret = refresh_full_schema_map_.get_refactored(tenant_id, schema_not_refreshed);
+  if (OB_SUCC(ret)) {
+    bret = !schema_not_refreshed;
+  }
+  return bret;
+}
+
 // sql should retry when tenant is normal but never refresh schema successfully.
 bool ObMultiVersionSchemaService::is_schema_error_need_retry(
      ObSchemaGetterGuard *guard,
