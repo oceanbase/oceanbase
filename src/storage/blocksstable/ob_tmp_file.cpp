@@ -235,9 +235,6 @@ void ObTmpFileIOHandle::reset()
   last_read_offset_ = -1;
   io_flag_.reset();
   update_offset_in_file_ = false;
-  last_extent_id_ = 0;
-  last_extent_min_offset_ = 0;
-  last_extent_max_offset_ = INT64_MAX;
 }
 
 bool ObTmpFileIOHandle::is_valid()
@@ -260,6 +257,8 @@ int64_t ObTmpFileIOHandle::get_extent_idx_from_cache(const int64_t offset) const
   int64_t ith_extent = -1;
   if (offset >= last_extent_min_offset_ && offset < last_extent_max_offset_) {
     ith_extent = last_extent_id_;
+  } else if (offset == last_extent_max_offset_) {
+    ith_extent = last_extent_id_ + 1;
   }
   return ith_extent;
 }
