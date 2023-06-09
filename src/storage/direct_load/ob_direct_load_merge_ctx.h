@@ -12,6 +12,8 @@
 #include "share/stat/ob_opt_osg_column_stat.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/table/ob_table_load_define.h"
+#include "share/table/ob_table_load_dml_stat.h"
+#include "share/table/ob_table_load_sql_statistics.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
@@ -101,6 +103,8 @@ public:
   int inc_finish_count(bool &is_ready);
   int collect_sql_statistics(
     const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array, table::ObTableLoadSqlStatistics &sql_statistics);
+  int collect_dml_stat(const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array,
+                       table::ObTableLoadDmlStat &dml_stats);
   const ObDirectLoadMergeParam &get_param() const { return param_; }
   const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   const common::ObTabletID &get_target_tablet_id() const { return target_tablet_id_; }

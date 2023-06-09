@@ -211,7 +211,6 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
     int64_t table_avg_len = 0;
     int64_t col_cnt = param_.table_data_desc_.column_count_;
     ObOptTableStat *table_stat = nullptr;
-    ObOptDmlStat dml_stat;
     StatLevel stat_level;
     if (table_schema->get_part_level() == PARTITION_LEVEL_ZERO) {
       stat_level = TABLE_LEVEL;
@@ -287,13 +286,6 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
         table_stat->set_object_type(stat_level);
         table_stat->set_row_count(table_row_cnt);
         table_stat->set_avg_row_size(table_avg_len);
-        dml_stat.tenant_id_ = tenant_id;
-        dml_stat.table_id_ = param_.target_table_id_;
-        dml_stat.tablet_id_ = get_target_tablet_id().id();
-        dml_stat.insert_row_count_ =  table_row_cnt;
-        if (OB_FAIL(ObOptStatMonitorManager::get_instance().update_local_cache(tenant_id, dml_stat))) {
-          LOG_WARN("failed to update dml stat local cache", K(ret));
-        }
       }
       // persistence col stat once a merge task finished
       if (OB_SUCC(ret) && OB_FAIL(sql_statistics.persistence_col_stats())) {
@@ -303,6 +295,32 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
   }
   return ret;
 }
+
+int ObDirectLoadTabletMergeCtx::collect_dml_stat(const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array, ObTableLoadDmlStat &dml_stats)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  int64_t insert_row_cnt = 0;
+  ObOptDmlStat *dml_stat = nullptr;
+  if (OB_FAIL(dml_stats.allocate_dml_stat(dml_stat))) {
+    LOG_WARN("fail to allocate table stat", KR(ret));
+  } else {
+    // scan task_array
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_array_.count(); ++i) {
+      insert_row_cnt += task_array_.at(i)->get_row_count();
+    }
+    // scan fast heap table
+    for (int64_t i = 0; OB_SUCC(ret) && i < fast_heap_table_array.count(); ++i) {
+      insert_row_cnt += fast_heap_table_array.at(i)->get_row_count();
+    }
+    dml_stat->tenant_id_ = tenant_id;
+    dml_stat->table_id_ = param_.target_table_id_;
+    dml_stat->tablet_id_ = target_tablet_id_.id();
+    dml_stat->insert_row_count_ = insert_row_cnt;
+  }
+  return ret;
+}
+
 
 int ObDirectLoadTabletMergeCtx::init_sstable_array(
   const ObIArray<ObIDirectLoadPartitionTable *> &table_array)

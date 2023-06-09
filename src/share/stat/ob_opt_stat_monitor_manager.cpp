@@ -495,11 +495,9 @@ int ObOptStatMonitorManager::update_tenant_dml_stat_info(uint64_t tenant_id)
     ObSqlString value_sql;
     int count = 0;
     for (auto iter = dml_stat_map->begin(); OB_SUCC(ret) && iter != dml_stat_map->end(); ++iter) {
-      if (OB_FAIL(get_dml_stat_sql(tenant_id,
-                                    iter->first,
-                                    iter->second,
-                                    0 != count, // need_add_comma
-                                    value_sql))) {
+      if (OB_FAIL(get_dml_stat_sql(tenant_id, iter->second,
+                                   0 != count, // need_add_comma
+                                   value_sql))) {
         LOG_WARN("failed to get dml stat sql", K(ret));
       } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
         if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
@@ -917,24 +915,25 @@ int ObOptStatMonitorManager::exec_insert_monitor_modified_sql(uint64_t tenant_id
     LOG_WARN("failed to append string", K(ret));
   } else if (OB_FAIL(mysql_proxy_->write(tenant_id, insert_sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(insert_sql), K(ret));
+  } else {
+    LOG_TRACE("succeed to exec insert monitor modified sql", K(tenant_id), K(values_sql));
   }
   return ret;
 }
 
 int ObOptStatMonitorManager::get_dml_stat_sql(const uint64_t tenant_id,
-                                              const StatKey &dml_stat_key,
                                               const ObOptDmlStat &dml_stat,
                                               const bool need_add_comma,
                                               ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer dml_splicer;
-  uint64_t table_id = dml_stat_key.first;
+  uint64_t table_id = dml_stat.table_id_;
   uint64_t ext_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
   uint64_t pure_table_id = share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id);
   if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ext_tenant_id)) ||
       OB_FAIL(dml_splicer.add_pk_column("table_id", pure_table_id)) ||
-      OB_FAIL(dml_splicer.add_pk_column("tablet_id", dml_stat_key.second)) ||
+      OB_FAIL(dml_splicer.add_pk_column("tablet_id", dml_stat.tablet_id_)) ||
       OB_FAIL(dml_splicer.add_column("inserts", dml_stat.insert_row_count_)) ||
       OB_FAIL(dml_splicer.add_column("updates", dml_stat.update_row_count_)) ||
       OB_FAIL(dml_splicer.add_column("deletes", dml_stat.delete_row_count_))) {
@@ -998,6 +997,38 @@ int ObOptStatMonitorManager::clean_useless_dml_stat_info(uint64_t tenant_id)
   return ret;
 }
 
+int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(const ObIArray<ObOptDmlStat *> &dml_stats)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString value_sql;
+  int count = 0;
+  uint64_t tenant_id = 0;
+  LOG_TRACE("begin to update dml stat info from direct load", K(dml_stats));
+  for (int64_t i = 0; OB_SUCC(ret) && i < dml_stats.count(); ++i) {
+    if (OB_ISNULL(dml_stats.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpcted error", K(ret), K(dml_stats.at(i)));
+    } else {
+      tenant_id = dml_stats.at(i)->tenant_id_;
+      if (OB_FAIL(get_dml_stat_sql(tenant_id, *dml_stats.at(i), 0 != count, value_sql))) {
+        LOG_WARN("failed to get dml stat sql", K(ret));
+      } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
+        if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
+          LOG_WARN("failed to exec insert sql", K(ret));
+        } else {
+          count = 0;
+          value_sql.reset();
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && count != 0) {
+    if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
+      LOG_WARN("failed to exec insert sql", K(ret));
+    }
+  }
+  return ret;
+}
 
 }
 }
