@@ -2987,25 +2987,33 @@ int ObPLCodeGenerateVisitor::visit(const ObPLGotoStmt &s)
           } \
         } while(0)
 
-        hash::HashMapPair<ObPLCodeGenerator::goto_label_flag, ObLLVMBasicBlock> pair;
+        hash::HashMapPair<ObPLCodeGenerator::goto_label_flag, std::pair<ObLLVMBasicBlock, ObLLVMBasicBlock>> pair;
         int tmp_ret = generator_.get_goto_label_map().get_refactored(
                                             s.get_dst_stmt()->get_stmt_id(), pair);
         if (OB_SUCCESS == tmp_ret) {
           RESTORE_LOOP_STACK(s.get_level(), s.get_dst_stmt()->get_level());
-          GEN_BR_WITH_COLSE_CURSOR(pair.second);
+          if (ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_CG == pair.first) {
+            GEN_BR_WITH_COLSE_CURSOR(pair.second.second);
+          } else {
+            GEN_BR_WITH_COLSE_CURSOR(pair.second.first);
+          }
         } else if (OB_HASH_NOT_EXIST == tmp_ret) {
           ObLLVMBasicBlock dst_blk;
+          ObLLVMBasicBlock stack_save_blk;
           if (OB_FAIL(generator_.get_helper().create_block(s.get_dst_label(),
                       generator_.get_func(), dst_blk))) {
             LOG_WARN("faile to create dst block", K(ret));
+          } else if (OB_FAIL(generator_.get_helper().create_block(s.get_dst_label(),
+                      generator_.get_func(), stack_save_blk))) {
+            LOG_WARN("faile to create stack save block", K(ret));
           } else if (OB_FAIL(pair.init(ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_EXIST,
-                                      dst_blk))) {
+                                      std::pair<ObLLVMBasicBlock, ObLLVMBasicBlock>(stack_save_blk, dst_blk)))) {
             LOG_WARN("failed to init pair", K(ret));
           } else if (OB_FAIL(generator_.get_goto_label_map().set_refactored(
                                           s.get_dst_stmt()->get_stmt_id(), pair))) {
             LOG_WARN("fill hash map failed", K(ret));
           } else {
-            GEN_BR_WITH_COLSE_CURSOR(dst_blk);
+            GEN_BR_WITH_COLSE_CURSOR(stack_save_blk);
           }
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -7739,17 +7747,27 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
         //控制流已断，后面的语句不再处理
     } else {
       // 去看一下对应的goto是否已经cg了，没有的话就记录一下这个label地址。
-      hash::HashMapPair<ObPLCodeGenerator::goto_label_flag, ObLLVMBasicBlock> pair;
+      ObLLVMValue stack;
+      hash::HashMapPair<ObPLCodeGenerator::goto_label_flag, std::pair<ObLLVMBasicBlock, ObLLVMBasicBlock>> pair;
       int tmp_ret = get_goto_label_map().get_refactored(stmt.get_stmt_id(), pair);
       if (OB_HASH_NOT_EXIST == tmp_ret) {
         ObLLVMBasicBlock label_block;
+        ObLLVMBasicBlock stack_save_block;
         const ObString *lab = stmt.get_label();
-        ObLLVMValue stack;
-        if (OB_FAIL(get_helper().stack_save(stack))) {
-          LOG_WARN("failed to save current stack", K(ret));
-        } else if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
+        if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
                                                 label_block))) {
           LOG_WARN("create goto label failed", K(ret));
+        } else if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
+                                                stack_save_block))) {
+          LOG_WARN("create goto label failed", K(ret));
+        } else if (OB_FAIL(get_helper().create_br(stack_save_block))) {
+          LOG_WARN("failed to create_br", K(ret));
+        } else if (OB_FAIL(get_helper().set_insert_point(stack_save_block))) {
+          LOG_WARN("failed to set insert point", K(ret));
+        } else if (OB_FAIL(set_current(stack_save_block))) {
+          LOG_WARN("failed to set current block", K(ret));
+        } else if (OB_FAIL(get_helper().stack_save(stack))) {
+          LOG_WARN("failed to save current stack", K(ret));
         } else if (OB_FAIL(get_helper().create_br(label_block))) {
           LOG_WARN("failed to create_br", K(ret));
         } else if (OB_FAIL(get_helper().set_insert_point(label_block))) {
@@ -7758,24 +7776,36 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
           LOG_WARN("failed to set current block", K(ret));
         } else if (OB_FAIL(get_helper().stack_restore(stack))) {
           LOG_WARN("failed to restore stack", K(ret));
-        } else if (OB_FAIL(pair.init(ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_NONEXIST,
-                                                    label_block))) {
+        } else if (OB_FAIL(pair.init(ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_CG,
+                                     std::pair<ObLLVMBasicBlock, ObLLVMBasicBlock>(stack_save_block, label_block)))) {
           LOG_WARN("init label block pair failed.", K(ret));
         } else if (OB_FAIL(get_goto_label_map().set_refactored(stmt.get_stmt_id(), pair))) {
           LOG_WARN("set label block failed", K(ret));
         } else {}
       } else if (OB_SUCCESS == tmp_ret) {
-        if (ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_EXIST == pair.first) {
-          ObLLVMBasicBlock &goto_block = pair.second;
-          if (OB_FAIL(get_helper().create_br(goto_block))) {
-            LOG_WARN("failed to create_br", K(ret));
-          } else if (OB_FAIL(get_helper().set_insert_point(goto_block))) {
-            LOG_WARN("failed to set insert point", K(ret));
-          } else if (OB_FAIL(set_current(goto_block))) {
-            LOG_WARN("failed to set current block", K(ret));
-          } else {}
+        ObLLVMBasicBlock &stack_save_block = pair.second.first;
+        ObLLVMBasicBlock &goto_block = pair.second.second;
+        if (OB_FAIL(get_helper().create_br(stack_save_block))) {
+          LOG_WARN("failed to create_br", K(ret));
+        } else if (OB_FAIL(get_helper().set_insert_point(stack_save_block))) {
+          LOG_WARN("failed to set insert point", K(ret));
+        } else if (OB_FAIL(set_current(stack_save_block))) {
+          LOG_WARN("failed to set current block", K(ret));
+        } else if (OB_FAIL(get_helper().stack_save(stack))) {
+          LOG_WARN("failed to save stack", K(ret));
+        } else if (OB_FAIL(get_helper().create_br(goto_block))) {
+          LOG_WARN("failed to create_br", K(ret));
+        } else if (OB_FAIL(get_helper().set_insert_point(goto_block))) {
+          LOG_WARN("failed to set insert point", K(ret));
+        } else if (OB_FAIL(set_current(goto_block))) {
+          LOG_WARN("failed to set current block", K(ret));
+        } else if (OB_FAIL(get_helper().stack_restore(stack))) {
+          LOG_WARN("failed to restore stack", K(ret));
         } else {
-          // do nothing
+          pair.first = ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_CG;
+          if (OB_FAIL(get_goto_label_map().set_refactored(stmt.get_stmt_id(), pair, true))) {
+            LOG_WARN("set label block failed", K(ret));
+          }
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
