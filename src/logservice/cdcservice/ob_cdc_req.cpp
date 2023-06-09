@@ -249,7 +249,7 @@ OB_DEF_DESERIALIZE(ObCdcReqStartLSNByTsResp)
  *
  */
 OB_SERIALIZE_MEMBER(ObCdcLSFetchLogReq, rpc_ver_, ls_id_, start_lsn_,
-                    upper_limit_ts_, client_pid_, client_id_, progress_, flag_, compressor_type_);
+                    upper_limit_ts_, client_pid_, client_id_, progress_, flag_, compressor_type_, tenant_id_);
 OB_SERIALIZE_MEMBER(ObCdcFetchStatus,
                     is_reach_max_lsn_,
                     is_reach_upper_limit_ts_,
@@ -339,6 +339,7 @@ void ObCdcLSFetchLogReq::reset()
   client_id_.reset();
   progress_ = OB_INVALID_TIMESTAMP;
   flag_ = 0;
+  tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
 ObCdcLSFetchLogReq& ObCdcLSFetchLogReq::operator=(const ObCdcLSFetchLogReq &other)
@@ -347,6 +348,11 @@ ObCdcLSFetchLogReq& ObCdcLSFetchLogReq::operator=(const ObCdcLSFetchLogReq &othe
   ls_id_ = other.ls_id_;
   start_lsn_ = other.start_lsn_;
   upper_limit_ts_ = other.upper_limit_ts_;
+  client_pid_ = other.client_pid_;
+  client_id_ = other.client_id_;
+  progress_ = other.progress_;
+  flag_ = other.flag_;
+  tenant_id_ = other.tenant_id_;
 
   return *this;
 }
@@ -356,7 +362,12 @@ bool ObCdcLSFetchLogReq::operator==(const ObCdcLSFetchLogReq &that) const
   return rpc_ver_ == that.rpc_ver_
     && ls_id_ == that.ls_id_
     && start_lsn_ == that.start_lsn_
-    && upper_limit_ts_ == that.upper_limit_ts_;
+    && upper_limit_ts_ == that.upper_limit_ts_
+    && client_pid_ == that.client_pid_
+    && client_id_ == that.client_id_
+    && progress_ == that.progress_
+    && flag_ == that.flag_
+    && tenant_id_ == that.tenant_id_;
 }
 
 bool ObCdcLSFetchLogReq::operator!=(const ObCdcLSFetchLogReq &that) const
@@ -475,7 +486,7 @@ void ObCdcLSFetchLogResp::reset()
  */
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq::MissLogParam, miss_lsn_);
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq, rpc_ver_, ls_id_, miss_log_array_,
-                    client_pid_, client_id_, flag_, compressor_type_);
+                    client_pid_, client_id_, flag_, compressor_type_, tenant_id_);
 
 void ObCdcLSFetchMissLogReq::reset()
 {
@@ -485,6 +496,7 @@ void ObCdcLSFetchMissLogReq::reset()
   client_pid_ = 0;
   client_id_.reset();
   flag_ = 0;
+  tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
 int ObCdcLSFetchMissLogReq::append_miss_log(const MissLogParam &param)

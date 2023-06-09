@@ -401,7 +401,7 @@ int ObLogRestoreNetDriver::init_fetcher_if_needed_(const int64_t cluster_id, con
 
     if (OB_FAIL(proxy_.get_sql_proxy(proxy))) {
       LOG_WARN("get sql proxy failed");
-    } else if (OB_FAIL(fetcher_->init(log_fetcher_user, cluster_id, tenant_id,
+    } else if (OB_FAIL(fetcher_->init(log_fetcher_user, cluster_id, tenant_id, MTL_ID(),
             is_loading_data_dict_baseline_data, fetching_mode, archive_dest,
             cfg_, ls_ctx_factory_, ls_ctx_add_info_factory_,
             restore_function_, proxy, &error_handler_))) {
@@ -467,7 +467,7 @@ bool ObLogRestoreNetDriver::is_fetcher_stale_(const int64_t cluster_id, const ui
   if (NULL == fetcher_) {
     bret = true;
   } else {
-    bret = cluster_id != fetcher_->get_cluster_id() || tenant_id != fetcher_->get_tenant_id();
+    bret = cluster_id != fetcher_->get_cluster_id() || tenant_id != fetcher_->get_source_tenant_id();
   }
   return bret;
 }
