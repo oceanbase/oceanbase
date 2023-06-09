@@ -1779,7 +1779,8 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
       }
       CK (OB_NOT_NULL(new_objs = reinterpret_cast<ObObj*>(data)));
       CK (OB_NOT_NULL(old_objs = reinterpret_cast<ObObj*>(src->get_data())));
-      for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
+      int64_t i = 0;
+      for (; OB_SUCC(ret) && i < src->get_count(); ++i) {
         ObObj old_obj = old_objs[i];
         new (&new_objs[i])ObObj();
         if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
@@ -1789,6 +1790,18 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
         OZ (ObPLComposite::copy_element(old_obj, new_objs[i], *coll_allocator));
         if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
           new_objs[i].set_type(ObMaxType);
+        }
+      }
+      // 对于已经copy成功的new obj释放内存
+      if (OB_FAIL(ret) && OB_NOT_NULL(data)) {
+        for (int64_t j = 0; j <= i; ++j) {
+          int tmp = ObUserDefinedType::destruct_obj(new_objs[j]);
+          if (OB_SUCCESS != tmp) {
+            LOG_WARN("fail torelease memory", K(ret), K(tmp));
+          }
+        }
+        if (NULL == allocator) {
+          coll_allocator->reset();
         }
       }
     }

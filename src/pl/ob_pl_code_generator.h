@@ -338,6 +338,7 @@ public:
   const ObSqlExpression *get_expr(int64_t i) const { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }
   ObSqlExpression *get_expr(int64_t i) { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }
   int generate_goto_label(const ObPLStmt &stmt);
+  int generate_destruct_obj(const ObPLStmt &s, jit::ObLLVMValue &src_datum);
   int generate_out_param(
     const ObPLStmt &s,
     const ObIArray<InOutParam> &param_desc,

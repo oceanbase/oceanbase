@@ -1797,6 +1797,7 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
             LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
           }
           ret = (OB_SUCCESS == ret ? close_ret : ret);
+          spi_result->destruct_exec_params(session);
           //spi_result->get_mysql_result().reset();
           int reset_ret = spi_result->reset_cursor_env(session);
           ret = (OB_SUCCESS == ret ? reset_ret : ret);

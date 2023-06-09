@@ -7818,6 +7818,24 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
   return ret;
 }
 
+int ObPLCodeGenerator::generate_destruct_obj(const ObPLStmt &s, ObLLVMValue &src_datum)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<jit::ObLLVMValue, 2> args;
+
+  OZ (args.push_back(get_vars()[CTX_IDX]));
+  OZ (args.push_back(src_datum));
+  if (OB_SUCC(ret)) {
+    jit::ObLLVMValue ret_err;
+    if (OB_FAIL(get_helper().create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err))) {
+      LOG_WARN("failed to create call", K(ret));
+    } else if (OB_FAIL(check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
+      LOG_WARN("failed to check success", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
 int ObPLCodeGenerator::generate_out_param(
   const ObPLStmt &s, const ObIArray<InOutParam> &param_desc, ObLLVMValue &params, int64_t i)
 {
@@ -7868,26 +7886,18 @@ int ObPLCodeGenerator::generate_out_param(
                                   s.get_block()->in_notfound(),
                                   s.get_block()->in_warning(),
                                   OB_INVALID_ID));
-        if (OB_SUCC(ret) && PL_CALL == s.get_type()) {
+        if (OB_FAIL(ret)) {
+        } else if (PL_CALL == s.get_type()) {
           const ObPLCallStmt *call_stmt = static_cast<const ObPLCallStmt *>(&s);
           if (call_stmt->get_nocopy_params().count() > i &&
               OB_INVALID_INDEX != call_stmt->get_nocopy_params().at(i) &&
               !param_desc.at(i).is_pure_out()) {
             // inner call nocopy的inout参数传递是指针, 无需释放
           } else {
-            ObSEArray<jit::ObLLVMValue, 2> args;
-
-            OZ (args.push_back(get_vars()[CTX_IDX]));
-            OZ (args.push_back(src_datum));
-            if (OB_SUCC(ret)) {
-              jit::ObLLVMValue ret_err;
-              if (OB_FAIL(get_helper().create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err))) {
-                LOG_WARN("failed to create call", K(ret));
-              } else if (OB_FAIL(check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
-                LOG_WARN("failed to check success", K(ret));
-              } else { /*do nothing*/ }
-            }
+            OZ (generate_destruct_obj(s, src_datum));
           }
+        } else if (PL_EXECUTE == s.get_type() && param_desc.at(i).is_pure_out()) {
+          OZ (generate_destruct_obj(s, src_datum));
         }
       }
     } else { //处理基础类型的出参

@@ -751,10 +751,16 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
           }
         }
       }
-
-      if (OB_SUCC(ret) && NULL != current_block_ && NULL != stmt) {
+      if (OB_FAIL(ret)) {
+        if (NULL != stmt) {
+          stmt->~ObPLStmt();
+        }
+      } else if (NULL != current_block_ && NULL != stmt) {
         if (OB_FAIL(current_block_->add_stmt(stmt))) {
           LOG_WARN("failed to add stmt", K(stmt), K(ret));
+          if (NULL != stmt) {
+            stmt->~ObPLStmt();
+          }
         }
       }
     }
