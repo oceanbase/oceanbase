@@ -427,6 +427,9 @@ public:
     pos_ += want_size;
     log_num_++;
   }
+  bool log_reach_threshold() const {
+    return pos_ > FETCH_BUF_THRESHOLD;
+  }
   bool is_valid() const
   {
     return pos_ >= 0 && pos_ <= FETCH_BUF_LEN;
@@ -446,6 +449,7 @@ public:
 
 private:
   static const int64_t FETCH_BUF_LEN = palf::MAX_LOG_BUFFER_SIZE * 8;
+  static const int64_t FETCH_BUF_THRESHOLD = FETCH_BUF_LEN - palf::MAX_LOG_BUFFER_SIZE;
 
 private:
   int64_t rpc_ver_;

@@ -555,6 +555,9 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
             // exit
             reach_max_lsn = true;
           }
+        } else if (OB_NEED_RETRY == ret) {
+          frt.stop("ArchiveNeedRetry");
+          ret = OB_SUCCESS;
         } else if (OB_ALREADY_IN_NOARCHIVE_MODE == ret || OB_ENTRY_NOT_EXIST == ret) {
           // archive is not on or lsn less than the start_lsn in archive
           ret = OB_ERR_OUT_OF_LOWER_BOUND;
@@ -604,7 +607,9 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
       } else {
         // log fetched successfully
         fetched_log_count++;
-
+        if (resp.log_reach_threshold()) {
+          frt.stop("LogReachThreshold");
+        }
         LOG_TRACE("LS fetch a log", K(ls_id), K(fetched_log_count), K(frt));
       }
     }
