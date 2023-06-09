@@ -1818,11 +1818,12 @@ int ObTransService::get_tx_state_from_tx_table_(const share::ObLSID &lsid,
   int ret = OB_SUCCESS;
   ObTxTableGuard tx_table_guard;
   int64_t _state = 0;
+  SCN recycled_scn;
   if (OB_FAIL(get_tx_table_guard_(NULL, lsid, tx_table_guard))) {
     TRANS_LOG(WARN, "get tx table guard failed", KR(ret), K(lsid), KPC(this));
   } else if (!tx_table_guard.is_valid()) {
     TRANS_LOG(WARN, "tx table is null", KR(ret), K(lsid), KPC(this));
-  } else if (OB_FAIL(tx_table_guard.try_get_tx_state(tx_id, _state, commit_version))) {
+  } else if (OB_FAIL(tx_table_guard.try_get_tx_state(tx_id, _state, commit_version, recycled_scn))) {
     TRANS_LOG(WARN, "get tx state failed", KR(ret), K(lsid), K(tx_id), KPC(this));
   } else {
     state = (int)_state;

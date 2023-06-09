@@ -72,11 +72,14 @@ int ObTxTableGuard::get_tx_state_with_scn(const transaction::ObTransID tx_id,
   }
 }
 
-int ObTxTableGuard::try_get_tx_state(const transaction::ObTransID tx_id, int64_t &state, share::SCN &trans_version)
+int ObTxTableGuard::try_get_tx_state(const transaction::ObTransID tx_id,
+                                     int64_t &state,
+                                     share::SCN &trans_version,
+                                     share::SCN &recycled_scn)
 {
   if (OB_NOT_NULL(tx_table_)) {
     ObReadTxDataArg arg(tx_id, epoch_, mini_cache_);
-    return tx_table_->try_get_tx_state(arg, state, trans_version);
+    return tx_table_->try_get_tx_state(arg, state, trans_version, recycled_scn);
   } else {
     return OB_NOT_INIT;
   }

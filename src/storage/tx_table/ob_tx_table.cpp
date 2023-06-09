@@ -826,9 +826,10 @@ int ObTxTable::check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITx
   } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
     ObTxDataGuard tx_data_guard;
     ObTxData *tx_data = nullptr;
+    SCN recycled_scn;
 
     // read tx data from tx data table and get tx data guard
-    if (OB_FAIL(tx_data_table_.check_with_tx_data(read_tx_data_arg.tx_id_, fn, tx_data_guard))) {
+    if (OB_FAIL(tx_data_table_.check_with_tx_data(read_tx_data_arg.tx_id_, fn, tx_data_guard, recycled_scn))) {
       if (OB_ITER_END == ret) {
         ret = OB_TRANS_CTX_NOT_EXIST;
       }
@@ -838,6 +839,7 @@ int ObTxTable::check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITx
                   K(ls_id_),
                   K(read_tx_data_arg),
                   K(tx_data_guard),
+                  K(recycled_scn),
                   "state", get_state_string(state_));
     } else if (OB_NOT_NULL(tx_data = tx_data_guard.tx_data())) {
       // if tx data is not null, put tx data into cache
@@ -947,7 +949,10 @@ int ObTxTable::get_tx_state_with_scn(ObReadTxDataArg &read_tx_data_arg,
   return ret;
 }
 
-int ObTxTable::try_get_tx_state(ObReadTxDataArg &read_tx_data_arg, int64_t &state, SCN &trans_version)
+int ObTxTable::try_get_tx_state(ObReadTxDataArg &read_tx_data_arg,
+                                int64_t &state,
+                                SCN &trans_version,
+                                SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   GetTxStateWithSCNFunctor fn(SCN::max_scn(), state, trans_version);
@@ -956,7 +961,7 @@ int ObTxTable::try_get_tx_state(ObReadTxDataArg &read_tx_data_arg, int64_t &stat
     LOG_WARN("tx table is not init.", KR(ret), K(read_tx_data_arg));
   } else {
     ObTxDataGuard tx_data_guard;
-    ret = tx_data_table_.check_with_tx_data(read_tx_data_arg.tx_id_, fn, tx_data_guard);
+    ret = tx_data_table_.check_with_tx_data(read_tx_data_arg.tx_id_, fn, tx_data_guard, recycled_scn);
     if (OB_ITER_END == ret) {
       ret = OB_TRANS_CTX_NOT_EXIST;
     }

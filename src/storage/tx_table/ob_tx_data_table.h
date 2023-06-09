@@ -195,7 +195,10 @@ public:  // ObTxDataTable
    * @param[in] tx_id the tx id of the transaction to be checked
    * @param[in] fn the functor which is dealt with tx data
    */
-  virtual int check_with_tx_data(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard);
+  virtual int check_with_tx_data(const transaction::ObTransID tx_id,
+                                 ObITxDataCheckFunctor &fn,
+                                 ObTxDataGuard &tx_data_guard,
+                                 share::SCN &recycled_scn);
 
   /**
    * @brief See ObTxTable::get_recycle_scn
@@ -266,11 +269,14 @@ private:
 
   int get_tx_data_from_cache_(const transaction::ObTransID tx_id, ObTxDataGuard &tx_data_guard, bool &find);
 
-  int check_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard);
+  int check_tx_data_in_sstable_(const transaction::ObTransID tx_id,
+                                ObITxDataCheckFunctor &fn,
+                                ObTxDataGuard &tx_data_guard,
+                                share::SCN &recycled_scn);
 
   int get_tx_data_in_cache_(const transaction::ObTransID tx_id, ObTxData *&tx_data);
 
-  int get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data);
+  int get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data, share::SCN &recycled_scn);
 
   int insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard);
 
