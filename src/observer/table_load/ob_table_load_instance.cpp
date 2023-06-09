@@ -40,7 +40,9 @@ void ObTableLoadInstance::destroy()
   if (nullptr != table_ctx_) {
     if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx_))) {
       LOG_WARN("table ctx may remove by service", KR(ret), KP(table_ctx_));
-    } else if (!is_committed_) {
+    }
+    if (!is_committed_) {
+      // must abort here, abort redef table need exec_ctx session_info
       ObTableLoadCoordinator::abort_ctx(table_ctx_);
     }
     ObTableLoadService::put_ctx(table_ctx_);

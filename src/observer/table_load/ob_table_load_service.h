@@ -38,7 +38,7 @@ public:
   void destroy();
   ObTableLoadManager &get_manager() { return manager_; }
 private:
-  void abort_all_ctx();
+  void fail_all_ctx(int error_code);
   void release_all_ctx();
 private:
   static const int64_t CHECK_TENANT_INTERVAL = 1LL * 1000 * 1000; // 1s
