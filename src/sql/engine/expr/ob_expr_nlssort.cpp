@@ -195,7 +195,7 @@ int ObExprNLSSort::eval_nlssort(const ObExpr &expr,
         coll_type = ObCharset::get_coll_type_by_nlssort_param(
               ObCharset::charset_type_by_coll(arg0_coll_type), param_v);
         if (OB_UNLIKELY(!ObCharset::is_valid_collation(coll_type))
-            || OB_UNLIKELY(0 != param_k.compare("NLS_SORT"))) {
+            || OB_UNLIKELY(0 != param_k.case_compare("NLS_SORT"))) {
           ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
           LOG_WARN("invalid collation", K(ret), K(param_k), K(param_v), K(coll_type));
         } else {
