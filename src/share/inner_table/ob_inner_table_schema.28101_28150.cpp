@@ -960,7 +960,7 @@ int ObInnerTableSchema::gv_ob_processlist_ora_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP, SVR_PORT, SQL_PORT,   ID,   USER,   HOST,   DB,   TENANT,   COMMAND,   TIME,   TOTAL_TIME,   STATE,   INFO,   PROXY_SESSID,   MASTER_SESSID,   USER_CLIENT_IP,   USER_HOST,   RETRY_CNT,   RETRY_INFO,   SQL_ID,   TRANS_ID,   THREAD_ID,   SSL_CIPHER,   TRACE_ID,   TRANS_STATE,   ACTION,   MODULE,   CLIENT_INFO FROM SYS.ALL_VIRTUAL_PROCESSLIST )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP, SVR_PORT, SQL_PORT,   ID,   "USER",   HOST,   DB,   TENANT,   COMMAND,   TIME,   TOTAL_TIME,   STATE,   INFO,   PROXY_SESSID,   MASTER_SESSID,   USER_CLIENT_IP,   USER_HOST,   RETRY_CNT,   RETRY_INFO,   SQL_ID,   TRANS_ID,   THREAD_ID,   SSL_CIPHER,   TRACE_ID,   TRANS_STATE,   ACTION,   MODULE,   CLIENT_INFO FROM SYS.ALL_VIRTUAL_PROCESSLIST )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
