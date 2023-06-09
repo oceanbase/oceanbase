@@ -781,7 +781,7 @@ int ObInnerTableSchema::gv_sql_workarea_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(NULL AS BINARY(8)) AS ADDRESS,       CAST(NULL AS SIGNED) AS HASH_VALUE,       SQL_ID,       CAST(NULL AS SIGNED) AS CHILD_NUMBER,       CAST(NULL AS BINARY(8)) AS WORKAREA_ADDRESS,       OPERATION_TYPE,       OPERATION_ID,       POLICY,       ESTIMATED_OPTIMAL_SIZE,       ESTIMATED_ONEPASS_SIZE,       LAST_MEMORY_USED,       LAST_EXECUTION,       LAST_DEGREE,       TOTAL_EXECUTIONS,       OPTIMAL_EXECUTIONS,       ONEPASS_EXECUTIONS,       MULTIPASSES_EXECUTIONS,       ACTIVE_TIME,       MAX_TEMPSEG_SIZE,       LAST_TEMPSEG_SIZE,       TENANT_ID AS CON_ID,       SVR_IP,       SVR_PORT     FROM OCEANBASE.__ALL_VIRTUAL_SQL_WORKAREA_HISTORY_STAT )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(NULL AS BINARY(8)) AS ADDRESS,       CAST(NULL AS SIGNED) AS HASH_VALUE,       SQL_ID,       CAST(PLAN_ID AS SIGNED) AS CHILD_NUMBER,       CAST(NULL AS BINARY(8)) AS WORKAREA_ADDRESS,       OPERATION_TYPE,       OPERATION_ID,       POLICY,       ESTIMATED_OPTIMAL_SIZE,       ESTIMATED_ONEPASS_SIZE,       LAST_MEMORY_USED,       LAST_EXECUTION,       LAST_DEGREE,       TOTAL_EXECUTIONS,       OPTIMAL_EXECUTIONS,       ONEPASS_EXECUTIONS,       MULTIPASSES_EXECUTIONS,       ACTIVE_TIME,       MAX_TEMPSEG_SIZE,       LAST_TEMPSEG_SIZE,       TENANT_ID AS CON_ID,       SVR_IP,       SVR_PORT     FROM OCEANBASE.__ALL_VIRTUAL_SQL_WORKAREA_HISTORY_STAT )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

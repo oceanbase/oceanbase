@@ -280,8 +280,8 @@ public:
   {
   public:
     // %alloc is used to initialize the structures, can not be used to hold the data
-    explicit ExtraResult(common::ObIAllocator &alloc)
-      : alloc_(alloc), unique_sort_op_(NULL)
+    explicit ExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
+      : alloc_(alloc), op_monitor_info_(op_monitor_info), unique_sort_op_(NULL)
     {}
     virtual ~ExtraResult();
     virtual void reuse();
@@ -293,7 +293,7 @@ public:
     DECLARE_VIRTUAL_TO_STRING;
   protected:
     common::ObIAllocator &alloc_;
-    ObMonitorNode op_monitor_info_;
+    ObMonitorNode &op_monitor_info_;
   public:
     // for distinct calculate may be replace by hash based distinct in the future.
     ObUniqueSortImpl *unique_sort_op_;
@@ -302,8 +302,8 @@ public:
   struct TopKFreHistExtraResult : public ExtraResult
   {
   public:
-    TopKFreHistExtraResult(common::ObIAllocator &alloc)
-      : ExtraResult(alloc), topk_fre_hist_() {}
+    TopKFreHistExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
+      : ExtraResult(alloc, op_monitor_info), topk_fre_hist_() {}
     virtual ~TopKFreHistExtraResult() {}
     virtual void reuse()
     {
@@ -317,8 +317,8 @@ public:
   class GroupConcatExtraResult : public ExtraResult
   {
   public:
-    explicit GroupConcatExtraResult(common::ObIAllocator &alloc)
-      : ExtraResult(alloc), row_count_(0), iter_idx_(0), sort_op_(NULL), separator_datum_(NULL), bool_mark_(alloc)
+    explicit GroupConcatExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
+      : ExtraResult(alloc, op_monitor_info), row_count_(0), iter_idx_(0), sort_op_(NULL), separator_datum_(NULL), bool_mark_(alloc)
     {
     }
     virtual ~GroupConcatExtraResult();
@@ -383,8 +383,8 @@ public:
   class HybridHistExtraResult : public ExtraResult
   {
   public:
-    explicit HybridHistExtraResult(common::ObIAllocator &alloc)
-      : ExtraResult(alloc),
+    explicit HybridHistExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
+      : ExtraResult(alloc, op_monitor_info),
         sort_row_count_(0),
         material_row_count_(0),
         sort_op_(nullptr),
@@ -425,8 +425,8 @@ public:
 
   struct DllUdfExtra : public ExtraResult
   {
-    explicit DllUdfExtra(common::ObIAllocator &alloc)
-        : ExtraResult(alloc), udf_fun_(NULL)
+    explicit DllUdfExtra(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
+        : ExtraResult(alloc, op_monitor_info), udf_fun_(NULL)
     {
     }
 

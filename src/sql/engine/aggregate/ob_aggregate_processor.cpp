@@ -1861,7 +1861,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            GroupConcatExtraResult *result = new (tmp_buf) GroupConcatExtraResult(aggr_alloc_);
+            GroupConcatExtraResult *result = new (tmp_buf) GroupConcatExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
             const bool need_rewind = (in_window_func_ || group_id > 0);
             if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
@@ -1904,7 +1904,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", "size", sizeof(HybridHistExtraResult));
           } else {
-            HybridHistExtraResult *result = new (tmp_buf) HybridHistExtraResult(aggr_alloc_);
+            HybridHistExtraResult *result = new (tmp_buf) HybridHistExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
             const bool need_rewind = (in_window_func_ || group_id > 0);
             if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
@@ -1927,7 +1927,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            TopKFreHistExtraResult *result = new (tmp_buf) TopKFreHistExtraResult(aggr_alloc_);
+            TopKFreHistExtraResult *result = new (tmp_buf) TopKFreHistExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
           }
           break;
@@ -1937,24 +1937,23 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
           CK(NULL != aggr_info.dll_udf_);
           DllUdfExtra *extra = NULL;
           if (OB_SUCC(ret)) {
-            extra = OB_NEWx(DllUdfExtra, (&aggr_alloc_),
-                    aggr_alloc_);
-            if (NULL == extra) {
+            void *tmp_buf = NULL;
+            if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(DllUdfExtra)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("allocate memory failed", K(ret));
-            }
-            aggr_cell.set_extra(extra);
-          }
-          if (OB_SUCC(ret)) {
-            OZ(ObUdfUtil::init_udf_args(aggr_alloc_,
+            } else {
+              DllUdfExtra *extra = new (tmp_buf) DllUdfExtra(aggr_alloc_, op_monitor_info_);
+              aggr_cell.set_extra(extra);
+              OZ(ObUdfUtil::init_udf_args(aggr_alloc_,
                                         aggr_info.dll_udf_->udf_attributes_,
                                         aggr_info.dll_udf_->udf_attributes_types_,
                                         extra->udf_ctx_.udf_args_));
-            OZ(aggr_info.dll_udf_->udf_func_.process_init_func(extra->udf_ctx_));
-            if (OB_SUCC(ret)) { // set func after udf ctx inited
-              extra->udf_fun_ = &aggr_info.dll_udf_->udf_func_;
+              OZ(aggr_info.dll_udf_->udf_func_.process_init_func(extra->udf_ctx_));
+              if (OB_SUCC(ret)) { // set func after udf ctx inited
+                extra->udf_fun_ = &aggr_info.dll_udf_->udf_func_;
+              }
+              OZ(extra->udf_fun_->process_clear_func(extra->udf_ctx_));
             }
-            OZ(extra->udf_fun_->process_clear_func(extra->udf_ctx_));
           }
           break;
         }
@@ -1971,7 +1970,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            ExtraResult *result = new (tmp_buf) ExtraResult(aggr_alloc_);
+            ExtraResult *result = new (tmp_buf) ExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
           }
         }

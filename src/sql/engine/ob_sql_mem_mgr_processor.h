@@ -120,7 +120,6 @@ public:
   }
   int64_t get_dumped_size() const { return profile_.dumped_size_; }
   void reset_delta_size() { profile_.delta_size_ = 0; }
-  void reset_mem_used() { profile_.mem_used_ = 0; }
   int64_t get_mem_used() const { return profile_.mem_used_; }
   int64_t get_delta_size() const { return profile_.delta_size_; }
   int64_t get_data_size() const { return profile_.data_size_ + profile_.delta_size_; }
