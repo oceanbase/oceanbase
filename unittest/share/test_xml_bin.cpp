@@ -249,11 +249,16 @@ TEST_F(TestXmlBin, serialize_element_header)
     ASSERT_EQ(serializer1.child_count_, 2);
     ASSERT_EQ(serializer1.attr_count_, 1);
     ASSERT_EQ(serializer1.header_.header_size(), 5);
-    ASSERT_EQ(serializer1.ele_header_.header_size(), 16);
-    ASSERT_EQ(serializer1.key_entry_start_, 21);
+    ASSERT_EQ(serializer1.ele_header_.header_size(), 15);
+    cout << "index start = " << serializer1.index_start_
+          << " type start = " << (int)serializer1.index_entry_size_ << endl;
+    ASSERT_EQ(serializer1.index_start_, 20);
+    ASSERT_EQ(serializer1.index_entry_size_, 1);
+    ASSERT_EQ(serializer1.key_entry_start_, 23);
     ASSERT_EQ(serializer1.key_entry_size_, 2);
-    ASSERT_EQ(serializer1.value_entry_start_, 39);
+    ASSERT_EQ(serializer1.value_entry_start_, 35);
     ASSERT_EQ(serializer1.value_entry_size_, 2);
+    ASSERT_EQ(serializer1.key_start_, 44);
 
     ASSERT_EQ(serializer1.serialize(0), 0);
 
@@ -263,7 +268,7 @@ TEST_F(TestXmlBin, serialize_element_header)
     ASSERT_EQ(serializer2.child_count_, 2);
     ASSERT_EQ(serializer2.attr_count_, 1);
     ASSERT_EQ(serializer2.header_.header_size(), 5);
-    ASSERT_EQ(serializer2.ele_header_.header_size(), 16);
+    ASSERT_EQ(serializer2.ele_header_.header_size(), 15);
 
     ObXmlElement *res = static_cast<ObXmlElement*>(handle);
     ASSERT_EQ(res->get_prefix().length(), prefix.length());
@@ -289,7 +294,10 @@ TEST_F(TestXmlBin, serialize_document_header)
     ObStringBuffer buffer(&allocator);
     doc->set_standalone(1);
     ObXmlDocBinHeader doc_header1(doc->get_version(),
-                                  doc->get_encoding());
+                                  doc->get_encoding(),
+                                  doc->get_encoding_flag(),
+                                  doc->get_standalone(),
+                                  doc->has_xml_decl());
     ASSERT_EQ(doc_header1.serialize(buffer), 0);
     ASSERT_EQ(doc_header1.header_size(), buffer.length());
     ASSERT_EQ(doc_header1.is_version_, 1);
@@ -517,6 +525,7 @@ TEST_F(TestXmlBin, set_at)
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObStringBuffer buf_str(&allocator);
+  doc->set_standalone(2);
 
   ObXmlBin bin(ctx);
   ObIMulModeBase* tree = doc;
@@ -532,7 +541,7 @@ TEST_F(TestXmlBin, set_at)
 
   ASSERT_EQ(std::string("1.0"), std::string(version.ptr(), version.length()));
   ASSERT_EQ(std::string("UTF-8"), std::string(encoding.ptr(), encoding.length()));
-  ASSERT_EQ(0, rbin.get_standalone());
+  ASSERT_EQ(2, rbin.get_standalone());
   ASSERT_EQ(0, rbin.get_is_empty());
   ASSERT_EQ(0, rbin.get_unparse());
 
@@ -1593,7 +1602,7 @@ TEST_F(TestXmlBin, read_pre_order)
     ASSERT_EQ(iter.next(tmp), 0);
     ASSERT_EQ(tmp->type(), M_TEXT);
 
-    std::string tmp_str(tmp->meta_.value_.ptr(), tmp->meta_.value_.length());
+    std::string tmp_str(tmp->meta_.value_ptr_, tmp->meta_.value_len_);
 
     cout << tmp_str << endl;
   }
@@ -1620,7 +1629,7 @@ TEST_F(TestXmlBin, read_by_key)
     ASSERT_EQ(xbin.parse_tree(doc), 0);
     ASSERT_EQ(xbin.set_child_at(0), 0);
 
-    std::string tmp_str(xbin.meta_.key_.ptr(), xbin.meta_.key_.length());
+    std::string tmp_str(xbin.meta_.key_ptr_, xbin.meta_.key_len_);
     cout << "key = " << tmp_str
           << " attr size = " << xbin.attribute_size()
           << " child size =  " << xbin.size()
