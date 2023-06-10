@@ -1034,6 +1034,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprJoinFilter::eval_range_filter,                                /* 604 */
   ObExprJoinFilter::eval_in_filter,                                   /* 605 */
   ObExprCurrentScn::eval_current_scn                                  /* 606 */
+  //ObExprTempTableSSID::calc_temp_table_ssid,                          /* 607 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

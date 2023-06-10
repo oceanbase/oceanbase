@@ -212,6 +212,7 @@ typedef enum ObItemType
   T_OP_AGG_MUL = 184,
   T_OP_AGG_DIV = 185,
   T_OP_OUTPUT_PACK = 186,
+  T_FUN_TEMP_TABLE_SSID = 187,
 
   ///< @note add new operator before this line
 
