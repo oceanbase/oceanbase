@@ -717,7 +717,7 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
 {
   UNUSED(max_read_stale_time);
   int ret = OB_SUCCESS;
-  bool monotinic_read = true;;
+  bool monotinic_read = true;
     // server weak read version
   if (!ObWeakReadUtil::enable_monotonic_weak_read(tenant_id_)) {
     if (OB_FAIL(GCTX.weak_read_service_->get_server_version(tenant_id_, snapshot))) {
