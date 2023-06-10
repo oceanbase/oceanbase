@@ -47,9 +47,10 @@ DynamicBuffer::~DynamicBuffer()
 char *DynamicBuffer::acquire(const int64_t size)
 {
   char *buf = NULL;
-  int64_t real_size = size <= BASIC_BUF_SIZE ? size : upper_align_(size);
-  if (size > MAX_BUF_SIZE) {
+  int64_t real_size = 0;
+  if (size <= 0 || size > MAX_BUF_SIZE) {
     ARCHIVE_LOG_RET(WARN, OB_NOT_SUPPORTED, "get buf oversize, not support", K(size));
+  } else if (FALSE_IT(real_size = size <= BASIC_BUF_SIZE ? size : upper_align_(size))) {
   } else if (0 != ATOMIC_LOAD(&ref_)) {
     ARCHIVE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "buffer ref not zero", KPC(this));
   } else if (NULL == buf_ || buf_size_ < size) {

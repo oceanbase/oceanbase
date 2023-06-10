@@ -600,6 +600,11 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
     } else if (OB_UNLIKELY(entry.get_serialize_size() > helper.get_capaicity())) {
       ret = OB_ERR_UNEXPECTED;
        ARCHIVE_LOG(ERROR, "iterate buf not valid", K(ret), K(helper), K(entry));
+    } else if (OB_UNLIKELY(helper.is_log_out_of_range(entry.get_serialize_size()))) {
+      // Committed logs can only be truncated in failover, and the commit_lsn before failover may be not match a log group entry,
+      // and the log may not match the buffer for the task
+      ret = OB_EAGAIN;
+      ARCHIVE_LOG(WARN, "log out of helper range, failover may happen", K(entry), K(helper), K(iter));
     } else {
       // 由于归档按照palf block起始LSN开始归档, 因此存在部分日志其scn是小于归档round_start_scn的,
       // 对于这部分日志, 归档到第一个piece
@@ -1113,6 +1118,11 @@ ObArchiveSendTask *ObArchiveFetcher::TmpMemoryHelper::gen_send_task()
   return task;
 }
 
+bool ObArchiveFetcher::TmpMemoryHelper::is_log_out_of_range(const int64_t size) const
+{
+  return std::min(commit_offset_, end_offset_) < (cur_offset_ + size);
+}
+
 // 聚合出足够大处理单元, 或者到达归档文件尾
 bool ObArchiveFetcher::TmpMemoryHelper::original_buffer_enough(const int64_t size)
 {
@@ -1158,7 +1168,8 @@ int ObArchiveFetcher::TmpMemoryHelper::append_handled_buf(char *buf, const int64
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(buf), K(buf_size));
   } else if (OB_UNLIKELY(buf_size > ec_buf_size_ - ec_buf_pos_)) {
-    ret = reserve_(std::max(static_cast<int64_t>(ec_buf_pos_ + (unitized_offset_ - start_offset_)), ec_buf_pos_ + buf_size));
+    ret = OB_NOT_SUPPORTED;
+    ARCHIVE_LOG(ERROR, "buf is oversize while buffer is pre-allocated enough", K(buf), K(buf_size), KPC(this));
   }
   if (OB_SUCC(ret)) {
     MEMCPY(ec_buf_ + ec_buf_pos_, buf, buf_size);
@@ -1228,23 +1239,6 @@ void ObArchiveFetcher::TmpMemoryHelper::inner_free_send_buffer_()
     ec_buf_size_ = 0;
     ec_buf_pos_ = 0;
   }
-}
-
-int ObArchiveFetcher::TmpMemoryHelper::reserve_(const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  char *tmp_buf = NULL;
-  const int64_t reserved_size = get_reserved_buf_size_();
-  if (size <= ec_buf_size_) {
-  } else if (OB_ISNULL(tmp_buf = (char *)allocator_->alloc_send_task(size + reserved_size))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    ARCHIVE_LOG(WARN, "alloc memory failed", K(ret), K(size));
-  } else {
-    MEMCPY(tmp_buf + reserved_size, ec_buf_, ec_buf_pos_);
-    ec_buf_ = tmp_buf;
-    ec_buf_size_ = size;
-  }
-  return ret;
 }
 
 int64_t ObArchiveFetcher::TmpMemoryHelper::get_reserved_buf_size_() const
