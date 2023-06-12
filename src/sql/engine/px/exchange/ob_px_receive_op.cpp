@@ -390,15 +390,11 @@ int ObPxReceiveOp::inner_rescan()
   return ret;
 }
 
-int ObPxReceiveOp::drain_exch()
+int ObPxReceiveOp::inner_drain_exch()
 {
   int ret = OB_SUCCESS;
   uint64_t version = -1;
-  if (OB_FAIL(try_open())) {
-    LOG_WARN("get operator ctx failed", K(ret));
-  } else if (exch_drained_) {
-    // has been drained, do noting.
-  } else if (iter_end_) {
+  if (iter_end_) {
     exch_drained_ = true;
   } else if (!exch_drained_) {
     if (IS_PX_COORD(get_spec().get_type())) {

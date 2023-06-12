@@ -103,7 +103,7 @@ public:
     return common::OB_ITER_END;
   }
 
-  virtual int drain_exch() override
+  virtual int inner_drain_exch() override
   {
     // Drain exchange is used in parallelism execution,
     // do nothing for old fashion distributed execution.

@@ -1036,17 +1036,6 @@ int ObPxCoordOp::init_batch_info()
   return ret;
 }
 
-int ObPxCoordOp::drain_exch()
-{
-  int ret = OB_SUCCESS;
-  if (enable_px_batch_rescan()) {
-    // do nothing
-  } else if (OB_FAIL(ObPxReceiveOp::drain_exch())) {
-    LOG_WARN("fail to drain exch", K(ret));
-  }
-  return ret;
-}
-
 int ObPxCoordOp::batch_rescan()
 {
   int ret = OB_SUCCESS;

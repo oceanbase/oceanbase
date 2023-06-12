@@ -221,7 +221,7 @@ public:
   virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override; // for batch
-  virtual int drain_exch() override;
+  virtual int inner_drain_exch() override;
   virtual void destroy() override {
     lucky_devil_champions_.reset();
     local_rf_msgs_.reset();

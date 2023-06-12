@@ -563,7 +563,6 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
     clear_evaluated_flag();
     const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
     ret = next_row();
-    uint64_t begin_cpu_time = rdtsc(); // must place after next_row()
     if (OB_FAIL(ret)) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next row from child op",
@@ -604,7 +603,7 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
                        get_spec().output_, eval_ctx_, slice_idx_array))) {
       LOG_WARN("fail get slice idx", K(ret));
     } else if (dfc_.all_ch_drained()) {
-      int tmp_ret = drain_exch();
+      int tmp_ret = child_->drain_exch();
       if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("drain exchange data failed", K(tmp_ret));
       }
@@ -643,9 +642,8 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
       LOG_WARN("fetch next rows failed", K(ret));
       break;
     }
-    uint64_t begin_cpu_time = rdtsc();
     if (dfc_.all_ch_drained()) {
-      int tmp_ret = drain_exch();
+      int tmp_ret = child_->drain_exch();
       if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("drain exchange data failed", K(tmp_ret));
       }

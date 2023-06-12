@@ -450,40 +450,13 @@ int ObJoinFilterOp::mark_not_need_send_bf_msg()
   return ret;
 }
 
-// copy ObOperator::drain_exch
-// It's same as the base operator, but only need add mark_not_need_send_bf_msg for shared shuffled bloom filter
-int ObJoinFilterOp::drain_exch()
+// need add mark_not_need_send_bf_msg for shared shuffled bloom filter
+int ObJoinFilterOp::inner_drain_exch()
 {
-  uint64_t cpu_begin_time = rdtsc();
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  /**
-   * 1. try to open this operator
-   * 2. try to drain all children
-   */
-  if (OB_FAIL(try_open())) {
-    LOG_WARN("fail to open operator", K(ret));
-  } else if (!exch_drained_) {
-    if (MY_SPEC.is_create_mode()) {
-      tmp_ret = mark_not_need_send_bf_msg();
-    }
-    exch_drained_ = true;
-    for (int64_t i = 0; i < child_cnt_ && OB_SUCC(ret); i++) {
-      if (OB_ISNULL(children_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL child found", K(ret), K(i));
-      } else if (OB_FAIL(children_[i]->drain_exch())) {
-        LOG_WARN("drain exch failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ret = tmp_ret;
-      if (OB_FAIL(ret)) {
-        LOG_WARN("failed to mark_not_need_send_bf_msg", K(ret));
-      }
-    }
+  if (MY_SPEC.is_create_mode()) {
+    ret = mark_not_need_send_bf_msg();
   }
-  total_time_ += (rdtsc() - cpu_begin_time);
   return ret;
 }
 

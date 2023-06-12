@@ -114,7 +114,7 @@ public:
   virtual int init_dfc(dtl::ObDtlDfoKey &key);
   bool channel_linked() { return channel_linked_; }
 
-  virtual int drain_exch() override;
+  virtual int inner_drain_exch() override;
   int active_all_receive_channel();
   int link_ch_sets(ObPxTaskChSet &ch_set,
                     common::ObIArray<dtl::ObDtlChannel*> &channels,

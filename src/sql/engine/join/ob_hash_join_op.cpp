@@ -754,38 +754,10 @@ int ObHashJoinOp::do_sync_wait_all()
   return ret;
 }
 
-// copy ObOperator::drain_exch
-// It's same as the base operator, but only need add sync to wait exit for shared hash join
-int ObHashJoinOp::drain_exch()
+// need add sync to wait exit for shared hash join
+int ObHashJoinOp::inner_drain_exch()
 {
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  /**
-   * 1. try to open this operator
-   * 2. try to drain all children
-   */
-  if (OB_FAIL(try_open())) {
-    LOG_WARN("fail to open operator", K(ret));
-  } else if (!exch_drained_) {
-    // don't sync to wait all when operator call drain_exch by self
-    tmp_ret = do_sync_wait_all();
-    exch_drained_ = true;
-    for (int64_t i = 0; i < child_cnt_ && OB_SUCC(ret); i++) {
-      if (OB_ISNULL(children_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL child found", K(ret), K(i));
-      } else if (OB_FAIL(children_[i]->drain_exch())) {
-        LOG_WARN("drain exch failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ret = tmp_ret;
-      if (OB_FAIL(ret)) {
-        LOG_WARN("failed to do sync wait all", K(ret));
-      }
-    }
-  }
-  return ret;
+  return do_sync_wait_all();
 }
 
 int ObHashJoinOp::next()

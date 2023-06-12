@@ -1095,7 +1095,7 @@ int ObOperator::get_next_row()
         }
       } else if (OB_ITER_END == ret) {
         row_reach_end_ = true;
-        int tmp_ret = drain_exch();
+        int tmp_ret = do_drain_exch();
         if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("drain exchange data failed", K(tmp_ret));
         }
@@ -1235,7 +1235,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
           got_first_row_ = true;
         }
         if (brs_.end_) {
-          int tmp_ret = drain_exch();
+          int tmp_ret = do_drain_exch();
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("drain exchange data failed", K(tmp_ret));
           }
@@ -1329,7 +1329,15 @@ int ObOperator::filter_batch_rows(const ObExprPtrIArray &exprs,
 // copy ObPhyOperator::drain_exch
 int ObOperator::drain_exch()
 {
+  int ret = OB_SUCCESS;
   uint64_t cpu_begin_time = rdtsc();
+  ret = do_drain_exch();
+  total_time_ += (rdtsc() - cpu_begin_time);
+  return ret;
+}
+
+int ObOperator::do_drain_exch()
+{
   int ret = OB_SUCCESS;
   /**
    * 1. try to open this operator
@@ -1338,20 +1346,24 @@ int ObOperator::drain_exch()
   if (OB_FAIL(try_open())) {
     LOG_WARN("fail to open operator", K(ret));
   } else if (!exch_drained_) {
+    int tmp_ret = inner_drain_exch();
     exch_drained_ = true;
-    for (int64_t i = 0; i < child_cnt_ && OB_SUCC(ret); i++) {
-      if (OB_ISNULL(children_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL child found", K(ret), K(i));
-      } else if (OB_FAIL(children_[i]->drain_exch())) {
-        LOG_WARN("drain exch failed", K(ret));
+    if (!spec_.is_receive()) {
+      for (int64_t i = 0; i < child_cnt_ && OB_SUCC(ret); i++) {
+        if (OB_ISNULL(children_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL child found", K(ret), K(i));
+        } else if (OB_FAIL(children_[i]->drain_exch())) {
+          LOG_WARN("drain exch failed", K(ret));
+        }
       }
     }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
   }
-  total_time_ += (rdtsc() - cpu_begin_time);
   return ret;
 }
-
 
 int ObOperator::get_real_child(ObOperator *&child, const int32_t child_idx)
 {
