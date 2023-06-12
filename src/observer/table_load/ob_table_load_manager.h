@@ -25,7 +25,7 @@ public:
   int add_table_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *table_ctx);
   int remove_table_ctx(const ObTableLoadUniqueKey &key);
   // table ctx holds a reference count
-  int remove_all_table_ctx(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
+  int get_all_table_ctx(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
   // table ctx holds a reference count
   int get_table_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *&table_ctx);
   // table ctx holds a reference count
@@ -33,6 +33,9 @@ public:
   // all table ctx hold a reference count
   int get_inactive_table_ctx_list(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
   void put_table_ctx(ObTableLoadTableCtx *table_ctx);
+  int64_t get_table_ctx_count() const;
+  int64_t get_dirty_list_count() const;
+  bool is_table_ctx_empty() const;
   bool is_dirty_list_empty() const;
   // table ctx no reference counting
   int get_releasable_table_ctx_list(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);

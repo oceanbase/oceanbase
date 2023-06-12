@@ -458,7 +458,7 @@ int FetchStream::dispatch_fetch_task_(LSFetchCtx &task,
   return ret;
 }
 
-int FetchStream::get_upper_limit(int64_t &upper_limit_us)
+int FetchStream::get_upper_limit(int64_t &upper_limit_ns)
 {
   int ret = OB_SUCCESS;
   int64_t min_progress = OB_INVALID_TIMESTAMP;
@@ -477,19 +477,19 @@ int FetchStream::get_upper_limit(int64_t &upper_limit_us)
   } else {
     // DDL partition is not limited by progress limit, here upper limit is set to a future value
     if (FETCH_STREAM_TYPE_SYS_LS == stype_) {
-      upper_limit_us = min_progress + ATOMIC_LOAD(&g_ddl_progress_limit) * NS_CONVERSION;
+      upper_limit_ns = min_progress + ATOMIC_LOAD(&g_ddl_progress_limit) * NS_CONVERSION;
     } else {
       // Other partition are limited by progress limit
-      upper_limit_us = min_progress + ATOMIC_LOAD(&g_dml_progress_limit) * NS_CONVERSION;
+      upper_limit_ns = min_progress + ATOMIC_LOAD(&g_dml_progress_limit) * NS_CONVERSION;
     }
 
     global_upper_limit = progress_controller_->get_global_upper_limit();
     if (OB_INVALID_TIMESTAMP != global_upper_limit) {
       const int64_t log_progress = ls_fetch_ctx_->get_progress();
       if (log_progress < global_upper_limit) {
-        upper_limit_us = INT64_MAX - 1;
+        upper_limit_ns = INT64_MAX - 1;
       } else {
-        upper_limit_us = std::min(upper_limit_us, global_upper_limit);
+        upper_limit_ns = std::min(upper_limit_ns, global_upper_limit);
       }
     }
   }

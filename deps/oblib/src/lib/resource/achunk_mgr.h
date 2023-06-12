@@ -60,7 +60,7 @@ public:
   void set_max_chunk_cache_size(const int64_t max_cache_size)
   {
 #ifdef OB_USE_ASAN
-    UNUSED(size);
+    UNUSED(max_cache_size);
     max_chunk_cache_size_ = 0;
 #else
     max_chunk_cache_size_ = max_cache_size;

@@ -1,5 +1,9 @@
 int64_t ob_update_loop_ts();
 
+int ussl_is_stop()
+{
+  return ATOMIC_LOAD(&ussl_is_stopped);
+}
 struct epoll_event *ussl_make_epoll_event(struct epoll_event *event, uint32_t event_flag, void *val)
 {
   event->events = event_flag;
@@ -80,11 +84,12 @@ static void ussl_eloop_handle_sock_event(ussl_sock_t *s)
 
 int ussl_eloop_run(ussl_eloop_t *ep)
 {
-  while (1) {
+  while (!ussl_is_stop()) {
     ob_update_loop_ts();
     ussl_eloop_refire(ep);
     ussl_dlink_for(&ep->ready_link, p) { ussl_eloop_handle_sock_event(ussl_structof(p, ussl_sock_t, ready_link)); }
     check_and_handle_timeout_event();
   }
+  close(ep->fd);
   return 0;
 }

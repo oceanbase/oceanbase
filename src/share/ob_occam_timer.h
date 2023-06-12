@@ -527,7 +527,7 @@ class ObOccamTimer
 {
 public:
   ObOccamTimer() : total_running_task_count_(0), precision_(0), is_running_(false) {}
-  ~ObOccamTimer() { stop_and_wait(); }
+  ~ObOccamTimer() { destroy(); }
   int init_and_start(ObOccamThreadPool &pool, const int64_t precision, const char *name)
   {
     TIMEGUARD_INIT(OCCAM, 100_ms);
@@ -572,7 +572,7 @@ public:
     }
     return OB_SUCCESS;
   }
-  void stop_and_wait()
+  void stop()
   {
     ATOMIC_STORE(&is_running_, false);
     int64_t last_print_time = 0;
@@ -583,6 +583,32 @@ public:
         OCCAM_LOG(INFO, "OccamTimr waiting running task finished",
                     K(ATOMIC_LOAD(&total_running_task_count_)), KP(this));
       }
+    }
+    if (timer_shared_ptr_.is_valid()) {
+      timer_shared_ptr_->stop();
+    }
+    if (thread_pool_shared_ptr_.is_valid()) {
+      thread_pool_shared_ptr_->stop();
+    }
+  }
+  void wait()
+  {
+    if (timer_shared_ptr_.is_valid()) {
+      timer_shared_ptr_->wait();
+    }
+    if (thread_pool_shared_ptr_.is_valid()) {
+      thread_pool_shared_ptr_->wait();
+    }
+  }
+  void destroy()
+  {
+    stop();
+    wait();
+    if (thread_pool_shared_ptr_.is_valid()) {
+      thread_pool_shared_ptr_->destroy();
+    }
+    if (timer_shared_ptr_.is_valid()) {
+      timer_shared_ptr_->destroy();
     }
   }
   bool is_running() const { return ATOMIC_LOAD(&is_running_); };

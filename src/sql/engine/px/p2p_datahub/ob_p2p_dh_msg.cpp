@@ -116,31 +116,36 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
 {
   int ret = OB_SUCCESS;
   ObP2PDhKey dh_key(p2p_datahub_id_, px_sequence_id_, task_id_);
-  ObP2PDatahubManager::P2PMsgMergeCall call(*this);
+  ObP2PDatahubManager::P2PMsgSetCall set_call(dh_key, *this);
+  ObP2PDatahubManager::P2PMsgMergeCall merge_call(*this);
   ObP2PDatahubManager::MsgMap &map = PX_P2P_DH.get_map();
   start_time_ = ObTimeUtility::current_time();
   ObP2PDatahubMsgGuard guard(this);
-  do {
-    if (OB_HASH_EXIST == (ret = map.set_refactored(dh_key, this))) {
-      if (OB_FAIL(map.atomic_refactored(dh_key, call))) {
-        if (OB_HASH_NOT_EXIST != ret) {
-          LOG_WARN("fail to merge p2p dh msg", K(ret));
-        }
-      }
-    } else if (OB_SUCCESS == ret) {
-      (void)check_finish_receive();
-      // set_refactored success, means this msg is in map, so register check item into dm
-      int reg_ret = ObDetectManagerUtils::p2p_datahub_register_check_item_into_dm(register_dm_info_,
-          dh_key, dm_cb_node_seq_id_);
-      if (OB_SUCCESS != reg_ret) {
-        LOG_WARN("[DM] failed to register check item to dm", K(reg_ret));
-      }
-      LOG_TRACE("[DM] p2p msg register check item to dm", K(reg_ret), K(register_dm_info_),
-          K(dh_key), K(dm_cb_node_seq_id_), K(this));
+
+  bool need_merge = true;
+  if (OB_FAIL(map.set_refactored(dh_key, this, 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/, &set_call))) {
+    if (OB_HASH_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to set refactored", K(ret));
     }
-  } while (ret == OB_HASH_NOT_EXIST);
-  if (call.need_free_) {
     need_free = true;
+  } else {
+    need_merge = false; // set success, not need to merge
+  }
+
+  // merge filter
+  if (OB_SUCC(ret) && need_merge) {
+    if (OB_FAIL(map.atomic_refactored(dh_key, merge_call))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("fail to merge p2p dh msg", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !need_merge) {
+    (void)check_finish_receive();
+  }
+  if (need_free) {
     // msg not in map, dec ref count
     guard.dec_msg_ref_count();
   }

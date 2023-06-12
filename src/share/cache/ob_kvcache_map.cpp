@@ -56,8 +56,8 @@ int ObKVCacheMap::init(const int64_t bucket_num, ObKVCacheStore *store)
   } else {
     bucket_size_ = DEFAULT_BUCKET_SIZE;
     if (is_mini_mode()) {
-      bucket_size_ *= lib::mini_mode_resource_ratio();
-      bucket_size_ = bucket_size_ > MIN_BUCKET_SIZE ? bucket_size_ : MIN_BUCKET_SIZE;
+      const int64_t bucket_size_idx = lib::mini_mode_resource_ratio() * BUCKET_SIZE_ARRAY_LEN;
+      bucket_size_ = BUCKET_SIZE_ARRAY[MIN(bucket_size_idx, BUCKET_SIZE_ARRAY_LEN - 1)];
     }
     const int64_t bucket_cnt = bucket_num % bucket_size_ == 0 ?
       bucket_num / bucket_size_ : bucket_num / bucket_size_ + 1;

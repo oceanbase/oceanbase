@@ -303,6 +303,58 @@ int ObTableLoadMerger::build_merge_ctx()
   return ret;
 }
 
+int ObTableLoadMerger::collect_dml_stat(ObTableLoadDmlStat &dml_stats)
+{
+  int ret = OB_SUCCESS;
+  if (store_ctx_->is_fast_heap_table_) {
+    ObDirectLoadMultiMap<ObTabletID, ObDirectLoadFastHeapTable *> tables;
+    ObArray<ObTableLoadTransStore *> trans_store_array;
+    if (OB_FAIL(tables.init())) {
+      LOG_WARN("fail to init table", KR(ret));
+    } else if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
+      LOG_WARN("fail to get trans store", KR(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < trans_store_array.count(); ++i) {
+        ObTableLoadTransStore *trans_store = trans_store_array.at(i);
+        for (int j = 0; OB_SUCC(ret) && j < trans_store->session_store_array_.count(); ++j) {
+          ObTableLoadTransStore::SessionStore * session_store =  trans_store->session_store_array_.at(j);
+          for (int k = 0 ; OB_SUCC(ret) && k < session_store->partition_table_array_.count(); ++k) {
+            ObIDirectLoadPartitionTable *table = session_store->partition_table_array_.at(k);
+            ObDirectLoadFastHeapTable *sstable = nullptr;
+            if (OB_ISNULL(sstable = dynamic_cast<ObDirectLoadFastHeapTable *>(table))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected not heap sstable", KR(ret), KPC(table));
+            } else {
+              const ObTabletID &tablet_id = sstable->get_tablet_id();
+              if (OB_FAIL(tables.add(tablet_id, sstable))) {
+                LOG_WARN("fail to add tables", KR(ret), KPC(sstable));
+              }
+            }
+          }
+        }
+      }
+      for (int i = 0; OB_SUCC(ret) && i < merge_ctx_.get_tablet_merge_ctxs().count(); ++i) {
+        ObDirectLoadTabletMergeCtx *tablet_ctx = merge_ctx_.get_tablet_merge_ctxs().at(i);
+        ObArray<ObDirectLoadFastHeapTable *> heap_table_array ;
+        if (OB_FAIL(tables.get(tablet_ctx->get_tablet_id(), heap_table_array))) {
+          LOG_WARN("get heap sstable failed", KR(ret));
+        } else if (OB_FAIL(tablet_ctx->collect_dml_stat(heap_table_array, dml_stats))) {
+          LOG_WARN("fail to collect sql statics", KR(ret));
+        }
+      }
+    }
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < merge_ctx_.get_tablet_merge_ctxs().count(); ++i) {
+      ObDirectLoadTabletMergeCtx *tablet_ctx = merge_ctx_.get_tablet_merge_ctxs().at(i);
+      ObArray<ObDirectLoadFastHeapTable *> heap_table_array ;
+      if (OB_FAIL(tablet_ctx->collect_dml_stat(heap_table_array, dml_stats))) {
+        LOG_WARN("fail to collect sql statics", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadMerger::collect_sql_statistics(ObTableLoadSqlStatistics &sql_statistics)
 {
   int ret = OB_SUCCESS;

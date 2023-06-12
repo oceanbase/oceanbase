@@ -84,7 +84,8 @@ public:
 
   int start() override;
   void stop() override;
-  
+  void wait() override;
+  int destroy();
   void run3() override;
   // force cancel archive
   int force_cancel(const uint64_t tenant_id) override;

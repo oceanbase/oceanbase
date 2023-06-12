@@ -244,6 +244,8 @@ void ObTaskController::wait()
 
 void ObTaskController::destroy()
 {
+  stop();
+  wait();
   ObSyslogPerErrLimiter::instance().destroy();
   for (int i = 0; i < MAX_TASK_ID; i++) {
     if (nullptr != limiters_[i]) {

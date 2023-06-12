@@ -156,6 +156,12 @@ int ObExprJoinFilter::check_rf_ready(
     if (join_filter_ctx->need_wait_ready()) {
       while (!join_filter_ctx->is_ready() && OB_SUCC(exec_ctx.fast_check_status())) {
         if (OB_NOT_NULL(rf_msg)) {
+#ifdef ERRSIM
+          if (OB_FAIL(OB_E(EventTable::EN_PX_JOIN_FILTER_HOLD_MSG) OB_SUCCESS)) {
+            LOG_WARN("join filter hold msg by design", K(ret));
+            ob_usleep(80000000);
+          }
+#endif
           if (rf_msg->check_ready()) {
             break;
           }

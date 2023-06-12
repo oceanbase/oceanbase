@@ -43,6 +43,10 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
   if (param_num < 3) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(param_num));
+  } else if (!is_called_in_sql()) {
+    ret = OB_ERR_SP_LILABEL_MISMATCH;
+    LOG_WARN("expr call in pl semantics disallowed", K(ret), K(N_UPDATEXML));
+    LOG_USER_ERROR(OB_ERR_SP_LILABEL_MISMATCH, static_cast<int>(strlen(N_UPDATEXML)), N_UPDATEXML);
   } else if (types[0].is_ext() && types[0].get_udt_id() == T_OBJ_XML) {
       types[0].get_calc_meta().set_sql_udt(ObXMLSqlType);
   } else if (!ob_is_xml_sql_type(types[0].get_type(), types[0].get_subschema_id())) {
@@ -62,9 +66,6 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
           if (types[i].get_charset_type() != CHARSET_UTF8MB4) {
             types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
-        } else {
-          types[i].set_calc_type(ObVarcharType);
-          types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
       } else {
         // value expr
@@ -86,9 +87,6 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
         if (types[param_num - 1].get_charset_type() != CHARSET_UTF8MB4) {
           types[param_num - 1].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
-      } else {
-        types[param_num - 1].set_calc_type(ObVarcharType);
-        types[param_num - 1].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
       }
     }
   }

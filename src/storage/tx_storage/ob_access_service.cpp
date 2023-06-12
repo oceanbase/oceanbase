@@ -663,7 +663,7 @@ int ObAccessService::insert_rows(
                                       column_ids,
                                       row_iter,
                                       affected_rows);
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !dml_param.is_direct_insert()) {
       int tmp_ret = audit_tablet_opt_dml_stat(dml_param,
                                               tablet_id,
                                               ObOptDmlStatType::TABLET_OPT_INSERT_STAT,

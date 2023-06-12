@@ -76,7 +76,7 @@ static void *bg_thread_func(void *arg)
 #define F_SETPIPE_SZ 1031
 #endif
 
-int init_bg_thread()
+int ussl_init_bg_thread()
 {
   int ret = 0;
   static const int pipe_resize = 128 * 1024;
@@ -98,6 +98,11 @@ int init_bg_thread()
     }
   }
   return ret;
+}
+
+void ussl_wait_bg_thread()
+{
+  pthread_join(ussl_bg_thread_id, NULL);
 }
 
 void add_to_timeout_list(ussl_dlink_t *l)

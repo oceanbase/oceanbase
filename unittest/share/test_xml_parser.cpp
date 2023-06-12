@@ -384,8 +384,11 @@ TEST_F(TestXmlParser, test_predefined_entity_ref)
   ObXmlDocument* doc = nullptr;
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
+  ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
+  doc = parser.document();
+  ASSERT_NE(nullptr, doc);
   ObXmlTreeTextWriter writer(&allocator);
   writer.visit(doc);
   ObString s = writer.get_xml_text();
@@ -420,6 +423,7 @@ TEST_F(TestXmlParser, test_predefined_entity_ref_with_blank)
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
   parser.set_not_ignore_space();
   ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
   doc = parser.document();
@@ -449,8 +453,10 @@ TEST_F(TestXmlParser, test_char_entity_ref)
   ObXmlDocument* doc = nullptr;
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
+  ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
+  doc = parser.document();
   ObXmlTreeTextWriter writer(&allocator);
   writer.visit(doc);
   ObString s = writer.get_xml_text();
@@ -477,6 +483,7 @@ TEST_F(TestXmlParser, test_char_entity_ref_with_blank)
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
   parser.set_not_ignore_space();
   ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
   doc = parser.document();
@@ -1024,8 +1031,11 @@ TEST_F(TestXmlParser, test_parse_content_with_predefined_entity)
   ObXmlDocument* content = nullptr;
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-  ret = ObXmlParserUtils::parse_content_text(ctx, xml_text, content);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
+  ASSERT_EQ(OB_SUCCESS, parser.parse_content(xml_text));
+  content = parser.document();
+  ASSERT_NE(nullptr, content);
   ObXmlTreeTextWriter writer(&allocator);
   writer.visit(content);
   ObString s = writer.get_xml_text();
@@ -1061,8 +1071,10 @@ TEST_F(TestXmlParser, test_parse_content_predined_entity)
   ObXmlDocument* content = nullptr;
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-  ret = ObXmlParserUtils::parse_content_text(ctx, xml_text, content);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
+  ASSERT_EQ(OB_SUCCESS, parser.parse_content(xml_text));
+  content = parser.document();
   ObXmlTreeTextWriter writer(&allocator);
   writer.visit(content);
   ObString s = writer.get_xml_text();
@@ -1079,8 +1091,11 @@ TEST_F(TestXmlParser, test_parse_text_sep)
   ObXmlDocument* content = nullptr;
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, content);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
+  ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
+  content = parser.document();
+  ASSERT_NE(nullptr, content);
   ObXmlTreeTextWriter writer(&allocator);
   writer.visit(content);
   ObString s = writer.get_xml_text();
@@ -2015,8 +2030,10 @@ TEST_F(TestXmlParser, test_unicode_char_ref)
   ObXmlDocument* doc = nullptr;
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
+  ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
+  doc = parser.document();
   ObXmlTreeTextWriter writer(&allocator);
   writer.visit(doc);
   ObString s = writer.get_xml_text();
@@ -2539,6 +2556,7 @@ TEST_F(TestXmlParser, test_attr_escape)
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   ObXmlParser parser(ctx);
+  parser.set_not_entity_replace();
   ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
   doc = parser.document();
   ASSERT_NE(nullptr, doc);
@@ -2562,7 +2580,6 @@ TEST_F(TestXmlParser, test_attr_not_escape)
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   ObXmlParser parser(ctx);
-  parser.set_entity_replace();
   ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
   doc = parser.document();
   ASSERT_NE(nullptr, doc);
@@ -2727,12 +2744,35 @@ TEST_F(TestXmlParser, test_revert_escape)
   common::ObString text_3("abdasdjkkjlasdopqweoionk");
   common::ObString res;
   ObArenaAllocator allocator(ObModIds::TEST);
-  ret = ObXmlParserUtils::revert_escape_character(allocator, text_1, res);
+  ret = ObXmlUtil::revert_escape_character(allocator, text_1, res);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(std::string(res.ptr(), res.length()), std::string(text_2.ptr(), text_2.length()));
-  ret = ObXmlParserUtils::revert_escape_character(allocator, text_3, res);
+  ret = ObXmlUtil::revert_escape_character(allocator, text_3, res);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(std::string(res.ptr(), res.length()), std::string(text_3.ptr(), text_3.length()));
+}
+
+TEST_F(TestXmlParser, test_attr_and_text_no_escape)
+{
+  int ret = 0;
+  common::ObString xml_text(
+  "<a attr=\"&lt;&gt;&amp;&quot;&apos;\">&lt;&gt;&amp;&quot;&apos;</a>"
+  );
+  common::ObString serialize_text(
+  "<a attr=\"<>&\"'\"><>&\"'</a>\n"
+  );
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ObXmlParser parser(ctx);
+  ASSERT_EQ(OB_SUCCESS, parser.parse_document(xml_text));
+  doc = parser.document();
+  ASSERT_NE(nullptr, doc);
+  ObXmlTreeTextWriter writer(&allocator);
+  ASSERT_EQ(OB_SUCCESS, writer.visit(doc));
+  ObString s = writer.get_xml_text();
+  ASSERT_EQ(std::string(serialize_text.ptr(), serialize_text.length()), std::string(s.ptr(), s.length()));
 }
 
 // class TestMemoryXmlParser : public ::testing::Test {

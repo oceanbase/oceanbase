@@ -435,7 +435,7 @@ int FetchStream::dispatch_fetch_task_(LSFetchCtx &task,
   return ret;
 }
 
-int FetchStream::get_upper_limit(int64_t &upper_limit_us)
+int FetchStream::get_upper_limit(int64_t &upper_limit_ns)
 {
   int ret = OB_SUCCESS;
   int64_t min_progress = OB_INVALID_TIMESTAMP;
@@ -453,10 +453,10 @@ int FetchStream::get_upper_limit(int64_t &upper_limit_us)
   } else {
     // DDL partition is not limited by progress limit, here upper limit is set to a future value
     if (FETCH_STREAM_TYPE_SYS_LS == stype_) {
-      upper_limit_us = min_progress + ATOMIC_LOAD(&g_ddl_progress_limit) * NS_CONVERSION;
+      upper_limit_ns = min_progress + ATOMIC_LOAD(&g_ddl_progress_limit) * NS_CONVERSION;
     } else {
       // Other partition are limited by progress limit
-      upper_limit_us = min_progress + ATOMIC_LOAD(&g_dml_progress_limit) * NS_CONVERSION;
+      upper_limit_ns = min_progress + ATOMIC_LOAD(&g_dml_progress_limit) * NS_CONVERSION;
     }
   }
 

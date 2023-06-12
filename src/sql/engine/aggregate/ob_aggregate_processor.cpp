@@ -29,6 +29,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/basic/ob_material_op_impl.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -1860,7 +1861,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            GroupConcatExtraResult *result = new (tmp_buf) GroupConcatExtraResult(aggr_alloc_);
+            GroupConcatExtraResult *result = new (tmp_buf) GroupConcatExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
             const bool need_rewind = (in_window_func_ || group_id > 0);
             if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
@@ -1903,7 +1904,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", "size", sizeof(HybridHistExtraResult));
           } else {
-            HybridHistExtraResult *result = new (tmp_buf) HybridHistExtraResult(aggr_alloc_);
+            HybridHistExtraResult *result = new (tmp_buf) HybridHistExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
             const bool need_rewind = (in_window_func_ || group_id > 0);
             if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
@@ -1926,7 +1927,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            TopKFreHistExtraResult *result = new (tmp_buf) TopKFreHistExtraResult(aggr_alloc_);
+            TopKFreHistExtraResult *result = new (tmp_buf) TopKFreHistExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
           }
           break;
@@ -1936,24 +1937,23 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
           CK(NULL != aggr_info.dll_udf_);
           DllUdfExtra *extra = NULL;
           if (OB_SUCC(ret)) {
-            extra = OB_NEWx(DllUdfExtra, (&aggr_alloc_),
-                    aggr_alloc_);
-            if (NULL == extra) {
+            void *tmp_buf = NULL;
+            if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(DllUdfExtra)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("allocate memory failed", K(ret));
-            }
-            aggr_cell.set_extra(extra);
-          }
-          if (OB_SUCC(ret)) {
-            OZ(ObUdfUtil::init_udf_args(aggr_alloc_,
+            } else {
+              DllUdfExtra *extra = new (tmp_buf) DllUdfExtra(aggr_alloc_, op_monitor_info_);
+              aggr_cell.set_extra(extra);
+              OZ(ObUdfUtil::init_udf_args(aggr_alloc_,
                                         aggr_info.dll_udf_->udf_attributes_,
                                         aggr_info.dll_udf_->udf_attributes_types_,
                                         extra->udf_ctx_.udf_args_));
-            OZ(aggr_info.dll_udf_->udf_func_.process_init_func(extra->udf_ctx_));
-            if (OB_SUCC(ret)) { // set func after udf ctx inited
-              extra->udf_fun_ = &aggr_info.dll_udf_->udf_func_;
+              OZ(aggr_info.dll_udf_->udf_func_.process_init_func(extra->udf_ctx_));
+              if (OB_SUCC(ret)) { // set func after udf ctx inited
+                extra->udf_fun_ = &aggr_info.dll_udf_->udf_func_;
+              }
+              OZ(extra->udf_fun_->process_clear_func(extra->udf_ctx_));
             }
-            OZ(extra->udf_fun_->process_clear_func(extra->udf_ctx_));
           }
           break;
         }
@@ -1970,7 +1970,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            ExtraResult *result = new (tmp_buf) ExtraResult(aggr_alloc_);
+            ExtraResult *result = new (tmp_buf) ExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
           }
         }
@@ -2538,6 +2538,8 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         ObObj obj;
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
+        } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+          LOG_WARN("fail to truncate string", K(ret));
         } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(obj))) {
           LOG_WARN("failed to process row", K(ret));
         } else {/*do nothing*/}
@@ -2984,6 +2986,8 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         ObObj obj;
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
+        } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+          LOG_WARN("fail to truncate string", K(ret));
         } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(obj))) {
           LOG_WARN("failed to process row", K(ret));
         } else {/*do nothing*/}
@@ -4854,6 +4858,8 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
     ObObj obj;
     if (OB_FAIL(datum->to_obj(obj, obj_meta))) {
       LOG_WARN("failed to obj", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+      LOG_WARN("fail to truncate string", K(ret));
     } else if (OB_FAIL(extra_info->topk_fre_hist_.add_top_k_frequency_item(obj))) {
       LOG_WARN("failed to process row", K(ret));
     } else {/*do nothing*/}
@@ -6048,6 +6054,9 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
         LOG_WARN("get unexpected null", K(ret), K(stored_row));
       } else if (stored_row->cells()[0].is_null()) {
         ++ null_count;
+      } else if (OB_FAIL(shadow_truncate_string_for_hybird_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                                const_cast<ObDatum &>(stored_row->cells()[0])))) {
+        LOG_WARN("failed to shadow truncate string for hybird hist", K(ret));
       } else if (OB_FAIL(prev_row.save_store_row(*stored_row))) {
         LOG_WARN("failed to deep copy limit last rows", K(ret));
       } else {
@@ -6064,6 +6073,9 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
       if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(stored_row));
+      } else if (OB_FAIL(shadow_truncate_string_for_hybird_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                                const_cast<ObDatum &>(stored_row->cells()[0])))) {
+        LOG_WARN("failed to shadow truncate string for hybrid hist", K(ret));
       } else if (OB_FAIL(check_rows_equal(prev_row, *stored_row, aggr_info, is_equal))) {
         LOG_WARN("failed to is order by item equal with prev row", K(ret));
       } else if (is_equal) {
@@ -6133,6 +6145,24 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
   return ret;
 }
 
+int ObAggregateProcessor::shadow_truncate_string_for_hybird_hist(const ObObjMeta obj_meta,
+                                                                 ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (ObColumnStatParam::is_valid_opt_col_type(obj_meta.get_type()) && obj_meta.is_string_type() && !datum.is_null()) {
+    const ObString &str = datum.get_string();
+    int64_t truncated_str_len = ObDbmsStatsUtils::get_truncated_str_len(str, obj_meta.get_collation_type());
+    if (OB_UNLIKELY(truncated_str_len < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(datum), K(truncated_str_len));
+    } else {
+      datum.set_string(str.ptr(), static_cast<uint32_t>(truncated_str_len));
+      LOG_TRACE("Succeed to shadow truncate string for hybird hist", K(datum));
+    }
+  }
+  return ret;
+}
+
 int ObAggregateProcessor::get_hybrid_hist_result(ObHybridHistograms *hybrid_hist,
                                                  bool has_lob_header,
                                                  ObDatum &result_datum)
@@ -6172,7 +6202,7 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
                                                    ObDatum &concat_result)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator tmp_alloc;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -6294,7 +6324,7 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
                                                        ObDatum &concat_result)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator tmp_alloc;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));

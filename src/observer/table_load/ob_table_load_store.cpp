@@ -16,6 +16,7 @@
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/table_load/ob_table_load_utils.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
+#include "share/stat/ob_opt_stat_monitor_manager.h"
 
 namespace oceanbase
 {
@@ -283,6 +284,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store commit");
+    ObTableLoadDmlStat dml_stats;
     obsys::ObWLockGuard guard(store_ctx_->get_status_lock());
     if (OB_FAIL(store_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
@@ -293,6 +295,10 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     } else if (param_.online_opt_stat_gather_ &&
                OB_FAIL(store_ctx_->merger_->collect_sql_statistics(sql_statistics))) {
       LOG_WARN("fail to collect sql stats", KR(ret));
+    } else if (OB_FAIL(store_ctx_->merger_->collect_dml_stat(dml_stats))) {
+      LOG_WARN("fail to build dml stat", KR(ret));
+    } else if (OB_FAIL(ObOptStatMonitorManager::get_instance().update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
+      LOG_WARN("fail to update dml stat info", KR(ret));
     } else if (OB_FAIL(store_ctx_->set_status_commit_unlock())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {

@@ -1257,7 +1257,7 @@ int ObTenantSqlMemoryManager::get_workarea_stat(ObIArray<ObSqlWorkAreaStat> &wa_
     if (OB_FAIL(wa_stats.push_back(workarea_stats_.at(nth)))) {
       LOG_WARN("failed to push back workarea stat", K(ret));
     } else {
-      LOG_TRACE("trace workarea history", K(workarea_stats_.at(i)),
+      LOG_TRACE("trace workarea history", K(workarea_stats_.at(nth)),
           K(wa_stats.at(wa_stats.count() - 1)));
     }
   }

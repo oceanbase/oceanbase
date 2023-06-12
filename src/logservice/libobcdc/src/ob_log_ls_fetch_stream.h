@@ -116,7 +116,7 @@ public:
 
   void switch_state(State state) { ATOMIC_STORE(&state_, state); }
 
-  int get_upper_limit(int64_t &upper_limit_us);
+  int get_upper_limit(int64_t &upper_limit_ns);
 
   // Execution Statistics
   void do_stat();

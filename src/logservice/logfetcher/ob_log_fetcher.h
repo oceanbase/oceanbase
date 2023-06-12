@@ -66,7 +66,7 @@ public:
   virtual int64_t get_cluster_id() const = 0;
 
   // Get Tenant ID
-  virtual uint64_t get_tenant_id() const = 0;
+  virtual uint64_t get_source_tenant_id() const = 0;
 
   // Add the log stream
   //
@@ -181,7 +181,8 @@ public:
   int init(
       const LogFetcherUser &log_fetcher_user,
       const int64_t cluster_id,
-      const uint64_t tenant_id,
+      const uint64_t source_tenant_id,
+      const uint64_t self_tenant_id,
       const bool is_loading_data_dict_baseline_data,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest,
@@ -203,7 +204,7 @@ public:
   virtual void configure(const ObLogFetcherConfig &cfg);
 
   virtual int64_t get_cluster_id() const { return cluster_id_; }
-  virtual uint64_t get_tenant_id() const { return tenant_id_; }
+  virtual uint64_t get_source_tenant_id() const { return source_tenant_id_; }
 
   virtual int add_ls(
       const share::ObLSID &ls_id,
@@ -266,7 +267,8 @@ private:
   bool                          is_inited_;
   LogFetcherUser                log_fetcher_user_;
   int64_t                       cluster_id_;
-  uint64_t                      tenant_id_;
+  uint64_t                      source_tenant_id_;
+  uint64_t                      self_tenant_id_;
   const ObLogFetcherConfig      *cfg_;
 
   bool                          is_loading_data_dict_baseline_data_;

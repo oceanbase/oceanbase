@@ -96,7 +96,7 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
     PalfHandleGuard palf_handle_guard;
     PalfGroupBufferIterator group_iter;
     const ObCdcRpcId &rpc_id = req.get_client_id();
-    ClientLSKey ls_key(rpc_id.get_addr(), rpc_id.get_pid(), ls_id);
+    ClientLSKey ls_key(rpc_id.get_addr(), rpc_id.get_pid(), req.get_tenant_id(), ls_id);
     ClientLSCtxMap &ctx_map = MTL(ObLogService*)->get_cdc_service()->get_ls_ctx_map();
     ClientLSCtx *ls_ctx = NULL;
     int8_t fetch_log_flag = req.get_flag();
@@ -179,7 +179,7 @@ int ObCdcFetcher::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
     const ObLSID &ls_id = req.get_ls_id();
     PalfHandleGuard palf_handle_guard;
     const ObCdcRpcId &rpc_id = req.get_client_id();
-    ClientLSKey ls_key(rpc_id.get_addr(), rpc_id.get_pid(), ls_id);
+    ClientLSKey ls_key(rpc_id.get_addr(), rpc_id.get_pid(), req.get_tenant_id(), ls_id);
     ClientLSCtxMap &ctx_map = MTL(ObLogService*)->get_cdc_service()->get_ls_ctx_map();
     ClientLSCtx *ls_ctx = NULL;
 
@@ -555,6 +555,9 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
             // exit
             reach_max_lsn = true;
           }
+        } else if (OB_NEED_RETRY == ret) {
+          frt.stop("ArchiveNeedRetry");
+          ret = OB_SUCCESS;
         } else if (OB_ALREADY_IN_NOARCHIVE_MODE == ret || OB_ENTRY_NOT_EXIST == ret) {
           // archive is not on or lsn less than the start_lsn in archive
           ret = OB_ERR_OUT_OF_LOWER_BOUND;
@@ -604,7 +607,9 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
       } else {
         // log fetched successfully
         fetched_log_count++;
-
+        if (resp.log_reach_threshold()) {
+          frt.stop("LogReachThreshold");
+        }
         LOG_TRACE("LS fetch a log", K(ls_id), K(fetched_log_count), K(frt));
       }
     }

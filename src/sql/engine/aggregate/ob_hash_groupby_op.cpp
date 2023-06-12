@@ -662,8 +662,8 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
                   &ctx_.get_allocator(),
                   tenant_id,
                   est_size,
-                  PHY_HASH_DISTINCT, // hardcode to distinct
-                  MY_SPEC.id_ + 1, // for unique, using op_id + 1
+                  MY_SPEC.type_,
+                  MY_SPEC.id_,
                   &ctx_))) {
     LOG_WARN("failed to init sql mem processor", K(ret));
   } else if (is_part) {

@@ -208,7 +208,7 @@ TEST_F(TestObOccamTimer, stop_and_wait) {
   int ret = OB_SUCCESS;
   ret = occam_timer->schedule_task_ignore_handle_repeat_and_immediately(20_ms, [](){ return false; });
   ASSERT_EQ(ret, OB_SUCCESS);
-  occam_timer->stop_and_wait();
+  occam_timer->destroy();
 }
 
 TEST_F(TestObOccamTimer, stop_repeat_task_inside_destroy_outside) {
@@ -218,7 +218,7 @@ TEST_F(TestObOccamTimer, stop_repeat_task_inside_destroy_outside) {
   ASSERT_EQ(ret, OB_SUCCESS);
   std::this_thread::sleep_for(chrono::milliseconds(50));
   handle.stop_and_wait();
-  occam_timer->stop_and_wait();
+  occam_timer->destroy();
 }
 
 TEST_F(TestObOccamTimer, stop_and_destroy_repeat_task_outside) {
@@ -228,7 +228,7 @@ TEST_F(TestObOccamTimer, stop_and_destroy_repeat_task_outside) {
   ASSERT_EQ(ret, OB_SUCCESS);
   std::this_thread::sleep_for(chrono::milliseconds(50));
   handle.stop_and_wait();
-  occam_timer->stop_and_wait();
+  occam_timer->destroy();
 }
 
 TEST_F(TestObOccamTimer, test_specify_first_delay) {
@@ -238,7 +238,7 @@ TEST_F(TestObOccamTimer, test_specify_first_delay) {
   ASSERT_EQ(ret, OB_SUCCESS);
   std::this_thread::sleep_for(chrono::milliseconds(505));
   handle.stop_and_wait();
-  occam_timer->stop_and_wait();
+  occam_timer->destroy();
 }
 
 void test_func(const char *function_name = __builtin_FUNCTION(), const char *file = __builtin_FILE(), const int64_t line = __builtin_LINE())

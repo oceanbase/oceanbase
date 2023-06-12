@@ -36,6 +36,14 @@ int ObMonitorNode::add_rt_monitor_node(ObMonitorNode *node)
   return ret;
 }
 
+ObPlanMonitorNodeList::ObPlanMonitorNodeList() :
+  inited_(false),
+  destroyed_(false),
+  recycle_threshold_(0),
+  batch_release_(0)
+{
+}
+
 ObPlanMonitorNodeList::~ObPlanMonitorNodeList()
 {
   if (inited_) {
@@ -43,22 +51,20 @@ ObPlanMonitorNodeList::~ObPlanMonitorNodeList()
   }
 }
 
-int ObPlanMonitorNodeList::init(uint64_t tenant_id,
-                                const int64_t max_mem_size,
-                                const int64_t queue_size)
+int ObPlanMonitorNodeList::init(uint64_t tenant_id, const int64_t tenant_mem_size)
 {
   int ret = OB_SUCCESS;
   ObMemAttr attr(tenant_id, "SqlPlanMonMap");
+  // at most use 1% percent of tenant memory to store SQL PLAN MONITOR nodes
+  const int64_t MAX_QUEUE_SIZE = 100000; //10w
+  int64_t queue_size = std::min(MAX_QUEUE_SIZE, (int64_t)((tenant_mem_size * 0.01) / sizeof(ObMonitorNode)));
   if (inited_) {
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(queue_.init(MOD_LABEL, queue_size, tenant_id))) {
     SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReqMemEvict, tg_id_))) {
     SERVER_LOG(WARN, "create failed", K(ret));
-  } else if (OB_FAIL(node_map_.create(!lib::is_mini_mode() ? DEFAULT_BUCKETS_COUNT :
-        DEFAULT_BUCKETS_COUNT / 100,
-        attr,
-        attr))) {
+  } else if (OB_FAIL(node_map_.create(queue_size, attr, attr))) {
     LOG_WARN("failed to create hash map", K(ret));
   } else if (OB_FAIL(TG_START(tg_id_))) {
     SERVER_LOG(WARN, "init timer fail", K(ret));
@@ -75,7 +81,8 @@ int ObPlanMonitorNodeList::init(uint64_t tenant_id,
       SERVER_LOG(WARN, "start eliminate task failed", K(ret));
     } else {
       rt_node_id_ = -1;
-      mem_limit_ = max_mem_size;
+      recycle_threshold_ = queue_size * 0.9; // when reach 90% usage, begin to recycle
+      batch_release_ = queue_size * 0.05; // recycle 5% nodes per round
       tenant_id_ = tenant_id;
       inited_ = true;
       destroyed_ = false;
@@ -109,7 +116,7 @@ int ObPlanMonitorNodeList::mtl_init(ObPlanMonitorNodeList* &node_list)
     LOG_WARN("failed to alloc memory for ObPlanMonitorNodeList", K(ret));
   } else {
     int64_t mem_limit = get_tenant_memory_limit(tenant_id);
-    if (OB_FAIL(node_list->init(tenant_id, mem_limit, MAX_QUEUE_SIZE))) {
+    if (OB_FAIL(node_list->init(tenant_id, mem_limit))) {
       LOG_WARN("failed to init event list", K(ret));
     }
   }

@@ -51,9 +51,10 @@ public:
     GOTO_LABEL_INVALID = -1,
     GOTO_LABEL_EXIST,
     GOTO_LABEL_NONEXIST,
+    GOTO_LABEL_CG,
   };
   typedef common::hash::ObHashMap<int64_t,
-                  common::hash::HashMapPair<goto_label_flag,  jit::ObLLVMBasicBlock>,
+                  common::hash::HashMapPair<goto_label_flag,  std::pair<jit::ObLLVMBasicBlock, jit::ObLLVMBasicBlock>>,
                   common::hash::NoPthreadDefendMode> goto_label_map;
 
 public:
@@ -337,6 +338,7 @@ public:
   const ObSqlExpression *get_expr(int64_t i) const { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }
   ObSqlExpression *get_expr(int64_t i) { return i < 0 || i >= exprs_.count() ? NULL : exprs_.at(i); }
   int generate_goto_label(const ObPLStmt &stmt);
+  int generate_destruct_obj(const ObPLStmt &s, jit::ObLLVMValue &src_datum);
   int generate_out_param(
     const ObPLStmt &s,
     const ObIArray<InOutParam> &param_desc,

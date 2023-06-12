@@ -329,6 +329,8 @@ private:
   // NB: in progress of expanding, the free size byte calcuated by BLOCK_SIZE * (max_block_id_ - min_block_id_) may be greater than
   //     curr_total_size_, if we calcuated log disk in use by curr_total_size_ - 'free size byte', the resule may be negative.
   int64_t block_cnt_in_use_;
+  // Before start ObServerLogBlockMgr, not support log disk resize.
+  bool is_started_;
   bool is_inited_;
 
 private:

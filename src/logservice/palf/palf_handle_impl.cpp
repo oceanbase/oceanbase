@@ -398,11 +398,6 @@ int PalfHandleImpl::submit_log(
       PALF_LOG(WARN, "cannot submit_log", KPC(this), KP(buf), K(buf_len), "role",
           state_mgr_.get_role(), "state", state_mgr_.get_state(), "proposal_id",
           state_mgr_.get_proposal_id(), K(opts), "mode_mgr can_append", mode_mgr_.can_append());
-    } else if (OB_UNLIKELY(state_mgr_.is_changing_config_with_arb())) {
-      ret = OB_EAGAIN;
-      if (palf_reach_time_interval(200 * 1000, chaning_config_warn_time_)) {
-        PALF_LOG(WARN, "can not submit log when memberlist is being changed", KPC(this));
-      }
     } else if (OB_FAIL(sw_.submit_log(buf, buf_len, ref_scn, lsn, scn))) {
       if (OB_EAGAIN != ret) {
         PALF_LOG(WARN, "submit_log failed", KPC(this), KP(buf), K(buf_len));
@@ -956,6 +951,43 @@ int PalfHandleImpl::check_args_and_generate_config_(const LogConfigChangeArgs &a
   return ret;
 }
 
+int PalfHandleImpl::wait_log_barrier_(const LogConfigChangeArgs &args,
+                                      const LogConfigInfo &new_config_info,
+                                      TimeoutChecker &not_timeout)
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret) && OB_SUCC(not_timeout())) {
+    bool need_wlock = (false == state_mgr_.is_changing_config_with_arb());
+    bool need_rlock = !need_wlock;
+    if (DEGRADE_ACCEPTOR_TO_LEARNER != args.type_ &&
+        true == ATOMIC_LOAD(&has_higher_prio_config_change_)) {
+      ret = OB_EAGAIN;
+      PALF_LOG(WARN, "reconfiguration is interrupted, try again", K(ret),
+          K_(palf_id), K_(self), K(args));
+      break;
+    }
+    if (true == need_wlock) {
+      WLockGuard guard(lock_);
+      if (OB_FAIL(config_mgr_.renew_config_change_barrier())) {
+        PALF_LOG(WARN, "renew_config_change_barrier failed", KR(ret), KPC(this), K(args));
+      } else if (OB_FAIL(state_mgr_.set_changing_config_with_arb())) {
+        PALF_LOG(WARN, "set_changing_config_with_arb failed", KR(ret), KPC(this), K(args));
+      }
+    } else if (true == need_rlock) {
+      RLockGuard guard(lock_);
+      if (OB_FAIL(config_mgr_.wait_log_barrier(args, new_config_info)) && OB_EAGAIN != ret) {
+        PALF_LOG(WARN, "wait_log_barrier_ failed", KR(ret), KPC(this), K(args));
+      } else if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS;
+        ob_usleep(10 * 1000);
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
                                              const int64_t timeout_us)
 {
@@ -1042,8 +1074,13 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
         ob_usleep(100 * 1000);
       }
     }
-    time_guard.click("wait_log_sync");
-    // step 3: motivate config change state switching
+    time_guard.click("precheck");
+    // step 3: waiting for log barrier if a arbitration member exists
+    if (OB_SUCC(ret) && true == new_config_info.arbitration_member_.is_valid()) {
+      ret = wait_log_barrier_(args, new_config_info, not_timeout);
+    }
+    time_guard.click("wait_barrier");
+    // step 4: motivate reconfiguration
     while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
       bool need_wlock = false;
       bool need_rlock = false;
@@ -1068,7 +1105,8 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
         break;
       }
       if (false == need_rlock && false == need_wlock) {
-        ob_usleep(50 * 1000);
+        const int64_t SLEEP_US = (state_mgr_.is_changing_config_with_arb())? 10 * 1000: 50 * 1000;
+        ob_usleep(SLEEP_US);
       }
       if (true == need_wlock) {
         WLockGuard guard(lock_);
@@ -1090,7 +1128,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
         }
       }
     }
-    time_guard.click("finish");
+    time_guard.click("reconfigure");
     PALF_LOG(INFO, "one_stage_config_change finish", KR(ret), KPC(this), K(args), K(config_version),
         K(timeout_us), K(time_guard));
     ret = (OB_LOG_NOT_SYNC == ret)? OB_EAGAIN: ret;
@@ -2283,6 +2321,7 @@ int PalfHandleImpl::handle_prepare_request(const common::ObAddr &server,
 {
   int ret = OB_SUCCESS;
   bool can_handle_prepare_request = false;
+  bool can_handle_leader_broadcast = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!server.is_valid() || INVALID_PROPOSAL_ID == proposal_id) {
@@ -2292,9 +2331,12 @@ int PalfHandleImpl::handle_prepare_request(const common::ObAddr &server,
     RLockGuard guard(lock_);
     if (state_mgr_.can_handle_prepare_request(proposal_id)) {
       can_handle_prepare_request = true;
+    } else if (state_mgr_.can_handle_leader_broadcast(server, proposal_id)) {
+      can_handle_leader_broadcast = true;
     }
   }
-  if (OB_SUCC(ret) && can_handle_prepare_request) {
+  if (OB_FAIL(ret)) {
+  } else if (can_handle_prepare_request) {
     WLockGuard guard(lock_);
     if (!state_mgr_.can_handle_prepare_request(proposal_id)) {
       // can not handle prepare request
@@ -2305,8 +2347,18 @@ int PalfHandleImpl::handle_prepare_request(const common::ObAddr &server,
       (void) sw_.clean_log();
       PALF_LOG(INFO, "handle_prepare_request success", K(ret), KPC(this), K(server), K_(self), K(proposal_id));
     }
+  } else if (can_handle_leader_broadcast) {
+    WLockGuard guard(lock_);
+    if (!state_mgr_.can_handle_leader_broadcast(server, proposal_id)) {
+      // can not handle leader broadcast
+    } else if (OB_FAIL(state_mgr_.handle_leader_broadcast(server, proposal_id))) {
+      PALF_LOG(WARN, "handle_leader_broadcast failed", K(ret), KPC(this), K(server), K(proposal_id));
+    } else {
+      PALF_LOG(TRACE, "handle_leader_broadcast success", K(ret), KPC(this), K(server), K(proposal_id));
+    }
   }
-  PALF_LOG(TRACE, "handle_prepare_request", K(ret), KPC(this), K(server), K(can_handle_prepare_request));
+  PALF_LOG(TRACE, "handle_prepare_request", K(ret), KPC(this), K(server),
+      K(can_handle_prepare_request), K(can_handle_leader_broadcast));
   return ret;
 }
 
@@ -2801,11 +2853,6 @@ int PalfHandleImpl::submit_group_log(const PalfAppendOptions &opts,
               "role", state_mgr_.get_role(), "state", state_mgr_.get_state(),
               "current proposal_id", state_mgr_.get_proposal_id(),
               "mode_mgr can_raw_write", mode_mgr_.can_raw_write(), K(opts));
-        } else if (OB_UNLIKELY(state_mgr_.is_changing_config_with_arb())) {
-          ret = OB_EAGAIN;
-          if (palf_reach_time_interval(200 * 1000, chaning_config_warn_time_)) {
-            PALF_LOG(WARN, "can not submit log when memberlist is being changed", K(ret), KPC(this));
-          }
         } else if (OB_FAIL(sw_.submit_group_log(lsn, buf, buf_len))) {
           PALF_LOG(WARN, "submit_group_log failed", K(ret), K_(palf_id), K_(self), KP(buf), K(buf_len));
         } else {

@@ -133,7 +133,7 @@ int ObMultiVersionGarbageCollector::stop()
   } else {
     ObTimeGuard timeguard(__func__, 1 * 1000 * 1000);
     (void)timer_handle_.stop_and_wait();
-    (void)timer_.stop_and_wait();
+    timer_.stop();
     last_study_timestamp_ = 0;
     last_refresh_timestamp_ = 0;
     last_reclaim_timestamp_ = 0;
@@ -152,11 +152,13 @@ int ObMultiVersionGarbageCollector::stop()
 
 void ObMultiVersionGarbageCollector::wait()
 {
+  timer_.wait();
   MVCC_LOG(INFO, "multi version garbage collector wait", KPC(this));
 }
 
 void ObMultiVersionGarbageCollector::destroy()
 {
+  timer_.destroy();
   MVCC_LOG(INFO, "multi version garbage collector destroy", KPC(this));
 }
 

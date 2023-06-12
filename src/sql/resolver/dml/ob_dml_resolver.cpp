@@ -1842,7 +1842,9 @@ int ObDMLResolver::resolve_columns_field_list_first(ObRawExpr *&expr, ObArray<Ob
     if (OB_SUCC(ret) && false == found) {
       ObQualifiedName &q_name = columns.at(i);
       ObRawExpr *real_ref_expr = NULL;
-      if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
+      if (OB_FAIL(replace_col_udt_qname(q_name))) {
+        LOG_WARN("replace col udt qname failed", K(ret), K(q_name));
+      } else if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref expr failed", K(ret), K(q_name));
         report_user_error_msg(ret, expr, q_name);
       } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {

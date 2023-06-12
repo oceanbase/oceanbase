@@ -430,9 +430,10 @@ int ObTxDataSingleRowGetter::get_next_row(ObTxData &tx_data)
       ret = get_next_row_(sstables, tx_data);
       if (OB_TIMEOUT == ret || OB_DISK_HUNG == ret) {
         ret = OB_EAGAIN;
-        STORAGE_LOG(WARN,
-                    "modify ret code from OB_TIMEOUT or OB_DISK_HUNG to OB_EAGAIN",
-                    KR(ret));
+        STORAGE_LOG(WARN, "modify ret code from OB_TIMEOUT or OB_DISK_HUNG to OB_EAGAIN", KR(ret));
+      } else if (OB_FAIL(ret)) {
+        recycled_scn_ = static_cast<ObSSTable*>(sstables[0])->get_filled_tx_scn();
+        STORAGE_LOG(WARN, "get tx data from sstable failed", K(recycled_scn_));
       }
     }
   }

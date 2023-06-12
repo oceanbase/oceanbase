@@ -478,6 +478,17 @@ protected:
       const ObPushdownExprSpec &pd_expr_spec = MY_SPEC.tsc_ctdef_.scan_ctdef_.pd_expr_spec_;
       ObSQLUtils::access_expr_sanity_check(pd_expr_spec.access_exprs_,
                                eval_ctx_, pd_expr_spec.max_batch_size_);
+
+
+      int64_t stmt_used = tsc_rtdef_.scan_rtdef_.stmt_allocator_.get_alloc()->used();
+      if (stmt_used > 2L*1024*1024*1024) {
+        SQL_LOG_RET(WARN,OB_ERR_UNEXPECTED,"stmt memory used over the threshold",K(stmt_used));
+      }
+
+      int64_t scan_used = tsc_rtdef_.scan_rtdef_.scan_allocator_.get_alloc()->used();
+      if (scan_used > 2L*1024*1024*1024) {
+        SQL_LOG_RET(WARN,OB_ERR_UNEXPECTED,"scan memory used over the threshold",K(scan_used));
+      }
     }
   }
   bool is_foreign_check_nested_session() { return ObSQLUtils::is_fk_nested_sql(&ctx_);}

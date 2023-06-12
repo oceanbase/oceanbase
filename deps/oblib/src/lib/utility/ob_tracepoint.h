@@ -102,8 +102,7 @@ private:
 
 
 #define EVENT_CALL(event_no, ...) ({ \
-      EventItem item; \
-      item = ::oceanbase::common::EventTable::instance().get_event(event_no); \
+      EventItem &item = ::oceanbase::common::EventTable::instance().get_event(event_no); \
       item.call(SELECT(1, ##__VA_ARGS__)); })
 
 #define ERRSIM_POINT_DEF(name) void name##name(){}; static oceanbase::common::NamedEventItem name( \
@@ -227,11 +226,24 @@ struct EventItem
       error_code_(0),
       cond_(0) {}
 
-  int call(const int64_t v) const { return cond_ == v ? call() : 0; }
-  int call() const
+  int call(const int64_t v) { return cond_ == v ? call() : 0; }
+  int call()
   {
     int ret = 0;
-    if (OB_LIKELY(trigger_freq_ == 0)) {
+    if (occur_ > 0) {
+      do {
+        int64_t occur = occur_;
+        if (occur > 0) {
+          if (ATOMIC_VCAS(&occur_, occur, occur - 1)) {
+            ret = static_cast<int>(error_code_);
+            break;
+          }
+        } else {
+          ret = 0;
+          break;
+        }
+      } while (true);
+    } else if (OB_LIKELY(trigger_freq_ == 0)) {
       ret = 0;
     } else if (get_tp_switch()) { // true means skip errsim
       ret = 0;
@@ -262,7 +274,7 @@ struct NamedEventItem : public ObDLinkBase<NamedEventItem>
   {
     l.add_last(this);
   }
-  operator int(void) const { return item_.call(); }
+  operator int(void) { return item_.call(); }
 
   const char *name_;
   EventItem item_;
@@ -620,6 +632,8 @@ class EventTable
       EN_PX_NOT_ERASE_P2P_DH_MSG = 608,
       EN_PX_SLOW_PROCESS_SQC_FINISH_MSG = 609,
       EN_PX_JOIN_FILTER_NOT_MERGE_MSG = 610,
+      EN_PX_P2P_MSG_REG_DM_FAILED= 611,
+      EN_PX_JOIN_FILTER_HOLD_MSG = 612,
       // please add new trace point after 700 or before 600
 
       // Compaction Related 700-750
@@ -711,12 +725,13 @@ class EventTable
       EN_THREAD_HANG = 2022,
 
       EN_ENABLE_SET_TRACE_CONTROL_INFO = 2100,
+      EN_CHEN = 2101,
 
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };
 
     /* get an event value */
-    inline EventItem get_event(int64_t index)
+    inline EventItem &get_event(int64_t index)
     { return (index >= 0 && index < SIZE_OF_EVENT_TABLE) ? event_table_[index] : event_table_[0]; }
 
     /* set an event value */

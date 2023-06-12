@@ -250,6 +250,7 @@ private:
     const LSN &get_cur_offset() const { return cur_offset_; }
     const share::SCN &get_unitized_scn() const { return unitized_scn_; }
     int64_t get_capaicity() const { return end_offset_ - cur_offset_; }
+    bool is_log_out_of_range(const int64_t size) const;
     bool original_buffer_enough(const int64_t size);
     int get_original_buf(const char *&buf, int64_t &buf_size);
     int append_handled_buf(char *buf, const int64_t buf_size);
@@ -279,7 +280,6 @@ private:
                  K_(next_piece),
                  K_(unit_size));
   private:
-    int reserve_(const int64_t size);
     int get_send_buffer_(const int64_t size);
     void inner_free_send_buffer_();
     int64_t get_reserved_buf_size_() const;

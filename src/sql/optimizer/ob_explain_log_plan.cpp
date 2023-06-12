@@ -133,10 +133,9 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
     /* generate plan call by ObMPQuery::process_with_tmp_context use tmp context, do not check */
   } else if (EXPLAIN_UNINITIALIZED !=  explain_stmt->get_explain_type()
              && EXPLAIN_BASIC !=  explain_stmt->get_explain_type()
-             && EXPLAIN_OUTLINE !=  explain_stmt->get_explain_type()
-             && EXPLAIN_EXTENDED_NOADDR !=  explain_stmt->get_explain_type()) {
-    /* generate plan again for explain/explain basic/explain outline/explain extended_noaddr,
-      do not check explain extended */
+             && EXPLAIN_OUTLINE !=  explain_stmt->get_explain_type()) {
+    /* generate plan again for explain/explain basic/explain outline,
+      do not check explain extended/explain extended_noaddr */
   } else if (0 == sql_ctx->first_plan_hash_) {  /* generate plan first time */
     void *tmp_ptr = NULL;
     sql_ctx->first_outline_data_.reset();

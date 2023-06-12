@@ -77,6 +77,21 @@ public:
     client_addr_.reset();
   }
 
+  bool operator==(const ObCdcRpcId &that) const {
+    return client_pid_ == that.client_pid_ &&
+           client_addr_ == that.client_addr_;
+  }
+
+  bool operator!=(const ObCdcRpcId &that) const {
+    return !(*this == that);
+  }
+
+  ObCdcRpcId &operator=(const ObCdcRpcId &that) {
+    client_pid_ = that.client_pid_;
+    client_addr_ = that.client_addr_;
+    return *this;
+  }
+
   void set_addr(ObAddr &addr) { client_addr_ = addr; }
   const ObAddr& get_addr() const { return client_addr_; }
 
@@ -237,6 +252,9 @@ public:
   void set_flag(int8_t flag) { flag_ |= flag; }
   int8_t get_flag() const { return flag_; }
 
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+
   void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
   common::ObCompressorType get_compressor_type() const { return compressor_type_; }
 
@@ -248,7 +266,8 @@ public:
       K_(client_id),
       K_(progress),
       K_(flag),
-      K_(compressor_type));
+      K_(compressor_type),
+      K_(tenant_id));
 
   OB_UNIS_VERSION(1);
 
@@ -268,6 +287,7 @@ private:
   int64_t progress_;
   int8_t flag_;
   common::ObCompressorType compressor_type_;
+  uint64_t tenant_id_;
 };
 
 // Statistics for LS
@@ -407,6 +427,9 @@ public:
     pos_ += want_size;
     log_num_++;
   }
+  bool log_reach_threshold() const {
+    return pos_ > FETCH_BUF_THRESHOLD;
+  }
   bool is_valid() const
   {
     return pos_ >= 0 && pos_ <= FETCH_BUF_LEN;
@@ -426,6 +449,7 @@ public:
 
 private:
   static const int64_t FETCH_BUF_LEN = palf::MAX_LOG_BUFFER_SIZE * 8;
+  static const int64_t FETCH_BUF_THRESHOLD = FETCH_BUF_LEN - palf::MAX_LOG_BUFFER_SIZE;
 
 private:
   int64_t rpc_ver_;
@@ -484,6 +508,9 @@ public:
   void set_flag(int8_t flag) { flag_ |= flag; }
   int8_t get_flag() const { return flag_; }
 
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+
   void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
   common::ObCompressorType get_compressor_type() const { return compressor_type_; }
 
@@ -503,6 +530,7 @@ private:
   ObCdcRpcId client_id_;
   int8_t flag_;
   common::ObCompressorType compressor_type_;
+  uint64_t tenant_id_;
 };
 
 } // namespace obrpc

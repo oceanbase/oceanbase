@@ -70,7 +70,7 @@ class ObIDetectCallback
 {
 public:
   // constructor for pass peer_states from derived class
-  explicit ObIDetectCallback(const ObArray<ObPeerTaskState> &peer_states);
+  explicit ObIDetectCallback(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states);
   virtual void destroy()
   {
     peer_states_.reset();
@@ -81,7 +81,10 @@ public:
 
   ObArray<ObPeerTaskState> &get_peer_states() { return peer_states_; }
 
+  // set peer state to finished and get the old state
   virtual int atomic_set_finished(const common::ObAddr &addr, ObTaskState *state=nullptr);
+  // if do_callback failed, reset state to running for next detect loop
+  virtual int atomic_set_running(const common::ObAddr &addr);
   int64_t get_ref_count() { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count(int64_t count = 1);
   int64_t dec_ref_count();
@@ -106,7 +109,7 @@ protected:
 class ObQcDetectCB : public ObIDetectCallback
 {
 public:
-  ObQcDetectCB(const ObArray<ObPeerTaskState> &peer_states, const ObInterruptibleTaskID &tid, sql::ObDfo &dfo,
+  ObQcDetectCB(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states, const ObInterruptibleTaskID &tid, sql::ObDfo &dfo,
       const ObArray<sql::dtl::ObDtlChannel *> &dtl_channels);
   void destroy() override;
   int do_callback() override;
@@ -124,8 +127,8 @@ private:
 class ObSqcDetectCB : public ObIDetectCallback
 {
 public:
-  ObSqcDetectCB(const ObArray<ObPeerTaskState> &peer_states, const ObInterruptibleTaskID &tid)
-      : ObIDetectCallback(peer_states), tid_(tid) {}
+  ObSqcDetectCB(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states, const ObInterruptibleTaskID &tid)
+      : ObIDetectCallback(tenant_id, peer_states), tid_(tid) {}
 
   int do_callback() override;
   int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::SQC_DETECT_CB; }
@@ -136,8 +139,8 @@ private:
 class ObSingleDfoDetectCB : public ObIDetectCallback
 {
 public:
-  ObSingleDfoDetectCB(const ObArray<ObPeerTaskState> &peer_states, const sql::dtl::ObDTLIntermResultKey &key)
-    : ObIDetectCallback(peer_states), key_(key) {}
+  ObSingleDfoDetectCB(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states, const sql::dtl::ObDTLIntermResultKey &key)
+    : ObIDetectCallback(tenant_id, peer_states), key_(key) {}
 
   int do_callback() override;
   int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::SINGLE_DFO_DETECT_CB; }
@@ -148,8 +151,8 @@ private:
 class ObTempTableDetectCB : public ObIDetectCallback
 {
 public:
-  ObTempTableDetectCB(const ObArray<ObPeerTaskState> &peer_states, const sql::dtl::ObDTLIntermResultKey &key)
-      : ObIDetectCallback(peer_states), key_(key) {}
+  ObTempTableDetectCB(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states, const sql::dtl::ObDTLIntermResultKey &key)
+      : ObIDetectCallback(tenant_id, peer_states), key_(key) {}
 
   int do_callback() override;
   int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::TEMP_TABLE_DETECT_CB; }
@@ -160,8 +163,8 @@ private:
 class ObP2PDataHubDetectCB : public ObIDetectCallback
 {
   public:
-  ObP2PDataHubDetectCB(const ObArray<ObPeerTaskState> &peer_states, const sql::ObP2PDhKey &key)
-      : ObIDetectCallback(peer_states), key_(key) {}
+  ObP2PDataHubDetectCB(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states, const sql::ObP2PDhKey &key)
+      : ObIDetectCallback(tenant_id, peer_states), key_(key) {}
 
   int do_callback() override;
   int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::P2P_DATAHUB_DETECT_CB; }

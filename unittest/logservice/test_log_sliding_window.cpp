@@ -551,6 +551,7 @@ TEST_F(TestLogSlidingWindow, test_after_flush_log)
   EXPECT_EQ(OB_SUCCESS, init_config_info.generate(default_mlist, 1, learners, init_config_version));
   config_meta.curr_ = init_config_info;
   mock_mm_.log_ms_meta_ = config_meta;
+  mock_mm_.sw_ = &log_sw_;
 
   mock_state_mgr_.mock_proposal_id_ = curr_proposal_id;
 
@@ -724,6 +725,7 @@ TEST_F(TestLogSlidingWindow, test_ack_log)
   EXPECT_EQ(OB_SUCCESS, init_config_info.generate(default_mlist, 1, learners, init_config_version));
   config_meta.curr_ = init_config_info;
   mock_mm_.log_ms_meta_ = config_meta;
+  mock_mm_.sw_ = &log_sw_;
 
   char *buf = data_buf_;
   int64_t buf_len = 2 * 1024 * 1024;

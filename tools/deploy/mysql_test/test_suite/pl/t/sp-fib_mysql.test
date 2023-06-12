@@ -1,6 +1,7 @@
 # owner: linlin.xll
 # owner group: SQL1
 # description:
+#tags: pl
 
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;

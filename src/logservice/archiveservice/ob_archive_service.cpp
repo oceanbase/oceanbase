@@ -169,6 +169,7 @@ void ObArchiveService::destroy()
   ls_meta_recorder_.destroy();
   timer_.destroy();
   allocator_.destroy();
+  ObThreadPool::destroy();
   log_service_ = NULL;
   ls_svr_ = NULL;
 }

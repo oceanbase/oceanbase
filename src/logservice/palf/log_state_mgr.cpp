@@ -61,6 +61,8 @@ LogStateMgr::LogStateMgr()
     replica_type_(NORMAL_REPLICA),
     is_changing_config_with_arb_(false),
     last_set_changing_config_with_arb_time_us_(OB_INVALID_TIMESTAMP),
+    broadcast_leader_(),
+    last_recv_leader_broadcast_time_us_(OB_INVALID_TIMESTAMP),
     is_inited_(false)
 {}
 
@@ -108,6 +110,7 @@ int LogStateMgr::init(const int64_t palf_id,
     allow_vote_persisted_ = replica_property_meta.allow_vote_;
     replica_type_ = replica_property_meta.replica_type_;
     is_sync_enabled_ = !is_arb_replica();
+    broadcast_leader_.reset();
     is_inited_ = true;
     PALF_LOG(INFO, "LogStateMgr init success", K(ret), K_(palf_id), K_(self));
   }
@@ -218,7 +221,7 @@ bool LogStateMgr::is_state_changed()
     state_changed = follower_init_need_switch_();
   } else if (is_follower_active_()) {
     (void) check_and_try_fetch_log_();
-    state_changed = follower_active_need_switch_();
+    state_changed = follower_active_need_switch_() || need_reset_broadcast_leader_();
   } else if (is_follower_pending_()) {
     (void) check_and_try_fetch_log_();
     state_changed = follower_pending_need_switch_();
@@ -301,7 +304,9 @@ int LogStateMgr::switch_state()
           set_leader_and_epoch_(new_leader, new_leader_epoch);
         }
         need_next_loop = true; // 1) drive reconfirm or 2) fetch log from leader
-      }
+      } else if (need_reset_broadcast_leader_()) {
+        reset_broadcast_leader_();
+      } else { }
     } else if (is_leader_reconfirm_()) {
       if (false == is_allow_vote()
           && OB_FAIL(election_->revoke(election::RoleChangeReason::PalfDisableVoteToRevoke))) {
@@ -390,6 +395,16 @@ bool LogStateMgr::can_handle_prepare_request(const int64_t &proposal_id) const
   return bool_ret;
 }
 
+bool LogStateMgr::can_handle_leader_broadcast(const common::ObAddr &server,
+                                              const int64_t &proposal_id) const
+{
+  bool bool_ret = false;
+  if (proposal_id == get_proposal_id()) {
+    bool_ret = (is_follower_active_());
+  }
+  return bool_ret;
+}
+
 bool LogStateMgr::can_handle_committed_info(const int64_t &proposal_id) const
 {
   bool bool_ret = false;
@@ -456,15 +471,26 @@ int LogStateMgr::handle_prepare_request(const common::ObAddr &server,
       if (server != leader_) {
         // update leader_
         leader_ = server;
+        broadcast_leader_ = server;
+        last_recv_leader_broadcast_time_us_ = common::ObTimeUtility::current_time();
       }
 
       if (OB_FAIL(write_prepare_meta_(proposal_id, server))) {
         PALF_LOG(WARN, "write_prepare_meta_ failed", K(ret), K_(palf_id), K(proposal_id), K(server));
       }
     }
-    PALF_LOG(INFO, "LogStateMgr handle_prepare_request success", K(ret), K_(palf_id), K(proposal_id), K(server),
-        K(self_), K(leader_));
+    PALF_LOG(INFO, "LogStateMgr handle_prepare_request success", K(ret), K_(palf_id),
+        K(self_), K(server), K(proposal_id), K(leader_), K_(broadcast_leader));
   }
+  return ret;
+}
+
+int LogStateMgr::handle_leader_broadcast(const common::ObAddr &server,
+                                         const int64_t &proposal_id)
+{
+  int ret = OB_SUCCESS;
+  broadcast_leader_ = server;
+  last_recv_leader_broadcast_time_us_ = common::ObTimeUtility::current_time();
   return ret;
 }
 
@@ -702,7 +728,7 @@ void LogStateMgr::reset_status_()
   leader_.reset();
   leader_epoch_ = OB_INVALID_TIMESTAMP;
   last_check_start_id_time_us_ = OB_INVALID_TIMESTAMP;
-  is_changing_config_with_arb_ = false;
+  ATOMIC_STORE(&is_changing_config_with_arb_, false);
   mm_->reset_status();
   mode_mgr_->reset_status();
   PALF_LOG(INFO, "reset_status_", K_(palf_id), K_(self), K_(leader_epoch), K(leader_));
@@ -948,6 +974,14 @@ bool LogStateMgr::need_update_leader_(common::ObAddr &new_leader)
   }
 
   return bool_ret;
+}
+
+bool LogStateMgr::need_reset_broadcast_leader_() const
+{
+  const int64_t curr_time_us = common::ObTimeUtility::current_time();
+  return broadcast_leader_.is_valid() &&
+      (curr_time_us - last_recv_leader_broadcast_time_us_ > \
+      2 * PALF_BROADCAST_LEADER_INFO_INTERVAL_US);
 }
 
 bool LogStateMgr::follower_need_update_role_(common::ObAddr &new_leader,
@@ -1200,10 +1234,9 @@ int LogStateMgr::set_changing_config_with_arb()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (false == is_changing_config_with_arb_) {
-    is_changing_config_with_arb_ = true;
+  } else if (true == ATOMIC_BCAS(&is_changing_config_with_arb_, false, true)) {
     last_set_changing_config_with_arb_time_us_ = common::ObTimeUtility::current_time();
-    PALF_LOG(INFO, "set_changing_config_with_arb to true", K(ret), K_(self), K_(palf_id));
+    PALF_EVENT("set_changing_config_with_arb to true", palf_id_, K(ret), K_(self));
   }
   return ret;
 }
@@ -1214,8 +1247,7 @@ int LogStateMgr::reset_changing_config_with_arb()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (true == is_changing_config_with_arb_) {
-    is_changing_config_with_arb_ = false;
+  } else if (true == ATOMIC_BCAS(&is_changing_config_with_arb_, true, false)) {
     const int64_t cost_time_us = (common::ObTimeUtility::current_time()
       - last_set_changing_config_with_arb_time_us_);
     PALF_EVENT("set_changing_config_with_arb to false", palf_id_, K(ret), K_(self), K(cost_time_us));
@@ -1226,7 +1258,16 @@ int LogStateMgr::reset_changing_config_with_arb()
 // protected by rlock in PalfHandleImpl
 bool LogStateMgr::is_changing_config_with_arb() const
 {
-  return is_changing_config_with_arb_;
+  return ATOMIC_LOAD(&is_changing_config_with_arb_);
+}
+
+void LogStateMgr::reset_broadcast_leader_()
+{
+  if (need_reset_broadcast_leader_()) {
+    PALF_LOG_RET(INFO, OB_SUCCESS, "reset_broadcast_leader_", K_(self), K_(palf_id),
+        K_(last_recv_leader_broadcast_time_us), K_(broadcast_leader));
+    broadcast_leader_.reset();
+  }
 }
 
 } // namespace palf

@@ -28,6 +28,7 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "common/ob_smart_call.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -2357,8 +2358,8 @@ int ObOptSelectivity::calc_column_range_selectivity(const OptTableMetas &table_m
     ObObj *new_start_obj = NULL;
     ObObj *new_end_obj = NULL;
     ObArenaAllocator tmp_alloc("ObOptSel");
-    if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&start_obj, tmp_alloc, new_start_obj)) ||
-        OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&end_obj, tmp_alloc, new_end_obj))) {
+    if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&start_obj, tmp_alloc, new_start_obj)) ||
+        OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&end_obj, tmp_alloc, new_end_obj))) {
       LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(start_obj), K(end_obj),
                                                             KPC(new_start_obj), KPC(new_end_obj));
     } else if (OB_ISNULL(new_start_obj) || OB_ISNULL(new_end_obj)) {
@@ -3605,7 +3606,7 @@ int ObOptSelectivity::get_equal_pred_sel(const ObHistogram &histogram,
   bool is_equal = false;
   ObObj *new_value = NULL;
   ObArenaAllocator tmp_alloc("ObOptSel");
-  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&value, tmp_alloc, new_value))) {
+  if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&value, tmp_alloc, new_value))) {
     LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(value), KPC(new_value));
   } else if (OB_ISNULL(new_value)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3652,8 +3653,8 @@ int ObOptSelectivity::get_range_sel_by_histogram(const ObHistogram &histogram,
         ObObj *new_startobj = NULL;
         ObObj *new_endobj = NULL;
         ObArenaAllocator tmp_alloc("ObOptSel");
-        if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(startobj, tmp_alloc, new_startobj)) ||
-            OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(endobj, tmp_alloc, new_endobj))) {
+        if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(startobj, tmp_alloc, new_startobj)) ||
+            OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(endobj, tmp_alloc, new_endobj))) {
           LOG_WARN("failed to convert valid obj for opt stats", K(ret), KPC(startobj), KPC(endobj),
                                                                 KPC(new_startobj), KPC(new_endobj));
         } else if (OB_ISNULL(new_startobj) || OB_ISNULL(new_endobj)) {

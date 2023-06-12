@@ -69,7 +69,10 @@ public: // dalegate functions
                             int64_t &state,
                             share::SCN &trans_version);
 
-  int try_get_tx_state(const transaction::ObTransID tx_id, int64_t &state, share::SCN &trans_version);
+  int try_get_tx_state(const transaction::ObTransID tx_id,
+                       int64_t &state,
+                       share::SCN &trans_version,
+                       share::SCN &recycled_scn);
 
   int lock_for_read(const transaction::ObLockForReadArg &lock_for_read_arg,
                     bool &can_read,

@@ -154,6 +154,7 @@ public:
     int start();
     void stop();
     void wait();
+    void destroy();
     int garbage_collect_right_now();
 
     TO_STRING_KV(KP(this),

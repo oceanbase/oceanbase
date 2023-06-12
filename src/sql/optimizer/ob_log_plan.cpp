@@ -73,6 +73,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/optimizer/ob_explain_note.h"
+#include "share/ob_lob_access_utils.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -4840,6 +4841,47 @@ int ObLogPlan::get_popular_values_hash(ObIAllocator &allocator,
   return ret;
 }
 
+int ObLogPlan::assign_right_popular_value_to_left(ObExchangeInfo &left_exch_info,
+                                                  ObExchangeInfo &right_exch_info)
+{
+  int ret = OB_SUCCESS;
+  // for join char with text, popular value from char col histogram should add lob locator
+  for (int i = 0; OB_SUCC(ret) && i < right_exch_info.popular_values_.count(); i++) {
+    const ObObj &pv = right_exch_info.popular_values_.at(i);
+    if (left_exch_info.hash_dist_exprs_.count() == 0 ||
+        OB_ISNULL(left_exch_info.hash_dist_exprs_.at(0).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("left_exch_info hash_dist_exprs_ is empty or null.", K(ret), K(left_exch_info));
+    } else {
+      ObObjType expect_type = left_exch_info.hash_dist_exprs_.at(0).expr_->get_result_meta().get_type();
+      if (ob_is_string_tc(pv.get_type()) && ob_is_large_text(expect_type)) {
+        // add lob locator for string
+        ObString data = pv.get_string();
+        ObTextStringResult new_tmp_lob(expect_type, true, &get_allocator());
+        if (OB_FAIL(new_tmp_lob.init(data.length()))) {
+          LOG_WARN("fail to init text string result", K(ret), K(new_tmp_lob), K(data.length()));
+        } else if (OB_FAIL(new_tmp_lob.append(data))) {
+          LOG_WARN("fail to append data", K(ret), K(new_tmp_lob), K(data.length()));
+        } else {
+          ObString res;
+          new_tmp_lob.get_result_buffer(res);
+          ObObj new_pv;
+          new_pv.set_lob_value(expect_type, res.ptr(), res.length());
+          new_pv.set_has_lob_header();
+          if (OB_FAIL(left_exch_info.popular_values_.push_back(new_pv))) {
+            LOG_WARN("failed to push obj to left_exch_info popular_values", K(ret), K(new_pv), K(left_exch_info));
+          }
+        }
+      } else {
+        if (OB_FAIL(left_exch_info.popular_values_.push_back(pv))) {
+          LOG_WARN("failed to push obj to left_exch_info popular_values", K(ret), K(pv), K(left_exch_info));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::compute_hash_distribution_info(const ObJoinType &join_type,
                                               const bool enable_hybrid_hash_dm,
                                               const ObIArray<ObRawExpr*> &join_exprs,
@@ -4889,8 +4931,8 @@ int ObLogPlan::compute_hash_distribution_info(const ObJoinType &join_type,
                     *right_exch_info.hash_dist_exprs_.at(0).expr_,
                     right_exch_info.popular_values_))) {
           LOG_WARN("fail check use hybrid hash dist", K(ret));
-        } else if (OB_FAIL(left_exch_info.popular_values_.assign(right_exch_info.popular_values_))) {
-          LOG_WARN("fail assign exch info", K(ret));
+        } else if (OB_FAIL(assign_right_popular_value_to_left(left_exch_info, right_exch_info))) {
+          LOG_WARN("fail to assign right exch info popular value to left", K(ret), K(left_exch_info), K(right_exch_info));
         } else {
           left_exch_info.dist_method_ = ObPQDistributeMethod::HYBRID_HASH_BROADCAST;
           right_exch_info.dist_method_ = ObPQDistributeMethod::HYBRID_HASH_RANDOM;
@@ -10173,7 +10215,7 @@ int ObLogPlan::classify_rownum_exprs(const ObIArray<ObRawExpr*> &rownum_exprs,
                                             const_expr, filter_exprs,
                                             start_exprs, limit_expr))) {
       LOG_WARN("failed to classify rownum expr", K(ret));
-    } else if (const_expr == limit_expr) {
+    } else if (const_expr == limit_expr && T_INVALID == limit_rownum_type) {
       limit_rownum_type = expr_type;
     }
   }

@@ -237,7 +237,7 @@ public:
   void print_error_log(int ret) const
   {
     if (need_print_error_ && (OB_INVALID_DATA == ret || OB_CHECKSUM_ERROR == ret)) {
-      PALF_LOG_RET(ERROR, ret, "invliad data or checksum error!!!", KPC(this));
+      PALF_LOG_RET(ERROR, ret, "invalid data or checksum error!!!", KPC(this));
     }
   }
   void set_need_print_error(const bool need_print_error)

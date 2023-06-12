@@ -58,8 +58,16 @@ public:
 class ClientLSKey
 {
 public:
-  ClientLSKey(): client_addr_(), client_pid_(0), ls_id_(share::ObLSID::INVALID_LS_ID) {}
-  ClientLSKey(const common::ObAddr &client_addr, const uint64_t client_pid, const share::ObLSID &ls_id);
+  ClientLSKey():
+      client_addr_(),
+      client_pid_(0),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      ls_id_(share::ObLSID::INVALID_LS_ID)
+      { }
+  ClientLSKey(const common::ObAddr &client_addr,
+              const uint64_t client_pid,
+              const uint64_t tenant_id,
+              const share::ObLSID &ls_id);
   ~ClientLSKey() { reset(); }
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const;
@@ -74,6 +82,7 @@ public:
 private:
   common::ObAddr client_addr_;
   uint64_t client_pid_;
+  uint64_t tenant_id_;
   share::ObLSID ls_id_;
 };
 

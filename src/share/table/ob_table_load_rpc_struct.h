@@ -8,6 +8,7 @@
 #include "lib/net/ob_addr.h"
 #include "ob_table_load_array.h"
 #include "ob_table_load_define.h"
+#include "share/table/ob_table_load_sql_statistics.h"
 #include "share/table/ob_table_load_row_array.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "sql/session/ob_sql_session_info.h"

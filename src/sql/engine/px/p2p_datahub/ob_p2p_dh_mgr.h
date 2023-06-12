@@ -61,6 +61,19 @@ public:
     int ret_;
   };
 
+  struct P2PMsgSetCall
+  {
+    P2PMsgSetCall(ObP2PDhKey &dh_key, ObP2PDatahubMsgBase &db_msg)
+        : dh_key_(dh_key), dh_msg_(db_msg), ret_(OB_SUCCESS), succ_reg_dm_(false) {};
+    ~P2PMsgSetCall() = default;
+    int operator() (const common::hash::HashMapPair<ObP2PDhKey, ObP2PDatahubMsgBase *> &entry);
+    void revert();
+    ObP2PDhKey &dh_key_;
+    ObP2PDatahubMsgBase &dh_msg_;
+    int ret_;
+    bool succ_reg_dm_;
+  };
+
 public:
   ObP2PDatahubManager() : map_(), is_inited_(false),
       p2p_dh_proxy_(), p2p_dh_id_(0)

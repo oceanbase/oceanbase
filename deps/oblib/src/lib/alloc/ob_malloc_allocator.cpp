@@ -94,7 +94,7 @@ void *ObMallocAllocator::alloc(const int64_t size)
 void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAttr &_attr)
 {
 #ifdef OB_USE_ASAN
-  UNUSED(attr);
+  UNUSED(_attr);
   return ::malloc(size);
 #else
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range

@@ -713,11 +713,11 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_limit_threshold_ = 95;
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_throttling_percentage_ = 100;
     mtl_init_ctx_->palf_options_.disk_options_.log_writer_parallelism_ = 3;
-    ObTenantConfig *config = TENANT_CONF(id_);
-    if (OB_ISNULL(config)) {
+    ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
       ret = is_virtual_tenant_id(id_) ? OB_SUCCESS : OB_ENTRY_NOT_EXIST;
     } else {
-      mtl_init_ctx_->palf_options_.disk_options_.log_writer_parallelism_ = config->_log_writer_parallelism;
+      mtl_init_ctx_->palf_options_.disk_options_.log_writer_parallelism_ = tenant_config->_log_writer_parallelism;
     }
     LOG_INFO("construct_mtl_init_ctx success", "palf_options", mtl_init_ctx_->palf_options_.disk_options_);
   }

@@ -9,6 +9,7 @@
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
 #include "share/table/ob_table_load_row_array.h"
+#include "share/table/ob_table_load_sql_statistics.h"
 
 namespace oceanbase
 {

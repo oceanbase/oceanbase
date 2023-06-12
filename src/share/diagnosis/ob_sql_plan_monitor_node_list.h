@@ -197,15 +197,10 @@ public:
       hash::SpinReadWriteDefendMode> MonitorNodeMap;
   static const int64_t MONITOR_NODE_PAGE_SIZE = (1LL << 21) - (1LL << 13); // 2M - 8k
   static const int64_t EVICT_INTERVAL = 1000000; //1s
-  //每进行一次recycle_old操作删除的记录数
-  static const int32_t BATCH_RELEASE_COUNT = 5000;
-  static const int32_t RECYCLE_THRESHOLD   = 90000; // 9w
-  static const int64_t MAX_QUEUE_SIZE      = 100000; //10w
-  static const int64_t DEFAULT_BUCKETS_COUNT = 100000; //10w
   static const char *MOD_LABEL;
   typedef common::ObRaQueue::Ref Ref;
 public:
-  ObPlanMonitorNodeList() = default;
+  ObPlanMonitorNodeList();
   ~ObPlanMonitorNodeList();
   static int mtl_init(ObPlanMonitorNodeList* &node_list);
   static void mtl_destroy(ObPlanMonitorNodeList* &node_list);
@@ -227,7 +222,8 @@ public:
     queue_.revert(ref);
     return common::OB_SUCCESS;
   }
-  int recycle_old(int64_t limit = BATCH_RELEASE_COUNT) {
+  int recycle_old(int64_t limit)
+  {
     void* req = NULL;
     int64_t count = 0;
     while(count++ < limit && NULL != (req = queue_.pop())) {
@@ -235,10 +231,11 @@ public:
     }
     return common::OB_SUCCESS;
   }
-  int64_t get_recycle_count() {
+  int64_t get_recycle_count()
+  {
     int64_t cnt = 0;
-    if (get_size_used() > RECYCLE_THRESHOLD) {
-      cnt = BATCH_RELEASE_COUNT; // cnt = get_size_used() - RECYCLE_THRESHOLD;
+    if (get_size_used() > recycle_threshold_) {
+      cnt = batch_release_;
     }
     return cnt;
   }
@@ -260,9 +257,7 @@ public:
   int revert_monitor_node(ObMonitorNode &node);
   int convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array);
 private:
-  int init(uint64_t tenant_id,
-           const int64_t max_mem_size,
-           const int64_t queue_size);
+  int init(uint64_t tenant_id, const int64_t tenant_mem_size);
   void destroy();
 private:
   common::ObConcurrentFIFOAllocator allocator_;//alloc mem for string buf
@@ -272,7 +267,8 @@ private:
   bool inited_;
   bool destroyed_;
   uint64_t request_id_;
-  int64_t mem_limit_;
+  int64_t recycle_threshold_; // begin to recycle node when reach threshold
+  int64_t batch_release_; // release node in batch
   uint64_t tenant_id_;
   int tg_id_;
   int64_t rt_node_id_;

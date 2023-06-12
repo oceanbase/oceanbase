@@ -96,7 +96,7 @@ const int64_t MATCH_LSN_ADVANCE_DELAY_THRESHOLD_US = 1 * 1000 * 1000L;
 const int64_t PALF_RECONFIRM_FETCH_MAX_LSN_INTERVAL = 1 * 1000 * 1000;
 const int64_t PALF_FETCH_LOG_INTERVAL_US = 2 * 1000 * 1000L;                 // 2s
 // Control the fetch interval trigger by outer(eg. config change pre check) by 500ms.
-const int64_t PALF_FETCH_LOG_OUTER_TRIGGER_INTERVAL = 500 * 1000L;           // 500 ms
+const int64_t PALF_FETCH_LOG_OUTER_TRIGGER_INTERVAL_US = 500 * 1000;           // 500 ms
 const int64_t PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US = 5 * 1000 * 1000;     // 5s
 const int64_t PALF_LEADER_RECONFIRM_SYNC_TIMEOUT_US = 10 * 1000 * 1000L;     // 10s
 const int64_t PREPARE_LOG_BUFFER_SIZE = 2048;
@@ -106,7 +106,8 @@ const int32_t DEFAULT_LOG_LOOP_INTERVAL_US = 100 * 1000;                        
 const int32_t LOG_LOOP_INTERVAL_FOR_PERIOD_FREEZE_US = 1 * 1000;                       // 1ms
 const int64_t PALF_SLIDING_WINDOW_SIZE = 1 << 11;                                   // must be 2^n(n>0), default 2^11 = 2048
 const int64_t PALF_MAX_LEADER_SUBMIT_LOG_COUNT = PALF_SLIDING_WINDOW_SIZE / 2;      // max number of concurrent submitting group log in leader
-const int64_t PALF_RESEND_MSLOG_INTERVAL_US = 500 * 1000L;                   // 500 ms
+const int64_t PALF_RESEND_CONFIG_LOG_INTERVAL_US = 500 * 1000L;                   // 500 ms
+const int64_t PALF_RESEND_CONFIG_LOG_FOR_ARB_INTERVAL_US = 10 * 1000L;            // 10 ms
 const int64_t PALF_BROADCAST_LEADER_INFO_INTERVAL_US = 5 * 1000 * 1000L;     // 5s
 const int64_t FIRST_VALID_LOG_ID = 1;  // The first valid log_id is 1.
 const int64_t PALF_PARENT_CHILD_TIMEOUT_US = 4 * 1000 * 1000L;               // 4000ms, 4s

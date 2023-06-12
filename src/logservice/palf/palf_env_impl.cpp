@@ -327,6 +327,7 @@ void PalfEnvImpl::destroy()
   fetch_log_engine_.destroy();
   log_updater_.destroy();
   log_rpc_.destroy();
+  election_timer_.destroy();
   log_alloc_mgr_ = NULL;
   monitor_ = NULL;
   self_.reset();

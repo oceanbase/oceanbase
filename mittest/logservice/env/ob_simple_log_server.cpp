@@ -345,7 +345,7 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
     net_.destroy();
 
     timer_handle_.stop_and_wait();
-    timer_.stop_and_wait();
+    timer_.destroy();
   }
   SERVER_LOG(INFO, "stop LogService success", K(ret), K(is_shutdown), K(guard));
   return ret;

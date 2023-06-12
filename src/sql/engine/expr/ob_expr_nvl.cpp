@@ -290,9 +290,9 @@ ObExprNaNvl::~ObExprNaNvl()
 {}
 
 int ObExprNaNvl::calc_result_type2(ObExprResType &type,
-                                       ObExprResType &type1,
-                                       ObExprResType &type2,
-                                       ObExprTypeCtx &type_ctx) const
+                                   ObExprResType &type1,
+                                   ObExprResType &type2,
+                                   ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret =  OB_SUCCESS;
@@ -308,6 +308,10 @@ int ObExprNaNvl::calc_result_type2(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "NUMBER",
                   ob_obj_type_str(type2.get_type()));
     LOG_WARN("invalid type of parameter", K(ret), K(type2));
+  } else if (ObTinyIntType == type1.get_type() || ObTinyIntType == type2.get_type()) {
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, static_cast<int>(strlen(get_name())), get_name());
   }
   if (OB_SUCC(ret)) {
     type.set_type(ObNumberType);

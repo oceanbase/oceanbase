@@ -989,7 +989,7 @@ int ObSortOpImpl::before_add_row()
       if (OB_FAIL(sql_mem_processor_.init(
                   &mem_context_->get_malloc_allocator(),
                   tenant_id_,
-                  size, op_type_, op_id_, exec_ctx_))) {
+                  size, op_monitor_info_.op_type_, op_monitor_info_.op_id_, exec_ctx_))) {
         LOG_WARN("failed to init sql mem processor", K(ret));
       } else {
         datum_store_.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -1944,7 +1944,7 @@ int ObSortOpImpl::add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
     int64_t size = OB_INVALID_ID == input_rows_ ? 0 : input_rows_ * input_width_ * 2;
     if (OB_FAIL(sql_mem_processor_.init(
                &mem_context_->get_malloc_allocator(),
-               tenant_id_, size, op_type_, op_id_, &eval_ctx_->exec_ctx_))) {
+               tenant_id_, size, op_monitor_info_.op_type_, op_monitor_info_.op_id_, &eval_ctx_->exec_ctx_))) {
       LOG_WARN("failed to init sql mem processor", K(ret));
     }
   } else {

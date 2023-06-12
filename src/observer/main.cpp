@@ -399,7 +399,7 @@ static int check_uid_before_start(const char *dir_path)
 
 static void print_all_thread(const char* desc)
 {
-  MPRINT("============= [%s]begin to show unstopped thread =============", desc);
+  MPRINT("============= [%s] begin to show unstopped thread =============", desc);
   DIR *dir = opendir("/proc/self/task");
   if (dir == NULL) {
     MPRINT("fail to print all thread");
@@ -421,12 +421,12 @@ static void print_all_thread(const char* desc)
       if (len > 0 && name[len - 1] == '\n') {
         name[len - 1] = '\0';
       }
-      MPRINT("tid: %s, name: %s", tid, name);
+      MPRINT("[%s] detect unstopped thread, tid: %s, name: %s", desc, tid, name);
       fclose(file);
     }
   }
   closedir(dir);
-  MPRINT("============= [%s]finish to show unstopped thread =============", desc);
+  MPRINT("============= [%s] finish to show unstopped thread =============", desc);
 }
 
 extern "C" {
@@ -589,6 +589,7 @@ int main(int argc, char *argv[])
       observer.destroy();
       ObTaskController::get().destroy();
       ObKVGlobalCache::get_instance().destroy();
+      ObClockGenerator::destroy();
       ObVirtualTenantManager::get_instance().destroy();
     }
     curl_global_cleanup();

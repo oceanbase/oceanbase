@@ -77,6 +77,7 @@ int64_t ObLogRpc::g_rpc_process_handler_time_upper_limit =
 ObLogRpc::ObLogRpc() :
     is_inited_(false),
     cluster_id_(OB_INVALID_CLUSTER_ID),
+    self_tenant_id_(OB_INVALID_TENANT_ID),
     net_client_(),
     last_ssl_info_hash_(UINT64_MAX),
     ssl_key_expired_time_(0),
@@ -117,6 +118,7 @@ int ObLogRpc::async_stream_fetch_log(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   req.set_client_id(client_id_);
+  req.set_tenant_id(self_tenant_id_);
   if (1 == cfg_->test_mode_force_fetch_archive) {
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_FETCH_ARCHIVE);
   }
@@ -137,6 +139,7 @@ int ObLogRpc::async_stream_fetch_missing_log(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   req.set_client_id(client_id_);
+  req.set_tenant_id(self_tenant_id_);
   if (1 == cfg_->test_mode_force_fetch_archive) {
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_FETCH_ARCHIVE);
   }
@@ -148,6 +151,7 @@ int ObLogRpc::async_stream_fetch_missing_log(const uint64_t tenant_id,
 
 int ObLogRpc::init(
     const int64_t cluster_id,
+    const uint64_t self_tenant_id,
     const int64_t io_thread_num,
     const ObLogFetcherConfig &cfg)
 {
@@ -172,6 +176,7 @@ int ObLogRpc::init(
     LOG_ERROR("reload_ssl_config succ", KR(ret));
   } else {
     cluster_id_ = cluster_id;
+    self_tenant_id_ = self_tenant_id;
     is_inited_ = true;
     LOG_INFO("init ObLogRpc succ", K(cluster_id), K(io_thread_num));
   }
@@ -183,6 +188,7 @@ void ObLogRpc::destroy()
 {
   is_inited_ = false;
   cluster_id_ = OB_INVALID_CLUSTER_ID;
+  self_tenant_id_ = OB_INVALID_TENANT_ID;
   net_client_.destroy();
   last_ssl_info_hash_ = UINT64_MAX;
   ssl_key_expired_time_ = 0;

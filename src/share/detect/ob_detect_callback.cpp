@@ -21,10 +21,11 @@ namespace common {
 
 const int64_t DM_INTERRUPT_MSG_MAX_LENGTH = 128;
 
-ObIDetectCallback::ObIDetectCallback(const ObArray<ObPeerTaskState> &peer_states)
+ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states)
     : ref_count_(0)
 {
   int ret = OB_SUCCESS;
+  peer_states_.set_attr(ObMemAttr(tenant_id, "DmCbStArr"));
   if (OB_FAIL(peer_states_.assign(peer_states))) {
     alloc_succ_ = false;
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -45,6 +46,20 @@ int ObIDetectCallback::atomic_set_finished(const common::ObAddr &addr, ObTaskSta
       if (OB_NOT_NULL(state)) {
         *state = old_val;
       }
+      ret = OB_SUCCESS;
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObIDetectCallback::atomic_set_running(const common::ObAddr &addr)
+{
+  int ret = OB_SEARCH_NOT_FOUND;
+  ARRAY_FOREACH_NORET(peer_states_, idx) {
+    if (peer_states_.at(idx).peer_addr_ == addr) {
+      ATOMIC_SET((int32_t*)&peer_states_.at(idx).peer_state_,
+          (int32_t)ObTaskState::RUNNING);
       ret = OB_SUCCESS;
       break;
     }
@@ -157,13 +172,16 @@ int ObDmInterruptQcCall::mock_sqc_finish_msg(sql::ObPxSqcMeta &sqc)
   return ret;
 }
 
-ObQcDetectCB::ObQcDetectCB(const ObArray<ObPeerTaskState> &peer_states, const ObInterruptibleTaskID &tid, sql::ObDfo &dfo,
+ObQcDetectCB::ObQcDetectCB(uint64_t tenant_id,
+    const ObArray<ObPeerTaskState> &peer_states,
+    const ObInterruptibleTaskID &tid, sql::ObDfo &dfo,
     const ObArray<sql::dtl::ObDtlChannel *> &dtl_channels)
-    : ObIDetectCallback(peer_states), tid_(tid), dfo_(dfo)
+    : ObIDetectCallback(tenant_id, peer_states), tid_(tid), dfo_(dfo)
 {
   // if ObIDetectCallback constructed succ
   if (alloc_succ_) {
     int ret = OB_SUCCESS;
+    dtl_channels_.set_attr(ObMemAttr(tenant_id, "DmCbDtlArr"));
     if (OB_FAIL(dtl_channels_.assign(dtl_channels))) {
       alloc_succ_ = false;
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -208,11 +226,13 @@ int ObQcDetectCB::atomic_set_finished(const common::ObAddr &addr, ObTaskState *s
   int ret = OB_SEARCH_NOT_FOUND;
   for (int i = 0; i < get_peer_states().count(); ++i) {
     if (get_peer_states().at(i).peer_addr_ == addr) {
-      sql::dtl::ObDtlRpcChannel* dtl_rpc_channel = static_cast<sql::dtl::ObDtlRpcChannel*>(dtl_channels_.at(i));
-      if (dtl_rpc_channel->recv_sqc_fin_res()) {
-        ATOMIC_SET((int32_t*)&get_peer_states().at(i).peer_state_, (int32_t)ObTaskState::FINISHED);
-        if (OB_NOT_NULL(state)) {
+      ATOMIC_SET((int32_t*)&get_peer_states().at(i).peer_state_, (int32_t)ObTaskState::FINISHED);
+      if (OB_NOT_NULL(state)) {
+        sql::dtl::ObDtlRpcChannel* dtl_rpc_channel = static_cast<sql::dtl::ObDtlRpcChannel*>(dtl_channels_.at(i));
+        if (dtl_rpc_channel->recv_sqc_fin_res()) {
           *state = ObTaskState::FINISHED;
+        } else {
+          *state = ObTaskState::RUNNING;
         }
       }
       ret = OB_SUCCESS;

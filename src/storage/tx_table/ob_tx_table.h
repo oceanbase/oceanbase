@@ -162,8 +162,9 @@ public:
    * @param[in] read_epoch
    * @param[out] state
    * @param[out] trans_version
+   * @param[out] recycled_scn only if tx data is not exist, recycled_scn would be assigned
    */
-  int try_get_tx_state(ObReadTxDataArg &read_tx_data_arg, int64_t &state, share::SCN &trans_version);
+  int try_get_tx_state(ObReadTxDataArg &read_tx_data_arg, int64_t &state, share::SCN &trans_version, share::SCN &recycled_scn);
 
   /**
    * @brief the txn READ_TRANS_ID use SNAPSHOT_VERSION to read the data, and check whether the data is locked, readable or unreadable by txn DATA_TRANS_ID. READ_LATEST is used to check whether read the data belong to the same txn

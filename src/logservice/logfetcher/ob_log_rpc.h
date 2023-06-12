@@ -99,6 +99,7 @@ public:
 public:
   int init(
       const int64_t cluster_id,
+      const uint64_t self_tenant_id,
       const int64_t io_thread_num,
       const ObLogFetcherConfig &cfg);
   void destroy();
@@ -111,6 +112,7 @@ private:
 private:
   bool                is_inited_;
   int64_t             cluster_id_;
+  uint64_t            self_tenant_id_;
   obrpc::ObNetClient  net_client_;
   uint64_t            last_ssl_info_hash_;
   int64_t             ssl_key_expired_time_;

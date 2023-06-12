@@ -96,8 +96,8 @@ int ObMockResource::free_cnt = 0;
 class ObMockDetectCB : public ObIDetectCallback
 {
 public:
-  ObMockDetectCB(const ObArray<ObPeerTaskState> &peer_states, ObMockResource *resource)
-    : ObIDetectCallback(peer_states), resouce_(resource) {}
+  ObMockDetectCB(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states, ObMockResource *resource)
+    : ObIDetectCallback(tenant_id, peer_states), resouce_(resource) {}
   int do_callback() override
   {
     int ret = OB_SUCCESS;

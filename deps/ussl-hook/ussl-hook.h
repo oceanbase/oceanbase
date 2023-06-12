@@ -39,6 +39,10 @@ enum CtxLevelOptName {
   SO_OB_CTX_SET_SSL_CONFIG,
 };
 
+static int ussl_is_stopped = 0;
+void ussl_stop();
+void ussl_wait();
+
 int ussl_setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 int ussl_listen(int fd, int n);
 int ussl_connect(int fd, const struct sockaddr *addr, socklen_t len);

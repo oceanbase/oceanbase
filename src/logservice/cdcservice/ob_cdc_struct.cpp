@@ -22,10 +22,15 @@ namespace cdc
 {
 ///////////////////////////////////////////ClientLSKey///////////////////////////////////////////
 
-ClientLSKey::ClientLSKey(const common::ObAddr &client_addr, const uint64_t client_pid, const share::ObLSID &ls_id)
-  : client_addr_(client_addr),
-    client_pid_(client_pid),
-    ls_id_(ls_id)
+ClientLSKey::ClientLSKey(
+    const common::ObAddr &client_addr,
+    const uint64_t client_pid,
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id)
+    : client_addr_(client_addr),
+      client_pid_(client_pid),
+      tenant_id_(tenant_id),
+      ls_id_(ls_id)
 {
 }
 
@@ -34,6 +39,7 @@ uint64_t ClientLSKey::hash() const
   uint64_t hash_val = client_pid_;
   hash_val = murmurhash(&hash_val , sizeof(hash_val), client_addr_.hash());
   hash_val = murmurhash(&hash_val, sizeof(hash_val), ls_id_.hash());
+  hash_val = murmurhash(&hash_val, sizeof(hash_val), tenant_id_);
   return hash_val;
 }
 
@@ -47,6 +53,7 @@ bool ClientLSKey::operator==(const ClientLSKey &that) const
 {
   return client_addr_ == that.client_addr_ &&
          client_pid_ == that.client_pid_ &&
+         tenant_id_ == that.tenant_id_ &&
          ls_id_ == that.ls_id_;
 }
 
@@ -59,6 +66,7 @@ ClientLSKey &ClientLSKey::operator=(const ClientLSKey &that)
 {
   client_addr_ = that.client_addr_;
   client_pid_ = that.client_pid_;
+  tenant_id_ = that.tenant_id_;
   ls_id_ = that.ls_id_;
   return *this;
 }
@@ -85,6 +93,7 @@ void ClientLSKey::reset()
 {
   client_addr_.reset();
   client_pid_ = 0;
+  tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_ = ObLSID::INVALID_LS_ID;
 }
 ///////////////////////////////////////////ClientLSCtx///////////////////////////////////////////

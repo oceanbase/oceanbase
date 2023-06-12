@@ -454,13 +454,17 @@ int64_t FetchStatInfoPrinter::to_string(char* buf, const int64_t buf_len) const
 
 
     (void)databuff_printf(buf, buf_len, pos,
-        "traffic=%s/sec size/rpc=%s log_cnt/rpc=%ld rpc_cnt/sec=%ld "
-        "single_rpc/sec=%ld(upper_limit=%ld,max_log=%ld,no_log=%ld,max_result=%ld) "
+        "traffic=%s/sec log_size=%ld size/rpc=%s log_cnt/rpc=%ld "
+        "rpc_cnt=%ld(%ld/sec) single_rpc=%ld(%ld/sec)"
+        "(upper_limit=%ld(%ld/sec),max_log=%ld(%ld/sec),no_log=%ld(%ld/sec),max_result=%ld(%ld/sec)) "
         "rpc_time=%ld svr_time=(queue=%ld,process=%ld) net_time=(l2s=%ld,s2l=%ld) cb_time=%ld "
         "handle_rpc_time=%ld flush_time=%ld read_log_time=%ld(log_entry=%ld,trans=%ld) %s",
-        SIZE_TO_STR(traffic), SIZE_TO_STR(log_size_per_rpc), log_cnt_per_rpc, rpc_cnt_per_sec,
-        single_rpc_cnt_per_sec, reach_upper_limit_rpc_cnt_per_sec,
-        reach_max_log_id_rpc_cnt_per_sec, no_log_rpc_cnt_per_sec, reach_max_result_rpc_cnt_per_sec,
+        SIZE_TO_STR(traffic), log_size, SIZE_TO_STR(log_size_per_rpc), log_cnt_per_rpc,
+        rpc_cnt, rpc_cnt_per_sec, single_rpc_cnt, single_rpc_cnt_per_sec,
+        reach_upper_limit_rpc_cnt, reach_upper_limit_rpc_cnt_per_sec,
+        reach_max_log_id_rpc_cnt, reach_max_log_id_rpc_cnt_per_sec,
+        no_log_rpc_cnt, no_log_rpc_cnt_per_sec,
+        reach_max_result_rpc_cnt, reach_max_result_rpc_cnt_per_sec,
         rpc_time_per_rpc, svr_queue_time_per_rpc, svr_process_time_per_rpc,
         l2s_net_time_per_rpc, s2l_net_time_per_rpc, callback_time_per_rpc,
         handle_rpc_time_per_rpc, flush_time_per_rpc, read_log_time_per_rpc,

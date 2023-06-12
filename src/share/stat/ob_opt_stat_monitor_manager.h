@@ -168,7 +168,6 @@ public:
                            const bool need_add_comma,
                            ObSqlString &sql_string);
   int get_dml_stat_sql(const uint64_t tenant_id,
-                       const StatKey &dml_stat_key,
                        const ObOptDmlStat &dml_stat,
                        const bool need_add_comma,
                        ObSqlString &sql_string);
@@ -189,6 +188,8 @@ public:
   int generate_opt_stat_monitoring_info_rows(observer::ObOptDmlStatMapsGetter &getter);
 
   int clean_useless_dml_stat_info(uint64_t tenant_id);
+
+  int update_dml_stat_info_from_direct_load(const ObIArray<ObOptDmlStat *> &dml_stats);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptStatMonitorManager);

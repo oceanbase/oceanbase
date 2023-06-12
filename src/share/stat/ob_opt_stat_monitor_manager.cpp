@@ -495,11 +495,9 @@ int ObOptStatMonitorManager::update_tenant_dml_stat_info(uint64_t tenant_id)
     ObSqlString value_sql;
     int count = 0;
     for (auto iter = dml_stat_map->begin(); OB_SUCC(ret) && iter != dml_stat_map->end(); ++iter) {
-      if (OB_FAIL(get_dml_stat_sql(tenant_id,
-                                    iter->first,
-                                    iter->second,
-                                    0 != count, // need_add_comma
-                                    value_sql))) {
+      if (OB_FAIL(get_dml_stat_sql(tenant_id, iter->second,
+                                   0 != count, // need_add_comma
+                                   value_sql))) {
         LOG_WARN("failed to get dml stat sql", K(ret));
       } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
         if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
@@ -917,24 +915,25 @@ int ObOptStatMonitorManager::exec_insert_monitor_modified_sql(uint64_t tenant_id
     LOG_WARN("failed to append string", K(ret));
   } else if (OB_FAIL(mysql_proxy_->write(tenant_id, insert_sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(insert_sql), K(ret));
+  } else {
+    LOG_TRACE("succeed to exec insert monitor modified sql", K(tenant_id), K(values_sql));
   }
   return ret;
 }
 
 int ObOptStatMonitorManager::get_dml_stat_sql(const uint64_t tenant_id,
-                                              const StatKey &dml_stat_key,
                                               const ObOptDmlStat &dml_stat,
                                               const bool need_add_comma,
                                               ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer dml_splicer;
-  uint64_t table_id = dml_stat_key.first;
+  uint64_t table_id = dml_stat.table_id_;
   uint64_t ext_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
   uint64_t pure_table_id = share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id);
   if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ext_tenant_id)) ||
       OB_FAIL(dml_splicer.add_pk_column("table_id", pure_table_id)) ||
-      OB_FAIL(dml_splicer.add_pk_column("tablet_id", dml_stat_key.second)) ||
+      OB_FAIL(dml_splicer.add_pk_column("tablet_id", dml_stat.tablet_id_)) ||
       OB_FAIL(dml_splicer.add_column("inserts", dml_stat.insert_row_count_)) ||
       OB_FAIL(dml_splicer.add_column("updates", dml_stat.update_row_count_)) ||
       OB_FAIL(dml_splicer.add_column("deletes", dml_stat.delete_row_count_))) {
@@ -961,31 +960,75 @@ int ObOptStatMonitorManager::generate_opt_stat_monitoring_info_rows(observer::Ob
 int ObOptStatMonitorManager::clean_useless_dml_stat_info(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObSqlString delete_sql;
-  int64_t affected_rows = 0;
+  ObSqlString delete_table_sql;
+  ObSqlString delete_part_sql;
+  int64_t affected_rows1 = 0;
+  int64_t affected_rows2 = 0;
   const char* all_table_name = NULL;
   if (OB_FAIL(ObSchemaUtils::get_all_table_name(tenant_id, all_table_name))) {
     LOG_WARN("failed to get all table name", K(ret));
-  } else if (OB_FAIL(delete_sql.append_fmt("DELETE FROM %s m WHERE (NOT EXISTS (SELECT 1 " \
+  } else if (OB_FAIL(delete_table_sql.append_fmt("DELETE FROM %s m WHERE (NOT EXISTS (SELECT 1 " \
             "FROM %s t, %s db WHERE t.tenant_id = db.tenant_id AND t.database_id = db.database_id "\
-            "AND t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND db.database_name != '__recyclebin') "\
-            "OR (tenant_id, table_id, tablet_id) IN (SELECT m.tenant_id, m.table_id, m.tablet_id FROM "\
-            "%s m, %s t WHERE t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND t.part_level > 0 "\
-            "AND NOT EXISTS (SELECT 1 FROM %s p WHERE  p.table_id = m.table_id AND p.tenant_id = m.tenant_id AND p.tablet_id = m.tablet_id) "\
-            "AND NOT EXISTS (SELECT 1 FROM %s sp WHERE  sp.table_id = m.table_id AND sp.tenant_id = m.tenant_id AND sp.tablet_id = m.tablet_id))) "\
+            "AND t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND db.database_name != '__recyclebin')) "\
             "AND table_id > %ld;",
             share::OB_ALL_MONITOR_MODIFIED_TNAME, all_table_name, share::OB_ALL_DATABASE_TNAME,
-            share::OB_ALL_MONITOR_MODIFIED_TNAME, all_table_name, share::OB_ALL_PART_TNAME,
+            OB_MAX_INNER_TABLE_ID))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(delete_part_sql.append_fmt("DELETE FROM %s m WHERE (tenant_id, table_id, tablet_id) IN ( "\
+            "SELECT m.tenant_id, m.table_id, m.tablet_id FROM "\
+            "%s m, %s t, %s db WHERE t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND t.part_level > 0 "\
+            "AND t.tenant_id = db.tenant_id AND t.database_id = db.database_id AND db.database_name != '__recyclebin' "\
+            "AND NOT EXISTS (SELECT 1 FROM %s p WHERE  p.table_id = m.table_id AND p.tenant_id = m.tenant_id AND p.tablet_id = m.tablet_id) "\
+            "AND NOT EXISTS (SELECT 1 FROM %s sp WHERE  sp.table_id = m.table_id AND sp.tenant_id = m.tenant_id AND sp.tablet_id = m.tablet_id)) "\
+            "AND table_id > %ld;",
+            share::OB_ALL_MONITOR_MODIFIED_TNAME, share::OB_ALL_MONITOR_MODIFIED_TNAME,
+            all_table_name, share::OB_ALL_DATABASE_TNAME, share::OB_ALL_PART_TNAME,
             share::OB_ALL_SUB_PART_TNAME, OB_MAX_INNER_TABLE_ID))) {
     LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id, delete_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to execute sql", K(ret), K(delete_sql));
+  } else if (OB_FAIL(mysql_proxy_->write(tenant_id, delete_table_sql.ptr(), affected_rows1))) {
+    LOG_WARN("failed to execute sql", K(ret), K(delete_table_sql));
+  } else if (OB_FAIL(mysql_proxy_->write(tenant_id, delete_part_sql.ptr(), affected_rows2))) {
+    LOG_WARN("failed to execute sql", K(ret), K(delete_part_sql));
   } else {
-    LOG_TRACE("succeed to clean useless monitor modified_data", K(tenant_id), K(delete_sql), K(affected_rows));
+    LOG_TRACE("succeed to clean useless monitor modified_data", K(tenant_id), K(delete_table_sql),
+                                                                K(affected_rows1), K(delete_part_sql),
+                                                                K(affected_rows2));
   }
   return ret;
 }
 
+int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(const ObIArray<ObOptDmlStat *> &dml_stats)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString value_sql;
+  int count = 0;
+  uint64_t tenant_id = 0;
+  LOG_TRACE("begin to update dml stat info from direct load", K(dml_stats));
+  for (int64_t i = 0; OB_SUCC(ret) && i < dml_stats.count(); ++i) {
+    if (OB_ISNULL(dml_stats.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpcted error", K(ret), K(dml_stats.at(i)));
+    } else {
+      tenant_id = dml_stats.at(i)->tenant_id_;
+      if (OB_FAIL(get_dml_stat_sql(tenant_id, *dml_stats.at(i), 0 != count, value_sql))) {
+        LOG_WARN("failed to get dml stat sql", K(ret));
+      } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
+        if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
+          LOG_WARN("failed to exec insert sql", K(ret));
+        } else {
+          count = 0;
+          value_sql.reset();
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && count != 0) {
+    if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
+      LOG_WARN("failed to exec insert sql", K(ret));
+    }
+  }
+  return ret;
+}
 
 }
 }

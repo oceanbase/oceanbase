@@ -20,7 +20,7 @@
 
 namespace oceanbase
 {
-using namespace oceanbase::common;
+using namespace common;
 using namespace share;
 
 namespace compaction
@@ -32,9 +32,9 @@ namespace compaction
     if (OB_FAIL(MTL(ObTenantDagScheduler*)->create_and_add_dag(&param, dag, is_emergency))) {  \
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) { \
         LOG_WARN("failed to create merge dag", K(ret), K(param)); \
-      } else { \
-        LOG_DEBUG("success to schedule tablet merge dag", K(ret), K(param)); \
       } \
+    } else { \
+      LOG_DEBUG("success to schedule tablet merge dag", K(ret), K(param), K(*dag)); \
     } \
   }
 

@@ -56,6 +56,7 @@ ObTenantFreezer::~ObTenantFreezer()
 
 void ObTenantFreezer::destroy()
 {
+  freeze_trigger_timer_.destroy();
   is_freezing_tx_data_ = false;
   exist_ls_freezing_ = false;
   self_.reset();

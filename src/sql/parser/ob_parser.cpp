@@ -77,6 +77,10 @@ bool ObParser::is_pl_stmt(const ObString &stmt, bool *is_create_func, bool *is_c
               state = S_C_COMMENT;
               p += 2;
             }
+          } else if ('#' == *p && lib::is_mysql_mode()) {
+            save_state = state;
+            state = S_COMMENT;
+            p += 1;
           }
           if (state != S_COMMENT && state != S_C_COMMENT) {
             p_normal_start = p;

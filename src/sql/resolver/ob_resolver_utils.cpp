@@ -4441,11 +4441,6 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();
     const ObCollationType dst_cs_type = generated_column.get_collation_type();
-    if (OB_SUCC(ret) && ObUserDefinedSQLType == expr_datatype) {
-      ret = OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED;
-      LOG_WARN("Define a xmltype column in generated column def is not supported", K(ret));
-      LOG_USER_ERROR(OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED);
-    }
 
     /* implicit data conversion judgement */
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
@@ -4477,6 +4472,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
             break;
           case ObLobType:
           case ObLongTextType:
+          case ObUserDefinedSQLType:
             ret = OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED;
             LOG_WARN("lob data type in generated column definition", K(ret));
             break;

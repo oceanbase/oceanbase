@@ -182,7 +182,7 @@ public:
       ObIAllocator &allocator = get_mem_context()->get_malloc_allocator();
       void *buf = allocator.alloc(sizeof(T));
       if (OB_NOT_NULL(buf)) {
-        ptr = new(buf) T(args...);
+        ptr = new(buf) T(detectable_id.tenant_id_, args...);
         if (!ptr->alloc_succ()) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LIB_LOG(WARN, "[DM] failed to new cb ", K(ptr));

@@ -452,7 +452,10 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
   return ret;
 }
 
-int ObTxDataTable::check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard)
+int ObTxDataTable::check_with_tx_data(const ObTransID tx_id,
+                                      ObITxDataCheckFunctor &fn,
+                                      ObTxDataGuard &tx_data_guard,
+                                      SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -461,7 +464,7 @@ int ObTxDataTable::check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunct
   } else if (OB_SUCC(check_tx_data_in_memtable_(tx_id, fn, tx_data_guard))) {
     // successfully do check function in memtable, check done
     STORAGE_LOG(DEBUG, "tx data table check with tx memtable data succeed", K(tx_id), K(fn));
-  } else if (OB_TRANS_CTX_NOT_EXIST == ret && OB_SUCC(check_tx_data_in_sstable_(tx_id, fn, tx_data_guard))) {
+  } else if (OB_TRANS_CTX_NOT_EXIST == ret && OB_SUCC(check_tx_data_in_sstable_(tx_id, fn, tx_data_guard, recycled_scn))) {
     // successfully do check function in sstable
     STORAGE_LOG(DEBUG, "tx data table check with tx sstable data succeed", K(tx_id), K(fn));
   } else {
@@ -669,7 +672,8 @@ int ObTxDataTable::get_tx_data_in_memtables_cache_(const ObTransID tx_id,
 
 int ObTxDataTable::check_tx_data_in_sstable_(const ObTransID tx_id,
                                              ObITxDataCheckFunctor &fn,
-                                             ObTxDataGuard &tx_data_guard)
+                                             ObTxDataGuard &tx_data_guard,
+                                             SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   tx_data_guard.reset();
@@ -679,7 +683,7 @@ int ObTxDataTable::check_tx_data_in_sstable_(const ObTransID tx_id,
   } else if (OB_ISNULL(tx_data_guard.tx_data())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tx data is unexpected null", KR(ret), K(tx_data_guard));
-  } else if (OB_FAIL(get_tx_data_in_sstable_(tx_id, *tx_data_guard.tx_data()))) {
+  } else if (OB_FAIL(get_tx_data_in_sstable_(tx_id, *tx_data_guard.tx_data(), recycled_scn))) {
     STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret), K(tx_id));
   } else {
     EVENT_INC(ObStatEventIds::TX_DATA_READ_TX_DATA_SSTABLE_COUNT);
@@ -695,7 +699,7 @@ int ObTxDataTable::check_tx_data_in_sstable_(const ObTransID tx_id,
   return ret;
 }
 
-int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data)
+int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data, share::SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   ObTableIterParam iter_param = read_schema_.iter_param_;
@@ -711,7 +715,7 @@ int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, O
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle), K(tablet_id_));
   } else {
-    ObTxDataSingleRowGetter getter(iter_param, slice_allocator_);
+    ObTxDataSingleRowGetter getter(iter_param, slice_allocator_, recycled_scn);
     if (OB_FAIL(getter.init(tx_id))) {
       STORAGE_LOG(WARN, "init ObTxDataSingleRowGetter fail.", KR(ret), KP(this), K(tablet_id_));
     } else if (OB_FAIL(getter.get_next_row(tx_data))) {
@@ -1269,6 +1273,7 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
   int ret = OB_SUCCESS;
   ObTxData tx_data_from_sstable;
   tx_data_from_sstable.reset();
+  SCN unused_scn;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1276,7 +1281,7 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
   } else if (OB_ISNULL(tx_data)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "tx data is nullptr", KR(ret), KP(this));
-  } else if (OB_FAIL(get_tx_data_in_sstable_(tx_data->tx_id_, tx_data_from_sstable))) {
+  } else if (OB_FAIL(get_tx_data_in_sstable_(tx_data->tx_id_, tx_data_from_sstable, unused_scn))) {
     if (ret == OB_TRANS_CTX_NOT_EXIST) {
       // This transaction does not have undo actions
       ret = OB_SUCCESS;
@@ -1377,8 +1382,9 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
   int ret = OB_SUCCESS;
   ObTxData tx_data;
   tx_data.reset();
+  SCN unused_scn;
 
-  if (OB_FAIL(get_tx_data_in_sstable_(tx_id, tx_data))) {
+  if (OB_FAIL(get_tx_data_in_sstable_(tx_id, tx_data, unused_scn))) {
     STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret), K(tx_id));
   } else {
     fprintf(fd, "********** Tx Data SSTable ***********\n\n");

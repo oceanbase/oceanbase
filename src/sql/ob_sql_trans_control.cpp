@@ -1202,7 +1202,8 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       || max_stale_time_us <= -2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
-  } else if (max_stale_time_us < 0) {
+  } else if (max_stale_time_us < 0
+      || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
     // no need check
     can_read = true;
   } else if (observer::ObServer::get_instance().get_self() == addr) {

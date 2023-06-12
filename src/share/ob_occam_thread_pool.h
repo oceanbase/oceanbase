@@ -107,6 +107,7 @@ public:
   void stop() {
     OCCAM_LOG(INFO, "occam thread marked stopped", K(this), K_(id));
     ATOMIC_SET(&is_stopped_, true);
+    share::ObThreadPool::stop();
   }
   void destroy() {
     if (is_inited_) {
@@ -269,17 +270,34 @@ public:
     }
     return ret;
   }
+  void stop()
+  {
+    if (is_inited_) {
+      int ret = OB_SUCCESS;
+      {
+        ObThreadCondGuard guard(cv_);
+        is_stopped_ = true;
+      }
+      if (OB_FAIL(cv_.broadcast())) {
+        OCCAM_LOG(ERROR, "cv broadcast failed", K(ret));
+      }
+      for (int64_t idx = 0; idx < thread_num_; ++idx) {
+        threads_[idx].stop();
+      }
+    }
+  }
+  void wait()
+  {
+    if (is_inited_) {
+      for (int64_t idx = 0; idx < thread_num_; ++idx) {
+        threads_[idx].wait();
+      }
+    }
+  }
   void destroy()
   {
-    int ret = OB_SUCCESS;
-    OCCAM_LOG(INFO, "call destroy", K(lbt()));
-    {
-      ObThreadCondGuard guard(cv_);
-      is_stopped_ = true;
-    }
-    if (OB_FAIL(cv_.broadcast())) {
-      OCCAM_LOG(ERROR, "cv broadcast failed", K(ret));
-    }
+    stop();
+    wait();
     if (is_inited_) {
       for (int64_t idx = 0; idx < thread_num_; ++idx) {
         threads_[idx].destroy();

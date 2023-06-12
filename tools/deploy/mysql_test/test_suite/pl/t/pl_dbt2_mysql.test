@@ -1,6 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
+#tags: pl
 #owner: linlin.xll
 #owner group: sql1
 #description:

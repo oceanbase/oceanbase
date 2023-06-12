@@ -94,6 +94,9 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
         type.set_type(ObVarcharType);
         type.set_calc_type(ObVarcharType);
       }
+    } else if (ObUserDefinedSQLTC == first_type_class) {
+      ret = OB_ERR_NO_ORDER_MAP_SQL;
+      LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
     } else {
       /**
        * 除去number类型，经过测试，结果的scale和第一个参数的scale一样，所以
@@ -152,6 +155,10 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
           case ObOTimestampTC:
           case ObDateTimeTC: {
             item_length = OB_MAX_TIMESTAMP_TZ_LENGTH;
+            break;
+          }
+          case ObUserDefinedSQLTC: {
+            item_length = types[i].get_length();
             break;
           }
           default:{

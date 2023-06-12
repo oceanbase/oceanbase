@@ -207,6 +207,8 @@ private:
                                common::ObIArray<AccessPath *> &ds_paths,
                                common::ObIArray<AccessPath *> &no_ds_paths,
                                bool &all_path_is_get);
+
+  static bool is_retry_ret(int ret);
 };
 
 }

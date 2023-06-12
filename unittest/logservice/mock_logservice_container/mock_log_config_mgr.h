@@ -15,6 +15,7 @@
 
 #define private public
 #include "logservice/palf/log_config_mgr.h"
+#include "logservice/palf/log_sliding_window.h"
 #undef private
 
 namespace oceanbase
@@ -106,6 +107,36 @@ public:
     int ret = OB_SUCCESS;
     if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.log_sync_memberlist_))) {
       PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), KPC(this));
+    } else {
+      replica_num = log_ms_meta_.curr_.log_sync_replica_num_;
+    }
+    return ret;
+  }
+  int get_log_sync_member_list_for_generate_committed_lsn(
+      ObMemberList &member_list,
+      int64_t &replica_num,
+      bool &is_before_barrier,
+      LSN &barrier_lsn) const
+  {
+    int ret = OB_SUCCESS;
+    LSN prev_committed_end_lsn;
+    sw_->get_committed_end_lsn(prev_committed_end_lsn);
+    is_before_barrier = false;
+    barrier_lsn = LSN(PALF_INITIAL_LSN_VAL);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
+    } else if (OB_UNLIKELY(prev_committed_end_lsn < reconfig_barrier_.prev_end_lsn_ &&
+        reconfig_barrier_.prev_end_lsn_.is_valid())) {
+      is_before_barrier = true;
+      barrier_lsn = reconfig_barrier_.prev_end_lsn_;
+      if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.log_sync_memberlist_))) {
+        PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
+      } else {
+        replica_num = log_ms_meta_.prev_.log_sync_replica_num_;
+      }
+    } else if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.log_sync_memberlist_))) {
+      PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
     } else {
       replica_num = log_ms_meta_.curr_.log_sync_replica_num_;
     }

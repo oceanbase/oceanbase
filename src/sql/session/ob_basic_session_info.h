@@ -1167,9 +1167,10 @@ public:
       curr_trace_id_ = *trace_id;
     }
   }
+  // forbid use jit
   int get_jit_enabled_mode(ObJITEnableMode &jit_mode) const
   {
-    jit_mode = sys_vars_cache_.get_ob_enable_jit();
+    jit_mode = ObJITEnableMode::OFF;
     return common::OB_SUCCESS;
   }
 

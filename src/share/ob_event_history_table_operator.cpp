@@ -207,17 +207,19 @@ void ObEventHistoryTableOperator::stop()
 {
   stopped_ = true;
   event_queue_.stop();
+  timer_.stop();
 }
 
 void ObEventHistoryTableOperator::wait()
 {
   event_queue_.wait();
+  timer_.wait();
 }
 
 void ObEventHistoryTableOperator::destroy()
 {
   event_queue_.destroy();
-  timer_.stop_and_wait();
+  timer_.destroy();
   // allocator should destroy after event_queue_ destroy
   inited_ = false;
 }

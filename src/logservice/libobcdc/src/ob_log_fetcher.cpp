@@ -747,7 +747,7 @@ void ObLogFetcher::print_fetcher_stat_()
 {
   int ret = OB_SUCCESS;
   int64_t min_progress = OB_INVALID_TIMESTAMP;
-  int64_t upper_limit_us = OB_INVALID_TIMESTAMP;
+  int64_t upper_limit_ns = OB_INVALID_TIMESTAMP;
   int64_t fetcher_delay = OB_INVALID_TIMESTAMP;
   int64_t dml_progress_limit = 0;
 
@@ -759,12 +759,12 @@ void ObLogFetcher::print_fetcher_stat_()
     ret = OB_INVALID_ERROR;
   } else {
     dml_progress_limit = ATOMIC_LOAD(&FetchStream::g_dml_progress_limit);
-    upper_limit_us = min_progress + dml_progress_limit;
-    fetcher_delay = get_timestamp() - min_progress;
+    upper_limit_ns = min_progress + dml_progress_limit * NS_CONVERSION;
+    fetcher_delay = get_timestamp() - min_progress / NS_CONVERSION;
   }
 
   if (OB_SUCC(ret)) {
-    LOG_INFO("[STAT] [FETCHER]", "upper_limit", TS_TO_STR(upper_limit_us),
+    LOG_INFO("[STAT] [FETCHER]", "upper_limit", NTS_TO_STR(upper_limit_ns),
         "dml_progress_limit_sec", dml_progress_limit / _SEC_,
         "fetcher_delay", TVAL_TO_STR(fetcher_delay));
   }
