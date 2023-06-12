@@ -1172,6 +1172,9 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
           if (!row->mvcc_row_flag_.is_uncommitted_row() || is_determined_state) {
             row->snapshot_version_ = 0;
             row->trans_id_.reset();
+            if (param_->need_scn_) {
+              row->storage_datums_[read_info_->get_schema_rowkey_count()].set_int(-trans_version);
+            }
           } else { // uncommitted row
             row->snapshot_version_ = INT64_MAX;
           }
