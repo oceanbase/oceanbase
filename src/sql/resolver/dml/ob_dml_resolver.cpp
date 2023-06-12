@@ -3712,6 +3712,7 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
       case T_JOINED_TABLE: {
         JoinedTable *root = NULL;
         set_has_ansi_join(true);
+        ansi_join_outer_table_id_.reset();
         if (OB_FAIL(resolve_joined_table(parse_tree, root))) {
           LOG_WARN("resolve joined table failed", K(ret));
         } else if (OB_FAIL(stmt->add_joined_table(root))) {
@@ -4275,9 +4276,11 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
       break;
     case T_JOIN_LEFT:
       cur_table->joined_type_ = LEFT_OUTER_JOIN;
+      OZ(ansi_join_outer_table_id_.push_back(cur_table->right_table_->table_id_));
       break;
     case T_JOIN_RIGHT:
       cur_table->joined_type_ = RIGHT_OUTER_JOIN;
+      OZ(ansi_join_outer_table_id_.push_back(cur_table->left_table_->table_id_));
       break;
     case T_JOIN_INNER:
       cur_table->joined_type_ = INNER_JOIN;
@@ -10831,20 +10834,7 @@ int ObDMLResolver::check_oracle_outer_join_condition(const ObRawExpr *expr)
   int ret = OB_SUCCESS;;
   CK(OB_NOT_NULL(expr));
   if (OB_SUCC(ret) && (expr->has_flag(CNT_OUTER_JOIN_SYMBOL))) {
-    if (OB_UNLIKELY(expr->has_flag(CNT_IN) || expr->has_flag(CNT_OR))) {
-      /**
-       * ORA-01719: OR 或 IN 操作数中不允许外部联接运算符 (+)
-       * 01719. 00000 -  "outer join operator (+) not allowed in operand of OR or IN"
-       * *Cause:    An outer join appears in an or clause.
-       * *Action:   If A and B are predicates, to get the effect of (A(+) or B),
-       *            try (select where (A(+) and not B)) union all (select where (B)).
-       * ----
-       * error: a(+) = b or c = d
-       * OK: a(+) in (1) [IN is T_OP_EQ in here]
-       */
-      ObArray<uint64_t> right_tables;
-      OZ(check_oracle_outer_join_in_or_validity(expr, right_tables));
-    } else if (expr->has_flag(CNT_SUB_QUERY)) {
+    if (expr->has_flag(CNT_SUB_QUERY)) {
       /**
        * ORA-01799: 列不能外部联接到子查询
        * 01799. 00000 -  "a column may not be outer-joined to a subquery"
@@ -10856,18 +10846,30 @@ int ObDMLResolver::check_oracle_outer_join_condition(const ObRawExpr *expr)
        */
       ret = OB_ERR_OUTER_JOIN_WITH_SUBQUERY;
       LOG_WARN("column may not be outer-joined to a subquery");
-    } else if (has_ansi_join()) {
+    } else if (OB_UNLIKELY(expr->has_flag(CNT_IN) || expr->has_flag(CNT_OR))) {
       /**
-       * ORA-25156: 旧样式的外部联接 (+) 不能与 ANSI 联接一起使用
-       * 25156. 00000 -  "old style outer join (+) cannot be used with ANSI joins"
-       * *Cause:    When a query block uses ANSI style joins, the old notation
-       *            for specifying outer joins (+) cannot be used.
-       * *Action:   Use ANSI style for specifying outer joins also.
+       * ORA-01719: OR 或 IN 操作数中不允许外部联接运算符 (+)
+       * 01719. 00000 -  "outer join operator (+) not allowed in operand of OR or IN"
+       * *Cause:    An outer join appears in an or clause.
+       * *Action:   If A and B are predicates, to get the effect of (A(+) or B),
+       *            try (select where (A(+) and not B)) union all (select where (B)).
        * ----
-       * error: select * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 = t2.c1(+)
+       * error: a(+) = b or c = d
+       * OK: a(+) in (1) [IN is T_OP_EQ in here]
        */
-      ret = OB_ERR_OUTER_JOIN_WITH_ANSI_JOIN;
-      LOG_WARN("old style outer join (+) cannot be used with ANSI joins");
+      OZ(check_oracle_outer_join_in_or_validity(expr, ansi_join_outer_table_id_));
+    } else if (has_ansi_join()) {
+      if (has_oracle_join()) {
+        if (expr->has_flag(CNT_OR)){
+          ret = OB_ERR_OUTER_JOIN_AMBIGUOUS;
+          LOG_WARN("outer join operator (+) not allowed in operand of OR or IN", K(ret));
+        } else {
+          ret = OB_ERR_OUTER_JOIN_WITH_ANSI_JOIN;
+          LOG_WARN("old style outer join (+) cannot be used with ANSI joins");
+        }
+      } else if (OB_FAIL(check_oracle_outer_join_expr_validity(expr, ansi_join_outer_table_id_, expr->get_expr_type()))){
+        LOG_WARN("fail to check_oracle_outer_join_expr_validity", K(ret));
+      }
     }
   }
   return ret;
@@ -10942,47 +10944,8 @@ int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
           if (OB_SUCC(ret)) {
             if (e->has_flag(IS_OR)) {
               ret = SMART_CALL(check_oracle_outer_join_in_or_validity(e, right_tables));
-            } else {
-              /* the tmp_left_tables and tmp_right_tables contain the table_id of the tables appear
-              * in e. Conflict between tmp_left_tables and tmp_right_tables will raise ORA-1416 or ORA-1468.
-              * e,g,. t1.c1(+) = t2.c1(+) will raise ORA-1468.
-              *       t1.c1(+) = t1.c1 will raise ORA-1416
-              *       t1.c1(+) + t2.c1 + t1.c1 = 1 or t1.c1(+) + t1.c1 + t2.c1 will raise ORA-1416
-              */
-              ObArray<uint64_t> tmp_left_tables;
-              ObArray<uint64_t> tmp_right_tables;
-              OZ(extract_column_with_outer_join_symbol(e, tmp_left_tables, tmp_right_tables));
-              if (OB_SUCC(ret)) {
-                if (tmp_left_tables.count() != 0 ||
-                    tmp_right_tables.count() != 1 ||
-                    (right_tables.count() != 0 &&
-                     !has_exist_in_array(right_tables, tmp_right_tables.at(0)))) {
-                  // should raise error
-                  if (tmp_right_tables.count() > 1) {
-                    ret = OB_ERR_MULTI_OUTER_JOIN_TABLE;
-                    LOG_WARN("a predicate may reference only one outer-joined table", K(ret));
-                  } else if (tmp_left_tables.count() != 0 && tmp_right_tables.count() == 1) {
-                    bool exist_flag = false;
-                    for (int64_t i = 0; !exist_flag && i < tmp_left_tables.count(); i++) {
-                      if (has_exist_in_array(tmp_right_tables, tmp_left_tables.at(i))) {
-                        exist_flag = true;
-                      }
-                    }
-                    if (exist_flag) {
-                      ret = OB_ERR_OUTER_JOIN_NESTED;
-                      LOG_WARN("two tables cannot be outer-joined to each other", K(ret));
-                    } else {
-                      ret = OB_ERR_OUTER_JOIN_AMBIGUOUS;
-                      LOG_WARN("outer join operator (+) not allowed in operand of OR or IN", K(ret));
-                    }
-                  } else {
-                    ret = OB_ERR_OUTER_JOIN_AMBIGUOUS;
-                    LOG_WARN("outer join operator (+) not allowed in operand of OR or IN", K(ret));
-                  }
-                } else if (right_tables.count() == 0 ){
-                  OZ((common::add_var_to_array_no_dup)(right_tables, tmp_right_tables.at(0)));
-                }
-              }
+            } else if (OB_FAIL(check_oracle_outer_join_expr_validity(e, right_tables, T_OP_OR))){
+              LOG_WARN("fail to check_oracle_outer_join_expr_validity", K(ret));
             }
           }
         }
@@ -10997,10 +10960,63 @@ int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
             LOG_WARN("null param expr returned", K(ret), K(i), K(cnt));
           } else if (e->has_flag(CNT_OR) || e->has_flag(CNT_IN)) {
             OZ(SMART_CALL(check_oracle_outer_join_in_or_validity(e, right_tables)));
+          } else if (OB_FAIL(check_oracle_outer_join_expr_validity(e, right_tables, T_OP_AND))){
+            LOG_WARN("fail to check_oracle_outer_join_expr_validity", K(ret));
           }
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDMLResolver::check_oracle_outer_join_expr_validity(const ObRawExpr *expr,
+                                                         ObIArray<uint64_t> &right_tables,
+                                                         ObItemType parent_type)
+{
+  /* the tmp_left_tables and tmp_right_tables contain the table_id of the tables appear
+  * in e. Conflict between tmp_left_tables and tmp_right_tables will raise ORA-1416 or ORA-1468.
+  * e,g,. t1.c1(+) = t2.c1(+) will raise ORA-1468.
+  *       t1.c1(+) = t1.c1 will raise ORA-1416
+  *       t1.c1(+) + t2.c1 + t1.c1 = 1 or t1.c1(+) + t1.c1 + t2.c1 will raise ORA-1416
+  */
+  int ret = OB_SUCCESS;
+  ObArray<uint64_t> tmp_left_tables;
+  ObArray<uint64_t> tmp_right_tables;
+  if (OB_ISNULL(expr)) {
+    LOG_WARN("unexpect null pointer", K(ret));
+  } else if (OB_FAIL(extract_column_with_outer_join_symbol(expr, tmp_left_tables, tmp_right_tables))) {
+    LOG_WARN("fail to extract_column_with_outer_join_symbol", K(ret));
+  } else if (tmp_right_tables.empty()) {
+    //do nothing
+  } else if (tmp_right_tables.count() > 1 ||
+              (right_tables.count() != 0 && !has_exist_in_array(right_tables, tmp_right_tables.at(0)))) {
+    //check right table
+    ret = OB_ERR_MULTI_OUTER_JOIN_TABLE;
+    LOG_WARN("a predicate may reference only one outer-joined table", K(tmp_right_tables.count()), K(ret));
+  } else {
+    OZ((common::add_var_to_array_no_dup)(right_tables, tmp_right_tables.at(0)));
+  }
+  //check left table
+  if (OB_SUCC(ret) && tmp_left_tables.count() != 0) {
+    bool exist_flag = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !exist_flag && i < tmp_left_tables.count(); i++) {
+      if (has_exist_in_array(tmp_right_tables, tmp_left_tables.at(i)) ||
+        (right_tables.count() != 0 && has_exist_in_array(right_tables, tmp_left_tables.at(i)))) {
+        exist_flag = true;
+      }
+    }
+    if (exist_flag) {
+      ret = OB_ERR_OUTER_JOIN_NESTED;
+      LOG_WARN("two tables cannot be outer-joined to each other", K(ret));
+    }
+  }
+  if (T_OP_OR == parent_type && ret != OB_SUCCESS) {
+    ret = OB_ERR_OUTER_JOIN_AMBIGUOUS;
+    LOG_WARN("outer join operator (+) not allowed in operand of OR or IN", K(ret));
+  } else if (has_ansi_join() && ret != OB_SUCCESS) {
+    ret = OB_ERR_OUTER_JOIN_WITH_ANSI_JOIN;
+    LOG_WARN("old style outer join (+) cannot be used with ANSI joins", K(ret));
   }
   return ret;
 }
@@ -11129,6 +11145,9 @@ int ObDMLResolver::resolve_outer_join_symbol(const ObStmtScope scope,
       ret = OB_ERR_OUTER_JOIN_NOT_ALLOWED;
       LOG_WARN("outer join operator (+) is not allowed here", K(ret));
     } else if (T_WHERE_SCOPE != current_scope_) {
+      if (T_ON_SCOPE  == current_scope_) {
+        OZ(check_oracle_outer_join_condition(expr));
+      }
       OZ(remove_outer_join_symbol(expr));
     } else {
       set_has_oracle_join(true);
@@ -11208,37 +11227,68 @@ int ObDMLResolver::generate_outer_join_dependency(
   }
   return ret;
 }
+int ObDMLResolver::do_extract_column(const ObRawExpr *expr,
+                                     ObIArray<uint64_t> &left_tables,
+                                     ObIArray<uint64_t> &right_tables)
+{
+  int ret = OB_SUCCESS;
+  bool is_right = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(expr), K(ret));
+  } else if (expr->has_flag(IS_OUTER_JOIN_SYMBOL)) {
+    CK(1 == expr->get_param_count(), OB_NOT_NULL(expr->get_param_expr(0)));
+    if (OB_SUCC(ret)) {
+      expr = expr->get_param_expr(0);
+      is_right = true;
+    }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (expr->has_flag(IS_COLUMN)) {
+    const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr*>(expr);
+    if (!is_right) {
+      OZ((common::add_var_to_array_no_dup)(left_tables, col_expr->get_table_id()));
+    } else {
+      OZ((common::add_var_to_array_no_dup)(right_tables, col_expr->get_table_id()));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      CK(OB_NOT_NULL(expr->get_param_expr(i)));
+      OZ(SMART_CALL(do_extract_column(expr->get_param_expr(i),
+                                      left_tables,
+                                      right_tables)));
+    }
+  }
+  return ret;
+}
 
 int ObDMLResolver::extract_column_with_outer_join_symbol(
     const ObRawExpr *expr, ObIArray<uint64_t> &left_tables, ObIArray<uint64_t> &right_tables)
 {
   int ret = OB_SUCCESS;
-  bool is_right = false;
-  CK(OB_NOT_NULL(expr));
-  if (OB_SUCC(ret)) {
-    if (expr->has_flag(IS_OUTER_JOIN_SYMBOL)) {
-      CK(1 == expr->get_param_count(), OB_NOT_NULL(expr->get_param_expr(0)));
-      if (OB_SUCC(ret)) {
-        expr = expr->get_param_expr(0);
-        is_right = true;
-      }
-    }
-
-    if (expr->has_flag(IS_COLUMN)) {
-      const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr*>(expr);
-      if (!is_right) {
-        OZ((common::add_var_to_array_no_dup)(left_tables, col_expr->get_table_id()));
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(expr), K(ret));
+  } else if (current_scope_ == T_WHERE_SCOPE &&
+             !expr->has_flag(CNT_OUTER_JOIN_SYMBOL) &&
+             IS_COMPARISON_OP(expr->get_expr_type()) &&
+             expr->has_flag(CNT_CONST)) {
+    //do nothing
+  } else if (T_OP_AND == expr->get_expr_type() || T_OP_OR == expr->get_expr_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      const ObRawExpr* child = NULL;
+      if (OB_ISNULL(child = expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null pointer", K(i), K(ret));
       } else {
-        OZ((common::add_var_to_array_no_dup)(right_tables, col_expr->get_table_id()));
-      }
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-        CK(OB_NOT_NULL(expr->get_param_expr(i)));
         OZ(SMART_CALL(extract_column_with_outer_join_symbol(expr->get_param_expr(i),
                                                             left_tables,
                                                             right_tables)));
       }
     }
+  } else if (OB_FAIL(do_extract_column(expr, left_tables, right_tables))) {
+    LOG_WARN("fail to do extract column", K(ret));
   }
   return ret;
 }

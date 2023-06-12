@@ -147,7 +147,7 @@ public:
   static int get_phy_plan_type(common::ObIArray<share::ObPartitionLocation> &part_location_set,
                                const common::ObAddr &my_address,
                                ObPhyPlanType &plan_type);
-
+  static int has_outer_join_symbol(const ParseNode *node, bool &has);
   static int replace_questionmarks(ParseNode *tree,
                                    const ParamStore &params);
 

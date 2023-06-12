@@ -269,6 +269,25 @@ int ObSQLUtils::get_phy_plan_type(ObIArray<share::ObPartitionLocation> &part_loc
   return ret;
 }
 
+int ObSQLUtils::has_outer_join_symbol(const ParseNode *node, bool &has)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer", K(node), K(ret));
+  } else if (node->type_ == T_OP_ORACLE_OUTER_JOIN_SYMBOL) {
+    has = true;
+  }
+  for (int64_t i = 0 ; OB_SUCC(ret) && !has && i < node->num_child_; i++) {
+    if (NULL == node->children_[i]) {
+      //do nothing
+    } else if (OB_FAIL(SMART_CALL(has_outer_join_symbol(node->children_[i], has)))) {
+      LOG_WARN("check has_outer_join_symbol fail", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSQLUtils::replace_questionmarks(ParseNode *tree,
                                       const ParamStore &params)
 {
