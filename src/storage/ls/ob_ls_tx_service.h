@@ -165,7 +165,7 @@ public:
   int traversal_flush();
   virtual share::SCN get_ls_weak_read_ts();
   int check_in_leader_serving_state(bool& bool_ret);
-
+  int set_max_replay_commit_version(share::SCN commit_version);
   transaction::ObTxRetainCtxMgr *get_retain_ctx_mgr();
 private:
   void reset_();

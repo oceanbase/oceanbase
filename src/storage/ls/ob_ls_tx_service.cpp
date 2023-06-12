@@ -632,6 +632,18 @@ int ObLSTxService::online()
   return ret;
 }
 
+int ObLSTxService::set_max_replay_commit_version(share::SCN commit_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else {
+    mgr_->update_max_replay_commit_version(commit_version);
+    TRANS_LOG(INFO, "succ set max_replay_commit_version", K(commit_version));
+  }
+  return ret;
+}
 } // transaction
 
 } // oceanbase

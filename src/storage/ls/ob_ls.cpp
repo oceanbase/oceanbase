@@ -461,6 +461,8 @@ int ObLS::start()
     LOG_WARN("ls is not inited", K(ret));
   } else if (OB_FAIL(tx_table_.start())) {
     LOG_WARN("tx table start failed", K(ret), KPC(this));
+  } else if (OB_FAIL(ls_tx_svr_.set_max_replay_commit_version(ls_meta_.get_clog_checkpoint_scn()))) {
+    LOG_WARN("set max replay commit scn fail", K(ret), K(ls_meta_.get_clog_checkpoint_scn()));
   } else {
     checkpoint_executor_.start();
     LOG_INFO("start_ls finish", KR(ret), KPC(this));
@@ -851,6 +853,8 @@ int ObLS::online_tx_()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ls_tx_svr_.online())) {
     LOG_WARN("ls tx service online failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(ls_tx_svr_.set_max_replay_commit_version(ls_meta_.get_clog_checkpoint_scn()))) {
+    LOG_WARN("set max replay commit scn fail", K(ret), K(ls_meta_.get_clog_checkpoint_scn()));
   } else if (OB_FAIL(tx_table_.online())) {
     LOG_WARN("tx table online failed", K(ret), K(ls_meta_));
   }
