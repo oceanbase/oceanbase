@@ -69,7 +69,7 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   const ObString &schema_comment = tb_ctx.get_table_schema()->get_comment_str();
 
   if (OB_FAIL(one_result.assign_property_names(tb_ctx.get_query_col_names()))) {
-    LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));    
+    LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
   } else if (has_filter) {
     if (is_hkv) {
       ObHTableFilterOperator *htable_result_iter = nullptr;
