@@ -98,7 +98,7 @@ int ObAllVirtualDumpTenantInfo::inner_get_next_row(common::ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 13:
           //idle_us
-          cells[i].set_int(t.idle_us_);
+          cells[i].set_int(0);
           break;
         case OB_APP_MIN_COLUMN_ID + 14:
           //recv_hp_rpc_cnt

@@ -45,6 +45,7 @@ enum { RQ_HIGH = QQ_MAX_PRIO, RQ_NORMAL, RQ_LOW, RQ_MAX_PRIO };
 class ObThWorker
     : public lib::Worker, public lib::Threads
 {
+  friend class ObTenant;
 public:
   explicit ObThWorker();
   virtual ~ObThWorker();
@@ -72,7 +73,7 @@ public:
   OB_INLINE void set_group(ObResourceGroup *group) { group_ = group; }
 
   void worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t &worker_level);
-  void run(int64_t idx);
+  void run(int64_t idx) override;
 
   OB_INLINE void pause() { pause_flag_ = true; }
 
@@ -103,12 +104,9 @@ public:
   OB_INLINE bool is_blocking() const { return OB_NOT_NULL(is_blocking_) && (0 != *is_blocking_); }
 
 private:
-  void set_th_worker_thread_name(uint64_t tenant_id);
+  void set_th_worker_thread_name();
   void update_ru_cputime();
   void process_request(rpc::ObRequest &req);
-
-  void th_created();
-  void th_destroy();
 
 private:
   ObWorkerProcessor procor_;
@@ -138,6 +136,7 @@ private:
   int64_t last_wakeup_ts_;
   uint8_t* is_blocking_;
   int64_t ru_cputime_;
+  int64_t idle_us_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
 }; // end of class ObThWorker

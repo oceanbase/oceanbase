@@ -2041,8 +2041,7 @@ int ObMultiTenant::get_tenant_cpu_usage(const uint64_t tenant_id, double &usage)
   } else {
     if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
     } else {
-      ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-      usage = tenant->get_token_usage() / tenant_config->cpu_quota_concurrency;
+      usage = tenant->get_token_usage() * tenant->unit_min_cpu();
     }
     lock_.unlock();
   }
