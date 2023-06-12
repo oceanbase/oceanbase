@@ -534,6 +534,8 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                          session.get_effective_tenant_id(),
                                          &session))) {
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
+    } else if (OB_FAIL(session.update_timezone_info())) {
+      LOG_WARN("fail to update time zone info", K(ret));
     } else {
       need_response_error = false;
       //每次执行不同sql都需要更新

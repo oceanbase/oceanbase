@@ -302,6 +302,8 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
                                          session.get_effective_tenant_id()))) {
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
+    } else if (OB_FAIL(session.update_timezone_info())) {
+      LOG_WARN("fail to update time zone info", K(ret));
     } else {
       ctx_.self_add_plan_ = false;
       ctx_.is_prepare_protocol_ = true; //set to prepare protocol

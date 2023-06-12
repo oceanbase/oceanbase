@@ -143,7 +143,8 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       labels_(),
       thread_id_(0),
       is_password_expired_(false),
-      process_query_time_(0)
+      process_query_time_(0),
+      last_update_tz_time_(0)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -410,6 +411,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   thread_id_ = 0;
   is_password_expired_ = false;
   process_query_time_ = 0;
+  last_update_tz_time_ = 0;
   sess_bt_buff_pos_ = 0;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
@@ -5815,30 +5817,37 @@ int ObBasicSessionInfo::set_time_zone(const ObString &str_val, const bool is_ora
 int ObBasicSessionInfo::update_timezone_info()
 {
   int ret = OB_SUCCESS;
-  ObTZMapWrap tz_map_wrap;
-  ObTimeZoneInfoManager *tz_info_mgr = NULL;
-  if (OB_FAIL(OTTZ_MGR.get_tenant_timezone(tenant_id_, tz_map_wrap, tz_info_mgr))) {
-    LOG_WARN("get tenant timezone with lock failed", K(ret));
-  } else if (OB_ISNULL(tz_info_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant timezone mgr is null", K(tz_info_mgr));
-  } else if (OB_UNLIKELY(tz_info_wrap_.is_position_class()
-              && tz_info_mgr->get_version() > tz_info_wrap_.get_cur_version())) {
-    ObString tz_name;
-    if (OB_UNLIKELY(!tz_info_wrap_.get_tz_info_pos().is_valid())) {
+  const int64_t UPDATE_PERIOD = 1000 * 1000 * 5; //5s
+  int64_t cur_time = ObTimeUtility::current_time();
+  if (cur_time - last_update_tz_time_ > UPDATE_PERIOD) {
+    ObTZMapWrap tz_map_wrap;
+    ObTimeZoneInfoManager *tz_info_mgr = NULL;
+    if (OB_FAIL(OTTZ_MGR.get_tenant_timezone(tenant_id_, tz_map_wrap, tz_info_mgr))) {
+      LOG_WARN("get tenant timezone with lock failed", K(ret));
+    } else if (OB_ISNULL(tz_info_mgr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("time zone info is invalid", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
-    } else if (OB_FAIL(tz_info_wrap_.get_tz_info_pos().get_tz_name(tz_name))) {
-      LOG_WARN("fal to get time zone name", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
-    } else {//此处需要先更新version，这样可以保证find到的tz_info version >= cur_version
-      int64_t orig_version = tz_info_wrap_.get_cur_version();
-      tz_info_wrap_.set_cur_version(tz_info_mgr->get_version());
-      if (OB_FAIL(tz_info_mgr->find_time_zone_info(tz_name, tz_info_wrap_.get_tz_info_pos()))) {
-        LOG_WARN("fail to find time zone info", K(tz_name), K(ret));
-        tz_info_wrap_.set_cur_version(orig_version);
-      } else {
-        tz_info_wrap_.get_tz_info_pos().set_error_on_overlap_time(tz_info_wrap_.is_error_on_overlap_time());
+      LOG_WARN("tenant timezone mgr is null", K(tz_info_mgr));
+    } else if (OB_UNLIKELY(tz_info_wrap_.is_position_class()
+                && tz_info_mgr->get_version() > tz_info_wrap_.get_cur_version())) {
+      ObString tz_name;
+      if (OB_UNLIKELY(!tz_info_wrap_.get_tz_info_pos().is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("time zone info is invalid", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
+      } else if (OB_FAIL(tz_info_wrap_.get_tz_info_pos().get_tz_name(tz_name))) {
+        LOG_WARN("fal to get time zone name", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
+      } else {//此处需要先更新version，这样可以保证find到的tz_info version >= cur_version
+        int64_t orig_version = tz_info_wrap_.get_cur_version();
+        tz_info_wrap_.set_cur_version(tz_info_mgr->get_version());
+        if (OB_FAIL(tz_info_mgr->find_time_zone_info(tz_name, tz_info_wrap_.get_tz_info_pos()))) {
+          LOG_WARN("fail to find time zone info", K(tz_name), K(ret));
+          tz_info_wrap_.set_cur_version(orig_version);
+        } else {
+          tz_info_wrap_.get_tz_info_pos().set_error_on_overlap_time(tz_info_wrap_.is_error_on_overlap_time());
+        }
       }
+    }
+    if (OB_SUCC(ret)) {
+      last_update_tz_time_ = cur_time;
     }
   }
   return ret;

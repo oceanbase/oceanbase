@@ -2407,8 +2407,6 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }
-    //timezone的更新频率非常低，放到后台驱动
-    (void)session_->update_timezone_info();
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
   }
   UNUSED(tmp_ret);

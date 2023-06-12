@@ -2099,6 +2099,7 @@ private:
   bool is_password_expired_;
   // timestamp of processing current query. refresh when retry.
   int64_t process_query_time_;
+  int64_t last_update_tz_time_; //timestamp of last attempt to update timezone info
 };
 
 inline const common::ObString ObBasicSessionInfo::get_current_query_string() const
