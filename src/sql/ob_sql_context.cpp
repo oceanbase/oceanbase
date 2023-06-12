@@ -274,7 +274,6 @@ void ObSqlCtx::clear()
   spm_ctx_.bl_key_.reset();
   cur_stmt_ = nullptr;
   is_text_ps_mode_ = false;
-  is_strict_defensive_check_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);

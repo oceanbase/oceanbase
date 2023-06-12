@@ -294,42 +294,35 @@ call dbms_stats.gather_table_stats('test','t_p');
 call dbms_stats.gather_table_stats('test','t_p4');
 explain basic delete /*+no_use_px, use_nl(t_p,t_p4), parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
 Query Plan
-=================================================
-|ID|OPERATOR                           |NAME    |
--------------------------------------------------
-|0 |DISTRIBUTED DELETE                 |        |
-|1 |└─PX COORDINATOR                   |        |
-|2 |  └─EXCHANGE OUT DISTR             |:EX10001|
-|3 |    └─NESTED-LOOP JOIN             |        |
-|4 |      ├─EXCHANGE IN DISTR          |        |
-|5 |      │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|6 |      │   └─PX BLOCK ITERATOR      |        |
-|7 |      │     └─TABLE RANGE SCAN     |t_p     |
-|8 |      └─PX PARTITION ITERATOR      |        |
-|9 |        └─TABLE GET                |t_p4    |
-=================================================
+========================================
+|ID|OPERATOR                  |NAME    |
+----------------------------------------
+|0 |PX COORDINATOR            |        |
+|1 |└─EXCHANGE OUT DISTR      |:EX10000|
+|2 |  └─PX PARTITION ITERATOR |        |
+|3 |    └─DELETE              |        |
+|4 |      └─NESTED-LOOP JOIN  |        |
+|5 |        ├─TABLE RANGE SCAN|t_p     |
+|6 |        └─TABLE GET       |t_p4    |
+========================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil)
-      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=256
+  1 - output(nil), filter(nil), rowset=256
       dop=4
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-      conds(nil), nl_params_([t_p.c1(:0)]), use_batch=false
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
-      (#keys=1, [t_p.c1]), dop=10
-  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=256
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_([t_p.c1(:0)]), use_batch=true
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
       range_cond([t_p.c1 >= 5])
-  8 - output(nil), filter(nil), rowset=256
-      affinitize
-  9 - output(nil), filter(nil), rowset=256
-      access(nil), partitions(p[0-3])
+  6 - output(nil), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p4.c1]), range(MIN ; MAX),
       range_cond([:0 = t_p4.c1])
