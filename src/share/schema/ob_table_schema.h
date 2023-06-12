@@ -729,6 +729,7 @@ public:
   inline bool is_spatial_index() const;
   inline static bool is_spatial_index(ObIndexType index_type);
   inline bool is_normal_index() const;
+  inline static bool is_normal_index(ObIndexType index_type);
   inline bool is_unique_index() const;
   inline static bool is_unique_index(ObIndexType index_type);
   virtual inline bool is_global_index_table() const override;
@@ -1633,9 +1634,14 @@ inline bool ObSimpleTableSchemaV2::is_spatial_index() const
 
 inline bool ObSimpleTableSchemaV2::is_normal_index() const
 {
-  return INDEX_TYPE_NORMAL_LOCAL == index_type_
-         || INDEX_TYPE_NORMAL_GLOBAL == index_type_
-         || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type_;
+  return is_normal_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_normal_index(ObIndexType index_type)
+{
+  return INDEX_TYPE_NORMAL_LOCAL == index_type
+         || INDEX_TYPE_NORMAL_GLOBAL == index_type
+         || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type;
 }
 
 inline bool ObSimpleTableSchemaV2::is_unique_index() const

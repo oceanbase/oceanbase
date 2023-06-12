@@ -121,9 +121,16 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema version is invalid", K(ret), K(ls_id), K(tablet_id), K(freeze_info));
     } else if (freeze_info.schema_version < last_sstable_schema_version) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("schema version in freeze info is less than last sstable", K(ret), K(ls_id), K(tablet_id),
-        K(freeze_info), K(last_sstable_schema_version));
+      if (tablet.get_storage_schema().is_index_table()) {
+        LOG_INFO("schema version in freeze info is less than last sstable, but is allowed for index table",
+            K(ret), K(ls_id), K(tablet_id), K(freeze_info), K(last_sstable_schema_version));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("schema version in freeze info is less than last sstable", K(ret), K(ls_id), K(tablet_id),
+            K(freeze_info), K(last_sstable_schema_version));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_table_schema_to_merge(
         tablet, freeze_info.schema_version, allocator, medium_info))) {
       if (OB_TABLE_IS_DELETED == ret) {
