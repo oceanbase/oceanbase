@@ -1068,21 +1068,24 @@ struct ObObjPrintParams
     tz_info_(tz_info),
     cs_type_(cs_type),
     print_flags_(0),
-    exec_ctx_(NULL)
+    exec_ctx_(NULL),
+    ob_obj_type_(ObNullType)
   {}
   ObObjPrintParams (const ObTimeZoneInfo *tz_info):
     tz_info_(tz_info),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
     print_flags_(0),
-    exec_ctx_(NULL)
+    exec_ctx_(NULL),
+    ob_obj_type_(ObNullType)
   {}
   ObObjPrintParams ():
     tz_info_(NULL),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
     print_flags_(0),
-    exec_ctx_(NULL)
+    exec_ctx_(NULL),
+    ob_obj_type_(ObNullType)
   {}
-  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags));
+  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type));
   const ObTimeZoneInfo *tz_info_;
   ObCollationType cs_type_;
   union {
@@ -1111,6 +1114,7 @@ struct ObObjPrintParams
    *
   */
   sql::ObExecContext *exec_ctx_;
+  ObObjType ob_obj_type_;
 };
 
 // sizeof(ObObjValue)=8

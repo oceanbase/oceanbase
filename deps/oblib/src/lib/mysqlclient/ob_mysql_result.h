@@ -21,6 +21,7 @@
 #include "common/ob_smart_var.h"
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "common/object/ob_obj_type.h"
+#include "common/object/ob_object.h"
 
 #define COLUMN_MAP_BUCKET_NUM 107
 
@@ -1370,8 +1371,7 @@ public:
   }
   virtual int get_type(const int64_t col_idx, ObObjMeta &type) const = 0;
   virtual int get_col_meta(const int64_t col_idx, bool old_max_length,
-                           oceanbase::common::ObString &name, ObObjMeta &meta,
-                           ObAccuracy &acc) const = 0;
+                           oceanbase::common::ObString &name, ObDataType &data_type) const = 0;
   int format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
                                      oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType cs_type,
                                      DblinkDriverProto link_type, bool old_max_length) const;

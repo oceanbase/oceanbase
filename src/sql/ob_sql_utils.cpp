@@ -3123,53 +3123,6 @@ int ObImplicitCursorInfo::merge_cursor(const ObImplicitCursorInfo &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObParamPosIdx, pos_, idx_);
-
-int ObLinkStmtParam::write(char *buf, int64_t buf_len, int64_t &pos, int64_t param_idx)
-{
-  /*
-   * we need 4 bytes for every const param:
-   * 1 byte:  '\0' for meta info flag. '\0' can not appear in any sql stmt fmt.
-   * 1 byte:  meta info type. now we used 0 to indicate const param.
-   * 2 bytes: uint16 for param index.
-   */
-  int ret = OB_SUCCESS;
-  if (buf_len - pos < PARAM_LEN) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("buffer is not enough", K(ret), K(buf_len), K(pos));
-  } else if (param_idx < 0 || param_idx > UINT16_MAX) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("param count should be between 0 and UINT16_MAX", K(ret), K(param_idx));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "param count not in the range 0 - UINT16_MAX");
-  } else {
-    buf[pos++] = 0;   // meta flag.
-    buf[pos++] = 0;   // meta type.
-    *(uint16_t*)(buf + pos) = param_idx;
-    pos += sizeof(uint16_t);
-  }
-  return ret;
-}
-
-int ObLinkStmtParam::read_next(const char *buf, int64_t buf_len, int64_t &pos, int64_t &param_idx)
-{
-  int ret = OB_SUCCESS;
-  const char *ch = buf + pos;
-  const char *buf_end = buf + buf_len - PARAM_LEN + 1;
-  param_idx = -1;
-  while (OB_SUCC(ret) && param_idx < 0 && ch < buf_end) {
-    if (0 != ch[0]) {
-      ch++;
-    } else if (0 != ch[1]) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unknown meta type", "meta_type", static_cast<int>(ch[1]));
-    } else {
-      param_idx = static_cast<int64_t>(*(uint16_t*)(ch + 2));
-    }
-  }
-  pos = ch - buf;
-  return ret;
-}
-
 int64_t ObLinkStmtParam::get_param_len()
 {
   return PARAM_LEN;

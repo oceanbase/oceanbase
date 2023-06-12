@@ -144,13 +144,15 @@ int ObLogLink::gen_link_stmt_param_infos()
   int64_t param_idx = 0;
   const int64_t param_len = ObLinkStmtParam::get_param_len();
   while (OB_SUCC(ret) && param_idx >= 0) {
-    if (OB_FAIL(ObLinkStmtParam::read_next(stmt_fmt_buf_, stmt_fmt_len_, param_pos, param_idx))) {
+    int8_t type_value;
+    if (OB_FAIL(ObLinkStmtParam::read_next(stmt_fmt_buf_, stmt_fmt_len_, param_pos, param_idx, type_value))) {
       LOG_WARN("failed to read next param", K(ret));
     } else if (param_idx < 0) {
       // skip.
     } else if (OB_FAIL(param_infos_.push_back(ObParamPosIdx(static_cast<int32_t>(param_pos),
-                                                            static_cast<int32_t>(param_idx))))) {
-      LOG_WARN("failed to push back param pos idx", K(ret), K(param_pos), K(param_idx));
+                                                            static_cast<int32_t>(param_idx),
+                                                            type_value)))) {
+      LOG_WARN("failed to push back param pos idx", K(ret), K(param_pos), K(param_idx), K(type_value));
     } else {
       param_pos += param_len;
     }

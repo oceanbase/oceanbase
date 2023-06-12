@@ -145,6 +145,15 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(password.assign_ptr(pwd_node->str_value_, static_cast<int32_t>(pwd_node->str_len_)))) {
       // do nothing
+    } else if (password.empty()) {
+      if (lib::is_oracle_mode()) {
+        ret = OB_ERR_MISSING_OR_INVALID_PASSWORD;
+        LOG_USER_ERROR(OB_ERR_MISSING_OR_INVALID_PASSWORD);
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create dblink with empty password");
+      }
+      LOG_WARN("create dblink with empty password", K(ret));
     } else if (OB_FAIL(create_dblink_stmt->set_password(password))) {
       LOG_WARN("set password failed", K(ret));
     }

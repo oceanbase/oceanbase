@@ -866,25 +866,6 @@ public:
   int64_t deleted_rows_;
 };
 
-struct ObParamPosIdx
-{
-  OB_UNIS_VERSION_V(1);
-public:
-  ObParamPosIdx()
-    : pos_(0),
-      idx_(0)
-  {}
-  ObParamPosIdx(int32_t pos, int32_t idx)
-    : pos_(pos),
-      idx_(idx)
-  {}
-  virtual ~ObParamPosIdx()
-  {}
-  TO_STRING_KV(N_POS, pos_,
-               N_IDX, idx_);
-  int32_t pos_;
-  int32_t idx_;
-};
 
 enum ObThreeStageAggrStage {
   NONE_STAGE,
@@ -970,16 +951,6 @@ public:
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   bool has_tenant_id_col_;
   int64_t tenant_id_col_idx_;
-};
-
-class ObLinkStmtParam
-{
-public:
-  static int write(char *buf, int64_t buf_len, int64_t &pos, int64_t param_idx);
-  static int read_next(const char *buf, int64_t buf_len, int64_t &pos, int64_t &param_idx);
-  static int64_t get_param_len();
-private:
-  static const int64_t PARAM_LEN;
 };
 
 class ObSqlFatalErrExtraInfoGuard : public common::ObFatalErrExtraInfoGuard

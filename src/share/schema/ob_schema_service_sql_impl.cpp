@@ -8515,7 +8515,6 @@ int ObSchemaServiceSQLImpl::generate_link_table_schema(uint64_t tenant_id, uint6
   SMART_VAR(ObMySQLProxy::MySQLResult, desc_res) {
     T tmp_table_schema;
     table_schema = NULL;
-    ObObjMeta type;
     int64_t column_count = col_meta_result->get_column_count();
     tmp_table_schema.set_tenant_id(tenant_id);
     tmp_table_schema.set_table_id(1); //no use
@@ -8534,22 +8533,23 @@ int ObSchemaServiceSQLImpl::generate_link_table_schema(uint64_t tenant_id, uint6
       int32_t length = 0;
       ObString column_name;
       bool old_max_length = false;
-      ObAccuracy acc;
-      if (OB_FAIL(col_meta_result->get_col_meta(i, old_max_length, column_name, type, acc))) {
+      ObDataType data_type;
+      if (OB_FAIL(col_meta_result->get_col_meta(i, old_max_length, column_name, data_type))) {
         LOG_WARN("failed to get column meta", K(i), K(old_max_length), K(ret));
       } else if (OB_FAIL(column_schema.set_column_name(column_name))) {
         LOG_WARN("failed to set column name", K(i), K(column_name), K(ret));
       } else {
-        precision = acc.get_precision();
-        scale = acc.get_scale();
-        length = acc.get_length();
+        precision = data_type.get_precision();
+        scale = data_type.get_scale();
+        length = data_type.get_length();
         column_schema.set_table_id(tmp_table_schema.get_table_id());
         column_schema.set_tenant_id(tenant_id);
         column_schema.set_column_id(i + OB_END_RESERVED_COLUMN_ID_NUM);
-        column_schema.set_meta_type(type);
+        column_schema.set_meta_type(data_type.get_meta_type());
         column_schema.set_charset_type(ObCharset::charset_type_by_coll(column_schema.get_collation_type()));
         column_schema.set_data_precision(precision);
         column_schema.set_data_scale(scale);
+        column_schema.set_zero_fill(data_type.is_zero_fill());
         LOG_DEBUG("schema service sql impl get DBLINK schema", K(column_schema), K(length));
         if (need_desc && OB_ISNULL(desc_result) &&
             (ObNCharType == column_schema.get_data_type()

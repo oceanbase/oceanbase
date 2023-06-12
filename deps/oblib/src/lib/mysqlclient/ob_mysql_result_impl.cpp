@@ -614,7 +614,7 @@ int ObMySQLResultImpl::get_timestamp_nano(const int64_t col_idx, const common::O
   return get_otimestamp_value(col_idx, tz_info, ObTimestampNanoType, otimestamp_val);
 }
 
-int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type) const
+int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type, bool is_unsigned_type) const
 {
   int ret = OB_SUCCESS;
   switch (mysql_type) {
@@ -622,17 +622,33 @@ int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType 
       ob_type = ObNullType;
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_TINY:
-      ob_type = ObTinyIntType;
+      if (is_unsigned_type) {
+        ob_type = ObUTinyIntType;
+      } else {
+        ob_type = ObTinyIntType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_SHORT:
-      ob_type = ObSmallIntType;
+      if (is_unsigned_type) {
+        ob_type = ObUSmallIntType;
+      } else {
+        ob_type = ObSmallIntType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_LONG:
-      ob_type = ObInt32Type;
+      if (is_unsigned_type) {
+        ob_type = ObUInt32Type;
+      } else {
+        ob_type = ObInt32Type;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_LONGLONG:
     case obmysql::EMySQLFieldType::MYSQL_TYPE_INT24:
-      ob_type = ObIntType;
+      if (is_unsigned_type) {
+        ob_type = ObUInt64Type;
+      } else {
+        ob_type = ObIntType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_FLOAT:
       ob_type = ObFloatType;
@@ -742,7 +758,8 @@ int ObMySQLResultImpl::get_type(const int64_t col_idx, ObObjMeta &type) const
   } else if (col_idx < 0 || col_idx >= result_column_count_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid column idx", K(col_idx), K_(result_column_count));
-  } else if (OB_FAIL(get_ob_type(ob_type, static_cast<obmysql::EMySQLFieldType>(fields_[col_idx].type)))) {
+  } else if (OB_FAIL(get_ob_type(ob_type, static_cast<obmysql::EMySQLFieldType>(fields_[col_idx].type),
+                                 fields_[col_idx].flags & UNSIGNED_FLAG))) {
     LOG_WARN("failed to get ob type", K(ret), "mysql_type", fields_[col_idx].type);
   } else {
     type.set_type(ob_type);
@@ -751,8 +768,8 @@ int ObMySQLResultImpl::get_type(const int64_t col_idx, ObObjMeta &type) const
   return ret;
 }
 int ObMySQLResultImpl::get_col_meta(const int64_t col_idx, bool old_max_length,
-                                    oceanbase::common::ObString &name, ObObjMeta &meta,
-                                    ObAccuracy &acc) const
+                                    oceanbase::common::ObString &name,
+                                    ObDataType &data_type) const
 {
   int ret = OB_SUCCESS;
   return ret;
