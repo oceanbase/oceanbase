@@ -113,6 +113,8 @@ int ObTableLoadRowArray<T>::assign(const ObTableLoadRowArray<T> &other)
 
   if (OB_FAIL(array_.assign(other.array_))) {
     OB_LOG(WARN, "failed to assign other array", KR(ret));
+  } else {
+    allocator_handle_ = other.allocator_handle_;
   }
 
   return ret;
