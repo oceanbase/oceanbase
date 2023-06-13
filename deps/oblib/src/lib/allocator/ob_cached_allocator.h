@@ -29,7 +29,7 @@ public:
   virtual ~ObCachedAllocator();
 
   T *alloc();
-  void free(T *obj);
+  void free(T *obj, bool can_reuse = true);
   int32_t get_allocated_count() const {return allocated_count_;};
   int32_t get_cached_count() const {return cached_count_;};
 private:
@@ -88,12 +88,16 @@ T *ObCachedAllocator<T>::alloc()
 }
 
 template<typename T>
-void ObCachedAllocator<T>::free(T *obj)
+void ObCachedAllocator<T>::free(T *obj, bool can_reuse)
 {
   if (OB_LIKELY(NULL != obj)) {
     int ret = OB_SUCCESS;
     ObSpinLockGuard guard(lock_);
-    if (OB_FAIL(cached_objs_.push_back(obj))) {
+    if (!can_reuse) {
+      // free directly
+      obj->~T();
+      pool_.free(obj);
+    } else if (OB_FAIL(cached_objs_.push_back(obj))) {
       LIB_LOG(ERROR, "failed to push obj into array", K(ret));
       // free directly
       obj->~T();
