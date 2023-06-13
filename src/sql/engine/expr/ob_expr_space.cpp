@@ -26,7 +26,7 @@ namespace sql
 {
 using namespace common;
 ObExprSpace::ObExprSpace(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_SPACE, N_SPACE, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {}
+  : ObStringExprOperator(alloc, T_FUN_SYS_SPACE, N_SPACE, 1, VALID_FOR_GENERATED_COL) {}
 
 inline int ObExprSpace::calc_result_type1(
     ObExprResType &type,
@@ -36,11 +36,41 @@ inline int ObExprSpace::calc_result_type1(
   int ret = OB_SUCCESS;
   // space is mysql only expr
   CK(lib::is_mysql_mode());
-
-  type.set_type(ObVarcharType);
+  ObObjType res_type = ObMaxType;
+  if (type1.is_null()) {
+    res_type = ObVarcharType;
+  } else if (type1.is_literal()) {
+    const ObObj &obj = type1.get_param();
+    ObArenaAllocator alloc(ObModIds::OB_SQL_RES_TYPE);
+    const ObDataTypeCastParams dtc_params =
+          ObBasicSessionInfo::create_dtc_params(type_ctx.get_session());
+    int64_t cur_time = 0;
+    ObCastMode cast_mode = CM_NONE;
+    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(type_ctx.get_session(), cast_mode))) {
+      LOG_WARN("failed to get default cast mode", K(ret));
+    } else {
+      cast_mode |= CM_WARN_ON_FAIL;
+      ObCastCtx cast_ctx(
+          &alloc, &dtc_params, cur_time, cast_mode, CS_TYPE_INVALID);
+      int64_t count_val = 0;
+      EXPR_GET_INT64_V2(obj, count_val);
+      res_type = get_result_type_mysql(count_val);
+    }
+  } else {
+    res_type = ObLongTextType;
+  }
+  type.set_type(res_type);
   type.set_collation_level(type1.get_collation_level());
   type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
-  type.set_length(OB_MAX_VARCHAR_LENGTH);
+  if (ObVarcharType == type.get_type()) {
+    type.set_length(MAX_CHAR_LENGTH_FOR_VARCAHR_RESULT);
+  } else if (ob_is_text_tc(type.get_type())) {
+    const int32_t mbmaxlen = 4;
+    const int32_t default_text_length =
+      ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()].get_length() / mbmaxlen;
+    // need to set a correct length for text tc in mysql mode
+    type.set_length(default_text_length);
+  }
   type1.set_calc_type(ObIntType);
   // Set cast mode for parameter casting, truncate string to integer.
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);

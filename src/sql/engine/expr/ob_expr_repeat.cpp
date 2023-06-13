@@ -46,7 +46,9 @@ int ObExprRepeat::calc_result_type2(ObExprResType &type,
                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  text.set_calc_type(common::ObVarcharType);
+  if (!text.is_string_type()) {
+    text.set_calc_type(common::ObVarcharType);
+  }
   count.set_calc_type(common::ObIntType);
   // Set cast mode for %count parameter, truncate string to integer.
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);

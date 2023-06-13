@@ -18,7 +18,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObExprSpace : public ObFuncExprOperator
+class ObExprSpace : public ObStringExprOperator
 {
 public:
 

@@ -198,11 +198,35 @@ int ObExprBaseLRpad::calc_type_length_oracle(const ObExprResType &result_type,
   return ret;
 }
 
+int ObExprBaseLRpad::get_origin_len_obj(ObObj &len_obj) const
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *expr = NULL;
+  if (OB_ISNULL(expr = get_raw_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get_raw_expr", K(ret));
+  } else if (expr->get_children_count() >= 2 && OB_NOT_NULL(expr = expr->get_param_expr(1))
+             && expr->get_expr_type() == T_FUN_SYS_CAST && CM_IS_IMPLICIT_CAST(expr->get_extra())) {
+    do {
+      if (expr->get_children_count() >= 1
+          && OB_ISNULL(expr = expr->get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get_param_expr", K(ret));
+      }
+    } while (OB_SUCC(ret) && T_FUN_SYS_CAST == expr->get_expr_type()
+             && CM_IS_IMPLICIT_CAST(expr->get_extra()));
+    if (OB_SUCC(ret)) {
+      len_obj = expr->get_result_type().get_param();
+    }
+  }
+  return ret;
+}
+
 int ObExprBaseLRpad::calc_type(ObExprResType &type,
                                ObExprResType &text,
                                ObExprResType &len,
                                ObExprResType *pad_text,
-                               ObExprTypeCtx &type_ctx)
+                               ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   ObObjType text_type = ObNullType;
@@ -248,9 +272,6 @@ int ObExprBaseLRpad::calc_type(ObExprResType &type,
     len.set_calc_type(len_type);
     if (is_mysql_mode()) {
       pad_obj = pad_text->get_param();
-      type.set_type(text_type);
-      text.set_calc_type(text_type);
-      pad_text->set_calc_type(text_type);
       ObSEArray<ObExprResType, 2> types;
       OZ(types.push_back(text));
       OZ(types.push_back(*pad_text));
@@ -258,6 +279,28 @@ int ObExprBaseLRpad::calc_type(ObExprResType &type,
                                               type_ctx.get_coll_type()));
       OX(text.set_calc_collation_type(type.get_collation_type()));
       OX(pad_text->set_calc_collation_type(type.get_collation_type()));
+      if (OB_SUCC(ret)) {
+        // len expr may add cast, search real len obj
+        if (OB_FAIL(get_origin_len_obj(length_obj))) {
+          LOG_WARN("fail to get ori len obj", K(ret));
+        } else if (!length_obj.is_null()) {
+          if (OB_FAIL(calc_type_length_mysql(type, text_obj, pad_obj, length_obj, type_ctx.get_session(), text_len))) {
+            LOG_WARN("failed to calc result type length mysql mode", K(ret));
+          }
+        } else {
+          text_len = max_len;
+        }
+        if (OB_SUCC(ret)) {
+          text_type = get_result_type_mysql(text_len);
+          type.set_type(text_type);
+          if (!ob_is_text_tc(text.get_type())) {
+            text.set_calc_type(text_type);
+          }
+          if (!ob_is_text_tc(pad_text->get_type())) {
+            pad_text->set_calc_type(text_type);
+          }
+        }
+      }
     } else {
       ObSEArray<ObExprResType*, 2> types;
       OZ(types.push_back(&text));
@@ -287,8 +330,6 @@ int ObExprBaseLRpad::calc_type(ObExprResType &type,
       if (!length_obj.is_null()) {
         if (is_oracle_mode && OB_FAIL(calc_type_length_oracle(type, text_obj, pad_obj, length_obj, text_len))) {
           LOG_WARN("failed to calc result type length oracle mode", K(ret));
-        } else if (!is_oracle_mode && OB_FAIL(calc_type_length_mysql(type, text_obj, pad_obj, length_obj, type_ctx.get_session(), text_len))) {
-          LOG_WARN("failed to calc result type length mysql mode", K(ret));
         }
       } else {
         text_len = max_len;
@@ -640,6 +681,7 @@ int ObExprBaseLRpad::calc_mysql_inner(const LRpadType pad_type,
   const ObCollationType cs_type = expr.datum_meta_.cs_type_;
   const ObObjType type = expr.datum_meta_.type_;
   bool has_lob_header = expr.obj_meta_.has_lob_header();
+  bool has_set_to_lob_locator = false;
   int64_t int_len = len.get_int();
   if (int_len < 0) {
     res.set_null();
@@ -652,28 +694,46 @@ int ObExprBaseLRpad::calc_mysql_inner(const LRpadType pad_type,
     // only substr needed
     result_size = ObCharset::charpos(cs_type, str_text.ptr(), str_text.length(), int_len);
     res.set_string(ObString(result_size, str_text.ptr()));
-  } else if (str_pad.length() == 0) {
-    res.set_string(ObString::make_empty_string());
-  } else if (OB_FAIL(get_padding_info_mysql(cs_type, str_text, int_len, str_pad,
-              max_result_size, repeat_count, prefix_size, result_size))) {
-    LOG_WARN("Failed to get padding info", K(ret), K(str_text), K(int_len),
-                                            K(str_pad), K(max_result_size));
-  } else if (result_size > max_result_size) {
-    res.set_null();
-    if (pad_type == RPAD_TYPE) {
-      LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "rpad", static_cast<int>(max_result_size));
-    } else {
-      LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "lpad", static_cast<int>(max_result_size));
-    }
-  } else if (OB_FAIL(padding(pad_type, cs_type, str_text.ptr(), str_text.length(), str_pad.ptr(),
-                              str_pad.length(), prefix_size, repeat_count, false, &res_alloc,
-                              result_ptr, result_size, type, has_lob_header))) {
-    LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad), K(prefix_size), K(repeat_count));
   } else {
-    if (NULL == result_ptr || 0 == result_size) {
+    has_set_to_lob_locator = true;
+    if (str_pad.length() == 0) {
+      res.set_string(ObString::make_empty_string());
+    } else if (OB_FAIL(get_padding_info_mysql(cs_type, str_text, int_len, str_pad,
+                max_result_size, repeat_count, prefix_size, result_size))) {
+      LOG_WARN("Failed to get padding info", K(ret), K(str_text), K(int_len),
+                                              K(str_pad), K(max_result_size));
+    } else if (result_size > max_result_size) {
       res.set_null();
+      if (pad_type == RPAD_TYPE) {
+        LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "rpad", static_cast<int>(max_result_size));
+      } else {
+        LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "lpad", static_cast<int>(max_result_size));
+      }
+    } else if (OB_FAIL(padding(pad_type, cs_type, str_text.ptr(), str_text.length(), str_pad.ptr(),
+                                str_pad.length(), prefix_size, repeat_count, false, &res_alloc,
+                                result_ptr, result_size, type, has_lob_header))) {
+      LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad), K(prefix_size), K(repeat_count));
     } else {
-      res.set_string(result_ptr, result_size);
+      if (NULL == result_ptr || 0 == result_size) {
+        res.set_null();
+      } else {
+        res.set_string(result_ptr, result_size);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && ob_is_text_tc(type) && !res.is_null() &&
+      has_lob_header && !has_set_to_lob_locator) {
+    ObString data = res.get_string();
+    ObTextStringResult result_buffer(type, has_lob_header, &res_alloc);
+    int64_t buffer_len = 0;
+    if (OB_FAIL(result_buffer.init(data.length()))) {
+      LOG_WARN("init stringtextbuffer failed", K(ret), K(data));
+    } else if (OB_FAIL(result_buffer.append(data))) {
+      LOG_WARN("temp lob lseek failed", K(ret));
+    } else {
+      ObString output;
+      result_buffer.get_result_buffer(output);
+      res.set_string(output);
     }
   }
   return ret;
