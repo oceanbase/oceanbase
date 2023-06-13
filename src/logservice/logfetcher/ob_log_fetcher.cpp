@@ -519,7 +519,7 @@ int ObLogFetcher::update_fetching_log_upper_limit(const share::SCN &upper_limit_
   } else if (OB_UNLIKELY(!upper_limit_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(upper_limit_scn));
-  } else if (FALSE_IT(upper_limit_ts_ns = upper_limit_scn.convert_to_ts() * 1000L)) {
+  } else if (FALSE_IT(upper_limit_ts_ns = static_cast<int64_t>(upper_limit_scn.get_val_for_logservice()))) {
   } else if (OB_FAIL(progress_controller_.set_global_upper_limit(upper_limit_ts_ns))) {
     LOG_WARN("set_global_upper_limit failed", K(upper_limit_scn), K(upper_limit_ts_ns));
   }
