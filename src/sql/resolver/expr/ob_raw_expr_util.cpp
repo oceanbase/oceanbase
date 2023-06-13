@@ -5217,6 +5217,7 @@ int ObRawExprUtils::build_pad_expr(ObRawExprFactory &expr_factory,
     if (expr->is_for_generated_column()) {
       pad_expr->set_for_generated_column();
     }
+    pad_expr->set_extra(1); //mark for column convert
     expr = pad_expr;
     if (OB_FAIL(expr->formalize(session_info))) {
       LOG_WARN("fail to extract info", K(ret));
