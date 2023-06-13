@@ -651,6 +651,7 @@ DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info m
 DEFINE_ERROR(OB_ARBITRATION_INFO_QUERY_FAILED, -4758, -1, "HY000", "the arbitration service may be unavailable, please check and retry");
 DEFINE_ERROR(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, -4759, -1, "HY000", "An error was ignored when accessing virtual table, actual error code: %d");
 DEFINE_ERROR(OB_LS_OFFLINE, -4760, -1, "HY000", "log stream is offline");
+DEFINE_ERROR(OB_LS_IS_DELETED, -4761, -1, "HY000", "log stream is deleted");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
