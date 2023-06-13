@@ -579,7 +579,7 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
     } else {
       min_scn_ = SCN::min(min_scn_, macro_block.scn_);
       max_scn_ = SCN::max(max_scn_, macro_block.scn_);
-      LOG_INFO("succeed to set macro block into ddl kv", K(macro_block));
+      LOG_INFO("succeed to set macro block into ddl kv", K(macro_block), KPC(data_macro_meta));
     }
   }
   return ret;
