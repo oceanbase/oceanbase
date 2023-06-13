@@ -112,8 +112,11 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
       if (from_len == 0 || from_len >= to_len) {
         type.set_length(ori_len);
       } else {
-        type.set_length(MIN(ori_len / from_len * to_len + ori_len % from_len,
-                            OB_MAX_VARCHAR_LENGTH));
+        result_len = ori_len / from_len * to_len + ori_len % from_len;
+        if (result_len < 0 || result_len > OB_MAX_VARCHAR_LENGTH) {
+          result_len = OB_MAX_VARCHAR_LENGTH;
+        }
+        type.set_length(result_len);
       }
     }
   }
