@@ -4539,10 +4539,10 @@ int ObRawExprPrinter::print_xml_element_expr(ObSysFunRawExpr *expr)
 
         if (OB_SUCC(ret) && format_type == 0) {
           if (buf_[cur_pos] == '\'') {
-             buf_[cur_pos] = ' ';
+             buf_[cur_pos] = '"';
           }
           if (buf_[new_pos - 1] == '\'') {
-             buf_[new_pos - 1] = ' ';
+             buf_[new_pos - 1] = '"';
           }
         }
 

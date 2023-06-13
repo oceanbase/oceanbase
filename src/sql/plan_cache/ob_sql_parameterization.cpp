@@ -1772,6 +1772,13 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_THREE, sql_info))) {
           SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
+      } else if (0 == func_name.case_compare("xmlserialize")
+            && (10 == node[1]->num_child_)) {
+        const int64_t ARGS_NUMBER_TEN = 10;
+        bool mark_arr[ARGS_NUMBER_TEN] = {1, 0, 1, 1, 1, 1, 1, 1, 1, 1}; //0表示参数化, 1 表示不参数化
+        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TEN, sql_info))) {
+          SQL_PC_LOG(WARN, "fail to mark weight_string arg", K(ret));
+        }
       }else if (0 == func_name.case_compare("weight_string")
           && (5 == node[1]->num_child_)) {
         const int64_t ARGS_NUMBER_FIVE = 5;
