@@ -1921,6 +1921,13 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 if (OB_FAIL(org_column->set_extended_type_info(column.get_extended_type_info()))) {
                   LOG_WARN("set enum or set info failed", K(ret), K(*expr));
                 }
+              } else if (is_oracle_mode() && column.is_xmltype()) {
+                org_column->set_sub_data_type(T_OBJ_XML);
+                // udt column is varbinary used for null bitmap
+                org_column->set_udt_set_id(gen_udt_set_id());
+                if (OB_FAIL(add_generated_hidden_column_for_udt(table_schema, *org_column))) {
+                  LOG_WARN("add udt hidden column to table_schema failed", K(ret), K(column));
+                }
               }
             }
             LOG_DEBUG("ctas oracle mode, create_table_column_count > 0,end", K(column));
