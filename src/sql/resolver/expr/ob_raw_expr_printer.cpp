@@ -236,8 +236,10 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
       LOG_WARN("fail to print 1 =", K(ret));
     } else if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
       OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
-    } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, expr->get_value().get_unknown()))) {
-      LOG_WARN("fail to write param to buf", K(ret));
+    } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_,
+                                              expr->get_value().get_unknown(),
+                                              expr->get_data_type()))) {
+      LOG_WARN("fail to write param to buf", K(expr->get_value().get_unknown()), K(expr->get_expr_obj_meta()), K(ret));
     }
   } else if (OB_NOT_NULL(param_store_) && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();

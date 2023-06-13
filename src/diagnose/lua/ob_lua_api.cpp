@@ -1416,7 +1416,7 @@ int select_dump_tenant_info(lua_State *L)
       // stopped
       gen.next_column(t.stopped_);
       // idle_us
-      gen.next_column(t.idle_us_);
+      gen.next_column(0);
       // recv_hp_rpc_cnt
       gen.next_column(t.recv_hp_rpc_cnt_);
       // recv_np_rpc_cnt

@@ -90,7 +90,7 @@ static void print_version()
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
   MPRINT("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
   MPRINT("BUILD_INFO: %s\n", build_info());
-  MPRINT("Copyright (c) 2011-2022 OceanBase Inc.");
+  MPRINT("Copyright (c) 2011-present OceanBase Inc.");
   MPRINT();
 }
 

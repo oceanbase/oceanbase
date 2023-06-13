@@ -89,7 +89,6 @@ public:
       ObExecContext &ctx, ObDfo &parent, dtl::ObDtlChTotalInfo &ch_info) override;
   virtual int notify_peers_mock_eof(
       ObDfo *dfo, int64_t timeout_ts, common::ObAddr addr) const;
-  virtual int drain_exch() override;
 protected:
   virtual int free_allocator() { return common::OB_SUCCESS; }
   /* destroy all channel */

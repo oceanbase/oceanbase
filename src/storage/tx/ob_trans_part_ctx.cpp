@@ -211,7 +211,7 @@ void ObPartTransCtx::destroy()
                 K(busy_cbs_.get_size()));
     }
 
-    ctx_tx_data_.destroy();
+
 
     if (NULL == ls_tx_ctx_mgr_) {
       TRANS_LOG(ERROR, "ls_tx_ctx_mgr_ is null, unexpected error", KP(ls_tx_ctx_mgr_), "context",
@@ -221,16 +221,23 @@ void ObPartTransCtx::destroy()
     }
     // Defensive Check 3 : missing to callback scheduler
     if (!is_follower_() && need_callback_scheduler_()) {
-      int ret = OB_TRANS_UNKNOWN;
+      int tx_result = OB_TRANS_UNKNOWN;
+      switch (ctx_tx_data_.get_state()) {
+      case ObTxCommitData::COMMIT: tx_result = OB_TRANS_COMMITED; break;
+      case ObTxCommitData::ABORT: tx_result = OB_TRANS_KILLED; break;
+      default:
+        TRANS_LOG(ERROR, "oops! unexpected tx_state in tx data", K(ctx_tx_data_.get_state()));
+      }
       if (SCN::min_scn() == start_working_log_ts_) {
-        TRANS_LOG(ERROR, "missing callback scheduler, callback with TRANS_UNKNOWN", K(ret), KPC(this));
+        TRANS_LOG(ERROR, "missing callback scheduler, do callback", K(tx_result), KPC(this));
       } else {
-        TRANS_LOG(WARN, "missing callback scheduler maybe, callback with TRANS_UNKNOWN", K(ret), KPC(this));
+        TRANS_LOG(WARN, "missing callback scheduler maybe, do callback", K(tx_result), KPC(this));
       }
       // NOTE: callback scheduler may introduce deadlock, need take care
-      trans_service_->handle_tx_commit_result(trans_id_, OB_TRANS_UNKNOWN, SCN());
+      trans_service_->handle_tx_commit_result(trans_id_, tx_result, SCN());
       FORCE_PRINT_TRACE(tlog_, "[missing callback scheduler] ");
     }
+
 
     if (NULL != tlog_) {
       print_trace_log_if_necessary_();
@@ -238,6 +245,7 @@ void ObPartTransCtx::destroy()
       tlog_ = NULL;
     }
 
+    ctx_tx_data_.destroy();
     mds_cache_.destroy();
     exec_info_.destroy();
 

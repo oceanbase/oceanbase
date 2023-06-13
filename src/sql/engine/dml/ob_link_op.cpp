@@ -239,11 +239,15 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
       // copy from param_store.
       int64_t saved_stmt_pos = link_stmt_pos;
       int64_t param_idx = param_infos.at(next_param).idx_;
+      int8_t param_type_value = param_infos.at(next_param).type_value_;
       const ObObjParam &param = param_store.at(param_idx);
       ObObjPrintParams obj_print_params = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
-
-      if (lib::is_oracle_mode() && ObSQLUtils::is_oracle_empty_string(param)) {
-        obj_print_params.print_null_string_value_  = true;
+      if (param_type_value < 0 || param_type_value > static_cast<int8_t>(ObObjType::ObMaxType)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid param type_value", K(param_type_value), K(ret));
+      } else if (param.is_null()) {
+        obj_print_params.ob_obj_type_  = ObObjType(param_type_value);
+        obj_print_params.print_null_string_value_ = 1;
       }
       if (DBLINK_DRV_OCI == link_type_) {
         // Ensure that when oceanbase connects to oracle,

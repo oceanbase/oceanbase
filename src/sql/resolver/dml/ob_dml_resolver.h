@@ -706,6 +706,9 @@ protected:
   int check_oracle_outer_join_condition(const ObRawExpr *expr);
   int check_oracle_outer_join_in_or_validity(const ObRawExpr * expr,
                                     ObIArray<uint64_t> &right_tables);
+  int check_oracle_outer_join_expr_validity(const ObRawExpr *expr,
+                                            ObIArray<uint64_t> &right_tables,
+                                            ObItemType parent_type);
   int check_single_oracle_outer_join_expr_validity(const ObRawExpr *right_expr,
                                           ObIArray<uint64_t> &le_left_tables,
                                           ObIArray<uint64_t> &le_right_tables,
@@ -722,7 +725,9 @@ protected:
   int extract_column_with_outer_join_symbol(const ObRawExpr *expr,
                                             common::ObIArray<uint64_t> &left_tables,
                                             common::ObIArray<uint64_t> &right_tables);
-
+  int do_extract_column(const ObRawExpr *expr,
+                        ObIArray<uint64_t> &left_tables,
+                        ObIArray<uint64_t> &right_tables);
   int add_oracle_outer_join_dependency(const common::ObIArray<uint64_t> &all_tables,
                                        const common::ObIArray<uint64_t> &left_tables,
                                        uint64_t right_table_id,
@@ -956,6 +961,8 @@ protected:
   //store json table column info
   common::ObSEArray<ObDmlJtColDef *, 1, common::ModulePageAllocator, true> json_table_infos_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_external_file_col_exprs_;
+  //for validity check for on-condition with (+)
+  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ansi_join_outer_table_id_;
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };

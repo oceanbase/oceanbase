@@ -16212,15 +16212,26 @@ int ObDDLService::check_db_and_table_is_exist(const obrpc::ObTruncateTableArg &a
                         ? true : false;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     common::sqlclient::ObMySQLResult *result = NULL;
-    if (OB_FAIL(sql.assign_fmt("SELECT session_id, a.database_id, table_id, database_name, table_name "
+    bool skip_escape = false;
+    // Before checking the table name, we should use mysql mode to escape the table name anyway,
+    // otherwise we may not find the table name in select sql
+    bool do_oracle_mode_escape = false;
+    const char *tmp_table_name = to_cstring(ObHexEscapeSqlStr(table_name, skip_escape, do_oracle_mode_escape));
+    const char *tmp_database_name = to_cstring(ObHexEscapeSqlStr(database_name, skip_escape, do_oracle_mode_escape));
+    if (OB_ISNULL(tmp_table_name)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table name is NULL", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(tmp_database_name)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("database name is NULL", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(sql.assign_fmt("SELECT session_id, a.database_id, table_id, database_name, table_name "
                               "FROM %s a JOIN (SELECT session_id, database_id, table_id, table_name FROM %s "
                               "UNION ALL SELECT session_id, database_id, table_id, table_name FROM %s WHERE tenant_id = %ld) c "
-                              "ON a.database_id = c.database_id WHERE a.database_name = '%.*s' AND table_name = '%.*s' "
+                              "ON a.database_id = c.database_id WHERE a.database_name = '%s' AND table_name = '%s' "
                               "AND (session_id = 0 or session_id = %lu) order by session_id desc",
                               OB_ALL_DATABASE_TNAME, OB_ALL_TABLE_TNAME,
                               OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id,
-                              database_name.length(), database_name.ptr(),
-                              table_name.length(), table_name.ptr(), session_id))) {
+                              tmp_database_name, tmp_table_name, session_id))) {
       LOG_WARN("failed assing sql", KR(ret), K(table_name), K(database_name), K(session_id));
     } else if (OB_FAIL(trans.read(res, tenant_id, sql.ptr()))) {
       LOG_WARN("failed to execute sql", KR(ret), K(tenant_id), K(table_name), K(database_name), K(session_id), K(sql));

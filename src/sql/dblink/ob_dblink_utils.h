@@ -148,6 +148,45 @@ private:
   ObString last_reverse_info_values_;
 };
 
+struct ObParamPosIdx
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObParamPosIdx()
+    : pos_(0),
+      idx_(0),
+      type_value_(0)
+  {}
+  ObParamPosIdx(int32_t pos, int32_t idx, int8_t type_value)
+    : pos_(pos),
+      idx_(idx),
+      type_value_(type_value)
+  {}
+  virtual ~ObParamPosIdx()
+  {}
+  TO_STRING_KV(N_POS, pos_,
+               N_IDX, idx_,
+               N_TYPE_VALUE, type_value_);
+  int32_t pos_;
+  int32_t idx_;
+  int8_t type_value_;
+  /*
+    if type_value_ = -1, means TimeOutHint, used in 3.x, unused in 4.x.
+    if type_value_ >= int8_t(ObObjType::ObNullType) and type_value_ <= int8_t(ObObjType::ObMaxType), means the value of ObObjType.
+    if type_value_ < -1 || type_value > int8_t(ObObjType::ObMaxType), means a invalid type_value_.
+  */
+};
+
+class ObLinkStmtParam
+{
+public:
+  static int write(char *buf, int64_t buf_len, int64_t &pos, int64_t param_idx, int8_t type_value = 0);
+  static int read_next(const char *buf, int64_t buf_len, int64_t &pos, int64_t &param_idx, int8_t &type_value);
+  static int64_t get_param_len();
+private:
+  static const int64_t PARAM_LEN;
+};
+
 } // end of namespace sql
 } // end of namespace oceanbase
 

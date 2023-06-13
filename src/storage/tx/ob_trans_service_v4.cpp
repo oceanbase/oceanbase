@@ -204,6 +204,7 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
                                          expire_ts,
                                          tx.trace_info_.get_app_trace_info(),
                                          tx.op_sn_,
+                                         SCN::max_scn(),
                                          commit_version,
                                          self_))
              || !commit_need_retry_(ret))) {
@@ -212,11 +213,17 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
     } else {
       TRANS_LOG(TRACE, "local ls commit tx started", K(tx));
     }
-  } else if (OB_FAIL(do_commit_tx_slowpath_(tx, expire_ts))) {
-    TRANS_LOG(WARN, "commit tx slowpath fail", K(ret),
-              K_(tx.coord_id), K_(tx.commit_parts), K(tx));
   } else {
-    TRANS_LOG(TRACE, "remote commit started", K(tx), K_(self));
+    // get gts cache as commit start scn
+    if (OB_FAIL(ts_mgr_->get_gts(tenant_id_, NULL, tx.commit_start_scn_))) {
+      TRANS_LOG(WARN, "get gts cache fail", K(ret));
+    }
+    if (OB_FAIL(do_commit_tx_slowpath_(tx))) {
+      TRANS_LOG(WARN, "commit tx slowpath fail", K(ret),
+                K_(tx.coord_id), K_(tx.commit_parts), K(tx));
+    } else {
+      TRANS_LOG(TRACE, "remote commit started", K(tx), K_(self));
+    }
   }
   // start commit fail
   if (OB_FAIL(ret)) {
@@ -225,38 +232,41 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
   return ret;
 }
 
+#define DELETED_UNRETRYABLE_ERROR(ret)          \
+  (OB_TABLE_IS_DELETED == ret                   \
+   /*|| OB_LS_IS_DELETED == ret*/               \
+   )
 /*
  * try send commit msg to coordinator, and register retry task
  * if msg send fail, the retry task will retry later
  * if both register task fail and send are failed, the commit failed
  */
-int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts)
+int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTxCommitMsg commit_msg;
-  bool post_msg_fail = false;
-  if (OB_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
-    TRANS_LOG(WARN, "build tx commit msg fail", K(ret), K(tx));
+  bool post_succ = false;
+  if (OB_TMP_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
+    TRANS_LOG(WARN, "build tx commit msg fail", K(tmp_ret), K(tx));
     // build msg fail won't cause commit fail, later driven by retry timer
-    post_msg_fail = true;
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
-    TRANS_LOG(WARN, "post tx commit msg fail", K(ret), K(tx), K(commit_msg));
-    // send msg fail won't cause commit fail, later driven by retry timer
-    post_msg_fail = true;
-    ret = OB_SUCCESS;
+  } else if (OB_TMP_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
+    TRANS_LOG(WARN, "post tx commit msg fail", K(tmp_ret), K(tx), K(commit_msg));
+    if (is_location_service_renew_error(tmp_ret)) {
+      // send msg fail won't cause commit fail, later driven by retry timer
+    } else if (DELETED_UNRETRYABLE_ERROR(tmp_ret)) {
+      ret = tx.commit_times_ > 0 ? OB_TRANS_UNKNOWN : OB_TRANS_KILLED;
+    } else { ret = tmp_ret; }
+  } else {
+    post_succ = true;
+    ++tx.commit_times_;
   }
 
-  if (post_msg_fail) {
-    if (OB_FAIL(register_commit_retry_task_(tx, POST_COMMIT_REQ_RETRY_INTERVAL))) {
-      TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(tx));
-    }
-  } else {
-    if (OB_FAIL(register_commit_retry_task_(tx))) {
-      TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(tx));
-    }
+  if (OB_SUCC(ret) &&
+      OB_FAIL(register_commit_retry_task_(tx, post_succ ? INT64_MAX : POST_COMMIT_REQ_RETRY_INTERVAL))) {
+    TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(post_succ), K(tx));
   }
-  TRANS_LOG(TRACE, "do commit tx slowpath", K(ret), K(post_msg_fail), K(tx));
+  TRANS_LOG(TRACE, "do commit tx slowpath", K(ret), K(post_succ), K(tx));
   return ret;
 }
 
@@ -362,23 +372,9 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   } else if (tx.commit_expire_ts_ <= now) {
     TRANS_LOG(WARN, "tx commit timeout", K_(tx.commit_expire_ts), K(tx));
     handle_tx_commit_result_(tx, OB_TRANS_STMT_TIMEOUT);
-  } else {
-    ObTxCommitMsg commit_msg;
-    if (OB_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
-      TRANS_LOG(WARN, "build tx commit msg fail", K(ret), K(tx));
-    } else if (OB_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
-      TRANS_LOG(WARN, "post commit msg fail", K(ret), K(tx));
-    }
-    // register again
-    if (OB_FAIL(ret)) {
-      if (OB_FAIL(register_commit_retry_task_(tx, POST_COMMIT_REQ_RETRY_INTERVAL))) {
-        TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
-      }
-    } else {
-      if (OB_FAIL(register_commit_retry_task_(tx))) {
-        TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
-      }
-    }
+  } else if (OB_FAIL(do_commit_tx_slowpath_(tx))) {
+    TRANS_LOG(WARN, "retry do commit tx failed", K(ret), K(tx));
+    handle_tx_commit_result_(tx, ret);
   }
   ref_cnt = tx.get_ref();
   tx.lock_.unlock();
@@ -508,6 +504,15 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
   case OB_TRANS_UNKNOWN:
     state = ObTxDesc::State::COMMIT_UNKNOWN;
     commit_out = result;
+    break;
+  case OB_TRANS_CTX_NOT_EXIST:
+    if (tx.commit_times_ <= 1) {
+      state = ObTxDesc::State::ROLLED_BACK;
+      commit_out = OB_TRANS_KILLED;
+    } else {
+      state = ObTxDesc::State::COMMIT_UNKNOWN;
+      commit_out = OB_TRANS_UNKNOWN;
+    }
     break;
   default:
     commit_fin = false;
@@ -1508,6 +1513,7 @@ int ObTransService::build_tx_commit_msg_(const ObTxDesc &tx, ObTxCommitMsg &msg)
   msg.cluster_id_ = tx.cluster_id_;
   msg.app_trace_info_ = tx.trace_info_.get_app_trace_info();
   msg.request_id_ = tx.op_sn_;
+  msg.commit_start_scn_ = tx.commit_start_scn_;
   if (OB_FAIL(msg.parts_.assign(tx.commit_parts_))) {
     TRANS_LOG(WARN, "assign parts fail", K(ret), K(tx));
   }
@@ -1739,16 +1745,15 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
 {
   int ret = OB_SUCCESS;
   SCN commit_version;
-  if (OB_FAIL(local_ls_commit_tx_(msg.tx_id_,
-                                  msg.receiver_,
-                                  msg.parts_,
-                                  msg.expire_ts_,
-                                  msg.app_trace_info_,
-                                  msg.request_id_,
-                                  commit_version,
-                                  msg.sender_addr_))) {
-    TRANS_LOG(WARN, "handle tx commit request fail", K(ret), K(msg));
-  }
+  ret = local_ls_commit_tx_(msg.tx_id_,
+                            msg.receiver_,
+                            msg.parts_,
+                            msg.expire_ts_,
+                            msg.app_trace_info_,
+                            msg.request_id_,
+                            msg.commit_start_scn_,
+                            commit_version,
+                            msg.sender_addr_);
   result.reset();
   result.init(ret, msg.get_timestamp());
   result.private_data_ = commit_version;
@@ -1768,6 +1773,7 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
                                         const int64_t &expire_ts,
                                         const common::ObString &app_trace_info,
                                         const int64_t &request_id,
+                                        const SCN commit_start_scn,
                                         SCN &commit_version,
                                         const common::ObAddr &caller)
 {
@@ -1778,15 +1784,35 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
     TRANS_LOG(WARN, "get coordinator tx context fail", K(ret), K(tx_id), K(coord));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       int tx_state = ObTxData::RUNNING;
-      if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version))) {
+      share::SCN recycle_scn;
+      if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version, recycle_scn))) {
         TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(coord), K(tx_id));
         if (OB_TRANS_CTX_NOT_EXIST == ret) {
-          ret = OB_TRANS_KILLED; // presume abort
+          if (commit_start_scn > recycle_scn) {
+            ret = OB_TRANS_KILLED; // abort without persistent
+          } else {
+            // recycled, either committed or aborted
+          }
         }
       } else {
         switch (tx_state) {
         case ObTxData::COMMIT:
-          ret = OB_TRANS_COMMITED;
+          {
+            ObLSTxCtxMgr *ls_tx_mgr = NULL;
+            if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(coord, ls_tx_mgr))) {
+              TRANS_LOG(WARN, "can not get ls_tx_mgr", K(ret), "ls_id", coord);
+            } else if (OB_ISNULL(ls_tx_mgr)) {
+              ret = OB_ERR_UNEXPECTED;
+              TRANS_LOG(WARN, "ls_tx_mgr is NULL", K(ret), "ls_id", coord);
+            } else if (ls_tx_mgr->in_leader_serving_state()) {
+              ret = OB_TRANS_COMMITED;
+            } else {
+              ret = OB_NOT_MASTER;
+            }
+            if (OB_NOT_NULL(ls_tx_mgr)) {
+              tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_mgr);
+            }
+          }
           break;
         case ObTxData::ABORT:
           ret = OB_TRANS_KILLED;
@@ -1813,12 +1839,12 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
 int ObTransService::get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                                 const ObTransID &tx_id,
                                                 int &state,
-                                                SCN &commit_version)
+                                                SCN &commit_version,
+                                                SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   ObTxTableGuard tx_table_guard;
   int64_t _state = 0;
-  SCN recycled_scn;
   if (OB_FAIL(get_tx_table_guard_(NULL, lsid, tx_table_guard))) {
     TRANS_LOG(WARN, "get tx table guard failed", KR(ret), K(lsid), KPC(this));
   } else if (!tx_table_guard.is_valid()) {

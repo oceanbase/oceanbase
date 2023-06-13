@@ -97,11 +97,108 @@ template <>
   UNUSED(obj);
   UNUSED(params);
   int ret = OB_SUCCESS;
+  const char *NULL_VALUE_STR = "NULL";
   if (params.print_null_string_value_) {
-    ret = databuff_printf(buffer, length, pos, "''");
-  } else {
-    ret = databuff_printf(buffer, length, pos, "NULL");
+    bool is_oracle_mode = lib::is_oracle_mode();
+    // oracle and mysql data type mapping:
+    switch (params.ob_obj_type_) {
+      case ObNullType:
+        break;
+      case ObTinyIntType:
+      case ObSmallIntType:
+      case ObMediumIntType:
+      case ObInt32Type:
+      case ObIntType:
+        NULL_VALUE_STR = is_oracle_mode ? "CAST(NULL AS NUMBER)" : "CAST(NULL AS SIGNED)";
+        break;
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUMediumIntType:
+      case ObUInt32Type:
+      case ObUInt64Type:
+        NULL_VALUE_STR = "CAST(NULL AS SIGNED)";//only need map to mysql datatype
+        break;
+      case ObFloatType:
+        NULL_VALUE_STR = "CAST(NULL AS FLOAT)";//only need map to mysql datatype
+        break;
+      case ObDoubleType:
+        NULL_VALUE_STR = "TO_BINARY_DOUBLE(NULL)";//only need map to oracle datatype
+        break;
+      case ObUFloatType:
+      case ObUDoubleType:
+        break;
+      case ObNumberType:
+        NULL_VALUE_STR = is_oracle_mode ?  "CAST(NULL AS NUMBER)" : "CAST(NULL AS DECIMAL)";
+        break;
+      case ObUNumberType:
+        break;
+      case ObDateTimeType:
+        NULL_VALUE_STR = is_oracle_mode ? "TO_DATE(NULL, 'YYYY-MM-DD')" : "STR_TO_DATE(NULL, '%Y-%m-%d %H:%i:%s')";
+        break;
+      case ObTimestampType:
+        NULL_VALUE_STR = "FROM_UNIXTIME(UNIX_TIMESTAMP(NULL), '%Y-%m-%d %H:%i:%s')";//only need map to mysql datatype
+        break;
+      case ObDateType:
+        NULL_VALUE_STR = "STR_TO_DATE(NULL, '%Y-%m-%d')";//only need map to mysql datatype
+        break;
+      case ObTimeType:
+        NULL_VALUE_STR = "CAST(NULL AS TIME)";//only need map to mysql datatype
+        break;
+      case ObYearType:
+        NULL_VALUE_STR = "CAST(NULL AS YEAR)";//only need map to mysql datatype
+        break;
+      case ObVarcharType:
+      case ObCharType:
+        NULL_VALUE_STR = is_oracle_mode ? "''" : "NULL";
+        break;
+      case ObHexStringType:
+      case ObExtendType:
+      case ObUnknownType:
+      case ObTinyTextType:
+      case ObTextType:
+      case ObMediumTextType:
+      case ObLongTextType:
+      case ObBitType:
+      case ObEnumType:
+      case ObSetType:
+      case ObEnumInnerType:
+      case ObSetInnerType:
+        break;
+      case ObTimestampTZType:
+        NULL_VALUE_STR = "TO_TIMESTAMP_TZ(NULL, 'YYYY-MM-DD HH24:MI:SS TZR')";//only need map to oracle datatype
+        break;
+      case ObTimestampLTZType:
+      case ObTimestampNanoType:
+        NULL_VALUE_STR = "TO_TIMESTAMP(NULL, 'YYYY-MM-DD HH24:MI:SS')";//only need map to oracle datatype
+        break;
+      case ObRawType:
+        NULL_VALUE_STR = "UTL_RAW.CAST_TO_RAW(NULL)";//only need map to oracle datatype
+        break;
+      case ObIntervalYMType:
+        NULL_VALUE_STR = "TO_YMINTERVAL(NULL)";//only need map to oracle datatype
+        break;
+      case ObIntervalDSType:
+        NULL_VALUE_STR = "TO_DSINTERVAL(NULL)";//only need map to oracle datatype
+        break;
+      case ObNumberFloatType:// oracle float, subtype of NUMBER
+        NULL_VALUE_STR = "TO_NUMBER(NULL)";//only need map to oracle datatype
+        break;
+      case ObNVarchar2Type: // nvarchar2
+      case ObNCharType: // nchar
+        NULL_VALUE_STR = "''";//only need map to oracle datatype
+        break;
+      case ObURowIDType: // UROWID
+        NULL_VALUE_STR = "CAST(NULL AS ROWID)";//only need map to oracle datatype
+        break;
+      case ObLobType:
+      case ObJsonType:
+      case ObGeometryType:
+      case ObUserDefinedSQLType:
+      default:
+        break;
+    }
   }
+  ret = databuff_printf(buffer, length, pos, "%s", NULL_VALUE_STR);
   return ret;
 }
 template <>

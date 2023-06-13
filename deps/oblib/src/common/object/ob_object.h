@@ -1068,21 +1068,24 @@ struct ObObjPrintParams
     tz_info_(tz_info),
     cs_type_(cs_type),
     print_flags_(0),
-    exec_ctx_(NULL)
+    exec_ctx_(NULL),
+    ob_obj_type_(ObNullType)
   {}
   ObObjPrintParams (const ObTimeZoneInfo *tz_info):
     tz_info_(tz_info),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
     print_flags_(0),
-    exec_ctx_(NULL)
+    exec_ctx_(NULL),
+    ob_obj_type_(ObNullType)
   {}
   ObObjPrintParams ():
     tz_info_(NULL),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
     print_flags_(0),
-    exec_ctx_(NULL)
+    exec_ctx_(NULL),
+    ob_obj_type_(ObNullType)
   {}
-  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags));
+  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type));
   const ObTimeZoneInfo *tz_info_;
   ObCollationType cs_type_;
   union {
@@ -1111,6 +1114,7 @@ struct ObObjPrintParams
    *
   */
   sql::ObExecContext *exec_ctx_;
+  ObObjType ob_obj_type_;
 };
 
 // sizeof(ObObjValue)=8
@@ -4069,15 +4073,22 @@ class ObHexEscapeSqlStr
 {
 public:
   ObHexEscapeSqlStr(const common::ObString &str) : str_(str),
-                                                   skip_escape_(false) { }
+                                                   skip_escape_(false),
+                                                   do_oracle_mode_escape_(lib::is_oracle_mode()) { }
   ObHexEscapeSqlStr(const common::ObString &str, const bool skip_escape) : str_(str),
-                                                                           skip_escape_(skip_escape){ }
+                                                                           skip_escape_(skip_escape),
+                                                                           do_oracle_mode_escape_(lib::is_oracle_mode()){ }
+  ObHexEscapeSqlStr(const common::ObString &str,
+                    const bool skip_escape,
+                    const bool do_oracle_mode_escape)
+    : str_(str), skip_escape_(skip_escape), do_oracle_mode_escape_(do_oracle_mode_escape){ }
   ObString str() const { return str_; }
   int64_t get_extra_length() const;
   DECLARE_TO_STRING;
 private:
   ObString str_;
   bool skip_escape_;
+  bool do_oracle_mode_escape_;
 };
 
 typedef Ob2DArray<ObObjParam, OB_MALLOC_BIG_BLOCK_SIZE,

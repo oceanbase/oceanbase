@@ -254,7 +254,7 @@ int do_commit_tx_(ObTxDesc &tx,
                   const int64_t expire_ts,
                   ObITxCallback &cb,
                   share::SCN &commit_version);
-int do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts);
+int do_commit_tx_slowpath_(ObTxDesc &tx);
 int register_commit_retry_task_(ObTxDesc &tx, int64_t max_delay = INT64_MAX);
 int unregister_commit_retry_task_(ObTxDesc &tx);
 int handle_tx_commit_result_(ObTxDesc &tx,
@@ -267,12 +267,22 @@ int local_ls_commit_tx_(const ObTransID &tx_id,
                         const int64_t &expire_ts,
                         const common::ObString &app_trace_info,
                         const int64_t &request_id,
+                        const share::SCN commit_start_scn,
                         share::SCN &commit_version,
                         const common::ObAddr &caller);
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
                                 int &state,
-                                share::SCN &commit_version);
+                                share::SCN &commit_version)
+{
+  share::SCN recycle_scn;
+  return get_tx_state_from_tx_table_(lsid, tx_id, state, commit_version, recycle_scn);
+}
+int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
+                                const ObTransID &tx_id,
+                                int &state,
+                                share::SCN &commit_version,
+                                share::SCN &recycle_scn);
 OB_NOINLINE int gen_trans_id_(ObTransID &trans_id);
 bool commit_need_retry_(const int ret);
 // for xa
