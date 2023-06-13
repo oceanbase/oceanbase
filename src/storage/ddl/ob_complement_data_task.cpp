@@ -1326,6 +1326,7 @@ int ObLocalScan::init(
     snapshot_version_ = snapshot_version;
     txs_ = txs;
     output_org_cols_only_ = output_org_cols_only;
+    ObDatumRow tmp_default_row;
     if (OB_FAIL(check_generated_column_exist(hidden_table_schema, org_col_ids))) {
       LOG_WARN("fail to init generated columns", K(ret), K(org_col_ids));
     } else if (OB_FAIL(extended_gc_.extended_col_ids_.assign(col_ids))) {
@@ -1334,6 +1335,8 @@ int ObLocalScan::init(
       LOG_WARN("fail to assign", K(ret));
     } else if (OB_FAIL(extended_gc_.output_projector_.assign(projector))) {
       LOG_WARN("fail to assign", K(ret));
+    } else if (OB_FAIL(tmp_default_row.init(allocator_, org_col_ids.count()))) {
+      STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
     } else if (OB_FAIL(default_row_.init(allocator_, org_col_ids.count()))) {
       STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
     } else if (OB_FAIL(tmp_row_.init(allocator_, org_col_ids.count()))) {
@@ -1344,10 +1347,12 @@ int ObLocalScan::init(
             + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
       LOG_WARN("fail to init checksum calculator", K(ret));
     } else {
-      default_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      tmp_default_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT); // default_row.row_flag_ will be set by deep_copy
       tmp_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      if (OB_FAIL(hidden_table_schema.get_orig_default_row(org_col_ids, default_row_))) {
+      if (OB_FAIL(hidden_table_schema.get_orig_default_row(org_col_ids, tmp_default_row))) {
         LOG_WARN("fail to get default row from table schema", K(ret));
+      } else if (OB_FAIL(default_row_.deep_copy(tmp_default_row, allocator_))) {
+        LOG_WARN("failed to deep copy default row", K(ret));
       } else {
         tenant_id_ = data_table_schema.get_tenant_id();
         source_table_id_ = data_table_schema.get_table_id();
