@@ -308,7 +308,7 @@ ObExprYear::~ObExprYear() {}
 
 int ObExprYear::calc_year(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
-  return ObExprTimeBase::calc(expr, ctx, expr_datum, DT_YEAR, true);
+  return ObExprTimeBase::calc(expr, ctx, expr_datum, DT_YEAR, true, true);
 }
 
 ObExprMonth::ObExprMonth(ObIAllocator &alloc)
