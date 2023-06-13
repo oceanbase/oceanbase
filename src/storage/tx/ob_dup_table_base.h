@@ -87,6 +87,86 @@ struct DupTableInterfaceStat
                K(dup_table_redo_sync_succ_cnt_),
                K(dup_table_redo_sync_fail_cnt_));
 };
+
+/*******************************************************
+ *  Dup_Table LS Role State
+ *******************************************************/
+enum class ObDupTableLSRoleState : int64_t
+{
+  UNKNOWN = 0,
+
+  ROLE_STATE_CHANGING = 1, // Follower
+
+  LS_REVOKE_SUCC = 10,
+  LS_TAKEOVER_SUCC = 11,
+
+  LS_OFFLINE_SUCC = 20,
+  LS_ONLINE_SUCC = 21,
+
+  LS_STOP_SUCC = 30,
+  LS_START_SUCC = 31,
+};
+
+struct ObDupTableLSRoleStateContainer
+{
+  int64_t role_state_;
+  int64_t offline_state_;
+  int64_t stop_state_;
+
+  void reset()
+  {
+    role_state_ = static_cast<int64_t>(ObDupTableLSRoleState::UNKNOWN);
+    offline_state_ = static_cast<int64_t>(ObDupTableLSRoleState::UNKNOWN);
+    stop_state_ = static_cast<int64_t>(ObDupTableLSRoleState::UNKNOWN);
+  }
+
+  int64_t *get_target_state_ref(ObDupTableLSRoleState target_state);
+  bool check_target_state(ObDupTableLSRoleState target_state);
+
+  TO_STRING_KV(K(role_state_), K(offline_state_), K(stop_state_));
+};
+
+class ObDupTableLSRoleStateHelper
+{
+public:
+  ObDupTableLSRoleStateHelper(const char *module_name) : module_name_(module_name)
+  {
+    cur_state_.reset();
+  }
+
+  void reset()
+  {
+    cur_state_.role_state_ = static_cast<int64_t>(ObDupTableLSRoleState::LS_REVOKE_SUCC);
+    cur_state_.stop_state_ = static_cast<int64_t>(ObDupTableLSRoleState::LS_STOP_SUCC);
+    cur_state_.offline_state_ = static_cast<int64_t>(ObDupTableLSRoleState::LS_ONLINE_SUCC);
+  }
+
+  bool is_leader();
+  bool is_follower();
+  bool is_offline();
+  bool is_online();
+  bool is_stopped();
+  bool is_started();
+
+  bool is_leader_serving() { return is_leader() && is_online() && is_started(); }
+  bool is_follower_serving() { return is_follower() && is_online() && is_started(); }
+  bool is_active_ls() { return is_online() && is_started(); }
+
+  int prepare_state_change(const ObDupTableLSRoleState &target_state,
+                           ObDupTableLSRoleStateContainer &restore_state);
+  int restore_state(const ObDupTableLSRoleState &target_state,
+                           ObDupTableLSRoleStateContainer &restore_state);
+  int state_change_succ(const ObDupTableLSRoleState &target_state,
+                           ObDupTableLSRoleStateContainer &restore_state);
+
+  TO_STRING_KV("module_name", module_name_, K(cur_state_));
+
+private:
+  ObDupTableLSRoleStateContainer cur_state_;
+  const char *module_name_;
+};
+
+
 /*******************************************************
  *  HashMapTool (not thread safe)
  *******************************************************/
@@ -781,6 +861,9 @@ public:
 
   int flush();
 
+  int offline();
+  int online();
+
   void reset()
   {
     dup_ls_meta_.reset();
@@ -863,6 +946,11 @@ public:
 
   bool is_busy();
 
+  bool check_is_busy_without_lock();
+
+  void rlock_for_log() { log_lock_.rdlock(); }
+  void unlock_for_log() { log_lock_.unlock(); }
+
   int on_success();
   int on_failure();
 
@@ -879,6 +967,7 @@ public:
                K(logging_lease_addrs_),
                K(logging_scn_),
                K(logging_lsn_));
+
 private:
   static const int64_t MAX_LOG_BLOCK_SIZE = common::OB_MAX_LOG_ALLOWED_SIZE;
   int prepare_serialize_log_entry_(int64_t &max_ser_size, DupLogTypeArray &type_array);

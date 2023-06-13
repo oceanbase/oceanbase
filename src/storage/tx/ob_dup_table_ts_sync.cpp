@@ -45,6 +45,17 @@ int ObDupTableLSTsSyncMgr::init(ObDupTableLSHandler *dup_ls_handle)
   return ret;
 }
 
+int ObDupTableLSTsSyncMgr::offline()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(clean_ts_info_cache_())) {
+    DUP_TABLE_LOG(WARN, "clean ts info cache", K(ret), KPC(this));
+  }
+
+  return ret;
+}
+
 int ObDupTableLSTsSyncMgr::validate_replay_ts(const common::ObAddr &dst,
                                               const share::SCN &target_replay_scn,
                                               const ObTransID &tx_id,

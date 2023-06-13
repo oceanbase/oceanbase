@@ -414,6 +414,23 @@ void ObLSDupTabletsMgr::reset()
   tablet_diag_info_log_buf_ = nullptr;
 }
 
+int ObLSDupTabletsMgr::offline()
+{
+  int ret = OB_SUCCESS;
+
+  // DUP_TABLE_LOG(INFO, "before dup_tablets_mgr offline", K(ret),KPC(this));
+
+  if (OB_FAIL(clean_unlog_tablets_())) {
+    DUP_TABLE_LOG(WARN, "clean unlog tablets failed", K(ret), KPC(this));
+  } else if (OB_FAIL(clean_durable_confirming_tablets_(share::SCN::max_scn()))) {
+    DUP_TABLE_LOG(WARN, "clean durable confirming tablets failed", K(ret), KPC(this));
+  } else if (OB_FAIL(clean_readable_tablets_(share::SCN::max_scn()))) {
+    DUP_TABLE_LOG(WARN, "clean all readable tablets failed", K(ret), KPC(this));
+  }
+
+  return ret;
+}
+
 int ObLSDupTabletsMgr::check_readable(const common::ObTabletID &tablet_id,
                                       bool &readable,
                                       const share::SCN &snapshot,

@@ -1,4 +1,4 @@
-// Copyrigh (c) 2021 OceanBase
+// Copyrigh(c) 2021 OceanBase
 // OceanBase is licensed under Mulan PubL v2.
 // You can use this software according to the terms and conditions of the Mulan PubL v2.
 // You may obtain a copy of Mulan PubL v2 at:
@@ -501,6 +501,8 @@ public:
   void reset();
 
   bool is_master() { return ATOMIC_LOAD(&is_master_); }
+
+  int offline();
 
   const static int64_t MAX_CONFIRMING_TABLET_COUNT;
 

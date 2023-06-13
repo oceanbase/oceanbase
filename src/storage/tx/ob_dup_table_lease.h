@@ -47,6 +47,7 @@ public:
   ObDupTableLSLeaseMgr() : lease_diag_info_log_buf_(nullptr) { reset(); }
 
   int init(ObDupTableLSHandler *dup_ls_handle);
+  int offline();
   void destroy() { reset(); };
   void reset();
   bool is_master() { return ATOMIC_LOAD(&is_master_); }

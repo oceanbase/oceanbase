@@ -39,6 +39,164 @@ const int64_t DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeInde
 };
 
 /*******************************************************
+ *  Dup_Table LS Role State
+ *******************************************************/
+int64_t *ObDupTableLSRoleStateContainer::get_target_state_ref(ObDupTableLSRoleState target_state)
+{
+  int64_t *state_member = nullptr;
+  switch (target_state) {
+  case ObDupTableLSRoleState::LS_REVOKE_SUCC:
+  case ObDupTableLSRoleState::LS_TAKEOVER_SUCC: {
+    state_member = &role_state_;
+    break;
+  }
+  case ObDupTableLSRoleState::LS_OFFLINE_SUCC:
+  case ObDupTableLSRoleState::LS_ONLINE_SUCC: {
+    state_member = &offline_state_;
+    break;
+  }
+  case ObDupTableLSRoleState::LS_START_SUCC:
+  case ObDupTableLSRoleState::LS_STOP_SUCC: {
+    state_member = &stop_state_;
+    break;
+  }
+  default: {
+    state_member = nullptr;
+    DUP_TABLE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "undefined target role state", K(target_state),
+                      KPC(this));
+    break;
+  }
+  }
+  return state_member;
+}
+
+bool ObDupTableLSRoleStateContainer::check_target_state(ObDupTableLSRoleState target_state)
+{
+  bool is_same = false;
+  int64_t *state_member = get_target_state_ref(target_state);
+  if (OB_NOT_NULL(state_member)) {
+    ObDupTableLSRoleState cur_state = static_cast<ObDupTableLSRoleState>(ATOMIC_LOAD(state_member));
+    if (target_state == cur_state) {
+      is_same = true;
+    } else if (ObDupTableLSRoleState::ROLE_STATE_CHANGING == cur_state) {
+      is_same = false;
+      DUP_TABLE_LOG(INFO, "The Role State is Changing", K(is_same), K(cur_state), KPC(this));
+    } else {
+      is_same = false;
+    }
+  }
+  return is_same;
+}
+
+bool ObDupTableLSRoleStateHelper::is_leader()
+{
+  return  cur_state_.check_target_state(ObDupTableLSRoleState::LS_TAKEOVER_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_follower()
+{
+  return  cur_state_.check_target_state(ObDupTableLSRoleState::LS_REVOKE_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_offline()
+{
+  return cur_state_.check_target_state(ObDupTableLSRoleState::LS_OFFLINE_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_online()
+{
+  return cur_state_.check_target_state(ObDupTableLSRoleState::LS_ONLINE_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_stopped()
+{
+  return cur_state_.check_target_state(ObDupTableLSRoleState::LS_STOP_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_started()
+{
+  return cur_state_.check_target_state(ObDupTableLSRoleState::LS_START_SUCC);
+}
+
+#define DUP_TABLE_LS_STATE_GET_AND_CHECK(target_state, restore_state)                             \
+  int64_t *state_member = cur_state_.get_target_state_ref(target_state);                          \
+  int64_t *backup_state_member = restore_state.get_target_state_ref(target_state);                \
+  ObDupTableLSRoleState cur_ls_state = ObDupTableLSRoleState::UNKNOWN;                            \
+  if (OB_ISNULL(state_member) || OB_ISNULL(backup_state_member)) {                                \
+    ret = OB_INVALID_ARGUMENT;                                                                    \
+    DUP_TABLE_LOG(WARN, "invalid arguments", K(ret), KP(state_member), KP(backup_state_member), \
+                  K(target_state), KPC(this));                                             \
+  } else if (OB_FALSE_IT(cur_ls_state =                                                           \
+                             static_cast<ObDupTableLSRoleState>(ATOMIC_LOAD(state_member)))) {    \
+  }
+
+int ObDupTableLSRoleStateHelper::prepare_state_change(const ObDupTableLSRoleState &target_state,
+                                                      ObDupTableLSRoleStateContainer &restore_state)
+{
+  int ret = OB_SUCCESS;
+
+  DUP_TABLE_LS_STATE_GET_AND_CHECK(target_state, restore_state)
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (target_state == cur_ls_state) {
+    ret = OB_NO_NEED_UPDATE;
+    DUP_TABLE_LOG(INFO, "the cur state has already been same as target_state", K(ret),
+                  K(target_state), KPC(this));
+  } else if (cur_ls_state == ObDupTableLSRoleState::UNKNOWN) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(INFO, "invalid role state", K(cur_ls_state), KPC(this));
+  } else {
+    if (ObDupTableLSRoleState::ROLE_STATE_CHANGING == cur_ls_state) {
+      DUP_TABLE_LOG(INFO,
+                    "cur_ls_state is the ROLE_STATE_CHANGING, may be error in the last role change",
+                    K(ret), K(cur_ls_state), K(target_state), KPC(this));
+    }
+    *backup_state_member = static_cast<int64_t>(cur_ls_state);
+    ATOMIC_STORE(state_member, static_cast<int64_t>(ObDupTableLSRoleState::ROLE_STATE_CHANGING));
+  }
+
+  return ret;
+}
+
+int ObDupTableLSRoleStateHelper::restore_state(const ObDupTableLSRoleState &target_state,
+                                               ObDupTableLSRoleStateContainer &restore_state)
+{
+  int ret = OB_SUCCESS;
+  DUP_TABLE_LS_STATE_GET_AND_CHECK(target_state, restore_state)
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (ObDupTableLSRoleState::ROLE_STATE_CHANGING != cur_ls_state) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(WARN, "invalid cur ls state", K(ret), K(cur_ls_state), KPC(this));
+  } else {
+    ATOMIC_STORE(state_member, *backup_state_member);
+  }
+
+  return ret;
+}
+
+int ObDupTableLSRoleStateHelper::state_change_succ(const ObDupTableLSRoleState &target_state,
+                                                   ObDupTableLSRoleStateContainer &restore_state)
+{
+  int ret = OB_SUCCESS;
+  DUP_TABLE_LS_STATE_GET_AND_CHECK(target_state, restore_state)
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (ObDupTableLSRoleState::ROLE_STATE_CHANGING != cur_ls_state
+             && target_state != cur_ls_state) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(WARN, "invalid cur ls state", K(ret), K(cur_ls_state), KPC(this));
+  } else {
+    ATOMIC_STORE(state_member, static_cast<int64_t>(target_state));
+  }
+
+  return ret;
+}
+
+/*******************************************************
  *  HashMapTool (not thread safe)
  *******************************************************/
 // nothing
@@ -274,6 +432,29 @@ int ObDupTableLSCheckpoint::flush()
   return ret;
 }
 
+int ObDupTableLSCheckpoint::offline()
+{
+  int ret = OB_SUCCESS;
+
+  // SpinWLockGuard w_guard(ckpt_rw_lock_);
+
+  // DUP_TABLE_LOG(INFO, , args...)
+
+  return ret;
+}
+
+int ObDupTableLSCheckpoint::online()
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard w_guard(ckpt_rw_lock_);
+
+  lease_log_rec_scn_.reset();
+  start_replay_scn_.reset();
+
+  DUP_TABLE_LOG(INFO, "Dup Table LS Checkpoint Online", K(ret), KPC(this));
+  return ret;
+}
+
 /*******************************************************
  *  Dup_Table Log
  *******************************************************/
@@ -413,6 +594,11 @@ int ObDupTableLogOperator::deserialize_log_entry()
 bool ObDupTableLogOperator::is_busy()
 {
   SpinRLockGuard guard(log_lock_);
+  return check_is_busy_without_lock();
+}
+
+bool ObDupTableLogOperator::check_is_busy_without_lock()
+{
   return !logging_tablet_set_ids_.empty() || !logging_lease_addrs_.empty();
 }
 

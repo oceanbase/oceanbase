@@ -46,6 +46,15 @@ int ObDupTableLSLeaseMgr::init(ObDupTableLSHandler *dup_ls_handle)
   return ret;
 }
 
+int ObDupTableLSLeaseMgr::offline()
+{
+  int ret = OB_SUCCESS;
+
+  follower_lease_info_.reset();
+  leader_lease_map_.clear();
+  return ret;
+}
+
 void ObDupTableLSLeaseMgr::reset()
 {
   ls_id_.reset();

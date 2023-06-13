@@ -465,6 +465,7 @@ int ObLS::start()
     LOG_WARN("set max replay commit scn fail", K(ret), K(ls_meta_.get_clog_checkpoint_scn()));
   } else {
     checkpoint_executor_.start();
+    dup_table_ls_handler_.start();
     LOG_INFO("start_ls finish", KR(ret), KPC(this));
     // do nothing
   }
@@ -494,6 +495,7 @@ int ObLS::stop_()
   tx_table_.stop();
   ls_restore_handler_.stop();
   keep_alive_ls_handler_.stop();
+  dup_table_ls_handler_.stop();
   log_handler_.reset_election_priority();
   restore_handler_.stop();
   if (OB_FAIL(log_handler_.stop())) {
@@ -579,6 +581,7 @@ bool ObLS::safe_to_destroy()
   bool is_ls_restore_handler_safe = false;
   bool is_tablet_service_safe = false;
   bool is_data_check_point_safe = false;
+  bool is_dup_table_handler_safe = false;
   bool is_log_handler_safe = false;
 
   if (OB_FAIL(ls_tablet_svr_.safe_to_destroy(is_tablet_service_safe))) {
@@ -587,6 +590,9 @@ bool ObLS::safe_to_destroy()
   } else if (OB_FAIL(data_checkpoint_.safe_to_destroy(is_data_check_point_safe))) {
     LOG_WARN("data_checkpoint check safe to destroy failed", K(ret), KPC(this));
   } else if (!is_data_check_point_safe) {
+  } else if (OB_FAIL(dup_table_ls_handler_.safe_to_destroy(is_dup_table_handler_safe))) {
+    LOG_WARN("dup table ls handler safe to destroy failed", K(ret), KPC(this));
+  } else if (!is_dup_table_handler_safe) {
   } else if (OB_FAIL(ls_restore_handler_.safe_to_destroy(is_ls_restore_handler_safe))) {
     LOG_WARN("ls restore handler safe to destroy failed", K(ret), KPC(this));
   } else if (!is_ls_restore_handler_safe) {
@@ -605,6 +611,7 @@ bool ObLS::safe_to_destroy()
       if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
         LOG_WARN("this ls is not safe to destroy", K(is_safe),
                  K(is_tablet_service_safe), K(is_data_check_point_safe),
+                 K(is_dup_table_handler_safe),
                  K(is_ls_restore_handler_safe), K(is_log_handler_safe),
                  "ls_ref", ref_mgr_.get_total_ref_cnt(),
                  K(ret), KP(this), KPC(this));
@@ -782,6 +789,8 @@ int ObLS::offline_()
     LOG_WARN("ddl log handler offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(offline_tx_())) {
     LOG_WARN("offline tx service failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(dup_table_ls_handler_.offline())) {
+    LOG_WARN("offline dup table ls handler failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(lock_table_.offline())) {
     LOG_WARN("lock table offline failed", K(ret), K(ls_meta_));
   // force release memtables created by force_tablet_freeze called during major
@@ -881,6 +890,8 @@ int ObLS::online()
     LOG_WARN("tablet service online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(lock_table_.online())) {
     LOG_WARN("lock table online failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(dup_table_ls_handler_.online())) {
+    LOG_WARN("dup table ls handler online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(online_tx_())) {
     LOG_WARN("ls tx online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_ddl_log_handler_.online())) {
