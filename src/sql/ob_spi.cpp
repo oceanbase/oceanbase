@@ -2338,44 +2338,37 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
       }
 
       if (OB_SUCC(ret)) {
-        if (!ObStmt::is_dynamic_supported_stmt(stmt_type)) {
-          // Some stmt type is dangerous and not allowed in Oracle, so we must forbid it.
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("Statement type not allowed in dynamic sql", K(ret), K(stmt_type), K(sql_str));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Statement not allowed in dynamic sql,");
+        int64_t exec_param_cnt = ObStmt::is_dml_stmt(stmt_type)
+          ? pl_prepare_result.result_set_->get_external_params().count()
+            : pl_prepare_result.result_set_->get_param_fields()->count();
+        if (pl_prepare_result.result_set_->is_returning() && 0 == into_cnt) {
+            ret = OB_ERR_MISSING_INTO_KEYWORD;
+            LOG_WARN("ORA-00925: missing INTO keyword", K(ret),
+                    K(pl_prepare_result.result_set_->is_returning()), K(into_cnt));
         } else {
-          int64_t exec_param_cnt = ObStmt::is_dml_stmt(stmt_type)
-            ? pl_prepare_result.result_set_->get_external_params().count()
-              : pl_prepare_result.result_set_->get_param_fields()->count();
-          if (pl_prepare_result.result_set_->is_returning() && 0 == into_cnt) {
-              ret = OB_ERR_MISSING_INTO_KEYWORD;
-              LOG_WARN("ORA-00925: missing INTO keyword", K(ret),
-                      K(pl_prepare_result.result_set_->is_returning()), K(into_cnt));
-          } else {
-            /*!
-              * 1、select语句的INTO子句在动态语句里直接丢掉，所以select语句参数个数按传进来的入参个数检查
-              * 2、dml语句如果有RETURNING INTO子句，需要去掉动态语句里RETURNING INTO的参数，
-              * 但是如果EXECUTE IMMEDIATE本身有RETURNING子句的话就不用去了
-              */
-            int64_t need_exec_param_cnt = exec_param_cnt;
-            if (ObStmt::is_dml_write_stmt(stmt_type)) {
-              need_exec_param_cnt = need_exec_param_cnt + (is_returning ? 0 : into_cnt);
-            }
-            if (param_cnt != need_exec_param_cnt) {
-              if (lib::is_mysql_mode()) {
-                ret = OB_ERR_WRONG_DYNAMIC_PARAM;
-                LOG_USER_ERROR(OB_ERR_WRONG_DYNAMIC_PARAM, exec_param_cnt, param_cnt);
-              } else if (param_cnt < need_exec_param_cnt) {
-                ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
-                LOG_WARN("ORA-01008: not all variables bound",
-                          K(ret), K(param_cnt),
-                          K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
-              } else {
-                ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
-                LOG_WARN("ORA-01006: bind variable does not exist",
-                          K(ret), K(param_cnt),
-                          K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
-              }
+          /*!
+            * 1、select语句的INTO子句在动态语句里直接丢掉，所以select语句参数个数按传进来的入参个数检查
+            * 2、dml语句如果有RETURNING INTO子句，需要去掉动态语句里RETURNING INTO的参数，
+            * 但是如果EXECUTE IMMEDIATE本身有RETURNING子句的话就不用去了
+            */
+          int64_t need_exec_param_cnt = exec_param_cnt;
+          if (ObStmt::is_dml_write_stmt(stmt_type)) {
+            need_exec_param_cnt = need_exec_param_cnt + (is_returning ? 0 : into_cnt);
+          }
+          if (param_cnt != need_exec_param_cnt) {
+            if (lib::is_mysql_mode()) {
+              ret = OB_ERR_WRONG_DYNAMIC_PARAM;
+              LOG_USER_ERROR(OB_ERR_WRONG_DYNAMIC_PARAM, exec_param_cnt, param_cnt);
+            } else if (param_cnt < need_exec_param_cnt) {
+              ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
+              LOG_WARN("ORA-01008: not all variables bound",
+                        K(ret), K(param_cnt),
+                        K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
+            } else {
+              ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+              LOG_WARN("ORA-01006: bind variable does not exist",
+                        K(ret), K(param_cnt),
+                        K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
             }
           }
         }
