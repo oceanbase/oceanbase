@@ -227,6 +227,8 @@ OB_DEF_DESERIALIZE(ObTableLoadSqlStatistics)
       OB_LOG(WARN, "failed to create col stat");
     } else if (OB_FAIL(osg_col_stat->deserialize(buf, data_len, pos))) {
       OB_LOG(WARN, "deserialize datum store failed", K(ret), K(i));
+    } else if (OB_FAIL(osg_col_stat->deep_copy(*osg_col_stat))) {
+      OB_LOG(WARN, "fail to deep copy", K(ret));
     } else if (OB_FAIL(col_stat_array_.push_back(osg_col_stat))) {
       OB_LOG(WARN, "fail to add table stat", KR(ret));
     }
