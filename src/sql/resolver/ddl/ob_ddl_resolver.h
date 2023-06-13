@@ -835,6 +835,8 @@ protected:
 
   int check_format_valid(const ObExternalFileFormat &format, bool &is_valid);
 
+  int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
+  int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
   void reset();
   int64_t block_size_;
   int64_t consistency_level_;
