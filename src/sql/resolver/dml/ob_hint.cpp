@@ -958,6 +958,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_DISTINCT_PUSHDOWN: return is_enable_hint ? "DISTINCT_PUSHDOWN" : "NO_DISTINCT_PUSHDOWN";
     case T_USE_HASH_SET: return is_enable_hint ? "USE_HASH_SET" : "NO_USE_HASH_SET";
     case T_USE_DISTRIBUTED_DML:    return is_enable_hint ? "USE_DISTRIBUTED_DML" : "NO_USE_DISTRIBUTED_DML";
+    case T_TABLE_DYNAMIC_SAMPLING:    return "DYNAMIC_SAMPLING";
     default:                    return NULL;
   }
 }

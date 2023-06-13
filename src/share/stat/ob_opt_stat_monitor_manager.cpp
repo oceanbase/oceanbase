@@ -974,9 +974,9 @@ int ObOptStatMonitorManager::clean_useless_dml_stat_info(uint64_t tenant_id)
             share::OB_ALL_MONITOR_MODIFIED_TNAME, all_table_name, share::OB_ALL_DATABASE_TNAME,
             OB_MAX_INNER_TABLE_ID))) {
     LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(delete_part_sql.append_fmt("DELETE FROM %s m WHERE (tenant_id, table_id, tablet_id) IN ( "\
-            "SELECT m.tenant_id, m.table_id, m.tablet_id FROM "\
-            "%s m, %s t, %s db WHERE t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND t.part_level > 0 "\
+  } else if (OB_FAIL(delete_part_sql.append_fmt("DELETE /*+use_nl(m1)*/FROM %s m1 WHERE (tenant_id, table_id, tablet_id) IN ( "\
+            "SELECT /*+leading(db, t, m, view1, view2) use_hash(m) use_hash(view1) use_hash(view2)*/ "\
+            "m.tenant_id, m.table_id, m.tablet_id FROM %s m, %s t, %s db WHERE t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND t.part_level > 0 "\
             "AND t.tenant_id = db.tenant_id AND t.database_id = db.database_id AND db.database_name != '__recyclebin' "\
             "AND NOT EXISTS (SELECT 1 FROM %s p WHERE  p.table_id = m.table_id AND p.tenant_id = m.tenant_id AND p.tablet_id = m.tablet_id) "\
             "AND NOT EXISTS (SELECT 1 FROM %s sp WHERE  sp.table_id = m.table_id AND sp.tenant_id = m.tenant_id AND sp.tablet_id = m.tablet_id)) "\

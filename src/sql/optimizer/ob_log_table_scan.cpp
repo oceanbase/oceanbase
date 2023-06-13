@@ -1769,6 +1769,10 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
                && OpParallelRule::OP_HINT_DOP == get_op_parallel_rule()
                && OB_FAIL(table_hint->parallel_hint_->print_hint(plan_text))) {
       LOG_WARN("failed to print table parallel hint", K(ret));
+    } else if (NULL != table_hint->dynamic_sampling_hint_ &&
+               table_hint->dynamic_sampling_hint_->get_dynamic_sampling() != ObGlobalHint::UNSET_DYNAMIC_SAMPLING &&
+               OB_FAIL(table_hint->dynamic_sampling_hint_->print_hint(plan_text))) {
+      LOG_WARN("failed to print dynamic sampling hint", K(ret));
     } else if (NULL != table_hint->use_das_hint_
                && use_das() == table_hint->use_das_hint_->is_enable_hint()
                && OB_FAIL(table_hint->use_das_hint_->print_hint(plan_text))) {

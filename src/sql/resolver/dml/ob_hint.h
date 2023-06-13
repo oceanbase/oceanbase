@@ -992,7 +992,7 @@ struct ObDDLSchemaVersionHint
 class ObTableDynamicSamplingHint : public ObOptHint
 {
 public:
-  ObTableDynamicSamplingHint(ObItemType hint_type)
+  ObTableDynamicSamplingHint(ObItemType hint_type = T_TABLE_DYNAMIC_SAMPLING)
     : ObOptHint(hint_type), dynamic_sampling_(ObGlobalHint::UNSET_DYNAMIC_SAMPLING), sample_block_cnt_(0)
   {
     set_hint_class(HINT_TABLE_DYNAMIC_SAMPLING);
