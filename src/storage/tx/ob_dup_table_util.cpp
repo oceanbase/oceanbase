@@ -289,8 +289,7 @@ int ObDupTabletScanTask::execute_for_dup_ls_()
       // #ifndef NDEBUG
       DUP_TABLE_LOG(INFO,
                     "ls not leader",
-                    K(cur_ls_ptr->get_ls_id()),
-                    KPC(cur_ls_ptr->get_dup_table_ls_handler()));
+                    K(cur_ls_ptr->get_ls_id()));
       // #endif
     } else if (OB_FAIL(refresh_dup_tablet_schema_(need_refreh_dup_schema, tenant_dup_tablet_set,
                                                   dup_ls_status_info))) {
