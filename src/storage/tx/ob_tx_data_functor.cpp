@@ -448,6 +448,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxData &tx_data, ObTxCCCtx *tx
         }
       } else if (ObTxData::ELR_COMMIT == state) {
         // TODO: make it more clear
+        value_.update_max_elr_trans_version(commit_version, tnode_.tx_id_);
         tnode_.fill_trans_version(commit_version);
         tnode_.set_elr();
       } else if (ObTxData::COMMIT == state) {
