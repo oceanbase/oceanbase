@@ -5887,15 +5887,33 @@ int ObSelectLogPlan::adjust_window_functions(const ObLogicalOperator *top,
   } else {
     const EqualSets &equal_sets = top->get_output_equal_sets();
     ObSEArray<std::pair<int64_t, int64_t>, 8> expr_entries;
+    bool is_const = false;
+    ObSEArray<ObRawExpr*, 4> simplified_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < winfunc_exprs.count(); ++i) {
       int64_t non_const_exprs = 0;
-      if (OB_FAIL(ObOptimizerUtil::get_non_const_expr_size(winfunc_exprs.at(i)->get_partition_exprs(),
-                                                           equal_sets,
-                                                           top->get_output_const_exprs(),
-                                                           get_onetime_query_refs(),
-                                                           non_const_exprs))) {
-        LOG_WARN("failed to get non const expr size", K(ret));
-      } else if (OB_FAIL(expr_entries.push_back(std::pair<int64_t, int64_t>(-non_const_exprs, i)))) {
+      simplified_exprs.reuse();
+      if (OB_ISNULL(winfunc_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::simplify_exprs(top->get_fd_item_set(),
+                                                         equal_sets,
+                                                         top->get_output_const_exprs(),
+                                                         winfunc_exprs.at(i)->get_partition_exprs(),
+                                                         simplified_exprs))) {
+        LOG_WARN("failed to simplify exprs", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < simplified_exprs.count(); ++j) {
+        if (OB_FAIL(ObOptimizerUtil::is_const_expr(simplified_exprs.at(j),
+                                                   equal_sets,
+                                                   top->get_output_const_exprs(),
+                                                   get_onetime_query_refs(),
+                                                   is_const))) {
+          LOG_WARN("failed to check is const expr", K(ret));
+        } else if (!is_const) {
+          ++non_const_exprs;
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(expr_entries.push_back(std::pair<int64_t, int64_t>(-non_const_exprs, i)))) {
         LOG_WARN("faield to push back expr entry", K(ret));
       }
     }
