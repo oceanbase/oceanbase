@@ -3313,6 +3313,27 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         }
         break;
       }
+      case T_COLLATION: {
+        if (lib::is_oracle_mode()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "set collate in oracle mode");
+          LOG_WARN("set collate in oracle mode is not supported now", K(ret));
+        } else if (column.is_string_type() || column.is_enum_or_set()) {
+          //To compat with mysql, only check here.
+          ObString collation;
+          ObCollationType collation_type;
+          ObCharsetType charset_type = column.get_charset_type();
+          collation.assign_ptr(attr_node->str_value_,
+                              static_cast<int32_t>(attr_node->str_len_));
+          if (CS_TYPE_INVALID == (collation_type = ObCharset::collation_type(collation))) {
+            ret = OB_ERR_UNKNOWN_COLLATION;
+            LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, collation.length(), collation.ptr());
+          } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type))) {
+            SQL_RESV_LOG(WARN, "fail to fill charset and collation info", K(charset_type), K(collation_type), K(ret));
+          }
+        }
+        break;
+      }
       default:  // won't be here
         ret = OB_ERR_PARSER_SYNTAX;
         SQL_RESV_LOG(WARN, "Wrong column attribute", K(ret), K(attr_node->type_));

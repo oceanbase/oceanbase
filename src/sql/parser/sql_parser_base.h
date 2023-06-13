@@ -1015,4 +1015,38 @@ do {\
     }\
   } while(0);\
 
+#define set_data_type_collation(date_type, attribute, only_collation, enable_multi_collation)                \
+  do {\
+    ParseNode *collation = NULL; \
+    bool found = false;\
+    if (attribute != NULL) {\
+      if (attribute->type_ == T_COLLATION) {\
+        collation = attribute;\
+      } else { \
+        for (int i = 0; i < attribute->num_child_; i++) {                    \
+          if (attribute->children_[i]->type_ == T_COLLATION) {                 \
+            if (!enable_multi_collation && found) {  \
+              yyerror(NULL, result, "Multiple COLLATE syntax not supported\n");\
+              YYABORT;\
+            } else {\
+              collation = attribute->children_[i];\
+              found = true;\
+            }\
+          } else if (only_collation) {\
+            yyerror(NULL, result, "Only support COLLATE syntax here\n");\
+            YYABORT;\
+          }\
+        }\
+      }\
+    }\
+    if (collation == NULL) {\
+    } else if (date_type->type_ == T_CHAR || date_type->type_ == T_VARCHAR || date_type->type_ == T_TEXT || date_type->type_ == T_TINYTEXT\
+              || date_type->type_ == T_LONGTEXT || date_type->type_ == T_MEDIUMTEXT || date_type->type_ == T_SET || date_type->type_ == T_ENUM) {\
+      if (date_type->num_child_ < 2) {\
+      } else {\
+        date_type->children_[1] = collation;\
+      }\
+    }\
+  } while(0);\
+
 #endif /* OCEANBASE_SRC_SQL_PARSER_SQL_PARSER_BASE_H_ */
