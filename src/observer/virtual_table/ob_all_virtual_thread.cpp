@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_thread.h"
-#include "lib/signal/ob_signal_utils.h"
 #include "lib/thread/protected_stack_allocator.h"
 
 #define GET_OTHER_TSI_ADDR(var_name, addr) \
@@ -53,6 +52,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     const int64_t col_count = output_column_ids_.count();
+    pid_t pid = getpid();
     StackMgr::Guard guard(g_stack_mgr);
     for (auto* header = *guard; OB_NOT_NULL(header); header = guard.next()) {
       auto* thread_base = (char*)(header->pth_);
@@ -124,29 +124,29 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
             }
             case WAIT_EVENT: {
               GET_OTHER_TSI_ADDR(rpc_dest_addr, &Thread::rpc_dest_addr_);
+              ObAddr addr;
+              struct iovec local_iov = {&addr, sizeof(ObAddr)};
+              struct iovec remote_iov = {thread_base + rpc_dest_addr_offset, sizeof(ObAddr)};
               wait_event_[0] = '\0';
               if (0 != join_addr) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "thread %u", *(uint32_t*)(thread_base + tid_offset));
               } else if (OB_NOT_NULL(wait_addr)) {
-                bool has_segv = false;
                 uint32_t val = 0;
-                do_with_crash_restore([&] {
-                  val = *wait_addr;
-                }, has_segv);
-                if (has_segv) {
+                struct iovec local_iov = {&val, sizeof(val)};
+                struct iovec remote_iov = {wait_addr, sizeof(val)};
+                ssize_t n = process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0);
+                if (n != sizeof(val)) {
                 } else if (0 != (val & (1<<30))) {
                   IGNORE_RETURN snprintf(wait_event_, 64, "wrlock on %u", val & 0x3fffffff);
                 } else {
                   IGNORE_RETURN snprintf(wait_event_, 64, "%u rdlocks", val & 0x3fffffff);
                 }
-              } else if (rpc_dest_addr.is_valid()) {
-                bool has_segv = false;
-                do_with_crash_restore([&] {
-                  int ret = snprintf(wait_event_, 64, "rpc to ");
-                  if (ret > 0) {
-                    IGNORE_RETURN rpc_dest_addr.to_string(wait_event_ + ret, 64 - ret);
-                  }
-                }, has_segv);
+              } else if (sizeof(ObAddr) == process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0)
+                         && addr.is_valid()) {
+                int ret = 0;
+                if ((ret = snprintf(wait_event_, 64, "rpc to ")) > 0) {
+                  IGNORE_RETURN addr.to_string(wait_event_ + ret, 64 - ret);
+                }
               } else if (0 != (is_blocking & Thread::WAIT_IN_TENANT_QUEUE)) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "tenant worker requests");
               } else if (0 != (is_blocking & Thread::WAIT_FOR_IO_EVENT)) {
@@ -181,12 +181,12 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               for (int64_t i = 0, j = 0; i < cnt; ++i) {
                 int64_t idx = (slot_cnt + i) % ARRAYSIZEOF(ObLatch::current_locks);
                 if (OB_NOT_NULL(locks[idx]) && j < 256) {
-                  bool has_segv = false;
                   uint32_t val = 0;
-                  do_with_crash_restore([&] {
-                    val = *locks[idx];
-                  }, has_segv);
-                  if (!has_segv && 0 != val) {
+                  struct iovec local_iov = {&val, sizeof(val)};
+                  struct iovec remote_iov = {locks[idx], sizeof(val)};
+                  ssize_t n = process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0);
+                  if (n != sizeof(val)) {
+                  } else if (0 != val) {
                     j += snprintf(locks_addr_ + j, 256 - j, "%p ", locks[idx]);
                   }
                 }

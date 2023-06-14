@@ -281,6 +281,7 @@ int faststack()
       _exit(EXIT_FAILURE);
     }
   }
+  LOG_WARN("faststack", K(now), K(ret));
   return ret;
 }
 
