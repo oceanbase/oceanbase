@@ -60,6 +60,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "share/unit/ob_unit_info.h" //ObUnit*
 #include "share/backup/ob_backup_clean_struct.h"
+#include "share/backup/ob_archive_struct.h"
 #include "logservice/palf/palf_options.h"//access mode
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "logservice/palf/log_define.h"//INVALID_PROPOSAL_ID
@@ -7782,6 +7783,34 @@ public:
   common::ObSArray<uint64_t> clean_tenant_ids_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanArg);
+};
+
+struct ObNotifyArchiveArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum NotifyArchiveOp {
+    INVALID_OP = 0,
+    START = 1,
+    DEFER = 2,
+    STOP = 3,
+    MAX_OP
+  };
+
+  ObNotifyArchiveArg() : 
+      tenant_id_(common::OB_INVALID_TENANT_ID),
+      notify_archive_op_(MAX_OP)
+  {
+  }
+public:
+  bool is_valid() const;
+  int assign(const ObNotifyArchiveArg &arg);
+  TO_STRING_KV(K_(tenant_id), K_(notify_archive_op));
+public:
+  uint64_t tenant_id_;
+  NotifyArchiveOp notify_archive_op_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyArchiveArg);
 };
 
 struct ObLSBackupCleanArg

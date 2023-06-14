@@ -149,6 +149,7 @@ public:
   int report_backup_over(const obrpc::ObBackupTaskRes &res);
   int report_backup_clean_over(const obrpc::ObBackupTaskRes &res);
 
+  int notify_archive(const obrpc::ObNotifyArchiveArg &arg);
   int get_ls_sync_scn(const obrpc::ObGetLSSyncScnArg &arg,
                            obrpc::ObGetLSSyncScnRes &result);
   int force_set_ls_as_single_replica(const obrpc::ObForceSetLSAsSingleReplicaArg &arg);
