@@ -3641,6 +3641,10 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                        trans))) {
           LOG_WARN("failed to rename index", K(*rename_index_arg), K(ret));
         } else if (OB_FAIL(rename_ori_index_name_set.set_refactored(ori_index_key))) {
+          const ObString &data_table_name = origin_table_schema.get_table_name_str();
+          //To be compatible with Mysql
+          ret = OB_ERR_KEY_DOES_NOT_EXISTS;
+          LOG_USER_ERROR(OB_ERR_KEY_DOES_NOT_EXISTS, ori_index_name.length(), ori_index_name.ptr(), data_table_name.length(), data_table_name.ptr());
           LOG_WARN("set index name to hash set failed", K(ret), K(ori_index_name));
         } else if (OB_FAIL(rename_new_index_name_set.set_refactored(new_index_key))) {
           LOG_WARN("set index name to hash set failed", K(ret), K(new_index_name));
