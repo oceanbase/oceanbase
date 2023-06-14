@@ -1196,7 +1196,8 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
                   expr->has_flag(CNT_SUB_QUERY)) {
         //do nothing
       } else if (expr->get_relation_ids().is_empty() &&
-                 !expr->is_const_expr()) {
+                 !expr->is_const_expr() &&
+                 ObOptimizerUtil::find_item(all_table_filters, expr)) {
         //bug fix:48314988
       } else if (OB_FAIL(table_filters.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -1639,11 +1640,11 @@ int ObLogPlan::pushdown_where_filters(JoinedTable* joined_table,
         if (OB_FAIL(new_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
-      } else if (qual->get_relation_ids().is_empty() &&
-                 qual->is_const_expr()) {
+      } else if (qual->get_relation_ids().is_empty()) {
         if (OB_FAIL(left_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
-        } else if (OB_FAIL(right_quals.push_back(qual))) {
+        } else if (qual->is_const_expr() &&
+                   OB_FAIL(right_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
       } else if (LEFT_OUTER_JOIN == join_type &&
