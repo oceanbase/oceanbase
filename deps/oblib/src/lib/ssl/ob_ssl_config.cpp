@@ -104,6 +104,11 @@ const char baba_tls_ciphers_list[]= "!aNULL:!eNULL:!EXPORT:!LOW:!MD5:!DES:!RC2:!
                                "ECDH-RSA-AES128-SHA:DH-RSA-AES256-SHA:ECDH-RSA-AES256-SHA:DES-CBC3-SHA";
 
 
+static const uint64_t tls_protocols = (SSL_OP_NO_SSLv2
+                                      | SSL_OP_NO_SSLv3
+                                      | SSL_OP_NO_TLSv1
+                                      | SSL_OP_NO_TLSv1_1);
+
 static X509* ob_ssl_get_sm_cert_memory(const char *cert)
 {
   BIO *bio = NULL;
@@ -335,9 +340,9 @@ static SSL_CTX* ob_ssl_create_ssl_ctx(const ObSSLConfig& ssl_config)
     /* server side options */
     SSL_CTX_set_options(ctx, SSL_OP_SSLREF2_REUSE_CERT_TYPE_BUG);
     SSL_CTX_set_options(ctx, SSL_OP_MICROSOFT_BIG_SSLV3_BUFFER);
-#if OPENSSL_VERSION_NUMBER >= 0x10101000L
-    SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1_3);
-#endif
+
+    SSL_CTX_set_options(ctx, tls_protocols);
+
     /* this option allow a potential SSL 2.0 rollback (CAN-2005-2969) */
     SSL_CTX_set_options(ctx, SSL_OP_MSIE_SSLV2_RSA_PADDING);
 
