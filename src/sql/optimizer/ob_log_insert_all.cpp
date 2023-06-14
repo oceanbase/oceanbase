@@ -200,21 +200,20 @@ int ObLogInsertAll::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 //   return ret;
 // }
 
-int ObLogInsertAll::inner_replace_op_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogInsertAll::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(insert_all_table_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret));
-  } else if (OB_FAIL(ObLogInsert::inner_replace_op_exprs(to_replace_exprs))) {
+  } else if (OB_FAIL(ObLogInsert::inner_replace_op_exprs(replacer))) {
     LOG_WARN("failed to replace op exprs", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < insert_all_table_info_->count(); ++i) {
     if (OB_ISNULL(insert_all_table_info_->at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null table info", K(ret), K(i));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+    } else if (OB_FAIL(replace_exprs_action(replacer,
                                             insert_all_table_info_->at(i)->when_cond_exprs_))) {
       LOG_WARN("failed to replace expr", K(ret));
     } else { /*do nothing*/ }

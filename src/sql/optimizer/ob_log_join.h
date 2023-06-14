@@ -100,8 +100,7 @@ namespace sql
 
     common::ObIArray<ObRawExpr *> &get_join_filters() { return join_filters_; }
 
-    virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs) override;
+    virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
     const common::ObIArray<ObOrderDirection> &get_merge_directions() const { return merge_directions_; }
     int set_merge_directions(const common::ObIArray<ObOrderDirection> &merge_directions)
     {

@@ -246,36 +246,35 @@ int ObLogJoin::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
-int ObLogJoin::inner_replace_op_exprs(
-  const ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs)
+int ObLogJoin::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_join_conditions()))) {
+  if (OB_FAIL(replace_exprs_action(replacer, get_join_conditions()))) {
     LOG_WARN("failed to extract subplan params in log join_conditions", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_join_filters()))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, get_join_filters()))) {
     LOG_WARN("failed to extract subplan params in log join_filters", K(ret));
   } else {
     int64_t N = get_nl_params().count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       ObRawExpr *&cur_expr = get_nl_params().at(i)->get_ref_expr();
-      if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_expr))) {
+      if (OB_FAIL(replace_expr_action(replacer, cur_expr))) {
         LOG_WARN("failed to extract subplan params in log join_filters", K(ret));
       } else { /* Do nothing */ }
     }
   }
   // add extra replace expr
   if (OB_SUCC(ret) && (CONNECT_BY_JOIN == join_type_)) {
-    if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_connect_by_root_exprs()))) {
+    if (OB_FAIL(replace_exprs_action(replacer, get_connect_by_root_exprs()))) {
       LOG_WARN("failed to replace connect by root exprs", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_sys_connect_by_path_exprs()))) {
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_sys_connect_by_path_exprs()))) {
       LOG_WARN("failed to replace sys connect by path exprs", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_prior_exprs()))) {
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_prior_exprs()))) {
       LOG_WARN("failed to replace prior exprs", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_connect_by_pseudo_columns()))) {
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_connect_by_pseudo_columns()))) {
       LOG_WARN("failed to replace connect by pseudo columns", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_connect_by_prior_exprs()))) {
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_connect_by_prior_exprs()))) {
       LOG_WARN("failed to replace connect by prior exprs", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_connect_by_extra_exprs()))) {
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_connect_by_extra_exprs()))) {
       LOG_WARN("failed to replace sys connect by extra exprs", K(ret));
     }
   }

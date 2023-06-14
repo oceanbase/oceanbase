@@ -27,6 +27,16 @@ ObRawExprReplacer::ObRawExprReplacer()
 ObRawExprReplacer::~ObRawExprReplacer()
 {}
 
+void ObRawExprReplacer::destroy()
+{
+  if (to_exprs_.created()) {
+    to_exprs_.destroy();
+  }
+  if (expr_replace_map_.created()) {
+    expr_replace_map_.destroy();
+  }
+}
+
 int ObRawExprReplacer::replace(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
@@ -310,27 +320,23 @@ bool ObRawExprReplacer::skip_child(ObRawExpr &expr)
 }
 
 int ObRawExprReplacer::add_replace_expr(ObRawExpr *from_expr,
-                                        ObRawExpr *to_expr)
+                                        ObRawExpr *to_expr,
+                                        bool overwrite /*false*/)
 {
   int ret = OB_SUCCESS;
   bool is_existed = false;
   if (OB_ISNULL(from_expr) || OB_ISNULL(to_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", KP(from_expr), KP(to_expr), K(ret));
-  } else if (OB_UNLIKELY(!expr_replace_map_.created())) {
-    if (OB_FAIL(expr_replace_map_.create(64, ObModIds::OB_SQL_COMPILE))) {
-      LOG_WARN("failed to create expr map", K(ret));
-    } else if (OB_FAIL(to_exprs_.create(64))) {
-      LOG_WARN("failed to create expr set", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_from_expr_existed(from_expr, to_expr, is_existed))) {
+  } else if (OB_FAIL(try_init_expr_map(DEFAULT_BUCKET_SIZE))) {
+    LOG_WARN("failed to init expr map", K(ret));
+  } else if (OB_FAIL(check_from_expr_existed(from_expr, to_expr, overwrite, is_existed))) {
     LOG_WARN("failed to check from expr existed", K(ret));
   } else if (is_existed) {
     // do not add duplicated replace expr
   } else if (OB_FAIL(expr_replace_map_.set_refactored(reinterpret_cast<uint64_t>(from_expr),
-                                                      reinterpret_cast<uint64_t>(to_expr)))) {
+                                                      reinterpret_cast<uint64_t>(to_expr),
+                                                      overwrite))) {
     LOG_WARN("failed to add replace expr into map", K(ret));
   } else if (OB_FAIL(to_exprs_.set_refactored(reinterpret_cast<uint64_t>(to_expr)))) {
     LOG_WARN("failed to add replace expr into set", K(ret));
@@ -345,6 +351,8 @@ int ObRawExprReplacer::add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs
   if (OB_UNLIKELY(from_exprs.count() != to_exprs.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr size mismatch", K(from_exprs.count()), K(to_exprs.count()), K(ret));
+  } else if (OB_FAIL(try_init_expr_map(from_exprs.count()))) {
+    LOG_WARN("failed to init expr map", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < from_exprs.count(); ++i) {
     if (OB_FAIL(add_replace_expr(from_exprs.at(i), to_exprs.at(i)))) {
@@ -358,6 +366,9 @@ int ObRawExprReplacer::add_replace_exprs(
     const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &to_replace_exprs)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(try_init_expr_map(to_replace_exprs.count()))) {
+    LOG_WARN("failed to init expr map", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < to_replace_exprs.count(); ++i) {
     if (OB_FAIL(add_replace_expr(to_replace_exprs.at(i).first, to_replace_exprs.at(i).second))) {
       LOG_WARN("failed to add replace expr", K(ret));
@@ -366,8 +377,39 @@ int ObRawExprReplacer::add_replace_exprs(
   return ret;
 }
 
+int ObRawExprReplacer::append_replace_exprs(const ObRawExprReplacer &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(try_init_expr_map(other.expr_replace_map_.size()))) {
+    LOG_WARN("failed to init expr map", K(ret));
+  }
+  for (auto it = other.expr_replace_map_.begin();
+       OB_SUCC(ret) && it != other.expr_replace_map_.end(); ++it) {
+    if (OB_FAIL(add_replace_expr(reinterpret_cast<ObRawExpr *>(it->first),
+                                 reinterpret_cast<ObRawExpr *>(it->second)))) {
+      LOG_WARN("failed to push back from to expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRawExprReplacer::try_init_expr_map(int64_t bucket_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!expr_replace_map_.created())) {
+    bucket_size = MAX(bucket_size, DEFAULT_BUCKET_SIZE);
+    if (OB_FAIL(expr_replace_map_.create(bucket_size, ObModIds::OB_SQL_COMPILE))) {
+      LOG_WARN("failed to create expr map", K(ret));
+    } else if (OB_FAIL(to_exprs_.create(bucket_size))) {
+      LOG_WARN("failed to create expr set", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObRawExprReplacer::check_from_expr_existed(const ObRawExpr *from_expr,
                                                const ObRawExpr *to_expr,
+                                               const bool overwrite,
                                                bool &is_existed)
 {
   int ret = OB_SUCCESS;
@@ -377,8 +419,12 @@ int ObRawExprReplacer::check_from_expr_existed(const ObRawExpr *from_expr,
   } else if (!is_existed) {
     // do nothing
   } else if (OB_UNLIKELY(old_expr != to_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("conflict expr replace rules", K(ret), KPC(from_expr), KPC(to_expr), KPC(old_expr));
+    if (overwrite) {
+      is_existed = false;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("conflict expr replace rules", K(ret), KPC(from_expr), KPC(to_expr), KPC(old_expr));
+    }
   }
   return ret;
 }

@@ -35,6 +35,7 @@ public:
   ObRawExprReplacer();
   virtual ~ObRawExprReplacer();
 
+  void destroy();
   int replace(ObRawExpr *&expr);
   virtual int visit(ObConstRawExpr &expr) override;
   virtual int visit(ObExecParamRawExpr &expr) override;
@@ -56,17 +57,23 @@ public:
   bool get_replace_happened() const { return replace_happened_; }
   void set_skip_bool_param_mysql(bool skip) { skip_bool_param_mysql_ = skip; }
   bool is_skip_bool_param_mysql() { return skip_bool_param_mysql_; }
+  bool empty() const { return !expr_replace_map_.created(); }
   int add_replace_expr(ObRawExpr *from_expr,
-                       ObRawExpr *to_expr);
+                       ObRawExpr *to_expr,
+                       bool overwrite = false);
   int add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs,
                         const ObIArray<ObRawExpr *> &to_exprs);
   int add_replace_exprs(const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &to_replace_exprs);
+  int append_replace_exprs(const ObRawExprReplacer &other);
 
 private:
   // types and constants
+  static const int64_t DEFAULT_BUCKET_SIZE = 64;
 private:
+  int try_init_expr_map(int64_t bucket_size);
   int check_from_expr_existed(const ObRawExpr *from_expr,
                               const ObRawExpr *to_expr,
+                              const bool overwrite,
                               bool &is_existed);
   int check_skip_expr(const ObRawExpr &expr, bool &skip_expr);
   int check_need_replace(const ObRawExpr *old_expr,

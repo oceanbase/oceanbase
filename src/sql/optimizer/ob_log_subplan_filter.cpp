@@ -584,16 +584,14 @@ int ObLogSubPlanFilter::allocate_startup_expr_post()
   return ret;
 }
 
-int ObLogSubPlanFilter::inner_replace_op_exprs(
-    const ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
+int ObLogSubPlanFilter::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exec_params_.count(); ++i) {
     if (OB_ISNULL(exec_params_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("exec param is null", K(ret));
-    } else if (OB_FAIL(replace_expr_action(to_replace_exprs,
-                                           exec_params_.at(i)->get_ref_expr()))) {
+    } else if (OB_FAIL(replace_expr_action(replacer, exec_params_.at(i)->get_ref_expr()))) {
       LOG_WARN("failed to replace expr action", K(ret));
     }
   }
@@ -614,8 +612,7 @@ int ObLogSubPlanFilter::allocate_subquery_id()
   return ret;
 }
 
-int ObLogSubPlanFilter::replace_nested_subquery_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogSubPlanFilter::replace_nested_subquery_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
   ObLogPlan *plan = NULL;
@@ -627,7 +624,7 @@ int ObLogSubPlanFilter::replace_nested_subquery_exprs(
     ObRawExpr *expr = subquery_exprs_.at(i);
     if (ObOptimizerUtil::find_item(plan->get_onetime_query_refs(), expr)) {
       // do not replace onetime expr ref query, only adjust nested subquery
-    } else if (OB_FAIL(replace_expr_action(to_replace_exprs, expr))) {
+    } else if (OB_FAIL(replace_expr_action(replacer, expr))) {
       LOG_WARN("failed to replace nested subquery expr", K(ret));
     } else if (expr == subquery_exprs_.at(i)) {
       // do nothing
