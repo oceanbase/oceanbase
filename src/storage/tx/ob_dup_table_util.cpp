@@ -701,8 +701,8 @@ int ObDupTableLSHandler::ls_loop_handle()
                     K(ls_id_), K(ls_state_helper_));
     }
     DUP_TABLE_LOG(DEBUG, "loop running : dup table ls handler", K(ret), K(ls_id_),
-                  K(ls_state_helper_), KPC(lease_mgr_ptr_), KPC(tablets_mgr_ptr_),
-                  KPC(log_operator_));
+                  K(ls_state_helper_), KP(lease_mgr_ptr_), KP(tablets_mgr_ptr_),
+                  KP(log_operator_));
 
     const int64_t fast_cur_time = ObTimeUtility::fast_current_time();
     const bool is_leader = ls_state_helper_.is_leader();

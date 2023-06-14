@@ -130,10 +130,10 @@ public:
   TO_STRING_KV(K(ls_id_),
                K(ls_state_helper_),
                K(dup_ls_ckpt_),
-               KPC(lease_mgr_ptr_),
-               KPC(tablets_mgr_ptr_),
-               // KPC(ts_sync_mgr_ptr_),
-               KPC(log_operator_),
+               KP(lease_mgr_ptr_),
+               KP(tablets_mgr_ptr_),
+               KP(ts_sync_mgr_ptr_),
+               KP(log_operator_),
                K(interface_stat_));
 
 public:
