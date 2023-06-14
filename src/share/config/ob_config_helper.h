@@ -406,6 +406,30 @@ private:
   DISABLE_COPY_ASSIGN(ObDataStorageErrorToleranceTimeChecker);
 };
 
+class ObSysBkgdIOLowPercentageChecker : public ObConfigChecker {
+public:
+  ObSysBkgdIOLowPercentageChecker()
+  {}
+  virtual ~ObSysBkgdIOLowPercentageChecker()
+  {}
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISABLE_COPY_ASSIGN(ObSysBkgdIOLowPercentageChecker);
+};
+
+class ObSysBkgdIOHighPercentageChecker : public ObConfigChecker {
+public:
+  ObSysBkgdIOHighPercentageChecker()
+  {}
+  virtual ~ObSysBkgdIOHighPercentageChecker()
+  {}
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISABLE_COPY_ASSIGN(ObSysBkgdIOHighPercentageChecker);
+};
+
 class ObTTLDutyDurationChecker : public ObConfigChecker {
 public:
   ObTTLDutyDurationChecker()

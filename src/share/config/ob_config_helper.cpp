@@ -322,6 +322,34 @@ bool ObDataStorageErrorToleranceTimeChecker::check(const ObConfigItem& t) const
   return is_valid;
 }
 
+bool ObSysBkgdIOLowPercentageChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    const int64_t sys_bkgd_io_high_percentage = GCONF.sys_bkgd_io_high_percentage;
+    if (value > sys_bkgd_io_high_percentage) {
+      is_valid = false;
+      LOG_USER_ERROR(OB_INVALID_CONFIG, "IO low percentage cannnot higher than high percent");
+    }
+  }
+  return is_valid;
+}
+
+bool ObSysBkgdIOHighPercentageChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    const int64_t sys_bkgd_io_low_percentage = GCONF.sys_bkgd_io_low_percentage;
+    if (sys_bkgd_io_low_percentage > value) {
+      is_valid = false;
+      LOG_USER_ERROR(OB_INVALID_CONFIG, "IO low percentage cannnot higher than high percent");
+    }
+  }
+  return is_valid;
+}
+
 int64_t ObConfigIntParser::get(const char* str, bool& valid)
 {
   char* p_end = NULL;

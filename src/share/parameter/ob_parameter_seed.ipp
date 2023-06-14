@@ -894,14 +894,16 @@ DEF_BOOL(_enable_fuse_row_cache, OB_CLUSTER_PARAMETER, "False",
          ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // background limit config
-DEF_INT(sys_bkgd_io_low_percentage, OB_CLUSTER_PARAMETER, "0", "[0,100]",
+DEF_INT_WITH_CHECKER(sys_bkgd_io_low_percentage, OB_CLUSTER_PARAMETER, "0", common::ObSysBkgdIOLowPercentageChecker,
+    "[0,100]",
     "the low disk io percentage of sys io, sys io can use at least low percentage,"
     "when the value is 0, it will automatically set low limit for SATA and SSD disk to "
     "guarantee at least 128MB disk bandwidth. "
     "Range: [0,100]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(sys_bkgd_io_high_percentage, OB_CLUSTER_PARAMETER, "90", "[1,100]",
-    "the high disk io percentage of sys io, sys io can use at most high percentage. "
+DEF_INT_WITH_CHECKER(sys_bkgd_io_high_percentage, OB_CLUSTER_PARAMETER, "90", common::ObSysBkgdIOHighPercentageChecker,
+    "[1,100]",
+    "the high disk io percentage of sys io, sys io can use at most high percentage "
     "Range: [1,100]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(sys_cpu_limit_trigger, OB_CLUSTER_PARAMETER, "80", "[50,)",
