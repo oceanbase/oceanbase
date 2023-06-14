@@ -1,0 +1,21 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY BASIC.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+--disable_warnings
+drop table if exists gis_polygon;
+--enable_warnings
+
+create table if not exists gis_polygon (
+        poly Polygon not null srid 4396
+        );
+
+insert into gis_polygon values (ST_srid(ST_GeomFromText('Polygon((0 0,0 3,3 0,0 0),(1 1,1 2,2 1,1 1))'), 4396));
+
+select area(poly) from gis_polygon;
+select st_area(poly) from gis_polygon;
+
+drop table if exists gis_polygon;

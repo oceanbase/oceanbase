@@ -1432,6 +1432,9 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
     } else if (0 == origin_name.case_compare("character_length")) {
       // character_length is synonym for char_length
       alias_name = ObString::make_string(N_CHAR_LENGTH);
+    } else if (0 == origin_name.case_compare("area")) {
+      // area is synonym for st_area
+      alias_name = ObString::make_string(N_ST_AREA);
     } else {
       //do nothing
     }
@@ -1441,5 +1444,5 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
 }
 
 } //end sql
-} //end oceanbase 
+} //end oceanbase
 
