@@ -162,14 +162,14 @@ inline int ObTableDelete::delete_rows(ObExecContext& ctx, ObDMLBaseParam& dml_pa
   ObPartitionService* partition_service = NULL;
   ObDMLRowIterator dml_row_iter(ctx, *this);
   // Set read latest = 0 to avoid defensive check if have foreign key
-  ObPhysicalPlanCtx *plan_ctx = nullptr;
-  if (OB_NOT_NULL(plan_ctx = GET_PHY_PLAN_CTX(ctx))) {
-    if (plan_ctx->need_foreign_key_checks()) {
-      const_cast<ObDMLBaseParam&>(dml_param).query_flag_.read_latest_ = 0;
+  ObTableModifyCtx *modify_ctx = GET_PHY_OPERATOR_CTX(ObTableModifyCtx, ctx, get_id());
+  if (OB_NOT_NULL(modify_ctx)) {
+    if (modify_ctx->need_foreign_key_checks()) {
+      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy_plan_ctx is NULL", K(ret), KP(plan_ctx));
+    LOG_WARN("modify_ctx is NULL", K(ret), KP(modify_ctx));
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(my_session)) {
