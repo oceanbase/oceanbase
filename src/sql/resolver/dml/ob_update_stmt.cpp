@@ -19,7 +19,11 @@ namespace sql {
 using namespace oceanbase::common;
 
 ObUpdateStmt::ObUpdateStmt()
-    : ObDelUpdStmt(stmt::T_UPDATE), tables_assignments_(), low_priority_(false), update_set_(false)
+    : ObDelUpdStmt(stmt::T_UPDATE),
+      tables_assignments_(),
+      low_priority_(false),
+      update_set_(false),
+      use_static_typing_engine_(false)
 {}
 
 ObUpdateStmt::~ObUpdateStmt()

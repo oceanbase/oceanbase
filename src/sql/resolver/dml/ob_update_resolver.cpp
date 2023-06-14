@@ -50,6 +50,7 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
   } else {
     stmt_ = update_stmt;
     update_stmt->set_ignore(false);
+    update_stmt->set_use_static_typing_engine(session_info_->use_static_typing_engine());
     if (NULL != parse_tree.children_[IGNORE]) {
       update_stmt->set_ignore(true);
       session_info_->set_ignore_stmt(true);

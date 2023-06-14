@@ -58,6 +58,10 @@ public:
   {
     update_set_ = update_set;
   }
+  void set_use_static_typing_engine(bool use_static_typing_engine)
+  {
+    use_static_typing_engine_ = use_static_typing_engine;
+  }
   bool is_update_set() const
   {
     return update_set_;
