@@ -201,10 +201,6 @@ int ObDiskUsageReportTask::report_tenant_disk_usage(const char *svr_ip,
 int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(tablet_iter_)) {
-    tablet_iter_->~ObTenantTabletIterator();
-    tablet_iter_ = nullptr;
-  }
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, allocator_);
   ObTabletHandle tablet_handle;
@@ -238,6 +234,10 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
     }
   }
 
+  if (OB_NOT_NULL(tablet_iter_)) {
+    tablet_iter_->~ObTenantTabletIterator();
+    tablet_iter_ = nullptr;
+  }
   return ret;
 }
 
