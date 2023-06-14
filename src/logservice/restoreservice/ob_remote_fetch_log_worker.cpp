@@ -286,12 +286,13 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
 {
   int ret = OB_SUCCESS;
   bool empty = true;
+  const int64_t DEFAULT_BUF_SIZE = 64 * 1024 * 1024L;
 
   if (OB_UNLIKELY(! task->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(ret), K(task));
   } else if (OB_FAIL(task->iter_.init(tenant_id_, task->id_, task->pre_scn_,
-          task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool()))) {
+          task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool(), DEFAULT_BUF_SIZE))) {
     LOG_WARN("ObRemoteLogIterator init failed", K(ret), K_(tenant_id), KPC(task));
   } else if (!need_fetch_log_(task->id_)) {
     LOG_TRACE("no need fetch log", KPC(task));

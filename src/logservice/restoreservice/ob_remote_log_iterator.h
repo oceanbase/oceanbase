@@ -17,6 +17,7 @@
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"        // print
+#include "logservice/palf/log_define.h"        // MAX_LOG_BUFFER_SIZE
 #include "logservice/palf/palf_iterator.h"     // MemPalfGroupBufferIterator
 #include "share/ob_ls_id.h"                    // ObLSID
 #include "ob_remote_log_source.h"              // ObRemoteLogParent
@@ -53,6 +54,7 @@ typedef const std::function<int(share::ObBackupDest &dest)> RefreshStorageInfoFu
 template<class LogEntryType>
 class ObRemoteLogIterator
 {
+  static const int64_t DEFAULT_SINGLE_READ_SIZE = 8 * palf::MAX_LOG_BUFFER_SIZE;
 public:
   // @param[in] get_source_func, an function to get the input log restore source
   // @param[in] update_source_func, an function to update location info the the log restore source,
@@ -78,7 +80,8 @@ public:
       const share::SCN &pre_scn,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      archive::LargeBufferPool *buffer_pool);
+      archive::LargeBufferPool *buffer_pool,
+      const int64_t single_read_size = DEFAULT_SINGLE_READ_SIZE);
   // @brief used as local iterator, get one entry if not to end
   // @param[out] entry LogGroupEntry or LogEntry
   // @param[out] lsn entry start lsn
@@ -101,7 +104,7 @@ public:
   bool is_empty() const { return data_buffer_.is_empty(); }
   char *get_buffer() { return buf_; }
 
-  TO_STRING_KV(K_(inited), K_(tenant_id), K_(id), K_(start_lsn), K_(cur_lsn), K_(end_lsn), K_(gen));
+  TO_STRING_KV(K_(inited), K_(tenant_id), K_(id), K_(start_lsn), K_(cur_lsn), K_(end_lsn), K_(single_read_size), K_(gen));
 
 private:
   int build_data_generator_(const share::SCN &pre_scn,
@@ -116,7 +119,9 @@ private:
   int prepare_buf_();
   int get_entry_(LogEntryType &entry, LSN &lsn, const char *&buf, int64_t &buf_size);
   void update_data_gen_max_lsn_();
+  void advance_data_gen_lsn_();
   void mark_source_error_(const int ret_code);
+  bool need_prepare_buf_(const int ret_code) const;
 
 private:
   bool inited_;
@@ -126,6 +131,7 @@ private:
   LSN cur_lsn_;            // 迭代最新一条日志所对应终点LSN
   share::SCN cur_scn_;     // 迭代最新一条日志scn
   LSN end_lsn_;
+  int64_t single_read_size_;
   ObRemoteSourceGuard source_guard_;
   RemoteDataBuffer<LogEntryType> data_buffer_;
   RemoteDataGenerator *gen_;
