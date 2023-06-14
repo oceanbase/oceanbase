@@ -2788,7 +2788,14 @@ public:
 
 public:
   ObPLDeclareHandlerStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_HANDLER), handlers_(allocator) {}
-  virtual ~ObPLDeclareHandlerStmt() {}
+  virtual ~ObPLDeclareHandlerStmt()
+  {
+    for (int64_t i = 0; i < get_child_size(); ++i) {
+      if (NULL != get_child_stmt(i)) {
+        (const_cast<ObPLStmt *>(get_child_stmt(i)))->~ObPLStmt();
+      }
+    }
+  }
 
   int accept(ObPLStmtVisitor &visitor) const;
   virtual int64_t get_child_size() const { return handlers_.count(); }

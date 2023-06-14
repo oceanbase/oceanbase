@@ -5000,6 +5000,20 @@ int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface
     PL_C_INTERFACE_t fp = GCTX.pl_engine_->get_interface_service().get_entry(name);
     if (nullptr != fp) {
       ret = fp(*ctx, *ctx->params_, *ctx->result_);
+      if (ctx->result_->is_pl_extend() &&
+          pl::PL_REF_CURSOR_TYPE != ctx->result_->get_meta().get_extend_type()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_ISNULL(ctx->exec_ctx_->get_pl_ctx())) {
+          tmp_ret = ctx->exec_ctx_->init_pl_ctx();
+        }
+        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx->exec_ctx_->get_pl_ctx())) {
+          tmp_ret = ctx->exec_ctx_->get_pl_ctx()->add(*ctx->result_);
+        }
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_ERROR("fail to record complex result to ctx", K(tmp_ret));
+        }
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Calling C interface which doesn't exist", K(interface_name), K(name));
