@@ -5,7 +5,6 @@ DEPLOY_PATH="$BASE_DIR/tools/deploy"
 OBSERVER_BIN="$BASE_DIR/tools/deploy/bin/observer"
 OBD_CLUSTER_PATH="$DEPLOY_PATH"/.obd/cluster
 OBD_LOCAL_VERSION_PATH="$DEPLOY_PATH"/.obd/version
-OBD_DEPS_PATH="$BASE_DIR/deps/init/oceanbase.el7.x86_64.deps"
 shopt -s expand_aliases
 source $DEPLOY_PATH/activate_obd.sh
 tag="latest"
