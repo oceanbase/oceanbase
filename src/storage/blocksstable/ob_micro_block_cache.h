@@ -188,6 +188,7 @@ protected:
   ObMicroBlockDesMeta block_des_meta_;
   bool use_block_cache_;
   bool need_write_extra_buf_;
+  char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
 };
 
 class ObSingleMicroBlockIOCallback : public ObIMicroBlockIOCallback
