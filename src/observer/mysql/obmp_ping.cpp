@@ -42,6 +42,8 @@ int ObMPPing::process()
     LOG_WARN("sql session info is null", K(ret));
   } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
+  } else if (FALSE_IT(session->update_last_active_time())) {
+    // COM_PING used for keepping connection alive
   } else {
     ObOKPParam ok_param;  // use default values
     if (OB_FAIL(send_ok_packet(*session, ok_param))) {
