@@ -282,7 +282,7 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
     LOG_WARN("null table load service", KR(ret));
   } else {
     ObTableLoadUniqueKey key(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
-    ret = service->get_manager().remove_table_ctx(key);
+    ret = service->get_manager().remove_table_ctx(key, table_ctx);
   }
   return ret;
 }
@@ -361,14 +361,14 @@ int ObTableLoadService::start()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadService not init", KR(ret), KP(this));
   } else {
-    gc_timer_.set_run_wrapper(MTL_CTX());
-    if (OB_FAIL(gc_timer_.init("TLD_GC", ObMemAttr(MTL_ID(), "GC_TIMER")))) {
+    timer_.set_run_wrapper(MTL_CTX());
+    if (OB_FAIL(timer_.init("TLD_Timer", ObMemAttr(MTL_ID(), "TLD_TIMER")))) {
       LOG_WARN("fail to init gc timer", KR(ret));
-    } else if (OB_FAIL(gc_timer_.schedule(check_tenant_task_, CHECK_TENANT_INTERVAL, true))) {
+    } else if (OB_FAIL(timer_.schedule(check_tenant_task_, CHECK_TENANT_INTERVAL, true))) {
       LOG_WARN("fail to schedule check tenant task", KR(ret));
-    } else if (OB_FAIL(gc_timer_.schedule(gc_task_, GC_INTERVAL, true))) {
+    } else if (OB_FAIL(timer_.schedule(gc_task_, GC_INTERVAL, true))) {
       LOG_WARN("fail to schedule gc task", KR(ret));
-    } else if (OB_FAIL(gc_timer_.schedule(release_task_, RELEASE_INTERVAL, true))) {
+    } else if (OB_FAIL(timer_.schedule(release_task_, RELEASE_INTERVAL, true))) {
       LOG_WARN("fail to schedule release task", KR(ret));
     }
   }
@@ -379,20 +379,20 @@ int ObTableLoadService::stop()
 {
   int ret = OB_SUCCESS;
   is_stop_ = true;
-  gc_timer_.stop();
+  timer_.stop();
   return ret;
 }
 
 void ObTableLoadService::wait()
 {
-  gc_timer_.wait();
+  timer_.wait();
   release_all_ctx();
 }
 
 void ObTableLoadService::destroy()
 {
   is_inited_ = false;
-  gc_timer_.destroy();
+  timer_.destroy();
 }
 
 void ObTableLoadService::fail_all_ctx(int error_code)
@@ -452,7 +452,7 @@ void ObTableLoadService::release_all_ctx()
         manager_.put_table_ctx(table_ctx);
       }
     }
-    if (manager_.is_table_ctx_empty()) {
+    if (0 == manager_.get_table_ctx_count()) {
       break;
     } else {
       ob_usleep(1 * 1000 * 1000);
@@ -474,7 +474,7 @@ void ObTableLoadService::release_all_ctx()
       LOG_INFO("free table ctx", K(tenant_id), K(table_id), K(hidden_table_id), KP(table_ctx));
       ObTableLoadService::free_ctx(table_ctx);
     }
-    if (manager_.is_dirty_list_empty()) {
+    if (0 == manager_.get_dirty_list_count()) {
       break;
     } else {
       ob_usleep(1 * 1000 * 1000);
