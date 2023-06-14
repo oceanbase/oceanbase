@@ -330,17 +330,11 @@ function deploy_cluster {
   else
     obd cluster destroy "$deploy_name" -f
   fi
-  if [ "x$IS_CE" == "x" ]; then
-    [[ "$YAML_CONF" == "" ]] || yaml_config_args="-c $YAML_CONF"
-  else
-    yaml_config_args=""
-    if [ $IS_CE == '0' ]; then
-      sed 's/oceanbase-ce\(:\?\)$/oceanbase\1/g' $config_yaml | obd cluster edit-config "$deploy_name"
-    fi
-    if [ $IS_CE == '1' ]; then
-      sed 's/oceanbase\(:\?\)$/oceanbase-ce\1/g' $config_yaml | obd cluster edit-config "$deploy_name"
-    fi
+  if [[ -f $OBD_CLUSTER_PATH/$deploy_name/inner_config.yaml ]]
+  then
+    sed -i '/$_deploy_/d' $OBD_CLUSTER_PATH/$deploy_name/inner_config.yaml
   fi
+  [[ "$YAML_CONF" == "" ]] || yaml_config_args="-c $YAML_CONF"
   obd cluster deploy "$deploy_name" -C $yaml_config_args || exit 1
   if ! obd cluster start "$deploy_name" -f;
   then
@@ -607,20 +601,6 @@ Options:
 function main() {
   entrance=${OBD_SH_ENTRANCE:-obd.sh}
   variables_parpare
-  if [[ -f ${OBD_LOCAL_VERSION_PATH} ]]
-  then
-    obd_local_version=`cat ${OBD_LOCAL_VERSION_PATH}`
-    obd_deps_version=`cat ${OBD_DEPS_PATH} | grep -E '^ob-deploy-' | grep -Eo '[0-9]+.[0-9]+.[0-9a-z]+-[0-9]+' | head -n1`
-    obd_deps_version=${obd_deps_version/-/.}
-    if [[ ${obd_local_version} != ${obd_deps_version} ]]
-    then
-      obd_local_version=`obd --version | grep -E '^OceanBase Deploy:' | awk '{print $3}'`
-      if [[ ${obd_local_version} != ${obd_deps_version} ]]
-      then
-        echo -e "\033[33m[WARN]\033[0m current obd version is not the latest version, use 'sh build.sh init' to update"
-      fi
-    fi
-  fi
   command="$1"
   shift
   extra_args=""
@@ -671,6 +651,11 @@ function main() {
   [[ "$OBD_LOCK_MODE" ]] || obd env set OBD_LOCK_MODE 0
   fi
   if [[  "$(grep '"OBD_DEPLOY_BASE_DIR":' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
+  then
+  obd env set OBD_DEPLOY_BASE_DIR "$DEPLOY_PATH"
+  fi
+  OBD_DEPLOY_BASE_DIR=$(grep -Po '"OBD_DEPLOY_BASE_DIR": "(.*?)"[,}]' ./.obd/.obd_environ  | sed 's/"OBD_DEPLOY_BASE_DIR": "\(.*\)"[,}]/\1/g')
+  if [[ ! -d $OBD_DEPLOY_BASE_DIR ]]
   then
   obd env set OBD_DEPLOY_BASE_DIR "$DEPLOY_PATH"
   fi

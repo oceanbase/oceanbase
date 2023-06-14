@@ -7,4 +7,4 @@ obproxy-ce:
     home_path: {{%% OBPORXY_HOME_PATH %%}}
   include: obd/obproxy.include.yaml
   depends:
-    - {{%% COMPONENT %%}}
+    - oceanbase-ce
