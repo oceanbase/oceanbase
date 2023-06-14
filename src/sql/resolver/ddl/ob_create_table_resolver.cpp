@@ -725,6 +725,11 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
         create_table_stmt->set_create_mode(create_mode);
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(deep_copy_string_in_part_expr(create_table_stmt))) {
+        LOG_WARN("failed to deep copy string in part expr");
+      }
+    }
   }
   return ret;
 }

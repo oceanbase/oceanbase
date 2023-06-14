@@ -182,6 +182,11 @@ int ObAlterTableResolver::resolve(const ParseNode& parse_tree)
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(deep_copy_string_in_part_expr(get_alter_table_stmt()))) {
+        LOG_WARN("failed to deep copy string in part expr");
+      }
+    }
   }
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
   return ret;

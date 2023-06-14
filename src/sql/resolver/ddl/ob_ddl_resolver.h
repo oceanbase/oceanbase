@@ -449,6 +449,8 @@ protected:
   int check_max_used_subpart_id_valid(const share::schema::ObTableSchema& table_schema,
       const share::schema::ObPartition& partition, int64_t& max_used_subpart_id);
 
+  int deep_copy_string_in_part_expr(ObPartitionedStmt *stmt);
+  int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr *> &exprs);
   void reset();
   int64_t block_size_;
   int64_t consistency_level_;
