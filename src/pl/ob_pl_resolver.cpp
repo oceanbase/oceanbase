@@ -9524,7 +9524,7 @@ int ObPLResolver::resolve_sqlcode_or_sqlerrm(ObQualifiedName &q_name,
   int ret = OB_SUCCESS;
   UNUSED(unit_ast);
   if (1 == q_name.access_idents_.count()
-      && q_name.access_idents_.at(0).get_type() == UNKNOWN
+      && q_name.access_idents_.at(0).get_type() == AccessNameType::UNKNOWN
       && (0 == q_name.access_idents_.at(0).access_name_.case_compare("SQLCODE")
           || 0 == q_name.access_idents_.at(0).access_name_.case_compare("SQLERRM"))) {
     ObPLSQLCodeSQLErrmRawExpr *c_expr = NULL;

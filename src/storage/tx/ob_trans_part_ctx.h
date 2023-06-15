@@ -173,7 +173,8 @@ public:
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
   int check_scheduler_status();
-  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
+  int remove_callback_for_uncommited_txn(
+    const memtable::ObMemtableSet *memtable_set);
   int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
 
   void update_max_submitted_seq_no(const int64_t seq_no)

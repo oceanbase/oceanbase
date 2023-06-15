@@ -199,7 +199,8 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   return ret;
 }
 
-int ObMemtable::remove_unused_callback_for_uncommited_txn_()
+int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
+  const ObLSID ls_id, const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
   // NB: Do not use cache here, because the trans_service may be destroyed under
@@ -208,8 +209,8 @@ int ObMemtable::remove_unused_callback_for_uncommited_txn_()
     MTL_CTX()->get<transaction::ObTransService *>();
 
   if (NULL != txs_svr
-      && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(this))) {
-    TRANS_LOG(WARN, "remove callback for uncommited txn failed", K(ret), K(*this));
+      && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(ls_id, memtable_set))) {
+    TRANS_LOG(WARN, "remove callback for uncommited txn failed", K(ret), KPC(memtable_set));
   }
 
   return ret;
@@ -233,10 +234,6 @@ void ObMemtable::destroy()
     freezer = MTL(ObTenantFreezer *);
     if (OB_SUCCESS != freezer->unset_tenant_slow_freeze(tablet_id)) {
       TRANS_LOG(WARN, "unset tenant slow freeze failed.", K(*this));
-    }
-
-    if (OB_FAIL(remove_unused_callback_for_uncommited_txn_())) {
-      TRANS_LOG(WARN, "failed to remove callback for uncommited txn", K(ret), K(*this));
     }
   }
   ObITable::reset();

@@ -22,6 +22,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/memtable/mvcc/ob_tx_callback_list.h"
 #include "storage/tablelock/ob_table_lock_common.h"
+#include "storage/memtable/ob_memtable_util.h"
 
 namespace oceanbase
 {
@@ -214,7 +215,9 @@ public:
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
   int remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
                                        bool &meet_generate_cursor);
-  int remove_callback_for_uncommited_txn(memtable::ObIMemtable *memtable, const share::SCN max_applied_scn);
+  int remove_callback_for_uncommited_txn(
+    const memtable::ObMemtableSet *memtable_set,
+    const share::SCN max_applied_scn);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
   void acquire_callback_list();
   void revert_callback_list();

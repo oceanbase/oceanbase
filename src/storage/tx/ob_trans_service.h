@@ -174,7 +174,9 @@ public:
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
   int dump_elr_statistic();
-  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
+  int remove_callback_for_uncommited_txn(
+    const ObLSID ls_id,
+    const memtable::ObMemtableSet *memtable_set);
   int64_t get_tenant_id() const { return tenant_id_; }
   const common::ObAddr &get_server() { return self_; }
   ObTransTimer &get_trans_timer() { return timer_; }

@@ -375,7 +375,8 @@ public:
   // When the memtable has mini-merged, the commit_version of its associated
   // transaction may be undecided;
   // @param [in] mt: the memtable point which is going to be deleted;
-  int remove_callback_for_uncommited_tx(memtable::ObMemtable* mt);
+  int remove_callback_for_uncommited_tx(
+    const memtable::ObMemtableSet *memtable_set);
 
   // Find the TxCtx and execute the check functor with the tx_data retained on the TxCtx;
   // Called by the ObTxCtxTable
@@ -928,7 +929,9 @@ public:
   // transaction may be undecided;
   // @param [in] ls_id: the specified ls_id;
   // @param [in] mt: the memtable point which will be deleted;
-  int remove_callback_for_uncommited_tx(const share::ObLSID &ls_id, memtable::ObMemtable* mt);
+  int remove_callback_for_uncommited_tx(
+    const ObLSID ls_id,
+    const memtable::ObMemtableSet *memtable_set);
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 

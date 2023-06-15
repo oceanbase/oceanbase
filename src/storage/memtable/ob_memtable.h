@@ -376,6 +376,9 @@ public:
   int64_t get_memtable_mgr_op_cnt() { return ATOMIC_LOAD(&memtable_mgr_op_cnt_); }
   int64_t inc_memtable_mgr_op_cnt() { return ATOMIC_AAF(&memtable_mgr_op_cnt_, 1); }
   int64_t dec_memtable_mgr_op_cnt() { return ATOMIC_SAF(&memtable_mgr_op_cnt_, 1); }
+  static int batch_remove_unused_callback_for_uncommited_txn(
+    const share::ObLSID ls_id,
+    const memtable::ObMemtableSet *memtable_set);
 
   /* freeze */
   virtual int set_frozen() override { local_allocator_.set_frozen(); return OB_SUCCESS; }
@@ -502,8 +505,6 @@ private:
       ObMvccRow *value,
       const storage::ObTableReadInfo &read_info,
       ObMvccWriteResult &res);
-
-  int remove_unused_callback_for_uncommited_txn_();
 
   void get_begin(ObMvccAccessCtx &ctx);
   void get_end(ObMvccAccessCtx &ctx, int ret);
