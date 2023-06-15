@@ -238,26 +238,24 @@ int ObTableLoadCoordinator::pre_begin_peers()
       //目前源表和目标表的分区信息连同每个分区的地址都完全一样
       const ObAddr &addr = leader_info.addr_;
       if (OB_UNLIKELY(leader_info.addr_ != target_leader_info.addr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("addr must be same", K(leader_info.addr_), K(target_leader_info.addr_), KR(ret));
-      } else {
-        request.partition_id_array_ = leader_info.partition_id_array_;
-        request.target_partition_id_array_ = target_leader_info.partition_id_array_;
-        if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
-          if (OB_FAIL(ObTableLoadStore::init_ctx(ctx_, request.partition_id_array_,
-                                                 request.target_partition_id_array_))) {
-            LOG_WARN("fail to store init ctx", KR(ret));
-          } else {
-            ObTableLoadStore store(ctx_);
-            if (OB_FAIL(store.init())) {
-              LOG_WARN("fail to init store", KR(ret));
-            } else if (OB_FAIL(store.pre_begin())) {
-              LOG_WARN("fail to store pre begin", KR(ret));
-            }
+        LOG_INFO("addr must be same", K(leader_info.addr_), K(target_leader_info.addr_));
+      }
+      request.partition_id_array_ = leader_info.partition_id_array_;
+      request.target_partition_id_array_ = target_leader_info.partition_id_array_;
+      if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
+        if (OB_FAIL(ObTableLoadStore::init_ctx(ctx_, request.partition_id_array_,
+                                                request.target_partition_id_array_))) {
+          LOG_WARN("fail to store init ctx", KR(ret));
+        } else {
+          ObTableLoadStore store(ctx_);
+          if (OB_FAIL(store.init())) {
+            LOG_WARN("fail to init store", KR(ret));
+          } else if (OB_FAIL(store.pre_begin())) {
+            LOG_WARN("fail to store pre begin", KR(ret));
           }
-        } else { // 对端, 发送rpc
-          TABLE_LOAD_RPC_CALL(load_pre_begin_peer, addr, request, result);
         }
+      } else { // 对端, 发送rpc
+        TABLE_LOAD_RPC_CALL(load_pre_begin_peer, addr, request, result);
       }
     }
   }
