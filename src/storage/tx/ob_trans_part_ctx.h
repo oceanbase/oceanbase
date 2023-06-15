@@ -230,6 +230,7 @@ private:
                 K(ctx_tx_data_),
                 K(role_state_),
                 K(start_replay_ts_),
+                K(start_recover_ts_),
                 K(is_incomplete_replay_ctx_),
                 K(mt_ctx_),
                 K(coord_prepare_info_arr_),
@@ -810,6 +811,7 @@ private:
   // set true when submitting redo log for freezing and reset after freezing
   bool is_submitting_redo_log_for_freeze_;
   share::SCN start_replay_ts_; // replay debug
+  share::SCN start_recover_ts_; // recover debug
 
   share::SCN start_working_log_ts_;
 
