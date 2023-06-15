@@ -329,8 +329,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
 
  // 列定义添加(__session_id bigint, __session_create_time bigint), 如果用户表定义已经出现__session_id等后面解析时会报错...
  int ObCreateTableResolver::add_new_column_for_oracle_temp_table(ObTableSchema &table_schema,
-                                                                 ObArray<ObColumnResolveStat> &stats,
-                                                                 bool add_to_schema)
+                                                                 ObArray<ObColumnResolveStat> &stats)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 column;
@@ -346,7 +345,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
     column.set_column_id(OB_HIDDEN_SESSION_ID_COLUMN_ID);
     column.set_is_hidden(true);
     stat.column_id_ = column.get_column_id();
-    if (add_to_schema && OB_FAIL(table_schema.add_column(column))) {
+    if (OB_FAIL(table_schema.add_column(column))) {
       SQL_RESV_LOG(WARN, "fail to add column", K(ret));
     } else if (OB_FAIL(stats.push_back(stat))) {
       SQL_RESV_LOG(WARN, "fail to push back stat", K(ret));
@@ -357,7 +356,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
       column.set_column_id(OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID);
       column.set_is_hidden(true);
       stat.column_id_ = column.get_column_id();
-      if (add_to_schema && OB_FAIL(table_schema.add_column(column))) {
+      if (OB_FAIL(table_schema.add_column(column))) {
         SQL_RESV_LOG(WARN, "fail to add column", K(ret));
       } else if (OB_FAIL(stats.push_back(stat))) {
         SQL_RESV_LOG(WARN, "fail to push back stat", K(ret));
@@ -717,17 +716,6 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
           if (OB_FAIL(add_hidden_tablet_seq_col())) {
             SQL_RESV_LOG(WARN, "failed to add hidden primary key tablet seq", K(ret));
-          }
-
-          if (OB_SUCC(ret) && is_oracle_temp_table_) {
-            ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-            ObArray<ObColumnResolveStat> column_stat;
-            int64_t pk_data_length = 0;
-            if (OB_FAIL(add_new_column_for_oracle_temp_table(table_schema, column_stat, false))) {
-              LOG_WARN("fail to add column stat", K(ret));
-            } else if (OB_FAIL(add_pk_key_for_oracle_temp_table(column_stat, pk_data_length))) {
-              LOG_WARN("fail to add pk for oracle temp table", K(ret));
-            }
           }
         }
 

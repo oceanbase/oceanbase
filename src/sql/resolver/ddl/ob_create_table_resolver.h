@@ -118,7 +118,7 @@ private:
                                           ObArray<ObColumnResolveStat> &stats);
   static int check_same_substr_expr(ObRawExpr &left, ObRawExpr &right, bool &same);
   virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema) override;
-  int add_new_column_for_oracle_temp_table(share::schema::ObTableSchema &table_schema, ObArray<ObColumnResolveStat> &stats, bool add_to_schema = true);
+  int add_new_column_for_oracle_temp_table(share::schema::ObTableSchema &table_schema, ObArray<ObColumnResolveStat> &stats);
   int add_new_indexkey_for_oracle_temp_table(const int32_t org_key_len);
   int add_pk_key_for_oracle_temp_table(ObArray<ObColumnResolveStat> &stats, int64_t &pk_data_length);
   int set_partition_info_for_oracle_temp_table(share::schema::ObTableSchema &table_schema);
