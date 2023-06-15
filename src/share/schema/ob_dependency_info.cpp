@@ -293,6 +293,8 @@ int ObDependencyInfo::insert_schema_object_dependency(common::ObISQLClient &tran
     LOG_WARN("get ref object time failed", K(ret),
                                           K(dep_info.get_ref_obj_type()),
                                           K(dep_info.get_ref_obj_id()));
+  } else if (get_dep_obj_id() == get_ref_obj_id()) {
+    // do nothing. object may depend on self
   } else if (OB_FAIL(gen_dependency_dml(exec_tenant_id, dml))) {
     LOG_WARN("gen table dml failed", K(ret));
   } else {
@@ -333,10 +335,8 @@ int ObDependencyInfo::collect_dep_infos(const ObIArray<ObSchemaObjVersion> &sche
     if (!(ObObjectType::TRIGGER == dep_obj_type && 0 == i)) {
       ObDependencyInfo dep;
       const ObSchemaObjVersion &s_objs = schema_objs.at(i);
-      if (!s_objs.is_valid()
-          // object may depend on self
-          || (is_pl
-          && dep_obj_type == ObSchemaObjVersion::get_schema_object_type(s_objs.object_type_))) {
+      if (!s_objs.is_valid()) {
+        // only collect valid dependency
         continue;
       }
       dep.set_dep_obj_id(OB_INVALID_ID);
