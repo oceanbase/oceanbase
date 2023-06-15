@@ -620,7 +620,7 @@ int ObPxTenantTargetMonitorP::process()
       for (int i = 0; OB_SUCC(ret) && i < arg_.addr_target_array_.count(); i++) {
         ObAddr &server = arg_.addr_target_array_.at(i).addr_;
         int64_t peer_used_inc = arg_.addr_target_array_.at(i).target_;
-        if (OB_FAIL(OB_PX_TARGET_MGR.update_peer_target_used(tenant_id, server, peer_used_inc))) {
+        if (OB_FAIL(OB_PX_TARGET_MGR.update_peer_target_used(tenant_id, server, peer_used_inc, leader_version))) {
           LOG_WARN("set thread count failed", K(ret), K(tenant_id), K(server), K(peer_used_inc));
         }
       }
