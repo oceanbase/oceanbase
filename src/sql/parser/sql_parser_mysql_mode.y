@@ -2640,6 +2640,7 @@ MOD '(' expr ',' expr ')'
   ParseNode *param_node = NULL;
   malloc_terminal_node(param_node, result->malloc_pool_, T_SFU_DOUBLE);
   int64_t len = strlen("2.718281828459045");
+  param_node->is_hidden_const_ = 1;
   param_node->str_value_ = parse_strndup("2.718281828459045", len, result->malloc_pool_);
   if (OB_UNLIKELY(NULL == param_node->str_value_)) {
     yyerror(NULL, result, "No more space for mallocing string\n");
@@ -2657,6 +2658,7 @@ MOD '(' expr ',' expr ')'
   ParseNode *param_node = NULL;
   malloc_terminal_node(param_node, result->malloc_pool_, T_SFU_DOUBLE);
   int64_t len = strlen("2.718281828459045");
+  param_node->is_hidden_const_ = 1;
   param_node->str_value_ = parse_strndup("2.718281828459045", len, result->malloc_pool_);
   if (OB_UNLIKELY(NULL == param_node->str_value_)) {
     yyerror(NULL, result, "No more space for mallocing string\n");
