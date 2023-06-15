@@ -1246,6 +1246,8 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
         LOG_WARN("get unexpected null", K(session), K(ret));
       } else if (is_plan_root() && OB_FAIL(adjust_plan_root_output_exprs())) {
         LOG_WARN("failed to set plan root output", K(ret));
+      } else if (is_plan_root() && OB_FAIL(collecte_inseparable_exprs(*alloc_expr_context))) {
+        LOG_WARN("failed to set plan root output", K(ret));
       } else if (OB_FAIL(allocate_expr_pre(*alloc_expr_context))) {
         LOG_WARN("failed to do allocate expr pre", K(ret));
       } else {
@@ -1527,6 +1529,22 @@ int ObLogicalOperator::mark_expr_produced(ObRawExpr *expr,
       expr_producer->producer_id_ = producer_id;
       LOG_TRACE("expr is marked as produced.", K(expr_producer->expr_), K(branch_id),
           K(expr_producer->consumer_id_), K(producer_id));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::collecte_inseparable_exprs(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(stmt), K(ret));
+  } else if (stmt->is_dblink_stmt() && stmt->is_select_stmt()) {
+    const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(stmt);
+    if (OB_FAIL(sel_stmt->get_select_exprs(ctx.inseparable_exprs_))) {
+      LOG_WARN("failed to get select exprs", K(ret));
     }
   }
   return ret;
@@ -1869,11 +1887,13 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
     LOG_WARN("failed to add var to array", K(ret));
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
-    ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
-                                           ctx,
-                                           ref_cnt,
-                                           shard_exprs));
+  if (!ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
+      ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
+                                            ctx,
+                                            ref_cnt,
+                                            shard_exprs));
+    }
   }
   return ret;
 }

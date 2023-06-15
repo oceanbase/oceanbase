@@ -641,6 +641,8 @@ struct ObAllocExprContext
   //  {key => flattern expr, value => reference count }
   hash::ObHashMap<uint64_t, int64_t> flattern_expr_map_;
   common::ObSEArray<ExprProducer, 16, common::ModulePageAllocator, true> expr_producers_;
+  // Exprs that cannot be used to extract shared child exprs
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> inseparable_exprs_;
 };
 
 struct ObPxPipeBlockingCtx
@@ -1174,6 +1176,8 @@ public:
     UNUSED(buf_len);
     return common::OB_SUCCESS;
   }
+
+  int collecte_inseparable_exprs(ObAllocExprContext &ctx);
 
   virtual int allocate_expr_pre(ObAllocExprContext &ctx);
 
