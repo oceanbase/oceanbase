@@ -21909,6 +21909,30 @@ static const _error _error_OB_NO_TABLET_NEED_BACKUP = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9095, No tablet need backup",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9095, No tablet need backup"
 };
+static const _error _error_OB_ERR_RESTORE_STANDBY_VERSION_LAG = {
+      .error_name            = "OB_ERR_RESTORE_STANDBY_VERSION_LAG",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "standby binary version is lower than primary data version, standby need upgrade",
+      .str_user_error        = "standby binary version is lower than primary data version, standby need upgrade",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9096, standby binary version is lower than primary data version, standby need upgrade",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9096, standby binary version is lower than primary data version, standby need upgrade"
+};
+static const _error _error_OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED = {
+      .error_name            = "OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "primary tenant has been dropped",
+      .str_user_error        = "primary tenant has been dropped",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9097, primary tenant has been dropped",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9097, primary tenant has been dropped"
+};
 static const _error _error_OB_NO_SUCH_FILE_OR_DIRECTORY = {
       .error_name            = "OB_NO_SUCH_FILE_OR_DIRECTORY",
       .error_cause           = "Internal Error",
@@ -26860,6 +26884,8 @@ struct ObStrErrorInit
     _errors[-OB_RESTORE_LOG_TO_END] = &_error_OB_RESTORE_LOG_TO_END;
     _errors[-OB_LS_RESTORE_FAILED] = &_error_OB_LS_RESTORE_FAILED;
     _errors[-OB_NO_TABLET_NEED_BACKUP] = &_error_OB_NO_TABLET_NEED_BACKUP;
+    _errors[-OB_ERR_RESTORE_STANDBY_VERSION_LAG] = &_error_OB_ERR_RESTORE_STANDBY_VERSION_LAG;
+    _errors[-OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED] = &_error_OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED;
     _errors[-OB_NO_SUCH_FILE_OR_DIRECTORY] = &_error_OB_NO_SUCH_FILE_OR_DIRECTORY;
     _errors[-OB_FILE_OR_DIRECTORY_EXIST] = &_error_OB_FILE_OR_DIRECTORY_EXIST;
     _errors[-OB_FILE_OR_DIRECTORY_PERMISSION_DENIED] = &_error_OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;

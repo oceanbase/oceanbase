@@ -1491,6 +1491,8 @@ constexpr int OB_ALREADY_IN_NOARCHIVE_MODE = -9092;
 constexpr int OB_RESTORE_LOG_TO_END = -9093;
 constexpr int OB_LS_RESTORE_FAILED = -9094;
 constexpr int OB_NO_TABLET_NEED_BACKUP = -9095;
+constexpr int OB_ERR_RESTORE_STANDBY_VERSION_LAG = -9096;
+constexpr int OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED = -9097;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
@@ -3576,6 +3578,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_RESTORE_LOG_TO_END__USER_ERROR_MSG "Restore log to end"
 #define OB_LS_RESTORE_FAILED__USER_ERROR_MSG "Restore log stream failed"
 #define OB_NO_TABLET_NEED_BACKUP__USER_ERROR_MSG "No tablet need backup"
+#define OB_ERR_RESTORE_STANDBY_VERSION_LAG__USER_ERROR_MSG "standby binary version is lower than primary data version, standby need upgrade"
+#define OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED__USER_ERROR_MSG "primary tenant has been dropped"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
@@ -5663,6 +5667,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_RESTORE_LOG_TO_END__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9093, Restore log to end"
 #define OB_LS_RESTORE_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9094, Restore log stream failed"
 #define OB_NO_TABLET_NEED_BACKUP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9095, No tablet need backup"
+#define OB_ERR_RESTORE_STANDBY_VERSION_LAG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9096, standby binary version is lower than primary data version, standby need upgrade"
+#define OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9097, primary tenant has been dropped"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"

@@ -2011,6 +2011,8 @@ DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARC
 DEFINE_ERROR(OB_RESTORE_LOG_TO_END, -9093, -1, "HY000", "Restore log to end");
 DEFINE_ERROR(OB_LS_RESTORE_FAILED, -9094, -1, "HY000", "Restore log stream failed");
 DEFINE_ERROR(OB_NO_TABLET_NEED_BACKUP, -9095, -1, "HY000", "No tablet need backup");
+DEFINE_ERROR(OB_ERR_RESTORE_STANDBY_VERSION_LAG, -9096, -1, "HY000", "standby binary version is lower than primary data version, standby need upgrade");
+DEFINE_ERROR(OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED, -9097, -1, "HY000", "primary tenant has been dropped");
 // end of backup and restore error codes 9001 ~ 9099
 
 ////////////////////////////////////////////////////////////////
