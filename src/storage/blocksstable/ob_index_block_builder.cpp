@@ -2279,7 +2279,6 @@ ObIndexBlockRebuilder::ObIndexBlockRebuilder()
    mutex_(common::ObLatchIds::INDEX_BUILDER_LOCK),
    index_store_desc_(nullptr),
    block_write_ctx_(),
-   macro_id_set_(),
    root_micro_block_desc_(nullptr),
    macro_meta_list_(nullptr),
    sstable_allocator_(nullptr),
@@ -2297,7 +2296,6 @@ void ObIndexBlockRebuilder::reset()
 {
   index_store_desc_ = nullptr;
   block_write_ctx_.reset();
-  macro_id_set_.destroy();
   root_micro_block_desc_ = nullptr;
   macro_meta_list_ = nullptr;
   sstable_allocator_ = nullptr;
@@ -2313,9 +2311,6 @@ int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObIndexBlockRebuilder has been inited", K(ret));
-  } else if (OB_FAIL(macro_id_set_.create(
-      bucket_num, ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_BUCKET, MTL_ID()))) {
-    STORAGE_LOG(WARN, "fail to create macro id set", K(ret));
   } else if (OB_FAIL(sstable_builder.init_builder_ptrs(sstable_builder_, index_store_desc_,
       sstable_allocator_, root_micro_block_desc_, macro_meta_list_))) {
     STORAGE_LOG(WARN, "fail to init referemce pointer members", K(ret));
@@ -2524,14 +2519,7 @@ int ObIndexBlockRebuilder::append_macro_row(const ObDataMacroBlockMeta &macro_me
     STORAGE_LOG(WARN, "invalid macro meta", K(ret), K(macro_meta));
   } else {
     lib::ObMutexGuard guard(mutex_); // migration will append concurrently
-    if (OB_FAIL(macro_id_set_.set_refactored(macro_meta.val_.macro_id_, 0 /*no override*/))) {
-      if (OB_HASH_EXIST != ret) {
-        STORAGE_LOG(WARN, "fail to put macro id into set", K(ret), K(macro_meta));
-      } else {
-        STORAGE_LOG(INFO, "duplicated macro meta", K(macro_meta));
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_FAIL(ObDataIndexBlockBuilder::add_macro_block_meta(
+    if (OB_FAIL(ObDataIndexBlockBuilder::add_macro_block_meta(
         macro_meta, *macro_meta_list_, *sstable_allocator_))) {
       STORAGE_LOG(WARN, "failed to add macro block meta", K(ret), K(macro_meta));
     } else if (OB_FAIL(block_write_ctx_.add_macro_block_id(macro_meta.val_.macro_id_))) { // inc_ref

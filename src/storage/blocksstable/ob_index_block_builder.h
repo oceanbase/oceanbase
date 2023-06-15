@@ -411,7 +411,6 @@ private:
   lib::ObMutex mutex_;
   ObDataStoreDesc *index_store_desc_;
   ObMacroBlocksWriteCtx block_write_ctx_;
-  common::hash::ObHashSet<MacroBlockId> macro_id_set_;
   ObIndexMicroBlockDesc *root_micro_block_desc_;
   ObMacroMetasArray *macro_meta_list_;
   ObIAllocator *sstable_allocator_;
