@@ -16,7 +16,8 @@ using namespace common;
 using namespace blocksstable;
 
 ObDirectLoadMultipleSSTableScanner::ObDirectLoadMultipleSSTableScanner()
-  : sstable_(nullptr),
+  : allocator_("TLD_Scanner"),
+    sstable_(nullptr),
     range_(nullptr),
     datum_utils_(nullptr),
     is_iter_start_(false),
@@ -48,6 +49,7 @@ int ObDirectLoadMultipleSSTableScanner::init(ObDirectLoadMultipleSSTable *sstabl
     table_data_desc_ = table_data_desc;
     range_ = &range;
     datum_utils_ = datum_utils;
+    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(data_block_scanner_.init(sstable, table_data_desc, range, datum_utils))) {
       LOG_WARN("fail to init data block scanner", KR(ret));
     } else if (OB_FAIL(data_block_reader_.init(table_data_desc.sstable_data_block_size_,

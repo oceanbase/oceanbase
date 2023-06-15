@@ -35,6 +35,7 @@ ObDirectLoadPartitionMergeTask::ObDirectLoadPartitionMergeTask()
     is_stop_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadPartitionMergeTask::~ObDirectLoadPartitionMergeTask()
@@ -831,7 +832,8 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::construct_row_iter(
  */
 
 ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::RowIterator()
-  : origin_iter_(nullptr),
+  : allocator_("TLD_RowIter"),
+    origin_iter_(nullptr),
     rowkey_column_num_(0),
     store_column_count_(0),
     heap_table_array_(nullptr),
@@ -868,6 +870,7 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::init(
     LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), KP(origin_table),
              KP(heap_table_array));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     range_.set_whole_range();
     if (OB_FAIL(origin_table->scan(range_, allocator_, origin_iter_))) {
       LOG_WARN("fail to scan origin table", KR(ret));

@@ -219,6 +219,7 @@ int ObTableLoadPartitionLocation::init_all_leader_info(ObIAllocator &allocator)
   ObHashMap<ObAddr, ObIArray<ObTableLoadLSIdAndPartitionId> *> addr_map;
   ObHashMap<ObAddr, ObIArray<ObTableLoadLSIdAndPartitionId> *>::const_iterator addr_iter;
   int64_t pos = 0;
+  tmp_allocator.set_tenant_id(MTL_ID());
   // 将所有addr存到set中
   if (OB_FAIL(addr_map.create(64, "TLD_PL_Tmp", "TLD_PL_Tmp"))) {
     LOG_WARN("fail to create hashmap", KR(ret));

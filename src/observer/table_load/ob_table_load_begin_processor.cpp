@@ -28,6 +28,7 @@ using namespace omt;
 
 ObTableLoadBeginP::ObTableLoadBeginP(const ObGlobalContext &gctx) : gctx_(gctx), table_ctx_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadBeginP::~ObTableLoadBeginP()

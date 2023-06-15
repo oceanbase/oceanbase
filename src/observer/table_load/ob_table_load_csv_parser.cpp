@@ -46,6 +46,7 @@ int ObTableLoadCSVParser::init(ObTableLoadTableCtx *table_ctx, const ObString &d
     LOG_WARN("invalid args", KR(ret), KP(table_ctx), K(data_buffer.length()),
              K(table_ctx->param_.data_type_));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     column_count_ = table_ctx->param_.column_count_;
     batch_row_count_ = table_ctx->param_.batch_size_;
     const int64_t total_obj_count = batch_row_count_ * column_count_;

@@ -47,6 +47,7 @@ int ObDirectLoadSSTableBuilder::init(const ObDirectLoadSSTableBuildParam &param)
     const uint64_t tenant_id = MTL_ID();
     param_ = param;
     allocator_.set_tenant_id(tenant_id);
+    rowkey_allocator_.set_tenant_id(tenant_id);
     start_key_.set_min_rowkey();
     end_key_.set_min_rowkey();
     int64_t dir_id = -1;

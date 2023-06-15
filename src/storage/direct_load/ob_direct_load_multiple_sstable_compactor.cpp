@@ -40,6 +40,8 @@ ObDirectLoadMultipleSSTableCompactor::ObDirectLoadMultipleSSTableCompactor()
     data_block_count_(0),
     row_count_(0),
     max_data_block_size_(0),
+    start_key_allocator_("TLD_SRowkey"),
+    end_key_allocator_("TLD_ERowkey"),
     is_inited_(false)
 {
 }
@@ -59,6 +61,8 @@ int ObDirectLoadMultipleSSTableCompactor::init(const ObDirectLoadMultipleSSTable
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
+    start_key_allocator_.set_tenant_id(MTL_ID());
+    end_key_allocator_.set_tenant_id(MTL_ID());
     start_key_.set_min_rowkey();
     end_key_.set_min_rowkey();
     is_inited_ = true;

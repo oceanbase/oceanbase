@@ -104,7 +104,6 @@ private:
 ObTableLoadMerger::ObTableLoadMerger(ObTableLoadStoreCtx *store_ctx)
   : store_ctx_(store_ctx),
     param_(store_ctx->ctx_->param_),
-    allocator_("TLD_TLdMerge"),
     running_thread_count_(0),
     has_error_(false),
     is_stop_(false),

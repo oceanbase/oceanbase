@@ -18,7 +18,10 @@ class ObTableLoadP : public obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<
 {
   typedef obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOAD> > ParentType;
 public:
-  explicit ObTableLoadP(const ObGlobalContext &gctx) : gctx_(gctx), allocator_("TLD_LoadP") {}
+  explicit ObTableLoadP(const ObGlobalContext &gctx) : gctx_(gctx), allocator_("TLD_LoadP")
+  {
+    allocator_.set_tenant_id(MTL_ID());
+  }
   virtual ~ObTableLoadP() = default;
 
 protected:
@@ -39,7 +42,10 @@ class ObTableLoadPeerP : public obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::Ob
 {
   typedef obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOAD_PEER> > ParentType;
 public:
-  explicit ObTableLoadPeerP(const ObGlobalContext &gctx) : gctx_(gctx), allocator_("TLD_PLoadP") {}
+  explicit ObTableLoadPeerP(const ObGlobalContext &gctx) : gctx_(gctx), allocator_("TLD_PLoadP")
+  {
+    allocator_.set_tenant_id(MTL_ID());
+  }
   virtual ~ObTableLoadPeerP() = default;
 
 protected:

@@ -10,6 +10,7 @@
 #include "share/ob_ls_id.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_print_utils.h"
+#include "share/rc/ob_tenant_base.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_opt_column_stat.h"
 
@@ -406,7 +407,7 @@ struct ObTableLoadSqlStatistics
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadSqlStatistics() : allocator_("TLD_Opstat") {}
+  ObTableLoadSqlStatistics() : allocator_("TLD_Opstat") { allocator_.set_tenant_id(MTL_ID()); }
   ~ObTableLoadSqlStatistics() { reset();}
   void reset() {
     for (int64_t i = 0; i < col_stat_array_.count(); ++i) {
