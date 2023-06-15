@@ -133,6 +133,17 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
                  && blocksstable::ObDmlFlag::DF_UPDATE == writer_dml_flag
                  && blocksstable::ObDmlFlag::DF_UPDATE == locker_dml_flag) {
         // bypass the case
+      // Case 9: For the case of the write only index, it may operate the same
+      // row more than once under the case that main table has two rows pointing
+      // to the same index which is building during the first stage(in which
+      // stage update and insert should consider index while the index is not
+      // readable). In the case, an update may update the same row on the index.
+      // So we need report the batched stmt warning according to this case.
+      } else if (write_flag.is_write_only_index()) {
+        ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+        TRANS_LOG(WARN, "write only index insert/update on the same row", K(ret),
+                  K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
+                  K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
       } else {
         // Others: It will never happen that two operaions on the same row for the
         // same txn except the above cases. So we should report unexpected error.
