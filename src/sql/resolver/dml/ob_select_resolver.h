@@ -129,6 +129,7 @@ protected:
   int add_parent_cte_table_item(TableItem *table_item);
   int resolve_from_clause(const ParseNode *node);
   int resolve_field_list(const ParseNode &node);
+  inline bool is_colum_without_alias(ParseNode *project_node);
   int resolve_star(const ParseNode *node);
   int resolve_group_clause(const ParseNode *node);
   int resolve_groupby_node(const ParseNode *group_node,
