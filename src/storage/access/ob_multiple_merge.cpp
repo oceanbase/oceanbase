@@ -657,6 +657,7 @@ void ObMultipleMerge::report_tablet_stat()
     // empty query, ignore it
   } else {
     int tmp_ret = OB_SUCCESS;
+    bool report_succ = false; /*placeholder*/
     storage::ObTabletStat tablet_stat;
     tablet_stat.ls_id_ = access_ctx_->table_store_stat_.ls_id_.id();
     tablet_stat.tablet_id_ = access_ctx_->table_store_stat_.tablet_id_.id();
@@ -665,7 +666,7 @@ void ObMultipleMerge::report_tablet_stat()
     tablet_stat.scan_physical_row_cnt_ = access_ctx_->table_store_stat_.physical_read_cnt_;
     tablet_stat.scan_micro_block_cnt_ = access_param_->iter_param_.enable_pd_blockscan() ? access_ctx_->table_store_stat_.micro_access_cnt_ : 0;
     tablet_stat.pushdown_micro_block_cnt_ = access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
-    if (OB_TMP_FAIL(MTL(storage::ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
+    if (OB_TMP_FAIL(MTL(storage::ObTenantTabletStatMgr *)->report_stat(tablet_stat, report_succ))) {
       STORAGE_LOG_RET(WARN, tmp_ret, "failed to report tablet stat", K(tmp_ret), K(tablet_stat));
     }
   }

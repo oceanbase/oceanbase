@@ -101,7 +101,8 @@ void TestTenantTabletStatMgr::report(ObTenantTabletStatMgr *mgr, const ObTabletS
 {
   ASSERT_TRUE(NULL != mgr);
   ASSERT_TRUE(stat.is_valid());
-  ASSERT_EQ(OB_SUCCESS, mgr->report_stat(stat));
+  bool report_succ = false;
+  ASSERT_EQ(OB_SUCCESS, mgr->report_stat(stat, report_succ));
 }
 
 void TestTenantTabletStatMgr::batch_report_stat(int64_t report_num)
@@ -384,7 +385,8 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_mgr)
   tablet_stat.scan_logical_row_cnt_ = 100;
   tablet_stat.scan_physical_row_cnt_ = 100;
 
-  ret = stat_mgr_->report_stat(tablet_stat);
+  bool report_succ = false;
+  ret = stat_mgr_->report_stat(tablet_stat, report_succ);
   ASSERT_EQ(OB_SUCCESS, ret);
   stat_mgr_->process_stats();
 

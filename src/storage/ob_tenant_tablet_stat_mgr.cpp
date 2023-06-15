@@ -556,14 +556,17 @@ void ObTenantTabletStatMgr::destroy()
   FLOG_INFO("ObTenantTabletStatMgr destroyed!");
 }
 
-int ObTenantTabletStatMgr::report_stat(const ObTabletStat &stat)
+int ObTenantTabletStatMgr::report_stat(
+    const ObTabletStat &stat,
+    bool &succ_report)
 {
   int ret = OB_SUCCESS;
+  succ_report = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantTabletStatMgr not inited", K(ret));
-  } else if (!stat.is_valid()) {
+  } else if (OB_UNLIKELY(!stat.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(stat));
   } else if (!stat.check_need_report()) {
@@ -580,6 +583,7 @@ int ObTenantTabletStatMgr::report_stat(const ObTabletStat &stat)
       }
     } else {
       report_queue_[pending_cur % DEFAULT_MAX_PENDING_CNT] = stat;
+      succ_report = true;
     }
   }
   return ret;
@@ -717,21 +721,6 @@ int ObTenantTabletStatMgr::fetch_node(ObTabletStreamNode *&node)
   return ret;
 }
 
-void ObTenantTabletStatMgr::dump_tablet_stat_status()
-{
-  if (REACH_TENANT_TIME_INTERVAL(DUMP_TABLET_STAT_INTERVAL)) {
-    uint64_t start_idx = report_cursor_; // it's OK to dirty read
-    uint64_t end_idx = pending_cursor_;
-    int64_t map_size = stream_map_.size();
-    int64_t stream_node_cnt = stream_pool_.get_allocated_num();
-
-    LOG_INFO("dump_tablet_stat_status",
-        "queue_cnt", end_idx - start_idx, K(start_idx), K(end_idx),
-        "map_size", map_size,
-        "stream_node_cnt", stream_node_cnt);
-  }
-}
-
 void ObTenantTabletStatMgr::process_stats()
 {
   int tmp_ret = OB_SUCCESS;
@@ -767,7 +756,6 @@ void ObTenantTabletStatMgr::refresh_all(const int64_t step)
 
 void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()
 {
-  mgr_.dump_tablet_stat_status();
   mgr_.process_stats();
 
   int64_t interval_step = 0;

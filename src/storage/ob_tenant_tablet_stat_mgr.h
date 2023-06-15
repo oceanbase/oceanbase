@@ -291,7 +291,9 @@ public:
   void stop();
   void destroy();
 
-  int report_stat(const ObTabletStat &stat);
+  int report_stat(
+      const ObTabletStat &stat,
+      bool &succ_report);
   int get_latest_tablet_stat(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
@@ -302,7 +304,6 @@ public:
       common::ObIArray<ObTabletStat> &tablet_stats);
   void process_stats();
   void refresh_all(const int64_t step);
-  void dump_tablet_stat_status();
 private:
   class TabletStatUpdater : public common::ObTimerTask
   {
