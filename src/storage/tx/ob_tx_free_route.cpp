@@ -984,9 +984,9 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
   //
   if (OB_SUCC(ret)) {
     if (return_normal_state) {
-      if (is_xa && (is_tx_start || is_tx_switch)) {
-        // XA START same as START TX, its state may be synced (instead of executed on local)
-        // hence, we forcedly set to changed
+      // XA START same as START TX, its state may be synced (instead of executed on local)
+      // hence, we forcedly set to changed
+      if ((is_tx_start && is_xa) || is_tx_switch) {
         ctx.static_changed_ = true;
         ctx.dynamic_changed_ = true;
         ctx.parts_changed_ = true;
