@@ -3345,14 +3345,15 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2& column_schema, ObCo
       column_schema.get_column_name_str().ptr(), column_schema.get_column_name_str().length());
   column_expr.set_column_flags(column_schema.get_column_flags());
   column_expr.set_hidden_column(column_schema.is_hidden());
+  // NOTE: The collation logic here must be the same as in function ObExprColumnConv::calc_result_typeN
+  ObCollationLevel col_cs_level = get_column_cs_level(column_schema.get_data_type());
+  column_expr.set_collation_level(col_cs_level);
   if (ob_is_string_type(column_schema.get_data_type()) 
       || ob_is_enumset_tc(column_schema.get_data_type())
       || ob_is_json_tc(column_schema.get_data_type())) {
     column_expr.set_collation_type(column_schema.get_collation_type());
-    column_expr.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
     column_expr.set_collation_type(CS_TYPE_BINARY);
-    column_expr.set_collation_level(CS_LEVEL_NUMERIC);
   }
   if (OB_SUCC(ret)) {
     column_expr.set_accuracy(accuracy);

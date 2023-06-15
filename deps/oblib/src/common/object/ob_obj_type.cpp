@@ -880,5 +880,18 @@ int find_type(const ObIArray<common::ObString>& type_infos, ObCollationType cs_t
   return ret;
 }
 
+ObCollationLevel get_column_cs_level(const ObObjType col_type)
+{
+  ObCollationLevel cs_level;
+  if (ob_is_string_type(col_type)
+      || ob_is_enumset_tc(col_type)
+      || ob_is_json_tc(col_type)) {
+    cs_level = CS_LEVEL_IMPLICIT;
+  } else {
+    cs_level = CS_LEVEL_NUMERIC;
+  }
+  return cs_level;
+}
+
 }  // namespace common
 }  // namespace oceanbase

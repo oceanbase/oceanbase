@@ -1483,6 +1483,9 @@ bool ob_can_static_cast(const ObObjType src, const ObObjType dst);
 int find_type(const common::ObIArray<common::ObString>& type_infos, common::ObCollationType cs_type,
     const common::ObString& val, int32_t& pos);
 
+// NOTE: this function is used to get collation level for column_conv expr to calculate result type
+// which needs to get the same colaltion level with the code in ObRawExprUtils::init_column_expr
+ObCollationLevel get_column_cs_level(const ObObjType col_type);
 enum ObOTimestampMetaAttrType { OTMAT_TIMESTAMP_TZ = 0, OTMAT_TIMESTAMP_LTZ, OTMAT_TIMESTAMP_NANO };
 }  // end namespace common
 }  // end namespace oceanbase

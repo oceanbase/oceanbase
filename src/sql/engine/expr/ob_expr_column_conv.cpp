@@ -241,7 +241,9 @@ int ObExprColumnConv::calc_result_typeN(
   } else {
     type.set_type(types[0].get_type());
     type.set_collation_type(types[1].get_collation_type());
-    type.set_collation_level(common::CS_LEVEL_IMPLICIT);
+    // NOTE: The collation logic here must be the same as in function ObRawExprUtils::init_column_expr
+    ObCollationLevel col_cs_level = get_column_cs_level(types[0].get_type());
+    type.set_collation_level(col_cs_level);
     type.set_accuracy(types[2].get_accuracy());
     if (types[3].is_not_null()) {
       type.set_result_flag(OB_MYSQL_NOT_NULL_FLAG);
