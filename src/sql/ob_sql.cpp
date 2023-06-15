@@ -1025,11 +1025,18 @@ int ObSql::do_real_prepare(const ObString &sql,
                                                                   param_store,
                                                                   session.get_local_collation_connection()))) {
         LOG_WARN("parameterize syntax tree failed", K(ret));
-      } else if (!pc_ctx.ps_need_parameterized_) {
-        pc_ctx.fixed_param_idx_.reset();
-        pc_ctx.fp_result_.raw_params_.reset();
-      } else {
-        info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+        if (OB_INVALID_ARGUMENT == ret) {
+          pc_ctx.ps_need_parameterized_ = false;
+          ret = OB_SUCCESS;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!pc_ctx.ps_need_parameterized_) {
+          pc_ctx.fixed_param_idx_.reset();
+          pc_ctx.fp_result_.raw_params_.reset();
+        } else {
+          info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+        }
       }
     }
 
