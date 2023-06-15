@@ -107,7 +107,7 @@ ObThWorker::ObThWorker()
       priority_limit_(RQ_LOW), is_lq_yield_(false),
       query_start_time_(0), last_check_time_(0),
       can_retry_(true), need_retry_(false),
-      has_add_to_cgroup_(false), last_wakeup_ts_(0), is_blocking_(nullptr), ru_cputime_(0),
+      has_add_to_cgroup_(false), last_wakeup_ts_(0), blocking_ts_(nullptr), ru_cputime_(0),
       idle_us_(0)
 {
 }
@@ -318,7 +318,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   int64_t wait_start_time = 0;
   int64_t wait_end_time = 0;
   procor_.th_created();
-  is_blocking_ = &Thread::is_blocking_;
+  blocking_ts_ = &Thread::blocking_ts_;
 
   ObTLTaGuard ta_guard(tenant_->id());
   // Avoid adding and deleting entities from the root node for every request, the parameters are meaningless

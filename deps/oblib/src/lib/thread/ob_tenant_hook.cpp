@@ -10,18 +10,17 @@
 #include <poll.h>
 #include <sys/epoll.h>
 
-#define SYS_HOOK(func_name, ...)                                            \
-  ({                                                                        \
-    int ret = 0;                                                            \
-    if (!in_sys_hook++) {                                                   \
-      oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT; \
-      ret = real_##func_name(__VA_ARGS__);                                  \
-      oceanbase::lib::Thread::is_blocking_ = 0;                             \
-    } else {                                                                \
-      ret = real_##func_name(__VA_ARGS__);                                  \
-    }                                                                       \
-    in_sys_hook--;                                                          \
-    ret;                                                                    \
+#define SYS_HOOK(func_name, ...)                                             \
+  ({                                                                         \
+    int ret = 0;                                                             \
+    if (!in_sys_hook++) {                                                    \
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT); \
+      ret = real_##func_name(__VA_ARGS__);                                   \
+    } else {                                                                 \
+      ret = real_##func_name(__VA_ARGS__);                                   \
+    }                                                                        \
+    in_sys_hook--;                                                           \
+    ret;                                                                     \
   })
 
 namespace oceanbase {
@@ -98,9 +97,8 @@ int pthread_join(pthread_t _thread, void **__retval)
   static int (*real_pthread_join)(pthread_t _thread, void **__retval) =
       (typeof(real_pthread_join))dlsym(RTLD_NEXT, "pthread_join");
   int ret = 0;
-  ::oceanbase::lib::Thread::thread_joined_ = _thread;
+  ::oceanbase::lib::Thread::JoinGuard guard(_thread);
   ret = SYS_HOOK(pthread_join, _thread, __retval);
-  ::oceanbase::lib::Thread::thread_joined_ = 0;
   return ret;
 }
 
@@ -126,7 +124,7 @@ int ob_epoll_wait(int __epfd, struct epoll_event *__events,
       int __epfd, struct epoll_event *__events,
 		  int __maxevents, int __timeout) = epoll_wait;
   int ret = 0;
-  oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT_FOR_IO_EVENT;
+  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_IO_EVENT);
   ret = SYS_HOOK(epoll_wait, __epfd, __events, __maxevents, __timeout);
   return ret;
 }
@@ -136,7 +134,7 @@ int ob_poll(struct pollfd *__fds, nfds_t __nfds, int __timeout)
   static int (*real_poll)(
       struct pollfd *__fds, nfds_t __nfds, int __timeout) = poll;
   int ret = 0;
-  oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT_FOR_IO_EVENT;
+  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_IO_EVENT);
   ret = SYS_HOOK(poll, __fds, __nfds, __timeout);
   return ret;
 }

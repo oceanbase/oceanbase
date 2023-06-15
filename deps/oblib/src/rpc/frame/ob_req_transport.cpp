@@ -440,9 +440,10 @@ ObPacket *ObReqTransport::send_session(easy_session_t *s) const
       s->addr.cidx = balance_assign(s);
     }
 
-    IGNORE_RETURN new (&lib::Thread::rpc_dest_addr_) ObAddr(s->addr);
-    pkt = reinterpret_cast<ObPacket*>(easy_client_send(eio_, s->addr, s));
-    lib::Thread::rpc_dest_addr_.reset();
+    {
+      lib::Thread::RpcGuard guard(s->addr);
+      pkt = reinterpret_cast<ObPacket*>(easy_client_send(eio_, s->addr, s));
+    }
     if (NULL == pkt) {
       char buff[OB_SERVER_ADDR_STR_LEN] = {'\0'};
       easy_inet_addr_to_str(&s->addr, buff, OB_SERVER_ADDR_STR_LEN);
