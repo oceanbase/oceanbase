@@ -550,6 +550,9 @@ public:
   int64_t get_dup_tablet_count();
   bool has_dup_tablet();
   int64_t get_readable_tablet_set_count();
+  int64_t get_need_confirm_tablet_set_count();
+  bool check_removing_tablet_exist();
+  bool check_changing_new_tablet_exist();
   int64_t get_all_tablet_set_count();
 
   int leader_takeover(const bool is_resume, const bool recover_all_readable_from_ckpt);

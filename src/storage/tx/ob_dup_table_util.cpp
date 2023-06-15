@@ -657,6 +657,7 @@ int ObDupTableLSHandler::ls_loop_handle()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  // TODO check stopped
   if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)
       || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
@@ -664,9 +665,13 @@ int ObDupTableLSHandler::ls_loop_handle()
   } else if (!ls_state_helper_.is_active_ls()) {
     ret = OB_LS_OFFLINE;
     DUP_TABLE_LOG(WARN, "the ls is not active", K(ret), KPC(this));
-  } else if (!has_dup_tablet()) {
+  } else if (!check_tablet_set_exist()) {
+    // if tablet set not exist,
+    // return OB_NO_TABLET and remove ls id form map
+    // else do ls loop handle
     ret = OB_NO_TABLET;
-    DUP_TABLE_LOG(INFO, "no dup tablet, no need to do loop worker", K(ret), KPC(tablets_mgr_ptr_));
+    DUP_TABLE_LOG(INFO, "no dup tablet, no need to do loop worker", K(ret),
+                  KPC(tablets_mgr_ptr_));
   } else {
     if (ls_state_helper_.is_leader()) {
       if (OB_ISNULL(log_operator_) || !log_operator_->is_busy()) {
@@ -1102,6 +1107,37 @@ bool ObDupTableLSHandler::has_dup_tablet()
     has_dup = tablets_mgr_ptr_->has_dup_tablet();
   }
   return has_dup;
+}
+
+// if return false, there are no tablets and tablet set need log
+bool ObDupTableLSHandler::check_tablet_set_exist()
+{
+  bool bool_ret = false;
+
+  if (OB_ISNULL(tablets_mgr_ptr_)) {
+    bool_ret = false;
+  } else {
+    int64_t readable_and_need_confirm_set_count =
+              tablets_mgr_ptr_->get_readable_tablet_set_count()
+              + tablets_mgr_ptr_->get_need_confirm_tablet_set_count();
+
+    // if readable and need confirm set count > 0, return true
+    if (readable_and_need_confirm_set_count > 0 ) {
+      bool_ret = true;
+    } else {
+      // if changing new and removing set exist return true
+      bool chaning_and_removing_tablet_exist =
+          tablets_mgr_ptr_->check_changing_new_tablet_exist()
+          || tablets_mgr_ptr_->check_removing_tablet_exist();
+      if (chaning_and_removing_tablet_exist) {
+        bool_ret = true;
+      } else {
+        bool_ret = false;
+      }
+    }
+  }
+
+  return bool_ret;
 }
 
 int ObDupTableLSHandler::get_local_ts_info(DupTableTsInfo &ts_info)

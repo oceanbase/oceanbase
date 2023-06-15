@@ -1237,6 +1237,16 @@ int64_t ObLSDupTabletsMgr::get_readable_tablet_set_count()
   return cnt;
 }
 
+int64_t ObLSDupTabletsMgr::get_need_confirm_tablet_set_count()
+{
+  int64_t cnt = 0;
+
+  SpinRLockGuard guard(dup_tablets_lock_);
+  cnt = need_confirm_new_queue_.get_size();
+
+  return cnt;
+}
+
 int64_t ObLSDupTabletsMgr::get_all_tablet_set_count()
 {
   int64_t cnt = 0;
@@ -1254,6 +1264,44 @@ int64_t ObLSDupTabletsMgr::get_all_tablet_set_count()
   }
 
   return cnt;
+}
+
+// check exist tablet or is logging
+bool ObLSDupTabletsMgr::check_removing_tablet_exist()
+{
+  bool bool_ret = false;
+  SpinRLockGuard guard(dup_tablets_lock_);
+
+  if (OB_ISNULL(removing_old_set_)) {
+    bool_ret = false;
+  } else if (removing_old_set_->size() > 0) {
+    bool_ret = true;
+  } else if (removing_old_set_->get_change_status()->is_modifiable()){
+    bool_ret = true;
+  } else {
+    bool_ret = false;
+  }
+
+  return bool_ret;
+}
+
+// check exist tablet or is logging
+bool ObLSDupTabletsMgr::check_changing_new_tablet_exist()
+{
+  bool bool_ret = false;
+  SpinRLockGuard guard(dup_tablets_lock_);
+
+  if (OB_ISNULL(changing_new_set_)) {
+    bool_ret = false;
+  } else if (changing_new_set_->size() > 0) {
+    bool_ret = true;
+  } else if (changing_new_set_->get_change_status()->is_modifiable()) {
+    bool_ret = true;
+  } else {
+    bool_ret = false;
+  }
+
+  return bool_ret;
 }
 
 int ObLSDupTabletsMgr::leader_takeover(const bool is_resume,

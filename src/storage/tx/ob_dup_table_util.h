@@ -179,6 +179,7 @@ public:
 
 public:
   int64_t get_dup_tablet_count();
+  bool check_tablet_set_exist();
   bool has_dup_tablet();
   int gc_dup_tablets(const int64_t gc_ts, const int64_t max_task_interval);
   int get_local_ts_info(DupTableTsInfo &ts_info);
