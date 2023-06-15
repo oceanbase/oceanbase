@@ -773,6 +773,18 @@ int ObTriggerResolver::resolve_compound_trigger_body(const ParseNode &parse_node
   int ret = OB_SUCCESS;
   ObTriggerInfo &trigger_info = trigger_arg.trigger_info_;
   CK (OB_NOT_NULL(session_info_));
+  CK (T_TG_COMPOUND_BODY == parse_node.type_);
+  CK (3 == parse_node.num_child_);
+  if (OB_SUCC(ret) && OB_NOT_NULL(parse_node.children_[2])) {
+    ObString tail_name(parse_node.children_[2]->str_len_, parse_node.children_[2]->str_value_);
+    if (0 != tail_name.case_compare(trigger_arg.trigger_info_.get_trigger_name())) {
+      ret = OB_ERR_END_LABEL_NOT_MATCH;
+      LOG_WARN("END identifier must match START identifier", K(ret), K(tail_name));
+      LOG_USER_ERROR(OB_ERR_END_LABEL_NOT_MATCH, tail_name.length(), tail_name.ptr(),
+                     trigger_arg.trigger_info_.get_trigger_name().length(),
+                     trigger_arg.trigger_info_.get_trigger_name().ptr());
+    }
+  }
   OZ (trigger_info.gen_package_source(trigger_arg.base_object_database_,
                                       trigger_arg.base_object_name_,
                                       parse_node,
