@@ -216,6 +216,7 @@ void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(palf::ElectionChangeLeaderMsgP);
   RPC_PROCESSOR(palf::LogGetMCStP);
   RPC_PROCESSOR(palf::LogGetStatP);
+  RPC_PROCESSOR(palf::LogNotifyFetchLogReqP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_cdc(ObSrvRpcXlator *xlator)
