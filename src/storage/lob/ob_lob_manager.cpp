@@ -2012,8 +2012,8 @@ int ObLobManager::write_inrow_inner(ObLobAccessParam& param, ObString& data, ObS
 {
   int ret = OB_SUCCESS;
   ObLobCommon *lob_common = param.lob_common_;
-  int32_t cur_handle_size = lob_common->get_handle_size(param.byte_size_) - param.byte_size_;
-  int32_t ptr_offset = 0;
+  int64_t cur_handle_size = lob_common->get_handle_size(param.byte_size_) - param.byte_size_;
+  int64_t ptr_offset = 0;
   if (OB_NOT_NULL(param.lob_locator_)) {
     ptr_offset = reinterpret_cast<char*>(param.lob_common_) - reinterpret_cast<char*>(param.lob_locator_->ptr_);
     cur_handle_size += ptr_offset;
