@@ -1,6 +1,8 @@
 drop table if exists t1, t2;
 create table t1 (c1 int, c2 int, c3 int);
 create table t2 (c1 int, c2 int, c3 int);
+call dbms_stats.gather_table_stats(NULL, 't1');
+call dbms_stats.gather_table_stats(NULL, 't2');
 explain select /*+ use_px parallel(2) use_hash(c d) */ * from (select a.c2, b.c3 from  (select /*+ use_hash(a, b) */ c1, c2, count(*) c3 from t1 group by 1, 2) a, (select c1, c2, count(*) c3 from t1 group by 1, 2) b where a.c1 = b.c1) c, (select c1, c2, count(*) c3 from t1 group by 1, 2) d where c.c2 = d.c2;
 Query Plan
 ============================================================================

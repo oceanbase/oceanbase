@@ -169,7 +169,7 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
       } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
         LOG_WARN("failed to merge stmt", K(ret));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
-                                          NULL != ctx.hint_,
+                                          NULL != ctx.hint_, false,
                                           trans_happened, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
@@ -266,7 +266,7 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
           } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
             LOG_WARN("failed to merge stmt", K(ret));
           } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
-                                              NULL != ctx.hint_,
+                                              NULL != ctx.hint_, false,
                                               trans_happened, &ctx))) {
             LOG_WARN("failed to accept transform", K(ret));
           } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
@@ -431,7 +431,7 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
       } else if (OB_FALSE_IT(NULL == view_table ? origin_trans_stmt = trans_stmt
                                                 : view_table->ref_query_ = static_cast<ObSelectStmt*>(trans_stmt))) {
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, origin_trans_stmt,
-                                          NULL != ctx.hint_,
+                                          NULL != ctx.hint_, false,
                                           trans_happened, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
@@ -548,7 +548,7 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
       } else if (OB_FALSE_IT(NULL == view_table ? trans_stmt = trans_ref_query
                                                 : view_table->ref_query_ = trans_ref_query)) {
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
-                                          NULL != ctx.hint_,
+                                          NULL != ctx.hint_, false,
                                           trans_happened, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened && OB_FAIL(add_transform_hint(*trans_stmt, &ctx))) {
@@ -2584,7 +2584,7 @@ int ObTransformOrExpansion::preprocess_or_condition(ObSelectStmt &stmt,
   5. outer/semi/anti join: use nlj with exec param push down
                            or use merge/hash and origin plan is nlj
 */
-int ObTransformOrExpansion::is_expected_plan(ObLogPlan *plan, void *check_ctx, bool &is_valid)
+int ObTransformOrExpansion::is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObCostBasedRewriteCtx *ctx = static_cast<ObCostBasedRewriteCtx *>(check_ctx);
@@ -2593,6 +2593,8 @@ int ObTransformOrExpansion::is_expected_plan(ObLogPlan *plan, void *check_ctx, b
   if (OB_ISNULL(ctx) || OB_ISNULL(plan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
+  } else if (!is_trans_plan) {
+    // do nothing
   } else if (OB_FAIL(find_trans_log_set(plan->get_plan_root(), ctx->trans_id_, log_set))) {
     LOG_WARN("failed to get join operator", K(ret));
   } else if (NULL == log_set) {

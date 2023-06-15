@@ -285,6 +285,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
                                       ObDMLStmt *&stmt,
                                       ObDMLStmt *trans_stmt,
                                       bool force_accept,
+                                      bool check_original_plan,
                                       bool &trans_happened,
                                       void *check_ctx /* = NULL*/)
 {
@@ -293,7 +294,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   trans_happened = false;
   ObDMLStmt *top_stmt = parent_stmts.empty() ? stmt : parent_stmts.at(0).stmt_;
   bool is_expected = false;
-  bool dummy = false;
+  bool is_original_expected = false;
   ObDMLStmt *tmp1 = NULL;
   ObDMLStmt *tmp2 = NULL;
   cost_based_trans_tried_ = true;
@@ -308,11 +309,14 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   } else if (OB_FAIL(evaluate_cost(parent_stmts, trans_stmt, true,
                                    trans_stmt_cost, is_expected, check_ctx))) {
     LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
-  } else if (stmt_cost_ >= 0 || !is_expected) {
+  } else if ((!check_original_plan && stmt_cost_ >= 0) || !is_expected) {
     trans_happened = is_expected && trans_stmt_cost < stmt_cost_;
   } else if (OB_FAIL(evaluate_cost(parent_stmts, stmt, false,
-                                   stmt_cost_, dummy, NULL))) {
+                                   stmt_cost_, is_original_expected,
+                                   check_original_plan ? check_ctx : NULL))) {
     LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
+  } else if (!is_original_expected) {
+    trans_happened = is_original_expected;
   } else {
     trans_happened = trans_stmt_cost < stmt_cost_;
   }
@@ -324,6 +328,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     OPT_TRACE("before transform cost:", stmt_cost_);
     OPT_TRACE("after transform cost:", trans_stmt_cost);
     OPT_TRACE("is expected plan:", is_expected);
+    OPT_TRACE("is expected original plan:", is_original_expected);
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
                      K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
   } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
@@ -344,10 +349,11 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   return ret;
 }
 
-int ObTransformRule::is_expected_plan(ObLogPlan *plan, void *check_ctx, bool &is_valid)
+int ObTransformRule::is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid)
 {
   UNUSED(plan);
   UNUSED(check_ctx);
+  UNUSED(is_trans_plan);
   is_valid = false;
   return OB_SUCCESS;
 }
@@ -414,7 +420,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
           LOG_WARN("failed to get optimization cost", K(ret));
         } else if (NULL == check_ctx) {
           // do nothing
-        } else if (OB_FAIL(is_expected_plan(plan, check_ctx, is_expected))) {
+        } else if (OB_FAIL(is_expected_plan(plan, check_ctx, is_trans_stmt, is_expected))) {
           LOG_WARN("failed to check transformed plan", K(ret));
         }
       }
