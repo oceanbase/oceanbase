@@ -193,18 +193,9 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
       ObMPDisconnect disconnect_processor(ctx);
       rpc::frame::ObReqProcessor *processor = static_cast<rpc::frame::ObReqProcessor *>(&disconnect_processor);
       if (OB_FAIL(processor->run())) {
-        LOG_WARN("free session fail", K(ctx));
-      } else {
-        LOG_INFO("free session successfully", K(conn.sessid_),
-                  "proxy_sessid", conn.proxy_sessid_, K(ctx));
+        LOG_WARN("free session fail and related session id can not be reused", K(ret), K(ctx));
       }
     }
-  }
-
-  if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(&conn, is_need_clear)))) {
-    LOG_ERROR("fail to jugde need clear", K(ret));
-  } else if (is_need_clear) {
-    GCTX.session_mgr_->mark_sessid_unused(conn.sessid_);
   }
 
   sm_conn_unlock_tenant(conn);
