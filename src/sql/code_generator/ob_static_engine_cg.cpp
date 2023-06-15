@@ -558,6 +558,7 @@ void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &
                  || col->get_result_type().is_geometry()
                  || col->get_result_type().get_type() == ObLongTextType
                  || col->get_result_type().get_type() == ObMediumTextType
+                 || col->get_result_type().get_type() == ObTextType
                  || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
                      && ob_is_text_tc(col->get_result_type().get_type()))) {
         // all lob types not support vectorize in 4.0

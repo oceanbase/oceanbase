@@ -1263,7 +1263,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c1 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c1], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -1284,7 +1284,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c1 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c1], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -1304,7 +1304,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c1 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c1], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -1325,7 +1325,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c1 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c1], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2203,7 +2203,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c2 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c2 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c2], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2224,7 +2224,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c2 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c2 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c2], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2244,7 +2244,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c2 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c2 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c2], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2265,7 +2265,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c2 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c2 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c2], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -3143,7 +3143,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c3 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c3 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c3], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -3164,7 +3164,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c3 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c3 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c3], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -3184,7 +3184,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c3 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c3 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c3], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -3205,7 +3205,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c3 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c3 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c3], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -4083,7 +4083,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c4 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c4 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c4], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -4104,7 +4104,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c4 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c4 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c4], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -4124,7 +4124,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c4 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c4 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c4], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -4145,7 +4145,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c4 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c4 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c4], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5023,7 +5023,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c5 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c5 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c5], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5044,7 +5044,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c5 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c5 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c5], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5064,7 +5064,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c5 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c5 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c5], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5085,7 +5085,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c5 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c5 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c5], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5963,7 +5963,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c6 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c6 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c6], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5984,7 +5984,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c6 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c6 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c6], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6004,7 +6004,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c6 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c6 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c6], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6025,7 +6025,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c6 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c6 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c6], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6903,7 +6903,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c7 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c7 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c7], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6924,7 +6924,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c7 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c7 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c7], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6944,7 +6944,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c7 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c7 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c7], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6965,7 +6965,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c7 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c7 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c7], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7843,7 +7843,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c8 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c8 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c8], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7864,7 +7864,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c8 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c8 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c8], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7884,7 +7884,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c8 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c8 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c8], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7905,7 +7905,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c8 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c8 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c8], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -8783,7 +8783,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c9 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c9 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c9], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -8804,7 +8804,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c9 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c9 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c9], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -8824,7 +8824,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c9 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c9 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c9], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -8845,7 +8845,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c9 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c9 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c9], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9723,7 +9723,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c10 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c10 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c10], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9744,7 +9744,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c10 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c10 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c10], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9764,7 +9764,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c10 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c10 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c10], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9785,7 +9785,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c10 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c10 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c10], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10663,7 +10663,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c11 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c11 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c11], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10684,7 +10684,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c11 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c11 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c11], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10704,7 +10704,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c11 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c11 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c11], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10725,7 +10725,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c11 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c11 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c11], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -11603,7 +11603,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c12 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c12 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c12], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -11624,7 +11624,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c12 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c12 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c12], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -11644,7 +11644,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c12 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c12 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c12], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -11665,7 +11665,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c12 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c12 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c12], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -12543,7 +12543,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c13 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c13 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c13], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -12564,7 +12564,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c13 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c13 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c13], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -12584,7 +12584,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c13 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c13 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c13], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -12605,7 +12605,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c13 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c13 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c13], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -13483,7 +13483,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c14 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c14 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c14], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -13504,7 +13504,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c14 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c14 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c14], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -13524,7 +13524,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c14 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c14 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c14], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -13545,7 +13545,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c14 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c14 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c14], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14423,7 +14423,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c15 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c15 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c15], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14444,7 +14444,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c15 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c15 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c15], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14464,7 +14464,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c15 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c15 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c15], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14485,7 +14485,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c15 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c15 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c15], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15363,7 +15363,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c16 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c16 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c16], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15384,7 +15384,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c16 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c16 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c16], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15404,7 +15404,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c16 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c16 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c16], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15425,7 +15425,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c16 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c16 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c16], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -16303,7 +16303,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c17 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c17 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c17], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -16324,7 +16324,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c17 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c17 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c17], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -16344,7 +16344,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c17 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c17 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c17], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -16365,7 +16365,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c17 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c17 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c17], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -17243,7 +17243,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c18 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c18 AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c18], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -17264,7 +17264,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c18 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c18 OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c18], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -17284,7 +17284,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c18 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c18 AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c18], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -17305,7 +17305,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c18 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([t1.c18 OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c18], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -18183,7 +18183,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c19, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c19, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c19], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -18204,7 +18204,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c19, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c19, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c19], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -18224,7 +18224,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c19, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c19, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c19], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -18245,7 +18245,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c19, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c19, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c19], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -19123,7 +19123,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c20, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c20, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c20], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -19144,7 +19144,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c20, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c20, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c20], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -19164,7 +19164,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c20, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c20, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c20], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -19185,7 +19185,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c20, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c20, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c20], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20063,7 +20063,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c21, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c21, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c21], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20084,7 +20084,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c21, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c21, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c21], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20104,7 +20104,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c21, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c21, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c21], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20125,7 +20125,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c21, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c21, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c21], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21003,7 +21003,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c22, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c22, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c22], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21024,7 +21024,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c22, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c22, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c22], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21044,7 +21044,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c22, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c22, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c22], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21065,7 +21065,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c22, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c22, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c22], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21085,7 +21085,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c1]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c1]), filter(nil)
       access([t1.c23], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21106,7 +21106,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c1]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c1]), filter(nil)
       access([t1.c23], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21128,7 +21128,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c2]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c2]), filter(nil)
       access([t1.c23], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21149,7 +21149,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c2]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c2]), filter(nil)
       access([t1.c23], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21171,7 +21171,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c3]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c3]), filter(nil)
       access([t1.c23], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21192,7 +21192,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c3]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c3]), filter(nil)
       access([t1.c23], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21214,7 +21214,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c4]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c4]), filter(nil)
       access([t1.c23], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21235,7 +21235,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c4]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c4]), filter(nil)
       access([t1.c23], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21257,7 +21257,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c5]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c5]), filter(nil)
       access([t1.c23], [t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21278,7 +21278,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c5]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c5]), filter(nil)
       access([t1.c23], [t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21300,7 +21300,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c6]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c6]), filter(nil)
       access([t1.c23], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21321,7 +21321,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c6]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c6]), filter(nil)
       access([t1.c23], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21343,7 +21343,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c7]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c7]), filter(nil)
       access([t1.c23], [t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21364,7 +21364,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c7]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c7]), filter(nil)
       access([t1.c23], [t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21386,7 +21386,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c8]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c8]), filter(nil)
       access([t1.c23], [t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21407,7 +21407,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c8]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c8]), filter(nil)
       access([t1.c23], [t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21429,7 +21429,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c9]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c9]), filter(nil)
       access([t1.c23], [t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21450,7 +21450,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c9]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c9]), filter(nil)
       access([t1.c23], [t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21472,7 +21472,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c10]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c10]), filter(nil)
       access([t1.c23], [t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21493,7 +21493,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c10]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c10]), filter(nil)
       access([t1.c23], [t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21515,7 +21515,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c11]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c11]), filter(nil)
       access([t1.c23], [t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21536,7 +21536,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c11]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c11]), filter(nil)
       access([t1.c23], [t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21558,7 +21558,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c12]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c12]), filter(nil)
       access([t1.c23], [t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21579,7 +21579,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c12]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c12]), filter(nil)
       access([t1.c23], [t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21601,7 +21601,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c13]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c13]), filter(nil)
       access([t1.c23], [t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21622,7 +21622,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c13]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c13]), filter(nil)
       access([t1.c23], [t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21644,7 +21644,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c14]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c14]), filter(nil)
       access([t1.c23], [t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21665,7 +21665,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c14]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c14]), filter(nil)
       access([t1.c23], [t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21687,7 +21687,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c15]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c15]), filter(nil)
       access([t1.c23], [t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21708,7 +21708,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c15]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c15]), filter(nil)
       access([t1.c23], [t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21730,7 +21730,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c16]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c16]), filter(nil)
       access([t1.c23], [t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21751,7 +21751,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c16]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c16]), filter(nil)
       access([t1.c23], [t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21773,7 +21773,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c17]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c17]), filter(nil)
       access([t1.c23], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21794,7 +21794,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c17]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c17]), filter(nil)
       access([t1.c23], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21816,7 +21816,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c18]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND t1.c18]), filter(nil)
       access([t1.c23], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21837,7 +21837,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c18]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR t1.c18]), filter(nil)
       access([t1.c23], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21859,7 +21859,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c19, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c19, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21880,7 +21880,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c19, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c19, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21902,7 +21902,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c20, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c20, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21923,7 +21923,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c20, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c20, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21945,7 +21945,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c21, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c21, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21966,7 +21966,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c21, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c21, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21988,7 +21988,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c22, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c22, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22009,7 +22009,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c22, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c22, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22031,7 +22031,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22052,7 +22052,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22074,7 +22074,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22095,7 +22095,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c23, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c23], [t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22118,7 +22118,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c1]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c1]), filter(nil)
       access([t1.c24], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22139,7 +22139,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c1]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c1]), filter(nil)
       access([t1.c24], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22161,7 +22161,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c2]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c2]), filter(nil)
       access([t1.c24], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22182,7 +22182,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c2]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c2]), filter(nil)
       access([t1.c24], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22204,7 +22204,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c3]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c3]), filter(nil)
       access([t1.c24], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22225,7 +22225,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c3]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c3]), filter(nil)
       access([t1.c24], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22247,7 +22247,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c4]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c4]), filter(nil)
       access([t1.c24], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22268,7 +22268,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c4]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c4]), filter(nil)
       access([t1.c24], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22290,7 +22290,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c5]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c5]), filter(nil)
       access([t1.c24], [t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22311,7 +22311,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c5]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c5]), filter(nil)
       access([t1.c24], [t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22333,7 +22333,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c6]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c6]), filter(nil)
       access([t1.c24], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22354,7 +22354,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c6]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c6]), filter(nil)
       access([t1.c24], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22376,7 +22376,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c7]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c7]), filter(nil)
       access([t1.c24], [t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22397,7 +22397,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c7]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c7]), filter(nil)
       access([t1.c24], [t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22419,7 +22419,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c8]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c8]), filter(nil)
       access([t1.c24], [t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22440,7 +22440,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c8]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c8]), filter(nil)
       access([t1.c24], [t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22462,7 +22462,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c9]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c9]), filter(nil)
       access([t1.c24], [t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22483,7 +22483,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c9]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c9]), filter(nil)
       access([t1.c24], [t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22505,7 +22505,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c10]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c10]), filter(nil)
       access([t1.c24], [t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22526,7 +22526,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c10]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c10]), filter(nil)
       access([t1.c24], [t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22548,7 +22548,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c11]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c11]), filter(nil)
       access([t1.c24], [t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22569,7 +22569,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c11]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c11]), filter(nil)
       access([t1.c24], [t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22591,7 +22591,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c12]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c12]), filter(nil)
       access([t1.c24], [t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22612,7 +22612,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c12]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c12]), filter(nil)
       access([t1.c24], [t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22634,7 +22634,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c13]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c13]), filter(nil)
       access([t1.c24], [t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22655,7 +22655,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c13]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c13]), filter(nil)
       access([t1.c24], [t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22677,7 +22677,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c14]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c14]), filter(nil)
       access([t1.c24], [t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22698,7 +22698,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c14]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c14]), filter(nil)
       access([t1.c24], [t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22720,7 +22720,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c15]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c15]), filter(nil)
       access([t1.c24], [t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22741,7 +22741,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c15]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c15]), filter(nil)
       access([t1.c24], [t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22763,7 +22763,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c16]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c16]), filter(nil)
       access([t1.c24], [t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22784,7 +22784,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c16]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c16]), filter(nil)
       access([t1.c24], [t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22806,7 +22806,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c17]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c17]), filter(nil)
       access([t1.c24], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22827,7 +22827,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c17]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c17]), filter(nil)
       access([t1.c24], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22849,7 +22849,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c18]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND t1.c18]), filter(nil)
       access([t1.c24], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22870,7 +22870,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c18]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR t1.c18]), filter(nil)
       access([t1.c24], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22892,7 +22892,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c19, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c19, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22913,7 +22913,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c19, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c19, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22935,7 +22935,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c20, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c20, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22956,7 +22956,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c20, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c20, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22978,7 +22978,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c21, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c21, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22999,7 +22999,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c21, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c21, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -23021,7 +23021,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c22, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c22, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -23042,7 +23042,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c22, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c22, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -23064,7 +23064,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -23085,7 +23085,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c23, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24], [t1.c23]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -23108,7 +23108,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) AND cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -23129,7 +23129,7 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil), rowset=256
+  0 - output([cast(t1.c24, DOUBLE(-1, -1)) OR cast(t1.c24, DOUBLE(-1, -1))]), filter(nil)
       access([t1.c24]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
