@@ -51,8 +51,10 @@ namespace sql
 
 ObBasicSessionInfo::SysVarsCacheData ObBasicSessionInfo::SysVarsCache::base_data_;
 
-ObBasicSessionInfo::ObBasicSessionInfo()
-    : query_mutex_(common::ObLatchIds::SESSION_QUERY_LOCK),
+ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
+  :   orig_tenant_id_(tenant_id),
+      tenant_session_mgr_(NULL),
+      query_mutex_(common::ObLatchIds::SESSION_QUERY_LOCK),
       thread_data_mutex_(common::ObLatchIds::SESSION_THREAD_DATA_LOCK),
       is_valid_(true),
       is_deserialized_(false),
@@ -91,16 +93,16 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       trans_flags_(),
       sql_scope_flags_(),
       need_reset_package_(false),
-      base_sys_var_alloc_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
-      inc_sys_var_alloc1_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
-      inc_sys_var_alloc2_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
+      base_sys_var_alloc_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      inc_sys_var_alloc1_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      inc_sys_var_alloc2_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
       current_buf_index_(0),
       bucket_allocator_wrapper_(&block_allocator_),
-      user_var_val_map_(SMALL_BLOCK_SIZE, ObWrapperAllocator(&block_allocator_)),
+      user_var_val_map_(SMALL_BLOCK_SIZE, ObWrapperAllocator(&block_allocator_), orig_tenant_id_),
       influence_plan_var_indexs_(),
       is_first_gen_(true),
       is_first_gen_config_(true),
-      sys_var_fac_(),
+      sys_var_fac_(orig_tenant_id_),
       next_frag_mem_point_(OB_MALLOC_NORMAL_BLOCK_SIZE), // 8KB
       sys_vars_encode_max_size_(0),
       consistency_level_(INVALID_CONSISTENCY),
@@ -158,6 +160,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
   sess_bt_buff_[0] = '\0';
   inc_sys_var_alloc_[0] = &inc_sys_var_alloc1_;
   inc_sys_var_alloc_[1] = &inc_sys_var_alloc2_;
+  influence_plan_var_indexs_.set_attr(ObMemAttr(orig_tenant_id_, "PlanVaIdx"));
 }
 
 ObBasicSessionInfo::~ObBasicSessionInfo()
@@ -5396,7 +5399,8 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
       thread_data_.cur_query_buf_len_ = 0;
     }
     int64_t len = MAX(MIN_CUR_QUERY_LEN, truncated_len + 1);
-     char *buf = reinterpret_cast<char*>(ob_malloc(len, ObModIds::OB_SQL_SESSION_QUERY_SQL));
+    char *buf = reinterpret_cast<char*>(ob_malloc(len, ObMemAttr(orig_tenant_id_,
+                                                                 ObModIds::OB_SQL_SESSION_QUERY_SQL)));
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));

@@ -41,6 +41,7 @@ namespace obmysql {
 }
 namespace sql {
   namespace dtl { class ObTenantDfc; }
+  class ObTenantSQLSessionMgr;
   class ObTenantSqlMemoryManager;
   class ObPlanMonitorNodeList;
   class ObPlanBaselineMgr;
@@ -254,7 +255,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       ObTestModule*,                                 \
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
       rootserver::ObHeartbeatService*,              \
-      oceanbase::common::ObDetectManager*            \
+      oceanbase::common::ObDetectManager*,          \
+      oceanbase::sql::ObTenantSQLSessionMgr*        \
   )
 
 

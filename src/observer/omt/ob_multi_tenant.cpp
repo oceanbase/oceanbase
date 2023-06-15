@@ -459,6 +459,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(server_obj_pool_mtl_new<ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObPartTransCtx>);
     MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
     MTL_BIND(ObDetectManager::mtl_init, ObDetectManager::mtl_destroy);
+    MTL_BIND(ObTenantSQLSessionMgr::mtl_init, ObTenantSQLSessionMgr::mtl_destroy);
     if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
       MTL_BIND2(nullptr, nullptr, start_mysql_queue, mtl_stop_default,
                 mtl_wait_default, mtl_destroy_default);
@@ -1456,12 +1457,14 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       SpinWLockGuard guard(lock_); //add a lock when set tenant stop, omt will check tenant has stop before calling timeup()
       removed_tenant->stop();
     }
-    LOG_INFO("removed_tenant begin to kill tenant session", K(tenant_id));
-    if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
-      LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
-      {
-        SpinWLockGuard guard(lock_);
-        removed_tenant->start();
+    if (!is_virtual_tenant_id(tenant_id)) {
+      LOG_INFO("removed_tenant begin to kill tenant session", K(tenant_id));
+      if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
+        LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
+        {
+          SpinWLockGuard guard(lock_);
+          removed_tenant->start();
+        }
       }
     }
   }

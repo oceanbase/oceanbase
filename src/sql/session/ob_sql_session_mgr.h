@@ -145,61 +145,12 @@ private:
   int get_avaiable_local_seq(uint32_t &local_seq);
   int set_first_seq(int64_t first_seq);
 
-  class SessionPool
-  {
-  public:
-    SessionPool();
-  public:
-    int init();
-    int pop_session(uint64_t tenant_id, ObSQLSessionInfo *&session);
-    int push_session(uint64_t tenant_id, ObSQLSessionInfo *&session);
-    int64_t count() const;
-    TO_STRING_KV(K(session_pool_.capacity()),
-                 K(session_pool_.get_total()),
-                 K(session_pool_.get_free()));
-  private:
-    static const int64_t POOL_CAPACIPY = 512;
-    static const uint64_t POOL_INITED = 0;
-    common::ObFixedQueue<ObSQLSessionInfo> session_pool_;
-    ObSQLSessionInfo *session_array[POOL_CAPACIPY];
-  };
-
-  class SessionPoolMap
-  {
-  public:
-    SessionPoolMap(ObIAllocator &alloc)
-      : pool_blocks_(ObWrapperAllocator(alloc)),
-        alloc_(alloc),
-        lock_(common::ObLatchIds::SESSION_POOL_MAP_LOCK)
-    {}
-    int get_session_pool(uint64_t tenant_id, SessionPool *&session_pool);
-  private:
-    static const uint64_t BLOCK_ID_SHIFT = 10;
-    static const uint64_t SLOT_ID_MASK = 0x3FF;
-    static const uint64_t SLOT_PER_BLOCK = 1ULL << BLOCK_ID_SHIFT;
-    typedef SessionPool *SessionPoolBlock[SLOT_PER_BLOCK];
-    typedef Ob2DArray<SessionPoolBlock *, 1024, ObWrapperAllocator> SessionPoolBlocks;
-  private:
-    int create_pool_block(uint64_t block_id, SessionPoolBlock *&pool_block);
-    int create_session_pool(SessionPoolBlock &pool_block, uint64_t slot_id, SessionPool *&session_pool);
-    uint64_t get_block_id(uint64_t tenant_id) const;
-    uint64_t get_slot_id(uint64_t tenant_id) const;
-  private:
-    SessionPoolBlocks pool_blocks_;
-    ObIAllocator &alloc_;
-    ObSpinLock lock_;
-  };
-
   class ValueAlloc
   {
   public:
     ValueAlloc()
-      : allocator_(SET_USE_500("SessMap")),
-        session_pool_map_(allocator_),
-        alloc_total_count_(0),
-        alloc_from_pool_count_(0),
-        free_total_count_(0),
-        free_to_pool_count_(0)
+      : alloc_total_count_(0),
+        free_total_count_(0)
     {}
     ~ValueAlloc() {}
     int clean_tenant(uint64_t tenant_id);
@@ -218,14 +169,8 @@ private:
       }
     }
   private:
-    bool is_valid_tenant_id(uint64_t tenant_id) const;
-  private:
-    ObArenaAllocator allocator_;
-    SessionPoolMap session_pool_map_;
     volatile int64_t alloc_total_count_;
-    volatile int64_t alloc_from_pool_count_;
     volatile int64_t free_total_count_;
-    volatile int64_t free_to_pool_count_;
     static const int64_t MAX_REUSE_COUNT = 10000;
     static const int64_t MAX_SYS_VAR_MEM = 256 * 1024;
   };
@@ -345,6 +290,45 @@ private:
   ObSQLSessionMgr &mgr_;
   ObSQLSessionInfo *session_;
 };
+
+class ObTenantSQLSessionMgr
+{
+public:
+  explicit ObTenantSQLSessionMgr(const int64_t tenant_id);
+  ~ObTenantSQLSessionMgr();
+
+  int init();
+  void destroy();
+  static int mtl_init(ObTenantSQLSessionMgr *&tenant_session_mgr);
+  static void mtl_destroy(ObTenantSQLSessionMgr *&tenant_session_mgr);
+  ObSQLSessionInfo *alloc_session();
+  void free_session(ObSQLSessionInfo *session);
+  void clean_session_pool();
+private:
+  class SessionPool
+  {
+  public:
+    static const int64_t POOL_CAPACIPY = 512;
+  public:
+    SessionPool();
+    int init(const int64_t capacity);
+    int pop_session(ObSQLSessionInfo *&session);
+    int push_session(ObSQLSessionInfo *&session);
+    int64_t count() const;
+    TO_STRING_KV(K(session_pool_.capacity()),
+                 K(session_pool_.get_total()),
+                 K(session_pool_.get_free()));
+  private:
+    ObSQLSessionInfo *session_array_[POOL_CAPACIPY];
+    common::ObFixedQueue<ObSQLSessionInfo> session_pool_;
+  };
+  bool is_valid_tenant_id(uint64_t tenant_id) const;
+private:
+  const int64_t tenant_id_;
+  SessionPool session_pool_;
+  ObFixedClassAllocator<ObSQLSessionInfo> session_allocator_;
+  DISALLOW_COPY_AND_ASSIGN(ObTenantSQLSessionMgr);
+}; // end of class ObSQLSessionMgr
 
 } // end of namespace sql
 } // end of namespace oceanbase

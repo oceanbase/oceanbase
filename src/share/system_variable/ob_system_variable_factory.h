@@ -1682,7 +1682,7 @@ public:
 class ObSysVarFactory
 {
 public:
-  ObSysVarFactory();
+  ObSysVarFactory(const int64_t tenant_id = OB_SERVER_TENANT_ID);
   virtual ~ObSysVarFactory();
   void destroy();
   int create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var);

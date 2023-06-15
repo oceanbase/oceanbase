@@ -49,7 +49,8 @@ public:
                                   > VarNameValMap;
 public:
   ObSessionValMap();
-  ObSessionValMap(const int64_t block_size, const common::ObWrapperAllocator &block_allocator);
+  ObSessionValMap(const int64_t block_size, const common::ObWrapperAllocator &block_allocator,
+                  const int64_t tenant_id=OB_SERVER_TENANT_ID);
   virtual ~ObSessionValMap();
   // clear all user variable, keep hash table inited
   void reuse();

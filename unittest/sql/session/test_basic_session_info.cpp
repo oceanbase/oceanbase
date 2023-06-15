@@ -34,7 +34,7 @@ TEST(test_basic_session_info, init_set_get)
   OBSERVER.init_schema();
   OBSERVER.init_tz_info_mgr();
   common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
-  ObBasicSessionInfo session_info;
+  ObBasicSessionInfo session_info(OB_SERVER_TENANT_ID);
   easy_connection_t conn;
   bool autocommit = false;
   bool is_valid  = false;
@@ -79,7 +79,7 @@ TEST(test_basic_session_info, load_variables)
   OBSERVER.init_schema();
   OBSERVER.init_tz_info_mgr();
   common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
-  ObBasicSessionInfo session_info;
+  ObBasicSessionInfo session_info(OB_SERVER_TENANT_ID);
   ObBasicSessionInfo::LockGuard lock_guard(session_info.get_query_lock());
   ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
   ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, 0, &allocator));

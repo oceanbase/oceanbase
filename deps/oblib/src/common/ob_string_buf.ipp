@@ -25,10 +25,10 @@ const int64_t ObStringBufT<PageAllocatorT, PageArenaT>::MIN_DEF_MEM_BLOCK_SIZE =
     OB_MALLOC_NORMAL_BLOCK_SIZE;
 
 template <typename PageAllocatorT, typename PageArenaT>
-ObStringBufT<PageAllocatorT, PageArenaT>::ObStringBufT(const lib::ObLabel &label /*=nullptr*/,
+ObStringBufT<PageAllocatorT, PageArenaT>::ObStringBufT(const lib::ObMemAttr &attr,
                                                        const int64_t block_size /*= DEF_MEM_BLOCK_SIZE*/)
     : local_arena_(block_size < MIN_DEF_MEM_BLOCK_SIZE ? MIN_DEF_MEM_BLOCK_SIZE : block_size,
-                   PageAllocatorT(label)),
+                   PageAllocatorT(attr)),
       arena_(local_arena_)
 {
 }

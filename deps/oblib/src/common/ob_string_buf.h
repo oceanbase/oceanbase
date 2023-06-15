@@ -29,8 +29,11 @@ template <typename PageAllocatorT = ModulePageAllocator, typename PageArenaT = P
 class ObStringBufT
 {
 public:
-  explicit ObStringBufT(const lib::ObLabel &label = ObModIds::OB_STRING_BUF,
+  explicit ObStringBufT(const lib::ObMemAttr &attr,
                         const int64_t block_size = DEF_MEM_BLOCK_SIZE);
+  explicit ObStringBufT(const lib::ObLabel &label = ObModIds::OB_STRING_BUF,
+                        const int64_t block_size = DEF_MEM_BLOCK_SIZE)
+    : ObStringBufT(lib::ObMemAttr(OB_SERVER_TENANT_ID, label), block_size) {}
   explicit ObStringBufT(PageArenaT &arena);
   ~ObStringBufT();
   int reset();
