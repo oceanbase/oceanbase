@@ -296,7 +296,7 @@ static struct VarsInit{
       ObSysVars[16].base_class_ = "ObTimeZoneSysVar" ;
       ObSysVars[16].name_ = "time_zone" ;
       ObSysVars[16].data_type_ = ObVarcharType ;
-      ObSysVars[16].value_ = "+8:00" ;
+      ObSysVars[16].value_ = "+08:00" ;
       ObSysVars[16].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[16].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_time_zone" ;
       ObSysVars[16].id_ = SYS_VAR_TIME_ZONE ;

@@ -257,7 +257,7 @@
   "time_zone": {
     "id": 16,
     "name": "time_zone",
-    "value": "+8:00",
+    "value": "+08:00",
     "data_type": "varchar",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
