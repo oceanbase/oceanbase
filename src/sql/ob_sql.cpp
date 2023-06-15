@@ -3655,6 +3655,8 @@ int ObSql::get_outline_data(ObSqlCtx &context,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null session info", K(ret));
+  } else if (0 != context.first_plan_hash_) {
+    outline_content = context.first_outline_data_;
   } else if (OB_FAIL(get_outline_data(pc_ctx, signature_sql, outline_state, outline_content))) {
     LOG_WARN("failed to get outline data", K(ret));
   }
