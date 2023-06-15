@@ -779,6 +779,10 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
         need_gather_hybrid_hist |= histogram.is_hybrid();
       }
     }
+    if (top_k_fre_hist != NULL) {
+      top_k_fre_hist->~ObTopKFrequencyHistograms();
+      top_k_fre_hist = NULL;
+    }
   }
   return ret;
 }
