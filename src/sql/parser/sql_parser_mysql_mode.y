@@ -917,6 +917,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   merge_nodes(string_list_node, result, T_EXPR_LIST, str_node);
   ParseNode *concat_node = NULL;
   make_name_node(concat_node, result->malloc_pool_, "concat");
+  concat_node->reserved_ = 1; /* mark special concat */
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, concat_node, string_list_node);
 }
 ;

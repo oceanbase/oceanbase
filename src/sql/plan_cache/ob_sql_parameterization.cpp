@@ -1598,6 +1598,8 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
           SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
+      } else if ((0 == func_name.case_compare("concat")) && 1 == node[0]->reserved_) {
+        sql_info.ps_need_parameterized_ = false;
       }
     }
   } else if (T_OP_LIKE == tree->type_) {
@@ -2010,6 +2012,7 @@ int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tr
     }
   } else if (T_OP_MUL == tree->children_[1]->type_
              || T_OP_DIV == tree->children_[1]->type_
+             || T_OP_INT_DIV == tree->children_[1]->type_
              || (lib::is_mysql_mode() && T_OP_MOD == tree->children_[1]->type_)) {
     /*  '0 - 2 * 3' should be transformed to '0 + (-2) * 3' */
     /*  '0 - 2 / 3' should be transformed to '0 + (-2) / 3' */
@@ -2088,7 +2091,8 @@ int ObSqlParameterization::find_leftest_const_node(ParseNode &cur_node, ParseNod
     const_node = &cur_node;
   } else if (1 == cur_node.is_assigned_from_child_) {
     // do nothing
-  } else if (T_OP_MUL == cur_node.type_ || T_OP_DIV == cur_node.type_ || T_OP_MOD == cur_node.type_) {
+  } else if (T_OP_MUL == cur_node.type_ || T_OP_DIV == cur_node.type_
+    || T_OP_INT_DIV == cur_node.type_ || T_OP_MOD == cur_node.type_) {
     /*   对于1 - (2-3)/4，语法树为 */
     /*      - */
     /*     / \ */
