@@ -172,13 +172,15 @@ int64_t ObTxCallbackList::calc_need_remove_count_for_fast_commit_()
   return need_remove_count;
 }
 
-int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
+int ObTxCallbackList::remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
+                                                       bool &meet_generate_cursor)
 {
   int ret = OB_SUCCESS;
-  has_remove = false;
+  meet_generate_cursor = false;
   SpinLockGuard guard(latch_);
 
-  ObRemoveCallbacksForFastCommitFunctor functor(calc_need_remove_count_for_fast_commit_());
+  ObRemoveCallbacksForFastCommitFunctor functor(generate_cursor,
+                                                calc_need_remove_count_for_fast_commit_());
   functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
@@ -186,7 +188,7 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   } else {
     callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
     ensure_checksum_(functor.get_checksum_last_scn());
-    has_remove = SCN::min_scn() != functor.get_checksum_last_scn();
+    meet_generate_cursor = functor.meet_generate_cursor();
   }
 
   return ret;

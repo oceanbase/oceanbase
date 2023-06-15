@@ -53,9 +53,10 @@ public:
   // parameter _fast_commit_callback_count. It will only remove callbacks
   // without removing data by calling checkpoint_callback. So user need
   // implement lazy callback for the correctness. What's more, it will calculate
-  // checksum when removing. Finally it returns has_remove if you really remove
-  // the callbacks.
-  int remove_callbacks_for_fast_commit(bool &has_remove);
+  // checksum when removing. Finally it returns meet_generate_cursor if you remove
+  // the callbacks that generate_cursor is pointing to.
+  int remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
+                                       bool &meet_generate_cursor);
 
   // remove_callbacks_for_remove_memtable will remove all callbacks that is
   // belonged to the specified memtable. It will only remove callbacks without

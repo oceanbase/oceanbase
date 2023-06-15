@@ -72,11 +72,14 @@ protected:
 class ObRemoveCallbacksForFastCommitFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObRemoveCallbacksForFastCommitFunctor(const int64_t need_remove_count)
-    : need_remove_count_(need_remove_count),
+  ObRemoveCallbacksForFastCommitFunctor(const ObITransCallback *generate_cursor,
+                                        const int64_t need_remove_count)
+    : generate_cursor_(generate_cursor),
+    need_remove_count_(need_remove_count),
     last_scn_for_remove_(share::SCN::min_scn()),
     checksum_scn_(share::SCN::min_scn()),
-    checksumer_(NULL) {}
+    checksumer_(NULL),
+    meet_generate_cursor_(false) {}
 
   virtual bool is_iter_end(ObITransCallback *callback) const override
   {
@@ -136,6 +139,12 @@ public:
       need_remove_callback_ = true;
       need_remove_count_--;
 
+      // If we are removing callback pointed by generate_cursor, we need reset
+      // the generate_cursor. Otherwise the dangling pointer may coredump.
+      if (generate_cursor_ == callback) {
+        meet_generate_cursor_ = true;
+      }
+
       // if we satisfy the removing count of fast commit, we still need remember
       // the last log ts we have already removed and then continue to remove the
       // callbacks until all callbacks with the same log ts has been removed in
@@ -156,15 +165,26 @@ public:
     return ret;
   }
 
-  VIRTUAL_TO_STRING_KV(K_(need_remove_count),
+  // return whether we are removing callbacks that pointed by generate cursor
+  bool meet_generate_cursor() const
+  {
+    return meet_generate_cursor_;
+  }
+
+  VIRTUAL_TO_STRING_KV(KP_(generate_cursor),
+                       K_(need_remove_count),
                        K_(checksum_scn),
-                       K_(last_scn_for_remove));
+                       K_(last_scn_for_remove),
+                       K_(meet_generate_cursor));
 
 private:
+  const ObITransCallback *generate_cursor_;
   int64_t need_remove_count_;
   share::SCN last_scn_for_remove_;
   share::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
+
+  bool meet_generate_cursor_;
 };
 
 class ObNeverStopForCallbackTraverseFunctor

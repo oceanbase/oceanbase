@@ -434,25 +434,25 @@ TEST_F(TestTxCallbackList, remove_callback_by_fast_commit)
 
   fast_commit_reserve_cnt_ = 16;
   bool has_remove = false;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
   EXPECT_EQ(8, callback_list_.get_length());
   EXPECT_EQ(1, mgr_.get_callback_remove_for_fast_commit_count());
   EXPECT_EQ(true, has_remove);
 
   fast_commit_reserve_cnt_ = 14;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
   EXPECT_EQ(6, callback_list_.get_length());
   EXPECT_EQ(3, mgr_.get_callback_remove_for_fast_commit_count());
   EXPECT_EQ(true, has_remove);
 
   fast_commit_reserve_cnt_ = 1;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
   EXPECT_EQ(4, callback_list_.get_length());
   EXPECT_EQ(5, mgr_.get_callback_remove_for_fast_commit_count());
   EXPECT_EQ(true, has_remove);
 
   fast_commit_reserve_cnt_ = 1;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
   EXPECT_EQ(4, callback_list_.get_length());
   EXPECT_EQ(5, mgr_.get_callback_remove_for_fast_commit_count());
   EXPECT_EQ(false, has_remove);
@@ -893,22 +893,22 @@ TEST_F(TestTxCallbackList, checksum_fast_commit_and_tx_end)
 
   fast_commit_reserve_cnt_ = 16;
   bool has_remove = false;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
   EXPECT_EQ(true, is_checksum_equal(1, checksum_));
   EXPECT_EQ(scn_2, callback_list_.checksum_scn_);
 
   fast_commit_reserve_cnt_ = 14;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
   EXPECT_EQ(true, is_checksum_equal(3, checksum_));
   EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
   fast_commit_reserve_cnt_ = 1;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
   fast_commit_reserve_cnt_ = 1;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
@@ -1080,7 +1080,7 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
       bool has_remove = false;
       if (enable) {
         EXPECT_EQ(OB_SUCCESS,
-                  callback_list_.remove_callbacks_for_fast_commit(has_remove));
+                  callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
         EXPECT_EQ(true, has_remove);
       }
 
@@ -1149,7 +1149,8 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
 
 namespace memtable
 {
-int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
+int ObTxCallbackList::remove_callbacks_for_fast_commit(const ObITransCallback *callback,
+                                                       bool &has_remove)
 {
   int ret = OB_SUCCESS;
   has_remove = false;
@@ -1159,7 +1160,7 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   const int64_t recommand_reserve_count = (fast_commit_callback_count + 1) / 2;
   const int64_t need_remove_count = length_ - recommand_reserve_count;
 
-  ObRemoveCallbacksForFastCommitFunctor functor(need_remove_count);
+  ObRemoveCallbacksForFastCommitFunctor functor(callback, need_remove_count);
   functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
