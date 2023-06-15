@@ -45,6 +45,7 @@ LATCH_DEF(TOKEN_BUCKET_LOCK, 30, "token bucket lock", LATCH_FIFO, 20000000L, 0, 
 LATCH_DEF(LIGHTY_HASHMAP_BUCKET_LOCK, 31, "light hashmap bucket lock", LATCH_FIFO, 2000, 0, LIGHTY_HASHMAP_BUCKET_LOCK_WAIT, "lighty hashmap bucket lock")
 LATCH_DEF(ROW_CALLBACK_LOCK, 32, "row callback lock", LATCH_FIFO, 2000, 0, ROW_CALLBACK_LOCK_WAIT, "row callback lock")
 LATCH_DEF(LS_LOCK, 33, "ls latch", LATCH_READ_PREFER, 2000, 0, LS_LOCK_WAIT, "ls latch")
+LATCH_DEF(NOUSE_34, 34, "not used 34", LATCH_FIFO, 2000, 0, NULL_EVENT, "not used 34")
 LATCH_DEF(SWITCH_LEADER_LOCK, 35, "switch leader lock", LATCH_FIFO, 2000, 0, SWITCH_LEADER_WAIT, "switch leader lock")
 LATCH_DEF(PARTITION_FREEZE_LOCK, 36, "partition freeze lock", LATCH_FIFO, 2000, 0, PARTITION_FREEZE_WAIT, "partition freeze lock")
 LATCH_DEF(SCHEMA_SERVICE_LOCK, 37, "schema service lock", LATCH_READ_PREFER, 2000, 0, SCHEMA_SERVICE_LOCK_WAIT, "schema service lock")
@@ -116,8 +117,7 @@ LATCH_DEF(OB_CONTEXT_LOCK, 102, "ob context lock", LATCH_FIFO, 2000, 0, OB_CONTE
 LATCH_DEF(OB_PG_INDEX_LOCK, 103, "ob pg index lock", LATCH_FIFO, 2000, 0, OB_CONTEXT_LOCK_WAIT, "ob pg index lock")
 LATCH_DEF(OB_LOG_ARCHIVE_SCHEDULER_LOCK, 104, "ob log archive scheduler lock", LATCH_FIFO, 2000, 0, OB_LOG_ARCHIVE_SCHEDULER_LOCK_WAIT, "ob log archive scheduler lock")
 LATCH_DEF(MEM_DUMP_ITER_LOCK, 105, "mem dump iter lock", LATCH_FIFO, 2000, 0, OB_CONTEXT_LOCK_WAIT, "mem dump iter lock")
-LATCH_DEF(OB_REQ_TIMEINFO_LIST_LOCK, 106, "ob request timeinfo list lock",
-          LATCH_FIFO, 2000, 0, OB_REQ_TIMEINFO_LIST_WAIT, "ob request timeinfo list lock")
+LATCH_DEF(OB_REQ_TIMEINFO_LIST_LOCK, 106, "ob request timeinfo list lock", LATCH_FIFO, 2000, 0, OB_REQ_TIMEINFO_LIST_WAIT, "ob request timeinfo list lock")
 LATCH_DEF(TRANS_BATCH_RPC_LOCK, 107, "trans batch rpc lock", LATCH_FIFO, 2000, 0, TRANS_BATCH_RPC_LOCK_WAIT, "trans batch rpc latch")
 LATCH_DEF(BACKUP_INFO_MGR_LOCK, 108, "backup info mgr lock", LATCH_FIFO, 2000, 0, BACKUP_INFO_MGR_LOCK_WAIT, "backup info mgr lock")
 LATCH_DEF(CLOG_RENEW_MS_TASK_LOCK, 109, "clog sw renew ms task spin lock", LATCH_FIFO, 20000000L, 0, CLOG_RENEW_MS_TASK_LOCK_WAIT, "clog sw renew ms task spin lock")
@@ -175,6 +175,7 @@ LATCH_DEF(OBCDC_FETCHLOG_ARPC_LOCK, 160, "obcdc fetchlog arpc lock", LATCH_FIFO,
 LATCH_DEF(OBCDC_FETCHSREAM_CONTAINER_LOCK, 161, "obcdc fetchstream container lock", LATCH_FIFO, 2000, 0, OBCDC_FETCHSTREAM_CONTAINER_LOCK_WAIT, "obcdc fetchstream container lock")
 LATCH_DEF(INNER_CONN_POOL_LOCK, 162, "inner connection pool lock", LATCH_FIFO, 2000, 0, INNER_CONN_POOL_LOCK_WAIT, "inner connection pool lock")
 LATCH_DEF(TENANT_RES_MGR_LIST_LOCK, 163, "tenant resource mgr list lock", LATCH_FIFO, 2000, 0, TENANT_RES_MGR_LIST_LOCK_WAIT, "tenant resource mgr list lock")
+LATCH_DEF(NOUSE_164, 164, "not used 164", LATCH_FIFO, 2000, 0, NULL_EVENT, "not used 164")
 LATCH_DEF(TC_FREE_LIST_LOCK, 165, "tc free list lock", LATCH_FIFO, 2000, 0, TC_FREE_LIST_LOCK_WAIT, "tc free list lock")
 LATCH_DEF(DEDUP_QUEUE_LOCK, 166, "dedup queue lock", LATCH_FIFO, 2000, 0, DEDUP_QUEUE_LOCK_WAIT, "dedup queue lock")
 LATCH_DEF(SLOG_PROCESSING_MUTEX, 167, "slog processing mutex", LATCH_FIFO, INT64_MAX, 0, SLOG_PROCESSING_MUTEX_WAIT, "slog processing mutex")
@@ -205,6 +206,7 @@ LATCH_DEF(CREATE_INNER_SCHEMA_EXECUTOR_LOCK, 191, "create inner schema executor 
 LATCH_DEF(WRS_SERVER_VERSION_LOCK, 192, "weak read server version lock", LATCH_FIFO, 2000, 0, WRS_SERVER_VERSION_WAIT, "weak read server version lock")
 LATCH_DEF(TX_LS_LOG_WRITER_LOCK, 193, "transaction ls log writer lock", LATCH_FIFO, 2000, 0, TX_LS_LOG_WRITER_WAIT, "transaction ls log writer lock")
 LATCH_DEF(TX_DESC_LOCK, 194, "transaction descriptor lock", LATCH_FIFO, 2000, 0, TX_DESC_WAIT, "transaction descriptor lock")
+LATCH_DEF(NOUSE_195, 195, "not used 195", LATCH_FIFO, 2000, 0, NULL_EVENT, "not used 195")
 LATCH_DEF(TX_DESC_COMMIT_LOCK, 196, "transaction descriptor commit lock", LATCH_FIFO, 2000, 0, TX_DESC_COMMIT_WAIT, "transaction descriptor commit lock")
 LATCH_DEF(WRS_CLUSTER_SERVICE_LOCK, 197, "weak read service cluster service lock", LATCH_FIFO, 2000, 0, WRS_CLUSTER_SERVICE_WAIT, "weak read service cluster service lock")
 LATCH_DEF(TX_STAT_ITEM_LOCK, 198, "transaction stat item lock", LATCH_FIFO, 2000, 0, TX_STAT_ITEM_WAIT, "transaction stat item lock")
@@ -217,6 +219,8 @@ LATCH_DEF(AUTO_INCREMENT_ALLOC_LOCK, 204, "auto increment alloc lock", LATCH_FIF
 LATCH_DEF(AUTO_INCREMENT_SYNC_LOCK, 205, "auto increment sync lock", LATCH_FIFO, 2000, 0, AUTO_INCREMENT_SYNC_LOCK_WAIT, "auto increment sync lock")
 LATCH_DEF(AUTO_INCREMENT_GAIS_LOCK, 206, "auto increment GAIS lock", LATCH_FIFO, 2000, 0, AUTO_INCREMENT_GAIS_LOCK_WAIT, "auto increment gais lock")
 LATCH_DEF(AUTO_INCREMENT_LEADER_LOCK, 207, "auto increment leader lock", LATCH_FIFO, 2000, 0, AUTO_INCREMENT_LEADER_LOCK_WAIT, "auto increment leader lock")
+LATCH_DEF(NOUSE_208, 208, "not used 208", LATCH_FIFO, 2000, 0, NULL_EVENT, "not used 208")
+LATCH_DEF(NOUSE_209, 209, "not used 209", LATCH_FIFO, 2000, 0, NULL_EVENT, "not used 209")
 LATCH_DEF(ALLOC_MEM_DUMP_TASK_LOCK, 210, "alloc memory dump task lock", LATCH_FIFO, 2000, 0, ALLOC_MEM_DUMP_TASK_WAIT, "alloc memory dump task lock")
 LATCH_DEF(ALLOC_ESS_LOCK, 211, "alloc expand, shrink and segment lock", LATCH_FIFO, 2000, 0, ALLOC_ESS_WAIT, "alloc expand, shrink and segment lock")
 LATCH_DEF(CONCURRENT_BITSET_LOCK, 212, "concurrent bitset lock", LATCH_FIFO, 2000, 0, CONCURRENT_BITSET_WAIT, "concurrent bitset lock")
@@ -300,8 +304,6 @@ LATCH_DEF(FREEZE_THREAD_POOL_LOCK, 289, "freeze thread pool lock", LATCH_FIFO, 2
 LATCH_DEF(DAS_ASYNC_RPC_LOCK, 290, "das wait remote response lock", LATCH_FIFO, 2000, 0, DAS_ASYNC_RPC_LOCK_WAIT, "das wait remote response lock")
 LATCH_DEF(CLOG_CKPT_RWLOCK, 291, "clog checkpoint rwlock", LATCH_READ_PREFER, 2000, 0, CLOG_CKPT_RWLOCK_WAIT, "clog checkpoint rwlock")
 LATCH_DEF(REWRITE_RULE_ITEM_LOCK, 292, "rewrite rule item lock", LATCH_FIFO, 2000, 0, REWRITE_RULE_ITEM_LOCK_WAIT, "rewrite rule item lock")
-
-// LATCH_DEF(TENANT_MGR_TENANT_BUCKET_LOCK, 290, "tenant mgr tenant bucket lock", LATCH_READ_PREFER, INT64_MAX, 0, TENANT_MGR_TENANT_BUCKET_LOCK_WAIT, "tenant mgr tenant bucket lock")
 LATCH_DEF(SRS_LOCK, 293, "srs lock", LATCH_READ_PREFER, 2000, 0, SRS_LOCK_WAIT, "srs lock")
 LATCH_DEF(DDL_EXECUTE_LOCK, 294, "ddl execute lock", LATCH_FIFO, 2000, 0, DDL_EXECUTE_LOCK_WAIT, "ddl execute lock")
 LATCH_DEF(TENANT_IO_CONFIG_LOCK, 295, "tenant io config lock", LATCH_FIFO, 2000, 0, TENANT_IO_CONFIG_WAIT, "tenant io config lock")
@@ -310,7 +312,7 @@ LATCH_DEF(ARB_SERVER_CONFIG_LOCK, 297, "arbserver config lock", LATCH_FIFO, 2000
 LATCH_DEF(CDC_SERVICE_LS_CTX_LOCK, 298, "cdcservice clientlsctx lock", LATCH_FIFO, 2000, 0, CDC_SERVICE_LS_CTX_LOCK_WAIT, "cdcservice clientlsctx lock")
 LATCH_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK, 299, "major freeze diagnose lock", LATCH_READ_PREFER, 2000, 0, MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, "major freeze diagnose lock")
 
-LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
+LATCH_DEF(LATCH_END, 300, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif
 
 #ifndef OB_LATCH_DEFINE_H_
