@@ -235,7 +235,7 @@ TEST_F(TestMultiTenant, get_tenant_context)
 class CtxMemConfigGetter : public ObICtxMemConfigGetter
 {
 public:
-  virtual int get(common::ObIArray<ObCtxMemConfig> &configs, int64_t tenant_limit)
+  virtual int get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs)
   {
     int ret = OB_SUCCESS;
     {
@@ -267,7 +267,7 @@ TEST_F(TestMultiTenant, idle)
   ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
   int64_t tenant_limit = malloc_allocator->get_tenant_limit(tenant_id);
   common::ObArray<ObCtxMemConfig> configs;
-  mcg.get(configs, tenant_limit);
+  mcg.get(tenant_id, tenant_limit, configs);
   ASSERT_TRUE(2 == configs.size());
   for (int i = 0 ; i < configs.size(); i++) {
     ObCtxMemConfig &cfg = configs.at(i);

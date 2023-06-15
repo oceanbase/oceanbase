@@ -55,13 +55,13 @@ struct ObCtxMemConfig
 class ObICtxMemConfigGetter
 {
 public:
-  virtual int get(common::ObIArray<ObCtxMemConfig> &configs, int64_t tenant_limit) = 0;
+  virtual int get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs) = 0;
 };
 
 class ObCtxMemConfigGetter : public ObICtxMemConfigGetter
 {
 public:
-  virtual int get(common::ObIArray<ObCtxMemConfig> &configs, int64_t tenant_limit);
+  virtual int get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs);
 };
 
 // Forward declearation

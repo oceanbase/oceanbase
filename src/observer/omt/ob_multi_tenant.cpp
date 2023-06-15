@@ -210,10 +210,10 @@ bool equal_with_tenant_id(const ObTenant *lhs,
   return NULL != lhs ? (lhs->id() == tenant_id) : false;
 }
 
-int ObCtxMemConfigGetter::get(common::ObIArray<ObCtxMemConfig> &configs, int64_t tenant_limit)
+int ObCtxMemConfigGetter::get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs)
 {
   int64_t ret = OB_SUCCESS;
-  {
+  if (tenant_id > OB_USER_TENANT_ID) {
     ObCtxMemConfig cfg;
     cfg.ctx_id_ = ObCtxIds::WORK_AREA;
     cfg.idle_size_ = 0;
@@ -793,7 +793,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   }
   if (OB_SUCC(ret)) {
     ObSEArray<ObCtxMemConfig, ObCtxIds::MAX_CTX_ID> configs;
-    if (OB_FAIL(mcg_->get(configs, allowed_mem_limit))) {
+    if (OB_FAIL(mcg_->get(tenant_id, allowed_mem_limit, configs))) {
       LOG_ERROR("get ctx mem config failed", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < configs.count(); i++) {
