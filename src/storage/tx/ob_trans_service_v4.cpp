@@ -1773,7 +1773,22 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
       } else {
         switch (tx_state) {
         case ObTxData::COMMIT:
-          ret = OB_TRANS_COMMITED;
+          {
+            ObLSTxCtxMgr *ls_tx_mgr = NULL;
+            if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(coord, ls_tx_mgr))) {
+              TRANS_LOG(WARN, "can not get ls_tx_mgr", K(ret), "ls_id", coord);
+            } else if (OB_ISNULL(ls_tx_mgr)) {
+              ret = OB_ERR_UNEXPECTED;
+              TRANS_LOG(WARN, "ls_tx_mgr is NULL", K(ret), "ls_id", coord);
+            } else if (ls_tx_mgr->in_leader_serving_state()) {
+              ret = OB_TRANS_COMMITED;
+            } else {
+              ret = OB_NOT_MASTER;
+            }
+            if (OB_NOT_NULL(ls_tx_mgr)) {
+              tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_mgr);
+            }
+          }
           break;
         case ObTxData::ABORT:
           ret = OB_TRANS_KILLED;
