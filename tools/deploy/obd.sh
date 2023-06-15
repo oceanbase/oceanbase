@@ -11,7 +11,7 @@ tag="latest"
 current_path=$(pwd)
 if [[ "$current_path" != "$BASE_DIR/tools/deploy" ]]
 then
-  echo "切换至路径[$BASE_DIR/tools/deploy]"
+  echo "Switching basedir to [$BASE_DIR/tools/deploy]..."
   cd $BASE_DIR/tools/deploy || exit 1
 fi
 
@@ -314,7 +314,12 @@ function deploy_cluster {
   else
     obd cluster destroy "$deploy_name" -f
   fi
-  obd cluster deploy "$deploy_name" -C -c $YAML_CONF || exit 1
+  if [[ -f $OBD_CLUSTER_PATH/$deploy_name/inner_config.yaml ]]
+  then
+    sed -i '/$_deploy_/d' $OBD_CLUSTER_PATH/$deploy_name/inner_config.yaml
+  fi
+  [[ "$YAML_CONF" == "" ]] || yaml_config_args="-c $YAML_CONF"
+  obd cluster deploy "$deploy_name" -C $yaml_config_args || exit 1
   if ! obd cluster start "$deploy_name" -f;
   then
     while [[ "$NO_CONFIRM" != "1" && "$(grep 'config_status: NEED_REDEPLOY' $OBD_CLUSTER_PATH/$deploy_name/.data)" != "" ]] 
@@ -617,6 +622,11 @@ function main() {
   obd env set OBD_LOCK_MODE 1
   fi
   if [[  "$(grep '"OBD_DEPLOY_BASE_DIR":' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
+  then
+  obd env set OBD_DEPLOY_BASE_DIR "$DEPLOY_PATH"
+  fi
+  OBD_DEPLOY_BASE_DIR=$(grep -Po '"OBD_DEPLOY_BASE_DIR": "(.*?)"[,}]' ./.obd/.obd_environ  | sed 's/"OBD_DEPLOY_BASE_DIR": "\(.*\)"[,}]/\1/g')
+  if [[ ! -d $OBD_DEPLOY_BASE_DIR ]]
   then
   obd env set OBD_DEPLOY_BASE_DIR "$DEPLOY_PATH"
   fi
