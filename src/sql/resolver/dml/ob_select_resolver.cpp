@@ -5591,16 +5591,16 @@ int ObSelectResolver::resolve_start_with_clause(const ParseNode *node)
   return ret;
 }
 
-int ObSelectResolver::check_connect_by_expr_validity(const ObRawExpr *raw_expr)
+int ObSelectResolver::check_connect_by_expr_validity(const ObRawExpr *raw_expr, bool is_prior)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(raw_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else if (OB_UNLIKELY(raw_expr->is_pseudo_column_expr() &&
-                         raw_expr->get_expr_type() != T_LEVEL)) {
+                          (is_prior || raw_expr->get_expr_type() != T_LEVEL))) {
     ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
-    LOG_WARN("Only Level pseudo allow here", K(ret));
+    LOG_WARN("Only Level pseudo without prior clause allow here", K(ret));
   } else if (OB_UNLIKELY(raw_expr->is_aggr_expr() ||
                           raw_expr->get_expr_class() == ObRawExpr::EXPR_PL_QUERY_REF)) {
     ret = OB_NOT_SUPPORTED;
@@ -5608,7 +5608,7 @@ int ObSelectResolver::check_connect_by_expr_validity(const ObRawExpr *raw_expr)
     LOG_WARN("expr is not supported here for connect by condition", K(ret));
   } else {
     for (int64_t i = 0; i < raw_expr->get_param_count() && OB_SUCC(ret); i++) {
-      if (OB_FAIL(check_connect_by_expr_validity(raw_expr->get_param_expr(i)))) {
+      if (OB_FAIL(check_connect_by_expr_validity(raw_expr->get_param_expr(i), is_prior))) {
         LOG_WARN("check_connect_by_expr_validity failed", K(ret));
       }
     }
@@ -5649,7 +5649,7 @@ int ObSelectResolver::resolve_connect_by_clause(const ParseNode *node)
         } else if (raw_expr->has_flag(CNT_SYS_CONNECT_BY_PATH)) {
           ret = OB_ERR_CBY_CONNECT_BY_PATH_NOT_ALLOWED;
           LOG_WARN("CONNECT BY PATH operator is not supported in the START WITH or in the CONNECT BY condition", K(ret));
-        } else if (OB_FAIL(check_connect_by_expr_validity(raw_expr))) {
+        } else if (OB_FAIL(check_connect_by_expr_validity(raw_expr, raw_expr->has_flag(CNT_PRIOR)))) {
           LOG_WARN("check_connect_by_expr_validity failed", K(ret));
         } else if (raw_expr->has_flag(CNT_PRIOR)) {
           select_stmt->set_has_prior(true);
