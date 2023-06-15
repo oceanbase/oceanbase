@@ -62,6 +62,7 @@ protected:
                     const common::ObIArray<ObExpr*> &dst_exprs,
                     const int64_t batch_size,
                     const ObBitVector &skip);
+  int init_mem_context();
 
 protected:
     //used by intersect and except
@@ -74,6 +75,7 @@ protected:
     //for batch array init, not reset in rescan
     bool need_init_;
     const ObBatchRows *left_brs_;
+    lib::MemoryContext mem_context_;
 };
 
 } // end namespace sql

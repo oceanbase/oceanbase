@@ -65,6 +65,7 @@ private:
   int build_distinct_data_for_batch_by_pass(const int64_t batch_size, bool is_block);
   int by_pass_get_next_batch(const int64_t batch_size);
   int process_state(int64_t probe_cnt, bool &can_insert);
+  int init_mem_context();
 private:
   const int64_t EXTEND_BKT_NUM_PUSH_DOWN = INIT_L3_CACHE_SIZE / sizeof(ObHashPartCols);
   typedef int (ObHashDistinctOp::*GetNextRowFunc)();
@@ -88,6 +89,7 @@ private:
   Build_distinct_data_func build_distinct_data_func_;
   Build_distinct_data_batch_func build_distinct_data_batch_func_;
   ObAdaptiveByPassCtrl bypass_ctrl_;
+  lib::MemoryContext mem_context_;
 };
 
 } // end namespace sql
