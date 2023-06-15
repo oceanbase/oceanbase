@@ -4272,7 +4272,6 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
               if (!synonym_name.empty()) {
                 // bug: 31827906
                 item->alias_name_ = synonym_name;
-                item->database_name_ = synonym_db_name;
               } else {
                 item->alias_name_ = tbl_name;
               }
@@ -4336,7 +4335,6 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
             if (!synonym_name.empty()) {
               // bug: 31827906
               item->alias_name_ = synonym_name;
-              item->database_name_ = synonym_db_name;
             } else {
               item->alias_name_ = tbl_name;
             }
