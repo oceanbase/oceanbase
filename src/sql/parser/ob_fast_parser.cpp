@@ -1018,9 +1018,17 @@ int ObFastParserBase::process_hex_number(bool is_quote)
     }
   } else {
     // 0X([0-9A-F])+
-    cur_token_type_ = PARAM_TOKEN;
     while (is_hex(next_ch)) {
       next_ch = raw_sql_.scan();
+    }
+    int64_t next_idf_pos = is_first_identifier_flags(raw_sql_.cur_pos_);
+    if (-1 != next_idf_pos) {
+      // it is possible that the next token is a string and needs to fall back to
+      // the position of quote
+      raw_sql_.cur_pos_ = pos;
+      cur_token_type_ = NORMAL_TOKEN;
+    } else {
+      cur_token_type_ = PARAM_TOKEN;
     }
   }
   if (OB_SUCC(ret) && PARAM_TOKEN == cur_token_type_) {
