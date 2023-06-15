@@ -63,6 +63,8 @@ public:
 
 public:
   int init(ObLogSysTableQueryer &systable_queryer,
+      const bool is_tenant_mode,
+      const uint64_t tenant_id,
       const common::ObRegion &prefer_region,
       const int64_t all_server_cache_update_interval_sec,
       const int64_t all_zone_cache_update_interval_sec);
@@ -81,17 +83,26 @@ private:
   // 2. other region or empty region(no retion info for lower version of observer)
   //    region_priority = REGION_PRIORITY_LOW
   int get_region_priority_(const common::ObRegion &region, RegionPriority &priority);
-  bool is_assign_region_(const common::ObRegion &region) const;
+  bool is_assign_region_(const common::ObRegion &region);
+
+  struct UnitsRecordItem;
+  int get_units_record_item_(const common::ObAddr &svr, UnitsRecordItem &item);
 
   bool need_update_zone_();
   int update_zone_cache_();
   int update_server_cache_();
   int purge_stale_records_();
   int purge_stale_zone_records_();
+  int update_unit_info_cache_();
+
   // NOTE: server serve in such cases:
   // 1. server status is ACTIVE or DELETING
   // 2. server not in ENCRYPTION zone
   bool is_svr_serve_(const SvrItem &svr_item, const ZoneItem &zone_item) const;
+
+  // NOTE: server serve in such cases:
+  // 1. server not in ENCRYPTION zone
+  bool is_svr_serve_(const UnitsRecordItem &units_record_item) const;
 
 private:
   typedef share::ObServerStatus::DisplayStatus StatusType;
@@ -187,10 +198,44 @@ private:
     bool operator()(const common::ObZone &zone, const ZoneItem &zone_item);
   };
 
+  struct UnitsRecordItem
+  {
+    uint64_t version_;
+    common::ObZone zone_;
+    common::ObZoneType zone_type_;
+    RegionPriority region_priority_;
+
+    void reset()
+    {
+      version_ = -1;
+      zone_.reset();
+      zone_type_ = common::ZONE_TYPE_INVALID;
+      region_priority_ = REGION_PRIORITY_UNKNOWN;
+    }
+
+    void reset(
+        const uint64_t version,
+        const common::ObZone &zone,
+        const common::ObZoneType &zone_type,
+        const RegionPriority region_priority)
+    {
+      version_ = version;
+      zone_ = zone;
+      zone_type_ = zone_type;
+      region_priority_ = region_priority;
+    }
+    const common::ObZoneType& get_zone_type() const { return zone_type_; }
+
+    TO_STRING_KV(K_(zone), K_(zone_type), K_(region_priority));
+  };
+  typedef common::ObLinearHashMap<common::ObAddr, UnitsRecordItem> UnitsMap;
+
   // set all_server_cache_update_interval for unitest
   void set_update_interval_(const int64_t time);
 
 private:
+  bool                  is_tenant_mode_;
+  uint64_t              tenant_id_;
   ObLogSysTableQueryer  *systable_queryer_;
   int64_t               all_server_cache_update_interval_;
   int64_t               all_zone_cache_update_interval_;
@@ -205,6 +250,7 @@ private:
 
   SvrMap                svr_map_;
   ZoneMap               zone_map_;
+  UnitsMap              units_map_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogAllSvrCache);

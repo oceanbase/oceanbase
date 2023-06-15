@@ -604,6 +604,13 @@ DEF_INT(_log_writer_parallelism, OB_TENANT_PARAMETER, "3",
        "the number of parallel log writer threads that can be used to write redo log entries to disk. ",
        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
+DEF_STR(standby_db_preferred_upstream_log_region, OB_TENANT_PARAMETER, "",
+       "The preferred upstream log region for Standby db. "
+       "The Standby db will give priority to the preferred upstream log region to fetch log. "
+       "For high availability，the Standby db will also switch to the other region "
+       "when the preferred upstream log region can not fetch log because of exception etc.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",
         "system utilization should not be large than resource_hard_limit",

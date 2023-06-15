@@ -85,7 +85,8 @@ public:
       const int64_t blacklist_survival_time_penalty_period_min = 1,
       const int64_t blacklist_history_overdue_time_min = 30,
       const int64_t blacklist_history_clear_interval_min = 20,
-      const bool is_tenant_mode = false);
+      const bool is_tenant_mode = false,
+      const uint64_t tenant_id = OB_INVALID_TENANT_ID);
   int start();
   void stop();
   void wait();
@@ -99,8 +100,8 @@ public:
   int get_background_refresh_time(int64_t &background_refresh_time_sec);
 
   // Region
-  int update_assign_region(const common::ObRegion &prefer_region);
-  int get_assign_region(common::ObRegion &prefer_region);
+  int update_preferred_upstream_log_region(const common::ObRegion &prefer_region);
+  int get_preferred_upstream_log_region(common::ObRegion &prefer_region);
 
   // Cache interval
   int update_cache_update_interval(const int64_t all_server_cache_update_interval_sec,
@@ -350,9 +351,10 @@ private:
 
 private:
   bool is_inited_;
-  bool is_tenant_mode_;
-  volatile bool is_stopped_ CACHE_ALIGNED;
   int64_t cluster_id_;
+  bool is_tenant_mode_;
+  uint64_t tenant_id_;
+  volatile bool is_stopped_ CACHE_ALIGNED;
   LSRouteKeySet ls_route_key_set_;
   LSRouterMap ls_router_map_;
   ObSliceAlloc log_router_allocator_;

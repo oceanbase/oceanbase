@@ -956,11 +956,10 @@ bool LSFetchCtx::need_switch_server(const common::ObAddr &cur_svr)
 
   if (OB_FAIL(get_log_route_service_(log_route_service))) {
     LOG_ERROR("get_log_route_service_ failed", KR(ret));
-  } else if (OB_FAIL(log_route_service->need_switch_server(tls_id_.get_tenant_id(), tls_id_.get_ls_id(),
-          next_lsn, cur_svr))) {
-    LOG_ERROR("ObLogRouteService need_switch_server failed", KR(ret), K(tls_id_), K(next_lsn),
-        K(cur_svr));
-  } else {}
+  } else {
+    bool_ret = log_route_service->need_switch_server(tls_id_.get_tenant_id(), tls_id_.get_ls_id(),
+          next_lsn, cur_svr);
+  }
 
   return bool_ret;
 }

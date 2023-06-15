@@ -17,6 +17,7 @@
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/compress/ob_compress_util.h" // ObCompressorType
+#include "common/ob_region.h"  // ObRegion
 #include "logservice/logfetcher/ob_log_fetcher_ls_ctx_additional_info_factory.h"
 #include "logservice/logfetcher/ob_log_fetcher_err_handler.h"
 #include "logservice/logfetcher/ob_log_fetcher_ls_ctx_default_factory.h"
@@ -94,6 +95,9 @@ private:
   void delete_fetcher_if_needed_with_lock_();
   void update_config_();
   int64_t get_rpc_timeout_sec_();
+  // update standby_fetch_log_specified_region
+  void update_standby_preferred_upstream_log_region_();
+
   int refresh_proxy_(const share::ObRestoreSourceServiceAttr &source);
 
 

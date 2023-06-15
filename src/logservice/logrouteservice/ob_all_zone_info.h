@@ -37,7 +37,8 @@ struct AllZoneRecord
     storage_type_ = share::ObZoneInfo::StorageType::STORAGE_TYPE_LOCAL;
   }
 
-  int init(ObString &zone,
+  int init(
+      ObString &zone,
       ObString &region);
 
   void set_storage_type_by_str(common::ObString &storage_type_str) {

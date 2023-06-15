@@ -204,6 +204,7 @@ ssl_client_authentication
 ssl_external_kms_info
 stack_size
 standby_db_fetch_log_rpc_timeout
+standby_db_preferred_upstream_log_region
 standby_fetch_log_bandwidth_limit
 syslog_io_bandwidth_limit
 syslog_level

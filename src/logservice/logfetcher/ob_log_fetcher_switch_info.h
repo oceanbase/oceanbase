@@ -51,10 +51,6 @@ struct KickOutInfo
   KickOutReason kick_out_reason_;
 
   KickOutInfo() : tls_id_(), kick_out_reason_(NONE) {}
-  explicit KickOutInfo(const logservice::TenantLSID &tls_id) :
-    tls_id_(tls_id),
-    kick_out_reason_(NONE)
-  {}
   KickOutInfo(const logservice::TenantLSID &tls_id, KickOutReason kick_out_reason) :
     tls_id_(tls_id),
     kick_out_reason_(kick_out_reason)
