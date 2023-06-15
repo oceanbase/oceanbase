@@ -447,9 +447,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem& multi_stmt_item, ObSQL
             ObString(sql_len_, sql_buf_));
       }
     }
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::clear();
-    }
+    ObThreadLogLevelUtils::clear();
     const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
     if (debug_sync_timeout > 0) {
       // ignore thread local debug sync actions to session actions failed
