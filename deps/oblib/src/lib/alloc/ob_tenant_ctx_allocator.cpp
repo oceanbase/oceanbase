@@ -510,10 +510,6 @@ void ObTenantCtxAllocator::common_free(void *ptr)
     abort_unless(block->obj_set_ != NULL);
 
     ObjectSet *os = block->obj_set_;
-    auto blk_mgr = os->get_block_mgr();
-    int64_t tenant_id = blk_mgr->get_tenant_id();
-    int64_t ctx_id = blk_mgr->get_ctx_id();
-    ObFreeLogPrinter::get_instance().print_free_log(tenant_id, ctx_id, obj);
     os->free_object(obj);
   }
 }
