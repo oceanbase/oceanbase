@@ -426,7 +426,8 @@ public:
                                uint64_t source_table_id,
                                ObShardingInfo *&sharding_info,
                                ObTablePartitionInfo *&table_part_info);
-
+  int assign_right_popular_value_to_left(ObExchangeInfo &left_exch_info,
+                                         ObExchangeInfo &right_exch_info);
   void set_insert_stmt(const ObInsertStmt *insert_stmt) { insert_stmt_ = insert_stmt; }
   const ObInsertStmt *get_insert_stmt() const { return insert_stmt_; }
 public:
