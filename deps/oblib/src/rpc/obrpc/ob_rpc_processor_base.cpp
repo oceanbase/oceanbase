@@ -498,6 +498,7 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
       }
     } else {
       RPC_REQ_OP.response_result(req_, NULL);
+      RPC_OBRPC_LOG(ERROR, "response rpc result failed", K(ret));
       req_ = NULL;
     }
 
