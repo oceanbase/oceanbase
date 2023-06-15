@@ -18,6 +18,7 @@ class ObTableLoadService
 {
 public:
   static int mtl_init(ObTableLoadService *&service);
+  static int check_tenant();
   static int check_support_direct_load(uint64_t table_id);
   static ObTableLoadTableCtx *alloc_ctx();
   static void free_ctx(ObTableLoadTableCtx *table_ctx);
@@ -37,7 +38,7 @@ public:
   void destroy();
   ObTableLoadManager &get_manager() { return manager_; }
 private:
-  void abort_all_ctx();
+  void fail_all_ctx(int error_code);
   void release_all_ctx();
 private:
   static const int64_t CHECK_TENANT_INTERVAL = 1LL * 1000 * 1000; // 1s
@@ -84,7 +85,7 @@ private:
   };
 private:
   ObTableLoadManager manager_;
-  common::ObTimer gc_timer_;
+  common::ObTimer timer_;
   ObCheckTenantTask check_tenant_task_;
   ObGCTask gc_task_;
   ObReleaseTask release_task_;

@@ -40,7 +40,9 @@ void ObTableLoadInstance::destroy()
   if (nullptr != table_ctx_) {
     if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx_))) {
       LOG_WARN("table ctx may remove by service", KR(ret), KP(table_ctx_));
-    } else if (!is_committed_) {
+    }
+    if (!is_committed_) {
+      // must abort here, abort redef table need exec_ctx session_info
       ObTableLoadCoordinator::abort_ctx(table_ctx_);
     }
     ObTableLoadService::put_ctx(table_ctx_);
@@ -64,6 +66,10 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
     allocator_ = execute_ctx->get_allocator();
     if (OB_FAIL(param.normalize())) {
       LOG_WARN("fail to normalize param", KR(ret));
+    }
+    // check tenant
+    else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check tenant", KR(ret), K(param.tenant_id_));
     }
     // check support
     else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_))) {

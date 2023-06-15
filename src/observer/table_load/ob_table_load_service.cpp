@@ -6,9 +6,9 @@
 
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/omt/ob_tenant.h"
-#include "observer/table_load/ob_table_load_coordinator.h"
+#include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_schema.h"
-#include "observer/table_load/ob_table_load_store.h"
+#include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_utils.h"
 #include "share/rc/ob_tenant_base.h"
@@ -54,11 +54,9 @@ void ObTableLoadService::ObCheckTenantTask::runTimerTask()
       LOG_WARN("fail to get tenant", KR(ret), K(tenant_id_));
     } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
                            tenant->get_unit_status())) {
-      LOG_INFO("tenant unit status not normal, exit", K(tenant_id_), KPC(tenant));
-      // stop all current tasks, release session
-      service_.abort_all_ctx();
-      // clear all current tasks, release handle
-      service_.release_all_ctx();
+      LOG_DEBUG("tenant unit status not normal, clear", K(tenant_id_), KPC(tenant));
+      // fail all current tasks
+      service_.fail_all_ctx(OB_ERR_UNEXPECTED_UNIT_STATUS);
     }
   }
 }
@@ -189,6 +187,21 @@ int ObTableLoadService::mtl_init(ObTableLoadService *&service)
   return ret;
 }
 
+int ObTableLoadService::check_tenant()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObTenant *tenant = nullptr;
+  if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
+    LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
+                         tenant->get_unit_status())) {
+    ret = OB_ERR_UNEXPECTED_UNIT_STATUS;
+    LOG_WARN("unit status not normal", KR(ret), K(tenant->get_unit_status()));
+  }
+  return ret;
+}
+
 int ObTableLoadService::check_support_direct_load(uint64_t table_id)
 {
   int ret = OB_SUCCESS;
@@ -269,7 +282,7 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
     LOG_WARN("null table load service", KR(ret));
   } else {
     ObTableLoadUniqueKey key(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
-    ret = service->get_manager().remove_table_ctx(key);
+    ret = service->get_manager().remove_table_ctx(key, table_ctx);
   }
   return ret;
 }
@@ -348,14 +361,14 @@ int ObTableLoadService::start()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadService not init", KR(ret), KP(this));
   } else {
-    gc_timer_.set_run_wrapper(MTL_CTX());
-    if (OB_FAIL(gc_timer_.init("TLD_GC"))) {
+    timer_.set_run_wrapper(MTL_CTX());
+    if (OB_FAIL(timer_.init("TLD_Timer"))) {
       LOG_WARN("fail to init gc timer", KR(ret));
-    } else if (OB_FAIL(gc_timer_.schedule(check_tenant_task_, CHECK_TENANT_INTERVAL, true))) {
+    } else if (OB_FAIL(timer_.schedule(check_tenant_task_, CHECK_TENANT_INTERVAL, true))) {
       LOG_WARN("fail to schedule check tenant task", KR(ret));
-    } else if (OB_FAIL(gc_timer_.schedule(gc_task_, GC_INTERVAL, true))) {
+    } else if (OB_FAIL(timer_.schedule(gc_task_, GC_INTERVAL, true))) {
       LOG_WARN("fail to schedule gc task", KR(ret));
-    } else if (OB_FAIL(gc_timer_.schedule(release_task_, RELEASE_INTERVAL, true))) {
+    } else if (OB_FAIL(timer_.schedule(release_task_, RELEASE_INTERVAL, true))) {
       LOG_WARN("fail to schedule release task", KR(ret));
     }
   }
@@ -366,39 +379,38 @@ int ObTableLoadService::stop()
 {
   int ret = OB_SUCCESS;
   is_stop_ = true;
-  gc_timer_.stop();
+  timer_.stop();
   return ret;
 }
 
 void ObTableLoadService::wait()
 {
-  gc_timer_.wait();
-  abort_all_ctx();
+  timer_.wait();
   release_all_ctx();
 }
 
 void ObTableLoadService::destroy()
 {
   is_inited_ = false;
-  gc_timer_.destroy();
+  timer_.destroy();
 }
 
-void ObTableLoadService::abort_all_ctx()
+void ObTableLoadService::fail_all_ctx(int error_code)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTableCtx *> table_ctx_array;
-  if (OB_FAIL(manager_.remove_all_table_ctx(table_ctx_array))) {
-    LOG_WARN("fail to remove all table ctx list", KR(ret));
+  if (OB_FAIL(manager_.get_all_table_ctx(table_ctx_array))) {
+    LOG_WARN("fail to get all table ctx list", KR(ret));
   } else {
     for (int i = 0; i < table_ctx_array.count(); ++i) {
       ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
-      // abort coordinator
+      // fail coordinator
       if (nullptr != table_ctx->coordinator_ctx_) {
-        ObTableLoadCoordinator::abort_ctx(table_ctx);
+        table_ctx->coordinator_ctx_->set_status_error(error_code);
       }
-      // abort store
-      else if (nullptr != table_ctx->store_ctx_) {
-        ObTableLoadStore::abort_ctx(table_ctx);
+      // fail store
+      if (nullptr != table_ctx->store_ctx_) {
+        table_ctx->store_ctx_->set_status_error(error_code);
       }
       manager_.put_table_ctx(table_ctx);
     }
@@ -409,7 +421,48 @@ void ObTableLoadService::release_all_ctx()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
+  // 1. check all ctx are removed
   while (OB_SUCC(ret)) {
+    if (REACH_TIME_INTERVAL(30 * 1000 * 1000)) {
+      LOG_INFO("[DIRECT LOAD TABLE CTX]", "count", manager_.get_table_ctx_count());
+    }
+    fail_all_ctx(OB_ERR_UNEXPECTED_UNIT_STATUS);
+    ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    if (OB_FAIL(manager_.get_inactive_table_ctx_list(table_ctx_array))) {
+      LOG_WARN("fail to get inactive table ctx list", KR(ret), K(tenant_id));
+    } else {
+      for (int i = 0; i < table_ctx_array.count(); ++i) {
+        ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
+        const uint64_t table_id = table_ctx->param_.table_id_;
+        const uint64_t hidden_table_id = table_ctx->ddl_param_.dest_table_id_;
+        // check if table ctx is removed
+        if (table_ctx->is_dirty()) {
+          LOG_DEBUG("table load ctx is dirty", K(tenant_id), K(table_id), "ref_count",
+                    table_ctx->get_ref_count());
+        }
+        // check if table ctx is activated
+        else if (table_ctx->get_ref_count() > 1) {
+          LOG_DEBUG("table load ctx is active", K(tenant_id), K(table_id), "ref_count",
+                    table_ctx->get_ref_count());
+        } else {
+          LOG_INFO("tenant exit, remove table load ctx", K(tenant_id), K(table_id),
+                   K(hidden_table_id));
+          remove_ctx(table_ctx);
+        }
+        manager_.put_table_ctx(table_ctx);
+      }
+    }
+    if (0 == manager_.get_table_ctx_count()) {
+      break;
+    } else {
+      ob_usleep(1 * 1000 * 1000);
+    }
+  }
+  // 2. release all ctx
+  while (OB_SUCC(ret)) {
+    if (REACH_TIME_INTERVAL(30 * 1000 * 1000)) {
+      LOG_INFO("[DIRECT LOAD DIRTY LIST]", "count", manager_.get_dirty_list_count());
+    }
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
     if (OB_FAIL(manager_.get_releasable_table_ctx_list(table_ctx_array))) {
       LOG_WARN("fail to get releasable table ctx list", KR(ret));
@@ -421,10 +474,10 @@ void ObTableLoadService::release_all_ctx()
       LOG_INFO("free table ctx", K(tenant_id), K(table_id), K(hidden_table_id), KP(table_ctx));
       ObTableLoadService::free_ctx(table_ctx);
     }
-    if (manager_.is_dirty_list_empty()) {
+    if (0 == manager_.get_dirty_list_count()) {
       break;
     } else {
-      ob_usleep(10 * 1000 * 1000);
+      ob_usleep(1 * 1000 * 1000);
     }
   }
 }
