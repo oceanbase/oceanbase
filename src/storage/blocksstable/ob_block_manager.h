@@ -336,6 +336,9 @@ private:
   int mark_macro_blocks(
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId> &macro_id_set);
+  int mark_held_shared_block(
+      MacroBlkIdMap &mark_info,
+      common::hash::ObHashSet<MacroBlockId> &macro_id_set);
   int mark_tenant_blocks(
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId> &macro_id_set);

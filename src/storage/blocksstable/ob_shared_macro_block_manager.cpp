@@ -315,6 +315,12 @@ int64_t ObSharedMacroBlockMgr::get_shared_block_cnt()
   return count;
 }
 
+void ObSharedMacroBlockMgr::get_cur_shared_block(MacroBlockId &macro_id)
+{
+  lib::ObMutexGuard guard(mutex_);
+  macro_id = macro_handle_.get_macro_id();
+}
+
 int ObSharedMacroBlockMgr::add_block(const MacroBlockId &block_id, const int64_t block_size)
 {
   int ret = OB_SUCCESS;
