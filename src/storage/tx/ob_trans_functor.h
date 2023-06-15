@@ -817,11 +817,11 @@ public:
         } else if (!tx_stat.xid_.empty() && tx_stat.coord_ == tx_stat.ls_id_ && (int64_t)ObTxState::REDO_COMPLETE == tx_stat.state_
                    && (!MTL_IS_PRIMARY_TENANT() || (TxCtxRoleState::LEADER == tx_stat.role_state_
                    && tx_stat.last_request_ts_ < ObClockGenerator::getClock() - INSERT_INTERNAL_FOR_PRIMARY))) {
-          MTL(ObXAService *)->insert_record_for_standby(tx_stat.tenant_id_,
-                                                        tx_stat.xid_,
-                                                        tx_stat.tx_id_,
-                                                        tx_stat.coord_,
-                                                        tx_stat.scheduler_addr_);
+          (void)MTL(ObXAService *)->insert_record_for_standby(tx_stat.tenant_id_,
+                                                              tx_stat.xid_,
+                                                              tx_stat.tx_id_,
+                                                              tx_stat.coord_,
+                                                              tx_stat.scheduler_addr_);
         }
       }
     }
@@ -1308,6 +1308,80 @@ public:
   }
 private:
   ObTxSchedulerStatIterator &tx_scheduler_stat_iter_;
+};
+
+
+class StandbyCleanUpAllLSFunctor
+{
+public:
+  StandbyCleanUpAllLSFunctor(ObTimeGuard &cleanup_timeguard)
+    : ret_(OB_SUCCESS), cleanup_timeguard_(cleanup_timeguard) {}
+  ~StandbyCleanUpAllLSFunctor() {}
+  bool operator()(ObLSTxCtxMgr *ls_tx_ctx_mgr)
+  {
+    int ret = common::OB_SUCCESS;
+    bool bool_ret = false;
+    cleanup_timeguard_.click();
+
+    if (OB_ISNULL(ls_tx_ctx_mgr)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG_RET(WARN, ret, "invalid argument", KP(ls_tx_ctx_mgr));
+    } else {
+      const share::ObLSID &ls_id = ls_tx_ctx_mgr->get_ls_id();
+
+      if (!ls_id.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        TRANS_LOG_RET(WARN, ret, "invalid ls id", K(ls_id), KP(ls_tx_ctx_mgr));
+      } else if (OB_FAIL(ls_tx_ctx_mgr->do_standby_cleanup())) {
+        TRANS_LOG_RET(WARN, ret, "iterate_standby_cleanup error", K(ret), K(ls_id));
+      } else {
+        bool_ret = true;
+      }
+    }
+    if (OB_FAIL(ret)) {
+      ret_ = ret;
+    }
+    return bool_ret;
+  }
+  int get_ret() const { return ret_; }
+private:
+  int ret_;
+  ObTimeGuard &cleanup_timeguard_;
+};
+
+class StandbyCleanUpFunctor
+{
+public:
+  StandbyCleanUpFunctor() {}
+  ~StandbyCleanUpFunctor() {}
+  OPERATOR_V4(StandbyCleanUpFunctor)
+  {
+    int ret = common::OB_SUCCESS;
+    bool bool_ret = false;
+
+    if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG_RET(WARN, ret, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
+      // If you encounter a situation where tx_ctx has not been init yet,
+      // skip it directly, there will be a background thread retry
+    } else if (!tx_ctx->is_inited()) {
+      // not inited, don't need to traverse
+    } else if (tx_ctx->is_xa_trans() && tx_ctx->is_root() && ObTxState::REDO_COMPLETE == tx_ctx->exec_info_.state_
+               && (!MTL_IS_PRIMARY_TENANT() || TxCtxRoleState::LEADER == tx_ctx->role_state_)) {
+      ret =  MTL(ObXAService *)->insert_record_for_standby(tx_ctx->tenant_id_, tx_ctx->exec_info_.xid_, tx_id,
+                                                           tx_ctx->ls_id_, tx_ctx->exec_info_.scheduler_);
+    }
+    if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret || OB_SUCC(ret)) {
+      bool_ret = true;
+    } else {
+      ret_ = ret;
+    }
+
+    return bool_ret;
+  }
+  int get_ret() const { return ret_; }
+private:
+  int ret_;
 };
 
 } // transaction

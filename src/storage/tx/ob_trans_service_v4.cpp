@@ -3400,5 +3400,48 @@ int ObTransService::handle_trans_collect_state_response(const ObCollectStateResp
   return ret;
 }
 
+void ObTransService::register_standby_cleanup_task()
+{
+  int ret = OB_SUCCESS;
+  ObTxStandbyCleanupTask *task = nullptr;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_ISNULL(task = static_cast<ObTxStandbyCleanupTask *>(
+    share::mtl_malloc(sizeof(ObTxStandbyCleanupTask), "standby_cleanup")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "alloc ObTxStandbyCleanupTask failed", K(ret));
+  } else if (OB_FALSE_IT(new (task) ObTxStandbyCleanupTask())) {
+  } else if (OB_FAIL(push(task))) {
+    TRANS_LOG(WARN, "push ObTxStandbyCleanupTask failed", K(ret));
+  } else {
+    TRANS_LOG(INFO, "push ObTxStandbyCleanupTask success");
+  }
+}
+
+int ObTransService::do_standby_cleanup()
+{
+  int ret = OB_SUCCESS;
+  common::ObTimeGuard timeguard("do standby cleanup", 1);
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(tx_ctx_mgr_.do_all_ls_standby_cleanup(timeguard))) {
+    TRANS_LOG(WARN, "iterate tx stat error", KR(ret));
+  } else {
+    // do nothing
+  }
+
+  return ret;
+}
+
 } // transaction
 } // ocenabase

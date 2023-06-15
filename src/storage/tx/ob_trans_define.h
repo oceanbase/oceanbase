@@ -1077,6 +1077,7 @@ public:
   static const int64_t UNKNOWN = -1;
   static const int64_t END_TRANS_CB_TASK = 0;
   static const int64_t ADVANCE_LS_CKPT_TASK = 1;
+  static const int64_t STANDBY_CLEANUP_TASK = 2;
   static const int64_t MAX = 3;
 public:
   static bool is_valid(const int64_t task_type)

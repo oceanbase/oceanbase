@@ -2820,6 +2820,7 @@ int ObService::refresh_tenant_info(
     } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
       LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));
     } else {
+      MTL(transaction::ObTransService *)->register_standby_cleanup_task();
       LOG_INFO("finish refresh_tenant_info", KR(ret), K(arg), K(result));
     }
   }

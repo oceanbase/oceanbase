@@ -2226,5 +2226,42 @@ int ObTxCtxMgr::check_scheduler_status(share::ObLSID ls_id)
   return ret;
 }
 
+int ObTxCtxMgr::do_all_ls_standby_cleanup(ObTimeGuard &cleanup_timeguard)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTxCtxMgr not inited");
+    ret = OB_NOT_INIT;
+  } else {
+    StandbyCleanUpAllLSFunctor fn(cleanup_timeguard);
+    if (OB_FAIL(foreach_ls_(fn))) {
+      ret = fn.get_ret();
+      TRANS_LOG(WARN, "foreach_ls standby cleanup error", KR(ret));
+    } else {
+      // do nothing
+    }
+  }
+  return ret;
+}
+
+int ObLSTxCtxMgr::do_standby_cleanup()
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
+    ret = OB_NOT_INIT;
+  } else {
+    StandbyCleanUpFunctor fn;
+    if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+      ret = fn.get_ret();
+      TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
+    }
+  }
+
+  return ret;
+}
+
 }
 }

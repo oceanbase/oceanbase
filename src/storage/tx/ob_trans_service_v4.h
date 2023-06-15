@@ -170,6 +170,8 @@ int check_for_standby(const share::ObLSID &ls_id,
                       bool &can_read,
                       SCN &trans_version,
                       bool &is_determined_state);
+void register_standby_cleanup_task();
+int do_standby_cleanup();
 
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 

@@ -176,11 +176,11 @@ public:
                    const share::ObLSID &coordinator,
                    const bool has_tx_level_temp_table,
                    int64_t &affected_rows);
-  void insert_record_for_standby(const uint64_t tenant_id,
-                                 const ObXATransID &xid,
-                                 const ObTransID &trans_id,
-                                 const share::ObLSID &coordinator,
-                                 const ObAddr &sche_addr);
+  int insert_record_for_standby(const uint64_t tenant_id,
+                                const ObXATransID &xid,
+                                const ObTransID &trans_id,
+                                const share::ObLSID &coordinator,
+                                const ObAddr &sche_addr);
 private:
   int local_one_phase_xa_commit_ (const ObXATransID &xid,
                                   const ObTransID &trans_id,

@@ -92,6 +92,7 @@ class ObPartTransCtx : public ObTransCtx,
   friend class ObTransService;
   friend class IterateTxStatFunctor;
   friend class IterateTransStatForKeyFunctor;
+  friend class StandbyCleanUpFunctor;
   friend class MockObTxCtx;
   friend class ObTxELRHandler;
   friend class ObIRetainCtxCheckFunctor;

@@ -36,6 +36,7 @@
 #include "ob_gts_rpc.h"
 #include "ob_gti_source.h"
 #include "ob_tx_version_mgr.h"
+#include "ob_tx_standby_cleanup.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/container/ob_iarray.h"
 #include "observer/ob_server_struct.h"
