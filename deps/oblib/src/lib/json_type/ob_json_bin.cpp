@@ -1338,7 +1338,7 @@ int ObJsonBin::deserialize_json_object_v0(const char *data, uint64_t length, ObJ
           ObJsonNode *node = NULL;
           ret = deserialize_json_value(val, length - value_offset, val_type, value_offset, node, type);
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(object->add(key, node))) {
+            if (OB_FAIL(object->add(key, node, true, false))) {
               LOG_WARN("failed to add node to obj", K(ret));
             }
           } else {

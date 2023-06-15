@@ -2079,6 +2079,79 @@ TEST_F(TestJsonTree, test_clone_node_datetime)
 
 }
 
+TEST_F(TestJsonTree, test_sort)
+{
+  // correct json text
+  common::ObString json_text("{ \"a\" : \"value1\", \"a\" : \"value2\", \
+      \"b\" : \"value3\",  \"b\" : \"value4\" }");
+  common::ObArenaAllocator allocator(ObModIds::TEST);
+  const char *syntaxerr = NULL;
+  ObJsonNode *json_tree = NULL;
+  ASSERT_EQ(OB_SUCCESS, ObJsonParser::parse_json_text(&allocator, json_text.ptr(),
+      json_text.length(), syntaxerr, NULL, json_tree));
+  ASSERT_TRUE(json_tree != NULL);
+
+  ObJsonBuffer j_buf(&allocator);
+  ASSERT_EQ(json_tree->print(j_buf, false), 0);
+
+  std::string tmp_res(j_buf.ptr());
+  std::string result("{\"a\": \"value2\", \"b\": \"value4\"}");
+  ASSERT_EQ(result, tmp_res);
+}
+
+TEST_F(TestJsonTree, test_big_json)
+{
+  common::ObArenaAllocator allocator(ObModIds::TEST);
+  ObJsonBuffer j_buf(&allocator);
+  ASSERT_EQ(j_buf.reserve(1024 * 1024), 0);
+  ASSERT_EQ(j_buf.append("{"), 0);
+
+
+  static char origin[] = "0123456789abcdef";
+  char key_buffer[33] = {0};
+  char value_buffer[16] = {0};
+  int idx = 0;
+
+  for (int64_t pos = 0; pos < 20000; ++pos) {
+    for (int i = 0; i < 32; ++i) {
+      idx = ObRandom::rand(0, 15);
+      key_buffer[i] = origin[idx];
+    }
+
+    ASSERT_EQ(j_buf.append("\""), 0);
+    ASSERT_EQ(j_buf.append(key_buffer, 32), 0);
+    ASSERT_EQ(j_buf.append("\""), 0);
+
+    ASSERT_EQ(j_buf.append(": "), 0);
+    snprintf(value_buffer, 16, "%ld", pos);
+    ASSERT_EQ(j_buf.append(value_buffer), 0);
+
+    ASSERT_EQ(j_buf.append(", "), 0);
+  }
+
+  j_buf.set_length(j_buf.length() - 2);
+  ASSERT_EQ(j_buf.append("}"), 0);
+
+  // correct json text
+  common::ObString json_text(j_buf.length(), j_buf.ptr());
+
+  const char *syntaxerr = NULL;
+  ObJsonNode *json_tree = NULL;
+
+  struct timeval time_start, time_end;
+  gettimeofday(&time_start, nullptr);
+  ASSERT_EQ(OB_SUCCESS, ObJsonParser::parse_json_text(&allocator, json_text.ptr(),
+      json_text.length(), syntaxerr, NULL, json_tree));
+  ASSERT_TRUE(json_tree != NULL);
+
+  gettimeofday(&time_end, nullptr);
+  ASSERT_EQ((static_cast<ObJsonObject*>(json_tree))->object_array_.count(), 20000);
+
+  cout << "time start : " << " sec = " << time_start.tv_sec << ", usec = " << time_start.tv_usec << endl;
+  cout << "time  end  : " << " sec = " << time_end.tv_sec << ", usec = " << time_end.tv_usec << endl;
+
+}
+
 } // namespace common
 } // namespace oceanbase
 

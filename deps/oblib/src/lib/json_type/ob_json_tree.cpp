@@ -623,7 +623,7 @@ int ObJsonObject::replace(const ObJsonNode *old_node, ObJsonNode *new_node)
 
 // When constructing a JSON tree, if two keys have the same value, 
 // the latter one will overwrite the former one
-int ObJsonObject::add(const common::ObString &key, ObJsonNode *value)
+int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool is_lazy_sort, bool need_overwrite)
 {
   INIT_SUCC(ret);
 
@@ -634,15 +634,23 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value)
     value->set_parent(this);
     ObJsonObjectPair pair(key, value);
 
-    ObJsonKeyCompare cmp;
-    ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
-                                                            object_array_.end(), pair, cmp);
-    if (low_iter != object_array_.end() && low_iter->get_key() == key) { // Found and covered
-      low_iter->set_value(value);
-    } else { // not found, push back, sort
-      object_array_.push_back(pair);
-      // sort again.
-      sort();
+    if (need_overwrite) {
+      ObJsonKeyCompare cmp;
+      ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
+                                                              object_array_.end(), pair, cmp);
+      if (low_iter != object_array_.end() && low_iter->get_key() == key) { // Found and covered
+        low_iter->set_value(value);
+      } else if (OB_FAIL(object_array_.push_back(pair))) {
+        LOG_WARN("failed to store in object array.", K(ret));
+      } else if (!is_lazy_sort) {
+        sort();
+      }
+    } else {
+      if (OB_FAIL(object_array_.push_back(pair))) {
+        LOG_WARN("failed to store in object array.", K(ret));
+      } else if (!is_lazy_sort) {
+        sort();
+      }
     }
     set_serialize_delta_size(value->get_serialize_size());
   }
@@ -654,6 +662,41 @@ void ObJsonObject::sort()
 {
   ObJsonKeyCompare cmp;
   std::sort(object_array_.begin(), object_array_.end(), cmp);
+}
+
+void ObJsonObject::stable_sort()
+{
+  ObJsonKeyCompare cmp;
+  std::stable_sort(object_array_.begin(), object_array_.end(), cmp);
+}
+
+void ObJsonObject::unique()
+{
+  int64_t pos = 1;
+  int64_t cur = 0;
+  int64_t last = object_array_.count();
+
+  for (; pos < last; pos++) {
+    ObJsonObjectPair& cur_ref = object_array_[cur];
+    ObJsonObjectPair& pos_ref = object_array_[pos];
+
+    common::ObString cur_key = cur_ref.get_key();
+    common::ObString pos_key = pos_ref.get_key();
+
+    if (cur_key.length() == pos_key.length() && cur_key.compare(pos_key) == 0) {
+      cur_ref = pos_ref;
+    } else {
+      cur++;
+      if (cur != pos) {
+        object_array_[cur] = pos_ref;
+      }
+    }
+  }
+
+  while (++cur < last) {
+    object_array_.pop_back();
+  }
+
 }
 
 void ObJsonObject::clear()
@@ -688,7 +731,7 @@ int ObJsonObject::consume(ObIAllocator *allocator, ObJsonObject *other)
       } else {
         other_value = other->get_value(other_key);
         if (OB_NOT_NULL(other_value)) {
-          if (OB_FAIL(add(other_key, other_value))) {
+          if (OB_FAIL(add(other_key, other_value, false, true))) {
             LOG_WARN("fail to add object", K(ret), K(other_key), K(*other_value));
           }
         }
@@ -726,7 +769,7 @@ int ObJsonObject::merge_patch(ObIAllocator *allocator, ObJsonObject *patch_obj)
           LOG_WARN("fail to remove element", K(ret), K(key));
         }
       } else if (j_patch_node->json_type() != ObJsonNodeType::J_OBJECT) {
-        if (OB_FAIL(add(key, j_patch_node))) {
+        if (OB_FAIL(add(key, j_patch_node, false, true))) {
           LOG_WARN("fail to add patch node to current object", K(ret), K(key), K(*j_patch_node));
         }
       } else { // j_patch_node->json_type() == ObJsonNodeType::J_OBJECT
@@ -755,7 +798,7 @@ int ObJsonObject::merge_patch(ObIAllocator *allocator, ObJsonObject *patch_obj)
           if (OB_FAIL(static_cast<ObJsonObject *>(j_node)->merge_patch(allocator, 
               static_cast<ObJsonObject *>(j_patch_node)))) {
             LOG_WARN("fail to merge path", K(ret), K(key));
-          } else if (OB_FAIL(add(key, j_node))) {
+          } else if (OB_FAIL(add(key, j_node, false, true))) {
             LOG_WARN("fail to add object", K(ret), K(key));
           }
         }
