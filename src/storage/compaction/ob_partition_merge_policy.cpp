@@ -65,7 +65,8 @@ int ObPartitionMergePolicy::get_neighbour_freeze_info(
       LOG_WARN("Failed to get freeze info, use snapshot_gc_ts instead", K(ret), K(snapshot_version));
       ret = OB_SUCCESS;
       freeze_info.reset();
-      freeze_info.next.freeze_version = MTL(ObTenantFreezeInfoMgr *)->get_snapshot_gc_ts();
+      // TODO(lixia.yq) use more accurate next_freeze_info in minor schedule
+      freeze_info.next.freeze_version = INT64_MAX;
       if (OB_NOT_NULL(last_major)) {
         freeze_info.prev.freeze_version = last_major->get_snapshot_version();
       }
