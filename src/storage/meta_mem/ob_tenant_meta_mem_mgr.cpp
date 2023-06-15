@@ -135,6 +135,7 @@ int ObTenantMetaMemMgr::init()
 {
   int ret = OB_SUCCESS;
   lib::ObMemAttr mem_attr(tenant_id_, "MetaAllocator", ObCtxIds::META_OBJ_CTX_ID);
+  lib::ObMemAttr map_attr(tenant_id_, "TabletMap");
   lib::ObMemAttr other_attr(tenant_id_, "T3MOtherMem");
   const int64_t bucket_num = cal_adaptive_bucket_num();
   const int64_t pin_set_bucket_num = common::hash::cal_next_prime(DEFAULT_BUCKET_NUM);
@@ -147,7 +148,7 @@ int ObTenantMetaMemMgr::init()
   } else if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(),
       OB_MALLOC_NORMAL_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("fail to init tenant fifo allocator", K(ret));
-  } else if (OB_FAIL(tablet_map_.init(bucket_num, tenant_id_, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
+  } else if (OB_FAIL(tablet_map_.init(bucket_num, map_attr, TOTAL_LIMIT, HOLD_LIMIT,
         common::OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("fail to initialize tablet map", K(ret), K(bucket_num));
   } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT, other_attr))) {
