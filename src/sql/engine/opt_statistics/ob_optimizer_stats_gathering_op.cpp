@@ -120,7 +120,6 @@ int ObOptimizerStatsGatheringOp::inner_rescan()
   }
   table_stats_map_.reuse();
   column_stats_map_.reuse();
-  part_map_.reuse();
   arena_.reset();
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to rescan");
@@ -239,7 +238,7 @@ int ObOptimizerStatsGatheringOp::inner_get_next_batch(const int64_t max_row_cnt)
       } else {
         batch_info_guard.set_batch_idx(i);
         if (OB_FAIL(calc_stats())) {
-          LOG_WARN("fail to calc stats", K(ret));
+          LOG_WARN("fail to calc stats", K(ret), K(i), K(child_brs->size_));
         }
       }
     }
