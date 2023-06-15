@@ -292,7 +292,8 @@ private:
   int getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_addr, uint64_t &len);
   int do_delete_one_piece(ObLobAccessParam& param, ObLobQueryResult &result, ObString &tmp_buff);
   int prepare_erase_buffer(ObLobAccessParam& param, ObString &tmp_buff);
-  void fill_zero(char *ptr, uint64_t length, bool is_char, uint32_t byte_len, uint32_t byte_offset, uint32_t char_len);
+  int fill_zero(char *ptr, uint64_t length, bool is_char,
+                const ObCollationType coll_type, uint32_t byte_len, uint32_t byte_offset, uint32_t &char_len);
   int prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside);
   bool lob_handle_has_char_len(ObLobAccessParam& param);
   int64_t* get_char_len_ptr(ObLobAccessParam& param);
