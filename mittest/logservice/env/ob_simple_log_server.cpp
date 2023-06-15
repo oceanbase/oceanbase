@@ -368,6 +368,10 @@ int ObMittestBlacklist::init(const common::ObAddr &self)
     SERVER_LOG(WARN, "create blacklist_ failed", K(ret));
   } else if (false == blacklist_.created()) {
     SERVER_LOG(WARN, "blacklist_ created failed");
+  } else if (OB_FAIL(pcode_blacklist_.create(1024))) {
+    SERVER_LOG(WARN, "create pcode_blacklist_ failed", K(ret));
+  } else if (false == pcode_blacklist_.created()) {
+    SERVER_LOG(WARN, "pcode_blacklist_ created failed");
   } else {
     self_ = self;
   }
@@ -386,11 +390,27 @@ void ObMittestBlacklist::unblock_net(const ObAddr &src)
   SERVER_LOG(INFO, "unblock_net", K(src), K(blacklist_));
 }
 
+void ObMittestBlacklist::block_pcode(const ObRpcPacketCode &pcode)
+{
+  pcode_blacklist_.set_refactored((int64_t)pcode);
+  SERVER_LOG(INFO, "block_pcode", K(pcode), K(pcode_blacklist_));
+}
+
+void ObMittestBlacklist::unblock_pcode(const ObRpcPacketCode &pcode)
+{
+  pcode_blacklist_.erase_refactored((int64_t)pcode);
+  SERVER_LOG(INFO, "unblock_pcode", K(pcode), K(pcode_blacklist_));
+}
+
 bool ObMittestBlacklist::need_filter_packet_by_blacklist(const ObAddr &addr)
 {
   return OB_HASH_EXIST == blacklist_.exist_refactored(addr);
 }
 
+bool ObMittestBlacklist::need_filter_packet_by_pcode_blacklist(const ObRpcPacketCode &pcode)
+{
+  return OB_HASH_EXIST == pcode_blacklist_.exist_refactored((int64_t)pcode);
+}
 
 void ObMittestBlacklist::set_rpc_loss(const ObAddr &src, const int loss_rate)
 {
@@ -493,6 +513,7 @@ void ObLogDeliver::destroy(const bool is_shutdown)
     TG_DESTROY(tg_id_);
     if (is_shutdown) {
       blacklist_.destroy();
+      pcode_blacklist_.destroy();
     }
     tg_id_ = 0;
     SERVER_LOG(INFO, "destroy ObLogDeliver");
@@ -597,6 +618,10 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
     }
     return false;
   };
+  if (this->need_filter_packet_by_pcode_blacklist(pcode)) {
+    SERVER_LOG(WARN, "need_filter_packet_by_pcode_blacklist", K(ret), K(pcode), K(pcode_blacklist_), KPC(palf_env_impl_));
+    return OB_SUCCESS;
+  }
   switch (pkt.get_pcode()) {
     #define PROCESS(processer) \
     processer p;\

@@ -179,6 +179,8 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
     EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.log_sync_memberlist_.contains(b_addr));
     EXPECT_EQ(leader_max_flushed_end_lsn, leader.palf_handle_impl_->sw_.committed_end_lsn_);
 
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[b_idx])->log_service_.get_arbitration_service()->start();
     revert_cluster_palf_handle_guard(palf_list);
   }
   delete_paxos_group(id);
@@ -289,6 +291,8 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
     EXPECT_TRUE(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
     EXPECT_TRUE(a_handle->palf_handle_impl_->config_mgr_.config_meta_.curr_.log_sync_memberlist_.contains(b_addr));
 
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[b_idx])->log_service_.get_arbitration_service()->start();
     revert_cluster_palf_handle_guard(palf_list);
   }
   delete_paxos_group(id);
@@ -372,6 +376,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_no_leader
     EXPECT_UNTIL_EQ(true, leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.degraded_learnerlist_.contains(b_addr));
 
     unblock_net(leader_idx, b_idx);
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[b_idx])->log_service_.get_arbitration_service()->start();
     get_cluster()[c_idx]->get_palf_env()->revert_palf_handle_impl(c_ihandle);
     revert_cluster_palf_handle_guard(palf_list);
   }
@@ -482,6 +487,76 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_arb_crash
   }
   delete_paxos_group(id);
   PALF_LOG(INFO, "end test test_2f1a_degrade_when_arb_crash", K(id));
+}
+
+TEST_F(TestObSimpleLogClusterArbMockEleService, test_arb_degrade_probe)
+{
+  int ret = OB_SUCCESS;
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
+  OB_LOGGER.set_log_level("TRACE");
+  SET_CASE_LOG_FILE(TEST_NAME, "test_arb_degrade_probe");
+  PALF_LOG(INFO, "begin test test_arb_degrade_probe", K(id));
+  {
+    int64_t leader_idx = 0;
+    int64_t arb_replica_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb_mock_election(id, arb_replica_idx, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
+
+    const int64_t b_idx = (leader_idx + 1) % 5;
+    const int64_t c_idx = (leader_idx + 2) % 5;
+    const int64_t d_idx = (leader_idx + 3) % 5;
+    const int64_t e_idx = (leader_idx + 4) % 5;
+    const common::ObAddr a_addr = get_cluster()[leader_idx]->get_addr();
+    const common::ObAddr b_addr = get_cluster()[b_idx]->get_addr();
+    const common::ObAddr c_addr = get_cluster()[c_idx]->get_addr();
+    const common::ObAddr d_addr = get_cluster()[d_idx]->get_addr();
+    const common::ObAddr e_addr = get_cluster()[e_idx]->get_addr();
+    PalfHandleImplGuard *a_handle = palf_list[leader_idx];
+    PalfHandleImplGuard *b_handle = palf_list[b_idx];
+
+    // CASE 1. D and E UNKNOWN, do not degrade
+    block_pcode(d_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
+    block_pcode(e_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
+    EXPECT_TRUE(dynamic_cast<ObSimpleLogServer*>(get_cluster()[d_idx])->deliver_.need_filter_packet_by_pcode_blacklist(ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG));
+    EXPECT_TRUE(dynamic_cast<ObSimpleLogServer*>(get_cluster()[e_idx])->deliver_.need_filter_packet_by_pcode_blacklist(ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG));
+    sleep(6);
+    EXPECT_EQ(0, leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.degraded_learnerlist_.get_member_number());
+
+    // CASE 2. D block_net, E UNKNOWN, do not degrade
+    block_net(leader_idx, d_idx);
+    sleep(2);
+    EXPECT_EQ(0, leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.degraded_learnerlist_.get_member_number());
+
+    // CASE 3. D block_net, E block_net, degrade
+    block_net(leader_idx, e_idx);
+    EXPECT_TRUE(is_degraded(leader, d_idx));
+    EXPECT_TRUE(is_degraded(leader, e_idx));
+
+    // CASE 4. D and E unblock_net but block_pcode, do not upgrade
+    unblock_net(leader_idx, d_idx);
+    unblock_net(leader_idx, e_idx);
+    sleep(2);
+    EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.degraded_learnerlist_.get_member_number());
+
+    // CASE 5. D unblock_net and unblock_pcode, upgrade E
+    unblock_pcode(d_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
+    EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.degraded_learnerlist_.contains(d_addr));
+
+    // CASE 6. E unblock_net and unblock_pcode, upgrade E
+    unblock_pcode(e_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
+    EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.config_meta_.curr_.degraded_learnerlist_.contains(d_addr));
+
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test test_arb_degrade_probe", K(id));
 }
 
 } // end unittest

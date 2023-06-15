@@ -757,6 +757,22 @@ void ObSimpleLogClusterTestEnv::unblock_net(const int64_t id1, const int64_t id2
   SERVER_LOG(INFO, "unblock_net success", K(addr1), K(addr2));
 }
 
+void ObSimpleLogClusterTestEnv::block_pcode(const int64_t id1, const ObRpcPacketCode &pcode)
+{
+  auto cluster = get_cluster();
+  ObAddr addr1 = cluster[id1]->get_addr();
+  cluster[id1]->block_pcode(pcode);
+  SERVER_LOG(INFO, "block_pcode success", K(addr1), K(pcode));
+}
+
+void ObSimpleLogClusterTestEnv::unblock_pcode(const int64_t id1, const ObRpcPacketCode &pcode)
+{
+  auto cluster = get_cluster();
+  ObAddr addr1 = cluster[id1]->get_addr();
+  cluster[id1]->unblock_pcode(pcode);
+  SERVER_LOG(INFO, "unblock_pcode success", K(addr1), K(pcode));
+}
+
 // set rpc loss by rate from id1 to id2
 void ObSimpleLogClusterTestEnv::set_rpc_loss(const int64_t id1, const int64_t id2, const int loss_rate)
 {

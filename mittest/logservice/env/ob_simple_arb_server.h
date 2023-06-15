@@ -111,6 +111,10 @@ public:
   {blacklist_.block_net(src);}
   void unblock_net(const ObAddr &src) override final
   {blacklist_.unblock_net(src);}
+  void block_pcode(const ObRpcPacketCode &pcode) override final
+  {blacklist_.block_pcode(pcode);}
+  void unblock_pcode(const ObRpcPacketCode &pcode) override final
+  {blacklist_.unblock_pcode(pcode);}
   void set_rpc_loss(const ObAddr &src, const int loss_rate) override final
   {blacklist_.set_rpc_loss(src, loss_rate);}
   void reset_rpc_loss(const ObAddr &src) override final
