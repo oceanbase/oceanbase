@@ -154,8 +154,8 @@ public:
   bool is_confirming() const { return flag_ == DupTabletSetChangeFlag::CONFIRMING; }
   bool can_be_confirmed_anytime() const
   {
-    return (trx_ref_ == 0 && readable_version_ >= need_confirm_scn_
-            && flag_ == DupTabletSetChangeFlag::CONFIRMING)
+    return (trx_ref_ == 0 && readable_version_ >= need_confirm_scn_ && readable_version_.is_valid()
+            && need_confirm_scn_.is_valid() && flag_ == DupTabletSetChangeFlag::CONFIRMING)
            || flag_ == DupTabletSetChangeFlag::CONFIRMED;
   }
   bool has_confirmed() const { return DupTabletSetChangeFlag::CONFIRMED == flag_; }
@@ -698,6 +698,7 @@ private:
 
   int cal_single_set_max_ser_size_(DupTabletChangeMap *hash_map,
                                    int64_t &max_ser_size,
+                                   const int64_t ser_size_limit,
                                    DupTabletSetIDArray &id_array);
 
   int merge_into_readable_tablets_(DupTabletChangeMap *change_map_ptr, const bool for_replay);

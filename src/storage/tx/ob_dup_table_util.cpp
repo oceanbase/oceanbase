@@ -92,6 +92,7 @@ int ObDupTabletScanTask::refresh_dup_tablet_schema_(
                                                           dup_ls_status_info))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         DUP_TABLE_LOG(DEBUG, "no duplicate ls", K(dup_ls_status_info));
+        ret = OB_SUCCESS;
       } else {
         DUP_TABLE_LOG(WARN, "get duplicate ls status info failed", K(ret), K(dup_ls_status_info));
       }

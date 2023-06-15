@@ -969,7 +969,8 @@ public:
                K(logging_lsn_));
 
 private:
-  static const int64_t MAX_LOG_BLOCK_SIZE = common::OB_MAX_LOG_ALLOWED_SIZE;
+  static const int64_t MAX_LOG_BLOCK_SIZE ;
+  static const int64_t RESERVED_LOG_HEADER_SIZE ; //100 Byte
   int prepare_serialize_log_entry_(int64_t &max_ser_size, DupLogTypeArray &type_array);
   int serialize_log_entry_(const int64_t max_ser_size, const DupLogTypeArray &type_array);
   int deserialize_log_entry_();
