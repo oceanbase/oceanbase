@@ -39,6 +39,18 @@ int ObHistBucket::deep_copy(const ObHistBucket &src,
   return ret;
 }
 
+int ObHistBucket::deep_copy(ObIAllocator &alloc, const ObHistBucket &src)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_write_obj(alloc, src.endpoint_value_, endpoint_value_))) {
+    LOG_WARN("failed to write obj");
+  } else {
+    endpoint_repeat_count_ = src.endpoint_repeat_count_;
+    endpoint_num_ = src.endpoint_num_;
+  }
+  return ret;
+}
+
 void ObHistogram::reset()
 {
   type_ = ObHistType::INVALID_TYPE;
@@ -90,6 +102,30 @@ int ObHistogram::deep_copy(const ObHistogram &src, char *buf, const int64_t buf_
     for (int64_t i = 0; OB_SUCC(ret) && i < buckets_.count(); ++i) {
       if (OB_FAIL(buckets_.at(i).deep_copy(src.buckets_.at(i), buf, buf_len, pos))) {
         LOG_WARN("deep copy bucket failed", K(ret), K(buf_len), K(pos));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHistogram::deep_copy(ObIAllocator &allocator, const ObHistogram &src)
+{
+  int ret = OB_SUCCESS;
+  type_ = src.type_;
+  sample_size_ = src.sample_size_;
+  density_ = src.density_;
+  bucket_cnt_ = src.bucket_cnt_;
+  void *ptr = NULL;
+  if (src.buckets_.empty()) {
+  } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObHistBucket) * src.buckets_.count()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory", K(src.buckets_.count()), K(ret));
+  } else {
+    ObHistBucket *new_buckets = new (ptr) ObHistBucket[src.buckets_.count()];
+    buckets_ = ObArrayWrap<ObHistBucket>(new_buckets, src.buckets_.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < buckets_.count(); ++i) {
+      if (OB_FAIL(buckets_.at(i).deep_copy(allocator, src.buckets_.at(i)))) {
+        LOG_WARN("deep copy bucket failed");
       }
     }
   }

@@ -54,6 +54,7 @@ public:
                 char *buf,
                 const int64_t buf_len,
                 int64_t &pos);
+  int deep_copy(ObIAllocator &alloc, const ObHistBucket &src);
 
   int64_t deep_copy_size() const { return endpoint_value_.get_deep_copy_size(); }
 
@@ -94,6 +95,7 @@ public:
   void reset();
 
   int deep_copy(const ObHistogram &src, char *buf, const int64_t buf_len, int64_t &pos);
+  int deep_copy(ObIAllocator &alloc, const ObHistogram &src);
   int assign(const ObHistogram &other);
   int64_t deep_copy_size() const;
 
