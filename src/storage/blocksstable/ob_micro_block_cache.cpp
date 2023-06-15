@@ -316,6 +316,7 @@ ObIMicroBlockIOCallback::ObIMicroBlockIOCallback()
     use_block_cache_(true),
     need_write_extra_buf_(true)
 {
+  MEMSET(encrypt_key_, 0, sizeof(encrypt_key_));
   static_assert(sizeof(*this) <= CALLBACK_BUF_SIZE, "IOCallback buf size not enough");
 }
 
@@ -507,6 +508,9 @@ int ObIMicroBlockIOCallback::assign(const ObIMicroBlockIOCallback &other)
   block_des_meta_ = other.block_des_meta_;
   use_block_cache_ = other.use_block_cache_;
   need_write_extra_buf_ = other.need_write_extra_buf_;
+  // deep copy encrypt_key
+  MEMCPY(encrypt_key_, other.block_des_meta_.encrypt_key_, sizeof(encrypt_key_));
+  block_des_meta_.encrypt_key_ = encrypt_key_;
   return ret;
 }
 
