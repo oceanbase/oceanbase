@@ -3023,6 +3023,23 @@ int ObSql::generate_plan(ParseResult &parse_result,
     } else if (OB_FAIL(prepare_outline_for_phy_plan(logical_plan,
                                                     phy_plan))) {
       LOG_WARN("failed to prepare outline for phy plan", K(ret));
+    } else if (logical_plan->get_optimizer_context().is_online_ddl()) {
+      int tmp_ret = OB_SUCCESS;
+      ObExplainDisplayOpt option;
+      option.with_tree_line_ = false;
+      ObSqlPlan sql_plan(logical_plan->get_allocator());
+      ObSEArray<common::ObString, 64> plan_strs;
+      if (OB_TMP_FAIL(sql_plan.print_sql_plan(logical_plan,
+                                          EXPLAIN_EXTENDED,
+                                          option,
+                                          plan_strs))) {
+        LOG_WARN("failed to store sql plan", K(tmp_ret));
+      } else {
+        LOG_INFO("ddl plan");
+        for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < plan_strs.count(); i++) {
+          _OB_LOG(INFO, "%*s", plan_strs.at(i).length(), plan_strs.at(i).ptr());
+        }
+      }
     }
     END_OPT_TRACE(session_info);
     if (OB_SUCC(ret) && session_info->is_user_session()) {
