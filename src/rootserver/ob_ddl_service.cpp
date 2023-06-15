@@ -30908,6 +30908,11 @@ int ObDDLSQLTransaction::start(ObISQLClient *proxy,
       start_operation_schema_version_ = tsi_oper->last_operation_schema_version_;
       start_operation_tenant_id_ = tsi_oper->last_operation_tenant_id_;
     }
+
+    if (enable_ddl_parallel_) {
+      enable_check_newest_schema_ = false;
+    }
+
     if (FAILEDx(common::ObMySQLTransaction::start(proxy, tenant_id, with_snapshot))) {
       LOG_WARN("fail to start trans", KR(ret), K(with_snapshot), K(tenant_id_));
     } else if (0 == tenant_refreshed_schema_version) {
@@ -30916,7 +30921,7 @@ int ObDDLSQLTransaction::start(ObISQLClient *proxy,
                K(tenant_id), K(tenant_refreshed_schema_version));
     } else if (OB_FAIL(lock_all_ddl_operation(*this, tenant_id_, enable_ddl_parallel_))) {
       LOG_WARN("fail to lock all ddl operation", K(ret), K(tenant_id_));
-    } else if (!enable_ddl_parallel_) {
+    } else if (enable_check_newest_schema_) {
       //double check, after lock success, check schema_version is newest before lock
       ObRefreshSchemaStatus schema_status;
       schema_status.tenant_id_ = tenant_id;

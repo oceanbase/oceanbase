@@ -2326,7 +2326,8 @@ public:
                       const bool need_end_signal = true,
                       const bool enable_query_stash = false,
                       const bool enable_ddl_parallel = false,
-                      const bool enable_check_ddl_epoch = true)
+                      const bool enable_check_ddl_epoch = true,
+                      const bool enable_check_newest_schema = true)
                       : common::ObMySQLTransaction(enable_query_stash),
                         schema_service_(schema_service),
                         tenant_id_(OB_INVALID_TENANT_ID),
@@ -2336,7 +2337,8 @@ public:
                         trans_start_schema_version_(0),
                         enable_ddl_parallel_(enable_ddl_parallel),
                         enable_check_ddl_epoch_(enable_check_ddl_epoch),
-                        trans_start_ddl_epoch_(OB_INVALID_VERSION)
+                        trans_start_ddl_epoch_(OB_INVALID_VERSION),
+                        enable_check_newest_schema_(enable_check_newest_schema)
                         {}
   virtual ~ObDDLSQLTransaction();
 
@@ -2421,6 +2423,9 @@ private:
   bool enable_check_ddl_epoch_;
   // for compare
   int64_t trans_start_ddl_epoch_;
+
+  // default true to check newest schema; daily major set false not check just use schema from inner table
+  bool enable_check_newest_schema_;
 };
 // Fill in the partition name and the high values of the last partition
 template<typename SCHEMA, typename ALTER_SCHEMA>
