@@ -4693,36 +4693,11 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg, 
             root_balancer_->notify_locality_modification();
             root_balancer_->wakeup();
           }
-
-          uint64_t tenant_id = new_table_schema.get_tenant_id();
-          uint64_t table_id = new_table_schema.get_table_id();
-          uint64_t part_num = new_table_schema.get_all_part_num();
-          // drop auto-increment attr in drop column/modify column
-          ObAutoincrementService &autoinc_service = ObAutoincrementService::get_instance();
-          if (OB_SUCC(ret)) {
-            if (0 != orig_table_schema->get_autoinc_column_id() && 0 == new_table_schema.get_autoinc_column_id()) {
-              LOG_INFO("begin to clear all auto-increment cache",
-                  K(tenant_id),
-                  K(table_id),
-                  K(part_num),
-                  K(orig_table_schema->get_autoinc_column_id()));
-              if (OB_FAIL(autoinc_service.clear_autoinc_cache_all(
-                      tenant_id, table_id, orig_table_schema->get_autoinc_column_id()))) {
-                LOG_WARN("failed to clear auto-increment cache", K(tenant_id), K(table_id));
-              }
-            }
-          }
-          // sync sync_value(auto_increment)
-          uint64_t auto_increment = alter_table_schema.get_auto_increment();
-          if (OB_SUCC(ret)) {
-            if (new_table_schema.get_autoinc_column_id() > 0 && auto_increment > 0) {
-              LOG_INFO("begin to sync auto_increment", K(tenant_id), K(table_id), K(part_num), K(auto_increment));
-              if (OB_FAIL(autoinc_service.sync_auto_increment_all(tenant_id,
-                      table_id,
-                      new_table_schema.get_autoinc_column_id(),
-                      0 == auto_increment ? 0 : auto_increment - 1))) {
-                LOG_WARN("failed to sync auto_increment", K(tenant_id), K(table_id), K(auto_increment));
-              }
+          // Before publish schema, Getting table partitions' location will fail in restore mode,
+          // this situation will cause alter table fail twice (50111667)
+          if (OB_SUCC(ret) && !tenant_schema->is_restore()) {
+            if (OB_FAIL(delete_auto_increment_attribute(orig_table_schema, new_table_schema, alter_table_schema))) {
+              LOG_WARN("fail to delete auto-incr attribute", KR(ret), KPC(orig_table_schema), K(alter_table_schema));
             }
           }
         }
@@ -5960,6 +5935,48 @@ int ObDDLService::check_split_list_partition_match(const share::schema::ObPartit
             LOG_USER_ERROR(OB_ERR_SPLIT_LIST_LESS_VALUE);
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::delete_auto_increment_attribute(const share::schema::ObTableSchema *orig_table_schema,
+    const share::schema::ObTableSchema &new_table_schema, const share::schema::AlterTableSchema &alter_table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  const uint64_t table_id = new_table_schema.get_table_id();
+  const uint64_t part_num = new_table_schema.get_all_part_num();
+  // drop auto-increment attr in drop column/modify column
+  ObAutoincrementService &autoinc_service = ObAutoincrementService::get_instance();
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(orig_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("orig_table_schema is NULL", KR(ret), K(new_table_schema), K(alter_table_schema));
+    } else if (0 != orig_table_schema->get_autoinc_column_id() && 0 == new_table_schema.get_autoinc_column_id()) {
+      LOG_INFO("begin to clear all auto-increment cache",
+          K(tenant_id),
+          K(table_id),
+          K(part_num),
+          K(orig_table_schema->get_autoinc_column_id()));
+      if (OB_FAIL(autoinc_service.clear_autoinc_cache_all(
+              tenant_id, table_id, orig_table_schema->get_autoinc_column_id()))) {
+        LOG_WARN("failed to clear auto-increment cache", K(tenant_id), K(table_id));
+      }
+    }
+  }
+  // sync sync_value(auto_increment)
+  uint64_t auto_increment = alter_table_schema.get_auto_increment();
+  if (OB_SUCC(ret)) {
+    if (new_table_schema.get_autoinc_column_id() > 0 && auto_increment > 0) {
+      LOG_INFO("begin to sync auto_increment", K(tenant_id), K(table_id), K(part_num), K(auto_increment));
+      if (OB_FAIL(autoinc_service.sync_auto_increment_all(tenant_id,
+              table_id,
+              new_table_schema.get_autoinc_column_id(),
+              0 == auto_increment ? 0 : auto_increment - 1))) {
+        LOG_WARN("failed to sync auto_increment", K(tenant_id), K(table_id), K(auto_increment));
       }
     }
   }

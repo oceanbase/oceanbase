@@ -766,6 +766,8 @@ public:
   int clear_partition_member_list(const int64_t max_schema_version, const int64_t tenant_id, const bool is_inner_table);
 
 private:
+  int delete_auto_increment_attribute(const share::schema::ObTableSchema *orig_table_schema,
+      const share::schema::ObTableSchema &new_table_schema, const share::schema::AlterTableSchema &alter_table_schema);
   int do_modify_system_variable(
       uint64_t tenant_id, const share::schema::ObSysVarSchema& modify_var, share::schema::ObSysVarSchema& new_schema);
 
