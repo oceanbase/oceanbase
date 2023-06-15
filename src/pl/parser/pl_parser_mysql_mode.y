@@ -359,7 +359,14 @@ outer_stmt:
   | package_body_block { $$ = $1; }
   | create_trigger_stmt { $$ = $1; }
   | drop_trigger_stmt { $$ = $1; }
-  | plsql_trigger_source { $$ = $1; }
+  | plsql_trigger_source
+    {
+      if (!parse_ctx->is_inner_parse_) {
+        obpl_mysql_yyerror(&@1, parse_ctx, "Syntax Error\n");
+        YYERROR;
+      }
+      $$ = $1;
+    }
 ;
 
 /*****************************************************************************
