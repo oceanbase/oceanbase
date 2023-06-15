@@ -110,6 +110,7 @@ int ObSignalHandle::deal_signals(int signum)
       break;
     }
     case SIGTERM: {
+      raise(SIGKILL);
       ObServer::get_instance().prepare_stop();
       ObServer::get_instance().set_stop();
       break;
