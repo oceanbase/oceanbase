@@ -5732,8 +5732,8 @@ int ObDMLResolver::resolve_limit_clause(const ParseNode *node)
       }
     } else {
       if (limit_node != NULL) {
-        if (limit_node->type_ != T_QUESTIONMARK && limit_node->type_ != T_INT
-            && limit_node->type_ != T_COLUMN_REF) {
+        if (limit_node->type_ != T_INT && limit_node->type_ != T_UINT64
+            && limit_node->type_ != T_QUESTIONMARK && limit_node->type_ != T_COLUMN_REF) {
           ret = OB_ERR_RESOLVE_SQL;
           LOG_WARN("Wrong type of limit value");
         } else {
