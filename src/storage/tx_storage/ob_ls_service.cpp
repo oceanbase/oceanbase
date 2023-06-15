@@ -59,7 +59,8 @@ ObLSService::ObLSService()
     rs_reporter_(nullptr),
     storage_svr_rpc_proxy_(),
     storage_rpc_(),
-    safe_ls_destroy_task_cnt_(0)
+    safe_ls_destroy_task_cnt_(0),
+    iter_cnt_(0)
 {}
 
 ObLSService::~ObLSService()
@@ -70,7 +71,7 @@ ObLSService::~ObLSService()
 void ObLSService::destroy()
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("destroy ls service");
+  LOG_INFO("destroy ls service", K_(iter_cnt));
   if (is_running_) {
     if (OB_FAIL(stop())) {
       LOG_WARN("stop ls service failed", K(ret));
@@ -91,10 +92,11 @@ void ObLSService::destroy()
 bool ObLSService::safe_to_destroy()
 {
   bool is_safe = (ls_map_.is_empty() &&
-                  ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) == 0);
+                  ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) == 0 &&
+                  ATOMIC_LOAD(&iter_cnt_) == 0);
   if (!is_safe && REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
     LOG_INFO("ls service is not safe to destroy", K(ls_map_.is_empty()),
-             K_(safe_ls_destroy_task_cnt));
+             K_(safe_ls_destroy_task_cnt), K_(iter_cnt));
   }
   return is_safe;
 }
@@ -107,6 +109,16 @@ void ObLSService::inc_ls_safe_destroy_task_cnt()
 void ObLSService::dec_ls_safe_destroy_task_cnt()
 {
   ATOMIC_DEC(&safe_ls_destroy_task_cnt_);
+}
+
+void ObLSService::inc_iter_cnt()
+{
+  ATOMIC_INC(&iter_cnt_);
+}
+
+void ObLSService::dec_iter_cnt()
+{
+  ATOMIC_DEC(&iter_cnt_);
 }
 
 int ObLSService::stop()
@@ -204,6 +216,7 @@ int ObLSService::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   const char *OB_LS_SERVICE = "LSSvr";
+  const char *OB_LS_ITER = "LSIter";
   const int64_t LS_ALLOC_TOTAL_LIMIT = 1024 * 1024 * 1024;
   const int64_t ITER_ALLOC_TOTAL_LIMIT = 1024 * 1024 * 1024;
 
@@ -220,7 +233,7 @@ int ObLSService::init(const uint64_t tenant_id,
                                         LS_ALLOC_TOTAL_LIMIT))) {
     LOG_WARN("fail to init ls allocator, ", K(ret));
   } else if (OB_FAIL(iter_allocator_.init(common::OB_MALLOC_NORMAL_BLOCK_SIZE,
-                                          OB_LS_SERVICE,
+                                          OB_LS_ITER,
                                           tenant_id,
                                           ITER_ALLOC_TOTAL_LIMIT))) {
     LOG_WARN("fail to init iter allocator, ", K(ret));
@@ -1182,9 +1195,11 @@ int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGet
   } else {
     ls_iter = new (buf) ObLSIterator();
     ls_iter->set_ls_map(ls_map_, mod);
+    inc_iter_cnt();
     if (OB_FAIL(guard.assign(ls_iter, [&](ObLSIterator *iter) mutable {
                                         iter->~ObLSIterator();
                                         iter_allocator_.free(iter);
+                                        dec_iter_cnt();
                                       }))) {
       LOG_WARN("create guard failed.", K(ret));
     }
