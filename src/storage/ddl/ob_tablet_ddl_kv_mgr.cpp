@@ -175,10 +175,7 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
   return ret;
 }
 
-int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
-                                 const SCN &commit_scn,
-                                 const uint64_t table_id,
-                                 const int64_t ddl_task_id)
+int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn, const SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -211,34 +208,25 @@ int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
     param.rec_scn_ = commit_scn;
     param.is_commit_ = true;
     param.start_scn_ = start_scn;
-    param.table_id_ = table_id;
-    param.execution_id_ = execution_id_;
-    param.ddl_task_id_ = ddl_task_id;
     const int64_t start_ts = ObTimeUtility::fast_current_time();
 
-    while (OB_SUCC(ret) && is_started()) {
-      if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
-        if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-          LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
-        } else {
-          ret = OB_SUCCESS;
-          ob_usleep(10L * 1000L);
-          if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-            LOG_INFO("retry schedule ddl commit task",
-                K(start_scn), K(commit_scn), K(table_id), K(ddl_task_id), K(*this),
-                "wait_elpased_s", (ObTimeUtility::fast_current_time() - start_ts) / 1000000L);
-          }
-        }
+    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
       } else {
-        LOG_INFO("schedule ddl commit task success", K(start_scn), K(commit_scn), K(table_id), K(ddl_task_id), K(*this));
-        break;
+        ret = OB_SUCCESS; // the backgroud scheduler will reschedule again
+        LOG_INFO("schedule ddl merge task need retry",
+            K(start_scn), K(commit_scn), K(*this),
+            "wait_elpased_s", (ObTimeUtility::fast_current_time() - start_ts) / 1000000L);
       }
+    } else {
+      LOG_INFO("schedule ddl commit task success", K(start_scn), K(commit_scn), K(*this));
     }
   }
   return ret;
 }
 
-int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &commit_scn, const bool is_replay, const uint64_t table_id, const int64_t ddl_task_id)
+int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -260,9 +248,6 @@ int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &c
     param.rec_scn_ = commit_scn;
     param.is_commit_ = true;
     param.start_scn_ = start_scn;
-    param.table_id_ = table_id;
-    param.execution_id_ = execution_id_;
-    param.ddl_task_id_ = ddl_task_id;
     // retry submit dag in case of the previous dag failed
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       if (OB_SIZE_OVERFLOW == ret || OB_EAGAIN == ret) {
@@ -274,20 +259,10 @@ int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &c
       ret = OB_EAGAIN; // until major sstable is ready
     }
   }
-  if (OB_FAIL(ret) && is_replay)  {
-    if (OB_TABLET_NOT_EXIST == ret || OB_TASK_EXPIRED == ret) {
-      ret = OB_SUCCESS; // think as succcess for replay
-    } else {
-      if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-        LOG_INFO("replay ddl commit", K(ret), K(start_scn), K(commit_scn), K(*this));
-      }
-      ret = OB_EAGAIN; // retry by replay service
-    }
-  }
   return ret;
 }
 
-int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &commit_scn, const uint64_t table_id, const int64_t ddl_task_id)
+int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -307,7 +282,7 @@ int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &co
     while (OB_SUCC(ret)) {
       if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(schedule_ddl_merge_task(start_scn, commit_scn, false/*is_replay*/, table_id, ddl_task_id))) {
+      } else if (OB_FAIL(schedule_ddl_merge_task(start_scn, commit_scn))) {
         if (OB_EAGAIN == ret) {
           ob_usleep(100L); // 100us.
           ret = OB_SUCCESS; // retry
@@ -336,11 +311,6 @@ int ObTabletDDLKvMgr::get_ddl_major_merge_param(const ObTabletMeta &tablet_meta,
     param.rec_scn_ = get_commit_scn_nolock(tablet_meta);
     param.is_commit_ = true;
     param.start_scn_ = start_scn_;
-
-    // no checksum report
-    param.table_id_ = 0;
-    param.execution_id_ = -1;
-    param.ddl_task_id_ = 0;
   } else {
     ret = OB_EAGAIN;
   }
