@@ -484,13 +484,6 @@ int ObOptimizerStatsGatheringOp::get_col_stats_by_partinfo(PartIds &part_ids, ui
 int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj, int64_t col_len)
 {
   int ret = OB_SUCCESS;
-  const ObObj *tmp_obj;
-  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&obj, arena_, tmp_obj))) {
-    LOG_WARN("fail to truncate string", K(ret));
-  } else {
-    obj = *tmp_obj;
-  }
-
   all_stats.global_col_stat_->set_stat_level(StatLevel::TABLE_LEVEL);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(all_stats.global_col_stat_->merge_obj(obj))) {
