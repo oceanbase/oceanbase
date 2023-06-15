@@ -124,7 +124,7 @@ int async_cb(easy_request_t *r)
 
       if (cb_cloned) {
         LOG_DEBUG("reset rcode", K(cb_cloned));
-        cb->reset_rcode();
+        cb->~AsyncCB();
       }
     }
   } else {
