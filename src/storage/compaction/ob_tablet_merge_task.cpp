@@ -272,21 +272,29 @@ int ObBasicTabletMergeDag::get_tablet_and_compat_mode()
 
 int64_t ObBasicTabletMergeDag::to_string(char* buf, const int64_t buf_len) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObIDag::to_string(buf, buf_len))) {
-    LOG_WARN("failed to call to ObIDag::string", K(ret), K(buf_len));
-  } else if (OB_FAIL(param_.to_string(buf, buf_len))) {
-    LOG_WARN("failed to call to ObTabletMergeDagParam::string", K(ret), K(buf_len));
-  } else if (OB_FAIL(common::databuff_printf(buf, buf_len, ", compat_mode_=%d,", compat_mode_))) {
-    LOG_WARN("failed to print compat mode", K(ret), K(compat_mode_));
-  } else if (OB_NOT_NULL(ctx_)) {
-    if (OB_FAIL(ctx_->sstable_version_range_.to_string(buf, buf_len))) {
-      LOG_WARN("failed to call to version range", K(ret), K(buf_len));
-    } else if (OB_FAIL(ctx_->scn_range_.to_string(buf, buf_len))) {
-      LOG_WARN("failed to call to log ts range", K(ret), K(buf_len));
+  int64_t pos = 0;
+
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    // do nothing
+  } else {
+    databuff_printf(buf, buf_len, pos, "{");
+    databuff_printf(buf, buf_len, pos, "ObIDag:");
+    pos += ObIDag::to_string(buf + pos, buf_len - pos);
+
+    databuff_print_json_kv_comma(buf, buf_len, pos, "param", param_);
+    databuff_print_json_kv_comma(buf, buf_len, pos, "compat_mode", compat_mode_);
+    if (nullptr == ctx_) {
+      databuff_print_json_kv_comma(buf, buf_len, pos, "ctx", ctx_);
+    } else {
+      databuff_printf(buf, buf_len, pos, ", ctx:{");
+      databuff_print_json_kv(buf, buf_len, pos, "sstable_version_range", ctx_->sstable_version_range_);
+      databuff_print_json_kv_comma(buf, buf_len, pos, "scn_range", ctx_->scn_range_);
+      databuff_printf(buf, buf_len, pos, "}");
     }
+    databuff_printf(buf, buf_len, pos, "}");
   }
-  return ret;
+
+  return pos;
 }
 
 int ObBasicTabletMergeDag::inner_init(const ObTabletMergeDagParam &param)
