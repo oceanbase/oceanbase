@@ -313,7 +313,7 @@ int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &co
         LOG_WARN("check status failed", K(ret));
       } else if (OB_FAIL(schedule_ddl_merge_task(start_scn, commit_scn, false/*is_replay*/))) {
         if (OB_EAGAIN == ret) {
-          ob_usleep(10L * 1000L);
+          ob_usleep(100L); // 100us.
           ret = OB_SUCCESS; // retry
         } else {
           LOG_WARN("commit ddl log failed", K(ret), K(start_scn), K(commit_scn), K(ls_id_), K(tablet_id_));
