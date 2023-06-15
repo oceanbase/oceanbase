@@ -47137,7 +47137,7 @@ def_table_schema(
 SELECT
   SVR_IP, SVR_PORT, SQL_PORT,
   ID,
-  USER,
+  "USER",
   HOST,
   DB,
   TENANT,
