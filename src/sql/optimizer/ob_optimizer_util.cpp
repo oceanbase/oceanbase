@@ -7541,20 +7541,31 @@ int ObOptimizerUtil::get_join_style_parallel(ObOptimizerContext &opt_ctx,
 {
   int ret = OB_SUCCESS;
   parallel = 1.0;
-  if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo ||
-             DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo) {
-    parallel = 1.0;
-  } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo) {
-    parallel = opt_ctx.get_parallel();
-  } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo ||
-             DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo ||
-             DistAlgo::DIST_BROADCAST_NONE == join_dist_algo ||
-             DistAlgo::DIST_BC2HOST_NONE == join_dist_algo ||
-             DistAlgo::DIST_HASH_NONE == join_dist_algo ||
-             DistAlgo::DIST_PARTITION_NONE == join_dist_algo) {
-    parallel = right_parallel;
-  } else {
-    parallel = left_parallel;
+  switch (join_dist_algo) {
+    case DistAlgo::DIST_BASIC_METHOD:
+    case DistAlgo::DIST_PULL_TO_LOCAL:
+      parallel = 1;
+      break;
+    case DistAlgo::DIST_NONE_ALL:
+    case DistAlgo::DIST_NONE_BROADCAST:
+    case DistAlgo::DIST_NONE_PARTITION:
+    case DistAlgo::DIST_NONE_HASH:
+    case DistAlgo::DIST_HASH_HASH:
+      parallel = left_parallel;
+      break;
+    case DistAlgo::DIST_ALL_NONE:
+    case DistAlgo::DIST_BROADCAST_NONE:
+    case DistAlgo::DIST_BC2HOST_NONE:
+    case DistAlgo::DIST_PARTITION_NONE:
+    case DistAlgo::DIST_HASH_NONE:
+      parallel = right_parallel;
+      break;
+    case DistAlgo::DIST_PARTITION_WISE:
+    case DistAlgo::DIST_EXT_PARTITION_WISE:
+      parallel = opt_ctx.get_parallel();
+      break;
+    default:
+      break;
   }
   return ret;
 }

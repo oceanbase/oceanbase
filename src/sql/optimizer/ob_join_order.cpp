@@ -4905,33 +4905,34 @@ int JoinPath::compute_join_path_parallel_and_server_info()
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
+    } else if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(opt_ctx,
+                                                                left_path_->parallel_,
+                                                                right_path_->parallel_,
+                                                                join_dist_algo_,
+                                                                parallel_))) {
+      LOG_WARN("failed to get parallel", K(ret));
     } else if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_) {
-      parallel_ = 1;
       server_cnt_ = 1;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
-      parallel_ = 1;
       server_cnt_ = 1;
       if (OB_FAIL(server_list_.push_back(opt_ctx.get_local_server_addr()))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo_) {
-      parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_) {
       if (OB_NOT_NULL(left_path_->strong_sharding_) && OB_NOT_NULL(right_path_->strong_sharding_)) {
-        parallel_ = opt_ctx.get_parallel();
         int64_t part_cnt = left_path_->strong_sharding_->get_part_cnt();
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
         server_cnt_ = left_path_->server_cnt_;
@@ -4941,7 +4942,6 @@ int JoinPath::compute_join_path_parallel_and_server_info()
       }
     } else if (DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo_) {
       if (OB_NOT_NULL(left_path_->strong_sharding_) && OB_NOT_NULL(right_path_->strong_sharding_)) {
-        parallel_ = opt_ctx.get_parallel();
         server_cnt_ = left_path_->server_cnt_;
         if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
           LOG_WARN("failed to assign server list", K(ret));
@@ -4949,19 +4949,16 @@ int JoinPath::compute_join_path_parallel_and_server_info()
       }
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
                DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
-      parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       common::ObAddr all_server_list;
       // a special ALL server list indicating hash-hash data distribution
@@ -4970,7 +4967,6 @@ int JoinPath::compute_join_path_parallel_and_server_info()
         LOG_WARN("failed to assign all server list", K(ret));
       }
     } else if (DistAlgo::DIST_PARTITION_NONE == join_dist_algo_) {
-      parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
@@ -4979,13 +4975,11 @@ int JoinPath::compute_join_path_parallel_and_server_info()
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
       }
     } else if (DistAlgo::DIST_HASH_NONE == join_dist_algo_) {
-      parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_NONE_PARTITION == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
@@ -4994,7 +4988,6 @@ int JoinPath::compute_join_path_parallel_and_server_info()
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
       }
     } else if (DistAlgo::DIST_NONE_HASH == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
@@ -7983,6 +7976,52 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       }
     }
   }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_BROADCAST)) {
+    OPT_TRACE("check none broadcast method");
+    int64_t join_parallel = 1;
+    if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(get_plan()->get_optimizer_context(),
+                                                         left_path.parallel_,
+                                                         right_path.parallel_,
+                                                         DIST_NONE_BROADCAST,
+                                                         join_parallel))) {
+      LOG_WARN("failed to get parallel", K(ret));
+    } else if (1 >= join_parallel) {
+      distributed_methods &= ~DIST_NONE_BROADCAST;
+      OPT_TRACE("parallel=1, plan will not use none broadcast");
+    }
+  }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_BROADCAST_NONE)) {
+    OPT_TRACE("check broadcast none method");
+    int64_t join_parallel = 1;
+    if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(get_plan()->get_optimizer_context(),
+                                                         left_path.parallel_,
+                                                         right_path.parallel_,
+                                                         DIST_BROADCAST_NONE,
+                                                         join_parallel))) {
+      LOG_WARN("failed to get parallel", K(ret));
+    } else if (1 >= join_parallel) {
+      distributed_methods &= ~DIST_BROADCAST_NONE;
+      OPT_TRACE("parallel=1, plan will not use broadcast none");
+    }
+  }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_HASH)) {
+    OPT_TRACE("check hash hash method");
+    int64_t join_parallel = 1;
+    if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(get_plan()->get_optimizer_context(),
+                                                         left_path.parallel_,
+                                                         right_path.parallel_,
+                                                         DIST_HASH_HASH,
+                                                         join_parallel))) {
+      LOG_WARN("failed to get parallel", K(ret));
+    } else if (1 >= join_parallel) {
+      distributed_methods &= ~DIST_HASH_HASH;
+      OPT_TRACE("parallel=1, plan will not use hash hash");
+    }
+  }
+
   /*
    * if we have other parallel join methods, avoid pull to local execution,
    * we may change this strategy in future
@@ -8565,6 +8604,7 @@ int ObJoinOrder::generate_join_filter_infos(const Path *left_path,
   bool right_is_scan = false;
   bool can_use_join_filter = false;
   ObLogicalOperator *right_child = NULL;
+  int64_t join_parallel = 1;;
   /*
   *  1. 检查并行度是否大于1, 检查是否使用新引擎.
   *  2. 检查Join类型.
@@ -8577,7 +8617,13 @@ int ObJoinOrder::generate_join_filter_infos(const Path *left_path,
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(ret), K(left_path), K(right_path), K(get_plan()));
-  } else if (get_plan()->get_optimizer_context().get_parallel() <= 1) {
+  } else if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(get_plan()->get_optimizer_context(),
+                                                              left_path->parallel_,
+                                                              right_path->parallel_,
+                                                              join_dist_algo,
+                                                              join_parallel))) {
+    LOG_WARN("failed to get parallel", K(ret));
+  } else if (1 >= join_parallel) {
     OPT_TRACE("parallel <= 1, plan will not use join filter");
   } else if (RIGHT_OUTER_JOIN == join_type ||
             FULL_OUTER_JOIN == join_type ||
