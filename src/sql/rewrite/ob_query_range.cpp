@@ -1227,8 +1227,10 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
       if (cur->in_keypart_->is_strict_in_ &&
           cur->in_keypart_->get_min_offset() == (++depth)) {
         depth = cur->in_keypart_->get_max_offset();
-        is_precise_get = (cur->in_keypart_->is_in_precise_get() &&
-                                        cur->item_next_ == NULL);
+        if (is_precise_get) {
+          is_precise_get = (cur->in_keypart_->is_in_precise_get() &&
+                            cur->or_next_ == NULL && cur->item_next_ == NULL);
+        }
       } else {
         is_precise_get = false;
         max_pos = cur->in_keypart_->get_min_offset();
