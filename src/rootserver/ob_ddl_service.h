@@ -240,6 +240,9 @@ public:
                          const share::schema::ObTableSchema **table_schema);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
                                       obrpc::ObCreateHiddenTableRes &res);
+  int check_index_on_foreign_key(const ObTableSchema *index_table_schema,
+                                const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos,
+                                bool &have_index);
   virtual int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
 
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
