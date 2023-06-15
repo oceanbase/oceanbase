@@ -50,6 +50,13 @@ void ObTxnFreeRouteCtx::init_before_handle_request(ObTxDesc *tx)
   in_txn_before_handle_request_ = false;
   audit_record_.proxy_flag_ = is_proxy_support_;
   if (OB_NOT_NULL(tx)) {
+    if (tx->flags_.DEFER_ABORT_) {
+      auto txs = MTL_WITH_CHECK_TENANT(ObTransService*, tx->tenant_id_);
+      if (OB_ISNULL(txs)) {
+        int ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "[tx free route] MTL(txs) is null", K(ret), K(tx->tenant_id_));
+      } else { txs->handle_defer_abort(*tx); }
+    }
     ObSpinLockGuard guard(tx->lock_);
     in_txn_before_handle_request_ = tx->in_tx_for_free_route_();
     txn_addr_ = TX_START_OR_RESUME_ADDR(tx);

@@ -550,6 +550,16 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
   return ret;
 }
 
+void ObTransService::abort_tx__(ObTxDesc &tx, const bool cleanup)
+{
+  abort_participants_(tx);
+  if (!cleanup) {
+    invalid_registered_snapshot_(tx);
+  } else {
+    tx_post_terminate_(tx);
+  }
+}
+
 int ObTransService::abort_tx_(ObTxDesc &tx, const int cause, const bool cleanup)
 {
   int ret = OB_SUCCESS;
@@ -564,16 +574,27 @@ int ObTransService::abort_tx_(ObTxDesc &tx, const int cause, const bool cleanup)
     }
     tx.state_ = ObTxDesc::State::IN_TERMINATE;
     tx.abort_cause_ = cause;
-    abort_participants_(tx);
-    tx.state_ = ObTxDesc::State::ABORTED;
-    if (!cleanup) {
-      invalid_registered_snapshot_(tx);
+    // promise the abort request always send from scheduler
+    if (tx.addr_ == self_ || tx.xa_start_addr_ == self_) {
+      abort_tx__(tx, cleanup);
     } else {
-      tx_post_terminate_(tx);
+      tx.flags_.DEFER_ABORT_ = true;
     }
+    tx.state_ = ObTxDesc::State::ABORTED;
   }
   TRANS_LOG(INFO, "abort tx", K(ret), K(*this), K(tx), K(cause));
   return ret;
+}
+
+void ObTransService::handle_defer_abort(ObTxDesc &tx)
+{
+  ObSpinLockGuard guard(tx.lock_);
+  if (tx.addr_ == self_ || tx.xa_start_addr_ == self_) {
+    if (tx.flags_.DEFER_ABORT_) {
+      abort_tx__(tx, true);
+      tx.flags_.DEFER_ABORT_ = false;
+    }
+  }
 }
 
 void ObTransService::invalid_registered_snapshot_(ObTxDesc &tx)

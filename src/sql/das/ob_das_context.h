@@ -82,6 +82,7 @@ public:
                             ObDASTabletMapper &tablet_mapper,
                             const DASTableIDArrayWrap *related_table_ids = nullptr);
   bool has_same_lsid(share::ObLSID *lsid);
+  int get_all_lsid(share::ObLSArray &ls_ids);
   int64_t get_related_tablet_cnt() const;
   void set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { snapshot_ = snapshot; }
   transaction::ObTxReadSnapshot &get_snapshot() { return snapshot_; }

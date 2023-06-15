@@ -42,6 +42,7 @@ public:
   virtual bool can_retry() const { return false; }
   // Set retry flag so that scheduler will reprocess this request then
   virtual void set_need_retry() {}
+  virtual void unset_need_retry() {}
   // It's used to check whether query need retry. Whenever worker has
   // observed this query need retry, it should stop processing this
   // query immediately.

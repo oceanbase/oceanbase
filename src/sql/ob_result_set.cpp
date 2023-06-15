@@ -874,6 +874,11 @@ int ObResultSet::close()
     }
     ret = auto_end_plan_trans(*physical_plan_, ret, async);
   }
+  // notify close fail to listener
+  int err = COVER_SUCC(do_close_plan_ret);
+  if (OB_SUCCESS != err && close_fail_cb_.is_valid()) {
+    close_fail_cb_(err);
+  }
   //NG_TRACE_EXT(result_set_close, OB_ID(ret), ret, OB_ID(arg1), prev_ret,
                //OB_ID(arg2), ins_ret, OB_ID(arg3), errcode_, OB_ID(async), async);
   return ret;  // 后面所有的操作都通过callback来完成
