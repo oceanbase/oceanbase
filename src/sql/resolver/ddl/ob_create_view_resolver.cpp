@@ -531,7 +531,7 @@ int ObCreateViewResolver::stmt_print(const ObSelectStmt *stmt,
                                       params_.schema_checker_->get_schema_guard(),
                                       obj_print_params, true);
       stmt_printer.set_column_list(column_list);
-      stmt_printer.set_is_root(true);  // print hint as root stmt
+      stmt_printer.set_is_first_stmt_for_hint(true);  // need print global hint
       if (OB_FAIL(stmt_printer.do_print())) {
         if (OB_SIZE_OVERFLOW == ret && buf_len < OB_MAX_PACKET_LENGTH) {
           buf_len = std::min(buf_len * 2, OB_MAX_PACKET_LENGTH);

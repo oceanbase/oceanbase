@@ -34,6 +34,7 @@ ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, con
     pos_(pos),
     stmt_(stmt),
     is_root_(false),
+    is_first_stmt_for_hint_(false),
     print_cte_(false),
     schema_guard_(schema_guard),
     print_params_(print_params),
@@ -74,7 +75,7 @@ int ObDMLStmtPrinter::print_hint()
       plan_text.pos_ = *pos_;
       plan_text.is_oneline_ = true;
       bool ignore_parallel = print_params_.for_dblink_;
-      if (OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_, is_root_, ignore_parallel))) {
+      if (OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_, is_first_stmt_for_hint_, ignore_parallel))) {
         LOG_WARN("failed to print stmt hint", K(ret));
       } else if (plan_text.pos_ == *pos_) {
         // no hint, roolback buffer!
