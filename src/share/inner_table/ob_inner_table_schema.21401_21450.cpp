@@ -210,7 +210,7 @@ int ObInnerTableSchema::v_ob_timestamp_service_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TS_TYPE,       TS_VALUE,       SVR_IP,       SVR_PORT     FROM       oceanbase.__all_virtual_timestamp_service     WHERE       ROLE = 'LEADER' AND SERVICE_EPOCH =       (SELECT MAX(SERVICE_EPOCH) FROM       oceanbase.__all_virtual_timestamp_service) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TENANT_ID,       TS_TYPE,       TS_VALUE,       SVR_IP,       SVR_PORT     FROM       oceanbase.__all_virtual_timestamp_service as a     WHERE       ROLE = 'LEADER' AND SERVICE_EPOCH =       (SELECT MAX(SERVICE_EPOCH) FROM       oceanbase.__all_virtual_timestamp_service       where TENANT_ID = a.TENANT_ID)     GROUP BY TENANT_ID )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

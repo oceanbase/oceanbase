@@ -26857,11 +26857,13 @@ def_table_schema(
       SVR_IP,
       SVR_PORT
     FROM
-      oceanbase.__all_virtual_timestamp_service
+      oceanbase.__all_virtual_timestamp_service as a
     WHERE
       ROLE = 'LEADER' AND SERVICE_EPOCH =
       (SELECT MAX(SERVICE_EPOCH) FROM
-      oceanbase.__all_virtual_timestamp_service)
+      oceanbase.__all_virtual_timestamp_service
+      where TENANT_ID = a.TENANT_ID)
+    GROUP BY TENANT_ID
 """.replace("\n", " ")
 )
 
@@ -51080,7 +51082,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'zhenjiang.xzj',
+  owner = 'lixinze.lxz',
   table_name      = 'V$OB_TIMESTAMP_SERVICE',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
