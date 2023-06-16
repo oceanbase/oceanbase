@@ -102,9 +102,18 @@ void ObDetectManager::destroy()
   }
   // destroy node and callback in all_check_items_
   FOREACH(iter, all_check_items_) {
+    const ObDetectableId &detectable_id = iter->first;
     ObDetectCallbackNode *node = iter->second;
     while (OB_NOT_NULL(node)) {
       ObDetectCallbackNode *next_node = node->next_;
+      // DM is destroying means that all tenant threads have already exited,
+      // the remain detect callbacks must be
+      // ObSingleDfoDetectCB, ObTempTableDetectCB, or ObP2PDataHubDetectCB
+      int temp_ret = node->cb_->do_callback();
+      LIB_LOG(WARN, "[DM] do callback during mtl destroy",
+            K(temp_ret), K(node->cb_->get_trace_id()),
+            K(detectable_id), K(node->cb_->get_detect_callback_type()),
+            K(node->sequence_id_));
       delete_cb_node(node);
       node = next_node;
     }
