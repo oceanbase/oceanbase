@@ -58,12 +58,11 @@ private:
   int execute_dist_das_task(ObDASRef &das_ref,
       ObDasAggregatedTasks &task_ops, bool async = true);
   int clear_task_exec_env(ObDASRef &das_ref, ObIDASTaskOp &task_op);
-  int refresh_partition_location(ObDASRef &das_ref, ObIDASTaskOp &task_op, int err_no);
+  int refresh_task_location_info(ObDASRef &das_ref, ObIDASTaskOp &task_op);
   int do_local_das_task(ObDASRef &das_ref, ObDASTaskArg &task_arg);
   int do_async_remote_das_task(ObDASRef &das_ref, ObDasAggregatedTasks &aggregated_tasks, ObDASTaskArg &task_arg);
   int do_sync_remote_das_task(ObDASRef &das_ref, ObDasAggregatedTasks &aggregated_tasks, ObDASTaskArg &task_arg);
   int collect_das_task_info(ObDASTaskArg &task_arg, ObDASRemoteInfo &remote_info);
-  bool can_fast_fail(const ObIDASTaskOp &task_op) const;
   void calc_das_task_parallelism(const ObDASRef &das_ref, const ObDasAggregatedTasks &task_ops, int &target_parallelism);
 private:
   obrpc::ObDASRpcProxy das_rpc_proxy_;

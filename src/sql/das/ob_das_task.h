@@ -148,9 +148,10 @@ public:
   DASRtDefFixedArray &get_related_rtdefs() { return related_rtdefs_; }
   ObTabletIDFixedArray &get_related_tablet_ids() { return related_tablet_ids_; }
   virtual int dump_data() const { return common::OB_SUCCESS; }
-  const DasTaskNode &get_node() const { return das_task_node_; };
-  DasTaskNode &get_node() { return das_task_node_; };
-  int get_errcode() const { return errcode_; };
+  const DasTaskNode &get_node() const { return das_task_node_; }
+  DasTaskNode &get_node() { return das_task_node_; }
+  int get_errcode() const { return errcode_; }
+  void set_errcode(int errcode) { errcode_ = errcode; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id),
                        K_(task_id),
                        K_(op_type),

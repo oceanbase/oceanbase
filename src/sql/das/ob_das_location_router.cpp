@@ -808,6 +808,8 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
       } else if (OB_FAIL(remote_replicas.push_back(&tmp_replica_loc))) {
         LOG_WARN("store tmp replica failed", K(ret));
       }
+    } else {
+      LOG_INFO("this replica is in the blacklist, thus filtered it", K(bl_key));
     }
   }
   if (OB_SUCC(ret)) {

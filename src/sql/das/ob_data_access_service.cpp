@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "observer/ob_srv_network_frame.h"
+#include "observer/mysql/ob_query_retry_ctrl.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_define.h"
 #include "sql/das/ob_das_extra_data.h"
@@ -20,6 +21,7 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/ob_phy_table_location.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/das/ob_das_retry_ctrl.h"
 #include "storage/tx/ob_trans_service.h"
 namespace oceanbase
 {
@@ -27,6 +29,7 @@ using namespace share;
 using namespace storage;
 using namespace common;
 using namespace transaction;
+using namespace observer;
 namespace sql
 {
 
@@ -210,17 +213,12 @@ int ObDataAccessService::clear_task_exec_env(ObDASRef &das_ref, ObIDASTaskOp &ta
   return ret;
 }
 
-int ObDataAccessService::refresh_partition_location(ObDASRef &das_ref,
-                                                    ObIDASTaskOp &task_op,
-                                                    int err_no)
+int ObDataAccessService::refresh_task_location_info(ObDASRef &das_ref, ObIDASTaskOp &task_op)
 {
   int ret = OB_SUCCESS;
   ObExecContext &exec_ctx = das_ref.get_exec_ctx();
-  ObDASBaseRtDef *das_rtdef = task_op.get_rtdef();
-  ObDASTableLoc *table_loc = das_rtdef->table_loc_;
   ObDASTabletLoc *tablet_loc = const_cast<ObDASTabletLoc*>(task_op.get_tablet_loc());
   int64_t retry_cnt = DAS_CTX(exec_ctx).get_location_router().get_retry_cnt();
-  DAS_CTX(exec_ctx).get_location_router().refresh_location_cache(tablet_loc->tablet_id_, true, err_no);
   if (OB_FAIL(ObDASUtils::wait_das_retry(retry_cnt))) {
     LOG_WARN("wait das retry failed", K(ret));
   } else if (OB_FAIL(DAS_CTX(exec_ctx).get_location_router().get_tablet_loc(*tablet_loc->loc_meta_,
@@ -230,7 +228,6 @@ int ObDataAccessService::refresh_partition_location(ObDASRef &das_ref,
   } else {
     task_op.set_ls_id(tablet_loc->ls_id_);
   }
-  LOG_INFO("LOCATION: refresh tablet cache", K(ret), KPC(table_loc), KPC(tablet_loc));
   return ret;
 }
 
@@ -239,36 +236,50 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
   int ret = task_op.errcode_;
   ObArenaAllocator tmp_alloc;
   ObDasAggregatedTasks das_task_wrapper(tmp_alloc);
-  while ((is_master_changed_error(ret) ||
-        is_partition_change_error(ret) ||
-        OB_REPLICA_NOT_READABLE == ret)
-          && !is_virtual_table(task_op.get_ref_table_id())) {
-    int tmp_ret = ret;
-    if (!can_fast_fail(task_op)) {
-      task_op.in_part_retry_ = true;
-      ObDASLocationRouter &location_router = DAS_CTX(das_ref.get_exec_ctx()).get_location_router();
-      location_router.set_last_errno(ret);
-      location_router.inc_retry_cnt();
-      if (OB_FAIL(clear_task_exec_env(das_ref, task_op))) {
-        LOG_WARN("clear task execution environment", K(ret));
-      } else if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
-        LOG_WARN("query is timeout, terminate retry", K(ret));
-      } else if (OB_FAIL(refresh_partition_location(das_ref, task_op, task_op.errcode_))) {
-        LOG_WARN("refresh partition location failed", K(ret), "ori_err_code", tmp_ret, K(lbt()));
-      } else if (FALSE_IT(das_task_wrapper.reuse())) {
-      } else if (FALSE_IT(task_op.set_task_status(ObDasTaskStatus::UNSTART))) {
-      } else if (OB_FAIL(das_task_wrapper.push_back_task(&task_op))) {
-        LOG_WARN("failed to push back task", K(ret));
-      } else if (OB_FAIL(execute_dist_das_task(das_ref, das_task_wrapper, false))) {
+  bool retry_continue = false;
+  ObDASLocationRouter &location_router = DAS_CTX(das_ref.get_exec_ctx()).get_location_router();
+  do {
+    ObDASRetryCtrl::retry_func retry_func = nullptr;
+
+    retry_continue = false;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ObQueryRetryCtrl::get_das_retry_func(task_op.errcode_, retry_func))) {
+      LOG_WARN("get das retry func failed", K(tmp_ret), K(task_op.errcode_));
+    } else if (retry_func != nullptr) {
+      bool need_retry = false;
+      retry_func(das_ref, task_op, need_retry);
+      LOG_INFO("[DAS RETRY] check if need tablet level retry",
+               KR(task_op.errcode_), K(need_retry),
+               "retry_cnt", location_router.get_retry_cnt());
+      if (need_retry) {
+        task_op.in_part_retry_ = true;
+        location_router.set_last_errno(task_op.get_errcode());
+        location_router.inc_retry_cnt();
+        if (OB_TMP_FAIL(clear_task_exec_env(das_ref, task_op))) {
+          LOG_WARN("clear task execution environment failed", K(tmp_ret));
+        }
+        if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
+          LOG_WARN("query is timeout, terminate retry", K(ret));
+        } else if (OB_FAIL(refresh_task_location_info(das_ref, task_op))) {
+          LOG_WARN("refresh task location failed", K(ret));
+        } else {
+          LOG_INFO("start to retry DAS task now", KPC(task_op.get_tablet_loc()));
+          das_task_wrapper.reuse();
+          task_op.set_task_status(ObDasTaskStatus::UNSTART);
+          if (OB_FAIL(das_task_wrapper.push_back_task(&task_op))) {
+            LOG_WARN("failed to push back task", K(ret));
+          } else if (OB_FAIL(execute_dist_das_task(das_ref, das_task_wrapper, false))) {
+            LOG_WARN("execute dist DAS task failed", K(ret));
+          }
+        }
         task_op.errcode_ = ret;
-        LOG_WARN("execute dist das task failed", K(ret));
+        retry_continue = (OB_SUCCESS != ret);
       } else {
-        LOG_DEBUG("retry das task success!", K(task_op));
+        ret = task_op.errcode_;
       }
-    } else {
-      break;
     }
-  }
+  } while (retry_continue);
+
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(task_op.state_advance())) {
@@ -278,37 +289,6 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
   OB_ASSERT(das_task_wrapper.has_unstart_tasks() == false &&
       das_task_wrapper.success_tasks_.get_size() == 0);
   return ret;
-}
-
-bool ObDataAccessService::can_fast_fail(const ObIDASTaskOp &task_op) const
-{
-  bool bret = false;
-  int ret = OB_SUCCESS;  // no need to pass ret outside.
-  const common::ObTableID &table_id = IS_DAS_DML_OP(task_op)
-      ? static_cast<const ObDASDMLBaseCtDef *>(task_op.get_ctdef())->table_id_
-      : static_cast<const ObDASScanCtDef *>(task_op.get_ctdef())->ref_table_id_;
-  int64_t schema_version = IS_DAS_DML_OP(task_op)
-      ? static_cast<const ObDASDMLBaseCtDef *>(task_op.get_ctdef())->schema_version_
-      : static_cast<const ObDASScanCtDef *>(task_op.get_ctdef())->schema_version_;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObTableSchema *table_schema = nullptr;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    LOG_ERROR("invalid schema service", KR(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-    // tenant could be deleted
-    bret = true;
-    LOG_WARN("get tenant schema guard fail", KR(ret), K(MTL_ID()));
-  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
-    LOG_WARN("failed to get table schema", KR(ret));
-  } else if (OB_ISNULL(table_schema)) {
-    bret = true;
-    LOG_WARN("table not exist, fast fail das task");
-  } else if (table_schema->get_schema_version() != schema_version) {
-    bret = true;
-    LOG_WARN("schema version changed, fast fail das task", "current schema version",
-             table_schema->get_schema_version(), "query schema version", schema_version);
-  }
-  return bret;
 }
 
 int ObDataAccessService::end_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op)
@@ -340,11 +320,8 @@ int ObDataAccessService::rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op
   OB_ASSERT(scan_op.errcode_ == ret);
   if (OB_FAIL(ret) && GCONF._enable_partition_level_retry && scan_op.can_part_retry()) {
     //only fast select can be retry with partition level
-    int tmp_ret = retry_das_task(das_ref, scan_op);
-    if (OB_SUCCESS == tmp_ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to retry das task", K(tmp_ret));
+    if (OB_FAIL(retry_das_task(das_ref, scan_op))) {
+      LOG_WARN("failed to retry das task", K(ret));
     }
   }
   return ret;
