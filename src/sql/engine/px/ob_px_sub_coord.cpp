@@ -421,16 +421,15 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
       for (int64_t i = 0; OB_SUCC(ret) && !find && i < sqc.get_temp_table_ctx().count(); ++i) {
         ObSqlTempTableCtx &temp_table_ctx = sqc.get_temp_table_ctx().at(i);
         if (access_op.temp_table_id_ == temp_table_ctx.temp_table_id_) {
-          if (sqc.get_sqc_id() < 0 || sqc.get_sqc_id() >= temp_table_ctx.interm_result_infos_.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("can not find temp table info in sqc meta info", K(ret));
-          } else {
-            ObTempTableResultInfo &info = temp_table_ctx.interm_result_infos_.at(sqc.get_sqc_id());
-            std::random_shuffle(info.interm_result_ids_.begin(), info.interm_result_ids_.end());
-            if (OB_FAIL(access_input->interm_result_ids_.assign(info.interm_result_ids_))) {
-              LOG_WARN("failed to assign result ids", K(ret));
-            } else {
-              find = true;
+          for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_table_ctx.interm_result_infos_.count(); ++j) {
+            if (sqc.get_exec_addr() == temp_table_ctx.interm_result_infos_.at(j).addr_) {
+              ObTempTableResultInfo &info = temp_table_ctx.interm_result_infos_.at(j);
+              std::random_shuffle(info.interm_result_ids_.begin(), info.interm_result_ids_.end());
+              if (OB_FAIL(access_input->interm_result_ids_.assign(info.interm_result_ids_))) {
+                LOG_WARN("failed to assign result ids", K(ret));
+              } else {
+                find = true;
+              }
             }
           }
         }
