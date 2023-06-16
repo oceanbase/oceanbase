@@ -24,6 +24,7 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"
 #include "sql/dblink/ob_dblink_utils.h"
+#include "sql/resolver/dml/ob_merge_stmt.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -445,14 +446,22 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
         }
       }
     } else if (stmt::T_MERGE == pdml_stmt.get_stmt_type()) {
-      bool with_unique_global_idx = false;
-      if (OB_FAIL(schema_guard->check_has_global_unique_index(
-                  session.get_effective_tenant_id(),
-                  main_table_tid, with_unique_global_idx))) {
-        LOG_WARN("fail check if table with global unqiue index", K(main_table_tid), K(ret));
-      } else if (with_unique_global_idx) {
+      bool update_rowkey = false;
+      ObSEArray<uint64_t, 4> index_ids;
+     if (OB_FAIL(schema_guard->get_all_unique_index(session.get_effective_tenant_id(),
+                                                    main_table_tid,
+                                                    index_ids))) {
+        LOG_WARN("failed to get all local unique index", K(ret));
+      } else if (OB_FAIL(index_ids.push_back(main_table_tid))) {
+        LOG_WARN("failed to push back index ids", K(ret));
+      } else if (OB_FAIL(check_merge_stmt_is_update_index_rowkey(session,
+                                                                 pdml_stmt,
+                                                                 index_ids,
+                                                                 update_rowkey))) {
+        LOG_WARN("failed to check merge stmt update rowkey", K(ret));
+      } else if (update_rowkey) {
         is_use_pdml = false;
-        ctx_.add_plan_note(PDML_DISABLED_BY_GLOBAL_UK);
+        ctx_.add_plan_note(PDML_DISABLE_BY_MERGE_UPDATE_PK);
       }
     }
   }
@@ -974,5 +983,60 @@ int ObOptimizer::check_force_default_stat()
   } else if (is_exists_opt && use_default_opt_stat) {
     ctx_.set_use_default_stat();
   }
+  return ret;
+}
+
+int ObOptimizer::check_merge_stmt_is_update_index_rowkey(const ObSQLSessionInfo &session,
+                                                         const ObDMLStmt &stmt,
+                                                         const ObIArray<uint64_t> &index_ids,
+                                                         bool &is_update)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_schema_guard();
+  const ObTableSchema *table_schema = NULL;
+  const ObMergeStmt &merge_stmt = static_cast<const ObMergeStmt&>(stmt);
+  const ObMergeTableInfo& merge_table_info = merge_stmt.get_merge_table_info();
+  ObSEArray<uint64_t, 4> rowkey_ids;
+  ObSEArray<uint64_t, 4> tmp_rowkey_ids;
+  const ObColumnRefRawExpr* column_expr = nullptr;
+  const ColumnItem* column_item = nullptr;
+  is_update = false;
+  if (OB_ISNULL(schema_guard) ||
+      OB_UNLIKELY(stmt::T_MERGE != stmt.get_stmt_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the schema guard is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
+    tmp_rowkey_ids.reuse();
+    if (OB_FAIL(schema_guard->get_table_schema(session.get_effective_tenant_id(),
+                                               index_ids.at(i),
+                                               table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpect null", K(ret), K(table_schema));
+    } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_ids(tmp_rowkey_ids))) {
+      LOG_WARN("failed to get column ids", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(rowkey_ids, tmp_rowkey_ids))) {
+      LOG_WARN("failed to append array no dup", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_update && i < merge_table_info.assignments_.count(); ++i) {
+    if (OB_ISNULL(column_expr = merge_table_info.assignments_.at(i).column_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null column expr", K(ret));
+    } else if (merge_table_info.table_id_ != merge_table_info.loc_table_id_) {
+      if (OB_ISNULL(column_item = stmt.get_column_item_by_id(column_expr->get_table_id(),
+                                                              column_expr->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column item", K(ret));
+      } else {
+        is_update = ObOptimizerUtil::find_item(rowkey_ids, column_item->base_cid_);
+      }
+    } else {
+      is_update = ObOptimizerUtil::find_item(rowkey_ids, column_expr->get_column_id());
+    }
+  }
+
   return ret;
 }

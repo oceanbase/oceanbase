@@ -7284,7 +7284,8 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
                                                  const ObIArray<ObLogicalOperator *> &child_ops,
                                                  ObIAllocator &allocator,
                                                  ObIArray<int64_t> &reselected_pos,
-                                                 ObShardingInfo *&result_sharding)
+                                                 ObShardingInfo *&result_sharding,
+                                                 int64_t &inherit_sharding_index)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObShardingInfo*, 8> sharding_infos;
@@ -7304,7 +7305,8 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
                                                  sharding_infos,
                                                  allocator,
                                                  reselected_pos,
-                                                 result_sharding))) {
+                                                 result_sharding,
+                                                 inherit_sharding_index))) {
     LOG_WARN("failed to compute basic sharding info", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -7314,12 +7316,15 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
                                                  const ObIArray<ObShardingInfo*> &input_shardings,
                                                  ObIAllocator &allocator,
                                                  ObIArray<int64_t> &reselected_pos,
-                                                 ObShardingInfo *&result_sharding)
+                                                 ObShardingInfo *&result_sharding,
+                                                 int64_t &inherit_sharding_index)
 {
   int ret = OB_SUCCESS;
   result_sharding = NULL;
+  inherit_sharding_index = 0;
   if (input_shardings.count() <= 1) {
     result_sharding = input_shardings.at(0);
+    inherit_sharding_index = 0;
   } else {
     ObAddr basic_addr;
     bool has_duplicated = false;
@@ -7361,11 +7366,13 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
       } else if (sharding->is_local()) {
         basic_addr = local_addr;
         result_sharding = sharding;
+        inherit_sharding_index = i;
       } else if (sharding->is_remote()) {
         if (OB_FAIL(sharding->get_remote_addr(basic_addr))) {
           LOG_WARN("failed to get remote addr", K(ret));
         } else {
           result_sharding = sharding;
+          inherit_sharding_index = i;
         }
       } else { /*do nothing*/ }
     }
@@ -7382,6 +7389,7 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
           }
         } else {
           result_sharding = input_shardings.at(0);
+          inherit_sharding_index = 0;
         }
       }
       if (OB_FAIL(ret)) {
@@ -7409,7 +7417,9 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
                                                                                can_reselect_replica,
                                                                                result_sharding))) {
             LOG_WARN("failed to compute duplicate table sharding", K(ret));
-          } else { /*do nothing*/ }
+          } else if (NULL != result_sharding) {
+             inherit_sharding_index = i;
+          }
         }
       }
     }
