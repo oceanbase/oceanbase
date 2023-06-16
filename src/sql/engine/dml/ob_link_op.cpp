@@ -158,7 +158,7 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
       } else if (in_xa_trascaction_ && OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
         LOG_WARN("failed to set dblink connection to session", K(my_session), K(sessid_), K(ret));
       } else {
-        LOG_INFO("link op get connection from dblink pool", KP(dblink_conn_), K(lbt()));
+        LOG_TRACE("link op get connection from dblink pool", KP(dblink_conn_), K(lbt()));
       }
     } else {
       dblink_conn_ = dblink_conn;
