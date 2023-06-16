@@ -350,18 +350,19 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       // chosen medium snapshot is far too old
       LOG_INFO("chosen medium snapshot is invalid for multi_version_start", K(ret), KPC(this),
           K(medium_info), K(max_reserved_snapshot));
+      int64_t snapshot_gc_ts = 0;
       if (medium_info.medium_snapshot_ == tablet_.get_snapshot_version() //  no uncommitted sstable
           && weak_read_ts_ + DEFAULT_SCHEDULE_MEDIUM_INTERVAL < ObTimeUtility::current_time_ns()) {
-        const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr *)->get_snapshot_gc_ts();
+        snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr *)->get_snapshot_gc_ts();
         // data before weak_read_ts & latest storage schema on memtable is match for schedule medium
         // schema will be update in prepare_medium_info
         medium_info.medium_snapshot_ = MIN(weak_read_ts_, snapshot_gc_ts);
-        if (medium_info.medium_snapshot_ < max_reserved_snapshot) {
-          ret = OB_NO_NEED_MERGE;
-        } else {
-          LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
-                  K(medium_info), K(max_reserved_snapshot), K_(weak_read_ts), K(snapshot_gc_ts));
-        }
+      }
+      if (medium_info.medium_snapshot_ < max_reserved_snapshot) {
+        ret = OB_NO_NEED_MERGE;
+      } else {
+        LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
+                K(medium_info), K(max_reserved_snapshot), K_(weak_read_ts), K(snapshot_gc_ts));
       }
     }
     if (OB_SUCC(ret) && !is_major) {

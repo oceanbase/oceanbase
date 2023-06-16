@@ -87,7 +87,8 @@ public:
       const ObTablet &tablet,
       int64_t &min_snapshot,
       int64_t &max_snapshot,
-      const bool check_table_cnt = true);
+      const bool check_table_cnt,
+      const bool is_multi_version_merge);
 
   static int diagnose_table_count_unsafe(
       const storage::ObMergeType merge_type,
@@ -139,7 +140,8 @@ private:
   static int get_neighbour_freeze_info(
       const int64_t snapshot_version,
       const storage::ObITable *last_major_table,
-      storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info);
+      storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
+      const bool is_multi_version_merge);
 
   static int64_t cal_hist_minor_merge_threshold();
   static int generate_input_result_array(

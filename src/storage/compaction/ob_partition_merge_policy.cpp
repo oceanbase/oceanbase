@@ -53,11 +53,11 @@ ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[
       ObPartitionMergePolicy::get_medium_merge_tables,
     };
 
-
 int ObPartitionMergePolicy::get_neighbour_freeze_info(
     const int64_t snapshot_version,
     const ObITable *last_major,
-    ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info)
+    ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
+    const bool is_multi_version_merge)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_neighbour_major_freeze(snapshot_version, freeze_info))) {
@@ -65,7 +65,6 @@ int ObPartitionMergePolicy::get_neighbour_freeze_info(
       LOG_WARN("Failed to get freeze info, use snapshot_gc_ts instead", K(ret), K(snapshot_version));
       ret = OB_SUCCESS;
       freeze_info.reset();
-      // TODO(lixia.yq) use more accurate next_freeze_info in minor schedule
       freeze_info.next.freeze_version = INT64_MAX;
       if (OB_NOT_NULL(last_major)) {
         freeze_info.prev.freeze_version = last_major->get_snapshot_version();
@@ -73,6 +72,9 @@ int ObPartitionMergePolicy::get_neighbour_freeze_info(
     } else {
       LOG_WARN("Failed to get neighbour major freeze info", K(ret), K(snapshot_version));
     }
+  }
+  if (OB_SUCC(ret) && INT64_MAX == freeze_info.next.freeze_version && is_multi_version_merge) {
+    freeze_info.next.freeze_version = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
   }
   return ret;
 }
@@ -182,7 +184,8 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
     LOG_WARN("failed to get all memtables from memtable mgr", K(ret));
   } else if (OB_FAIL(get_neighbour_freeze_info(merge_inc_base_version,
                                                table_store.get_major_sstables().get_boundary_table(true),
-                                               freeze_info))) {
+                                               freeze_info,
+                                               true/*is_multi_version_merge*/))) {
     LOG_WARN("failed to get next major freeze", K(ret), K(merge_inc_base_version), K(table_store));
   } else if (OB_FAIL(find_mini_merge_tables(param, freeze_info, ls, tablet, memtable_handles, result))) {
     if (OB_NO_NEED_MERGE != ret) {
@@ -359,7 +362,8 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
   } else if (tablet.is_ls_inner_tablet()) {
     min_snapshot_version = 0;
     max_snapshot_version = INT64_MAX;
-  } else if (OB_FAIL(get_boundary_snapshot_version(tablet, min_snapshot_version, max_snapshot_version))) {
+  } else if (OB_FAIL(get_boundary_snapshot_version(tablet, min_snapshot_version, max_snapshot_version,
+    true/*check_table_cnt*/, true/*is_multi_version_merge*/))) {
     LOG_WARN("fail to calculate boundary version", K(ret));
   }
 
@@ -382,7 +386,8 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
     const ObTablet &tablet,
     int64_t &min_snapshot,
     int64_t &max_snapshot,
-    const bool check_table_cnt)
+    const bool check_table_cnt,
+    const bool is_multi_version_merge)
 {
   int ret = OB_SUCCESS;
   int64_t merge_inc_base_version = tablet.get_snapshot_version();
@@ -398,7 +403,8 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
     LOG_WARN("table store not valid", K(ret), K(table_store));
   } else if (OB_FAIL(get_neighbour_freeze_info(merge_inc_base_version,
                                                last_major_table,
-                                               freeze_info))) {
+                                               freeze_info,
+                                               is_multi_version_merge))) {
     LOG_WARN("failed to get freeze info", K(ret), K(merge_inc_base_version), K(table_store));
   } else if (check_table_cnt && table_store.get_table_count() >= OB_UNSAFE_TABLE_CNT) {
     max_snapshot = INT64_MAX;
@@ -639,7 +645,8 @@ int ObPartitionMergePolicy::deal_hist_minor_merge(
       int64_t table_cnt = 0;
       int64_t min_minor_version = 0;
       int64_t max_minor_version = 0;
-      if (OB_FAIL(get_boundary_snapshot_version(tablet, min_minor_version, max_minor_version))) {
+      if (OB_FAIL(get_boundary_snapshot_version(tablet, min_minor_version, max_minor_version,
+        true/*check_table_cnt*/, true/*is_multi_version_merge*/))) {
         LOG_WARN("fail to calculate boundary version", K(ret));
       } else {
         ObSSTable *table = nullptr;
@@ -1290,7 +1297,7 @@ int ObAdaptiveMergePolicy::find_meta_major_tables(
     ret = OB_NO_NEED_MERGE;
     LOG_WARN("no minor/major sstable to do meta major merge", K(ret), KPC(last_minor), KPC(last_major));
   } else if (OB_FAIL(ObPartitionMergePolicy::get_boundary_snapshot_version(
-      tablet, min_snapshot, max_snapshot, false/*check_table_cnt*/))) {
+      tablet, min_snapshot, max_snapshot, false/*check_table_cnt*/, false/*is_multi_version_merge*/))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("Failed to find meta merge base table", K(ret), KPC(last_major), KPC(last_major), KPC(base_table));
     }
