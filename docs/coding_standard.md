@@ -21,9 +21,8 @@ This coding standard will be continuously supplemented and improved as needed.
 The subdirectories of the OceanBase system are as follows:
 - src: contains source code, including header files and implementation files
 - unittest: contains unit test code and small-scale integration test code written by developers
-- tests: contains testing frameworks and cases for the testing team
 - tools: contains external tools
-- doc: contains documentation
+- docs: contains documentation
 - rpm: contains RPM spec files
 - script: contains operation and maintenance scripts for OceanBase.
 
@@ -409,19 +408,12 @@ const int ObBar::CONST_V = 1;
 
 Before C\+\+11, the C\+\+98 standard only allowed static const variables of intergral type to be initialized with definitions included in the class declaration. In C++11, constexpr is introduced, and static constexpr member variables (including types such as double) can also be initialized in the declaration. This kind of variable will not generate static area storage after compilation.
 
-```txt
-Before C++11, the values of variables could be used in constant expressions only
-if the variables are declared const, have an initializer which is a constant 
-expression, and are of integral or enumeration type. C++11 removes the 
-restriction that the variables must be of integral or enumeration type if they 
-are defined with the constexpr keyword:
+> Before C++11, the values of variables could be used in constant expressions only if the variables are declared const, have an initializer which is a constant expression, and are of integral or enumeration type. C++11 removes the restriction that the variables must be of integral or enumeration type if they  are defined with the constexpr keyword:
+>
+> constexpr double earth_gravitational_acceleration = 9.8;
+> constexpr double moon_gravitational_acceleration = earth_gravitational_acceleration / 6.0;
 
-constexpr double earth_gravitational_acceleration = 9.8;
-constexpr double moon_gravitational_acceleration = earth_gravitational_acceleration / 6.0;
-
-Such data variables are implicitly const, and must have an initializer which
-must be a constant expression.
-```
+> Such data variables are implicitly const, and must have an initializer whichmust be a constant expression.
 
 **Case 1**
 
@@ -735,27 +727,28 @@ Here are some commonly used macros:
 
 1. `OB_SUCC`
 
-It is usually used to judge whether the return value is `OB_SUCCESS`, which is equivalent to `OB_SUCCESS == (ret = func())`. Note that ret needs to be pre-defined in the function when using `OB_SUCC`, for example, the following writing method.
+   It is usually used to judge whether the return value is `OB_SUCCESS`, which is equivalent to `OB_SUCCESS == (ret = func())`. Note that ret needs to be pre-defined in the function when using `OB_SUCC`, for example, the following writing method.
 
-```cpp
-ret = OB_SUCCESS;
-if (OB_SUCC(func())) {
-  // do something
-}
-```
+   ```cpp
+   ret = OB_SUCCESS;
+   if (OB_SUCC(func())) {
+     // do something
+   }
+   ```
 
 2. `OB_FAIL`
 
-It is usually used to judge whether the return value is not `OB_SUCCESS`, which is equivalent to `OB_SUCCESS != (ret = func())`. Note that ret needs to be pre-defined in the function when using `OB_FAIL`, for example, the following writing method.
+   It is usually used to judge whether the return value is not `OB_SUCCESS`, which is equivalent to `OB_SUCCESS != (ret = func())`. Note that ret needs to be pre-defined in the function when using `OB_FAIL`, for example, the following writing method.
 
-```cpp
-ret = OB_SUCCESS;
-if (OB_FAIL(func())) {
-  // do something
-}
-```
+   ```cpp
+   ret = OB_SUCCESS;
+   if (OB_FAIL(func())) {
+     // do something
+   }
+   ```
 
 3. `OB_ISNULL`
+
    It is usually used to judge whether the pointer is empty, which is equivalent to nullptr ==, for example, the following writing method.
    
    ```cpp
@@ -765,6 +758,7 @@ if (OB_FAIL(func())) {
    ```
    
 4. `OB_NOT_NULL`
+
    It is usually used to judge whether the pointer is not empty, which is equivalent to nullptr !=, for example, the following writing method
    ```cpp
    if (OB_NOT_NULL(ptr)) {
@@ -773,60 +767,66 @@ if (OB_FAIL(func())) {
    ```
    
 5. `IS_INIT`
+
    It is usually used to judge whether the class has been initialized, which is equivalent to `is_inited_`. Note that the member `is_inited_` needs to exist in the class, for example, the following writing method.
-```cpp
-if (IS_INIT) {
-  // do something
-}
-```
+   ```cpp
+   if (IS_INIT) {
+     // do something
+   }
+   ```
 
 6. `IS_NOT_INIT`
+
     It is usually used to judge whether the class has been initialized, which is equivalent to `!is_inited_`. Note that the member `is_inited_` needs to exist in the class, for example, the following writing method.
 
-```cpp
-if (IS_NOT_INIT) {
-  // do something
-}
-```
+   ```cpp
+   if (IS_NOT_INIT) {
+     // do something
+   }
+   ```
 
 7. `REACH_TIME_INTERVAL`
-It is used to judge whether a certain time interval has been exceeded. The parameter is `us`. Note that there will be a static variable to record the time inside the macro, so the judgment of time is global. It is usually used to control the log output frequency. For example, the following writing method will Let the system do some actions after more than 1s interval.
-```cpp
-if (REACH_TIME_INTERVAL(1000 * 1000)) {
-  // do something
-}
-```
+
+   It is used to judge whether a certain time interval has been exceeded. The parameter is `us`. Note that there will be a static variable to record the time inside the macro, so the judgment of time is global. It is usually used to control the log output frequency. For example, the following writing method will Let the system do some actions after more than 1s interval.
+   ```cpp
+   if (REACH_TIME_INTERVAL(1000 * 1000)) {
+     // do something
+   }
+   ```
 
 8. `OZ`
-It is used to simplify the log output after `OB_FAIL`. When you only need to simply output the log after an error is reported, you can use `OZ`. Note that when using `OZ`, you need to define `USING_LOG_PREFIX` at the beginning of the cpp file. For example, the following writing method.
 
-```cpp
-OZ(func());
-```
+   It is used to simplify the log output after `OB_FAIL`. When you only need to simply output the log after an error is reported, you can use `OZ`. Note that when using `OZ`, you need to define `USING_LOG_PREFIX` at the beginning of the cpp file. For example, the following writing method.
 
-Equivalent to
+   ```cpp
+   OZ(func());
+   ```
 
-```cpp
-if (OB_FAIL(func())) {
-   LOG_WARN("fail to exec func, ", K(ret));
-}
-```
+   Equivalent to
+
+   ```cpp
+   if (OB_FAIL(func())) {
+     LOG_WARN("fail to exec func, ", K(ret));
+   }
+   ```
 
 9. `K`
-Usually used for log output, output variable name and variable value, such as the following writing.
-```cpp
-if (OB_FAIL(ret)) {
-   LOG_WARN("fail to exec func, ", K(ret));
-}
-```
+
+   Usually used for log output, output variable name and variable value, such as the following writing.
+   ```cpp
+   if (OB_FAIL(ret)) {
+     LOG_WARN("fail to exec func, ", K(ret));
+   }
+   ```
 
 10. `KP`
-Usually used for log output, output variable names and pointers, such as the following writing method.
-```cpp
-if (OB_FAIL(ret)) {
-   LOG_WARN("fail to exec func, ", K(ret), KP(ptr));
-}
-```
+
+    Usually used for log output, output variable names and pointers, such as the following writing method.
+    ```cpp
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to exec func, ", K(ret), KP(ptr));
+    }
+    ```
 
 ## 4.9 Inherit
 
@@ -2432,13 +2432,15 @@ In version 0.5, there is a problem that the print log format is not uniform and 
 "m is 5", "m:5", etc. The new log module allows users to print the values of required variables in the form of key-value pairs.
 ## 11.1 Log Printing Level
 
-| Log Level | Level Definition |
-| --------- | -------- |
-| ERROR     | Any unexpected, unrecoverable error requiring human intervention         |
-| WARNING   | Exceptions that are expected and can be handled by the program           |
-| INFO      | (Startup default level). A small amount of flagged information about system state changes. For example, a user, a table is added, the system enters daily merge, partition migration, etc. |
-| TRACE | Requests granular debugging information, such as printing a TRACE log at different stages of executing a SQL statement |
-| DEBUG | General and detailed debugging information to track the internal state and data structure of the system. |
+| Log Level | User | Level Definition |
+| --------- | ---- | -------- |
+| ERROR     | DBA  | Any unexpected, unrecoverable error requiring human intervention. The observer cannot provide normal service exceptions, such as the disk is full and the listening port is occupied. It can also be some internal inspection errors after our productization, such as our 4377 (dml defensive check error), 4103 (data checksum error), etc., which require DBA intervention to restore |
+| WARN      | DBA  | In an unexpected scenario, the observer can provide services, but the behavior may not meet expectations, such as our write current limit |
+| INFO      | DBA  | (Startup default level). A small amount of flagged information about system state changes. For example, a user, a table is added, the system enters daily merge, partition migration, etc. |
+| EDIAG     | RD   | Error Diagnosis, diagnostic information to assist in troubleshooting, unexpected logical errors, such as function parameters that do not meet expectations, etc., usually OceanBase program BUG |
+| WDIAG     | RD   | Warning Diagnosis, diagnostic information to assist in troubleshooting, expected errors, such as function return failure |
+| TRACE     | RD   | Requests granular debugging information, such as printing a TRACE log at different stages of executing a SQL statement |
+| DEBUG     | RD   | General and detailed debugging information to track the internal state and data structure of the system. |
 
 It should be noted that DEBUG logs are often used for integration testing or online system debugging, and cannot be used as a substitute for unit testing.
 
