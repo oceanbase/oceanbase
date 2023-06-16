@@ -1100,7 +1100,24 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
   if (RETRY_TYPE_NONE != retry_type_) {
     retry_err_code_ = client_ret;
   }
+  if (RETRY_TYPE_NONE != retry_type_) {
+    result.set_close_fail_callback([this](const int err)-> void { this->on_close_resultset_fail_(err); });
+  }
 }
 
+void ObQueryRetryCtrl::on_close_resultset_fail_(const int err)
+{
+  // some unretryable error happened in close result set phase
+  if (OB_SUCCESS != err && RETRY_TYPE_NONE != retry_type_) {
+    // the txn relative error in close stmt
+    if (OB_TRANS_NEED_ROLLBACK == err ||
+        OB_TRANS_INVALID_STATE == err ||
+        OB_TRANS_HAS_DECIDED == err) {
+      retry_type_ = RETRY_TYPE_NONE;
+      // also clear the packet retry
+      THIS_WORKER.unset_need_retry();
+    }
+  }
+}
 }/* ns observer*/
 }/* ns oceanbase */

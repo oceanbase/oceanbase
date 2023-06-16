@@ -468,6 +468,22 @@ bool ObDASCtx::has_same_lsid(ObLSID *lsid)
   return bret;
 }
 
+int ObDASCtx::get_all_lsid(share::ObLSArray &ls_ids)
+{
+  int ret = OB_SUCCESS;
+  FOREACH_X(table_node, table_locs_, OB_SUCC(ret)) {
+    ObDASTableLoc *table_loc = *table_node;
+    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
+         OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
+      ObDASTabletLoc *tablet_loc = *tablet_node;
+      if (!is_contain(ls_ids, tablet_loc->ls_id_)) {
+        ret = ls_ids.push_back(tablet_loc->ls_id_);
+      }
+    }
+  }
+  return ret;
+}
+
 int64_t ObDASCtx::get_related_tablet_cnt() const
 {
   int64_t total_cnt = 0;

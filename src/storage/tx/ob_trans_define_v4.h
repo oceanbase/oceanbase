@@ -399,6 +399,7 @@ protected:
       bool PARTS_INCOMPLETE_: 1;     // participants set incomplete (must abort)
       bool PART_EPOCH_MISMATCH_: 1;  // participant's born epoch mismatched
       bool WITH_TEMP_TABLE_: 1;      // with txn level temporary table
+      bool DEFER_ABORT_: 1;          // need do abort in txn start node
     };
     void switch_to_idle_();
     FLAG update_with(const FLAG &flag);

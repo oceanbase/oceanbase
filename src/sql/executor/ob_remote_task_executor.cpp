@@ -102,7 +102,8 @@ int ObRemoteTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskIn
                                         session,
                                         has_sent_task,
                                         has_transfer_err,
-                                        plan_ctx->get_phy_plan());
+                                        plan_ctx->get_phy_plan(),
+                                        query_ctx);
       ret = COVER_SUCC(tmp_ret);
 
       if (OB_SUCC(ret)) {
@@ -177,7 +178,8 @@ int ObRemoteTaskExecutor::handle_tx_after_rpc(ObScanner *scanner,
                                               ObSQLSessionInfo *session,
                                               const bool has_sent_task,
                                               const bool has_transfer_err,
-                                              const ObPhysicalPlan *phy_plan)
+                                              const ObPhysicalPlan *phy_plan,
+                                              ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
   auto tx_desc = session->get_tx_desc();
@@ -204,17 +206,26 @@ int ObRemoteTaskExecutor::handle_tx_after_rpc(ObScanner *scanner,
                 K(tx_desc));
     }
     if (has_transfer_err || OB_FAIL(ret)) {
-      // report Unknown of tx participant involved
-      LOG_WARN("remote execute fail with transfer_error, tx will rollback");
-      session->get_trans_result().set_incomplete();
-      // TODO: yunxing.cyx
-      // get the remote LSID and report to transaction let tx continue
-        /* share::ObLSID ls_id = xxx;
-           if (OB_FAIL(MTL(transaction::ObTransService*)
-                    ->add_unknown_tx_exec_part(*tx_desc,
-                                              ls_id))) {
-          LOG_WARN("report tx unknown part fail", K(ret), K(ls_id));
-        } */
+      if (exec_ctx.use_remote_sql()) {
+        LOG_WARN("remote execute use sql fail with transfer_error, tx will rollback", K(ret));
+        session->get_trans_result().set_incomplete();
+      } else {
+        ObDASCtx &das_ctx = DAS_CTX(exec_ctx);
+        share::ObLSArray ls_ids;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(das_ctx.get_all_lsid(ls_ids))) {
+          LOG_WARN("get all ls_ids failed", K(tmp_ret));
+        } else if (OB_TMP_FAIL(session->get_trans_result().add_touched_ls(ls_ids))) {
+          LOG_WARN("add touched ls to txn failed", K(tmp_ret));
+        } else {
+         LOG_INFO("add touched ls succ", K(ls_ids));
+        }
+        if (OB_TMP_FAIL(tmp_ret)) {
+          LOG_WARN("remote execute use plan fail with transfer_error and try add touched ls failed, tx will rollback", K(tmp_ret));
+          session->get_trans_result().set_incomplete();
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
     }
   }
   return ret;

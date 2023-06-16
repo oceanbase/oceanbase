@@ -321,6 +321,7 @@ public:
   static void replace_lob_type(const ObSQLSessionInfo &session,
                                const ObField &field,
                                obmysql::ObMySQLField &mfield);
+  void set_close_fail_callback(ObFunction<void(const int)> func) { close_fail_cb_ = func; }
 private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;
@@ -426,6 +427,7 @@ private:
   common::ObString ps_sql_; // for sql in pl
   bool is_init_;
   common::ParamStore ps_params_; // 文本 ps params 记录，用于填入 sql_audit
+  common::ObFunction<void(const int)> close_fail_cb_;
 };
 
 
