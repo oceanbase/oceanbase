@@ -4,7 +4,7 @@
 | 1      | 1.0              |                 | New                 | June 15th, 2023 |
 
 # 1 Introduction
-This coding standard is applicable to the OceanBase project of Ant Group. It provides some coding constraints and defines coding styles. In the OceanBase project, test code must adhere to the coding style defined in this document, and it is recommended that test code also adhere to the coding constraints defined in this document. Other code must adhere to both the coding constraints and coding style defined in this document.
+This coding standard is applicable to the OceanBase project of Ant Group. It provides some coding constraints and defines coding styles. In the OceanBase project, the kernel code must comply with the coding style of this document, the test code is recommended to comply with the coding constraints of this document, and other codes must also comply with the coding constraints and coding style of this document.
 
 This coding standard is committed to writing C/C++ code that is easy to understand, reduces traps, and has a unified format. Therefore:
 
