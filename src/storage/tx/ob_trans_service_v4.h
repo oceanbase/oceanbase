@@ -162,6 +162,7 @@ int handle_trans_ask_state(const ObAskStateMsg &msg, obrpc::ObTransRpcResult &re
 int handle_trans_ask_state_response(const ObAskStateRespMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_trans_collect_state(const ObCollectStateMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_trans_collect_state_response(const ObCollectStateRespMsg &msg, obrpc::ObTransRpcResult &result);
+int handle_ls_deleted(const ObTxMsg &msg);
 void build_tx_collect_state_resp_(ObCollectStateRespMsg &resp, const ObCollectStateMsg &msg);
 void build_tx_ask_state_resp_(ObAskStateRespMsg &resp, const ObAskStateMsg &msg);
 int check_for_standby(const share::ObLSID &ls_id,
@@ -245,7 +246,7 @@ int post_tx_abort_part_msg_(const ObTxDesc &tx_desc,
                             const ObTxPart &p);
 bool is_sync_replica_(const share::ObLSID &ls_id);
 
-void handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader);
+int handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader, const bool ls_deleted);
 
 int update_max_read_ts_(const uint64_t tenant_id,
                         const share::ObLSID &lsid,

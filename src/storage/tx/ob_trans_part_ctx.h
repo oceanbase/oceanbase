@@ -580,7 +580,8 @@ public:
   int handle_tx_2pc_clear_resp(const Ob2pcClearRespMsg &msg);
   static int handle_tx_orphan_2pc_msg(const ObTxMsg &recv_msg,
                                       const common::ObAddr& self_addr,
-                                      ObITransRpc* rpc);
+                                      ObITransRpc* rpc,
+                                      const bool ls_deleted);
   // for xa
   int handle_tx_2pc_prepare_redo_req(const Ob2pcPrepareRedoReqMsg &msg);
   int handle_tx_2pc_prepare_redo_resp(const Ob2pcPrepareRedoRespMsg &msg);
@@ -622,7 +623,8 @@ private:
   static int post_orphan_msg_(const ObTwoPhaseCommitMsgType &msg_type,
                               const ObTxMsg &recv_msg,
                               const common::ObAddr &self_addr,
-                              ObITransRpc* rpc);
+                              ObITransRpc* rpc,
+                              const bool ls_deleted);
   static int get_max_decided_scn_(const share::ObLSID &ls_id, share::SCN &scn);
   int get_2pc_participants_copy(share::ObLSArray &copy_participants);
   // for xa

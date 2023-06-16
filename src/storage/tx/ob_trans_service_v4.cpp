@@ -1944,7 +1944,7 @@ int ObTransService::handle_tx_batch_req(int msg_type,
           OB_PARTITION_NOT_EXIST == ret ||                              \
           OB_LS_NOT_EXIST == ret) {                                     \
         /* need_check_leader : just for unittest case*/                 \
-        handle_orphan_2pc_msg_(msg, need_check_leader);                 \
+        (void)handle_orphan_2pc_msg_(msg, need_check_leader, false);    \
       }                                                                 \
     } else if (OB_FAIL(ctx->get_ls_tx_ctx_mgr()                         \
                  ->get_ls_log_adapter()->get_role(leader, UNUSED))) {   \
@@ -1955,7 +1955,7 @@ int ObTransService::handle_tx_batch_req(int msg_type,
     } else if (ctx->is_exiting()) {                                     \
       ret = OB_TRANS_CTX_NOT_EXIST;                                     \
       TRANS_LOG(INFO, "tx context is exiting",K(ret),K(msg));           \
-      handle_orphan_2pc_msg_(msg, false);                               \
+      (void)handle_orphan_2pc_msg_(msg, false, false);                  \
     } else if (OB_FAIL(ctx->msg_handler__(msg))) {                      \
         TRANS_LOG(WARN, "handle 2pc request fail", K(ret), K(msg));     \
     }                                                                   \
@@ -1997,6 +1997,7 @@ int ObTransService::handle_tx_batch_req(int msg_type,
    || OB_LS_NOT_EXIST == ret                    \
    || OB_PARTITION_NOT_EXIST == ret             \
    || OB_TENANT_NOT_EXIST == ret                \
+   || is_location_service_renew_error(ret)      \
    )
 
 int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
@@ -2137,7 +2138,7 @@ int ObTransService::update_max_read_ts_(const uint64_t tenant_id,
 }
 
 // need_check_leader : just for unittest case
-void ObTransService::handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader)
+int ObTransService::handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader, const bool ls_deleted)
 {
   int ret = OB_SUCCESS;
   bool leader = false;
@@ -2154,11 +2155,12 @@ void ObTransService::handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_
     TRANS_LOG(WARN, "receiver not master", K(ret), K(msg));
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(ObPartTransCtx::handle_tx_orphan_2pc_msg(msg, get_server(), get_trans_rpc()))) {
+  if (OB_SUCC(ret) && OB_FAIL(ObPartTransCtx::handle_tx_orphan_2pc_msg(msg, get_server(), get_trans_rpc(), ls_deleted))) {
     TRANS_LOG(WARN, "handle tx orphan 2pc msg failed", K(ret), K(msg));
   } else {
     // do nothing
   }
+  return ret;
 }
 
 int ObTransService::refresh_location_cache(const share::ObLSID ls)
@@ -3378,6 +3380,12 @@ int ObTransService::handle_trans_collect_state_response(const ObCollectStateResp
   result.reset();
   result.init(ret, msg.get_timestamp());
   return ret;
+}
+
+int ObTransService::handle_ls_deleted(const ObTxMsg &msg)
+{
+  TRANS_LOG(INFO, "handle ls deleted", K(msg));
+  return handle_orphan_2pc_msg_(msg, false, true);
 }
 
 } // transaction
