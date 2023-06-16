@@ -46,22 +46,23 @@ class ObTenantConfig;
 struct ObCtxMemConfig
 {
   ObCtxMemConfig()
-    : ctx_id_(0), idle_size_(0) {}
+    : ctx_id_(0), idle_size_(0), limit_(INT64_MAX) {}
   uint64_t ctx_id_;
   int64_t idle_size_;
-  TO_STRING_KV(K_(ctx_id), K_(idle_size));
+  int64_t limit_;
+  TO_STRING_KV(K_(ctx_id), K_(idle_size), K_(limit));
 };
 
 class ObICtxMemConfigGetter
 {
 public:
-  virtual int get(common::ObIArray<ObCtxMemConfig> &configs) = 0;
+  virtual int get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs) = 0;
 };
 
 class ObCtxMemConfigGetter : public ObICtxMemConfigGetter
 {
 public:
-  virtual int get(common::ObIArray<ObCtxMemConfig> &configs);
+  virtual int get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs);
 };
 
 // Forward declearation

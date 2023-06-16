@@ -207,10 +207,17 @@ bool equal_with_tenant_id(const ObTenant *lhs,
   return NULL != lhs ? (lhs->id() == tenant_id) : false;
 }
 
-int ObCtxMemConfigGetter::get(common::ObIArray<ObCtxMemConfig> &configs)
+int ObCtxMemConfigGetter::get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs)
 {
-  UNUSED(configs);
-  return OB_SUCCESS;
+  int64_t ret = OB_SUCCESS;
+  if (tenant_id > OB_USER_TENANT_ID) {
+    ObCtxMemConfig cfg;
+    cfg.ctx_id_ = ObCtxIds::WORK_AREA;
+    cfg.idle_size_ = 0;
+    cfg.limit_ = 5 * tenant_limit / 100;
+    ret = configs.push_back(cfg);
+  }
+  return ret;
 }
 
 ObCtxMemConfigGetter g_default_mcg;
@@ -799,15 +806,18 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   }
   if (OB_SUCC(ret)) {
     ObSEArray<ObCtxMemConfig, ObCtxIds::MAX_CTX_ID> configs;
-    if (OB_FAIL(mcg_->get(configs))) {
+    if (OB_FAIL(mcg_->get(tenant_id, allowed_mem_limit, configs))) {
       LOG_ERROR("get ctx mem config failed", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < configs.count(); i++) {
       const uint64_t ctx_id = configs.at(i).ctx_id_;
       const int64_t idle_size = configs.at(i).idle_size_;
+      const int64_t limit = configs.at(i).limit_;
       const bool reserve = true;
       if (OB_FAIL(malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id, idle_size, reserve))) {
         LOG_ERROR("set tenant ctx idle failed", K(ret));
+      } else if (OB_FAIL(set_ctx_limit(tenant_id, ctx_id, limit))) {
+        LOG_ERROR("set tenant ctx limit failed", K(ret), K(limit));
       }
       LOG_INFO("init ctx memory finish", K(ret), K(tenant_id), K(i), K(configs.at(i)));
     }

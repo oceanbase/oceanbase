@@ -244,19 +244,21 @@ TEST_F(TestMultiTenant, get_tenant_context)
 class CtxMemConfigGetter : public ObICtxMemConfigGetter
 {
 public:
-  virtual int get(common::ObIArray<ObCtxMemConfig> &configs)
+  virtual int get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs)
   {
     int ret = OB_SUCCESS;
     {
       ObCtxMemConfig cfg;
       cfg.ctx_id_ = 10;
       cfg.idle_size_ = 10 * INTACT_ACHUNK_SIZE;
+      cfg.limit_ = 5 * tenant_limit / 100;
       ret = configs.push_back(cfg);
     }
     {
       ObCtxMemConfig cfg;
       cfg.ctx_id_ = 11;
       cfg.idle_size_ = 20 * INTACT_ACHUNK_SIZE;
+      cfg.limit_ = 10 * tenant_limit / 100;
       ret = configs.push_back(cfg);
     }
     return ret;
@@ -271,10 +273,11 @@ TEST_F(TestMultiTenant, idle)
   uint64_t tenant_id = 100;
   int ret = add_tenant(tenant_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  common::ObArray<ObCtxMemConfig> configs;
-  mcg.get(configs);
-  ASSERT_TRUE(2 == configs.size());
   ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
+  int64_t tenant_limit = malloc_allocator->get_tenant_limit(tenant_id);
+  common::ObArray<ObCtxMemConfig> configs;
+  mcg.get(tenant_id, tenant_limit, configs);
+  ASSERT_TRUE(2 == configs.size());
   for (int i = 0 ; i < configs.size(); i++) {
     ObCtxMemConfig &cfg = configs.at(i);
     auto ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, cfg.ctx_id_);
@@ -282,6 +285,7 @@ TEST_F(TestMultiTenant, idle)
     int64_t chunk_cnt = cfg.idle_size_/INTACT_ACHUNK_SIZE;
     ASSERT_EQ(ta->chunk_cnt_, chunk_cnt);
     ASSERT_EQ(ta->idle_size_, cfg.idle_size_);
+    ASSERT_EQ(ta->get_limit(), cfg.limit_);
     ASSERT_NE(0, malloc_allocator->get_tenant_ctx_hold(tenant_id, cfg.ctx_id_));
   }
   // remove
