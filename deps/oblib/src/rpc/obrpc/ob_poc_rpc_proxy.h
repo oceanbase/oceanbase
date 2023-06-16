@@ -131,31 +131,32 @@ public:
     if (OB_LS_FETCH_LOG2 == pcode) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
-    IGNORE_RETURN new (&lib::Thread::rpc_dest_addr_) ObAddr(addr);
-    if (OB_FAIL(rpc_encode_req(proxy, pool, pcode, args, opts, req, req_sz, false))) {
-      RPC_LOG(WARN, "rpc encode req fail", K(ret));
-    } else if(OB_FAIL(check_blacklist(addr))) {
-      RPC_LOG(WARN, "check_blacklist failed", K(ret));
-    } else if (0 != (sys_err = pn_send(
-        (pnio_group_id<<32) + thread_id,
-        obaddr2sockaddr(&sock_addr, addr),
-        req,
-        req_sz,
-        static_cast<int16_t>(set.idx_of_pcode(pcode)),
-        start_ts + get_proxy_timeout(proxy),
-        ObSyncRespCallback::client_cb,
-        &cb))) {
-      ret = translate_io_error(sys_err);
-      RPC_LOG(WARN, "pn_send fail", K(sys_err), K(addr), K(pcode));
-    } else if (OB_FAIL(cb.wait())) {
-      RPC_LOG(WARN, "sync rpc execute fail", K(ret), K(addr), K(pcode));
-    } else if (NULL == (resp = cb.get_resp(resp_sz))) {
-      ret = common::OB_ERR_UNEXPECTED;
-      RPC_LOG(WARN, "sync rpc execute success but resp is null", K(ret), K(addr), K(pcode));
-    } else if (OB_FAIL(rpc_decode_resp(resp, resp_sz, out, resp_pkt, rcode))) {
-      RPC_LOG(WARN, "execute rpc fail", K(addr), K(pcode), K(ret));
+    {
+      lib::Thread::RpcGuard guard(addr);
+      if (OB_FAIL(rpc_encode_req(proxy, pool, pcode, args, opts, req, req_sz, false))) {
+        RPC_LOG(WARN, "rpc encode req fail", K(ret));
+      } else if(OB_FAIL(check_blacklist(addr))) {
+        RPC_LOG(WARN, "check_blacklist failed", K(ret));
+      } else if (0 != (sys_err = pn_send(
+          (pnio_group_id<<32) + thread_id,
+          obaddr2sockaddr(&sock_addr, addr),
+          req,
+          req_sz,
+          static_cast<int16_t>(set.idx_of_pcode(pcode)),
+          start_ts + get_proxy_timeout(proxy),
+          ObSyncRespCallback::client_cb,
+          &cb))) {
+        ret = translate_io_error(sys_err);
+        RPC_LOG(WARN, "pn_send fail", K(sys_err), K(addr), K(pcode));
+      } else if (OB_FAIL(cb.wait())) {
+        RPC_LOG(WARN, "sync rpc execute fail", K(ret), K(addr), K(pcode));
+      } else if (NULL == (resp = cb.get_resp(resp_sz))) {
+        ret = common::OB_ERR_UNEXPECTED;
+        RPC_LOG(WARN, "sync rpc execute success but resp is null", K(ret), K(addr), K(pcode));
+      } else if (OB_FAIL(rpc_decode_resp(resp, resp_sz, out, resp_pkt, rcode))) {
+        RPC_LOG(WARN, "execute rpc fail", K(addr), K(pcode), K(ret));
+      }
     }
-    lib::Thread::rpc_dest_addr_.reset();
     if (rcode.rcode_ != OB_DESERIALIZE_ERROR) {
       int wb_ret = OB_SUCCESS;
       if (common::OB_SUCCESS != (wb_ret = log_user_error_and_warn(rcode))) {

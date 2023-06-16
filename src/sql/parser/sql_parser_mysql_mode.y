@@ -412,7 +412,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_float_precision opt_number_precision
 %type <node> opt_equal_mark opt_default_mark read_only_or_write not not2 opt_disk_alias
 %type <node> int_or_decimal
-%type <node> opt_column_attribute_list column_attribute
+%type <node> opt_column_attribute_list column_attribute column_attribute_list
 %type <node> show_stmt from_or_in columns_or_fields database_or_schema index_or_indexes_or_keys opt_from_or_in_database_clause opt_show_condition opt_desc_column_option opt_status opt_storage
 %type <node> prepare_stmt stmt_name preparable_stmt
 %type <node> variable_set_stmt var_and_val_list var_and_val to_or_eq set_expr_or_default sys_var_and_val_list sys_var_and_val opt_set_sys_var opt_global_sys_vars_set
@@ -4591,11 +4591,12 @@ column_definition
   merge_nodes(col_list, result, T_COLUMN_LIST, $7);
   malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 3, col_list, NULL != $9 ? $9 : $5, $10);
 }
-| PRIMARY KEY opt_index_using_algorithm '(' column_name_list ')' opt_index_using_algorithm opt_comment
+| PRIMARY KEY opt_index_name opt_index_using_algorithm '(' column_name_list ')' opt_index_using_algorithm opt_comment
 {
+  (void)($3);
   ParseNode *col_list= NULL;
-  merge_nodes(col_list, result, T_COLUMN_LIST, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 3, col_list, NULL != $7 ? $7 : $3, $8);
+  merge_nodes(col_list, result, T_COLUMN_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 3, col_list, NULL != $8 ? $8 : $4, $9);
 }
 | key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
 {
@@ -4745,19 +4746,20 @@ SIMPLE
 ;
 
 column_definition:
-//column_name data_type opt_column_attribute_list
 column_definition_ref data_type opt_column_attribute_list opt_position_column
 {
   ParseNode *attributes = NULL;
   merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $3);
+  set_data_type_collation($2, attributes, false, true);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 4, $1, $2, attributes, $4);
 }
-| column_definition_ref data_type opt_generated_keyname AS '(' expr ')' opt_storage_type opt_generated_column_attribute_list opt_position_column
+| column_definition_ref data_type opt_collation opt_generated_keyname AS '(' expr ')' opt_storage_type opt_generated_column_attribute_list opt_position_column
 {
   ParseNode *attributes = NULL;
-  dup_expr_string($6, result, @6.first_column, @6.last_column);
-  merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $9);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 7, $1, $2, attributes, $6, $8, $10, $3);
+  set_data_type_collation($2, $3, true, false);
+  dup_expr_string($7, result, @7.first_column, @7.last_column);
+  merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $10);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 7, $1, $2, attributes, $7, $9, $11, $4);
 }
 ;
 
@@ -5253,9 +5255,9 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_terminal_node($$, result->malloc_pool_, $1[0]);
   $$->sql_str_off_ = @1.first_column;
 }
-| CHARACTER opt_string_length_i opt_binary opt_charset opt_collation
+| CHARACTER opt_string_length_i opt_binary opt_charset
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CHAR, 3, $4, $5, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHAR, 3, $4, NULL, $3);
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is char */
   $$->sql_str_off_ = @1.first_column;
@@ -5306,16 +5308,16 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->sql_str_off_ = @1.first_column;
 }
 
-/*  | TEXT opt_binary opt_charset opt_collation
+/*  | TEXT opt_binary opt_charset
 //  {
 //    (void)($2);
 //    malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, $3, $4, $2);
 //    $$->int32_values_[0] = 256;
 //    $$->int32_values_[1] = 0; /* is char */
 /*  }*/
-| VARCHAR string_length_i opt_binary opt_charset opt_collation
+| VARCHAR string_length_i opt_binary opt_charset
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, $4, $5, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, $4, NULL, $3);
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is char */
 }
@@ -5384,9 +5386,9 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = $3[0];
   $$->int32_values_[1] = 0; /* is char */
 }
-| CHARACTER VARYING string_length_i opt_binary opt_charset opt_collation
+| CHARACTER VARYING string_length_i opt_binary opt_charset
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, $5, $6, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, $5, NULL, $4);
   $$->int32_values_[0] = $3[0];
   $$->int32_values_[1] = 0; /* is char */
 }
@@ -5424,9 +5426,9 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 1; /* is binary */
   $$->sql_str_off_ = @1.first_column;
 }
-| text_type_i opt_string_length_i_v2 opt_binary opt_charset opt_collation
+| text_type_i opt_string_length_i_v2 opt_binary opt_charset
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, $1[0], 3, $4, $5, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, $1[0], 3, $4, NULL, $3);
   if ($1[0] != T_TEXT && $2[0] != -1) {
     yyerror(&@2, result, "not support to specify the length in parentheses\n");
     YYERROR;
@@ -5472,19 +5474,19 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $$->sql_str_off_ = @1.first_column;
   }
 }
-| ENUM '(' string_list ')' opt_binary opt_charset opt_collation
+| ENUM '(' string_list ')' opt_binary opt_charset
 {
   ParseNode *string_list_node = NULL;
   merge_nodes(string_list_node, result, T_STRING_LIST, $3);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_ENUM, 4, $6, $7, $5, string_list_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ENUM, 4, $6, NULL, $5, string_list_node);
   $$->int32_values_[0] = 0;//not used so far
   $$->int32_values_[1] = 0; /* is char */
 }
-| SET '(' string_list ')' opt_binary opt_charset opt_collation
+| SET '(' string_list ')' opt_binary opt_charset
 {
   ParseNode *string_list_node = NULL;
   merge_nodes(string_list_node, result, T_STRING_LIST, $3);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET, 4, $6, $7, $5, string_list_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET, 4, $6, NULL, $5, string_list_node);
   $$->int32_values_[0] = 0;//not used so far
   $$->int32_values_[1] = 0; /* is char */
 }
@@ -5900,11 +5902,23 @@ collation
 ;
 
 opt_column_attribute_list:
-opt_column_attribute_list column_attribute
-{ malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2); }
+column_attribute_list
+{
+  $$ = $1;
+}
 | /*EMPTY*/
 { $$ = NULL; }
 ;
+
+column_attribute_list:
+column_attribute_list column_attribute
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+| column_attribute
+{
+  $$ = $1;
+}
 
 column_attribute:
 not NULLX
@@ -5937,7 +5951,6 @@ not NULLX
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_UNIQUE_KEY);
 }
 | opt_primary KEY
-
 {
   (void)($1);
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_PRIMARY_KEY);
@@ -5965,6 +5978,14 @@ not NULLX
 | SRID INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_SRID, 1, $2);
+}
+| COLLATE collation_name
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_COLLATION);
+  $$->str_value_ = $2->str_value_;
+  $$->str_len_ = $2->str_len_;
+  $$->param_num_ = $2->param_num_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 ;
 
@@ -14371,12 +14392,13 @@ add_primary_key
 ;
 
 add_primary_key:
-PRIMARY KEY '(' column_name_list ')' opt_index_option_list
+PRIMARY KEY opt_index_name '(' column_name_list ')' opt_index_option_list
 {
+  (void)($3);
   ParseNode *col_list = NULL;
   ParseNode *index_option = NULL;
-  merge_nodes(col_list, result, T_COLUMN_LIST, $4);
-  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $6);
+  merge_nodes(col_list, result, T_COLUMN_LIST, $5);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $7);
   malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 2, col_list, index_option);
 }
 ;

@@ -1869,6 +1869,7 @@ int dump_thread_info(lua_State *L)
       "wait_event"
     };
     LuaVtableGenerator gen(L, columns);
+    pid_t pid = getpid();
     StackMgr::Guard guard(g_stack_mgr);
     for(auto* header = *guard; OB_NOT_NULL(header) && !gen.is_end(); header = guard.next()) {
       auto* thread_base = (char*)(header->pth_);
@@ -1904,10 +1905,11 @@ int dump_thread_info(lua_State *L)
             if (OB_NOT_NULL(locks[idx]) && j < 256) {
               bool has_segv = false;
               uint32_t val = 0;
-              do_with_crash_restore([&] {
-                val = *locks[idx];
-              }, has_segv);
-              if (!has_segv && 0 != val) {
+              struct iovec local_iov = {&val, sizeof(val)};
+              struct iovec remote_iov = {locks[idx], sizeof(val)};
+              ssize_t n = process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0);
+              if (n != sizeof(val)) {
+              } else if (0 != val) {
                 j += snprintf(addrs + j, 256 - j, "%p ", locks[idx]);
               }
             }
@@ -1935,7 +1937,7 @@ int dump_thread_info(lua_State *L)
           gen.next_column(trace_id_buf);
         }
         // status
-        GET_OTHER_TSI_ADDR(is_blocking, &Thread::is_blocking_);
+        GET_OTHER_TSI_ADDR(blocking_ts, &Thread::blocking_ts_);
         {
           GET_OTHER_TSI_ADDR(join_addr, &Thread::thread_joined_);
           GET_OTHER_TSI_ADDR(sleep_us, &Thread::sleep_us_);
@@ -1944,7 +1946,7 @@ int dump_thread_info(lua_State *L)
             status_str = "Join";
           } else if (0 != sleep_us) {
             status_str = "Sleep";
-          } else if (0 != is_blocking) {
+          } else if (0 != blocking_ts) {
             status_str = "Wait";
           } else {
             status_str = "Run";
@@ -1957,39 +1959,40 @@ int dump_thread_info(lua_State *L)
           GET_OTHER_TSI_ADDR(join_addr, &Thread::thread_joined_);
           GET_OTHER_TSI_ADDR(sleep_us, &Thread::sleep_us_);
           GET_OTHER_TSI_ADDR(rpc_dest_addr, &Thread::rpc_dest_addr_);
+          GET_OTHER_TSI_ADDR(event, &Thread::wait_event_);
           constexpr int64_t BUF_LEN = 64;
           char wait_event[BUF_LEN];
+          ObAddr addr;
+          struct iovec local_iov = {&addr, sizeof(ObAddr)};
+          struct iovec remote_iov = {thread_base + rpc_dest_addr_offset, sizeof(ObAddr)};
           wait_event[0] = '\0';
           if (0 != join_addr) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "thread %u %ld", *(uint32_t*)(thread_base + tid_offset), tid_offset);
           } else if (OB_NOT_NULL(wait_addr)) {
-            bool has_segv = false;
             uint32_t val = 0;
-            do_with_crash_restore([&] {
-              val = *wait_addr;
-            }, has_segv);
-            if (has_segv) {
+            struct iovec local_iov = {&val, sizeof(val)};
+            struct iovec remote_iov = {wait_addr, sizeof(val)};
+            ssize_t n = process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0);
+            if (n != sizeof(val)) {
             } else if (0 != (val & (1<<30))) {
               IGNORE_RETURN snprintf(wait_event, BUF_LEN, "wrlock on %u", val & 0x3fffffff);
             } else {
               IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%u rdlocks", val & 0x3fffffff);
             }
-          } else if (rpc_dest_addr.is_valid()) {
-            bool has_segv = false;
-            do_with_crash_restore([&] {
-              int ret = snprintf(wait_event, BUF_LEN, "rpc to ");
-              if (ret > 0) {
-                IGNORE_RETURN rpc_dest_addr.to_string(wait_event + ret, BUF_LEN - ret);
-              }
-            }, has_segv);
-          } else if (0 != (is_blocking & Thread::WAIT_IN_TENANT_QUEUE)) {
+          } else if (sizeof(ObAddr) == process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0)
+                     && addr.is_valid()) {
+            int ret = 0;
+            if ((ret = snprintf(wait_event, BUF_LEN, "rpc to ")) > 0) {
+              IGNORE_RETURN addr.to_string(wait_event + ret, BUF_LEN - ret);
+            }
+          } else if (0 != blocking_ts && (0 != (Thread::WAIT_IN_TENANT_QUEUE & event))) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "tenant worker request");
-          } else if (0 != (is_blocking & Thread::WAIT_FOR_IO_EVENT)) {
+          } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_IO_EVENT & event))) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "IO events");
-          } else if (0 != (is_blocking & Thread::WAIT_FOR_TRANS_RETRY)) {
-            IGNORE_RETURN snprintf(wait_event, 64, "trans retry");
           } else if (0 != sleep_us) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%ld us", sleep_us);
+          } else if (0 != blocking_ts) {
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%ld us", common::ObTimeUtility::fast_current_time() - blocking_ts);
           }
           gen.next_column(wait_event);
         }

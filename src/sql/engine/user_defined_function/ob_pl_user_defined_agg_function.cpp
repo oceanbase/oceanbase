@@ -17,6 +17,7 @@
 #include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "sql/engine/expr/ob_datum_cast.h"
 
 namespace oceanbase
 {
@@ -509,6 +510,30 @@ int ObPlAggUdfFunction::process_get_pl_agg_udf_result(ObObjParam &pl_obj,
     } else if (OB_UNLIKELY(udf_params->count() < 2)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(udf_params->count()));
+    } else if (OB_FAIL(ObDatumCast::check_can_cast(udf_params->at(1).get_type(),
+                                            udf_params->at(1).get_collation_type(),
+                                            result_type_.get_type(),
+                                            result_type_.get_collation_type()))) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      ObString src_type = ob_obj_type_str(udf_params->at(1).get_type());
+      ObString dts_type = ob_obj_type_str(result_type_.get_type());
+      if (udf_params->at(1).is_blob() || udf_params->at(1).is_blob_locator()) {
+        src_type = ObString("BLOB");
+      } else if (udf_params->at(1).is_clob() || udf_params->at(1).is_clob_locator()) {
+        src_type = ObString("CLOB");
+      }
+      if (result_type_.is_blob() || result_type_.is_blob_locator()) {
+        dts_type = ObString("BLOB");
+      } else if (result_type_.is_clob() || result_type_.is_clob_locator()) {
+        dts_type = ObString("CLOB");
+      }
+      LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP,
+                    src_type.ptr(),
+                    dts_type.ptr());
+      LOG_WARN("cast to expected type not supported",
+                K(ret),
+                K(udf_params->at(1)),
+                K(result_type_));
     } else if (!ob_is_lob_tc(result_type_.get_type())) {
       ObObj src_obj;
       udf_params->at(1).copy_value_or_obj(src_obj, true);

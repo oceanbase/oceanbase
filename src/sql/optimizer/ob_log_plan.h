@@ -1742,11 +1742,12 @@ protected: // member variable
   ObLogOperatorFactory log_op_factory_;
   All_Candidate_Plans candidates_;
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true > group_replaced_exprs_;
-  common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true >
-      window_function_replaced_exprs_;
-  common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true > gen_col_replaced_exprs_;
-  common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 1, common::ModulePageAllocator, true > stat_gather_replaced_exprs_;
+  ObRawExprReplacer group_replacer_;
+  ObRawExprReplacer window_function_replacer_;
+  ObRawExprReplacer gen_col_replacer_;
+  ObRawExprReplacer onetime_replacer_;
   // used for gather statistic begin
+  ObRawExprReplacer stat_gather_replacer_;
   ObRawExpr* stat_partition_id_expr_;
   ObLogTableScan* stat_table_scan_;
   // used for gather statistics end

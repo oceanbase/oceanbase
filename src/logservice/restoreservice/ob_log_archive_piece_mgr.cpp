@@ -298,6 +298,21 @@ int ObLogArchivePieceContext::update_file_info(const int64_t dest_id,
   return ret;
 }
 
+void ObLogArchivePieceContext::get_max_file_info(int64_t &dest_id,
+    int64_t &round_id,
+    int64_t &piece_id,
+    int64_t &max_file_id,
+    int64_t &max_file_offset,
+    palf::LSN &max_lsn)
+{
+  dest_id = dest_id_;
+  round_id = round_context_.round_id_;
+  piece_id = inner_piece_context_.piece_id_;
+  max_file_id = inner_piece_context_.file_id_;
+  max_file_offset = inner_piece_context_.file_offset_;
+  max_lsn = inner_piece_context_.max_lsn_;
+}
+
 int ObLogArchivePieceContext::get_max_archive_log(palf::LSN &lsn, SCN &scn)
 {
   int ret = OB_SUCCESS;

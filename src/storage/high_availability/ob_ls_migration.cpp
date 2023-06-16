@@ -1253,7 +1253,8 @@ int ObStartMigrationTask::update_ls_()
     if (OB_FAIL(ls->update_ls_meta(update_restore_status,
                                    ctx_->src_ls_meta_package_.ls_meta_))) {
       LOG_WARN("failed to update ls meta", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ls->set_dup_table_ls_meta(ctx_->src_ls_meta_package_.dup_ls_meta_))) {
+    } else if (OB_FAIL(ls->set_dup_table_ls_meta(ctx_->src_ls_meta_package_.dup_ls_meta_,
+                                                 true /*need_flush_slog*/))) {
       LOG_WARN("failed to set dup table ls meta", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ls->get_end_lsn(end_lsn))) {
       LOG_WARN("failed to get end lsn", K(ret), KPC(ctx_));

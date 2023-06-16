@@ -172,7 +172,7 @@ public:
                          const common::ObString &conn_str,
                          const common::ObString &cluster_str,
                          const sqlclient::dblink_param_ctx &param_ctx);
-  int acquire_dblink(uint64 tenant_id, uint64_t dblink_id,
+  int acquire_dblink(uint64_t tenant_id, uint64_t dblink_id,
                      sqlclient::DblinkDriverProto dblink_type,
                      const sqlclient::dblink_param_ctx &param_ctx,
                      sqlclient::ObISQLConnection *&dblink_conn,

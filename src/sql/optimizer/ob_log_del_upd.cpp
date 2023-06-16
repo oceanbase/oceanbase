@@ -1405,25 +1405,24 @@ int ObLogDelUpd::print_outline_data(PlanText &plan_text)
   return ret;
 }
 
-int ObLogDelUpd::inner_replace_op_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogDelUpd::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_index_dml_infos()))) {
+  if (OB_FAIL(replace_dml_info_exprs(replacer, get_index_dml_infos()))) {
     LOG_WARN("failed to replace dml info exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, view_check_exprs_))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, view_check_exprs_))) {
     LOG_WARN("failed to replace view check exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, produced_trans_exprs_))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, produced_trans_exprs_))) {
     LOG_WARN("failed to replace produced trans exprs", K(ret));
   } else if (NULL != pdml_partition_id_expr_ &&
-    OB_FAIL(replace_expr_action(to_replace_exprs, pdml_partition_id_expr_))) {
+    OB_FAIL(replace_expr_action(replacer, pdml_partition_id_expr_))) {
     LOG_WARN("failed to replace pdml partition id expr", K(ret));
   }
   return ret;
 }
 
 int ObLogDelUpd::replace_dml_info_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs,
+    ObRawExprReplacer &replacer,
     const ObIArray<IndexDMLInfo *> &index_dml_infos)
 {
   int ret = OB_SUCCESS;
@@ -1432,31 +1431,29 @@ int ObLogDelUpd::replace_dml_info_exprs(
     if (OB_ISNULL(index_dml_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+    } else if (OB_FAIL(replace_exprs_action(replacer,
                                             index_dml_info->column_convert_exprs_))) {
       LOG_WARN("failed to replace exprs", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+    } else if (OB_FAIL(replace_exprs_action(replacer,
                                             index_dml_info->ck_cst_exprs_))) {
       LOG_WARN("failed to replace exprs", K(ret));
     } else if (NULL != index_dml_info->new_part_id_expr_ &&
-            OB_FAIL(replace_expr_action(to_replace_exprs, index_dml_info->new_part_id_expr_))) {
+            OB_FAIL(replace_expr_action(replacer, index_dml_info->new_part_id_expr_))) {
       LOG_WARN("failed to replace new parititon id expr", K(ret));
     } else if (NULL != index_dml_info->old_part_id_expr_ &&
-      OB_FAIL(replace_expr_action(to_replace_exprs, index_dml_info->old_part_id_expr_))) {
+      OB_FAIL(replace_expr_action(replacer, index_dml_info->old_part_id_expr_))) {
       LOG_WARN("failed to replace old parititon id expr", K(ret));
     } else if (NULL != index_dml_info->old_rowid_expr_ &&
-      OB_FAIL(replace_expr_action(to_replace_exprs, index_dml_info->old_rowid_expr_))) {
+      OB_FAIL(replace_expr_action(replacer, index_dml_info->old_rowid_expr_))) {
       LOG_WARN("failed to replace old rowid expr", K(ret));
     } else if (NULL != index_dml_info->new_rowid_expr_ &&
-      OB_FAIL(replace_expr_action(to_replace_exprs, index_dml_info->new_rowid_expr_))) {
+      OB_FAIL(replace_expr_action(replacer, index_dml_info->new_rowid_expr_))) {
       LOG_WARN("failed to replace new rowid expr", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
-                      index_dml_info->column_old_values_exprs_))) {
+    } else if (OB_FAIL(replace_exprs_action(replacer, index_dml_info->column_old_values_exprs_))) {
       LOG_WARN("failed to replace column old values exprs ", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->assignments_.count(); ++i) {
-      if (OB_FAIL(replace_expr_action(to_replace_exprs,
-                                      index_dml_info->assignments_.at(i).expr_))) {
+      if (OB_FAIL(replace_expr_action(replacer, index_dml_info->assignments_.at(i).expr_))) {
         LOG_WARN("failed to replace expr", K(ret));
       }
     }

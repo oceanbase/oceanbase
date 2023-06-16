@@ -2338,44 +2338,37 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
       }
 
       if (OB_SUCC(ret)) {
-        if (!ObStmt::is_dynamic_supported_stmt(stmt_type)) {
-          // Some stmt type is dangerous and not allowed in Oracle, so we must forbid it.
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("Statement type not allowed in dynamic sql", K(ret), K(stmt_type), K(sql_str));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Statement not allowed in dynamic sql,");
+        int64_t exec_param_cnt = ObStmt::is_dml_stmt(stmt_type)
+          ? pl_prepare_result.result_set_->get_external_params().count()
+            : pl_prepare_result.result_set_->get_param_fields()->count();
+        if (pl_prepare_result.result_set_->is_returning() && 0 == into_cnt) {
+            ret = OB_ERR_MISSING_INTO_KEYWORD;
+            LOG_WARN("ORA-00925: missing INTO keyword", K(ret),
+                    K(pl_prepare_result.result_set_->is_returning()), K(into_cnt));
         } else {
-          int64_t exec_param_cnt = ObStmt::is_dml_stmt(stmt_type)
-            ? pl_prepare_result.result_set_->get_external_params().count()
-              : pl_prepare_result.result_set_->get_param_fields()->count();
-          if (pl_prepare_result.result_set_->is_returning() && 0 == into_cnt) {
-              ret = OB_ERR_MISSING_INTO_KEYWORD;
-              LOG_WARN("ORA-00925: missing INTO keyword", K(ret),
-                      K(pl_prepare_result.result_set_->is_returning()), K(into_cnt));
-          } else {
-            /*!
-              * 1、select语句的INTO子句在动态语句里直接丢掉，所以select语句参数个数按传进来的入参个数检查
-              * 2、dml语句如果有RETURNING INTO子句，需要去掉动态语句里RETURNING INTO的参数，
-              * 但是如果EXECUTE IMMEDIATE本身有RETURNING子句的话就不用去了
-              */
-            int64_t need_exec_param_cnt = exec_param_cnt;
-            if (ObStmt::is_dml_write_stmt(stmt_type)) {
-              need_exec_param_cnt = need_exec_param_cnt + (is_returning ? 0 : into_cnt);
-            }
-            if (param_cnt != need_exec_param_cnt) {
-              if (lib::is_mysql_mode()) {
-                ret = OB_ERR_WRONG_DYNAMIC_PARAM;
-                LOG_USER_ERROR(OB_ERR_WRONG_DYNAMIC_PARAM, exec_param_cnt, param_cnt);
-              } else if (param_cnt < need_exec_param_cnt) {
-                ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
-                LOG_WARN("ORA-01008: not all variables bound",
-                          K(ret), K(param_cnt),
-                          K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
-              } else {
-                ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
-                LOG_WARN("ORA-01006: bind variable does not exist",
-                          K(ret), K(param_cnt),
-                          K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
-              }
+          /*!
+            * 1、select语句的INTO子句在动态语句里直接丢掉，所以select语句参数个数按传进来的入参个数检查
+            * 2、dml语句如果有RETURNING INTO子句，需要去掉动态语句里RETURNING INTO的参数，
+            * 但是如果EXECUTE IMMEDIATE本身有RETURNING子句的话就不用去了
+            */
+          int64_t need_exec_param_cnt = exec_param_cnt;
+          if (ObStmt::is_dml_write_stmt(stmt_type)) {
+            need_exec_param_cnt = need_exec_param_cnt + (is_returning ? 0 : into_cnt);
+          }
+          if (param_cnt != need_exec_param_cnt) {
+            if (lib::is_mysql_mode()) {
+              ret = OB_ERR_WRONG_DYNAMIC_PARAM;
+              LOG_USER_ERROR(OB_ERR_WRONG_DYNAMIC_PARAM, exec_param_cnt, param_cnt);
+            } else if (param_cnt < need_exec_param_cnt) {
+              ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
+              LOG_WARN("ORA-01008: not all variables bound",
+                        K(ret), K(param_cnt),
+                        K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
+            } else {
+              ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+              LOG_WARN("ORA-01006: bind variable does not exist",
+                        K(ret), K(param_cnt),
+                        K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
             }
           }
         }
@@ -5007,6 +5000,20 @@ int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface
     PL_C_INTERFACE_t fp = GCTX.pl_engine_->get_interface_service().get_entry(name);
     if (nullptr != fp) {
       ret = fp(*ctx, *ctx->params_, *ctx->result_);
+      if (ctx->result_->is_pl_extend() &&
+          pl::PL_REF_CURSOR_TYPE != ctx->result_->get_meta().get_extend_type()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_ISNULL(ctx->exec_ctx_->get_pl_ctx())) {
+          tmp_ret = ctx->exec_ctx_->init_pl_ctx();
+        }
+        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx->exec_ctx_->get_pl_ctx())) {
+          tmp_ret = ctx->exec_ctx_->get_pl_ctx()->add(*ctx->result_);
+        }
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_ERROR("fail to record complex result to ctx", K(tmp_ret));
+        }
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Calling C interface which doesn't exist", K(interface_name), K(name));
@@ -6269,9 +6276,6 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
   for (int i = 0; OB_SUCC(ret) && i < obj_array.count(); ++i) {
     ObObj &obj = obj_array.at(i);
     tmp_obj.reset();
-    if (obj.is_clob() && !(ob_is_nstring(result_types[i].get_obj_type()))) {
-      obj.set_collation_type(result_types[i].get_collation_type());
-    }
     obj.set_collation_level(result_types[i].get_collation_level());
     LOG_DEBUG("column convert", K(obj.get_meta()), K(result_types[i].get_meta_type()),
               K(current_type.at(i)), K(result_types[i].get_accuracy()));

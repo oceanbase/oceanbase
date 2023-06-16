@@ -452,7 +452,7 @@ int ObSchemaCache::init()
   } else if (OB_FAIL(tablet_cache_.init(OB_TABLET_TABLE_CACHE_NAME, priority))) {
     LOG_WARN("init tablet-table cache failed", KR(ret));
   } else if (OB_FAIL(sys_cache_.create(OB_SCHEMA_CACHE_SYS_CACHE_MAP_BUCKET_NUM,
-                                       ObModIds::OB_SCHEMA_CACHE_SYS_CACHE_MAP))) {
+                                       SET_USE_500(ObModIds::OB_SCHEMA_CACHE_SYS_CACHE_MAP)))) {
     LOG_WARN("init sys cache failed", K(ret));
   } else if (OB_FAIL(init_all_core_table())) {
     LOG_WARN("init all_core_table cache failed", K(ret));

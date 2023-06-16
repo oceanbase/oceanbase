@@ -363,26 +363,25 @@ int ObLogTableScan::generate_access_exprs()
 }
 
 
-int ObLogTableScan::replace_gen_col_op_exprs(
-        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>  >&to_replace_exprs)
+int ObLogTableScan::replace_gen_col_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
   if (is_index_scan() && !(get_index_back())) {
     // do nothing.
-  } else if (0 < to_replace_exprs.count()) {
+  } else if (!replacer.empty()) {
     FOREACH_CNT_X(it, get_op_ordering(), OB_SUCC(ret)) {
-      if (OB_FAIL(replace_expr_action(to_replace_exprs, it->expr_))) {
+      if (OB_FAIL(replace_expr_action(replacer, it->expr_))) {
         LOG_WARN("replace agg expr failed", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_output_exprs()))) {
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_output_exprs()))) {
       LOG_WARN("failed to replace agg expr", K(ret));
     } else if (NULL != limit_offset_expr_ &&
-        OB_FAIL(replace_expr_action(to_replace_exprs, limit_count_expr_))) {
+        OB_FAIL(replace_expr_action(replacer, limit_count_expr_))) {
       LOG_WARN("failed to replace limit count expr", K(ret));
     } else if (NULL != limit_offset_expr_  &&
-              OB_FAIL(replace_expr_action(to_replace_exprs, limit_offset_expr_))) {
+              OB_FAIL(replace_expr_action(replacer, limit_offset_expr_))) {
       LOG_WARN("failed to replace limit offset expr ", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_aggr_exprs_.count(); ++i) {
@@ -391,7 +390,7 @@ int ObLogTableScan::replace_gen_col_op_exprs(
           if (OB_ISNULL(pushdown_aggr_expr->get_param_expr(j))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("param_expr is NULL", K(j), K(ret));
-          } else if (OB_FAIL(replace_expr_action(to_replace_exprs,
+          } else if (OB_FAIL(replace_expr_action(replacer,
                               pushdown_aggr_expr->get_param_expr(j)))) {
             LOG_WARN("Fail to replace push down aggr expr", K(i), K(j), K(ret));
           }
@@ -401,18 +400,18 @@ int ObLogTableScan::replace_gen_col_op_exprs(
     // Scenario processing without index table.
     if (OB_SUCC(ret) && !get_index_back()) {
       if (NULL != part_expr_  &&
-              OB_FAIL(replace_expr_action(to_replace_exprs, part_expr_))) {
+              OB_FAIL(replace_expr_action(replacer, part_expr_))) {
         LOG_WARN("failed to replace part expr ", K(ret));
-      } else if (NULL != subpart_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs,
+      } else if (NULL != subpart_expr_ && OB_FAIL(replace_expr_action(replacer,
                 subpart_expr_))) {
         LOG_WARN("failed to replace subpart expr ", K(ret));
-      } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_filter_exprs()))) {
+      } else if (OB_FAIL(replace_exprs_action(replacer, get_filter_exprs()))) {
         LOG_WARN("failed to replace agg expr", K(ret));
       }
     }
     // Index back to table scene processing
     if (OB_SUCC(ret) && get_index_back()) {
-      if (OB_FAIL(replace_index_back_pushdown_filters(to_replace_exprs))) {
+      if (OB_FAIL(replace_index_back_pushdown_filters(replacer))) {
         LOG_WARN("failed to replace pushdown exprs", K(ret));
       }
     }
@@ -420,22 +419,21 @@ int ObLogTableScan::replace_gen_col_op_exprs(
   return ret;
 }
 
-int ObLogTableScan::replace_index_back_pushdown_filters(
-                    const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>  >&to_replace_exprs)
+int ObLogTableScan::replace_index_back_pushdown_filters(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObRawExpr*> &filters = get_filter_exprs();
   const auto &flags = get_filter_before_index_flags();
   if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id())) {
     // nonpushdown need replace.
-    if (OB_FAIL(replace_exprs_action(to_replace_exprs, filters))) {
+    if (OB_FAIL(replace_exprs_action(replacer, filters))) {
       LOG_WARN("failed to replace agg expr", K(ret));
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
       if (filters.at(i)->has_flag(CNT_PL_UDF)) {
         // nonpushdown need replace.
-        if (OB_FAIL(replace_expr_action(to_replace_exprs, filters.at(i)))) {
+        if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
           LOG_WARN("failed to replace agg expr", K(ret));
         }
       } else if (!get_index_back()) {
@@ -446,13 +444,13 @@ int ObLogTableScan::replace_index_back_pushdown_filters(
       } else if (flags.at(i)) {
         if (get_index_back() && get_is_index_global() && filters.at(i)->has_flag(CNT_SUB_QUERY)) {
           // lookup_pushdown need replace.
-          if (OB_FAIL(replace_expr_action(to_replace_exprs, filters.at(i)))) {
+          if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
             LOG_WARN("failed to replace agg expr", K(ret));
           }
         } else {
           // scan_pushdown no need replace.
         }
-      } else if (OB_FAIL(replace_expr_action(to_replace_exprs, filters.at(i)))) {
+      } else if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
         LOG_WARN("failed to replace agg expr", K(ret));
       }
     }
@@ -1658,14 +1656,13 @@ int ObLogTableScan::set_query_ranges(ObIArray<ObNewRange> &ranges,
   return ret;
 }
 
-int ObLogTableScan::inner_replace_op_exprs(
-        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
+int ObLogTableScan::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_exprs_action(to_replace_exprs, access_exprs_))) {
+  if (OB_FAIL(replace_exprs_action(replacer, access_exprs_))) {
     LOG_WARN("failed to replace_expr_action", K(ret));
   } else if (calc_part_id_expr_ != NULL &&
-             OB_FAIL(replace_expr_action(to_replace_exprs, calc_part_id_expr_))) {
+             OB_FAIL(replace_expr_action(replacer, calc_part_id_expr_))) {
     LOG_WARN("failed to replace calc part id expr", K(ret));
   }
   return ret;
@@ -1769,6 +1766,10 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
                && OpParallelRule::OP_HINT_DOP == get_op_parallel_rule()
                && OB_FAIL(table_hint->parallel_hint_->print_hint(plan_text))) {
       LOG_WARN("failed to print table parallel hint", K(ret));
+    } else if (NULL != table_hint->dynamic_sampling_hint_ &&
+               table_hint->dynamic_sampling_hint_->get_dynamic_sampling() != ObGlobalHint::UNSET_DYNAMIC_SAMPLING &&
+               OB_FAIL(table_hint->dynamic_sampling_hint_->print_hint(plan_text))) {
+      LOG_WARN("failed to print dynamic sampling hint", K(ret));
     } else if (NULL != table_hint->use_das_hint_
                && use_das() == table_hint->use_das_hint_->is_enable_hint()
                && OB_FAIL(table_hint->use_das_hint_->print_hint(plan_text))) {

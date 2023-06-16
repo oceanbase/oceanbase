@@ -1163,22 +1163,26 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
           }
         }
         if (OB_SUCC(ret) && version_fit) {
-          if (0 != context_->trans_version_range_.base_version_ && is_determined_state) {
-            // major read rows
-            LOG_DEBUG("success to set trans_version on uncommitted row", K(ret), K(trans_version));
-            row->storage_datums_[read_info_->get_schema_rowkey_count()].set_int(-trans_version);
-          }
-
-          if (!row->mvcc_row_flag_.is_uncommitted_row() || is_determined_state) {
-            row->snapshot_version_ = 0;
-            row->trans_id_.reset();
-            if (param_->need_scn_) {
-              row->storage_datums_[read_info_->get_schema_rowkey_count()].set_int(-trans_version);
+          if (OB_INVALID_INDEX != read_info_->get_trans_col_index() && is_determined_state) {
+            // only uncommitted row need to be set, committed row set in row reader
+            int64_t trans_idx = read_info_->get_trans_col_index();
+            if (OB_UNLIKELY(trans_idx >= row->count_ || 0 >= trans_version)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("Unexpected trans info", K(ret), K(trans_idx), K(trans_version), KPC(row), KPC_(read_info));
+            } else {
+              LOG_DEBUG("success to set trans_version on uncommitted row", K(ret), K(trans_version));
+              row->storage_datums_[trans_idx].set_int(-trans_version);
             }
-          } else { // uncommitted row
-            row->snapshot_version_ = INT64_MAX;
           }
-          ret_row = row;
+          if (OB_SUCC(ret)) {
+            if (!row->mvcc_row_flag_.is_uncommitted_row() || is_determined_state) {
+              row->snapshot_version_ = 0;
+              row->trans_id_.reset();
+            } else { // uncommitted row
+              row->snapshot_version_ = INT64_MAX;
+            }
+            ret_row = row;
+          }
         }
       }
     }

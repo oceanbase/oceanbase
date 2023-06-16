@@ -24,11 +24,30 @@ namespace common
 template <class T>
     using __is_default_constructible__ = std::is_default_constructible<T>;
 
+class ObClassMeta
+{
+  constexpr static int64_t MAGIC_CODE = 0xbebe23311332bbcc;
+public:
+  ObClassMeta(void *instance)
+    : magic_code_(MAGIC_CODE),
+      instance_(instance)
+  {}
+  bool check_magic_code() { return MAGIC_CODE == magic_code_; }
+  void *instance() { return instance_; }
+private:
+  const int64_t magic_code_;
+  void *instance_;
+};
+
 template<class T>
 class ObFixedClassAllocator
 {
 public:
-  ObFixedClassAllocator(const int obj_size, const ObMemAttr &attr, int blk_size, int64_t nway) : allocator_(obj_size, attr, blk_size)
+  using object_type = T;
+public:
+  ObFixedClassAllocator(const ObMemAttr &attr, int64_t nway)
+    : allocator_(sizeof(T) + sizeof(ObClassMeta), attr,
+                 choose_blk_size(sizeof(T) + sizeof(ObClassMeta)))
   {
     allocator_.set_nway(static_cast<int32_t>(nway));
   }
@@ -53,9 +72,7 @@ public:
 
   static ObFixedClassAllocator<T> *get(const char* label = "ConcurObjPool")
   {
-    static ObFixedClassAllocator<T> instance(sizeof(T),
-                                             SET_USE_500(ObMemAttr(common::OB_SERVER_TENANT_ID, label)),
-                                             choose_blk_size(sizeof(T)),
+    static ObFixedClassAllocator<T> instance(SET_USE_500(ObMemAttr(common::OB_SERVER_TENANT_ID, label)),
                                              common::get_cpu_count());
     return &instance;
   }
@@ -65,10 +82,9 @@ public:
     return allocator_.alloc();
   }
 
-  void free(T *ptr)
+  void free(void *ptr)
   {
     if (OB_LIKELY(NULL != ptr)) {
-      ptr->~T();
       allocator_.free(ptr);
       ptr = NULL;
     }
@@ -78,41 +94,53 @@ private:
   ObSliceAlloc allocator_;
 };
 
-#define op_alloc_args(type, args...) \
+template<typename instance_type, typename object_type>
+inline void type_checker(instance_type*, object_type*)
+{
+  OLD_STATIC_ASSERT((std::is_same<typename instance_type::object_type, object_type>::value),
+                    "unmatched type");
+}
+
+template<typename T>
+inline void free_helper(T *ptr)
+{
+  auto *meta = reinterpret_cast<common::ObClassMeta*>((char*)ptr - sizeof(common::ObClassMeta));
+  abort_unless(meta->check_magic_code());
+  ptr->~T();
+  ((ObFixedClassAllocator<T>*)meta->instance())->free(meta);
+}
+
+#define op_instance_alloc_args(instance, type, args...)  \
   ({ \
     type *ret = NULL; \
-    common::ObFixedClassAllocator<type> *instance = \
-      common::ObFixedClassAllocator<type>::get(#type); \
+    type_checker(instance, ret); \
     if (OB_LIKELY(NULL != instance)) { \
-      void *tmp = instance->alloc(); \
-      if (OB_LIKELY(NULL != tmp)) { \
-        ret = new (tmp) type(args); \
+      void *ptr = (instance)->alloc(); \
+      if (OB_LIKELY(NULL != ptr)) { \
+        auto *meta = new (ptr) common::ObClassMeta(instance); \
+        ret = new (meta + 1) type(args); \
       } \
     } \
     ret; \
+  })
+
+#define op_alloc_args(type, args...) \
+  ({ \
+    common::ObFixedClassAllocator<type> *instance = \
+      common::ObFixedClassAllocator<type>::get(#type); \
+    op_instance_alloc_args(instance, type, args); \
   })
 
 #define op_alloc(type) \
   ({ \
     OLD_STATIC_ASSERT((std::is_default_constructible<type>::value), "type is not default constructible"); \
-    type *ret = NULL; \
-    common::ObFixedClassAllocator<type> *instance = \
-      common::ObFixedClassAllocator<type>::get(#type); \
-    if (OB_LIKELY(NULL != instance)) { \
-      void *tmp = instance->alloc(); \
-      if (OB_LIKELY(NULL != tmp)) { \
-        ret = new (tmp) type(); \
-      } \
-    } \
-    ret; \
+    op_alloc_args(type); \
   })
 
 #define op_free(ptr) \
   ({ \
-    common::ObFixedClassAllocator<__typeof__(*ptr)> *instance = \
-      common::ObFixedClassAllocator<__typeof__(*ptr)>::get(); \
-    if (OB_LIKELY(NULL != instance)) { \
-      instance->free(ptr); \
+    if (OB_LIKELY(NULL != ptr)) { \
+      free_helper(ptr); \
     } \
   })
 

@@ -101,7 +101,7 @@ public:
   OB_INLINE void set_lq_yield(bool v=true) { is_lq_yield_ = v; }
   OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
   OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
-  OB_INLINE bool is_blocking() const { return OB_NOT_NULL(is_blocking_) && (0 != *is_blocking_); }
+  OB_INLINE int64_t blocking_ts() const { return OB_NOT_NULL(blocking_ts_) ? (*blocking_ts_) : 0; }
 
 private:
   void set_th_worker_thread_name();
@@ -134,7 +134,7 @@ private:
   bool has_add_to_cgroup_;
 
   int64_t last_wakeup_ts_;
-  uint8_t* is_blocking_;
+  int64_t* blocking_ts_;
   int64_t ru_cputime_;
   int64_t idle_us_;
 private:

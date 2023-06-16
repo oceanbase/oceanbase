@@ -770,7 +770,6 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id)
       alter_table_schema.clear_constraint();
       alter_table_schema.set_origin_database_name(database_schema->get_database_name_str());
       alter_table_schema.set_origin_table_name(table_schema->get_table_name_str());
-      int64_t task_id = 0;
       if (OB_FAIL(alter_table_schema.add_constraint(*constraint))) {
         LOG_WARN("add constraint failed", K(ret));
       } else {
@@ -799,29 +798,19 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id)
             }
           } else if (OB_FAIL(root_service->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
             LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
-          } else {
-            task_id = task_record.task_id_;
           }
           if (OB_SUCC(ret)) {
+            TCWLockGuard guard(lock_);
             DependTaskStatus status;
-            bool need_set_status = false;
-            status.task_id_ = task_id; // child task id, which is used to judge child task finish.
+            status.task_id_ = task_record.task_id_; // child task id, which is used to judge child task finish.
             if (OB_FAIL(dependent_task_result_map_.get_refactored(constraint_id, status))) {
               if (OB_HASH_NOT_EXIST != ret) {
                 LOG_WARN("get from dependent task map failed", K(ret));
-              } else {
-                ret = OB_SUCCESS;
-                need_set_status = true;
-              }
-            }
-            if (OB_SUCC(ret) && need_set_status) {
-              status.task_id_ = task_id; // child task id is used to judge whether child task finish.
-              if (OB_FAIL(dependent_task_result_map_.set_refactored(constraint_id, status))) {
+              } else if (OB_FAIL(dependent_task_result_map_.set_refactored(constraint_id, status))) {
                 LOG_WARN("set dependent task map failed", K(ret), K(constraint_id));
-              } else {
-                LOG_INFO("add constraint task", K(constraint_id));
               }
             }
+            LOG_INFO("add constraint task", K(ret), K(constraint_id), K(status));
           }
         }
       }
@@ -893,7 +882,6 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id)
           ret = OB_ENTRY_NOT_EXIST;
           LOG_WARN("cannot find foreign key in table", K(ret), K(fk_id), K(fk_info_array));
         } else {
-          DependTaskStatus status;
           fk_arg.foreign_key_name_ = fk_info.foreign_key_name_;
           fk_arg.enable_flag_ = fk_info.enable_flag_;
           fk_arg.is_modify_enable_flag_ = fk_info.enable_flag_;
@@ -920,14 +908,27 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id)
           if (OB_FAIL(alter_table_arg.foreign_key_arg_list_.push_back(fk_arg))) {
             LOG_WARN("push back foreign key arg failed", K(ret));
           } else if (OB_FAIL(root_service->get_ddl_task_scheduler().create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
-            LOG_WARN("submit ddl task failed", K(ret));
+            if (OB_ENTRY_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("submit ddl task failed", K(ret));
+            }
           } else if (OB_FAIL(root_service->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
             LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
-          } else if (FALSE_IT(status.task_id_ = task_record.task_id_)) { // child task id is used to judge whether child task finish.
-          } else if (OB_FAIL(dependent_task_result_map_.set_refactored(fk_id, status))) {
-            LOG_WARN("set dependent task map failed", K(ret));
-          } else {
-            LOG_INFO("add foregin key ddl task", K(fk_arg), K(fk_id));
+          }
+          if (OB_SUCC(ret)) {
+            TCWLockGuard guard(lock_);
+            DependTaskStatus status;
+            status.task_id_ = task_record.task_id_; // child task id, which is used to judge child task finish.
+            if (OB_FAIL(dependent_task_result_map_.get_refactored(fk_id, status))) {
+              if (OB_HASH_NOT_EXIST != ret) {
+                LOG_WARN("get from dependent task map failed", K(ret));
+              } else if (OB_FAIL(dependent_task_result_map_.set_refactored(fk_id, status))) {
+                LOG_WARN("set dependent task map failed", K(ret), K(fk_id));
+              }
+            }
+            LOG_INFO("add fk task", K(ret), K(fk_id), K(status));
+
           }
         }
       }

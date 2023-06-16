@@ -1998,6 +1998,10 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
     const char *end = pos + str.length();
     // find first digit.
     for (; pos < end && isspace(*pos); ++pos) {}
+    if (pos >= end) {
+      ret = OB_INVALID_DATE_FORMAT;
+      LOG_WARN("invalid argument, all spaces", K(ret));
+    }
     const char *first_digit = pos;
     if (pos < end && !('-' == *pos || isdigit(*pos))){
       for (int i = 0; OB_SUCC(ret) && i < TOTAL_PART_CNT; ++i) {
@@ -2013,7 +2017,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
       bool has_done = false;
       // maybe it is an whole datetime string.
       if (end - first_digit >= 12) {
-        ret = str_to_ob_time_with_date(str, ob_time, scale, false, 0);
+        ret = str_to_ob_time_with_date(str, ob_time, scale, true, 0);
         if ((DT_TYPE_NONE & ob_time.mode_) || OB_INVALID_DATE_FORMAT == ret) {
           ob_time.mode_ &= (~DT_TYPE_NONE);
           for (int i = 0; i < DATETIME_PART_CNT; ++i) {
@@ -2097,6 +2101,14 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
               ob_time.parts_[DT_USEC] = digits.value_;    // usecond.
               if (NULL != scale) {
                 *scale = static_cast<int16_t>(MIN(digits.len_, 6));
+              }
+              // '2:59:59.9999999' ---> '03:00:00.000000'
+              const int64_t *part_max = DT_PART_BASE;
+              for (int i = DATETIME_PART_CNT - 1; OB_SUCC(ret) && i > DATE_PART_CNT; i--) {
+                if (ob_time.parts_[i] == part_max[i]) {
+                  ob_time.parts_[i] = 0;
+                  ob_time.parts_[i - 1]++;
+                }
               }
             }
           }

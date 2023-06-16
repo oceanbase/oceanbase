@@ -490,11 +490,24 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
         } else if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_INIT_FAILED) OB_SUCCESS)) {
           sqc.set_need_report(false);
           LOG_WARN("[SIM] server down. fail to init sqc", K(ret));
+          if (ignore_vtable_error && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
+            ObFastInitSqcReportQCMessageCall call(&sqc, ret, phy_plan_ctx->get_timeout_timestamp(), true);
+            call.mock_sqc_finish_msg();
+            ret = OB_SUCCESS;
+            sqc.set_server_not_alive(true);
+          }
         } else if (OB_FAIL(proxy
                           .by(THIS_WORKER.get_rpc_tenant()?: session->get_effective_tenant_id())
                           .timeout(timeout_us)
                           .fast_init_sqc(args, &sqc_cb))) {
-          LOG_WARN("fail to init sqc", K(ret), K(sqc));
+          if (ignore_vtable_error && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
+            LOG_WARN("ignore error when init sqc with virtual table failed", K(ret), K(sqc));
+            ObFastInitSqcReportQCMessageCall call(&sqc, ret, phy_plan_ctx->get_timeout_timestamp(), true);
+            call.mock_sqc_finish_msg();
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to init sqc", K(ret), K(sqc));
+          }
           sqc.set_need_report(false);
           sqc.set_server_not_alive(true);
         }

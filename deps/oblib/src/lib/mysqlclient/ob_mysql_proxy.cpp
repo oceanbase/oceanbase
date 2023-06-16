@@ -446,7 +446,7 @@ int ObDbLinkProxy::create_dblink_pool(uint64_t tenant_id, uint64_t dblink_id, Db
   return ret;
 }
 
-int ObDbLinkProxy::acquire_dblink(uint64 tenant_id, uint64_t dblink_id,
+int ObDbLinkProxy::acquire_dblink(uint64_t tenant_id, uint64_t dblink_id,
                                   DblinkDriverProto dblink_type,
                                   const dblink_param_ctx &param_ctx,
                                   ObISQLConnection *&dblink_conn,

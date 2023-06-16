@@ -480,6 +480,7 @@ int ObBackupDataLSTask::set_optional_servers_(const ObIArray<common::ObAddr> &bl
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
       if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
+          && ObReplicaTypeCheck::is_full_replica(replica.get_replica_type()) // TODO(chongrong.th) 5.0 allow R replica backup later
           && !check_replica_in_black_server_(replica, black_servers)) { 
         ObBackupServer server;
         server.set(replica.get_server(), 0/*high priority*/);

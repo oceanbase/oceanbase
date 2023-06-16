@@ -21,6 +21,7 @@ ObRemoteLogIterator<LogEntryType>::ObRemoteLogIterator(GetSourceFunc &get_source
   cur_lsn_(),
   cur_scn_(),
   end_lsn_(),
+  single_read_size_(0),
   source_guard_(),
   data_buffer_(),
   gen_(NULL),
@@ -44,7 +45,8 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
     const share::SCN &pre_scn,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    archive::LargeBufferPool *buffer_pool)
+    archive::LargeBufferPool *buffer_pool,
+    const int64_t single_read_size)
 {
   int ret = OB_SUCCESS;
   ObRemoteLogParent *source = NULL;
@@ -56,7 +58,8 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
         || OB_INVALID_TENANT_ID == tenant_id
         || ! id.is_valid()
         || ! start_lsn.is_valid()
-        || (end_lsn.is_valid() && end_lsn <= start_lsn))) {
+        || (end_lsn.is_valid() && end_lsn <= start_lsn)
+        || single_read_size < 2 * 1024 * 1024)) {  // TODO set size
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(buffer_pool),
         K(tenant_id), K(id), K(start_lsn), K(end_lsn));
@@ -78,8 +81,9 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
     id_ = id;
     start_lsn_ = start_lsn;
     end_lsn_ = end_lsn;
+    single_read_size_ = single_read_size;
     ret = build_data_generator_(pre_scn, source, refresh_storage_info_func_);
-    CLOG_LOG(TRACE, "ObRemoteLogIterator init", K(ret), K(tenant_id), K(id), K(pre_scn), K(start_lsn), K(end_lsn));
+    CLOG_LOG(INFO, "ObRemoteLogIterator init", K(ret), K(tenant_id), K(id), K(pre_scn), K(start_lsn), K(end_lsn));
   }
 
   if (OB_SUCC(ret)) {
@@ -127,6 +131,7 @@ void ObRemoteLogIterator<LogEntryType>::reset()
   cur_lsn_.reset();
   cur_scn_.reset();
   end_lsn_.reset();
+  single_read_size_ = 0;
   data_buffer_.reset();
   source_guard_.reset();
 }
@@ -215,7 +220,8 @@ int ObRemoteLogIterator<LogEntryType>::build_location_data_generator_(const shar
   ObLogArchivePieceContext *piece_context = NULL;
   source->get(dest, piece_context, end_scn);
   gen_ = MTL_NEW(LocationDataGenerator, "ResDataGen", tenant_id_, pre_scn,
-      id_, start_lsn_, end_lsn_, end_scn, dest, piece_context, buf_, buf_size_);
+      id_, start_lsn_, end_lsn_, end_scn, dest, piece_context, buf_, buf_size_,
+      single_read_size_);
   if (OB_ISNULL(gen_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "alloc location data generator failed", K(ret), KPC(this));
@@ -231,8 +237,8 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
   do {
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_entry_(entry, lsn, buf, buf_size))) {
-      if (OB_BUF_NOT_ENOUGH == ret) {
-      CLOG_LOG(TRACE, "buf not enough, need read data", K(ret), KPC(this));
+      if (need_prepare_buf_(ret)) {
+        CLOG_LOG(TRACE, "buf not enough, need read data", K(ret), KPC(this));
       } else {
         CLOG_LOG(WARN, "get entry failed", K(ret), KPC(this));
       }
@@ -246,7 +252,7 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
       }
     }
 
-    if (OB_BUF_NOT_ENOUGH == ret) {
+    if (need_prepare_buf_(ret)) {
       if (OB_FAIL(prepare_buf_())) {
         if (OB_ITER_END != ret) {
           CLOG_LOG(WARN, "prepare buffer failed", K(ret));
@@ -260,7 +266,17 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
   if (OB_FAIL(ret) && OB_ITER_END != ret && ! is_io_error(ret)) {
     mark_source_error_(ret);
   }
+
+  if (OB_SUCC(ret)) {
+    advance_data_gen_lsn_();
+  }
   return ret;
+}
+
+template<class LogEntryType>
+bool ObRemoteLogIterator<LogEntryType>::need_prepare_buf_(const int ret_code) const
+{
+  return OB_BUF_NOT_ENOUGH == ret_code || OB_NEED_RETRY == ret_code;
 }
 
 template<class LogEntryType>
@@ -276,12 +292,12 @@ int ObRemoteLogIterator<LogEntryType>::prepare_buf_()
     if (OB_ITER_END != ret) {
       CLOG_LOG(WARN, "next buffer failed", K(ret), KPC(this));
     } else {
-      CLOG_LOG(TRACE, "next buffer to end", KPC(this));
+      CLOG_LOG(INFO, "next buffer to end", KPC(this));
     }
   } else if (OB_FAIL(data_buffer_.set(lsn, buf, buf_size))) {
     CLOG_LOG(WARN, "data buffer set failed", K(ret), K(lsn), K(buf), K(buf_size), KPC(this));
   } else {
-    CLOG_LOG(TRACE, "data buffer init succ", K(ret), K_(data_buffer));
+    CLOG_LOG(INFO, "data buffer init succ", K(ret), K_(data_buffer), KPC(this));
   }
   return ret;
 }
@@ -304,6 +320,14 @@ void ObRemoteLogIterator<LogEntryType>::update_data_gen_max_lsn_()
 {
   if (NULL != gen_ && cur_lsn_.is_valid()) {
     gen_->update_max_lsn(cur_lsn_);
+  }
+}
+
+template<class LogEntryType>
+void ObRemoteLogIterator<LogEntryType>::advance_data_gen_lsn_()
+{
+  if (NULL != gen_ && cur_lsn_.is_valid()) {
+    gen_->advance_step_lsn(cur_lsn_);
   }
 }
 

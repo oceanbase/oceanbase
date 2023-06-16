@@ -47,7 +47,8 @@ ObHashDistinctOp::ObHashDistinctOp(ObExecContext &exec_ctx, const ObOpSpec &spec
     hash_values_for_batch_(nullptr),
     build_distinct_data_func_(&ObHashDistinctOp::build_distinct_data),
     build_distinct_data_batch_func_(&ObHashDistinctOp::build_distinct_data_for_batch),
-    bypass_ctrl_()
+    bypass_ctrl_(),
+    mem_context_(NULL)
 {
   enable_sql_dumped_ = GCONF.is_sql_operator_dump_enabled();
 }
@@ -65,6 +66,8 @@ int ObHashDistinctOp::inner_open()
                             ->get_sys_variable(share::SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO,
                                                                             bypass_ctrl_.cut_ratio_))) {
     LOG_WARN("failed to get no pushdown cut ratio", K(ret));
+  } else if (OB_FAIL(init_mem_context())) {
+    LOG_WARN("failed to init mem context", K(ret));
   } else {
     first_got_row_ = true;
     tenant_id_ = ctx_.get_my_session()->get_effective_tenant_id();
@@ -134,6 +137,10 @@ void ObHashDistinctOp::destroy()
 {
   sql_mem_processor_.unregister_profile_if_necessary();
   hp_infras_.~ObHashPartInfrastructure();
+  if (OB_LIKELY(NULL != mem_context_)) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = NULL;
+  }
   ObOperator::destroy();
 }
 
@@ -145,7 +152,7 @@ int ObHashDistinctOp::init_hash_partition_infras()
       &ctx_, MY_SPEC.px_est_size_factor_, est_rows, est_rows))) {
     LOG_WARN("failed to get px size", K(ret));
   } else if (OB_FAIL(sql_mem_processor_.init(
-                  &ctx_.get_allocator(),
+                  &mem_context_->get_malloc_allocator(),
                   tenant_id_,
                   est_rows * MY_SPEC.width_,
                   MY_SPEC.type_,
@@ -778,6 +785,21 @@ int ObHashDistinctOp::process_state(int64_t probe_cnt, bool &can_insert)
     }
     bypass_ctrl_.probe_cnt_ = 0;
     bypass_ctrl_.exists_cnt_ = 0;
+  }
+  return ret;
+}
+
+int ObHashDistinctOp::init_mem_context()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == mem_context_) {
+    lib::ContextParam param;
+    param.set_mem_attr(ctx_.get_my_session()->get_effective_tenant_id(),
+        "ObHashDistRows",
+        ObCtxIds::WORK_AREA);
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
+      LOG_WARN("memory entity create failed", K(ret));
+    }
   }
   return ret;
 }

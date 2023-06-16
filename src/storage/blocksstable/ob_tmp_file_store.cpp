@@ -815,8 +815,6 @@ int64_t ObTmpTenantFileStore::dec_ref()
 
 int ObTmpTenantFileStore::init(const uint64_t tenant_id)
 {
-  auto allocator_attr = SET_USE_500(ObModIds::OB_TMP_BLOCK_MANAGER);
-  auto io_allocator_attr = SET_USE_500(ObModIds::OB_TMP_PAGE_CACHE);
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -825,8 +823,6 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else if (OB_FAIL(io_allocator_.init(OB_MALLOC_BIG_BLOCK_SIZE, ObModIds::OB_TMP_PAGE_CACHE, tenant_id, IO_LIMIT))) {
     STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
-  } else if (FALSE_IT(allocator_.set_attr(allocator_attr))) {
-  } else if (FALSE_IT(io_allocator_.set_attr(io_allocator_attr))) {
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "fail to get the page cache", K(ret));

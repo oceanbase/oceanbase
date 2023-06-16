@@ -1083,7 +1083,8 @@ int ObStartLSRestoreTask::update_ls_meta_()
   } else if (OB_FAIL(ls->update_ls_meta(false/*don't update restore status*/,
                                         ctx_->src_ls_meta_package_.ls_meta_))) {
     LOG_WARN("fail to update ls meta", K(ret), KPC(ls), KPC(ctx_));
-  } else if (OB_FAIL(ls->set_dup_table_ls_meta(ctx_->src_ls_meta_package_.dup_ls_meta_))) {
+  } else if (OB_FAIL(ls->set_dup_table_ls_meta(ctx_->src_ls_meta_package_.dup_ls_meta_,
+                                               true /*need_flush_slog*/))) {
     LOG_WARN("fail to set dup table ls meta", K(ret), KPC(ctx_));
   } else {
     LOG_INFO("update ls meta succeed", KPC(ls), KPC(ctx_));

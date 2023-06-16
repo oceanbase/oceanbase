@@ -61,6 +61,7 @@ public:
 public:
   ObDupTableLSTsSyncMgr() : ts_sync_diag_info_log_buf_(nullptr) {}
   int init(ObDupTableLSHandler *dup_ls_handle);
+  int offline();
 
   void reset()
   {
@@ -109,6 +110,8 @@ public:
 
   int get_lease_mgr_stat(ObDupLSLeaseMgrStatIterator &collect_iter,
                          FollowerLeaseMgrStatArr &arr);
+
+  TO_STRING_KV(K(ls_id_), K(ts_info_cache_.size()));
 private:
   int clean_ts_info_cache_();
   int request_ts_info_by_rpc_(const common::ObAddr &addr, const share::SCN &leader_commit_scn);

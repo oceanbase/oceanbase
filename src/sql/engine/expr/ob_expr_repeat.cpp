@@ -46,7 +46,9 @@ int ObExprRepeat::calc_result_type2(ObExprResType &type,
                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  text.set_calc_type(common::ObVarcharType);
+  if (!ob_is_text_tc(text.get_type())) {
+    text.set_calc_type(common::ObVarcharType);
+  }
   count.set_calc_type(common::ObIntType);
   // Set cast mode for %count parameter, truncate string to integer.
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
@@ -278,6 +280,9 @@ int ObExprRepeat::eval_repeat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
   ObDatum *text = NULL;
   ObDatum *count = NULL;
   int64_t max_size = 0;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObString text_str;
   if (OB_FAIL(expr.args_[0]->eval(ctx, text))
       || OB_FAIL(expr.args_[1]->eval(ctx, count))) {
     LOG_WARN("evaluate parameters failed", K(ret));
@@ -285,6 +290,9 @@ int ObExprRepeat::eval_repeat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
     expr_datum.set_null();
   } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_max_allowed_packet(max_size))) {
     LOG_WARN("get max length failed", K(ret));
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *text,
+                     expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), text_str))) {
+    LOG_WARN("fail to get real data.", K(ret), K(text_str));
   } else {
     ObExprStrResAlloc expr_res_alloc(expr, ctx);
     bool is_null = false;
@@ -292,10 +300,10 @@ int ObExprRepeat::eval_repeat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
     ObString output;
     if (!ob_is_text_tc(expr.datum_meta_.type_)) {
       ret = repeat(output, is_null,
-                   text->get_string(), count->get_int(), expr_res_alloc, max_size);
+                   text_str, count->get_int(), expr_res_alloc, max_size);
     } else { // text tc
       ret = repeat_text(expr.datum_meta_.type_, has_lob_header, output, is_null,
-                        text->get_string(), count->get_int(), expr_res_alloc, max_size);
+                        text_str, count->get_int(), expr_res_alloc, max_size);
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("do repeat failed", K(ret));

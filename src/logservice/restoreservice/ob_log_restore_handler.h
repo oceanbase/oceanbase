@@ -85,35 +85,11 @@ enum class RestoreSyncStatus {
   RESTORE_SYNC_CHECK_NETWORK = 6,
   RESTORE_SYNC_FETCH_LOG_TIME_OUT = 7,
   RESTORE_SYNC_SUSPEND = 8,
-  RESTORE_SYNC_NOT_AVAILABLE = 9,
+  RESTORE_SYNC_STANDBY_NEED_UPGRADE = 9,
+  RESTORE_SYNC_PRIMARY_IS_DROPPED = 10,
+  RESTORE_SYNC_NOT_AVAILABLE = 11,
   MAX_RESTORE_SYNC_STATUS
 };
-
-inline int restore_sync_status_to_string(const RestoreSyncStatus status, char *str_buf_, const int64_t str_len)
-{
-  int ret = OB_SUCCESS;
-  if (RestoreSyncStatus::RESTORE_SYNC_NORMAL == status) {
-    strncpy(str_buf_, "NORMAL", str_len);
-  } else if (RestoreSyncStatus::RESTORE_SYNC_SOURCE_HAS_A_GAP == status) {
-    strncpy(str_buf_, "SOURCE HAS A GAP", str_len);
-  } else if (RestoreSyncStatus::RESTORE_SYNC_SUBMIT_LOG_NOT_MATCH == status
-    || RestoreSyncStatus::RESTORE_SYNC_FETCH_LOG_NOT_MATCH == status) {
-    strncpy(str_buf_, "STANDBY LOG NOT MATCH", str_len);
-  } else if (RestoreSyncStatus::RESTORE_SYNC_CHECK_USER_OR_PASSWORD == status) {
-    strncpy(str_buf_, "CHECK USER OR PASSWORD", str_len);
-  } else if (RestoreSyncStatus::RESTORE_SYNC_CHECK_NETWORK == status) {
-    strncpy(str_buf_, "CHECK NETWORK", str_len);
-  } else if (RestoreSyncStatus::RESTORE_SYNC_FETCH_LOG_TIME_OUT == status) {
-    strncpy(str_buf_, "FETCH LOG TIMEOUT", str_len);
-  } else if (RestoreSyncStatus::RESTORE_SYNC_SUSPEND == status) {
-    strncpy(str_buf_, "RESTORE SUSPEND", str_len);
-  } else if (RestoreSyncStatus::RESTORE_SYNC_NOT_AVAILABLE == status) {
-    strncpy(str_buf_, "NOT AVAILABLE", str_len);
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-  }
-  return ret;
-}
 
 struct RestoreStatusInfo
 {
@@ -122,6 +98,7 @@ public:
   ~RestoreStatusInfo() { reset(); }
   bool is_valid() const;
   void reset();
+  int restore_sync_status_to_string(char *str_buf, const int64_t str_len);
   TO_STRING_KV(K_(ls_id), K_(sync_lsn), K_(sync_scn), K_(sync_status), K_(err_code), K_(comment));
 
 public:

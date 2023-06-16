@@ -7863,41 +7863,41 @@ int ObPLCodeGenerator::generate_out_param(
           (PL_EXECUTE == s.get_type() && param_desc.at(i).is_pure_out())) {
         // 对于INOUT参数, execute immediate复杂类型传递的是指针, 什么都不需要做; inner call场景, inout参数会入参会深拷，这里需要重新拷回
         // 对于OUT参数, 复杂类型构造了新的ObjParam, 这里进行COPY;
-        ObLLVMValue into_address;
-        ObLLVMValue allocator;
-        ObLLVMValue src_datum;
-        ObLLVMValue dest_datum;
-        OZ (extract_objparam_from_context(
-          get_vars().at(CTX_IDX), param_desc.at(i).out_idx_, into_address));
-        if (pl_type.is_collection_type()) {
-          ObLLVMValue dest_collection;
-          OZ (extract_extend_from_objparam(into_address, pl_type, dest_collection));
-          OZ (extract_allocator_from_collection(dest_collection, allocator));
+        if (PL_CALL == s.get_type() &&
+            static_cast<const ObPLCallStmt *>(&s)->get_nocopy_params().count() > i &&
+            OB_INVALID_INDEX != static_cast<const ObPLCallStmt *>(&s)->get_nocopy_params().at(i) &&
+            !param_desc.at(i).is_pure_out()) {
+            // inner call nocopy的inout参数传递是指针, 无需重新拷贝
         } else {
-          OZ (generate_null(ObIntType, allocator));
-        }
-        OZ (extract_obobj_ptr_from_objparam(into_address, dest_datum));
-        OZ (extract_obobj_ptr_from_objparam(p_arg, src_datum));
-        OZ (pl_type.generate_copy(*this,
-                                  *(s.get_namespace()),
-                                  allocator,
-                                  src_datum,
-                                  dest_datum,
-                                  s.get_block()->in_notfound(),
-                                  s.get_block()->in_warning(),
-                                  OB_INVALID_ID));
-        if (OB_FAIL(ret)) {
-        } else if (PL_CALL == s.get_type()) {
-          const ObPLCallStmt *call_stmt = static_cast<const ObPLCallStmt *>(&s);
-          if (call_stmt->get_nocopy_params().count() > i &&
-              OB_INVALID_INDEX != call_stmt->get_nocopy_params().at(i) &&
-              !param_desc.at(i).is_pure_out()) {
-            // inner call nocopy的inout参数传递是指针, 无需释放
+          ObLLVMValue into_address;
+          ObLLVMValue allocator;
+          ObLLVMValue src_datum;
+          ObLLVMValue dest_datum;
+          OZ (extract_objparam_from_context(
+            get_vars().at(CTX_IDX), param_desc.at(i).out_idx_, into_address));
+          if (pl_type.is_collection_type()) {
+            ObLLVMValue dest_collection;
+            OZ (extract_extend_from_objparam(into_address, pl_type, dest_collection));
+            OZ (extract_allocator_from_collection(dest_collection, allocator));
           } else {
+            OZ (generate_null(ObIntType, allocator));
+          }
+          OZ (extract_obobj_ptr_from_objparam(into_address, dest_datum));
+          OZ (extract_obobj_ptr_from_objparam(p_arg, src_datum));
+          OZ (pl_type.generate_copy(*this,
+                                    *(s.get_namespace()),
+                                    allocator,
+                                    src_datum,
+                                    dest_datum,
+                                    s.get_block()->in_notfound(),
+                                    s.get_block()->in_warning(),
+                                    OB_INVALID_ID));
+          if (OB_FAIL(ret)) {
+          } else if (PL_CALL == s.get_type()) {
+            OZ (generate_destruct_obj(s, src_datum));
+          } else if (PL_EXECUTE == s.get_type() && param_desc.at(i).is_pure_out()) {
             OZ (generate_destruct_obj(s, src_datum));
           }
-        } else if (PL_EXECUTE == s.get_type() && param_desc.at(i).is_pure_out()) {
-          OZ (generate_destruct_obj(s, src_datum));
         }
       }
     } else { //处理基础类型的出参
@@ -7978,6 +7978,19 @@ int ObPLCodeGenerator::generate_out_param(
                                     s.get_block()->in_notfound(),
                                     s.get_block()->in_warning(),
                                     package_id));
+        if (OB_FAIL(ret)) {
+        } else if (PL_CALL == s.get_type()) {
+          const ObPLCallStmt *call_stmt = static_cast<const ObPLCallStmt *>(&s);
+          if (call_stmt->get_nocopy_params().count() > i &&
+              OB_INVALID_INDEX != call_stmt->get_nocopy_params().at(i) &&
+              !param_desc.at(i).is_pure_out()) {
+            // inner call nocopy的inout参数传递是指针, 无需释放
+          } else {
+            OZ (generate_destruct_obj(s, src_datum));
+          }
+        } else if (PL_EXECUTE == s.get_type() && param_desc.at(i).is_pure_out()) {
+          OZ (generate_destruct_obj(s, src_datum));
+        }
       }
       if (OB_SUCC(ret) && package_id != OB_INVALID_ID && var_idx != OB_INVALID_ID) {
         OZ (generate_update_package_changed_info(s, package_id, var_idx));

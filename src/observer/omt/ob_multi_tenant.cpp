@@ -210,10 +210,10 @@ bool equal_with_tenant_id(const ObTenant *lhs,
   return NULL != lhs ? (lhs->id() == tenant_id) : false;
 }
 
-int ObCtxMemConfigGetter::get(common::ObIArray<ObCtxMemConfig> &configs, int64_t tenant_limit)
+int ObCtxMemConfigGetter::get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs)
 {
   int64_t ret = OB_SUCCESS;
-  {
+  if (tenant_id > OB_USER_TENANT_ID) {
     ObCtxMemConfig cfg;
     cfg.ctx_id_ = ObCtxIds::WORK_AREA;
     cfg.idle_size_ = 0;
@@ -459,6 +459,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(server_obj_pool_mtl_new<ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObPartTransCtx>);
     MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
     MTL_BIND(ObDetectManager::mtl_init, ObDetectManager::mtl_destroy);
+    MTL_BIND(ObTenantSQLSessionMgr::mtl_init, ObTenantSQLSessionMgr::mtl_destroy);
     if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
       MTL_BIND2(nullptr, nullptr, start_mysql_queue, mtl_stop_default,
                 mtl_wait_default, mtl_destroy_default);
@@ -793,7 +794,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   }
   if (OB_SUCC(ret)) {
     ObSEArray<ObCtxMemConfig, ObCtxIds::MAX_CTX_ID> configs;
-    if (OB_FAIL(mcg_->get(configs, allowed_mem_limit))) {
+    if (OB_FAIL(mcg_->get(tenant_id, allowed_mem_limit, configs))) {
       LOG_ERROR("get ctx mem config failed", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < configs.count(); i++) {
@@ -1456,12 +1457,14 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       SpinWLockGuard guard(lock_); //add a lock when set tenant stop, omt will check tenant has stop before calling timeup()
       removed_tenant->stop();
     }
-    LOG_INFO("removed_tenant begin to kill tenant session", K(tenant_id));
-    if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
-      LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
-      {
-        SpinWLockGuard guard(lock_);
-        removed_tenant->start();
+    if (!is_virtual_tenant_id(tenant_id)) {
+      LOG_INFO("removed_tenant begin to kill tenant session", K(tenant_id));
+      if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
+        LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
+        {
+          SpinWLockGuard guard(lock_);
+          removed_tenant->start();
+        }
       }
     }
   }
@@ -1486,6 +1489,12 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
         LOG_WARN("must be same tenant", K(tenant_id), K(ret));
       } else {
         remove_tenant_succ = true;
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(GCTX.dblink_proxy_)) {
+      if (OB_FAIL(GCTX.dblink_proxy_->clean_dblink_connection(tenant_id))) {
+        LOG_WARN("failed to clean dblink connection", K(ret), K(tenant_id));
       }
     }
 
@@ -1562,11 +1571,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
   if (OB_SUCC(ret)) {
     if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_tenant_interm_result_info(tenant_id))) {
       LOG_WARN("failed to erase_tenant_interm_result_info", K(ret), K(tenant_id));
-    }
-  }
-  if (OB_SUCC(ret) && OB_NOT_NULL(GCTX.dblink_proxy_)) {
-    if (OB_FAIL(GCTX.dblink_proxy_->clean_dblink_connection(tenant_id))) {
-      LOG_WARN("failed to clean dblink connection", K(ret), K(tenant_id));
     }
   }
   return ret;

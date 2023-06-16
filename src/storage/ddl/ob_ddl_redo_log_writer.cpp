@@ -1190,6 +1190,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
   ObLSID ls_id;
   SCN ddl_start_scn = get_start_scn();
   SCN commit_scn = SCN::min_scn();
+  bool is_remote_write = false;
   if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_UNLIKELY(!table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls", K(ret), K(table_key));
@@ -1198,7 +1199,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     LOG_WARN("get tablet failed", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, true, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
+  } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, true, table_key, commit_scn, is_remote_write))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(table_key), K(table_id), K(execution_id), K(ddl_task_id));
     } else {
@@ -1219,17 +1220,18 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(ddl_start_scn,
-                                                             commit_scn,
-                                                             table_id,
-                                                             ddl_task_id))) {
+  } else if (is_remote_write) {
+    LOG_INFO("ddl commit log is written in remote, need wait replay", K(ddl_task_id), K(tablet_id), K(ddl_start_scn), K(commit_scn));
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(ddl_start_scn, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
           K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
     } else {
       LOG_WARN("failed to do ddl kv commit", K(ret), K(ddl_start_scn), K(commit_scn));
     }
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_merge_success(ddl_start_scn, commit_scn, table_id, ddl_task_id))) {
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_merge_success(ddl_start_scn, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
           K(ddl_start_scn), "new_ddl_start_scn",
@@ -1342,22 +1344,18 @@ int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
                                              ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                                              const bool allow_remote_write,
                                              const ObITable::TableKey &table_key,
-                                             const int64_t table_id,
-                                             const int64_t execution_id,
-                                             const int64_t ddl_task_id,
-                                             SCN &commit_scn)
+                                             SCN &commit_scn,
+                                             bool &is_remote_write)
 
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("storage_ddl", "before_write_prepare_log",
-                        "table_key", table_key,
-                        "table_id", table_id,
-                        "execution_id", execution_id,
-                        "ddl_task_id", ddl_task_id);
+                        "table_key", table_key);
   DEBUG_SYNC(BEFORE_DDL_WRITE_PREPARE_LOG);
 #endif
   commit_scn.set_min();
+  is_remote_write = false;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObDDLCommitLog log;
@@ -1392,10 +1390,12 @@ int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
   }
   if (OB_SUCC(ret) && remote_write_) {
     obrpc::ObRpcRemoteWriteDDLCommitLogArg arg;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), table_id, execution_id, ddl_task_id))) {
+    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn()))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLCommitLogArg", K(ret));
     } else if (OB_FAIL(retry_remote_write_ddl_clog( [&]() { return remote_write_commit_log(arg, commit_scn); }))) {
       LOG_WARN("remote write ddl commit log failed", K(ret), K(arg));
+    } else {
+      is_remote_write = !(leader_addr_ == GCTX.self_addr());
     }
   }
   return ret;

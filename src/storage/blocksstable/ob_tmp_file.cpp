@@ -1159,12 +1159,11 @@ ObTmpFileManager &ObTmpFileManager::get_instance()
 int ObTmpFileManager::init()
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr = SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_TMP_FILE_MANAGER)); //TODO: split tmp file map into each tenant.
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
-  } else if (OB_FAIL(files_.init(DEFAULT_BUCKET_NUM, OB_SERVER_TENANT_ID,
-      ObModIds::OB_TMP_FILE_MANAGER,
-      TOTAL_LIMIT, HOLD_LIMIT, BLOCK_SIZE))) {
+  } else if (OB_FAIL(files_.init(DEFAULT_BUCKET_NUM, attr, TOTAL_LIMIT, HOLD_LIMIT, BLOCK_SIZE))) {
     STORAGE_LOG(WARN, "fail to init map for temporary files", K(ret));
   } else if (OB_FAIL(OB_TMP_FILE_STORE.init())) {
     STORAGE_LOG(WARN, "fail to init the block manager for temporary files", K(ret));

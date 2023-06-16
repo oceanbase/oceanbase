@@ -1363,9 +1363,9 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
         if (desc_snapshot.is_valid()) {
           snapshot_version = desc_snapshot;
         }
-        MVCC_LOG(DEBUG, "RR/SI txn with tx_desc", K(MTL_ID()), KPC(tx_desc), KPC(sess_info),
+        MVCC_LOG(DEBUG, "RR/SI txn with tx_desc", K(MTL_ID()), KPC(sess_info),
                  K(snapshot_version), K(min_active_snapshot_version_), K(desc_snapshot),
-                 K(sess_snapshot));
+                 K(sess_snapshot), K(desc_snapshot));
       } else if (transaction::ObTxIsolationLevel::RC == tx_desc->get_isolation_level()) {
         // Case 2: RC with tx desc exists, it may exists that snapshot is get from
         // the executor and not maintained in the session and tx desc. So we need
@@ -1382,16 +1382,17 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
             snapshot_version.convert_from_ts(sess_info->get_cur_state_start_time()
                                              - 5L * 1000L * 1000L * 60L);
             MVCC_LOG(INFO, "RC txn with tx_desc while from session start time",
-                     K(MTL_ID()), KPC(tx_desc), KPC(sess_info), K(snapshot_version),
-                     K(min_active_snapshot_version_), K(sess_info->get_cur_state_start_time()));
+                     K(MTL_ID()), KPC(sess_info), K(snapshot_version),
+                     K(min_active_snapshot_version_),
+                     K(sess_info->get_cur_state_start_time()));
           }
         }
-        MVCC_LOG(DEBUG, "RC txn with tx_desc", K(MTL_ID()), KPC(tx_desc), KPC(sess_info),
+        MVCC_LOG(DEBUG, "RC txn with tx_desc", K(MTL_ID()), KPC(sess_info),
                  K(snapshot_version), K(min_active_snapshot_version_), K(desc_snapshot),
-                 K(sess_snapshot));
+                 K(sess_snapshot), K(desc_snapshot));
       } else {
-        MVCC_LOG(INFO, "unknown txn with tx_desc", K(MTL_ID()), KPC(tx_desc), KPC(sess_info),
-                 K(snapshot_version), K(min_active_snapshot_version_));
+        MVCC_LOG(INFO, "unknown txn with tx_desc", K(MTL_ID()), KPC(sess_info),
+                 K(snapshot_version), K(min_active_snapshot_version_), K(desc_snapshot));
       }
     } else {
       share::SCN sess_snapshot = sess_info->get_reserved_snapshot_version();

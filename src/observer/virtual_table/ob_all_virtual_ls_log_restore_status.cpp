@@ -174,8 +174,7 @@ int ObVirtualLSLogRestoreStatus::insert_ls_restore_status_info_(logservice::Rest
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 6: {
-        if (OB_FAIL(restore_sync_status_to_string(restore_status_info.sync_status_, restore_status_str_,
-            sizeof(restore_status_str_)))) {
+        if (OB_FAIL(restore_status_info.restore_sync_status_to_string(restore_status_str_, sizeof(restore_status_str_)))) {
           SERVER_LOG(WARN, "restore_sync_status to string failed", K(restore_status_info));
         } else {
           cur_row_.cells_[i].set_varchar(ObString::make_string(restore_status_str_));

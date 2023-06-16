@@ -357,11 +357,7 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
       if (!is_right_border || range.get_end_key().is_max_rowkey()) {
         end_idx = sorted_rowkeys_.count() - 1;
       } else {
-        if (range.is_right_closed()) {
-          end_idx = std::lower_bound(sorted_rowkeys_.begin(), sorted_rowkeys_.end(), range.get_end_key(), cmp) - sorted_rowkeys_.begin();
-        } else {
-          end_idx = std::upper_bound(sorted_rowkeys_.begin(), sorted_rowkeys_.end(), range.get_end_key(), cmp) - sorted_rowkeys_.begin();
-        }
+        end_idx = std::lower_bound(sorted_rowkeys_.begin(), sorted_rowkeys_.end(), range.get_end_key(), cmp) - sorted_rowkeys_.begin();
         if (sorted_rowkeys_.count() == end_idx) {
           end_idx = sorted_rowkeys_.count() - 1;
         }
@@ -579,7 +575,7 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
     } else {
       min_scn_ = SCN::min(min_scn_, macro_block.scn_);
       max_scn_ = SCN::max(max_scn_, macro_block.scn_);
-      LOG_INFO("succeed to set macro block into ddl kv", K(macro_block));
+      LOG_INFO("succeed to set macro block into ddl kv", K(macro_block), KPC(data_macro_meta));
     }
   }
   return ret;

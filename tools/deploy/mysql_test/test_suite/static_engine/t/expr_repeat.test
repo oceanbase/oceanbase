@@ -33,7 +33,18 @@ select repeat(1.414, 2);
 --error 1301
 select repeat("abc", 200000000);
 
+--error 0,1051
+drop table t2;
+create table t2 as select repeat('a', 512),repeat('a', 513),repeat('a',32767),repeat('a',32768),repeat('a',65535),repeat('a',65536) from dual;
+desc t2;
+drop table t2;
+
 --enable_warnings
+
+create table t2(c1 text, c2 mediumtext, c3 longtext);
+insert into t2 values('a','b','c');
+select repeat(c1, 10),repeat(c2,10),repeat(c3,10) from t2;
+drop table t2;
 
 connection syscon;
 --sleep 2

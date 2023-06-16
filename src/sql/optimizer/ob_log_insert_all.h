@@ -48,8 +48,7 @@ public:
   { insert_all_table_info_ = insert_all_table_info; }
   inline const common::ObIArray<ObInsertAllTableInfo*> *get_insert_all_table_info() const
   { return insert_all_table_info_; }
-  virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 protected:
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;

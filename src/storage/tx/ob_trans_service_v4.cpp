@@ -252,11 +252,11 @@ int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx)
     // build msg fail won't cause commit fail, later driven by retry timer
   } else if (OB_TMP_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
     TRANS_LOG(WARN, "post tx commit msg fail", K(tmp_ret), K(tx), K(commit_msg));
-    if (is_location_service_renew_error(tmp_ret)) {
-      // send msg fail won't cause commit fail, later driven by retry timer
-    } else if (DELETED_UNRETRYABLE_ERROR(tmp_ret)) {
+    if (DELETED_UNRETRYABLE_ERROR(tmp_ret)) {
       ret = tx.commit_times_ > 0 ? OB_TRANS_UNKNOWN : OB_TRANS_KILLED;
-    } else { ret = tmp_ret; }
+    } else {
+      // retryable error : location incorrect, server shutdown etc.
+    }
   } else {
     post_succ = true;
     ++tx.commit_times_;
@@ -3397,6 +3397,49 @@ int ObTransService::handle_trans_collect_state_response(const ObCollectStateResp
   }
   result.reset();
   result.init(ret, msg.get_timestamp());
+  return ret;
+}
+
+void ObTransService::register_standby_cleanup_task()
+{
+  int ret = OB_SUCCESS;
+  ObTxStandbyCleanupTask *task = nullptr;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_ISNULL(task = static_cast<ObTxStandbyCleanupTask *>(
+    share::mtl_malloc(sizeof(ObTxStandbyCleanupTask), "standby_cleanup")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "alloc ObTxStandbyCleanupTask failed", K(ret));
+  } else if (OB_FALSE_IT(new (task) ObTxStandbyCleanupTask())) {
+  } else if (OB_FAIL(push(task))) {
+    TRANS_LOG(WARN, "push ObTxStandbyCleanupTask failed", K(ret));
+  } else {
+    TRANS_LOG(INFO, "push ObTxStandbyCleanupTask success");
+  }
+}
+
+int ObTransService::do_standby_cleanup()
+{
+  int ret = OB_SUCCESS;
+  common::ObTimeGuard timeguard("do standby cleanup", 1);
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(tx_ctx_mgr_.do_all_ls_standby_cleanup(timeguard))) {
+    TRANS_LOG(WARN, "iterate tx stat error", KR(ret));
+  } else {
+    // do nothing
+  }
+
   return ret;
 }
 

@@ -63,16 +63,73 @@ public:
     return update_loop_ts(common::ObTimeUtility::fast_current_time());
   }
 public:
+  class BaseWaitGuard
+  {
+  public:
+    OB_INLINE explicit BaseWaitGuard() : last_ts_(blocking_ts_)
+    {
+      blocking_ts_ = common::ObTimeUtility::fast_current_time();
+    }
+    ~BaseWaitGuard()
+    {
+      blocking_ts_ = last_ts_;
+    }
+  private:
+    int64_t last_ts_;
+  };
+  class WaitGuard : public BaseWaitGuard
+  {
+  public:
+    OB_INLINE explicit WaitGuard(uint8_t type) : type_(type)
+    {
+      wait_event_ |= type;
+    }
+    ~WaitGuard()
+    {
+      wait_event_ &= ~type_;
+    }
+  private:
+    uint8_t type_;
+  };
+  class JoinGuard : public BaseWaitGuard
+  {
+  public:
+    OB_INLINE explicit JoinGuard(pthread_t thread)
+    {
+      thread_joined_ = thread;
+    }
+    ~JoinGuard()
+    {
+      thread_joined_ = 0;
+    }
+  };
+  class RpcGuard : public BaseWaitGuard
+  {
+  public:
+    OB_INLINE explicit RpcGuard(const easy_addr_t& addr)
+    {
+      IGNORE_RETURN new (&rpc_dest_addr_) ObAddr(addr);
+    }
+    OB_INLINE explicit RpcGuard(const ObAddr& addr)
+    {
+      IGNORE_RETURN new (&rpc_dest_addr_) ObAddr(addr);
+    }
+    ~RpcGuard()
+    {
+      rpc_dest_addr_.reset();
+    }
+  };
+
   static constexpr uint8_t WAIT                 = (1 << 0);
   static constexpr uint8_t WAIT_IN_TENANT_QUEUE = (1 << 1);
   static constexpr uint8_t WAIT_FOR_IO_EVENT    = (1 << 2);
-  static constexpr uint8_t WAIT_FOR_TRANS_RETRY = (1 << 3);
   // for thread diagnose, maybe replace it with union later.
   static thread_local int64_t loop_ts_;
   static thread_local pthread_t thread_joined_;
   static thread_local int64_t sleep_us_;
-  static thread_local uint8_t is_blocking_;
+  static thread_local int64_t blocking_ts_;
   static thread_local ObAddr rpc_dest_addr_;
+  static thread_local uint8_t wait_event_;
 private:
   static void* __th_start(void *th);
   void destroy_stack();

@@ -48,7 +48,7 @@ namespace logservice
 {
 using namespace oceanbase::share;
 
-const char *type_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS)] = {
+const char *restore_comment_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS)] = {
   "Invalid restore status",
   " ",
   "There is a gap between the log source and standby",
@@ -58,7 +58,24 @@ const char *type_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS
   "Log source is unreachable, the log source access point may be unavailable",
   "Fetch log time out",
   "Restore suspend, the standby has synchronized to recovery until scn",
+  "Standby binary version is lower than primary data version, standby need upgrade",
+  "Primary tenant has been dropped",
   "Unexpected exceptions",
+};
+
+const char *restore_status_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS)] = {
+  "INVALID RESTORE STATUS",
+  "NORMAL",
+  "SOURCE HAS A GAP",
+  "STANDBY LOG NOT MATCH",
+  "STANDBY LOG NOT MATCH",
+  "CHECK USER OR PASSWORD",
+  "CHECK NETWORK",
+  "FETCH LOG TIMEOUT",
+  "RESTORE SUSPEND",
+  "STANDBY NEED UPGRADE",
+  "PRIMARY TENANT DROPPED",
+  "NOT AVAILABLE",
 };
 
 ObLogRestoreHandler::ObLogRestoreHandler() :
@@ -920,7 +937,7 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
     restore_status_info.err_code_ = ret_code;
     restore_status_info.sync_lsn_ = lsn.val_;
     restore_status_info.sync_scn_ = scn;
-    if (OB_FAIL(restore_status_info.comment_.assign_fmt("%s", type_str[int(restore_status_info.sync_status_)]))) {
+    if (OB_FAIL(restore_status_info.comment_.assign_fmt("%s", restore_comment_str[int(restore_status_info.sync_status_)]))) {
       CLOG_LOG(WARN, "fail to assign comment", K(sync_status));
     } else {
       CLOG_LOG(TRACE, "success to get error code and message", K(restore_status_info));
@@ -964,6 +981,14 @@ int ObLogRestoreHandler::get_err_code_and_message_(int ret_code,
   else if (OB_TIMEOUT == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
     sync_status = RestoreSyncStatus::RESTORE_SYNC_FETCH_LOG_TIME_OUT;
   }
+  // RESTORE_SYNC_STANDBY_NEED_UPGRADE
+  else if (OB_ERR_RESTORE_STANDBY_VERSION_LAG == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_STANDBY_NEED_UPGRADE;
+  }
+  // RESTORE_SYNC_PRIMARY_IS_DROPPED
+  else if (OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_PRIMARY_IS_DROPPED;
+  }
   // RESTORE_SYNC_NOT_AVAILABLE
   else if (OB_SUCCESS != ret_code) {
     sync_status = RestoreSyncStatus::RESTORE_SYNC_NOT_AVAILABLE;
@@ -990,6 +1015,22 @@ void RestoreStatusInfo::reset()
   sync_status_ = RestoreSyncStatus::INVALID_RESTORE_SYNC_STATUS;
   err_code_ = OB_SUCCESS;
   comment_.reset();
+}
+
+int RestoreStatusInfo::restore_sync_status_to_string(char *str_buf, const int64_t str_len)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_RESTORE_STATUS_STR_LEN = 32;
+  if (OB_ISNULL(str_buf)
+    || str_len < MAX_RESTORE_STATUS_STR_LEN
+    || sync_status_ <= RestoreSyncStatus::INVALID_RESTORE_SYNC_STATUS
+    || sync_status_ >= RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid restore status", K(sync_status_));
+  } else if (databuff_printf(str_buf, str_len, "%s", restore_status_str[int(sync_status_)])) {
+    CLOG_LOG(WARN, "databuff printf restore status str failed", K(sync_status_));
+  }
+  return ret;
 }
 
 bool RestoreStatusInfo::is_valid() const

@@ -384,8 +384,7 @@ int ObJoinOrder::compute_sharding_info_for_base_path(ObIArray<AccessPath *> &acc
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (table_schema->is_external_table()) {
-    int64_t parallel = opt_ctx->is_use_table_dop() ? table_schema->get_dop() :opt_ctx->get_parallel();
-    if (parallel > 1
+    if (path->parallel_ > 1
         || ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location())) {
       sharding_info = opt_ctx->get_distributed_sharding();
     } else {

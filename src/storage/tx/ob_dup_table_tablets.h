@@ -1,4 +1,4 @@
-// Copyrigh (c) 2021 OceanBase
+// Copyrigh(c) 2021 OceanBase
 // OceanBase is licensed under Mulan PubL v2.
 // You can use this software according to the terms and conditions of the Mulan PubL v2.
 // You may obtain a copy of Mulan PubL v2 at:
@@ -154,8 +154,8 @@ public:
   bool is_confirming() const { return flag_ == DupTabletSetChangeFlag::CONFIRMING; }
   bool can_be_confirmed_anytime() const
   {
-    return (trx_ref_ == 0 && readable_version_ >= need_confirm_scn_
-            && flag_ == DupTabletSetChangeFlag::CONFIRMING)
+    return (trx_ref_ == 0 && readable_version_ >= need_confirm_scn_ && readable_version_.is_valid()
+            && need_confirm_scn_.is_valid() && flag_ == DupTabletSetChangeFlag::CONFIRMING)
            || flag_ == DupTabletSetChangeFlag::CONFIRMED;
   }
   bool has_confirmed() const { return DupTabletSetChangeFlag::CONFIRMED == flag_; }
@@ -502,6 +502,8 @@ public:
 
   bool is_master() { return ATOMIC_LOAD(&is_master_); }
 
+  int offline();
+
   const static int64_t MAX_CONFIRMING_TABLET_COUNT;
 
 public:
@@ -548,6 +550,9 @@ public:
   int64_t get_dup_tablet_count();
   bool has_dup_tablet();
   int64_t get_readable_tablet_set_count();
+  int64_t get_need_confirm_tablet_set_count();
+  bool check_removing_tablet_exist();
+  bool check_changing_new_tablet_exist();
   int64_t get_all_tablet_set_count();
 
   int leader_takeover(const bool is_resume, const bool recover_all_readable_from_ckpt);
@@ -693,6 +698,7 @@ private:
 
   int cal_single_set_max_ser_size_(DupTabletChangeMap *hash_map,
                                    int64_t &max_ser_size,
+                                   const int64_t ser_size_limit,
                                    DupTabletSetIDArray &id_array);
 
   int merge_into_readable_tablets_(DupTabletChangeMap *change_map_ptr, const bool for_replay);

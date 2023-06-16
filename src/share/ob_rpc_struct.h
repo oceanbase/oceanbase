@@ -8359,14 +8359,10 @@ public:
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
            const storage::ObITable::TableKey &table_key,
-           const share::SCN &start_scn,
-           const int64_t table_id,
-           const int64_t execution_id,
-           const int64_t ddl_task_id);
+           const share::SCN &start_scn);
   bool is_valid() const
   {
-    return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid_and_not_min()
-           && table_id_ > 0 && execution_id_ >= 0 && ddl_task_id_ > 0;
+    return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid_and_not_min();
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(table_id),
                K_(execution_id), K_(ddl_task_id));
@@ -8375,9 +8371,9 @@ public:
   share::ObLSID ls_id_;
   storage::ObITable::TableKey table_key_;
   share::SCN start_scn_;
-  int64_t table_id_;
-  int64_t execution_id_;
-  int64_t ddl_task_id_;
+  int64_t table_id_; // depercated
+  int64_t execution_id_; // depercated
+  int64_t ddl_task_id_; // depercated
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLCommitLogArg);
 };

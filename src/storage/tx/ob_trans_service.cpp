@@ -516,6 +516,17 @@ void ObTransService::handle(void *task)
         mtl_free(advance_ckpt_task);
         advance_ckpt_task = nullptr;
       }
+    } else if (ObTransRetryTaskType::STANDBY_CLEANUP_TASK == trans_task->get_task_type()) {
+      ObTxStandbyCleanupTask *standby_cleanup_task = static_cast<ObTxStandbyCleanupTask *>(trans_task);
+      if (OB_ISNULL(standby_cleanup_task)) {
+        TRANS_LOG(WARN, "standby cleanup task is null");
+      } else if (OB_FAIL(do_standby_cleanup())) {
+        TRANS_LOG(WARN, "do standby cleanup failed", K(ret));
+      }
+      if (OB_NOT_NULL(standby_cleanup_task)) {
+        mtl_free(standby_cleanup_task);
+        standby_cleanup_task = nullptr;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected trans task type!!!", KR(ret), K(*trans_task));
@@ -619,7 +630,6 @@ int ObTransService::remove_callback_for_uncommited_txn(
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(!is_running_)) {
     TRANS_LOG(WARN, "ObTransService is not running");
-    ret = OB_NOT_RUNNING;
   } else if (OB_ISNULL(memtable_set)) {
     TRANS_LOG(WARN, "memtable is NULL");
     ret = OB_INVALID_ARGUMENT;

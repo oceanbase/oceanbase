@@ -796,6 +796,11 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         SQL_RESV_LOG(WARN, "uk and pk is duplicate", K(ret));
       }
     }
+    if (OB_SUCC(ret)){
+      if (OB_FAIL(deep_copy_string_in_part_expr(create_table_stmt))) {
+        LOG_WARN("failed to deep copy string in part expr");
+      }
+    }
   }
   return ret;
 }
@@ -1908,6 +1913,13 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               } else if (column.is_enum_or_set()) {
                 if (OB_FAIL(org_column->set_extended_type_info(column.get_extended_type_info()))) {
                   LOG_WARN("set enum or set info failed", K(ret), K(*expr));
+                }
+              } else if (is_oracle_mode() && column.is_xmltype()) {
+                org_column->set_sub_data_type(T_OBJ_XML);
+                // udt column is varbinary used for null bitmap
+                org_column->set_udt_set_id(gen_udt_set_id());
+                if (OB_FAIL(add_generated_hidden_column_for_udt(table_schema, *org_column))) {
+                  LOG_WARN("add udt hidden column to table_schema failed", K(ret), K(column));
                 }
               }
             }

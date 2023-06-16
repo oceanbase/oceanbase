@@ -38,6 +38,169 @@ const int64_t DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeInde
     3 * 60 * 1000 * 1000 // 3min , ts_sync_print_interval
 };
 
+
+const int64_t ObDupTableLogOperator::MAX_LOG_BLOCK_SIZE=common::OB_MAX_LOG_ALLOWED_SIZE;
+const int64_t ObDupTableLogOperator::RESERVED_LOG_HEADER_SIZE = 100;
+
+
+/*******************************************************
+ *  Dup_Table LS Role State
+ *******************************************************/
+int64_t *ObDupTableLSRoleStateContainer::get_target_state_ref(ObDupTableLSRoleState target_state)
+{
+  int64_t *state_member = nullptr;
+  switch (target_state) {
+  case ObDupTableLSRoleState::LS_REVOKE_SUCC:
+  case ObDupTableLSRoleState::LS_TAKEOVER_SUCC: {
+    state_member = &role_state_;
+    break;
+  }
+  case ObDupTableLSRoleState::LS_OFFLINE_SUCC:
+  case ObDupTableLSRoleState::LS_ONLINE_SUCC: {
+    state_member = &offline_state_;
+    break;
+  }
+  case ObDupTableLSRoleState::LS_START_SUCC:
+  case ObDupTableLSRoleState::LS_STOP_SUCC: {
+    state_member = &stop_state_;
+    break;
+  }
+  default: {
+    state_member = nullptr;
+    DUP_TABLE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "undefined target role state", K(target_state),
+                      KPC(this));
+    break;
+  }
+  }
+  return state_member;
+}
+
+bool ObDupTableLSRoleStateContainer::check_target_state(ObDupTableLSRoleState target_state)
+{
+  bool is_same = false;
+  int64_t *state_member = get_target_state_ref(target_state);
+  if (OB_NOT_NULL(state_member)) {
+    ObDupTableLSRoleState cur_state = static_cast<ObDupTableLSRoleState>(ATOMIC_LOAD(state_member));
+    if (target_state == cur_state) {
+      is_same = true;
+    } else if (ObDupTableLSRoleState::ROLE_STATE_CHANGING == cur_state) {
+      is_same = false;
+      DUP_TABLE_LOG(INFO, "The Role State is Changing", K(is_same), K(cur_state), KPC(this));
+    } else {
+      is_same = false;
+    }
+  }
+  return is_same;
+}
+
+bool ObDupTableLSRoleStateHelper::is_leader()
+{
+  return  cur_state_.check_target_state(ObDupTableLSRoleState::LS_TAKEOVER_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_follower()
+{
+  return  cur_state_.check_target_state(ObDupTableLSRoleState::LS_REVOKE_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_offline()
+{
+  return cur_state_.check_target_state(ObDupTableLSRoleState::LS_OFFLINE_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_online()
+{
+  return cur_state_.check_target_state(ObDupTableLSRoleState::LS_ONLINE_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_stopped()
+{
+  return cur_state_.check_target_state(ObDupTableLSRoleState::LS_STOP_SUCC);
+}
+
+bool ObDupTableLSRoleStateHelper::is_started()
+{
+  return cur_state_.check_target_state(ObDupTableLSRoleState::LS_START_SUCC);
+}
+
+#define DUP_TABLE_LS_STATE_GET_AND_CHECK(target_state, restore_state)                             \
+  int64_t *state_member = cur_state_.get_target_state_ref(target_state);                          \
+  int64_t *backup_state_member = restore_state.get_target_state_ref(target_state);                \
+  ObDupTableLSRoleState cur_ls_state = ObDupTableLSRoleState::UNKNOWN;                            \
+  if (OB_ISNULL(state_member) || OB_ISNULL(backup_state_member)) {                                \
+    ret = OB_INVALID_ARGUMENT;                                                                    \
+    DUP_TABLE_LOG(WARN, "invalid arguments", K(ret), KP(state_member), KP(backup_state_member), \
+                  K(target_state), KPC(this));                                             \
+  } else if (OB_FALSE_IT(cur_ls_state =                                                           \
+                             static_cast<ObDupTableLSRoleState>(ATOMIC_LOAD(state_member)))) {    \
+  }
+
+int ObDupTableLSRoleStateHelper::prepare_state_change(const ObDupTableLSRoleState &target_state,
+                                                      ObDupTableLSRoleStateContainer &restore_state)
+{
+  int ret = OB_SUCCESS;
+
+  DUP_TABLE_LS_STATE_GET_AND_CHECK(target_state, restore_state)
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (target_state == cur_ls_state) {
+    ret = OB_NO_NEED_UPDATE;
+    DUP_TABLE_LOG(INFO, "the cur state has already been same as target_state", K(ret),
+                  K(target_state), KPC(this));
+  } else if (cur_ls_state == ObDupTableLSRoleState::UNKNOWN) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(INFO, "invalid role state", K(cur_ls_state), KPC(this));
+  } else {
+    if (ObDupTableLSRoleState::ROLE_STATE_CHANGING == cur_ls_state) {
+      DUP_TABLE_LOG(INFO,
+                    "cur_ls_state is the ROLE_STATE_CHANGING, may be error in the last role change",
+                    K(ret), K(cur_ls_state), K(target_state), KPC(this));
+    }
+    *backup_state_member = static_cast<int64_t>(cur_ls_state);
+    ATOMIC_STORE(state_member, static_cast<int64_t>(ObDupTableLSRoleState::ROLE_STATE_CHANGING));
+  }
+
+  return ret;
+}
+
+int ObDupTableLSRoleStateHelper::restore_state(const ObDupTableLSRoleState &target_state,
+                                               ObDupTableLSRoleStateContainer &restore_state)
+{
+  int ret = OB_SUCCESS;
+  DUP_TABLE_LS_STATE_GET_AND_CHECK(target_state, restore_state)
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (ObDupTableLSRoleState::ROLE_STATE_CHANGING != cur_ls_state) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(WARN, "invalid cur ls state", K(ret), K(cur_ls_state), KPC(this));
+  } else {
+    ATOMIC_STORE(state_member, *backup_state_member);
+  }
+
+  return ret;
+}
+
+int ObDupTableLSRoleStateHelper::state_change_succ(const ObDupTableLSRoleState &target_state,
+                                                   ObDupTableLSRoleStateContainer &restore_state)
+{
+  int ret = OB_SUCCESS;
+  DUP_TABLE_LS_STATE_GET_AND_CHECK(target_state, restore_state)
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (ObDupTableLSRoleState::ROLE_STATE_CHANGING != cur_ls_state
+             && target_state != cur_ls_state) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(WARN, "invalid cur ls state", K(ret), K(cur_ls_state), KPC(this));
+  } else {
+    ATOMIC_STORE(state_member, static_cast<int64_t>(target_state));
+  }
+
+  return ret;
+}
+
 /*******************************************************
  *  HashMapTool (not thread safe)
  *******************************************************/
@@ -274,6 +437,29 @@ int ObDupTableLSCheckpoint::flush()
   return ret;
 }
 
+int ObDupTableLSCheckpoint::offline()
+{
+  int ret = OB_SUCCESS;
+
+  // SpinWLockGuard w_guard(ckpt_rw_lock_);
+
+  // DUP_TABLE_LOG(INFO, , args...)
+
+  return ret;
+}
+
+int ObDupTableLSCheckpoint::online()
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard w_guard(ckpt_rw_lock_);
+
+  lease_log_rec_scn_.reset();
+  start_replay_scn_.reset();
+
+  DUP_TABLE_LOG(INFO, "Dup Table LS Checkpoint Online", K(ret), KPC(this));
+  return ret;
+}
+
 /*******************************************************
  *  Dup_Table Log
  *******************************************************/
@@ -413,6 +599,11 @@ int ObDupTableLogOperator::deserialize_log_entry()
 bool ObDupTableLogOperator::is_busy()
 {
   SpinRLockGuard guard(log_lock_);
+  return check_is_busy_without_lock();
+}
+
+bool ObDupTableLogOperator::check_is_busy_without_lock()
+{
   return !logging_tablet_set_ids_.empty() || !logging_lease_addrs_.empty();
 }
 
@@ -550,6 +741,7 @@ int ObDupTableLogOperator::prepare_serialize_log_entry_(int64_t &max_ser_size,
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid block buf", K(ret), K(big_segment_buf_));
   } else {
+
     if (OB_SUCC(ret)) {
       origin_max_ser_size = max_ser_size;
       if (OB_FAIL(lease_mgr_ptr_->prepare_serialize(max_ser_size, logging_lease_addrs_))) {
@@ -559,9 +751,10 @@ int ObDupTableLogOperator::prepare_serialize_log_entry_(int64_t &max_ser_size,
         DUP_TABLE_LOG(WARN, "push back log entry type failed", K(ret));
       }
     }
+
     if (OB_SUCC(ret)) {
       origin_max_ser_size = max_ser_size;
-      int64_t max_log_buf_size = MAX_LOG_BLOCK_SIZE - max_stat_log.get_serialize_size();
+      int64_t max_log_buf_size = MAX_LOG_BLOCK_SIZE - RESERVED_LOG_HEADER_SIZE - max_stat_log.get_serialize_size();
       if (OB_FAIL(tablet_mgr_ptr_->prepare_serialize(max_ser_size, logging_tablet_set_ids_,
                                                      max_log_buf_size))) {
         DUP_TABLE_LOG(WARN, "prepare serialize tablets_mgr failed", K(ret));
@@ -599,10 +792,10 @@ int ObDupTableLogOperator::serialize_log_entry_(const int64_t max_ser_size,
 {
   int ret = OB_SUCCESS;
 
-  if (max_ser_size > MAX_LOG_BLOCK_SIZE) {
+  if (max_ser_size > MAX_LOG_BLOCK_SIZE - RESERVED_LOG_HEADER_SIZE) {
     ret = OB_LOG_TOO_LARGE;
     DUP_TABLE_LOG(WARN, "serialize buf is not enough for a big log", K(ls_id_), K(max_ser_size),
-                  K(type_array));
+                  K(type_array), K(MAX_LOG_BLOCK_SIZE),K(RESERVED_LOG_HEADER_SIZE));
   } else if (OB_FAIL(big_segment_buf_.init_for_serialize(max_ser_size))) {
     DUP_TABLE_LOG(WARN, "init big_segment_buf_ failed", K(ret), K(max_ser_size),
                   K(big_segment_buf_));
@@ -746,7 +939,7 @@ int ObDupTableLogOperator::deserialize_log_entry_()
       }
 
       if (OB_SUCC(ret) && data_pos < after_header_pos + log_entry_size) {
-        DUP_TABLE_LOG(INFO, "try to deserialize a new version log", K(ret), K(data_pos),
+        DUP_TABLE_LOG(INFO, "try to deserialize a new version dup_table log in older observer", K(ret), K(data_pos),
                       K(after_header_pos), K(log_entry_size), K(entry_header));
         data_pos = after_header_pos + log_entry_size;
       }
@@ -796,6 +989,10 @@ int ObDupTableLogOperator::retry_submit_log_block_()
                                                        block_buf_pos, unused))) {
       DUP_TABLE_LOG(WARN, "split one part of segment failed", K(ret), K(big_segment_buf_),
                     K(block_buf_pos));
+    } else if (OB_FAIL(!big_segment_buf_.is_completed())) {
+      ret = OB_LOG_TOO_LARGE;
+      DUP_TABLE_LOG(WARN, "Too large dup table log. We can not submit it", K(ret),
+                    K(big_segment_buf_.is_completed()), KPC(this));
     } else if (OB_FAIL(log_handler_->append(block_buf_, block_buf_pos, share::SCN::min_scn(), false,
                                             this, logging_lsn_, logging_scn_))) {
       DUP_TABLE_LOG(WARN, "append block failed", K(ret), K(ls_id_));

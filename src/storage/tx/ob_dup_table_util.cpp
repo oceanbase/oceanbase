@@ -92,6 +92,7 @@ int ObDupTabletScanTask::refresh_dup_tablet_schema_(
                                                           dup_ls_status_info))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         DUP_TABLE_LOG(DEBUG, "no duplicate ls", K(dup_ls_status_info));
+        ret = OB_SUCCESS;
       } else {
         DUP_TABLE_LOG(WARN, "get duplicate ls status info failed", K(ret), K(dup_ls_status_info));
       }
@@ -286,8 +287,11 @@ int ObDupTabletScanTask::execute_for_dup_ls_()
       ret = OB_INVALID_ARGUMENT;
       DUP_TABLE_LOG(WARN, "invalid ls ptr", K(ret), KP(cur_ls_ptr));
     } else if (!cur_ls_ptr->get_dup_table_ls_handler()->is_master()) {
-      // do nothing
-      DUP_TABLE_LOG(DEBUG, "ls not leader", K(cur_ls_ptr->get_ls_id()));
+      // #ifndef NDEBUG
+      DUP_TABLE_LOG(INFO,
+                    "ls not leader",
+                    K(cur_ls_ptr->get_ls_id()));
+      // #endif
     } else if (OB_FAIL(refresh_dup_tablet_schema_(need_refreh_dup_schema, tenant_dup_tablet_set,
                                                   dup_ls_status_info))) {
       DUP_TABLE_LOG(INFO, "refresh dup table schema failed", K(ret));
@@ -371,7 +375,7 @@ int ObDupTableLSHandler::init(bool is_dup_table)
 {
   int ret = OB_SUCCESS;
   if (is_dup_table) {
-    if (ATOMIC_LOAD(&is_inited_)) {
+    if (is_inited()) {
       ret = OB_INIT_TWICE;
     } else {
       // init by dup_tablet_scan_task_.
@@ -397,7 +401,7 @@ int ObDupTableLSHandler::init(bool is_dup_table)
           DUP_TABLE_LOG(WARN, "init ts_sync_mgr failed", K(ret));
         } else if (OB_FAIL(tablets_mgr_ptr_->init(this))) {
           DUP_TABLE_LOG(WARN, "init tablets_mgr failed", K(ret));
-        } else if (ATOMIC_LOAD(&is_master_) && OB_FAIL(leader_takeover_(true /*is_resume*/))) {
+        } else if (ls_state_helper_.is_leader() && OB_FAIL(leader_takeover_(true /*is_resume*/))) {
           DUP_TABLE_LOG(WARN, "leader takeover in init failed", K(ret));
         } else {
           ATOMIC_STORE(&is_inited_, true);
@@ -421,20 +425,146 @@ int ObDupTableLSHandler::init(bool is_dup_table)
         ts_sync_mgr_ptr_ = nullptr;
         tablets_mgr_ptr_ = nullptr;
       }
-      DUP_TABLE_LOG(INFO, "ls handler init", K(ret), K(ls_id_), K(is_master()), K(is_follower()),
-                          KPC(lease_mgr_ptr_), KPC(tablets_mgr_ptr_), KP(ts_sync_mgr_ptr_));
+      DUP_TABLE_LOG(INFO, "ls handler init", K(ret), KPC(this));
     }
   }
   return ret;
 }
 
+void ObDupTableLSHandler::start()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  ObDupTableLSRoleStateContainer restore_state_container;
+  if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_START_SUCC,
+                                                    restore_state_container))) {
+    DUP_TABLE_LOG(WARN, "prepare state change failed", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_state_helper_.state_change_succ(ObDupTableLSRoleState::LS_START_SUCC,
+                                                   restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "change ls role state error", K(ret), KPC(this));
+    }
+  }
+}
+
+void ObDupTableLSHandler::stop()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  ObDupTableLSRoleStateContainer restore_state_container;
+  if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_STOP_SUCC,
+                                                    restore_state_container))) {
+    DUP_TABLE_LOG(WARN, "prepare state change failed", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_state_helper_.state_change_succ(ObDupTableLSRoleState::LS_STOP_SUCC,
+                                                   restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "change ls role state error", K(ret), KPC(this));
+    }
+  }
+}
+
+int ObDupTableLSHandler::offline()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  ObDupTableLSRoleStateContainer restore_state_container;
+  if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_OFFLINE_SUCC,
+                                                    restore_state_container))) {
+    DUP_TABLE_LOG(WARN, "prepare state change failed", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
+    ret = OB_EAGAIN;
+    DUP_TABLE_LOG(WARN, "wait log synced before offline", K(ret), KPC(this));
+  } else if (OB_NOT_NULL(tablets_mgr_ptr_) && OB_FAIL(tablets_mgr_ptr_->offline())) {
+    DUP_TABLE_LOG(WARN, "dup tablets mgr offline failed", K(ret), KPC(this));
+  } else if (OB_NOT_NULL(lease_mgr_ptr_) && OB_FAIL(lease_mgr_ptr_->offline())) {
+    DUP_TABLE_LOG(WARN, "dup lease mgr offline failed", K(ret), KPC(this));
+  } else if (OB_NOT_NULL(ts_sync_mgr_ptr_) && OB_FAIL(ts_sync_mgr_ptr_->offline())) {
+    DUP_TABLE_LOG(WARN, "dup ts mgr offline failed", K(ret), KPC(this));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_state_helper_.state_change_succ(ObDupTableLSRoleState::LS_OFFLINE_SUCC,
+                                                   restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "change ls role state error", K(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObDupTableLSHandler::online()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  ObDupTableLSRoleStateContainer restore_state_container;
+  if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_ONLINE_SUCC,
+                                                    restore_state_container))) {
+    DUP_TABLE_LOG(WARN, "prepare state change failed", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(dup_ls_ckpt_.online())) {
+    DUP_TABLE_LOG(WARN, "dup table checkpoint online failed", K(ret), KPC(this));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_state_helper_.state_change_succ(ObDupTableLSRoleState::LS_ONLINE_SUCC,
+                                                   restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "change ls role state error", K(ret), KPC(this));
+    }
+  }
+
+  return ret;
+}
+
+int ObDupTableLSHandler::safe_to_destroy(bool &is_dup_table_handler_safe)
+{
+  int ret = OB_SUCCESS;
+  is_dup_table_handler_safe = false;
+  if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
+    ret = OB_EAGAIN;
+    DUP_TABLE_LOG(WARN, "wait log synced before destroy", K(ret), KPC(this));
+  }
+
+  if (OB_SUCC(ret)) {
+    is_dup_table_handler_safe = true;
+  }
+
+  return ret;
+}
+
 void ObDupTableLSHandler::destroy() { reset(); }
+
+// int ObDupTableLSHandler::offline()
+// {
+//   int ret = OB_SUCCESS;
+//   }
+//   return ret;
+// }
+//
+// int ObDupTableLSHandler::online() {}
 
 void ObDupTableLSHandler::reset()
 {
   // ATOMIC_STORE(&is_inited_, false);
   is_inited_ = false;
-  is_master_ = false;
+  ls_state_helper_.reset();
 
   dup_ls_ckpt_.reset();
 
@@ -470,52 +600,81 @@ void ObDupTableLSHandler::reset()
   }
 }
 
-bool ObDupTableLSHandler::is_master()
-{
-  bool sub_master = true;
-  if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
-    sub_master = sub_master && ts_sync_mgr_ptr_->is_master();
-  }
-  if (OB_NOT_NULL(lease_mgr_ptr_)) {
-    sub_master = sub_master && lease_mgr_ptr_->is_master();
-  }
-  if (OB_NOT_NULL(tablets_mgr_ptr_)) {
-    sub_master = sub_master && tablets_mgr_ptr_->is_master();
-  }
+// bool ObDupTableLSHandler::is_master()
+// {
+//   bool sub_master = true;
+//   if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
+//     sub_master = sub_master && ts_sync_mgr_ptr_->is_master();
+//   }
+//   if (OB_NOT_NULL(lease_mgr_ptr_)) {
+//     sub_master = sub_master && lease_mgr_ptr_->is_master();
+//   }
+//   if (OB_NOT_NULL(tablets_mgr_ptr_)) {
+//     sub_master = sub_master && tablets_mgr_ptr_->is_master();
+//   }
+//
+//   return (ATOMIC_LOAD(&is_master_)) && sub_master;
+// }
 
-  return (ATOMIC_LOAD(&is_master_)) && sub_master;
+// bool ObDupTableLSHandler::is_follower()
+// {
+//   bool sub_not_master = true;
+//   if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
+//     sub_not_master = sub_not_master && !ts_sync_mgr_ptr_->is_master();
+//   }
+//   if (OB_NOT_NULL(lease_mgr_ptr_)) {
+//     sub_not_master = sub_not_master && !lease_mgr_ptr_->is_master();
+//   }
+//   if (OB_NOT_NULL(tablets_mgr_ptr_)) {
+//     sub_not_master = sub_not_master && !tablets_mgr_ptr_->is_master();
+//   }
+//
+//   return (!ATOMIC_LOAD(&is_master_)) && sub_not_master;
+// }
+
+bool ObDupTableLSHandler::is_inited()
+{
+  return ATOMIC_LOAD(&is_inited_);
 }
 
-bool ObDupTableLSHandler::is_follower()
-{
-  bool sub_not_master = true;
-  if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
-    sub_not_master = sub_not_master && !ts_sync_mgr_ptr_->is_master();
-  }
-  if (OB_NOT_NULL(lease_mgr_ptr_)) {
-    sub_not_master = sub_not_master && !lease_mgr_ptr_->is_master();
-  }
-  if (OB_NOT_NULL(tablets_mgr_ptr_)) {
-    sub_not_master = sub_not_master && !tablets_mgr_ptr_->is_master();
-  }
+bool ObDupTableLSHandler::is_master() { return ls_state_helper_.is_leader_serving(); }
 
-  return (!ATOMIC_LOAD(&is_master_)) && sub_not_master;
-}
+// bool ObDupTableLSHandler::is_online()
+// {
+//   bool sub_online =  true;
+//   if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
+//     sub_online = sub_online && !ts_sync_mgr_ptr_->is_master();
+//   }
+//   if (OB_NOT_NULL(lease_mgr_ptr_)) {
+//     sub_online = sub_online && !lease_mgr_ptr_->is_master();
+//   }
+//   if (OB_NOT_NULL(tablets_mgr_ptr_)) {
+//     sub_online = sub_online && !tablets_mgr_ptr_->is_master();
+//   }
+//
+// }
 
 int ObDupTableLSHandler::ls_loop_handle()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   // TODO check stopped
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)
+  if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)
       || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "dup table ls handle not init", K(ret));
-  } else if (!has_dup_tablet()) {
+  } else if (!ls_state_helper_.is_active_ls()) {
+    ret = OB_LS_OFFLINE;
+    DUP_TABLE_LOG(WARN, "the ls is not active", K(ret), KPC(this));
+  } else if (!check_tablet_set_exist()) {
+    // if tablet set not exist,
+    // return OB_NO_TABLET and remove ls id form map
+    // else do ls loop handle
     ret = OB_NO_TABLET;
-    DUP_TABLE_LOG(INFO, "no dup tablet, no need to do loop worker", K(ret), KPC(tablets_mgr_ptr_));
+    DUP_TABLE_LOG(INFO, "no dup tablet, no need to do loop worker", K(ret),
+                  KPC(tablets_mgr_ptr_));
   } else {
-    if (is_master()) {
+    if (ls_state_helper_.is_leader()) {
       if (OB_ISNULL(log_operator_) || !log_operator_->is_busy()) {
         // handle lease request and collect follower info
         DupTableTsInfo min_lease_ts_info;
@@ -539,16 +698,20 @@ int ObDupTableLSHandler::ls_loop_handle()
         DUP_TABLE_LOG(WARN, "update all ts info cache failed", K(tmp_ret));
       }
 
-    } else if (is_follower()) {
+    } else if (ls_state_helper_.is_follower()) {
       if (OB_FAIL(lease_mgr_ptr_->follower_handle())) {
         DUP_TABLE_LOG(WARN, "follower lease handle failed", K(ret));
       }
+    } else {
+      DUP_TABLE_LOG(INFO, "undefined role state for dup table ls, skip this loop", K(ret),
+                    K(ls_id_), K(ls_state_helper_));
     }
-    DUP_TABLE_LOG(DEBUG, "loop running : dup table ls handler", K(ret), K(ls_id_), K(is_master()),
-                  KPC(lease_mgr_ptr_), KPC(tablets_mgr_ptr_), KPC(log_operator_));
+    DUP_TABLE_LOG(DEBUG, "loop running : dup table ls handler", K(ret), K(ls_id_),
+                  K(ls_state_helper_), KP(lease_mgr_ptr_), KP(tablets_mgr_ptr_),
+                  KP(log_operator_));
 
     const int64_t fast_cur_time = ObTimeUtility::fast_current_time();
-    const bool is_leader = is_master();
+    const bool is_leader = ls_state_helper_.is_leader();
 
     if (fast_cur_time - last_diag_info_print_us_[DupTableDiagStd::TypeIndex::LEASE_INDEX]
         >= DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeIndex::LEASE_INDEX]) {
@@ -585,15 +748,20 @@ int ObDupTableLSHandler::refresh_dup_table_tablet(common::ObTabletID tablet_id,
 {
   int ret = OB_SUCCESS;
 
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(tablets_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(tablets_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     if (is_dup_table) {
-      DUP_TABLE_LOG(WARN, "ObDupTableLSHandler not init", K(ret), K(is_inited_),
-                    KP(tablets_mgr_ptr_));
+      DUP_TABLE_LOG(WARN, "ObDupTableLSHandler not init", K(ret), K(is_inited_), K(is_dup_table),
+                    KPC(this));
     }
+  } else if (!ls_state_helper_.is_leader()) {
+    ret = OB_NOT_MASTER;
+    DUP_TABLE_LOG(WARN, "No need to refresh dup table schema", K(ret), K(tablet_id),
+                  K(is_dup_table), KPC(this));
   } else if (OB_FAIL(tablets_mgr_ptr_->refresh_dup_tablet(tablet_id, is_dup_table, refresh_time))) {
     if (ret != OB_NOT_MASTER) {
-      DUP_TABLE_LOG(WARN, "refresh dup table tablet failed", K(ret), K(tablet_id), K(is_dup_table));
+      DUP_TABLE_LOG(WARN, "refresh dup table tablet failed", K(ret), K(tablet_id), K(is_dup_table),
+                    KPC(this));
     } else {
       ret = OB_SUCCESS;
     }
@@ -605,9 +773,12 @@ int ObDupTableLSHandler::refresh_dup_table_tablet(common::ObTabletID tablet_id,
 int ObDupTableLSHandler::recive_lease_request(const ObDupTableLeaseRequest &lease_req)
 {
   int ret = OB_SUCCESS;
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "DupTableLSHandler not init", K(ret), K(is_inited_), KP(lease_mgr_ptr_));
+  } else if (!ls_state_helper_.is_leader_serving()) {
+    ret = OB_NOT_MASTER;
+    DUP_TABLE_LOG(WARN, "No need to recive lease request", K(ret), K(lease_req), KPC(this));
   } else if (OB_FAIL(ts_sync_mgr_ptr_->handle_ts_sync_response(lease_req))) {
     DUP_TABLE_LOG(WARN, "handle ts sync response failed", K(ret));
   } else if (OB_FAIL(lease_mgr_ptr_->recive_lease_request(lease_req))) {
@@ -620,9 +791,12 @@ int ObDupTableLSHandler::handle_ts_sync_response(const ObDupTableTsSyncResponse 
 {
   int ret = OB_SUCCESS;
 
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "DupTableLSHandler not init", K(ret), K(is_inited_), KP(ts_sync_mgr_ptr_));
+  } else if (!ls_state_helper_.is_leader_serving()) {
+    ret = OB_NOT_MASTER;
+    DUP_TABLE_LOG(WARN, "No need to handle ts sync response", K(ret), K(ts_sync_resp), KPC(this));
   } else if (OB_FAIL(ts_sync_mgr_ptr_->handle_ts_sync_response(ts_sync_resp))) {
     DUP_TABLE_LOG(WARN, "handle ts sync response failed", K(ret));
   }
@@ -634,9 +808,12 @@ int ObDupTableLSHandler::handle_ts_sync_request(const ObDupTableTsSyncRequest &t
 {
   int ret = OB_SUCCESS;
 
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "DupTableLSHandler not init", K(ret), K(is_inited_), KP(ts_sync_mgr_ptr_));
+  } else if (!ls_state_helper_.is_follower_serving()) {
+    ret = OB_NOT_FOLLOWER;
+    DUP_TABLE_LOG(WARN, "No need to handle ts sync request", K(ret), K(ts_sync_req), KPC(this));
   } else if (OB_FAIL(ts_sync_mgr_ptr_->handle_ts_sync_request(ts_sync_req))) {
     DUP_TABLE_LOG(WARN, "handle ts sync request failed", K(ret));
   }
@@ -663,7 +840,7 @@ int ObDupTableLSHandler::check_redo_sync_completed(const ObTransID &tx_id,
   before_prepare_gts.set_invalid();
   int64_t start_us = OB_INVALID_TIMESTAMP;
 
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "ObDupTableLSHandler not init", K(ret), K(is_inited_), KP(lease_mgr_ptr_),
                   KP(ts_sync_mgr_ptr_));
@@ -775,7 +952,7 @@ int ObDupTableLSHandler::block_confirm_with_dup_tablet_change_snapshot(
 
   ATOMIC_INC(&total_block_confirm_ref_);
 
-  if (!ATOMIC_LOAD(&is_inited_)) {
+  if (!is_inited()) {
     // do nothing
     ret = OB_SUCCESS;
   } else {
@@ -788,7 +965,7 @@ int ObDupTableLSHandler::gc_dup_tablets(const int64_t gc_ts, const int64_t max_t
 {
   int ret = OB_SUCCESS;
 
-  if (!ATOMIC_LOAD(&is_inited_)) {
+  if (!is_inited() || !ls_state_helper_.is_leader_serving()) {
     // do nothing
   } else if (OB_ISNULL(tablets_mgr_ptr_)) {
     ret = OB_NOT_INIT;
@@ -808,7 +985,7 @@ int ObDupTableLSHandler::try_to_confirm_tablets_(const share::SCN &confirm_scn)
 {
   int ret = OB_SUCCESS;
 
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(tablets_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(tablets_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "ObDupTableLSHandler not init", K(ret), K(is_inited_),
                   KP(tablets_mgr_ptr_));
@@ -871,6 +1048,9 @@ int ObDupTableLSHandler::check_dup_tablet_readable(const ObTabletID &tablet_id,
   } else if (OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)) {
     // no dup tablet in ls
     readable = false;
+  } else if (!ls_state_helper_.is_active_ls()) {
+    readable = false;
+    DUP_TABLE_LOG(INFO, "the ls is not active", K(ret), KPC(this));
   } else if (!has_dup_tablet()) {
     readable = false;
     interface_stat_.dup_table_follower_read_tablet_not_exist_cnt_++;
@@ -905,6 +1085,7 @@ int ObDupTableLSHandler::check_dup_tablet_readable(const ObTabletID &tablet_id,
 
   return ret;
 }
+
 int64_t ObDupTableLSHandler::get_dup_tablet_count()
 {
   int64_t dup_tablet_cnt = 0;
@@ -929,13 +1110,47 @@ bool ObDupTableLSHandler::has_dup_tablet()
   return has_dup;
 }
 
+// if return false, there are no tablets and tablet set need log
+bool ObDupTableLSHandler::check_tablet_set_exist()
+{
+  bool bool_ret = false;
+
+  if (OB_ISNULL(tablets_mgr_ptr_)) {
+    bool_ret = false;
+  } else {
+    int64_t readable_and_need_confirm_set_count =
+              tablets_mgr_ptr_->get_readable_tablet_set_count()
+              + tablets_mgr_ptr_->get_need_confirm_tablet_set_count();
+
+    // if readable and need confirm set count > 0, return true
+    if (readable_and_need_confirm_set_count > 0 ) {
+      bool_ret = true;
+    } else {
+      // if changing new and removing set exist return true
+      bool chaning_and_removing_tablet_exist =
+          tablets_mgr_ptr_->check_changing_new_tablet_exist()
+          || tablets_mgr_ptr_->check_removing_tablet_exist();
+      if (chaning_and_removing_tablet_exist) {
+        bool_ret = true;
+      } else {
+        bool_ret = false;
+      }
+    }
+  }
+
+  return bool_ret;
+}
+
 int ObDupTableLSHandler::get_local_ts_info(DupTableTsInfo &ts_info)
 {
   int ret = OB_SUCCESS;
 
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "DupTableLSHandler not init", K(ret), K(is_inited_), KP(ts_sync_mgr_ptr_));
+  } else if (!ls_state_helper_.is_active_ls()) {
+    ret = OB_LS_OFFLINE;
+    DUP_TABLE_LOG(WARN, "the ls is not active", K(ret), KPC(this));
   } else if (OB_FAIL(ts_sync_mgr_ptr_->get_local_ts_info(ts_info))) {
     DUP_TABLE_LOG(WARN, "get local ts sync info failed", K(ret));
   }
@@ -947,9 +1162,13 @@ int ObDupTableLSHandler::get_cache_ts_info(const common::ObAddr &addr, DupTableT
 {
   int ret = OB_SUCCESS;
 
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "DupTableLSHandler not init", K(ret), K(is_inited_), KP(ts_sync_mgr_ptr_));
+  } else if (!ls_state_helper_.is_leader_serving()) {
+    ret = OB_NOT_MASTER;
+    DUP_TABLE_LOG(WARN, "we can not get cached ts info from a follower", K(ret), K(ts_info),
+                  KPC(this));
   } else if (OB_FAIL(ts_sync_mgr_ptr_->get_cache_ts_info(addr, ts_info))) {
     DUP_TABLE_LOG(WARN, "get cache ts info failed", K(ret), K(addr), K(ts_info));
   }
@@ -967,7 +1186,7 @@ int ObDupTableLSHandler::replay(const void *buffer,
   const bool no_dup_tablet_before_replay = !has_dup_tablet();
 
   // cover lease list and tablets list
-  if (!ATOMIC_LOAD(&is_inited_) && OB_FAIL(init(true))) {
+  if (!is_inited() && OB_FAIL(init(true))) {
     DUP_TABLE_LOG(WARN, "init dup_ls_handle in replay failed", K(ret));
   } else if (OB_FAIL(prepare_log_operator_())) {
     DUP_TABLE_LOG(WARN, "init dup_table log operator failed", K(ret));
@@ -1011,11 +1230,25 @@ int ObDupTableLSHandler::replay(const void *buffer,
 void ObDupTableLSHandler::switch_to_follower_forcedly()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(leader_revoke_())) {
-    DUP_TABLE_LOG(ERROR, "switch to follower forcedly failed for dup table", K(ret), K(ls_id_),
-                  K(is_master()));
+  int tmp_ret = OB_SUCCESS;
+
+  ObDupTableLSRoleStateContainer restore_state_container;
+  if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_REVOKE_SUCC,
+                                                    restore_state_container))) {
+    DUP_TABLE_LOG(WARN, "prepare state change failed", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(leader_revoke_(true /*forcedly*/))) {
+    DUP_TABLE_LOG(ERROR, "switch to follower forcedly failed for dup table", K(ret), KPC(this));
   }
-  ATOMIC_STORE(&is_master_, false);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_state_helper_.state_change_succ(ObDupTableLSRoleState::LS_REVOKE_SUCC,
+                                                   restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "change ls role state error", K(ret), KPC(this));
+    }
+  }
 }
 
 int ObDupTableLSHandler::switch_to_follower_gracefully()
@@ -1023,20 +1256,34 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  if (OB_FAIL(leader_revoke_())) {
-    DUP_TABLE_LOG(WARN, "switch to follower gracefully failed for dup table", K(ret), K(ls_id_),
-                  K(is_master()));
+  ObDupTableLSRoleStateContainer restore_state_container;
+  if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_REVOKE_SUCC,
+                                                    restore_state_container))) {
+    DUP_TABLE_LOG(WARN, "prepare state change failed", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(leader_revoke_(false /*forcedly*/))) {
+    DUP_TABLE_LOG(WARN, "switch to follower gracefully failed for dup table", K(ret), KPC(this));
   }
 
-  ATOMIC_STORE(&is_master_, false);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_state_helper_.state_change_succ(ObDupTableLSRoleState::LS_REVOKE_SUCC,
+                                                   restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "change ls role state error", K(ret), KPC(this));
+    }
+  } else {
+    tmp_ret = OB_SUCCESS;
 
-  if (OB_FAIL(ret)) {
-    if (OB_TMP_FAIL(resume_leader())) {
+    if (OB_TMP_FAIL(leader_takeover_(true /*is_resume*/))) {
+      DUP_TABLE_LOG(WARN, "resume leader failed", K(ret), K(tmp_ret), KPC(this));
+    }
+    if (OB_SUCCESS != tmp_ret) {
       ret = OB_LS_NEED_REVOKE;
-      DUP_TABLE_LOG(WARN, "resume leader failed, need revoke", K(ret), K(tmp_ret), K(ls_id_));
-    } else {
-      DUP_TABLE_LOG(WARN, "resume leader successfully, return error code", K(ret), K(tmp_ret),
-                    K(ls_id_));
+      DUP_TABLE_LOG(WARN, "resume leader failed, need revoke", K(ret), K(tmp_ret), KPC(this));
+    } else if (OB_TMP_FAIL(ls_state_helper_.restore_state(ObDupTableLSRoleState::LS_REVOKE_SUCC,
+                                                          restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "restore ls role state error", K(ret), KPC(this));
     }
   }
 
@@ -1046,62 +1293,115 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
 int ObDupTableLSHandler::resume_leader()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   const bool is_resume = true;
 
-  if (OB_FAIL(leader_takeover_(is_resume))) {
-    DUP_TABLE_LOG(WARN, "resume leader failed for dup table", K(ret), K(ls_id_), K(is_master()));
+  ObDupTableLSRoleStateContainer restore_state_container;
+  if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
+                                                    restore_state_container))) {
+    DUP_TABLE_LOG(WARN, "prepare state change failed", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(leader_takeover_(is_resume))) {
+    DUP_TABLE_LOG(WARN, "resume leader failed for dup table", K(ret), KPC(this));
   }
 
-  ATOMIC_STORE(&is_master_, true);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_state_helper_.state_change_succ(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
+                                                   restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "change ls role state error", K(ret), KPC(this));
+    }
+  } else {
+    tmp_ret = OB_SUCCESS;
+
+    if (OB_TMP_FAIL(leader_revoke_(true /*forcedly*/))) {
+      DUP_TABLE_LOG(WARN, "leader revoke failed", K(ret), K(tmp_ret), KPC(this));
+    } else if (OB_TMP_FAIL(ls_state_helper_.restore_state(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
+                                                          restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "restore ls role state error", K(ret), KPC(this));
+    }
+  }
   return ret;
 }
 
 int ObDupTableLSHandler::switch_to_leader()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   const bool is_resume = false;
-  if (OB_FAIL(leader_takeover_(is_resume))) {
-    DUP_TABLE_LOG(WARN, "switch to leader failed for dup table", K(ret), K(ls_id_), K(is_master()));
+
+  ObDupTableLSRoleStateContainer restore_state_container;
+  if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
+                                                    restore_state_container))) {
+    DUP_TABLE_LOG(WARN, "prepare state change failed", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(leader_takeover_(is_resume))) {
+    DUP_TABLE_LOG(WARN, "leader takeover failed for dup table", K(ret), KPC(this));
   }
-  ATOMIC_STORE(&is_master_, true);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_state_helper_.state_change_succ(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
+                                                   restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "change ls role state error", K(ret), KPC(this));
+    }
+  } else {
+    tmp_ret = OB_SUCCESS;
+
+    if (OB_TMP_FAIL(leader_revoke_(true /*forcedly*/))) {
+      DUP_TABLE_LOG(WARN, "leader revoke failed", K(ret), K(tmp_ret), KPC(this));
+    } else if (OB_TMP_FAIL(ls_state_helper_.restore_state(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
+                                                          restore_state_container))) {
+      DUP_TABLE_LOG(ERROR, "restore ls role state error", K(ret), KPC(this));
+    }
+  }
   return ret;
 }
 
-int ObDupTableLSHandler::leader_revoke_()
+int ObDupTableLSHandler::leader_revoke_(const bool is_forcedly)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
-  if (!is_master()) {
-    // ret = OB_STATE_NOT_MATCH;
-    DUP_TABLE_LOG(WARN, "ObDupTableLSHandler has already been follower",
-                  K(ret), K(ls_id_), K(is_master()));
-  } else {
-    // clean new/old tablet set
-    if (OB_NOT_NULL(log_operator_)) {
-      if (OB_NOT_NULL(tablets_mgr_ptr_)
-          && OB_FAIL(tablets_mgr_ptr_->leader_revoke(log_operator_->is_busy()))) {
-        DUP_TABLE_LOG(WARN, "clean unreadable tablet set failed", K(ret));
+  bool is_logging = false;
+  if (OB_NOT_NULL(log_operator_)) {
+    log_operator_->rlock_for_log();
+    is_logging = log_operator_->check_is_busy_without_lock();
+  }
+  if (OB_NOT_NULL(tablets_mgr_ptr_) && OB_TMP_FAIL(tablets_mgr_ptr_->leader_revoke(is_logging))) {
+    DUP_TABLE_LOG(WARN, "tablets_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
+    if (!is_forcedly) {
+      ret = tmp_ret;
+    }
+  }
+  if (OB_NOT_NULL(log_operator_)) {
+    log_operator_->unlock_for_log();
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(ts_sync_mgr_ptr_)) {
+    if (OB_TMP_FAIL(ts_sync_mgr_ptr_->leader_revoke())) {
+      DUP_TABLE_LOG(WARN, "ts_sync_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
+      if (!is_forcedly) {
+        ret = tmp_ret;
       }
     }
+  }
 
-    if (OB_SUCC(ret) && OB_NOT_NULL(ts_sync_mgr_ptr_)) {
-      if (OB_FAIL(ts_sync_mgr_ptr_->leader_revoke())) {
-        DUP_TABLE_LOG(WARN, "ts_sync_mgr switch to follower failed", K(ret));
+  if (OB_SUCC(ret) && OB_NOT_NULL(lease_mgr_ptr_)) {
+    if (OB_TMP_FAIL(lease_mgr_ptr_->leader_revoke())) {
+      DUP_TABLE_LOG(WARN, "lease_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
+      if (!is_forcedly) {
+        ret = tmp_ret;
       }
     }
-
-    if (OB_SUCC(ret) && OB_NOT_NULL(lease_mgr_ptr_)) {
-      if (OB_FAIL(lease_mgr_ptr_->leader_revoke())) {
-        DUP_TABLE_LOG(WARN, "lease_mgr switch to follower failed", K(ret));
-      }
-    }
-
   }
 
   interface_stat_.reset();
-  DUP_TABLE_LOG(INFO, "Leader Revoke", K(ret), K(ls_id_), KPC(log_operator_));
+  DUP_TABLE_LOG(INFO, "Leader Revoke", K(ret), K(is_forcedly), KPC(this));
   return ret;
 }
 
@@ -1109,29 +1409,24 @@ int ObDupTableLSHandler::leader_takeover_(const bool is_resume)
 {
   int ret = OB_SUCCESS;
 
-  if (is_master()) {
-    ret = OB_STATE_NOT_MATCH;
-    DUP_TABLE_LOG(ERROR, "unexpected ObDupTableLSHandler role", K(ret), K(ls_id_), K(is_master()));
-  } else {
-    // clean ts info cache
-    if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
-      ts_sync_mgr_ptr_->leader_takeover();
-    }
-    // extend lease_expired_time
-    if (OB_NOT_NULL(lease_mgr_ptr_)) {
-      lease_mgr_ptr_->leader_takeover(is_resume);
-    }
+  // clean ts info cache
+  if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
+    ts_sync_mgr_ptr_->leader_takeover();
+  }
+  // extend lease_expired_time
+  if (OB_NOT_NULL(lease_mgr_ptr_)) {
+    lease_mgr_ptr_->leader_takeover(is_resume);
+  }
 
-    if (OB_NOT_NULL(tablets_mgr_ptr_)) {
-      if (OB_FAIL(tablets_mgr_ptr_->leader_takeover(
-              is_resume, dup_ls_ckpt_.contain_all_readable_on_replica()))) {
-        DUP_TABLE_LOG(WARN, "clean unreadable tablet set failed", K(ret));
-      }
+  if (OB_NOT_NULL(tablets_mgr_ptr_)) {
+    if (OB_FAIL(tablets_mgr_ptr_->leader_takeover(
+            is_resume, dup_ls_ckpt_.contain_all_readable_on_replica()))) {
+      DUP_TABLE_LOG(WARN, "clean unreadable tablet set failed", K(ret));
     }
   }
 
   interface_stat_.reset();
-  DUP_TABLE_LOG(INFO, "Leader Takeover", K(ret), K(ls_id_), K(is_resume));
+  DUP_TABLE_LOG(INFO, "Leader Takeover", K(ret), K(is_resume), KPC(this));
   return ret;
 }
 
@@ -1149,6 +1444,40 @@ int ObDupTableLSHandler::prepare_log_operator_()
       new (log_operator_) ObDupTableLogOperator(ls_id_, log_handler_, &dup_ls_ckpt_, lease_mgr_ptr_,
                                                 tablets_mgr_ptr_);
     }
+  }
+
+  return ret;
+}
+
+int ObDupTableLSHandler::set_dup_table_ls_meta(
+    const ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_ls_meta,
+    bool need_flush_slog)
+{
+  int ret = OB_SUCCESS;
+
+  DUP_TABLE_LOG(INFO, "try to recover dup table ls meta", K(ret), K(need_flush_slog),
+                K(dup_ls_meta), KPC(this));
+
+  if (OB_FAIL(dup_ls_ckpt_.set_dup_ls_meta(dup_ls_meta))) {
+    DUP_TABLE_LOG(WARN, "set dup ls meta failed", K(ret), K(need_flush_slog), K(dup_ls_meta),
+                  KPC(this));
+  } else if (need_flush_slog && OB_FAIL(dup_ls_ckpt_.flush())) {
+    DUP_TABLE_LOG(WARN, "flush slog failed", K(ret), K(need_flush_slog), K(dup_ls_meta), KPC(this));
+  }
+
+  return ret;
+}
+
+int ObDupTableLSHandler::flush(share::SCN &rec)
+{
+  int ret = OB_SUCCESS;
+
+  if (!ls_state_helper_.is_started()) {
+    ret = OB_LS_NOT_EXIST;
+    DUP_TABLE_LOG(WARN, "this ls is not started", K(ret), K(rec), KPC(this));
+
+  } else {
+    ret = dup_ls_ckpt_.flush();
   }
 
   return ret;
@@ -1186,7 +1515,7 @@ int ObDupTableLSHandler::get_min_lease_ts_info_(DupTableTsInfo &min_ts_info)
   LeaseAddrArray lease_valid_array;
   min_ts_info.reset();
 
-  if (!ATOMIC_LOAD(&is_inited_) || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid arguments", K(is_inited_), KP(lease_mgr_ptr_),
                   KP(ts_sync_mgr_ptr_));
@@ -1226,7 +1555,7 @@ int ObDupTableLSHandler::get_lease_mgr_stat(ObDupLSLeaseMgrStatIterator &collect
   FollowerLeaseMgrStatArr collect_arr;
 
   // collect all leader info
-  if (is_master()) {
+  if (ls_state_helper_.is_leader_serving()) {
     if (OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
       ret = OB_NOT_INIT;
       DUP_TABLE_LOG(WARN, "not init", K(ret), KPC(lease_mgr_ptr_), KP(ts_sync_mgr_ptr_));

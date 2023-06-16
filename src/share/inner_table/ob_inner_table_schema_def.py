@@ -5547,6 +5547,16 @@ def_table_schema(
 # 460 : __all_tenant_snapshots
 # 461 : __all_tenant_snapshot_ls
 # 462 : __all_tenant_snapshot_ls_meta_table
+
+# 463 : __all_mlogs
+# 464 : __all_mviews
+# 465 : __all_mview_refresh_stats_sys_defaults
+# 466 : __all_mview_refresh_stats_params
+# 467 : __all_mview_refresh_run_stats
+# 468 : __all_mview_refresh_stats
+# 469 : __all_mview_refresh_change_stats
+# 470 : __all_mview_refresh_stmt_stats
+
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11903,7 +11913,15 @@ def_table_schema(
 # 12402: __all_virtual_tenant_snapshots
 # 12403: __all_virtual_tenant_snapshot_ls
 # 12404: __all_virtual_tenant_snapshot_ls_meta_table
-#
+
+# 12405: __all_virtual_mlogs
+# 12406: __all_virtual_mviews
+# 12407: __all_virtual_mview_refresh_stats_sys_defaults
+# 12408: __all_virtual_mview_refresh_stats_params
+# 12409: __all_virtual_mview_refresh_run_stats
+# 12410: __all_virtual_mview_refresh_stats
+# 12411: __all_virtual_mview_refresh_change_stats
+# 12412: __all_virtual_mview_refresh_stmt_stats
 # 余留位置
 #
 
@@ -12263,6 +12281,14 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15387', all_def_keywords['__all_virtual_ls_log_restore_status'])))
 # 15388: __all_virtual_tenant_parameter
 
+# 15389: __all_mlogs
+# 15390: __all_mviews
+# 15391: __all_mview_refresh_stats_sys_defaults
+# 15392: __all_mview_refresh_stats_params
+# 15393: __all_mview_refresh_run_stats
+# 15394: __all_mview_refresh_stats
+# 15395: __all_mview_refresh_change_stats
+# 15396: __all_mview_refresh_stmt_stats
 
 ################################################################################
 # System View (20000,30000]
@@ -27220,6 +27246,23 @@ def_table_schema(
     normal_columns = [
     ],
 )
+
+# 21427: CDB_OB_MLOGS
+# 21428: CDB_OB_MVIEWS
+# 21429: CDB_OB_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+# 21430: CDB_OB_MVIEW_REFRESH_STATS_PARAMS
+# 21431: CDB_OB_MVIEW_REFRESH_RUN_STATS
+# 21432: CDB_OB_MVIEW_REFRESH_STATS
+# 21433: CDB_OB_MVIEW_REFRESH_CHANGE_STATS
+# 21434: CDB_OB_MVIEW_REFRESH_STMT_STATS
+# 21435: DBA_OB_MLOGS
+# 21436: DBA_OB_MVIEWS
+# 21437: DBA_OB_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+# 21438: DBA_OB_MVIEW_REFRESH_STATS_PARAMS
+# 21439: DBA_OB_MVIEW_REFRESH_RUN_STATS
+# 21440: DBA_OB_MVIEW_REFRESH_STATS
+# 21441: DBA_OB_MVIEW_REFRESH_CHANGE_STATS
+# 21442: DBA_OB_MVIEW_REFRESH_STMT_STATS
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -45063,6 +45106,15 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
   ON GP.SNAME = 'STALE_PERCENT'
 """.replace("\n", " ")
 )
+
+# 25248: DBA_OB_MLOGS
+# 25249: DBA_OB_MVIEWS
+# 25250: DBA_OB_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+# 25251: DBA_OB_MVIEW_REFRESH_STATS_PARAMS
+# 25252: DBA_OB_MVIEW_REFRESH_RUN_STATS
+# 25253: DBA_OB_MVIEW_REFRESH_STATS
+# 25254: DBA_OB_MVIEW_REFRESH_CHANGE_STATS
+# 25255: DBA_OB_MVIEW_REFRESH_STMT_STATS
 
 #### End Data Dictionary View
 ################################################################################

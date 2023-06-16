@@ -66,15 +66,16 @@ int ObExprPad::calc_result_type3(ObExprResType &type,
     padding_str.set_calc_type(text_type);
 
     if (is_oracle_mode()) {
+      //for oracle mode, this funcion is only used for padding char/nchar types
       const ObSQLSessionInfo *session = type_ctx.get_session();
       if (OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is NULL", K(ret));
       } else {
         ObSEArray<ObExprResType*, 2, ObNullAllocator> types;
-        OZ(types.push_back(&source));
         OZ(types.push_back(&padding_str));
         OZ(aggregate_string_type_and_charset_oracle(*session, types, type));
+        OZ(types.push_back(&source));
         OZ(deduce_string_param_calc_type_and_charset(*session, type, types));
       }
     } else {
@@ -120,7 +121,20 @@ int ObExprPad::calc_pad_expr(const ObExpr &expr, ObEvalCtx &ctx,
       byte_delta = src_str.length() - src_char_len;
       len_int -= byte_delta;
     }
-    if (src_char_len < len_int) {
+
+    if (lib::is_oracle_mode() && 1 == expr.extra_) {
+      //for column convert char/nchar padding, the padded length should be less than max length of target types
+      const int64_t max_len = expr.is_called_in_sql_ ? OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE;
+      int64_t min_mb_len = 0;
+      if (OB_FAIL(ObCharset::get_mbminlen_by_coll(expr.datum_meta_.cs_type_, min_mb_len))) {
+        LOG_WARN("fail to get min mb len", K(ret));
+      } else {
+        int64_t max_pad_chars = (max_len - src_str.length())/min_mb_len;
+        len_int = std::min(len_int, max_pad_chars +  src_char_len);
+      }
+    }
+
+    if (OB_SUCC(ret) && src_char_len < len_int) {
       ObDatum len_char;
       len_char.ptr_ = reinterpret_cast<const char*>(&len_int);
       len_char.pack_ = sizeof(len_int);
@@ -147,6 +161,7 @@ int ObExprPad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_pad_expr;
+  rt_expr.extra_ = raw_expr.get_extra();
   return ret;
 }
 

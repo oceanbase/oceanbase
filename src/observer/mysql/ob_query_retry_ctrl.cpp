@@ -864,8 +864,13 @@ void ObQueryRetryCtrl::before_func(ObRetryParam &v)
 
 void ObQueryRetryCtrl::after_func(ObRetryParam &v)
 {
-  if (OB_TRY_LOCK_ROW_CONFLICT != v.client_ret_ && OB_ERR_PROXY_REROUTE != v.client_ret_) {
-    //锁冲突就不要打印了，避免日志刷屏
+  if (OB_TRY_LOCK_ROW_CONFLICT == v.client_ret_
+        || OB_ERR_PROXY_REROUTE == v.client_ret_
+        || (v.is_from_pl_ && OB_READ_NOTHING == v.client_ret_)) {
+    //锁冲突不打印了，避免日志刷屏
+    // 二次路由不打印
+    // PL 里面的 OB_READ_NOTHING 不打印日志
+  } else {
     LOG_WARN_RET(v.client_ret_, "[RETRY] check if need retry", K(v), "need_retry", RETRY_TYPE_NONE != v.retry_type_);
   }
   if (RETRY_TYPE_NONE != v.retry_type_) {

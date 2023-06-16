@@ -3313,6 +3313,27 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         }
         break;
       }
+      case T_COLLATION: {
+        if (lib::is_oracle_mode()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "set collate in oracle mode");
+          LOG_WARN("set collate in oracle mode is not supported now", K(ret));
+        } else if (column.is_string_type() || column.is_enum_or_set()) {
+          //To compat with mysql, only check here.
+          ObString collation;
+          ObCollationType collation_type;
+          ObCharsetType charset_type = column.get_charset_type();
+          collation.assign_ptr(attr_node->str_value_,
+                              static_cast<int32_t>(attr_node->str_len_));
+          if (CS_TYPE_INVALID == (collation_type = ObCharset::collation_type(collation))) {
+            ret = OB_ERR_UNKNOWN_COLLATION;
+            LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, collation.length(), collation.ptr());
+          } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type))) {
+            SQL_RESV_LOG(WARN, "fail to fill charset and collation info", K(charset_type), K(collation_type), K(ret));
+          }
+        }
+        break;
+      }
       default:  // won't be here
         ret = OB_ERR_PARSER_SYNTAX;
         SQL_RESV_LOG(WARN, "Wrong column attribute", K(ret), K(attr_node->type_));
@@ -10674,6 +10695,47 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
       LOG_WARN("calc ddl parallelism failed", K(ret));
     } else {
       stmt.set_parallelism(parallelism);
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::deep_copy_string_in_part_expr(ObPartitionedStmt* stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null stmt");
+  } else if (OB_FAIL(append(exprs, stmt->get_part_fun_exprs()))) {
+    LOG_WARN("failed to append part fun exprs", K(ret));
+  } else if (OB_FAIL(append(exprs, stmt->get_subpart_fun_exprs()))) {
+    LOG_WARN("failed to append subpart fun exprs", K(ret));
+  } else if (exprs.count() > 0 && OB_FAIL(deep_copy_column_expr_name(*allocator_, exprs))) {
+    LOG_WARN("failed to deep copy column expr name");
+  }
+  return ret;
+}
+
+int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
+                                              ObIArray<ObRawExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> column_exprs;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(exprs, column_exprs))) {
+    LOG_WARN("failed to extract column exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+      ObColumnRefRawExpr* column_expr = NULL;
+      if (OB_ISNULL(column_exprs.at(i)) || !column_exprs.at(i)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(i), K(column_exprs));
+      } else if (OB_FALSE_IT(column_expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(i)))) {
+      } else if (OB_FAIL(ob_write_string(allocator, column_expr->get_column_name(), column_expr->get_column_name()))) {
+        LOG_WARN("failed to write string");
+      } else if (OB_FAIL(ob_write_string(allocator, column_expr->get_database_name(), column_expr->get_database_name()))) {
+        LOG_WARN("failed to write string");
+      }
     }
   }
   return ret;

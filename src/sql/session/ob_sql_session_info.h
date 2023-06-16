@@ -655,7 +655,7 @@ public:
 
 
 public:
-  ObSQLSessionInfo();
+  ObSQLSessionInfo(const uint64_t tenant_id=OB_SERVER_TENANT_ID);
   virtual ~ObSQLSessionInfo();
 
   int init(uint32_t sessid, uint64_t proxy_sessid,
@@ -981,7 +981,7 @@ public:
   int clear_context(const common::ObString &context_name,
                     const common::ObString &attribute);
   int64_t get_curr_session_context_size() const { return curr_session_context_size_; }
-  void reuse_context_map() 
+  void reuse_context_map()
   {
     for (auto it = contexts_map_.begin(); it != contexts_map_.end(); ++it) {
       if (OB_NOT_NULL(it->second)) {

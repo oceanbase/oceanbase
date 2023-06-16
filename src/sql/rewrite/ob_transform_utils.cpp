@@ -13211,5 +13211,58 @@ int ObTransformUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
   return ret;
 }
 
+int ObTransformUtils::check_is_index_part_key(ObTransformerCtx &ctx,
+                                             ObDMLStmt &stmt,
+                                             ObRawExpr *check_expr,
+                                             bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  ObSQLSessionInfo *session_info = ctx.session_info_;
+  if (OB_ISNULL(check_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index", K(ret), K(check_expr));
+  } else if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info is null", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(check_expr, check_expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else if (!check_expr->is_column_ref_expr()) {
+    // do nothing
+  } else {
+    ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr *>(check_expr);
+    const share::schema::ObColumnSchemaV2 *column_schema = NULL;
+    TableItem *table = stmt.get_table_item_by_id(col->get_table_id());
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is null", K(ret), K(*col));
+    } else if (!table->is_basic_table()) {
+
+    } else if (OB_FAIL(ctx.schema_checker_->get_column_schema(session_info->get_effective_tenant_id(),
+                                                              table->ref_id_,
+                                                              col->get_column_id(),
+                                                              column_schema,
+                                                              true))) {
+      LOG_WARN("failed to get column schema", K(ret), K(table->ref_id_), K(col->get_column_id()), K(col->get_table_id()), K(table), K(col), K(lbt()));
+    } else if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", K(ret));
+    } else if (column_schema->is_rowkey_column()) {
+      is_valid = true;
+    } else if (OB_FAIL(ctx.schema_checker_->check_column_has_index(column_schema->get_tenant_id(),
+                                                                    table->ref_id_,
+                                                                    col->get_column_id(),
+                                                                    is_valid))) {
+      LOG_WARN("failed to check column is a key", K(ret));
+    } else if (is_valid) {
+      // do nothing
+    } else if (ctx.schema_checker_->check_if_partition_key(session_info->get_effective_tenant_id(),
+                          table->ref_id_, col->get_column_id(), is_valid)) {
+      LOG_WARN("failed to check if partition key", K(ret));
+    }
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase

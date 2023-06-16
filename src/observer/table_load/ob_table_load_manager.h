@@ -23,7 +23,7 @@ public:
   int init();
   // table ctx holds a reference count
   int add_table_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *table_ctx);
-  int remove_table_ctx(const ObTableLoadUniqueKey &key);
+  int remove_table_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *table_ctx);
   // table ctx holds a reference count
   int get_all_table_ctx(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
   // table ctx holds a reference count
@@ -34,33 +34,42 @@ public:
   int get_inactive_table_ctx_list(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
   void put_table_ctx(ObTableLoadTableCtx *table_ctx);
   int64_t get_table_ctx_count() const;
-  int64_t get_dirty_list_count() const;
-  bool is_table_ctx_empty() const;
-  bool is_dirty_list_empty() const;
   // table ctx no reference counting
   int get_releasable_table_ctx_list(common::ObIArray<ObTableLoadTableCtx *> &table_ctx_array);
-public:
+  int64_t get_dirty_list_count() const;
+private:
   int add_dirty_list(ObTableLoadTableCtx *table_ctx);
 private:
-  struct TableHandle
-  {
-  public:
-    TableHandle() : table_ctx_(nullptr) {}
-    TO_STRING_KV(K_(key), KP_(table_ctx));
-  public:
-    ObTableLoadUniqueKey key_;
-    ObTableLoadTableCtx *table_ctx_;
-  };
   // key => table_ctx
   typedef common::hash::ObHashMap<ObTableLoadUniqueKey, ObTableLoadTableCtx *,
                                   common::hash::NoPthreadDefendMode>
     TableCtxMap;
-  // table_id => table_handle
-  typedef common::hash::ObHashMap<uint64_t, TableHandle, common::hash::NoPthreadDefendMode>
-    TableHandleMap;
+  // table_id => table_ctx
+  typedef common::hash::ObHashMap<uint64_t, ObTableLoadTableCtx *,
+                                  common::hash::NoPthreadDefendMode>
+    TableCtxIndexMap;
+
+  class HashMapEraseIfEqual
+  {
+  public:
+    HashMapEraseIfEqual(ObTableLoadTableCtx *table_ctx) : table_ctx_(table_ctx) {}
+    bool operator()(
+      common::hash::HashMapPair<ObTableLoadUniqueKey, ObTableLoadTableCtx *> &entry) const
+    {
+      return table_ctx_ == entry.second;
+    }
+    bool operator()(common::hash::HashMapPair<uint64_t, ObTableLoadTableCtx *> &entry) const
+    {
+      return table_ctx_ == entry.second;
+    }
+  public:
+    ObTableLoadTableCtx *table_ctx_;
+  };
+private:
   mutable obsys::ObRWLock rwlock_;
   TableCtxMap table_ctx_map_;
-  TableHandleMap table_handle_map_; // index of the latest task
+  TableCtxIndexMap table_ctx_index_map_; // index of the latest task
+  // for release table ctx in background
   mutable lib::ObMutex mutex_;
   common::ObDList<ObTableLoadTableCtx> dirty_list_;
   bool is_inited_;

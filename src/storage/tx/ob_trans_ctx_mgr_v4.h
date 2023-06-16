@@ -483,6 +483,8 @@ public:
 
   int get_max_decided_scn(share::SCN & scn);
 
+  int do_standby_cleanup();
+
   TO_STRING_KV(KP(this),
                K_(ls_id),
                K_(tenant_id),
@@ -950,6 +952,7 @@ public:
 
   int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
 
+  int do_all_ls_standby_cleanup(ObTimeGuard &cleanup_timeguard);
 private:
   int create_ls_(const int64_t tenant_id,
                  const share::ObLSID &ls_id,

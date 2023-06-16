@@ -38,14 +38,15 @@ ObSessionValMap::ObSessionValMap()
 }
 
 ObSessionValMap::ObSessionValMap(const int64_t block_size,
-                                 const ObWrapperAllocator &block_allocator)
+                                 const ObWrapperAllocator &block_allocator,
+                                 const int64_t tenant_id)
     : block_allocator_(SMALL_BLOCK_SIZE, common::OB_MALLOC_NORMAL_BLOCK_SIZE,
-                       ObMalloc(ObModIds::OB_SQL_SESSION_VAR_MAP)),
+                       ObMalloc(ObMemAttr(tenant_id, ObModIds::OB_SQL_SESSION_VAR_MAP))),
     var_name_val_map_allocer_(block_size, block_allocator),
     str_buf1_(ObModIds::OB_SQL_SESSION_VAR_MAP),
     str_buf2_(ObModIds::OB_SQL_SESSION_VAR_MAP),
     current_buf_index_(0),
-    bucket_allocator_(ObModIds::OB_SQL_SESSION_VAR_MAP),
+    bucket_allocator_(ObMemAttr(tenant_id, ObModIds::OB_SQL_SESSION_VAR_MAP)),
     bucket_allocator_wrapper_(&bucket_allocator_),
     str_buf_free_threshold_(0),
     next_free_mem_point_(str_buf_free_threshold_)

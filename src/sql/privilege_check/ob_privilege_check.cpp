@@ -935,8 +935,7 @@ int get_dml_stmt_need_privs(
             }
             if (OB_SUCC(ret)) {
               if (session_priv.is_tenant_changed()
-                  && 0 != table_item->database_name_.case_compare(OB_SYS_DATABASE_NAME)
-                  && OB_SYS_TENANT_ID != session_priv.tenant_id_) {
+                  && 0 != table_item->database_name_.case_compare(OB_SYS_DATABASE_NAME)) {
                 ret = OB_ERR_NO_DB_PRIVILEGE;
                 LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
                                session_priv.host_name_.length(),session_priv.host_name_.ptr(),
@@ -3009,8 +3008,7 @@ int ObPrivilegeCheck::can_do_operation_on_db(
 {
   int ret = OB_SUCCESS;
   if (session_priv.is_tenant_changed()
-      && 0 != db_name.case_compare(OB_SYS_DATABASE_NAME)
-      && OB_SYS_TENANT_ID != session_priv.tenant_id_) {
+      && 0 != db_name.case_compare(OB_SYS_DATABASE_NAME)) {
     ret = OB_ERR_NO_DB_PRIVILEGE;
     LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
                    session_priv.host_name_.length(),session_priv.host_name_.ptr(),

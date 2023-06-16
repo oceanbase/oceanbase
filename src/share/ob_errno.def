@@ -19,7 +19,7 @@
 //oracle error https://docs.oracle.com/en/database/oracle/oracle-database/18/errmg/ORA-00910.html
 //
 //we have ob errno, mysql errno, oracle errno. ob errno used in source code, mysql/oracle errno used in error packet encoding.
-//developer only use ob errno in source code, and specify the mapping relation between ob errno and mysql/oracle errnor in this file.
+//developer only use ob errno in source code, and specify the mapping relation between ob errno and mysql/oracle errno in this file.
 //
 //DEFINE_FULL_ERROR(C1, C0, M1, M2, M3, M4, R1, R2, R3, R4)
 //C0: ob error code
@@ -308,7 +308,7 @@ DEFINE_ERROR(OB_INVALID_PARTITION, -4251, -1, "HY000", "partition not valid");
 DEFINE_ERROR(OB_ERR_TIMEOUT_TRUNCATED, -4252, WARN_DATA_TRUNCATED, "01000", "Timeout value truncated to 102 years");
 DEFINE_ERROR_EXT(OB_ERR_TOO_LONG_TENANT_COMMENT, -4253, -1, "HY000", "Comment for tenant is too long", "Comment for tenant is too long (max = %ld)");
 DEFINE_ERROR(OB_ERR_NET_PACKET_TOO_LARGE, -4254, ER_NET_PACKET_TOO_LARGE, "08S01", "Got a packet bigger than \'max_allowed_packet\' bytes");
-DEFINE_ERROR(OB_TRACE_DESC_NOT_EXIST, -4255, -1, "HY000", "trace log title or key not exist describle");
+DEFINE_ERROR(OB_TRACE_DESC_NOT_EXIST, -4255, -1, "HY000", "trace log title or key not exist describe");
 DEFINE_ERROR_EXT(OB_ERR_NO_DEFAULT, -4256, ER_NO_DEFAULT, "42000", "Variable doesn't have a default value", "Variable '%.*s' doesn't have a default value");
 DEFINE_ERROR_DEP(OB_ERR_COMPRESS_DECOMPRESS_DATA, -4257, -1, "HY000", "compress data or decompress data failed");
 DEFINE_ERROR_EXT_DEP(OB_ERR_INCORRECT_STRING_VALUE, -4258, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, "HY000", "Incorrect string value", "Incorrect string value for column '%.*s' at row %ld");
@@ -440,14 +440,14 @@ DEFINE_ERROR(OB_STACK_OVERFLOW, -4385, -1, "HY000", "stack overflow");
 DEFINE_ERROR(OB_NOT_ALLOW_REMOVING_LEADER, -4386, -1, "HY000", "Do not allow removing leader");
 DEFINE_ERROR(OB_NEED_SWITCH_CONSUMER_GROUP, -4387, 13937, "HY000", "Failed to switch resource group");
 DEFINE_ERROR_DEP(OB_UNEXPECT_INTERNAL_ERROR, -4388, -1, "HY000", "Unexpected internal error happen, please checkout the internal errcode");
-DEFINE_ERROR_DEP(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Porcessing time is too long");
+DEFINE_ERROR_DEP(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Processing time is too long");
 DEFINE_ERROR(OB_ERR_REMOTE_SCHEMA_NOT_FULL, -4390, -1, "HY000", "Schema of remote server is not refreshed yet");
 DEFINE_ERROR(OB_DDL_SSTABLE_RANGE_CROSS, -4391, -1, "HY000", "ddl sstable version range cross");
 DEFINE_ERROR(OB_DISK_HUNG, -4392, -1, "HY000", "disk is hung");
 DEFINE_ERROR(OB_ERR_OBSERVER_START, -4393, -1, "HY000", "observer start process failure");
 DEFINE_ERROR(OB_ERR_OBSERVER_STOP, -4394, -1, "HY000", "observer stop process failure");
 DEFINE_ERROR(OB_ERR_OBSERVICE_START, -4395, -1, "HY000", "observice start process has failure");
-DEFINE_ERROR_DEP(OB_ERR_THREAD_PANIC, -4396, -1, "HY000", "Worker thread pannic, thread may be terminated or hung");
+DEFINE_ERROR_DEP(OB_ERR_THREAD_PANIC, -4396, -1, "HY000", "Worker thread panic, thread may be terminated or hung");
 DEFINE_ERROR(OB_ENCODING_EST_SIZE_OVERFLOW, -4397, -1, "HY000", "Encoding estimated size overflow");
 DEFINE_ORACLE_ERROR(OB_INVALID_SUB_PARTITION_TYPE, -4398, 1500, "HY000", "It is only possible to mix RANGE/LIST partitioning with HASH/KEY partitioning for subpartitioning", 14020, "this physical attribute may not be specified for a table partition");
 DEFINE_ERROR(OB_ERR_UNEXPECTED_UNIT_STATUS, -4399, -1, "HY000", "Unit status is not expected");
@@ -522,7 +522,7 @@ DEFINE_ERROR(OB_SERVER_ZONE_NOT_MATCH, -4631, -1, "HY000", "server zone not matc
 DEFINE_ERROR(OB_OVER_ZONE_NUM_LIMIT, -4632, -1, "HY000", "zone num has reach max zone num");
 DEFINE_ERROR(OB_ZONE_STATUS_NOT_MATCH, -4633, -1, "HY000", "zone status not match");
 DEFINE_ERROR_EXT(OB_RESOURCE_UNIT_IS_REFERENCED, -4634, -1, "HY000", "resource unit is referenced by resource pool", "resource unit \'%s\' is referenced by some resource pool");
-DEFINE_ERROR(OB_DIFFERENT_PRIMARY_ZONE, -4636, -1, "HY000", "table schema primary zone different with other table in sampe tablegroup");
+DEFINE_ERROR(OB_DIFFERENT_PRIMARY_ZONE, -4636, -1, "HY000", "table schema primary zone different with other table in same tablegroup");
 DEFINE_ERROR(OB_SERVER_NOT_ACTIVE, -4637, -1, "HY000", "server is not active");
 DEFINE_ERROR(OB_RS_NOT_MASTER, -4638, -1, "HY000", "The RootServer is not the master");
 DEFINE_ERROR(OB_CANDIDATE_LIST_ERROR, -4639, -1, "HY000", "The candidate list is invalid");
@@ -644,13 +644,15 @@ DEFINE_ERROR(OB_WAIT_DEGRATION_TIMEOUT, -4751, -1, "HY000", "wait degration fini
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_START, -4752, -1, "HY000", "rootservice start process has failure");
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_STOP, -4753, -1, "HY000", "rootservice stop process has failure");
 DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not passed");
-DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice backgroud thread may be hung");
+DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice background thread may be hung");
 DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
 DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
 //DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
 DEFINE_ERROR(OB_ARBITRATION_INFO_QUERY_FAILED, -4758, -1, "HY000", "the arbitration service may be unavailable, please check and retry");
 DEFINE_ERROR(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, -4759, -1, "HY000", "An error was ignored when accessing virtual table, actual error code: %d");
 DEFINE_ERROR(OB_LS_OFFLINE, -4760, -1, "HY000", "log stream is offline");
+DEFINE_ERROR(OB_LS_IS_DELETED, -4761, -1, "HY000", "log stream is deleted");
+DEFINE_ERROR(OB_SKIP_CHECKING_LS_STATUS, -4762, -1, "HY000", "This operation has been finished without checking ls status");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -750,7 +752,7 @@ DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_IS, -5107, -1, "42000", "Invalid ar
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_LENGTH, -5108, -1, "42000", "Invalid argument for length()", "function LENGTH() expected a varchar argument");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_SUBSTR, -5109, -1, "42000", "Invalid argument for substr()", "invalid input format. ret=%d text=%s start=%s length=%s");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_TIME_TO_USEC, -5110, -1, "42000", "Invalid argument for time_to_usec()", "TIME_TO_USEC() expected timestamp or a string as date argument");
-DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_USEC_TO_TIME, -5111, -1, "42000", "Invalid argument for usec_to_time()", "USEC_TO_TIME expected a interger number as usec argument");
+DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_USEC_TO_TIME, -5111, -1, "42000", "Invalid argument for usec_to_time()", "USEC_TO_TIME expected a integer number as usec argument");
 DEFINE_ERROR_EXT(OB_ERR_USER_VARIABLE_UNKNOWN, -5112, -1, "42P01", "Unknown user variable", "Variable %.*s does not exists");
 DEFINE_ERROR_EXT(OB_ILLEGAL_USAGE_OF_MERGING_FROZEN_TIME, -5113, -1, "42000", "Illegal usage of merging_frozen_time()", "MERGING_FROZEN_TIME() system function only be used in daily merging.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_INVALID_NUMERIC, -5114, -1, "42000", "Invalid numeric", "Invalid numeric char '%c'", 1722, "invalid number", "invalid number char '%c'");
@@ -1060,7 +1062,7 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_MULTIPLE_JSON_VALUES, -5433, ER_MULTIPLE_JSON
 DEFINE_ERROR(OB_SQL_RETRY_SPM, -5434, -1, "HY000", "retry sql due to spm");
 DEFINE_ERROR(OB_OUTLINE_NOT_REPRODUCIBLE, -5435, -1, "HY000", "outline not reproducible");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN, -5436, -1, "42000", "Invalid argument for timestamp_to_scn()", " TIMESTAMP_TO_SCN expected timestamp argument");
-DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP, -5437, -1, "42000", "Invalid argument for scn_to_timestamp()", "SCN_TO_TIMESTAMP expected a interger number as nsec argument");
+DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP, -5437, -1, "42000", "Invalid argument for scn_to_timestamp()", "SCN_TO_TIMESTAMP expected a integer number as nsec argument");
 DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_CHILD_PARTITIONING, -5438, ER_WINDOW_NO_CHILD_PARTITIONING, "HY000", "Named window cann't be modified by another partitioning property", "A window which depends on another cannot define partitioning");
 DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_INHERIT_FRAME, -5439, ER_WINDOW_NO_INHERIT_FRAME, "HY000", "Named window cann't be modified by another framing property", "Window '%.*s' has a frame definition, so cannot be referenced by another window");
 DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_REDEFINE_ORDER_BY, -5440, ER_WINDOW_NO_REDEFINE_ORDER_BY, "HY000", "Named window cann't be modified by another ordering property", "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause");
@@ -1433,7 +1435,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_ROWTYPE_MISMATCH, -5841, -1, "HY000", "PL/SQL: Return
 DEFINE_ORACLE_ERROR(OB_ERR_STORAGE_ERROR, -5842, -1, "HY000", "PL/SQL: storage error", 6500, "PL/SQL: storage error");
 DEFINE_ORACLE_ERROR(OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT, -5843, -1, "HY000", "Subscript outside of limit", 6532, "Subscript outside of limit");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CURSOR, -5844, -1, "HY000", "invalid cursor", 1001, "invalid cursor");
-DEFINE_ORACLE_ERROR(OB_ERR_LOGIN_DENIED, -5845, -1, "HY000", "invalid username/password; logon denied", 1017, "invalid username/password; logon deniedd");
+DEFINE_ORACLE_ERROR(OB_ERR_LOGIN_DENIED, -5845, -1, "HY000", "invalid username/password; logon denied", 1017, "invalid username/password; logon denied");
 DEFINE_ORACLE_ERROR(OB_ERR_NOT_LOGGED_ON, -5846, -1, "HY000", "not logged on", 1012, "not logged on");
 DEFINE_ORACLE_ERROR(OB_ERR_SELF_IS_NULL, -5847, -1, "HY000", "method dispatch on NULL SELF argument is disallowed", 30625, "method dispatch on NULL SELF argument is disallowed");
 DEFINE_ORACLE_ERROR(OB_ERR_TIMEOUT_ON_RESOURCE, -5848, -1, "HY000", "timeout occurred while waiting for a resource", 51, "timeout occurred while waiting for a resource");
@@ -1480,7 +1482,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_NO_OPTIONS_FOR_ALTER_USER, -5888, -1, "HY000", "no op
 DEFINE_ORACLE_ERROR(OB_ERR_NO_MATCHING_UK_PK_FOR_COL_LIST, -5889, -1, "HY000", "no matching unique or primary key for this column-list", 2270, "no matching unique or primary key for this column-list");
 DEFINE_ORACLE_ERROR(OB_ERR_DUP_FK_IN_TABLE, -5890, -1, "HY000", "duplicate referential constraint specifications", 2774, "duplicate referential constraint specifications");
 DEFINE_ORACLE_ERROR(OB_ERR_DUP_FK_EXISTS, -5891, -1, "HY000", "such a referential constraint already exists in the table", 2775, "such a referential constraint already exists in the table");
-DEFINE_ORACLE_ERROR(OB_ERR_MISSING_OR_INVALID_PRIVIEGE, -5892, -1, "HY000", "missing or invalid privilege", 990, "missing or invalide privilege");
+DEFINE_ORACLE_ERROR(OB_ERR_MISSING_OR_INVALID_PRIVIEGE, -5892, -1, "HY000", "missing or invalid privilege", 990, "missing or invalid privilege");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_VIRTUAL_COLUMN_TYPE, -5893, -1, "HY000", "specified data type is not supported for a virtual column", 54003, "specified data type is not supported for a virtual column");
 DEFINE_ORACLE_ERROR(OB_ERR_REFERENCED_TABLE_HAS_NO_PK, -5894, -1, "HY000", "referenced table does not have a primary key", 2268, "referenced table does not have a primary key");
 DEFINE_ORACLE_ERROR(OB_ERR_MODIFY_PART_COLUMN_TYPE, -5895, -1, "HY000", "data type or length of a table partitioning column may not be changed", 14060, "data type or length of a table partitioning column may not be changed");
@@ -1530,12 +1532,12 @@ DEFINE_ORACLE_ERROR(OB_ERR_ARG_INVALID, -5934, -1, "HY000", "argument is null, i
 //
 // ATTENTION !!! ATTENTION !!! ATTENTION !!!
 // If you need to use this error code, you MUST use LOG_USER_ERROR to generate a customized
-// error message. Or you will make your customer really pissed off !!!
+// error message. Or you will make your customer really passed off !!!
 /////////////////////////////////////////////////////////////////////////////////////////////
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_DBMS_STATS_PL, -5935, -1, "HY000", "must use LOG_USER_ERROR", "%s", 20001, "must use LOG_USER_ERROR", "%s");
 DEFINE_ERROR_EXT(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION, -5936, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect value for function", "Incorrect %.*s value: '%.*s' for function %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_UNSUPPORTED_CHARACTER_SET, -5937, -1, "HY000", "unsupported character set", 1482, "unsupported character set");
-DEFINE_ORACLE_ERROR(OB_ERR_MUST_BE_FOLLOWED_BY_FOUR_HEXDECIMAL_CHARACTERS_OR_ANOTHER, -5938, -1, "HY000", "'\\' must be followed by four hexdecimal characters or another '\\'", 30186, "'\\' must be followed by four hexdecimal characters or another '\\'");
+DEFINE_ORACLE_ERROR(OB_ERR_MUST_BE_FOLLOWED_BY_FOUR_HEXADECIMAL_CHARACTERS_OR_ANOTHER, -5938, -1, "HY000", "'\\' must be followed by four hexadecimal characters or another '\\'", 30186, "'\\' must be followed by four hexadecimal characters or another '\\'");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_PARAMETER_TOO_LONG, -5939, -1, "HY000", "parameter value longer than maximum characters", "parameter value longer than %d characters", 32021, "parameter value longer than maximum characters", "parameter value longer than %d characters");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_PLSQL_CCFLAGS, -5940, -1, "HY000", "invalid parameter for PLSQL_CCFLAGS", 39962, "invalid parameter for PLSQL_CCFLAGS");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_REF_MUTUALLY_DEP, -5941, -1, "HY000", "Aborted: formed a non-REF mutually-dependent cycle", "Aborted: '%.*s' formed a non-REF mutually-dependent cycle with '%.*s'", 4055, "Aborted: formed a non-REF mutually-dependent cycle", "Aborted: '%.*s' formed a non-REF mutually-dependent cycle with '%.*s'");
@@ -1899,6 +1901,7 @@ DEFINE_ORACLE_ERROR(OB_INVALID_MODIFICATION_OF_COLUMNS, -7415, -1, "42000", "inv
 DEFINE_ORACLE_ERROR(OB_ERR_NULL_FOR_XML_CONSTRUCTOR, -7416, -1, "42000", "Expected XML tag , got no content", 19032, "Expected XML tag , got no content");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_INDEX, -7417, -1, "42000", "cannot create index on expression with datatype ADT '%.*s'", 2327 ,"cannot create index on expression with datatype ADT '%.*s'");
 DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_XML_WITH_INVALID_NODE, -7418, -1, "42000", "XML nodes must be updated with valid nodes and of the same type'", 31067 ,"XML nodes must be updated with valid nodes and of the same type");
+DEFINE_ORACLE_ERROR(OB_LOB_VALUE_NOT_EXIST, -7419, -1, "42000", "LOB value does not exist", 22922 ,"LOB value does not exist");
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999
 ////////////////////////////////////////////////////////////////
@@ -1929,7 +1932,7 @@ DEFINE_ERROR(OB_AGENT_INITING_BACKUP_COUNT_ERROR, -9015, -1, "HY000", "agent ini
 DEFINE_ERROR(OB_CLUSTER_NAME_NOT_EQUAL, -9016, -1, "HY000", "ob cluster name not equal");
 DEFINE_ERROR(OB_RS_LIST_INVAILD, -9017, -1, "HY000", "rs list invalid");
 DEFINE_ERROR(OB_AGENT_HAS_FAILED_TASK, -9018, -1, "HY000", "agent has failed task");
-DEFINE_ERROR(OB_RESTORE_PARTITION_IS_COMPELETE, -9019, -1, "HY000", "restore partition is compelete");
+DEFINE_ERROR(OB_RESTORE_PARTITION_IS_COMPLETE, -9019, -1, "HY000", "restore partition is complete");
 DEFINE_ERROR(OB_RESTORE_PARTITION_TWICE, -9020, -1, "HY000", "restore partition twice");
 DEFINE_ERROR(OB_STOP_DROP_SCHEMA, -9022, -1, "HY000", "physical backup switch is on");
 DEFINE_ERROR(OB_CANNOT_START_LOG_ARCHIVE_BACKUP, -9023, -1, "HY000", "cannot start log archive backup");
@@ -2009,6 +2012,8 @@ DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARC
 DEFINE_ERROR(OB_RESTORE_LOG_TO_END, -9093, -1, "HY000", "Restore log to end");
 DEFINE_ERROR(OB_LS_RESTORE_FAILED, -9094, -1, "HY000", "Restore log stream failed");
 DEFINE_ERROR(OB_NO_TABLET_NEED_BACKUP, -9095, -1, "HY000", "No tablet need backup");
+DEFINE_ERROR(OB_ERR_RESTORE_STANDBY_VERSION_LAG, -9096, -1, "HY000", "standby binary version is lower than primary data version, standby need upgrade");
+DEFINE_ERROR(OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED, -9097, -1, "HY000", "primary tenant has been dropped");
 // end of backup and restore error codes 9001 ~ 9099
 
 ////////////////////////////////////////////////////////////////
@@ -2028,7 +2033,7 @@ DEFINE_ERROR(OB_NOT_READY_TO_EXTEND_FILE, -9202, -1, "HY000", "Auto extend param
 
 ////////////////////////////////////////////////////////////////
 //error code for PL/SQL  -9500 ~ -10000
-//!!! -20000/-21000/-32491 shoud not in here. but we can not remove it now because of compat. ONLY PL SQL ERROR PUT HERE!!!
+//!!! -20000/-21000/-32491 should not in here. but we can not remove it now because of compat. ONLY PL SQL ERROR PUT HERE!!!
 ////////////////////////////////////////////////////////////////
 DEFINE_ORACLE_ERROR_V2_EXT(OB_SP_RAISE_APPLICATION_ERROR, -20000, -1, "HY000", "The stored procedure 'raise_application_error' was called which causes this error to be generated", "%.*s", 20000, "ORA-20000: The stored procedure 'raise_application_error' was called which causes this error to be generated", "ORA%06ld: %.*s");
 DEFINE_ORACLE_ERROR_EXT(OB_SP_RAISE_APPLICATION_ERROR_NUM, -21000, -1, "HY000", "error number argument to raise_application_error of stringstring is out of range", "error number argument to raise_application_error of '%d' is out of range", 21000, "error number argument to raise_application_error of stringstring is out of range", "error number argument to raise_application_error of '%d' is out of range");

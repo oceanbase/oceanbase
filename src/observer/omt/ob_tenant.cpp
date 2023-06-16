@@ -374,6 +374,7 @@ void ObResourceGroup::check_worker_count()
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
     int64_t token = 1;
+    int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
     {
       ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_->id()));
@@ -385,31 +386,30 @@ void ObResourceGroup::check_worker_count()
         workers_.remove(wnode);
         destroy_worker(w);
       } else if (w->has_req_flag()
-                 && w->is_blocking()
+                 && w->blocking_ts() - now >= EXPAND_INTERVAL
                  && enable_dynamic_worker) {
         ++token;
       }
     }
     int64_t succ_num = 0L;
-    int64_t now = 0;
     token = std::max(token, min_worker_cnt());
     token = std::min(token, max_worker_cnt());
     if (OB_UNLIKELY(workers_.get_size() < min_worker_cnt())) {
       const auto diff = min_worker_cnt() - workers_.get_size();
-      token_change_ts_ = ObTimeUtility::current_time();
+      token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, false);
       acquire_more_worker(diff, succ_num);
       LOG_INFO("worker thread created", K(tenant_->id()), K(group_id_), K(token));
     } else if (OB_UNLIKELY(token > workers_.get_size())
                && OB_LIKELY(ObMallocAllocator::get_instance()->get_tenant_remain(tenant_->id()) > ObMallocAllocator::get_instance()->get_tenant_limit(tenant_->id()) * 0.05)) {
       ATOMIC_STORE(&shrink_, false);
-      if (OB_LIKELY((now = ObTimeUtility::current_time()) - token_change_ts_ >= EXPAND_INTERVAL)) {
+      if (OB_LIKELY(now - token_change_ts_ >= EXPAND_INTERVAL)) {
         token_change_ts_ = now;
         acquire_more_worker(1, succ_num);
         LOG_INFO("worker thread created", K(tenant_->id()), K(group_id_), K(token));
       }
     } else if (OB_UNLIKELY(token < workers_.get_size())
-               && OB_LIKELY((now = ObTimeUtility::current_time()) - token_change_ts_ >= SHRINK_INTERVAL)) {
+               && OB_LIKELY(now - token_change_ts_ >= SHRINK_INTERVAL)) {
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, true);
       LOG_INFO("worker thread began to shrink", K(tenant_->id()), K(group_id_), K(token));
@@ -1034,7 +1034,7 @@ int ObTenant::get_new_request(
   ObLink* task = nullptr;
 
   req = nullptr;
-  Thread::is_blocking_ |= Thread::WAIT_IN_TENANT_QUEUE;
+  Thread::WaitGuard guard(Thread::WAIT_IN_TENANT_QUEUE);
   if (w.is_group_worker()) {
     w.set_large_query(false);
     w.set_curr_request_level(0);
@@ -1367,6 +1367,7 @@ void ObTenant::check_worker_count()
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
     int64_t token = 3;
+    int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
     {
       ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
@@ -1379,32 +1380,31 @@ void ObTenant::check_worker_count()
         workers_.remove(wnode);
         destroy_worker(w);
       } else if (w->has_req_flag()
-                 && w->is_blocking()
+                 && w->blocking_ts() - now >= EXPAND_INTERVAL
                  && w->is_default_worker()
                  && enable_dynamic_worker) {
         ++token;
       }
     }
     int64_t succ_num = 0L;
-    int64_t now = 0;
     token = std::max(token, min_worker_cnt());
     token = std::min(token, max_worker_cnt());
     if (OB_UNLIKELY(workers_.get_size() < min_worker_cnt())) {
       const auto diff = min_worker_cnt() - workers_.get_size();
-      token_change_ts_ = ObTimeUtility::current_time();
+      token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, false);
       acquire_more_worker(diff, succ_num);
       LOG_INFO("worker thread created", K(id_), K(token));
     } else if (OB_UNLIKELY(token > workers_.get_size())
                && OB_LIKELY(ObMallocAllocator::get_instance()->get_tenant_remain(id_) > ObMallocAllocator::get_instance()->get_tenant_limit(id_) * 0.05)) {
       ATOMIC_STORE(&shrink_, false);
-      if (OB_LIKELY((now = ObTimeUtility::current_time()) - token_change_ts_ >= EXPAND_INTERVAL)) {
+      if (OB_LIKELY(now - token_change_ts_ >= EXPAND_INTERVAL)) {
         token_change_ts_ = now;
         acquire_more_worker(1, succ_num);
         LOG_INFO("worker thread created", K(id_), K(token));
       }
     } else if (OB_UNLIKELY(token < workers_.get_size())
-               && OB_LIKELY((now = ObTimeUtility::current_time()) - token_change_ts_ >= SHRINK_INTERVAL)) {
+               && OB_LIKELY(now - token_change_ts_ >= SHRINK_INTERVAL)) {
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, true);
       LOG_INFO("worker thread began to shrink", K(id_), K(token));

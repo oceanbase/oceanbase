@@ -429,12 +429,11 @@ int ObLogWindowFunction::print_used_hint(PlanText &plan_text)
   return ret;
 }
 
-int ObLogWindowFunction::inner_replace_op_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogWindowFunction::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
   FOREACH_X(key, sort_keys_, OB_SUCC(ret)) {
-    if (OB_FAIL(replace_expr_action(to_replace_exprs, key->expr_))) {
+    if (OB_FAIL(replace_expr_action(replacer, key->expr_))) {
       LOG_WARN("replace expr failed", K(ret));
     }
   }
@@ -444,7 +443,7 @@ int ObLogWindowFunction::inner_replace_op_exprs(
     if (OB_ISNULL(win_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("win expr is null", K(ret));
-    } else if (OB_FAIL(replace_expr_action(to_replace_exprs, win_expr))) {
+    } else if (OB_FAIL(replace_expr_action(replacer, win_expr))) {
       LOG_WARN("replace expr failed", K(ret));
     } else if (win_expr == win_exprs_.at(i)) {
       // do nothing

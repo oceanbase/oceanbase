@@ -258,7 +258,7 @@ int ObXAService::revert_xa_ctx(ObXACtx *xa_ctx)
   trans_id, coordinator, scheduler_ip, scheduler_port, state, flag) \
   values (%lu, x'%.*s', x'%.*s', %ld, %ld, %ld, '%s', %d, %d, %ld)"
 
-void ObXAService::insert_record_for_standby(const uint64_t tenant_id,
+int ObXAService::insert_record_for_standby(const uint64_t tenant_id,
                                             const ObXATransID &xid,
                                             const ObTransID &trans_id,
                                             const share::ObLSID &coordinator,
@@ -303,10 +303,12 @@ void ObXAService::insert_record_for_standby(const uint64_t tenant_id,
   } else if (OB_FAIL(mysql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute insert record sql failed", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else {
+    ObXAStatistics::get_instance().inc_cleanup_tx_count();
     TRANS_LOG(INFO, "execute insert record sql success", K(exec_tenant_id), K(tenant_id),
               K(sql), K(affected_rows));
   }
   THIS_WORKER.set_timeout_ts(original_timeout_us);
+  return ret;
 }
 
 #define INSERT_XA_LOCK_SQL "\

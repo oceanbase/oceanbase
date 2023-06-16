@@ -826,7 +826,7 @@ int ObTableColumns::set_null_and_default_according_binary_expr(
     if (OB_UNLIKELY(NULL == (tbl_item = select_stmt->get_table_item_by_id(bexpr->get_table_id())))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is NULL", K(ret), K(tbl_item));
-    } else if (OB_INVALID_ID == tbl_item->ref_id_) {
+    } else if (OB_INVALID_ID == tbl_item->ref_id_ || tbl_item->is_link_table()) {
       // do nothing
     } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, tbl_item->ref_id_, table_schema))
         || NULL == table_schema) {

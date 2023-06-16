@@ -85,7 +85,7 @@ private:
   };
 private:
   ObTableLoadManager manager_;
-  common::ObTimer gc_timer_;
+  common::ObTimer timer_;
   ObCheckTenantTask check_tenant_task_;
   ObGCTask gc_task_;
   ObReleaseTask release_task_;

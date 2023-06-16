@@ -160,7 +160,7 @@ class ObResourceMap
 public:
   ObResourceMap();
   virtual ~ObResourceMap();
-  int init(const int64_t bucket_num, const uint64_t tenant_id, const char *label,
+  int init(const int64_t bucket_num, const ObMemAttr &attr,
       const int64_t total_limit, const int64_t hold_limit, const int64_t page_size);
   template <typename Callback = ObResourceDefaultCallback<Key,Value>>
   int get(const Key &key, ObResourceHandle<Value> &handle, Callback callback = ObResourceDefaultCallback<Key, Value>());
@@ -205,14 +205,13 @@ ObResourceMap<Key, Value>::~ObResourceMap()
 template <typename Key, typename Value>
 int ObResourceMap<Key, Value>::init(
     const int64_t bucket_num,
-    const uint64_t tenant_id,
-    const char *label,
+    const ObMemAttr &attr,
     const int64_t total_limit,
     const int64_t hold_limit,
     const int64_t page_size)
 {
   int ret = common::OB_SUCCESS;
-  auto attr = SET_USE_500(ObMemAttr(tenant_id, label));
+  const uint64_t tenant_id = attr.tenant_id_;
   const int64_t bkt_num = common::hash::cal_next_prime(bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
@@ -230,12 +229,12 @@ int ObResourceMap<Key, Value>::init(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "lock buckets isn't equal to map buckets, which could cause concurrency issues", K(ret),
         K(bkt_num), K(map_.bucket_count()));
-  } else if (OB_FAIL(allocator_.init(total_limit, hold_limit, page_size))) {
+  } else if (OB_FAIL(allocator_.init(page_size, "ResourceMap", tenant_id, total_limit))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else {
     allocator_.set_attr(attr);
     is_inited_ = true;
-    STORAGE_LOG(INFO, "init resource map success", K(ret), K(tenant_id), K(bkt_num));
+    STORAGE_LOG(INFO, "init resource map success", K(ret), K(attr), K(bkt_num));
   }
   return ret;
 }
