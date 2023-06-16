@@ -119,6 +119,12 @@
 #  cur.execute(sql)
 #  wait_parameter_sync(cur, False, parameter, value, timeout)
 #
+#def set_tenant_parameter(cur, parameter, value, timeout = 0):
+#  sql = """alter system set {0} = '{1}' tenant = 'all'""".format(parameter, value)
+#  logging.info(sql)
+#  cur.execute(sql)
+#  wait_parameter_sync(cur, True, parameter, value, timeout)
+#
 #def get_ori_enable_ddl(cur, timeout):
 #  ori_value_str = fetch_ori_enable_ddl(cur)
 #  wait_parameter_sync(cur, False, 'enable_ddl', ori_value_str, timeout)
@@ -290,6 +296,17 @@
 #
 #  wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
 #
+#def do_suspend_merge(cur, timeout):
+#    action_sql = "alter system suspend merge tenant = all"
+#    rollback_sql = "alter system resume merge tenant = all"
+#    logging.info(action_sql)
+#    cur.execute(action_sql)
+#
+#def do_resume_merge(cur, timeout):
+#    action_sql = "alter system resume merge tenant = all"
+#    rollback_sql = "alter system suspend merge tenant = all"
+#    logging.info(action_sql)
+#    cur.execute(action_sql)
 #
 #class Cursor:
 #  __cursor = None
@@ -1224,9 +1241,17 @@
 #  # when upgrade across version, disable enable_ddl/major_freeze
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
-#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_rereplication', 'False', timeout)
+#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+#    if current_version != '4.0.0.0':
+#      actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+#      actions.do_suspend_merge(cur, timeout)
+#  else:
+#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+#    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+#    actions.do_suspend_merge(cur, timeout)
+#
 #####========******####======== actions begin ========####******========####
 #  return
 #####========******####========= actions end =========####******========####
@@ -1901,6 +1926,9 @@
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
+#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn != finished_scn and max_received_scn > 0""")
+#  if results[0][0] > 0 :
+#    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
@@ -2689,6 +2717,8 @@
 ## 7 打开major freeze
 #def enable_major_freeze(cur, timeout):
 #  actions.set_parameter(cur, 'enable_major_freeze', 'True', timeout)
+#  actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'True', timeout)
+#  actions.do_resume_merge(cur, timeout)
 #
 ## 开始升级后的检查
 #def do_check(conn, cur, query_cur, timeout):

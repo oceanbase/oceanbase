@@ -111,6 +111,12 @@ def set_parameter(cur, parameter, value, timeout = 0):
   cur.execute(sql)
   wait_parameter_sync(cur, False, parameter, value, timeout)
 
+def set_tenant_parameter(cur, parameter, value, timeout = 0):
+  sql = """alter system set {0} = '{1}' tenant = 'all'""".format(parameter, value)
+  logging.info(sql)
+  cur.execute(sql)
+  wait_parameter_sync(cur, True, parameter, value, timeout)
+
 def get_ori_enable_ddl(cur, timeout):
   ori_value_str = fetch_ori_enable_ddl(cur)
   wait_parameter_sync(cur, False, 'enable_ddl', ori_value_str, timeout)
@@ -282,6 +288,17 @@ def do_end_upgrade(cur, timeout):
 
   wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
 
+def do_suspend_merge(cur, timeout):
+    action_sql = "alter system suspend merge tenant = all"
+    rollback_sql = "alter system resume merge tenant = all"
+    logging.info(action_sql)
+    cur.execute(action_sql)
+
+def do_resume_merge(cur, timeout):
+    action_sql = "alter system resume merge tenant = all"
+    rollback_sql = "alter system suspend merge tenant = all"
+    logging.info(action_sql)
+    cur.execute(action_sql)
 
 class Cursor:
   __cursor = None
