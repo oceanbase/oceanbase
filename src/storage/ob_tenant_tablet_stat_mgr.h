@@ -14,6 +14,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/lock/ob_bucket_lock.h"
+#include "lib/lock/ob_tc_rwlock.h"
 #include "lib/queue/ob_fixed_queue.h"
 #include "lib/list/ob_dlist.h"
 
@@ -69,36 +70,18 @@ public:
   void reset() { MEMSET(this, 0, sizeof(ObTabletStat)); }
   bool is_valid() const;
   bool check_need_report() const;
+  int64_t get_total_merge_row_count() const { return insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_; }
   ObTabletStat& operator=(const ObTabletStat &other);
   ObTabletStat& operator+=(const ObTabletStat &other);
   ObTabletStat& archive(int64_t factor);
-  bool is_hot_tablet() const;
-  bool is_insert_mostly() const;
-  bool is_update_mostly() const;
-  bool is_delete_mostly() const;
-  bool is_inefficient_scan() const;
-  bool is_inefficient_insert() const;
-  bool is_inefficient_pushdown() const;
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(query_cnt), K_(merge_cnt), K_(scan_logical_row_cnt),
                K_(scan_physical_row_cnt), K_(scan_micro_block_cnt), K_(pushdown_micro_block_cnt),
                K_(exist_row_total_table_cnt), K_(exist_row_read_table_cnt), K_(insert_row_cnt),
                K_(update_row_cnt), K_(delete_row_cnt));
 
 public:
-  static constexpr int64_t ACCESS_FREQUENCY = 5;
-  static constexpr int64_t BASE_FACTOR = 10;
-  static constexpr int64_t INSERT_PIVOT_FACTOR = 5;
-  static constexpr int64_t UPDATE_PIVOT_FACTOR = 4;
-  static constexpr int64_t DELETE_PIVOT_FACTOR = 3;
-  static constexpr int64_t SCAN_READ_FACTOR = 2;
-  static constexpr int64_t EXIST_READ_FACTOR = 7;
-  static constexpr int64_t BASIC_TABLE_CNT_THRESHOLD = 5;
-  static constexpr int64_t BASIC_MICRO_BLOCK_CNT_THRESHOLD = 16;
-  static constexpr int64_t BASIC_ROW_CNT_THRESHOLD = 10000; // TODO(@Danling) make it a comfiguration item
-  static constexpr int64_t QUERY_REPORT_MIN_ROW_CNT = 100;
-  static constexpr int64_t QUERY_REPORT_MIN_MICRO_BLOCK_CNT = 10;
-  static constexpr int64_t QUERY_REPORT_MIN_SCAN_TABLE_CNT = 2;
-  static constexpr int64_t MERGE_REPORT_MIN_ROW_CNT = 100;
+  static constexpr int64_t QUERY_REPORT_INEFFICIENT_THRESHOLD = 3;
+  static constexpr int64_t MERGE_REPORT_MIN_ROW_CNT = 1000;
 public:
   int64_t ls_id_;
   uint64_t tablet_id_;
@@ -113,6 +96,52 @@ public:
   uint64_t insert_row_cnt_;
   uint64_t update_row_cnt_;
   uint64_t delete_row_cnt_;
+};
+
+
+struct ObTabletStatAnalyzer
+{
+public:
+  ObTabletStatAnalyzer() = default;
+  ~ObTabletStatAnalyzer() = default;
+  bool is_hot_tablet() const;
+  bool is_insert_mostly() const;
+  bool is_update_or_delete_mostly() const;
+  bool has_slow_query() const;
+  TO_STRING_KV(K_(tablet_stat), K_(is_small_tenant), K_(boost_factor));
+public:
+  static constexpr int64_t ACCESS_FREQUENCY = 5;
+  static constexpr int64_t BASE_FACTOR = 10;
+  static constexpr int64_t LOAD_THRESHOLD = 7;
+  static constexpr int64_t TOMBSTONE_THRESHOLD = 3;
+  static constexpr int64_t QUERY_BASIC_ROW_CNT = 1000;
+  static constexpr int64_t QUERY_BASIC_MICRO_BLOCK_CNT = 10;
+  static constexpr int64_t QUERY_BASIC_ITER_TABLE_CNT = 5;
+  static constexpr int64_t MERGE_BASIC_ROW_CNT = 10000;
+public:
+  ObTabletStat tablet_stat_;
+  int64_t boost_factor_;
+  bool is_small_tenant_;
+};
+
+
+struct ObTenantSysStat
+{
+public:
+  ObTenantSysStat();
+  ~ObTenantSysStat() = default;
+  void reset();
+  bool is_small_tenant() const;
+  bool is_full_cpu_usage() const;
+  TO_STRING_KV(K_(cpu_usage_percentage), K_(min_cpu_cnt), K_(max_cpu_cnt), K_(memory_hold), K_(memory_limit));
+
+public:
+  static constexpr double EPS = 1e-9;
+  double cpu_usage_percentage_;
+  double min_cpu_cnt_;
+  double max_cpu_cnt_;
+  int64_t memory_hold_;
+  int64_t memory_limit_;
 };
 
 
@@ -302,6 +331,11 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       common::ObIArray<ObTabletStat> &tablet_stats);
+  int get_tablet_analyzer(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      ObTabletStatAnalyzer &analyzer);
+  int get_sys_stat(ObTenantSysStat &sys_stat);
   void process_stats();
   void refresh_all(const int64_t step);
 private:
@@ -326,18 +360,18 @@ private:
   static constexpr int64_t TABLET_STAT_PROCESS_INTERVAL = 5 * 1000L * 1000L; //5s
   static constexpr int64_t CHECK_INTERVAL = 120L * 1000L * 1000L; //120s
   static constexpr int64_t CHECK_RUNNING_TIME_INTERVAL = 120L * 1000L * 1000L; //120s
-  static constexpr int64_t DUMP_TABLET_STAT_INTERVAL = 60 * 1000LL * 1000LL; //60s
+  static constexpr int64_t CHECK_SYS_STAT_INTERVAL = 10 * 1000LL * 1000LL; //10s
   static constexpr int32_t DEFAULT_MAX_FREE_STREAM_CNT = 10000;
   static constexpr int32_t DEFAULT_UP_LIMIT_STREAM_CNT = 20000;
   static constexpr int32_t DEFAULT_BUCKET_NUM = 1000;
-  static constexpr int32_t DEFAULT_MAX_PENDING_CNT = 20000;
+  static constexpr int32_t DEFAULT_MAX_PENDING_CNT = 40000;
   static constexpr int32_t MAX_REPORT_RETRY_CNT = 5;
 
   TabletStatUpdater report_stat_task_;
   ObTabletStreamPool stream_pool_;
   TabletStreamMap stream_map_;
   common::ObBucketLock bucket_lock_;
-  ObTabletStat report_queue_[DEFAULT_MAX_PENDING_CNT];
+  ObTabletStat report_queue_[DEFAULT_MAX_PENDING_CNT]; // 12 * 8 * 40000 bytes
   uint64_t report_cursor_;
   uint64_t pending_cursor_;
   int report_tg_id_;

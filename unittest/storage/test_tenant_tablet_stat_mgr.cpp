@@ -113,7 +113,7 @@ void TestTenantTabletStatMgr::batch_report_stat(int64_t report_num)
   for (int64_t i = 0; i < report_num; ++i) {
     ObTabletStat curr_stat;
     curr_stat.ls_id_ = 1;
-    curr_stat.tablet_id_ = 10001 + i;
+    curr_stat.tablet_id_ = 300001 + i;
     curr_stat.query_cnt_ = 100 * (i + 1);
     curr_stat.scan_physical_row_cnt_ = 10000 + i;
 
@@ -201,10 +201,10 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stream)
 {
   ObTabletStat tablet_stat;
   tablet_stat.ls_id_ = 1;
-  tablet_stat.tablet_id_ = 1;
+  tablet_stat.tablet_id_ = 200123;
   tablet_stat.query_cnt_ = 100;
-  tablet_stat.scan_logical_row_cnt_ = 100;
-  tablet_stat.scan_physical_row_cnt_ = 100;
+  tablet_stat.scan_logical_row_cnt_ = 1000000;
+  tablet_stat.scan_physical_row_cnt_ = 1000000;
 
   ObTabletStream stream;
   auto &curr_buckets = stream.curr_buckets_;
@@ -380,10 +380,10 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_mgr)
 
   ObTabletStat tablet_stat;
   tablet_stat.ls_id_ = 1;
-  tablet_stat.tablet_id_ = 123;
+  tablet_stat.tablet_id_ = 200123;
   tablet_stat.query_cnt_ = 100;
-  tablet_stat.scan_logical_row_cnt_ = 100;
-  tablet_stat.scan_physical_row_cnt_ = 100;
+  tablet_stat.scan_logical_row_cnt_ = 100000;
+  tablet_stat.scan_physical_row_cnt_ = 1000000;
 
   bool report_succ = false;
   ret = stat_mgr_->report_stat(tablet_stat, report_succ);
@@ -392,7 +392,7 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_mgr)
 
   ObTabletStat res;
   share::ObLSID ls_id(1);
-  common::ObTabletID tablet_id(123);
+  common::ObTabletID tablet_id(200123);
   ret = stat_mgr_->get_latest_tablet_stat(ls_id, tablet_id, res);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(100, res.query_cnt_);

@@ -38,6 +38,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {
@@ -1297,6 +1298,7 @@ int ObTabletMergeFinishTask::try_schedule_compaction_after_mini(
   int tmp_ret = OB_SUCCESS;
   const ObTabletID &tablet_id = ctx.param_.tablet_id_;
   ObLSID ls_id = ctx.param_.ls_id_;
+
   // report tablet stat
   if (0 == ctx.get_merge_info().get_sstable_merge_info().macro_block_count_) {
     // empty mini compaction, no need to reprot stat

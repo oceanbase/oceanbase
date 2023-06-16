@@ -28,7 +28,7 @@ class ObTabletTableStore;
 class ObGetMergeTablesResult;
 class ObTablesHandleArray;
 class ObStorageSchema;
-struct ObTabletStat;
+struct ObTabletStatAnalyzer;
 struct ObTableHandleV2;
 class ObLS;
 class ObTableStoreIterator;
@@ -242,15 +242,18 @@ private:
       storage::ObGetMergeTablesResult &result,
       const bool update_snapshot_flag);
 private:
-  static int check_load_data_situation(const storage::ObTabletStat &tablet_stat,
-                                       const storage::ObTablet &tablet,
-                                       AdaptiveMergeReason &merge_reason);
-  static int check_tombstone_situation(const storage::ObTabletStat &tablet_stat,
-                                       const storage::ObTablet &tablet,
-                                       AdaptiveMergeReason &merge_reason);
-  static int check_ineffecient_read(const storage::ObTabletStat &tablet_stat,
-                                    const storage::ObTablet &tablet,
-                                    AdaptiveMergeReason &merge_reason);
+  static int check_load_data_situation(
+      const storage::ObTabletStatAnalyzer &analyzer,
+      const storage::ObTablet &tablet,
+      AdaptiveMergeReason &merge_reason);
+  static int check_tombstone_situation(
+      const storage::ObTabletStatAnalyzer &analyzer,
+      const storage::ObTablet &tablet,
+      AdaptiveMergeReason &merge_reason);
+  static int check_ineffecient_read(
+      const storage::ObTabletStatAnalyzer &analyzer,
+      const storage::ObTablet &tablet,
+      AdaptiveMergeReason &merge_reason);
   static int check_inc_sstable_row_cnt_percentage(
       const ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
@@ -263,7 +266,7 @@ private:
   static constexpr int64_t LOAD_DATA_SCENE_THRESHOLD = 70;
   static constexpr int64_t TOMBSTONE_SCENE_THRESHOLD = 50;
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
-  static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 1000L; // 1k
+  static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
 };
 
 
