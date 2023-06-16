@@ -53,6 +53,8 @@ ObExprJoinFilter::ObExprJoinFilterContext::~ObExprJoinFilterContext()
     // do not destroy it, because other worker threads may not start yet
     rf_msg_->dec_ref_count();
   }
+  hash_funcs_.reset();
+  cmp_funcs_.reset();
 }
 
 void ObExprJoinFilter::ObExprJoinFilterContext::reset_monitor_info()
@@ -121,27 +123,6 @@ int ObExprJoinFilter::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
     }
   }
 
-  rt_expr.inner_func_cnt_ = rt_expr.arg_cnt_ * FUNCTION_CNT;
-
-  if (0 == rt_expr.inner_func_cnt_) {
-    // do nothing
-  } else if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(rt_expr.inner_functions_ = reinterpret_cast<void**>(expr_cg_ctx.allocator_->
-                       alloc(sizeof(ObExpr::EvalFunc) * rt_expr.arg_cnt_ * FUNCTION_CNT)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc memory for inner_functions_ failed", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < rt_expr.arg_cnt_; ++i) {
-      rt_expr.inner_functions_[GET_FUNC(i, HASH_ROW)] =
-          reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->murmur_hash_v2_);
-      rt_expr.inner_functions_[GET_FUNC(i, HASH_BATCH)] =
-          reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->murmur_hash_v2_batch_);
-      rt_expr.inner_functions_[GET_FUNC(i, NULL_FIRST_COMPARE)] =
-          reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->null_first_cmp_);
-      rt_expr.inner_functions_[GET_FUNC(i, NULL_LAST_COMPARE)] =
-          reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->null_last_cmp_);
-    }
-  }
   return ret;
 }
 

@@ -194,8 +194,7 @@ public:
   int64_t filter_len_;
   ExprFixedArray join_keys_;
   common::ObHashFuncs hash_funcs_;
-  ObCmpFuncs null_first_cmp_funcs_;
-  ObCmpFuncs null_last_cmp_funcs_;
+  ObCmpFuncs cmp_funcs_;
   JoinFilterSharedType filter_shared_type_;
   ObExpr *calc_tablet_id_expr_;
   common::ObFixedArray<ObRuntimeFilterInfo, common::ObIAllocator> rf_infos_;

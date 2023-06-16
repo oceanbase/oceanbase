@@ -31,19 +31,11 @@ enum RuntimeFilterType
 class ObExprJoinFilter : public ObExprOperator
 {
 public:
-  #define FUNCTION_CNT 4
-  #define GET_FUNC(i, j) (((i) * (FUNCTION_CNT)) + (j))
-  enum FunctionIndex{
-    HASH_ROW = 0,
-    HASH_BATCH = 1,
-    NULL_FIRST_COMPARE = 2,
-    NULL_LAST_COMPARE = 3
-  };
   class ObExprJoinFilterContext : public ObExprOperatorCtx
   {
     public:
       ObExprJoinFilterContext() : ObExprOperatorCtx(),
-          rf_msg_(nullptr), rf_key_(), start_time_(0),
+          rf_msg_(nullptr), rf_key_(), hash_funcs_(), cmp_funcs_(), start_time_(0),
           filter_count_(0), total_count_(0), check_count_(0),
           n_times_(0), ready_ts_(0), next_check_start_pos_(0),
           window_cnt_(0), window_size_(0),
@@ -62,6 +54,8 @@ public:
     public:
       ObP2PDatahubMsgBase *rf_msg_;
       ObP2PDhKey rf_key_;
+      ObHashFuncs hash_funcs_;
+      ObCmpFuncs cmp_funcs_;
       int64_t start_time_;
       int64_t filter_count_;
       int64_t total_count_;

@@ -73,6 +73,10 @@ public:
       { return join_filter_exprs_; }
 common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
       { return join_filter_exprs_; }
+  int add_join_filter_cmp_funcs(const common::ObDatumCmpFuncType &cmp_fun)
+      { return join_filter_cmp_funcs_.push_back(cmp_fun);}
+  const common::ObIArray<common::ObDatumCmpFuncType> &get_join_filter_cmp_funcs()
+      { return join_filter_cmp_funcs_; }
   common::ObIArray<bool> &get_is_null_safe_cmps()
       { return is_null_safe_cmps_; }
   const common::ObIArray<RuntimeFilterType> &get_join_filter_types()
@@ -108,6 +112,8 @@ private:
   //equal join condition expr
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_exprs_;
   bool is_use_filter_shuffle_; // 标记use端filter是否有shuffle
+  // join_filter_cmp_funcs_ is for join filter use
+  common::ObSEArray<common::ObDatumCmpFuncType, 8, common::ModulePageAllocator, true> join_filter_cmp_funcs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_filter_exprs_;
   common::ObSEArray<RuntimeFilterType, 8, common::ModulePageAllocator, true> join_filter_types_;
   common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> p2p_sequence_ids_;

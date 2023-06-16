@@ -2508,9 +2508,7 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
     LOG_WARN("fail to generate calc part id expr", K(ret), KP(op.get_tablet_id_expr()));
   } else if (OB_FAIL(spec.hash_funcs_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
-  } else if (OB_FAIL(spec.null_first_cmp_funcs_.init(op.get_join_exprs().count()))) {
-    LOG_WARN("failed to init cmp funcs", K(ret));
-  } else if (OB_FAIL(spec.null_last_cmp_funcs_.init(op.get_join_exprs().count()))) {
+  } else if (OB_FAIL(spec.cmp_funcs_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init cmp funcs", K(ret));
   } else if (OB_FAIL(generate_rt_exprs(op.get_join_exprs(), spec.join_keys_))) {
     LOG_WARN("failed to generate rt exprs", K(ret));
@@ -2524,25 +2522,49 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
         LOG_WARN("failed to push back hash func", K(ret));
       }
     } else {
-      for (int64_t i = 0; i < spec.join_keys_.count() && OB_SUCC(ret); ++i) {
-        ObExpr *join_expr = spec.join_keys_.at(i);
-        ObHashFunc hash_func;
-        ObCmpFunc null_first_cmp;
-        ObCmpFunc null_last_cmp;
-        null_first_cmp.cmp_func_ = join_expr->basic_funcs_->null_first_cmp_;
-        null_last_cmp.cmp_func_ = join_expr->basic_funcs_->null_last_cmp_;
-        set_murmur_hash_func(hash_func, join_expr->basic_funcs_);
-        if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_) ||
-            OB_ISNULL(null_first_cmp.cmp_func_) ||
-            OB_ISNULL(null_last_cmp.cmp_func_ )) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("hash func is null, check datatype is valid", K(ret));
-        } else if (OB_FAIL(spec.hash_funcs_.push_back(hash_func))) {
-          LOG_WARN("failed to push back hash func", K(ret));
-        } else if (OB_FAIL(spec.null_first_cmp_funcs_.push_back(null_first_cmp))) {
-          LOG_WARN("failed to push back null first cmp func", K(ret));
-        } else if (OB_FAIL(spec.null_last_cmp_funcs_.push_back(null_last_cmp))) {
-          LOG_WARN("failed to push back null last cmp func", K(ret));
+      // for create filter op, the compare funcs are only used for comparing left join key
+      // the compare funcs will be stored in rf msg finally
+      if (op.is_create_filter()) {
+        for (int64_t i = 0; i < spec.join_keys_.count() && OB_SUCC(ret); ++i) {
+          ObExpr *join_expr = spec.join_keys_.at(i);
+          ObHashFunc hash_func;
+          ObCmpFunc null_first_cmp;
+          ObCmpFunc null_last_cmp;
+          null_first_cmp.cmp_func_ = join_expr->basic_funcs_->null_first_cmp_;
+          null_last_cmp.cmp_func_ = join_expr->basic_funcs_->null_last_cmp_;
+          set_murmur_hash_func(hash_func, join_expr->basic_funcs_);
+          if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_) ||
+              OB_ISNULL(null_first_cmp.cmp_func_) ||
+              OB_ISNULL(null_last_cmp.cmp_func_ )) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("hash func or cmp func is null, check datatype is valid", K(ret));
+          } else if (OB_FAIL(spec.hash_funcs_.push_back(hash_func))) {
+            LOG_WARN("failed to push back hash func", K(ret));
+          } else if (lib::is_mysql_mode() && OB_FAIL(spec.cmp_funcs_.push_back(null_first_cmp))) {
+            LOG_WARN("failed to push back null first cmp func", K(ret));
+          } else if (lib::is_oracle_mode() && OB_FAIL(spec.cmp_funcs_.push_back(null_last_cmp))) {
+            LOG_WARN("failed to push back null last cmp func", K(ret));
+          }
+        }
+      } else {
+      // for use filter op, the compare funcs are used to compare left and right
+      // the compare funcs will be stored in ObExprJoinFilterContext finally
+        const common::ObIArray<common::ObDatumCmpFuncType> &join_filter_cmp_funcs = op.get_join_filter_cmp_funcs();
+        for (int64_t i = 0; i < spec.join_keys_.count() && OB_SUCC(ret); ++i) {
+          ObExpr *join_expr = spec.join_keys_.at(i);
+          ObHashFunc hash_func;
+          ObCmpFunc cmp_func;
+          cmp_func.cmp_func_ = join_filter_cmp_funcs.at(i);
+          set_murmur_hash_func(hash_func, join_expr->basic_funcs_);
+          if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_) ||
+              OB_ISNULL(cmp_func.cmp_func_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("hash func or cmp func is null, check datatype is valid", K(ret));
+          } else if (OB_FAIL(spec.hash_funcs_.push_back(hash_func))) {
+            LOG_WARN("failed to push back hash func", K(ret));
+          } else if (OB_FAIL(spec.cmp_funcs_.push_back(cmp_func))) {
+            LOG_WARN("failed to push back cmp func", K(ret));
+          }
         }
       }
     }

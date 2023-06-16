@@ -4530,16 +4530,42 @@ int ObLogicalOperator::generate_runtime_filter_expr(
   ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
   common::ObIArray<ObRawExpr *> &exprs = op->get_filter_exprs();
   ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
-  common::ObIArray<ObRawExpr *> &join_exprs = join_filter_use->get_join_exprs();
+  common::ObIArray<ObRawExpr *> &join_use_exprs = join_filter_use->get_join_exprs();
+  common::ObIArray<ObRawExpr *> &join_create_exprs = join_filter_create->get_join_exprs();
   ObOpRawExpr *join_filter_expr = NULL;
   ObSQLSessionInfo *session_info = get_plan()->get_optimizer_context().get_session_info();
-  if (OB_FAIL(expr_factory.create_raw_expr(T_OP_RUNTIME_FILTER, join_filter_expr))) {
+  if (OB_UNLIKELY(join_use_exprs.count() != join_create_exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("join_use_exprs's size doesn't match join_create_exprs's size",
+        K(join_use_exprs.count()), K(join_create_exprs.count()));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_RUNTIME_FILTER, join_filter_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
   } else {
     join_filter_expr->set_runtime_filter_type(type);
-    for (int i = 0; i < join_exprs.count() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(join_filter_expr->add_param_expr(join_exprs.at(i)))) {
+    for (int i = 0; i < join_use_exprs.count() && OB_SUCC(ret); ++i) {
+      ObRawExpr *join_use_expr = join_use_exprs.at(i);
+      ObRawExpr *join_create_expr = join_create_exprs.at(i);
+      if (OB_ISNULL(join_use_expr) || OB_ISNULL(join_create_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join_use_expr or join_create_expr is NULL!", K(join_use_expr), K(join_create_expr));
+      } else if (OB_FAIL(join_filter_expr->add_param_expr(join_use_exprs.at(i)))) {
         LOG_WARN("fail to add param expr", K(ret));
+      } else {
+        CK(join_use_expr->get_collation_type() == join_create_expr->get_collation_type());
+        ObCmpFunc cmp_func;
+        const ObScale scale = ObDatumFuncs::max_scale(join_use_expr->get_result_type().get_scale(),
+                                                      join_create_expr->get_result_type().get_scale());
+        bool has_lob_header = is_lob_storage(join_use_expr->get_data_type())
+                              || is_lob_storage(join_create_expr->get_data_type());
+        cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
+                                      join_use_expr->get_data_type(),
+                                      join_create_expr->get_data_type(),
+                                      lib::is_oracle_mode()? NULL_LAST : NULL_FIRST,
+                                      join_use_expr->get_collation_type(),
+                                      scale,
+                                      lib::is_oracle_mode(),
+                                      has_lob_header);
+        join_filter_use->add_join_filter_cmp_funcs(cmp_func.cmp_func_);
       }
     }
     if (OB_SUCC(ret)) {
