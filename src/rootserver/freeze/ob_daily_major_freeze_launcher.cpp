@@ -144,13 +144,21 @@ int ObDailyMajorFreezeLauncher::try_launch_major_freeze()
       LOG_WARN("fail to get localtime", KR(ret), K(errno));
     } else if ((human_time_ptr->tm_hour == hour) && (human_time_ptr->tm_min == minute)) {
       if (!already_launch_) {
+        const int64_t start_us = ObTimeUtility::current_time();
+        const int64_t RETRY_TIME_LIMIT = 2 * 3600 * 1000 * 1000L; // 2h
         do {
           ObMajorFreezeParam param;
           param.transport_ = GCTX.net_frame_->get_req_transport();
           if (OB_FAIL(param.add_freeze_info(tenant_id_))) {
             LOG_WARN("fail to push_back", KR(ret), K_(tenant_id));
           } else if (OB_FAIL(ObMajorFreezeHelper::major_freeze(param))) {
-            LOG_WARN("fail to major freeze", K(param), KR(ret));
+            if ((OB_TIMEOUT == ret)) {
+              ret = OB_EAGAIN; // in order to try launch major freeze again, set ret = OB_EAGAIN here
+              LOG_WARN("may be ddl confilict, will try to launch major freeze again", KR(ret), K(param),
+                       "sleep_us", MAJOR_FREEZE_RETRY_INTERVAL_US * MAJOR_FREEZE_RETRY_LIMIT);
+            } else {
+              LOG_WARN("fail to major freeze", K(param), KR(ret));
+            }
           } else {
             already_launch_ = true;
             LOG_INFO("launch major freeze by duty time", K_(tenant_id),
@@ -160,15 +168,21 @@ int ObDailyMajorFreezeLauncher::try_launch_major_freeze()
           // launcher will retry when error code is OB_EAGAIN
           // maybe use a new err code is better(OB_MAJRO_FREEZE_EAGAIN)
           if (OB_EAGAIN == ret) {
+            LOG_WARN("leader switch or ddl confilict, will try to launch major freeze again",
+              KR(ret), K(param), "sleep_us", MAJOR_FREEZE_RETRY_INTERVAL_US * MAJOR_FREEZE_RETRY_LIMIT);
             int64_t usleep_cnt = 0;
             update_last_run_timestamp();
             while (!stop_ && (usleep_cnt < MAJOR_FREEZE_RETRY_LIMIT)) {
               ++usleep_cnt;
               ob_usleep(MAJOR_FREEZE_RETRY_INTERVAL_US);
             }
-            ret = OB_SUCCESS;
           }
-        } while (!stop_ && (OB_EAGAIN == ret));
+        } while (!stop_ && (OB_EAGAIN == ret) && ((ObTimeUtility::current_time() - start_us) < RETRY_TIME_LIMIT));
+        if (!already_launch_ && !stop_ && (OB_EAGAIN == ret)
+            && ((ObTimeUtility::current_time() - start_us) > RETRY_TIME_LIMIT)) {
+          LOG_ERROR("daily major freeze is not launched due to ddl conflict, and reaches retry "
+                    "time limit", KR(ret), K(start_us), "now", ObTimeUtility::current_time());
+        }
       } else {
         LOG_INFO("major_freeze has been already launched, no need to do again", K_(tenant_id));
       }
