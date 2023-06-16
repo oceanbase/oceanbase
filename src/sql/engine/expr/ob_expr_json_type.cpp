@@ -156,7 +156,8 @@ int ObExprJsonType::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, 
         } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
             j_in_type, j_base))) {
           LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
-          if (ret == OB_ERR_INVALID_JSON_TEXT) {
+          if (ret == OB_ERR_INVALID_JSON_TEXT_IN_PARAM) {
+            ret = OB_ERR_INVALID_JSON_TEXT;
             LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
           }
         } else {

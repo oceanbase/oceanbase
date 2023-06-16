@@ -256,7 +256,7 @@ bool ObRapidJsonHandler::seeing_value(ObJsonNode *value)
         INIT_SUCC(ret);
         next_state_ = ObJsonExpectNextState::EXPECT_OBJECT_KEY;
         ObJsonObject *object = dynamic_cast<ObJsonObject *>(current_element_);
-        if (OB_FAIL(object->add(key_, value, with_unique_key_))) {
+        if (OB_FAIL(object->add(key_, value, with_unique_key_, true, false))) {
           LOG_WARN("fail to add element to json object", K(ret));
           if (ret == OB_ERR_DUPLICATE_KEY) {
             with_duplicate_key_ = true;
@@ -317,7 +317,13 @@ bool ObRapidJsonHandler::is_end_object_or_array()
       // Sort the key-value pairs of the ObJsonObject at the current level.
       ObJsonObject *obj = static_cast<ObJsonObject *>(current_element_);
       obj->update_serialize_size();
-      obj->sort();
+      obj->stable_sort();
+      int64_t origin_num = obj->element_count();
+      obj->unique();
+      if (with_unique_key_ && obj->element_count() < origin_num) {
+        is_continue = false;
+        with_duplicate_key_ = true;
+      }
     } else { // current is array
       current_element_->update_serialize_size();
     }
