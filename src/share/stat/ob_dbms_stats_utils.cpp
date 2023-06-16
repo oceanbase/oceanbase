@@ -272,6 +272,9 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_SESSION_EVENT_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_ROUTINE_TID ||
          table_id == share::OB_ALL_VIRTUAL_TX_DATA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_TRANS_LOCK_STAT_TID ||
+         table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SQL_AUDIT_TID ||
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_ORA_TID ||
@@ -289,7 +292,9 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_TRACE_SPAN_INFO_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_LOCK_WAIT_STAT_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_TRANS_STAT_ORA_TID ||
-         table_id == share::OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_ORA_TID;
+         table_id == share::OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_TRANS_LOCK_STAT_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_ORA_TID;
 }
 
 bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)

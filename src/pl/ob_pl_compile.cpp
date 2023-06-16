@@ -338,7 +338,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     if (OB_SUCC(ret)) {
       ObString body = proc->get_routine_body(); //获取body字符串
       ObDataTypeCastParams dtc_params = session_info_.get_dtc_params();
-      ObPLParser parser(allocator_, dtc_params.connection_collation_);
+      ObPLParser parser(allocator_, dtc_params.connection_collation_, session_info_.get_sql_mode());
       if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                     allocator_, dtc_params, body))) {
         LOG_WARN("fail to do charset convert", K(ret), K(body));
@@ -565,7 +565,7 @@ int ObPLCompiler::analyze_package(const ObString &source,
   CK (!source.empty());
   CK (package_ast.is_inited());
   if (OB_SUCC(ret)) {
-    ObPLParser parser(allocator_, session_info_.get_local_collation_connection());
+    ObPLParser parser(allocator_, session_info_.get_local_collation_connection(), session_info_.get_sql_mode());
     ObStmtNodeTree *parse_tree = NULL;
     CHECK_COMPATIBILITY_MODE(&session_info_);
     ObPLResolver resolver(allocator_,

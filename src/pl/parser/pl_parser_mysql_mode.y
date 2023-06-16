@@ -126,6 +126,7 @@ int obpl_mysql_wrap_node_into_subquery(ObParseCtx *_parse_ctx, ParseNode *node) 
       parse_result.charset_info_ = _parse_ctx->charset_info_;
       parse_result.is_not_utf8_connection_ = _parse_ctx->is_not_utf8_connection_;
       parse_result.connection_collation_ = _parse_ctx->connection_collation_;
+      parse_result.sql_mode_ = _parse_ctx->scanner_ctx_.sql_mode_;
       if (0 == parse_sql_stmt(&parse_result)) {
         *node = *parse_result.result_tree_->children_[0];
         node->str_value_ = subquery;
@@ -2477,6 +2478,7 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
     parse_result.charset_info_ = parse_ctx->charset_info_;
     parse_result.is_not_utf8_connection_ = parse_ctx->is_not_utf8_connection_;
     parse_result.connection_collation_ = parse_ctx->connection_collation_;
+    parse_result.sql_mode_ = parse_ctx->scanner_ctx_.sql_mode_;
   }
   if (sql_str_len <= 0) {
     //do nothing

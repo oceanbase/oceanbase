@@ -1946,6 +1946,8 @@ test	bug2267_4	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEF
 call bug2267_2()|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
 test	bug2267_4	FUNCTION	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+test	bug2564_3	FUNCTION	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+test	bug2564_4	FUNCTION	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 call bug2267_3()|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 bug2267_1		CREATE DEFINER = admin@% PROCEDURE `test`.`bug2267_1`
@@ -2228,7 +2230,6 @@ set @@sql_mode = 'ANSI_QUOTES'|
 drop procedure if exists bug2564_2|
 create procedure bug2564_2()
 insert into "t1" values ('foo', 1)|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'insert into "t1" values ('foo', 1)' at line 2
 set @@sql_mode = ''$
 drop function if exists bug2564_3$
 create function bug2564_3(x int, y int) returns int
@@ -2247,7 +2248,11 @@ MODIFIES SQL DATA
 COMMENT `Joe's procedure`
  insert into `t1` values ("foo", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create procedure bug2564_2|
-ERROR 42000: procedure/function does not exist
+Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
+bug2564_2	ANSI_QUOTES	CREATE DEFINER = admin@% PROCEDURE `test`.`bug2564_2`
+()
+
+MODIFIES SQL DATA insert into "t1" values ('foo', 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create function bug2564_3|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 bug2564_3		CREATE DEFINER = admin@% FUNCTION `test`.`bug2564_3`
@@ -2262,7 +2267,6 @@ bug2564_4	REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI	CREATE DEF
 ) RETURNS int(11) return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure bug2564_1|
 drop procedure bug2564_2|
-ERROR 42000: PROCEDURE test.bug2564_2 does not exist
 drop function bug2564_3|
 drop function bug2564_4|
 drop function if exists bug3132|

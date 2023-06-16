@@ -204,7 +204,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
   ObStmtNodeTree *parse_tree = NULL;
   if (OB_SUCC(ret)) {
     ObString body = routine_info_.get_routine_body(); //获取body字符串
-    ObPLParser parser(inner_allocator_, session_info_.get_local_collation_connection());
+    ObPLParser parser(inner_allocator_, session_info_.get_local_collation_connection(), session_info_.get_sql_mode());
     CHECK_COMPATIBILITY_MODE(&session_info_);
 
     if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
