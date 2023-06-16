@@ -168,7 +168,7 @@ int ObAesEncryption::aes_encrypt(const char *key, const int64_t &key_len, const 
     unsigned char *iv_encrypt = need_iv ? (unsigned char *)iv : NULL;
     engine = ObTdeEncryptEngineLoader::get_instance().get_tde_engine(mode);
     if (NULL != engine) {
-      if (EXECUTE_COUNT_PER_SEC(1)) {
+      if (EXECUTE_COUNT_PER_SEC(10)) {
         LOG_INFO("tde use engine to encrypt data", K(mode));
       }
     }
@@ -228,7 +228,7 @@ int ObAesEncryption::aes_decrypt(const char *key, const int64_t &key_len, const 
     unsigned char *iv_encrypt = need_iv ? (unsigned char *)iv : NULL;
     engine = ObTdeEncryptEngineLoader::get_instance().get_tde_engine(mode);
     if (NULL != engine) {
-      if (EXECUTE_COUNT_PER_SEC(1)) {
+      if (EXECUTE_COUNT_PER_SEC(10)) {
         LOG_INFO("tde use engine to decrypt data", K(mode));
       }
     }
@@ -531,18 +531,18 @@ int ObTdeEncryptEngineLoader::load(const common::ObString& engine)
     LOG_WARN("unsupport engine", K(engine));
   } else {
     if (NULL == tde_engine_[type]) {
-      tde_engine_[type] = ENGINE_by_id(engine.ptr());
-      if (NULL == tde_engine_[type]) {
+      ENGINE *e = ENGINE_by_id(engine.ptr());
+      if (NULL == e) {
         ret = OB_INIT_FAIL;
         err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
         LOG_WARN("load engine failed", K(engine), K(err_reason));
-      } else if (!ENGINE_init(tde_engine_[type])) {
+      } else if (!ENGINE_init(e)) {
         ret = OB_INIT_FAIL;
         err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
         LOG_WARN("Failed initialisation engine!", K(engine), K(err_reason));
-        ENGINE_free(tde_engine_[type]);
-        tde_engine_[type] = NULL;
+        ENGINE_free(e);
       } else {
+        tde_engine_[type] = e;
         LOG_INFO("tde install engine success", K(engine));
       }
     }
@@ -607,7 +607,7 @@ ObTdeEncryptEngineLoader::ObEncryptEngineType ObTdeEncryptEngineLoader::get_engi
   ObEncryptEngineType type = OB_INVALID_ENGINE;
   if (OB_NOT_NULL(strcasestr(engine.ptr(), "sm4"))) {
     type = OB_SM4_ENGINE;
-  } else if (OB_NOT_NULL(strcasestr(engine.ptr(), "hy"))) {
+  } else if (OB_NOT_NULL(strcasestr(engine.ptr(), "hy")) || OB_NOT_NULL(strcasestr(engine.ptr(), "hct"))) {
     type = OB_SM4_ENGINE;
   } else if (OB_NOT_NULL(strcasestr(engine.ptr(), "aes"))) {
     type = OB_AES_ENGINE;
