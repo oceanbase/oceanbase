@@ -581,10 +581,10 @@ public:
     int ret = OB_SUCCESS;
     // **replace** error code & error msg
     if (new_error_code != ObPxTask::TASK_DEFAULT_RET_VALUE) {
-      if ((OB_SUCCESS == current_error_code) ||
-          ((OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == current_error_code ||
-            OB_GOT_SIGNAL_ABORTING == current_error_code) &&
-           OB_SUCCESS != new_error_code)) {
+      if ((OB_SUCCESS == current_error_code ||
+           OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == current_error_code ||
+           OB_GOT_SIGNAL_ABORTING == current_error_code) &&
+           OB_SUCCESS != new_error_code) {
         current_error_code = new_error_code;
         FORWARD_USER_ERROR(new_error_code, from.msg_);
       }
