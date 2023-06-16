@@ -271,6 +271,8 @@ struct ObSingleLSInfoDesc final : public ObExternArchiveDesc
     int64_t file_id_;
     int64_t size_bytes_;
 
+    bool operator < (const OneFile &other) const { return file_id_ < other.file_id_; }
+
     TO_STRING_KV(K_(file_id), K_(size_bytes));
   };
 
@@ -528,28 +530,6 @@ private:
 
   private:
     DISALLOW_COPY_AND_ASSIGN(ObRoundRangeFilter);
-  };
-
-  class ObPieceFileListFilter : public ObBaseDirEntryOperator
-  {
-  public:
-    ObPieceFileListFilter();
-    virtual ~ObPieceFileListFilter() {}
-    int init(ObArchiveStore *store);
-    int func(const dirent *entry) override;
-
-    ObArray<int64_t> &result() { return files_; }
-
-    TO_STRING_KV(K_(is_inited), K_(*store), K_(files));
-
-  private:
-    bool is_inited_;
-    ObArchiveStore *store_;
-
-    ObArray<int64_t> files_;
-
-  private:
-    DISALLOW_COPY_AND_ASSIGN(ObPieceFileListFilter);
   };
 
   class ObLSFileListOp : public ObBaseDirEntryOperator
