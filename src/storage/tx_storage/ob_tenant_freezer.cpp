@@ -1035,11 +1035,7 @@ int ObTenantFreezer::get_freeze_trigger_(ObTenantFreezeCtx &ctx)
       min = MIN(mem_memstore_limit, max_mem_memstore_can_get_now);
     }
 
-    if (min < 100) {
-      memstore_freeze_trigger =  get_freeze_trigger_percentage_() * min / 100;
-    } else {
-      memstore_freeze_trigger = min / 100 * get_freeze_trigger_percentage_();
-    }
+    memstore_freeze_trigger =  get_freeze_trigger_percentage_() * min / 100;
   }
   // result
   ctx.max_mem_memstore_can_get_now_ = max_mem_memstore_can_get_now;
