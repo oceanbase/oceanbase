@@ -1020,6 +1020,7 @@ public:
       share::SCN &start_replay_scn);
   static int get_backup_scn(const uint64_t &tenant_id, share::SCN &scn);
   static int check_tenant_data_version_match(const uint64_t tenant_id, const uint64_t data_version);
+  static int get_full_replica_num(const uint64_t tenant_id, int64_t &replica_num);
 private:
   static const int64_t  RETRY_INTERVAL = 10 * 1000 * 1000;
   static const int64_t  MAX_RETRY_TIMES = 3;
@@ -1402,6 +1403,8 @@ struct ObBackupLSTaskAttr final
   ~ObBackupLSTaskAttr() {}
   bool is_valid() const;
   int assign(const ObBackupLSTaskAttr &other);
+  int get_black_server_str(const ObIArray<ObAddr> &black_servers, ObSqlString &sql_string) const;
+  int set_black_servers(const ObString &str);
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(ls_id), K_(job_id), K_(backup_set_id), K_(backup_type), K_(task_type),
       K_(status), K_(start_ts), K_(end_ts), K_(backup_date), K_(black_servers), K_(dst), K_(task_trace_id),
       K_(stats), K_(start_turn_id), K_(turn_id), K_(retry_id), K_(result));

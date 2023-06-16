@@ -295,14 +295,28 @@ int ObBackupDataLSTaskMgr::update_black_server(
     const ObAddr &block_server)
 {
   int ret  = OB_SUCCESS;
+  int64_t full_replica_num = 0;
+  ObSqlString black_server_sql_string("");
+  ObSEArray<ObAddr, OB_MAX_MEMBER_NUMBER> new_black_servers_;
   if (!block_server.is_valid() || !ls_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(block_server), K(ls_attr));
-  } else if (OB_FAIL(lease_service.check_lease())) {
+  } else if (OB_FAIL(ObBackupUtils::get_full_replica_num(ls_attr.tenant_id_, full_replica_num))) {
+    LOG_WARN("failed to get full replica num", K(ret));
+  } else if (ls_attr.black_servers_.count() + 1 == full_replica_num) {
+    // all replicas are in black servers, clear the black servers.
+  } else if (OB_FAIL(new_black_servers_.assign(ls_attr.black_servers_))) {
+    LOG_WARN("failed to assign black servers", K(ret));
+  } else if (OB_FAIL(new_black_servers_.push_back(block_server))) {
+    LOG_WARN("failed to push back black server", K(ret));
+  } else if (OB_FAIL(ls_attr.get_black_server_str(new_black_servers_, black_server_sql_string))) {
+    LOG_WARN("failed to get black server str", K(ret), K(new_black_servers_));
+  }
+  if (FAILEDx(lease_service.check_lease())) {
     LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
   } else if (OB_FAIL(ObBackupLSTaskOperator::update_black_server(
-      sql_proxy, ls_attr.task_id_, ls_attr.tenant_id_, ls_attr.ls_id_, block_server))) {
-    LOG_WARN("[DATA_BACKUP]failed to update block server", K(ret), K(ls_attr), K(block_server));
+      sql_proxy, ls_attr.task_id_, ls_attr.tenant_id_, ls_attr.ls_id_, black_server_sql_string.string()))) {
+    LOG_WARN("[DATA_BACKUP]failed to update block server", K(ret), K(ls_attr), K(black_server_sql_string));
   }
   return ret;
 }
