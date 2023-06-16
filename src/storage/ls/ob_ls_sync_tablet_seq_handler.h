@@ -36,7 +36,7 @@ public:
 public:
   int init(ObLS *ls);
   void reset();
-	// for replay
+  // for replay
   int replay(const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
