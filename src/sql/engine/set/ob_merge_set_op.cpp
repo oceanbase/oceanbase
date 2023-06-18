@@ -35,7 +35,8 @@ ObMergeSetOp::ObMergeSetOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpIn
     last_row_(alloc_),
     cmp_(),
     need_skip_init_row_(false),
-    last_row_idx_(-1)
+    last_row_idx_(-1),
+    use_last_row_(false)
 {}
 
 int ObMergeSetOp::inner_open()
