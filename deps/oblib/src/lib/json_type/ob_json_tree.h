@@ -205,6 +205,9 @@ public:
     }
     return max_child + 1;
   }
+
+  void unique();
+  void stable_sort();
   OB_INLINE uint64_t get_serialize_size()
   {
     if (serialize_size_ == 0) {
@@ -256,7 +259,7 @@ public:
   // @param [in] key    The key.
   // @param [in] value  The Json node.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  int add(const common::ObString &key, ObJsonNode *value, bool with_unique_key = false);
+  int add(const common::ObString &key, ObJsonNode *value, bool with_unique_key = false, bool is_lazy_sort = false, bool need_overwrite = true);
 
   // Rename key in current object if exist.
   //
