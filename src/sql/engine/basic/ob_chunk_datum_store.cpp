@@ -516,8 +516,7 @@ void ObChunkDatumStore::reset()
   blocks_.reset();
   cur_blk_ = NULL;
   cur_blk_buffer_ = nullptr;
-  free_block(tmp_dump_blk_);
-  tmp_dump_blk_ = nullptr;
+  free_tmp_dump_blk(); // just in case, not necessary. tmp block always freed instantly after use
   while (!free_list_.is_empty()) {
     Block *item = free_list_.remove_first();
     mem_hold_ -= item->get_buffer()->mem_size();
