@@ -1607,10 +1607,6 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
         ObObjType type = scalar_data_type.get_obj_type();
         type = ob_is_lob_locator(type) ? ObLongTextType : type;
         int32_t length = scalar_data_type.get_length();
-        if (ob_is_json(type)) {
-          length = length < 0 ? 0 : length;
-          type = ObLongTextType;
-        }
         if (OB_FAIL(ObDDLResolver::check_text_length(scalar_data_type.get_charset_type(),
                                                      scalar_data_type.get_collation_type(),
                                                      ident_name.ptr(),
