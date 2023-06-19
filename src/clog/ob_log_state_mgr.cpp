@@ -2701,7 +2701,8 @@ ObVersion ObLogStateMgr::get_freeze_version() const
 void ObLogStateMgr::check_role_change_warn_interval_(bool& is_role_change_timeout) const
 {
   const int64_t current = ObTimeUtility::current_time();
-  if (current - role_change_time_ > ROLE_CHANGE_WARN_INTERVAL) {
+  const int64_t role_change_timeout = GCONF.role_change_timeout;
+  if (current - role_change_time_ > role_change_timeout) {
     is_role_change_timeout = true;
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       CLOG_LOG(ERROR,
@@ -2712,7 +2713,8 @@ void ObLogStateMgr::check_role_change_warn_interval_(bool& is_role_change_timeou
           "interval",
           current - role_change_time_,
           K_(role),
-          K_(state));
+          K_(state),
+          K(role_change_timeout));
     }
   }
 }

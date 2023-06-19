@@ -618,7 +618,6 @@ private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
-  enum { ROLE_CHANGE_WARN_INTERVAL = 10 * 1000 * 1000 };
   static const int64_t START_PARTITION_WARN_INTERVAL = 1 * 1000;
   static const int64_t BUF_SIZE = 2048;
   static const int64_t STANDBY_CHECK_SYNC_START_ID_INTERVAL = 3l * 1000l * 1000l;

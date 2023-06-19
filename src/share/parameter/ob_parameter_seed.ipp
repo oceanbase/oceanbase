@@ -782,6 +782,10 @@ DEF_INT(clog_max_unconfirmed_log_count, OB_TENANT_PARAMETER, "1500", "[100, 5000
     "maximum of unconfirmed logs in clog module. "
     "Range: [100, 50000]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(role_change_timeout, OB_CLUSTER_PARAMETER, "10s", "(0s,]",
+    "The time interval of partition's role changing (revoke/takeover). "
+    "Range: (0s, +∞)",
+    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_ob_clog_timeout_to_force_switch_leader, OB_CLUSTER_PARAMETER, "10s", "[0s, 60m]",
     "When log sync is blocking, leader need wait this interval before revoke."
