@@ -808,10 +808,10 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
     }
     case T_OP_BOOL:{
       CK(1 == expr->get_param_count());
-      if (print_params_.for_dblink_) {
-        DATA_PRINTF("(case when (");
+      if (print_params_.for_dblink_ && lib::is_mysql_mode()) {
+        DATA_PRINTF("!!(");
         PRINT_EXPR(expr->get_param_expr(0));
-        DATA_PRINTF(") then 1 else 0 end)");
+        DATA_PRINTF(")");
       } else if (expr->has_flag(IS_INNER_ADDED_EXPR)) {
         // ignore print inner added expr
         PRINT_EXPR(expr->get_param_expr(0));

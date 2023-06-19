@@ -1477,34 +1477,15 @@ int ObTransformDBlink::formalize_bool_select_expr(ObDMLStmt *stmt)
     ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
     for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
       SelectItem &select_item = select_items.at(i);
-      ObRawExpr *case_when_expr = NULL;
-      ObConstRawExpr *one_expr = NULL;
-      ObConstRawExpr *zero_expr = NULL;
       bool is_bool_expr = false;
       if (OB_ISNULL(select_item.expr_)) {
         LOG_WARN("unexpected select item", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(select_item.expr_, is_bool_expr))) {
         LOG_WARN("failed to check is bool expr", K(ret));
-      } else if (!is_bool_expr) {
-        // do nothing
-      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
-                                                              ObIntType,
-                                                              1,
-                                                              one_expr))) {
-        LOG_WARN("failed to build const number expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
-                                                              ObIntType,
-                                                              0,
-                                                              zero_expr))) {
-        LOG_WARN("failed to build const number expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(*ctx_->expr_factory_,
-                                                              select_item.expr_,
-                                                              one_expr,
-                                                              zero_expr,
-                                                              case_when_expr))) {
-        LOG_WARN("failed to build case when expr", K(ret));
-      } else {
-        select_item.expr_ = case_when_expr;
+      } else if (is_bool_expr) {
+        // TODO : BOOL SELECT ITEM NOT SUPPORTED IN ORACLE MODE
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("bool select item for oracle dblink not supported", K(ret));
       }
     }
   }
