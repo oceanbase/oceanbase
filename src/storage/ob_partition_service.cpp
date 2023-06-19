@@ -6215,6 +6215,7 @@ int ObPartitionService::is_log_sync(const common::ObPartitionKey& key, bool& is_
 {
   int ret = OB_SUCCESS;
   is_sync = false;
+  bool partition_exist = true;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -6222,7 +6223,10 @@ int ObPartitionService::is_log_sync(const common::ObPartitionKey& key, bool& is_
   } else if (OB_UNLIKELY(!is_running_)) {
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "The service is not running, ", K(ret));
+  } else if (OB_FAIL(check_partition_exist(key, partition_exist))) {
+    STORAGE_LOG(WARN, "check_partition_exist failed, ", K(ret), K(key));
   } else {
+    DEBUG_SYNC(BEFORE_WAIT_FETCH_LOG);
     ObIPartitionGroupGuard guard;
     clog::ObIPartitionLogService* pls = NULL;
     if (OB_FAIL(get_partition(key, guard))) {
@@ -6235,6 +6239,9 @@ int ObPartitionService::is_log_sync(const common::ObPartitionKey& key, bool& is_
       STORAGE_LOG(WARN, "partition log service is NULL", K(key), K(ret));
     } else if (OB_FAIL(pls->is_log_sync_with_leader(is_sync))) {
       STORAGE_LOG(WARN, "wait fetch log failed.", K(key), K(ret));
+    } else if (!is_sync && !partition_exist) {
+      ret = OB_TABLE_IS_DELETED;
+      STORAGE_LOG(WARN, "table will be deleted, no need wait log sync with leader", K(key));
     } else {
       max_confirmed_log_id = pls->get_max_confirmed_log_id();
     }
@@ -7789,9 +7796,12 @@ int ObPartitionService::wait_fetch_log(const common::ObPartitionKey& key)
   } else {
     int64_t start = ObTimeUtility::current_time();
     while (OB_SUCC(ret)) {
+      bool partition_exist = true;
       if (OB_UNLIKELY(!is_running_)) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "The service is not running, ", K(ret));
+      } else if (OB_FAIL(check_partition_exist(key, partition_exist))) {
+        STORAGE_LOG(WARN, "check_partition_exist failed, ", K(ret), K(key));
       } else {
         ObIPartitionGroupGuard guard;
         if (OB_FAIL(get_partition(key, guard))) {
@@ -7803,11 +7813,18 @@ int ObPartitionService::wait_fetch_log(const common::ObPartitionKey& key)
           bool is_sync = false;
           if (OB_SUCC(guard.get_partition_group()->get_log_service()->is_log_sync_with_leader(is_sync))) {
             if (!is_sync) {
-              usleep(MC_WAIT_INTERVAL);
-              int64_t end = ObTimeUtility::current_time();
-              if (end - start > FETCH_LOG_TIMEOUT) {
-                ret = OB_TIMEOUT;
-                STORAGE_LOG(WARN, "wait fetch log process timeout", "time", (end - start));
+              // fixed: if majority of partition have been dropped, is_log_sync_with_leader will always return false,
+              // the status of migrate task can not been advanced for a long time(eg: each partition will cost 1 min).
+              if (!partition_exist) {
+                ret = OB_TABLE_IS_DELETED;
+                STORAGE_LOG(WARN, "table will be deleted, no need wait log sync with leader", K(key));
+              } else {
+                usleep(MC_WAIT_INTERVAL);
+                int64_t end = ObTimeUtility::current_time();
+                if (end - start > FETCH_LOG_TIMEOUT) {
+                  ret = OB_TIMEOUT;
+                  STORAGE_LOG(WARN, "wait fetch log process timeout", "time", (end - start));
+                }
               }
             } else {
               STORAGE_LOG(INFO, "wait fetch log succeed.", K(key), K(ret));

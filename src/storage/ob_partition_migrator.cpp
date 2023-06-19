@@ -12415,7 +12415,6 @@ int ObMigrateFinishTask::process()
   ObIPartitionGroup *partition = NULL;
   ObPGStorage *pg_storage = NULL;
   DEBUG_SYNC(BEFORE_FINISH_MIGRATE_TASK);
-
   if (NULL != ctx_) {
     LOG_INFO("start ObMigrateFinishTask process", "pkey", ctx_->replica_op_arg_.key_, K(ctx_->replica_op_arg_.type_));
   }
