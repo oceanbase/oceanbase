@@ -663,6 +663,7 @@ public:
   int check_is_all_server_readonly_replica(
       share::schema::ObSchemaGetterGuard &guard,
       bool &is) const;
+  int check_if_tablet_exists(const common::ObTabletID &tablet_id, bool &exists) const;
 
   int add_simple_foreign_key_info(const uint64_t tenant_id,
                                   const uint64_t database_id,

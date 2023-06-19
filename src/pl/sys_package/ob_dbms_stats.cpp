@@ -233,7 +233,7 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                             &running_monitor))) {
         LOG_WARN("failed to update stat cache", K(ret));
       } else if (is_virtual_table(stat_param.table_id_)) {//not gather virtual table index.
-        tmp_alloc.reset();
+        //do nothing
       } else if (stat_param.cascade_ &&
                 OB_FAIL(fast_gather_index_stats(ctx, stat_param,
                                                 is_all_fast_gather, no_gather_index_ids))) {

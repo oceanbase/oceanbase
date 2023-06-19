@@ -224,7 +224,7 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       } else if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i+1, j_val))) {
         ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
-      } else if (OB_FAIL(j_base->object_add(key, j_val))) {
+      } else if (OB_FAIL(j_obj.add(key, static_cast<ObJsonNode*>(j_val), false, true, false))) {
         if (ret == OB_ERR_JSON_DOCUMENT_NULL_KEY) {
           LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
         }
@@ -235,6 +235,8 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 
   if (OB_SUCC(ret)) {
     ObString raw_bin;
+    j_obj.stable_sort();
+    j_obj.unique();
     if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {

@@ -1484,7 +1484,8 @@ int ObTablet::do_rowkey_exists(
       } else if (FALSE_IT(store_ctx.tablet_stat_.exist_row_read_table_cnt_ = check_table_cnt)) {
       } else if (FALSE_IT(store_ctx.tablet_stat_.exist_row_total_table_cnt_ = table_iter.count())) {
       } else if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
-        if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(store_ctx.tablet_stat_))) {
+        bool report_succ = false; /*placeholder*/
+        if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(store_ctx.tablet_stat_, report_succ))) {
           LOG_WARN("failed to report tablet stat", K(tmp_ret), K(stat));
         }
       }
@@ -1538,7 +1539,8 @@ int ObTablet::do_rowkeys_exist(ObTableStoreIterator &tables_iter, ObRowsInfo &ro
     if (0 == access_ctx.table_store_stat_.exist_row_.empty_read_cnt_) {
       // ROWKEY IN_ROW_CACHE / NOT EXIST
     } else if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
-      if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
+      bool report_succ = false; /*placeholder*/
+      if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(tablet_stat, report_succ))) {
         LOG_WARN("failed to report tablet stat", K(tmp_ret), K(tablet_stat));
       }
     }

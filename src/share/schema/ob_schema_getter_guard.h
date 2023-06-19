@@ -182,10 +182,9 @@ public:
       const uint64_t tenant_id,
       const uint64_t table_id,
       bool &has_local_unique_index);
-  int check_has_global_unique_index(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      bool &has_global_unique_index);
+  int get_all_unique_index(const uint64_t tenant_id,
+                           const uint64_t table_id,
+                           ObIArray<uint64_t> &unique_index_ids);
 	bool is_tenant_schema_valid(const int64_t tenant_id) const;
 	/*
    interface for simple schema

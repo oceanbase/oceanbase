@@ -9,6 +9,8 @@
 #include "share/ob_force_print_log.h"
 #include "share/ob_thread_mgr.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
+#include "observer/ob_server_struct.h"
+#include "observer/ob_server.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -105,17 +107,28 @@ bool ObTabletStat::is_valid() const
 bool ObTabletStat::check_need_report() const
 {
   bool bret = false;
+  ObTabletID tablet_id(tablet_id_);
 
-  if (0 != query_cnt_) { // report by query
-    if (QUERY_REPORT_MIN_ROW_CNT <= scan_physical_row_cnt_ ||
-      QUERY_REPORT_MIN_MICRO_BLOCK_CNT <= scan_micro_block_cnt_ ||
-      QUERY_REPORT_MIN_SCAN_TABLE_CNT <= exist_row_total_table_cnt_) {
+  if (tablet_id.is_ls_inner_tablet()) {
+    // do nothing
+  } else if (0 < merge_cnt_) { // report by compaction
+    bret = get_total_merge_row_count() >= MERGE_REPORT_MIN_ROW_CNT;
+  } else if (0 < query_cnt_) { // only report the slow query
+    const int64_t boost_factor = tablet_id.is_inner_tablet() ? 2 : 1;
+    if (scan_physical_row_cnt_ > 0 &&
+        scan_physical_row_cnt_ >= scan_logical_row_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
       bret = true;
     }
-  } else if (0 != merge_cnt_) { // report by compaction
-    bret = MERGE_REPORT_MIN_ROW_CNT <= insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_;
-  } else { // invalid tablet stat
-    bret = false;
+
+    if (!bret && scan_micro_block_cnt_ > 0 &&
+        scan_micro_block_cnt_ >= pushdown_micro_block_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
+      bret = true;
+    }
+
+    if (!bret && exist_row_total_table_cnt_ > 0 &&
+        exist_row_total_table_cnt_ >= exist_row_read_table_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
+      bret = true;
+    }
   }
   return bret;
 }
@@ -166,74 +179,96 @@ ObTabletStat& ObTabletStat::archive(int64_t factor)
   return *this;
 }
 
-bool ObTabletStat::is_hot_tablet() const
+
+/************************************* ObTabletStatAnalyzer *************************************/
+bool ObTabletStatAnalyzer::is_hot_tablet() const
 {
-  return query_cnt_ + merge_cnt_ >= ACCESS_FREQUENCY;
+  return tablet_stat_.query_cnt_ + tablet_stat_.merge_cnt_ >= ACCESS_FREQUENCY * boost_factor_;
 }
 
-bool ObTabletStat::is_insert_mostly() const
+bool ObTabletStatAnalyzer::is_insert_mostly() const
 {
   bool bret = false;
-  uint64_t total_row_cnt = insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_;
-  if (total_row_cnt < BASIC_ROW_CNT_THRESHOLD) {
+  ObTabletID tablet_id(tablet_stat_.tablet_id_);
+  uint64_t total_row_cnt = tablet_stat_.get_total_merge_row_count();
+
+  if (tablet_id.is_inner_tablet() || tablet_id.is_ls_inner_tablet()) {
+    // do nothing
+  } else if (0 == tablet_stat_.insert_row_cnt_) {
+    // no insert occurs
+  } else if (total_row_cnt < MERGE_BASIC_ROW_CNT * boost_factor_) {
     // do nothing
   } else {
-    bret = insert_row_cnt_ * BASE_FACTOR / total_row_cnt >= INSERT_PIVOT_FACTOR;
+    bret = total_row_cnt * LOAD_THRESHOLD <= tablet_stat_.insert_row_cnt_ * BASE_FACTOR;
   }
   return bret;
 }
 
-bool ObTabletStat::is_update_mostly() const
+bool ObTabletStatAnalyzer::is_update_or_delete_mostly() const
 {
   bool bret = false;
-  uint64_t total_row_cnt = insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_;
-  if (total_row_cnt < BASIC_ROW_CNT_THRESHOLD) {
+  uint64_t total_row_cnt = tablet_stat_.get_total_merge_row_count();
+
+  if (0 == tablet_stat_.delete_row_cnt_ + tablet_stat_.update_row_cnt_) {
+    // no update && delete occurs
+  } else if (total_row_cnt < MERGE_BASIC_ROW_CNT * boost_factor_) {
     // do nothing
   } else {
-    bret = update_row_cnt_ * BASE_FACTOR / total_row_cnt >= UPDATE_PIVOT_FACTOR;
+    bret = total_row_cnt * TOMBSTONE_THRESHOLD * boost_factor_ <= (tablet_stat_.update_row_cnt_ + tablet_stat_.delete_row_cnt_) * BASE_FACTOR;
   }
   return bret;
 }
 
-bool ObTabletStat::is_delete_mostly() const
+bool ObTabletStatAnalyzer::has_slow_query() const
 {
   bool bret = false;
-  uint64_t total_row_cnt = insert_row_cnt_ + update_row_cnt_ + delete_row_cnt_;
-  if (total_row_cnt < BASIC_ROW_CNT_THRESHOLD) {
-    // do nothing
-  } else {
-    bret = delete_row_cnt_ * BASE_FACTOR / total_row_cnt >= DELETE_PIVOT_FACTOR;
+  // all tablet query stats are ineffecient, only check the basic threshold
+  if (tablet_stat_.scan_physical_row_cnt_ >= QUERY_BASIC_ROW_CNT * boost_factor_ ||
+      tablet_stat_.scan_micro_block_cnt_ >= QUERY_BASIC_MICRO_BLOCK_CNT * boost_factor_ ||
+      tablet_stat_.exist_row_total_table_cnt_ >= QUERY_BASIC_ITER_TABLE_CNT * boost_factor_) {
+    bret = true;
   }
   return bret;
 }
 
 
-bool ObTabletStat::is_inefficient_scan() const
+/************************************* ObTenantSysStat *************************************/
+ObTenantSysStat::ObTenantSysStat()
+  : cpu_usage_percentage_(0),
+    min_cpu_cnt_(0),
+    max_cpu_cnt_(0),
+    memory_hold_(0),
+    memory_limit_(0)
+{
+}
+
+void ObTenantSysStat::reset()
+{
+  cpu_usage_percentage_ = 0;
+  min_cpu_cnt_ = 0;
+  max_cpu_cnt_ = 0;
+  memory_hold_ = 0;
+  memory_limit_ = 0;
+}
+
+bool ObTenantSysStat::is_small_tenant() const
 {
   bool bret = false;
-  if (0 == scan_logical_row_cnt_ || scan_logical_row_cnt_ < BASIC_ROW_CNT_THRESHOLD) {
-  } else {
-    bret = scan_physical_row_cnt_ / scan_logical_row_cnt_ >= SCAN_READ_FACTOR;
-  }
+  // 8c16g
+  const int64_t cpu_threshold = 8;
+  // When the tenant memory exceeds 10GB, the meta tenant occupies at least 10% of the memory.
+  const int64_t mem_threshold = (16L << 30) * 9 / 10;
+  bret = max_cpu_cnt_ < cpu_threshold || memory_limit_ < mem_threshold;
   return bret;
 }
 
-bool ObTabletStat::is_inefficient_insert() const
+bool ObTenantSysStat::is_full_cpu_usage() const
 {
   bool bret = false;
-  if (0 == exist_row_total_table_cnt_ || exist_row_total_table_cnt_ < BASIC_TABLE_CNT_THRESHOLD) {
+  if (is_small_tenant()) {
+    bret = max_cpu_cnt_ * 60 <= cpu_usage_percentage_;
   } else {
-    bret = exist_row_read_table_cnt_ * BASE_FACTOR / exist_row_total_table_cnt_ >= EXIST_READ_FACTOR;
-  }
-  return bret;
-}
-
-bool ObTabletStat::is_inefficient_pushdown() const
-{
-  bool bret = false;
-  if (0 == scan_micro_block_cnt_ || scan_micro_block_cnt_ < BASIC_MICRO_BLOCK_CNT_THRESHOLD) {
-  } else {
-    bret = pushdown_micro_block_cnt_ < scan_micro_block_cnt_ / SCAN_READ_FACTOR;
+    bret = max_cpu_cnt_ * 70 <= cpu_usage_percentage_;
   }
   return bret;
 }
@@ -556,14 +591,17 @@ void ObTenantTabletStatMgr::destroy()
   FLOG_INFO("ObTenantTabletStatMgr destroyed!");
 }
 
-int ObTenantTabletStatMgr::report_stat(const ObTabletStat &stat)
+int ObTenantTabletStatMgr::report_stat(
+    const ObTabletStat &stat,
+    bool &succ_report)
 {
   int ret = OB_SUCCESS;
+  succ_report = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantTabletStatMgr not inited", K(ret));
-  } else if (!stat.is_valid()) {
+  } else if (OB_UNLIKELY(!stat.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(stat));
   } else if (!stat.check_need_report()) {
@@ -580,6 +618,7 @@ int ObTenantTabletStatMgr::report_stat(const ObTabletStat &stat)
       }
     } else {
       report_queue_[pending_cur % DEFAULT_MAX_PENDING_CNT] = stat;
+      succ_report = true;
     }
   }
   return ret;
@@ -640,6 +679,44 @@ int ObTenantTabletStatMgr::get_history_tablet_stats(
     } else if (OB_FAIL(stream_node->stream_.get_all_tablet_stat(tablet_stats))) {
       LOG_WARN("failed to get all tablet stat", K(ret), K(key));
     }
+  }
+  return ret;
+}
+
+int ObTenantTabletStatMgr::get_tablet_analyzer(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    ObTabletStatAnalyzer &analyzer)
+{
+  int ret = OB_SUCCESS;
+  ObTenantSysStat sys_stat;
+
+  if (OB_FAIL(get_latest_tablet_stat(ls_id, tablet_id, analyzer.tablet_stat_))) {
+    LOG_WARN("failed to get latest tablet stat", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(get_sys_stat(sys_stat))) {
+    LOG_WARN("failed to get sys stat", K(ret));
+  } else {
+    analyzer.is_small_tenant_ = sys_stat.is_small_tenant();
+    analyzer.boost_factor_ = analyzer.is_small_tenant_ ? 2 : 1;
+  }
+  return ret;
+}
+
+int ObTenantTabletStatMgr::get_sys_stat(ObTenantSysStat &sys_stat)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantTabletStatMgr not inited", K(ret));
+  } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu_usage(MTL_ID(), sys_stat.cpu_usage_percentage_))) {
+    LOG_WARN("failed to get tenant cpu usage", K(ret), K(sys_stat));
+  } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), sys_stat.min_cpu_cnt_, sys_stat.max_cpu_cnt_))) {
+    LOG_WARN("failed to get tenant cpu count", K(ret), K(sys_stat));
+  } else {
+    sys_stat.memory_hold_ = lib::get_tenant_memory_hold(MTL_ID());
+    sys_stat.memory_limit_ = lib::get_tenant_memory_limit(MTL_ID());
+    sys_stat.cpu_usage_percentage_ *= 100;
   }
   return ret;
 }
@@ -717,24 +794,9 @@ int ObTenantTabletStatMgr::fetch_node(ObTabletStreamNode *&node)
   return ret;
 }
 
-void ObTenantTabletStatMgr::dump_tablet_stat_status()
-{
-  if (REACH_TENANT_TIME_INTERVAL(DUMP_TABLET_STAT_INTERVAL)) {
-    uint64_t start_idx = report_cursor_; // it's OK to dirty read
-    uint64_t end_idx = pending_cursor_;
-    int64_t map_size = stream_map_.size();
-    int64_t stream_node_cnt = stream_pool_.get_allocated_num();
-
-    LOG_INFO("dump_tablet_stat_status",
-        "queue_cnt", end_idx - start_idx, K(start_idx), K(end_idx),
-        "map_size", map_size,
-        "stream_node_cnt", stream_node_cnt);
-  }
-}
-
 void ObTenantTabletStatMgr::process_stats()
 {
-  int tmp_ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   const uint64_t start_idx = report_cursor_;
   const uint64_t pending_cur = ATOMIC_LOAD(&pending_cursor_);
   uint64_t end_idx = (pending_cur > start_idx + DEFAULT_MAX_PENDING_CNT)
@@ -745,10 +807,10 @@ void ObTenantTabletStatMgr::process_stats()
   } else {
     for (uint64_t i = start_idx; i < end_idx; ++i) {
       const ObTabletStat &cur_stat = report_queue_[i % DEFAULT_MAX_PENDING_CNT];
-      if (!cur_stat.is_valid()) {
+      if (OB_UNLIKELY(!cur_stat.is_valid())) {
         // allow dirty read
-      } else if (OB_TMP_FAIL(update_tablet_stream(cur_stat))) {
-        LOG_WARN_RET(tmp_ret, "failed to update tablet stat", K(tmp_ret), K(cur_stat));
+      } else if (OB_FAIL(update_tablet_stream(cur_stat))) {
+        LOG_WARN_RET(ret, "failed to update tablet stat", K(ret), K(cur_stat));
       }
     }
     report_cursor_ = pending_cur; // only TabletStatUpdater update this value.
@@ -767,7 +829,6 @@ void ObTenantTabletStatMgr::refresh_all(const int64_t step)
 
 void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()
 {
-  mgr_.dump_tablet_stat_status();
   mgr_.process_stats();
 
   int64_t interval_step = 0;

@@ -172,7 +172,7 @@ int check_for_standby(const share::ObLSID &ls_id,
                       bool &is_determined_state);
 void register_standby_cleanup_task();
 int do_standby_cleanup();
-
+void handle_defer_abort(ObTxDesc &tx);
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
 private:
@@ -180,6 +180,7 @@ int check_ls_status_(const share::ObLSID &ls_id, bool &leader);
 void init_tx_(ObTxDesc &tx, const uint32_t session_id);
 int start_tx_(ObTxDesc &tx);
 int abort_tx_(ObTxDesc &tx, const int cause, bool cleanup = true);
+void abort_tx__(ObTxDesc &tx, bool cleanup);
 int finalize_tx_(ObTxDesc &tx);
 int find_parts_after_sp_(ObTxDesc &tx,
                          ObTxPartRefList &parts,

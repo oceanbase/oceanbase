@@ -27,6 +27,7 @@
 #include "logservice/palf/palf_base_info.h"//palf::PalfBaseInfo
 #include "share/scn.h"
 #include "share/ls/ob_ls_life_manager.h"
+#include "rootserver/ob_root_utils.h"//notify_switch_leader
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -590,6 +591,8 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
                                   const common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
+  ObArray<common::ObAddr> server_list;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
@@ -605,7 +608,6 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
       LOG_WARN("fail to set timeout ctx", KR(ret));
     } else {
       int64_t rpc_count = 0;
-      int tmp_ret = OB_SUCCESS;
       ObArray<int> return_code_array;
       for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
         ObAddr addr;
@@ -620,6 +622,8 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
                 GCONF.cluster_id, tenant_id_, arg))) {
           LOG_WARN("failed to set member list", KR(tmp_ret), K(ctx.get_timeout()), K(arg),
               K(tenant_id_));
+        } else if (OB_FAIL(server_list.push_back(addr))) {
+          LOG_WARN("failed to push back server list", KR(ret), K(addr));
         }
       }
 
@@ -632,6 +636,16 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
         LOG_WARN("failed to check set member liset result", KR(ret), K(rpc_count),
             K(paxos_replica_num), K(return_code_array));
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    obrpc::ObNotifySwitchLeaderArg arg;
+    if (OB_FAIL(arg.init(tenant_id_, id_, ObAddr(),
+            obrpc::ObNotifySwitchLeaderArg::CREATE_LS))) {
+      LOG_WARN("failed to init arg", KR(ret), K(tenant_id_), K(id_));
+    } else if (OB_TMP_FAIL(rootserver::ObRootUtils::notify_switch_leader(
+            GCTX.srv_rpc_proxy_, tenant_id_, arg, server_list))) {
+      LOG_WARN("failed to notiry switch leader", KR(ret), KR(tmp_ret), K(tenant_id_), K(arg), K(server_list));
     }
   }
   return ret;

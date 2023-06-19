@@ -1514,24 +1514,22 @@ int ObBackupLSTaskOperator::update_black_server(
     const int64_t task_id, 
     const uint64_t tenant_id,
     const ObLSID &ls_id, 
-    const ObAddr &block_server)
+    const ObString &black_servers)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = -1;
   ObDMLSqlSplicer dml;
-  char black_server_str[OB_MAX_SERVER_ADDR_SIZE] = "";
-  block_server.ip_port_to_string(black_server_str, OB_MAX_SERVER_ADDR_SIZE);
-  if (task_id <= 0 || tenant_id == OB_INVALID_TENANT_ID || !ls_id.is_valid() || !block_server.is_valid()) {
+  if (task_id <= 0 || tenant_id == OB_INVALID_TENANT_ID || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(task_id), K(tenant_id), K(ls_id), K(block_server));
+    LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(task_id), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, tenant_id))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TASK_ID, task_id))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));    
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_LS_ID, ls_id.id()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_column(OB_STR_BLACK_LIST, black_server_str))) {
+  } else if (OB_FAIL(dml.add_column(OB_STR_BLACK_LIST, black_servers.ptr()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_LS_TASK_TNAME, sql))) {
     LOG_WARN("[DATA_BACKUP]failed to splice_update_sql", K(ret));
@@ -1838,7 +1836,7 @@ int ObBackupLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBackupL
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
   char backup_type_str[OB_SYS_TASK_TYPE_LENGTH] = "";
   char task_type_str[64] = "";
-  char black_list_str[OB_MAX_SERVER_ADDR_SIZE] = "";
+  char black_list_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = "";
   char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TASK_ID, ls_attr.task_id_, int64_t);
@@ -1851,7 +1849,7 @@ int ObBackupLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBackupL
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_TASK_TYPE, task_type_str, 64, real_length);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_START_TS, ls_attr.start_ts_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_END_TS, ls_attr.end_ts_, int64_t);
-  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_BLACK_LIST, black_list_str, OB_MAX_SERVER_ADDR_SIZE, real_length);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_BLACK_LIST, black_list_str, OB_INNER_TABLE_DEFAULT_VALUE_LENTH, real_length);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DATE, ls_attr.backup_date_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TURN_ID, ls_attr.turn_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RETRY_ID, ls_attr.retry_id_, int64_t);
@@ -1879,8 +1877,8 @@ int ObBackupLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBackupL
     LOG_WARN("[DATA_BACKUP]failed to set backup_type", K(ret), K(backup_type_str));
   } else if (OB_FAIL(ls_attr.task_type_.set_type(task_type_str))) {
     LOG_WARN("[DATA_BACKUP]failed to set task type", K(ret), K(task_type_str));
-  } else if (OB_FAIL(parse_string_to_addr_(black_list_str, ls_attr.black_servers_))) {
-    LOG_WARN("[DATA_BACKUP]failed to parse string to addr", K(ret)); 
+  } else if (OB_FAIL(ls_attr.set_black_servers(black_list_str))) {
+    LOG_WARN("[DATA_BACKUP]failed to parse black list str", K(ret));
   } else if (strcmp(trace_id_str, "") != 0 && OB_FAIL(ls_attr.task_trace_id_.set(trace_id_str))) {
     LOG_WARN("[DATA_BACKUP]failed to set task trace id", K(ret), K(trace_id_str));
   } else if (!ls_attr.dst_.set_ip_addr(server_str, static_cast<int32_t>(port))) {
@@ -1891,22 +1889,6 @@ int ObBackupLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBackupL
   }
   return ret;
 }
-
-int ObBackupLSTaskOperator::parse_string_to_addr_(
-    const char *str, 
-    ObIArray<common::ObAddr> &servers)
-{
-  int ret = OB_SUCCESS;
-  ObAddr server;
-  if (0 == strcmp(str, "")) {
-  } else if (OB_FAIL(server.parse_from_cstring(str))) {
-    LOG_WARN("[DATA_BACKUP]failed to parse server from cstring", K(ret), K(str));
-  } else if (OB_FAIL(servers.push_back(server))) {
-    LOG_WARN("[DATA_BACKUP]failed to push server back", K(server));
-  }
-  return ret;
-}
-
 
 int ObBackupLSTaskOperator::advance_status(
     common::ObISQLClient &proxy, 

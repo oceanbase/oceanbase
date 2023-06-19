@@ -2595,7 +2595,6 @@ create procedure bug2564_1()
 set @@sql_mode = 'ANSI_QUOTES'|
 --disable_warnings ONCE
 drop procedure if exists bug2564_2|
---error 1064
 create procedure bug2564_2()
   insert into "t1" values ('foo', 1)|
 
@@ -2616,14 +2615,12 @@ delimiter |$
 set @@sql_mode = ''|
 --source mysql_test/include/show_create_table_old_version_replica2.inc
 show create procedure bug2564_1|
---error 1305
 show create procedure bug2564_2|
 show create function bug2564_3|
 --source mysql_test/include/show_create_table_old_version_replica2.inc
 show create function bug2564_4|
 
 drop procedure bug2564_1|
---error 1305
 drop procedure bug2564_2|
 drop function bug2564_3|
 drop function bug2564_4|

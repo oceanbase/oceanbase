@@ -161,14 +161,13 @@ public:
   static int update_stats_(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id,
       const ObLSID &ls_id, const ObBackupStats &stats);
   static int update_black_server(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id,
-      const ObLSID &ls_id, const ObAddr &block_server);
+      const ObLSID &ls_id, const ObString &black_servers);
   static int delete_ls_task_without_sys(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t task_id);
 private:
   static int fill_dml_with_ls_task_(const ObBackupLSTaskAttr &ls_attr, ObDMLSqlSplicer &dml);
   static int fill_select_ls_task_sql_(ObSqlString &sql);
   static int parse_ls_result_(sqlclient::ObMySQLResult &result, ObIArray<ObBackupLSTaskAttr> &ls_attrs);
   static int do_parse_ls_result_(sqlclient::ObMySQLResult &result, ObBackupLSTaskAttr &ls_attr);
-  static int parse_string_to_addr_(const char *str, ObIArray<common::ObAddr> &servers);
 };
 
 class ObBackupLSTaskInfoOperator : public ObBackupBaseTableOperator

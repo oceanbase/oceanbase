@@ -1428,32 +1428,37 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
   int tmp_ret = OB_SUCCESS;
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  ObTabletStat tablet_stat;
-  reason = AdaptiveMergeReason::NONE;
 
-  if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->get_latest_tablet_stat(ls_id, tablet_id, tablet_stat))) {
+  reason = AdaptiveMergeReason::NONE;
+  ObTabletStatAnalyzer tablet_analyzer;
+
+  if (tablet_id.is_special_merge_tablet()) {
+    // do nothing
+  } else if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->get_tablet_analyzer(ls_id, tablet_id, tablet_analyzer))) {
     if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to get latest tablet stat", K(ret), K(ls_id), K(tablet_id));
+      LOG_WARN("failed to get tablet analyzer stat", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_TMP_FAIL(check_inc_sstable_row_cnt_percentage(tablet, reason))) {
       LOG_WARN("failed to check sstable data situation", K(tmp_ret), K(ls_id), K(tablet_id));
+    } else {
+      ret = OB_SUCCESS;
     }
   } else {
-    if (OB_TMP_FAIL(check_tombstone_situation(tablet_stat, tablet, reason))) {
-      LOG_WARN("failed to check tombstone scene", K(tmp_ret), K(ls_id), K(tablet_id));
+    if (OB_TMP_FAIL(check_tombstone_situation(tablet_analyzer, tablet, reason))) {
+      LOG_WARN("failed to check tombstone scene", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
     }
-    if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_load_data_situation(tablet_stat, tablet, reason))) {
-      LOG_WARN("failed to check load data scene", K(tmp_ret), K(ls_id), K(tablet_id));
+    if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_load_data_situation(tablet_analyzer, tablet, reason))) {
+      LOG_WARN("failed to check load data scene", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
     }
     if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_inc_sstable_row_cnt_percentage(tablet, reason))) {
-      LOG_WARN("failed to check sstable data situation", K(tmp_ret), K(ls_id), K(tablet_id));
+      LOG_WARN("failed to check sstable data situation", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
     }
-    if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_ineffecient_read(tablet_stat, tablet, reason))) {
-      LOG_WARN("failed to check ineffecient read", K(tmp_ret), K(ls_id), K(tablet_id));
+    if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_ineffecient_read(tablet_analyzer, tablet, reason))) {
+      LOG_WARN("failed to check ineffecient read", K(tmp_ret), K(ls_id), K(tablet_id), K(tablet_analyzer));
     }
+  }
 
-    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000 /*10s*/)) {
-      LOG_INFO("Check tablet adaptive merge reason", K(reason), K(tablet_stat)); // TODO tmp log, remove later
-    }
+  if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000 /*10s*/)) {
+    LOG_INFO("Check tablet adaptive merge reason", K(ret), K(ls_id), K(tablet_id),  K(reason), K(tablet_analyzer));
   }
   return ret;
 }
@@ -1489,7 +1494,7 @@ int ObAdaptiveMergePolicy::check_inc_sstable_row_cnt_percentage(
 }
 
 int ObAdaptiveMergePolicy::check_load_data_situation(
-    const ObTabletStat &tablet_stat,
+    const storage::ObTabletStatAnalyzer &analyzer,
     const ObTablet &tablet,
     AdaptiveMergeReason &reason)
 {
@@ -1497,19 +1502,20 @@ int ObAdaptiveMergePolicy::check_load_data_situation(
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   reason = AdaptiveMergeReason::NONE;
-  if (!tablet.is_valid() || !tablet_stat.is_valid()
-      || ls_id.id() != tablet_stat.ls_id_ || tablet_id.id() != tablet_stat.tablet_id_) {
+
+  if (OB_UNLIKELY(!tablet.is_valid() || !analyzer.tablet_stat_.is_valid()
+      || ls_id.id() != analyzer.tablet_stat_.ls_id_ || tablet_id.id() != analyzer.tablet_stat_.tablet_id_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(tablet), K(tablet_stat));
-  } else if (tablet_stat.is_hot_tablet() && tablet_stat.is_insert_mostly()) {
+    LOG_WARN("get invalid arguments", K(ret), K(tablet), K(analyzer));
+  } else if (analyzer.is_hot_tablet() && analyzer.is_insert_mostly()) {
     reason = AdaptiveMergeReason::LOAD_DATA_SCENE;
   }
-  LOG_DEBUG("check_load_data_situation", K(ret), K(ls_id), K(tablet_id), K(reason), K(tablet_stat));
+  LOG_DEBUG("check_load_data_situation", K(ret), K(ls_id), K(tablet_id), K(reason), K(analyzer));
   return ret;
 }
 
 int ObAdaptiveMergePolicy::check_tombstone_situation(
-    const ObTabletStat &tablet_stat,
+    const storage::ObTabletStatAnalyzer &analyzer,
     const ObTablet &tablet,
     AdaptiveMergeReason &reason)
 {
@@ -1518,19 +1524,19 @@ int ObAdaptiveMergePolicy::check_tombstone_situation(
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   reason = AdaptiveMergeReason::NONE;
 
-  if (!tablet.is_valid() || !tablet_stat.is_valid()
-      || ls_id.id() != tablet_stat.ls_id_ || tablet_id.id() != tablet_stat.tablet_id_) {
+  if (OB_UNLIKELY(!tablet.is_valid() || !analyzer.tablet_stat_.is_valid()
+      || ls_id.id() != analyzer.tablet_stat_.ls_id_ || tablet_id.id() != analyzer.tablet_stat_.tablet_id_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(tablet), K(tablet_stat));
-  } else if (tablet_stat.is_hot_tablet() && (tablet_stat.is_update_mostly() || tablet_stat.is_delete_mostly())) {
+    LOG_WARN("get invalid arguments", K(ret), K(analyzer), K(tablet));
+  } else if (analyzer.tablet_stat_.merge_cnt_ > 1 && analyzer.is_update_or_delete_mostly()) {
     reason = AdaptiveMergeReason::TOMBSTONE_SCENE;
   }
-  LOG_DEBUG("check_tombstone_situation", K(ret), K(ls_id), K(tablet_id), K(reason), K(tablet_stat));
+  LOG_DEBUG("check_tombstone_situation", K(ret), K(ls_id), K(tablet_id), K(reason), K(analyzer));
   return ret;
 }
 
 int ObAdaptiveMergePolicy::check_ineffecient_read(
-    const ObTabletStat &tablet_stat,
+    const storage::ObTabletStatAnalyzer &analyzer,
     const ObTablet &tablet,
     AdaptiveMergeReason &reason)
 {
@@ -1539,16 +1545,14 @@ int ObAdaptiveMergePolicy::check_ineffecient_read(
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   reason = AdaptiveMergeReason::NONE;
 
-  if (!tablet.is_valid() || !tablet_stat.is_valid() ||
-      ls_id.id() != tablet_stat.ls_id_ || tablet_id.id() != tablet_stat.tablet_id_) {
+  if (OB_UNLIKELY(!tablet.is_valid() || !analyzer.tablet_stat_.is_valid()
+      || ls_id.id() != analyzer.tablet_stat_.ls_id_ || tablet_id.id() != analyzer.tablet_stat_.tablet_id_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(tablet), K(tablet_stat));
-  } else if (!tablet_stat.is_hot_tablet()) {
-  } else if (tablet_stat.is_inefficient_scan() || tablet_stat.is_inefficient_insert()
-          || tablet_stat.is_inefficient_pushdown()) {
+    LOG_WARN("get invalid arguments", K(ret), K(tablet), K(analyzer));
+  } else if (analyzer.is_hot_tablet() && analyzer.has_slow_query()) {
     reason = AdaptiveMergeReason::INEFFICIENT_QUERY;
   }
-  LOG_DEBUG("check_ineffecient_read", K(ret), K(ls_id), K(tablet_id), K(reason), K(tablet_stat));
+  LOG_DEBUG("check_ineffecient_read", K(ret), K(ls_id), K(tablet_id), K(reason), K(analyzer));
   return ret;
 }
 

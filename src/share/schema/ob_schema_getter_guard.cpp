@@ -329,16 +329,14 @@ int ObSchemaGetterGuard::check_has_local_unique_index(
   return ret;
 }
 
-int ObSchemaGetterGuard::check_has_global_unique_index(
-    const uint64_t tenant_id,
-    const uint64_t table_id,
-    bool &has_global_unique_index)
+int ObSchemaGetterGuard::get_all_unique_index(const uint64_t tenant_id,
+                                              const uint64_t table_id,
+                                              ObIArray<uint64_t> &unique_index_ids)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = NULL;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const ObSimpleTableSchemaV2 *index_schema = NULL;
-  has_global_unique_index = false;
   if (OB_FAIL(get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
@@ -357,9 +355,10 @@ int ObSchemaGetterGuard::check_has_global_unique_index(
                KR(ret), K(tenant_id), K(index_id));
     } else if (OB_UNLIKELY(index_schema->is_final_invalid_index())) {
       //invalid index status, need ingore
-    } else if (index_schema->is_global_unique_index_table()) {
-      has_global_unique_index = true;
-      break;
+    } else if ((index_schema->is_local_unique_index_table() ||
+               index_schema->is_global_unique_index_table()) &&
+               OB_FAIL(unique_index_ids.push_back(index_id))) {
+      LOG_WARN("failed to push back local unique index", K(ret));
     }
   }
   return ret;

@@ -2049,6 +2049,26 @@ int ObBackupUtils::check_tenant_data_version_match(const uint64_t tenant_id, con
   return ret;
 }
 
+int ObBackupUtils::get_full_replica_num(const uint64_t tenant_id, int64_t &replica_num)
+{
+  int ret = OB_SUCCESS;
+  replica_num = 0;
+  ObMultiVersionSchemaService *schema_service = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  const ObTenantSchema *tenant_info = nullptr;
+  if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service must not be null", K(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("[DATA_BACKUP]failed to get_tenant_schema_guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+    LOG_WARN("[DATA_BACKUP]failed to get tenant info", K(ret), K(tenant_id));
+  } else {
+    replica_num = tenant_info->get_full_replica_num();
+  }
+  return ret;
+}
+
 int ObBackupUtils::get_backup_info_default_timeout_ctx(ObTimeoutCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -3503,6 +3523,58 @@ bool ObBackupLSTaskAttr::is_valid() const
       && status_.is_valid()
       && start_ts_ > 0
       && turn_id_ > 0;
+}
+
+int ObBackupLSTaskAttr::get_black_server_str(const ObIArray<ObAddr> &black_servers, ObSqlString &sql_string) const
+{
+  int ret = OB_SUCCESS;
+  char black_server_str[OB_MAX_SERVER_ADDR_SIZE] = "";
+  for (int64_t i = 0; OB_SUCC(ret) && i < black_servers.count(); i++) {
+    const ObAddr &server = black_servers.at(i);
+    if (OB_FALSE_IT(MEMSET(black_server_str, 0, OB_MAX_SERVER_ADDR_SIZE))) {
+    } else if (OB_FALSE_IT(server.ip_port_to_string(black_server_str, OB_MAX_SERVER_ADDR_SIZE))) {
+    } else if (OB_FAIL(sql_string.append_fmt("%.*s%s",
+                                              static_cast<int>(OB_MAX_SERVER_ADDR_SIZE), black_server_str,
+                                              i == black_servers.count() - 1 ? "" : ","))) {
+      LOG_WARN("failed to append fmt black server", K(ret));
+    } else if (sql_string.length() > OB_INNER_TABLE_DEFAULT_VALUE_LENTH) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid black servers", K(ret), K(sql_string));
+    }
+  }
+  return ret;
+}
+
+int ObBackupLSTaskAttr::set_black_servers(const ObString &str)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  ObArenaAllocator allocator;
+  int64_t buf_len = str.length() + 1;
+  ObAddr server;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("fail to alloc string", K(ret), "buf length", buf_len);
+  } else if (OB_FALSE_IT(MEMSET(buf, 0, buf_len))) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, "%.*s", static_cast<int>(str.length()), str.ptr()))) {
+    LOG_WARN("fail to print str", K(ret), K(str), K(buf_len));
+  } else {
+    char *token = nullptr;
+    char *saveptr = nullptr;
+    token = buf;
+    for (char *str = token; OB_SUCC(ret); str = nullptr) {
+      token = ::STRTOK_R(str, ",", &saveptr);
+      if (OB_ISNULL(token)) {
+        break;
+      } else if (OB_FALSE_IT(server.reset())) {
+      } else if (OB_FAIL(server.parse_from_cstring(token))) {
+        LOG_WARN("fail to assign backup set path", K(ret));
+      } else if (OB_FAIL(black_servers_.push_back(server))) {
+        LOG_WARN("fail to push back path", K(ret), K(server));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObBackupLSTaskAttr::assign(const ObBackupLSTaskAttr &other)

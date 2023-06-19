@@ -62,8 +62,7 @@ OB_SERIALIZE_MEMBER((ObJoinFilterSpec, ObOpSpec),
                     filter_len_,
                     join_keys_,
                     hash_funcs_,
-                    null_first_cmp_funcs_,
-                    null_last_cmp_funcs_,
+                    cmp_funcs_,
                     filter_shared_type_,
                     calc_tablet_id_expr_,
                     rf_infos_,
@@ -264,9 +263,7 @@ int ObJoinFilterOpInput::construct_msg_details(
         LOG_WARN("fail to prepare allocate col cnt", K(ret));
       } else if (OB_FAIL(range_msg.cells_size_.prepare_allocate(col_cnt))) {
         LOG_WARN("fail to prepare allocate col cnt", K(ret));
-      } else if (OB_FAIL(range_msg.null_first_cmp_funcs_.assign(spec.null_first_cmp_funcs_))) {
-        LOG_WARN("fail to init cmp funcs", K(ret));
-      } else if (OB_FAIL(range_msg.null_last_cmp_funcs_.assign(spec.null_last_cmp_funcs_))) {
+      } else if (OB_FAIL(range_msg.cmp_funcs_.assign(spec.cmp_funcs_))) {
         LOG_WARN("fail to init cmp funcs", K(ret));
       } else if (OB_FAIL(range_msg.need_null_cmp_flags_.assign(spec.need_null_cmp_flags_))) {
         LOG_WARN("fail to init cmp flags", K(ret));
@@ -285,7 +282,7 @@ int ObJoinFilterOpInput::construct_msg_details(
         LOG_WARN("fail to init in hash set", K(ret));
       } else if (OB_FAIL(in_msg.cur_row_.prepare_allocate(col_cnt))) {
         LOG_WARN("fail to prepare allocate col cnt", K(ret));
-      } else if (OB_FAIL(in_msg.cmp_funcs_.assign(spec.null_first_cmp_funcs_))) {
+      } else if (OB_FAIL(in_msg.cmp_funcs_.assign(spec.cmp_funcs_))) {
         LOG_WARN("fail to init cmp funcs", K(ret));
       } else if (OB_FAIL(in_msg.hash_funcs_for_insert_.assign(spec.hash_funcs_))) {
         LOG_WARN("fail to init cmp funcs", K(ret));
@@ -314,8 +311,7 @@ ObJoinFilterSpec::ObJoinFilterSpec(common::ObIAllocator &alloc, const ObPhyOpera
     filter_len_(0),
     join_keys_(alloc),
     hash_funcs_(alloc),
-    null_first_cmp_funcs_(alloc),
-    null_last_cmp_funcs_(alloc),
+    cmp_funcs_(alloc),
     filter_shared_type_(JoinFilterSharedType::INVALID_TYPE),
     calc_tablet_id_expr_(NULL),
     rf_infos_(alloc),
@@ -838,7 +834,7 @@ int ObJoinFilterOp::open_join_filter_use()
       ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx = NULL;
       if (OB_ISNULL(join_filter_ctx = static_cast<ObExprJoinFilter::ObExprJoinFilterContext *>(
           ctx_.get_expr_op_ctx(MY_SPEC.rf_infos_.at(i).filter_expr_id_)))) {
-        if (OB_FAIL(ctx_.create_expr_op_ctx(MY_SPEC.rf_infos_.at(i).filter_expr_id_,join_filter_ctx))) {
+        if (OB_FAIL(ctx_.create_expr_op_ctx(MY_SPEC.rf_infos_.at(i).filter_expr_id_, join_filter_ctx))) {
           LOG_WARN("failed to create operator ctx", K(ret), K(MY_SPEC.rf_infos_.at(i).filter_expr_id_));
         } else {
           ObP2PDhKey dh_key(MY_SPEC.rf_infos_.at(i).p2p_datahub_id_, px_seq_id, task_id);
@@ -846,6 +842,17 @@ int ObJoinFilterOp::open_join_filter_use()
           int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
           join_filter_ctx->window_size_ = ADAPTIVE_BF_WINDOW_ORG_SIZE;
           join_filter_ctx->max_wait_time_ms_ = filter_input->config_.runtime_filter_wait_time_ms_;
+          join_filter_ctx->hash_funcs_.set_allocator(&ctx_.get_allocator());
+          join_filter_ctx->cmp_funcs_.set_allocator(&ctx_.get_allocator());
+          if (OB_FAIL(join_filter_ctx->hash_funcs_.init(MY_SPEC.hash_funcs_.count()))) {
+            LOG_WARN("failed to assign hash_func");
+          } else if (OB_FAIL(join_filter_ctx->cmp_funcs_.init(MY_SPEC.cmp_funcs_.count()))) {
+            LOG_WARN("failed to assign cmp_funcs_");
+          } else if (OB_FAIL(join_filter_ctx->hash_funcs_.assign(MY_SPEC.hash_funcs_))) {
+            LOG_WARN("failed to assign hash_func");
+          } else if (OB_FAIL(join_filter_ctx->cmp_funcs_.assign(MY_SPEC.cmp_funcs_))) {
+            LOG_WARN("failed to assign cmp_funcs_");
+          }
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

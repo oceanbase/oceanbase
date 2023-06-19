@@ -98,11 +98,11 @@ int ObLogFetcher::init(
     cfg_ = &cfg;
     // Before the LogFetcher module is initialized, the following configuration items need to be loaded
     configure(cfg);
-    const common::ObRegion prefer_region(cfg.region.str());
+    const common::ObRegion region(cfg.region.str());
 
     if (is_integrated_fetching_mode(fetching_mode) && OB_FAIL(log_route_service_.init(
         proxy,
-        prefer_region,
+        region,
         cluster_id,
         false/*is_across_cluster*/,
         err_handler,
@@ -115,8 +115,9 @@ int ObLogFetcher::init(
         cfg.blacklist_survival_time_penalty_period_min,
         cfg.blacklist_history_overdue_time_min,
         cfg.blacklist_history_clear_interval_min,
-        true/*is_tenant_mode*/))) {
-      LOG_ERROR("ObLogRouterService init failer", KR(ret), K(prefer_region), K(cluster_id));
+        true/*is_tenant_mode*/,
+        source_tenant_id))) {
+      LOG_ERROR("ObLogRouterService init failer", KR(ret), K(region), K(cluster_id), K(source_tenant_id));
     } else if (OB_FAIL(progress_controller_.init(cfg.ls_count_upper_limit))) {
       LOG_ERROR("init progress controller fail", KR(ret));
     } else if (OB_FAIL(large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024))) {
@@ -239,7 +240,7 @@ int ObLogFetcher::start()
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else if (OB_UNLIKELY(! stop_flag_)) {
     LOG_ERROR("fetcher has been started", K(stop_flag_));
     ret = OB_INIT_TWICE;
@@ -335,6 +336,34 @@ void ObLogFetcher::mark_stop_flag()
   }
 }
 
+int ObLogFetcher::update_preferred_upstream_log_region(const common::ObRegion &region)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
+  } else if (OB_FAIL(log_route_service_.update_preferred_upstream_log_region(region))) {
+    LOG_WARN("ObLogRouteService update_preferred_upstream_log_region failed", KR(ret), K(region));
+  }
+
+  return ret;
+}
+
+int ObLogFetcher::get_preferred_upstream_log_region(common::ObRegion &region)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
+  } else if (OB_FAIL(log_route_service_.get_preferred_upstream_log_region(region))) {
+    LOG_WARN("ObLogRouteService get_preferred_upstream_log_region failed", KR(ret), K(region));
+  }
+
+  return ret;
+}
+
 int ObLogFetcher::add_ls(
     const share::ObLSID &ls_id,
     const ObLogFetcherStartParameters &start_parameters)
@@ -354,7 +383,7 @@ int ObLogFetcher::add_ls(
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   }
   // Requires a valid start-up timestamp
   else if (OB_UNLIKELY(start_tstamp_ns <= -1)) {
@@ -395,7 +424,7 @@ int ObLogFetcher::recycle_ls(const share::ObLSID &ls_id)
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("Fetcher not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else if (OB_FAIL(ls_fetch_mgr_.recycle_ls(tls_id))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       LOG_INFO("ls has been recycled in fetcher", K(tls_id));
@@ -418,7 +447,7 @@ int ObLogFetcher::remove_ls(const share::ObLSID &ls_id)
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("Fetcher not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else if (OB_FAIL(recycle_ls(ls_id))) {
     LOG_ERROR("recycle_ls failed", KR(ret), K(ls_id));
   } else {
@@ -452,7 +481,7 @@ int ObLogFetcher::remove_ls_physically(const share::ObLSID &ls_id)
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("LogFetcher is not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else if (OB_FAIL(fs_container_mgr_.remove_fsc(removed_tls_id))) {
     LOG_ERROR("fs_container_mgr_ remove_fsc failed", KR(ret), K(removed_tls_id));
   } else if (OB_FAIL(ls_fetch_mgr_.remove_ls(removed_tls_id))) {
@@ -470,7 +499,7 @@ int ObLogFetcher::get_all_ls(ObIArray<share::ObLSID> &ls_ids)
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("LogFetcher is not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else {
     FetchCtxMapLSGetter ls_getter(ls_ids);
 
@@ -495,7 +524,7 @@ int ObLogFetcher::get_ls_proposal_id(const share::ObLSID &ls_id, int64_t &propos
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("LogFetcher is not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id));
@@ -515,7 +544,7 @@ int ObLogFetcher::update_fetching_log_upper_limit(const share::SCN &upper_limit_
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("LogFetcher is not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else if (OB_UNLIKELY(!upper_limit_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(upper_limit_scn));
@@ -533,7 +562,7 @@ int ObLogFetcher::update_compressor_type(const common::ObCompressorType &compres
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("LogFetcher is not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else if (OB_FAIL(rpc_.update_compressor_type(compressor_type))) {
     LOG_WARN("ObLogRpc update_compressor_type failed", K(compressor_type));
   }
@@ -547,7 +576,7 @@ int ObLogFetcher::get_progress_info(ProgressInfo &progress_info)
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("LogFetcher is not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else {
     if (OB_FAIL(ls_fetch_mgr_.for_each_ls(progress_info))) {
       LOG_ERROR("for each part fetch ctx fail", KR(ret));
@@ -563,7 +592,7 @@ int ObLogFetcher::wait_for_all_ls_to_be_removed(const int64_t timeout)
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("Fetcher not inited", KR(ret));
+    LOG_ERROR("ObLogFetcher has not been inited", KR(ret));
   } else {
     const int64_t start_time = get_timestamp();
 
@@ -619,8 +648,8 @@ void ObLogFetcher::configure(const ObLogFetcherConfig &cfg)
         K(blacklist_survival_time_penalty_period_min),
         K(blacklist_history_overdue_time_min),
         K(blacklist_history_clear_interval_min));
-    } else if (OB_FAIL(log_route_service_.update_assign_region(cfg.region.str()))) {
-      LOG_ERROR("update_assign_region failed", KR(ret), "region", cfg.region);
+    } else if (OB_FAIL(log_route_service_.update_preferred_upstream_log_region(cfg.region.str()))) {
+      LOG_ERROR("update_preferred_upstream_log_region failed", KR(ret), "region", cfg.region);
     } else if (OB_FAIL(log_route_service_.update_cache_update_interval(
         all_server_cache_update_interval_sec,
         all_zone_cache_update_interval_sec))) {

@@ -5056,10 +5056,9 @@ int JoinPath::compute_join_path_sharding()
                                               input_shardings,
                                               *parent_->get_allocator(),
                                               reselected_dup_pos,
-                                              strong_sharding_))) {
+                                              strong_sharding_,
+                                              inherit_sharding_index_))) {
         LOG_WARN("failed to compute basic sharding info", K(ret));
-      } else if (OB_FALSE_IT(inherit_sharding_index_ = 0)) {
-        //do nothing
       } else if (reselected_dup_pos.empty()) {
         /*no duplicated table, do nothing*/
       } else if (OB_UNLIKELY(2 != reselected_dup_pos.count())) {

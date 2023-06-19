@@ -6961,7 +6961,7 @@ int ObNotifySwitchLeaderArg::assign(const ObNotifySwitchLeaderArg &other)
 
 const char* SwitchLeaderCommentStr[] =
 {
-  "STOP SERVER", "STOP ZONE", "CHANGE MEMBER", "MODIFY PRIMARY_ZONE", "MANUAL SWITCH"
+  "STOP SERVER", "STOP ZONE", "CHANGE MEMBER", "MODIFY PRIMARY_ZONE", "MANUAL SWITCH", "CREATE LS"
 };
 const char* ObNotifySwitchLeaderArg::comment_to_str() const
 {

@@ -186,7 +186,9 @@ private:
     // @param [in]  lsn                 target lsn
     // @param [out] is_log_served       whether serve target log id
     // @param [out] is_server_invalid   whether the server is no longer valid (no more valid ranges)
-    void check_and_update_serve_info(const palf::LSN &lsn,
+    void check_and_update_serve_info(
+        const bool is_always_serving,
+        const palf::LSN &lsn,
         bool &is_log_served,
         bool &is_server_invalid);
 

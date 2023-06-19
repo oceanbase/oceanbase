@@ -38,6 +38,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {
@@ -1200,26 +1201,29 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
 int ObTabletMergeFinishTask::try_report_tablet_stat_after_mini(ObTabletMergeCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = ctx.param_.ls_id_;
   const ObTabletID &tablet_id = ctx.param_.tablet_id_;
-
   const ObTransNodeDMLStat &tnode_stat = ctx.tnode_stat_;
+  bool report_succ = false;
 
   if (tablet_id.is_special_merge_tablet()) {
     // no need report
   } else if (ObTabletStat::MERGE_REPORT_MIN_ROW_CNT >= tnode_stat.get_dml_count()) {
     // insufficient data, skip to report
   } else {
+    // always report tablet stat whether _enable_adaptive_compaction is true or not for mini compaction
     ObTabletStat report_stat;
-    report_stat.ls_id_ = ctx.param_.ls_id_.id(),
-    report_stat.tablet_id_ = ctx.param_.tablet_id_.id();
+    report_stat.ls_id_ = ls_id.id();
+    report_stat.tablet_id_ = tablet_id.id();
     report_stat.merge_cnt_ = 1;
     report_stat.insert_row_cnt_ = tnode_stat.insert_row_count_;
     report_stat.update_row_cnt_ = tnode_stat.update_row_count_;
     report_stat.delete_row_cnt_ = tnode_stat.delete_row_count_;
-    if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(report_stat))) {
+    if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(report_stat, report_succ))) {
       STORAGE_LOG(WARN, "failed to report tablet stat", K(ret));
     }
   }
+  FLOG_INFO("try report tablet stat", K(ret), K(ls_id), K(tablet_id), K(tnode_stat), K(report_succ));
   return ret;
 }
 
@@ -1294,11 +1298,11 @@ int ObTabletMergeFinishTask::try_schedule_compaction_after_mini(
   int tmp_ret = OB_SUCCESS;
   const ObTabletID &tablet_id = ctx.param_.tablet_id_;
   ObLSID ls_id = ctx.param_.ls_id_;
-  bool enable_adaptive_compaction = MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction();
+
   // report tablet stat
   if (0 == ctx.get_merge_info().get_sstable_merge_info().macro_block_count_) {
     // empty mini compaction, no need to reprot stat
-  } else if (enable_adaptive_compaction && OB_TMP_FAIL(try_report_tablet_stat_after_mini(ctx))) {
+  } else if (OB_TMP_FAIL(try_report_tablet_stat_after_mini(ctx))) {
     LOG_WARN("failed to report table stat after mini compaction", K(tmp_ret), K(ls_id), K(tablet_id));
   }
   if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(

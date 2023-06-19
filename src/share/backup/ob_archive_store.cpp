@@ -1350,35 +1350,27 @@ int ObArchiveStore::get_piece_paths_in_range(const SCN &start_scn, const SCN &en
 int ObArchiveStore::get_file_range_in_piece(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, int64_t &min_file_id, int64_t &max_file_id)
 {
   int ret = OB_SUCCESS;
-  ObBackupIoAdapter util;
-  ObBackupPath piece_path;
-  const ObBackupStorageInfo *storage_info = get_storage_info();
-  const ObBackupDest &dest = get_backup_dest();
-  ObPieceFileListFilter op;
-  if (!is_init()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(dest, dest_id, round_id, piece_id, ls_id, piece_path))) {
-    LOG_WARN("get piece ls dir path failed", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id));
-  } else if (OB_FAIL(op.init(this))) {
-    LOG_WARN("ObPieceFileListFilter init failed", K(ret));
-  } else if (OB_FAIL(util.list_files(piece_path.get_ptr(), storage_info, op))) {
-    LOG_WARN("list files failed", K(ret), K(piece_path), K(dest));
+  ObArray<ObSingleLSInfoDesc::OneFile> filelist;
+  if (OB_FAIL(get_file_list_in_piece(
+              dest_id,
+              round_id,
+              piece_id,
+              ls_id,
+              filelist))) {
+    LOG_WARN("failed to get file list", K(ret), K(dest_id), K(round_id), K(piece_id), K(ls_id));
+  } else if (filelist.empty()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("file not exist", K(ret), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else {
-    ObArray<int64_t> &result = op.result();
-    std::sort(result.begin(), result.end());
-    if (result.count() > 0) {
-      min_file_id = result.at(0);
-      max_file_id = result.at(result.count() - 1);
-    } else {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("file not exist", K(ret), K(piece_path));
-    }
+    std::sort(filelist.begin(), filelist.end());
+    min_file_id = filelist.at(0).file_id_;
+    max_file_id = filelist.at(filelist.count() - 1).file_id_;
   }
+
   return ret;
 }
 
-int ObArchiveStore:: get_file_list_in_piece(const int64_t dest_id, const int64_t round_id, 
+int ObArchiveStore::get_file_list_in_piece(const int64_t dest_id, const int64_t round_id,
     const int64_t piece_id, const ObLSID &ls_id, ObIArray<ObSingleLSInfoDesc::OneFile> &filelist) const
 {
   int ret = OB_SUCCESS;
@@ -1833,54 +1825,6 @@ int ObArchiveStore::ObRoundRangeFilter::func(const dirent *entry)
   return ret;
 }
 
-ObArchiveStore::ObPieceFileListFilter::ObPieceFileListFilter()
-  : is_inited_(false), store_(nullptr), files_()
-{}
-
-int ObArchiveStore::ObPieceFileListFilter::init(ObArchiveStore *store)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObPieceFileListFilter init twice", K(ret));
-  } else if (OB_ISNULL(store)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid store", K(ret), K(store));
-  } else {
-    store_ = store;
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObArchiveStore::ObPieceFileListFilter::func(const dirent *entry)
-{
-  int ret = OB_SUCCESS;
-  char file_name[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-  int64_t file_id = -1;
-  int32_t len = 0;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPieceFileListFilter not init", K(ret));
-  } else if (OB_ISNULL(entry)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid entry", K(ret));
-  } else if (FALSE_IT(len = static_cast<int32_t>(strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX)))) {
-  } else if (len <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX));
-  } else if (OB_FAIL(databuff_printf(file_name, sizeof(file_name), "%.*s", len, entry->d_name))) {
-    LOG_WARN("fail to save tmp file name", K(ret), K(file_name));
-  } else if (OB_FAIL(ob_atoll(file_name, file_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid archive file name", K(file_name));
-  } else if (OB_FAIL(files_.push_back(file_id))) {
-    LOG_WARN("push back failed", K(ret), K(file_id));
-  }
-  return ret;
-}
-
-
 ObArchiveStore::ObLSFileListOp::ObLSFileListOp()
   : is_inited_(false), store_(nullptr), filelist_(nullptr)
 {}
@@ -1907,28 +1851,31 @@ int ObArchiveStore::ObLSFileListOp::init(const ObArchiveStore *store, ObIArray<O
 
 int ObArchiveStore::ObLSFileListOp::func(const dirent *entry)
 {
+  // The format of archive file name is like '100.obarc'.
   int ret = OB_SUCCESS;
-  ObString file_name;
   ObSingleLSInfoDesc::OneFile one_file;
   char *endptr = NULL;
-  int32_t len = 0;
+  const char *filename = NULL;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLSFileListOp not init", K(ret));
   } else if (OB_ISNULL(entry)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid entry", K(ret));
-  } else if (FALSE_IT(len = static_cast<int32_t>(strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX)))) {
-  } else if (len <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX));
-  } else if (OB_FALSE_IT(file_name.assign_ptr(entry->d_name, len))) {
-  } else if (OB_FAIL(ob_atoll(file_name.ptr(), one_file.file_id_))) {
-    OB_LOG(WARN, "ignore invalid file name", K(ret), K(file_name));
+  } else if (OB_FALSE_IT(filename = entry->d_name)) {
+  } else if (STRLEN(filename) <= STRLEN(OB_ARCHIVE_SUFFIX)) {
+    LOG_WARN("ignore invalid file name", KCSTRING(filename));
+  } else if (OB_FAIL(ob_strtoll(filename, endptr, one_file.file_id_))) {
+    LOG_WARN("ignore invalid file name", K(ret), KCSTRING(filename));
     ret = OB_SUCCESS;
+  } else if (OB_ISNULL(endptr) || 0 != STRCMP(endptr, OB_ARCHIVE_SUFFIX)) {
+    LOG_WARN("ignore invalid file name", KCSTRING(filename));
   } else if (OB_FALSE_IT(one_file.size_bytes_ = get_size())) {
   } else if (OB_FAIL(filelist_->push_back(one_file))) {
     LOG_WARN("push back failed", K(ret), K(one_file));
+  } else {
+    LOG_INFO("find one archive file", KCSTRING(filename), "bytes", one_file.size_bytes_);
   }
   return ret;
 }

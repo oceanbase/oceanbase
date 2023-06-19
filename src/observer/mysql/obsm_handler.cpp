@@ -233,26 +233,10 @@ int ObSMHandler::on_close(easy_connection_t *c)
         ObMPDisconnect disconnect_processor(ctx);
         rpc::frame::ObReqProcessor *processor = static_cast<rpc::frame::ObReqProcessor *>(&disconnect_processor);
         if (OB_FAIL(processor->run())) {
-          LOG_WARN("free session fail", K(ctx));
-        } else {
-          LOG_INFO("free session successfully", K(conn->sessid_),
-                    "proxy_sessid", conn->proxy_sessid_, K(ctx));
+          LOG_WARN("free session fail and related session id can not be reused", K(ret), K(ctx), "sessid", conn->sessid_);
         }
       }
     }
-
-    //set sessid unused, 统一放在on_close()中，确保不会被并发mark_sessid_unuses
-    if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(conn, is_need_clear)))) {
-      LOG_ERROR("fail to jugde need clear", K(ret));
-    } else if (is_need_clear) {
-      if (OB_UNLIKELY(OB_FAIL(gctx_.session_mgr_->mark_sessid_unused(conn->sessid_)))) {
-        LOG_ERROR("fail to mark sessid unused", K(ret), K(conn->sessid_),
-                  "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_);
-      } else {
-        LOG_INFO("mark sessid unused", K(conn->sessid_),
-                 "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_);
-      }
-    } else {/*do nothing*/}
 
     //unlock tenant
     if (OB_LIKELY(NULL != conn->tenant_ && conn->is_tenant_locked_)) {

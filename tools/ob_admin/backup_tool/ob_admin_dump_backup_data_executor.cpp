@@ -2421,8 +2421,10 @@ int ObAdminDumpBackupDataExecutor::dump_archive_single_ls_info_file_(const share
   PrintHelper::print_dump_line("max_lsn", single_ls_info_file.max_lsn_);
   ARRAY_FOREACH_X(single_ls_info_file.filelist_, i , cnt, OB_SUCC(ret)) {
     const ObSingleLSInfoDesc::OneFile &one_file = single_ls_info_file.filelist_.at(i);
-    PrintHelper::print_dump_list_value(one_file.file_id_, i == cnt - 1);
-    PrintHelper::print_dump_list_value(one_file.size_bytes_, i == cnt - 1);
+    PrintHelper::print_dump_title("archive file", i, 1);
+    PrintHelper::print_dump_line("file id", one_file.file_id_);
+    PrintHelper::print_dump_line("bytes", one_file.size_bytes_);
+    PrintHelper::print_end_line();
   }
   PrintHelper::print_end_line();
   return ret;

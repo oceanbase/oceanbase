@@ -138,6 +138,11 @@ int ObPrimaryStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant status is not normal, switch tenant is");
   }
 
+  // reset return code to TIMEOUT, to prevent the error code which not user unfriendly
+  if (THIS_WORKER.is_timeout() && OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+    ret = OB_TIMEOUT;
+  }
+
   int64_t cost = ObTimeUtility::current_time() - begin_time;
   CLUSTER_EVENT_ADD_CONTROL_FINISH(ret, alter_cluster_event,
       K(cost),

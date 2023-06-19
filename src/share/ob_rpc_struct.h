@@ -3103,6 +3103,7 @@ public:
     CHANGE_MEMBER,//remove member, migrate replica, type transfer
     MODIFY_PRIMARY_ZONE,
     MANUAL_SWITCH,
+    CREATE_LS,
   };
   const char* comment_to_str() const;
   ObNotifySwitchLeaderArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), advise_leader_(),

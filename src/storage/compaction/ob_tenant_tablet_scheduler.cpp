@@ -985,6 +985,17 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
       DEL_SUSPECT_INFO(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX));
     }
 
+    bool enable_adaptive_compaction = enable_adaptive_compaction_;
+    ObTenantSysStat cur_sys_stat;
+    if (!enable_adaptive_compaction_) {
+      // do nothing
+    } else if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->get_sys_stat(cur_sys_stat))) {
+      LOG_WARN("failed to get tenant sys stat", K(tmp_ret), K(cur_sys_stat));
+    } else if (cur_sys_stat.is_full_cpu_usage()) {
+      enable_adaptive_compaction = false;
+      FLOG_INFO("disable adaptive compaction due to the high load CPU", K(ret), K(cur_sys_stat));
+    }
+
     while (OB_SUCC(ret) && schedule_tablet_cnt < SCHEDULE_TABLET_BATCH_CNT) { // loop all tablet in ls
       bool tablet_merge_finish = false;
       if (OB_FAIL(medium_ls_tablet_iter_.get_next_tablet(ls_handle, tablet_handle))) {
@@ -1034,14 +1045,14 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
           } else if (ObTimeUtility::fast_current_time() * 1000 <
               tablet->get_medium_compaction_info_list().get_wait_check_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
             // need wait 10 mins before schedule meta major
-          } else if (enable_adaptive_compaction_ && OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, new_handle))) {
+          } else if (enable_adaptive_compaction && OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, new_handle))) {
             if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
               LOG_WARN("failed to schedule tablet merge", K(tmp_ret), K(ls_id), K(tablet_id));
             }
           }
         }
         if (could_schedule_next_medium && could_major_merge
-          && (!tablet_merge_finish || enable_adaptive_compaction_ || check_medium_finish)
+          && (!tablet_merge_finish || enable_adaptive_compaction || check_medium_finish)
           && OB_TMP_FAIL(func.schedule_next_medium_for_leader(
             tablet_merge_finish ? 0 : merge_version, schedule_stats_))) { // schedule another round
           LOG_WARN("failed to schedule next medium", K(tmp_ret), K(ls_id), K(tablet_id));

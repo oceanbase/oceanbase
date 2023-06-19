@@ -1447,7 +1447,8 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
     ObString pc_key;
     ParseResult parse_result;
     ObPLParser pl_parser(allocator,
-                      ctx.get_my_session()->get_dtc_params().connection_collation_);
+                      ctx.get_my_session()->get_dtc_params().connection_collation_,
+                      ctx.get_my_session()->get_sql_mode());
     OZ (pl_parser.fast_parse(sql, parse_result));
     if (OB_SUCC(ret)) {
       PlTransformTreeCtx trans_ctx;

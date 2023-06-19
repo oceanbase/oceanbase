@@ -68,6 +68,12 @@ public:
   // Get Tenant ID
   virtual uint64_t get_source_tenant_id() const = 0;
 
+  // Update assign region to fetch log
+  virtual int update_preferred_upstream_log_region(const common::ObRegion &region) = 0;
+
+  // Get assign region
+  virtual int get_preferred_upstream_log_region(common::ObRegion &region) = 0;
+
   // Add the log stream
   //
   // @param  [in]   ls_id        LS ID
@@ -205,6 +211,9 @@ public:
 
   virtual int64_t get_cluster_id() const { return cluster_id_; }
   virtual uint64_t get_source_tenant_id() const { return source_tenant_id_; }
+
+  virtual int update_preferred_upstream_log_region(const common::ObRegion &region);
+  virtual int get_preferred_upstream_log_region(common::ObRegion &region);
 
   virtual int add_ls(
       const share::ObLSID &ls_id,

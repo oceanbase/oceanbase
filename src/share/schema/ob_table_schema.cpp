@@ -1219,6 +1219,28 @@ int ObSimpleTableSchemaV2::get_tablet_id_by_object_id(
   return ret;
 }
 
+int ObSimpleTableSchemaV2::check_if_tablet_exists(const ObTabletID &tablet_id, bool &exists) const
+{
+  int ret = OB_SUCCESS;
+  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+  ObPartitionSchemaIter iter(*this, mode);
+  ObPartitionSchemaIter::Info info;
+  exists = false;
+  while (OB_SUCC(ret) && !exists) {
+    if (OB_FAIL(iter.next_partition_info(info))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("iter partition failed", KR(ret));
+      }
+    } else if (info.tablet_id_ == tablet_id) {
+      exists = true;
+    }
+  }
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
 ObTableSchema::ObTableSchema()
     : ObSimpleTableSchemaV2()
 {

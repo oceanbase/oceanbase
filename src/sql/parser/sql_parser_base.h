@@ -1049,4 +1049,20 @@ do {\
     }\
   } while(0);\
 
+// bugfix:
+// avoid '"' in the middle of a str in oracle mode
+#define CHECK_ORACLE_IDENTIFIER_VALID(src_str, str_len)                         \
+  do {                                                                          \
+    if (OB_UNLIKELY(src_str == NULL || str_len <= 0)) {                         \
+    } else {                                                                    \
+      for (int64_t i = 0; i < str_len; i++) {                                   \
+        if (OB_UNLIKELY(src_str[i] == '\"')) {                                  \
+          ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_UNSUPPORTED;   \
+          yyerror(yylloc, yyextra, "identifier not support to have double quote");\
+          return ERROR;                                                         \
+        }                                                                       \
+      }                                                                         \
+    }                                                                           \
+  } while(0);                                                                   \
+
 #endif /* OCEANBASE_SRC_SQL_PARSER_SQL_PARSER_BASE_H_ */
