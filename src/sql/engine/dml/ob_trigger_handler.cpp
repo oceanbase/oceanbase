@@ -410,7 +410,10 @@ int TriggerHandle::calc_trigger_routine(
   OZ (exec_ctx.get_pl_engine()->execute(
     exec_ctx, exec_ctx.get_allocator(), trigger_id, routine_id, path, params, nocopy_params, result),
       trigger_id, routine_id, params);
-  OX (exec_ctx.get_my_session()->set_for_trigger_package(old_flag));
+  if (exec_ctx.get_my_session()->is_for_trigger_package()) {
+    // whether `ret == OB_SUCCESS`, need to restore flag
+    exec_ctx.get_my_session()->set_for_trigger_package(old_flag);
+  }
   return ret;
 }
 
