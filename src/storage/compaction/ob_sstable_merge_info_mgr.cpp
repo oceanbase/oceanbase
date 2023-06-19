@@ -149,7 +149,7 @@ void ObSSTableMergeInfoIterator::reset()
  */
 ObTenantSSTableMergeInfoMgr::ObTenantSSTableMergeInfoMgr()
   : is_inited_(false),
-    allocator_(SET_USE_500(ObModIds::OB_SSTABLE_MERGE_INFO), OB_MALLOC_BIG_BLOCK_SIZE),
+    allocator_(SET_USE_UNEXPECTED_500(ObModIds::OB_SSTABLE_MERGE_INFO), OB_MALLOC_BIG_BLOCK_SIZE),
     major_merge_infos_(allocator_),
     minor_merge_infos_(allocator_)
 {

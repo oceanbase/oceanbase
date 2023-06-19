@@ -24,7 +24,8 @@ using namespace common;
 namespace storage
 {
 ObStorageLoggerManager::ObStorageLoggerManager()
-    : log_dir_(nullptr),
+    : allocator_(SET_USE_UNEXPECTED_500("StorageLoggerM")),
+      log_dir_(nullptr),
       max_log_file_size_(0),
       is_inited_(false),
       log_file_spec_(),

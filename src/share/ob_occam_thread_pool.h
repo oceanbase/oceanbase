@@ -49,7 +49,7 @@ struct DefaultAllocator : public ObIAllocator {
 #ifdef UNIITTEST_DEBUG
     total_alive_num++;
 #endif
-    return ob_malloc(size, SET_USE_500("OccamThreadPool"));
+    return ob_malloc(size, SET_USE_UNEXPECTED_500("OccamThreadPool"));
   }
   void* alloc(const int64_t size, const ObMemAttr &attr) override {
     UNUSED(attr);

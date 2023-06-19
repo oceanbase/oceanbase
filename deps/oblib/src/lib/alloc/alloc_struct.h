@@ -119,7 +119,7 @@ struct ObLabel
 
 struct ObMemAttr
 {
-  friend ObMemAttr DoNotUseMe(ObMemAttr &attr);
+  friend ObMemAttr DoNotUseMe(ObMemAttr &attr, bool expect_500);
   uint64_t tenant_id_;
   ObLabel label_;
   uint64_t ctx_id_;
@@ -136,35 +136,39 @@ struct ObMemAttr
         prio_(prio) {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
   bool use_500() const { return use_500_; }
+  bool expect_500() const { return expect_500_; }
 private:
   bool use_500_ = false;
+  bool expect_500_ = true;
 };
 
-inline ObMemAttr DoNotUseMe(ObMemAttr &attr)
+inline ObMemAttr DoNotUseMe(ObMemAttr &attr, bool expect_500)
 {
   attr.use_500_ = true;
+  attr.expect_500_ = expect_500;
   return attr;
 }
 
-inline ObMemAttr DoNotUseMe(const ObMemAttr &&attr)
+inline ObMemAttr DoNotUseMe(const ObMemAttr &&attr, const bool expect_500)
 {
   ObMemAttr attr_cpy = attr;
-  return DoNotUseMe(attr_cpy);
+  return DoNotUseMe(attr_cpy, expect_500);
 }
 
-inline ObMemAttr DoNotUseMe(const ObLabel &label)
+inline ObMemAttr DoNotUseMe(const ObLabel &label, const bool expect_500)
 {
   ObMemAttr attr(OB_SERVER_TENANT_ID, label);
-  return DoNotUseMe(attr);
+  return DoNotUseMe(attr, expect_500);
 }
 
-inline ObMemAttr DoNotUseMe(const ObLabel &label, const uint64_t ctx_id)
+inline ObMemAttr DoNotUseMe(const ObLabel &label, const uint64_t ctx_id, const bool expect_500)
 {
   ObMemAttr attr(OB_SERVER_TENANT_ID, label, ctx_id);
-  return DoNotUseMe(attr);
+  return DoNotUseMe(attr, expect_500);
 }
 
-#define SET_USE_500(args...) ::oceanbase::lib::DoNotUseMe(args)
+#define SET_USE_500(args...) ::oceanbase::lib::DoNotUseMe(args, true)
+#define SET_USE_UNEXPECTED_500(args...) ::oceanbase::lib::DoNotUseMe(args, false)
 
 struct AllocHelper
 {

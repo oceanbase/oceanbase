@@ -23,7 +23,7 @@ namespace oceanbase
 {
 namespace common
 {
-ObMemAttr g_config_mem_attr = SET_USE_500("ConfigChecker");
+ObMemAttr g_config_mem_attr = SET_USE_UNEXPECTED_500("ConfigChecker");
 
 const char *log_archive_config_keywords[] =
 {

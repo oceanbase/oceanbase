@@ -1506,3 +1506,8 @@ DEF_BOOL(_force_explict_500_malloc, OB_CLUSTER_PARAMETER, "False",
 DEF_CAP(range_optimizer_max_mem_size, OB_TENANT_PARAMETER, "128M", "[16M,1G]",
         "to limit the memory consumption for the query range optimizer. Range: [16M,1G]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+#ifdef ENABLE_500_MEMORY_LIMIT
+DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
+         "specifies whether allowed to limit the memory of tenant 500",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+#endif
