@@ -596,7 +596,6 @@ int ObTransService::remove_callback_for_uncommited_txn(
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(!is_running_)) {
     TRANS_LOG(WARN, "ObTransService is not running");
-    ret = OB_NOT_RUNNING;
   } else if (OB_ISNULL(memtable_set)) {
     TRANS_LOG(WARN, "memtable is NULL");
     ret = OB_INVALID_ARGUMENT;
