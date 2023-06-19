@@ -227,6 +227,8 @@ private:
   bool in_doing_status_(const ArchiveKey &key) const;
 
   void statistic(const int64_t log_size, const int64_t ts);
+
+  bool iterator_need_retry_(const int ret) const;
 private:
   class TmpMemoryHelper
   {
