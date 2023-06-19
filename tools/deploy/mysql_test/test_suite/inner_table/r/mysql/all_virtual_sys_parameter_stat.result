@@ -216,6 +216,7 @@ replica_safe_remove_time
 resource_hard_limit
 resource_soft_limit
 restore_concurrency
+role_change_timeout
 rootservice_async_task_queue_size
 rootservice_async_task_thread_count
 rootservice_list
