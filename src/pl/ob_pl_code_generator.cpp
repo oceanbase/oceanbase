@@ -1848,6 +1848,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLTrimStmt &s)
   int ret = OB_SUCCESS;
   if (NULL == generator_.get_current().get_v()) {
     //控制流已断，后面的语句不再处理
+  } else if (OB_FAIL(generator_.get_helper().set_insert_point(generator_.get_current()))) {
+    LOG_WARN("failed to set insert point", K(ret));
+  } else if (OB_FAIL(generator_.generate_goto_label(s))) {
+    LOG_WARN("failed to generate goto label", K(ret));
   } else {
     COLLECTION_STMT_COMM(s.get_trim_expr());
 
@@ -1880,6 +1884,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeleteStmt &s)
   int ret = OB_SUCCESS;
   if (NULL == generator_.get_current().get_v()) {
     //控制流已断，后面的语句不再处理
+  } else if (OB_FAIL(generator_.get_helper().set_insert_point(generator_.get_current()))) {
+    LOG_WARN("failed to set insert point", K(ret));
+  } else if (OB_FAIL(generator_.generate_goto_label(s))) {
+    LOG_WARN("failed to generate goto label", K(ret));
   } else {
     COLLECTION_STMT_COMM(s.get_delete_expr());
 
@@ -7571,6 +7579,7 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   if (stmt.get_is_goto_dst()) {
+
     if (NULL == get_current().get_v()) {
         //控制流已断，后面的语句不再处理
     } else {
@@ -7580,7 +7589,10 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
       if (OB_HASH_NOT_EXIST == tmp_ret) {
         ObLLVMBasicBlock label_block;
         const ObString *lab = stmt.get_label();
-        if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
+        ObLLVMValue stack;
+        if (OB_FAIL(get_helper().stack_save(stack))) {
+          LOG_WARN("failed to save current stack", K(ret));
+        } else if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
                                                 label_block))) {
           LOG_WARN("create goto label failed", K(ret));
         } else if (OB_FAIL(get_helper().create_br(label_block))) {
@@ -7589,6 +7601,8 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
           LOG_WARN("failed to set insert point", K(ret));
         } else if (OB_FAIL(set_current(label_block))) {
           LOG_WARN("failed to set current block", K(ret));
+        } else if (OB_FAIL(get_helper().stack_restore(stack))) {
+          LOG_WARN("failed to restore stack", K(ret));
         } else if (OB_FAIL(pair.init(ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_NONEXIST,
                                                     label_block))) {
           LOG_WARN("init label block pair failed.", K(ret));
@@ -7596,7 +7610,6 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
           LOG_WARN("set label block failed", K(ret));
         } else {}
       } else if (OB_SUCCESS == tmp_ret) {
-        // 这个时候，goto已经cg了，拿到对应的block地址，做为新的block
         if (ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_EXIST == pair.first) {
           ObLLVMBasicBlock &goto_block = pair.second;
           if (OB_FAIL(get_helper().create_br(goto_block))) {
