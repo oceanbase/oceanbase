@@ -1805,7 +1805,12 @@ void ObChunkDatumStore::ChunkIterator::free_block(Block *blk, const int64_t size
     bool do_phy_free = force_free;
     if (!force_free) {
       try_free_cached_blocks();
-      if (NULL != age_) {
+      if (NULL != blk_holder_ptr_) {
+        // fill iter ptr at pos of age, since we do not use age in shared cache
+        *((int64_t *)((char *)blk + size - sizeof(int64_t))) = reinterpret_cast<int64_t> (this);
+        blk_holder_ptr_->block_list_.add_last(blk);
+        blk->blk_size_ = size;
+      } else if (NULL != age_) {
         STATIC_ASSERT(sizeof(BlockBuffer) >= sizeof(int64_t), "unexpected block buffer size");
         // Save age to the tail of the block, we always allocate one BlockBuffer in tail of block,
         // it's safe to write it here.
@@ -2095,7 +2100,8 @@ ObChunkDatumStore::ChunkIterator::ChunkIterator()
     read_blk_buf_(NULL),
     aio_blk_(NULL),
     aio_blk_buf_(NULL),
-    age_(NULL)
+    age_(NULL),
+    blk_holder_ptr_(NULL)
 {
 }
 
@@ -2150,6 +2156,13 @@ void ObChunkDatumStore::ChunkIterator::reset_cursor(const int64_t file_size)
 
   while (NULL != free_list_.get_first()) {
     free_block(free_list_.remove_first(), default_block_size_, force_free);
+  }
+
+  if (nullptr != blk_holder_ptr_) {
+    if (blk_holder_ptr_->block_list_.get_size() > 0) {
+      blk_holder_ptr_->release();
+      blk_holder_ptr_ = nullptr;
+    }
   }
 
   cur_iter_blk_ = nullptr;
@@ -2840,6 +2853,19 @@ void ObChunkDatumStore::free_tmp_dump_blk()
   if (NULL != tmp_dump_blk_) {
     free_block(tmp_dump_blk_);
     tmp_dump_blk_ = nullptr;
+  }
+}
+
+void ObChunkDatumStore::IteratedBlockHolder::release()
+{
+  while (block_list_.get_size() > 0) {
+    Block *blk = block_list_.remove_first();
+    ChunkIterator *iter = reinterpret_cast<ChunkIterator *> (*((int64_t *)((char *)blk + blk->blk_size_ - sizeof(int64_t))));
+    if (OB_NOT_NULL(blk) && OB_NOT_NULL(iter)) {
+      iter->free_block(blk, blk->blk_size_, true);
+    } else {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "get unexpected block pair", KP(iter), KP(blk));
+    }
   }
 }
 

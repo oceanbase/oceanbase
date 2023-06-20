@@ -677,6 +677,16 @@ public:
     int64_t age_;
   };
 
+  struct IteratedBlockHolder
+  {
+    IteratedBlockHolder() : block_list_() {}
+    ~IteratedBlockHolder()
+    {
+      release();
+    }
+    void release();
+    BlockList block_list_;
+  };
   class ChunkIterator
   {
   public:
@@ -688,6 +698,7 @@ public:
     };
   public:
      friend class ObChunkDatumStore;
+     friend class IteratedBlockHolder;
      ChunkIterator();
      virtual ~ChunkIterator();
      int init(ObChunkDatumStore *row_store, int64_t chunk_read_size = 0, const IterationAge *age = NULL);
@@ -720,7 +731,7 @@ public:
 
      TO_STRING_KV(KP_(store), KP_(cur_iter_blk),
          K_(cur_chunk_n_blocks), K_(cur_iter_pos), K_(file_size), K_(chunk_read_size),
-         KP_(chunk_mem), KP_(read_blk), KP_(read_blk_buf), KP_(aio_blk), KP_(aio_blk_buf));
+         KP_(chunk_mem), KP_(read_blk), KP_(read_blk_buf), KP_(aio_blk), KP_(aio_blk_buf), KP_(blk_holder_ptr));
   private:
      void reset_cursor(const int64_t file_size);
      int load_next_block();
@@ -731,6 +742,7 @@ public:
      int alloc_block(Block *&blk, const int64_t size);
      void free_block(Block *blk, const int64_t size, bool force_free = false);
      void try_free_cached_blocks();
+     void set_blk_holder_ptr(IteratedBlockHolder *ptr) { blk_holder_ptr_ = ptr;}
   protected:
     ObChunkDatumStore* store_;
     Block* cur_iter_blk_;
@@ -759,6 +771,7 @@ public:
     IterationAge inner_age_;
     const IterationAge *age_;
     int64_t default_block_size_;
+    IteratedBlockHolder *blk_holder_ptr_;
   };
 
   class Iterator
@@ -802,6 +815,7 @@ public:
     { return chunk_it_.has_next_chunk() || (row_it_.is_valid() && row_it_.has_next()); }
     bool is_valid() { return chunk_it_.is_valid(); }
     inline int64_t get_chunk_read_size() { return chunk_it_.get_chunk_read_size(); }
+    void set_blk_holder_ptr(IteratedBlockHolder *ptr) { chunk_it_.set_blk_holder_ptr(ptr); }
   private:
      explicit Iterator(ObChunkDatumStore *row_store);
   protected:
