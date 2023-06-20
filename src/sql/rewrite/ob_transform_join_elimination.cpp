@@ -2945,14 +2945,16 @@ int ObTransformJoinElimination::trans_semi_condition_exprs(ObDMLStmt *stmt,
     }
     /*将所有改写的condition转成NOT(join_cond1) OR NOT(join_cond2) OR ...
       OR LNNVL(expr1) OR LNNVL(expr2) OR ...*/
-    if (OB_SUCC(ret) && !new_conditions.empty()) {
-      ObRawExpr *or_expr = NULL;
-      if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, new_conditions, or_expr))) {
+    if (OB_SUCC(ret) ) {
+      ObRawExpr *filter_expr = NULL;
+      if (!new_conditions.empty() && OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, new_conditions, filter_expr))) {
         LOG_WARN("make or expr failed", K(ret));
-      } else if (OB_ISNULL(or_expr)) {
+      } else if (new_conditions.empty() && OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, filter_expr, false))) {
+        LOG_WARN("make or expr failed", K(ret));
+      } else if (OB_ISNULL(filter_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("or expr is null", K(ret));
-      } else if (OB_FAIL(stmt->get_condition_exprs().push_back(or_expr))) {
+      } else if (OB_FAIL(stmt->get_condition_exprs().push_back(filter_expr))) {
         LOG_WARN("failed to push back cond", K(ret));
       } else {/*do nothing*/}
     } else {/*do nothing*/}
