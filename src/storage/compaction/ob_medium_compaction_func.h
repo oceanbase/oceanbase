@@ -71,9 +71,12 @@ protected:
       const ObTabletID &tablet_id,
       share::ObTabletCompactionScnInfo &ret_info);
   int prepare_medium_info(const ObGetMergeTablesResult &result, ObMediumCompactionInfo &medium_info);
-  int init_parallel_range(
+  int init_parallel_range_and_schema_changed(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
+  int init_schema_changed(
+    const ObSSTableMeta &sstable_meta,
+    ObMediumCompactionInfo &medium_info);
   static int get_result_for_major(
       ObTablet &tablet,
       const ObMediumCompactionInfo &medium_info,

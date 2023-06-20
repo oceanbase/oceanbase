@@ -229,6 +229,7 @@ ObMediumCompactionInfo::ObMediumCompactionInfo()
     compaction_type_(COMPACTION_TYPE_MAX),
     contain_parallel_range_(false),
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
+    is_schema_changed_(false),
     reserved_(0),
     cluster_id_(0),
     data_version_(0),
@@ -279,6 +280,9 @@ void ObMediumCompactionInfo::reset()
   info_ = 0;
   medium_compat_version_ = 0;
   compaction_type_ = COMPACTION_TYPE_MAX;
+  contain_parallel_range_ = false;
+  medium_merge_reason_ = ObAdaptiveMergePolicy::NONE;
+  is_schema_changed_ = false;
   cluster_id_ = 0;
   medium_snapshot_ = 0;
   data_version_ = 0;
