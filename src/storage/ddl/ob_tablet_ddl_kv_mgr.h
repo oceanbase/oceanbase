@@ -38,9 +38,9 @@ public:
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
   int ddl_start_nolock(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
   int ddl_start(ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
-  int ddl_commit(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
-  int schedule_ddl_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool is_replay, const uint64_t table_id, const int64_t ddl_task_id); // try wait build major sstable
-  int wait_ddl_merge_success(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id, const int64_t ddl_task_id);
+  int ddl_commit(const share::SCN &start_scn, const share::SCN &commit_scn); // schedule build a major sstable
+  int schedule_ddl_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn); // try wait build major sstable
+  int wait_ddl_merge_success(const share::SCN &start_scn, const share::SCN &commit_scn);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
   int get_or_create_ddl_kv(const share::SCN &start_scn, const share::SCN &scn, ObTableHandleV2 &kv_handle); // used in active ddl kv guard
   int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObTableHandleV2 &kv_handle); // locate ddl kv with exeact freeze log ts

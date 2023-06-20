@@ -301,10 +301,8 @@ public:
                        ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                        const bool allow_remote_write,
                        const ObITable::TableKey &table_key,
-                       const int64_t table_id,
-                       const int64_t execution_id,
-                       const int64_t ddl_task_id,
-                       share::SCN &commit_scn);
+                       share::SCN &commit_scn,
+                       bool &is_remote_write);
   OB_INLINE void set_start_scn(const share::SCN &start_scn) { start_scn_.atomic_set(start_scn); }
   OB_INLINE share::SCN get_start_scn() const { return start_scn_.atomic_get(); }
 private:

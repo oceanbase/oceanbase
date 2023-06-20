@@ -785,6 +785,8 @@ int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(ObTabletHandle &tab
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
         LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
       }
+    } else {
+      LOG_INFO("schedule ddl merge task for major sstable success", K(param));
     }
   }
   return ret;

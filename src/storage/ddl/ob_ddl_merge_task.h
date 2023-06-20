@@ -45,27 +45,20 @@ public:
       tablet_id_(),
       rec_scn_(share::SCN::min_scn()),
       is_commit_(false),
-      start_scn_(share::SCN::min_scn()),
-      table_id_(0),
-      execution_id_(-1),
-      ddl_task_id_(0)
+      start_scn_(share::SCN::min_scn())
   { }
   bool is_valid() const
   {
     return ls_id_.is_valid() && tablet_id_.is_valid() && start_scn_.is_valid_and_not_min();
   }
   virtual ~ObDDLTableMergeDagParam() = default;
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(start_scn),
-    K_(table_id), K_(execution_id), K_(ddl_task_id));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(start_scn));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   share::SCN rec_scn_;
   bool is_commit_;
   share::SCN start_scn_; // start log ts at schedule, for skipping expired task
-  uint64_t table_id_; // used for report ddl checksum
-  int64_t execution_id_; // used for report ddl checksum
-  int64_t ddl_task_id_; // used for report ddl checksum
 };
 
 class ObDDLTableMergeDag : public share::ObIDag
