@@ -2140,6 +2140,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
     bool use_plan_cache = session->get_local_ob_enable_plan_cache();
     context.self_add_plan_ = false;
     PlanCacheMode mode = remote_sql_info.use_ps_ ? PC_PS_MODE : PC_TEXT_MODE;
+    mode = remote_sql_info.sql_from_pl_ ? PC_PL_MODE : mode;
     context.cur_sql_ = trimed_stmt;
     pc_ctx = new (pc_ctx) ObPlanCacheCtx(trimed_stmt,
                                          mode,
@@ -2221,6 +2222,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
         remote_sql_info.ps_params_->pop_back();
       }
       PlanCacheMode mode = remote_sql_info.use_ps_ ? PC_PS_MODE : PC_TEXT_MODE;
+      mode = remote_sql_info.sql_from_pl_ ? PC_PL_MODE : mode;
       if (OB_FAIL(handle_physical_plan(trimed_stmt, context, tmp_result, *pc_ctx, get_plan_err))) {
         if (OB_ERR_PROXY_REROUTE == ret) {
           LOG_DEBUG("fail to handle physical plan", K(ret));
@@ -4221,6 +4223,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       if (OB_SUCC(ret) && phy_plan->is_remote_plan()
           && !phy_plan->contains_temp_table()
           && !enable_send_plan) {
+        pctx->get_remote_sql_info().sql_from_pl_ = PC_PL_MODE == pc_ctx.mode_;
         //处理远程plan转发SQL的情况
         ParamStore &param_store = pctx->get_param_store_for_update();
         if (OB_NOT_NULL(ps_params)) {
