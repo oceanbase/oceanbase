@@ -4074,13 +4074,22 @@ int ObSelectLogPlan::allocate_link_scan_as_top(ObLogicalOperator *&old_top)
 {
   int ret = OB_SUCCESS;
   ObLogLinkScan *link_scan = NULL;
+  const ObSelectStmt *stmt = get_stmt();
+  ObSEArray<ObRawExpr*, 4> select_exprs;
   if (NULL != old_top) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("old_top should be null", K(ret), K(get_stmt()));
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret), K(stmt));
   } else if (OB_ISNULL(link_scan = static_cast<ObLogLinkScan *>(get_log_op_factory().
                                   allocate(*this, LOG_LINK_SCAN)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate link dml operator", K(ret));
+  } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(link_scan->get_select_exprs().assign(select_exprs))) {
+    LOG_WARN("failed to assign select exprs", K(ret));
   } else if (OB_FAIL(link_scan->compute_property())) {
     LOG_WARN("failed to compute property", K(ret));
   } else {

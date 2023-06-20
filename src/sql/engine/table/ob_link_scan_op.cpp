@@ -35,10 +35,10 @@ namespace sql
 {
 
 ObLinkScanSpec::ObLinkScanSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
-  : ObLinkSpec(alloc, type), has_for_update_(false)
+  : ObLinkSpec(alloc, type), has_for_update_(false), select_exprs_(alloc)
 {}
 
-OB_SERIALIZE_MEMBER((ObLinkScanSpec, ObLinkSpec));
+OB_SERIALIZE_MEMBER((ObLinkScanSpec, ObLinkSpec), has_for_update_, select_exprs_);
 
 ObLinkScanOp::ObLinkScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
   : ObLinkOp(exec_ctx, spec, input),
@@ -302,38 +302,47 @@ int ObLinkScanOp::fetch_row()
       reset_result();
     }
   } else {
-    const ObIArray<ObExpr *> &output = spec_.output_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < output.count(); i++) {
-      ObObj value;
-      ObObj new_value;
-      ObObj *res_obj = &value;
-      ObExpr *expr = output.at(i);
-      ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
-      if (OB_FAIL(result_->get_obj(i, value, tz_info_, &row_allocator_))) {
-        LOG_WARN("failed to get obj", K(ret), K(i));
-      } else if (OB_UNLIKELY(ObNullType != value.get_type() &&    // use get_type(), do not use get_type_class() here.
-                            (value.get_type() != expr->obj_meta_.get_type() || 
-                                  (ob_is_string_or_lob_type(value.get_type()) &&
-                                   ob_is_string_or_lob_type(expr->obj_meta_.get_type()) &&
-                                   value.get_type() == expr->obj_meta_.get_type() && 
-                                   value.get_collation_type() != expr->obj_meta_.get_collation_type())))) {
-        DEFINE_CAST_CTX(expr->datum_meta_.cs_type_);
-        if (OB_FAIL(ObObjCaster::to_type(expr->obj_meta_.get_type(), cast_ctx, value, new_value))) {
-          LOG_WARN("cast obj failed", K(ret), K(value), K(expr->obj_meta_));
-        } else {
-          res_obj = &new_value;
+    const ObIArray<ObExpr *> &select_exprs =
+          (MY_SPEC.select_exprs_.empty() ? spec_.output_ : MY_SPEC.select_exprs_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
+      ObExpr *expr = select_exprs.at(i);
+      if (!expr->is_const_expr()) {
+        ObObj value;
+        ObObj new_value;
+        ObObj *res_obj = &value;
+        ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
+        if (OB_FAIL(result_->get_obj(i, value, tz_info_, &row_allocator_))) {
+          LOG_WARN("failed to get obj", K(ret), K(i));
+        } else if (OB_UNLIKELY(ObNullType != value.get_type() &&    // use get_type(), do not use get_type_class() here.
+                              (value.get_type() != expr->obj_meta_.get_type() ||
+                                    (ob_is_string_or_lob_type(value.get_type()) &&
+                                    ob_is_string_or_lob_type(expr->obj_meta_.get_type()) &&
+                                    value.get_type() == expr->obj_meta_.get_type() &&
+                                    value.get_collation_type() != expr->obj_meta_.get_collation_type())))) {
+          DEFINE_CAST_CTX(expr->datum_meta_.cs_type_);
+          if (OB_FAIL(ObObjCaster::to_type(expr->obj_meta_.get_type(), cast_ctx, value, new_value))) {
+            LOG_WARN("cast obj failed", K(ret), K(value), K(expr->obj_meta_));
+          } else {
+            res_obj = &new_value;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(datum.from_obj(*res_obj))) {
+            LOG_WARN("from obj failed", K(ret));
+          } else if (is_lob_storage(res_obj->get_type()) &&
+                    OB_FAIL(ob_adjust_lob_datum(*res_obj, expr->obj_meta_,
+                                                get_exec_ctx().get_allocator(), datum))) {
+            LOG_WARN("adjust lob datum failed", K(ret), K(i), K(res_obj->get_meta()), K(expr->obj_meta_));
+          }
+        }
+      } else {
+        ObDatum *datum = NULL;
+        if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
+          LOG_WARN("expr evaluate failed", K(ret), KPC(expr));
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(datum.from_obj(*res_obj))) {
-          LOG_WARN("from obj failed", K(ret));
-        } else if (is_lob_storage(res_obj->get_type()) &&
-                   OB_FAIL(ob_adjust_lob_datum(*res_obj, expr->obj_meta_,
-                                               get_exec_ctx().get_allocator(), datum))) {
-          LOG_WARN("adjust lob datum failed", K(ret), K(i), K(res_obj->get_meta()), K(expr->obj_meta_));
-        } else {
-          expr->set_evaluated_projected(eval_ctx_);
-        }
+        expr->set_evaluated_projected(eval_ctx_);
       }
     }
   }
