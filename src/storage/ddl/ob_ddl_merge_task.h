@@ -182,7 +182,7 @@ public:
                                  const ObIArray<int64_t> &column_checksums);
   static int check_and_get_major_sstable(const share::ObLSID &ls_id,
                                          const ObTabletID &tablet_id,
-                                         const blocksstable::ObSSTable *&latest_major_sstable);
+                                         const blocksstable::ObSSTable *&first_major_sstable);
 
   static int check_data_integrity(const ObTablesHandleArray &ddl_sstables,
                                   const share::SCN &start_scn,

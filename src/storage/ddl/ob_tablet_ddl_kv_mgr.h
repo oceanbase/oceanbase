@@ -39,8 +39,8 @@ public:
   int ddl_start_nolock(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
   int ddl_start(ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
   int ddl_commit(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
-  int schedule_ddl_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool is_replay); // try wait build major sstable
-  int wait_ddl_merge_success(const share::SCN &start_scn, const share::SCN &commit_scn);
+  int schedule_ddl_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool is_replay, const uint64_t table_id, const int64_t ddl_task_id); // try wait build major sstable
+  int wait_ddl_merge_success(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id, const int64_t ddl_task_id);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
   int get_or_create_ddl_kv(const share::SCN &start_scn, const share::SCN &scn, ObTableHandleV2 &kv_handle); // used in active ddl kv guard
   int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObTableHandleV2 &kv_handle); // locate ddl kv with exeact freeze log ts
@@ -80,10 +80,9 @@ public:
   bool can_schedule_major_compaction_nolock(const ObTabletMeta &tablet_meta);
   int get_ddl_major_merge_param(const ObTabletMeta &tablet_meta, ObDDLTableMergeDagParam &merge_param);
   int get_rec_scn(share::SCN &rec_scn);
-  void prepare_info_for_checksum_report(const uint64_t table_id, const int64_t ddl_task_id) { table_id_ = table_id; ddl_task_id_ = ddl_task_id; }
   TO_STRING_KV(K_(is_inited), K_(success_start_scn), K_(ls_id), K_(tablet_id), K_(table_key),
       K_(data_format_version), K_(start_scn), K_(commit_scn), K_(max_freeze_scn),
-      K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
+      K_(execution_id), K_(head), K_(tail), K_(ref_cnt));
 
 private:
   int64_t get_idx(const int64_t pos) const;
@@ -111,9 +110,7 @@ private:
   share::SCN start_scn_;
   share::SCN commit_scn_;
   share::SCN max_freeze_scn_;
-  uint64_t table_id_; // used for ddl checksum
   int64_t execution_id_; // used for ddl checksum
-  int64_t ddl_task_id_; // used for ddl checksum
   ObTableHandleV2 ddl_kv_handles_[MAX_DDL_KV_CNT_IN_STORAGE];
   int64_t head_;
   int64_t tail_;

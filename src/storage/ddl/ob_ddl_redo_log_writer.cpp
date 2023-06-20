@@ -23,6 +23,7 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_ts_mgr.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -1160,7 +1161,6 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     LOG_WARN("get tablet failed", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FALSE_IT(ddl_kv_mgr_handle.get_obj()->prepare_info_for_checksum_report(table_id, ddl_task_id))) {
   } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, true, table_key, table_id, execution_id, ddl_task_id, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(table_key), K(table_id), K(execution_id), K(ddl_task_id));
@@ -1192,13 +1192,45 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     } else {
       LOG_WARN("failed to do ddl kv commit", K(ret), K(ddl_start_scn), K(commit_scn));
     }
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_merge_success(ddl_start_scn, commit_scn))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_merge_success(ddl_start_scn, commit_scn, table_id, ddl_task_id))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
           K(ddl_start_scn), "new_ddl_start_scn",
           ddl_kv_mgr_handle.get_obj()->get_start_scn());
     } else {
       LOG_WARN("failed to wait ddl merge", K(ret), K(ddl_start_scn));
+    }
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               tablet_id,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_ISNULL(tablet_handle.get_obj())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("tablet handle is null", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    ObSSTable *first_major_sstable = static_cast<ObSSTable *>(
+        tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
+    if (OB_ISNULL(first_major_sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no major after wait merge success", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_UNLIKELY(first_major_sstable->get_key() != table_key)) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("ddl major sstable dropped, snapshot holding may have bug", K(ret), KPC(first_major_sstable), K(table_key), K(tablet_id), K(execution_id), K(ddl_task_id));
+    } else {
+      for (int64_t retry_cnt = 10; retry_cnt > 0; retry_cnt--) { // overwrite ret
+        if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(ls_id,
+                                                         tablet_id,
+                                                         table_id,
+                                                         execution_id,
+                                                         ddl_task_id,
+                                                         first_major_sstable->get_meta().get_col_checksum()))) {
+          LOG_WARN("report ddl column checksum failed", K(ret), K(ls_id), K(tablet_id), K(execution_id), K(ddl_task_id));
+        } else {
+          break;
+        }
+        ob_usleep(100L * 1000L);
+      }
     }
   }
   return ret;
