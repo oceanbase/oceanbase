@@ -655,7 +655,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
       int64_t stale_time = session->get_ob_max_read_stale_time();
       int64_t refresh_interval = GCONF.weak_read_version_refresh_interval;
-      if (refresh_interval > stale_time) {
+      if (stale_time > 0 && refresh_interval > stale_time) {
         TRANS_LOG(WARN, "weak_read_version_refresh_interval is larger than ob_max_read_stale_time ",
                   K(refresh_interval), K(stale_time), KPC(txs));
       }
