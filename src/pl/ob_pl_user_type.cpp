@@ -217,8 +217,10 @@ int ObUserDefinedType::generate_new(ObPLCodeGenerator &generator,
   ObLLVMType ptr_type;
   ObLLVMType ir_type;
   ObLLVMType ir_pointer_type;
+  ObLLVMValue stack;
   int64_t init_size = 0;
   // Step 1: 初始化内存
+  OZ (generator.get_helper().stack_save(stack));
   OZ (generator.get_helper().get_llvm_type(ObIntType, ptr_type));
   OZ (generator.get_helper().create_alloca("alloc_composite_addr", ptr_type, extend_ptr));
   OZ (args.push_back(generator.get_vars().at(generator.CTX_IDX)));
@@ -248,6 +250,7 @@ int ObUserDefinedType::generate_new(ObPLCodeGenerator &generator,
   OZ (generator.get_helper().create_int_to_ptr(ObString("ptr_to_user_type"), value, ir_pointer_type,
                                              composite_value));
   OZ (generate_construct(generator, ns, composite_value, s));
+  OZ (generator.get_helper().stack_restore(stack));
   return ret;
 }
 
