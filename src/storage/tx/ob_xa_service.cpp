@@ -1526,30 +1526,50 @@ int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
   } else if (coordinator.is_valid()) {
     ret = OB_TRANS_XA_PROTO;
     TRANS_LOG(WARN, "xa has entered the commit phase", K(ret), K(tx_id), K(xid), K(coordinator));
-  } /*else if (ObXATransState::IDLE != state) {
-    ret = OB_TRANS_XA_PROTO;
-    TRANS_LOG(WARN, "xa trans one phase commit invoked in improper state",
-              K(ret), K(state), K(xid), K(tx_id));
-  }*/ else if (sche_addr == GCTX.self_addr()) {
-    if (OB_FAIL(local_one_phase_xa_commit_(xid, tx_id, timeout_us, request_id, has_tx_level_temp_table))) {
-      TRANS_LOG(WARN, "local one phase commit failed", K(ret), K(tx_id), K(xid));
-    }
   } else {
-    if (OB_FAIL(remote_one_phase_xa_commit_(xid, tx_id, tenant_id, sche_addr, timeout_us, request_id,
-                                            has_tx_level_temp_table))) {
-      TRANS_LOG(WARN, "remote one phase commit failed", K(ret), K(tx_id), K(xid));
-    }
-  }
-
-  // xa_proto is returned when in tightly couple mode, there are
-  // still multiple branches and one phase commit is triggered.
-  // Under such condition, oracle would not delete inner table record
-  // TODO, maybe should use OB_SUCC(ret)???
-  if (OB_TRANS_XA_PROTO != ret) {
-    const bool is_tightly = !ObXAFlag::contain_loosely(end_flag);
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = delete_xa_branch(tenant_id, xid, is_tightly))) {
-      TRANS_LOG(WARN, "delete xa record failed", K(ret), K(xid));
+    bool need_delete = true;
+    if (sche_addr == GCTX.self_addr()) {
+      if (OB_FAIL(local_one_phase_xa_commit_(xid, tx_id, timeout_us, request_id, has_tx_level_temp_table))) {
+        TRANS_LOG(WARN, "local one phase commit failed", K(ret), K(tx_id), K(xid));
+      }
+    } else {
+      if (OB_FAIL(remote_one_phase_xa_commit_(xid, tx_id, tenant_id, sche_addr, timeout_us, request_id,
+                                              has_tx_level_temp_table))) {
+        TRANS_LOG(WARN, "remote one phase commit failed", K(ret), K(tx_id), K(xid));
+      }
+    }
+
+    if (OB_TRANS_XA_PROTO == ret) {
+      need_delete = false;
+    } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      // check xa trans state again
+      if (OB_SUCCESS != (tmp_ret = query_sche_and_coord(tenant_id,
+                                                        xid,
+                                                        sche_addr,
+                                                        coordinator,
+                                                        tx_id,
+                                                        end_flag))) {
+        if (OB_ITER_END == tmp_ret) {
+          ret = OB_TRANS_XA_NOTA;
+          TRANS_LOG(WARN, "xid is not valid", K(ret), K(xid));
+        } else {
+          TRANS_LOG(WARN, "query xa scheduler failed", K(tmp_ret), K(xid));
+        }
+        need_delete = false;
+      } else if (coordinator.is_valid()) {
+        // xa prepare may be completed, do not delete record
+        need_delete = false;
+      }
+    }
+    // xa_proto is returned when in tightly couple mode, there are
+    // still multiple branches and one phase commit is triggered.
+    // Under such condition, oracle would not delete inner table record
+    if (need_delete) {
+      const bool is_tightly = !ObXAFlag::contain_loosely(end_flag);
+      if (OB_SUCCESS != (tmp_ret = delete_xa_branch(tenant_id, xid, is_tightly))) {
+        TRANS_LOG(WARN, "delete xa record failed", K(tmp_ret), K(xid), K(is_tightly));
+      }
     }
   }
 
