@@ -67,6 +67,14 @@ int ObExprObjectConstruct::check_types(const ObObj *objs_stack,
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
     if (!objs_stack[i].is_null()) {
       TYPE_CHECK(objs_stack[i], elem_types.at(i).get_type());
+      if (objs_stack[i].is_pl_extend()) {
+        pl::ObPLComposite *composite = reinterpret_cast<pl::ObPLComposite*>(objs_stack[i].get_ext());
+        CK (OB_NOT_NULL(composite));
+        if (OB_SUCC(ret) && composite->get_id() != elem_types.at(i).get_udt_id()) {
+          ret = OB_ERR_CALL_WRONG_ARG;
+          LOG_WARN("invalid argument. unexpected obj type", K(ret), KPC(composite), K(elem_types), K(i));
+        }
+      }
     }
   }
   return ret;
