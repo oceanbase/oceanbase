@@ -1170,8 +1170,8 @@ int ObRecordType::deserialize(
   CK (OB_NOT_NULL(record));
   int64_t count = OB_INVALID_COUNT;
   // when record be delete , type will be PL_INVALID_TYPE
+  OX (record->deserialize(src, src_len, src_pos));
   if (OB_SUCC(ret) && record->get_type() != PL_INVALID_TYPE) {
-    OX (record->deserialize(src, src_len, src_pos));
     OZ (serialization::decode(src, src_len, src_pos, count));
     OX (record->set_count(count));
 
