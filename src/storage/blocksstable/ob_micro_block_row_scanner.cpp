@@ -895,6 +895,13 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
         ++context_->table_store_stat_.logical_read_cnt_;
       }
     }
+  } else {
+    if (!reverse_scan_ && (last_ < reader_->row_count() - 1) &&
+        !is_row_empty(prev_micro_row_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected locate range", K(ret), K_(start), K_(last), K_(reverse_scan), KPC_(range),
+               K_(prev_micro_row), K_(macro_id));
+    }
   }
   return ret;
 }
