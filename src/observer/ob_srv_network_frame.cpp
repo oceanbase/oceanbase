@@ -515,6 +515,8 @@ void ObSrvNetworkFrame::wait()
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->wait();
   }
+  obrpc::global_poc_server.wait();
+  ussl_wait();
 }
 
 int ObSrvNetworkFrame::stop()
@@ -526,6 +528,7 @@ int ObSrvNetworkFrame::stop()
   if (OB_FAIL(net_.stop())) {
     LOG_WARN("stop easy net fail", K(ret));
   } else {
+    rpc_stop();
     ObNetKeepAlive::get_instance().stop();
   }
   ingress_service_.stop();
@@ -568,6 +571,12 @@ void ObSrvNetworkFrame::sql_nio_stop()
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->stop();
   }
+}
+
+void ObSrvNetworkFrame::rpc_stop()
+{
+  ussl_stop();
+  obrpc::global_poc_server.stop();
 }
 
 int ObSrvNetworkFrame::reload_rpc_auth_method()

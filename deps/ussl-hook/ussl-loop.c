@@ -100,9 +100,13 @@ int ussl_init_bg_thread()
   return ret;
 }
 
+extern int is_ussl_bg_thread_started;
 void ussl_wait_bg_thread()
 {
-  pthread_join(ussl_bg_thread_id, NULL);
+  if (ATOMIC_LOAD(&is_ussl_bg_thread_started)) {
+    pthread_join(ussl_bg_thread_id, NULL);
+    ATOMIC_STORE(&is_ussl_bg_thread_started, 0);
+  }
 }
 
 void add_to_timeout_list(ussl_dlink_t *l)

@@ -1069,6 +1069,10 @@ int ObServer::stop()
     net_frame_.sql_nio_stop();
     FLOG_INFO("sql nio stopped");
 
+    FLOG_INFO("begin to stop rpc listen and io threads");
+    net_frame_.rpc_stop();
+    FLOG_INFO("rpc stopped");
+
     FLOG_INFO("begin to stop active session history task");
     ObActiveSessHistTask::get_instance().stop();
     FLOG_INFO("active session history task stopped");
@@ -1282,14 +1286,6 @@ int ObServer::stop()
     } else {
       FLOG_INFO("net frame stopped");
     }
-
-    FLOG_INFO("begin to stop ussl");
-    ussl_stop();
-    FLOG_INFO("stop ussl success");
-
-    FLOG_INFO("begin to stop global_poc_server");
-    obrpc::global_poc_server.stop();
-    FLOG_INFO("stop global_poc_server success");
 
     FLOG_INFO("begin to stop rootservice event history");
     ROOTSERVICE_EVENT_INSTANCE.stop();
@@ -1533,14 +1529,6 @@ int ObServer::wait()
     palf::election::GLOBAL_REPORT_TIMER.wait();
     FLOG_INFO("wait global election report timer success");
 
-
-    FLOG_INFO("begin to wait ussl");
-    ussl_wait();
-    FLOG_INFO("wait ussl success");
-
-    FLOG_INFO("begin to wait global_poc_server");
-    obrpc::global_poc_server.wait();
-    FLOG_INFO("wait global_poc_server success");
 
     FLOG_INFO("begin to wait rootservice event history");
     ROOTSERVICE_EVENT_INSTANCE.wait();
