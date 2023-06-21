@@ -2642,7 +2642,10 @@ int PartTransTask::get_database_schema_info_with_inc_dict(
   return ret;
 }
 
-int PartTransTask::get_table_meta_with_inc_dict(const uint64_t tenant_id, const uint64_t table_id, const datadict::ObDictTableMeta *&tb_meta)
+int PartTransTask::get_table_meta_with_inc_dict(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const datadict::ObDictTableMeta *&tb_meta)
 {
   int ret = OB_SUCCESS;
 
@@ -2677,6 +2680,45 @@ int PartTransTask::get_table_meta_with_inc_dict(const uint64_t tenant_id, const 
   } else {
     // ONLY used for SYS_LS PartTransTask of DDL_TRANS
     ret = OB_ENTRY_NOT_EXIST;
+  }
+
+  return ret;
+}
+
+int PartTransTask::check_for_ddl_trans(
+    bool &is_not_barrier,
+    ObSchemaOperationType &op_type) const
+{
+  int ret = OB_SUCCESS;
+  is_not_barrier = false;
+  int64_t other_ddl_count = 0;
+  IStmtTask *stmt_task = get_stmt_list().head_;
+
+  while (NULL != stmt_task && OB_SUCC(ret)) {
+    DdlStmtTask *ddl_stmt = dynamic_cast<DdlStmtTask *>(stmt_task);
+
+    if (OB_UNLIKELY(! stmt_task->is_ddl_stmt()) || OB_ISNULL(ddl_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid DDL statement", KR(ret), KPC(stmt_task), K(ddl_stmt));
+    } else {
+      op_type = static_cast<ObSchemaOperationType>(ddl_stmt->get_operation_type());
+
+      if (OB_DDL_CREATE_TABLE == op_type
+          || OB_DDL_TRUNCATE_TABLE == op_type) {
+        is_not_barrier = true;
+      } else {
+        ++other_ddl_count;
+      }
+      stmt_task = stmt_task->get_next();
+    }
+  } // while
+
+  if (OB_SUCC(ret)) {
+    // Normally, a DDL transaction only contains one DDL statement.
+    // If there are multiple statements, the DDL transaction is treated as barrier to avoid misjudgments
+    if (other_ddl_count > 0) {
+      is_not_barrier = false;
+    }
   }
 
   return ret;

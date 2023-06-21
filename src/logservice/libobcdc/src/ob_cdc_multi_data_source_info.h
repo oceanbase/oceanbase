@@ -95,6 +95,13 @@ public:
   DictDatabaseArray &get_dict_database_array() { return dict_database_metas_; }
   DictTableArray &get_dict_table_array() { return dict_table_metas_; }
 
+  bool is_empty_dict_info() const
+  {
+    return (0 == dict_tenant_metas_.count())
+      && (0 == dict_database_metas_.count())
+      && (0 == dict_table_metas_.count());
+  }
+
   int get_new_tenant_scehma_info(
       const uint64_t tenant_id,
       TenantSchemaInfo &tenant_schema_info);

@@ -236,7 +236,7 @@ bool LSSvrList::need_switch_server(const ObLSRouterKey &key,
       // Switch the Server scenario and consider that the Server is always serving
       svr_item.check_and_update_serve_info(true/*is_always_serving*/, next_lsn, is_log_served, is_svr_invalid);
 
-      LOG_INFO("need_switch_server", K(key), K(next_lsn), K(cur_svr), K(svr_item), K(is_log_served), K(is_svr_invalid));
+      LOG_TRACE("need_switch_server", K(key), K(next_lsn), K(cur_svr), K(svr_item), K(is_log_served), K(is_svr_invalid));
 
       if (is_log_served && !is_svr_invalid  && !blacklist.exist(svr_item.svr_)) {
         if (cur_svr == svr_item.svr_) {

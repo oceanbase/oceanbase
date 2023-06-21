@@ -1130,6 +1130,14 @@ public:
   // NOTICE: ONLY AVALIABLE FOR DDL_TRANS.
   int get_table_meta_with_inc_dict(const uint64_t tenant_id, const uint64_t table_id, const datadict::ObDictTableMeta *&tb_meta);
 
+  // Check if the DDL transaction needs to be treated as a barrier.
+  //
+  // @param [out] is_not_barrier is not a barrier
+  // @param [out] op_type Schema operation type
+  int check_for_ddl_trans(
+      bool &is_not_barrier,
+      ObSchemaOperationType &op_type) const;
+
   TO_STRING_KV(
       "state", serve_state_,
       "type", print_task_type(type_),
