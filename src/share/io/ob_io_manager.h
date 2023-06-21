@@ -151,6 +151,7 @@ public:
   int trace_request_if_need(const ObIORequest *req, const char* msg, ObIOTracer::TraceType trace_type);
   int64_t get_group_num();
   uint64_t get_usage_index(const int64_t group_id);
+  ObIOAllocator *get_tenant_io_allocator() { return &io_allocator_; }
   void print_io_status();
   void inc_ref();
   void dec_ref();

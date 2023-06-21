@@ -478,8 +478,6 @@ int ObIOManager::add_tenant_io_manager(const uint64_t tenant_id, const ObTenantI
   } else if (FALSE_IT(tenant_io_mgr = new (buf) ObTenantIOManager())) {
   } else if (OB_FAIL(tenant_io_mgr->init(tenant_id, tenant_io_config, &io_scheduler_))) {
     LOG_WARN("init tenant io manager failed", K(ret), K(tenant_id), K(tenant_io_config));
-  } else if (OB_FAIL(io_scheduler_.init_group_queues(tenant_id, tenant_io_mgr->get_group_num()))) {
-    LOG_WARN("init io map failed", K(ret), K(tenant_id), K(tenant_io_config));
   } else if (OB_FAIL(tenant_io_mgr->start())) {
     LOG_WARN("start tenant io manager failed", K(ret), K(tenant_id));
   } else {
@@ -665,6 +663,8 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
      LOG_WARN("init io usage failed", K(ret), K(io_usage_));
   } else if (OB_FAIL(io_clock_->init(io_config, &io_usage_))) {
     LOG_WARN("init io clock failed", K(ret), K(io_config));
+  } else if (OB_FAIL(io_scheduler->init_group_queues(tenant_id, io_config.group_num_, &io_allocator_))) {
+    LOG_WARN("init io map failed", K(ret), K(tenant_id), K(io_allocator_));
   } else if (OB_FAIL(init_group_index_map(tenant_id, io_config))) {
     LOG_WARN("init group map failed", K(ret));
   } else if (OB_FAIL(io_config_.deep_copy(io_config))) {
