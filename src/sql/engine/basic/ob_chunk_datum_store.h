@@ -804,9 +804,80 @@ public:
      Block *aio_blk_; // not null means aio is reading.
      BlockBuffer *aio_blk_buf_;
 
-     BlockList free_list_;
-     // cached blocks for batch iterate
-     BlockList cached_;
+     /*
+      * Currently, the design philosophy of ObChunkDatumStore is as follows:
+      *  - Support concurrent read. External readers have no "side effects" on
+      *    ObChunkDatumStore and will not change any state in ObChunkDatumStore.
+      *  - From the reader/writer's perspective, the data in ObChunkDatumStore
+      *    is divided into two parts: blocks cached in memory and data persisted in files.
+      *
+      * ObChunkDatumStore's write strategy:
+      * All data is first written to the cache block.
+      * If the cache is full, the oldest data in the cache block is written to the disk,
+      * and then the data is written to the cache block. The final effect is that old data
+      * is on the disk and new data is in the cache, with the order of writing preserved.
+
+      * ObChunkDatumStore's read strategy:
+      * The reading order of data is consistent with the writing order,
+      * first reading from the disk file, and then reading from the cache block after
+      * finishing reading from the disk. An Iterator must be used to access data in ObChunkDatumStore.
+      * When the Iterator accesses data, it first reads from the disk and caches the disk data
+      * in the Iterator's private cache. When the Iterator is released, these cached data will also
+      * be released with the Iterator. After the disk data is read, the Iterator directly
+      * reads the block cache in ObChunkDatumStore based on its own record of the block offset.
+      *
+      * To wrap it up, the write & read mode is FIFO.
+      */
+
+      /*
+        In this illustration, ObChunkDatumStore is readonly.
+        Iterator 1 and Iterator 2 are accessing the same ObChunkDatumStore in parallel.
+        The Iterator caches data independently, and have its own private cur_nth_blk_.
+
+           +------------------------------------------------------+
+           |                Iterator 1                            |
+           |                      +-----------+  +----------+     |
+           |  cur_nth_blk_        | cached    |  |cached    |     |
+           |       |              | block     |  |block     |     |
+           |       +------+       +-----+-----+  +----+-----+     |
+           |              |             |             |           |
+           +--------------+-------------+-------------+-----------+
+                          |             |             |
+                          |             |             |
+                          |             |             |
+      +-------------------+-------------+-------------+----------------+
+      |                   |             |             |                |
+      |     +-------+ +---v---+     +---v-------------v----------+     |
+      |     |       | |       |     |                            |     |
+      |     |in mem | |in mem |     |       in disk              |     |
+      |     |block  | |block  |     |       block                |     |
+      |     |       | |       |     |                            |     |
+      |     |       | |       |     |                            |     |
+      |     |       | |       |     |                            |     |
+      |     +---^---+ +-------+     +------^--------^------------+     |
+      |         |                          |        |                  |
+      |         |      ObChunkDatumStore   |        |                  |
+      |         |                          |        |                  |
+      +---------+--------------------------+--------+------------------+
+                |                          |        |
+                |                          |        |
+                |                          |        |
+          +-----+--------------------------+--------+------------+
+          |     |                          |        |            |
+          |                      +---------+-+  +---+------+     |
+          |  cur_nth_blk_        | cached    |  |cached    |     |
+          |                      | block     |  |block     |     |
+          |                      +-----------+  +----------+     |
+          |               Iterator 2                             |
+          +------------------------------------------------------+
+
+     */
+     // idle memory blocks cached by iterator,
+     // used to cache data read from aio file
+     BlockList ifree_list_;
+     // active blocks for batch iterate
+     // used to output data
+     BlockList icached_;
 
      // inner iteration age is used for batch iteration with no outside age control.
      IterationAge inner_age_;
