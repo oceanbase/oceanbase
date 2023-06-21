@@ -236,6 +236,19 @@ int ObSMHandler::on_close(easy_connection_t *c)
           LOG_WARN("free session fail and related session id can not be reused", K(ret), K(ctx), "sessid", conn->sessid_);
         }
       }
+    } else {
+      //if session is not alloc, session id should be mark unused here
+      if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(conn, is_need_clear)))) {
+        LOG_ERROR("fail to jugde need clear", K(ret));
+      } else if (is_need_clear) {
+        if (OB_UNLIKELY(OB_FAIL(gctx_.session_mgr_->mark_sessid_unused(conn->sessid_)))) {
+          LOG_ERROR("fail to mark sessid unused", K(ret), K(conn->sessid_),
+                    "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_);
+        } else {
+          LOG_INFO("mark sessid unused", K(conn->sessid_),
+                  "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_);
+        }
+      } else {/*do nothing*/}
     }
 
     //unlock tenant
@@ -257,6 +270,7 @@ int ObSMHandler::on_close(easy_connection_t *c)
              "from_java_client", conn->is_java_client_,
              "c/s protocol", get_cs_protocol_type_name(conn->get_cs_protocol_type()),
              "is_need_clear_sessid_", conn->is_need_clear_sessid_,
+             "is_sess_alloc_", conn->is_sess_alloc_,
              K(ret),
              K(trace_id),
              K(conn->pkt_rec_wrapper_),
