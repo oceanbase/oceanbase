@@ -8622,7 +8622,8 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
             ret = OB_SUCCESS;
           } else if ((ob_is_clob(src_meta.type_, src_meta.cs_type_)
                       || ob_is_clob_locator(src_meta.type_, src_meta.cs_type_)
-                      || expr.args_[0]->obj_meta_.is_xml_sql_type()) && lib::is_oracle_mode()) {
+                      || expr.args_[0]->obj_meta_.is_xml_sql_type()
+                      || (expr.args_[0]->type_ == T_FUN_SYS_CAST && expr.args_[0]->args_[0]->obj_meta_.is_xml_sql_type())) && lib::is_oracle_mode()) {
             if (ob_is_nchar(expr.datum_meta_.type_)
                 || ob_is_char(expr.datum_meta_.type_, expr.datum_meta_.cs_type_)) {
               ret = OB_OPERATE_OVERFLOW;
