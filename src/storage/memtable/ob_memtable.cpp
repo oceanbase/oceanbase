@@ -2834,9 +2834,8 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
       if (lock_state.is_delayed_cleanout_) {
         auto lock_data_sequence = lock_state.lock_data_sequence_;
         auto &tx_table_guard = acc_ctx.get_tx_table_guard();
-        int64_t read_epoch = tx_table_guard.epoch();
-        if (OB_FAIL(tx_table_guard.get_tx_table()->check_row_locked(
-                tx_id, conflict_tx_id, lock_data_sequence, read_epoch, lock_state))) {
+        if (OB_FAIL(tx_table_guard.check_row_locked(
+                tx_id, conflict_tx_id, lock_data_sequence, lock_state))) {
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));
         }
       } else {

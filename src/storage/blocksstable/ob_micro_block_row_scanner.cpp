@@ -76,6 +76,7 @@ void ObIMicroBlockRowScanner::reuse()
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   last_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   can_ignore_multi_version_ = false;
+  tx_table_guard_.reuse();
 }
 
 int ObIMicroBlockRowScanner::init(
@@ -109,6 +110,7 @@ int ObIMicroBlockRowScanner::init(
       if (NULL != reader_) {
         reader_->reset();
       }
+      tx_table_guard_ = context.store_ctx_->mvcc_acc_ctx_.get_tx_table_guard();
       LOG_DEBUG("init ObIMicroBlockRowScanner", K(context), KPC_(read_info), K(param));
     }
   }
@@ -152,6 +154,7 @@ int ObIMicroBlockRowScanner::switch_context(
     context_ = &context;
     sstable_ = sstable;
     use_fuse_row_cache_ = context.use_fuse_row_cache_;
+    tx_table_guard_ = context.store_ctx_->mvcc_acc_ctx_.get_tx_table_guard();
   }
 
   return ret;
@@ -1325,11 +1328,9 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  auto &tx_table_guard = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guard();
-  int64_t read_epoch = tx_table_guard.epoch();
   SCN scn_trans_version = SCN::invalid_scn();
-  if (OB_FAIL(tx_table_guard.get_tx_table()->lock_for_read(
-        lock_for_read_arg, read_epoch, can_read, scn_trans_version, is_determined_state))) {
+  if (OB_FAIL(tx_table_guard_.lock_for_read(
+        lock_for_read_arg, can_read, scn_trans_version, is_determined_state))) {
     LOG_WARN("failed to check transaction status", K(ret));
   } else {
     trans_version = scn_trans_version.get_val_for_tx();
@@ -2091,18 +2092,15 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::find_uncommitted_row()
   return ret;
 }
 
-int ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state(
-    const transaction::ObTransID &trans_id,
-    int64_t &state,
-    int64_t &commit_trans_version)
+int ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state(const transaction::ObTransID &trans_id,
+                                                                  int64_t &state,
+                                                                  int64_t &commit_trans_version)
 {
   int ret = OB_SUCCESS;
-  //get trans status & committed_trans_version_
+  // get trans status & committed_trans_version_
   SCN scn_commit_trans_version = SCN::max_scn();
-  auto &tx_table_guard = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guard();
-  int64_t read_epoch = tx_table_guard.epoch();
-  if (OB_FAIL(tx_table_guard.get_tx_table()->get_tx_state_with_scn(
-      trans_id, context_->merge_scn_, read_epoch, state, scn_commit_trans_version))) {
+
+  if (OB_FAIL(tx_table_guard_.get_tx_state_with_scn(trans_id, context_->merge_scn_, state, scn_commit_trans_version))) {
     LOG_WARN("get transaction status failed", K(ret), K(trans_id), K(state));
   } else {
     commit_trans_version = scn_commit_trans_version.get_val_for_tx();
@@ -2230,10 +2228,9 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::set_trans_version_for_uncommit
   return ret;
 }
 
-int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(
-    const transaction::ObTransID &trans_id,
-    const int64_t sql_seq,
-    bool &can_read)
+int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(const transaction::ObTransID &trans_id,
+                                                                          const int64_t sql_seq,
+                                                                          bool &can_read)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2244,13 +2241,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(
     OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(trans_id, sql_seq, trans_state)) {
     can_read = trans_state.can_read_;
   } else {
-    auto &tx_table_guard = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guard();
-    int64_t read_epoch = tx_table_guard.epoch();
-    if (OB_FAIL(tx_table_guard.get_tx_table()->check_sql_sequence_can_read(
-            trans_id,
-            sql_seq,
-            read_epoch,
-            can_read))) {
+    if (OB_FAIL(tx_table_guard_.check_sql_sequence_can_read(trans_id, sql_seq, can_read))) {
       LOG_WARN("check sql sequence can read failed", K(ret), K(can_read), K(trans_id), K(sql_seq));
     } else if (OB_NOT_NULL(context_->trans_state_mgr_) &&
       OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(trans_id, sql_seq,

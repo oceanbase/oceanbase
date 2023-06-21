@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
 #include "storage/memtable/ob_concurrent_control.h"
+#include "storage/tx_table/ob_tx_table_interface.h"
 
 namespace oceanbase
 {
@@ -27,7 +28,6 @@ class ObPartTransCtx;
 
 namespace storage {
 class ObTxTable;
-class ObTxTableGuard;
 }
 
 namespace memtable
@@ -178,10 +178,7 @@ public:
   share::SCN get_snapshot_version() const {
     return snapshot_.version_;
   }
-  storage::ObTxTable *get_tx_table() const {
-    return tx_table_guard_.get_tx_table();
-  }
-  const storage::ObTxTableGuard &get_tx_table_guard() const {
+  storage::ObTxTableGuard &get_tx_table_guard() {
     return tx_table_guard_;
   }
   ObMemtableCtx *get_mem_ctx() const {

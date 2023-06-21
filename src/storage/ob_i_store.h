@@ -26,7 +26,6 @@ MULTI_VERSION_EXTRA_ROWKEY_DEF(MAX_EXTRA_ROWKEY, 0, NULL, NULL)
 #include "share/ob_i_tablet_scan.h"
 #include "share/schema/ob_table_param.h"
 #include "storage/tx/ob_trans_define.h"
-#include "storage/tx_table/ob_tx_table_interface.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/ob_table_store_stat_mgr.h"

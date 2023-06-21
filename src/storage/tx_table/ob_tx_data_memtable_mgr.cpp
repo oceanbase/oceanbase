@@ -396,22 +396,11 @@ int ObTxDataMemtableMgr::get_all_memtables_with_range(ObTableHdlArray &handles, 
 int ObTxDataMemtableMgr::get_all_memtables_for_write(ObTxDataMemtableWriteGuard &write_guard)
 {
   int ret = OB_SUCCESS;
+  write_guard.reset();
   MemMgrRLockGuard lock_guard(lock_);
   for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
-    int64_t real_idx = get_memtable_idx(i);
-    write_guard.handles_[i - memtable_head_].reset();
-    ObTableHandleV2 &table_handle = write_guard.handles_[i - memtable_head_];
-    ObTxDataMemtable *tx_data_memtable = nullptr;
-    if (OB_FAIL(get_ith_memtable(i, table_handle))) {
-      STORAGE_LOG(WARN, "fail to get ith memtable", K(ret), K(i));
-    } else if (OB_FAIL(table_handle.get_tx_data_memtable(tx_data_memtable))) {
-      STORAGE_LOG(ERROR, "get tx data memtable from memtable handle failed", KR(ret), K(table_handle));
-    } else if (OB_ISNULL(tx_data_memtable)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "tx data memtable is unexpected nullptr", K(ret), KPC(tx_data_memtable));
-    } else {
-      write_guard.size_++;
-      tx_data_memtable->inc_write_ref();
+    if (OB_FAIL(write_guard.push_back_table(tables_[get_memtable_idx(i)], t3m_, table_type_))) {
+      STORAGE_LOG(WARN, "push back table to write guard failed", KR(ret), K(ls_id_));
     }
   }
   return ret;

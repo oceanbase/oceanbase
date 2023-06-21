@@ -25,6 +25,52 @@ namespace storage
 {
 class TxDataMemtableMgrFreezeGuard;
 
+class ObTxDataMemtableWriteGuard
+{
+public:
+  ObTxDataMemtableWriteGuard() : size_(0)
+  {
+  }
+  ~ObTxDataMemtableWriteGuard() { reset(); }
+
+  int push_back_table(memtable::ObIMemtable *i_memtable, ObTenantMetaMemMgr *t3m, const ObITable::TableType table_type)
+  {
+    int ret = OB_SUCCESS;
+    ObTxDataMemtable *tx_data_memtable = nullptr;
+    if (OB_FAIL(handles_[size_].set_table(static_cast<ObITable *const>(i_memtable), t3m, table_type))) {
+      STORAGE_LOG(WARN, "set i memtable to handle failed", KR(ret), KP(i_memtable), KP(t3m), K(table_type));
+    } else if (OB_FAIL(handles_[size_].get_tx_data_memtable(tx_data_memtable))) {
+      STORAGE_LOG(ERROR, "get tx data memtable from memtable handle failed", KR(ret), K(handles_[size_]));
+    } else if (OB_ISNULL(tx_data_memtable)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "tx data memtable is unexpected nullptr", K(ret), KPC(tx_data_memtable));
+    } else {
+      tx_data_memtable->inc_write_ref();
+      size_++;
+    }
+    return ret;
+  }
+
+  void reset()
+  {
+    for (int i = 0; i < MAX_TX_DATA_MEMTABLE_CNT; i++) {
+      if (handles_[i].is_valid()) {
+        ObTxDataMemtable *tx_data_memtable = nullptr;
+        handles_[i].get_tx_data_memtable(tx_data_memtable);
+        tx_data_memtable->dec_write_ref();
+      }
+      handles_[i].reset();
+    }
+    size_ = 0;
+  }
+
+  TO_STRING_KV(K(size_), K(handles_[0]), K(handles_[1]));
+
+public:
+  int64_t size_;
+  ObTableHandleV2 handles_[MAX_TX_DATA_MEMTABLE_CNT];
+};
+
 class ObTxDataMemtableMgr : public ObIMemtableMgr, public checkpoint::ObCommonCheckpoint
 {
 friend TxDataMemtableMgrFreezeGuard;

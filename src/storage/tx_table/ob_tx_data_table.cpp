@@ -69,6 +69,7 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
     TX_DATA_MEM_LEAK_DEBUG_CODE
 
     ls_ = ls;
+    ls_id_ = ls->get_ls_id();
     memtable_mgr_ = static_cast<ObTxDataMemtableMgr *>(memtable_mgr_handle.get_memtable_mgr());
     memtable_mgr_->set_slice_allocator(&slice_allocator_);
     tx_ctx_table_ = tx_ctx_table;
@@ -219,7 +220,7 @@ void ObTxDataTable::reset()
 int ObTxDataTable::prepare_for_safe_destroy()
 {
   int ret = clean_memtables_cache_();
-  LOG_INFO("tx data table prepare for safe destroy", KR(ret), K(get_ls_id()));
+  LOG_INFO("tx data table prepare for safe destroy", KR(ret), K(ls_id_));
   return ret;
 }
 
@@ -418,7 +419,7 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
         STORAGE_LOG(WARN,
                     "insert tx data into tx data memtable failed",
                     KR(ret),
-                    "ls_id", get_ls_id(),
+                    K(ls_id_),
                     KPC(tx_data),
                     KPC(tx_data_memtable));
       } else {
@@ -448,16 +449,19 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
   return ret;
 }
 
-int ObTxDataTable::check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunctor &fn)
+int ObTxDataTable::check_with_tx_data(const ObTransID tx_id,
+                                      ObITxDataCheckFunctor &fn,
+                                      ObTxDataGuard &tx_data_guard,
+                                      SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tx data table is not init.", KR(ret), KP(this), K(tx_id));
-  } else if (OB_SUCC(check_tx_data_in_memtable_(tx_id, fn))) {
+  } else if (OB_SUCC(check_tx_data_in_memtable_(tx_id, fn, tx_data_guard))) {
     // successfully do check function in memtable, check done
     STORAGE_LOG(DEBUG, "tx data table check with tx memtable data succeed", K(tx_id), K(fn));
-  } else if (OB_TRANS_CTX_NOT_EXIST == ret && OB_SUCC(check_tx_data_in_sstable_(tx_id, fn))) {
+  } else if (OB_TRANS_CTX_NOT_EXIST == ret && OB_SUCC(check_tx_data_in_sstable_(tx_id, fn, tx_data_guard, recycled_scn))) {
     // successfully do check function in sstable
     STORAGE_LOG(DEBUG, "tx data table check with tx sstable data succeed", K(tx_id), K(fn));
   } else {
@@ -465,15 +469,19 @@ int ObTxDataTable::check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunct
                 K(tablet_id_));
   }
 
+  if (OB_SUCC(ret) && OB_NOT_NULL(tx_data_guard.tx_data()) && (ObTxData::RUNNING == tx_data_guard.tx_data()->state_)) {
+    ret = OB_EAGAIN;
+    STORAGE_LOG(WARN, "read a running state tx data from tx data table, need retry", KR(ret), K(tx_data_guard));
+  }
   return ret;
 }
 
-int ObTxDataTable::check_tx_data_in_memtable_(const ObTransID tx_id, ObITxDataCheckFunctor &fn)
+int ObTxDataTable::check_tx_data_in_memtable_(const ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard)
 {
   int ret = OB_SUCCESS;
 
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(check_tx_data_with_cache_once_(tx_id, fn))) {
+    if (OB_FAIL(check_tx_data_with_cache_once_(tx_id, fn, tx_data_guard))) {
       if (OB_EAGAIN == ret) {
         ret = OB_SUCCESS;
         if (OB_FAIL(update_memtables_cache())) {
@@ -495,11 +503,10 @@ int ObTxDataTable::check_tx_data_in_memtable_(const ObTransID tx_id, ObITxDataCh
   return ret;
 }
 
-int ObTxDataTable::check_tx_data_with_cache_once_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn)
+int ObTxDataTable::check_tx_data_with_cache_once_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard)
 {
   int ret = OB_SUCCESS;
 
-  ObTxDataGuard tx_data_guard;
   bool find = false;
 
   if (OB_FAIL(get_tx_data_from_cache_(tx_id, tx_data_guard, find))) {
@@ -659,32 +666,32 @@ int ObTxDataTable::get_tx_data_in_memtables_cache_(const ObTransID tx_id,
   return ret;
 }
 
-// For ease of understanding, this function can be regarded as the following steps:
-// 1. Try to get tx data from sstable cache if we want to use the cache.
-// 2. If we 1) dont want to get tx data from cache; 2) get from cache failed; 3) get an tx data with
-// running state from cachce, trying to get tx data from sstable.
-// 3. Call functor with tx data.
-// 4. Free or revert tx data according to where it is from.
-int ObTxDataTable::check_tx_data_in_sstable_(const ObTransID tx_id, ObITxDataCheckFunctor &fn)
+int ObTxDataTable::check_tx_data_in_sstable_(const ObTransID tx_id,
+                                             ObITxDataCheckFunctor &fn,
+                                             ObTxDataGuard &tx_data_guard,
+                                             SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
-  ObTxData tx_data;
-  tx_data.reset();
+  tx_data_guard.reset();
 
-  if (OB_FAIL(get_tx_data_in_sstable_(tx_id, tx_data))) {
+  if (OB_FAIL(alloc_tx_data(tx_data_guard))) {
+    STORAGE_LOG(WARN, "allocate tx data to read from sstable failed", KR(ret), K(tx_data_guard));
+  } else if (OB_ISNULL(tx_data_guard.tx_data())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tx data is unexpected null", KR(ret), K(tx_data_guard));
+  } else if (OB_FAIL(get_tx_data_in_sstable_(tx_id, *tx_data_guard.tx_data(), recycled_scn))) {
     STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret), K(tx_id));
-  } else if (OB_FAIL(fn(tx_data))) {
+  } else if (OB_FAIL(fn(*tx_data_guard.tx_data()))) {
     STORAGE_LOG(WARN, "check tx data in sstable failed.", KR(ret), KP(this), K(tablet_id_));
   }
 
-  if (OB_NOT_NULL(tx_data.undo_status_list_.head_)) {
-    free_undo_status_list_(tx_data.undo_status_list_.head_);
-    tx_data.undo_status_list_.head_ = nullptr;
+  if (OB_FAIL(ret)) {
+    tx_data_guard.reset();
   }
   return ret;
 }
 
-int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data)
+int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data, share::SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   ObTableIterParam iter_param = read_schema_.iter_param_;
@@ -700,7 +707,7 @@ int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, O
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle), K(tablet_id_));
   } else {
-    ObTxDataSingleRowGetter getter(iter_param, slice_allocator_);
+    ObTxDataSingleRowGetter getter(iter_param, slice_allocator_, recycled_scn);
     if (OB_FAIL(getter.init(tx_id))) {
       STORAGE_LOG(WARN, "init ObTxDataSingleRowGetter fail.", KR(ret), KP(this), K(tablet_id_));
     } else if (OB_FAIL(getter.get_next_row(tx_data))) {
@@ -882,12 +889,12 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "invalid cache for upper trans version calculation", KR(ret));
     } else if (OB_FAIL(calc_upper_trans_scn_(sstable_end_scn, upper_trans_version))) {
-      STORAGE_LOG(WARN, "calc upper trans version failed", KR(ret), "ls_id", get_ls_id());
+      STORAGE_LOG(WARN, "calc upper trans version failed", KR(ret), K(ls_id_));
     } else {
       FLOG_INFO("get upper trans version finish.",
                 KR(ret),
                 K(skip_calc),
-                "ls_id", get_ls_id(),
+                K(ls_id_),
                 K(sstable_end_scn),
                 K(upper_trans_version));
     }
@@ -1027,7 +1034,7 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(const SCN &sstable_end_scn)
   // make sure the max decided log ts is greater than sstable_end_scn
   if (OB_FAIL(ls_->get_max_decided_scn(max_decided_scn))) {
     need_skip = true;
-    STORAGE_LOG(WARN, "get max decided log ts failed", KR(ret), "ls_id", get_ls_id().id());
+    STORAGE_LOG(WARN, "get max decided log ts failed", KR(ret), K(ls_id_).id());
   }
 
   // check if the min_start_scn_in_ctx is larger than sstable_end_scn
@@ -1243,12 +1250,10 @@ int ObTxDataTable::calc_upper_trans_scn_(const SCN sstable_end_scn, SCN &upper_t
               K(sstable_end_scn),
               K(upper_trans_version),
               K(calc_upper_trans_version_cache_),
-              "ls_id", get_ls_id(),
+              K(ls_id_),
               "array_count", array.count(),
               "chose_idx", l);
-  for (int i = 0; i < array.count(); i++) {
-    STORAGE_LOG(INFO, "commit versions array : ", K(i), K(array.at(i)));
-  }
+
   return ret;
 }
 
@@ -1257,6 +1262,7 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
   int ret = OB_SUCCESS;
   ObTxData tx_data_from_sstable;
   tx_data_from_sstable.reset();
+  SCN unused_scn;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1264,7 +1270,7 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
   } else if (OB_ISNULL(tx_data)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "tx data is nullptr", KR(ret), KP(this));
-  } else if (OB_FAIL(get_tx_data_in_sstable_(tx_data->tx_id_, tx_data_from_sstable))) {
+  } else if (OB_FAIL(get_tx_data_in_sstable_(tx_data->tx_id_, tx_data_from_sstable, unused_scn))) {
     if (ret == OB_TRANS_CTX_NOT_EXIST) {
       // This transaction does not have undo actions
       ret = OB_SUCCESS;
@@ -1365,8 +1371,9 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
   int ret = OB_SUCCESS;
   ObTxData tx_data;
   tx_data.reset();
+  SCN unused_scn;
 
-  if (OB_FAIL(get_tx_data_in_sstable_(tx_id, tx_data))) {
+  if (OB_FAIL(get_tx_data_in_sstable_(tx_id, tx_data, unused_scn))) {
     STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret), K(tx_id));
   } else {
     fprintf(fd, "********** Tx Data SSTable ***********\n\n");
@@ -1376,7 +1383,7 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
   return ret;
 }
 
-share::ObLSID ObTxDataTable::get_ls_id() { return ls_->get_ls_id(); }
+share::ObLSID ObTxDataTable::get_ls_id() { return ls_id_; }
 
 }  // namespace storage
 
