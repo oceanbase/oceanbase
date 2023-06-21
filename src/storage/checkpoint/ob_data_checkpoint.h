@@ -67,6 +67,22 @@ private:
   ObCheckpointDList *dlist_;
 };
 
+class ObSpinLockTimeGuard
+{
+public:
+  ObSpinLockTimeGuard(common::ObSpinLock &lock,
+                      const char *owner = "unknown",
+                      const int64_t warn_threshold = 100 * 1000 /* 100 ms */)
+  : time_guard_(owner, warn_threshold),
+    lock_guard_(lock){}
+
+  ~ObSpinLockTimeGuard() {}
+  void click(const char *mod = NULL) { time_guard_.click(mod); }
+private:
+  ObTimeGuard time_guard_;
+  ObSpinLockGuard lock_guard_;
+};
+
 // responsible for maintenance transaction checkpoint unit
 class ObDataCheckpoint : public ObCommonCheckpoint
 {
