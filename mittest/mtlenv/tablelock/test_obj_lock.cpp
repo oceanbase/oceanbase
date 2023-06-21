@@ -57,6 +57,7 @@ public:
   static void TearDownTestCase();
   virtual void SetUp() override
   {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
     // mock sequence no
     ObClockGenerator::init();
     create_memtable();

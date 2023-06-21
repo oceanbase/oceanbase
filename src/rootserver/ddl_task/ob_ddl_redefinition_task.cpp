@@ -86,7 +86,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   ObSqlString sql_string;
   ObSchemaGetterGuard schema_guard;
   const ObSysVariableSchema *sys_variable_schema = nullptr;
-  ObDDLTaskKey task_key(dest_table_id_, schema_version_);
+  ObDDLTaskKey task_key(tenant_id_, dest_table_id_, schema_version_);
   ObDDLTaskInfo info;
   bool oracle_mode = false;
   bool need_exec_new_inner_sql = true;
@@ -229,78 +229,6 @@ int ObDDLRedefinitionTask::prepare(const ObDDLTaskStatus next_task_status)
   // overwrite ret
   if (OB_FAIL(switch_status(next_task_status, true, ret))) {
     LOG_WARN("fail to switch status", K(ret));
-  }
-  return ret;
-}
-
-int ObDDLRedefinitionTask::lock_table(const ObDDLTaskStatus next_task_status)
-{
-  int ret = OB_SUCCESS;
-  int64_t rpc_timeout = 0;
-  int64_t target_rpc_timeout = 0;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *data_table_schema = nullptr;
-  const ObTableSchema *dest_table_schema = nullptr;
-  ObDDLTaskStatus new_status = ObDDLTaskStatus::LOCK_TABLE;
-  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
-  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("get tenant schema guard failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(object_id_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, dest_table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(target_object_id_));
-  } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(dest_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema), KP(dest_table_schema));
-  } else if (data_table_schema->is_tmp_table() != dest_table_schema->is_tmp_table()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table type is different", K(ret), K(data_table_schema->is_tmp_table()), K(dest_table_schema->is_tmp_table()));
-  } else if (data_table_schema->is_tmp_table()) {
-    // no need to lock table and unlock table.
-  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
-    LOG_WARN("get ddl rpc timeout fail", K(ret));
-  } else if (OB_FAIL(ObTableLockRpcClient::get_instance().lock_table(object_id_,
-                                          EXCLUSIVE, schema_version_, rpc_timeout, tenant_id_))) {
-    if (!ObDDLUtil::is_table_lock_retry_ret_code(ret)) {
-      LOG_WARN("lock source table failed", K(ret), K(object_id_));
-    } else {
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        ObTaskController::get().allow_next_syslog();
-        LOG_INFO("cannot lock source table", K(ret), K(object_id_));
-      }
-    }
-  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, target_object_id_, target_rpc_timeout))) {
-    LOG_WARN("get ddl rpc timeout fail", K(ret));
-  } else if (OB_FAIL(ObTableLockRpcClient::get_instance().lock_table(target_object_id_,
-                                          EXCLUSIVE, schema_version_, target_rpc_timeout, tenant_id_))) {
-    if (!ObDDLUtil::is_table_lock_retry_ret_code(ret)) {
-      LOG_WARN("lock dest table failed", K(ret), K(target_object_id_));
-    } else {
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        ObTaskController::get().allow_next_syslog();
-        LOG_INFO("cannot lock dest table", K(ret), K(target_object_id_));
-      }
-    }
-  }
-  DEBUG_SYNC(DDL_REDEFINITION_LOCK_TABLE);
-  if (OB_FAIL(ret)) {
-    ret = ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_SUCCESS : ret;
-  } else if (OB_FAIL(obtain_snapshot())) {
-    if (OB_SNAPSHOT_DISCARDED == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to obtain snapshot version", K(ret));
-    }
-  } else {
-    new_status = next_task_status;
-  }
-  if (new_status == next_task_status || OB_FAIL(ret)) {
-    if (OB_FAIL(switch_status(new_status, true, ret))) {
-      LOG_WARN("fail to switch task status", K(ret));
-    }
   }
   return ret;
 }
@@ -453,10 +381,11 @@ int ObDDLRedefinitionTask::release_snapshot(const int64_t snapshot_version)
 }
 
 // to hold snapshot, containing data in old table with new schema version.
-int ObDDLRedefinitionTask::obtain_snapshot()
+int ObDDLRedefinitionTask::obtain_snapshot(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObDDLTaskStatus new_status = ObDDLTaskStatus::OBTAIN_SNAPSHOT;
   ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -502,6 +431,21 @@ int ObDDLRedefinitionTask::obtain_snapshot()
       }
     } else {
       snapshot_held_ = true;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_SNAPSHOT_DISCARDED == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to obtain snapshot version", K(ret));
+    }
+  } else {
+    new_status = next_task_status;
+  }
+  if (new_status == next_task_status || OB_FAIL(ret)) {
+    if (OB_FAIL(switch_status(new_status, true, ret))) {
+      LOG_WARN("fail to switch task status", K(ret));
     }
   }
   return ret;
@@ -1043,50 +987,6 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
   return ret;
 }
 
-int ObDDLRedefinitionTask::unlock_table()
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *data_table_schema = nullptr;
-  const ObTableSchema *dest_table_schema = nullptr;
-  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
-  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("get tenant schema failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
-    LOG_WARN("get table schema failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, dest_table_schema))) {
-    LOG_WARN("get table schema failed", K(ret));
-  } 
-  
-  // In scenario like succeed to cleanup garbage but RPC timeout occurs, executing the function again
-  // will find data/dest table not exist.
-  if (OB_FAIL(ret)) {
-  } else if (nullptr == data_table_schema || data_table_schema->is_tmp_table()) {
-  } else if (OB_FAIL(ObTableLockRpcClient::get_instance().unlock_table(object_id_,
-                                      EXCLUSIVE, schema_version_, 0, tenant_id_))) {
-    if (OB_OBJ_LOCK_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("unlock source table failed", K(ret), K(object_id_));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (nullptr == dest_table_schema || dest_table_schema->is_tmp_table()) {
-  } else if (OB_FAIL(ObTableLockRpcClient::get_instance().unlock_table(target_object_id_,
-                                      EXCLUSIVE, schema_version_, 0, tenant_id_))) {
-    if (OB_OBJ_LOCK_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("unlock dest table failed", K(ret), K(target_object_id_));
-    }
-  }
-  return ret;
-}
-
 int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
@@ -1239,6 +1139,7 @@ int ObDDLRedefinitionTask::finish()
   alter_table_arg_.ddl_task_type_ = share::CLEANUP_GARBAGE_TASK;
   alter_table_arg_.table_id_ = object_id_;
   alter_table_arg_.hidden_table_id_ = target_object_id_;
+  alter_table_arg_.task_id_ = task_id_;
   alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
   ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1247,8 +1148,6 @@ int ObDDLRedefinitionTask::finish()
   } else if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(unlock_table())) {
-    LOG_WARN("unlock table failed", K(ret));
   } else if (snapshot_version_ > 0 && OB_FAIL(release_snapshot(snapshot_version_))) {
     LOG_WARN("release snapshot failed", K(ret));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {

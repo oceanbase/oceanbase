@@ -258,9 +258,9 @@ int ObIndexBlockTreePath::PathItemStack::expand()
 
 ObIndexBlockTreeCursor::ObIndexBlockTreeCursor()
   : cursor_path_(), index_block_cache_(nullptr), reader_(nullptr), micro_reader_helper_(),
-    sstable_(nullptr), tenant_id_(OB_INVALID_TENANT_ID), rowkey_column_cnt_(0),
+    tenant_id_(OB_INVALID_TENANT_ID), rowkey_column_cnt_(0),
     curr_path_item_(), row_(),
-    idx_row_parser_(), read_info_(nullptr), is_inited_(false) {}
+    idx_row_parser_(), read_info_(nullptr), sstable_meta_handle_(), is_inited_(false) {}
 
 ObIndexBlockTreeCursor::~ObIndexBlockTreeCursor()
 {
@@ -275,6 +275,7 @@ void ObIndexBlockTreeCursor::reset()
     micro_reader_helper_.reset();
     reader_ = nullptr;
     read_info_ = nullptr;
+    sstable_meta_handle_.reset();
     is_inited_ = false;
   }
 }
@@ -282,7 +283,7 @@ void ObIndexBlockTreeCursor::reset()
 int ObIndexBlockTreeCursor::init(
     const ObSSTable &sstable,
     ObIAllocator &allocator,
-    const ObTableReadInfo *read_info,
+    const ObITableReadInfo *read_info,
     const TreeType tree_type)
 {
   int ret = OB_SUCCESS;
@@ -298,22 +299,24 @@ int ObIndexBlockTreeCursor::init(
     LOG_WARN("Fail to init curr path item pointer", K(ret));
   } else if (OB_FAIL(micro_reader_helper_.init(allocator))) {
     LOG_WARN("Fail to init micro reader helper", K(ret));
+  } else if (OB_FAIL(sstable.get_meta(sstable_meta_handle_))) {
+    LOG_WARN("Fail to get sstable meta handle", K(ret));
   } else {
-    sstable_ = &sstable;
     tenant_id_ = MTL_ID();
-    const ObSSTableMeta &sstable_meta = sstable.get_meta();
     ObRowStoreType root_row_store_type
-        = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
+        = static_cast<ObRowStoreType>(sstable_meta_handle_.get_sstable_meta().get_basic_meta().root_row_store_type_);
     curr_path_item_->row_store_type_ = root_row_store_type;
     read_info_ = read_info;
-    rowkey_column_cnt_ = read_info_->get_rowkey_count();
+    rowkey_column_cnt_ = read_info_->get_schema_rowkey_count() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     switch (tree_type) {
     case TreeType::INDEX_BLOCK: {
-      curr_path_item_->block_data_ = sstable_meta.get_root_info().get_block_data();
+      curr_path_item_->block_data_ =
+          sstable_meta_handle_.get_sstable_meta().get_root_info().get_block_data();
       break;
     }
     case TreeType::DATA_MACRO_META: {
-      curr_path_item_->block_data_ = sstable_meta.get_macro_info().get_macro_meta_data();
+      curr_path_item_->block_data_ =
+          sstable_meta_handle_.get_sstable_meta().get_macro_info().get_macro_meta_data();
       break;
     }
     default: {
@@ -323,13 +326,15 @@ int ObIndexBlockTreeCursor::init(
     }
 
     if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(root_row_store_type = curr_path_item_->block_data_.get_store_type())) {
+    } else if (FALSE_IT(curr_path_item_->row_store_type_ = root_row_store_type)) {
     } else if (OB_FAIL(row_.init(allocator, rowkey_column_cnt_ + 1))) {
       STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
     } else if (nullptr != curr_path_item_->block_data_.get_extra_buf()) {
       curr_path_item_->is_block_transformed_ = true;
     } else if (OB_FAIL(set_reader(root_row_store_type))) {
       LOG_WARN("Fail to set micro block reader", K(ret));
-    } else if (OB_FAIL(reader_->init(curr_path_item_->block_data_, *read_info_))) {
+    } else if (OB_FAIL(reader_->init(curr_path_item_->block_data_, &(read_info_->get_datum_utils())))) {
       LOG_WARN("Fail to init micro block reader", K(ret));
     }
 
@@ -360,7 +365,7 @@ int ObIndexBlockTreeCursor::drill_down(
   } else if (OB_FAIL(drill_down(rowkey, depth, is_beyond_the_range))) {
     LOG_WARN("Fail to do lower bound drill down", K(ret));
   } else if (FALSE_IT(
-      compare_schema_rowkey = rowkey.datum_cnt_ == sstable_->get_meta().get_schema_rowkey_column_count())) {
+      compare_schema_rowkey = rowkey.datum_cnt_ == read_info_->get_schema_rowkey_count())) {
   } else if (is_lower_bound || rowkey.is_min_rowkey() || rowkey.is_max_rowkey()) {
   } else {
     // move to upper bound
@@ -416,7 +421,6 @@ int ObIndexBlockTreeCursor::drill_down(
     ret = OB_NOT_INIT;
     LOG_WARN("Tree cursor not inited", K(ret));
   } else {
-    const ObSSTableMeta &sstable_meta = sstable_->get_meta();
     switch (depth) {
       case ONE_LEVEL: {
         if (!cursor_path_.empty()) {
@@ -429,7 +433,7 @@ int ObIndexBlockTreeCursor::drill_down(
         } else {
           curr_path_item_->is_root_micro_block_ = true;
           curr_path_item_->row_store_type_
-              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
+              = static_cast<ObRowStoreType>(sstable_meta_handle_.get_sstable_meta().get_basic_meta().root_row_store_type_);
         }
 
         if (OB_FAIL(ret)) {
@@ -459,7 +463,7 @@ int ObIndexBlockTreeCursor::drill_down(
         } else {
           curr_path_item_->is_root_micro_block_ = true;
           curr_path_item_->row_store_type_
-              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
+              = static_cast<ObRowStoreType>(sstable_meta_handle_.get_sstable_meta().get_basic_meta().root_row_store_type_);
         }
 
         while (OB_SUCC(ret) && !reach_target_depth) {
@@ -510,7 +514,7 @@ int ObIndexBlockTreeCursor::drill_down()
     } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(new_row_store_type)))) {
       LOG_WARN("Fail to set row reader", K(ret), K(new_row_store_type));
     } else if (OB_FAIL(reader_->init(
-        curr_path_item_->block_data_, *read_info_))) {
+        curr_path_item_->block_data_, &(read_info_->get_datum_utils())))) {
       LOG_WARN("Fail to get micro block buffer handle", K(ret));
     }
 
@@ -686,7 +690,7 @@ int ObIndexBlockTreeCursor::pull_up(const bool cascade, const bool is_reverse_sc
   } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(curr_path_item_->row_store_type_)))) {
     LOG_WARN("Fail to set row reader", K(ret));
   } else if (OB_FAIL(reader_->init(
-      curr_path_item_->block_data_, *read_info_))) {
+      curr_path_item_->block_data_, &(read_info_->get_datum_utils())))) {
     LOG_WARN("Fail to init micro block row reader", K(ret), KPC(curr_path_item_));
   } else if (OB_FAIL(read_next_level_row(curr_path_item_->curr_row_idx_))) {
     LOG_WARN("Fail to read next level row", K(ret), KPC(curr_path_item_));
@@ -710,7 +714,7 @@ int ObIndexBlockTreeCursor::pull_up_to_root()
   } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(curr_path_item_->row_store_type_)))) {
     LOG_WARN("Fail to set reader");
   } else if (OB_FAIL(reader_->init(
-      curr_path_item_->block_data_, *read_info_))) {
+      curr_path_item_->block_data_, &(read_info_->get_datum_utils())))) {
     LOG_WARN("Fail to init reader", K(ret));
   }
   return ret;
@@ -882,7 +886,7 @@ int ObIndexBlockTreeCursor::get_current_endkey(ObDatumRowkey &endkey, const bool
 {
   int ret = OB_SUCCESS;
   const int64_t rowkey_datum_cnt = get_schema_rowkey ?
-      sstable_->get_meta().get_schema_rowkey_column_count() : rowkey_column_cnt_;
+      read_info_->get_schema_rowkey_count() : rowkey_column_cnt_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Fail to get current endkey", K(ret));
@@ -978,12 +982,14 @@ int ObIndexBlockTreeCursor::get_next_level_block(
 {
   int ret = OB_SUCCESS;
   int64_t absolute_offset = 0;
+  ObSSTableMetaHandle meta_handle;
   if (OB_UNLIKELY(!macro_block_id.is_valid() || !idx_row_header.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid macro block id or index block row data",
         K(ret), K(macro_block_id), K(idx_row_header));
   } else {
-    absolute_offset = sstable_->get_macro_offset() + idx_row_header.get_block_offset();
+    absolute_offset = sstable_meta_handle_.get_sstable_meta().get_macro_info().get_nested_offset()
+        + idx_row_header.get_block_offset();
   }
 
   if (OB_FAIL(ret)) {

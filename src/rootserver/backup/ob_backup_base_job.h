@@ -13,11 +13,33 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_BACKUP_BASE_JOB_H_
 #define OCEANBASE_ROOTSERVER_OB_BACKUP_BASE_JOB_H_
 
-#include "ob_backup_task_scheduler.h"
+#include "lib/container/ob_iarray.h"
+#include "lib/allocator/ob_allocator.h"
+#include "src/share/ob_define.h"
 namespace oceanbase 
 {
+namespace common
+{
+class ObAddr;
+}
+namespace share
+{
+class ObHAResultInfo;
+}
 namespace rootserver 
 {
+
+enum class BackupJobType : int64_t
+{
+  BACKUP_DATA_JOB = 0,
+  VALIDATE_JOB = 1,
+  BACKUP_BACKUP_PIECE_JOB = 2,
+  BACKUP_BACKUP_DATA_JOB = 3,
+  BACKUP_CLEAN_JOB = 4,
+  BACKUP_JOB_MAX
+};
+
+class ObBackupScheduleTask;
 
 class ObIBackupJobScheduler 
 {
@@ -28,8 +50,7 @@ public:
   virtual int process() = 0;
   virtual int force_cancel(const uint64_t &tenant_id) = 0;    
   // if can_remove return true, scheudler can remove task from scheduler  
-  virtual int handle_execute_over(const ObBackupScheduleTask *task, bool &can_remove, 
-                                  const ObAddr &black_server, const int execute_ret) = 0;
+  virtual int handle_execute_over(const ObBackupScheduleTask *task, const share::ObHAResultInfo &result_info, bool &can_remove) = 0;
   virtual int get_need_reload_task(common::ObIAllocator &allocator, 
                                    common::ObIArray<ObBackupScheduleTask *> &tasks) = 0; // reload tasks after switch master happend
 public:

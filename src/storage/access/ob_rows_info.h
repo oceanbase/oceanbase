@@ -34,7 +34,7 @@ public:
   int init(
       const ObRelativeTable &table,
       ObStoreCtx &store_ctx,
-      const ObTableReadInfo &full_read_info);
+      const ObITableReadInfo &rowkey_read_info);
   int check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRelativeTable &table);
   const blocksstable::ObDatumRowkey& get_duplicate_rowkey() const { return min_key_; }
   blocksstable::ObDatumRowkey& get_duplicate_rowkey() { return min_key_; }
@@ -53,13 +53,9 @@ public:
     int init(
         const ObRelativeTable &table,
         ObStoreCtx &store_ctx,
-        const ObTableReadInfo &full_read_info,
+        const ObITableReadInfo &rowkey_read_info,
         ObStorageReserveAllocator &allocator);
     OB_INLINE bool is_valid() const { return is_inited_; }
-    OB_INLINE ObStoreCtx &get_store_ctx()
-    { return *table_access_context_.store_ctx_; }
-    OB_INLINE const ObTableReadInfo *get_read_info() const
-    { return table_iter_param_.read_info_; }
     TO_STRING_KV(K_(table_iter_param), K_(table_access_context));
     ObTableIterParam table_iter_param_;
     ObTableAccessContext table_access_context_;

@@ -24,13 +24,21 @@ int ObLSLocationUpdateTask::init(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
+    const bool renew_for_tenant,
     const int64_t add_timestamp)
 {
   int ret = OB_SUCCESS;
-  cluster_id_ = cluster_id;
-  tenant_id_ = tenant_id;
-  ls_id_ = ls_id;
-  add_timestamp_ = add_timestamp;
+  if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id
+      || !ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
+  } else {
+    cluster_id_ = cluster_id;
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    renew_for_tenant_ = renew_for_tenant;
+    add_timestamp_ = add_timestamp;
+  }
   return ret;
 }
 
@@ -39,6 +47,7 @@ void ObLSLocationUpdateTask::reset()
   cluster_id_ = OB_INVALID_CLUSTER_ID;
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_.reset();
+  renew_for_tenant_ = false;
   add_timestamp_ = OB_INVALID_TIMESTAMP;
 }
 
@@ -57,6 +66,7 @@ int ObLSLocationUpdateTask::assign(const ObLSLocationUpdateTask &other)
     cluster_id_ = other.cluster_id_;
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
+    renew_for_tenant_ = other.renew_for_tenant_;
     add_timestamp_ = other.add_timestamp_;
   }
   return ret;
@@ -68,6 +78,7 @@ int64_t ObLSLocationUpdateTask::hash() const
   hash_val = murmurhash(&cluster_id_, sizeof(cluster_id_), hash_val);
   hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
   hash_val = murmurhash(&ls_id_, sizeof(ls_id_), hash_val);
+  hash_val = murmurhash(&renew_for_tenant_, sizeof(renew_for_tenant_), hash_val);
   return hash_val;
 }
 
@@ -81,7 +92,8 @@ bool ObLSLocationUpdateTask::operator ==(const ObLSLocationUpdateTask &other) co
   } else {
     equal = (cluster_id_ == other.cluster_id_
         && tenant_id_ == other.tenant_id_
-        && ls_id_ == other.ls_id_);
+        && ls_id_ == other.ls_id_
+        && renew_for_tenant_ == other.renew_for_tenant_);
   }
   return equal;
 }

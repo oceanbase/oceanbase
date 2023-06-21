@@ -49,7 +49,7 @@ ObAdminDumpsstExecutor::~ObAdminDumpsstExecutor()
 int ObAdminDumpsstExecutor::execute(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
-
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   if (OB_SUCC(parse_cmd(argc, argv))) {
     OB_LOGGER.set_log_level( is_quiet_ ? "ERROR" : "INFO");
     lib::set_memory_limit(96 * 1024 * 1024 * 1024LL);
@@ -64,7 +64,8 @@ int ObAdminDumpsstExecutor::execute(int argc, char *argv[])
         storage_env_.user_row_cache_priority_,
         storage_env_.fuse_row_cache_priority_,
         storage_env_.bf_cache_priority_,
-        storage_env_.bf_cache_miss_count_threshold_))) {
+        storage_env_.bf_cache_miss_count_threshold_,
+        storage_env_.storage_meta_cache_priority_))) {
       STORAGE_LOG(WARN, "Fail to init OB_STORE_CACHE, ", K(ret), K(storage_env_.data_dir_));
     } else if (OB_FAIL(load_config())) {
       STORAGE_LOG(WARN, "fail to load config", K(ret));

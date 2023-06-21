@@ -595,8 +595,6 @@ public:
   common::ObRowkey split_high_bound_val_;
   common::ObRowkey split_list_row_values_;
   int assign(const ObTableSchema &src_schema);
-  // In order to handle partition management operations at the tablegroup level
-  int assign_tablegroup_partition(const ObTablegroupSchema &src_schema);
   //virtual int add_partition(const ObPartition &part);
   //virtual int add_subpartition(const ObSubPartition &sub_part);
   //virtual int alloc_partition(const ObPartition *&partition);
@@ -1078,6 +1076,12 @@ public:
                                      const uint64_t tenant_id,
                                      const uint64_t table_id,
                                      int64_t &last_schema_version) = 0;
+
+  virtual int get_table_latest_schema_versions(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      common::ObIArray<ObTableLatestSchemaVersion> &table_schema_versions) = 0;
 
   // whether we can see the expected version or not
   // @return OB_SCHEMA_EAGAIN when not readable

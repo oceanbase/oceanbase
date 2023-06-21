@@ -28,10 +28,11 @@ class ObStoreRowkey;
 }
 namespace share {
 class ObLSID;
+class SCN;
 }
 namespace storage {
 class ObStoreRowLockState;
-class ObTxTableGuard;
+class ObTxTableGuards;
 
 class ObRowConflictHandler {
 public:
@@ -46,12 +47,13 @@ public:
   // choose to retry or throw an exception according to the isolation level.
   static int check_foreign_key_constraint_for_memtable(memtable::ObMvccValueIterator *value_iter,
                                                        storage::ObStoreRowLockState &lock_state);
-  static int check_foreign_key_constraint_for_sstable(storage::ObTxTableGuard &tx_table_guard,
+  static int check_foreign_key_constraint_for_sstable(storage::ObTxTableGuards &tx_table_guards,
                                                       const transaction::ObTransID &read_trans_id,
                                                       const transaction::ObTransID &data_trans_id,
                                                       const int64_t sql_sequence,
                                                       const int64_t trans_version,
                                                       const int64_t snapshot_version,
+                                                      const share::SCN &end_scn,
                                                       storage::ObStoreRowLockState &lock_state);
   // TODO(yichang): This function is refered to ObMemtable::post_row_write_conflict_,
   // but remove the mem_ctx and tx_ctx in the implement. I think ObMemtable can call
@@ -63,7 +65,8 @@ public:
                                     const common::ObTabletID tablet_id,
                                     const share::ObLSID ls_id,
                                     const int64_t last_compact_cnt,
-                                    const int64_t total_trans_node_cnt);
+                                    const int64_t total_trans_node_cnt,
+                                    const share::SCN &trans_scn);
 };
 }
 }

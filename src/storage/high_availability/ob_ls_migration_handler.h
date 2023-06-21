@@ -106,7 +106,6 @@ private:
   int do_finish_status_();
 
   int generate_build_ls_dag_net_();
-  int check_migration_concurrency_limit_();
   int schedule_build_ls_dag_net_(
       const ObLSMigrationTask &task);
   int generate_prepare_ls_dag_net_();
@@ -124,8 +123,8 @@ private:
   int get_ls_required_size_(
       const ObMigrationOpArg &arg,
       int64_t &required_size);
-
-  int build_rebuild_task_();
+  int inner_report_result_(const ObLSMigrationTask &task);
+  int report_to_rebuild_service_();
   int get_ls_info_(
       const int64_t cluster_id,
       const uint64_t tenant_id,

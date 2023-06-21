@@ -300,7 +300,7 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   (void)GET_COL_IGNORE_NULL(result.get_int, "svr_port", port);
   (void)GET_COL_IGNORE_NULL(result.get_int, "tenant_id", tenant_id);
   (void)GET_COL_IGNORE_NULL(result.get_int, "ls_id", id);
-  (void)GET_COL_IGNORE_NULL(result.get_varchar, "ls_state", ls_state_str);
+  (void)GET_COL_IGNORE_NULL(result.get_varchar, "role", ls_state_str);
   (void)GET_COL_IGNORE_NULL(result.get_uint, "weak_read_scn", weak_read_scn_uint);
   (void)GET_COL_IGNORE_NULL(result.get_int, "migrate_status", migrate_status_int);
 

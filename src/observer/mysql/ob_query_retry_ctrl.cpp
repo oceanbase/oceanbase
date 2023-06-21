@@ -251,7 +251,9 @@ public:
       v.retry_type_ = RETRY_TYPE_NONE;
       v.no_more_test_ = true;
     } else if (ObStmt::is_ddl_stmt(v.result_.get_stmt_type(), v.result_.has_global_variable())) {
-      if (OB_EAGAIN == err || OB_SNAPSHOT_DISCARDED == err || OB_ERR_PARALLEL_DDL_CONFLICT == err) {
+      if (OB_EAGAIN == err || OB_SNAPSHOT_DISCARDED == err || OB_ERR_PARALLEL_DDL_CONFLICT == err || OB_TRANS_KILLED == err
+          || OB_PARTITION_IS_BLOCKED == err) {
+        // OB_PARTITION_IS_BLOCKED is returned when LS is block_tx by a transfer task, DDL need retry
         try_packet_retry(v);
       } else {
         v.client_ret_ = err;

@@ -171,7 +171,7 @@ void TestBackupIndexIterator::fake_init_macro_index_merger_(const int64_t file_c
   ObBackupIndexMergeParam merge_param;
   build_backup_index_merge_param_(merge_param);
   merger.set_count(file_count, per_file_item_count);
-  ret = merger.init(merge_param, sql_proxy, throttle_);
+  ret = merger.init(merge_param, sql_proxy);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 

@@ -92,7 +92,7 @@ namespace common
 
 namespace function
 {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
 struct DebugRecorder {
   int function_default_construct_time = 0;
   int function_copy_construct_time = 0;
@@ -119,7 +119,7 @@ struct DebugRecorder {
 
 struct DefaultFunctionAllocator : public ObIAllocator {
   void *alloc(const int64_t size) override {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     total_alive_num++;
 #endif
     static lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "ObFunction");
@@ -131,12 +131,12 @@ struct DefaultFunctionAllocator : public ObIAllocator {
     return alloc(size);
   }
   void free(void *ptr) override {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     total_alive_num--;
 #endif
     ob_free(ptr);
   }
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
   int total_alive_num = 0;
 #endif
   static DefaultFunctionAllocator &get_default_allocator() {
@@ -176,7 +176,7 @@ class ObFunction<Ret(Args...)> {
     Derived(const Derived<Fn> &&fn) = delete;
     template <typename Arg>
     Derived(Arg &&fn) : func_(std::forward<Arg>(fn)) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
       RECORDER.derived_construct_time++;
 #endif
     }
@@ -210,7 +210,7 @@ public:
   // default constructor
   explicit ObFunction(ObIAllocator &allocator = DEFAULT_ALLOCATOR) :
   base_(nullptr), allocator_(allocator) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_default_construct_time++;
 #endif
   }
@@ -218,7 +218,7 @@ public:
   ObFunction(const ObFunction<Ret(Args...)> &rhs,
              ObIAllocator &allocator = DEFAULT_ALLOCATOR) :
   base_(nullptr), allocator_(allocator) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_copy_construct_time++;
 #endif
     (void)assign(rhs);
@@ -227,7 +227,7 @@ public:
   ObFunction(ObFunction<Ret(Args...)> &&rhs,
              ObIAllocator &allocator = DEFAULT_ALLOCATOR) :
   base_(nullptr), allocator_(allocator) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_move_construct_time++;
 #endif
     (void)assign(std::forward<ObFunction<Ret(Args...)>>(rhs));
@@ -242,18 +242,18 @@ public:
   ObFunction(Fn &&rhs,
              ObIAllocator &allocator = DEFAULT_ALLOCATOR) :
   base_(nullptr), allocator_(allocator) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_general_construct_time++;
 #endif
     (void)assign(std::forward<Fn>(rhs));
   }
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
   Abstract* get_func_ptr() { return base_; }
 #endif
 
   // copy assign operator
   ObFunction &operator=(const ObFunction<Ret(Args...)> &rhs) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_copy_equal_time++;
 #endif
     (void)assign(rhs);
@@ -261,7 +261,7 @@ public:
   }
   // move assign operator
   ObFunction &operator=(ObFunction<Ret(Args...)> &&rhs) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_move_equal_time++;
 #endif
     (void)assign(std::forward<ObFunction<Ret(Args...)>>(rhs));
@@ -272,7 +272,7 @@ public:
   typename std::enable_if<
   !std::is_same<typename std::decay<Fn>::type, ObFunction<Ret(Args...)>>::value, bool>::type = true>
   ObFunction &operator=(Fn &&rhs) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_general_equal_time++;
 #endif
     (void)assign(std::forward<Fn>(rhs));
@@ -299,14 +299,14 @@ public:
   bool is_valid() const { return nullptr != base_; }
   // copy assign
   int assign(const ObFunction<Ret(Args...)> &rhs) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_copy_assign_time++;
 #endif
     return base_assign_(rhs.base_);
   }
   // move assign
   int assign(ObFunction<Ret(Args...)> &&rhs) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_move_assign_time++;
 #endif
     int ret = OB_SUCCESS;
@@ -329,7 +329,7 @@ public:
   typename std::enable_if<
     !std::is_same<typename std::decay<Fn>::type, ObFunction<Ret(Args...)>>::value, bool>::type = true>
   int assign(Fn &&rhs) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_general_assign_time++;
 #endif
     int ret = OB_SUCCESS;
@@ -352,7 +352,7 @@ public:
                KP(&DEFAULT_ALLOCATOR));
 private:
   int base_assign_(Abstract *rhs) {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     RECORDER.function_base_assign_time++;
 #endif
     int ret = OB_SUCCESS;

@@ -49,7 +49,8 @@ public:
   int join_complement_log();
   int join_macro_data_dir(const share::ObBackupDataType &type, const int64_t turn_id, const int64_t retry_id);
   int join_macro_data_file(const int64_t file_id);
-  int join_data_info_turn(const int64_t turn_id);
+  int join_tablet_info_file(const int64_t file_id);
+  int join_data_info_turn(const share::ObBackupDataType &type, const int64_t turn_id);
   int join_meta_info_turn_and_retry(const int64_t turn_id, const int64_t retry_id);
   int join_tenant_macro_range_index_file(const share::ObBackupDataType &type, const int64_t retry_id);
   int join_tenant_meta_index_file(const share::ObBackupDataType &type, const int64_t retry_id, const bool is_sec_meta);
@@ -115,7 +116,7 @@ struct ObBackupPathUtil
 
   // file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1/tablet_info.obbak
   static int get_ls_data_tablet_info_path(const share::ObBackupDest &backup_set_dest,
-      const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id,
+      const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const int64_t file_id,
       share::ObBackupPath &backup_path);
 
   // file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/
@@ -161,12 +162,12 @@ struct ObBackupPathUtil
   static int get_ls_info_dir_path(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);
 
-  // file:///obbackup/backup_set_1_full/infos/data_info_turn_1
+  // file:///obbackup/backup_set_1_full/infos/major_data_info_turn_1
   static int get_ls_info_data_info_dir_path(const share::ObBackupDest &backup_set_dest,
-      const int64_t turn_id, share::ObBackupPath &backup_path);
+      const share::ObBackupDataType &type, const int64_t turn_id, share::ObBackupPath &backup_path);
 
   static int get_ls_info_data_info_dir_path(const share::ObBackupDest &backup_tenant_dest,
-      const share::ObBackupSetDesc &desc, const int64_t turn_id, share::ObBackupPath &backup_path);
+      const share::ObBackupSetDesc &desc, const share::ObBackupDataType &type, const int64_t turn_id, share::ObBackupPath &backup_path);
 
   // file:///obbackup/backup_set_1_full/infos/meta_info/
   static int get_tenant_meta_info_dir_path(const share::ObBackupDest &backup_set_dest, 
@@ -242,7 +243,10 @@ struct ObBackupPathUtil
 
   // file://obbackup/backup_set_1_full/infos/data_info_turn_1/tablet_log_stream_info.obbak
   static int get_backup_data_tablet_ls_info_path(const share::ObBackupDest &backup_set_dest,
-      const uint64_t turn_id, share::ObBackupPath &path);
+      const share::ObBackupDataType &backup_data_type, const uint64_t turn_id, share::ObBackupPath &path);
+
+  // file://obbackup/backup_set_1_full/infos/meta_info/tablet_log_stream_info
+  static int get_backup_data_meta_tablet_ls_info_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path);
 
   // file:///obbackup/backup_set_1_full/infos/deleted_tablet_info
   static int get_deleted_tablet_info_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path);

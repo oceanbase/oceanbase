@@ -52,10 +52,6 @@ public:
   int check();
 private:
   virtual int check_stop() const override;
-  int get_all_tenant_related_ls_status_info(
-      const uint64_t tenant_id,
-      common::ObIArray<share::ObLSStatusInfo> &ls_status_info_array);
-
   int try_check_migrate_unit_finish_not_in_locality(
       const uint64_t &tenant_id);
   int try_check_migrate_unit_finish_not_in_tenant();

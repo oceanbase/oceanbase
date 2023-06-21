@@ -15,8 +15,7 @@
 
 #include "ob_backup_base_job.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "share/backup/ob_backup_data_store.h"
-#include "rootserver/backup/ob_backup_lease_service.h"
+#include "storage/backup/ob_backup_data_store.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_ls_id.h"
@@ -45,8 +44,7 @@ public:
   virtual int process() override;
   virtual int force_cancel(const uint64_t &tenant_id) override;
   // if can_remove return true, scheudler can remove task from scheduler
-  virtual int handle_execute_over(const ObBackupScheduleTask *task, bool &can_remove,
-      const ObAddr &black_server, const int execute_ret) override;
+  virtual int handle_execute_over(const ObBackupScheduleTask *task, const share::ObHAResultInfo &result_info, bool &can_remove) override;
   // reloading task from inner table which status is pending or doing
   virtual int get_need_reload_task(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) override; 
 public:
@@ -57,8 +55,9 @@ public:
   static int get_next_job_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &job_id);
   static int get_next_backup_set_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &next_backup_set_id);
 public:
-  int init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy, share::schema::ObMultiVersionSchemaService &schema_service,
-      ObBackupLeaseService  &lease_service, ObBackupTaskScheduler &task_scheduler, ObBackupService &backup_service);
+  int init(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service, ObBackupTaskScheduler &task_scheduler,
+      ObBackupDataService &backup_service);
 
   // constructing a ObBackupJobAttr according to ObBackupDatabaseArg, them insert the ObBackupJobAttr into __all_backup_job
   int start_backup_data(const obrpc::ObBackupDatabaseArg &in_arg);
@@ -88,13 +87,11 @@ private:
   int build_task_(const share::ObBackupJobAttr &job, const share::ObBackupSetTaskAttr &set_task_attr, 
       const share::ObBackupLSTaskAttr &ls_task,
       ObIAllocator &allocator, ObBackupScheduleTask *&task);
-
   int persist_backup_version_(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const uint64_t &cluster_version);
   template <typename T>
   int do_build_task_(const share::ObBackupJobAttr &job, const share::ObBackupSetTaskAttr &set_task_attr, 
       const share::ObBackupLSTaskAttr &ls_task,
       ObIAllocator &allocator, T &tmp_task, ObBackupScheduleTask *&task);
-  int get_all_normal_tenants_(ObIArray<uint64_t> &tenants);
   int handle_failed_job_(
       const uint64_t tenant_id,
       const int64_t result,
@@ -102,12 +99,12 @@ private:
       share::ObBackupJobAttr &job_attr);
 private:
   bool is_inited_;
+  uint64_t tenant_id_;
   common::ObMySQLProxy                       *sql_proxy_;
   obrpc::ObSrvRpcProxy                       *rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   ObBackupTaskScheduler                      *task_scheduler_;
-  ObBackupLeaseService                       *lease_service_;
-  ObBackupService                            *backup_service_;
+  ObBackupDataService                            *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataScheduler);
 };
 
@@ -120,8 +117,8 @@ public:
   virtual int deal_non_reentrant_job(const int err) = 0;
 public:
   int init(const uint64_t tenant_id, share::ObBackupJobAttr &job_attr, common::ObMySQLProxy &sql_proxy, 
-      obrpc::ObSrvRpcProxy &rpc_proxy, ObBackupTaskScheduler &task_scheduler, ObBackupLeaseService  &lease_service,
-      share::schema::ObMultiVersionSchemaService &schema_service_, ObBackupService &backup_service);
+      obrpc::ObSrvRpcProxy &rpc_proxy, ObBackupTaskScheduler &task_scheduler,
+      share::schema::ObMultiVersionSchemaService &schema_service_, ObBackupDataService &backup_service);
   void reset();
   uint64_t get_tenant_id() const { return tenant_id_; }
   bool is_can_retry(const int err) const;
@@ -133,8 +130,7 @@ protected:
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupTaskScheduler *task_scheduler_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
-  ObBackupLeaseService*  lease_service_;
-  ObBackupService *backup_service_;
+  ObBackupDataService *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObIBackupJobMgr);
 };
 

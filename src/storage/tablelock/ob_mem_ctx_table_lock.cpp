@@ -296,7 +296,7 @@ void ObLockMemCtx::set_log_synced(
   }
 }
 
-int ObLockMemCtx::check_lock_exist(
+int ObLockMemCtx::check_lock_exist( //TODO(lihongqin):check it
     const ObLockID &lock_id,
     const ObTableLockOwnerID &owner_id,
     const ObTableLockMode mode,

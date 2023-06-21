@@ -106,30 +106,29 @@ public:
 struct ObTenantSuperBlock final
 {
 public:
-  static const uint64_t HIDDEN_FLAG_MASK = 0x01;
-
-  static const int64_t TENANT_SUPER_BLOCK_VERSION = 1;
+  static const int64_t MIN_SUPER_BLOCK_VERSION = 0;
+  static const int64_t TENANT_SUPER_BLOCK_VERSION = 2;
   ObTenantSuperBlock();
   ObTenantSuperBlock(const uint64_t tenant_id, const bool is_hidden = false);
   ~ObTenantSuperBlock() = default;
   void reset();
   bool is_valid() const;
+  bool is_old_version() const { return version_ < TENANT_SUPER_BLOCK_VERSION; }
 
   TO_STRING_KV(K_(tenant_id),
                K_(replay_start_point),
                K_(ls_meta_entry),
                K_(tablet_meta_entry),
-               K_(ls_dup_table_entry),
-               K_(is_hidden));
+               K_(is_hidden),
+               K_(version));
   OB_UNIS_VERSION(TENANT_SUPER_BLOCK_VERSION);
-
 public:
   uint64_t tenant_id_;
   common::ObLogCursor replay_start_point_;
   blocksstable::MacroBlockId ls_meta_entry_;
   blocksstable::MacroBlockId tablet_meta_entry_;
-  blocksstable::MacroBlockId ls_dup_table_entry_;
   bool is_hidden_;
+  int64_t version_;
 };
 
 #define IS_EMPTY_BLOCK_LIST(entry_block) (entry_block == oceanbase::storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK)

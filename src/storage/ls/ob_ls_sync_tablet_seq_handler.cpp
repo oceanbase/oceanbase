@@ -14,6 +14,7 @@
 #include "storage/ls/ob_ls_sync_tablet_seq_handler.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
+#include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "logservice/ob_log_base_header.h"
 #include "share/scn.h"
 #include "lib/oblog/ob_log_module.h"
@@ -21,8 +22,10 @@
 
 namespace oceanbase
 {
+
 using namespace palf;
 using namespace share;
+
 namespace storage
 {
 

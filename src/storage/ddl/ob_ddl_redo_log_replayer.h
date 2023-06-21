@@ -36,11 +36,7 @@ public:
   int replay_commit(const ObDDLCommitLog &log, const share::SCN &scn);
 private:
   void destroy();
-  int check_need_replay_ddl_log(const ObITable::TableKey &table_key,
-                                const share::SCN &ddl_start_scn,
-                                const share::SCN &scn,
-                                bool &need_replay,
-                                ObTabletHandle &tablet_handle);
+
 private:
   static const int64_t TOTAL_LIMIT = 10 * 1024 * 1024 * 1024L;
   static const int64_t HOLD_LIMIT = 10 * 1024 * 1024 * 1024L;

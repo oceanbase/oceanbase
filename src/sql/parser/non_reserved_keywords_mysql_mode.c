@@ -745,6 +745,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"statements", STATEMENTS},
   {"statistics", STATISTICS},
   {"binding", BINDING},
+  {"sharding", SHARDING},
   {"schema", SCHEMA},
   {"schemas", SCHEMAS},
   {"select", SELECT},

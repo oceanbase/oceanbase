@@ -343,6 +343,7 @@ public:
 
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
+  virtual int get_config_version(LogConfigVersion &config_version) const = 0;
   virtual int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                                      int64_t &paxos_replica_num,
                                                      common::GlobalLearnerList &learner_list) const = 0;
@@ -378,6 +379,7 @@ public:
   // - other: bug
   virtual int add_member(const common::ObMember &member,
                         const int64_t new_replica_num,
+                        const LogConfigVersion &config_version,
                         const int64_t timeout_us) = 0;
 
   // @brief, remove a member from paxos group
@@ -397,6 +399,7 @@ public:
   // @brief, replace old_member with new_member
   // @param[in] const common::ObMember &added_member: member wil be added
   // @param[in] const common::ObMember &removed_member: member will be removed
+  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace member successfully
@@ -406,6 +409,7 @@ public:
   // - other: bug
   virtual int replace_member(const common::ObMember &added_member,
                              const common::ObMember &removed_member,
+                             const LogConfigVersion &config_version,
                              const int64_t timeout_us) = 0;
 
   // @brief: add a learner(read only replica) in this clsuter
@@ -432,6 +436,7 @@ public:
   // @param[in] const common::ObMember &learner: learner will be switched to acceptor
   // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
   //            learner to acceptor (similar to add_member)
+  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
@@ -440,6 +445,7 @@ public:
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   virtual int switch_learner_to_acceptor(const common::ObMember &learner,
                                          const int64_t new_replica_num,
+                                         const LogConfigVersion &config_version,
                                          const int64_t timeout_us) = 0;
 
   // @brief: switch an acceptor(full replica) to learner(read only replica) in this clsuter
@@ -713,6 +719,9 @@ public:
 
   virtual int stat(PalfStat &palf_stat) = 0;
   virtual int get_palf_epoch(int64_t &palf_epoch) const = 0;
+  virtual int try_lock_config_change(int64_t lock_owner, int64_t timeout_us) = 0;
+  virtual int unlock_config_change(int64_t lock_owner, int64_t timeout_us) = 0;
+  virtual int get_config_change_lock_stat(int64_t &lock_owner, bool &is_locked) = 0;
   virtual int diagnose(PalfDiagnoseInfo &diagnose_info) const = 0;
   virtual int update_palf_stat() = 0;
   virtual int read_data_from_buffer(const LSN &read_begin_lsn,
@@ -784,6 +793,7 @@ public:
   int change_leader_to(const common::ObAddr &dest_addr) override final;
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
+  int get_config_version(LogConfigVersion &config_version) const;
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                              int64_t &paxos_replica_num,
                                              common::GlobalLearnerList &learner_list) const override final;
@@ -795,12 +805,14 @@ public:
                          const int64_t timeout_us) override final;
   int add_member(const common::ObMember &member,
                 const int64_t new_replica_num,
+                const LogConfigVersion &config_version,
                 const int64_t timeout_us) override final;
   int remove_member(const common::ObMember &member,
                     const int64_t new_replica_num,
                     const int64_t timeout_us) override final;
   int replace_member(const common::ObMember &added_member,
                      const common::ObMember &removed_member,
+                     const LogConfigVersion &config_version,
                      const int64_t timeout_us) override final;
   int add_learner(const common::ObMember &added_learner,
                   const int64_t timeout_us) override final;
@@ -808,6 +820,7 @@ public:
                   const int64_t timeout_us) override final;
   int switch_learner_to_acceptor(const common::ObMember &learner,
                                  const int64_t new_replica_num,
+                                 const LogConfigVersion &config_version,
                                  const int64_t timeout_us) override final;
   int switch_acceptor_to_learner(const common::ObMember &member,
                                  const int64_t new_replica_num,
@@ -1012,6 +1025,13 @@ public:
   int flashback(const int64_t mode_version,
                 const share::SCN &flashback_scn,
                 const int64_t timeout_us) override final;
+
+  //config change lock related function
+  int try_lock_config_change(int64_t lock_owner, int64_t timeout_us);
+
+  int unlock_config_change(int64_t lock_owner, int64_t timeout_us);
+  int get_config_change_lock_stat(int64_t &lock_owner, bool &is_locked);
+
   int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   int update_palf_stat() override final;
   TO_STRING_KV(K_(palf_id), K_(self), K_(has_set_deleted));
@@ -1122,9 +1142,9 @@ private:
                                       const int64_t proposal_id,
                                       const int64_t election_epoch,
                                       bool &is_already_finished,
-                                      LogConfigInfo &new_config_info) const;
+                                      LogConfigInfoV2 &new_config_info) const;
   int wait_log_barrier_(const LogConfigChangeArgs &args,
-                        const LogConfigInfo &new_config_info,
+                        const LogConfigInfoV2 &new_config_info,
                         TimeoutChecker &not_timeout);
   int one_stage_config_change_(const LogConfigChangeArgs &args, const int64_t timeout_us);
   int check_need_rebuild_(const LSN &base_lsn,

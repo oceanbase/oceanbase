@@ -50,7 +50,7 @@ ObStorageSchemaRecorder::ObStorageSchemaRecorder()
     table_id_(0)
 {
 #if defined(__x86_64__)
-  STATIC_ASSERT(sizeof(ObStorageSchemaRecorder) <= 120, "size of schema recorder is oversize");
+  STATIC_ASSERT(sizeof(ObStorageSchemaRecorder) <= 128, "size of schema recorder is oversize");
 #endif
 }
 
@@ -145,16 +145,17 @@ int ObStorageSchemaRecorder::inner_replay_clog(
   ObTabletHandle tmp_tablet_handle;
 
   if (OB_FAIL(replay_get_tablet_handle(ls_id_, tablet_id_, scn, tmp_tablet_handle))) {
-    LOG_WARN("failed to get tablet handle", K(ret), K_(tablet_id), K(scn));
+    if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get tablet handle", K(ret), K_(tablet_id), K(scn));
+    }
   } else if (OB_FAIL(replay_storage_schema.deserialize(tmp_allocator, buf, size, pos))) {
     LOG_WARN("fail to deserialize table schema", K(ret), K_(tablet_id));
-  } else if (FALSE_IT(replay_storage_schema.set_sync_finish(true))) {
-  } else if (OB_FAIL(tmp_tablet_handle.get_obj()->save_multi_source_data_unit(&replay_storage_schema, scn,
-      true/*for_replay*/, memtable::MemtableRefOp::NONE))) {
-    LOG_WARN("failed to save storage schema", K(ret), K_(tablet_id), K(replay_storage_schema));
   } else {
-    LOG_INFO("success to replay schema clog", K(ret), K_(ls_id), K_(tablet_id),
-      K(replay_storage_schema.get_schema_version()), K(replay_storage_schema.compat_mode_));
+    // just replay schema clog, do not save storage schema
+    // DDL is forbidden during upgrade
+    LOG_INFO("success to replay schema clog", K(ret), K(replay_storage_schema));
   }
   replay_storage_schema.reset();
   tmp_tablet_handle.reset();
@@ -168,6 +169,7 @@ int ObStorageSchemaRecorder::try_update_storage_schema(
     const int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -178,6 +180,10 @@ int ObStorageSchemaRecorder::try_update_storage_schema(
   } else if (ignore_storage_schema_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported to update storage schema", K(ret), K_(tablet_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", K(ret));
+  } else if (compat_version >= DATA_VERSION_4_2_0_0) {
+    // for compat, before all server upgrade to 4.2, need sync storage schema
   } else if (FALSE_IT(table_id_ = table_id)) { // clear in free_allocated_info
   } else if (OB_FAIL(try_update_for_leader(table_version, &allocator, timeout_ts))) {
     LOG_WARN("failed to update for leader", K(ret), K(table_version));
@@ -322,7 +328,7 @@ int ObStorageSchemaRecorder::get_schema(
     }
   } else {
     table_version = t_schema->get_schema_version();
-    if (OB_FAIL(storage_schema_->init(*allocator_, *t_schema, compat_mode_))) {
+    if (OB_FAIL(storage_schema_->init(*allocator_, *t_schema, compat_mode_, false/*skip_column_info*/, ObStorageSchema::STORAGE_SCHEMA_VERSION))) {
       LOG_WARN("failed to init storage schema", K(ret), K(t_schema));
     }
   }

@@ -123,7 +123,8 @@ ObLSReplica::ObLSReplica()
     in_member_list_(false),
     member_time_us_(0),
     learner_list_(),
-    in_learner_list_(false)
+    in_learner_list_(false),
+    rebuild_(false)
 {
 }
 
@@ -157,6 +158,7 @@ void ObLSReplica::reset()
   member_time_us_ = 0;
   learner_list_.reset();
   in_learner_list_ = false;
+  rebuild_ = false;
 }
 
 int ObLSReplica::init(
@@ -178,7 +180,8 @@ int ObLSReplica::init(
     const int64_t data_size,
     const int64_t required_size,
     const MemberList &member_list,
-    const GlobalLearnerList &learner_list)
+    const GlobalLearnerList &learner_list,
+    const bool rebuild)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -210,6 +213,7 @@ int ObLSReplica::init(
     paxos_replica_number_ = paxos_replica_number;
     data_size_ = data_size;
     required_size_ = required_size;
+    rebuild_ = rebuild;
   }
   return ret;
 }
@@ -248,6 +252,7 @@ int ObLSReplica::assign(const ObLSReplica &other)
       in_member_list_ = other.in_member_list_;
       member_time_us_ = other.member_time_us_;
       in_learner_list_ = other.in_learner_list_;
+      rebuild_ = other.rebuild_;
     }
   }
   return ret;
@@ -279,16 +284,18 @@ bool ObLSReplica::is_equal_for_report(const ObLSReplica &other) const
     is_equal = (proposal_id_ == other.proposal_id_);
   }
 
-  // check replica_type and learner_list if necessary
-  bool is_compatible_with_readonly_replica = false;
-  int ret = OB_SUCCESS;
-  if (is_equal && OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(
-                                           tenant_id_,
-                                           is_compatible_with_readonly_replica))) {
-    LOG_WARN("failed to check compat version for readonly replica", KR(ret), K_(tenant_id));
-  } else if (is_equal && is_compatible_with_readonly_replica) {
-    is_equal = learner_list_is_equal(learner_list_, other.learner_list_)
-               && replica_type_ == other.replica_type_;
+  // check replica_type/learner_list/rebuild if necessary (>=4.2.0.0)
+  if (is_equal) {
+    bool is_compatible_with_readonly_replica = false;
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(
+        tenant_id_, is_compatible_with_readonly_replica))) {
+      LOG_WARN("failed to check compat version for readonly replica", KR(ret), K_(tenant_id));
+    } else if (is_compatible_with_readonly_replica) {
+      is_equal = learner_list_is_equal(learner_list_, other.learner_list_)
+                 && replica_type_ == other.replica_type_
+                 && rebuild_ == other.rebuild_;
+    }
   }
 
   return is_equal;
@@ -314,23 +321,57 @@ bool ObLSReplica::learner_list_is_equal(const common::GlobalLearnerList &a, cons
   return is_equal;
 }
 
-bool ObLSReplica::member_list_is_equal(const MemberList &a, const MemberList &b) const
+bool ObLSReplica::member_list_is_equal(const MemberList &a, const MemberList &b)
 {
   bool is_equal = true;
   if (a.count() != b.count()) {
     is_equal = false;
   } else {
-    for (int i = 0; is_equal && i < a.count(); ++i) {
-      is_equal = false;
-      for (int j = 0; j < b.count(); ++j) {
-        if (a[i] == b[j]) {
-          is_equal = true;
-          break;
-        }
+    ARRAY_FOREACH_X(a, idx, cnt, is_equal) {
+      if (!common::is_contain(b, a.at(idx))) {
+        is_equal = false;
+      }
+    }
+    ARRAY_FOREACH_X(b, idx, cnt, is_equal) {
+      if (!common::is_contain(a, b.at(idx))) {
+        is_equal = false;
       }
     }
   }
   return is_equal;
+}
+
+bool ObLSReplica::server_is_in_member_list(
+    const MemberList &member_list,
+    const common::ObAddr &server)
+{
+  bool is_found = false;
+  ARRAY_FOREACH_X(member_list, idx, cnt, !is_found) {
+    if (server == member_list.at(idx).get_server()) {
+      is_found = true;
+    }
+  }
+  return is_found;
+}
+
+bool ObLSReplica::servers_in_member_list_are_same(const MemberList &a, const MemberList &b)
+{
+  bool is_same = true;
+  if (a.count() != b.count()) {
+    is_same = false;
+  } else {
+    ARRAY_FOREACH_X(a, idx, cnt, is_same) {
+      if (!server_is_in_member_list(b, a.at(idx).get_server())) {
+        is_same = false;
+      }
+    }
+    ARRAY_FOREACH_X(b, idx, cnt, is_same) {
+      if (!server_is_in_member_list(a, b.at(idx).get_server())) {
+        is_same = false;
+      }
+    }
+  }
+  return is_same;
 }
 
 int64_t ObLSReplica::to_string(char *buf, const int64_t buf_len) const
@@ -361,7 +402,8 @@ int64_t ObLSReplica::to_string(char *buf, const int64_t buf_len) const
       K_(in_member_list),
       K_(member_time_us),
       K_(learner_list),
-      K_(in_learner_list));
+      K_(in_learner_list),
+      K_(rebuild));
   J_OBJ_END();
   return pos;
 }
@@ -390,7 +432,8 @@ OB_SERIALIZE_MEMBER(ObLSReplica,
                     in_member_list_,
                     member_time_us_,
                     learner_list_,
-                    in_learner_list_);
+                    in_learner_list_,
+                    rebuild_);
 
 int ObLSReplica::member_list2text(
     const MemberList &member_list,

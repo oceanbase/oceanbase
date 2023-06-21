@@ -175,6 +175,32 @@ int ObAdminDumpBackupDataUtil::read_index_file_trailer(const common::ObString &b
   return ret;
 }
 
+int ObAdminDumpBackupDataUtil::read_tablet_metas_file_trailer(const common::ObString &backup_path,
+    const common::ObString &storage_info_str, backup::ObTabletInfoTrailer &tablet_meta_trailer)
+{
+  int ret = OB_SUCCESS;
+  int64_t file_length = 0;
+  char *buf = NULL;
+  ObArenaAllocator allocator;
+  ObBackupSerializeHeaderWrapper serializer_wrapper(&tablet_meta_trailer);
+  const int64_t trailer_len = serializer_wrapper.get_serialize_size();
+  int64_t pos = 0;
+  if (OB_FAIL(get_backup_file_length(backup_path, storage_info_str, file_length))) {
+    STORAGE_LOG(WARN, "failed to get file length", K(ret), K(backup_path), K(storage_info_str));
+  } else if (OB_UNLIKELY(file_length <= trailer_len)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup index file too small", K(ret), K(file_length), K(trailer_len));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(trailer_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(trailer_len));
+  } else if (OB_FAIL(pread_file(backup_path, storage_info_str, file_length - trailer_len, trailer_len, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path), K(storage_info_str), K(file_length), K(trailer_len));
+  } else if (OB_FAIL(serializer_wrapper.deserialize(buf, trailer_len, pos))) {
+    STORAGE_LOG(WARN, "failed to deserialize.", K(ret));
+  }
+  return ret;
+}
+
 int ObAdminDumpBackupDataUtil::pread_file(const common::ObString &backup_path, const common::ObString &storage_info_str,
     const int64_t offset, const int64_t read_size, char *buf)
 {
@@ -793,6 +819,12 @@ int ObAdminDumpBackupDataExecutor::do_execute_()
       }
       break;
     }
+    case share::ObBackupFileType::BACKUP_TABLET_METAS_INFO: {
+      if (OB_FAIL(print_ls_tablet_meta_tablets_())) {
+        STORAGE_LOG(WARN, "failed to print ls tablet meta tablets", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_SYS;
       STORAGE_LOG(WARN, "invalid type", K(ret), K_(file_type));
@@ -915,10 +947,10 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_path_()
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
-  share::ObBackupSetFilter op;
+  storage::ObBackupSetFilter op;
   share::ObBackupPath path;
   share::ObBackupStorageInfo storage_info;
-  share::ObTenantBackupSetInfosDesc tenant_backup_set_infos;
+  storage::ObTenantBackupSetInfosDesc tenant_backup_set_infos;
   ObSArray<share::ObBackupSetDesc> backup_set_array;
   ObArray<share::ObBackupSetFileDesc> target_backup_set;
   if (OB_FAIL(get_backup_set_placeholder_dir_path(path))) {
@@ -930,7 +962,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_path_()
   } else if (OB_FAIL(op.get_backup_set_array(backup_set_array))) {
     STORAGE_LOG(WARN, "fail to get backup set names", K(ret));
   } else {
-    share::ObBackupDataStore::ObBackupSetDescComparator cmp;
+    storage::ObBackupDataStore::ObBackupSetDescComparator cmp;
     std::sort(backup_set_array.begin(), backup_set_array.end(), cmp);
     for (int64_t i = backup_set_array.count() - 1; i >= 0; i--) {
       path.reset();
@@ -1276,7 +1308,7 @@ int ObAdminDumpBackupDataExecutor::print_meta_index_index_list_()
 int ObAdminDumpBackupDataExecutor::print_ls_attr_info_()
 {
   int ret = OB_SUCCESS;
-  share::ObBackupDataLSAttrDesc ls_attr_desc;
+  storage::ObBackupDataLSAttrDesc ls_attr_desc;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), ls_attr_desc))) {
@@ -1296,14 +1328,14 @@ int ObAdminDumpBackupDataExecutor::print_ls_attr_info_()
 int ObAdminDumpBackupDataExecutor::print_tablet_to_ls_info_()
 {
   int ret = OB_SUCCESS;
-  share::ObBackupDataTabletToLSDesc tablet_to_ls_desc;
+  storage::ObBackupDataTabletToLSDesc tablet_to_ls_desc;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), tablet_to_ls_desc))) {
     STORAGE_LOG(WARN, "fail to read tablet to ls info", K(ret), K(backup_path_), K(storage_info_));
   } else {
     ARRAY_FOREACH_X(tablet_to_ls_desc.tablet_to_ls_, i , cnt, OB_SUCC(ret)) {
-      const share::ObBackupDataTabletToLSInfo tablet_to_ls = tablet_to_ls_desc.tablet_to_ls_.at(i);
+      const storage::ObBackupDataTabletToLSInfo tablet_to_ls = tablet_to_ls_desc.tablet_to_ls_.at(i);
       if (OB_FAIL(dump_tablet_to_ls_info_(tablet_to_ls))) {
         STORAGE_LOG(WARN, "fail to dump ls attr info", K(ret), K(tablet_to_ls));
       }
@@ -1316,14 +1348,14 @@ int ObAdminDumpBackupDataExecutor::print_tablet_to_ls_info_()
 int ObAdminDumpBackupDataExecutor::print_deleted_tablet_info_()
 {
   int ret = OB_SUCCESS;
-  share::ObBackupDeletedTabletToLSDesc deleted_tablet_to_ls;
+  storage::ObBackupDeletedTabletToLSDesc deleted_tablet_to_ls;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), deleted_tablet_to_ls))) {
     STORAGE_LOG(WARN, "fail to read tablet to ls info", K(ret), K(backup_path_), K(storage_info_));
   } else {
     ARRAY_FOREACH_X(deleted_tablet_to_ls.deleted_tablet_to_ls_, i , cnt, OB_SUCC(ret)) {
-      const share::ObBackupDataTabletToLSInfo tablet_to_ls = deleted_tablet_to_ls.deleted_tablet_to_ls_.at(i);
+      const storage::ObBackupDataTabletToLSInfo tablet_to_ls = deleted_tablet_to_ls.deleted_tablet_to_ls_.at(i);
       if (OB_FAIL(dump_tablet_to_ls_info_(tablet_to_ls))) {
         STORAGE_LOG(WARN, "fail to dump ls attr info", K(ret), K(tablet_to_ls));
       }
@@ -1336,7 +1368,7 @@ int ObAdminDumpBackupDataExecutor::print_deleted_tablet_info_()
 int ObAdminDumpBackupDataExecutor::print_tenant_locality_info_()
 {
   int ret = OB_SUCCESS;
-  share::ObExternTenantLocalityInfoDesc locality_desc;
+  storage::ObExternTenantLocalityInfoDesc locality_desc;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), locality_desc))) {
@@ -1350,7 +1382,7 @@ int ObAdminDumpBackupDataExecutor::print_tenant_locality_info_()
 int ObAdminDumpBackupDataExecutor::print_tenant_diagnose_info_()
 {
   int ret = OB_SUCCESS;
-  share::ObExternTenantDiagnoseInfoDesc diagnose_info;
+  storage::ObExternTenantDiagnoseInfoDesc diagnose_info;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), diagnose_info))) {
@@ -1364,7 +1396,7 @@ int ObAdminDumpBackupDataExecutor::print_tenant_diagnose_info_()
 int ObAdminDumpBackupDataExecutor::print_backup_set_info_()
 {
   int ret = OB_SUCCESS;
-  share::ObExternBackupSetInfoDesc backup_set_info_desc;
+  storage::ObExternBackupSetInfoDesc backup_set_info_desc;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), backup_set_info_desc))) {
@@ -1510,6 +1542,75 @@ int ObAdminDumpBackupDataExecutor::print_tenant_archive_piece_infos_file_()
   return ret;
 }
 
+int ObAdminDumpBackupDataExecutor::print_ls_tablet_meta_tablets_()
+{
+  int ret = OB_SUCCESS;
+  backup::ObTabletInfoTrailer tablet_meta_trailer;
+  if (OB_FAIL(ObAdminDumpBackupDataUtil::read_tablet_metas_file_trailer(backup_path_, storage_info_, tablet_meta_trailer))) {
+    STORAGE_LOG(WARN, "failed to read tablet metas file trailer", K(ret));
+  } else {
+    common::ObArenaAllocator allocator;
+    const int64_t DEFAULT_BUF_LEN = 2 * 1024 * 1024; // 2M
+    int64_t cur_buf_offset = tablet_meta_trailer.offset_;
+    int64_t cur_total_len = 0;
+    char *buf = nullptr;
+    while (OB_SUCC(ret) && cur_buf_offset < tablet_meta_trailer.length_) {
+      const uint64_t buf_len = tablet_meta_trailer.length_ - cur_buf_offset < DEFAULT_BUF_LEN ?
+                               tablet_meta_trailer.length_ - cur_buf_offset : DEFAULT_BUF_LEN;
+      if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed to alloc read buf", K(ret), K(buf_len));
+      } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path_, storage_info_, cur_buf_offset, buf_len, buf))) {
+        STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path_), K(storage_info_), K(cur_buf_offset), K(buf_len));
+      } else {
+        backup::ObBackupTabletMeta tablet_meta;
+        blocksstable::ObBufferReader buffer_reader(buf, buf_len);
+        while (OB_SUCC(ret)) {
+          tablet_meta.reset();
+          int64_t pos = 0;
+          const ObBackupCommonHeader *common_header = nullptr;
+          if (buffer_reader.remain() == 0) {
+            cur_total_len = buffer_reader.capacity();
+            STORAGE_LOG(INFO, "read buf finish", K(buffer_reader));
+            break;
+          } else if (OB_FAIL(buffer_reader.get(common_header))) {
+            STORAGE_LOG(WARN, "failed to get common_header", K(ret), K(backup_path_), K(buffer_reader));
+          } else if (OB_ISNULL(common_header)) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "common header is null", K(ret), K(backup_path_), K(buffer_reader));
+          } else if (OB_FAIL(common_header->check_valid())) {
+            STORAGE_LOG(WARN, "common_header is not valid", K(ret), K(backup_path_), K(buffer_reader));
+          } else if (common_header->data_zlength_ > buffer_reader.remain()) {
+            cur_total_len = buffer_reader.pos() - sizeof(ObBackupCommonHeader);
+            STORAGE_LOG(INFO, "buf not enough, wait later", K(cur_total_len), K(buffer_reader));
+            break;
+          } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
+            STORAGE_LOG(WARN, "failed to check data checksum", K(ret), K(*common_header), K(backup_path_), K(buffer_reader));
+          } else if (OB_FAIL(tablet_meta.tablet_meta_.deserialize(buffer_reader.current(), common_header->data_zlength_, pos))) {
+            STORAGE_LOG(WARN, "failed to read data_header", K(ret), K(*common_header), K(backup_path_), K(buffer_reader));
+          } else if (OB_FAIL(buffer_reader.advance(common_header->data_length_ + common_header->align_length_))) {
+            STORAGE_LOG(WARN, "failed to advance buffer", K(ret));
+          } else {
+            tablet_meta.tablet_id_ = tablet_meta.tablet_meta_.tablet_id_;
+            if (OB_FAIL(dump_common_header_(*common_header))) {
+              STORAGE_LOG(WARN, "failed to dump common header", K(ret));
+            } else if (OB_FAIL(dump_backup_tablet_meta_(tablet_meta))) {
+              STORAGE_LOG(WARN, "failed to dump backup tablet meta", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          cur_buf_offset += cur_total_len;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(dump_tablet_trailer_(tablet_meta_trailer))) {
+      STORAGE_LOG(WARN, "failed to inner print tablet trailer", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObAdminDumpBackupDataExecutor::print_backup_format_file_()
 {
   int ret = OB_SUCCESS;
@@ -1527,7 +1628,7 @@ int ObAdminDumpBackupDataExecutor::print_backup_format_file_()
 int ObAdminDumpBackupDataExecutor::print_tenant_backup_set_infos_()
 {
   int ret = OB_SUCCESS;
-  share::ObTenantBackupSetInfosDesc file_desc;
+  storage::ObTenantBackupSetInfosDesc file_desc;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
@@ -1541,7 +1642,7 @@ int ObAdminDumpBackupDataExecutor::print_tenant_backup_set_infos_()
 int ObAdminDumpBackupDataExecutor::print_backup_ls_meta_infos_file_()
 {
   int ret = OB_SUCCESS;
-  share::ObBackupLSMetaInfosDesc file_desc;
+  storage::ObBackupLSMetaInfosDesc file_desc;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
@@ -1900,6 +2001,18 @@ int ObAdminDumpBackupDataExecutor::dump_data_file_trailer_(const backup::ObBacku
   return ret;
 }
 
+int ObAdminDumpBackupDataExecutor::dump_tablet_trailer_(const backup::ObTabletInfoTrailer &tablet_meta_trailer)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Tablet Meta Trailer");
+  PrintHelper::print_dump_line("file_id", tablet_meta_trailer.file_id_);
+  PrintHelper::print_dump_line("tablet_count", tablet_meta_trailer.tablet_cnt_);
+  PrintHelper::print_dump_line("offset", tablet_meta_trailer.offset_);
+  PrintHelper::print_dump_line("length", tablet_meta_trailer.length_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
 int ObAdminDumpBackupDataExecutor::dump_index_file_trailer_(const backup::ObBackupMultiLevelIndexTrailer &trailer)
 {
   int ret = OB_SUCCESS;
@@ -2090,7 +2203,8 @@ int ObAdminDumpBackupDataExecutor::dump_backup_tablet_meta_(const backup::ObBack
   PrintHelper::print_dump_line("tablet_meta:ref_tablet_id", tablet_meta.tablet_meta_.ref_tablet_id_.id());
   PrintHelper::print_dump_line("tablet_meta:clog_checkpoint_scn", tablet_meta.tablet_meta_.clog_checkpoint_scn_.get_val_for_logservice());
   PrintHelper::print_dump_line("tablet_meta:ddl_checkpoint_scn", tablet_meta.tablet_meta_.ddl_checkpoint_scn_.get_val_for_logservice());
-  PrintHelper::print_dump_line("tablet_meta:tablet_status", tablet_meta.tablet_meta_.tx_data_.tablet_status_);
+  // TODO yq: print migration param tablet status
+  // PrintHelper::print_dump_line("tablet_meta:tablet_status", tablet_meta.tablet_meta_.tx_data_.tablet_status_);
   PrintHelper::print_end_line();
   return ret;
 }
@@ -2152,25 +2266,25 @@ int ObAdminDumpBackupDataExecutor::dump_ls_attr_info_(const share::ObLSAttr &ls_
   PrintHelper::print_dump_line("ls_group_id", ls_attr.get_ls_group_id());
   PrintHelper::print_dump_line("flag", ls_attr.get_ls_flag().get_flag_value());
   PrintHelper::print_dump_line("status", ls_attr.get_ls_status());
-  PrintHelper::print_dump_line("operation_type", ls_attr.get_ls_operatin_type());
+  PrintHelper::print_dump_line("operation_type", ls_attr.get_ls_operation_type());
   return ret;
 }
 
-int ObAdminDumpBackupDataExecutor::dump_tablet_to_ls_info_(const share::ObBackupDataTabletToLSInfo &tablet_to_ls_info)
+int ObAdminDumpBackupDataExecutor::dump_tablet_to_ls_info_(const storage::ObBackupDataTabletToLSInfo &tablet_to_ls_info)
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("tablet_to_ls info");
   PrintHelper::print_dump_line("ls_id", tablet_to_ls_info.ls_id_.id());
   PrintHelper::print_dump_list_start("tablet_id");
   ARRAY_FOREACH_X(tablet_to_ls_info.tablet_id_list_, i , cnt, OB_SUCC(ret)) {
-    const ObTabletID &tablet_id = tablet_to_ls_info.tablet_id_list_.at(i);
+    const common::ObTabletID &tablet_id = tablet_to_ls_info.tablet_id_list_.at(i);
     PrintHelper::print_dump_list_value(to_cstring(tablet_id.id()), i == cnt - 1);
   }
   PrintHelper::print_dump_list_end();
   return ret;
 }
 
-int ObAdminDumpBackupDataExecutor::dump_tenant_locality_info_(const share::ObExternTenantLocalityInfoDesc &locality_info)
+int ObAdminDumpBackupDataExecutor::dump_tenant_locality_info_(const storage::ObExternTenantLocalityInfoDesc &locality_info)
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("locality info");
@@ -2182,11 +2296,12 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_locality_info_(const share::ObExt
   PrintHelper::print_dump_line("compat_mode", static_cast<int64_t>(locality_info.compat_mode_));
   PrintHelper::print_dump_line("locality", locality_info.locality_.ptr());
   PrintHelper::print_dump_line("primary_zone", locality_info.primary_zone_.ptr());
+  PrintHelper::print_dump_line("sys_time_zone", locality_info.sys_time_zone_.ptr());
   PrintHelper::print_end_line();
   return ret;
 }
 
-int ObAdminDumpBackupDataExecutor::dump_tenant_diagnose_info_(const share::ObExternTenantDiagnoseInfoDesc &diagnose_info)
+int ObAdminDumpBackupDataExecutor::dump_tenant_diagnose_info_(const storage::ObExternTenantDiagnoseInfoDesc &diagnose_info)
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("diagnose info");
@@ -2218,7 +2333,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<
   return ret;
 }
 
-int ObAdminDumpBackupDataExecutor::dump_backup_ls_meta_infos_file_(const share::ObBackupLSMetaInfosDesc &ls_meta_infos)
+int ObAdminDumpBackupDataExecutor::dump_backup_ls_meta_infos_file_(const storage::ObBackupLSMetaInfosDesc &ls_meta_infos)
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("ls meta infos");
@@ -2478,9 +2593,9 @@ int ObAdminDumpBackupDataExecutor::dump_check_exist_result_(
 int ObAdminDumpBackupDataExecutor::print_tablet_autoinc_seq_(const share::ObTabletAutoincSeq &autoinc_seq)
 {
   int ret = OB_SUCCESS;
-  const common::ObSArray<share::ObTabletAutoincInterval> &intervals = autoinc_seq.get_intervals();
-  for (int64_t i = 0; OB_SUCC(ret) && intervals.count(); ++i) {
-    const share::ObTabletAutoincInterval &interval = intervals.at(i);
+  const share::ObTabletAutoincInterval *intervals = autoinc_seq.get_intervals();
+  for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_seq.get_intervals_count(); ++i) {
+    const share::ObTabletAutoincInterval &interval = intervals[i];
     PrintHelper::print_dump_line("tablet_meta:autoinc_seq:start", interval.start_);
     PrintHelper::print_dump_line("tablet_meta:autoinc_seq:end", interval.end_);
   }
@@ -2517,7 +2632,7 @@ int ObAdminDumpBackupDataExecutor::get_backup_set_placeholder_dir_path(
 }
 
 int ObAdminDumpBackupDataExecutor::filter_backup_set_(
-    const share::ObTenantBackupSetInfosDesc &tenant_backup_set_infos,
+    const storage::ObTenantBackupSetInfosDesc &tenant_backup_set_infos,
     const ObSArray<share::ObBackupSetDesc> &placeholder_infos,
     ObIArray<share::ObBackupSetFileDesc> &target_backup_set)
 {

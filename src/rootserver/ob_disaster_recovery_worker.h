@@ -514,27 +514,34 @@ private:
   class UnitProvider
   {
   public:
-    UnitProvider(common::hash::ObHashSet<int64_t> &unit_set)
+    UnitProvider()
       : inited_(false),
         tenant_id_(OB_INVALID_ID),
         unit_mgr_(nullptr),
-        unit_set_(unit_set) {}
-    int init(const uint64_t tenant_id, ObUnitManager *unit_mgr);
-    int get_unit(
+        unit_set_() {}
+    int init(
+        const uint64_t tenant_id,
+        DRLSInfo &dr_ls_info,
+        ObUnitManager *unit_mgr);
+    int allocate_unit(
         const common::ObZone &zone,
         const uint64_t unit_group_id,
         share::ObUnitInfo &unit_info);
+    int init_unit_set(
+        DRLSInfo &dr_ls_info);
+
   private:
     int inner_get_valid_unit_(
         const common::ObZone &zone,
         const common::ObArray<share::ObUnitInfo> &unit_array,
         share::ObUnitInfo &output_unit_info,
+        const bool &force_get,
         bool &found);
   private:
     bool inited_;
     uint64_t tenant_id_;
     ObUnitManager *unit_mgr_;
-    common::hash::ObHashSet<int64_t> &unit_set_;
+    common::hash::ObHashSet<int64_t> unit_set_;
   };
 
   typedef common::hash::ObHashMap<
@@ -596,8 +603,6 @@ private:
         ReplicaDesc &replica_desc);
     int generate_modify_paxos_replica_number_task();
     // private func for get_next_locality_alignment_task
-    int init_unit_set(
-        common::hash::ObHashSet<int64_t> &unit_set);
     int try_get_readonly_all_server_locality_alignment_task(
         UnitProvider &unit_provider,
         const LATask *&task);
@@ -638,7 +643,6 @@ private:
     int64_t locality_paxos_replica_number_;
     LocalityMap locality_map_;
     ReplicaStatMap replica_stat_map_;
-    common::hash::ObHashSet<int64_t> unit_set_;
     UnitProvider unit_provider_;
     common::ObArenaAllocator allocator_;
   };
@@ -738,6 +742,17 @@ private:
       DRUnitStatInfo *&unit_in_group_stat_info,
       bool &need_generate);
 
+  int generate_migrate_ls_task(
+      const bool only_for_display,
+      const char* task_comment,
+      const share::ObLSReplica &ls_replica,
+      const DRServerStatInfo &server_stat_info,
+      const DRUnitStatInfo &unit_stat_info,
+      const DRUnitStatInfo &unit_in_group_stat_info,
+      const ObReplicaMember &dst_member,
+      DRLSInfo &dr_ls_info,
+      int64_t &acc_dr_task);
+
   int construct_extra_infos_to_build_migrate_task(
       DRLSInfo &dr_ls_info,
       const share::ObLSReplica &ls_replica,
@@ -765,6 +780,7 @@ private:
       const ObReplicaMember &src_member,
       const ObReplicaMember &data_source,
       const int64_t &old_paxos_replica_number,
+      const char* task_comment,
       int64_t &acc_dr_task);
 
   int try_locality_alignment(
@@ -898,6 +914,128 @@ private:
       DRLSInfo &dr_ls_info,
       const ObDRTaskKey &task_key,
       const LATask *task,
+      int64_t &acc_dr_task);
+
+  // If unit is deleting and a R-replica of duplicate log stream is on it,
+  // we have to remove this replica from learner_list directly
+  // @params[in]  ls_replica, the replica to remove
+  // @params[in]  only_for_display, whether just to display this task
+  // @params[in]  dr_ls_info, disaster recovery infos of this log stream
+  // @params[out] acc_dr_task, accumulated disaster recovery task count
+  int try_remove_readonly_replica_for_deleting_unit_(
+      const share::ObLSReplica &ls_replica,
+      const bool &only_for_display,
+      DRLSInfo &dr_ls_info,
+      int64_t &acc_dr_task);
+
+  // If unit is delting and a replica is on it,
+  // we have to migrate this replica to another unit
+  // @params[in]  unit_provider, allocate a valid unit to do migration
+  // @params[in]  dr_ls_info, disaster recovery infos of this log stream
+  // @params[in]  ls_replica, the replica to migrate
+  // @params[in]  ls_status_info, status info of this log stream
+  // @params[in]  server_stat_info, server info of this replica
+  // @params[in]  unit_stat_info, unit info of this replica
+  // @params[in]  unit_in_group_stat_info, unit group info of this log stream
+  // @params[in]  only_for_display, whether just to display this task
+  // @params[out] acc_dr_task, accumulated disaster recovery task count
+  int try_migrate_replica_for_deleting_unit_(
+      ObDRWorker::UnitProvider &unit_provider,
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica &ls_replica,
+      const share::ObLSStatusInfo &ls_status_info,
+      const DRServerStatInfo &server_stat_info,
+      const DRUnitStatInfo &unit_stat_info,
+      const DRUnitStatInfo &unit_in_group_stat_info,
+      const bool &only_for_display,
+      int64_t &acc_dr_task);
+
+  // If unit is deleting and a F-replica of duplicate log stream is on it,
+  // we have to type transform another valid R-replica to F-replica
+  // @params[in]  dr_ls_info, disaster recovery infos of this log stream
+  // @params[in]  ls_replica, the replica to do type transform
+  // @params[in]  only_for_display, whether just to display this task
+  // @params[out] acc_dr_task, accumulated disaster recovery task count
+  int try_type_transform_for_deleting_unit_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica &ls_replica,
+      const bool &only_for_display,
+      int64_t &acc_dr_task);
+
+  // When need to type transform a R-replica to F-replica,
+  // use this function to get a valid R-replica
+  // @params[in]  dr_ls_info, disaster recovery infos of this log stream
+  // @params[in]  exclude_replica, excluded replica
+  // @params[in]  target_zone, which zone to scan
+  // @params[out] replica, the expected valid R-replica
+  // @params[out] unit_id, which unit does this replica belongs to
+  // @params[out] unit_group_id, which unit group does this replica belongs to
+  // @params[out] find_a_valid_readonly_replica, whether find a valid replica
+  int find_valid_readonly_replica_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica &exclude_replica,
+      const ObZone &target_zone,
+      share::ObLSReplica &replica,
+      uint64_t &unit_id,
+      uint64_t &unit_group_id,
+      bool &find_a_valid_readonly_replica);
+
+  // construct extra infos to build a type transform task
+  // @params[in]  dr_ls_info, disaster recovery infos of this log stream
+  // @params[in]  ls_replica, which replica to do type transform
+  // @params[in]  dst_member, dest replica
+  // @params[in]  src_member, source replica
+  // @params[in]  target_unit_id, dest replica belongs to whcih unit
+  // @params[in]  target_unit_group_id, dest replica belongs to which unit group
+  // @params[out] task_id, the unique task key
+  // @params[out] tenant_id, which tenant's task
+  // @params[out] ls_id, which log stream's task
+  // @params[out] leader_addr, leader replica address
+  // @params[out] data_source, data source replica
+  // @params[out] data_size, data_size of this replica
+  // @params[out] dst_replica, dest replica infos
+  // @params[out] old_paxos_replica_number, previous number of F-replica count
+  // @params[out] new_paxos_replica_number, new number of F-replica count
+  int construct_extra_info_to_build_type_transform_task_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica &ls_replica,
+      const ObReplicaMember &dst_member,
+      const ObReplicaMember &src_member,
+      const uint64_t &target_unit_id,
+      const uint64_t &target_unit_group_id,
+      share::ObTaskId &task_id,
+      uint64_t &tenant_id,
+      share::ObLSID &ls_id,
+      common::ObAddr &leader_addr,
+      ObReplicaMember &data_source,
+      int64_t &data_size,
+      ObDstReplica &dst_replica,
+      int64_t &old_paxos_replica_number,
+      int64_t &new_paxos_replica_number);
+
+  // generate a type transform and push into task manager
+  // @params[in]  task_key, the key of this task
+  // @params[in]  tenant_id, which tenant's task
+  // @params[in]  ls_id, which log stream's task
+  // @params[in]  task_id, the id of this task
+  // @params[in]  data_size, data_size of this replica
+  // @params[in]  dst_replica, dest replica
+  // @params[in]  src_member, source member
+  // @params[in]  data_source, data source replica
+  // @params[in]  old_paxos_replica_number, previous number of F-replica count
+  // @params[in]  new_paxos_replica_number, new number of F-replica count
+  // @params[out] acc_dr_task, accumulated disaster recovery task count
+  int generate_type_transform_task_(
+      const ObDRTaskKey &task_key,
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const share::ObTaskId &task_id,
+      const int64_t data_size,
+      const ObDstReplica &dst_replica,
+      const ObReplicaMember &src_member,
+      const ObReplicaMember &data_source,
+      const int64_t old_paxos_replica_number,
+      const int64_t new_paxos_replica_number,
       int64_t &acc_dr_task);
 
 private:

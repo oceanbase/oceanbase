@@ -120,7 +120,7 @@ public:
   int64_t get_serialize_size(void) const;
   int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const;
 
-  TO_STRING_KV(K_(val));
+  TO_STRING_KV(K_(val), K_(v));
 private:
   void transform_max_();
 private:

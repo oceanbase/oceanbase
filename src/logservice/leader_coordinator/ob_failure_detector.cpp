@@ -45,8 +45,7 @@ ObFailureDetector::ObFailureDetector()
     : is_running_(false),
       coordinator_(nullptr),
       has_add_clog_hang_event_(false),
-      has_add_slog_hang_event_(false),
-      has_add_sstable_hang_event_(false),
+      has_add_data_disk_hang_event_(false),
       has_add_clog_full_event_(false),
       has_schema_error_(false),
       lock_(common::ObLatchIds::ELECTION_LOCK)
@@ -124,8 +123,7 @@ void ObFailureDetector::destroy()
 {
   LC_TIME_GUARD(1_s);
   has_add_clog_hang_event_ = false;
-  has_add_slog_hang_event_ = false;
-  has_add_sstable_hang_event_ = false;
+  has_add_data_disk_hang_event_ = false;
   has_add_clog_full_event_ = false;
   has_schema_error_ = false;
   COORDINATOR_LOG(INFO, "ObFailureDetector mtl destroy");
@@ -162,10 +160,8 @@ void ObFailureDetector::detect_failure()
   LC_TIME_GUARD(1_s);
   // clog disk hang check
   detect_palf_hang_failure_();
-  // slog writer hang check
-  detect_slog_writer_hang_failure_();
-  // sstable hang check
-  detect_sstable_io_failure_();
+  // data disk io hang check
+  detect_data_disk_io_failure_();
   // clog disk full check
   detect_palf_disk_full_();
   // schema refreshed check
@@ -317,12 +313,9 @@ bool ObFailureDetector::is_clog_disk_has_fatal_error()
          || ATOMIC_LOAD(&has_add_clog_full_event_);
 }
 
-bool ObFailureDetector::is_data_disk_has_fatal_error(bool &slog_hang, bool &data_hang)
+bool ObFailureDetector::is_data_disk_has_fatal_error()
 {
-  ATOMIC_SET(&slog_hang, has_add_slog_hang_event_);
-  ATOMIC_SET(&data_hang, has_add_sstable_hang_event_);
-  return ATOMIC_LOAD(&has_add_slog_hang_event_)
-         || ATOMIC_LOAD(&has_add_sstable_hang_event_);
+  return ATOMIC_LOAD(&has_add_data_disk_hang_event_);
 }
 
 bool ObFailureDetector::is_schema_not_refreshed()
@@ -367,74 +360,38 @@ void ObFailureDetector::detect_palf_hang_failure_()
   }
 }
 
-void ObFailureDetector::detect_slog_writer_hang_failure_()
-{
-  LC_TIME_GUARD(1_s);
-  int ret = OB_SUCCESS;
-  bool is_slog_writer_hang = false;
-  int64_t slog_writer_last_working_time = OB_INVALID_TIMESTAMP;
-  const int64_t now = ObTimeUtility::current_time();
-  ObStorageLogger *storage_logger = MTL(ObStorageLogger*);
-  FailureEvent slog_writer_hang_event(FailureType::PROCESS_HANG, FailureModule::STORAGE, FailureLevel::FATAL);
-  if (OB_FAIL(slog_writer_hang_event.set_info("slog writer hang event"))) {
-    COORDINATOR_LOG(ERROR, "slog_writer_hang_event set_info failed", K(ret));
-  } else if (FALSE_IT(slog_writer_last_working_time = storage_logger->get_pwrite_ts())) {
-  } else if (FALSE_IT(is_slog_writer_hang = (0 != slog_writer_last_working_time
-                      && now - slog_writer_last_working_time > GCONF.data_storage_warning_tolerance_time))) {
-  } else if (false == ATOMIC_LOAD(&has_add_slog_hang_event_)) {
-    if (!is_slog_writer_hang) {
-      // slog writer is normal, skip.
-    } else if (OB_FAIL(add_failure_event(slog_writer_hang_event))) {
-      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(slog_writer_hang_event));
-    } else {
-      ATOMIC_SET(&has_add_slog_hang_event_, true);
-      LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "slog writer may be hung, add failure event", K(slog_writer_hang_event),
-                    K(slog_writer_last_working_time), "hung time", now - slog_writer_last_working_time);
-    }
-  } else {
-    if (is_slog_writer_hang) {
-      // slog writer still hangs, cannot remove failure_event.
-    } else if (OB_FAIL(remove_failure_event(slog_writer_hang_event))) {
-      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(slog_writer_hang_event));
-    } else {
-      ATOMIC_SET(&has_add_slog_hang_event_, false);
-      COORDINATOR_LOG(INFO, "slog writer has recoverd, remove failure event", K(ret), K(slog_writer_hang_event));
-    }
-  }
-}
-
-void ObFailureDetector::detect_sstable_io_failure_()
+void ObFailureDetector::detect_data_disk_io_failure_()
 {
   LC_TIME_GUARD(1_s);
   int ret = OB_SUCCESS;
   ObDeviceHealthStatus data_disk_status;
   int64_t data_disk_error_start_ts = OB_INVALID_TIMESTAMP;
   const int64_t now = ObTimeUtility::current_time();
-  FailureEvent sstable_io_hang_event(FailureType::PROCESS_HANG, FailureModule::STORAGE, FailureLevel::FATAL);
-  if (OB_FAIL(sstable_io_hang_event.set_info("sstable io hang event"))) {
+  FailureEvent data_disk_io_hang_event(FailureType::PROCESS_HANG, FailureModule::STORAGE, FailureLevel::FATAL);
+  if (OB_FAIL(data_disk_io_hang_event.set_info("data disk io hang event"))) {
     COORDINATOR_LOG(ERROR, "sstable_io_hang_event set_info failed", K(ret));
   } else if (OB_FAIL(OB_IO_MANAGER.get_device_health_detector().get_device_health_status(data_disk_status,
                                                                                          data_disk_error_start_ts))) {
     COORDINATOR_LOG(WARN, "get_device_health_status failed", K(ret));
-  } else if (false == ATOMIC_LOAD(&has_add_sstable_hang_event_)) {
+  } else if (false == ATOMIC_LOAD(&has_add_data_disk_hang_event_)) {
     // TODO: modify statement if new ObDeviceHealthStatus is added
     if (ObDeviceHealthStatus::DEVICE_HEALTH_NORMAL == data_disk_status) {
       // data disk does not hang, skip.
-    } else if (OB_FAIL(add_failure_event(sstable_io_hang_event))) {
-      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(sstable_io_hang_event));
+    } else if (OB_FAIL(add_failure_event(data_disk_io_hang_event))) {
+      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(data_disk_io_hang_event));
     } else {
-      ATOMIC_SET(&has_add_sstable_hang_event_, true);
-      LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk may be hung, add failure event", K(sstable_io_hang_event),
+      ATOMIC_SET(&has_add_data_disk_hang_event_, true);
+      LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk may be hung, add failure event", K(data_disk_io_hang_event),
                     K(data_disk_error_start_ts));
     }
   } else {
     if (ObDeviceHealthStatus::DEVICE_HEALTH_NORMAL != data_disk_status) {
       // data disk does not recoverd, cannot remove failure_event.
-    } else if (OB_FAIL(remove_failure_event(sstable_io_hang_event))) {
-      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(sstable_io_hang_event));
+    } else if (OB_FAIL(remove_failure_event(data_disk_io_hang_event))) {
+      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(data_disk_io_hang_event));
     } else {
-      ATOMIC_SET(&has_add_sstable_hang_event_, false);
-      COORDINATOR_LOG(INFO, "data disk has recoverd, remove failure event", K(ret), K(sstable_io_hang_event));
+      ATOMIC_SET(&has_add_data_disk_hang_event_, false);
+      COORDINATOR_LOG(INFO, "data disk has recoverd, remove failure event", K(ret), K(data_disk_io_hang_event));
     }
   }
 }

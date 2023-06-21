@@ -24,6 +24,7 @@
 #include "ob_one_phase_committer.h"
 #include "ob_two_phase_committer.h"
 #include <cstdint>
+#include "storage/multi_data_source/buffer_ctx.h"
 
 
 namespace oceanbase
@@ -393,7 +394,8 @@ public:
   int register_multi_data_source(const ObTxDataSourceType type,
                                  const char *buf,
                                  const int64_t len,
-                                 const bool try_lock = false);
+                                 const bool try_lock,
+                                 const ObRegisterMdsFlag &register_flag);
 
   const share::SCN get_start_log_ts()
   {
@@ -533,7 +535,9 @@ private:
                           const bool is_force_kill = false);
   int gen_final_mds_array_(ObTxBufferNodeArray &array, bool is_committing = true) const;
   int gen_total_mds_array_(ObTxBufferNodeArray &mds_array) const;
-  int deep_copy_mds_array(const ObTxBufferNodeArray &mds_array, bool need_replace = false);
+  int deep_copy_mds_array(const ObTxBufferNodeArray &mds_array,
+                          ObTxBufferNodeArray &incremental_array,
+                          bool need_replace = false);
   bool is_contain_mds_type_(const ObTxDataSourceType target_type);
   int submit_multi_data_source_();
   int submit_multi_data_source_(ObTxLogBlock &log_block);
@@ -602,7 +606,8 @@ public:
   int handle_tx_2pc_clear_resp(const Ob2pcClearRespMsg &msg);
   static int handle_tx_orphan_2pc_msg(const ObTxMsg &recv_msg,
                                       const common::ObAddr& self_addr,
-                                      ObITransRpc* rpc);
+                                      ObITransRpc* rpc,
+                                      const bool ls_deleted);
   // for xa
   int handle_tx_2pc_prepare_redo_req(const Ob2pcPrepareRedoReqMsg &msg);
   int handle_tx_2pc_prepare_redo_resp(const Ob2pcPrepareRedoRespMsg &msg);
@@ -644,7 +649,8 @@ private:
   static int post_orphan_msg_(const ObTwoPhaseCommitMsgType &msg_type,
                               const ObTxMsg &recv_msg,
                               const common::ObAddr &self_addr,
-                              ObITransRpc* rpc);
+                              ObITransRpc* rpc,
+                              const bool ls_deleted);
   static int get_max_decided_scn_(const share::ObLSID &ls_id, share::SCN &scn);
   int get_2pc_participants_copy(share::ObLSArray &copy_participants);
   // for xa

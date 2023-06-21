@@ -199,6 +199,8 @@
 #include "observer/virtual_table/ob_all_virtual_archive_dest_status.h"
 #include "observer/virtual_table/ob_virtual_show_trace.h"
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
+#include "observer/virtual_table/ob_all_virtual_mds_node_stat.h"
+#include "observer/virtual_table/ob_all_virtual_mds_event_history.h"
 #include "observer/virtual_table/ob_all_virtual_dup_ls_lease_mgr.h"
 #include "observer/virtual_table/ob_all_virtual_dup_ls_tablets.h"
 #include "observer/virtual_table/ob_all_virtual_opt_stat_gather_monitor.h"
@@ -206,6 +208,7 @@
 #include "observer/virtual_table/ob_all_virtual_dup_ls_tablet_set.h"
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 #include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
+#include "observer/virtual_table/ob_all_virtual_tablet_buffer_info.h"
 
 namespace oceanbase
 {
@@ -610,12 +613,12 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           }
           case OB_ALL_VIRTUAL_BACKUP_SCHEDULE_TASK_TID: {
             ObAllBackupScheduleTaskStat *all_task_stat = NULL;
-            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllBackupScheduleTaskStat, all_task_stat))) {
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_UNLIKELY(NULL == omt)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "get tenant fail", K(ret));
+            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllBackupScheduleTaskStat, all_task_stat, omt))) {
               SERVER_LOG(ERROR, "ObAllBackupScheduleTaskStat construct failed", K(ret));
-            } else if (OB_FAIL(all_task_stat->init(
-                                    root_service_.get_schema_service(),
-                                    root_service_.get_backup_task_scheduler()))) {
-              SERVER_LOG(WARN, "all_virtual_backup_schedule_task table init failed", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_task_stat);
             }
@@ -1840,9 +1843,20 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               if (OB_FAIL(OB_SERVER_BLOCK_MGR.get_marker_status(marker_status))) {
                 SERVER_LOG(WARN, "failed to get marker info", K(ret));
               } else if (OB_FAIL(all_virtual_marker_status->init(marker_status))) {
-                SERVER_LOG(WARN, "fail to init migration_status", K(ret));
+                SERVER_LOG(WARN, "fail to init marker_status", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_marker_status);
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TABLET_BUFFER_INFO_TID: {
+            ObAllVirtualTabletBufferInfo *all_virtual_tablet_buffer_info = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTabletBufferInfo, all_virtual_tablet_buffer_info))) {
+              if (OB_FAIL(all_virtual_tablet_buffer_info->init(addr_))) {
+                SERVER_LOG(WARN, "fail to init tablet_buffer_info", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_tablet_buffer_info);
               }
             }
             break;
@@ -2388,6 +2402,32 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "failed to init ObAllVirtualDMmlStats", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(dml_stats_result_monitor);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_MDS_NODE_STAT_TID: {
+            ObAllVirtualMdsNodeStat *mds_node_stat = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_UNLIKELY(NULL == omt)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "get tenant fail", K(ret));
+            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualMdsNodeStat, mds_node_stat, omt))) {
+              SERVER_LOG(ERROR, "ObAllVirtualMdsNodeStat construct fail", K(ret));
+            } else {
+              vt_iter = static_cast<ObAllVirtualMdsNodeStat *>(mds_node_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_MDS_EVENT_HISTORY_TID: {
+            ObAllVirtualMdsEventHistory *mds_node_stat = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_UNLIKELY(NULL == omt)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "get tenant fail", K(ret));
+            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualMdsEventHistory, mds_node_stat, omt))) {
+              SERVER_LOG(ERROR, "ObAllVirtualMdsEventHistory construct fail", K(ret));
+            } else {
+              vt_iter = static_cast<ObAllVirtualMdsEventHistory *>(mds_node_stat);
             }
             break;
           }

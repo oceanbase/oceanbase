@@ -13,9 +13,8 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_RESTORE_SCHEDULER_H_
 #define OCEANBASE_ROOTSERVER_OB_RESTORE_SCHEDULER_H_
 
-#include "share/backup/ob_backup_info_mgr.h"
 #include "rootserver/restore/ob_restore_util.h"
-#include "rootserver/ob_primary_ls_service.h"//ObTenantThreadHelper
+#include "rootserver/ob_tenant_thread_helper.h"//ObTenantThreadHelper
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_common_rpc_proxy.h"
@@ -100,6 +99,9 @@ private:
   int restore_finish(const share::ObPhysicalRestoreJob &job_info);
   int tenant_restore_finish(const share::ObPhysicalRestoreJob &job_info);
   int restore_init_ls(const share::ObPhysicalRestoreJob &job_info);
+  int restore_wait_to_consistent_scn(const share::ObPhysicalRestoreJob &job_info);
+  int check_tenant_replay_to_consistent_scn(const uint64_t tenant_id, const share::SCN &scn, bool &is_replay_finish);
+  int set_restore_to_target_scn_(common::ObMySQLTransaction &sql_client, const share::ObPhysicalRestoreJob &job_info, const share::SCN &scn);
   int restore_wait_ls_finish(const share::ObPhysicalRestoreJob &job_info);
   int restore_wait_tenant_finish(const share::ObPhysicalRestoreJob &job_info);
 
@@ -112,6 +114,7 @@ private:
 
   int check_locality_valid(const share::schema::ZoneLocalityIArray &locality);
   int try_update_job_status(
+      common::ObISQLClient &sql_client,
       int return_ret,
       const share::ObPhysicalRestoreJob &job,
       share::PhysicalRestoreMod mod = share::PHYSICAL_RESTORE_MOD_RS);
@@ -129,6 +132,7 @@ private:
   int finish_create_ls_(const share::schema::ObTenantSchema &tenant_schema,
       const common::ObIArray<share::ObLSAttr> &ls_attr_array);
   int check_all_ls_restore_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
+  int check_all_ls_restore_to_consistent_scn_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
   int try_get_tenant_restore_history_(const share::ObPhysicalRestoreJob &job_info,
                                       share::ObHisRestoreJobPersistInfo &history_info,
                                       bool &restore_tenant_exist);

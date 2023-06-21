@@ -135,7 +135,6 @@ static constexpr const char *usage_str =
 "int = set_log_probe(string)\n"
 "{{row1}, {row2}, ...} = select_mem_leak_checker_info()\n"
 "{{row1}, {row2}, ...} = select_compaction_diagnose_info()\n"
-"{{row1}, {row2}, ...} = select_dag_warning_history()\n"
 "{{row1}, {row2}, ...} = select_server_schema_info()\n"
 "{{row1}, {row2}, ...} = select_schema_slot()\n"
 "{{row1}, {row2}, ...} = dump_thread_info()\n"
@@ -1640,73 +1639,6 @@ int select_compaction_diagnose_info(lua_State *L)
   return 1;
 }
 
-// list{list, list...} = select_dag_warning_history()
-int select_dag_warning_history(lua_State *L)
-{
-  int argc = lua_gettop(L);
-  if (argc > 1) {
-    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call select_dag_warning_history() failed, bad arguments count, should be less than 2.");
-    lua_pushnil(L);
-  } else {
-    int ret = OB_SUCCESS;
-    share::ObDagWarningInfoIterator dag_warning_info_iter;
-    // OB_SYS_TENANT_ID means dump all
-    if (OB_FAIL(dag_warning_info_iter.open(OB_SYS_TENANT_ID))) {
-      OB_LOG(ERROR, "Fail to open merge info iter", K(ret));
-      lua_pushnil(L);
-    } else {
-      std::vector<const char*> columns = {
-        "tenant_id",
-        "task_id",
-        "module",
-        "type",
-        "ret",
-        "status",
-        "gmt_create",
-        "gmt_modified",
-        "retry_cnt",
-        "warning_info"
-      };
-      LuaVtableGenerator gen(L, columns);
-      share::ObDagWarningInfo dag_warning_info;
-      while (OB_SUCC(dag_warning_info_iter.get_next_info(dag_warning_info)) && !gen.is_end()) {
-        gen.next_row();
-        // tenant_id
-        gen.next_column(dag_warning_info.tenant_id_);
-        // task_id
-        {
-          char task_id_buf[common::OB_TRACE_STAT_BUFFER_SIZE];
-          int64_t n = dag_warning_info.task_id_.to_string(task_id_buf, sizeof(task_id_buf));
-          if (n < 0 || n >= sizeof(task_id_buf)) {
-            ret = OB_BUF_NOT_ENOUGH;
-          } else {
-            gen.next_column(task_id_buf);
-          }
-        }
-        // module
-        gen.next_column(share::ObIDag::get_dag_module_str(dag_warning_info.dag_type_));
-        // type
-        gen.next_column(share::ObIDag::get_dag_type_str(dag_warning_info.dag_type_));
-        // ret
-        gen.next_column(common::ob_error_name(dag_warning_info.dag_ret_));
-        // status
-        gen.next_column(ObDagWarningInfo::get_dag_status_str(dag_warning_info.dag_status_));
-        // gmt_create
-        gen.next_column(dag_warning_info.gmt_create_);
-        // gmt_modified
-        gen.next_column(dag_warning_info.gmt_modified_);
-        // retry_cnt
-        gen.next_column(dag_warning_info.retry_cnt_);
-        // warning_info
-        gen.next_column(dag_warning_info.warning_info_);
-
-        gen.row_end();
-      }
-    }
-  }
-  return 1;
-}
-
 // list{list, list...} = select_server_schema_info()
 int select_server_schema_info(lua_State *L)
 {
@@ -2177,7 +2109,6 @@ void APIRegister::register_api(lua_State* L)
   lua_register(L, "show_log_probe", show_log_probe);
   lua_register(L, "select_mem_leak_checker_info", select_mem_leak_checker_info);
   lua_register(L, "select_compaction_diagnose_info", select_compaction_diagnose_info);
-  lua_register(L, "select_dag_warning_history", select_dag_warning_history);
   lua_register(L, "select_server_schema_info", select_server_schema_info);
   lua_register(L, "select_schema_slot", select_schema_slot);
   lua_register(L, "dump_thread_info", dump_thread_info);

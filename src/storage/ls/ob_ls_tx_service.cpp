@@ -162,7 +162,7 @@ int ObLSTxService::get_write_store_ctx(ObTxDesc &tx,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
-    ret = trans_service_->get_write_store_ctx(tx, snapshot, write_flag, store_ctx);
+    ret = trans_service_->get_write_store_ctx(tx, snapshot, write_flag, store_ctx, false);
   }
   return ret;
 }
@@ -628,6 +628,60 @@ int ObLSTxService::online()
     TRANS_LOG(WARN, "ls tx service online failed", K(ret), K_(ls_id));
   } else {
     // do nothing
+  }
+  return ret;
+}
+
+int ObLSTxService::block_normal()
+{
+  int ret = OB_SUCCESS;
+  bool unused_is_all_tx_clean_up = false;
+
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(mgr_->block_normal(unused_is_all_tx_clean_up))) {
+    TRANS_LOG(WARN, "block normal tx failed", K_(ls_id));
+  }
+  return ret;
+}
+
+int ObLSTxService::unblock_normal()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(mgr_->unblock_normal())) {
+    TRANS_LOG(WARN, "ls tx service unblock normal failed", K(ret), K_(ls_id));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int ObLSTxService::get_tx_ctx_count(int64_t &tx_ctx_count)
+{
+  int ret = OB_SUCCESS;
+  tx_ctx_count = -1;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else {
+    tx_ctx_count = mgr_->get_tx_ctx_count();
+  }
+  return ret;
+}
+
+int ObLSTxService::get_active_tx_count(int64_t &active_tx_count)
+{
+  int ret = OB_SUCCESS;
+  active_tx_count = -1;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else {
+    active_tx_count = mgr_->get_active_tx_count();
   }
   return ret;
 }

@@ -975,6 +975,18 @@ def gen_history_table_def(table_id, keywords):
 
   return new_keywords
 
+def gen_history_table_def_of_task(table_id, keywords):
+  new_keywords = copy.deepcopy(keywords)
+  new_keywords["table_id"] = table_id
+  new_keywords["table_name"] = "%s_history" % new_keywords["table_name"]
+
+  cols = new_keywords["normal_columns"]
+  cols.append(('create_time', 'timestamp', 'false'))
+  cols.append(('finish_time', 'timestamp', 'false'))
+
+  return new_keywords
+
+
 def def_all_lob_aux_table():
   global lob_aux_ids
   # build lob meta for 30000 ~ 39999

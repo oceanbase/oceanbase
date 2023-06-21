@@ -1111,7 +1111,6 @@ int ObStoragePerfRead::backup_sstable_meta(ObSSTable &sstable)
   int64_t pos = 0;
   char *buf = NULL;
   ObArenaAllocator allocator(ObModIds::TEST);
-  ObIAllocator &tenant_allocator = MTL(ObTenantMetaMemMgr*)->get_tenant_allocator();
 
   if(-1 == (fd = open(sstable_meta_path_, O_RDONLY, 0777))){
     ret = OB_ERR_UNEXPECTED;
@@ -1128,9 +1127,7 @@ int ObStoragePerfRead::backup_sstable_meta(ObSSTable &sstable)
   } else if (size != read(fd, buf, size)){
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "fail to read meta");
-  } else if(OB_SUCCESS != (ret = sstable.deserialize(tenant_allocator, buf, size, pos))){
-    STORAGE_LOG(WARN, "fail to deserialize sstable", K(ret));
-  } else if(OB_SUCCESS != (ret = sstable.deserialize_post_work())){
+  } else if(OB_SUCCESS != (ret = sstable.deserialize(allocator_, buf, size, pos))){
     STORAGE_LOG(WARN, "fail to deserialize sstable", K(ret));
   } else {
     STORAGE_LOG(INFO, "backup sstable meta success");

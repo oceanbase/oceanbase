@@ -104,8 +104,6 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObHandlePartTransCtxP, gctx_);
   RPC_PROCESSOR(ObRpcSetMemberListP, gctx_);
   RPC_PROCESSOR(ObRpcCreateLSP, gctx_);
-  RPC_PROCESSOR(ObRpcCreateTabletP, gctx_);
-  RPC_PROCESSOR(ObRpcDropTabletP, gctx_);
   RPC_PROCESSOR(ObRpcCheckLSCanOfflineP, gctx_);
   RPC_PROCESSOR(ObCleanSequenceCacheP, gctx_);
   RPC_PROCESSOR(ObRegisterTxDataP, gctx_);
@@ -141,11 +139,26 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObFetchLSMetaInfoP);
   RPC_PROCESSOR(ObFetchLSMemberListP);
   RPC_PROCESSOR(ObFetchSSTableMacroInfoP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageFetchLSViewP, gctx_.bandwidth_throttle_);
 
   // restore
   RPC_PROCESSOR(ObNotifyRestoreTabletsP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObInquireRestoreP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObUpdateLSMetaP, gctx_.bandwidth_throttle_);
+
+  //transfer
+  RPC_PROCESSOR(ObCheckStartTransferTabletsP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObGetLSActiveTransCountP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObGetTransferStartScnP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObFetchTransferTabletsInfoP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObFetchLSReplayScnP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObCheckTransferTabletsBackfillP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageReplaceMemberP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageAddMemberP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageSwitchLearnerToAcceptorP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageBlockTxP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageKillTxP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageUnBlockTxP, gctx_.bandwidth_throttle_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
@@ -280,6 +293,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   //standby switchover/failover
   RPC_PROCESSOR(ObRpcGetLSSyncScnP, gctx_);
   RPC_PROCESSOR(ObRefreshTenantInfoP, gctx_);
+  RPC_PROCESSOR(ObRpcGetLSReplayedScnP, gctx_);
   RPC_PROCESSOR(ObUpdateTenantInfoCacheP, gctx_);
 
   RPC_PROCESSOR(ObSyncRewriteRulesP, gctx_);

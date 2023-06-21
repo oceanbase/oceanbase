@@ -136,6 +136,7 @@ private:
 public:
   virtual void SetUp() override
   {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
     // mock sequence no
     ObClockGenerator::init();
     // mock tx table
@@ -372,7 +373,7 @@ public:
     tx_ctx->mt_ctx_.log_gen_.set(&(tx_ctx->mt_ctx_.trans_mgr_),
                                  &(tx_ctx->mt_ctx_));
     store_ctx->mvcc_acc_ctx_.snapshot_.tx_id_ = tx_id;
-    store_ctx->mvcc_acc_ctx_.tx_table_guard_.init(&tx_table_);
+    store_ctx->mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&tx_table_);
     if (for_replay) {
       store_ctx->mvcc_acc_ctx_.mem_ctx_->commit_to_replay();
     }
@@ -432,12 +433,23 @@ public:
     share::SCN snapshot_scn;
     snapshot_scn.convert_for_tx(snapshot);
     start_stmt(wtx, snapshot_scn, expire_time);
-    EXPECT_EQ(expect_ret, (ret = memtable->set(*wtx,
-                                               encrypt_index_,
-                                               read_info_,
-                                               columns_,
-                                               write_row,
-                                               encrypt_meta_)));
+
+    ObTableAccessContext context;
+    ObVersionRange trans_version_range;
+    const bool read_latest = true;
+    ObQueryFlag query_flag;
+
+    trans_version_range.base_version_ = 0;
+    trans_version_range.multi_version_start_ = 0;
+    trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+    query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+    query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+    if (OB_FAIL(context.init(query_flag, *wtx, allocator_, trans_version_range))) {
+      TRANS_LOG(WARN, "Fail to init access context", K(ret));
+    }
+
+    EXPECT_EQ(expect_ret, (ret = memtable->set(iter_param_, context, columns_, write_row, encrypt_meta_)));
 
     TRANS_LOG(INFO, "======================= end write tx ======================",
               K(ret), K(wtx->mvcc_acc_ctx_.tx_id_), K(*wtx), K(snapshot), K(expire_time), K(write_row));
@@ -457,10 +469,23 @@ public:
      share::SCN snapshot_scn;
      snapshot_scn.convert_for_tx(snapshot);
      start_stmt(ltx, snapshot_scn, expire_time);
-     EXPECT_EQ(expect_ret, (ret = memtable->lock(*ltx,
-                                                 tablet_id_.id(),
-                                                 read_info_,
-                                                 rowkey)));
+
+     ObTableAccessContext context;
+     ObVersionRange trans_version_range;
+     const bool read_latest = true;
+     ObQueryFlag query_flag;
+
+     trans_version_range.base_version_ = 0;
+     trans_version_range.multi_version_start_ = 0;
+     trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+     query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+     query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+     if (OB_FAIL(context.init(query_flag, *ltx, allocator_, trans_version_range))) {
+       TRANS_LOG(WARN, "Fail to init access context", K(ret));
+     }
+
+     EXPECT_EQ(expect_ret, (ret = memtable->lock(iter_param_, context, rowkey)));
 
      TRANS_LOG(INFO, "======================= end lock tx ======================",
                K(ret), K(ltx->mvcc_acc_ctx_.tx_id_), K(*ltx), K(snapshot), K(expire_time), K(rowkey));
@@ -480,10 +505,23 @@ public:
       share::SCN snapshot_scn;
       snapshot_scn.convert_for_tx(snapshot);
       start_stmt(ltx, snapshot_scn, expire_time);
-      EXPECT_EQ(expect_ret, (ret = memtable->lock(*ltx,
-                                                  tablet_id_.id(),
-                                                  read_info_,
-                                                  rowkey)));
+
+      ObTableAccessContext context;
+      ObVersionRange trans_version_range;
+      const bool read_latest = true;
+      ObQueryFlag query_flag;
+
+      trans_version_range.base_version_ = 0;
+      trans_version_range.multi_version_start_ = 0;
+      trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+      query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+      query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+      if (OB_FAIL(context.init(query_flag, *ltx, allocator_, trans_version_range))) {
+        TRANS_LOG(WARN, "Fail to init access context", K(ret));
+      }
+
+      EXPECT_EQ(expect_ret, (ret = memtable->lock(iter_param_, context, rowkey)));
       ObMvccTransNode *node = get_tx_last_tnode(ltx);
       ((ObMemtableDataHeader *)(node->buf_))->dml_flag_ = blocksstable::ObDmlFlag::DF_INSERT;
 
@@ -862,13 +900,14 @@ public:
 
   int mock_iter_param()
   {
+	int ret = OB_SUCCESS;
     // iter_param_.rowkey_cnt_ = rowkey_cnt_;
     iter_param_.tablet_id_ = tablet_id_;
     iter_param_.table_id_ = tablet_id_.id();
-    read_info_.init(allocator_, 16000, rowkey_cnt_, lib::is_oracle_mode(), columns_);
+    read_info_.init(allocator_, 16000, rowkey_cnt_, lib::is_oracle_mode(), columns_, nullptr/*storage_cols_index*/);
     iter_param_.read_info_ = &read_info_;
 
-    return OB_SUCCESS;
+    return ret;
   }
 
   void reset_iter_param()
@@ -3301,17 +3340,31 @@ TEST_F(TestMemtableV2, test_seq_set_violation)
   share::SCN scn_3000;
   scn_3000.convert_for_tx(3000);
   start_pdml_stmt(wtx, scn_3000, read_seq_no, 1000000000/*expire_time*/);
-  EXPECT_EQ(OB_SUCCESS, (ret = memtable->set(*wtx,
-                                             tablet_id_.id(),
-                                             read_info_,
+
+  ObTableAccessContext context;
+  ObVersionRange trans_version_range;
+  const bool read_latest = true;
+  ObQueryFlag query_flag;
+
+  trans_version_range.base_version_ = 0;
+  trans_version_range.multi_version_start_ = 0;
+  trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+  query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+  query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+  if (OB_FAIL(context.init(query_flag, *wtx, allocator_, trans_version_range))) {
+    TRANS_LOG(WARN, "Fail to init access context", K(ret));
+  }
+
+  EXPECT_EQ(OB_SUCCESS, (ret = memtable->set(iter_param_,
+                                             context,
                                              columns_,
                                              write_row,
                                              encrypt_meta_)));
 
   start_pdml_stmt(wtx, scn_3000, read_seq_no, 1000000000/*expire_time*/);
-  EXPECT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, (ret = memtable->set(*wtx,
-                                                               tablet_id_.id(),
-                                                               read_info_,
+  EXPECT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, (ret = memtable->set(iter_param_,
+                                                               context,
                                                                columns_,
                                                                write_row,
                                                                encrypt_meta_)));
@@ -3349,17 +3402,30 @@ TEST_F(TestMemtableV2, test_parallel_lock_with_same_txn)
   wtx->mvcc_acc_ctx_.abs_lock_timeout_ = abs_expire_time;
   wtx->mvcc_acc_ctx_.tx_scn_ = ObSequence::inc_and_get_max_seq_no();
 
+  ObTableAccessContext context;
+  ObVersionRange trans_version_range;
+  const bool read_latest = true;
+  ObQueryFlag query_flag;
+
+  trans_version_range.base_version_ = 0;
+  trans_version_range.multi_version_start_ = 0;
+  trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+  query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+  query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+  if (OB_FAIL(context.init(query_flag, *wtx, allocator_, trans_version_range))) {
+    TRANS_LOG(WARN, "Fail to init access context", K(ret));
+  }
+
   // Step3: lock for the first time
-  EXPECT_EQ(OB_SUCCESS, (ret = memtable->lock(*wtx,
-                                              tablet_id_.id(),
-                                              read_info_,
+  EXPECT_EQ(OB_SUCCESS, (ret = memtable->lock(iter_param_,
+                                              context,
                                               rowkey)));
 
   // Step4: lock for the second time
   wtx->mvcc_acc_ctx_.tx_scn_ = ObSequence::inc_and_get_max_seq_no();
-  EXPECT_EQ(OB_SUCCESS, (ret = memtable->lock(*wtx,
-                                              tablet_id_.id(),
-                                              read_info_,
+  EXPECT_EQ(OB_SUCCESS, (ret = memtable->lock(iter_param_,
+                                              context,
                                               rowkey)));
   memtable->destroy();
 }
@@ -3401,12 +3467,13 @@ int ObTxCtxTable::release_ref_()
 
 namespace memtable
 {
-int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &,
-                                           const ObTxNodeArg &,
-                                           const ObMemtableKey *,
-                                           ObMvccRow *,
-                                           const storage::ObTableReadInfo &read_info,
-                                           ObMvccWriteResult &)
+int ObMemtable::lock_row_on_frozen_stores_(
+    const storage::ObTableIterParam &,
+    const ObTxNodeArg &,
+    storage::ObTableAccessContext &,
+    const ObMemtableKey *,
+    ObMvccRow *,
+    ObMvccWriteResult &)
 {
   if (unittest::TestMemtableV2::is_sstable_contains_lock_) {
     return OB_TRY_LOCK_ROW_CONFLICT;

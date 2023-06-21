@@ -21,25 +21,6 @@ using namespace common;
 using namespace storage;
 using namespace compaction;
 
-
-template <uint32_t SIZE>
-int ObTabletStream::get_bucket_tablet_stat(
-    const ObTabletStatBucket<SIZE> &bucket,
-    common::ObIArray<ObTabletStat> &tablet_stats) const
-{
-  int ret = OB_SUCCESS;
-  int64_t idx = bucket.head_idx_;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < bucket.count(); ++i) {
-    int64_t curr_idx = bucket.get_idx(idx);
-    if (OB_FAIL(tablet_stats.push_back(bucket.units_[curr_idx]))) {
-      LOG_WARN("failed to add tablet stat", K(ret), K(idx));
-    }
-    ++idx;
-  }
-  return ret;
-}
-
 class TestTenantTabletStatMgr : public ::testing::Test
 {
 public:
@@ -77,6 +58,7 @@ void TestTenantTabletStatMgr::TearDownTestCase()
 
 void TestTenantTabletStatMgr::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
 
   ObTenantEnv::set_tenant(&tenant_base_);
@@ -143,7 +125,7 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_bucket)
   tablet_stat.scan_physical_row_cnt_ = 100;
 
   {
-    int64_t step = 1;
+    uint32_t step = 1;
     ObTabletStatBucket<8> bucket(step);
     ObTabletStat retired_stat;
     bool has_retired = false;
@@ -160,7 +142,7 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_bucket)
   }
 
   {
-    int64_t step = 16;
+    uint32_t step = 16;
     ObTabletStatBucket<4> bucket(step);
     ObTabletStat retired_stat;
     bool has_retired = false;
@@ -179,7 +161,7 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_bucket)
   }
 
   {
-    int64_t step = 32;
+    uint32_t step = 32;
     ObTabletStatBucket<4> bucket(step);
     ObTabletStat retired_stat;
     bool has_retired = false;

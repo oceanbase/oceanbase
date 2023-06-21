@@ -1117,7 +1117,7 @@ int ObJsonOInterval::parse()
   int ret = OB_SUCCESS;
   if (field_type_ == ObIntervalYMType) {
     ObIntervalYMValue value;
-    ObScale scale = ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObIntervalYMType].get_scale();;
+    ObScale scale = ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObIntervalYMType].get_scale();
     if ((NULL == str_val_.find('P')) ? //有P的是ISO格式
             OB_FAIL(ObTimeConverter::str_to_interval_ym(str_val_, value, scale))
           : OB_FAIL(ObTimeConverter::iso_str_to_interval_ym(str_val_, value))) {
@@ -1127,7 +1127,7 @@ int ObJsonOInterval::parse()
     }
   } else {
     ObIntervalDSValue value;
-    ObScale scale = ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObIntervalDSType].get_scale();;
+    ObScale scale = ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObIntervalDSType].get_scale();
     if ((NULL == str_val_.find('P')) ? //有P的是ISO格式
             OB_FAIL(ObTimeConverter::str_to_interval_ds(str_val_, value, scale))
           : OB_FAIL(ObTimeConverter::iso_str_to_interval_ds(str_val_, value))) {

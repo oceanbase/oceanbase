@@ -127,8 +127,9 @@ public:
   {
     return BACKUP_MACRO_BLOCK_INDEX_ITERATOR;
   }
-  TO_STRING_KV(
-      K_(backup_dest), K_(tenant_id), K_(backup_set_desc), K_(ls_id), "type", "backup macro block index iterator");
+  TO_STRING_KV(K_(task_id), K_(backup_dest), K_(tenant_id), K_(backup_set_desc), K_(ls_id), K_(backup_data_type),
+      K_(turn_id), K_(retry_id), K_(cur_file_id), K_(file_id_list), K_(cur_idx), K(cur_index_list_.count()), K_(cur_index_list),
+     "type", "backup macro block index iterator");
 
 private:
   bool need_fetch_new_() const;
@@ -161,7 +162,7 @@ public:
   {
     return BACKUP_MACRO_RANGE_INDEX_ITERATOR;
   }
-  TO_STRING_KV(K_(backup_path), K_(tenant_id), K_(backup_set_desc), K_(ls_id), K_(cur_idx), K(cur_index_list_.count()),
+  TO_STRING_KV(K_(backup_path), K_(tenant_id), K_(backup_set_desc), K_(ls_id), K_(cur_idx), K_(cur_index_list), K(cur_index_list_.count()),
       "type", "backup_macro_range_index_iterator");
 
 private:

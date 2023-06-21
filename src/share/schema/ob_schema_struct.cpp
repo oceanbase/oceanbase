@@ -1513,6 +1513,11 @@ int get_tenant_status(const ObString &str, ObTenantStatus &status)
   return ret;
 }
 
+bool is_tenant_normal(ObTenantStatus &status)
+{
+  return TENANT_STATUS_NORMAL == status;
+}
+
 bool is_tenant_restore(ObTenantStatus &status)
 {
   return TENANT_STATUS_RESTORE == status || TENANT_STATUS_CREATING_STANDBY == status;
@@ -4420,6 +4425,7 @@ ObTablegroupSchema::ObTablegroupSchema()
       schema_version_(OB_INVALID_VERSION),
       tablegroup_name_(),
       comment_(),
+      sharding_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -4436,6 +4442,7 @@ ObTablegroupSchema::ObTablegroupSchema(common::ObIAllocator *allocator)
       schema_version_(OB_INVALID_VERSION),
       tablegroup_name_(),
       comment_(),
+      sharding_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -4451,6 +4458,7 @@ ObTablegroupSchema::ObTablegroupSchema(const ObTablegroupSchema &other)
       schema_version_(OB_INVALID_VERSION),
       tablegroup_name_(),
       comment_(),
+      sharding_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -4504,6 +4512,8 @@ ObTablegroupSchema &ObTablegroupSchema::operator =(const ObTablegroupSchema &src
         LOG_WARN("Fail to deep copy comment, ", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.split_partition_name_, split_partition_name_))) {
         LOG_WARN("fail to deep copy split partition name", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.sharding_, sharding_))) {
+        LOG_WARN("fail to deep copy split partition name", K(ret));
       } else if (OB_FAIL(src_schema.split_high_bound_val_.deep_copy(split_high_bound_val_, *get_allocator()))) {
         LOG_WARN("fail to deep copy split row key", K(ret));
       } else if (OB_FAIL(src_schema.split_list_row_values_.deep_copy(split_list_row_values_, *get_allocator()))) {
@@ -4522,6 +4532,7 @@ int64_t ObTablegroupSchema::get_convert_size() const
   int64_t convert_size = sizeof(*this);
   convert_size += tablegroup_name_.length() + 1;
   convert_size += comment_.length() + 1;
+  convert_size += sharding_.length() + 1;
   convert_size += part_option_.get_convert_size() - sizeof(part_option_);
   convert_size += sub_part_option_.get_convert_size() - sizeof(sub_part_option_);
   convert_size += split_partition_name_.length() + 1;
@@ -4554,6 +4565,7 @@ void ObTablegroupSchema::reset()
   split_partition_name_.reset();
   split_high_bound_val_.reset();
   split_list_row_values_.reset();
+  sharding_.reset();
   ObPartitionSchema::reset();
 }
 
@@ -4606,6 +4618,10 @@ OB_DEF_SERIALIZE(ObTablegroupSchema)
       } else { }
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                sharding_);
+  }
   LOG_TRACE("serialize tablegroup schema", K(*this));
 
   return ret;
@@ -4643,6 +4659,8 @@ OB_DEF_SERIALIZE_SIZE(ObTablegroupSchema)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               sub_part_template_flags_);
 
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              sharding_);
   return len;
 }
 
@@ -4704,6 +4722,10 @@ OB_DEF_DESERIALIZE(ObTablegroupSchema)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                sharding_);
+  }
   LOG_WARN("serialize tablegroup schema", K(*this));
   return ret;
 }
@@ -4732,7 +4754,8 @@ int64_t ObTablegroupSchema::to_string(char *buf, const int64_t buf_len) const
        ObArrayWrap<ObPartition *>(hidden_partition_array_, hidden_partition_num_),
        K_(split_high_bound_val),
        K_(split_list_row_values),
-       K_(sub_part_template_flags));
+       K_(sub_part_template_flags),
+       K_(sharding));
   J_OBJ_END();
   return pos;
 }
@@ -13259,6 +13282,53 @@ OB_SERIALIZE_MEMBER(ObRlsContextSchema,
                     table_id_,
                     context_name_,
                     attribute_);
+
+ObTableLatestSchemaVersion::ObTableLatestSchemaVersion()
+    : table_id_(OB_INVALID_ID),
+      schema_version_(OB_INVALID_VERSION),
+      is_deleted_(false)
+{
+}
+
+void ObTableLatestSchemaVersion::reset()
+{
+  table_id_ = OB_INVALID_ID;
+  schema_version_ = OB_INVALID_VERSION;
+  is_deleted_ = false;
+}
+
+int ObTableLatestSchemaVersion::init(
+    const uint64_t table_id,
+    const int64_t schema_version,
+    const bool is_deleted)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id || OB_INVALID_VERSION == schema_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_id), K(schema_version), K(is_deleted));
+  } else {
+    table_id_ = table_id;
+    schema_version_ = schema_version;
+    is_deleted_ = is_deleted;
+  }
+  return ret;
+}
+
+bool ObTableLatestSchemaVersion::is_valid() const
+{
+  return OB_INVALID_ID != table_id_ && OB_INVALID_VERSION != schema_version_;
+}
+
+int ObTableLatestSchemaVersion::assign(const ObTableLatestSchemaVersion &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    table_id_ = other.table_id_;
+    schema_version_ = other.schema_version_;
+    is_deleted_ = other.is_deleted_;
+  }
+  return ret;
+}
 
 //
 //

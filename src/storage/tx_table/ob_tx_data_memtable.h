@@ -162,8 +162,8 @@ public:  // ObTxDataMemtable
   int init(const ObITable::TableKey &table_key,
            SliceAllocator *slice_allocator,
            ObTxDataMemtableMgr *memtable_mgr,
+           storage::ObFreezer *freezer,
            const int64_t buckets_cnt);
-
   /**
    * @brief Insert the tx data into this tx data memtable
    *
@@ -290,28 +290,6 @@ public: /* derived from ObIMemtable */
                   storage::ObTableAccessContext &context,
                   const blocksstable::ObDatumRowkey &rowkey,
                   blocksstable::ObDatumRow &row) override;
-  // not supported
-  virtual int set(storage::ObStoreCtx &ctx,
-                  const uint64_t table_id,
-                  const storage::ObTableReadInfo &read_info,
-                  const common::ObIArray<share::schema::ObColDesc> &columns,
-                  const storage::ObStoreRow &row,
-                  const share::ObEncryptMeta *encrypt_meta) override;
-  // not supported
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   common::ObNewRowIterator &row_iter) override;
-  // not supported
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   const common::ObNewRow &row) override;
-  // not supported
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   const blocksstable::ObDatumRowkey &rowkey) override;
 
 public:  // checkpoint
   share::SCN get_rec_scn()

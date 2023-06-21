@@ -237,6 +237,8 @@ int ObIOManager::pread(ObIOInfo &info, int64_t &read_size)
           if (OB_DATA_OUT_OF_RANGE != ret) {
             LOG_WARN("sync read failed", K(ret), K(info));
           }
+        } else {
+          break;
         }
       }
     }
@@ -271,8 +273,10 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
       while (OB_SUCC(ret) || OB_TIMEOUT == ret) { // wait to die
         if (OB_FAIL(handle.wait(MAX_IO_WAIT_TIME_MS))) {
           if (OB_DATA_OUT_OF_RANGE != ret) {
-            LOG_WARN("sync read failed", K(ret), K(info));
+            LOG_WARN("sync write failed", K(ret), K(info));
           }
+        } else {
+          break;
         }
       }
     }
@@ -728,8 +732,6 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   int ret = OB_SUCCESS;
   handle.reset();
   ObIORequest *req = nullptr;
-  bool data_hang = false;
-  bool slog_hang = false;
   const int64_t callback_size = nullptr == info.callback_ ? 0 : info.callback_->size();
   logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
   if (OB_UNLIKELY(!is_inited_)) {
@@ -738,11 +740,10 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (NULL != detector &&
-             detector->is_data_disk_has_fatal_error(slog_hang, data_hang)) { // also consider slog writer hung
+  } else if (NULL != detector && detector->is_data_disk_has_fatal_error()) {
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay
-    LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk or slog disk has fatal error", K(slog_hang), K(data_hang));
+    LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk has fatal error");
   } else if (OB_FAIL(alloc_io_request(io_allocator_, callback_size, req))) {
     LOG_WARN("alloc io request failed", K(ret), KP(req));
   } else if (FALSE_IT(req->tenant_io_mgr_.hold(this))) {

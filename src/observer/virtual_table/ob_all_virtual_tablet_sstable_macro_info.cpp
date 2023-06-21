@@ -71,15 +71,16 @@ ObAllVirtualTabletSSTableMacroInfo::ObAllVirtualTabletSSTableMacroInfo()
     tablet_iter_(nullptr),
     tablet_allocator_("VTTable"),
     tablet_handle_(),
+	cols_desc_(),
     ls_id_(share::ObLSID::INVALID_LS_ID),
-    all_tables_(),
+    table_store_iter_(),
     curr_sstable_(nullptr),
+    curr_sstable_meta_handle_(),
     macro_iter_(nullptr),
-    other_block_idx_(-1),
+    other_blk_iter_(),
     iter_allocator_(),
     rowkey_allocator_(),
     curr_range_(),
-    table_idx_(0),
     block_idx_(0),
     iter_buf_(nullptr)
 {
@@ -95,22 +96,23 @@ void ObAllVirtualTabletSSTableMacroInfo::reset()
   omt::ObMultiTenantOperator::reset();
   addr_.reset();
   ls_id_ = share::ObLSID::INVALID_LS_ID;
-  all_tables_.reset();
-  table_idx_ = 0;
+  table_store_iter_.reset();
   block_idx_ = 0;
   tablet_handle_.reset();
+  cols_desc_.reset();
 
   if (OB_NOT_NULL(iter_buf_)) {
     allocator_->free(iter_buf_);
     iter_buf_ = nullptr;
   }
   curr_sstable_ = nullptr;
+  curr_sstable_meta_handle_.reset();
   if (OB_NOT_NULL(macro_iter_)) {
     macro_iter_->~ObIMacroBlockIterator();
     macro_iter_ = nullptr;
   }
   curr_range_.reset();
-  other_block_idx_ = -1;
+  other_blk_iter_.reset();
   memset(objs_, 0, sizeof(objs_));
   iter_allocator_.reset();
   rowkey_allocator_.reset();
@@ -148,20 +150,24 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_macro_info(MacroInfo &info)
   blocksstable::ObDataMacroBlockMeta macro_meta;
   macro_desc.macro_meta_ = &macro_meta;
   while (OB_SUCC(ret)) {
-    if (OB_ISNULL(macro_iter_) && -1 == other_block_idx_ && OB_FAIL(get_next_sstable())) {
+    if (OB_ISNULL(macro_iter_) && !other_blk_iter_.is_valid() && OB_FAIL(get_next_sstable())) {
       if (OB_ITER_END != ret) {
         SERVER_LOG(WARN, "fail to get next sstable", K(ret));
       }
     } else if (OB_ISNULL(curr_sstable_)) {
       clean_cur_sstable();
-    } else if (-1 != other_block_idx_) {
-      const ObIArray<MacroBlockId> &blks = curr_sstable_->get_meta().get_macro_info().get_other_block_ids();
-      if (blks.count() == other_block_idx_) {
-        other_block_idx_ = -1;
-      } else if (OB_FAIL(get_macro_info(blks.at(other_block_idx_), info))) {
-        SERVER_LOG(WARN, "fail to get macro info", K(ret), "macro_id", blks.at(other_block_idx_));
+    } else if (other_blk_iter_.is_valid()) {
+      blocksstable::MacroBlockId macro_id;
+      if (OB_FAIL(other_blk_iter_.get_next_macro_id(macro_id))) {
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "fail to get next macro id", K(ret), K(other_blk_iter_));
+        } else {
+          other_blk_iter_.reset();
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(get_macro_info(macro_id, info))) {
+        SERVER_LOG(WARN, "fail to get macro info", K(ret), "macro_id", macro_id);
       } else {
-        ++other_block_idx_;
         break;
       }
     } else if (OB_NOT_NULL(macro_iter_) && OB_FAIL(macro_iter_->get_next_macro_block(macro_desc))) {
@@ -170,8 +176,10 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_macro_info(MacroInfo &info)
       } else {
         macro_iter_->~ObIMacroBlockIterator();
         macro_iter_ = nullptr;
-        ++other_block_idx_;
-        ret = OB_SUCCESS;
+        if (OB_FAIL(curr_sstable_meta_handle_.get_sstable_meta().get_macro_info().get_other_block_iter(
+            other_blk_iter_))) {
+          STORAGE_LOG(WARN, "fail get other block iterator", K(ret), KPC(curr_sstable_));
+        }
       }
     } else if (OB_FAIL(get_macro_info(macro_desc, info))) {
       SERVER_LOG(WARN, "fail to get macro info", K(ret), K(macro_desc));
@@ -238,11 +246,10 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
 {
   int ret = OB_SUCCESS;
   rowkey_allocator_.reuse();
-  const ObTableReadInfo &read_info = tablet_handle_.get_obj()->get_index_read_info();
   if (OB_UNLIKELY(!macro_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(ret), K(macro_desc));
-  } else if (OB_FAIL(macro_desc.range_.to_store_range(read_info.get_columns_desc(),
+  } else if (OB_FAIL(macro_desc.range_.to_store_range(cols_desc_,
                                                       rowkey_allocator_,
                                                       info.store_range_))) {
     SERVER_LOG(WARN, "fail to get store range", K(ret), K(macro_desc.range_));
@@ -444,8 +451,9 @@ void ObAllVirtualTabletSSTableMacroInfo::clean_cur_sstable()
   iter_allocator_.reuse();
   curr_range_.set_whole_range();
   curr_sstable_ = nullptr;
+  curr_sstable_meta_handle_.reset();
   block_idx_ = 0;
-  other_block_idx_ = -1;
+  other_blk_iter_.reset();
 }
 
 int ObAllVirtualTabletSSTableMacroInfo::inner_get_next_row(ObNewRow *&row)
@@ -525,11 +533,21 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_tablet()
     } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle_));
+    } else if (tablet_handle_.get_obj()->is_empty_shell()) {
     } else {
       bool need_ignore = check_tablet_need_ignore(tablet_handle_.get_obj()->get_tablet_meta());
       if (!need_ignore) {
-        ls_id_ = tablet_handle_.get_obj()->get_tablet_meta().ls_id_.id();
-        break;
+	  const ObIArray<ObColDesc> &cols_desc = tablet_handle_.get_obj()->get_rowkey_read_info().get_columns_desc();
+
+	  cols_desc_.reuse();
+	  if (OB_FAIL(cols_desc_.assign(cols_desc))) {
+          SERVER_LOG(WARN, "fail to assign rowkey col desc, ", K(ret));
+	  } else if (OB_FAIL(ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(cols_desc_))) {
+	    SERVER_LOG(WARN, "fail to add extra rowkey info, ", K(ret));
+	  } else {
+          ls_id_ = tablet_handle_.get_obj()->get_tablet_meta().ls_id_.id();
+	    break;
+	  }
       }
     }
   }
@@ -542,40 +560,47 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_sstable()
   bool need_ignore = false;
   clean_cur_sstable();
   blocksstable::ObDatumRange curr_range;
-  if (table_idx_ < all_tables_.count()) {
-    curr_sstable_ = static_cast<blocksstable::ObSSTable *>(all_tables_.at(table_idx_));
-    ++table_idx_;
-  } else {
-    all_tables_.reuse();
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(get_next_tablet())) {
-        if (OB_ITER_END != ret) {
-          SERVER_LOG(WARN, "fail to get next tablet", K(ret));
+  ObITable *table = nullptr;
+  if (OB_FAIL(table_store_iter_.get_next(table))) {
+    if (OB_UNLIKELY(ret != OB_ITER_END)) {
+      SERVER_LOG(WARN, "fail to iterate next table", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      while (OB_SUCC(ret)) {
+        table_store_iter_.reset();
+        if (OB_FAIL(get_next_tablet())) {
+          if (OB_ITER_END != ret) {
+            SERVER_LOG(WARN, "fail to get next tablet", K(ret));
+          }
+        } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K_(tablet_handle));
+        } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_sstables(table_store_iter_))) {
+          SERVER_LOG(WARN, "fail to get all tables", K(ret), K_(tablet_handle), K_(table_store_iter));
+        } else if (0 != table_store_iter_.count()) {
+          break;
         }
-      } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle_));
-      } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_sstables(all_tables_))) {
-        SERVER_LOG(WARN, "fail to get sstables", K(ret), K(tablet_handle_));
-      } else if (all_tables_.count() > 0) {
-        table_idx_ = 0;
-        curr_sstable_ = static_cast<blocksstable::ObSSTable *>(all_tables_.at(table_idx_));
-        ++table_idx_;
-        break;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(table_store_iter_.get_next(table))) {
+        SERVER_LOG(WARN, "fail to get table after switch tablet", K(ret));
       }
     }
   }
+
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(curr_sstable_)) {
+  } else if (OB_ISNULL(curr_sstable_ = static_cast<ObSSTable *>(table))) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "unexpected null curr sstable", K(ret));
   } else {
-    if (curr_sstable_->get_meta().is_empty()
+    if (curr_sstable_->is_empty()
         || check_sstable_need_ignore(curr_sstable_->get_key())) {
       clean_cur_sstable();
+    } else if (OB_FAIL(curr_sstable_->get_meta(curr_sstable_meta_handle_))) {
+      SERVER_LOG(WARN, "fail to get curr sstable meta handle", K(ret));
     } else if (OB_FAIL(curr_sstable_->scan_macro_block(
         curr_range_,
-        tablet_handle_.get_obj()->get_index_read_info(),
+        tablet_handle_.get_obj()->get_rowkey_read_info(),
         iter_allocator_,
         macro_iter_,
         false,

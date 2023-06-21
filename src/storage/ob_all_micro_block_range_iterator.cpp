@@ -23,7 +23,7 @@ namespace storage
 {
 
 ObAllMicroBlockRangeIterator::ObAllMicroBlockRangeIterator()
-  : sstable_meta_(nullptr),
+  : schema_rowkey_cnt_(0),
     tree_cursor_(),
     start_bound_micro_block_(),
     end_bound_micro_block_(),
@@ -49,7 +49,7 @@ ObAllMicroBlockRangeIterator::~ObAllMicroBlockRangeIterator()
 void ObAllMicroBlockRangeIterator::reset()
 {
   if (is_inited_) {
-    sstable_meta_ = nullptr;
+    schema_rowkey_cnt_ = 0;
     tree_cursor_.reset();
     start_bound_micro_block_.reset();
     end_bound_micro_block_.reset();
@@ -77,26 +77,24 @@ void ObAllMicroBlockRangeIterator::reset()
 int ObAllMicroBlockRangeIterator::open(
     const ObSSTable &sstable,
     const ObDatumRange &range,
-    const ObTableReadInfo &index_read_info,
+    const ObITableReadInfo &rowkey_read_info,
     ObIAllocator &allocator,
     const bool is_reverse_scan)
 {
   int ret = OB_SUCCESS;
-  int64_t rowkey_column_cnt = 0;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Inited twice", K(ret));
   } else if (OB_UNLIKELY(!sstable.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid sstable", K(ret));
-  } else if (sstable.get_meta().is_empty()) {
+  } else if (sstable.is_empty()) {
     is_iter_end_ = true;
     is_inited_ = true;
-  } else if (FALSE_IT(rowkey_column_cnt = sstable.get_meta().get_basic_meta().rowkey_column_count_)) {
-  } else if (OB_FAIL(tree_cursor_.init(sstable, allocator, &index_read_info))) {
+  } else if (OB_FAIL(tree_cursor_.init(sstable, allocator, &rowkey_read_info))) {
     LOG_WARN("Fail to init index tree cursor", K(ret), K(sstable));
   } else {
-    sstable_meta_ = &sstable.get_meta();
+    schema_rowkey_cnt_ = rowkey_read_info.get_schema_rowkey_count();
     range_ = &range;
     bool start_key_beyond_range = false;
     bool end_key_beyond_range = false;
@@ -261,7 +259,6 @@ int ObAllMicroBlockRangeIterator::generate_cur_range(
   micro_range_.set_right_closed();
   ObDatumRowkey &start_key = is_reverse_scan_ ? curr_key_ : prev_key_;
   ObDatumRowkey &endkey = is_reverse_scan_ ? prev_key_ : curr_key_;
-  const int64_t schema_rowkey_cnt = sstable_meta_->get_schema_rowkey_column_count();
   if (is_first_block) {
     micro_range_.start_key_ = range_->get_start_key();
     if (range_->get_border_flag().inclusive_start()) {
@@ -279,8 +276,8 @@ int ObAllMicroBlockRangeIterator::generate_cur_range(
     micro_range_.start_key_ = start_key;
     micro_range_.end_key_ = endkey;
   }
-  micro_range_.start_key_.datum_cnt_ = MIN(micro_range_.start_key_.datum_cnt_, schema_rowkey_cnt);
-  micro_range_.end_key_.datum_cnt_ = MIN(micro_range_.end_key_.datum_cnt_, schema_rowkey_cnt);
+  micro_range_.start_key_.datum_cnt_ = MIN(micro_range_.start_key_.datum_cnt_, schema_rowkey_cnt_);
+  micro_range_.end_key_.datum_cnt_ = MIN(micro_range_.end_key_.datum_cnt_, schema_rowkey_cnt_);
   return ret;
 }
 

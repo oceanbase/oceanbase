@@ -77,6 +77,8 @@ protected:
   blocksstable::ObDatumRow result_row_;
   storage::ObNopPos nop_pos_;
   common::ObArenaAllocator allocator_;
+  // for major: store all columns' description
+  // for mini & minor: store multi_version rowkey column description
   common::ObArray<share::schema::ObColDesc, common::ObIAllocator &> multi_version_column_ids_;
   bool is_inited_;
   int64_t purged_count_;
@@ -92,6 +94,7 @@ public:
   {}
   virtual ~ObMajorPartitionMergeFuser();
   virtual void reset() override;
+  virtual bool is_valid() const override;
   virtual int fuse_row(MERGE_ITER_ARRAY &macro_row_iters) override;
   virtual const char *get_fuser_name() const override { return "ObMajorPartitionMergeFuser"; }
   INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser, K_(default_row));

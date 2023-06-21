@@ -21,9 +21,12 @@ using namespace common;
 namespace observer
 {
 ObAllVirtualDagWarningHistory::ObAllVirtualDagWarningHistory()
-    : dag_warning_info_(),
+    : ip_buf_("\0"),
+      task_id_buf_("\0"),
+      dag_warning_info_(),
       dag_warning_info_iter_(),
-      is_inited_(false)
+      is_inited_(false),
+      comment_("\0")
 {
 }
 ObAllVirtualDagWarningHistory::~ObAllVirtualDagWarningHistory()
@@ -31,46 +34,47 @@ ObAllVirtualDagWarningHistory::~ObAllVirtualDagWarningHistory()
   reset();
 }
 
-int ObAllVirtualDagWarningHistory::init()
-{
-  int ret = OB_SUCCESS;
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    SERVER_LOG(WARN, "ObAllVirtualDagWarningHistory has been inited", K(ret));
-  } else if (OB_FAIL(dag_warning_info_iter_.open(effective_tenant_id_))) {
-    SERVER_LOG(WARN, "Fail to open merge info iter", K(ret));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-
 int ObAllVirtualDagWarningHistory::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "ObAllVirtualDagWarningHistory has been inited", K(ret));
-  } else if (OB_FAIL(dag_warning_info_iter_.get_next_info(dag_warning_info_))) {
-    if (OB_ITER_END != ret) {
-      STORAGE_LOG(WARN, "Fail to get next merge info", K(ret));
+  if (OB_FAIL(execute(row))) {
+    if (ret != OB_ITER_END) {
+      SERVER_LOG(WARN, "execute fail", K(ret));
     }
-  } else if (OB_FAIL(fill_cells(dag_warning_info_))) {
-    STORAGE_LOG(WARN, "Fail to fill cells", K(ret), K(dag_warning_info_));
-  } else {
-    row = &cur_row_;
   }
   return ret;
 }
 
-int ObAllVirtualDagWarningHistory::fill_cells(ObDagWarningInfo &dag_warning_info)
+bool ObAllVirtualDagWarningHistory::is_need_process(uint64_t tenant_id)
+{
+  if (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_) {
+    return true;
+  }
+  return false;
+}
+
+int ObAllVirtualDagWarningHistory::process_curr_tenant(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  row = nullptr;
   const int64_t col_count = output_column_ids_.count();
   ObObj *cells = cur_row_.cells_;
-  int64_t n = 0;
+  int64_t compression_ratio = 0;
+  int n = 0;
+  if (!dag_warning_info_iter_.is_opened()) {
+    if (OB_FAIL(MTL(ObDagWarningHistoryManager *)->open_iter(dag_warning_info_iter_))) {
+      STORAGE_LOG(WARN, "fail to begin ObTenantSSTableMergeInfoMgr::Iterator", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (FALSE_IT(MEMSET(comment_, '\0', sizeof(comment_)))) {
+    } else if (OB_FAIL(dag_warning_info_iter_.get_next(&dag_warning_info_, comment_, sizeof(comment_)))) {
+      if (OB_ITER_END != ret) {
+        STORAGE_LOG(WARN, "fail to get next sstable merge info", K(ret));
+      }
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
     uint64_t col_id = output_column_ids_.at(i);
     switch (col_id) {
@@ -87,11 +91,11 @@ int ObAllVirtualDagWarningHistory::fill_cells(ObDagWarningInfo &dag_warning_info
       break;
     case TENANT_ID:
       //tenant_id
-      cells[i].set_int(dag_warning_info.tenant_id_);
+      cells[i].set_int(dag_warning_info_.tenant_id_);
       break;
     case TASK_ID:
       //table_id
-      n = dag_warning_info.task_id_.to_string(task_id_buf_, sizeof(task_id_buf_));
+      n = dag_warning_info_.task_id_.to_string(task_id_buf_, sizeof(task_id_buf_));
       if (n < 0 || n >= sizeof(task_id_buf_)) {
         ret = OB_BUF_NOT_ENOUGH;
         SERVER_LOG(WARN, "buffer not enough", K(ret));
@@ -102,40 +106,40 @@ int ObAllVirtualDagWarningHistory::fill_cells(ObDagWarningInfo &dag_warning_info
       break;
     case MODULE:
       //module
-      cells[i].set_varchar(share::ObIDag::get_dag_module_str(dag_warning_info.dag_type_));
+      cells[i].set_varchar(share::ObIDag::get_dag_module_str(dag_warning_info_.dag_type_));
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     case TYPE: {
       //dag_type
-      cells[i].set_varchar(share::ObIDag::get_dag_type_str(dag_warning_info.dag_type_));
+      cells[i].set_varchar(share::ObIDag::get_dag_type_str(dag_warning_info_.dag_type_));
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     }
     case RET: {
       // dag_ret
-      cells[i].set_varchar(common::ob_error_name(dag_warning_info.dag_ret_));
+      cells[i].set_varchar(common::ob_error_name(dag_warning_info_.dag_ret_));
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     }
     case STATUS:
       // dag_status
-      cells[i].set_varchar(ObDagWarningInfo::get_dag_status_str(dag_warning_info.dag_status_));
+      cells[i].set_varchar(ObDagWarningInfo::get_dag_status_str(dag_warning_info_.dag_status_));
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     case GMT_CREATE:
       //table_type
-      cells[i].set_timestamp(dag_warning_info.gmt_create_);
+      cells[i].set_timestamp(dag_warning_info_.gmt_create_);
       break;
     case GMT_MODIFIED:
       //major_table_id
-      cells[i].set_timestamp(dag_warning_info.gmt_modified_);
+      cells[i].set_timestamp(dag_warning_info_.gmt_modified_);
       break;
     case RETRY_CNT:
-      cells[i].set_int(dag_warning_info.retry_cnt_);
+      cells[i].set_int(dag_warning_info_.retry_cnt_);
       break;
     case WARNING_INFO: {
       //merge_type
-      cells[i].set_varchar(dag_warning_info.warning_info_);
+      cells[i].set_varchar(comment_);
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     }
@@ -144,15 +148,18 @@ int ObAllVirtualDagWarningHistory::fill_cells(ObDagWarningInfo &dag_warning_info
       SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));
     }
   }
-
+  if (OB_SUCC(ret)) {
+    row = &cur_row_;
+  }
   return ret;
 }
 void ObAllVirtualDagWarningHistory::reset()
 {
+  omt::ObMultiTenantOperator::reset();
   ObVirtualTableScannerIterator::reset();
-  dag_warning_info_iter_.reset();
   memset(ip_buf_, 0, sizeof(ip_buf_));
   memset(task_id_buf_, 0, sizeof(task_id_buf_));
+  memset(comment_, 0, sizeof(comment_));
 }
 
 

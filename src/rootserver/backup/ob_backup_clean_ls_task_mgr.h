@@ -13,7 +13,6 @@
 #ifndef OCEANBASE_SHARE_OB_BACKUP_CLEAN_LS_TASK_MGR_H_
 #define OCEANBASE_SHARE_OB_BACKUP_CLEAN_LS_TASK_MGR_H_
 #include "ob_backup_service.h"
-#include "rootserver/backup/ob_backup_lease_service.h"
 #include "share/backup/ob_backup_clean_struct.h"
 #include "share/backup/ob_archive_struct.h"
 
@@ -32,24 +31,23 @@ public:
       share::ObBackupCleanLSTaskAttr &ls_attr,
       ObBackupTaskScheduler &task_scheduler,
       common::ObISQLClient &sql_proxy,
-      ObBackupLeaseService &lease_service,
-      ObBackupService &backup_service);
+      ObBackupCleanService &backup_service);
   int process(int64_t &finish_cnt);
   int cancel(int64_t &finish_cnt);
   static int advance_ls_task_status(
-      ObBackupLeaseService &lease_service,
+      ObBackupCleanService &backup_service,
       common::ObISQLClient &sql_proxy, 
       const share::ObBackupCleanLSTaskAttr &ls_attr, 
       const share::ObBackupTaskStatus &next_status, 
       const int result = OB_SUCCESS, 
       const int64_t end_ts = 0);
   static int redo_ls_task(
-      ObBackupLeaseService &lease_service, 
+      ObBackupCleanService &backup_service,
       common::ObISQLClient &sql_proxy, 
       const share::ObBackupCleanLSTaskAttr &ls_attr,
       const int64_t retry_id);
   static int statistic_info(
-      ObBackupLeaseService &lease_service, 
+      ObBackupCleanService &backup_service,
       common::ObISQLClient &sql_proxy, 
       const share::ObBackupCleanLSTaskAttr &ls_attr);
 private:
@@ -61,8 +59,7 @@ private:
   share::ObBackupCleanLSTaskAttr *ls_attr_;
   ObBackupTaskScheduler *task_scheduler_;
   common::ObISQLClient *sql_proxy_;
-  ObBackupLeaseService *lease_service_;
-  ObBackupService *backup_service_;
+  ObBackupCleanService *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanLSTaskMgr);
 };
 

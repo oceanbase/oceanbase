@@ -16,7 +16,6 @@
 #include "lib/container/ob_array_iterator.h"
 #define private public
 #include "share/backup/ob_backup_path.h"
-#include "share/backup/ob_log_archive_backup_info_mgr.h"
 
 using namespace oceanbase;
 using namespace common;

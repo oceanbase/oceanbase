@@ -137,12 +137,11 @@ void TestMultiVersionMergeRecycle::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
 
   // create tablet
-  obrpc::ObBatchCreateTabletArg create_tablet_arg;
-  share::schema::ObTableSchema table_schema;
-  ASSERT_EQ(OB_SUCCESS, gen_create_tablet_arg(tenant_id_, ls_id, tablet_id, create_tablet_arg, 1, &table_schema));
-
   ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(*ls_tablet_svr, create_tablet_arg));
+  uint64_t table_id = 12345;
+  share::schema::ObTableSchema table_schema;
+  ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema));
 }
 
 void TestMultiVersionMergeRecycle::TearDownTestCase()
@@ -249,7 +248,6 @@ void TestMultiVersionMergeRecycle::build_sstable(
     ObSSTable *&merged_sstable)
 {
   ASSERT_EQ(OB_SUCCESS, ctx.merge_info_.create_sstable(ctx));
-  ASSERT_EQ(OB_SUCCESS, ctx.merged_table_handle_.get_sstable(merged_sstable));
 }
 
 TEST_F(TestMultiVersionMergeRecycle, recycle_macro)

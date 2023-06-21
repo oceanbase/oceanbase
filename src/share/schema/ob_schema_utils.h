@@ -26,6 +26,11 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObISQLClient;
+}
+
 namespace share
 {
 namespace schema
@@ -33,6 +38,7 @@ namespace schema
 class ObTableSchema;
 class ObColumnSchemaV2;
 class ObServerSchemaService;
+struct SchemaKey;
 class ObSchemaUtils
 {
 public:
@@ -114,11 +120,56 @@ public:
              uint64_t tenant_id,
              uint64_t data_table_id,
              ObIArray<ObTableSchema> &table_schemas);
+  // Optimized method to batch get latest table schemas from cache or inner_table automatically.
+  //
+  // @param[in] sql_client: ObISQLClient
+  // @param[in] allocator:  allocator to manage memory of table schemas
+  // @param[in] tenant_id:  target tenant_id
+  // @param[in] table_ids:   target table_id array
+  // @param[out] table_schemas: array of ObSimpleTableSchemaV2 pointers
+  //                           (it's count may be smaller than table_ids when some tables not exist or been deleted)
+  // @return: OB_SUCCESS if success
+  static int batch_get_latest_table_schemas(
+      common::ObISQLClient &sql_client,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const common::ObIArray<ObObjectID> &table_ids,
+      common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
+
+  // Optimized method to get latest table schema from cache or inner_table automatically.
+  //
+  // @param[in] sql_client: ObISQLClient
+  // @param[in] allocator:  allocator to manage memory of table schema
+  // @param[in] tenant_id:  target tenant_id
+  // @param[in] table_id:   target table_id
+  // @param[out] table_schema: pointer of ObSimpleTableSchemaV2 (not null)
+  // @return: OB_SUCCESS if success
+  //          OB_TABLE_NOT_EXIST if table not exist
+  static int get_latest_table_schema(
+      common::ObISQLClient &sql_client,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const ObObjectID &table_id,
+      ObSimpleTableSchemaV2 *&table_schema);
 private:
   static int get_tenant_variable(schema::ObSchemaGetterGuard &schema_guard,
                                  uint64_t tenant_id,
                                  share::ObSysVarClassType var_id,
                                  common::ObObj &value);
+
+  static int batch_get_table_schemas_from_cache_(
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const ObIArray<ObTableLatestSchemaVersion> &table_schema_versions,
+      common::ObIArray<SchemaKey> &need_refresh_table_schema_keys,
+      common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
+  static int batch_get_table_schemas_from_inner_table_(
+      common::ObISQLClient &sql_client,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      common::ObArray<SchemaKey> &need_refresh_table_schema_keys,
+      common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
+
   // disallow construct
   ObSchemaUtils() {}
   ~ObSchemaUtils() {}

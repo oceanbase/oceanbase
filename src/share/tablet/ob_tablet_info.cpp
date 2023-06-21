@@ -299,18 +299,22 @@ int ObTabletInfo::find_replica_idx_(const ObTabletReplica &replica, int64_t &idx
 int ObTabletToLSInfo::init(
     const common::ObTabletID &tablet_id,
     const ObLSID &ls_id,
-    const uint64_t table_id) {
+    const uint64_t table_id,
+    const int64_t transfer_seq) {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(
       !tablet_id.is_valid()
       || !ls_id.is_valid()
-      || OB_INVALID_ID == table_id)) {
+      || OB_INVALID_ID == table_id
+      || transfer_seq <= OB_INVALID_TRANSFER_SEQ)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init with invalid argument", KR(ret), K(tablet_id), K(ls_id), K(table_id));
+    LOG_WARN("init with invalid argument",
+        KR(ret), K(tablet_id), K(ls_id), K(table_id), K(transfer_seq));
   } else {
     tablet_id_ = tablet_id;
     ls_id_ = ls_id;
     table_id_ = table_id;
+    transfer_seq_ = transfer_seq;
   }
   return ret;
 }
@@ -322,6 +326,7 @@ int ObTabletToLSInfo::assign(const ObTabletToLSInfo &other)
     tablet_id_ = other.tablet_id_;
     ls_id_ = other.ls_id_;
     table_id_ = other.table_id_;
+    transfer_seq_ = other.transfer_seq_;
   }
   return ret;
 }

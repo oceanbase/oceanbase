@@ -37,6 +37,8 @@ private:
       common::ObAddr &choosen_src_addr);
   int fetch_ls_meta_info_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObAddr &member_addr,
       obrpc::ObFetchLSMetaInfoResp &ls_meta_info);
+  int get_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,  const common::ObAddr &leader_addr,
+      common::ObIArray<common::ObAddr> &addr_list);
 
 private:
   bool is_inited_;

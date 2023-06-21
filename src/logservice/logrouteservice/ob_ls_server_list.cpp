@@ -368,7 +368,7 @@ int LSSvrList::get_next_server_based_on_blacklist_(const palf::LSN &next_lsn,
 int64_t LSSvrList::LSNRange::to_string(char *buffer, int64_t length) const
 {
   int64_t pos = 0;
-  (void)databuff_printf(buffer, length, pos, "LSN:{%ld, %ld}",
+  (void)databuff_printf(buffer, length, pos, "LSN:{%lu, %lu}",
       start_lsn_.val_, end_lsn_.val_);
 
   return pos;

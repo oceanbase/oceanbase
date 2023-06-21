@@ -140,10 +140,12 @@ public:
   int check_sql_sequence_can_read(
       const transaction::ObTransID &data_trans_id,
       const int64_t sql_sequence,
+      const share::SCN scn,
       bool &can_read)
   {
     int ret = OB_SUCCESS;
     UNUSED(data_trans_id);
+    UNUSED(scn);
     if (ROLLBACK_SQL_SEQUENCE != sql_sequence
         && ROLLBACK_SQL_SEQUENCE_2 != sql_sequence
         && ROLLBACK_SQL_SEQUENCE_3 != sql_sequence) {

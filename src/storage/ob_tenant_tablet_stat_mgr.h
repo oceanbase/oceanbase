@@ -149,7 +149,7 @@ template<uint32_t SIZE>
 class ObTabletStatBucket
 {
 public:
-  ObTabletStatBucket(const uint64_t step)
+  ObTabletStatBucket(const uint32_t step)
     : head_idx_(0), curr_idx_(SIZE - 1), refresh_cnt_(0), step_(step) {}
   ~ObTabletStatBucket() {}
   void reset();
@@ -378,6 +378,23 @@ private:
   bool is_inited_;
 };
 
+template <uint32_t SIZE>
+int ObTabletStream::get_bucket_tablet_stat(
+    const ObTabletStatBucket<SIZE> &bucket,
+    common::ObIArray<ObTabletStat> &tablet_stats) const
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = bucket.head_idx_;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < bucket.count(); ++i) {
+    int64_t curr_idx = bucket.get_idx(idx);
+    if (OB_FAIL(tablet_stats.push_back(bucket.units_[curr_idx]))) {
+      STORAGE_LOG(WARN, "failed to add tablet stat", K(ret), K(idx));
+    }
+    ++idx;
+  }
+  return ret;
+}
 
 #define CHECK_SCHEDULE_TIME_INTERVAL(interval, step) \
   ({ \

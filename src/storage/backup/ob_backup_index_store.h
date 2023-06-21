@@ -205,8 +205,8 @@ public:
   ObBackupMetaIndexStoreWrapper();
   virtual ~ObBackupMetaIndexStoreWrapper();
   int init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
-      const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc, const bool is_sec_meta,
-      ObBackupIndexKVCache &index_kv_cache);
+      const share::ObBackupDest &backup_dest, const share::ObBackupSetFileDesc &backup_set_info, const bool is_sec_meta,
+      const bool init_sys_tablet_index_store, ObBackupIndexKVCache &index_kv_cache);
 
   int get_backup_meta_index(const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);

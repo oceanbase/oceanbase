@@ -20,11 +20,13 @@
 #include "common/ob_tablet_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
+#include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
 #include "storage/schema_utils.h"
 #include "storage/ls/ob_ls_tablet_service.h"
+#include "storage/tablet/ob_tablet_meta.h"
 
 namespace oceanbase
 {
@@ -71,6 +73,7 @@ TestRootBlockInfo::TestRootBlockInfo()
 
 void TestRootBlockInfo::SetUp()
 {
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   TestDataFilePrepare::SetUp();
   prepare_tablet_read_info();
   des_meta_.encrypt_id_ = ObAesOpMode::ob_invalid_mode;
@@ -100,7 +103,7 @@ void TestRootBlockInfo::prepare_tablet_read_info()
     desc.col_order_ = ObOrderType::ASC;
     ASSERT_EQ(OB_SUCCESS, columns.push_back(desc));
   }
-  ASSERT_EQ(OB_SUCCESS, table_read_info_.init(allocator_, schema_version, ROWKEY_COL_CNT, lib::is_oracle_mode(), columns, true));
+  ASSERT_EQ(OB_SUCCESS, table_read_info_.init(allocator_, schema_version, ROWKEY_COL_CNT, lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
 }
 
 void TestRootBlockInfo::prepare_block_root()
@@ -154,7 +157,7 @@ void TestRootBlockInfo::prepare_block_root()
   write_info.size_ = buf_size;
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::write_block(write_info, handle));
   block_addr_.second_id_ = handle.get_macro_id().second_id();
-  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(&allocator_, block_addr_, block_data_));
+  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, block_addr_, block_data_));
   ASSERT_TRUE(root_info_.is_valid());
 }
 
@@ -166,18 +169,32 @@ public:
   virtual void SetUp() override;
   virtual void TearDown() override;
 private:
+  void prepare_create_sstable_param();
+private:
   ObTabletCreateSSTableParam param_;
+  ObTabletID tablet_id_;
+  int64_t data_version_;
+  int64_t snapshot_version_;
+  share::schema::ObTableSchema table_schema_;
+  common::ObArenaAllocator allocator_;
 };
 
 TestSSTableMacroInfo::TestSSTableMacroInfo()
   : TestRootBlockInfo(),
-    param_()
+    param_(),
+    tablet_id_(1),
+    data_version_(0),
+    snapshot_version_(0),
+    table_schema_(),
+    allocator_()
 {
 }
 
 void TestSSTableMacroInfo::SetUp()
 {
   TestRootBlockInfo::SetUp();
+  TestSchemaUtils::prepare_data_schema(table_schema_);
+  prepare_create_sstable_param();
   param_.data_block_macro_meta_addr_ = block_addr_;
   param_.data_block_macro_meta_ = block_data_;
 }
@@ -185,6 +202,42 @@ void TestSSTableMacroInfo::SetUp()
 void TestSSTableMacroInfo::TearDown()
 {
   TestRootBlockInfo::TearDown();
+}
+
+void TestSSTableMacroInfo::prepare_create_sstable_param()
+{
+  const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  param_.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+  param_.table_key_.tablet_id_ = tablet_id_;
+  param_.table_key_.version_range_.base_version_ = ObVersionRange::MIN_VERSION;
+  param_.table_key_.version_range_.snapshot_version_ = snapshot_version_;
+  param_.schema_version_ = table_schema_.get_schema_version();
+  param_.create_snapshot_version_ = 0;
+  param_.progressive_merge_round_ = table_schema_.get_progressive_merge_round();
+  param_.progressive_merge_step_ = 0;
+  param_.table_mode_ = table_schema_.get_table_mode_struct();
+  param_.index_type_ = table_schema_.get_index_type();
+  param_.rowkey_column_cnt_ = table_schema_.get_rowkey_column_num()
+          + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  param_.root_block_addr_.set_none_addr();
+  param_.data_block_macro_meta_addr_.set_none_addr();
+  param_.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  param_.latest_row_store_type_ = ObRowStoreType::DUMMY_ROW_STORE;
+  param_.data_index_tree_height_ = 0;
+  param_.index_blocks_cnt_ = 0;
+  param_.data_blocks_cnt_ = 0;
+  param_.micro_block_cnt_ = 0;
+  param_.use_old_macro_block_count_ = 0;
+  param_.column_cnt_ = table_schema_.get_column_count() + multi_version_col_cnt;
+  param_.data_checksum_ = 0;
+  param_.occupy_size_ = 0;
+  param_.ddl_scn_.set_min();
+  param_.filled_tx_scn_.set_min();
+  param_.original_size_ = 0;
+  param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  param_.encrypt_id_ = 0;
+  param_.master_key_id_ = 0;
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
 class TestSSTableMeta : public TestDataFilePrepare
@@ -291,11 +344,11 @@ void TestMigrationSSTableParam::SetUp()
   ASSERT_TRUE(!sstable_meta_.is_valid());
   sstable_meta_.reset();
   ASSERT_TRUE(!sstable_meta_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, sstable_meta_.init(param_, &allocator_));
+  ASSERT_EQ(OB_SUCCESS, sstable_meta_.init(param_, allocator_));
   ASSERT_TRUE(sstable_meta_.is_valid());
   ASSERT_TRUE(sstable_meta_.data_root_info_.is_valid());
   ASSERT_TRUE(sstable_meta_.macro_info_.is_valid());
-  ASSERT_TRUE(sstable_meta_.get_col_checksum().count() > 0);
+  ASSERT_TRUE(sstable_meta_.get_col_checksum_cnt() > 0);
   table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   table_key_.tablet_id_ = 1101;
   table_key_.version_range_.base_version_ = 0;
@@ -314,8 +367,8 @@ void TestMigrationSSTableParam::TearDown()
 TEST_F(TestRootBlockInfo, test_load_and_transform_root_block)
 {
   ASSERT_TRUE(root_info_.get_addr().is_block());
-  ASSERT_EQ(OB_SUCCESS, root_info_.load_root_block_data(des_meta_));
-  ASSERT_EQ(OB_SUCCESS, root_info_.transform_root_block_data(table_read_info_));
+  ASSERT_EQ(OB_SUCCESS, root_info_.load_root_block_data(allocator_, des_meta_));
+  ASSERT_EQ(OB_SUCCESS, root_info_.transform_root_block_data(allocator_));
 }
 
 TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
@@ -332,12 +385,11 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
 
   ObRootBlockInfo tmp_info;
   pos = 0;
-  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(&allocator_, des_meta_, buf, buf_len_1, pos));
+  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(allocator_, des_meta_, buf, buf_len_1, pos));
   ASSERT_EQ(buf_len_1, pos);
   ASSERT_TRUE(tmp_info.is_valid());
   ASSERT_EQ(root_info_.get_addr(), tmp_info.get_addr());
-  ASSERT_EQ(root_info_.get_block_data().type_, tmp_info.get_block_data().type_);
-  ASSERT_EQ(0, memcmp(tmp_info.get_block_data().get_buf(), block_data_.get_buf(), block_data_.get_buf_size()));
+  ASSERT_EQ(0, memcmp(tmp_info.block_data_.get_buf(), block_data_.get_buf(), block_data_.get_buf_size()));
   delete [] buf;
 
   // test memory address.
@@ -351,7 +403,7 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
   block_data.buf_ = data;
   block_data.size_ = BUF_LEN;
   block_data.type_ = ObMicroBlockData::INDEX_BLOCK;
-  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(&allocator_, addr, block_data));
+  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, addr, block_data));
   ASSERT_TRUE(root_info_.is_valid());
   ASSERT_TRUE(root_info_.get_addr().is_memory());
 
@@ -363,13 +415,13 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
   ASSERT_TRUE(root_info_.is_valid());
 
   pos = 0;
-  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(&allocator_, des_meta_, buf, buf_len_2, pos));
+  tmp_info.reset();
+  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(allocator_, des_meta_, buf, buf_len_2, pos));
   ASSERT_EQ(buf_len_2, pos);
   ASSERT_TRUE(tmp_info.is_valid());
   ASSERT_EQ(root_info_.get_addr(), tmp_info.get_addr());
-  ASSERT_EQ(root_info_.get_block_data().type_, tmp_info.get_block_data().type_);
   ASSERT_TRUE(tmp_info.get_addr().is_memory());
-  ASSERT_EQ(0, memcmp(tmp_info.get_block_data().get_buf(), block_data.buf_, BUF_LEN));
+  ASSERT_EQ(0, memcmp(tmp_info.block_data_.get_buf(), block_data.buf_, BUF_LEN));
   delete [] buf;
 
   // test none address.
@@ -377,7 +429,7 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
   ASSERT_TRUE(!root_info_.is_valid());
   addr.set_none_addr();
   block_data.type_ = ObMicroBlockData::INDEX_BLOCK;
-  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(&allocator_, addr, block_data));
+  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, addr, block_data));
   ASSERT_TRUE(root_info_.is_valid());
   ASSERT_TRUE(root_info_.get_addr().is_none());
 
@@ -390,11 +442,11 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
   ASSERT_TRUE(root_info_.get_addr().is_none());
 
   pos = 0;
-  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(&allocator_, des_meta_, buf, buf_len_3, pos));
+  tmp_info.reset();
+  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(allocator_, des_meta_, buf, buf_len_3, pos));
   ASSERT_EQ(buf_len_3, pos);
   ASSERT_TRUE(tmp_info.is_valid());
   ASSERT_EQ(root_info_.get_addr(), tmp_info.get_addr());
-  ASSERT_EQ(root_info_.get_block_data().type_, tmp_info.get_block_data().type_);
   delete [] buf;
 }
 
@@ -404,11 +456,11 @@ TEST_F(TestSSTableMacroInfo, test_serialize_and_deserialize)
   ASSERT_TRUE(!sstable_macro_info.is_valid());
   sstable_macro_info.reset();
   ASSERT_TRUE(!sstable_macro_info.is_valid());
-  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.init_macro_info(&allocator_, param_));
+  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.init_macro_info(allocator_, param_));
   ASSERT_TRUE(sstable_macro_info.is_valid());
   ASSERT_EQ(block_addr_, sstable_macro_info.get_macro_meta_addr());
-  ASSERT_EQ(0, sstable_macro_info.get_data_block_ids().count());
-  ASSERT_EQ(0, sstable_macro_info.get_other_block_ids().count());
+  ASSERT_EQ(0, sstable_macro_info.get_data_block_count());
+  ASSERT_EQ(0, sstable_macro_info.get_other_block_count());
 
   int64_t pos = 0;
   const int64_t buf_len = sstable_macro_info.get_serialize_size();
@@ -418,42 +470,69 @@ TEST_F(TestSSTableMacroInfo, test_serialize_and_deserialize)
 
   ObSSTableMacroInfo tmp_info;
   pos = 0;
-  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(&allocator_, des_meta_, buf, buf_len, pos));
+  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(allocator_, des_meta_, buf, buf_len, pos));
   ASSERT_TRUE(tmp_info.is_valid());
   ASSERT_EQ(block_addr_, tmp_info.get_macro_meta_addr());
-  ASSERT_EQ(0, tmp_info.get_data_block_ids().count());
-  ASSERT_EQ(0, tmp_info.get_other_block_ids().count());
+  ASSERT_EQ(0, tmp_info.get_data_block_count());
+  ASSERT_EQ(0, tmp_info.get_other_block_count());
   ASSERT_EQ(sstable_macro_info.macro_meta_info_.addr_, tmp_info.macro_meta_info_.addr_);
-  ASSERT_EQ(sstable_macro_info.data_block_ids_.count(), tmp_info.data_block_ids_.count());
-  ASSERT_EQ(sstable_macro_info.other_block_ids_.count(), tmp_info.other_block_ids_.count());
+  ASSERT_EQ(sstable_macro_info.data_block_count_, tmp_info.data_block_count_);
+  ASSERT_EQ(sstable_macro_info.other_block_count_, tmp_info.other_block_count_);
 }
 
 TEST_F(TestSSTableMacroInfo, test_huge_block_ids)
 {
   ObSSTableMacroInfo sstable_macro_info;
-  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.init_macro_info(&allocator_, param_));
   MacroBlockId block_id;
-  sstable_macro_info.data_block_ids_.set_capacity(blocksstable::ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD);
-  sstable_macro_info.other_block_ids_.set_capacity(1);
+  block_id.second_id_ = 10000;
+  ASSERT_EQ(OB_SUCCESS, param_.other_block_ids_.push_back(block_id));
 
   for (int64_t i = 0; i < blocksstable::ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD; i++) {
     block_id.reset();
     block_id.second_id_ = ObRandom::rand(1, 10<<10);
-    ASSERT_EQ(OB_SUCCESS, sstable_macro_info.data_block_ids_.push_back(block_id));
+    ASSERT_EQ(OB_SUCCESS, param_.data_block_ids_.push_back(block_id));
   }
-
+  ASSERT_EQ(OB_SUCCESS, sstable_macro_info.init_macro_info(allocator_, param_));
   int64_t pos = 0;
   const int64_t buf_len = sstable_macro_info.get_serialize_size();
   char *buf = new char[buf_len];
+  ASSERT_NE(nullptr, sstable_macro_info.linked_block_ids_);
+  ASSERT_NE(0, sstable_macro_info.linked_block_count_);
   ASSERT_EQ(OB_SUCCESS, sstable_macro_info.serialize(buf, buf_len, pos));
-  ASSERT_NE(0, sstable_macro_info.linked_block_ids_.count());
+  ASSERT_NE(nullptr, sstable_macro_info.linked_block_ids_);
+  ASSERT_NE(0, sstable_macro_info.linked_block_count_);
 
   ObSSTableMacroInfo tmp_info;
   pos = 0;
-  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(&allocator_, des_meta_, buf, buf_len, pos));
+  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(allocator_, des_meta_, buf, buf_len, pos));
+  ObMacroIdIterator iter;
+  ASSERT_EQ(OB_SUCCESS, tmp_info.get_data_block_iter(iter));
   for (int i = 0; i < blocksstable::ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD; i++) {
-    ASSERT_EQ(sstable_macro_info.data_block_ids_.at(i), tmp_info.data_block_ids_.at(i));
+    MacroBlockId macro_id;
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_macro_id(macro_id));
+    ASSERT_EQ(param_.data_block_ids_.at(i), macro_id);
   }
+  ASSERT_EQ(sstable_macro_info.data_block_count_, tmp_info.data_block_count_);
+  ASSERT_EQ(sstable_macro_info.other_block_count_, tmp_info.other_block_count_);
+  ASSERT_EQ(sstable_macro_info.entry_id_, tmp_info.entry_id_);
+  ASSERT_EQ(sstable_macro_info.linked_block_count_, tmp_info.linked_block_count_);
+
+  ObSSTableMacroInfo deep_copy_info;
+  const int64_t variable_size = sstable_macro_info.get_variable_size();
+  char *d_buf = new char [variable_size];
+  pos = 0;
+  sstable_macro_info.deep_copy(d_buf, variable_size, pos, deep_copy_info);
+  ASSERT_NE(nullptr, deep_copy_info.linked_block_ids_);
+  ASSERT_NE(0, deep_copy_info.linked_block_count_);
+  iter.reset();
+  ASSERT_EQ(OB_SUCCESS, deep_copy_info.get_data_block_iter(iter));
+  for (int i = 0; i < blocksstable::ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD; i++) {
+    MacroBlockId macro_id;
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_macro_id(macro_id));
+    ASSERT_EQ(param_.data_block_ids_.at(i), macro_id);
+  }
+  ASSERT_EQ(sstable_macro_info.data_block_count_, deep_copy_info.data_block_count_);
+  ASSERT_EQ(sstable_macro_info.other_block_count_, deep_copy_info.other_block_count_);
 }
 
 TEST_F(TestSSTableMeta, test_empty_sstable_serialize_and_deserialize)
@@ -462,11 +541,11 @@ TEST_F(TestSSTableMeta, test_empty_sstable_serialize_and_deserialize)
   ASSERT_TRUE(!sstable_meta.is_valid());
   sstable_meta.reset();
   ASSERT_TRUE(!sstable_meta.is_valid());
-  ASSERT_EQ(OB_SUCCESS, sstable_meta.init(param_, &allocator_));
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.init(param_, allocator_));
   ASSERT_TRUE(sstable_meta.is_valid());
   ASSERT_TRUE(sstable_meta.data_root_info_.is_valid());
   ASSERT_TRUE(sstable_meta.macro_info_.is_valid());
-  ASSERT_TRUE(sstable_meta.get_col_checksum().count() > 0);
+  ASSERT_TRUE(sstable_meta.get_col_checksum_cnt() > 0);
 
   int64_t pos = 0;
   const int64_t buf_len = sstable_meta.get_serialize_size();
@@ -475,22 +554,51 @@ TEST_F(TestSSTableMeta, test_empty_sstable_serialize_and_deserialize)
   ASSERT_TRUE(sstable_meta.is_valid());
   ASSERT_TRUE(sstable_meta.data_root_info_.is_valid());
   ASSERT_TRUE(sstable_meta.macro_info_.is_valid());
-  ASSERT_TRUE(sstable_meta.get_col_checksum().count() > 0);
+  ASSERT_TRUE(sstable_meta.get_col_checksum_cnt() > 0);
 
   ObSSTableMeta tmp_meta;
   pos = 0;
-  ASSERT_EQ(OB_SUCCESS, tmp_meta.deserialize(&allocator_, buf, buf_len, pos));
+  ASSERT_EQ(OB_SUCCESS, tmp_meta.deserialize(allocator_, buf, buf_len, pos));
   ASSERT_TRUE(tmp_meta.is_valid());
   ASSERT_TRUE(tmp_meta.data_root_info_.is_valid());
   ASSERT_TRUE(tmp_meta.macro_info_.is_valid());
-  ASSERT_TRUE(tmp_meta.get_col_checksum().count() > 0);
+  ASSERT_TRUE(tmp_meta.get_col_checksum_cnt() > 0);
   ASSERT_EQ(sstable_meta.basic_meta_, tmp_meta.basic_meta_);
-  ASSERT_EQ(sstable_meta.column_checksums_.count(), tmp_meta.column_checksums_.count());
+  ASSERT_EQ(sstable_meta.get_col_checksum_cnt(), tmp_meta.get_col_checksum_cnt());
   ASSERT_EQ(sstable_meta.data_root_info_.addr_, tmp_meta.data_root_info_.addr_);
-  ASSERT_EQ(sstable_meta.macro_info_.data_block_ids_.count(), tmp_meta.macro_info_.data_block_ids_.count());
-  ASSERT_EQ(sstable_meta.macro_info_.other_block_ids_.count(), tmp_meta.macro_info_.other_block_ids_.count());
+  ASSERT_EQ(sstable_meta.macro_info_.data_block_count_, tmp_meta.macro_info_.data_block_count_);
+  ASSERT_EQ(sstable_meta.macro_info_.other_block_count_, tmp_meta.macro_info_.other_block_count_);
   free(buf);
 }
+
+TEST_F(TestSSTableMeta, test_sstable_deep_copy)
+{
+  ObSSTable full_sstable;
+  ASSERT_EQ(OB_SUCCESS, full_sstable.init(param_, &allocator_));
+  const int64_t buf_len = full_sstable.get_deep_copy_size();
+  char *buf = static_cast<char *>(allocator_.alloc(buf_len));
+  ASSERT_TRUE(nullptr != buf);
+  ObIStorageMetaObj *value = nullptr;
+  ASSERT_EQ(OB_SUCCESS, full_sstable.deep_copy(buf, buf_len, value));
+  ObSSTable *tiny_sstable = static_cast<ObSSTable*>(value);
+  ASSERT_EQ(full_sstable.key_, tiny_sstable->key_);
+  ASSERT_EQ(full_sstable.valid_for_reading_, tiny_sstable->valid_for_reading_);
+  ASSERT_EQ(true, full_sstable.is_tmp_sstable_);
+  ASSERT_EQ(false, tiny_sstable->is_tmp_sstable_);
+  ASSERT_EQ(full_sstable.meta_->basic_meta_, tiny_sstable->meta_->basic_meta_);
+  ASSERT_EQ(full_sstable.meta_->data_root_info_.addr_, tiny_sstable->meta_->data_root_info_.addr_);
+  ASSERT_EQ(full_sstable.meta_->data_root_info_.block_data_.type_, tiny_sstable->meta_->data_root_info_.block_data_.type_);
+  ASSERT_EQ(full_sstable.meta_->macro_info_.macro_meta_info_.block_data_.type_, tiny_sstable->meta_->macro_info_.macro_meta_info_.block_data_.type_);
+  ASSERT_EQ(full_sstable.meta_->macro_info_.macro_meta_info_.addr_, tiny_sstable->meta_->macro_info_.macro_meta_info_.addr_);
+  ASSERT_EQ(full_sstable.meta_->macro_info_.data_block_count_, tiny_sstable->meta_->macro_info_.data_block_count_);
+  ASSERT_EQ(full_sstable.meta_->macro_info_.other_block_count_, tiny_sstable->meta_->macro_info_.other_block_count_);
+  ASSERT_EQ(full_sstable.meta_->macro_info_.linked_block_count_, tiny_sstable->meta_->macro_info_.linked_block_count_);
+  ASSERT_EQ(full_sstable.meta_->macro_info_.entry_id_, tiny_sstable->meta_->macro_info_.entry_id_);
+  ASSERT_EQ(full_sstable.meta_->column_checksum_count_, tiny_sstable->meta_->column_checksum_count_);
+  ASSERT_EQ(0, memcmp(full_sstable.meta_->column_checksums_, tiny_sstable->meta_->column_checksums_, full_sstable.meta_->column_checksum_count_));
+  ASSERT_EQ(full_sstable.meta_->is_inited_, tiny_sstable->meta_->is_inited_);
+}
+
 TEST_F(TestMigrationSSTableParam, test_empty_sstable_serialize_and_deserialize)
 {
   ObMigrationSSTableParam mig_param;
@@ -498,7 +606,9 @@ TEST_F(TestMigrationSSTableParam, test_empty_sstable_serialize_and_deserialize)
   mig_param.reset();
   ASSERT_TRUE(!mig_param.is_valid());
   mig_param.basic_meta_ = sstable_meta_.get_basic_meta();
-  ASSERT_EQ(OB_SUCCESS, mig_param.column_checksums_.assign(sstable_meta_.get_col_checksum()));
+  for (int64_t i = 0; i < sstable_meta_.get_col_checksum_cnt(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, mig_param.column_checksums_.push_back(sstable_meta_.get_col_checksum()[i]));
+  }
   mig_param.table_key_ = table_key_;
   ASSERT_TRUE(mig_param.is_valid());
   ASSERT_TRUE(mig_param.basic_meta_.is_valid());
@@ -506,7 +616,7 @@ TEST_F(TestMigrationSSTableParam, test_empty_sstable_serialize_and_deserialize)
   ASSERT_TRUE(mig_param.table_key_.is_valid());
   ASSERT_EQ(sstable_meta_.get_basic_meta(), mig_param.basic_meta_);
   ASSERT_EQ(table_key_, mig_param.table_key_);
-  ASSERT_EQ(sstable_meta_.get_col_checksum().count(), mig_param.column_checksums_.count());
+  ASSERT_EQ(sstable_meta_.get_col_checksum_cnt(), mig_param.column_checksums_.count());
 
   int64_t pos = 0;
   const int64_t buf_len = mig_param.get_serialize_size();
@@ -567,14 +677,15 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSSTableMeta src_meta;
-  ret = src_meta.init(src_sstable_param, &allocator);
+  ret = src_meta.init(src_sstable_param, allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObMigrationSSTableParam mig_param;
   mig_param.basic_meta_ = src_meta.get_basic_meta();
   mig_param.table_key_ = src_sstable_param.table_key_;
-  ret = mig_param.column_checksums_.assign(src_meta.get_col_checksum());
-  ASSERT_EQ(OB_SUCCESS, ret);
+  for (int64_t i = 0; i < sstable_meta_.get_col_checksum_cnt(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, mig_param.column_checksums_.push_back(src_meta.get_col_checksum()[i]));
+  }
 
   ObTabletCreateSSTableParam dest_sstable_param;
   ret = ObLSTabletService::build_create_sstable_param_for_migration(mig_param, dest_sstable_param);
@@ -582,6 +693,7 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
 
   ASSERT_TRUE(dest_sstable_param.encrypt_id_ == src_sstable_param.encrypt_id_);
 }
+
 } // end namespace unittest
 } // end namespace oceanbase
 

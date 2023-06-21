@@ -1592,7 +1592,7 @@ OB_DEF_SERIALIZE_SIZE(MockObNewRowIterator)
 
 int ObMockDirectReadIterator::init(ObStoreRowIterator *iter,
                                    common::ObIAllocator &alloc,
-                                   ObTableReadInfo &read_info)
+                                   const ObITableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
   const blocksstable::ObDatumRow *row = nullptr;

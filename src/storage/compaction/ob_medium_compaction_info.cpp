@@ -12,10 +12,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/compaction/ob_medium_compaction_info.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 
 namespace oceanbase
 {
 using namespace storage;
+using namespace blocksstable;
 
 namespace compaction
 {
@@ -24,20 +26,30 @@ namespace compaction
  * ObParallelMergeInfo
  * */
 
+template<typename T>
+void ObParallelMergeInfo::destroy(T *&array)
+{
+  if (nullptr != array && nullptr != allocator_) {
+    for (int i = 0; i < list_size_; ++i) {
+      array[i].destroy(*allocator_);
+    }
+    allocator_->free(array);
+    array = nullptr;
+  }
+}
+
 void ObParallelMergeInfo::destroy()
 {
-  if (list_size_ > 0 && nullptr != parallel_end_key_list_ && nullptr != allocator_) {
-    for (int i = 0; i < list_size_; ++i) {
-      parallel_end_key_list_[i].destroy(*allocator_);
-    }
+  if (list_size_ > 0) {
+    destroy(parallel_store_rowkey_list_);
+    destroy(parallel_datum_rowkey_list_);
     list_size_ = 0;
-    allocator_->free(parallel_end_key_list_);
-    parallel_end_key_list_ = nullptr;
-    allocator_ = nullptr;
   }
+  allocator_ = nullptr;
   parallel_info_ = 0;
 }
 
+// CAREFUL! parallel_info_ contains list_size, no need serialize array count of rowkey list
 int ObParallelMergeInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -50,15 +62,36 @@ int ObParallelMergeInfo::serialize(char *buf, const int64_t buf_len, int64_t &po
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
         parallel_info_);
-    for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
-      if (OB_FAIL(parallel_end_key_list_[i].serialize(buf, buf_len, pos))) {
-        LOG_WARN("failed to encode concurrent cnt", K(ret), K(i), K(list_size_), K(parallel_end_key_list_[i]));
+    if (PARALLEL_INFO_VERSION_V0 == compat_) {
+      for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
+        if (OB_FAIL(parallel_store_rowkey_list_[i].serialize(buf, buf_len, pos))) {
+          LOG_WARN("failed to encode concurrent cnt", K(ret), K(i), K(list_size_), K(parallel_store_rowkey_list_[i]));
+        }
       }
+    } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
+      for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
+        if (OB_FAIL(parallel_datum_rowkey_list_[i].serialize(buf, buf_len, pos))) {
+          LOG_WARN("failed to encode concurrent cnt", K(ret), K(i), K(list_size_), K(parallel_datum_rowkey_list_[i]));
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid compat version", KR(ret), K_(compat));
     }
   }
   return ret;
 }
 
+#define ALLOC_ROWKEY_ARRAY(array_ptr, T) \
+  void *alloc_buf = nullptr; \
+  if (OB_ISNULL(alloc_buf = allocator.alloc(sizeof(T) * list_size_))) { \
+    ret = OB_ALLOCATE_MEMORY_FAILED; \
+    LOG_WARN("failed to alloc rowkey array", K(ret), K(list_size_)); \
+  } else { \
+    array_ptr = new(alloc_buf) T[list_size_]; \
+  }
+
+// CAREFUL! parallel_info_ contains list_size, no need deserialize array count of rowkey list
 int ObParallelMergeInfo::deserialize(
     common::ObIAllocator &allocator,
     const char *buf,
@@ -77,17 +110,30 @@ int ObParallelMergeInfo::deserialize(
       LOG_WARN("list size is invalid", K(ret), K(list_size_));
     } else {
       allocator_ = &allocator;
-      void *alloc_buf = nullptr;
-      if (OB_ISNULL(alloc_buf = allocator.alloc(sizeof(ObStoreRowkey) * list_size_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc store rowkey array", K(ret), K(list_size_));
+      if (OB_FAIL(ret)) {
+      } else if (PARALLEL_INFO_VERSION_V0 == compat_) {
+        ALLOC_ROWKEY_ARRAY(parallel_store_rowkey_list_, ObStoreRowkey);
+        for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
+          // need to deserialize StoreRowkey
+          if (OB_FAIL(parallel_store_rowkey_list_[i].deserialize(allocator, buf, data_len, pos))) {
+            LOG_WARN("failed to encode concurrent cnt", K(ret), K(i), K(list_size_), K(data_len), K(pos));
+          }
+        } // end of for
+      } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
+        ALLOC_ROWKEY_ARRAY(parallel_datum_rowkey_list_, ObDatumRowkey);
+        ObDatumRowkey tmp_datum_rowkey;
+        ObStorageDatum datums[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
+        tmp_datum_rowkey.assign(datums, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER);
+        for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
+          if (OB_FAIL(tmp_datum_rowkey.deserialize(buf, data_len, pos))) {
+            LOG_WARN("failed to decode datum rowkey", K(ret), K(i), K(list_size_), K(data_len), K(pos));
+          } else if (tmp_datum_rowkey.deep_copy(parallel_datum_rowkey_list_[i] /*dst*/, allocator)) {
+            LOG_WARN("failed to deep copy datum rowkey", KR(ret), K(i), K(tmp_datum_rowkey));
+          }
+        } // end of for
       } else {
-        parallel_end_key_list_ = new(alloc_buf) ObStoreRowkey[list_size_];
-      }
-      for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
-        if (OB_FAIL(parallel_end_key_list_[i].deserialize(allocator, buf, data_len, pos))) {
-          LOG_WARN("failed to encode concurrent cnt", K(ret), K(i), K(list_size_), K(data_len), K(pos));
-        }
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid compat version", KR(ret), K_(compat));
       }
       if (OB_FAIL(ret)) {
         destroy(); // free parallel_end_key_list_ in destroy
@@ -97,13 +143,20 @@ int ObParallelMergeInfo::deserialize(
   return ret;
 }
 
+// CAREFUL! parallel_info_ contains list_size, no need serialize array count of rowkey list
 int64_t ObParallelMergeInfo::get_serialize_size() const
 {
   int64_t len = 0;
   if (list_size_ > 0) {
     len += serialization::encoded_length_vi32(parallel_info_);
-    for (int i = 0; i < list_size_; ++i) {
-      len += parallel_end_key_list_[i].get_serialize_size();
+    if (PARALLEL_INFO_VERSION_V0 == compat_) {
+      for (int i = 0; i < list_size_; ++i) {
+        len += parallel_store_rowkey_list_[i].get_serialize_size();
+      }
+    } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
+      for (int i = 0; i < list_size_; ++i) {
+        len += parallel_datum_rowkey_list_[i].get_serialize_size();
+      }
     }
   }
   return len;
@@ -114,8 +167,9 @@ int ObParallelMergeInfo::generate_from_range_array(
     ObArrayArray<ObStoreRange> &paral_range)
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
-  if (OB_UNLIKELY(0 != list_size_ || nullptr != parallel_end_key_list_)) {
+  if (OB_UNLIKELY(0 != list_size_
+      || nullptr != parallel_store_rowkey_list_
+      || nullptr != parallel_datum_rowkey_list_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parallel merge info is not empty", K(ret), KPC(this));
   } else {
@@ -125,32 +179,77 @@ int ObParallelMergeInfo::generate_from_range_array(
     }
     if (sum_range_cnt <= VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
       // do nothing
-    } else if (FALSE_IT(list_size_ = sum_range_cnt - 1)) {
-    } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObStoreRowkey) * list_size_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate", K(ret), K(paral_range));
     } else {
+      list_size_ = sum_range_cnt - 1;
       allocator_ = &allocator;
-      parallel_end_key_list_ = new(buf) ObStoreRowkey[list_size_];
-      int64_t cnt = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < paral_range.count() && cnt < list_size_; ++i) {
-        const ObIArray<ObStoreRange> &range_array = paral_range.at(i);
-        for (int64_t j = 0; OB_SUCC(ret) && j < range_array.count() && cnt < list_size_; ++j) {
-          if (OB_FAIL(range_array.at(j).get_end_key().deep_copy(parallel_end_key_list_[cnt++], allocator))) {
-            LOG_WARN("failed to deep copy end key", K(ret), K(i), K(range_array), K(j), K(cnt));
-          }
-        }
-      } // end of loop array
+      uint64_t compat_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+        LOG_WARN("fail to get data version", K(ret));
+      } else if (compat_version < DATA_VERSION_4_2_0_0) { // sync store_rowkey_list
+        ret = generate_store_rowkey_list(allocator, paral_range);
+      } else { // sync datum_rowkey_list
+        ret = generate_datum_rowkey_list(allocator, paral_range);
+      }
     }
   }
   LOG_DEBUG("parallel range info", K(ret), KPC(this), K(paral_range), K(paral_range.count()), K(paral_range.at(0)));
-
   if (OB_FAIL(ret)) {
     destroy();
   } else if (get_serialize_size() > MAX_PARALLEL_RANGE_SERIALIZE_LEN) {
     ret = OB_SIZE_OVERFLOW;
     LOG_DEBUG("parallel range info is too large to sync", K(ret), KPC(this));
     destroy();
+  }
+  return ret;
+}
+
+int ObParallelMergeInfo::generate_datum_rowkey_list(
+    ObIAllocator &allocator,
+    ObArrayArray<ObStoreRange> &paral_range)
+{
+  int ret = OB_SUCCESS;
+  compat_ = PARALLEL_INFO_VERSION_V1;
+  ALLOC_ROWKEY_ARRAY(parallel_datum_rowkey_list_, ObDatumRowkey);
+  int64_t cnt = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < paral_range.count() && cnt < list_size_; ++i) {
+    const ObIArray<ObStoreRange> &range_array = paral_range.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < range_array.count() && cnt < list_size_; ++j) {
+      if (OB_FAIL(parallel_datum_rowkey_list_[cnt++].from_rowkey(range_array.at(j).get_end_key().get_rowkey(), allocator))) {
+        LOG_WARN("failed to deep copy end key", K(ret), K(j), "src_key", range_array.at(j).get_end_key());
+      }
+    }
+  } // end of loop array
+  return ret;
+}
+
+int ObParallelMergeInfo::generate_store_rowkey_list(
+    ObIAllocator &allocator,
+    ObArrayArray<ObStoreRange> &paral_range)
+{
+  int ret = OB_SUCCESS;
+  compat_ = PARALLEL_INFO_VERSION_V0;
+  ALLOC_ROWKEY_ARRAY(parallel_store_rowkey_list_, ObStoreRowkey);
+  int64_t cnt = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < paral_range.count() && cnt < list_size_; ++i) {
+    const ObIArray<ObStoreRange> &range_array = paral_range.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < range_array.count() && cnt < list_size_; ++j) {
+      if (OB_FAIL(range_array.at(j).get_end_key().deep_copy(parallel_store_rowkey_list_[cnt++]/*dst*/, allocator))) {
+        LOG_WARN("failed to deep copy end key", K(ret), K(j), "src_key", range_array.at(j).get_end_key());
+      }
+    }
+  } // end of loop array
+  return ret;
+}
+
+template<typename T>
+int ObParallelMergeInfo::deep_copy_list(common::ObIAllocator &allocator, const T *src, T *&dst)
+{
+  int ret = OB_SUCCESS;
+  ALLOC_ROWKEY_ARRAY(dst, T);
+  for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
+    if (OB_FAIL(src[i].deep_copy(dst[i], allocator))) {
+      LOG_WARN("failed to deep copy end key", K(ret), K(i), K(src[i]));
+    }
   }
   return ret;
 }
@@ -164,25 +263,39 @@ int ObParallelMergeInfo::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("other parallel info is invalid", K(ret), K(other));
   } else {
+    compat_ = other.compat_;
     list_size_ = other.list_size_;
     allocator_ = &allocator;
     if (list_size_ > 0) {
-      void *buf = nullptr;
-      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObStoreRowkey) * list_size_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate", K(ret), K(other));
-      } else {
-        parallel_end_key_list_ = new (buf) ObStoreRowkey[list_size_];
-        for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
-          if (OB_FAIL(other.parallel_end_key_list_[i].deep_copy(parallel_end_key_list_[i], allocator))) {
-            LOG_WARN("failed to deep copy end key", K(ret), K(i), K(other.parallel_end_key_list_[i]));
-          }
-        }
-        if (OB_FAIL(ret)) {
-          destroy();
-        }
-      } // else
+      if (PARALLEL_INFO_VERSION_V0 == compat_) {
+        ret = deep_copy_list(allocator, other.parallel_store_rowkey_list_, parallel_store_rowkey_list_);
+      } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
+        ret = deep_copy_list(allocator, other.parallel_datum_rowkey_list_, parallel_datum_rowkey_list_);
+      }
+      if (OB_FAIL(ret)) {
+        destroy();
+      }
     }
+  }
+  return ret;
+}
+
+int ObParallelMergeInfo::deep_copy_datum_rowkey(
+    const int64_t idx,
+    ObIAllocator &input_allocator,
+    blocksstable::ObDatumRowkey &rowkey) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(idx < 0 || idx >= list_size_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid idx", KR(ret), K(idx), K_(list_size));
+  } else if (PARALLEL_INFO_VERSION_V0 == compat_) {
+    if (OB_FAIL(rowkey.from_rowkey(parallel_store_rowkey_list_[idx].get_rowkey()/*src*/, input_allocator))) {
+      STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(idx), K(parallel_store_rowkey_list_[idx]));
+    }
+  } else if (PARALLEL_INFO_VERSION_V1 == compat_
+      && OB_FAIL(parallel_datum_rowkey_list_[idx].deep_copy(rowkey/*dst*/, input_allocator))) {
+    STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(idx), K(parallel_datum_rowkey_list_[idx]));
   }
   return ret;
 }
@@ -193,16 +306,27 @@ int64_t ObParallelMergeInfo::to_string(char* buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(list_size));
+    J_KV(K_(list_size), K_(compat));
     J_COMMA();
-    for (int i = 0; i < list_size_; ++i) {
-      J_KV(K(i), "key", parallel_end_key_list_[i]);
-      J_COMMA();
+    if (PARALLEL_INFO_VERSION_V0 == compat_) {
+      for (int i = 0; i < list_size_; ++i) {
+        J_KV(K(i), "key", parallel_store_rowkey_list_[i]);
+        J_COMMA();
+      }
+    } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
+      for (int i = 0; i < list_size_; ++i) {
+        J_KV(K(i), "key", parallel_datum_rowkey_list_[i]);
+        J_COMMA();
+      }
     }
     J_OBJ_END();
   }
   return pos;
 }
+
+OB_SERIALIZE_MEMBER_SIMPLE(
+    ObMediumCompactionInfoKey,
+    medium_snapshot_);
 
 /*
  * ObMediumCompactionInfo
@@ -224,8 +348,7 @@ const char *ObMediumCompactionInfo::get_compaction_type_str(enum ObCompactionTyp
 }
 
 ObMediumCompactionInfo::ObMediumCompactionInfo()
-  : ObIMultiSourceDataUnit(),
-    medium_compat_version_(MEIDUM_COMPAT_VERSION),
+  : medium_compat_version_(MEIDUM_COMPAT_VERSION_V2),
     compaction_type_(COMPACTION_TYPE_MAX),
     contain_parallel_range_(false),
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
@@ -233,6 +356,7 @@ ObMediumCompactionInfo::ObMediumCompactionInfo()
     cluster_id_(0),
     data_version_(0),
     medium_snapshot_(0),
+    last_medium_snapshot_(0),
     storage_schema_(),
     parallel_merge_info_()
 {
@@ -242,6 +366,12 @@ ObMediumCompactionInfo::ObMediumCompactionInfo()
 ObMediumCompactionInfo::~ObMediumCompactionInfo()
 {
   reset();
+}
+
+int ObMediumCompactionInfo::assign(ObIAllocator &allocator,
+                                   const ObMediumCompactionInfo &medium_info)
+{
+  return init(allocator, medium_info);
 }
 
 int ObMediumCompactionInfo::init(
@@ -260,6 +390,7 @@ int ObMediumCompactionInfo::init(
     info_ = medium_info.info_;
     cluster_id_ = medium_info.cluster_id_;
     medium_snapshot_ = medium_info.medium_snapshot_;
+    last_medium_snapshot_ = medium_info.last_medium_snapshot_;
     data_version_ = medium_info.data_version_;
   }
   return ret;
@@ -271,7 +402,9 @@ bool ObMediumCompactionInfo::is_valid() const
       && medium_snapshot_ > 0
       && data_version_ > 0
       && storage_schema_.is_valid()
-      && parallel_merge_info_.is_valid();
+      && parallel_merge_info_.is_valid()
+      && (MEIDUM_COMPAT_VERSION == medium_compat_version_
+        || (MEIDUM_COMPAT_VERSION_V2 == medium_compat_version_ && last_medium_snapshot_ != 0));
 }
 
 void ObMediumCompactionInfo::reset()
@@ -281,38 +414,10 @@ void ObMediumCompactionInfo::reset()
   compaction_type_ = COMPACTION_TYPE_MAX;
   cluster_id_ = 0;
   medium_snapshot_ = 0;
+  last_medium_snapshot_ = 0;
   data_version_ = 0;
   storage_schema_.reset();
   parallel_merge_info_.destroy();
-}
-
-int ObMediumCompactionInfo::deep_copy(const ObIMultiSourceDataUnit *src, ObIAllocator *allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == src || nullptr == allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(src), KP(allocator));
-  } else if (OB_UNLIKELY(memtable::MultiSourceDataUnitType::MEDIUM_COMPACTION_INFO != src->type())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), "type", src->type(), KP(allocator));
-  } else {
-    ret = init(*allocator, *static_cast<const ObMediumCompactionInfo *>(src));
-  }
-  return ret;
-}
-
-int ObMediumCompactionInfo::save_storage_schema(
-    ObIAllocator &allocator,
-    const storage::ObStorageSchema &storage_schema)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!storage_schema.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(storage_schema));
-  } else if (OB_FAIL(storage_schema_.init(allocator, storage_schema))) {
-    LOG_WARN("failed to init storage schema", K(ret), K(storage_schema));
-  }
-  return ret;
 }
 
 int ObMediumCompactionInfo::gene_parallel_info(
@@ -327,7 +432,7 @@ int ObMediumCompactionInfo::gene_parallel_info(
     } else {
       ret = OB_SUCCESS;
     }
-  } else if (parallel_merge_info_.list_size_ > 0) {
+  } else if (parallel_merge_info_.get_size() > 0) {
     contain_parallel_range_ = true;
     LOG_INFO("success to gene parallel info", K(ret), K(contain_parallel_range_), K(parallel_merge_info_));
   }
@@ -348,10 +453,15 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
         medium_snapshot_,
         data_version_,
         storage_schema_);
-    if (contain_parallel_range_) {
+    if (OB_SUCC(ret) && contain_parallel_range_) {
       LST_DO_CODE(
           OB_UNIS_ENCODE,
           parallel_merge_info_);
+    }
+    if (OB_SUCC(ret) && MEIDUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+      LST_DO_CODE(
+        OB_UNIS_ENCODE,
+        last_medium_snapshot_);
     }
     LOG_DEBUG("ObMediumCompactionInfo::serialize", K(ret), K(buf), K(buf_len), K(pos));
   }
@@ -376,7 +486,7 @@ int ObMediumCompactionInfo::deserialize(
         data_version_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(storage_schema_.deserialize(allocator, buf, data_len, pos))) {
-      LOG_WARN("failed to deserialize storage schema", K(ret));
+      LOG_WARN("failed to deserialize storage schema", K(ret), K(buf), K(data_len), K(pos));
     } else if (contain_parallel_range_) {
       if (OB_FAIL(parallel_merge_info_.deserialize(allocator, buf, data_len, pos))) {
         LOG_WARN("failed to deserialize parallel merge info", K(ret), K(buf), K(data_len), K(pos));
@@ -384,6 +494,11 @@ int ObMediumCompactionInfo::deserialize(
     } else {
       clear_parallel_range();
       LOG_DEBUG("ObMediumCompactionInfo::deserialize", K(ret), K(buf), K(data_len), K(pos));
+    }
+    if (OB_SUCC(ret) && MEIDUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+      LST_DO_CODE(
+        OB_UNIS_DECODE,
+        last_medium_snapshot_);
     }
   }
   return ret;
@@ -402,6 +517,11 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
   if (contain_parallel_range_) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, parallel_merge_info_);
   }
+  if (MEIDUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+    LST_DO_CODE(
+      OB_UNIS_ADD_LEN,
+      last_medium_snapshot_);
+  }
   return len;
 }
 
@@ -410,6 +530,22 @@ void ObMediumCompactionInfo::gene_info(
 {
   J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
       K(medium_snapshot_), K_(parallel_merge_info));
+}
+
+int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(cluster_id), K_(medium_compat_version), K_(data_version),
+      "compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
+      "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_), K_(cluster_id),
+      K_(medium_snapshot), K_(last_medium_snapshot), K_(storage_schema),
+      K_(contain_parallel_range), K_(parallel_merge_info));
+    J_OBJ_END();
+  }
+  return pos;
 }
 
 } //namespace compaction

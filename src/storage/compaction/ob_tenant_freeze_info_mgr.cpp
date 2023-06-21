@@ -24,7 +24,6 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_tenant_schema_service.h"
-#include "share/backup/ob_backup_info_mgr.h"
 #include "observer/ob_server_struct.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/system_variable/ob_system_variable_alias.h"
@@ -36,6 +35,7 @@
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 
 namespace oceanbase
 {
@@ -961,11 +961,17 @@ int ObTenantFreezeInfoMgr::ReloadTask::try_update_info()
 void ObTenantFreezeInfoMgr::ReloadTask::runTimerTask()
 {
   int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(refresh_merge_info())) {
-    LOG_WARN_RET(tmp_ret, "fail to refresh merge info", KR(tmp_ret));
-  }
-  if (OB_TMP_FAIL(try_update_info())) {
-    LOG_WARN_RET(tmp_ret, "fail to try update info", KR(tmp_ret));
+  if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000 /* 10s */)) {
+      LOG_WARN_RET(tmp_ret, "slog replay hasn't finished, this task can't start");
+    }
+  } else {
+    if (OB_TMP_FAIL(refresh_merge_info())) {
+      LOG_WARN_RET(tmp_ret, "fail to refresh merge info", KR(tmp_ret));
+    }
+    if (OB_TMP_FAIL(try_update_info())) {
+      LOG_WARN_RET(tmp_ret, "fail to try update info", KR(tmp_ret));
+    }
   }
 }
 

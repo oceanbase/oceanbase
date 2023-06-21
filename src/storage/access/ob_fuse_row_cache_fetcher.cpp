@@ -26,7 +26,7 @@ ObFuseRowCacheFetcher::ObFuseRowCacheFetcher()
 }
 
 int ObFuseRowCacheFetcher::init(const ObTabletID &tablet_id,
-                                const ObTableReadInfo *read_info,
+                                const ObITableReadInfo *read_info,
                                 const int64_t tablet_version)
 {
   int ret = OB_SUCCESS;

@@ -158,7 +158,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_state(TEST_ADDR,
@@ -296,7 +296,7 @@ TEST_F(TestObTxLog, tx_log_body_redo)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_state(TEST_ADDR,
@@ -414,7 +414,7 @@ TEST_F(TestObTxLog, test_compat_bytes)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_info(TEST_ADDR,

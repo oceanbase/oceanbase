@@ -63,9 +63,9 @@ public:
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
+  static int get_foreign_key_info(const share::schema::ObTableSchema *table_schema, const int64_t foreign_key_id, share::schema::ObForeignKeyInfo &fk_info);
 private:
   int check_fk_by_send_sql() const;
-  int get_foreign_key_info(const share::schema::ObTableSchema *table_schema, share::schema::ObForeignKeyInfo &fk_info) const;
   int get_column_names(const share::schema::ObTableSchema &table_schema,
       const common::ObIArray<uint64_t> &column_ids,
       common::ObIArray<ObString> &column_name_str) const;
@@ -142,6 +142,7 @@ private:
       common::ObIAllocator &allocator);
   int check_replica_end(bool &is_end);
   int check_health();
+  int release_ddl_locks();
 private:
   static const int64_t OB_CONSTRAINT_TASK_VERSION = 1;
   common::TCRWLock lock_;

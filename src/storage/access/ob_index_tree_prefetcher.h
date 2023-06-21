@@ -118,13 +118,14 @@ public:
       rescan_cnt_(0),
       data_version_(0),
       sstable_(nullptr),
+      sstable_meta_handle_(),
       data_block_cache_(nullptr),
       index_block_cache_(nullptr),
       micro_block_handle_mgr_(),
       index_block_(),
       iter_param_(nullptr),
       access_ctx_(nullptr),
-      index_read_info_(nullptr),
+	    datum_utils_(nullptr),
       index_scanner_(),
       micro_handles_(),
       macro_id_()
@@ -141,24 +142,15 @@ public:
       const void *query_range);
   virtual int switch_context(
       const int iter_type,
-      const ObTableReadInfo &index_read_info,
       ObSSTable &sstable,
+      const ObStorageDatumUtils &datum_utils,
       ObTableAccessContext &access_ctx,
       const void *query_range);
   int single_prefetch(ObSSTableReadHandle &read_handle);
   OB_INLINE bool is_valid() { return is_inited_; }
   VIRTUAL_TO_STRING_KV(K_(data_version), K_(index_scanner));
 protected:
-  OB_INLINE int init_index_scanner(ObIndexBlockRowScanner &index_scanner)
-  {
-    return index_scanner.init(
-        agg_projector_,
-        agg_column_schema_,
-        index_read_info_,
-        *access_ctx_->stmt_allocator_,
-        access_ctx_->query_flag_,
-        sstable_->get_macro_offset());
-  }
+  int init_index_scanner(ObIndexBlockRowScanner &index_scanner);
   int check_bloom_filter(const ObMicroIndexInfo &index_info, ObSSTableReadHandle &read_handle);
   int prefetch_block_data(
       ObMicroIndexInfo &index_block_info,
@@ -179,13 +171,14 @@ protected:
   int64_t rescan_cnt_;
   int64_t data_version_;
   ObSSTable *sstable_;
+  ObSSTableMetaHandle sstable_meta_handle_;
   ObDataMicroBlockCache *data_block_cache_;
   ObIndexMicroBlockCache *index_block_cache_;
   ObMicroBlockHandleMgr micro_block_handle_mgr_;
   ObMicroBlockData index_block_;
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
-  const ObTableReadInfo *index_read_info_;
+  const ObStorageDatumUtils *datum_utils_;
   common::ObFixedArray<int32_t, common::ObIAllocator> agg_projector_;
   common::ObFixedArray<share::schema::ObColumnSchemaV2, common::ObIAllocator> agg_column_schema_;
   static const int64_t DEFAULT_GET_MICRO_DATA_HANDLE_CNT = 2;
@@ -268,8 +261,8 @@ public:
       const void *query_range) override;
   virtual int switch_context(
       const int iter_type,
-      const ObTableReadInfo &index_read_info,
       ObSSTable &sstable,
+      const ObStorageDatumUtils &datum_utils,
       ObTableAccessContext &access_ctx,
       const void *query_range) override;
   int multi_prefetch();
@@ -343,8 +336,8 @@ public:
       const void *query_range) override final;
   virtual int switch_context(
       const int iter_type,
-      const ObTableReadInfo &index_read_info,
       ObSSTable &sstable,
+      const ObStorageDatumUtils &datum_utils,
       ObTableAccessContext &access_ctx,
       const void *query_range) override final;
   int prefetch();
@@ -488,7 +481,6 @@ private:
       return ret;
     }
     OB_INLINE int get_next_index_row(
-        const ObTableReadInfo &read_info,
         const blocksstable::ObDatumRowkey &border_rowkey,
         ObMicroIndexInfo &block_info,
         const bool has_lob_out)
@@ -499,7 +491,7 @@ private:
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             STORAGE_LOG(WARN, "Fail to get_next index row", K(ret), K_(index_scanner));
           } else if (fetch_idx_ < prefetch_idx_) {
-            if (OB_FAIL(forward(read_info, border_rowkey, has_lob_out))) {
+            if (OB_FAIL(forward(border_rowkey, has_lob_out))) {
               STORAGE_LOG(WARN, "Fail to forward index tree handle", K(ret));
             }
           }
@@ -524,12 +516,10 @@ private:
       return index_block_read_handles_[fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH];
     }
     int prefetch(
-        const ObTableReadInfo &read_info,
         const blocksstable::ObDatumRowkey &border_rowkey,
         const int64_t level,
         ObIndexTreeMultiPassPrefetcher &prefetcher);
     int forward(
-        const ObTableReadInfo &read_info,
         const blocksstable::ObDatumRowkey &border_rowkey,
         const bool has_lob_out);
     OB_INLINE int check_blockscan(const blocksstable::ObDatumRowkey &border_rowkey)

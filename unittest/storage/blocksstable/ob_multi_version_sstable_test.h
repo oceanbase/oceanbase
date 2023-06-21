@@ -37,6 +37,7 @@
 #include "share/ob_simple_mem_limit_getter.h"
 #include "../mockcontainer/mock_ob_iterator.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
+#include "unittest/storage/mock_ob_table_read_info.h"
 
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 
@@ -97,6 +98,7 @@ int init_io_device(const char *test_name,
     storage_env.user_block_cache_priority_ = 1;
     storage_env.user_row_cache_priority_ = 1;
     storage_env.fuse_row_cache_priority_ = 1;
+    storage_env.storage_meta_cache_priority_ = 10;
     storage_env.ethernet_speed_ = 1000000;
     storage_env.redundancy_level_ = ObStorageEnv::NORMAL_REDUNDANCY;
 
@@ -128,7 +130,8 @@ int init_io_device(const char *test_name,
         storage_env.user_row_cache_priority_,
         storage_env.fuse_row_cache_priority_,
         storage_env.bf_cache_priority_,
-        storage_env.bf_cache_miss_count_threshold_))) {
+        storage_env.bf_cache_miss_count_threshold_,
+        storage_env.storage_meta_cache_priority_))) {
       STORAGE_LOG(WARN, "Fail to init OB_STORE_CACHE, ", K(ret), K(storage_env.data_dir_));
     }
   }
@@ -191,7 +194,6 @@ protected:
   ObMergeType merge_type_;
   ObTenantFreezeInfoMgr *mgr_;
   ObTableSchema table_schema_;
-  ObTableSchema index_schema_;
 
   ObITable::TableKey table_key_;
   ObDataStoreDesc data_desc_;
@@ -208,14 +210,16 @@ protected:
   ObFixedArray<ObColDesc, common::ObIAllocator> full_cols_;
   ObTableIterParam iter_param_;
   ObTableAccessContext context_;
-  ObTableReadInfo full_read_info_;
+  storage::MockObTableReadInfo full_read_info_;
   ObDatumRow datum_row_;
-  ObArenaAllocator allocator_;
+  static ObArenaAllocator allocator_;
   char test_name_[100];
 
   MockObMetaReport rs_reporter_;
   MockDiskUsageReport disk_reporter_;
 };
+
+ObArenaAllocator ObMultiVersionSSTableTest::allocator_;
 
 void ObMultiVersionSSTableTest::SetUpTestCase()
 {
@@ -227,16 +231,8 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   //OK(init_io_device("multi_version_test"));
 
-  const int64_t bucket_num = 1024L;
-  const int64_t max_cache_size = 1024L * 1024L * 512;
-  const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   ObIOManager::get_instance().add_tenant_io_manager(
       tenant_id_, ObTenantIOConfig::default_instance());
-  OK(ObKVGlobalCache::get_instance().init(&getter,
-                                          bucket_num,
-                                          max_cache_size,
-                                          block_size));
-  OK(OB_STORE_CACHE.init(10, 1, 1, 1, 1, 10000));
 
   // create ls
   ObLSHandle ls_handle;
@@ -264,7 +260,6 @@ ObMultiVersionSSTableTest::ObMultiVersionSSTableTest(
     : merge_type_(merge_type),
     mgr_(nullptr),
     table_schema_(),
-    index_schema_(),
     row_store_type_(row_store_type),
     root_index_builder_(nullptr),
     data_iter_cursor_(0),
@@ -278,6 +273,7 @@ ObMultiVersionSSTableTest::~ObMultiVersionSSTableTest()
 
 void ObMultiVersionSSTableTest::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
 }
 
 void ObMultiVersionSSTableTest::TearDown()
@@ -338,8 +334,7 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
                           column_cnt - extra_rowkey_cnt,
                           schema_rowkey_cnt,
                           lib::is_oracle_mode(),
-                          tmp_col_descs,
-                          true));
+                          tmp_col_descs));
 
   //init table schema
   table_schema_.reset();
@@ -355,26 +350,12 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
   table_schema_.set_row_store_type(FLAT_ROW_STORE);
   table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
 
-  index_schema_.reset();
-  ASSERT_EQ(OB_SUCCESS, index_schema_.set_table_name("test_index_block"));
-  index_schema_.set_tenant_id(tenant_id_);
-  index_schema_.set_tablegroup_id(1);
-  index_schema_.set_database_id(1);
-  index_schema_.set_table_id(table_id_);
-  index_schema_.set_rowkey_column_num(full_read_info_.get_schema_rowkey_count());
-  index_schema_.set_max_used_column_id(common::OB_APP_MIN_COLUMN_ID + full_read_info_.get_request_count());
-  index_schema_.set_block_size(2 * 1024);
-  index_schema_.set_compress_func_name("none");
-  index_schema_.set_row_store_type(FLAT_ROW_STORE);
-  index_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
-
   ObColumnSchemaV2 column;
   //init column
   char name[OB_MAX_FILE_NAME_LENGTH];
   memset(name, 0, sizeof(name));
   column_cnt = full_read_info_.get_request_count();
-  const common::ObIArray<ObColDesc> &cols_desc = full_read_info_.get_columns_desc();
-  for(int64_t i = 0; i < cols_desc.count(); ++i) {
+  for(int64_t i = 0; i < tmp_col_descs.count(); ++i) {
     column.reset();
     bool is_rowkey_col = false;
     if (i < schema_rowkey_cnt) {
@@ -386,24 +367,13 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
     column.set_table_id(table_id_);
     sprintf(name, "test%020ld", i);
     ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
-    column.set_data_type(cols_desc.at(i).col_type_.get_type());
-    column.set_column_id(cols_desc.at(i).col_id_);
+    column.set_data_type(tmp_col_descs.at(i).col_type_.get_type());
+    column.set_column_id(tmp_col_descs.at(i).col_id_);
     column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
     column.set_data_length(1);
     ASSERT_EQ(OB_SUCCESS, table_schema_.add_column(column));
-    if (is_rowkey_col) {
-      ASSERT_EQ(OB_SUCCESS, index_schema_.add_column(column));
-    }
   }
   column.reset();
-  column.set_table_id(table_id_);
-  column.set_column_id(column_cnt + OB_APP_MIN_COLUMN_ID);
-  ASSERT_EQ(OB_SUCCESS, column.set_column_name("Index block data"));
-  column.set_data_type(ObVarcharType);
-  column.set_collation_type(CS_TYPE_BINARY);
-  column.set_data_length(1);
-  column.set_rowkey_position(0);
-  ASSERT_EQ(OB_SUCCESS, index_schema_.add_column(column));
 
   table_key_.table_type_ = get_merged_table_type();
   table_key_.tablet_id_ = tablet_id_;
@@ -419,12 +389,15 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
 
   ObTabletHandle tablet_handle;
+  void *ptr = nullptr;
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   ObTablet *tablet = tablet_handle.get_obj();
-  tablet->storage_schema_.reset();
-  tablet->storage_schema_.init(*tablet->allocator_, table_schema_, lib::Worker::CompatMode::MYSQL);
-  tablet->full_read_info_.reset();
-  tablet->build_read_info(*tablet->allocator_);
+  ASSERT_NE(nullptr, ptr = allocator_.alloc(sizeof(ObStorageSchema)));
+  tablet->storage_schema_addr_.ptr_ = new (ptr) ObStorageSchema();
+  tablet->storage_schema_addr_.get_ptr()->init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL);
+  ASSERT_NE(nullptr, ptr = allocator_.alloc(sizeof(ObRowkeyReadInfo)));
+  tablet->rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
+  tablet->build_read_info(allocator_);
 }
 
 void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
@@ -452,7 +425,7 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
   data_desc_.row_store_type_ = row_store_type_;
   ASSERT_TRUE(data_desc_.is_valid());
 
-  ASSERT_EQ(OB_SUCCESS, index_desc_.init(index_schema_, ls_id, tablet_id, merge_type_, snapshot_version, DATA_VERSION_4_1_0_0));
+  ASSERT_EQ(OB_SUCCESS, index_desc_.init_as_index(table_schema_, ls_id, tablet_id, merge_type_, snapshot_version, DATA_VERSION_4_1_0_0));
   ASSERT_TRUE(index_desc_.is_valid());
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc_));
 
@@ -517,10 +490,12 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   ObSSTableMergeRes res;
   const int64_t column_cnt =
       table_schema_.get_column_count() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(column_cnt, res));
+  ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(res));
 
   ObTabletCreateSSTableParam param;
   table_key_.table_type_ = table_type;
+  param.data_block_ids_ = res.data_block_ids_;
+  param.other_block_ids_ = res.other_block_ids_;
   param.table_key_ = table_key_;
   param.schema_version_ = SCHEMA_VERSION;
   param.create_snapshot_version_ = 0;
@@ -561,7 +536,16 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   ObLSService *ls_svr = MTL(ObLSService*);
   ObLSID lsid(ls_id_);
   OK(ls_svr->get_ls(lsid, ls_handle, ObLSGetMod::STORAGE_MOD));
-  OK(ObTabletCreateDeleteHelper::create_sstable(param, handle));
+  void *buf = allocator_.alloc(sizeof(ObSSTable));
+  ASSERT_TRUE(nullptr != buf);
+  ObSSTable *sstable = new (buf) ObSSTable();
+  OK(ObTabletCreateDeleteHelper::create_sstable(param, allocator_, *sstable));
+  ObTableReadInfo read_info;
+  ObSEArray<share::schema::ObColDesc, 16> cols_desc;
+  ASSERT_EQ(OB_SUCCESS, table_schema_.get_multi_version_column_descs(cols_desc));
+  ASSERT_EQ(OB_SUCCESS, read_info.init(allocator_, table_schema_.get_rowkey_column_num() + 1,
+   table_schema_.get_rowkey_column_num(), false, cols_desc, nullptr/*storage_cols_index*/));
+  ASSERT_EQ(OB_SUCCESS, handle.set_sstable(sstable, &allocator_));
 }
 
 void ObMultiVersionSSTableTest::prepare_data(

@@ -23,6 +23,7 @@
 #include "storage/tx/ob_timestamp_service.h"
 #include "storage/tx/ob_trans_id_service.h"
 #include "storage/tablelock/ob_lock_memtable.h"
+#include "logservice/replayservice/ob_tablet_replay_executor.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
@@ -248,7 +249,8 @@ int ObTxReplayExecutor::try_get_tx_ctx_(int64_t tx_id, int64_t tenant_id, const 
       ret = OB_SUCCESS;
       bool tx_ctx_existed = false;
       common::ObAddr scheduler = log_block_header_.get_scheduler();
-      ObTxCreateArg arg(true,  /* for_replay */
+      ObTxCreateArg arg(true, /* for_replay */
+                        false, /* for_special_tx */
                         tenant_id,
                         tx_id,
                         ls_id,
@@ -256,7 +258,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_(int64_t tx_id, int64_t tenant_id, const 
                         GET_MIN_CLUSTER_VERSION(),
                         0, /*session_id*/
                         scheduler,
-                        INT64_MAX, /*trans_expired_time_*/
+                        INT64_MAX,         /*trans_expired_time_*/
                         ls_tx_srv_->get_trans_service());
       if (OB_FAIL(ls_tx_srv_->create_tx_ctx(arg, tx_ctx_existed, ctx_))) {
         TRANS_LOG(WARN, "get_tx_ctx error", K(ret), K(tx_id), KP(ctx_));
@@ -602,7 +604,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
   ObTabletHandle tablet_handle;
 
   if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_, tablet_handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
+    if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
       ctx_->force_no_need_replay_checksum();
       ret = OB_SUCCESS;
       TRANS_LOG(WARN, "[Replay Tx] tablet gc, skip this log entry", K(ret), K(row_head.tablet_id_),
@@ -614,6 +616,23 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
       TRANS_LOG(INFO, "[Replay Tx] get tablet failed, retry this log entry", K(ret), K(row_head.tablet_id_),
                 KP(ls_), K(log_ts_ns_), K(tx_part_log_no_), K(ctx_));
       ret = OB_EAGAIN;
+    }
+  } else if (OB_FAIL(logservice::ObTabletReplayExecutor::replay_check_restore_status(tablet_handle, false/*update_tx_data*/))) {
+    if (OB_NO_NEED_UPDATE == ret) {
+      ctx_->check_no_need_replay_checksum(log_ts_ns_);
+      ret = OB_SUCCESS;
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        TRANS_LOG(INFO, "[Replay Tx] Not need replay, skip this log entry", K(row_head.tablet_id_),
+                  K(log_ts_ns_), K(tx_part_log_no_));
+      }
+    } else if (OB_EAGAIN == ret) {
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        TRANS_LOG(INFO, "[Replay Tx] tablet not ready, retry this log entry", K(ret), K(row_head.tablet_id_),
+                  K(log_ts_ns_), K(tx_part_log_no_));
+      }
+    } else {
+      TRANS_LOG(WARN, "[Replay Tx] replay check restore status error", K(ret), K(row_head.tablet_id_),
+                K(log_ts_ns_), K(tx_part_log_no_));
     }
   } else if (OB_FAIL(get_compat_mode_(row_head.tablet_id_, mode))) {
     TRANS_LOG(WARN, "[Replay Tx] get compat mode error", K(ret), K(mode));

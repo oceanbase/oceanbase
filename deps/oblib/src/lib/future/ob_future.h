@@ -106,7 +106,7 @@ namespace future
 
 struct DefaultFutureAllocator : public ObIAllocator {
   void *alloc(const int64_t size) override {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     total_alive_num++;
 #endif
     return ob_malloc(size, SET_USE_500("ObFuture"));
@@ -116,12 +116,12 @@ struct DefaultFutureAllocator : public ObIAllocator {
     return alloc(size);
   }
   void free(void *ptr) override {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     total_alive_num--;
 #endif
     ob_free(ptr);
   }
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
   int total_alive_num = 0;
 #endif
   static DefaultFutureAllocator &get_default_allocator() {

@@ -2029,6 +2029,7 @@ typedef enum ObItemType
   T_DELETE_POLICY,
   T_BACKUP_KEY,
   T_RESTORE_TENANT_2,
+  T_CANCEL_RESTORE,
   T_GEN_ROWS,
   T_LOAD_BATCH_SIZE,
   T_DIRECT, // direct load data

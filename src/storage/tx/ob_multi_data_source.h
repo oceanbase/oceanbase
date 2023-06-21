@@ -18,6 +18,9 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "lib/string/ob_string.h"
 #include "share/ob_ls_id.h"
+#include "share/scn.h"
+#include "storage/multi_data_source/mds_ctx.h"
+#include "storage/multi_data_source/buffer_ctx.h"
 
 namespace oceanbase
 {
@@ -47,50 +50,21 @@ enum class ObTxDataSourceType : int64_t
   TABLE_LOCK = 1,
   // for log stream table(create log stream)
   LS_TABLE = 2,
-  // for create tablet
-  CREATE_TABLET = 3,
-  // for drop tablet
-  REMOVE_TABLET = 4,
   // for liboblog
   DDL_BARRIER = 5,
   // for all ddl trans(record incremental schema)
   DDL_TRANS = 6,
-  // for unbind hidden tablet and reuse index tablet
-  MODIFY_TABLET_BINDING = 7,
   // for standby upgrade
   STANDBY_UPGRADE = 8,
+  BEFORE_VERSION_4_1 = 13,
+#define NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
+#define _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(helper_class_name, buffer_ctx_type, ID, ENUM_NAME) ENUM_NAME = ID,
+  #include "storage/multi_data_source/compile_utility/mds_register.h"
+#undef _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_
+#undef NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
   MAX_TYPE = 100
 };
 
-class ObMDSStr
-{
-  OB_UNIS_VERSION(1);
-
-public:
-  ObMDSStr();
-  ~ObMDSStr();
-  void reset();
-
-  int set(const char *msd_buf,
-          const int64_t msd_buf_len,
-          const ObTxDataSourceType &type,
-          const share::ObLSID ls_id);
-
-  const char *get_msd_buf() { return mds_str_.ptr(); }
-  int64_t get_msd_buf_len() { return mds_str_.length(); }
-  const ObTxDataSourceType &get_msd_type() { return type_; }
-  const share::ObLSID &get_ls_id() { return ls_id_; }
-
-  TO_STRING_KV(K(mds_str_), K(type_), K(ls_id_));
-
-private:
-  // const char *msd_buf_;
-  // int64_t msd_buf_len_;
-  // bool from_copy_;
-  common::ObString mds_str_;
-  ObTxDataSourceType type_;
-  share::ObLSID ls_id_;
-};
 
 enum class NotifyType : int64_t
 {
@@ -113,7 +87,7 @@ class ObTxBufferNode
 public:
   ObTxBufferNode() : type_(ObTxDataSourceType::UNKNOWN), data_() { reset(); }
   ~ObTxBufferNode() {}
-  int init(const ObTxDataSourceType type, const common::ObString &data);
+  int init(const ObTxDataSourceType type, const common::ObString &data, const share::SCN &base_scn, storage::mds::BufferCtx *ctx);
   bool is_valid() const
   {
     return type_ > ObTxDataSourceType::UNKNOWN && type_ < ObTxDataSourceType::MAX_TYPE
@@ -125,6 +99,7 @@ public:
     data_.reset();
     has_submitted_ = false;
     has_synced_ = false;
+    mds_base_scn_.reset();
   }
 
   void replace_data(const common::ObString &data);
@@ -140,22 +115,26 @@ public:
   void set_synced() { has_synced_ = true; }
   bool is_synced() const { return has_synced_; }
 
+  const share::SCN &get_base_scn() { return mds_base_scn_; }
+
   void log_sync_fail()
   {
     has_submitted_ = false;
     has_synced_ = false;
   }
-
+  storage::mds::BufferCtxNode &get_buffer_ctx_node() const { return buffer_ctx_node_; }
   TO_STRING_KV(K(has_submitted_), K(has_synced_), K_(type), K(data_.length()));
-
 private:
   bool has_submitted_;
   bool has_synced_;
+  share::SCN mds_base_scn_;
   ObTxDataSourceType type_;
   common::ObString data_;
+  mutable storage::mds::BufferCtxNode buffer_ctx_node_;
 };
 
 typedef common::ObSEArray<ObTxBufferNode, 1> ObTxBufferNodeArray;
+typedef common::ObSEArray<storage::mds::BufferCtxNode , 1> ObTxBufferCtxArray;
 
 class ObMulSourceTxDataNotifier
 {
@@ -181,16 +160,6 @@ private:
   static int notify_standby_upgrade(const NotifyType type,
                              const char *buf, const int64_t len,
                              const ObMulSourceDataNotifyArg &arg);
-  static int notify_create_tablet(const NotifyType type,
-                                  const char *buf, const int64_t len,
-                                  const ObMulSourceDataNotifyArg &arg);
-  static int notify_remove_tablet(const NotifyType type,
-                                const char *buf, const int64_t len,
-                                const ObMulSourceDataNotifyArg &arg);
-  static int notify_modify_tablet_binding(const NotifyType type,
-                                          const char *buf,
-                                          const int64_t len,
-                                          const ObMulSourceDataNotifyArg &arg);
   static int notify_ddl_trans(const NotifyType type,
                               const char *buf, const int64_t len,
                               const ObMulSourceDataNotifyArg &arg);
@@ -206,6 +175,56 @@ public:
 private:
 
 
+};
+
+struct ObRegisterMdsFlag
+{
+  bool need_flush_redo_instantly_;
+  share::SCN mds_base_scn_;
+
+  ObRegisterMdsFlag() { reset(); }
+  void reset()
+  {
+    need_flush_redo_instantly_ = false;
+    mds_base_scn_.reset();
+  }
+
+  TO_STRING_KV(K(need_flush_redo_instantly_), K(mds_base_scn_));
+
+  OB_UNIS_VERSION(1);
+};
+
+class ObMDSInnerSQLStr
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObMDSInnerSQLStr();
+  ~ObMDSInnerSQLStr();
+  void reset();
+
+  int set(const char *mds_buf,
+          const int64_t mds_buf_len,
+          const ObTxDataSourceType &type,
+          const share::ObLSID ls_id,
+          const ObRegisterMdsFlag &register_flag);
+
+  const char *get_msd_buf() { return mds_str_.ptr(); }
+  int64_t get_msd_buf_len() { return mds_str_.length(); }
+  const ObTxDataSourceType &get_msd_type() { return type_; }
+  const share::ObLSID &get_ls_id() { return ls_id_; }
+  const ObRegisterMdsFlag &get_register_flag() { return register_flag_; }
+
+  TO_STRING_KV(K(mds_str_), K(type_), K(ls_id_), K(register_flag_));
+
+private:
+  // const char *msd_buf_;
+  // int64_t msd_buf_len_;
+  // bool from_copy_;
+  common::ObString mds_str_;
+  ObTxDataSourceType type_;
+  share::ObLSID ls_id_;
+  ObRegisterMdsFlag register_flag_;
 };
 
 } // transaction

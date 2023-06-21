@@ -99,6 +99,11 @@ public:
   static void SetUpTestCase()
   {
     LOG_INFO("SetUpTestCase");
+    ASSERT_EQ(OB_SUCCESS, omt::ObTenantConfigMgr::get_instance().add_tenant_config(MTL_ID()));
+    uint64_t version = cal_version(4, 2, 0, 0);
+    ASSERT_EQ(OB_SUCCESS, ObClusterVersion::get_instance().init(version));
+    ObClusterVersion::get_instance().tenant_config_mgr_ = &omt::ObTenantConfigMgr::get_instance();
+
     ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
     SAFE_DESTROY_INSTANCE.init();
     SAFE_DESTROY_INSTANCE.start();
@@ -113,11 +118,16 @@ public:
     MockTenantModuleEnv::get_instance().destroy();
   }
 
+  void SetUp()
+  {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
+  }
   void create_ls(uint64_t tenant_id, ObLSID &ls_id, ObLS *&ls);
   void insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_desc, ObTxReadSnapshot snapshot, const char* in_str);
   void prepare_tx_desc(ObTxDesc *&tx_desc, ObTxReadSnapshot &snapshot);
 private:
   static share::schema::ObTableSchema table_schema_;
+  common::ObArenaAllocator allocator_;
 };
 
 share::schema::ObTableSchema TestTrans::table_schema_;
@@ -218,11 +228,14 @@ TEST_F(TestTrans, create_ls_and_tablet)
   create_ls(tenant_id, ls_id, ls);
 
   LOG_INFO("create tablet");
-  obrpc::ObBatchCreateTabletArg create_tablet_arg;
   ObTabletID tablet_id(1001);
-  ASSERT_EQ(OB_SUCCESS, gen_create_tablet_arg(tenant_id, ls_id, tablet_id, create_tablet_arg, 1, &table_schema_));
   ObLSTabletService *ls_tablet_svr = ls->get_tablet_svr();
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(*ls_tablet_svr, create_tablet_arg));
+  ObLSService* ls_svr = MTL(ObLSService*);
+  ObLSHandle ls_handle;
+  uint64_t table_id = 12345;
+  ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema_, table_id));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema_, allocator_));
 }
 
 TEST_F(TestTrans, basic)
@@ -314,12 +327,13 @@ TEST_F(TestTrans, dist_trans)
 
   // create tablet
   LOG_INFO("create tablet");
-  obrpc::ObBatchCreateTabletArg create_tablet_arg;
   ObTabletID tablet_id2(1002);
-  ASSERT_EQ(OB_SUCCESS, gen_create_tablet_arg(tenant_id, ls_id2, tablet_id2, create_tablet_arg, 1, &table_schema_));
 
   ObLSTabletService *ls_tablet_svr = ls2->get_tablet_svr();
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(*ls_tablet_svr, create_tablet_arg));
+  ObLSService* ls_svr = MTL(ObLSService*);
+  ObLSHandle ls_handle2;
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id2, ls_handle2, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle2, tablet_id2, table_schema_, allocator_));
 
 
   LOG_INFO("start transaction");

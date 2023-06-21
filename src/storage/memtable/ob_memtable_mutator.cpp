@@ -326,7 +326,8 @@ ObMemtableMutatorRow::ObMemtableMutatorRow():
     update_seq_(0),
     acc_checksum_(0),
     version_(0),
-    flag_(0)
+    flag_(0),
+    column_cnt_(0)
 {
 }
 
@@ -340,7 +341,8 @@ ObMemtableMutatorRow::ObMemtableMutatorRow(const uint64_t table_id,
                                            const uint32_t acc_checksum,
                                            const int64_t version,
                                            const int32_t flag,
-                                           const int64_t seq_no):
+                                           const int64_t seq_no,
+                                           const int64_t column_cnt):
     ObMutator(table_id, rowkey, table_version, seq_no),
     dml_flag_(dml_flag),
     update_seq_((uint32_t)modify_count),
@@ -348,7 +350,8 @@ ObMemtableMutatorRow::ObMemtableMutatorRow(const uint64_t table_id,
     old_row_(old_row),
     acc_checksum_(acc_checksum),
     version_(version),
-    flag_(flag)
+    flag_(flag),
+    column_cnt_(column_cnt)
 {}
 
 ObMemtableMutatorRow::~ObMemtableMutatorRow()
@@ -376,7 +379,8 @@ int ObMemtableMutatorRow::copy(uint64_t &table_id,
                                uint32_t &acc_checksum,
                                int64_t &version,
                                int32_t &flag,
-                               int64_t &seq_no) const
+                               int64_t &seq_no,
+                               int64_t &column_cnt) const
 {
   int ret = OB_SUCCESS;
   table_id = table_id_;
@@ -390,6 +394,7 @@ int ObMemtableMutatorRow::copy(uint64_t &table_id,
   version = version_;
   flag = flag_;
   seq_no = seq_no_;
+  column_cnt = column_cnt_;
   return ret;
 }
 
@@ -429,13 +434,13 @@ int ObMemtableMutatorRow::serialize(char *buf, int64_t &buf_len, int64_t &pos,
           TRANS_LOG(INFO, "serialize row fail", K(ret), KP(buf), K(buf_len), K(pos));
         }
     }
-    if (OB_SUCC(ret)) {
-      row_size_ = (uint32_t)(new_pos - pos);
-      if (OB_FAIL(encode_i32(buf, buf_len, pos, row_size_))) {
-        TRANS_LOG(WARN, "serialize row size fail", K(ret), K(buf_len), K(pos), K(table_id_));
-      } else {
-        pos = new_pos;
-      }
+    if (FAILEDx(encode_vi64(buf, buf_len, new_pos, column_cnt_))) {
+      TRANS_LOG(WARN, "failed to serialize column cnt", K(column_cnt_));
+    } else if (FALSE_IT(row_size_ = (uint32_t )(new_pos - pos))) {
+    } else if (OB_FAIL(encode_i32(buf, buf_len, pos, row_size_))) {
+      TRANS_LOG(WARN, "serialize row fail", K(ret), K(buf_len), K(pos), K(table_id_));
+    } else {
+      pos = new_pos;
     }
   }
   return ret;
@@ -502,6 +507,11 @@ int ObMemtableMutatorRow::deserialize(const char *buf, const int64_t buf_len, in
         if (OB_SUCC(ret) && (new_pos < decrypted_len)) {
           if (OB_FAIL(decode_vi64(decrypted_buf, decrypted_len, new_pos, (int64_t *)&seq_no_))) {
             TRANS_LOG(WARN, "deserialize seq no fail", K(ret), K(table_id_), K(decrypted_len), K(new_pos));
+          }
+        }
+        if (OB_SUCC(ret) && (new_pos < decrypted_len)) {
+          if (OB_FAIL(decode_vi64(decrypted_buf, decrypted_len, new_pos, (int64_t *)&column_cnt_))) {
+            TRANS_LOG(WARN, "deserialize column cnt fail", K(ret), K(table_id_), K(decrypted_len), K(new_pos));
           }
         }
         if (OB_SUCC(ret)) {
@@ -587,7 +597,7 @@ int ObMutatorTableLock::serialize(
   if (OB_ISNULL(buf) || pos < 0 || pos > buf_len) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(lock_id_.serialize(buf, buf_len, new_pos)) ||
-             OB_FAIL(encode_vi64(buf, buf_len, new_pos, owner_id_)) ||
+             OB_FAIL(owner_id_.serialize(buf, buf_len, new_pos)) ||
              OB_FAIL(encode_i8(buf, buf_len, new_pos, mode_)) ||
              OB_FAIL(encode_i8(buf, buf_len, new_pos, lock_type_)) ||
              OB_FAIL(encode_vi64(buf, buf_len, new_pos, seq_no_)) ||
@@ -628,7 +638,7 @@ int ObMutatorTableLock::deserialize(
               K(pos), K_(row_size));
   } else if (OB_FAIL(lock_id_.deserialize(buf, buf_len, new_pos))) {
     TRANS_LOG(WARN, "deserialize lock_id fail", K(ret), K(pos), K(new_pos), K(row_size_), K(buf_len));
-  } else if (OB_FAIL(decode_vi64(buf, buf_len, new_pos, &owner_id_))) {
+  } else if (OB_FAIL(owner_id_.deserialize(buf, buf_len, new_pos))) {
     TRANS_LOG(WARN, "deserialize owner_id fail", K(ret), K(pos), K(new_pos), K(row_size_), K(buf_len));
   } else if (OB_FAIL(decode_i8(buf, buf_len, new_pos, reinterpret_cast<int8_t*>(&mode_)))) {
     TRANS_LOG(WARN, "deserialize lock mode fail", K(ret), K(pos), K(new_pos), K(row_size_), K(buf_len));
@@ -875,7 +885,8 @@ int ObMutatorWriter::append_row_kv(
                              redo.acc_checksum_,
                              redo.version_,
                              redo.flag_,
-                             redo.seq_no_);
+                             redo.seq_no_,
+                             redo.column_cnt_);
     int64_t tmp_pos = buf_.get_position();
     int64_t row_capacity = row_capacity_;
 

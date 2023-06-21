@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "storage/backup/ob_backup_task.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/location_cache/ob_location_service.h"
 #include "share/backup/ob_backup_struct.h"
 
 using namespace oceanbase::common;
@@ -45,7 +46,7 @@ bool ObBackupJobDesc::operator==(const ObBackupJobDesc &other) const
 /* ObLSBackupParam */
 
 ObLSBackupParam::ObLSBackupParam()
-    : task_id_(), backup_dest_(), tenant_id_(), dest_id_(0), backup_set_desc_(), ls_id_(), turn_id_(), retry_id_()
+    : job_id_(0), task_id_(0), backup_dest_(), tenant_id_(0), dest_id_(0), backup_set_desc_(), ls_id_(), turn_id_(0), retry_id_(0)
 {}
 
 ObLSBackupParam::~ObLSBackupParam()
@@ -53,8 +54,8 @@ ObLSBackupParam::~ObLSBackupParam()
 
 bool ObLSBackupParam::is_valid() const
 {
-  return task_id_ > 0 && backup_dest_.is_valid() && OB_INVALID_ID != tenant_id_ && dest_id_ > 0 && backup_set_desc_.is_valid() &&
-         ls_id_.is_valid() && turn_id_ >= 0 && retry_id_ >= 0;
+  return job_id_ > 0 && task_id_ > 0 && backup_dest_.is_valid() && OB_INVALID_ID != tenant_id_ && dest_id_ > 0
+      && backup_set_desc_.is_valid() && ls_id_.is_valid() && turn_id_ >= 0 && retry_id_ >= 0;
 }
 
 int ObLSBackupParam::assign(const ObLSBackupParam &param)
@@ -66,6 +67,7 @@ int ObLSBackupParam::assign(const ObLSBackupParam &param)
   } else if (OB_FAIL(backup_dest_.deep_copy(param.backup_dest_))) {
     LOG_WARN("failed to deep copy backup dest", K(ret));
   } else {
+    job_id_ = param.job_id_;
     task_id_ = param.task_id_;
     tenant_id_ = param.tenant_id_;
     dest_id_ = param.dest_id_;
@@ -1205,7 +1207,7 @@ void ObBackupLSTaskInfo::reset()
 /* ObBackupSkippedTablet */
 
 ObBackupSkippedTablet::ObBackupSkippedTablet()
-    : task_id_(), tenant_id_(), turn_id_(), retry_id_(), tablet_id_(), ls_id_(), backup_set_id_(), skipped_type_()
+    : task_id_(), tenant_id_(), turn_id_(), retry_id_(), tablet_id_(), ls_id_(), backup_set_id_(), skipped_type_(), data_type_()
 {}
 
 ObBackupSkippedTablet::~ObBackupSkippedTablet()
@@ -1213,13 +1215,14 @@ ObBackupSkippedTablet::~ObBackupSkippedTablet()
 
 bool ObBackupSkippedTablet::is_valid() const
 {
-  return task_id_ > 0 && OB_INVALID_ID != tenant_id_ && turn_id_ > 0 && retry_id_ >= 0 && tablet_id_.is_valid() &&
-         ls_id_.is_valid() && backup_set_id_ > 0 && skipped_type_.is_valid();
+  return task_id_ > 0 && OB_INVALID_ID != tenant_id_ && turn_id_ > 0 && retry_id_ >= 0 && tablet_id_.is_valid()
+         && ls_id_.is_valid() && backup_set_id_ > 0 && skipped_type_.is_valid()
+         && data_type_.is_valid();
 }
 
 /* ObBackupReportCtx */
 
-ObBackupReportCtx::ObBackupReportCtx() : rs_mgr_(NULL), sql_proxy_(NULL), rs_rpc_proxy_(NULL)
+ObBackupReportCtx::ObBackupReportCtx() : location_service_(NULL), sql_proxy_(NULL), rpc_proxy_(NULL)
 {}
 
 ObBackupReportCtx::~ObBackupReportCtx()
@@ -1227,7 +1230,7 @@ ObBackupReportCtx::~ObBackupReportCtx()
 
 bool ObBackupReportCtx::is_valid() const
 {
-  return OB_NOT_NULL(rs_mgr_) && OB_NOT_NULL(sql_proxy_) && OB_NOT_NULL(rs_rpc_proxy_);
+  return OB_NOT_NULL(location_service_) && OB_NOT_NULL(sql_proxy_) && OB_NOT_NULL(rpc_proxy_);
 }
 
 }  // namespace backup

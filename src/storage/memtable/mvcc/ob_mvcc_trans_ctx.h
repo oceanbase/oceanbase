@@ -50,7 +50,8 @@ struct RedoDataNode
            const int64_t version,
            const int32_t flag,
            const int64_t seq_no,
-           const common::ObTabletID &tablet_id);
+           const common::ObTabletID &tablet_id,
+           const int64_t column_cnt);
   void set_callback(ObITransCallback *callback) { callback_ = callback; }
   ObMemtableKey key_;
   ObRowData old_row_;
@@ -63,6 +64,7 @@ struct RedoDataNode
   int64_t seq_no_;
   ObITransCallback *callback_;
   common::ObTabletID tablet_id_;
+  int64_t column_cnt_;
 };
 
 struct TableLockRedoDataNode
@@ -347,7 +349,8 @@ public:
       memtable_(memtable),
       is_link_(false),
       not_calc_checksum_(false),
-      seq_no_(0)
+      seq_no_(0),
+      column_cnt_(0)
   {}
   ObMvccRowCallback(ObMvccRowCallback &cb, ObMemtable *memtable) :
       ObITransCallback(cb.need_fill_redo_, cb.need_submit_log_),
@@ -358,7 +361,8 @@ public:
       memtable_(memtable),
       is_link_(cb.is_link_),
       not_calc_checksum_(cb.not_calc_checksum_),
-      seq_no_(cb.seq_no_)
+      seq_no_(cb.seq_no_),
+      column_cnt_(cb.column_cnt_)
   {
     (void)key_.encode(cb.key_.get_rowkey());
   }
@@ -372,7 +376,8 @@ public:
             const int64_t data_size,
             const ObRowData *old_row,
             const bool is_replay,
-            const int64_t seq_no)
+            const int64_t seq_no,
+            const int64_t column_cnt)
   {
     UNUSED(is_replay);
 
@@ -394,6 +399,7 @@ public:
     if (tnode_) {
       tnode_->set_seq_no(seq_no_);
     }
+    column_cnt_ = column_cnt;
   }
   bool on_memtable(const ObIMemtable * const memtable) override;
   ObIMemtable *get_memtable() const override;
@@ -465,6 +471,7 @@ private:
     bool not_calc_checksum_ : 1;
   };
   int64_t seq_no_;
+  int64_t column_cnt_;
 };
 
 }; // end namespace memtable

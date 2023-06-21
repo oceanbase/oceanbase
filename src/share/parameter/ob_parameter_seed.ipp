@@ -619,13 +619,19 @@ DEF_BOOL(enable_rereplication, OB_CLUSTER_PARAMETER, "True",
          "specifies whether the auto-replication is turned on. "
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_rebalance, OB_CLUSTER_PARAMETER, "True",
-         "specifies whether the load-balancing is turned on. "
+DEF_BOOL(enable_rebalance, OB_TENANT_PARAMETER, "True",
+         "specifies whether the tenant load-balancing is turned on. "
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(balancer_idle_time, OB_CLUSTER_PARAMETER, "5m", "[10s,]",
-         "the time interval between the schedules of the load-balancing task. "
+DEF_TIME(balancer_idle_time, OB_TENANT_PARAMETER, "10s", "[10s,]",
+         "the time interval between the schedules of the tenant load-balancing task. "
          "Range: [10s, +∞)",
+         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(partition_balance_schedule_interval, OB_TENANT_PARAMETER, "2h", "[0s,]",
+         "the time interval between generate partition balance task. "
+         "The value should be no less than balancer_idle_time to enable partition balance. "
+         "Default value 2h and the value 0s means disable partition balance. "
+         "Range: [0s, +∞)",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(balancer_tolerance_percentage, OB_CLUSTER_PARAMETER, "10", "[1, 100)",
         "specifies the tolerance (in percentage) of the unbalance of the disk space utilization "
@@ -749,7 +755,7 @@ DEF_CAP(_server_standby_fetch_log_bandwidth_limit, OB_CLUSTER_PARAMETER, "0MB", 
 
 //// location cache config
 DEF_TIME(virtual_table_location_cache_expire_time, OB_CLUSTER_PARAMETER, "8s", "[1s,)",
-         "expiration time for virtual table location info in partiton location cache. "
+         "expiration time for virtual table location info in partition location cache. "
          "Range: [1s, +∞)",
          ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(location_refresh_thread_count, OB_CLUSTER_PARAMETER, "2", "(1,64]",
@@ -789,6 +795,8 @@ DEF_INT(bf_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "bf cache priority
 DEF_INT(bf_cache_miss_count_threshold, OB_CLUSTER_PARAMETER, "100", "[0,)", "bf cache miss count threshold, 0 means disable bf cache. Range:[0, )",
         ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(fuse_row_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "fuse row cache priority. Range:[1, )", ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(storage_meta_cache_priority, OB_CLUSTER_PARAMETER, "10", "[1,)", "storage meta cache priority. Range:[1, )",
+        ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //background limit config
 DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
@@ -956,8 +964,16 @@ ERRSIM_DEF_INT(errsim_tablet_batch_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "batch tablet count when in errsim mode"
         "Range: [0,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(errsim_backup_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "the ls id that backup want to insert error"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_INT(errsim_backup_tablet_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "the tablet id that backup want to insert error"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(errsim_transfer_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "the ls id that transfer want to insert error"
         "Range: [0,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_INT(skip_report_pg_backup_task_table_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
@@ -1398,6 +1414,41 @@ DEF_BOOL(_enable_tenant_leak_memory_protection, OB_CLUSTER_PARAMETER, "True", "p
 DEF_TIME(_advance_checkpoint_timeout, OB_CLUSTER_PARAMETER, "30m", "[10s,180m]",
          "the timeout for backup/migrate advance checkpoint Range: [10s,180m]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+//transfer
+DEF_TIME(_transfer_start_rpc_timeout, OB_CLUSTER_PARAMETER, "10s", "[1ms,600s]",
+        "transfer start status rpc check some status ready timeout, Range [1ms,600s]. "
+        "The default value is 10ms",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_transfer_finish_trans_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
+        "transfer finish transaction timeout, Range [1s,600s]. "
+        "The default value is 10s",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_transfer_start_trans_timeout, OB_CLUSTER_PARAMETER, "10s", "[1ms,600s]",
+        "transfer start transaction timeout, Range [1ms,600s]. "
+        "The default value is 10s",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_transfer_start_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
+        "the number of transfer start retry. Range: [0, 64] in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+
+
+DEF_TIME(_transfer_service_wakeup_interval, OB_CLUSTER_PARAMETER, "5m", "[1s,5m]",
+        "transfer service wakeup interval in errsim mode"
+        "Range: [1s, 5m]",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_transfer_process_lock_tx_timeout, OB_TENANT_PARAMETER, "100s", "[30s,)",
+        "transaction timeout for locking and unlocking transfer task"
+        "Range: [30s, +∞)",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+
+// end of transfer
+
 DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "24h", "(0s,]",
          "data dictionary dump to log(SYS LS) interval"
         "Range: (0s,+∞)",
@@ -1428,6 +1479,12 @@ DEF_BOOL(enable_user_defined_rewrite_rules, OB_TENANT_PARAMETER, "False",
 DEF_TIME(_ob_plan_cache_auto_flush_interval, OB_CLUSTER_PARAMETER, "0s", "[0s,)",
          "time interval for auto periodic flush plan cache. Range: [0s, +∞)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(errsim_migration_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "errsim migration ls id. Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_STR(errsim_transfer_backfill_server_addr, OB_CLUSTER_PARAMETER, "",
+        "the server addr that transfer backfill forbid to execute to when in errsim mode",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_enable_direct_load, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable direct path load",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1455,6 +1512,13 @@ DEF_INT(observer_id, OB_CLUSTER_PARAMETER, "0", "[1, 18446744073709551615]",
 DEF_INT(_pipelined_table_function_memory_limit, OB_TENANT_PARAMETER, "524288000", "[1024,18446744073709551615]",
         "pipeline table function result set memory size limit. default 524288000 (500M), Range: [1024,18446744073709551615]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_balance_kill_transaction, OB_TENANT_PARAMETER, "False",
+        "Specifies whether balance should actively kill transaction",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_balance_kill_transaction_threshold, OB_TENANT_PARAMETER, "100ms", "[1ms, 60s]",
+         "the time given to the transaction to execute when do balance"
+         "before it will be killed. Range: [1ms, 60s]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_fast_reclaim, OB_CLUSTER_PARAMETER, "True",
         "Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

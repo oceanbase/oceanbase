@@ -72,7 +72,7 @@ public:
 
   int init(
       const blocksstable::ObDatumRange &range,
-      const ObTableReadInfo &read_info,
+      const ObITableReadInfo &read_info,
       const blocksstable::MacroBlockId &macro_id,
       const common::ObIArray<blocksstable::ObMicroIndexInfo> &micro_block_infos,
       const common::ObIArray<blocksstable::ObDatumRowkey> &endkeys,

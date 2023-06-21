@@ -26,214 +26,183 @@ using namespace share;
 
 namespace rootserver
 {
-
-int64_t ObBackupMgrIdling::get_idle_interval_us()
-{
-  const int64_t backup_check_interval = GCONF._backup_idle_time;
-  return backup_check_interval;
-}
-
-ObBackupService::ObBackupService()
-    : is_inited_(false),
-      mgr_mtx_(),
-      can_schedule_(false),
-      idling_(stop_),
-      backup_data_scheduler_(),
-      backup_clean_scheduler_(),
-      backup_auto_obsolete_delete_trigger_(),
-      jobs_(),
-      triggers_(),
-      task_scheduler_(nullptr),
-      lease_service_(nullptr)
-{
-}
+/*
+*----------------------------- ObBackupService -----------------------------
+*/
 
 int ObBackupService::init(
     common::ObMySQLProxy &sql_proxy, 
     obrpc::ObSrvRpcProxy &rpc_proxy,
     schema::ObMultiVersionSchemaService &schema_service, 
-    ObBackupLeaseService &lease_service,
+    share::ObLocationService &loacation_service,
     ObBackupTaskScheduler &task_scheduler)
 {
   int ret = OB_SUCCESS;
-  const int64_t backup_mgr_thread_cnt = 1;
+  uint64_t tenant_id = MTL_ID();
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup mgr already inited", K(ret));
-  } else if (OB_FAIL(backup_data_scheduler_.init(
-      sql_proxy, rpc_proxy, schema_service, lease_service, task_scheduler, *this))) {
-    LOG_WARN("fail to init backup data scheduler", K(ret));
-  } else if (OB_FAIL(register_job_(&backup_data_scheduler_))) {
-    LOG_WARN("fail to regist job", K(ret), "job_type", backup_data_scheduler_.get_job_type());
-  } else if (OB_FAIL(backup_clean_scheduler_.init(
-      sql_proxy, rpc_proxy, schema_service, lease_service, task_scheduler, *this))) {
-    LOG_WARN("fail to init backup clean scheduler", K(ret));
-  } else if (OB_FAIL(register_job_(&backup_clean_scheduler_))) {
-    LOG_WARN("fail to regist job", K(ret), "job_type", backup_clean_scheduler_.get_job_type());
-  } else if (OB_FAIL(backup_auto_obsolete_delete_trigger_.init(
-      sql_proxy, rpc_proxy, schema_service, lease_service, task_scheduler, *this))) {
-    LOG_WARN("fail to init backup auto obsolete delete trigger", K(ret));
-  } else if (OB_FAIL(register_trigger_(&backup_auto_obsolete_delete_trigger_))) {
-    LOG_WARN("fail to regist job", K(ret), "job_type", backup_auto_obsolete_delete_trigger_.get_trigger_type());
-  } else if (OB_FAIL(create(backup_mgr_thread_cnt, "BackupMgr"))) {
-    LOG_WARN("create thread failed", K(ret), K(backup_mgr_thread_cnt));
+  } else if (OB_FAIL(task_scheduler.register_backup_srv(*this))) {
+    LOG_WARN("failed to register backup srv", K(ret));
+  } else if (OB_FAIL(sub_init(sql_proxy, rpc_proxy, schema_service, loacation_service, task_scheduler))) {
+    LOG_WARN("failed to do sub init", K(ret));
   } else {
+    tenant_id_ = tenant_id;
     task_scheduler_ = &task_scheduler;
-    lease_service_ = &lease_service;
+    schema_service_ = &schema_service;
     is_inited_ = true;
   }
   return ret;
 }
 
-void ObBackupService::stop()
+void ObBackupService::run2()
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    ObRsReentrantThread::stop();
-    idling_.wakeup();
-  }
-  LOG_INFO("Backup mgr stop", K(ret));
-}
-
-int ObBackupService::register_job_(ObIBackupJobScheduler *new_job)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(mgr_mtx_);
-  if (nullptr == new_job) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("new job is nullptr", K(ret));
-  } else if (OB_FAIL(jobs_.push_back(new_job))) {
-    LOG_WARN("regist job error", K(ret));
-  } else {
-    BackupJobType job_type = new_job->get_job_type();
-    LOG_INFO("backup mgr register job", K(job_type));
-  }
-  return ret;
-}
-
-int ObBackupService::register_trigger_(ObIBackupTrigger *new_trigger)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(mgr_mtx_);
-  if (nullptr == new_trigger) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("new trigger is nullptr", K(ret));
-  } else if (OB_FAIL(triggers_.push_back(new_trigger))) {
-    LOG_WARN("regist trigger error", K(ret));
-  } else {
-    BackupTriggerType trigger_type = new_trigger->get_trigger_type();
-    LOG_INFO("backup mgr register trigger", K(trigger_type));
-  }
-  return ret;
-}
-
-int ObBackupService::idle() const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(idling_.idle())) {
-    LOG_WARN("idle failed", K(ret));
-  } 
-  return ret;
-}
-
-void ObBackupService::wakeup()
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    idling_.wakeup();
-  }
-}
-
-int ObBackupService::get_job(const BackupJobType &type, ObIBackupJobScheduler *&new_job) 
-{
-  int ret = OB_SUCCESS;
-  new_job = nullptr;
-  ObMutexGuard guard(mgr_mtx_);
-  for (int i = 0; i < jobs_.count(); ++i) {
-    ObIBackupJobScheduler *tmp_job = jobs_.at(i);
-    if (type == tmp_job->get_job_type()) {
-      new_job = jobs_.at(i);
-      break;
-    }
-  }
-  if (nullptr == new_job) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("job not exist", K(ret), K(type));
-  }
-  return ret;
-}
-
-void ObBackupService::start_trigger_(int64_t &last_trigger_ts)
-{
-  int ret = OB_SUCCESS;
-  const int64_t now_ts = ObTimeUtility::current_time();
-#ifdef ERRSIM
-  const int64_t MAX_TRIGGET_TIME_INTERVAL = GCONF.trigger_auto_backup_delete_interval;
-#else
-  const int64_t MAX_TRIGGET_TIME_INTERVAL = 60 * 60 * 1000 * 1000L;// 1h
-#endif
-  if (now_ts > (last_trigger_ts + MAX_TRIGGET_TIME_INTERVAL)) {
-    for (int64_t i = 0; i < triggers_.count(); ++i) {
-      ObIBackupTrigger *trigger = triggers_.at(i);
-      if (OB_FAIL(trigger->process())) {  // status move forward, generate task and add task
-        LOG_WARN("job status move forward failed", K(ret), K(*trigger));
-      }
-    }
-    last_trigger_ts = now_ts;
-  }
-}
-
-void ObBackupService::start_scheduler_()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < jobs_.count(); ++i) {
-    ObIBackupJobScheduler *job = jobs_.at(i);
-    if (OB_FAIL(job->process())) {  // status move forward, generate task and add task
-      LOG_WARN("job status move forward failed", K(ret), K(*job));
-    }
-  }
-} 
-void ObBackupService::run3()
-{
-  int ret = OB_SUCCESS;
-  LOG_INFO("backup mgr start");
+  LOG_INFO("[backupService]backup service start");
   int64_t last_trigger_ts = ObTimeUtility::current_time();
-  while (!stop_) {
-    if (can_schedule()) {
-      if (OB_FAIL(lease_service_->check_lease())) {
-        LOG_WARN("fail to check lease", K(ret));
+  while (!has_set_stop()) {
+    set_idle_time(ObBackupBaseService::OB_MIDDLE_IDLE_TIME);
+    ObCurTraceId::init(GCONF.self_addr_);
+    share::schema::ObSchemaGetterGuard schema_guard;
+    const share::schema::ObTenantSchema *tenant_schema = NULL;
+    if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get schema guard", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
+      LOG_WARN("failed to get schema ", KR(ret), K(tenant_id_));
+    } else if (tenant_schema->is_normal()) {
+      if (can_schedule()) {
+        process(last_trigger_ts);
       } else {
-        LOG_INFO("start scheduler");
-        ObCurTraceId::init(GCONF.self_addr_);
-        start_trigger_(last_trigger_ts);
-        start_scheduler_();
+        task_scheduler_->wakeup();
+        wakeup();
       }
-    } else {
-      task_scheduler_->wakeup();
-      wakeup();
     }
-    
-    if (OB_FAIL(idle())) {
-      LOG_WARN("idle failed", K(ret));
-    } else {
-      continue;
-    }
+    idle();
   }
-  LOG_INFO("backup mgr stop");
+  LOG_INFO("[backupService]backup service stop");
 }
 
-int ObBackupService::handle_backup_database(const obrpc::ObBackupDatabaseArg &arg)
+bool ObBackupService::can_schedule()
+{
+  bool can = false;
+  if (is_sys_tenant(tenant_id_)) {
+  // sys tenant has no task need be reload by backup task scheduler, so no need to wait reload, always return can
+    can = true;
+  } else {
+    can = ATOMIC_LOAD(&can_schedule_);
+  }
+  return can;
+}
+
+void ObBackupService::enable_backup()
+{
+  ATOMIC_SET(&can_schedule_, true);
+}
+
+void ObBackupService::disable_backup()
+{
+  ATOMIC_SET(&can_schedule_, false);
+}
+
+void ObBackupService::destroy()
+{
+  ObBackupBaseService::destroy();
+  task_scheduler_ = nullptr;
+  is_inited_ = false;
+}
+
+/*
+*----------------------------- ObBackupDataService -----------------------------
+*/
+
+int ObBackupDataService::mtl_init(ObBackupDataService *&srv)
 {
   int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  obrpc::ObSrvRpcProxy *rpc_proxy = nullptr;
+  share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
+  ObBackupTaskScheduler *backup_task_scheduler = nullptr;
+  share::ObLocationService *location_service = nullptr;
+  if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
+  } else if (OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
+  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service should not be NULL", K(ret), KP(schema_service));
+  } else if (OB_ISNULL(backup_task_scheduler = MTL(ObBackupTaskScheduler *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup_task_scheduler should not be NULL", K(ret), KP(backup_task_scheduler));
+  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service should not be NULL", K(ret), KP(backup_task_scheduler));
+  } else if (OB_FAIL(srv->init(*sql_proxy, *rpc_proxy, *schema_service, *location_service, *backup_task_scheduler))) {
+    LOG_WARN("fail to ini backup service");
+  }
+  return ret;
+}
+
+int ObBackupDataService::sub_init(
+    common::ObMySQLProxy &sql_proxy,
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    schema::ObMultiVersionSchemaService &schema_service,
+    share::ObLocationService &loacation_service,
+    ObBackupTaskScheduler &task_scheduler)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backup mgr already inited", K(ret));
+  } else if (OB_FAIL(backup_data_scheduler_.init(
+      tenant_id, sql_proxy, rpc_proxy, schema_service, task_scheduler, *this))) {
+    LOG_WARN("fail to init backup data scheduler", K(ret));
+  } else if (OB_FAIL(create("BackupDataSrv", *this, ObWaitEventIds::BACKUP_DATA_SERVICE_COND_WAIT))) {
+    LOG_WARN("failed to create backup data service", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupDataService::process(int64_t &last_schedule_ts) {
+  int ret = OB_SUCCESS;
+  UNUSED(last_schedule_ts);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(backup_data_scheduler_.process())) {
+    LOG_WARN("failed to process backup data", K(ret));
+  }
+  return ret;
+}
+
+ObIBackupJobScheduler *ObBackupDataService::get_scheduler(const BackupJobType &type)
+{
+  ObIBackupJobScheduler *ptr = nullptr;
+  if (BackupJobType::BACKUP_DATA_JOB == type) {
+    ptr = &backup_data_scheduler_;
+  }
+  return ptr;
+}
+
+int ObBackupDataService::get_need_reload_task(
+    common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(backup_data_scheduler_.get_need_reload_task(allocator, tasks))) {
+    LOG_WARN("failed to get need reload task", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupDataService::handle_backup_database(const obrpc::ObBackupDatabaseArg &arg)
+{
+  int ret = OB_SUCCESS;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -248,7 +217,7 @@ int ObBackupService::handle_backup_database(const obrpc::ObBackupDatabaseArg &ar
   return ret;
 }
 
-int ObBackupService::handle_backup_database_cancel(const uint64_t tenant_id, const ObIArray<uint64_t> &managed_tenant_ids)
+int ObBackupDataService::handle_backup_database_cancel(const uint64_t tenant_id, const ObIArray<uint64_t> &managed_tenant_ids)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -265,7 +234,118 @@ int ObBackupService::handle_backup_database_cancel(const uint64_t tenant_id, con
   return ret;
 }
 
-int ObBackupService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
+/*
+*----------------------------- ObBackupCleanService -----------------------------
+*/
+
+
+int ObBackupCleanService::mtl_init(ObBackupCleanService *&srv)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  obrpc::ObSrvRpcProxy *rpc_proxy = nullptr;
+  share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
+  ObBackupTaskScheduler *backup_task_scheduler = nullptr;
+  share::ObLocationService *location_service = nullptr;
+  if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
+  } else if (OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
+  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service should not be NULL", K(ret), KP(schema_service));
+  } else if (OB_ISNULL(backup_task_scheduler = MTL(ObBackupTaskScheduler *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup_task_scheduler should not be NULL", K(ret), KP(backup_task_scheduler));
+  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service should not be NULL", K(ret), KP(backup_task_scheduler));
+  } else if (OB_FAIL(srv->init(*sql_proxy, *rpc_proxy, *schema_service, *location_service, *backup_task_scheduler))) {
+    LOG_WARN("fail to ini backup service");
+  }
+  return ret;
+}
+
+int ObBackupCleanService::sub_init(
+    common::ObMySQLProxy &sql_proxy,
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    schema::ObMultiVersionSchemaService &schema_service,
+    share::ObLocationService &loacation_service,
+    ObBackupTaskScheduler &task_scheduler)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backup mgr already inited", K(ret));
+  } else if (OB_FAIL(backup_clean_scheduler_.init(
+      tenant_id, sql_proxy, rpc_proxy, schema_service, task_scheduler, *this))) {
+    LOG_WARN("fail to init backup clean scheduler", K(ret));
+  } else if (OB_FAIL(register_job_(&backup_clean_scheduler_))) {
+    LOG_WARN("fail to regist job", K(ret), "job_type", backup_clean_scheduler_.get_job_type());
+  } else if (OB_FAIL(backup_auto_obsolete_delete_trigger_.init(tenant_id,
+      sql_proxy, rpc_proxy, schema_service, task_scheduler, *this))) {
+    LOG_WARN("fail to init backup data scheduler", K(ret));
+  } else if (OB_FAIL(register_trigger_(&backup_auto_obsolete_delete_trigger_))) {
+    LOG_WARN("fail to regist job", K(ret), "job_type", backup_auto_obsolete_delete_trigger_.get_trigger_type());
+  } else if (OB_FAIL(create("BackupCleanSrv", *this, ObWaitEventIds::BACKUP_CLEAN_SERVICE_COND_WAIT))) {
+    LOG_WARN("create BackupService thread failed", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupCleanService::process(int64_t &last_schedule_ts)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    process_trigger_(last_schedule_ts);
+    process_scheduler_();
+  }
+  return ret;
+}
+
+ObIBackupJobScheduler *ObBackupCleanService::get_scheduler(const BackupJobType &type)
+{
+  ObIBackupJobScheduler *ptr = nullptr;
+  int ret = OB_SUCCESS;
+  bool find_job = false;
+  ARRAY_FOREACH(jobs_, i) {
+    ObIBackupJobScheduler *job = jobs_.at(i);
+    if (nullptr == job) {
+    } else if (type == job->get_job_type()) {
+      ptr = job;
+    }
+  }
+  return ptr;
+}
+
+int ObBackupCleanService::get_need_reload_task(
+    common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks)
+{
+  int ret = OB_SUCCESS;
+  ObSArray<ObBackupScheduleTask *> need_reload_tasks;
+  for (int i = 0; OB_SUCC(ret) && i < jobs_.count(); ++i) {
+    ObIBackupJobScheduler *job = jobs_.at(i);
+    need_reload_tasks.reset();
+    if (nullptr == job) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("nullptr backup job", K(ret));
+    } else if (OB_FAIL(job->get_need_reload_task(allocator, need_reload_tasks))) {
+      LOG_WARN("failed to get need reload task", K(ret), K(*job));
+    } else if (need_reload_tasks.empty()) {
+    } else if (OB_FAIL(append(tasks, need_reload_tasks))) {
+      LOG_WARN("failed to append tasks", K(ret), K(need_reload_tasks));
+    }
+  }
+  return ret;
+}
+
+int ObBackupCleanService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
 {
   int ret = OB_SUCCESS;
 
@@ -313,7 +393,7 @@ int ObBackupService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
 }
 
 
-int ObBackupService::handle_delete_policy(const obrpc::ObDeletePolicyArg &arg)
+int ObBackupCleanService::handle_delete_policy(const obrpc::ObDeletePolicyArg &arg)
 {
   int ret = OB_SUCCESS;
 
@@ -353,7 +433,7 @@ int ObBackupService::handle_delete_policy(const obrpc::ObDeletePolicyArg &arg)
   return ret;
 }
 
-int ObBackupService::handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg)
+int ObBackupCleanService::handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -368,41 +448,66 @@ int ObBackupService::handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg
   return ret;
 }
 
-int ObBackupService::get_need_reload_task(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) 
+
+int ObBackupCleanService::register_job_(ObIBackupJobScheduler *new_job)
 {
   int ret = OB_SUCCESS;
-  ObMutexGuard guard(mgr_mtx_);
-  ObSArray<ObBackupScheduleTask *> need_reload_tasks;
-  for (int i = 0; OB_SUCC(ret) && i < jobs_.count(); ++i) {
-    ObIBackupJobScheduler *job = jobs_.at(i);
-    need_reload_tasks.reset();
-    if (nullptr == job) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("nullptr backup job", K(ret));
-    } else if (OB_FAIL(job->get_need_reload_task(allocator, need_reload_tasks))) {
-      LOG_WARN("failed to get need reload task", K(ret), K(*job));
-    } else if (need_reload_tasks.empty()) {
-    } else if (OB_FAIL(append(tasks, need_reload_tasks))) {
-      LOG_WARN("failed to append tasks", K(ret), K(need_reload_tasks));
-    }
+  if (nullptr == new_job) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("new job is nullptr", K(ret));
+  } else if (OB_FAIL(jobs_.push_back(new_job))) {
+    LOG_WARN("regist job error", K(ret));
+  } else {
+    BackupJobType job_type = new_job->get_job_type();
+    LOG_INFO("backup mgr register job", K(job_type));
   }
   return ret;
 }
 
-bool ObBackupService::can_schedule() 
+int ObBackupCleanService::register_trigger_(ObIBackupTrigger *new_trigger)
 {
-  bool can = ATOMIC_LOAD(&can_schedule_);
-  return can;
+  int ret = OB_SUCCESS;
+  if (nullptr == new_trigger) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("new trigger is nullptr", K(ret));
+  } else if (OB_FAIL(triggers_.push_back(new_trigger))) {
+    LOG_WARN("regist trigger error", K(ret));
+  } else {
+    BackupTriggerType trigger_type = new_trigger->get_trigger_type();
+    LOG_INFO("backup mgr register trigger", K(trigger_type));
+  }
+  return ret;
 }
 
-void ObBackupService::enable_backup()
+void ObBackupCleanService::process_trigger_(int64_t &last_trigger_ts)
 {
-  ATOMIC_SET(&can_schedule_, true);
+  int tmp_ret = OB_SUCCESS;
+  const int64_t now_ts = ObTimeUtility::current_time();
+#ifdef ERRSIM
+  const int64_t MAX_TRIGGET_TIME_INTERVAL = GCONF.trigger_auto_backup_delete_interval;
+#else
+  const int64_t MAX_TRIGGET_TIME_INTERVAL = 60 * 60 * 1000 * 1000L;// 1h
+#endif
+  if (now_ts > (last_trigger_ts + MAX_TRIGGET_TIME_INTERVAL)) {
+    for (int64_t i = 0; i < triggers_.count(); ++i) {
+      ObIBackupTrigger *trigger = triggers_.at(i);
+      if (OB_SUCCESS != (tmp_ret = trigger->process())) {  // status move forward, generate task and add task
+        LOG_WARN_RET(tmp_ret, "job status move forward failed", K(*trigger));
+      }
+    }
+    last_trigger_ts = now_ts;
+  }
 }
 
-void ObBackupService::disable_backup()
+void ObBackupCleanService::process_scheduler_()
 {
-  ATOMIC_SET(&can_schedule_, false);
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t i = 0; i < jobs_.count(); ++i) {
+    ObIBackupJobScheduler *job = jobs_.at(i);
+    if (OB_SUCCESS != (tmp_ret = job->process())) {  // status move forward, generate task and add task
+      LOG_WARN_RET(tmp_ret, "job status move forward failed", K(*job));
+    }
+  }
 }
 
 }  // namespace rootserver

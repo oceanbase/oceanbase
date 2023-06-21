@@ -424,10 +424,14 @@ public:
   void set_id(int64_t id) { id_ = id; }
   AtomicOperator &get_op() { return op_; }
   void set_running() { running_ = true; }
-  int fill_comment(char *buf,const int64_t size) const {
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param,
+      ObIAllocator &allocator) const override
+  {
     int ret = OB_SUCCESS;
-    if (OB_ISNULL(buf) || size <0) {
-      COMMON_LOG(INFO,"buf is NULL",K(ret),K(size));
+    if (!is_inited_) {
+      ret = OB_NOT_INIT;
+    } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(), 1, 1, "table_id", 10))) {
+      COMMON_LOG(WARN, "fail to add dag warning info param", K(ret));
     }
     return ret;
   }
@@ -479,7 +483,7 @@ private:
 class TestHALowDag : public TestDag
 {
 public:
-  TestHALowDag() : TestDag(ObDagType::DAG_TYPE_BACKUP) {}
+  TestHALowDag() : TestDag(ObDagType::DAG_TYPE_BACKUP_PREPARE) {}
 private:
   DISALLOW_COPY_AND_ASSIGN(TestHALowDag);
 };
@@ -800,6 +804,7 @@ public:
   TestDagScheduler()
     : tenant_id_(500),
       scheduler_(nullptr),
+      dag_history_mgr_(nullptr),
       tenant_base_(500),
       allocator_("DagScheduler")
   { }
@@ -809,18 +814,29 @@ public:
     scheduler_ = OB_NEW(ObTenantDagScheduler, ObModIds::TEST);
     tenant_base_.set(scheduler_);
 
+    dag_history_mgr_ = OB_NEW(ObDagWarningHistoryManager, ObModIds::TEST);
+    tenant_base_.set(dag_history_mgr_);
+
     ObTenantEnv::set_tenant(&tenant_base_);
     ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
+
+    ObMallocAllocator *ma = ObMallocAllocator::get_instance();
+    ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id_));
+    ASSERT_EQ(OB_SUCCESS, ma->set_tenant_limit(tenant_id_, 1LL << 30));
   }
   void TearDown()
   {
     scheduler_->destroy();
+    scheduler_ = nullptr;
+    dag_history_mgr_->~ObDagWarningHistoryManager();
+    dag_history_mgr_ = nullptr;
     tenant_base_.destroy();
     ObTenantEnv::set_tenant(nullptr);
   }
 private:
   const uint64_t tenant_id_;
   ObTenantDagScheduler *scheduler_;
+  ObDagWarningHistoryManager *dag_history_mgr_;
   ObTenantBase tenant_base_;
   ObArenaAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(TestDagScheduler);

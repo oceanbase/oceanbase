@@ -189,7 +189,7 @@ void *ObMallocAllocator::realloc(
   } else if (OB_ISNULL(nptr = allocator->realloc(ptr, size, inner_attr))) {
     // do nothing
   }
-  return nptr;;
+  return nptr;
 #endif
 }
 
@@ -247,7 +247,7 @@ ObTenantCtxAllocatorGuard ObMallocAllocator::get_tenant_ctx_allocator(uint64_t t
 {
   if (OB_LIKELY(tl_ta != NULL && tl_ta->get_tenant_id() == tenant_id)) {
     const bool lock = false;
-    return ObTenantCtxAllocatorGuard(&tl_ta[ctx_id], lock);;
+    return ObTenantCtxAllocatorGuard(&tl_ta[ctx_id], lock);
   }
   return get_tenant_ctx_allocator_without_tlcache(tenant_id, ctx_id);
 }

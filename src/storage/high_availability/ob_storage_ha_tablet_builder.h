@@ -69,11 +69,20 @@ public:
   ObStorageHATabletsBuilder();
   virtual ~ObStorageHATabletsBuilder();
   int init(const ObStorageHATabletsBuilderParam &param);
+  // Create all tablets with remote tablet meta.
   int create_or_update_tablets();
+  int create_all_tablets(
+      ObICopyLSViewInfoReader *reader,
+      common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
+      common::ObIArray<common::ObTabletID> &data_tablet_id_list,
+      CopyTabletSimpleInfoMap &simple_info_map);
+  // Restore PENDING tablets meta. PENDING tablets will be exist at restore phase RESTORE_SYS_TABLETS,
+  // RESTORE_TO_CONSISTENT_SCN, or QUICK_RESTORE. Leader gets the meta from backup, follower gets it from leader.
+  // If that tablet meta identified uniquely by transfer sequence exists, replace and update the restore status to EMPTY.
+  // Otherwise, just update it to UNDEFINED.
+  int update_pending_tablets_with_remote();
   int build_tablets_sstable_info();
   int update_local_tablets();
-  const CopyTabletSimpleInfoMap &get_tablets_simple_info_map() { return tablet_simple_info_map_ ; }
-  int get_src_deleted_tablet_list(common::ObIArray<common::ObTabletID> &tablet_id_list);
 
 private:
   int get_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
@@ -83,22 +92,31 @@ private:
   int create_or_update_tablet_(
       const obrpc::ObCopyTabletInfo &tablet_info,
       ObLS *ls);
-  int get_tablets_sstable_reader_(ObICopySSTableInfoReader *&reader);
+  int get_tablets_sstable_reader_(
+      const common::ObIArray<ObTabletHandle> &tablet_handle_array,
+      ObICopySSTableInfoReader *&reader);
   int build_tablets_sstable_info_(
       const obrpc::ObCopyTabletSSTableInfo &sstable_info);
-  int get_tablets_sstable_restore_reader_(ObICopySSTableInfoReader *&reader);
-  int get_tablets_sstable_ob_reader_(ObICopySSTableInfoReader *&reader);
+  int get_tablets_sstable_restore_reader_(
+      const common::ObIArray<ObTabletHandle> &tablet_handle_array,
+      ObICopySSTableInfoReader *&reader);
+  int get_tablets_sstable_ob_reader_(
+      const common::ObIArray<ObTabletHandle> &tablet_handle_array,
+      ObICopySSTableInfoReader *&reader);
   void free_sstable_info_reader_(ObICopySSTableInfoReader *&reader);
 
-  int build_copy_tablets_sstable_info_arg_(obrpc::ObCopyTabletsSSTableInfoArg &arg);
+  int build_copy_tablets_sstable_info_arg_(
+      const common::ObIArray<ObTabletHandle> &tablet_handle_array,
+      obrpc::ObCopyTabletsSSTableInfoArg &arg);
   int build_copy_tablet_sstable_info_arg_(
-      const common::ObTabletID &tablet_id,
+      const ObTabletHandle &tablet_handle,
       obrpc::ObCopyTabletSSTableInfoArg &arg);
   int get_major_sstable_max_snapshot_(
       const ObSSTableArray &major_sstable_array,
       int64_t &max_snapshot_version);
   int get_remote_logical_minor_scn_range_(
       const ObSSTableArray &minor_sstable_array,
+      ObTablet *tablet,
       share::ObScnRange &scn_range);
   int get_need_copy_ddl_sstable_range_(
       const ObTablet *tablet,
@@ -109,6 +127,7 @@ private:
       share::SCN &max_start_scn);
   int hold_local_reuse_sstable_(
       const common::ObTabletID &tablet_id,
+      ObTabletHandle &local_tablet_hdl,
       ObTablesHandleArray &tables_handle,
       ObStorageSchema &storage_schema,
       compaction::ObMediumCompactionInfoList &medium_info_list,
@@ -119,9 +138,11 @@ private:
   int remove_uncomplete_tablet_(
       const common::ObTabletID &tablet_id);
   int create_tablet_remote_logical_sstable_(
+      common::ObArenaAllocator &allocator,
       const common::ObTabletID &tablet_id,
       ObTablesHandleArray &tables_handle);
   int create_remote_logical_sstable_(
+      common::ObArenaAllocator &allocator,
       const common::ObTabletID &tablet_id,
       const share::SCN start_scn,
       const share::SCN end_scn,
@@ -139,17 +160,20 @@ private:
   int create_tablet_remote_logical_sstable_(
       ObTablet *tablet,
       ObTablesHandleArray &tables_handle);
+  int modified_tablet_info_(
+      obrpc::ObCopyTabletInfo &tablet_info);
+
   int create_tablet_with_major_sstables_(
       ObLS *ls,
       const obrpc::ObCopyTabletInfo &tablet_info,
       const ObTablesHandleArray &major_tables,
       const ObStorageSchema &storage_schema,
       const compaction::ObMediumCompactionInfoList &medium_info_list);
+  int hold_local_tablet_(
+      common::ObIArray<ObTabletHandle> &tablet_handle_array);
 private:
   bool is_inited_;
   ObStorageHATabletsBuilderParam param_;
-  CopyTabletSimpleInfoMap tablet_simple_info_map_;
-  ObArray<common::ObTabletID> deleted_tablet_id_list_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilder);
 };
 
@@ -256,6 +280,7 @@ public:
   int get_copy_sstable_maro_range_info(
       const ObITable::TableKey &copy_table_key,
       ObCopySSTableMacroRangeInfo &copy_sstable_macro_range_info);
+  int check_src_tablet_exist(bool &is_exist);
 private:
   int build_sstable_macro_range_info_map_();
   int get_sstable_macro_range_info_reader_(ObICopySSTableMacroInfoReader *&reader);
@@ -270,7 +295,7 @@ private:
   ObStorageHACopySSTableParam param_;
   ObArenaAllocator allocator_;
   CopySSTableMacroRangeInfoMap macro_range_info_map_;
-
+  storage::ObCopyTabletStatus::STATUS status_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHACopySSTableInfoMgr);
 };
 
@@ -306,17 +331,17 @@ private:
       int64_t &multi_version_start);
   static int inner_update_tablet_table_store_with_major_(
       const int64_t multi_version_start,
+      const ObTableHandleV2 &table_handle,
       ObLS *ls,
       ObTablet *tablet,
-      ObITable *table,
-      const ObStorageSchema &storage_schema,
-      const compaction::ObMediumCompactionInfoList &medium_info_list);
+      const ObStorageSchema &storage_schema);
   static int inner_update_tablet_table_store_with_minor_(
       ObLS *ls,
       ObTablet *tablet,
       const bool &need_tablet_meta_merge,
       const ObMigrationTabletParam *src_tablet_meta,
-      const ObTablesHandleArray &tables_handle);
+      const ObTablesHandleArray &tables_handle,
+      const bool update_ddl_sstable);
   static int check_need_merge_tablet_meta_(
       const ObMigrationTabletParam *src_tablet_meta,
       ObTablet *tablet,

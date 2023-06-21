@@ -92,14 +92,13 @@ public:
    */
   void detect_failure();
   bool is_clog_disk_has_fatal_error();
-  bool is_data_disk_has_fatal_error(bool &slog_hang, bool &data_hang);
+  bool is_data_disk_has_fatal_error();
   bool is_schema_not_refreshed();
 private:
   bool check_is_running_() const { return is_running_; }
   int insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info);
   void detect_palf_hang_failure_();
-  void detect_slog_writer_hang_failure_();
-  void detect_sstable_io_failure_();
+  void detect_data_disk_io_failure_();
   void detect_palf_disk_full_();
   void detect_schema_not_refreshed_();
 private:
@@ -117,8 +116,7 @@ private:
   common::ObOccamTimerTaskRAIIHandle recovery_task_handle_;
   ObLeaderCoordinator *coordinator_;
   bool has_add_clog_hang_event_;
-  bool has_add_slog_hang_event_;
-  bool has_add_sstable_hang_event_;
+  bool has_add_data_disk_hang_event_;
   bool has_add_clog_full_event_;
   bool has_schema_error_;
   ObSpinLock lock_;

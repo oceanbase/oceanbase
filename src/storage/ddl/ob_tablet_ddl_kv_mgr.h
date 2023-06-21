@@ -93,13 +93,13 @@ private:
   int get_ddl_kvs_unlock(const bool frozen_only, ObTablesHandleArray &kv_handle_array);
   int64_t get_count_nolock() const;
   int update_ddl_major_sstable();
-  int create_empty_ddl_sstable(ObTableHandleV2 &table_handle);
+  int create_empty_ddl_sstable(common::ObArenaAllocator &allocator, blocksstable::ObSSTable &sstable);
   void cleanup_unlock();
   void destroy();
   bool is_commit_success_unlock() const;
 public:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 16;
-  static const int64_t TRY_LOCK_TIMEOUT = 1 * 1000000; // 1s
+  static const int64_t TRY_LOCK_TIMEOUT = 10 * 1000000; // 10s
 private:
   bool is_inited_;
   share::SCN success_start_scn_;

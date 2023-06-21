@@ -37,6 +37,8 @@
 #include "observer/ob_server.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"        //ObWeakReadUtil
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ls/ob_ls_get_mod.h"
+#include "storage/tablet/ob_tablet.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
 
@@ -675,24 +677,32 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   } else {
     auto &tx_desc = *session->get_tx_desc();
     int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
-    share::ObLSID local_ls_id;
-    bool local_single_ls_plan = plan->is_local_plan()
-      && OB_PHY_PLAN_LOCAL == plan->get_location_type()
-      && das_ctx.has_same_lsid(&local_ls_id);
-    if (local_single_ls_plan) {
-      ret = txs->get_ls_read_snapshot(tx_desc,
-                                      session->get_tx_isolation(),
-                                      local_ls_id,
-                                      stmt_expire_ts,
-                                      snapshot);
-    } else {
+    share::ObLSID first_ls_id;
+    bool local_single_ls_plan = false;
+    const bool local_single_ls_plan_maybe = plan->is_local_plan() &&
+                                            OB_PHY_PLAN_LOCAL == plan->get_location_type() &&
+                                            !tx_desc.is_can_elr();
+    if (local_single_ls_plan_maybe) {
+      if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id))) {
+      } else if (!first_ls_id.is_valid()) {
+        // do nothing
+      } else if (OB_FAIL(txs->get_ls_read_snapshot(tx_desc,
+                                                   session->get_tx_isolation(),
+                                                   first_ls_id,
+                                                   stmt_expire_ts,
+                                                   snapshot))) {
+      } else {
+        local_single_ls_plan = has_same_lsid(das_ctx, snapshot.core_.version_, first_ls_id);
+      }
+    }
+    if (OB_SUCC(ret) && !local_single_ls_plan) {
       ret = txs->get_read_snapshot(tx_desc,
                                    session->get_tx_isolation(),
                                    stmt_expire_ts,
                                    snapshot);
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("fail to get snapshot", K(ret), K(local_ls_id), KPC(session));
+      LOG_WARN("fail to get snapshot", K(ret), K(local_single_ls_plan), K(first_ls_id), KPC(session));
     }
   }
   return ret;
@@ -765,6 +775,76 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
 uint32_t ObSqlTransControl::get_real_session_id(ObSQLSessionInfo &session)
 {
   return session.get_xid().empty() ? 0 : (session.get_proxy_sessid() != 0 ? session.get_proxy_sessid() : session.get_sessid());
+}
+
+int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid)
+{
+  int ret = OB_SUCCESS;
+  const DASTableLocList &table_locs = das_ctx.get_table_loc_list();
+  if (!table_locs.empty()) {
+    const ObDASTableLoc *first_table_loc = table_locs.get_first();
+    const DASTabletLocList &tablet_locs = first_table_loc->get_tablet_locs();
+    if (!tablet_locs.empty()) {
+      const ObDASTabletLoc *tablet_loc = tablet_locs.get_first();
+      first_lsid = tablet_loc->ls_id_;
+    }
+  }
+  return ret;
+}
+
+bool ObSqlTransControl::has_same_lsid(const ObDASCtx &das_ctx,
+                                      const share::SCN &snapshot_version,
+                                      share::ObLSID &first_lsid)
+{
+  int ret = OB_SUCCESS;
+  bool bret = true;
+  ObLSHandle ls_handle;
+  const DASTableLocList &table_locs = das_ctx.get_table_loc_list();
+  FOREACH_X(table_node, table_locs, bret) {
+    ObDASTableLoc *table_loc = *table_node;
+    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
+         bret && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
+      ObDASTabletLoc *tablet_loc = *tablet_node;
+      const ObTabletID tablet_id = tablet_loc->tablet_id_;
+      if (first_lsid != tablet_loc->ls_id_) {
+        bret = false;
+      }
+      if (bret && !ls_handle.is_valid()) {
+        ObLSService *ls_svr = NULL;
+        if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+          bret = false;
+        } else if (OB_FAIL(ls_svr->get_ls(first_lsid, ls_handle, ObLSGetMod::TRANS_MOD))) {
+          bret = false;
+        } else {
+          // do nothing
+        }
+      }
+      if (bret) {
+        ObLS *ls = NULL;
+        ObLSTabletService *ls_tablet_service = NULL;
+        if (OB_ISNULL(ls = ls_handle.get_ls())) {
+          bret = false;
+        } else if (OB_ISNULL(ls_tablet_service = ls->get_tablet_svr())) {
+          bret = false;
+        } else {
+          ObTablet *tablet = NULL;
+          ObTabletHandle tablet_handle;
+          if (OB_FAIL(ls_tablet_service->get_tablet(tablet_id, tablet_handle, 100 * 1000))) {
+            bret = false;
+          } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+            bret = false;
+          } else if (!tablet->get_tablet_meta().transfer_info_.is_valid()) {
+            bret = false;
+          } else if (tablet->get_tablet_meta().transfer_info_.transfer_start_scn_ >= snapshot_version) {
+            bret = false;
+          } else {
+            // do nothing
+          }
+        }
+      }
+    }
+  }
+  return bret;
 }
 
 int ObSqlTransControl::start_hook_if_need_(ObSQLSessionInfo &session,

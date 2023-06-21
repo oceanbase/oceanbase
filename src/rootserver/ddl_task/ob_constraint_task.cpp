@@ -16,6 +16,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_ddl_common.h"
+#include "storage/ddl/ob_ddl_lock.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_snapshot_info_manager.h"
 #include "share/scn.h"
@@ -55,7 +56,7 @@ int ObCheckConstraintValidationTask::process()
   const ObDatabaseSchema *database_schema = nullptr;
   int tmp_ret = OB_SUCCESS;
   ObTabletID unused_tablet_id;
-  ObDDLTaskKey task_key(target_object_id_, schema_version_);
+  ObDDLTaskKey task_key(tenant_id_, target_object_id_, schema_version_);
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id_, table_schema))) {
@@ -189,7 +190,7 @@ int ObForeignKeyConstraintValidationTask::process()
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else {
     ObTabletID unused_tablet_id;
-    ObDDLTaskKey task_key(foregin_key_id_, schema_version_);
+    ObDDLTaskKey task_key(tenant_id_, foregin_key_id_, schema_version_);
     ObDDLTaskInfo info;
     int tmp_ret = OB_SUCCESS;
     if (OB_FAIL(check_fk_by_send_sql())) {
@@ -233,7 +234,7 @@ int ObForeignKeyConstraintValidationTask::check_fk_by_send_sql() const
     // ob drop database to recyclebin won't drop its tables to recyclebin, but will drop fk of its tables directly.
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("database schema not exist", K(ret));
-  } else if (OB_FAIL(get_foreign_key_info(data_table_schema, fk_info))) {
+  } else if (OB_FAIL(get_foreign_key_info(data_table_schema, foregin_key_id_, fk_info))) {
     LOG_WARN("get foreign key info failed", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, fk_info.parent_table_id_, parent_table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(fk_info.parent_table_id_));
@@ -263,7 +264,7 @@ int ObForeignKeyConstraintValidationTask::check_fk_by_send_sql() const
   return ret;
 }
 
-int ObForeignKeyConstraintValidationTask::get_foreign_key_info(const ObTableSchema *table_schema, ObForeignKeyInfo &fk_info) const
+int ObForeignKeyConstraintValidationTask::get_foreign_key_info(const ObTableSchema *table_schema, const int64_t foreign_key_id, ObForeignKeyInfo &fk_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)) {
@@ -273,7 +274,7 @@ int ObForeignKeyConstraintValidationTask::get_foreign_key_info(const ObTableSche
     const ObIArray<ObForeignKeyInfo> &fk_infos = table_schema->get_foreign_key_infos();
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < fk_infos.count() && !found; ++i) {
-      if (foregin_key_id_ == fk_infos.at(i).foreign_key_id_) {
+      if (foreign_key_id == fk_infos.at(i).foreign_key_id_) {
         fk_info = fk_infos.at(i);
         found = true;
       }
@@ -818,6 +819,79 @@ int ObConstraintTask::check_replica_end(bool &is_end)
   return ret;
 }
 
+int ObConstraintTask::release_ddl_locks()
+{
+  int ret = OB_SUCCESS;
+  int64_t total_tablet_cnt = 0;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  const ObTableSchema *another_table_schema = nullptr;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+      tenant_id_, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(object_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table dropped", K(ret), K(object_id_));
+  } else if (OB_FALSE_IT(total_tablet_cnt += table_schema->get_all_part_num())) {
+  } else if (ObDDLType::DDL_FOREIGN_KEY_CONSTRAINT == task_type_) {
+    const ObIArray<ObBasedSchemaObjectInfo> &obj_infos = alter_table_arg_.based_schema_object_infos_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < obj_infos.count(); i++) {
+      const ObBasedSchemaObjectInfo &obj_info = obj_infos.at(i);
+      if (TABLE_SCHEMA == obj_info.schema_type_ && object_id_ != obj_info.schema_id_) {
+        const uint64_t another_table_id = obj_info.schema_id_;
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, another_table_id, another_table_schema))) {
+          LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(another_table_id));
+        } else if (OB_ISNULL(another_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("table dropped", K(ret), K(another_table_id));
+        } else {
+          total_tablet_cnt += another_table_schema->get_all_part_num();
+          break;
+        }
+      }
+    }
+  }
+
+  ObTimeoutCtx timeout_ctx;
+  int64_t ddl_tx_timeout = 0;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDDLUtil::get_ddl_tx_timeout(total_tablet_cnt, ddl_tx_timeout))) {
+    LOG_WARN("get ddl tx timeout failed", K(ret));
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(ddl_tx_timeout))) {
+    LOG_WARN("set timeout ctx failed", K(ret));
+  } else if (OB_FAIL(timeout_ctx.set_timeout(ddl_tx_timeout))) {
+    LOG_WARN("set timeout failed", K(ret));
+  }
+
+  ObMySQLTransaction trans;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
+    LOG_WARN("start transaction failed", K(ret));
+  } else if (OB_FAIL(ObDDLLock::unlock_for_common_ddl(*table_schema,
+                                                      transaction::tablelock::ObTableLockOwnerID(task_id_),
+                                                      trans))) {
+    LOG_WARN("failed to unlock ddl", K(ret));
+  } else if (nullptr != another_table_schema) {
+    if (OB_FAIL(ObDDLLock::unlock_for_common_ddl(*another_table_schema,
+                                                 transaction::tablelock::ObTableLockOwnerID(task_id_),
+                                                 trans))) {
+      LOG_WARN("failed to unlock ddl", K(ret));
+    }
+  }
+
+  bool commit = (OB_SUCCESS == ret);
+  int tmp_ret = trans.end(commit);
+  if (OB_SUCCESS != tmp_ret) {
+    ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+  }
+  if (OB_TABLE_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
 int ObConstraintTask::cleanup_impl()
 {
   int ret = OB_SUCCESS;
@@ -827,6 +901,8 @@ int ObConstraintTask::cleanup_impl()
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
   } else if (snapshot_version_ > 0 && OB_FAIL(release_snapshot(snapshot_version_))) {
     LOG_WARN("release snapshot failed", K(ret));
+  } else if (OB_FAIL(release_ddl_locks())) {
+    LOG_WARN("failed to release ddl locks", K(ret));
   } else if (OB_FAIL(report_error_code())) {
     LOG_WARN("report error code failed", K(ret));
   }
@@ -1258,7 +1334,6 @@ int ObConstraintTask::rollback_failed_schema()
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
   } else { 
-    alter_table_arg_.based_schema_object_infos_.reset();
     if (ObDDLType::DDL_CHECK_CONSTRAINT == task_type_) {
       if (OB_FAIL(rollback_failed_check_constraint())) {
         LOG_WARN("drop failed check constraint failed", K(ret));
@@ -1290,6 +1365,7 @@ int ObConstraintTask::rollback_failed_check_constraint()
     if (OB_FAIL(deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg))) {
       LOG_WARN("fail to deep copy table arg", K(ret));
     } else {
+      alter_table_arg.based_schema_object_infos_.reset();
       ObTableSchema::const_constraint_iterator iter = alter_table_arg.alter_table_schema_.constraint_begin();
       if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_) {
         (*iter)->set_constraint_id(target_object_id_);
@@ -1400,6 +1476,7 @@ int ObConstraintTask::rollback_failed_foregin_key()
       LOG_WARN("get ddl rpc timeout failed", K(ret));
     }
     if (OB_SUCC(ret)) {
+      alter_table_arg.based_schema_object_infos_.reset();
       alter_table_arg.is_inner_ = true;
       if (is_table_hidden_) {
         ObSArray<uint64_t> unused_ids;
@@ -1492,6 +1569,7 @@ int ObConstraintTask::rollback_failed_add_not_null_columns()
       alter_table_arg.ddl_task_type_ = share::DELETE_COLUMN_FROM_SCHEMA;
       alter_table_arg.index_arg_list_.reset();
       alter_table_arg.foreign_key_arg_list_.reset();
+      alter_table_arg.based_schema_object_infos_.reset();
       alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
       AlterColumnSchema *col_schema = NULL;
       for (int64_t i = 0; i < alter_table_arg.alter_table_schema_.get_column_count() && OB_SUCC(ret); i++) {

@@ -13,69 +13,119 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_BACKUP_SERVICE_H_
 #define OCEANBASE_ROOTSERVER_OB_BACKUP_SERVICE_H_
 
-#include "ob_backup_task_scheduler.h"
+#include "ob_backup_base_service.h"
 #include "ob_backup_data_scheduler.h"
-#include "ob_backup_base_job.h"
-#include "rootserver/ob_thread_idling.h"
-#include "rootserver/ob_rs_reentrant_thread.h"
 #include "ob_backup_clean_scheduler.h"
 namespace oceanbase 
 {
 namespace rootserver 
 {
-class ObBackupMgrIdling : public ObThreadIdling 
+class ObBackupTaskScheduler;
+// the backup service who relay on ObBackupTaskScheduler must inherit this.
+class ObBackupService : public ObBackupBaseService
 {
 public:
-  explicit ObBackupMgrIdling(volatile bool &stop) : ObThreadIdling(stop) {}
-  virtual int64_t get_idle_interval_us();
-};
-
-class ObBackupService : public ObRsReentrantThread 
-{
-public:
-  ObBackupService();
+  ObBackupService(): is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), can_schedule_(false), task_scheduler_(nullptr),
+      schema_service_(nullptr) {}
   virtual ~ObBackupService() {};
   int init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
-      share::schema::ObMultiVersionSchemaService &schema_service, ObBackupLeaseService &lease_service,
-      ObBackupTaskScheduler &task_scheduler);
-  virtual void run3() override;
-  virtual int blocking_run() { BLOCKING_RUN_IMPLEMENT(); }
-  void stop();
-  void wakeup();
-  int idle() const;
+           share::schema::ObMultiVersionSchemaService &schema_service,
+           share::ObLocationService &loacation_service,
+           ObBackupTaskScheduler &task_scheduler);
+  void run2() override final;
+  virtual int process(int64_t &last_schedule_ts) = 0;
+  void destroy() override final;
 public:
-  int handle_backup_database(const obrpc::ObBackupDatabaseArg &arg);
-  int handle_backup_database_cancel(const uint64_t tenant_id, const ObIArray<uint64_t> &managed_tenant_ids);
-  int handle_backup_delete(const obrpc::ObBackupCleanArg &arg);
-  int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
-  int handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg);
 
-  common::ObSEArray<ObIBackupJobScheduler *, 8> &get_jobs() { return jobs_; }
-  virtual int get_job(const BackupJobType &type, ObIBackupJobScheduler *&new_job);
-  int get_need_reload_task(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks);
+  virtual ObIBackupJobScheduler *get_scheduler(const BackupJobType &type) = 0;
+  virtual int get_need_reload_task(
+      common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) = 0;
+
+  virtual int switch_to_leader() override { disable_backup(); return ObBackupBaseService::switch_to_leader(); }
+  virtual int resume_leader() override { disable_backup(); return ObBackupBaseService::resume_leader(); }
+
+  // called by ObBackupTaskScheduler.
+  // if ObBackupTaskScheduler reload ls task succeed, call enable_backup.
+  // otherwise call disable_backup().
   void disable_backup();
   void enable_backup();
   bool can_schedule();
+  TO_STRING_KV(K_(tenant_id), K_(can_schedule))
+protected:
+  virtual int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+           share::schema::ObMultiVersionSchemaService &schema_service,
+           share::ObLocationService &loacation_service,
+           ObBackupTaskScheduler &task_scheduler) = 0;
+protected:
+  bool is_inited_;
+  uint64_t tenant_id_;
+  bool can_schedule_;
+  ObBackupTaskScheduler *task_scheduler_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupService);
+};
+
+class ObBackupDataService final : public ObBackupService
+{
+public:
+  ObBackupDataService(): ObBackupService(), backup_data_scheduler_() {}
+  virtual ~ObBackupDataService() {}
+  static int mtl_init(ObBackupDataService *&srv);
+  int process(int64_t &last_schedule_ts) override;
+
+  ObIBackupJobScheduler *get_scheduler(const BackupJobType &type);
+  int get_need_reload_task(
+      common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) override;
+
+  int handle_backup_database(const obrpc::ObBackupDatabaseArg &arg);
+  int handle_backup_database_cancel(const uint64_t tenant_id, const ObIArray<uint64_t> &managed_tenant_ids);
+private:
+  int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+    share::schema::ObMultiVersionSchemaService &schema_service, share::ObLocationService &loacation_service,
+    ObBackupTaskScheduler &task_scheduler) override;
+private:
+  ObBackupDataScheduler backup_data_scheduler_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDataService);
+};
+
+class ObBackupCleanService final : public ObBackupService
+{
+public:
+  ObBackupCleanService() : ObBackupService(), backup_clean_scheduler_(), backup_auto_obsolete_delete_trigger_(),
+    jobs_(), triggers_() {}
+  virtual ~ObBackupCleanService() {}
+  static int mtl_init(ObBackupCleanService *&srv);
+  int process(int64_t &last_schedule_ts) override;
+
+  ObIBackupJobScheduler *get_scheduler(const BackupJobType &type);
+  int get_need_reload_task(
+      common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) override;
+
+  int handle_backup_delete(const obrpc::ObBackupCleanArg &arg);
+  int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
+  int handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg);
+private:
+  virtual int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+                  share::schema::ObMultiVersionSchemaService &schema_service,
+                  share::ObLocationService &loacation_service,
+                  ObBackupTaskScheduler &task_scheduler) override;
+
 private:
   int register_job_(ObIBackupJobScheduler *new_job);
   int register_trigger_(ObIBackupTrigger *new_trigger);
-  void start_trigger_(int64_t &last_trigger_ts);
-  void start_scheduler_();
+  void process_trigger_(int64_t &last_trigger_ts);
+  void process_scheduler_();
+
 private:
-  bool is_inited_;
-  lib::ObMutex mgr_mtx_;
-  bool can_schedule_;
-  mutable ObBackupMgrIdling idling_;
-  ObBackupDataScheduler backup_data_scheduler_;
   ObBackupCleanScheduler backup_clean_scheduler_;
   ObBackupAutoObsoleteDeleteTrigger backup_auto_obsolete_delete_trigger_;
   common::ObSEArray<ObIBackupJobScheduler *, 8> jobs_;
   common::ObSEArray<ObIBackupTrigger *, 2> triggers_;
-  ObBackupTaskScheduler *task_scheduler_;
-  ObBackupLeaseService *lease_service_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObBackupService);
+  DISALLOW_COPY_AND_ASSIGN(ObBackupCleanService);
 };
+
+
 }  // end namespace rootserver
 }  // namespace oceanbase
 #endif  // OCEANBASE_ROOTSERVER_OB_BACKUP_SERVICE_H_

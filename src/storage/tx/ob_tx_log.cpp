@@ -25,21 +25,31 @@ using namespace share;
 namespace transaction
 {
 
-bool ObTxLogTypeChecker::need_pre_replay_barrier(const ObTxLogType log_type,
-                                                 const ObTxDataSourceType data_source_type)
+logservice::ObReplayBarrierType
+ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
+                                        const ObTxDataSourceType data_source_type)
 {
-  bool need_barrier = false;
 
-  //multi data source trans's redo log
+  logservice::ObReplayBarrierType barrier_flag = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+
+  // multi data source trans's redo log
   if (ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type) {
-    if (data_source_type == ObTxDataSourceType::CREATE_TABLET
-        || data_source_type == ObTxDataSourceType::REMOVE_TABLET
-        || data_source_type == ObTxDataSourceType::MODIFY_TABLET_BINDING) {
-      need_barrier = true;
+    if (data_source_type == ObTxDataSourceType::CREATE_TABLET_NEW_MDS
+        || data_source_type == ObTxDataSourceType::DELETE_TABLET_NEW_MDS
+        || data_source_type == ObTxDataSourceType::UNBIND_TABLET_NEW_MDS
+        || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT
+        || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_OUT) {
+
+      barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
+
+    } else if (data_source_type == ObTxDataSourceType::START_TRANSFER_IN
+               || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN) {
+
+      barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
     }
   }
 
-  return need_barrier;
+  return barrier_flag;
 }
 
 // ============================== Tx Log Header =============================
@@ -664,15 +674,16 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
   int64_t version = 0;
   int32_t flag = 0;
   int64_t seq_no = 0;
+  int64_t column_cnt = 0;
   ObStoreRowkey rowkey;
   memtable::ObRowData new_row;
   memtable::ObRowData old_row;
   blocksstable::ObDmlFlag dml_flag = blocksstable::ObDmlFlag::DF_NOT_EXIST;
 
   if (OB_FAIL(row.copy(table_id, rowkey, table_version, new_row, old_row, dml_flag,
-                       modify_count, acc_checksum, version, flag, seq_no))) {
+                       modify_count, acc_checksum, version, flag, seq_no, column_cnt))) {
     TRANS_LOG(WARN, "row_.copy fail", K(ret), K(table_id), K(rowkey), K(table_version), K(new_row),
-              K(old_row), K(dml_flag), K(modify_count), K(acc_checksum), K(version));
+              K(old_row), K(dml_flag), K(modify_count), K(acc_checksum), K(version), K(column_cnt));
   } else {
     arg.log_stat_->new_row_size_ += new_row.size_;
     arg.log_stat_->old_row_size_ += old_row.size_;
@@ -713,6 +724,8 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
     arg.writer_ptr_->dump_int64(new_row.size_);
     arg.writer_ptr_->dump_key("OldRowSize");
     arg.writer_ptr_->dump_int64(old_row.size_);
+    arg.writer_ptr_->dump_key("ColumnCnt");
+    arg.writer_ptr_->dump_int64(column_cnt);
   }
   return ret;
 }

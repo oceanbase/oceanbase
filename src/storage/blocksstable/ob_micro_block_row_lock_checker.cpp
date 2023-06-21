@@ -64,14 +64,14 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
       } else if (OB_FAIL(lock_state_->trans_version_.convert_for_tx(trans_version))) {
         LOG_ERROR("convert failed", K(ret), K(trans_version));
       } else if (row_header->get_row_multi_version_flag().is_uncommitted_row()) {
-        ObTxTableGuard tx_table_guard = ctx.get_tx_table_guard();
+        ObTxTableGuards tx_table_guards = ctx.get_tx_table_guards();
         ObTxTable *tx_table = nullptr;
         int64 read_epoch = ObTxTable::INVALID_READ_EPOCH;
-        if (!tx_table_guard.is_valid()) {
+        if (!tx_table_guards.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("tx table guard is invalid", KR(ret), K(ctx));
-        } else if (OB_FAIL(tx_table_guard.check_row_locked(
-                       read_trans_id, row_header->get_trans_id(), sql_sequence, *lock_state_))) {
+        } else if (OB_FAIL(tx_table_guards.check_row_locked(read_trans_id, row_header->get_trans_id(), sql_sequence,
+            sstable_->get_end_scn(), *lock_state_))) {
         } else if (lock_state_->is_locked_) {
           lock_state_->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
         }

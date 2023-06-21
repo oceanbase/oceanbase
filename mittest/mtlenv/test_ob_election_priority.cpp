@@ -56,6 +56,10 @@ public:
   ~TestElectionPriority() {}
   static void SetUpTestCase() { ASSERT_EQ(OB_SUCCESS, storage::MockTenantModuleEnv::get_instance().init()); }
   static void TearDownTestCase() { storage::MockTenantModuleEnv::get_instance().destroy(); }
+  void SetUp()
+  {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
+  }
   // virtual void SetUp() { }
   // virtual void TearDown() { }
   static void test_normal()

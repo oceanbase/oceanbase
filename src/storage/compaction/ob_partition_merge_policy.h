@@ -30,6 +30,7 @@ class ObTablesHandleArray;
 class ObStorageSchema;
 struct ObTabletStatAnalyzer;
 struct ObTableHandleV2;
+struct ObStorageMetaHandle;
 class ObLS;
 class ObTableStoreIterator;
 }
@@ -87,7 +88,8 @@ public:
       const ObTablet &tablet,
       int64_t &min_snapshot,
       int64_t &max_snapshot,
-      const bool check_table_cnt = true);
+      const bool check_table_cnt,
+      const bool is_multi_version_merge);
 
   static int diagnose_table_count_unsafe(
       const storage::ObMergeType merge_type,
@@ -118,7 +120,7 @@ private:
 
   static int refine_minor_merge_tables(
       const ObTablet &tablet,
-      const common::ObIArray<blocksstable::ObSSTable *> &merge_tables,
+      const ObTablesHandleArray &merge_tables,
       int64_t &left_border,
       int64_t &right_border);
 
@@ -239,6 +241,7 @@ private:
                                              storage::ObITable *&meta_base_table,
                                              int64_t &merge_inc_version);
   static int add_meta_merge_result(storage::ObITable *table,
+      const storage::ObStorageMetaHandle &table_meta_handle,
       storage::ObGetMergeTablesResult &result,
       const bool update_snapshot_flag);
 private:

@@ -189,16 +189,14 @@ public:
   // old_row is the old version of the row for set action, it contains all columns(NB: it works for liboblog only currently)
   // new_row is the new version of the row for set action, it only contains the necessary columns for update and entire columns for insert
   virtual int set(
-      storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const storage::ObTableReadInfo &read_info,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
       const storage::ObStoreRow &row,
       const share::ObEncryptMeta *encrypt_meta);
   virtual int set(
-      storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const storage::ObTableReadInfo &read_info,
+      const storage::ObTableIterParam &param,
+	  storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
       const ObIArray<int64_t> &update_idx,
       const storage::ObStoreRow &old_row,
@@ -210,20 +208,14 @@ public:
   // tablet_id is necessary for the query_engine's key engine(NB: do we need it now?)
   // columns is the schema of the new_row, it contains the row key
   // row/rowkey/row_iter is the row key or row key iterator for lock
+
   virtual int lock(
-      storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const storage::ObTableReadInfo &read_info,
-      common::ObNewRowIterator &row_iter);
-  virtual int lock(
-      storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const storage::ObTableReadInfo &read_info,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
       const common::ObNewRow &row);
   virtual int lock(
-      storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const storage::ObTableReadInfo &read_info,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
       const blocksstable::ObDatumRowkey &rowkey);
 
   // exist/prefix_exist is used to ensure the (prefix) existance of the row
@@ -237,12 +229,11 @@ public:
   // all_rows_found returns the existance of all of the rowkey(may be deleted) or existance of one of the rowkey(must not be deleted)
   // may_exist returns the possible existance of the rowkey(may be deleted)
   virtual int exist(
-      storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const storage::ObTableReadInfo &read_info,
-      const blocksstable::ObDatumRowkey &rowkey,
-      bool &is_exist,
-      bool &has_found);
+      const storage::ObTableIterParam &param,
+	  storage::ObTableAccessContext &context,
+	  const blocksstable::ObDatumRowkey &rowkey,
+	  bool &is_exist,
+	  bool &has_found);
   virtual int exist(
       storage::ObRowsInfo &rows_info,
       bool &is_exist,
@@ -304,11 +295,10 @@ public:
   // rowkey is the row key used for lock
   // locked returns whether lock is locked by myself
   int check_row_locked_by_myself(
-    storage::ObStoreCtx &ctx,
-    const uint64_t table_id,
-    const storage::ObTableReadInfo &read_info,
+    const storage::ObTableIterParam &param,
+    storage::ObTableAccessContext &context,
     const blocksstable::ObDatumRowkey &rowkey,
-    bool &locked);
+	bool &locked);
 
   // // TODO: ==================== Memtable Other Interface ==================
   int set_freezer(storage::ObFreezer *handler);
@@ -326,6 +316,13 @@ public:
   inline bool not_empty() const { return INT64_MAX != get_protection_clock(); };
   void set_max_schema_version(const int64_t schema_version);
   virtual int64_t get_max_schema_version() const override;
+  void set_max_data_schema_version(const int64_t schema_version);
+  int64_t get_max_data_schema_version() const;
+  void set_max_column_cnt(const int64_t column_cnt);
+  int64_t get_max_column_cnt() const;
+  int get_schema_info(
+    int64_t &max_schema_version_on_memtable,
+    int64_t &max_column_cnt_on_memtable) const;
   int row_compact(ObMvccRow *value,
                   const share::SCN snapshot_version,
                   const int64_t flag);
@@ -431,6 +428,16 @@ public:
     }
   }
   inline bool get_logging_blocked() { return ATOMIC_LOAD(&logging_blocked_); }
+  // User should take response of the recommend scn. All version smaller than
+  // recommend scn should belong to the tables before the memtable and the
+  // memtable. And under exception case, user need guarantee all new data is
+  // bigger than the recommend_scn.
+  inline void set_transfer_freeze(const share::SCN recommend_scn)
+  {
+    recommend_snapshot_version_.atomic_set(recommend_scn);
+    ATOMIC_STORE(&transfer_freeze_flag_, true);
+  }
+  inline bool is_transfer_freeze() const { return ATOMIC_LOAD(&transfer_freeze_flag_); }
   int64_t get_unsubmitted_cnt() const { return ATOMIC_LOAD(&unsubmitted_cnt_); }
   int inc_unsubmitted_cnt();
   int dec_unsubmitted_cnt();
@@ -482,8 +489,10 @@ public:
                      bool &is_all_delay_cleanout,
                      int64_t &count);
   int dump2text(const char *fname);
+  // TODO(handora.qc) ready_for_flush interface adjustment
+  bool is_can_flush() { return ObMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn(); }
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), KP_(memtable_mgr), K_(timestamp), K_(state),
-                       K_(freeze_clock), K_(max_schema_version), K_(write_ref_cnt), K_(local_allocator),
+                       K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(write_ref_cnt), K_(local_allocator),
                        K_(unsubmitted_cnt), K_(unsynced_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
                        K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version), K_(migration_clog_checkpoint_scn),
@@ -491,24 +500,26 @@ public:
                        K_(read_barrier), K_(is_flushed), K_(freeze_state), K_(allow_freeze),
                        K_(mt_stat_.frozen_time), K_(mt_stat_.ready_for_flush_time),
                        K_(mt_stat_.create_flush_dag_time), K_(mt_stat_.release_time),
-                       K_(mt_stat_.last_print_time));
+                       K_(mt_stat_.last_print_time), K_(ls_id), K_(transfer_freeze_flag), K_(recommend_snapshot_version));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
-  int mvcc_write_(storage::ObStoreCtx &ctx,
-                  const ObMemtableKey *key,
-                  const storage::ObTableReadInfo &read_info,
-                  const ObTxNodeArg &arg,
-                  bool &is_new_locked);
+  int mvcc_write_(
+      const storage::ObTableIterParam &param,
+	  storage::ObTableAccessContext &context,
+	  const ObMemtableKey *key,
+	  const ObTxNodeArg &arg,
+	  bool &is_new_locked);
+
   int mvcc_replay_(storage::ObStoreCtx &ctx,
                    const ObMemtableKey *key,
                    const ObTxNodeArg &arg);
 
   int lock_row_on_frozen_stores_(
-      storage::ObStoreCtx &ctx,
+      const storage::ObTableIterParam &param,
       const ObTxNodeArg &arg,
+      storage::ObTableAccessContext &context,
       const ObMemtableKey *key,
       ObMvccRow *value,
-      const storage::ObTableReadInfo &read_info,
       ObMvccWriteResult &res);
 
   void get_begin(ObMvccAccessCtx &ctx);
@@ -521,22 +532,22 @@ private:
   int check_standby_cluster_schema_condition_(storage::ObStoreCtx &ctx,
                                               const int64_t table_id,
                                               const int64_t table_version);
-  int set_(storage::ObStoreCtx &ctx,
-           const uint64_t table_id,
-           const storage::ObTableReadInfo &read_info,
-           const common::ObIArray<share::schema::ObColDesc> &columns,
-           const storage::ObStoreRow &new_row,
-           const storage::ObStoreRow *old_row,
-           const common::ObIArray<int64_t> *update_idx);
-  int lock_(storage::ObStoreCtx &ctx,
-            const uint64_t table_id,
-            const storage::ObTableReadInfo &read_info,
-            const common::ObStoreRowkey &rowkey);
-  int lock_(storage::ObStoreCtx &ctx,
-            const uint64_t table_id,
-            const storage::ObTableReadInfo &read_info,
-            const common::ObStoreRowkey &rowkey,
-            ObMemtableKey &mtk);
+
+
+  int set_(
+	  const storage::ObTableIterParam &param,
+	  storage::ObTableAccessContext &context,
+      const common::ObIArray<share::schema::ObColDesc> &columns,
+      const storage::ObStoreRow &new_row,
+      const storage::ObStoreRow *old_row,
+      const common::ObIArray<int64_t> *update_idx);
+  int lock_(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      const common::ObStoreRowkey &rowkey);
+
+
+
   int post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
                                const ObMemtableKey &row_key,
                                storage::ObStoreRowLockState &lock_state,
@@ -561,7 +572,8 @@ private:
   ObQueryEngine query_engine_;
   ObMvccEngine mvcc_engine_;
   mutable ObMtStat mt_stat_;
-  int64_t max_schema_version_;  // to record the max schema version of all data
+  int64_t max_schema_version_;  // to record the max schema version of memtable & schema_change_clog
+  int64_t max_data_schema_version_;  // to record the max schema version of write data
   int64_t pending_cb_cnt_; // number of transactions have to sync log
   int64_t unsubmitted_cnt_; // number of trans node to be submitted logs
   int64_t unsynced_cnt_; // number of trans node to be synced logs
@@ -570,6 +582,12 @@ private:
   int64_t logging_blocked_start_time; // record the start time of logging blocked
   bool unset_active_memtable_logging_blocked_;
   bool resolve_active_memtable_left_boundary_;
+  // TODO(handora.qc): remove it as soon as possible
+  // only used for decide special right boundary of memtable
+  bool transfer_freeze_flag_;
+  // only used for decide special snapshot version of memtable
+  share::SCN recommend_snapshot_version_;
+
   share::SCN freeze_scn_;
   share::SCN max_end_scn_;
   share::SCN rec_scn_;
@@ -591,6 +609,7 @@ private:
   mutable common::TCRWLock multi_source_data_lock_;
   transaction::ObTxEncryptMeta *encrypt_meta_;
   common::SpinRWLock encrypt_meta_lock_;
+  int64_t max_column_cnt_; // record max column count of row
 };
 
 template<class T>

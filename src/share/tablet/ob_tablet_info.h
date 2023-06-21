@@ -16,6 +16,7 @@
 #include "common/ob_tablet_id.h" // ObTabletID
 #include "lib/net/ob_addr.h" // ObAddr
 #include "share/ob_ls_id.h" // ObLSID
+#include "share/transfer/ob_transfer_info.h" // OB_INVALID_TRANSFER_SEQ
 
 namespace oceanbase
 {
@@ -145,16 +146,18 @@ private:
 };
 
 // ObTabletToLSInfo is used to store info for __all_tablet_to_ls.
-// Structure: <tablet_id, ls_id, table_id>
+// Structure: <tablet_id, ls_id, table_id, transfer_seq>
 class ObTabletToLSInfo
 {
 public:
-  ObTabletToLSInfo() : tablet_id_(), ls_id_(), table_id_(OB_INVALID_ID) {}
+  ObTabletToLSInfo()
+      : tablet_id_(), ls_id_(), table_id_(OB_INVALID_ID), transfer_seq_(OB_INVALID_TRANSFER_SEQ) {}
   explicit ObTabletToLSInfo(
       const common::ObTabletID &tablet_id,
       const ObLSID &ls_id,
-      const uint64_t table_id)
-      : tablet_id_(tablet_id), ls_id_(ls_id), table_id_(table_id)
+      const uint64_t table_id,
+      const int64_t transfer_seq)
+      : tablet_id_(tablet_id), ls_id_(ls_id), table_id_(table_id), transfer_seq_(transfer_seq)
   {
   }
   ~ObTabletToLSInfo() { reset(); }
@@ -163,32 +166,38 @@ public:
     tablet_id_.reset();
     ls_id_.reset();
     table_id_ = OB_INVALID_ID;
+    transfer_seq_ = OB_INVALID_TRANSFER_SEQ;
   }
   inline bool is_valid() const
   {
     return tablet_id_.is_valid()
         && ls_id_.is_valid()
-        && OB_INVALID_ID != table_id_;
+        && OB_INVALID_ID != table_id_
+        && transfer_seq_ > OB_INVALID_TRANSFER_SEQ;
   }
   inline bool operator==(const ObTabletToLSInfo &other) const
   {
-    return  other.tablet_id_ == tablet_id_
-        &&  other.ls_id_ == ls_id_
-        &&  other.table_id_ == table_id_;
+    return other.tablet_id_ == tablet_id_
+        && other.ls_id_ == ls_id_
+        && other.table_id_ == table_id_
+        && other.transfer_seq_ == transfer_seq_;
   }
   inline const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   inline const ObLSID &get_ls_id() const { return ls_id_; }
   inline uint64_t get_table_id() const { return table_id_; }
+  inline int64_t get_transfer_seq() const { return transfer_seq_; }
   int init(
       const common::ObTabletID &tablet_id,
       const ObLSID &ls_id,
-      const uint64_t table_id);
+      const uint64_t table_id,
+      const int64_t transfer_seq);
   int assign(const ObTabletToLSInfo &other);
-  TO_STRING_KV(K_(tablet_id), K_(ls_id), K_(table_id));
+  TO_STRING_KV(K_(tablet_id), K_(ls_id), K_(table_id), K_(transfer_seq));
 private:
   common::ObTabletID tablet_id_;
   ObLSID ls_id_;
   uint64_t table_id_;
+  int64_t transfer_seq_;
 };
 
 class ObTabletTablePair

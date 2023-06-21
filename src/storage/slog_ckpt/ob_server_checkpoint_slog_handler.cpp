@@ -15,9 +15,11 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_reader.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_writer.h"
+#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/ob_super_block_struct.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "observer/omt/ob_tenant.h"
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_logger_manager.h"
@@ -106,14 +108,17 @@ int ObServerCheckpointSlogHandler::start()
     LOG_WARN("fail to replay_sever_slog", K(ret));
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.first_mark_device())) { // mark must after finish replay slog
     LOG_WARN("fail to first mark device", K(ret));
-  } else if(OB_FAIL(enable_replay_clog())) {
-    LOG_WARN("fail to enable_replay_clog", K(ret));
+  } else if (OB_FAIL(try_write_checkpoint_for_compat())) {
+    LOG_WARN("fail to try write checkpoint for compat", K(ret));
+  } else if (OB_FAIL(finish_slog_replay())) {
+    LOG_ERROR("fail to finish slog replay", KR(ret));
   } else if (OB_FAIL(task_timer_.start())) { // start checkpoint task after finsh replay slog
     LOG_WARN("fail to start task timer", K(ret));
   } else {
     ATOMIC_STORE(&is_started_, true);
     LOG_INFO("succ to start server checkpoint slog handler");
   }
+
   return ret;
 }
 
@@ -153,7 +158,42 @@ void ObServerCheckpointSlogHandler::destroy()
   task_timer_.destroy();
 }
 
-int ObServerCheckpointSlogHandler::enable_replay_clog()
+int ObServerCheckpointSlogHandler::try_write_checkpoint_for_compat()
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<omt::ObTenantMeta> tenant_metas;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, omt is nullptr", K(ret));
+  } else if (OB_FAIL(omt->get_tenant_metas(tenant_metas))) {
+    LOG_WARN("fail to get tenant metas", K(ret), KP(omt));
+  } else {
+    bool need_svr_ckpt = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_metas.size(); ++i) {
+      const ObTenantSuperBlock &super_block = tenant_metas.at(i).super_block_;
+      if (!super_block.is_old_version()) {
+        // nothing to do.
+      } else {
+        MTL_SWITCH(super_block.tenant_id_) {
+          if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->write_checkpoint(true/*is_force*/))) {
+            LOG_WARN("fail to write tenant slog checkpoint", K(ret));
+          } else {
+            need_svr_ckpt = true;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (need_svr_ckpt && OB_FAIL(write_checkpoint(true/*is_force*/))) {
+        LOG_WARN("fail to write server checkpoint", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerCheckpointSlogHandler::finish_slog_replay()
 {
   int ret = OB_SUCCESS;
   common::ObArray<uint64_t> tenant_ids;
@@ -168,15 +208,57 @@ int ObServerCheckpointSlogHandler::enable_replay_clog()
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); i++) {
     const uint64_t &tenant_id = tenant_ids.at(i);
     MTL_SWITCH(tenant_id) {
-      if (OB_FAIL(MTL(ObLSService*)->enable_replay())) {
-        LOG_WARN("fail to enable replay clog", K(ret));
+      common::ObSharedGuard<ObLSIterator> ls_iter;
+      ObLS *ls = nullptr;
+      ObLSTabletService *ls_tablet_svr = nullptr;
+      if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+        LOG_WARN("failed to get ls iter", K(ret));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(ls_iter->get_next(ls))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next ls", K(ret));
+            }
+          } else if (nullptr == ls) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ls is null", K(ret));
+          } else if (OB_FAIL(ls->finish_slog_replay())) {
+            LOG_WARN("finish replay failed", K(ret), KPC(ls));
+          }
+        }
+        if (OB_ITER_END == ret) {
+          if (OB_FAIL(MTL(ObLSService*)->gc_ls_after_replay_slog())) {
+            LOG_WARN("fail to gc ls after replay slog", K(ret));
+          }
+        }
       }
     }
   }
-
   return ret;
 }
 
+int ObServerCheckpointSlogHandler::enable_replay_clog()
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<uint64_t> tenant_ids;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, omt is nullptr", K(ret));
+  } else if (OB_FAIL(omt->get_mtl_tenant_ids(tenant_ids))) {
+    LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); i++) {
+    const uint64_t &tenant_id = tenant_ids.at(i);
+    MTL_SWITCH(tenant_id) {
+      if (OB_FAIL(OB_FAIL(MTL(ObLSService*)->enable_replay()))) {
+        LOG_WARN("fail enable replay clog", K(ret));
+      }
+    }
+  }
+  FLOG_INFO("enable replay clog", K(ret));
+  return ret;
+}
 
 int ObServerCheckpointSlogHandler::read_checkpoint(const ObServerSuperBlock &super_block)
 {
@@ -197,7 +279,7 @@ int ObServerCheckpointSlogHandler::set_meta_block_list(ObIArray<MacroBlockId> &m
 {
   int ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
-  if (OB_FAIL(server_meta_block_handle_.add_macro_blocks(meta_block_list, true /*switch handle*/))) {
+  if (OB_FAIL(server_meta_block_handle_.add_macro_blocks(meta_block_list))) {
     LOG_WARN("fail to add_macro_blocks", K(ret));
   }
   return ret;
@@ -227,8 +309,8 @@ int ObServerCheckpointSlogHandler::replay_and_apply_server_slog(const ObLogCurso
     LOG_WARN("fail to replay_sever_slog", K(ret));
   } else if (OB_FAIL(server_slogger_->start_log(replay_finish_point))) {
     LOG_WARN("fail to start slog", K(ret));
-  } else if (OB_FAIL(applay_replay_result())) {
-    LOG_WARN("fail to applay_replay_result", K(ret));
+  } else if (OB_FAIL(apply_replay_result())) {
+    LOG_WARN("fail to apply_replay_result", K(ret));
   } else if (OB_FAIL(tenant_meta_map_for_replay_.clear())) {
     LOG_WARN("fail to clear tenant_meta_map_for_replay_", K(ret));
   }
@@ -659,7 +741,7 @@ int ObServerCheckpointSlogHandler::replay_over()
   int ret = OB_SUCCESS;
   return ret;
 }
-int ObServerCheckpointSlogHandler::applay_replay_result()
+int ObServerCheckpointSlogHandler::apply_replay_result()
 {
   int ret = OB_SUCCESS;
   int64_t tenant_count = tenant_meta_map_for_replay_.size();

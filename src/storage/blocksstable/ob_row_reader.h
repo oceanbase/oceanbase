@@ -62,7 +62,7 @@ public:
   int sequence_deep_copy_datums(const int64_t start_idx, ObStorageDatum *datum);
   int read_cell_with_bitmap(
       const int64_t start_idx,
-      const storage::ObTableReadInfo &read_info,
+      const storage::ObITableReadInfo &read_info,
       ObDatumRow &datum_row,
       memtable::ObNopBitMap &nop_bitmap);
   OB_INLINE int64_t get_sparse_col_idx(const int64_t column_idx);
@@ -79,13 +79,13 @@ private:
       ObStorageDatum &datum);
   int read_column_from_buf(
       int64_t tmp_pos,
-      int64_t next_pos, 
+      int64_t next_pos,
       const ObRowHeader::SPECIAL_VAL special_val,
-      ObStorageDatum &datum);    
+      ObStorageDatum &datum);
   int read_datum(const int64_t column_idx, ObStorageDatum &datum);
-  OB_INLINE uint8_t read_special_value(const int64_t column_idx) 
+  OB_INLINE uint8_t read_special_value(const int64_t column_idx)
   {
-    const int64_t index = column_idx >> 1; 
+    const int64_t index = column_idx >> 1;
     const int64_t shift = (column_idx % 2) << 2;
     return (special_vals_[index] >> shift) & 0x0F;
   }
@@ -118,13 +118,13 @@ public:
   int read_row(
       const char *row_buf,
       const int64_t row_len,
-      const storage::ObTableReadInfo *read_info,
+      const storage::ObITableReadInfo *read_info,
       ObDatumRow &datum_row);
   // only read cells where bitmap shows col_idx = TRUE
   int read_memtable_row(
       const char *row_buf,
       const int64_t row_len,
-      const storage::ObTableReadInfo &read_info,
+      const storage::ObITableReadInfo &read_info,
       ObDatumRow &datum_row,
       memtable::ObNopBitMap &nop_bitmap,
       bool &read_finished);
@@ -137,7 +137,7 @@ public:
       ObStorageDatum &datum);
   int compare_meta_rowkey(
       const ObDatumRowkey &rhs,
-      const storage::ObTableReadInfo &read_info,
+      const blocksstable::ObStorageDatumUtils &datum_utils,
       const char *buf,
       const int64_t row_len,
       int32_t &cmp_result);

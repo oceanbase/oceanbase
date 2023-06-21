@@ -13,19 +13,12 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_status.h"
-
-#include "lib/lock/ob_thread_cond.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/serialization.h"
 #include "share/ob_errno.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
-#include "storage/tx/ob_trans_define.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {
-using namespace share;
 namespace storage
 {
 ObTabletStatus::ObTabletStatus()
@@ -36,6 +29,28 @@ ObTabletStatus::ObTabletStatus()
 ObTabletStatus::ObTabletStatus(const Status &status)
   : status_(status)
 {
+}
+
+static const char *TABLET_STATUS_STRS[] = {
+    "CREATING",
+    "NORMAL",
+    "DELETING",
+    "DELETED",
+    "TRANSFER_OUT",
+    "TRANSFER_IN",
+    "TRANSFER_OUT_DELETED",
+};
+
+const char *ObTabletStatus::get_str(const ObTabletStatus &status)
+{
+  const char *str = NULL;
+
+  if (status.status_ < 0 || status.status_ >= ObTabletStatus::MAX) {
+    str = "UNKNOWN";
+  } else {
+    str = TABLET_STATUS_STRS[status.status_];
+  }
+  return str;
 }
 
 int ObTabletStatus::serialize(char *buf, const int64_t len, int64_t &pos) const
@@ -92,7 +107,8 @@ bool ObTabletStatus::is_valid_status(const Status current_status, const Status t
       }
       break;
     case NORMAL:
-      if (target_status != DELETING && target_status != NORMAL) {
+      if (target_status != DELETING && target_status != NORMAL
+          && target_status != TRANSFER_OUT && target_status != TRANSFER_IN) {
         b_ret = false;
       }
       break;
@@ -109,6 +125,21 @@ bool ObTabletStatus::is_valid_status(const Status current_status, const Status t
         b_ret = false;
       }
       break;
+    case TRANSFER_OUT:
+      if (target_status != NORMAL && target_status != TRANSFER_OUT_DELETED && target_status != TRANSFER_OUT) {
+        b_ret = false;
+      }
+      break;
+    case TRANSFER_IN:
+      if (target_status != NORMAL && target_status != DELETED && target_status != TRANSFER_IN) {
+        b_ret = false;
+      }
+      break;
+    case TRANSFER_OUT_DELETED:
+      if (target_status != DELETED && target_status != TRANSFER_OUT_DELETED && target_status != TRANSFER_OUT_DELETED) {
+        b_ret = false;
+      }
+      break;
     default:
       b_ret = false;
       break;
@@ -117,96 +148,5 @@ bool ObTabletStatus::is_valid_status(const Status current_status, const Status t
   return b_ret;
 }
 
-ObTabletStatusChecker::ObTabletStatusChecker(ObTablet &tablet)
-  : tablet_(tablet)
-{
-}
-
-int ObTabletStatusChecker::check(const uint64_t time_us)
-{
-  int ret = OB_SUCCESS;
-  common::ObThreadCond &cond = tablet_.get_cond();
-  ObThreadCondGuard guard(cond);
-
-  if (OB_FAIL(do_wait(cond, time_us))) {
-    LOG_WARN("failed to do cond wait", K(ret));
-  }
-
-  return ret;
-}
-
-int ObTabletStatusChecker::wake_up(
-    ObTabletTxMultiSourceDataUnit &tx_data,
-    const SCN &memtable_scn,
-    const bool for_replay,
-    const memtable::MemtableRefOp ref_op)
-{
-  int ret = OB_SUCCESS;
-  common::ObThreadCond &cond = tablet_.get_cond();
-  ObThreadCondGuard guard(cond);
-
-  if (OB_FAIL(tablet_.set_tablet_final_status(tx_data, memtable_scn, for_replay, ref_op))) {
-    LOG_WARN("failed to set tablet status", K(ret), K(tx_data), K(memtable_scn),
-        K(for_replay), K(ref_op));
-  } else if (OB_FAIL(cond.broadcast())) {
-    LOG_WARN("failed to broadcast", K(ret));
-  }
-
-  return ret;
-}
-
-int ObTabletStatusChecker::do_wait(common::ObThreadCond &cond, const uint64_t time_us)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  const share::ObLSID &ls_id = tablet_.tablet_meta_.ls_id_;
-  const common::ObTabletID &tablet_id = tablet_.tablet_meta_.tablet_id_;
-  bool need_wait = true;
-  ObTabletStatus::Status actual_status = ObTabletStatus::MAX;
-
-  if (OB_FAIL(tablet_.get_tablet_status(actual_status))) {
-    LOG_WARN("failed to get status", K(ret));
-  } else if (ObTabletStatus::NORMAL == actual_status
-      || ObTabletStatus::DELETED == actual_status) {
-    need_wait = false;
-  } else if (ObTabletStatus::CREATING == actual_status
-      || ObTabletStatus::DELETING == actual_status
-      || ObTabletStatus::MAX == actual_status) {
-    need_wait = true;
-    // MAX status only occurs when tablet is in creating procedure
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(actual_status));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (!need_wait) {
-  } else {
-    while (OB_SUCC(ret) && !is_final_status(actual_status)) {
-      if (OB_FAIL(tablet_.get_tablet_status(actual_status))) {
-        LOG_WARN("failed to get status", K(ret));
-      } else if (is_final_status(actual_status)) {
-        break;
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(cond.wait_us(time_us))) {
-        if (OB_TIMEOUT == ret) {
-          LOG_WARN("cond wait timeout", K(ret), K(tenant_id), K(ls_id), K(tablet_id),
-              K(time_us), K(actual_status));
-        } else {
-          LOG_WARN("failed to cond wait", K(ret));
-        }
-      }
-    }
-  }
-
-  if (OB_SUCC(ret) && ObTabletStatus::DELETED == actual_status) {
-    ret = OB_TABLET_NOT_EXIST;
-    LOG_WARN("tablet does not exist, may be deleted", K(ret), K(actual_status));
-  }
-
-  return ret;
-}
 } // namespace storage
 } // namespace oceanbase

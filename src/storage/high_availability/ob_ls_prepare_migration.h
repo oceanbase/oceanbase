@@ -43,6 +43,7 @@ public:
   int64_t start_ts_;
   int64_t finish_ts_;
   share::SCN log_sync_scn_;
+  ObArray<common::ObTabletID> tablet_id_array_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -51,7 +52,8 @@ public:
       K_(task_id),
       K_(start_ts),
       K_(finish_ts),
-      K_(log_sync_scn));
+      K_(log_sync_scn),
+      K_(tablet_id_array));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSPrepareMigrationCtx);
 };
@@ -99,10 +101,11 @@ private:
 class ObPrepareMigrationDag : public ObStorageHADag
 {
 public:
-  explicit ObPrepareMigrationDag(const ObStorageHADagType sub_type);
+  explicit ObPrepareMigrationDag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObPrepareMigrationDag();
   virtual bool operator == (const share::ObIDag &other) const override;
   virtual int64_t hash() const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   int prepare_ctx(share::ObIDagNet *dag_net);
 
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
@@ -117,7 +120,7 @@ public:
   virtual ~ObInitialPrepareMigrationDag();
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+
 
   int init(share::ObIDagNet *dag_net);
   INHERIT_TO_STRING_KV("ObPrepareMigrationDag", ObPrepareMigrationDag, KP(this));
@@ -150,7 +153,6 @@ public:
   virtual ~ObStartPrepareMigrationDag();
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
 
   int init(share::ObIDagNet *dag_net);
   INHERIT_TO_STRING_KV("ObPrepareMigrationDag", ObPrepareMigrationDag, KP(this));
@@ -174,6 +176,10 @@ private:
   int wait_ls_checkpoint_scn_push_();
   int generate_prepare_migration_dags_();
   int remove_local_incomplete_tablets_();
+  int prepare_backfill_tx_tablets_();
+  int wait_transfer_tablets_ready_();
+  int wait_transfer_out_tablet_ready_(
+      ObLS *ls, ObTablet *tablet);
 
 private:
   bool is_inited_;
@@ -188,7 +194,6 @@ public:
   virtual ~ObFinishPrepareMigrationDag();
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
 
   int init(share::ObIDagNet *dag_net);
   INHERIT_TO_STRING_KV("ObPrepareMigrationDag", ObPrepareMigrationDag, KP(this));

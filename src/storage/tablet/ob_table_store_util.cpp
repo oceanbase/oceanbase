@@ -32,268 +32,155 @@ using namespace common;
 using namespace storage;
 using namespace blocksstable;
 
-ObITableArray::ObITableArray()
-  : meta_mem_mgr_(nullptr),
-    array_(nullptr),
-    allocator_(nullptr),
-    count_(0),
-    is_inited_(false)
+void ObSSTableArray::reset()
 {
-}
-
-ObITableArray::~ObITableArray()
-{
-  destroy();
-}
-
-void ObITableArray::destroy()
-{
+  if (OB_LIKELY(nullptr != sstable_array_)) {
+    for (int64_t i = 0; i < cnt_; i++) {
+      ObSSTable *sstable = sstable_array_[i];
+      if (OB_LIKELY(nullptr != sstable)) {
+        sstable->~ObSSTable();
+        sstable = nullptr;
+      }
+    }
+  }
+  cnt_ = 0;
+  sstable_array_ = nullptr;
   is_inited_ = false;
-  if (OB_NOT_NULL(array_)) {
-    for (int64_t i = 0; i < count_; ++i) {
-      reset_table(i);
-    }
-    if (OB_NOT_NULL(allocator_)) {
-      allocator_->free(array_);
-    }
-    array_ = nullptr;
-  }
-  count_ = 0;
-  if (OB_NOT_NULL(allocator_)) {
-    allocator_ = nullptr;
-  }
 }
 
-void ObITableArray::reset_table(const int64_t pos)
-{
-  if (pos < 0 || pos >= count_) { // do nothing
-  } else if (OB_ISNULL(array_[pos])) {
-  // maybe called by thread without tenant, such as iocallback, comment until remove tablet_handle from iocallback
-  // } else if (OB_UNLIKELY(meta_mem_mgr_ != MTL(ObTenantMetaMemMgr *) || nullptr == meta_mem_mgr_)) {
-  } else if (OB_ISNULL(meta_mem_mgr_) || OB_ISNULL(allocator_)) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KP(allocator_), KPC(array_[pos]));
-  } else if (0 == array_[pos]->dec_ref()) {
-    if (meta_mem_mgr_->is_used_obj_pool(allocator_)) {
-      if (OB_UNLIKELY(OB_INVALID_TENANT_ID == MTL_ID()
-          && array_[pos]->is_sstable()
-          && reinterpret_cast<ObSSTable*>(array_[pos])->is_small_sstable())) {
-        FLOG_INFO("this thread doesn't have MTL ctx, push sstable into gc queue", KP(array_[pos]), K(array_[pos]->get_key()));
-        meta_mem_mgr_->push_table_into_gc_queue(array_[pos], array_[pos]->get_key().table_type_);
-      } else if (array_[pos]->is_sstable() && !array_[pos]->is_ddl_mem_sstable()) {
-        meta_mem_mgr_->gc_sstable(reinterpret_cast<ObSSTable*>(array_[pos]));
-      } else {
-        meta_mem_mgr_->push_table_into_gc_queue(array_[pos], array_[pos]->get_key().table_type_);
-      }
-    } else {
-      array_[pos]->~ObITable();
-      allocator_->free(array_[pos]);
-    }
-    array_[pos] = nullptr;
-  } else {
-    array_[pos] = nullptr;
-  }
-}
-
-int ObITableArray::init(ObIAllocator &allocator, const int64_t count)
-{
-  int ret = OB_SUCCESS;
-  ObITable **buf = nullptr;
-  ObTenantMetaMemMgr *meta_mem_mgr = MTL(ObTenantMetaMemMgr *);
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObITableArray cannot init twice", K(ret), K(*this));
-  } else if (OB_UNLIKELY(0 >= count)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(count));
-  } else if (OB_ISNULL(buf = static_cast<ObITable**>(allocator.alloc(sizeof(ObITable*) * count)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for table pointer", K(ret), K(count));
-  } else if (OB_ISNULL(meta_mem_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get meta mem mgr from MTL", K(ret));
-  } else {
-    MEMSET(buf, 0, sizeof(ObITable*) * count);
-    meta_mem_mgr_ =  meta_mem_mgr;
-    allocator_ = &allocator;
-    array_ = buf;
-    count_ = count;
-    is_inited_ = true;
-  }
-
-  if (OB_UNLIKELY(!is_inited_) && OB_NOT_NULL(buf)) {
-    allocator.free(buf);
-    array_ = nullptr;
-  }
-  return ret;
-}
-
-int ObITableArray::copy(
-    ObIAllocator &allocator,
-    const ObITableArray &other,
-    const bool allow_empty_table)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(init(allocator, other.count_))) {
-    LOG_WARN("failed to init ObITableArray for copying", K(ret), K(other));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
-      if (OB_ISNULL(other[i])) {
-        if (!allow_empty_table) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("table must be not null", K(ret), K(i), K(other));
-        }
-      } else if (OB_FAIL(assign(i, other[i]))) {
-        LOG_WARN("failed to add table", K(ret), K(i), K(other[i]));
-      }
-    }
-    if (OB_FAIL(ret)) {
-      destroy();
-    }
-  }
-  return ret;
-}
-
-int ObITableArray::init_and_copy(
-    ObIAllocator &allocator,
+int ObSSTableArray::init(
+    ObArenaAllocator &allocator,
     const ObIArray<ObITable *> &tables,
     const int64_t start_pos)
 {
   int ret = OB_SUCCESS;
-  if (tables.empty() || start_pos < 0 || start_pos >= tables.count()) {
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("double init", K(ret));
+  } else if (OB_UNLIKELY(start_pos > tables.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tables), K(MAX_SSTABLE_CNT_IN_STORAGE));
-  } else if (OB_FAIL(init(allocator, tables.count() - start_pos))) {
-    LOG_WARN("failed to init ObITableArray", K(ret), K(*this));
+    LOG_WARN("invalid start pos", K(ret), K(start_pos), K(tables.count()));
+  } else if (OB_FAIL(inner_init(allocator, tables, start_pos, tables.count() - start_pos))) {
+    LOG_WARN("fail to init sstable array", K(ret));
   } else {
-    ObITable *table = nullptr;
-    for (int64_t i = start_pos; OB_SUCC(ret) && i < tables.count(); ++i) {
-      if (OB_ISNULL(table = tables.at(i))) {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObSSTableArray::init(ObArenaAllocator &allocator, const blocksstable::ObSSTable *sstable)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("double init", K(ret));
+  } else if (OB_UNLIKELY(!sstable->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("try to init sstable array with an unserialized sstable", K(ret), KPC(sstable));
+  } else {
+    cnt_ = 1;
+    sstable_array_ = reinterpret_cast<ObSSTable **>(allocator.alloc(sizeof(ObSSTable *)));
+    if (OB_ISNULL(sstable_array_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for sstable address array", K(ret), K_(cnt));
+    } else if (OB_FAIL(sstable->deep_copy(allocator, sstable_array_[0]))) {
+      LOG_WARN("fail to deep copy sstable address", K(ret), KPC(sstable));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObSSTableArray::init(
+    ObArenaAllocator &allocator,
+    const ObIArray<ObITable *> &tables,
+    const ObIArray<ObMetaDiskAddr> &addrs,
+    const int64_t start_pos,
+    const int64_t cnt)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("double init", K(ret));
+  } else if (OB_FAIL(inner_init(allocator, tables, start_pos, cnt))) {
+    LOG_WARN("fail to inner init sstable array", K(ret));
+  } else {
+    for (int64_t i = start_pos; OB_SUCC(ret) && i < start_pos + cnt; ++i) {
+      ObSSTable *sstable = sstable_array_[i - start_pos];
+      if (OB_ISNULL(sstable)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("table must not null", K(ret), K(tables));
-      } else if (OB_FAIL(assign(i - start_pos, table))) {
-        LOG_WARN("failed to add table to tables", K(ret));
+        LOG_WARN("unexpected null sstable pointer", K(ret), K(tables), K(addrs), K(start_pos), K(cnt));
+      } else if (OB_FAIL(sstable->set_addr(addrs.at(i)))) {
+        LOG_WARN("fail to set sstable meta disk address", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObSSTableArray::init(ObArenaAllocator &allocator, const ObSSTableArray &other)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObITable *, OB_DEFAULT_SE_ARRAY_COUNT> tables;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("double init", K(ret));
+  } else if (OB_FAIL(other.get_all_tables(tables))) {
+    LOG_WARN("fail to get all tables from old array", K(ret), K(other));
+  } else if (OB_FAIL(inner_init(allocator, tables, 0, tables.count()))) {
+    LOG_WARN("fail to inner init sstable array", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObSSTableArray::inner_init(
+    ObArenaAllocator &allocator,
+    const ObIArray<ObITable *> &tables,
+    const int64_t start_pos,
+    const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(
+      tables.count() < 0
+      || count < 0
+      || start_pos + count > tables.count()
+      || start_pos < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments to init sstable array for serialize", K(ret),
+        K(tables), K(start_pos), K(count));
+  } else if (0 == count) {
+    // nothing to do.
+    cnt_ = 0;
+    sstable_array_ = nullptr;
+  } else {
+    cnt_ = count;
+    sstable_array_ = static_cast<ObSSTable **>(allocator.alloc(sizeof(ObSSTable *) * cnt_));
+    if (OB_ISNULL(sstable_array_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for sstable address array", K(ret), K_(cnt));
+    }
+    for (int64_t i = start_pos; OB_SUCC(ret) && i < start_pos + count; ++i) {
+      ObITable *table = tables.at(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null table ptr", K(ret));
+      } else if (OB_UNLIKELY(!table->is_sstable() && !table->is_ddl_mem_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table type", K(ret), KPC(table));
+      } else if (OB_FAIL(static_cast<ObSSTable *>(table)->deep_copy(allocator, sstable_array_[i - start_pos]))) {
+        LOG_WARN("fail to copy sstable", K(ret), KPC(static_cast<ObSSTable *>(table)));
       }
     }
     if (OB_FAIL(ret)) {
-      destroy();
-    }
-  }
-  return ret;
-}
-
-int ObITableArray::assign(const int64_t pos, ObITable * const table)
-{
-  int ret = OB_SUCCESS;
-  ObTenantMetaMemMgr *meta_mem_mgr = MTL(ObTenantMetaMemMgr *);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObITableArray not inited", K(ret), K(*this));
-  } else if (OB_UNLIKELY(pos < 0 || pos >= count_ || NULL == table)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(pos), KP(table), K(*this));
-  } else if (meta_mem_mgr_ != meta_mem_mgr) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("meta mem mgr is unexpected not equal!", K(ret), K(meta_mem_mgr_), K(meta_mem_mgr));
-  } else {
-    array_[pos] = table;
-    table->inc_ref();
-  }
-  return ret;
-}
-
-int ObITableArray::get_all_tables(common::ObIArray<ObITable *> &tables) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-  } else if (0 >= count_) {
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
-      if (OB_ISNULL(array_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table must not be null", K(ret), K(i), K(*this));
-      } else if (OB_FAIL(tables.push_back(array_[i]))) {
-        LOG_WARN("fail to push back", K(ret), K(i));
-      }
-    }
-  }
-  return ret;
-}
-
-ObITable *ObITableArray::get_boundary_table(const bool last) const
-{
-  ObITable *table = nullptr;
-  if (IS_NOT_INIT) {
-    // not inited, just return nullptr
-  } else if (0 >= count_) {
-    // no table, just return nullptr.
-  } else if (last) {
-    table = array_[count_ - 1];
-  } else {
-    table = array_[0];
-  }
-  return table;
-}
-
-int ObITableArray::get_table(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const
-{
-  int ret = OB_SUCCESS;
-  handle.reset();
-  if (IS_NOT_INIT) {
-  } else if (0 >= count_) {
-  } else if (OB_UNLIKELY(!table_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key));
-  } else {
-    ObITable *table = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
-      if (OB_ISNULL(array_[i])) {
-      } else if (table_key == array_[i]->get_key()) {
-        table = array_[i];
-        break;
-      }
-    }
-
-    if (OB_SUCC(ret) && OB_NOT_NULL(table)) {
-      if (OB_FAIL(handle.set_table(table, meta_mem_mgr_, table->get_key().table_type_))) {
-        LOG_WARN("failed to set table handle", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObITableArray::get_all_tables(storage::ObTablesHandleArray &tables) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-  } else if (0 >= count_) {
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
-      if (OB_ISNULL(array_[i])) {
-      } else if (OB_FAIL(tables.add_table(array_[i]))) {
-        LOG_WARN("failed to add table to handle array", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-
-int ObSSTableArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buf || buf_len <= 0 || pos < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments.", KP(buf), K(buf_len), K(pos), K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, count_))) {
-    LOG_WARN("failed to encode count", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
-      if (OB_ISNULL(array_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table in array_ must not be null", K(ret), K(i));
-      } else if (OB_FAIL(array_[i]->serialize(buf, buf_len, pos))) {
-        LOG_WARN("failed to serialize table", K(ret), KPC(array_[i]));
+      if (nullptr != sstable_array_) {
+        allocator.free(sstable_array_);
+        sstable_array_ = nullptr;
       }
     }
   }
@@ -302,335 +189,537 @@ int ObSSTableArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) co
 
 int64_t ObSSTableArray::get_serialize_size() const
 {
+  int ret = OB_SUCCESS;
   int64_t len = 0;
-  len += serialization::encoded_length_i64(count_);
-  for (int64_t i = 0; i < count_; ++i) {
-    len += array_[i]->get_serialize_size();
+  len += serialization::encoded_length_i64(cnt_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
+    ObSSTable *sstable = sstable_array_[i];
+    if (OB_ISNULL(sstable) ||
+        OB_UNLIKELY(!sstable->get_addr().is_valid() || sstable->get_addr().is_none())) {
+      len = 0;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid sstable", K(ret), KPC(sstable));
+    } else {
+      len += sstable->get_serialize_size();
+    }
   }
   return len;
+}
+
+int ObSSTableArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(buf_len));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, cnt_))) {
+    LOG_WARN("fail to encode count", K(ret), K_(cnt));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
+    ObSSTable *sstable = sstable_array_[i];
+    if (OB_ISNULL(sstable)
+        || OB_UNLIKELY(!sstable->get_addr().is_valid() || sstable->get_addr().is_none())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid sstable address", K(ret), KPC(sstable));
+    } else if (OB_FAIL(sstable->serialize(buf, buf_len, pos))) {
+      LOG_WARN("failed to serialize sstable address", K(ret), KPC(sstable));
+    }
+  }
+
+  return ret;
 }
 
 int ObSSTableArray::deserialize(
-    ObIAllocator &allocator,
+    ObArenaAllocator &allocator,
     const char *buf,
     const int64_t data_len,
     int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  int64_t count = 0;
-
-  if (OB_UNLIKELY(NULL == buf || data_len <= 0 || pos < 0)) {
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || data_len <= pos)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments.", KP(buf),K(data_len), K(pos), K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &count))) {
-    LOG_WARN("failed to decode count_", K(ret));
-  } else if (0 >= count) {
-  } else if (OB_FAIL(init(allocator, count))) {
-    LOG_WARN("failed to init ObSSTableArray", K(ret), K(*this));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count && pos < data_len; ++i) {
-      ObTableHandleV2 table_handle;
-      ObSSTable *sstable = nullptr;
-      if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->acquire_sstable(table_handle, allocator))) {
-        LOG_WARN("failed to acquire sstable from meta_mem_mgr", K(ret));
-      } else if (OB_ISNULL(sstable = static_cast<ObSSTable *>(table_handle.get_table()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, sstable is nullptr", K(ret), K(table_handle));
-      } else if (OB_FAIL(sstable->deserialize(allocator, buf, data_len, pos))) {
-        LOG_WARN("failed to deserialize sstable", K(ret));
-      } else if (OB_FAIL(assign(i, table_handle.get_table()))) {
-        LOG_WARN("failed to assign table to ObSSTableArray", K(ret), K(i));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    destroy();
-  }
-  return ret;
-}
-
-int ObSSTableArray::get_min_schema_version(int64_t &min_schema_version) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObSSTableArray not inited", K(ret), K(*this));
-  } else {
-    min_schema_version = INT64_MAX;
-    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
-      if (OB_ISNULL(array_[i])) {
-        ret = OB_ERR_SYS;
-        LOG_ERROR("unexpected null sstable", K(ret), K(i), K(*this));
-      } else {
-        min_schema_version = MIN(min_schema_version, static_cast<ObSSTable*>(array_[i])->get_meta().get_basic_meta().schema_version_);
-      }
-    }
-  }
-  return ret;
-}
-
-
-int ObExtendTableArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &cnt_))) {
+    LOG_WARN("fail to decode count", K(ret));
+  } else if (0 == cnt_) {
+    // empty sstable array
+  } else if (OB_UNLIKELY(cnt_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ObExtendTableArray not inited, cannot serialize", K(ret));
-  } else if (OB_UNLIKELY(NULL == buf || buf_len <= 0 || pos < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments.", KP(buf), K(buf_len), K(pos), K(ret));
+    LOG_WARN("deserialized array count less than 0", K(ret), K_(cnt));
   } else {
-    int64_t table_count = 0;
-    for (int64_t i = 0; i < count_; ++i) {
-      if (OB_NOT_NULL(array_[i])) {
-        ++table_count;
-      }
-    }
-    if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, table_count))) {
-      LOG_WARN("failed to serialize table count", K(ret));
-    } else if (0 == table_count) { // no extend tables
+    const int64_t ptr_array_size = sizeof(ObSSTable *) * cnt_;
+    const int64_t obj_array_size = sizeof(ObSSTable) * cnt_;
+    char *buff = nullptr;
+    if (OB_ISNULL(buff = static_cast<char *>(allocator.alloc(ptr_array_size + obj_array_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for sstable array", K(ret), K_(cnt), K(ptr_array_size), K(obj_array_size));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
-        if (OB_ISNULL(array_[i])) {
-        } else if (OB_FAIL(array_[i]->serialize(buf, buf_len, pos))) {
-          LOG_WARN("failed to serialize table", K(ret), KPC(array_[i]));
+      sstable_array_ = reinterpret_cast<ObSSTable **>(buff);
+      ObSSTable *obj_array = new (buff + ptr_array_size) ObSSTable[cnt_];
+      for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
+        sstable_array_[i] = obj_array + i;
+        if (OB_FAIL(sstable_array_[i]->deserialize(allocator, buf, data_len, pos))) {
+          LOG_WARN("fail to deserialized sstable address", K(ret));
         }
       }
     }
+    if (OB_FAIL(ret)) {
+      if (nullptr != sstable_array_) {
+        allocator.free(sstable_array_);
+        sstable_array_ = nullptr;
+      }
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
 
-int64_t ObExtendTableArray::get_serialize_size() const
+int64_t ObSSTableArray::get_deep_copy_size() const
 {
   int64_t len = 0;
-  int64_t count = 0;
-  for (int64_t i = 0; i < count_; ++i) {
-    if (OB_NOT_NULL(array_[i])) {
-      ++count;
-    }
-  }
-  len += serialization::encoded_length_i64(count);
-  for (int64_t i = 0; i < count_; ++i) {
-    if (OB_NOT_NULL(array_[i])) {
-      len += array_[i]->get_serialize_size();
+  len += cnt_ * sizeof(ObSSTable *);
+  for (int64_t i = 0; i < cnt_; ++i) {
+    if (OB_ISNULL(sstable_array_[i])) {
+      len = 0;
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected null pointer for sstable array", KPC(this), K(i), K_(cnt));
+      break;
+    } else {
+      len += sstable_array_[i]->get_deep_copy_size();
     }
   }
   return len;
 }
 
-int ObExtendTableArray::deserialize(
-    ObIAllocator &allocator,
-    const char *buf,
-    const int64_t data_len,
-    int64_t &pos)
+int ObSSTableArray::deep_copy(
+    char *dst_buf,
+    const int64_t buf_size,
+    int64_t &pos,
+    ObSSTableArray &dst_array) const
 {
   int ret = OB_SUCCESS;
-  int64_t count = 0;
-
-  if (OB_UNLIKELY(count_ <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ObExtendTableArray should alloc memory for array before deserializing", K(ret), K(*this));
-  } else if (OB_UNLIKELY(NULL == buf || data_len <= 0 || pos < 0)) {
+  const int64_t memory_size = get_deep_copy_size();
+  if (OB_ISNULL(dst_buf) || OB_UNLIKELY(buf_size - pos < memory_size)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments.", K(ret), KP(buf), K(data_len), K(pos));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &count))) {
-    LOG_WARN("failed to decode count_", K(ret));
+    LOG_WARN("invalue argument", K(ret), KP(dst_buf), K(buf_size), K(pos), K_(cnt), K(memory_size));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count && pos < data_len; ++i) {
-      ObTableHandleV2 table_handle;
-      ObSSTable *sstable = nullptr;
-      if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->acquire_sstable(table_handle, allocator))) {
-        LOG_WARN("failed to acquire sstable from meta_mem_mgr", K(ret));
-      } else if (OB_ISNULL(sstable = static_cast<ObSSTable *>(table_handle.get_table()))) {
+    dst_array.cnt_ = cnt_;
+    dst_array.sstable_array_ = 0 == cnt_ ? nullptr : reinterpret_cast<ObSSTable **>(dst_buf + pos);
+    const int64_t array_size = cnt_ * sizeof(ObSSTable *);
+    pos += array_size;
+    for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
+      int64_t sstable_copy_size = 0;
+      ObIStorageMetaObj *new_sstable = nullptr;
+      char *sstable_copy_buf = dst_buf + pos;
+      if (OB_ISNULL(sstable_array_[i])) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, sstable is nullptr", K(ret), K(table_handle));
-      } else if (OB_FAIL(sstable->deserialize(allocator, buf, data_len, pos))) {
-        LOG_WARN("failed to deserialize sstable", K(ret));
-      } else if (table_handle.get_table()->is_meta_major_sstable()) {
-        if (OB_FAIL(assign(ObTabletTableStore::META_MAJOR, table_handle.get_table()))) {
-          LOG_WARN("failed to add meta major table", K(ret));
+        LOG_WARN("unexpected null sstable pointer", K(ret), KPC(this), K(i));
+      } else if (FALSE_IT(sstable_copy_size = sstable_array_[i]->get_deep_copy_size())) {
+      } else if (OB_FAIL(sstable_array_[i]->deep_copy(sstable_copy_buf, buf_size - pos, new_sstable))) {
+        LOG_WARN("fail to deep copy sstable addr", K(ret));
+      } else {
+        dst_array.sstable_array_[i] = static_cast<ObSSTable *>(new_sstable);
+        pos += sstable_copy_size;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      dst_array.is_inited_ = is_inited_;
+    }
+  }
+  return ret;
+}
+
+ObSSTable *ObSSTableArray::operator[](const int64_t pos) const
+{
+  return at(pos);
+}
+
+blocksstable::ObSSTable *ObSSTableArray::at(const int64_t pos) const
+{
+  ObSSTable *sstable = nullptr;
+  if (!is_valid() || pos >= cnt_ || pos < 0) {
+    sstable = nullptr;
+  } else {
+    sstable = sstable_array_[pos];
+  }
+  return sstable;
+}
+
+ObITable *ObSSTableArray::get_boundary_table(const bool is_last) const
+{
+  ObSSTable *sstable = nullptr;
+  if (!is_valid() || 0 == cnt_) {
+    sstable = nullptr;
+  } else {
+    sstable = is_last ? sstable_array_[cnt_ - 1] : sstable_array_[0];
+  }
+  return sstable;
+}
+
+int ObSSTableArray::get_all_tables(ObIArray<ObITable *> &tables) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
+      if (OB_FAIL(tables.push_back(sstable_array_[i]))) {
+        LOG_WARN("fail to push sstable address into array", K(ret), K(i), K(tables));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSSTableArray::get_table(const ObITable::TableKey &table_key, ObITable *&table) const
+{
+  int ret = OB_SUCCESS;
+  table = nullptr;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(table_key));
+  } else if (OB_UNLIKELY(!table_key.is_valid() || table_key.is_memtable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table key", K(ret), K(table_key));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
+      if (OB_ISNULL(sstable_array_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null sstable pointer", K(ret), KPC(this));
+      } else if (table_key == sstable_array_[i]->get_key()) {
+        table = sstable_array_[i];
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSSTableArray::inc_macro_ref(bool &is_success) const
+{
+  int ret = OB_SUCCESS;
+  is_success = false;
+  bool inc_data_success = false;
+  bool inc_meta_success = false;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(inc_data_ref_cnt(inc_data_success))) {
+    LOG_WARN("fail to increase sstables' data ref cnt", K(ret));
+  } else if (OB_FAIL(inc_meta_ref_cnt(inc_meta_success))) {
+    LOG_WARN("fail to increase sstables' meta ref cnt", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (inc_data_success) {
+      dec_data_ref_cnt();
+    }
+    if (inc_meta_success) {
+      dec_meta_ref_cnt();
+    }
+  } else {
+    is_success = true;
+  }
+  return ret;
+}
+
+void ObSSTableArray::dec_macro_ref() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    dec_data_ref_cnt();
+    dec_meta_ref_cnt();
+  }
+}
+
+int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
+{
+  int ret = OB_SUCCESS;
+  inc_success = false;
+  ObITable *table = nullptr;
+  int64_t sstable_cnt = 0;
+  ObMetaDiskAddr addr;
+  MacroBlockId macro_id;
+  int64_t offset = 0;
+  int64_t size = 0;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; i++) {
+    table = sstable_array_[i];
+    if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("table is invalid", K(ret), KPC(table));
+      // shouldn't abort after being merged into master !!!
+      ob_abort();
+    } else {
+      ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
+      addr = sstable->get_addr();
+      if (addr.is_memory()) {
+        // full/old tablet, skip increase
+        sstable_cnt++;
+      } else if (OB_UNLIKELY(!addr.is_block() || !addr.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("addr is invalid", K(ret), K(addr));
+      } else if (OB_FAIL(addr.get_block_addr(macro_id, offset, size))) {
+        LOG_WARN("fail to get macro id from addr", K(ret), K(addr));
+      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+        LOG_ERROR("fail to increase ref cnt for sstable meta's macro block", K(ret), K(macro_id));
+      } else {
+        sstable_cnt++;
+        FLOG_INFO("barry debug inc sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) && 0 != sstable_cnt) {
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; i < sstable_cnt; i++) {
+      table = sstable_array_[i];
+      if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("table is invalid", K(tmp_ret), KPC(table));
+      } else {
+        ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
+        addr = sstable->get_addr();
+        if (addr.is_memory()) {
+          // full/old tablet, skip increase
+        } else if (OB_UNLIKELY(!addr.is_block() || !addr.is_valid())) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("addr is invalid", K(tmp_ret), K(addr));
+        } else if (OB_TMP_FAIL(addr.get_block_addr(macro_id, offset, size))) {
+          LOG_ERROR("fail to get macro id from addr", K(tmp_ret), K(addr));
+        } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+          LOG_ERROR("fail to decrease ref cnt for sstable meta's macro block", K(tmp_ret), K(macro_id));
+        } else {
+          FLOG_INFO("barry debug decrease sstable meta's macro ref", K(tmp_ret), K(addr), K(macro_id), KPC(sstable));
         }
       }
     }
   }
+
+  if (OB_SUCC(ret)) {
+    inc_success = true;
+  }
+
+  FLOG_INFO("barry debug the number of sstables that increase meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
+
   return ret;
 }
 
-
-ObMemtableArray::ObMemtableArray()
-  : meta_mem_mgr_(nullptr),
-    allocator_(nullptr),
-    array_(nullptr),
-    is_inited_(false)
+int ObSSTableArray::inc_data_ref_cnt(bool &inc_success) const
 {
-}
+  int ret = OB_SUCCESS;
+  inc_success = false;
+  ObITable *table = nullptr;
+  int64_t sstable_cnt = 0;
 
-ObMemtableArray::~ObMemtableArray()
-{
-  destroy();
-}
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; i++) {
+    bool inc_data_block_success = false;
+    table = sstable_array_[i];
+    if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("table is invalid", K(ret), KPC(table));
+      // shouldn't abort after being merged into master !!!
+      ob_abort();
+    } else {
+      ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
+      if (OB_FAIL(sstable->inc_macro_ref(inc_data_block_success))) {
+        LOG_WARN("fail to increase ref cnt for sstable", K(ret), KPC(sstable), K(inc_data_block_success));
+      } else {
+        sstable_cnt++;
+      }
+      LOG_DEBUG("barry debug increase sstable data macro ref", K(ret), KPC(sstable));
+    }
+  }
 
-void ObMemtableArray::destroy()
-{
-  if (OB_ISNULL(allocator_) || OB_ISNULL(array_)) {
-    // do nothing
-  } else {
-    ObITable *table = nullptr;
-    for (int64_t i = 0; i < count(); ++i) {
-      if (OB_NOT_NULL(table = array_->at(i))) {
-        reset_table(i);
+  if (OB_FAIL(ret) && 0 != sstable_cnt) {
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; i < sstable_cnt; i++) {
+      table = sstable_array_[i];
+      if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("table is invalid", K(tmp_ret), KPC(table));
+        // shouldn't abort after being merged into master !!!
+        ob_abort();
+      } else {
+        ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
+        sstable->dec_macro_ref();
+        LOG_DEBUG("barry debug decrease sstable data macro ref", K(tmp_ret), KPC(sstable));
       }
     }
-    array_->~ObSEArray();
-    allocator_->free(array_);
   }
 
-  meta_mem_mgr_ = nullptr;
-  allocator_ = nullptr;
-  array_ = nullptr;
-  is_inited_ = false;
-}
-
-int ObMemtableArray::init(common::ObIAllocator *allocator)
-{
-  int ret = OB_SUCCESS;
-  char *buf = nullptr;
-  const int64_t alloc_size = sizeof(ObSEArray<ObITable*, DEFAULT_TABLE_CNT, common::ObIAllocator&>);
-
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObMemtableArray has been inited", K(ret), KPC(this));
-  } else if (OB_UNLIKELY(NULL == allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(allocator));
-  } else if (OB_ISNULL(meta_mem_mgr_ = MTL(ObTenantMetaMemMgr *))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get meta mem mgr from MTL", K(ret));
-  } else if (FALSE_IT(allocator_ = allocator)) {
-  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(alloc_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate mem for buf", K(ret));
-  } else {
-    array_ = new (buf) ObSEArray<ObITable *, DEFAULT_TABLE_CNT, common::ObIAllocator&>(OB_MALLOC_NORMAL_BLOCK_SIZE, *allocator_);
-    is_inited_ = true;
+  if (OB_SUCC(ret)) {
+    inc_success = true;
   }
+
   return ret;
 }
 
-int ObMemtableArray::init(
-    common::ObIAllocator *allocator,
-    const ObMemtableArray &other)
+void ObSSTableArray::dec_meta_ref_cnt() const
 {
   int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObMemtableArray has been inited", K(ret), KPC(this));
-  } else if (OB_FAIL(init(allocator))) {
-    LOG_WARN("failed to init ObMemtableArray", K(ret));
-  } else if (meta_mem_mgr_ != other.meta_mem_mgr_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("meta mem mgr must be same", K(ret), K(meta_mem_mgr_), K(other.meta_mem_mgr_));
-  }
-
   ObITable *table = nullptr;
-  for (int64_t i = 0; OB_SUCC(ret) && i < other.count(); ++i) {
-    table = other.get_table(i);
-    if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
+  ObMetaDiskAddr addr;
+  MacroBlockId macro_id;
+  int64_t offset = 0;
+  int64_t size = 0;
+  int64_t sstable_cnt = 0;
+
+  for (int64_t i = 0; i < cnt_; i++) {
+    table = sstable_array_[i];
+    if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
-    } else if (OB_FAIL(add_table(table))) {
-      LOG_WARN("failed to add to memtables", K(ret));
+      LOG_ERROR("table is invalid", K(ret), KPC(table));
+      // shouldn't abort after being merged into master !!!
+      ob_abort();
+    } else {
+      ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
+      addr = sstable->get_addr();
+      if (addr.is_memory()) {
+        // full/old tablet, skip decrease
+      } else if (OB_UNLIKELY(!addr.is_block() || !addr.is_valid())) {
+        LOG_ERROR("addr is invalid", K(ret), K(addr));
+      } else if (OB_FAIL(addr.get_block_addr(macro_id, offset, size))) {
+        LOG_ERROR("fail to get macro id from addr", K(ret), K(addr));
+      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+        LOG_ERROR("fail to decrease ref cnt for sstable meta's macro block", K(ret), K(macro_id));
+      } else {
+        sstable_cnt++;
+        FLOG_INFO("barry debug decrease sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
+      }
     }
   }
-  if (OB_FAIL(ret)) {
-    destroy();
+
+  FLOG_INFO("barry debug the number of sstables that decrease meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
+}
+
+void ObSSTableArray::dec_data_ref_cnt() const
+{
+  int ret = OB_SUCCESS;
+  ObITable *table = nullptr;
+  int64_t sstable_cnt = 0;
+
+  for (int64_t i = 0; i < cnt_; i++) {
+    table = sstable_array_[i];
+    if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("table is invalid", K(ret), KPC(table));
+      // shouldn't abort after being merged into master !!!
+      ob_abort();
+    } else {
+      sstable_cnt++;
+      ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
+      sstable->dec_macro_ref();
+      LOG_DEBUG("barry debug decrease sstable data's macro ref", K(ret), KPC(sstable));
+    }
+  }
+}
+
+int ObMemtableArray::assign(ObMemtableArray &dst_array) const
+{
+  int ret = OB_SUCCESS;
+  dst_array.count_ = count_;
+  for (int64_t i = 0; i < MEMTABLE_ARRAY_SIZE; ++i) {
+    dst_array.memtable_array_[i] = memtable_array_[i];
   }
   return ret;
 }
 
 int ObMemtableArray::build(
-    common::ObIArray<ObTableHandleV2> &handle_array,
+    common::ObIArray<ObITable *> &table_array,
     const int64_t start_pos)
 {
   int ret = OB_SUCCESS;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObMemtableArray not inited", K(ret), KPC(this));
-  } else if (start_pos < 0 || start_pos >= handle_array.count()) {
+  if (OB_UNLIKELY(0 != count_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("memtable array is not empry", K(ret));
+  } else if (OB_UNLIKELY(start_pos < 0 || start_pos >= table_array.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(start_pos), K(handle_array));
+    LOG_WARN("get invalid arguments", K(ret), K(start_pos), K(table_array));
   }
 
   ObITable *table = nullptr;
-  for (int64_t i = start_pos; OB_SUCC(ret) && i < handle_array.count(); ++i) {
+  for (int64_t i = start_pos; OB_SUCC(ret) && i < table_array.count(); ++i) {
     memtable::ObMemtable *memtable = nullptr;
-    table = handle_array.at(i).get_table();
+    table = table_array.at(i);
     if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
     } else if (FALSE_IT(memtable = reinterpret_cast<memtable::ObMemtable *>(table))) {
     } else if (memtable->is_empty()) {
-      FLOG_INFO("Empty memtable discarded", KPC(memtable));
-    } else if (OB_FAIL(add_table(table))) {
-      LOG_WARN("failed to add to memtables", K(ret));
+      FLOG_INFO("empty memtable discarded", KPC(memtable));
+    } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
+      ret = OB_ARRAY_OUT_OF_RANGE;
+      LOG_WARN("too many elements for memtable array", K(ret));
+    } else {
+      memtable_array_[count_] = memtable;
+      ++count_;
     }
   }
+
   if (OB_FAIL(ret)) {
-    destroy();
+    count_ = 0;
   }
   return ret;
 }
 
-int ObMemtableArray::rebuild(common::ObIArray<ObTableHandleV2> &handle_array)
+int ObMemtableArray::rebuild(const common::ObIArray<ObITable *> &table_array)
 {
   int ret = OB_SUCCESS;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("ObMemtableArray not inited", K(ret), KPC(this), K(handle_array));
+  if (OB_FAIL(trim_empty_last_memtable())) {
+    LOG_WARN("failed to trim empty last memtable", K(ret));
   } else {
-    ObITable *last_memtable = get_table(count() - 1);
-    SCN end_scn = (NULL == last_memtable) ? SCN::min_scn() : last_memtable->get_end_scn();
+    const memtable::ObMemtable *last_memtable = count_ > 0 ? memtable_array_[count_ - 1] : nullptr;
+    const share::SCN endscn = (NULL == last_memtable) ? share::SCN::min_scn() : last_memtable->get_end_scn();
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < handle_array.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
       memtable::ObMemtable *memtable = nullptr;
-      ObITable *table = handle_array.at(i).get_table();
+      ObITable *table = table_array.at(i);
       if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
       } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
       } else if (memtable->is_empty()) {
         FLOG_INFO("Empty memtable discarded", KPC(memtable));
-      } else if (table->get_end_scn() < end_scn) {
-      } else if (table->get_end_scn() == end_scn && table == last_memtable) { //fix issue 41996395
-      } else if (OB_FAIL(add_table(table))) {
-        LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
+      } else if (table->get_end_scn() < endscn) {
+      } else if (table->get_end_scn() == endscn && memtable == last_memtable) { //fix issue 41996395
+      } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("too many elements for memtable array", K(ret));
+      } else {
+        memtable_array_[count_] = memtable;
+        ++count_;
       }
     }
   }
+
   return ret;
 }
 
 int ObMemtableArray::rebuild(
     const share::SCN &clog_checkpoint_scn,
-    common::ObIArray<ObTableHandleV2> &handle_array)
+    common::ObIArray<ObITable *> &table_array)
 {
   int ret = OB_SUCCESS;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("ObMemtableArray not inited", K(ret), KPC(this), K(handle_array));
-  } else if (OB_UNLIKELY(!empty())) {
+  if (OB_UNLIKELY(!empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("current memtable array is not empty", K(ret), K(clog_checkpoint_scn), KPC(this));
   } else {
-    // use clog checkpoint scn to filter memtable handle array
-    for (int64_t i = 0; OB_SUCC(ret) && i < handle_array.count(); ++i) {
+    // use clog checkpoint scn to filter memtable array
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
       memtable::ObMemtable *memtable = nullptr;
-      ObITable *table = handle_array.at(i).get_table();
+      ObITable *table = table_array.at(i);
       if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
@@ -640,62 +729,42 @@ int ObMemtableArray::rebuild(
       } else if (table->get_end_scn() <= clog_checkpoint_scn) {
         FLOG_INFO("memtable end scn no greater than clog checkpoint scn, should be discarded", K(ret),
             "end_scn", table->get_end_scn(), K(clog_checkpoint_scn));
-      } else if (OB_FAIL(add_table(table))) {
-        LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
+      } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("too many elements for memtable array", K(ret));
+      } else {
+        memtable_array_[count_] = memtable;
+        ++count_;
       }
     }
   }
   return ret;
 }
 
-int ObMemtableArray::prepare_allocate()
+int ObMemtableArray::find(const ObITable::TableKey &table_key, ObITable *&table) const
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObMemtableArray not inited", K(ret), KPC(this));
-  } else {
-    int64_t cur_capacity = array_->get_capacity();
-    int64_t cur_count = array_->count();
-    if (cur_capacity > cur_count) {
-    } else if (OB_FAIL(array_->reserve(cur_capacity * 2))) {
-      LOG_WARN("failed to realloc memory for ObMemtableArray", K(ret), KPC(this));
-    }
-  }
-  return ret;
-}
+  table = nullptr;
 
-int ObMemtableArray::find(
-    const ObITable::TableKey &table_key,
-    ObTableHandleV2 &handle) const
-{
-  int ret = OB_SUCCESS;
-  handle.reset();
-
-  if (empty()) {
+  if (0 == count_) {
   } else if (OB_UNLIKELY(!table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key));
   }
 
-  ObITable *table = nullptr;
-  for (int64_t i = 0; OB_SUCC(ret) && i < count(); ++i) {
-    if (OB_ISNULL(get_table(i))) {
-    } else if (table_key == get_table(i)->get_key()) {
-      table = get_table(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
+    if (OB_ISNULL(memtable_array_[i])) {
+    } else if (table_key == memtable_array_[i]->get_key()) {
+      table = memtable_array_[i];
       break;
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(table)) {
-    if (OB_FAIL(handle.set_table(table, meta_mem_mgr_, table->get_key().table_type_))) {
-      LOG_WARN("failed to set table handle", K(ret));
-    }
-  }
+
   return ret;
 }
 
 int ObMemtableArray::find(
-    const SCN &start_scn,
+    const share::SCN &start_scn,
     const int64_t base_version,
     ObITable *&table,
     int64_t &mem_pos) const
@@ -704,18 +773,18 @@ int ObMemtableArray::find(
   mem_pos = -1;
   table = nullptr;
 
-  if (OB_UNLIKELY(empty())) {
+  if (OB_UNLIKELY(0 == count_)) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no memtable", K(ret), KPC(this));
   } else if (OB_UNLIKELY(!start_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(start_scn), K(base_version));
-  } else if (SCN::min_scn() == start_scn) {
+  } else if (share::SCN::min_scn() == start_scn) {
     mem_pos = 0;
-    table = get_table(0);
+    table = memtable_array_[0];
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count(); ++i) {
-      ObITable * memtable = get_table(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
+      ObITable *memtable = memtable_array_[i];
       if (OB_ISNULL(memtable)) {
         ret = OB_ERR_SYS;
         LOG_WARN("table must not null", K(ret), KPC(memtable), KPC(this));
@@ -735,279 +804,36 @@ int ObMemtableArray::find(
   return ret;
 }
 
-int ObMemtableArray::add_table(ObITable * const table)
+int ObMemtableArray::trim_empty_last_memtable()
 {
+  // trim last memtable if it is empty since right boundary of memtable could be refine asynchronuously
   int ret = OB_SUCCESS;
-  ObTenantMetaMemMgr *meta_mem_mgr = nullptr;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObMemtableArray not inited", K(ret), KPC(this));
-  } else if (OB_ISNULL(table)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), KPC(table));
-  } else if (FALSE_IT(meta_mem_mgr = MTL(ObTenantMetaMemMgr *))) {
-  } else if (meta_mem_mgr_ != meta_mem_mgr) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("meta mem mgr is unexpected not equal!", K(ret), K(meta_mem_mgr_), K(meta_mem_mgr));
-  } else if (OB_FAIL(array_->push_back(table))) {
-    LOG_WARN("failed to add table", K(ret));
-  } else {
-    table->inc_ref();
+  const int64_t last_memtable_idx = count_ - 1;
+  if (0 == count_) {
+    // skip
+  } else if (memtable_array_[last_memtable_idx]->is_empty()) {
+    LOG_INFO("trim empty last memtable", K(ret), K(memtable_array_[last_memtable_idx]));
+    memtable_array_[last_memtable_idx] = nullptr;
+    count_--;
   }
   return ret;
 }
 
-void ObMemtableArray::reset_table(const int64_t pos)
-{
-  ObITable *table = nullptr;
-
-  if (pos < 0 || pos >= count()) { // do nothing
-  } else if (OB_ISNULL(table = get_table(pos))) {
-  } else if (OB_ISNULL(meta_mem_mgr_)) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KPC(table));
-  } else if (0 == table->dec_ref()) {
-    meta_mem_mgr_->push_table_into_gc_queue(table, table->get_key().table_type_);
-  }
-}
-
-
-/* ObTableStoreIterator Section */
-ObTableStoreIterator::ObTableStoreIterator(const bool reverse_iter)
-  : array_(),
-    pos_(INT64_MAX),
-    memstore_retired_(nullptr)
-{
-  step_ = reverse_iter ? -1 : 1;
-}
-
-ObTableStoreIterator::~ObTableStoreIterator()
-{
-  reset();
-}
-
-void ObTableStoreIterator::reset()
-{
-  array_.reset();
-  pos_ = INT64_MAX;
-  memstore_retired_ = nullptr;
-}
-
-void ObTableStoreIterator::resume()
-{
-  pos_ = step_ < 0 ? array_.count() - 1 : 0;
-}
-
-ObITable *ObTableStoreIterator::get_boundary_table(const bool is_last)
-{
-  ObITable *table = nullptr;
-  if (!is_valid()) {
-  } else if (is_last) {
-    table = step_ > 0 ? array_.at(array_.count() - 1) : array_.at(0);
-  } else {
-    table = step_ < 0 ? array_.at(array_.count() - 1) : array_.at(0);
-  }
-  return table;
-}
-
-int ObTableStoreIterator::copy(const ObTableStoreIterator &other)
-{
-  int ret = OB_SUCCESS;
-  if (!other.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(other));
-  } else if (OB_FAIL(array_.assign(other.array_))) {
-    LOG_WARN("failed to copy array", K(ret));
-  } else {
-    memstore_retired_ = other.memstore_retired_;
-  }
-  return ret;
-}
-
-int ObTableStoreIterator::add_tables(ObMemtableArray &array, const int64_t start_pos)
-{
-  int ret = OB_SUCCESS;
-  if (start_pos < 0 || start_pos >= array.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(start_pos));
-  }
-
-  for (int64_t i = start_pos; OB_SUCC(ret) && i < array.count(); ++i) {
-    ObITable *cur = array[i];
-    if (OB_ISNULL(cur)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null table", K(ret), K(i), K(cur));
-    } else if (OB_FAIL(array_.push_back(cur))) {
-      LOG_WARN("failed to add table to iterator", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTableStoreIterator::add_tables(ObITable **start, const int64_t count)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(start) || count <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(start), K(count));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-      ObITable **cur = start + i;
-      if (OB_ISNULL(*cur)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null table", K(ret), K(start), K(i), K(cur), K(count));
-      } else if (OB_FAIL(array_.push_back(*cur))) {
-        LOG_WARN("failed to add table to iterator", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableStoreIterator::add_table(ObITable *input_table)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(input_table)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(input_table));
-  } else if (OB_FAIL(array_.push_back(input_table))) {
-    LOG_WARN("failed to add table to iterator", K(ret), KP(input_table));
-  }
-  return ret;
-}
-
-int ObTableStoreIterator::get_next(ObITable *&table)
-{
-  int ret = OB_SUCCESS;
-  table = nullptr;
-  if (0 == array_.count()) {
-    ret = OB_ITER_END;
-  } else if (INT64_MAX == pos_) {
-    pos_ = (-1 == step_) ? array_.count() - 1 : 0;
-  } else if (pos_ >= array_.count() || pos_ < 0) {
-    ret = OB_ITER_END;
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(array_.at(pos_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("iter unexpected null table", K(ret), K(*this));
-  } else {
-    table = array_.at(pos_);
-    pos_ += step_;
-  }
-  return ret;
-}
-
-int ObTableStoreIterator::set_retire_check()
-{
-  int ret = OB_SUCCESS;
-  memstore_retired_ = nullptr;
-  ObITable *first_memtable = nullptr;
-
-  for (int64_t i = array_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    if (OB_ISNULL(array_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table must not null", K(ret), K(*this));
-    } else if (array_.at(i)->is_data_memtable()) {
-      first_memtable = array_.at(i);
-    } else {
-      break;
-    }
-  }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(first_memtable)) {
-    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(first_memtable);
-    memstore_retired_ = &memtable->get_read_barrier();
-  }
-  return ret;
-}
-
-/* ObPrintTableStoreIterator Section */
-ObPrintTableStoreIterator::ObPrintTableStoreIterator(const ObTableStoreIterator &iter)
-  : array_(iter.array_),
-    pos_(iter.pos_),
-    step_(iter.step_),
-    memstore_retired_(iter.memstore_retired_)
-{
-}
-
-ObPrintTableStoreIterator::~ObPrintTableStoreIterator()
-{
-}
-
-int64_t ObPrintTableStoreIterator::to_string(char *buf, const int64_t buf_len) const
+int64_t ObMemtableArray::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
     // do nothing
   } else {
     J_OBJ_START();
-    J_NAME("ObTableStoreIterator_Pretty");
-    J_COLON();
-    J_KV(KP(this), K_(array), K_(pos), K_(step), K_(memstore_retired));
-    J_COMMA();
-    BUF_PRINTF("iter array");
-    J_COLON();
-    J_OBJ_START();
-    if (array_.count() > 0) {
-      ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
-      J_NEWLINE();
-      BUF_PRINTF("[%ld] [ ", GETTID());
-      BUF_PRINTO(PC(trace_id));
-      BUF_PRINTF(" ] ");
-      BUF_PRINTF(" %-10s %-19s %-19s %-19s %-19s %-19s %-4s %-16s \n",
-          "table_type", "table_addr", "upper_trans_ver", "max_merge_ver",
-          "start_scn", "end_scn", "ref", "uncommit_row");
-      for (int64_t i = 0; i < array_.count(); ++i) {
-        if (i > 0) {
-          J_NEWLINE();
-        }
-        ObITable *table = array_.at(i);
-        table_to_string(table, buf, buf_len, pos);
-      }
-    } else {
-      J_EMPTY_OBJ();
-    }
-    J_OBJ_END();
+    J_NAME("ObMemtableArray");
+    J_KV(KP(this),
+        K_(count),
+        "memtable_ptr_array", ObArrayWrap<memtable::ObMemtable *>(memtable_array_, count_));
     J_OBJ_END();
   }
   return pos;
 }
-
-void ObPrintTableStoreIterator::table_to_string(
-    ObITable *table,
-    char *buf,
-    const int64_t buf_len,
-    int64_t &pos) const
-{
-  if (nullptr != table) {
-    ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
-    BUF_PRINTF("[%ld] [ ", GETTID());
-    BUF_PRINTO(PC(trace_id));
-    BUF_PRINTF(" ] ");
-    const char* table_name = table->is_sstable()
-      ? ObITable::get_table_type_name(table->get_key().table_type_)
-      : (table->is_active_memtable() ? "ACTIVE" : "FROZEN");
-    const char * uncommit_row = table->is_sstable()
-      ? (static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().contain_uncommitted_row_ ? "true" : "false")
-      : "unused";
-
-    BUF_PRINTF(" %-10s %-19p %-19lu %-19lu %-19s %-19s %-4ld %-16s ",
-      table_name,
-      reinterpret_cast<const void *>(table),
-      table->get_upper_trans_version(),
-      table->get_max_merged_trans_version(),
-      to_cstring(table->get_start_scn()),
-      to_cstring(table->get_end_scn()),
-      table->get_ref(),
-      uncommit_row);
-  } else {
-    BUF_PRINTF(" %-10s %-19s %-10s %-19s %-19s %-19s %-19s %-4s %-16s \n",
-        "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL");
-  }
-}
-
 
 /* ObTableStoreUtil Section */
 bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
@@ -1015,7 +841,7 @@ bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
 {
   bool bret = false;
   if (OB_SUCCESS != result_code_) {
-  } else if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, bret))) {
+  } else if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, true/*is_ascend*/, bret))) {
     LOG_WARN_RET(result_code_, "failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
   }
   return bret;
@@ -1040,13 +866,27 @@ bool ObTableStoreUtil::ObTableHandleV2LogTsRangeCompare::operator()(
   } else {
     const ObITable *ltable = lhandle.get_table();
     const ObITable *rtable = rhandle.get_table();
-    if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, bret))) {
+    if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, true/*is_ascend*/, bret))) {
       LOG_WARN_RET(result_code_, "failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
     }
   }
   return bret;
 }
 
+bool ObTableStoreUtil::ObTableHandleV2LogTsRangeReverseCompare::operator()(
+    const ObTableHandleV2 &lhandle, const ObTableHandleV2 &rhandle) const
+{
+  bool bret = false;
+  if (OB_SUCCESS != result_code_) {
+  } else {
+    const ObITable *ltable = lhandle.get_table();
+    const ObITable *rtable = rhandle.get_table();
+    if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, false/*is_ascend*/, bret))) {
+      LOG_WARN_RET(result_code_, "failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
+    }
+  }
+  return bret;
+}
 
 bool ObTableStoreUtil::ObTableHandleV2SnapshotVersionCompare::operator()(
      const ObTableHandleV2 &lhandle, const ObTableHandleV2 &rhandle) const
@@ -1065,7 +905,7 @@ bool ObTableStoreUtil::ObTableHandleV2SnapshotVersionCompare::operator()(
 }
 
 
-int ObTableStoreUtil::compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, bool &bret)
+int ObTableStoreUtil::compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, const bool is_ascend, bool &bret)
 {
   int ret = OB_SUCCESS;
   bret = false;
@@ -1087,8 +927,11 @@ int ObTableStoreUtil::compare_table_by_scn_range(const ObITable *ltable, const O
     bret = true;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table end log ts shouldn't be equal", KPC(ltable), KPC(rtable));
-  } else { // log ts not equal
+  } else if (is_ascend) {
+    // log ts not equal
     bret = ltable->get_end_scn() < rtable->get_end_scn();
+  } else {
+    bret = ltable->get_end_scn() > rtable->get_end_scn();
   }
   return ret;
 }
@@ -1141,6 +984,23 @@ int ObTableStoreUtil::sort_minor_tables(ObArray<ObITable *> &tables)
     std::sort(tables.begin(), tables.end(), comp);
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort tables", K(ret), K(tables));
+    }
+  }
+  return ret;
+}
+
+int ObTableStoreUtil::reverse_sort_minor_table_handles(ObArray<ObTableHandleV2> &table_handles)
+{
+  int ret = OB_SUCCESS;
+
+  if (table_handles.empty()) {
+    // no need sort
+  } else {
+    // There is an assumption: either all tables are with scn range, or none
+    ObTableHandleV2LogTsRangeReverseCompare comp(ret);
+    std::sort(table_handles.begin(), table_handles.end(), comp);
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("failed to sort tables", K(ret), K(table_handles));
     }
   }
   return ret;

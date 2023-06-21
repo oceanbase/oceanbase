@@ -141,6 +141,8 @@ int ObAllVirtualTabletCompactionInfo::process_curr_tenant(common::ObNewRow *&row
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
   ObITable *table = nullptr;
+  ObArenaAllocator allocator;
+  const compaction::ObMediumCompactionInfoList *medium_info_list = nullptr;
   if (OB_UNLIKELY(!start_to_read_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "not inited", K(start_to_read_), K(ret));
@@ -154,8 +156,9 @@ int ObAllVirtualTabletCompactionInfo::process_curr_tenant(common::ObNewRow *&row
   } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "tablet is null", K(ret), K(tablet_handle_));
+  } else if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_info_list))) {
+    SERVER_LOG(WARN, "tablet read medium info list failed", K(ret), K(tablet_handle_));
   } else {
-    const compaction::ObMediumCompactionInfoList &medium_info_list = tablet->get_medium_compaction_info_list();
     const int64_t col_count = output_column_ids_.count();
     int64_t max_sync_medium_scn = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -182,12 +185,18 @@ int ObAllVirtualTabletCompactionInfo::process_curr_tenant(common::ObNewRow *&row
         case TABLET_ID:
           cur_row_.cells_[i].set_int(tablet->get_tablet_meta().tablet_id_.id());
           break;
-        case FINISH_SCN:
-          table = tablet->get_table_store().get_major_sstables().get_boundary_table(true/*last*/);
-          cur_row_.cells_[i].set_int(nullptr == table ? 0 : table->get_snapshot_version());
+        case FINISH_SCN: {
+          ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+          if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+            SERVER_LOG(WARN, "fail to fetch table store", K(ret));
+          } else {
+            table = table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/);
+            cur_row_.cells_[i].set_int(nullptr == table ? 0 : table->get_snapshot_version());
+          }
           break;
+        }
         case WAIT_CHECK_SCN:
-          cur_row_.cells_[i].set_int(medium_info_list.get_wait_check_medium_scn());
+          cur_row_.cells_[i].set_int(medium_info_list->get_wait_check_medium_scn());
           break;
         case MAX_RECEIVED_SCN:
           if (OB_SUCCESS == tablet->get_max_sync_medium_scn(max_sync_medium_scn)) {
@@ -197,9 +206,9 @@ int ObAllVirtualTabletCompactionInfo::process_curr_tenant(common::ObNewRow *&row
           }
           break;
         case SERIALIZE_SCN_LIST:
-          if (medium_info_list.size() > 0 || compaction::ObMediumCompactionInfo::MAJOR_COMPACTION == medium_info_list.get_last_compaction_type()) {
+          if (medium_info_list->size() > 0 || compaction::ObMediumCompactionInfo::MAJOR_COMPACTION == medium_info_list->get_last_compaction_type()) {
             int64_t pos = 0;
-            medium_info_list.gene_info(medium_info_buf_, OB_MAX_VARCHAR_LENGTH, pos);
+            medium_info_list->gene_info(medium_info_buf_, OB_MAX_VARCHAR_LENGTH, pos);
             cur_row_.cells_[i].set_varchar(medium_info_buf_);
             SERVER_LOG(DEBUG, "get medium info mgr", K(medium_info_list), K(medium_info_buf_));
           } else {

@@ -108,7 +108,8 @@ public:
       const int64_t data_size,
       const int64_t required_size,
       const MemberList &member_list,
-      const GlobalLearnerList &learner_list);
+      const GlobalLearnerList &learner_list,
+      const bool rebuild);
   // check-related functions
   inline bool is_valid() const;
   inline bool is_strong_leader() const { return common::is_strong_leader(role_); }
@@ -125,6 +126,11 @@ public:
   static int transform_ob_member_list(
       const common::ObMemberList &ob_member_list,
       MemberList &member_list);
+  static bool member_list_is_equal(const MemberList &a, const MemberList &b);
+  static bool server_is_in_member_list(
+      const MemberList &member_list,
+      const common::ObAddr &server);
+  static bool servers_in_member_list_are_same(const MemberList &a, const MemberList &b);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   // operator-related functions
   int assign(const ObLSReplica &other);
@@ -154,6 +160,7 @@ public:
   inline int64_t get_member_time_us() const { return member_time_us_; }
   inline int64_t get_data_size() const { return data_size_; }
   inline int64_t get_required_size() const { return required_size_; }
+  inline bool get_rebuild() const { return rebuild_; }
   inline const common::GlobalLearnerList &get_learner_list() const { return learner_list_; }
 
   // functions to set values
@@ -174,7 +181,6 @@ public:
   //set replica role(FOLLOWER), proposal_id(0), modify_time(now)
   inline void update_to_follower_role();
   bool learner_list_is_equal(const common::GlobalLearnerList &a, const common::GlobalLearnerList &b) const;
-  bool member_list_is_equal(const MemberList &a, const MemberList &b) const;
 private:
   int64_t create_time_us_;               // store utc time
   int64_t modify_time_us_;               // store utc time
@@ -202,6 +208,7 @@ private:
   int64_t member_time_us_;               // member_time_us
   common::GlobalLearnerList learner_list_;              // list to record R-replicas
   bool in_learner_list_;                 // whether in learner_list
+  bool rebuild_;                         // whether in rebuild
 };
 
 // [class_full_name] class ObLSInfo

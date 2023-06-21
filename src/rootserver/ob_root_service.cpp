@@ -97,6 +97,7 @@
 #include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/scn.h"
+#include "rootserver/backup/ob_backup_proxy.h" //ObBackupServiceProxy
 #include "logservice/palf_handle_guard.h"
 #include "logservice/ob_log_service.h"
 #include "rootserver/ob_heartbeat_service.h"
@@ -650,14 +651,10 @@ ObRootService::ObRootService()
     update_rs_list_timer_task_(*this),
     update_all_server_config_task_(*this),
     baseline_schema_version_(0),
-    backup_service_(),
-    backup_task_scheduler_(),
-    archive_service_(),
     start_service_time_(0),
     rs_status_(),
     fail_count_(0),
     schema_history_recycler_(),
-    backup_lease_service_(),
     disaster_recovery_task_executor_(),
     disaster_recovery_task_mgr_(),
     global_ctx_task_(*this)
@@ -734,18 +731,6 @@ int ObRootService::fake_init(ObServerConfig &config,
                                   lst_operator, zone_manager_, unit_manager_,
                                   snapshot_manager_))) {
       LOG_WARN("ddl_service_ init failed", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(backup_task_scheduler_.init(&zone_manager_, &rpc_proxy_, &backup_service_, sql_proxy_, backup_lease_service_))) {
-      LOG_WARN("fail to init backup task scheduler", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-	    if (OB_FAIL(backup_service_.init(sql_proxy_, rpc_proxy_, *schema_service_, backup_lease_service_, backup_task_scheduler_))) {
-      LOG_WARN("fail to init backup service", K(ret));
     }
   }
 
@@ -899,28 +884,10 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init THE_RS_JOB_TABLE failed", KR(ret));
   } else if (OB_FAIL(ddl_scheduler_.init(this))) {
     FLOG_WARN("init ddl task scheduler failed", KR(ret));
-  } else if (OB_FAIL(backup_lease_service_.init(self_addr_, sql_proxy))) {
-    // backup lease service需要rs切走以后将lease的leader addr重置调，所以不能用sql_proxy_
-    FLOG_WARN("init backup lease service failed", KR(ret));
-  } else if (OB_FAIL(backup_task_scheduler_.init(&zone_manager_, &rpc_proxy_,
-                                                 &backup_service_, sql_proxy_, backup_lease_service_))) {
-    FLOG_WARN("init backup task scheduler failed", KR(ret));
-  } else if (OB_FAIL(backup_service_.init(sql_proxy_, rpc_proxy_, *schema_service_,
-                                          backup_lease_service_, backup_task_scheduler_))) {
-    FLOG_WARN("init backup service failed", KR(ret));
-  } else if (OB_FAIL(backup_lease_service_.register_mgr(backup_service_))) {
-    FLOG_WARN("register log backup mgr failed", KR(ret));
-  } else if (OB_FAIL(archive_service_.init(zone_manager_, unit_manager_, schema_service_,
-                                           rpc_proxy_, sql_proxy_, backup_lease_service_))) {
-    FLOG_WARN("init archive_service_ failed", KR(ret));
-  } else if (OB_FAIL(backup_lease_service_.register_scheduler(archive_service_))) {
-    FLOG_WARN("register archive_service_ failed", KR(ret));
   } else if (OB_FAIL(schema_history_recycler_.init(*schema_service_,
                                                    zone_manager_,
                                                    sql_proxy_))) {
     FLOG_WARN("fail to init schema history recycler failed", KR(ret));
-  } else if (OB_FAIL(backup_lease_service_.start())) {
-    FLOG_WARN("start backup lease task failed", KR(ret));
   } else if (OB_FAIL(dbms_job::ObDBMSJobMaster::get_instance().init(&sql_proxy_,
                                                                     schema_service_))) {
     FLOG_WARN("init ObDBMSJobMaster failed", KR(ret));
@@ -960,14 +927,6 @@ void ObRootService::destroy()
       FLOG_WARN("stop service failed", KR(ret));
       fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
     }
-  }
-
-  FLOG_INFO("start destroy archive_service_");
-  if (OB_FAIL(archive_service_.destroy())) {
-    FLOG_INFO("archive_service_ destory failed", KR(ret));
-    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
-  } else {
-    FLOG_INFO("finish destroy archive_service_");
   }
 
   if (OB_FAIL(lost_replica_checker_.destroy())) {
@@ -1018,26 +977,11 @@ void ObRootService::destroy()
     FLOG_INFO("heartbeat checker destroy");
   }
 
-  if (OB_FAIL(backup_task_scheduler_.destroy())) {
-    FLOG_WARN("root backup task scheduler destroy failed", KR(ret));
-    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
-  } else {
-    FLOG_INFO("root backup task scheduler destroy");
-  }
-
-  if (OB_FAIL(backup_service_.destroy())) {
-    FLOG_WARN("root backup mgr destroy failed", KR(ret));
-    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
-  } else {
-    FLOG_INFO("root backup mgr destroy");
-  }
-
-  FLOG_INFO("start destroy backup_lease_service_");
-  backup_lease_service_.destroy();
-  FLOG_INFO("finish destroy backup_lease_service_");
+  ROOTSERVICE_EVENT_INSTANCE.destroy();
+  FLOG_INFO("event table operator destroy");
 
   dbms_job::ObDBMSJobMaster::get_instance().destroy();
-  FLOG_INFO("ObDBMSJobMaster destory");
+  FLOG_INFO("ObDBMSJobMaster destroy");
 
 
   if (OB_FAIL(disaster_recovery_task_mgr_.destroy())) {
@@ -1048,7 +992,7 @@ void ObRootService::destroy()
   }
 
   dbms_scheduler::ObDBMSSchedJobMaster::get_instance().destroy();
-  FLOG_INFO("ObDBMSSchedJobMaster destory");
+  FLOG_INFO("ObDBMSSchedJobMaster destroy");
   TG_DESTROY(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer destroyed");
 
@@ -1246,10 +1190,6 @@ int ObRootService::stop()
       FLOG_INFO("empty_server_checker stop");
       lost_replica_checker_.stop();
       FLOG_INFO("lost_replica_checker stop");
-      backup_task_scheduler_.stop();
-      FLOG_INFO("backup backup task scheduler stop");
-      backup_lease_service_.stop_lease();
-      FLOG_INFO("backup lease service stop");
       thread_checker_.stop();
       FLOG_INFO("rs_monitor_check : thread_checker stop");
       schema_history_recycler_.stop();
@@ -1260,18 +1200,12 @@ int ObRootService::stop()
       FLOG_INFO("ddl task scheduler stop");
       dbms_job::ObDBMSJobMaster::get_instance().stop();
       FLOG_INFO("dbms job master stop");
-      backup_task_scheduler_.stop();
-      FLOG_INFO("backup_task_scheduler_ stop");
-      backup_service_.stop();
-      FLOG_INFO("backup_mgr stop");
       disaster_recovery_task_mgr_.stop();
       FLOG_INFO("disaster_recovery_task_mgr stop");
       dbms_scheduler::ObDBMSSchedJobMaster::get_instance().stop();
       FLOG_INFO("dbms sched job master stop");
       TG_STOP(lib::TGDefIDs::GlobalCtxTimer);
       FLOG_INFO("global ctx timer stop");
-      archive_service_.stop();
-      FLOG_INFO("archive service stop");
     }
   }
 
@@ -1290,8 +1224,6 @@ void ObRootService::wait()
   FLOG_INFO("start to wait all thread exit");
   root_balancer_.wait();
   FLOG_INFO("root balancer exit success");
-  backup_lease_service_.wait_lease();
-  FLOG_INFO("log archive exit success");
   empty_server_checker_.wait();
   FLOG_INFO("empty server checker exit success");
   lost_replica_checker_.wait();
@@ -1308,17 +1240,10 @@ void ObRootService::wait()
   FLOG_INFO("inspect queue exit success");
   ddl_scheduler_.wait();
   FLOG_INFO("ddl task scheduler exit success");
-  backup_task_scheduler_.wait();
-  FLOG_INFO("root backup task scheduler exit success");
-  backup_service_.wait();
-  FLOG_INFO("root backup mgr exit success");
   disaster_recovery_task_mgr_.wait();
   FLOG_INFO("rebalance task mgr exit success");
   TG_WAIT(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer exit success");
-  archive_service_.wait();
-  FLOG_INFO("archive service exit success");
-  backup_task_scheduler_.reuse();
   ObUpdateRsListTask::clear_lock();
   THE_RS_JOB_TABLE.reset_max_job_id();
   int64_t cost = ObTimeUtility::current_time() - start_time;
@@ -4716,7 +4641,7 @@ int ObRootService::calc_column_checksum_repsonse(const obrpc::ObCalcColumnChecks
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.on_column_checksum_calc_reply(
-          arg.tablet_id_, ObDDLTaskKey(arg.target_table_id_, arg.schema_version_), arg.ret_code_))) {
+          arg.tablet_id_, ObDDLTaskKey(arg.tenant_id_, arg.target_table_id_, arg.schema_version_), arg.ret_code_))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   return ret;
@@ -5056,23 +4981,6 @@ int ObRootService::do_restart()
     FLOG_INFO("success to init sequenxe id");
   }
 
-  if (FAILEDx(backup_task_scheduler_.start())) {
-    FLOG_WARN("backup_task_scheduler_ start failed", KR(ret));
-  } else {
-    FLOG_INFO("success to start backup_task_scheduler_");
-  }
-
-  if (FAILEDx(backup_lease_service_.start_lease())) {
-    FLOG_WARN("backup_lease_service_ start failed", KR(ret));
-  } else {
-    FLOG_INFO("success to start backup_lease_service_");
-  }
-
-  if (FAILEDx(archive_service_.start())) {
-    FLOG_WARN("archive service start failed", KR(ret));
-  } else {
-    FLOG_INFO("success to start archive service");
-  }
 
 
   if (FAILEDx(disaster_recovery_task_mgr_.start())) {
@@ -9062,6 +8970,52 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("config invalid", KR(ret), K(*item));
       }
+    } else if (0 == STRCMP(item->name_.ptr(), PARTITION_BALANCE_SCHEDULE_INTERVAL)) {
+      const int64_t DEFAULT_BALANCER_IDLE_TIME = 10 * 1000 * 1000L; // 10s
+      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
+        const uint64_t tenant_id = item->tenant_ids_.at(i);
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+        int64_t balancer_idle_time = tenant_config.is_valid() ? tenant_config->balancer_idle_time : DEFAULT_BALANCER_IDLE_TIME;
+        int64_t interval = ObConfigTimeParser::get(item->value_.ptr(), valid);
+        if (valid) {
+          if (0 == interval) {
+            valid = true;
+          } else if (interval >= balancer_idle_time) {
+            valid = true;
+          } else {
+            valid = false;
+            char err_msg[DEFAULT_BUF_LENGTH];
+            (void)snprintf(err_msg, sizeof(err_msg), "partition_balance_schedule_interval of tenant %ld, "
+                "it should not be less than balancer_idle_time", tenant_id);
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, err_msg);
+          }
+        }
+        if (!valid) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("config invalid", KR(ret), K(*item), K(balancer_idle_time), K(tenant_id));
+        }
+      }
+    } else if (0 == STRCMP(item->name_.ptr(), BALANCER_IDLE_TIME)) {
+      const int64_t DEFAULT_PARTITION_BALANCE_SCHEDULE_INTERVAL = 2 * 3600 * 1000 * 1000L; // 2h
+      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
+        const uint64_t tenant_id = item->tenant_ids_.at(i);
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+        int64_t interval = tenant_config.is_valid()
+            ? tenant_config->partition_balance_schedule_interval
+            : DEFAULT_PARTITION_BALANCE_SCHEDULE_INTERVAL;
+        int64_t idle_time = ObConfigTimeParser::get(item->value_.ptr(), valid);
+        if (valid && (idle_time > interval)) {
+          valid = false;
+          char err_msg[DEFAULT_BUF_LENGTH];
+          (void)snprintf(err_msg, sizeof(err_msg), "balancer_idle_time of tenant %ld, "
+              "it should not be longer than partition_balance_schedule_interval", tenant_id);
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, err_msg);
+        }
+        if (!valid) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("config invalid", KR(ret), K(*item), K(interval), K(tenant_id));
+        }
+      }
     }
   }
   return ret;
@@ -9438,10 +9392,8 @@ int ObRootService::handle_archive_log(const obrpc::ObArchiveLogArg &arg)
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (arg.enable_ && OB_FAIL(archive_service_.open_archive_mode(arg.tenant_id_, arg.archive_tenant_ids_))) {
-    LOG_WARN("failed to open archive mode", K(ret), K(arg));
-  } else if (!arg.enable_ && OB_FAIL(archive_service_.close_archive_mode(arg.tenant_id_, arg.archive_tenant_ids_))) {
-    LOG_WARN("failed to close archive mode", K(ret), K(arg));
+  } else if (OB_FAIL(ObBackupServiceProxy::handle_archive_log(arg))) {
+    LOG_WARN("failed to handle archive log", K(ret));
   }
   return ret;
 }
@@ -9449,11 +9401,10 @@ int ObRootService::handle_archive_log(const obrpc::ObArchiveLogArg &arg)
 int ObRootService::handle_backup_database(const obrpc::ObBackupDatabaseArg &in_arg)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObBackupDatabaseArg arg = in_arg;
 	if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(backup_service_.handle_backup_database(in_arg))) {
+  } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_database(in_arg))) {
     LOG_WARN("failed to handle backup database", K(ret), K(in_arg));
   }
   FLOG_INFO("handle_backup_database", K(ret), K(in_arg));
@@ -9569,7 +9520,7 @@ int ObRootService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
 	if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(backup_service_.handle_backup_delete(arg))) {
+  } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_delete(arg))) {
     LOG_WARN("failed to handle backup delete", K(ret), K(arg));
   }
   return ret;
@@ -9581,7 +9532,7 @@ int ObRootService::handle_delete_policy(const obrpc::ObDeletePolicyArg &arg)
 	if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-	} else if (OB_FAIL(backup_service_.handle_delete_policy(arg))) {
+	} else if (OB_FAIL(ObBackupServiceProxy::handle_delete_policy(arg))) {
     LOG_WARN("failed to handle delete policy", K(ret), K(arg));
   }
   return ret;
@@ -9597,7 +9548,7 @@ int ObRootService::handle_backup_database_cancel(
   } else if (ObBackupManageArg::CANCEL_BACKUP != arg.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("handle backup database cancel get invalid argument", K(ret), K(arg));
-  } else if (OB_FAIL(backup_service_.handle_backup_database_cancel(arg.tenant_id_, arg.managed_tenant_ids_))) {
+  } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_database_cancel(arg))) {
     LOG_WARN("failed to start schedule backup cancel", K(ret), K(arg));
   }
   return ret;
@@ -9640,43 +9591,8 @@ int ObRootService::handle_cancel_backup_backup(const obrpc::ObBackupManageArg &a
 
 int ObRootService::handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg)
 {
-  int ret = OB_SUCCESS;
-
-  FLOG_WARN("start cancel all backup force");
-  // clear backup_dest and backup_backup_dest in GCONF
-  ObSqlString sql;
-  int64_t affected_rows = -1;
-  if (OB_FAIL(sql.assign_fmt("alter system set backup_dest=''"))) {
-    LOG_WARN("failed to clear backup dest", K(ret));
-  } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to clear backup dest", K(ret), K(sql));
-  } else {
-    LOG_WARN("succeed to clear backup dest");
-  }
-
-  ROOTSERVICE_EVENT_ADD("root_service", "clear_backup_dest", "result", ret, K_(self_addr));
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(sql.assign_fmt("alter system set backup_backup_dest=''"))) {
-      LOG_WARN("failed to clear backup backup dest", K(ret));
-    } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
-      LOG_WARN("failed to clear backup backup dest", K(ret), K(sql));
-    } else {
-      LOG_WARN("succeed to clear backup backup dest");
-    }
-
-    ROOTSERVICE_EVENT_ADD("root_service", "clear_backup_backup_dest", "result", ret, K_(self_addr));
-  }
-
-  ROOTSERVICE_EVENT_ADD("root_service", "force_cancel_backup", "result", ret, K_(self_addr));
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(backup_lease_service_.force_cancel(arg.tenant_id_))) {
-    LOG_WARN("failed to force stop", K(ret), K(arg));
-  }
-
-  FLOG_WARN("end cancel all backup force", K(ret));
-
+  int ret = OB_NOT_SUPPORTED;
+  LOG_ERROR("not support now", K(ret), K(arg));
   return ret;
 }
 
@@ -9745,7 +9661,7 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.on_sstable_complement_job_reply(
-      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
+      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.tenant_id_, arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   return ret;
@@ -9851,32 +9767,6 @@ int ObRootService::flush_opt_stat_monitoring_info(const obrpc::ObFlushOptStatArg
         LOG_WARN("fail to update table statistic", K(ret), K(server_list.at(i)));
       } else { /*do nothing*/}
     }
-  }
-  return ret;
-}
-
-int ObRootService::receive_backup_clean_over(const obrpc::ObBackupTaskRes &res)
-{
-  int ret = OB_SUCCESS;
-  ObBackupCleanLSTask task;
-  FLOG_INFO("receive backup clean over", K(res));
-  if (OB_FAIL(task.build_from_res(res, BackupJobType::BACKUP_CLEAN_JOB))) {
-    LOG_WARN("failed to build task from res rpc", K(ret), K(res));
-  } else if (OB_FAIL(backup_task_scheduler_.execute_over(task, res.result_))) {
-    LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));
-  }
-  return ret;
-}
-
-int ObRootService::receive_backup_over(const obrpc::ObBackupTaskRes &res)
-{
-  int ret = OB_SUCCESS;
-  ObBackupDataLSTask task;
-  FLOG_INFO("receive backup data over", K(res));
-  if (OB_FAIL(task.build_from_res(res, BackupJobType::BACKUP_DATA_JOB))) {
-    LOG_WARN("failed to build task from res rpc", K(ret), K(res));
-  } else if (OB_FAIL(backup_task_scheduler_.execute_over(task, res.result_))) {
-    LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));
   }
   return ret;
 }

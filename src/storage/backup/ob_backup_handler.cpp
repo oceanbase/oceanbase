@@ -31,10 +31,9 @@ int ObBackupHandler::schedule_backup_meta_dag(const ObBackupJobDesc &job_desc, c
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObBackupReportCtx report_ctx;
-  report_ctx.rs_mgr_ = GCTX.rs_mgr_;
+  report_ctx.location_service_ = GCTX.location_service_;
   report_ctx.sql_proxy_ = GCTX.sql_proxy_;
-  report_ctx.rs_rpc_proxy_ = GCTX.rs_rpc_proxy_;
-  ObLSBackupMetaDagNet *backup_dag_net = NULL;
+  report_ctx.rpc_proxy_ = GCTX.srv_rpc_proxy_;
   ObTenantDagScheduler *dag_scheduler = NULL;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(sql_proxy) || !job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id ||
@@ -65,14 +64,15 @@ int ObBackupHandler::schedule_backup_meta_dag(const ObBackupJobDesc &job_desc, c
     param.retry_id_ = retry_id;
     param.start_scn_ = start_scn;
     param.report_ctx_ = report_ctx;
+    param.backup_data_type_.set_sys_data_backup();
     if (OB_FAIL(param.backup_dest_.deep_copy(backup_dest))) {
       LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy, tenant_id, backup_dest, param.dest_id_))) {
       LOG_WARN("failed to get dest id", K(ret), K(backup_dest));
-    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net(&param, backup_dag_net))) {
+    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<ObLSBackupMetaDagNet>(&param))) {
       LOG_WARN("failed to create log stream backup dag net", K(ret), K(param));
     } else {
-      FLOG_INFO("success to create log stream backup dag net", K(ret), KP(backup_dag_net), K(param));
+      FLOG_INFO("success to create log stream backup dag net", K(ret), K(param));
     }
   }
   return ret;
@@ -85,10 +85,9 @@ int ObBackupHandler::schedule_backup_data_dag(const ObBackupJobDesc &job_desc, c
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObBackupReportCtx report_ctx;
-  report_ctx.rs_mgr_ = GCTX.rs_mgr_;
+  report_ctx.location_service_ = GCTX.location_service_;
   report_ctx.sql_proxy_ = GCTX.sql_proxy_;
-  report_ctx.rs_rpc_proxy_ = GCTX.rs_rpc_proxy_;
-  ObLSBackupDataDagNet *backup_dag_net = NULL;
+  report_ctx.rpc_proxy_ = GCTX.srv_rpc_proxy_;
   ObTenantDagScheduler *dag_scheduler = NULL;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(sql_proxy) || !job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id
@@ -121,10 +120,10 @@ int ObBackupHandler::schedule_backup_data_dag(const ObBackupJobDesc &job_desc, c
       LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy, tenant_id, backup_dest, param.dest_id_))) {
       LOG_WARN("failed to get dest id", K(ret), K(backup_dest));
-    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net(&param, backup_dag_net))) {
+    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<ObLSBackupDataDagNet>(&param))) {
       LOG_WARN("failed to create log stream backup dag net", K(ret), K(param));
     } else {
-      FLOG_INFO("success to create log stream backup dag net", K(ret), KP(backup_dag_net), K(param));
+      FLOG_INFO("success to create log stream backup dag net", K(ret), K(param));
     }
   }
   return ret;
@@ -137,10 +136,9 @@ int ObBackupHandler::schedule_build_tenant_level_index_dag(const ObBackupJobDesc
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObBackupReportCtx report_ctx;
-  report_ctx.rs_mgr_ = GCTX.rs_mgr_;
+  report_ctx.location_service_ = GCTX.location_service_;
   report_ctx.sql_proxy_ = GCTX.sql_proxy_;
-  report_ctx.rs_rpc_proxy_ = GCTX.rs_rpc_proxy_;
-  ObBackupBuildTenantIndexDagNet *backup_dag_net = NULL;
+  report_ctx.rpc_proxy_ = GCTX.srv_rpc_proxy_;
   ObTenantDagScheduler *dag_scheduler = NULL;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(sql_proxy) || !job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id ||
@@ -173,10 +171,10 @@ int ObBackupHandler::schedule_build_tenant_level_index_dag(const ObBackupJobDesc
       LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy, tenant_id, backup_dest, param.dest_id_))) {
       LOG_WARN("failed to get dest id", K(ret), K(backup_dest));
-    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net(&param, backup_dag_net))) {
+    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<ObBackupBuildTenantIndexDagNet>(&param))) {
       LOG_WARN("failed to create log stream backup dag net", K(ret), K(param));
     } else {
-      FLOG_INFO("success to create log stream backup dag net", K(ret), KP(backup_dag_net), K(param));
+      FLOG_INFO("success to create log stream backup dag net", K(ret), K(param));
     }
   }
   return ret;
@@ -189,11 +187,10 @@ int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &j
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObBackupReportCtx report_ctx;
-  report_ctx.rs_mgr_ = GCTX.rs_mgr_;
+  report_ctx.location_service_ = GCTX.location_service_;
   report_ctx.sql_proxy_ = GCTX.sql_proxy_;
-  report_ctx.rs_rpc_proxy_ = GCTX.rs_rpc_proxy_;
+  report_ctx.rpc_proxy_ = GCTX.srv_rpc_proxy_;
   ObLSBackupDagNetInitParam param;
-  ObLSBackupComplementLogDagNet *backup_dag_net = NULL;
   ObTenantDagScheduler *dag_scheduler = NULL;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(sql_proxy) ||!job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id ||
@@ -228,10 +225,10 @@ int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &j
       LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy, tenant_id, backup_dest, param.dest_id_))) {
       LOG_WARN("failed to get dest id", K(ret), K(backup_dest));
-    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net(&param, backup_dag_net))) {
+    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<ObLSBackupComplementLogDagNet>(&param))) {
       LOG_WARN("failed to create log stream backup dag net", K(ret), K(param));
     } else {
-      FLOG_INFO("success to create log stream backup dag net", K(ret), KP(backup_dag_net), K(param));
+      FLOG_INFO("success to create log stream backup dag net", K(ret), K(param));
     }
   }
   return ret;

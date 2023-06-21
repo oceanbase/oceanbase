@@ -2498,10 +2498,13 @@ int ObTableScanOp::init_ddl_column_checksum()
     column_checksum_.set_allocator(&ctx_.get_allocator());
     col_need_reshape_.set_allocator(&ctx_.get_allocator());
     const ObSQLSessionInfo *session = nullptr;
-    const ObIArray<ObColumnParam *> &cols = MY_CTDEF.scan_ctdef_.table_param_.get_read_info().get_columns();
+    const ObIArray<ObColumnParam *> *cols = MY_CTDEF.scan_ctdef_.table_param_.get_read_info().get_columns();
     if (OB_ISNULL(session = ctx_.get_my_session())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid session", K(ret));
+    } else if (OB_ISNULL(cols)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col param array is unexpected null", K(ret),KP(cols));
     } else if (MY_SPEC.output_.count() != MY_SPEC.ddl_output_cids_.count()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K(MY_SPEC.output_), K(MY_CTDEF.scan_ctdef_.table_param_), K(MY_SPEC.ddl_output_cids_));
@@ -2518,8 +2521,8 @@ int ObTableScanOp::init_ddl_column_checksum()
       for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ddl_output_cids_.count(); ++i) {
         bool found = false;
         bool need_reshape = false;
-        for (int64_t j = 0; OB_SUCC(ret) && !found && j < cols.count(); ++j) {
-          const ObColumnParam *col_param = cols.at(j);
+        for (int64_t j = 0; OB_SUCC(ret) && !found && j < cols->count(); ++j) {
+          const ObColumnParam *col_param = cols->at(j);
           if (OB_ISNULL(col_param)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid col param", K(ret));

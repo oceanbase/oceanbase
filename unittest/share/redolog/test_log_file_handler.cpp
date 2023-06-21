@@ -243,7 +243,6 @@ TEST_F(TestLogFileHandler, file_read)
 
   ret = file_handler.write((void *) buf, TestLogFileHandler::DIO_WRITE_ALIGN_SIZE, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(0, file_handler.get_pwrite_ts());
 
   ret = file_handler.close();
   ASSERT_EQ(OB_SUCCESS, ret);

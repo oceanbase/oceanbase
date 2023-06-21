@@ -52,7 +52,7 @@ public:
   }
 
   int init(ObTxTable *tx_table);
-  bool is_valid() const { return nullptr != tx_table_ ? true : false; }
+  bool is_valid() const { return nullptr != tx_table_; }
 
   ObTxTable *get_tx_table() const { return tx_table_; }
 

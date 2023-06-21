@@ -58,6 +58,7 @@ class ObMultiVersionSchemaService;
 
 ObLSStatus str_to_ls_status(const ObString &status_str);
 const char* ls_status_to_str(const ObLSStatus &status);
+
 bool ls_is_empty_status(const ObLSStatus &status);
 bool ls_is_creating_status(const ObLSStatus &status);
 bool ls_is_created_status(const ObLSStatus &status);
@@ -69,6 +70,8 @@ bool is_valid_status_in_ls(const ObLSStatus &status);
 bool ls_is_create_abort_status(const ObLSStatus &status);
 bool ls_need_create_abort_status(const ObLSStatus &status);
 bool ls_is_pre_tenant_dropping_status(const ObLSStatus &status);
+class ObLSStatusOperator;
+
 const int64_t MAX_MEMBERLIST_FLAG_LENGTH = 10;
 class ObMemberListFlag
 {
@@ -156,6 +159,12 @@ struct ObLSStatusInfo
   {
     return status_;
   }
+
+  ObLSID get_ls_id() const
+  {
+    return ls_id_;
+  }
+
   ObLSFlag get_flag() const
   {
     return flag_;
@@ -177,7 +186,8 @@ struct ObLSStatusInfo
   ObZone primary_zone_;
   share::ObLSFlag flag_;
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_group_id), K_(status),
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_group_id),
+               "status", ls_status_to_str(status_),
                K_(unit_group_id), K_(primary_zone), K_(flag));
 };
 
@@ -248,10 +258,6 @@ class ObLSStatusOperator : public ObLSLifeIAgent, public ObLSTemplateOperator
  public:
   ObLSStatusOperator() {};
   virtual ~ObLSStatusOperator(){}
-
-  static const char* LS_STATUS_ARRAY[];
-  static ObLSStatus str_to_ls_status(const ObString &status_str);
-  static const char* ls_status_to_str(const ObLSStatus &status);
 
 public:
   /*
@@ -331,6 +337,19 @@ public:
                               ObISQLClient &client,
                               const ObMember &arb_member,
                               const common::GlobalLearnerList &learner_list);
+   /*
+   * description: update ls's ls group id
+   * @param[in] tenant_id
+  * @param[in] ls_id
+   * @param[in] old_ls_group_id
+   * @param[in] new_ls_group_id
+   * @param[in] unit_group_id : the new ls group's target unit group
+   * @param[in] client*/
+  int alter_ls_group_id(const uint64_t tenant_id, const ObLSID &id,
+                       const uint64_t old_ls_group_id,
+                       const uint64_t new_ls_group_id,
+                       const uint64_t new_unit_group_id,
+                       ObISQLClient &client);
 
   int get_all_ls_status_by_order(const uint64_t tenant_id,
                                  ObLSStatusInfoIArray &ls_array,
@@ -386,9 +405,16 @@ public:
                 share::ObLSPrimaryZoneInfo &status_info);
   int get_ls_primary_zone_info(const uint64_t tenant_id, const ObLSID &id,
                                ObLSPrimaryZoneInfo &primary_zone_info, ObISQLClient &client);
-  int get_tenant_primary_zone_info_array(const uint64_t tenant_id,
+  int get_ls_primary_zone_info_by_order_ls_group(const uint64_t tenant_id,
                                          ObLSPrimaryZoneInfoIArray &primary_zone_info_array,
                                          ObISQLClient &client);
+  /*
+   * description: get user tenant max ls id, only for compatible
+   * @param[in] tenant_id
+   * @param[out] max_id: max ls id of the tenant
+   * @param[in] client*/
+  int get_tenant_max_ls_id(const uint64_t tenant_id, ObLSID &max_id,
+                           ObISQLClient &client);
 
   /**
    * @description:
@@ -434,47 +460,17 @@ public:
       ObISQLClient &client,
       const char *print_str,
       bool &has_ls_without_leader,
-      common::ObSqlString &error_msg);
-
-  struct ObLSExistState final
-  {
-  public:
-    enum State
-    {
-      INVALID_STATE = -1,
-      EXISTING,
-      DELETED,
-      UNCREATED,
-      MAX_STATE
-    };
-    ObLSExistState() : state_(INVALID_STATE) {}
-    ~ObLSExistState() {}
-    void reset() { state_ = INVALID_STATE; }
-    void set_existing() { state_ = EXISTING; }
-    void set_deleted() { state_ = DELETED; }
-    void set_uncreated() { state_ = UNCREATED; }
-    bool is_valid() const { return state_ > INVALID_STATE && state_ < MAX_STATE; }
-    bool is_existing() const { return EXISTING == state_; }
-    bool is_deleted() const { return DELETED == state_; }
-    bool is_uncreated() const { return UNCREATED == state_; }
-
-    TO_STRING_KV(K_(state));
-  private:
-    State state_;
-  };
-
-  /* check if the ls exists by __all_virtual_ls_status
-   *
-   * @param[in] tenant_id:   target tenant_id
-   * @param[in] ls_id:       target ls_id
-   * @param[out] state:      EXISTING/DELETED/UNCREATED
-   * @return
-   *  - OB_SUCCESS:          check successfully
-   *  - OB_TENANT_NOT_EXIST: tenant not exist
-   *  - OB_INVALID_ARGUMENT: invalid ls_id or tenant_id
-   *  - other:               other failures
-   */
-  static int check_ls_exist(const uint64_t tenant_id, const ObLSID &ls_id, ObLSExistState &state);
+      ObSqlString &error_msg);
+  /*
+   * description: get all tenant ls status. for user tenant: get user tenant ls status info and meta tenant ls status info
+   * @param[in] sql_proxy
+   * @param[in] tenant_id : maybe user tenant id and sys tenant id
+   * @param[out] ls status info array
+   * */
+  int get_all_tenant_related_ls_status_info(
+      common::ObMySQLProxy &sql_proxy,
+      const uint64_t tenant_id,
+      ObLSStatusInfoIArray &ls_status_info_array);
 
 private:
   template<typename T> int get_list_hex_(

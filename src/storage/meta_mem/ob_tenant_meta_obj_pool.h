@@ -22,11 +22,115 @@ namespace storage
 {
 
 class ObTenantMetaMemMgr;
+class ObTablet;
 
 class RPMetaObjLabel
 {
 public:
   static constexpr const char LABEL[] = "MetaObj";
+};
+
+class ObMetaObjBufferHeader final
+{
+public:
+  static const uint16_t MAGIC_NUM = 0xa12f;
+public:
+  ObMetaObjBufferHeader()
+    : buf_len_(0),
+      magic_num_(MAGIC_NUM),
+      has_new_(false),
+      in_map_(false),
+      reserved_(0)
+  {}
+  explicit ObMetaObjBufferHeader(const uint64_t header)
+    : header_(header)
+  {}
+  ~ObMetaObjBufferHeader() = default;
+  TO_STRING_KV(K(header_), K(buf_len_), K(magic_num_), K(has_new_), K(in_map_), K(reserved_));
+public:
+  union {
+    uint64_t header_;
+    struct {
+      uint64_t buf_len_   : 32;
+      uint64_t magic_num_ : 16;
+      uint64_t has_new_   : 1;
+      uint64_t in_map_    : 1;
+      uint64_t reserved_  : 14;
+    };
+  };
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMetaObjBufferHeader);
+};
+
+typedef common::ObDLinkNode<ObMetaObjBufferHeader> ObMetaObjBufferNode;
+
+template <typename T, int64_t BUFFER_LENGTH>
+class ObMetaObjBuffer final
+{
+public:
+  ObMetaObjBuffer()
+    : header_()
+  {
+    header_.get_data().buf_len_ = BUFFER_LENGTH;
+    memset(buf_, 0x0, BUFFER_LENGTH);
+  }
+  ~ObMetaObjBuffer() { reset(); }
+  char *buf() { return buf_; }
+  void reset()
+  {
+    if (header_.get_data().has_new_) {
+      reinterpret_cast<T *>(buf_)->~T();
+      header_.get_data().has_new_ = false;
+    }
+    header_.get_data().in_map_ = false;
+    memset(buf_, 0x0, BUFFER_LENGTH);
+  }
+public:
+  ObMetaObjBufferNode header_;
+  char buf_[BUFFER_LENGTH];
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMetaObjBuffer);
+};
+
+class ObMetaObjBufferHelper final
+{
+public:
+  static ObMetaObjBufferNode &get_linked_node(char *obj);
+  static ObMetaObjBufferHeader &get_buffer_header(char *obj);
+  static char *get_obj_buffer(ObMetaObjBufferNode *node);
+  static void *get_meta_obj_buffer_ptr(char *obj);
+  static void set_in_map(char *obj, const bool in_map)
+  {
+    uint64_t old = ATOMIC_LOAD(&(get_buffer_header(obj).header_));
+    ObMetaObjBufferHeader new_header(old);
+    new_header.in_map_ = in_map;
+    while (old != (new_header.header_ = ATOMIC_CAS(&(get_buffer_header(obj).header_), old, new_header.header_))) {
+      old = new_header.header_;
+      new_header.in_map_ = in_map;
+    }
+  }
+  static bool is_in_map(char *obj)
+  {
+    return ObMetaObjBufferHeader(ATOMIC_LOAD(&(get_buffer_header(obj).header_))).in_map_;
+  }
+  template <typename T>
+  static void new_meta_obj(void *buf, T *&obj)
+  {
+    char *obj_buf = static_cast<char *>(buf) + sizeof(ObMetaObjBufferNode);
+    ObMetaObjBufferHeader &header = get_buffer_header(obj_buf);
+    abort_unless(false == header.has_new_);
+    obj = new (obj_buf) T();
+    header.has_new_ = true;
+    header.in_map_ = false;
+  }
+  template <typename T>
+  static void del_meta_obj(T *obj)
+  {
+    ObMetaObjBufferHeader &header = get_buffer_header(reinterpret_cast<char *>(obj));
+    obj->~T();
+    header.has_new_ = false;
+    header.in_map_ = false;
+  }
 };
 
 class TryWashTabletFunc final
@@ -35,10 +139,11 @@ public:
   explicit TryWashTabletFunc(ObTenantMetaMemMgr &t3m);
   ~TryWashTabletFunc();
 
-  int operator()();
+  int operator()(const std::type_info &type_info, void *&free_obj);
 
 private:
   ObTenantMetaMemMgr &t3m_;
+  DISALLOW_COPY_AND_ASSIGN(TryWashTabletFunc);
 };
 
 class ObITenantMetaObjPool
@@ -48,6 +153,7 @@ public:
   virtual ~ObITenantMetaObjPool() = default;
 
   virtual void free_obj(void *obj) = 0;
+  virtual int alloc_obj(void *&obj) = 0;
 };
 
 template <typename T>
@@ -63,7 +169,8 @@ public:
       const int64_t max_free_list_num,
       const lib::ObLabel &label,
       const uint64_t ctx_id,
-      TryWashTabletFunc &wash_func_);
+      TryWashTabletFunc *wash_func = nullptr,
+      const bool allow_over_max_free_num = true);
   virtual ~ObTenantMetaObjPool();
 
   int64_t used() const { return allocator_.used(); }
@@ -72,6 +179,7 @@ public:
   int64_t get_free_obj_cnt() const { return this->get_free_num(); }
   int64_t get_obj_size() const { return sizeof(T); }
   virtual void free_obj(void *obj) override;
+  virtual int alloc_obj(void *&obj) override;
   virtual void free_node_(typename BasePool::Node *ptr) override;
 
   int acquire(T *&t);
@@ -81,9 +189,10 @@ public:
       this->get_free_num(), "allocator used", allocator_.used(), "allocator total",
       allocator_.total());
 private:
-  TryWashTabletFunc &wash_func_;
+  TryWashTabletFunc *wash_func_;
   common::ObFIFOAllocator allocator_;
   int64_t used_obj_cnt_;
+  bool allow_over_max_free_num_;
 };
 
 template <class T>
@@ -93,34 +202,43 @@ void ObTenantMetaObjPool<T>::free_obj(void *obj)
 }
 
 template <class T>
+int ObTenantMetaObjPool<T>::alloc_obj(void *&obj)
+{
+  int ret = OB_SUCCESS;
+  T *t = nullptr;
+  if (OB_FAIL(acquire(t))) {
+    STORAGE_LOG(WARN, "fail to acquire object", K(ret));
+  } else {
+    obj = static_cast<void *>(t);
+  }
+  return ret;
+}
+
+template <class T>
 int ObTenantMetaObjPool<T>::acquire(T *&t)
 {
   int ret = OB_SUCCESS;
   t = nullptr;
-  const int64_t max_wait_ts = ObTimeUtility::fast_current_time() + 1000L * 1000L * 3L; // 3s
-  while (OB_SUCC(ret)
-         && OB_ISNULL(t = BasePool::alloc())
-         && max_wait_ts - ObTimeUtility::fast_current_time() >= 0) {
-    ob_usleep(1);
-    if (OB_FAIL(wash_func_())) {
-      STORAGE_LOG(WARN, "wash function fail", K(ret));
-    }
-  }
-  if (OB_ALLOCATE_MEMORY_FAILED == ret && OB_NOT_NULL(t = BasePool::alloc())) {
-    ret = OB_SUCCESS;
-  }
-
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(t)) {
-      BasePool::free(t);
-      t = nullptr;
-    }
+  const bool allow_alloc = allow_over_max_free_num_ || (BasePool::max_free_list_num_ > ATOMIC_LOAD(&used_obj_cnt_));
+  if (allow_alloc && OB_NOT_NULL(t = BasePool::alloc())) {
+    (void)ATOMIC_AAF(&used_obj_cnt_, 1);
   } else {
+    const int64_t max_wait_ts = ObTimeUtility::fast_current_time() + 1000L * 1000L * 3L; // 3s
+    while (OB_SUCC(ret)
+           && OB_ISNULL(t)
+           && OB_NOT_NULL(wash_func_)
+           && max_wait_ts - ObTimeUtility::fast_current_time() >= 0) {
+      ob_usleep(1);
+      void *free_obj = nullptr;
+      if (OB_FAIL((*wash_func_)(typeid(T), free_obj))) {
+        STORAGE_LOG(WARN, "wash function fail", K(ret));
+      } else {
+        t = static_cast<T *>(free_obj);
+      }
+    }
     if (OB_ISNULL(t)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "no object could be acquired", K(ret));
-    } else {
-      (void)ATOMIC_AAF(&used_obj_cnt_, 1);
     }
   }
   return ret;
@@ -159,11 +277,13 @@ ObTenantMetaObjPool<T>::ObTenantMetaObjPool(
     const int64_t max_free_list_num,
     const lib::ObLabel &label,
     const uint64_t ctx_id,
-    TryWashTabletFunc &wash_func_)
+    TryWashTabletFunc *wash_func,
+    const bool allow_over_max_free_num)
   : ObBaseResourcePool<T, RPMetaObjLabel>(max_free_list_num, &allocator_,
       lib::ObMemAttr(tenant_id, label, ctx_id)),
-    wash_func_(wash_func_),
-    used_obj_cnt_(0)
+      wash_func_(wash_func),
+      used_obj_cnt_(0),
+      allow_over_max_free_num_(allow_over_max_free_num)
 {
   int ret = OB_SUCCESS;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));

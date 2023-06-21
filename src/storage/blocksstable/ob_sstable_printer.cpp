@@ -253,6 +253,11 @@ void ObSSTablePrinter::print_cell(const ObObj &cell)
   P_VALUE_STR_B(to_cstring(cell));
 }
 
+void ObSSTablePrinter::print_cell(const ObStorageDatum &datum)
+{
+  P_VALUE_STR_B(to_cstring(datum));
+}
+
 void ObSSTablePrinter::print_common_header(const ObMacroBlockCommonHeader *common_header)
 {
   print_title("Common Header");
@@ -479,7 +484,7 @@ void ObSSTablePrinter::print_bloom_filter_micro_block(const char* micro_block_bu
 void ObSSTablePrinter::print_store_row(
     const ObDatumRow *row,
     const ObObjMeta *obj_metas,
-    const int64_t rowkey_column_cnt,
+    const int64_t type_array_column_cnt,
     const bool is_index_block,
     const bool is_trans_sstable)
 {
@@ -522,16 +527,27 @@ void ObSSTablePrinter::print_store_row(
     }
   } else {
     ObObj obj;
-    for (int64_t i = 0; i < row->get_column_count(); ++i) {
+    for (int64_t i = 0; i < type_array_column_cnt; ++i) {
       ObObjMeta column_meta = obj_metas[i];
-      if (is_index_block && i == rowkey_column_cnt) {
-        column_meta.set_varbinary();
-      }
       if (OB_FAIL(row->storage_datums_[i].to_obj_enhance(obj, column_meta))) {
         STORAGE_LOG(WARN, "Fail to transform storage datum to obj", K(ret), K(i), K(column_meta),
                     KPC(row));
       } else {
         print_cell(obj);
+      }
+    }
+    for (int64_t i = type_array_column_cnt; i < row->get_column_count(); ++i) {
+      if (is_index_block && i == type_array_column_cnt) {
+        ObObjMeta column_meta;
+        column_meta.set_varbinary();
+        if (OB_FAIL(row->storage_datums_[i].to_obj_enhance(obj, column_meta))) {
+          STORAGE_LOG(WARN, "Fail to transform storage datum to obj", K(ret), K(i), K(column_meta),
+                      KPC(row));
+        } else {
+          print_cell(obj);
+        }
+      } else {
+        print_cell(row->storage_datums_[i]);
       }
     }
   }

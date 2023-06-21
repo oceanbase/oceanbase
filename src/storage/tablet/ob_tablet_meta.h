@@ -29,10 +29,15 @@
 #include "storage/ddl/ob_tablet_barrier_log.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
+#include "storage/tablet/ob_tablet_mds_data.h"
+#include "storage/tablet/ob_tablet_full_memory_mds_data.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "share/scn.h"
+#include "storage/tablet/ob_tablet_mds_data.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
+#include "storage/high_availability/ob_tablet_transfer_info.h"
 
 namespace oceanbase
 {
@@ -42,6 +47,7 @@ struct ObMigrationTabletParam;
 
 class ObTabletMeta final
 {
+  friend class ObTablet;
 public:
   static const share::SCN INIT_CLOG_CHECKPOINT_SCN;
   static const share::SCN INVALID_CREATE_SCN;
@@ -53,40 +59,30 @@ public:
   ObTabletMeta &operator=(const ObTabletMeta &other) = delete;
   ~ObTabletMeta();
 public:
+  // first init func
   int init(
-      common::ObIAllocator &allocator,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const common::ObTabletID &data_tablet_id,
-      const common::ObTabletID &lob_meta_tablet_id,
-      const common::ObTabletID &lob_piece_tablet_id,
       const share::SCN create_scn,
       const int64_t snapshot_version,
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
-      const int64_t max_sync_storage_schema_version,
-      const int64_t max_serialized_medium_scn);
+      const int64_t create_schema_version);
   int init(
-      common::ObIAllocator &allocator,
       const ObTabletMeta &old_tablet_meta,
       const int64_t snapshot_version,
       const int64_t multi_version_start,
-      const ObTabletTxMultiSourceDataUnit &tx_data,
-      const ObTabletBindingInfo &ddl_data,
-      const share::ObTabletAutoincSeq &autoinc_seq,
       const int64_t max_sync_storage_schema_version,
-      const int64_t max_serialized_medium_scn,
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
       const ObDDLTableStoreParam &ddl_info = ObDDLTableStoreParam());
   int init(
-      common::ObIAllocator &allocator,
+      const ObTabletMeta &old_tablet_meta,
+      const share::SCN &flush_scn);
+  int init(
       const ObMigrationTabletParam &param);
   int init(
-      common::ObIAllocator &allocator,
       const ObTabletMeta &old_tablet_meta,
-      const ObTabletTxMultiSourceDataUnit &tx_data,
-      const ObTabletBindingInfo &ddl_data,
-      const share::ObTabletAutoincSeq &autoinc_seq,
       const ObMigrationTabletParam *tablet_meta);
   int init(
       common::ObIAllocator &allocator,
@@ -95,18 +91,21 @@ public:
   void reset();
   bool is_valid() const;
 
+  int assign(const ObTabletMeta &other);
   // serialize & deserialize
-  int serialize(char *buf, const int64_t len, int64_t &pos);
+  int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(
-      common::ObIAllocator &allocator,
       const char *buf,
       const int64_t len,
       int64_t &pos);
   int64_t get_serialize_size() const;
-
-  int update(const ObMigrationTabletParam &param);
-  int update_create_scn(const share::SCN create_scn);
+  int reset_transfer_table();
+  bool has_transfer_table() const;
   share::SCN get_ddl_sstable_start_scn() const;
+  // Return the max replayed scn which is the max scn among clog_checkpoint_scn,
+  // mds_checkpoint_scn and ddl_checkpoint_scn.
+  // Note, if a new type of checkpoint scn is added, donot forget to modify the returned scn.
+  share::SCN get_max_replayed_scn() const;
 public:
   static int deserialize_id(
       const char *buf,
@@ -124,18 +123,16 @@ public:
                K_(tablet_id),
                K_(data_tablet_id),
                K_(ref_tablet_id),
+               K_(has_next_tablet),
                K_(create_scn),
                K_(start_scn),
                K_(clog_checkpoint_scn),
                K_(ddl_checkpoint_scn),
                K_(snapshot_version),
                K_(multi_version_start),
-               K_(autoinc_seq),
                K_(compat_mode),
                K_(ha_status),
                K_(report_status),
-               K_(tx_data),
-               K_(ddl_data),
                K_(table_store_flag),
                K_(ddl_start_scn),
                K_(ddl_snapshot_version),
@@ -143,7 +140,10 @@ public:
                K_(max_serialized_medium_scn),
                K_(ddl_execution_id),
                K_(ddl_data_format_version),
-               K_(ddl_commit_scn));
+               K_(ddl_commit_scn),
+               K_(mds_checkpoint_scn),
+               K_(transfer_info),
+               K_(create_schema_version));
 
 public:
   int32_t version_;
@@ -161,22 +161,23 @@ public:
   int64_t snapshot_version_;
   int64_t multi_version_start_;
   lib::Worker::CompatMode compat_mode_;
-  share::ObTabletAutoincSeq autoinc_seq_;
   ObTabletHAStatus ha_status_;
   ObTabletReportStatus report_status_;
-  ObTabletTxMultiSourceDataUnit tx_data_;
-  ObTabletBindingInfo ddl_data_;
   ObTabletTableStoreFlag table_store_flag_;
   share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
   // max_sync_storage_schema_version_ = MIN(serialized_schema_version, sync_schema_version)
   // serialized_schema_version > sync_schema_version when major update storage schema
   // sync_schema_version > serialized_schema_version when replay schema clog but not mini merge yet
+  // max_sync_storage_schema_version will be inaccurate after 4.2
   int64_t max_sync_storage_schema_version_;
   int64_t ddl_execution_id_;
   int64_t ddl_data_format_version_;
-  int64_t max_serialized_medium_scn_; // update when serialized medium info
+  int64_t max_serialized_medium_scn_; // abandon after 4.2
   share::SCN ddl_commit_scn_;
+  share::SCN mds_checkpoint_scn_;
+  ObTabletTransferInfo transfer_info_;
+  int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque :
@@ -201,20 +202,29 @@ public:
   ObMigrationTabletParam &operator=(const ObMigrationTabletParam &) = delete;
 public:
   bool is_valid() const;
+  bool is_empty_shell() const;
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
   int64_t get_serialize_size() const;
   void reset();
   int assign(const ObMigrationTabletParam &param);
+  int build_deleted_tablet_info(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
+
+  // Return the max tablet checkpoint scn which is the max scn among clog_checkpoint_scn,
+  // mds_checkpoint_scn and ddl_checkpoint_scn.
+  // Note, if a new type of checkpoint scn is added, donot forget to modify the returned scn.
+  share::SCN get_max_tablet_checkpoint_scn() const;
 
   // used for restore PENDING tablet, the placeholder tablet doesn't have storage schema to use
   static int construct_placeholder_storage_schema_and_medium(
-      ObIAllocator &allocator,
+      common::ObArenaAllocator &allocator,
       ObStorageSchema &storage_schema,
-      compaction::ObMediumCompactionInfoList &medium_info_list);
+      compaction::ObMediumCompactionInfoList &medium_info_list,
+      ObTabletFullMemoryMdsData &full_memory_mds_data);
 
   TO_STRING_KV(K_(magic_number),
                K_(version),
+               K_(is_empty_shell),
                K_(ls_id),
                K_(tablet_id),
                K_(data_tablet_id),
@@ -227,29 +237,35 @@ public:
                K_(ddl_start_scn),
                K_(snapshot_version),
                K_(multi_version_start),
-               K_(autoinc_seq),
                K_(compat_mode),
                K_(ha_status),
                K_(report_status),
-               K_(tx_data),
-               K_(ddl_data),
                K_(storage_schema),
                K_(medium_info_list),
                K_(table_store_flag),
                K_(max_sync_storage_schema_version),
+               K_(ddl_execution_id),
+               K_(ddl_data_format_version),
                K_(max_serialized_medium_scn),
-               K_(ddl_commit_scn));
+               K_(ddl_commit_scn),
+               K_(mds_checkpoint_scn),
+               K_(mds_data),
+               K_(transfer_info),
+               K_(create_schema_version));
 private:
-  int deserialize_old(const char *buf, const int64_t len, int64_t &pos);
+  int deserialize_v2(const char *buf, const int64_t len, int64_t &pos);
+  int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
 
   // magic_number_ is added to support upgrade from old format(without version and length compatibility)
   // The old format first member is ls_id_(also 8 bytes long), which is not possible be a negative number.
   const static int64_t MAGIC_NUM = -20230111;
   const static int64_t PARAM_VERSION = 1;
+  const static int64_t PARAM_VERSION_V2 = 2;
 
 public:
   int64_t magic_number_;
   int64_t version_;
+  bool is_empty_shell_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   common::ObTabletID data_tablet_id_;
@@ -261,13 +277,10 @@ public:
   int64_t snapshot_version_;
   int64_t multi_version_start_;
   lib::Worker::CompatMode compat_mode_;
-  share::ObTabletAutoincSeq autoinc_seq_;
   ObTabletHAStatus ha_status_;
   ObTabletReportStatus report_status_;
-  ObTabletTxMultiSourceDataUnit tx_data_;
-  ObTabletBindingInfo ddl_data_;
-  ObStorageSchema storage_schema_;
-  compaction::ObMediumCompactionInfoList medium_info_list_;
+  ObStorageSchema storage_schema_; // not valid for empty shell
+  compaction::ObMediumCompactionInfoList medium_info_list_; // not valid for empty shell
   ObTabletTableStoreFlag table_store_flag_;
   share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
@@ -277,6 +290,10 @@ public:
   int64_t ddl_data_format_version_;
   int64_t max_serialized_medium_scn_;
   share::SCN ddl_commit_scn_;
+  share::SCN mds_checkpoint_scn_;
+  ObTabletFullMemoryMdsData mds_data_;
+  ObTabletTransferInfo transfer_info_;
+  int64_t create_schema_version_;
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema

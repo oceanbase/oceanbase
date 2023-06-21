@@ -123,7 +123,7 @@ namespace guard
 
 struct DefaultSharedGuardAllocator : public ObIAllocator {
   void *alloc(const int64_t size) override {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     total_alive_num++;
 #endif
     static lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "ObGuard");
@@ -135,12 +135,12 @@ struct DefaultSharedGuardAllocator : public ObIAllocator {
     return alloc(size);
   }
   void free(void *ptr) override {
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
     total_alive_num--;
 #endif
     ob_free(ptr);
   }
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
   int total_alive_num = 0;
 #endif
   static DefaultSharedGuardAllocator &get_default_allocator() {

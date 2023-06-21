@@ -454,7 +454,8 @@ public:
                K_(recv_level_rpc_cnt),
                K_(group_map),
                K_(rpc_stat_info),
-               K_(token_change_ts))
+               K_(token_change_ts),
+               "tenant_role", get_tenant_role())
 public:
   static bool equal(const ObTenant *t1, const ObTenant *t2)
   {

@@ -670,7 +670,7 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     ObLockID lock_id;
     ObLockOBJType real_obj_type = static_cast<ObLockOBJType>(obj_type);
     ObTableLockMode real_lock_mode = static_cast<ObTableLockMode>(lock_mode);
-    ObTableLockOwnerID real_owner_id = owner_id;
+    ObTableLockOwnerID real_owner_id = static_cast<ObTableLockOwnerID>(owner_id);
     ObTransID real_create_tx_id = create_tx_id;
     ObTableLockOpType real_op_type = static_cast<ObTableLockOpType>(op_type);
     ObTableLockOpStatus real_lock_op_status = static_cast<ObTableLockOpStatus>(lock_op_status);
@@ -752,7 +752,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     ObLockID lock_id;
     ObLockOBJType real_obj_type = static_cast<ObLockOBJType>(obj_type);
     ObTableLockMode real_lock_mode = static_cast<ObTableLockMode>(lock_mode);
-    ObTableLockOwnerID real_owner_id = owner_id;
+    ObTableLockOwnerID real_owner_id = static_cast<ObTableLockOwnerID>(owner_id);
     ObTransID real_create_tx_id = create_tx_id;
     ObTableLockOpType real_op_type = static_cast<ObTableLockOpType>(op_type);
     ObTableLockOpStatus real_lock_op_status = static_cast<ObTableLockOpStatus>(lock_op_status);

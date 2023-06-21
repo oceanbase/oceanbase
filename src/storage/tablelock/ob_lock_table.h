@@ -156,16 +156,6 @@ private:
   int recover_(const blocksstable::ObDatumRow &row);
   int get_table_schema_(const uint64_t tenant_id,
                         share::schema::ObTableSchema &schema);
-  int gen_create_tablet_arg_(const common::ObTabletID &tablet_id,
-                             const uint64_t tenant_id,
-                             const share::ObLSID ls_id,
-                             const lib::Worker::CompatMode compat_mode,
-                             const share::schema::ObTableSchema &table_schema,
-                             obrpc::ObBatchCreateTabletArg &arg);
-  int gen_remove_tablet_arg_(const common::ObTabletID &tablet_id,
-                             const uint64_t tenant_id,
-                             const share::ObLSID ls_id,
-                             obrpc::ObBatchRemoveTabletArg &arg);
 
 private:
   static const int64_t LOCKTABLE_SCHEMA_VERSION = 0;

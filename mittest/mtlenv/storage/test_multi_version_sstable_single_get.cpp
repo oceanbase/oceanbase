@@ -54,12 +54,10 @@ void TestMultiVersionSSTableSingleGet::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
 
   // create tablet
-  obrpc::ObBatchCreateTabletArg create_tablet_arg;
   share::schema::ObTableSchema table_schema;
-  ASSERT_EQ(OB_SUCCESS, gen_create_tablet_arg(tenant_id_, ls_id, tablet_id, create_tablet_arg, 1, &table_schema));
-
-  ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(*ls_tablet_svr, create_tablet_arg));
+  uint64_t table_id = 12345;
+  ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
 }
 
 void TestMultiVersionSSTableSingleGet::TearDownTestCase()
@@ -91,7 +89,6 @@ void TestMultiVersionSSTableSingleGet::prepare_query_param(
   iter_param_.table_id_ = table_id_;
   iter_param_.tablet_id_ = tablet_id_;
   iter_param_.read_info_ = &full_read_info_;
-  iter_param_.full_read_info_ = &full_read_info_;
   iter_param_.out_cols_project_ = nullptr;
   iter_param_.is_same_schema_column_ = true;
   iter_param_.has_virtual_columns_ = false;
@@ -187,9 +184,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+		            context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -202,9 +198,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = false;
   is_found = false;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+		            context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -217,9 +212,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = false;
   is_found = true;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+                    context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -232,9 +226,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = false;
   is_found = false;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+                    context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -247,9 +240,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+                    context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -266,9 +258,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+                    context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -281,9 +272,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+                    context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -296,9 +286,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+                    context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -311,9 +300,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+                    context_,
                     rowkey,
                     is_exist,
                     is_found));
@@ -326,9 +314,8 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   rowkey.assign(datum_row.storage_datums_, schema_rowkey_cnt);
   is_exist = true;
   is_found = true;
-  OK(sstable->exist(*context_.store_ctx_,
-                    table_id_,
-                    full_read_info_,
+  OK(sstable->exist(iter_param_,
+                    context_,
                     rowkey,
                     is_exist,
                     is_found));

@@ -243,7 +243,7 @@ void TestSSTableRowMultiScanner::test_single_get_normal(const bool is_reverse_sc
   int ret = OB_SUCCESS;
   ObArray<int64_t> seeds;
   // prepare query param and context
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // row in first macro
   ret = seeds.push_back(3);
@@ -275,7 +275,7 @@ void TestSSTableRowMultiScanner::test_single_get_border(const bool is_reverse_sc
   int ret = OB_SUCCESS;
   ObArray<int64_t> seeds;
   // prepare query param and context
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // left border rowkey
   ret = seeds.push_back(0);
@@ -308,7 +308,7 @@ void TestSSTableRowMultiScanner::test_multi_get_normal(const bool is_reverse_sca
   ObArray<int64_t> seeds;
 
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // 2 rows exist test
   seeds.reuse();
@@ -393,7 +393,7 @@ void TestSSTableRowMultiScanner::test_multi_get_border(const bool is_reverse_sca
   int ret = OB_SUCCESS;
   ObArray<int64_t> seeds;
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // first row of sstable
   ret = seeds.push_back(0);
@@ -441,7 +441,7 @@ void TestSSTableRowMultiScanner::test_single_scan_normal(const bool is_reverse_s
   const int64_t end = std::max(random_start, random_end);
 
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // multiple rows exist
   ret = seeds.push_back(start);
@@ -481,7 +481,7 @@ void TestSSTableRowMultiScanner::test_single_scan_border(const bool is_reverse_s
   int ret = OB_SUCCESS;
   ObArray<int64_t> seeds;
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // full table scan
   ret = seeds.push_back(0);
@@ -569,7 +569,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_scan_range(
   ObSSTableRowMultiScanner scanner;
 
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   //invalid argument with 0 ranges
   /*
@@ -693,7 +693,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   ObSSTableRowMultiScanner kv_scanner;
 
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // multi scan interact with multi get
   ObDatumRange mget_ranges[TEST_MULTI_GET_CNT];

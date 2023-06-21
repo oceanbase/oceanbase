@@ -148,6 +148,27 @@ public:
   int nonblock_renew(
       const uint64_t tenant_id,
       const ObTabletID &tablet_id);
+
+  // renew location cache according to error_code for tablets
+  //
+  // @param [in] tenant_id: target tenant which the tablets belong to
+  // @param [in] tablet_list: target tablet_id list(there may be duplicate values)
+  // @param [in] error_code: the error code form sql which needs retry
+  // @param [in] is_nonblock: renew locations synchronously or asynchronously
+  // @return OB_GET_LOCATION_TIME_OUT if inner_sql timeout when you block renew
+  int batch_renew_tablet_locations(
+      const uint64_t tenant_id,
+      const ObList<common::ObTabletID, common::ObIAllocator> &tablet_list,
+      const int error_code,
+      const bool is_nonblock);
+
+  // renew tablet ls mapping and ls location according to error_code
+  // implementation is based on batch_renew_tablet_locations
+  int renew_tablet_location(
+      const uint64_t tenant_id,
+      const common::ObTabletID &tablet_id,
+      const int error_code,
+      const bool is_nonblock);
  // ----------------------- End interfaces for tablet to log stream -----------------------
 
   // ----------------------- Interfaces for virtual table location -------------------------
@@ -181,6 +202,19 @@ public:
       const uint64_t table_id);
   // --------------------- End interfaces for virtual table location -----------------------
 
+  /* check if the ls exists by querying __all_ls_status and __all_tenant_info
+   *
+   * @param[in] tenant_id:   target tenant_id
+   * @param[in] ls_id:       target ls_id
+   * @param[out] state:      EXISTING/DELETED/UNCREATED
+   * @return
+   *  - OB_SUCCESS:          check successfully
+   *  - OB_TENANT_NOT_EXIST: tenant not exist
+   *  - OB_INVALID_ARGUMENT: invalid ls_id or tenant_id
+   *  - other:               other failures
+   */
+  static int check_ls_exist(const uint64_t tenant_id, const ObLSID &ls_id, ObLSExistState &state);
+
   int init(
       ObLSTableOperator &ls_pt,
       schema::ObMultiVersionSchemaService &schema_service,
@@ -195,6 +229,18 @@ public:
   int destroy();
   int reload_config();
 
+private:
+  enum RenewType {
+    DEFAULT_RENEW_BOTH = 0,
+    ONLY_RENEW_TABLET_LS_MAPPING = 1,
+    ONLY_RENEW_LS_LOCATION = 2
+  };
+  RenewType gen_renew_type_(const int error) const;
+
+  static int construct_check_ls_exist_sql_(
+      const uint64_t tenant_id,
+      const ObLSID &ls_id,
+      ObSqlString &sql);
 private:
   bool inited_;
   bool stopped_;

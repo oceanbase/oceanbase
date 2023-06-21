@@ -52,6 +52,7 @@ public:
   static void print_line(const char *name, const char *value, const int64_t level = 1);
   static void print_row_title(const blocksstable::ObDatumRow *row, const int64_t row_index);
   static void print_cell(const common::ObObj &cell);
+  static void print_cell(const blocksstable::ObStorageDatum &datum);
   static void print_end_line(const int64_t level = 1);
   static void print_cols_info_start(const char *n1, const char *n2, const char *n3, const char *n4, const char *n5);
   static void print_cols_info_line(const int32_t &v1, const common::ObObjType v2, const common::ObOrderType v3, const int64_t &v4, const int64_t & v5);
@@ -68,7 +69,7 @@ public:
   static void print_store_row(
       const blocksstable::ObDatumRow *row,
       const ObObjMeta *obj_metas,
-      const int64_t rowkey_column_cnt,
+      const int64_t type_array_column_cnt,
       const bool is_index_block,
       const bool is_trans_sstable);
   static void print_store_row_hex(const blocksstable::ObDatumRow *row, const ObObjMeta *obj_metas, const int64_t buf_size, char *hex_print_buf);

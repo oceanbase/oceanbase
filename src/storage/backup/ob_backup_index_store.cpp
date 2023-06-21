@@ -939,6 +939,16 @@ int ObBackupMacroBlockIndexStore::get_macro_block_index_(const blocksstable::ObL
       LOG_WARN("no macro block index exist", K(ret), K(macro_id), K(range_index), K(index_list));
     }
   }
+#ifdef ERRSIM
+  if (macro_id.tablet_id_ == GCONF.errsim_backup_tablet_id) {
+    SERVER_EVENT_SYNC_ADD("backup_errsim", "get_macro_block_index",
+                         "logic_id", macro_id,
+                         "range_index", range_index,
+                         "macro_index", macro_index,
+                         "backup_path", backup_path,
+                         "result", ret);
+  }
+#endif
   return ret;
 }
 
@@ -1090,14 +1100,17 @@ ObBackupMetaIndexStoreWrapper::~ObBackupMetaIndexStoreWrapper()
 {}
 
 int ObBackupMetaIndexStoreWrapper::init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
-    const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc, const bool is_sec_meta,
-    ObBackupIndexKVCache &index_kv_cache)
+    const share::ObBackupDest &backup_dest, const share::ObBackupSetFileDesc &backup_set_info, const bool is_sec_meta,
+    const bool init_sys_tablet_index_store, ObBackupIndexKVCache &index_kv_cache)
 {
   int ret = OB_SUCCESS;
+  share::ObBackupSetDesc backup_set_desc;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("index store init twice", K(ret));
   } else {
+    backup_set_desc.backup_set_id_ = backup_set_info.backup_set_id_;
+    backup_set_desc.backup_type_ = backup_set_info.backup_type_;
     ObBackupIndexStoreParam share_param = param;
     for (int64_t i = 0; OB_SUCC(ret) && i < ARRAY_SIZE; ++i) {
       ObBackupDataType backup_data_type;
@@ -1105,13 +1118,19 @@ int ObBackupMetaIndexStoreWrapper::init(const ObBackupRestoreMode &mode, const O
       int64_t retry_id = 0;
       if (OB_FAIL(get_type_by_idx_(i, backup_data_type))) {
         LOG_WARN("failed to get type by idx", K(ret), K(i));
+      } else if (backup_data_type.is_sys_backup() && !init_sys_tablet_index_store) {
+        continue;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (backup_data_type.is_minor_backup() && OB_FALSE_IT(share_param.turn_id_ = backup_set_info.minor_turn_id_)) {
+      } else if (backup_data_type.is_major_backup() && OB_FALSE_IT(share_param.turn_id_ = backup_set_info.major_turn_id_)) {
       } else if (OB_FAIL(get_index_store_(backup_data_type, store))) {
         LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
       } else if (OB_ISNULL(store)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
       } else if (!backup_data_type.is_sys_backup() && OB_FAIL(get_tenant_meta_index_retry_id_(
-          backup_dest, backup_data_type, param.turn_id_, is_sec_meta, retry_id))) {
+          backup_dest, backup_data_type, share_param.turn_id_, is_sec_meta, retry_id))) {
         LOG_WARN("failed to get tenant meta index retry id", K(ret));
       } else {
         share_param.backup_data_type_ = backup_data_type;
@@ -1372,13 +1391,16 @@ int ObBackupTenantIndexRetryIDGetter::get_ls_info_data_info_dir_path_(ObBackupPa
   int ret = OB_SUCCESS;
   backup_path.reset();
   if (is_restore_) {
-    if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, turn_id_, backup_path))) {
-      LOG_WARN("failed to get ls info data info dir path", K(ret), K_(backup_dest), K_(backup_set_desc), K_(turn_id));
+    if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
+        backup_dest_, backup_data_type_, turn_id_, backup_path))) {
+      LOG_WARN("failed to get ls info data info dir path",
+          K(ret), K_(backup_dest), K_(backup_data_type), K_(backup_set_desc), K_(turn_id));
     }
   } else {
     if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
-        backup_dest_, backup_set_desc_, turn_id_, backup_path))) {
-      LOG_WARN("failed to get ls info data info dir path", K(ret), K_(backup_dest), K_(backup_set_desc), K_(turn_id));
+        backup_dest_, backup_set_desc_, backup_data_type_, turn_id_, backup_path))) {
+      LOG_WARN("failed to get ls info data info dir path",
+          K(ret), K_(backup_dest), K_(backup_set_desc), K_(backup_data_type), K_(turn_id));
     }
   }
   return ret;

@@ -172,10 +172,12 @@ class ObTxDataSingleRowGetter
 {
   using SliceAllocator = ObSliceAlloc;
 public:
-  ObTxDataSingleRowGetter(const ObTableIterParam &iter_param,
-                          SliceAllocator &slice_allocator,
-                          share::SCN &recycled_scn)
-      : iter_param_(iter_param), slice_allocator_(slice_allocator), recycled_scn_(recycled_scn), key_datums_() {}
+  ObTxDataSingleRowGetter(
+     const ObTableIterParam &iter_param,
+	   const ObSSTableArray &sstables,
+     SliceAllocator &slice_allocator,
+     share::SCN &recycled_scn)
+      : iter_param_(iter_param), sstables_(sstables), slice_allocator_(slice_allocator), recycled_scn_(recycled_scn), key_datums_() {}
   virtual ~ObTxDataSingleRowGetter() {}
 
   /**
@@ -187,9 +189,9 @@ public:
   int get_next_row(ObTxData &tx_data);
 
 private:
-  int get_next_row_(ObSSTableArray &sstables, ObTxData &tx_data);
+  int get_next_row_(const ObSSTableArray &sstables, ObTxData &tx_data);
   int get_row_from_sstables_(blocksstable::ObDatumRowkey &row_key,
-                             ObSSTableArray &sstables,
+                             const ObSSTableArray &sstables,
                              const ObTableIterParam &iter_param,
                              ObTableAccessContext &access_context,
                              ObStringHolder &temp_buffer,
@@ -198,6 +200,7 @@ private:
 
 private:
   const ObTableIterParam &iter_param_;
+  const ObSSTableArray &sstables_;
   SliceAllocator &slice_allocator_;
   share::SCN &recycled_scn_;
   transaction::ObTransID tx_id_;

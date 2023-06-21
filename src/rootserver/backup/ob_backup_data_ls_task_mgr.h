@@ -30,38 +30,32 @@ public:
            share::ObBackupLSTaskAttr &ls_attr,
            ObBackupTaskScheduler &task_scheduler,
            common::ObISQLClient &sql_proxy,
-           ObBackupLeaseService &lease_service,
-           ObBackupService &backup_service);
+           ObBackupDataService &backup_service);
   // result : when task can't retry, return the result which is the error code
   int process(int64_t &finish_cnt);
   int cancel(int64_t &finish_cnt);
-  static int advance_status(ObBackupLeaseService &lease_service,
-                            common::ObISQLClient &sql_proxy,
-                            const share::ObBackupLSTaskAttr &ls_attr,
-                            const share::ObBackupTaskStatus &next_status,
-                            const int result = OB_SUCCESS,
-                            const int64_t end_ts = 0);
-  static int redo_ls_task(ObBackupLeaseService &lease_service,
+
+  static int redo_ls_task(ObBackupDataService &backup_service,
                           common::ObISQLClient &sql_proxy,
                           const share::ObBackupLSTaskAttr &ls_attr,
                           const int64_t start_turn_id,
                           const int64_t turn_id,
                           const int64_t retry_id);
-  static int mark_ls_task_info_final(ObBackupLeaseService &lease_service,
-                                     common::ObISQLClient &sql_proxy,
-                                     const share::ObBackupLSTaskAttr &ls_attr);
-  static int update_black_server(ObBackupLeaseService &lease_service,
+  static int handle_execute_over(ObBackupDataService &backup_service,
+                          common::ObISQLClient &sql_proxy,
+                          const share::ObBackupLSTaskAttr &ls_attr,
+                          const share::ObHAResultInfo &result_info);
+  static int check_ls_is_dropped(const share::ObBackupLSTaskAttr &ls_attr,
                                  common::ObISQLClient &sql_proxy,
-                                 const share::ObBackupLSTaskAttr &ls_attr,
-                                 const ObAddr &block_server);
+                                 bool &is_dropped);
 private:
   int gen_and_add_task_();
-  int check_ls_is_dropped_(bool &is_dropped);
   int gen_and_add_backup_data_task_();
   int gen_and_add_backup_meta_task_();
   int gen_and_add_backup_compl_log_();
   int gen_and_add_build_index_task_();
   int finish_(int64_t &finish_cnt);
+  int advance_status_(const share::ObBackupTaskStatus &next_status);
 private:
   bool is_inited_;
   share::ObBackupJobAttr *job_attr_;
@@ -69,8 +63,7 @@ private:
   share::ObBackupSetTaskAttr *set_task_attr_;
   ObBackupTaskScheduler *task_scheduler_;
   common::ObISQLClient *sql_proxy_;
-  ObBackupLeaseService *lease_service_;
-  ObBackupService *backup_service_;
+  ObBackupDataService *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSTaskMgr);
 };
 

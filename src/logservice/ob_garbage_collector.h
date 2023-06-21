@@ -200,7 +200,7 @@ private:
                                const share::ObLSID &id) const;
   //日志流状态表相关
   void gc_check_ls_status_(ObGCCandidateArray &gc_candidates);
-  int gc_check_ls_status_(const share::ObLSID &id,
+  int gc_check_ls_status_(storage::ObLS &ls,
                           ObGCCandidateArray &gc_candidates);
   int check_if_tenant_has_been_dropped_(const uint64_t tenant_id,
                                         bool &has_dropped);

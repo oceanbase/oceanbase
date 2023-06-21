@@ -188,7 +188,7 @@ public:
     // iter_param_.rowkey_cnt_ = rowkey_cnt_;
     iter_param_.tablet_id_ = tablet_id_;
     iter_param_.table_id_ = tablet_id_.id();
-    read_info_.init(allocator_, 16000, rowkey_cnt_, false, columns_);
+    read_info_.init(allocator_, 16000, rowkey_cnt_, false, columns_, nullptr/*storage_cols_index*/);
     iter_param_.read_info_ = &read_info_;
 
     return OB_SUCCESS;
@@ -297,7 +297,22 @@ public:
     store_ctx.table_iter_ = &table_iter;
     ObStoreRow write_row;
     tm_->mock_row(key, val, row_key, write_row);
-    return mt.set_(store_ctx, tm_->tablet_id_.id(), tm_->read_info_, tm_->columns_, write_row, NULL, NULL);
+
+    ObArenaAllocator allocator;
+    ObTableAccessContext context;
+    ObVersionRange trans_version_range;
+    const bool read_latest = true;
+    ObQueryFlag query_flag;
+
+    trans_version_range.base_version_ = 0;
+    trans_version_range.multi_version_start_ = 0;
+    trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+    query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+    query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+    context.init(query_flag, store_ctx, allocator, trans_version_range);
+
+    return mt.set_(tm_->iter_param_, context, tm_->columns_, write_row, NULL, NULL);
   }
   int write(int64_t key, int64_t val, ObMemtable &mt, int64_t snapshot_version = 1000) {
     ObDatumRowkey row_key;

@@ -32,7 +32,6 @@ namespace compaction
 
 ObPartitionMergeProgress::ObPartitionMergeProgress(common::ObIAllocator &allocator)
   : allocator_(allocator),
-    read_info_(nullptr),
     merge_dag_(nullptr),
     scanned_row_cnt_arr_(nullptr),
     output_block_cnt_arr_(nullptr),
@@ -91,7 +90,7 @@ int64_t ObPartitionMergeProgress::to_string(char *buf, const int64_t buf_len) co
   return pos;
 }
 
-int ObPartitionMergeProgress::init(ObTabletMergeCtx *ctx, const ObTableReadInfo &read_info)
+int ObPartitionMergeProgress::init(ObTabletMergeCtx *ctx)
 {
   int ret = OB_SUCCESS;
   int64_t *buf = NULL;
@@ -118,7 +117,6 @@ int ObPartitionMergeProgress::init(ObTabletMergeCtx *ctx, const ObTableReadInfo 
 
     concurrent_cnt_ = concurrent_cnt;
     merge_dag_ = merge_dag;
-    read_info_ = &read_info;
 
     if (OB_FAIL(estimate(ctx))) {
       LOG_WARN("failed to estimate unit count", K(ret), K(ctx));
@@ -136,9 +134,11 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(ctx));
   } else {
-    const ObIArray<ObITable*> &tables = ctx->tables_handle_.get_tables();
+    ObSEArray<ObITable *, OB_DEFAULT_SE_ARRAY_COUNT> tables;
     int64_t old_major_data_size = 0;
-    if (OB_UNLIKELY(0 == tables.count() || NULL == tables.at(0))) {
+    if (OB_FAIL(ctx->tables_handle_.get_tables(tables))) {
+      LOG_WARN("failed to get tables", K(ret), K(tables));
+    } else if (OB_UNLIKELY(0 == tables.count() || NULL == tables.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected tables", K(ret), K(tables));
     } else if (is_mini_merge(ctx->param_.merge_type_)) { // only mini merge use estimate row interface
@@ -175,24 +175,24 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
       }
     } else {
       int64_t total_macro_block_cnt = 0;
-      ObSSTable *table = nullptr;
+      const ObITable *table = nullptr;
       for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
-        if (OB_UNLIKELY(nullptr == tables.at(i) || !tables.at(i)->is_sstable())) {
+        ObSSTableMetaHandle sst_meta_hdl;
+        if (OB_ISNULL(table = tables.at(i)) || OB_UNLIKELY(!tables.at(i)->is_sstable())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected table", K(ret), K(i), KPC(tables.at(i)));
+          LOG_WARN("get unexpected null table", K(ret), K(i), KPC(table), K(tables));
+        } else if (static_cast<const ObSSTable *>(table)->is_empty()) {
+          LOG_DEBUG("table is empty, skip it", K(i), KPC(static_cast<const ObSSTable *>(table)));
+          continue;
+        } else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+          LOG_WARN("fail to get sstable meta handle", K(ret));
         } else {
-          table = static_cast<ObSSTable *>(tables.at(i));
-          const ObSSTableBasicMeta &meta = table->get_meta().get_basic_meta();
-          if (meta.get_total_macro_block_count() <= 0) {
-            LOG_DEBUG("table is empty, skip it", K(i), KPC(static_cast<ObSSTable *>(table)));
-            continue;
-          } else {
-            total_macro_block_cnt += meta.get_total_macro_block_count() - meta.get_total_use_old_macro_block_count();
-            estimate_row_cnt_ += meta.row_count_;
-            estimate_occupy_size_ += meta.occupy_size_;
-            if (table->is_major_sstable()) {
-              old_major_data_size = meta.occupy_size_;
-            }
+          total_macro_block_cnt += (sst_meta_hdl.get_sstable_meta().get_total_macro_block_count()
+              - sst_meta_hdl.get_sstable_meta().get_total_use_old_macro_block_count());
+          estimate_row_cnt_ += sst_meta_hdl.get_sstable_meta().get_row_count();
+          estimate_occupy_size_ += sst_meta_hdl.get_sstable_meta().get_occupy_size();
+          if (table->is_major_sstable()) {
+            old_major_data_size = sst_meta_hdl.get_sstable_meta().get_occupy_size();
           }
         }
       }

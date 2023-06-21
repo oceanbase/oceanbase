@@ -105,7 +105,7 @@ struct ObRangeSplitInfo
   TO_STRING_KV(K_(store_range), KPC_(tables), K_(total_size), K_(max_macro_block_count),
                K_(max_estimate_micro_block_cnt), K_(parallel_target_count), K_(is_sstable));
   const common::ObStoreRange *store_range_;
-  const ObTableReadInfo *index_read_info_;
+  const ObITableReadInfo *index_read_info_;
   common::ObIArray<ObITable *> *tables_;
   int64_t total_size_;
   int64_t parallel_target_count_;
@@ -239,7 +239,7 @@ public:
   ~ObPartitionRangeSpliter();
   void reset();
   int get_range_split_info(common::ObIArray<ObITable *> &tables,
-                           const ObTableReadInfo &index_read_info,
+                           const ObITableReadInfo &index_read_info,
                            const common::ObStoreRange &store_range,
                            ObRangeSplitInfo &range_info);
   int split_ranges(ObRangeSplitInfo &range_info,
@@ -253,7 +253,7 @@ private:
                          common::ObIAllocator &allocator,
                          common::ObIArray<ObStoreRange> &range_array);
   int get_single_range_info(const ObStoreRange &store_range,
-                            const ObTableReadInfo &index_read_info,
+                            const ObITableReadInfo &index_read_info,
                             ObITable *table,
                             int64_t &total_size,
                             int64_t &macro_block_cnt,
@@ -272,13 +272,13 @@ public:
   // return total size(byte) of all sstables in read_tables
   int get_multi_range_size(
       const common::ObIArray<common::ObStoreRange> &range_array,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &index_read_info,
       ObTableStoreIterator &table_iter,
       int64_t &total_size);
   int get_split_multi_ranges(
       const common::ObIArray<common::ObStoreRange> &range_array,
       const int64_t expected_task_count,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &index_read_info,
       ObTableStoreIterator &table_iter,
       common::ObIAllocator &allocator,
       common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
@@ -299,7 +299,7 @@ private:
                          common::ObIAllocator &allocator,
                          common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
   int get_range_split_infos(common::ObIArray<ObITable *> &tables,
-                            const ObTableReadInfo &index_read_info,
+                            const ObITableReadInfo &index_read_info,
                             const common::ObIArray<common::ObStoreRange> &range_array,
                             RangeSplitInfoArray &range_info_array,
                             int64_t &total_size);
@@ -318,7 +318,7 @@ class ObPartitionMajorSSTableRangeSpliter
 public:
   ObPartitionMajorSSTableRangeSpliter();
   virtual ~ObPartitionMajorSSTableRangeSpliter();
-  int init(const ObTableReadInfo &index_read_info, blocksstable::ObSSTable *major_sstable,
+  int init(const ObITableReadInfo &index_read_info, blocksstable::ObSSTable *major_sstable,
            int64_t tablet_size, common::ObIAllocator &allocator);
   int split_ranges(common::ObIArray<ObStoreRange> &ranges);
 private:
@@ -328,7 +328,7 @@ private:
                                      common::ObIArray<ObStoreRange> &ranges);
 private:
   blocksstable::ObSSTable *major_sstable_;
-  const storage::ObTableReadInfo *index_read_info_;
+  const storage::ObITableReadInfo *index_read_info_;
   int64_t tablet_size_;
   common::ObIAllocator *allocator_;
   bool is_inited_;
@@ -383,7 +383,7 @@ protected:
     ObIAllocator &allocator_;
     ObSEArray<share::schema::ObColDesc, OB_MAX_ROWKEY_COLUMN_NUMBER> rowkey_col_ids_;
     ObSEArray<int32_t, OB_MAX_ROWKEY_COLUMN_NUMBER> out_cols_project_;
-    ObTableReadInfo tbl_read_info_;
+    ObRowkeyReadInfo tbl_read_info_;
     ObTableAccessParam tbl_xs_param_;
     ObStoreCtx store_ctx_;
     ObTableAccessContext tbl_xs_ctx_;

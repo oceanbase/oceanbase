@@ -17,6 +17,7 @@
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_client.h"
+#include "storage/ddl/ob_ddl_lock.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -63,7 +64,7 @@ int ObUpdateAutoincSequenceTask::process()
     const ObDatabaseSchema *db_schema = nullptr;
     const ObColumnSchemaV2 *column_schema = nullptr;
     ObSchemaGetterGuard schema_guard;
-    ObDDLTaskKey task_key(dest_table_id_, schema_version_);
+    ObDDLTaskKey task_key(tenant_id_, dest_table_id_, schema_version_);
     if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, dest_table_id_, table_schema))) {
@@ -240,12 +241,6 @@ int ObModifyAutoincTask::process()
         }
         break;
       }
-      case ObDDLTaskStatus::LOCK_TABLE: {
-        if (OB_FAIL(lock_table())) {
-          LOG_WARN("lock table failed", K(ret), K(*this));
-        }
-        break;
-      }
       case ObDDLTaskStatus::MODIFY_AUTOINC: {
         if (OB_FAIL(modify_autoinc())) {
           LOG_WARN("update schema failed", K(ret), K(*this));
@@ -275,45 +270,27 @@ int ObModifyAutoincTask::process()
   return ret;
 }
 
-int ObModifyAutoincTask::lock_table()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObModifyAutoincTask has not been inited", K(ret));
-  } else if (OB_FAIL(ObTableLockRpcClient::get_instance().lock_table(object_id_,
-                                          EXCLUSIVE, schema_version_, 0, tenant_id_))) {
-    if (!ObDDLUtil::is_table_lock_retry_ret_code(ret)) {
-      LOG_WARN("lock source table failed", K(ret), K(object_id_));
-    } else {
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        ObTaskController::get().allow_next_syslog();
-        LOG_INFO("cannot lock source table", K(object_id_));
-      }
-    }
-  }
-  DEBUG_SYNC(DDL_REDEFINITION_LOCK_TABLE);
-  if (ObDDLUtil::is_table_lock_retry_ret_code(ret)) {
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(switch_status(ObDDLTaskStatus::MODIFY_AUTOINC, true, ret))) {
-    LOG_WARN("fail to switch status", K(ret));
-  }
-  return ret;
-}
-
 int ObModifyAutoincTask::unlock_table()
 {
   int ret = OB_SUCCESS;
+  ObRootService *root_service = GCTX.root_service_;
+  ObMySQLTransaction trans;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObModifyAutoincTask has not been inited", K(ret));
-  } else if (OB_FAIL(ObTableLockRpcClient::get_instance().unlock_table(object_id_,
-                                      EXCLUSIVE, schema_version_, 0, tenant_id_))) {
-    if (OB_OBJ_LOCK_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("unlock source table failed", K(ret), K(object_id_));
-    }
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
+    LOG_WARN("start transaction failed", K(ret));
+  } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id_, object_id_, ObTableLockOwnerID(task_id_), trans))) {
+    LOG_WARN("failed to unlock table", K(ret));
+  }
+
+  bool commit = (OB_SUCCESS == ret);
+  int tmp_ret = trans.end(commit);
+  if (OB_SUCCESS != tmp_ret) {
+    ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
   }
   return ret;
 }
@@ -640,7 +617,7 @@ void ObModifyAutoincTask::flt_set_status_span_tag() const
     FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_ret_code, ret_code_);
     break;
   }
-  case ObDDLTaskStatus::LOCK_TABLE: {
+  case ObDDLTaskStatus::OBTAIN_SNAPSHOT: {
     FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_ret_code, ret_code_);
     break;
   }

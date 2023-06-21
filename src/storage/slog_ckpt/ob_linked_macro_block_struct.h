@@ -99,8 +99,7 @@ class ObMetaBlockListHandle final
 public:
   ObMetaBlockListHandle();
   ~ObMetaBlockListHandle();
-  int add_macro_blocks(const common::ObIArray<blocksstable::MacroBlockId> &block_list,
-      const bool need_switch_handle);
+  int add_macro_blocks(const common::ObIArray<blocksstable::MacroBlockId> &block_list);
   void reset();
   int reserve(const int64_t block_count);
   const common::ObIArray<blocksstable::MacroBlockId> &get_meta_block_list() const;

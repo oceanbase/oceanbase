@@ -24,6 +24,7 @@ ObStorageCacheSuite::ObStorageCacheSuite()
     user_row_cache_(),
     bf_cache_(),
     fuse_row_cache_(),
+    storage_meta_cache_(),
     is_inited_(false)
 {
 }
@@ -45,7 +46,8 @@ int ObStorageCacheSuite::init(
     const int64_t user_row_cache_priority,
     const int64_t fuse_row_cache_priority,
     const int64_t bf_cache_priority,
-    const int64_t bf_cache_miss_count_threshold)
+    const int64_t bf_cache_miss_count_threshold,
+    const int64_t storage_meta_cache_priority)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -63,6 +65,8 @@ int ObStorageCacheSuite::init(
     STORAGE_LOG(ERROR, "failed to set bf_cache_miss_count_threshold", K(ret));
   } else if (OB_FAIL(fuse_row_cache_.init("fuse_row_cache", fuse_row_cache_priority))) {
     STORAGE_LOG(ERROR, "fail to init fuse row cache", K(ret));
+  } else if (OB_FAIL(storage_meta_cache_.init("storage_meta_cache", storage_meta_cache_priority))) {
+    STORAGE_LOG(ERROR, "fail to init storage meta cache", K(ret), K(storage_meta_cache_priority));
   } else {
     is_inited_ = true;
   }
@@ -79,7 +83,8 @@ int ObStorageCacheSuite::reset_priority(
     const int64_t user_block_cache_priority,
     const int64_t user_row_cache_priority,
     const int64_t fuse_row_cache_priority,
-    const int64_t bf_cache_priority)
+    const int64_t bf_cache_priority,
+    const int64_t storage_meta_cache_priority)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -95,6 +100,8 @@ int ObStorageCacheSuite::reset_priority(
     STORAGE_LOG(ERROR, "set priority for bloom filter cache failed, ", K(ret));
   } else if (OB_FAIL(fuse_row_cache_.set_priority(fuse_row_cache_priority))) {
     STORAGE_LOG(ERROR, "fail to set priority for fuse row cache", K(ret));
+  } else if (OB_FAIL(storage_meta_cache_.set_priority(storage_meta_cache_priority))) {
+    STORAGE_LOG(ERROR, "fail to set priority for storage cache", K(ret), K(storage_meta_cache_priority));
   }
   return ret;
 }
@@ -115,6 +122,7 @@ void ObStorageCacheSuite::destroy()
   user_row_cache_.destroy();
   bf_cache_.destroy();
   fuse_row_cache_.destroy();
+  storage_meta_cache_.destory();
   is_inited_ = false;
 }
 

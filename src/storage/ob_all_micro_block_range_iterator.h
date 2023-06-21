@@ -29,7 +29,7 @@ public:
   int open(
       const blocksstable::ObSSTable &sstable,
       const blocksstable::ObDatumRange &range,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
       const bool is_reverse_scan);
   int get_next_range(const blocksstable::ObDatumRange *&range);
@@ -42,7 +42,7 @@ private:
   int generate_cur_range(const bool is_first_range, const bool is_last_range);
   int deep_copy_rowkey(const blocksstable::ObDatumRowkey &src_key, blocksstable::ObDatumRowkey &dest_key, char *&key_buf);
 private:
-  const blocksstable::ObSSTableMeta *sstable_meta_;
+  int64_t schema_rowkey_cnt_;
   blocksstable::ObIndexBlockTreeCursor tree_cursor_;
   blocksstable::ObMicroBlockId start_bound_micro_block_;
   blocksstable::ObMicroBlockId end_bound_micro_block_;

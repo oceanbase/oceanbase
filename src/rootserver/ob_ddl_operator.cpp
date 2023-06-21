@@ -2435,45 +2435,6 @@ int ObDDLOperator::add_table_partitions(const ObTableSchema &orig_table_schema,
   return ret;
 }
 
-int ObDDLOperator::add_tablegroup_partitions(const ObTablegroupSchema &orig_tablegroup_schema,
-                                             const ObTablegroupSchema &inc_tablegroup_schema,
-                                             const int64_t new_schema_version,
-                                             ObTablegroupSchema &new_tablegroup_schema,
-                                             ObMySQLTransaction &trans,
-                                             const ObString *ddl_stmt_str)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaService *schema_service = schema_service_.get_schema_service();
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is NULL", K(ret));
-  } else if (new_schema_version <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("schema_version is invalid", K(ret), K(new_schema_version));
-  } else {
-    const int64_t inc_part_num = inc_tablegroup_schema.get_part_option().get_part_num();
-    if (OB_FAIL(schema_service->get_tablegroup_sql_service().add_inc_part_info(trans,
-                                                                               orig_tablegroup_schema,
-                                                                               inc_tablegroup_schema,
-                                                                               new_schema_version))) {
-      LOG_WARN("add inc part info failed", K(ret));
-    } else if (OB_FAIL(new_tablegroup_schema.assign(orig_tablegroup_schema))) {
-      LOG_WARN("failed to assign schema", K(ret), K(orig_tablegroup_schema));
-    } else {
-      const int64_t part_num = orig_tablegroup_schema.get_part_option().get_part_num();
-      const int64_t all_part_num = part_num + inc_part_num;
-      new_tablegroup_schema.get_part_option().set_part_num(all_part_num);
-      new_tablegroup_schema.set_schema_version(new_schema_version);
-      ObSchemaOperationType opt_type = OB_DDL_ALTER_TABLEGROUP_PARTITION;
-      if (OB_FAIL(schema_service->get_tablegroup_sql_service()
-                  .update_partition_option(trans, new_tablegroup_schema, opt_type, ddl_stmt_str))) {
-        LOG_WARN("update partition option failed", K(ret), K(part_num), K(inc_part_num));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDDLOperator::get_part_array_from_table(const ObTableSchema &new_table_schema,
                                              const ObTableSchema &inc_table_schema,
                                              ObIArray<ObPartition*> &out_part_array)
@@ -2734,48 +2695,6 @@ int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
                               .update_partition_option(trans, new_table_schema, schema_version))) {
         LOG_WARN("update partition option failed", K(ret), K(part_num), K(inc_part_num));
       }
-    }
-  }
-  return ret;
-}
-
-int ObDDLOperator::drop_tablegroup_partitions(const ObTablegroupSchema &orig_tablegroup_schema,
-                                              ObTablegroupSchema &inc_tablegroup_schema,
-                                              const int64_t new_schema_version,
-                                              ObTablegroupSchema &new_tablegroup_schema,
-                                              ObMySQLTransaction &trans,
-                                              const ObString *ddl_stmt_str)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaService *schema_service = schema_service_.get_schema_service();
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is NULL", K(ret));
-  } else if (new_schema_version <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("schema_version is invalid", K(ret), K(new_schema_version));
-  } else if (OB_INVALID_ID == orig_tablegroup_schema.get_tablegroup_id()
-             || is_sys_tablegroup_id(orig_tablegroup_schema.get_tablegroup_id())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("can't drop partition while tablegroup is created before ver 2.0",
-             K(ret), K(orig_tablegroup_schema));
-  } else if (OB_FAIL(schema_service->get_tablegroup_sql_service().drop_inc_part_info(
-                     trans,
-                     orig_tablegroup_schema,
-                     inc_tablegroup_schema,
-                     new_schema_version))) {
-    LOG_WARN("delete inc part info failed", K(ret));
-  } else {
-    new_tablegroup_schema = orig_tablegroup_schema;
-    const int64_t part_num = orig_tablegroup_schema.get_part_option().get_part_num();
-    const int64_t inc_part_num = inc_tablegroup_schema.get_part_option().get_part_num();
-    const int64_t all_part_num = part_num - inc_part_num;
-    new_tablegroup_schema.get_part_option().set_part_num(all_part_num);
-    new_tablegroup_schema.set_schema_version(new_schema_version);
-    ObSchemaOperationType opt_type = OB_DDL_ALTER_TABLEGROUP_PARTITION;
-    if (OB_FAIL(schema_service->get_tablegroup_sql_service()
-                .update_partition_option(trans, new_tablegroup_schema, opt_type, ddl_stmt_str))) {
-      LOG_WARN("update partition option failed", K(ret), K(part_num), K(inc_part_num));
     }
   }
   return ret;
@@ -5236,7 +5155,9 @@ int ObDDLOperator::init_tenant_tablegroup(const uint64_t tenant_id,
     tg_schema.set_schema_version(OB_CORE_SCHEMA_VERSION);
     tg_schema.set_part_level(PARTITION_LEVEL_ZERO);
     tg_schema.set_schema_version(new_schema_version);
-    if (OB_FAIL(schema_service->get_tablegroup_sql_service().insert_tablegroup(tg_schema, trans))) {
+    if (OB_FAIL(tg_schema.set_sharding(OB_PARTITION_SHARDING_ADAPTIVE))) {
+      LOG_WARN("set sharding failed", K(ret), K(tg_schema));
+    } else if (OB_FAIL(schema_service->get_tablegroup_sql_service().insert_tablegroup(tg_schema, trans))) {
       LOG_WARN("insert_tablegroup failed", K(tg_schema), K(ret));
     }
   }

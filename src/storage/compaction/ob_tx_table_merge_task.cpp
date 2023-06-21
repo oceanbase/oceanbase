@@ -110,11 +110,11 @@ int ObTxTableMergePrepareTask::pre_process_tx_data_table_merge_(ObTabletMergeCtx
   int ret = OB_SUCCESS;
 
   if (is_mini_merge(ctx.param_.merge_type_)) {
-    common::ObIArray<storage::ObITable *> &tables = ctx.tables_handle_.get_tables();
-    for (int i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
-      if (OB_FAIL(static_cast<ObTxDataMemtable *>(tables.at(i))->pre_process_for_merge())) {
+    for (int i = 0; OB_SUCC(ret) && i < ctx.tables_handle_.get_count(); i++) {
+      ObITable *table = ctx.tables_handle_.get_table(i);
+      if (OB_FAIL(static_cast<ObTxDataMemtable *>(table)->pre_process_for_merge())) {
         LOG_WARN("do pre process for tx data table merge failed.", K(ret), K(ctx.param_),
-                 KPC(tables.at(i)));
+                 KPC(table));
       }
     }
   }
@@ -150,7 +150,7 @@ int ObTxTableMergePrepareTask::inner_init_ctx(ObTabletMergeCtx &ctx, bool &skip_
     }
   } else if (OB_FAIL(ctx.get_basic_info_from_result(get_merge_table_result))) {
     LOG_WARN("failed to set basic info to ctx", K(ret), K(get_merge_table_result), K(ctx));
-  } else if (OB_FAIL(ctx.get_storage_schema_to_merge(get_merge_table_result.handle_, false/*get_schema_on_memtable*/))) {
+  } else if (OB_FAIL(ctx.get_storage_schema_to_merge(get_merge_table_result.handle_))) {
     LOG_WARN("failed to get storage schema", K(ret), K(get_merge_table_result), K(ctx));
   } else if (LS_TX_DATA_TABLET == ctx.param_.tablet_id_
              && OB_FAIL(pre_process_tx_data_table_merge_(ctx))) {

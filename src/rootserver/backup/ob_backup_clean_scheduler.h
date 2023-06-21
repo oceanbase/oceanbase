@@ -13,12 +13,17 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_BACKUP_CLEAN_SCHEDULER_H_
 #define OCEANBASE_ROOTSERVER_OB_BACKUP_CLEAN_SCHEDULER_H_
 #include "ob_backup_base_job.h"
-#include "rootserver/backup/ob_backup_lease_service.h"
 #include "share/backup/ob_backup_clean_struct.h"
 #include "share/backup/ob_archive_struct.h"
 
 namespace oceanbase
 {
+namespace obrpc
+{
+class ObSrvRpcProxy;
+struct ObBackupCleanArg;
+struct ObDeletePolicyArg;
+}
 namespace common 
 {
 class ObISQLClient;
@@ -26,6 +31,9 @@ class ObISQLClient;
 namespace rootserver 
 {
 class ObIBackupDeleteMgr;
+class ObBackupTaskScheduler;
+class ObBackupCleanService;
+class ObServerManager;
 class ObBackupCleanScheduler : public ObIBackupJobScheduler
 {
 public:
@@ -36,18 +44,17 @@ public:
   virtual int force_cancel(const uint64_t &tenant_id) override; // for lease 
   virtual int handle_execute_over(
       const ObBackupScheduleTask *task,
-      bool &can_remove, 
-      const ObAddr &black_server,
-      const int execute_ret) override;
+      const share::ObHAResultInfo &result_info,
+      bool &can_remove) override;
   virtual int get_need_reload_task(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) override; // reload tasks after switch master happend
 public:
   int init(
+      const uint64_t tenant_id,
       common::ObMySQLProxy &sql_proxy,
       obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service,
-      ObBackupLeaseService &lease_service,
       ObBackupTaskScheduler &task_scheduler,
-      ObBackupService &backup_service);
+      ObBackupCleanService &backup_service);
   int start_schedule_backup_clean(const obrpc::ObBackupCleanArg &in_arg);
   int cancel_backup_clean_job(const obrpc::ObBackupCleanArg &in_arg);
   int add_delete_policy(const obrpc::ObDeletePolicyArg &in_arg);
@@ -61,7 +68,6 @@ private:
       const common::ObIArray<uint64_t> &backup_tenant_ids,
       common::ObIArray<share::ObBackupCleanJobAttr> &job_attrs);
   int get_next_job_id_(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &job_id);
-  int get_all_normal_tenants_(ObIArray<uint64_t> &tenants);
   int get_job_need_reload_task(
       const share::ObBackupCleanJobAttr &job, 
       common::ObIAllocator &allocator, 
@@ -92,12 +98,12 @@ private:
   int handle_failed_job_(const uint64_t tenant_id, const int64_t result, ObIBackupDeleteMgr &job_mgr, share::ObBackupCleanJobAttr &job_attr);
 private:
   bool is_inited_;
+  uint64_t tenant_id_;
   common::ObMySQLProxy                       *sql_proxy_;
   obrpc::ObSrvRpcProxy                       *rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
-  ObBackupLeaseService                       *lease_service_;
   ObBackupTaskScheduler                      *task_scheduler_;
-  ObBackupService                            *backup_service_;
+  ObBackupCleanService                            *backup_service_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanScheduler);        
 };
@@ -116,9 +122,8 @@ public:
       common::ObMySQLProxy &sql_proxy, 
       obrpc::ObSrvRpcProxy &rpc_proxy,
       ObBackupTaskScheduler &task_scheduler,
-      ObBackupLeaseService  &lease_service,
       share::schema::ObMultiVersionSchemaService &schema_service_,
-      ObBackupService &backup_service);
+      ObBackupCleanService &backup_service);
   void reset();
   uint64_t get_tenant_id() const { return tenant_id_; }
   bool is_can_retry(const int err) const;
@@ -130,8 +135,7 @@ protected:
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupTaskScheduler *task_scheduler_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
-  ObBackupLeaseService*  lease_service_;
-  ObBackupService *backup_service_;
+  ObBackupCleanService *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObIBackupDeleteMgr);
 };
 
@@ -256,12 +260,12 @@ public:
   virtual int process() override;
 public:
   int init(
+      const uint64_t tenant_id,
       common::ObMySQLProxy &sql_proxy,
       obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service,
-      ObBackupLeaseService &lease_service,
       ObBackupTaskScheduler &task_scheduler,
-      ObBackupService &backup_service);
+      ObBackupCleanService &backup_service);
 private:
   int start_auto_delete_obsolete_data_();
   int get_delete_policy_parameter_(
@@ -270,12 +274,12 @@ private:
   int parse_time_interval_(const char *str, int64_t &val);
 private:
   bool is_inited_;
+  uint64_t tenant_id_;
   common::ObMySQLProxy                       *sql_proxy_;
   obrpc::ObSrvRpcProxy                       *rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
-  ObBackupLeaseService                       *lease_service_;
   ObBackupTaskScheduler                      *task_scheduler_;
-  ObBackupService                            *backup_service_;
+  ObBackupCleanService                            *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupAutoObsoleteDeleteTrigger); 
 };
 

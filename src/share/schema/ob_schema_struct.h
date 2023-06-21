@@ -29,6 +29,8 @@
 #include "share/ob_priv_common.h"
 #include "lib/worker.h"
 #include "objit/common/ob_item_type.h"
+#include "lib/hash/ob_pointer_hashmap.h"
+#include "lib/string/ob_sql_string.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -507,6 +509,20 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_DOMAIN_CTXCAT == index_type
            || INDEX_TYPE_SPATIAL_LOCAL == index_type
            || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
+}
+
+inline bool is_aux_lob_table(const ObTableType &table_type)
+{
+  return AUX_LOB_META == table_type
+      || AUX_LOB_PIECE == table_type;
+}
+
+inline bool is_related_table(
+    const ObTableType &table_type,
+    const ObIndexType &index_type)
+{
+  return is_index_local_storage(index_type)
+      || is_aux_lob_table(table_type);
 }
 
 inline bool index_has_tablet(const ObIndexType &index_type)
@@ -1425,6 +1441,7 @@ const char *ob_tenant_status_str(const ObTenantStatus);
 int get_tenant_status(const common::ObString &str, ObTenantStatus &status);
 
 bool is_tenant_restore(ObTenantStatus &status);
+bool is_tenant_normal(ObTenantStatus &status);
 bool is_creating_standby_tenant_status(ObTenantStatus &status);
 class ObTenantSchema : public ObSchema
 {
@@ -2514,6 +2531,7 @@ public:
   inline int set_tablegroup_name(const common::ObString &name) { return deep_copy_str(name, tablegroup_name_); }
   inline int set_table_name(const common::ObString &name) { return deep_copy_str(name, tablegroup_name_); }
   inline int set_comment(const common::ObString &comment) { return deep_copy_str(comment, comment_); }
+  inline int set_sharding(const common::ObString &sharding) { return deep_copy_str(sharding, sharding_); }
 
   inline int set_split_partition(const common::ObString &split_partition) { return deep_copy_str(split_partition, split_partition_name_); }
   inline int set_split_rowkey(const common::ObRowkey &rowkey)
@@ -2527,6 +2545,7 @@ public:
   virtual uint64_t get_tablegroup_id() const override { return tablegroup_id_; }
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const char *get_comment() const { return  extract_str(comment_); }
+  inline const common::ObString &get_sharding() const { return sharding_; }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline const common::ObString &get_table_name() const { return tablegroup_name_; }
   virtual const char *get_entity_name() const override { return extract_str(tablegroup_name_); }
@@ -2618,6 +2637,7 @@ private:
   int64_t schema_version_;
   common::ObString tablegroup_name_;
   common::ObString comment_;
+  common::ObString sharding_;
   //2.0 add
   int64_t part_func_expr_num_;
   int64_t sub_part_func_expr_num_;
@@ -2674,7 +2694,8 @@ public:
              const PARTITION &l_part,
              const PARTITION &r_part,
              const ObPartitionFuncType part_type,
-             bool &is_equal);
+             bool &is_equal,
+             ObSqlString *user_error = NULL);
 
   static bool is_types_equal_for_partition_check(
               const bool is_oracle_mode,
@@ -6300,13 +6321,24 @@ public:
   uint64_t constraint_id_;
 };
 
+#define ASSIGN_PARTITION_ERROR(ERROR_STRING, USER_ERROR) { \
+  if (OB_SUCC(ret)) {\
+    if (OB_NOT_NULL(ERROR_STRING)) { \
+      if (OB_FAIL(ERROR_STRING->assign(USER_ERROR))) { \
+        SHARE_SCHEMA_LOG(WARN, "fail to append user error", KR(ret));\
+      }\
+    }\
+  }\
+}\
+
 template<typename PARTITION>
 int ObPartitionUtils::check_partition_value(
     const bool is_oracle_mode,
     const PARTITION &l_part,
     const PARTITION &r_part,
     const ObPartitionFuncType part_type,
-    bool &is_equal)
+    bool &is_equal,
+    ObSqlString *user_error)
 {
   int ret = common::OB_SUCCESS;
   is_equal = true;
@@ -6315,7 +6347,8 @@ int ObPartitionUtils::check_partition_value(
   } else if (is_range_part(part_type)) {
     if (l_part.get_high_bound_val().get_obj_cnt() != r_part.get_high_bound_val().get_obj_cnt()) {
       is_equal = false;
-      SHARE_SCHEMA_LOG(DEBUG, "fail to check partition value, value count not equal",
+      ASSIGN_PARTITION_ERROR(user_error, "range_part partition value count not equal");
+      SHARE_SCHEMA_LOG(TRACE, "fail to check partition value, value count not equal",
                        "left", l_part.get_high_bound_val(),
                        "right", r_part.get_high_bound_val());
     } else {
@@ -6325,19 +6358,25 @@ int ObPartitionUtils::check_partition_value(
         // The obj comparison function does not require the same cs_level
         if (meta1.get_collation_type() == meta2.get_collation_type()) {
           is_equal = is_types_equal_for_partition_check(is_oracle_mode, meta1.get_type(), meta2.get_type());
+          if (!is_equal) {
+            ASSIGN_PARTITION_ERROR(user_error, "range_part partition meta type not equal");
+            SHARE_SCHEMA_LOG(TRACE, "fail to check partition values, value meta not equal",
+                           "left", l_part.get_high_bound_val().get_obj_ptr()[i],
+                           "right", r_part.get_high_bound_val().get_obj_ptr()[i], K(is_oracle_mode));
+          }
         } else {
           is_equal = false;
+          ASSIGN_PARTITION_ERROR(user_error, "range_part partition collation type not matched");
           SHARE_SCHEMA_LOG(TRACE, "collation type not matched", "left", meta1.get_collation_type(),
                            "right", meta2.get_collation_type());
         }
-        if (false == is_equal) {
-          SHARE_SCHEMA_LOG(DEBUG, "fail to check partition values, value meta not equal",
-                           "left", l_part.get_high_bound_val().get_obj_ptr()[i],
-                           "right", r_part.get_high_bound_val().get_obj_ptr()[i], K(is_oracle_mode));
+        if (!is_equal) {
+          //do nothing
         } else if (0 != l_part.get_high_bound_val().get_obj_ptr()[i].compare(r_part.get_high_bound_val().get_obj_ptr()[i],
-                                                                             r_part.get_high_bound_val().get_obj_ptr()[i].get_collation_type())) {
+                                                                      r_part.get_high_bound_val().get_obj_ptr()[i].get_collation_type())) {
           is_equal = false;
-          SHARE_SCHEMA_LOG(DEBUG, "fail to check partition values, value not equal",
+          ASSIGN_PARTITION_ERROR(user_error, "range_part partition value not equal");
+          SHARE_SCHEMA_LOG(TRACE, "fail to check partition values, value not equal",
                            "left", l_part.get_high_bound_val().get_obj_ptr()[i],
                            "right", r_part.get_high_bound_val().get_obj_ptr()[i]);
         }
@@ -6348,6 +6387,7 @@ int ObPartitionUtils::check_partition_value(
     const common::ObIArray<common::ObNewRow> &r_list_values = r_part.get_list_row_values();
     if (l_list_values.count() != r_list_values.count()) {
       is_equal = false;
+      ASSIGN_PARTITION_ERROR(user_error, "list_part partition value count not equal");
       SHARE_SCHEMA_LOG(TRACE, "fail to check list_part partition value, value count not equal",
                        "left", l_list_values,
                        "right", r_list_values);
@@ -6360,7 +6400,8 @@ int ObPartitionUtils::check_partition_value(
           // First check that the count and meta information are consistent;
           if (l_rowkey.get_count() != r_rowkey.get_count()) {
             is_equal = false;
-            SHARE_SCHEMA_LOG(DEBUG, "fail to check partition value, value count not equal",
+            ASSIGN_PARTITION_ERROR(user_error, "list_part partition value count not equal");
+            SHARE_SCHEMA_LOG(TRACE, "fail to check partition value, value count not equal",
                             "left", l_rowkey, "right", r_rowkey);
           } else {
             for (int64_t z = 0; z < l_rowkey.get_count() && is_equal; z++) {
@@ -6369,14 +6410,16 @@ int ObPartitionUtils::check_partition_value(
               // The obj comparison function does not require the same cs_level
               if (meta1.get_collation_type() == meta2.get_collation_type()) {
                 is_equal = is_types_equal_for_partition_check(is_oracle_mode, meta1.get_type(), meta2.get_type());
+                if (!is_equal) {
+                  ASSIGN_PARTITION_ERROR(user_error, "list_part partition meta type not equal");
+                  SHARE_SCHEMA_LOG(TRACE, "fail to check partition values, value meta not equal",
+                                 "left", l_rowkey.get_cell(z), "right", r_rowkey.get_cell(z));
+                }
               } else {
                 is_equal = false;
+                ASSIGN_PARTITION_ERROR(user_error, "list_part partition collation type not matched");
                 SHARE_SCHEMA_LOG(TRACE,"collation type not matched", "left", meta1.get_collation_type(),
                                  "right", meta2.get_collation_type());
-              }
-              if (false == is_equal) {
-                SHARE_SCHEMA_LOG(DEBUG, "fail to check partition values, value meta not equal",
-                                 "left", l_rowkey.get_cell(z), "right", r_rowkey.get_cell(z));
               }
             }
           }
@@ -6387,7 +6430,8 @@ int ObPartitionUtils::check_partition_value(
         } //end for (int64_t j = 0
         if (!find_equal_item) {
           is_equal = false;
-          SHARE_SCHEMA_LOG(TRACE,"fail to find equal item");
+          ASSIGN_PARTITION_ERROR(user_error, "list_part partition value not equal");
+          SHARE_SCHEMA_LOG(TRACE,"list_part partition value not equal");
         }
       } //end for (int64_t i = 0;
     }
@@ -8033,6 +8077,26 @@ private:
   uint64_t table_id_;
   common::ObString context_name_;
   common::ObString attribute_;
+};
+
+class ObTableLatestSchemaVersion
+{
+public:
+  ObTableLatestSchemaVersion();
+  virtual ~ObTableLatestSchemaVersion() {}
+  void reset();
+  int init(const uint64_t table_id, const int64_t schema_version, const bool is_deleted);
+  bool is_valid() const;
+  int assign(const ObTableLatestSchemaVersion &other);
+  bool is_deleted() const { return is_deleted_; }
+  uint64_t get_table_id() const { return table_id_; }
+  int64_t get_schema_version() const { return schema_version_; }
+
+  VIRTUAL_TO_STRING_KV(K_(table_id), K_(schema_version), K_(is_deleted));
+private:
+  uint64_t table_id_;
+  int64_t schema_version_;
+  bool is_deleted_;
 };
 
 }//namespace schema

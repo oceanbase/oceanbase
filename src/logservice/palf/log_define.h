@@ -149,6 +149,8 @@ constexpr int LOG_WRITE_FLAG = O_RDWR | O_DIRECT | O_SYNC;
 constexpr mode_t FILE_OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 // =========== Disk io end ====================
 
+const int64_t OB_INVALID_CONFIG_CHANGE_LOCK_OWNER = -1;
+
 enum ObReplicaState {
   INVALID_STATE = 0,
   INIT = 1,

@@ -529,7 +529,7 @@ protected:
       common::ObSEArray<ObRawExpr*, 8> &range_exprs);
   static int resolve_interval_node(
       ObResolverParams &params,
-      ParseNode *interval_node, 
+      ParseNode *interval_node,
       common::ColumnType &col_dt,
       int64_t precision,
       int64_t scale,
@@ -585,7 +585,7 @@ protected:
     int resolve_enum_or_set_column(
       const ParseNode *type_node,
       share::schema::ObColumnSchemaV2 &column);
-  
+
   static int is_gen_col_with_udf(const ObTableSchema &table_schema,
                                  const ObRawExpr *col_expr,
                                  bool &res);

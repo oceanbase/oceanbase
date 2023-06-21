@@ -61,7 +61,6 @@ int ObSSTableRowGetter::inner_open(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init ObSSTableRowGetter", K(ret), KP(query_range), KP(table));
   } else {
-    const ObTableReadInfo *index_read_info = iter_param.get_full_read_info()->get_index_read_info();
     sstable_ = static_cast<ObSSTable *>(table);
     rowkey_ = static_cast<const blocksstable::ObDatumRowkey *>(query_range);
     iter_param_ = &iter_param;
@@ -74,11 +73,8 @@ int ObSSTableRowGetter::inner_open(
                   type_, *sstable_, iter_param, access_ctx, query_range))) {
         LOG_WARN("fail to init prefetcher", K(ret));
       }
-    } else if (OB_ISNULL(index_read_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected null index read info", K(ret), KP(index_read_info));
     } else if (OB_FAIL(prefetcher_.switch_context(
-        type_, *index_read_info, *sstable_, access_ctx, query_range))) {
+        type_, *sstable_, iter_param.get_read_info()->get_datum_utils(), access_ctx, query_range))) {
       LOG_WARN("fail to switch context for prefetcher, ", K(ret));
     }
     if (OB_SUCC(ret)) {

@@ -199,18 +199,6 @@ public:
                        share::schema::ObTableSchema &new_table_schema,
                        common::ObMySQLTransaction &trans,
                        const common::ObString *ddl_stmt_str = NULL);
-  int add_tablegroup_partitions(const share::schema::ObTablegroupSchema &orig_tablegroup_schema,
-                                const share::schema::ObTablegroupSchema &inc_tablegroup_schema,
-                                const int64_t new_schema_version,
-                                share::schema::ObTablegroupSchema &new_tablegroup_schema,
-                                common::ObMySQLTransaction &trans,
-                                const common::ObString *ddl_stmt_str);
-  int drop_tablegroup_partitions(const share::schema::ObTablegroupSchema &orig_tablegroup_schema,
-                                 share::schema::ObTablegroupSchema &inc_tablegroup_schema,
-                                 const int64_t new_schema_version,
-                                 share::schema::ObTablegroupSchema &new_tablegroup_schema,
-                                 common::ObMySQLTransaction &trans,
-                                 const common::ObString *ddl_stmt_str);
   static int check_part_equal(
       const share::schema::ObPartitionFuncType part_type,
       const share::schema::ObPartition *r_part,

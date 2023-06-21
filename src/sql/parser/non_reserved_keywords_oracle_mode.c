@@ -962,6 +962,7 @@ static const NonReservedKeyword Oracle_non_reserved_keywords[] =
   {"session_alias", SESSION_ALIAS},
   {"session_user", SESSION_USER},
   {"binding", BINDING},
+  {"sharding", SHARDING},
   {"set_master_cluster", SET_MASTER_CLUSTER},
   {"set_slave_cluster", SET_SLAVE_CLUSTER},
   {"set_tp", SET_TP},

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define UNIITTEST_DEBUG
+#define UNITTEST_DEBUG
 
 #include "share/ob_occam_timer.h"
 #include <gtest/gtest.h>
@@ -206,7 +206,7 @@ TEST_F(TestObOccamTimer, hung) {
 
 TEST_F(TestObOccamTimer, stop_and_wait) {
   int ret = OB_SUCCESS;
-  ret = occam_timer->schedule_task_ignore_handle_repeat_and_immediately(20_ms, [](){ return false; });
+  ret = occam_timer->schedule_task_ignore_handle_repeat(20_s, [](){ return false; });
   ASSERT_EQ(ret, OB_SUCCESS);
   occam_timer->destroy();
 }

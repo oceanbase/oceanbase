@@ -13,11 +13,18 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_data_ls_task_mgr.h"
+#include "ob_backup_schedule_task.h"
+#include "ob_backup_task_scheduler.h"
 #include "share/backup/ob_backup_struct.h"
 #include "rootserver/backup/ob_backup_service.h"
 #include "share/ls/ob_ls_status_operator.h"
 #include "storage/backup/ob_backup_operator.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "storage/backup/ob_backup_data_store.h"
+#include "share/backup/ob_backup_connectivity.h"
+#include "storage/backup/ob_backup_data_struct.h"
+#include "storage/backup/ob_backup_operator.h"
+
 
 namespace oceanbase
 {
@@ -33,7 +40,6 @@ ObBackupDataLSTaskMgr::ObBackupDataLSTaskMgr()
    set_task_attr_(nullptr),
    task_scheduler_(nullptr),
    sql_proxy_(nullptr),
-   lease_service_(nullptr),
    backup_service_(nullptr)
 {
 }
@@ -48,8 +54,7 @@ int ObBackupDataLSTaskMgr::init(
     ObBackupLSTaskAttr &ls_attr,
     ObBackupTaskScheduler &task_scheduler,
     common::ObISQLClient &sql_proxy,
-    ObBackupLeaseService &lease_service,
-    ObBackupService &backup_service)
+    ObBackupDataService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -64,7 +69,6 @@ int ObBackupDataLSTaskMgr::init(
     ls_attr_ = &ls_attr;
     task_scheduler_ = &task_scheduler;
     sql_proxy_ = &sql_proxy;
-    lease_service_ = &lease_service;
     backup_service_ = &backup_service;
     is_inited_ = true;
   }
@@ -113,11 +117,8 @@ int ObBackupDataLSTaskMgr::process(int64_t &finish_cnt)
 int ObBackupDataLSTaskMgr::gen_and_add_task_()
 {
   int ret = OB_SUCCESS;
-  ObBackupDataTaskType type;
-  type.type_ = ls_attr_->task_type_.type_;
   DEBUG_SYNC(BEFORE_ADD_BACKUP_TASK_INTO_SCHEDULER);
   switch (ls_attr_->task_type_.type_) {
-    case ObBackupDataTaskType::Type::BACKUP_DATA_SYS:
     case ObBackupDataTaskType::Type::BACKUP_DATA_MINOR:
     case ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR: {
       if (ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR == ls_attr_->task_type_.type_) {
@@ -159,20 +160,21 @@ int ObBackupDataLSTaskMgr::gen_and_add_task_()
   return ret;
 }
 
-int ObBackupDataLSTaskMgr::check_ls_is_dropped_(bool &is_dropped)
+int ObBackupDataLSTaskMgr::check_ls_is_dropped(
+    const share::ObBackupLSTaskAttr &ls_attr, common::ObISQLClient &sql_proxy, bool &is_dropped)
 {
   int ret = OB_SUCCESS;
   ObLSStatusOperator op;
   share::ObLSStatusInfo status_info;
   is_dropped = false;
-  if (share::ObBackupDataTaskType::Type::BACKUP_BUILD_INDEX == ls_attr_->task_type_.type_) {
-  } else if (OB_FAIL(op.get_ls_status_info(ls_attr_->tenant_id_, ls_attr_->ls_id_, status_info, *sql_proxy_))) {
+  if (share::ObBackupDataTaskType::Type::BACKUP_BUILD_INDEX == ls_attr.task_type_.type_) {
+  } else if (OB_FAIL(op.get_ls_status_info(ls_attr.tenant_id_, ls_attr.ls_id_, status_info, sql_proxy))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       is_dropped = true;
       ret = OB_SUCCESS;
-      LOG_INFO("ls has been dropped", K(ret), KPC(ls_attr_));
+      LOG_INFO("ls has been dropped", K(ret), K(ls_attr));
     } else {
-      LOG_WARN("fail to get ls status", K(ret), KPC(ls_attr_));
+      LOG_WARN("fail to get ls status", K(ret), K(ls_attr));
     }
   } 
   return ret;
@@ -187,18 +189,19 @@ int ObBackupDataLSTaskMgr::gen_and_add_backup_meta_task_()
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   bool is_dropped = false;
 
-  if (OB_FAIL(check_ls_is_dropped_(is_dropped))) {
+  if (OB_FAIL(check_ls_is_dropped(*ls_attr_, *sql_proxy_, is_dropped))) {
     LOG_WARN("fail to check ls is dropped", K(ret));
   } else if (is_dropped) {
     share::ObBackupTaskStatus next_status(ObBackupTaskStatus::Status::FINISH);
-    if (ObBackupDataLSTaskMgr::advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status, 
-        OB_LS_NOT_EXIST, ObTimeUtility::current_time())) {
+    ls_attr_->result_ = OB_LS_NOT_EXIST;
+    ls_attr_->end_ts_ = ObTimeUtility::current_time();
+    if (OB_FAIL(advance_status_(next_status))) {
       LOG_WARN("fail to advance ls task status to finish", K(ret));
     }
   } else if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
-    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), KPC(job_attr_), KPC(set_task_attr_), KPC(ls_attr_));
-  } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), KPC(ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+  } else if (OB_FAIL(advance_status_(next_status))) {
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
     LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(job_attr_), K(task));
   } 
@@ -214,18 +217,19 @@ int ObBackupDataLSTaskMgr::gen_and_add_backup_data_task_()
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   bool is_dropped = false;
 
-  if (OB_FAIL(check_ls_is_dropped_(is_dropped))) {
+  if (OB_FAIL(check_ls_is_dropped(*ls_attr_, *sql_proxy_, is_dropped))) {
     LOG_WARN("fail to check ls is dropped", K(ret));
   } else if (is_dropped) {
     share::ObBackupTaskStatus next_status(ObBackupTaskStatus::Status::FINISH);
-    if (ObBackupDataLSTaskMgr::advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status, 
-        OB_LS_NOT_EXIST, ObTimeUtility::current_time())) {
+    ls_attr_->result_ = OB_LS_NOT_EXIST;
+    ls_attr_->end_ts_ = ObTimeUtility::current_time();
+    if (OB_FAIL(advance_status_(next_status))) {
       LOG_WARN("fail to advance ls task status to finish", K(ret));
     }
   } else if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
-    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), KPC(job_attr_), KPC(set_task_attr_), KPC(ls_attr_));
-  } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), KPC(ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+  } else if (OB_FAIL(advance_status_(next_status))) {
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
     LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(job_attr_), K(task));
   }
@@ -241,9 +245,9 @@ int ObBackupDataLSTaskMgr::gen_and_add_backup_compl_log_()
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
-    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), KPC(job_attr_), KPC(set_task_attr_), KPC(ls_attr_));
-  } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), KPC(ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+  } else if (OB_FAIL(advance_status_(next_status))) {
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
     LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(ls_attr_));
   }
@@ -259,70 +263,76 @@ int ObBackupDataLSTaskMgr::gen_and_add_build_index_task_()
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
-    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), KPC(job_attr_), KPC(set_task_attr_), KPC(ls_attr_));
-  } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), KPC(ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+  } else if (OB_FAIL(advance_status_(next_status))) {
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
     LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(ls_attr_));
   }
   return ret;
 }
 
-int ObBackupDataLSTaskMgr::advance_status(
-    ObBackupLeaseService &lease_service,
-    common::ObISQLClient &sql_proxy,
-    const ObBackupLSTaskAttr &ls_attr,
-    const ObBackupTaskStatus &next_status,
-    const int result,
-    const int64_t end_ts)
+int ObBackupDataLSTaskMgr::advance_status_(const share::ObBackupTaskStatus &next_status)
 {
   int ret  = OB_SUCCESS;
-  if (!next_status.is_valid() || !ls_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(next_status), K(ls_attr));
-  } else if (OB_FAIL(lease_service.check_lease())) {
-    LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
-  } else if (OB_FAIL(ObBackupLSTaskOperator::advance_status(sql_proxy, ls_attr, next_status, result, end_ts))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance log stream status", K(ret), K(ls_attr), K(next_status), K(result), K(end_ts));
+  ObSqlString extra_condition;
+  ls_attr_->status_ = next_status;
+  if (OB_FAIL(extra_condition.assign_fmt(
+      "%s = %ld and %s = %ld", OB_STR_TURN_ID, ls_attr_->turn_id_, OB_STR_RETRY_ID, ls_attr_->retry_id_))) {
+    LOG_WARN("failed to assign extra condition", K(ret));
+  } else if (OB_FAIL(backup_service_->check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
+  } else if (OB_FAIL(ObBackupLSTaskOperator::report_ls_task(*sql_proxy_, *ls_attr_, extra_condition))) {
+    LOG_WARN("failed to report ls task", K(ret), KPC(ls_attr_));
+  } else {
+    LOG_INFO("advance ls task status", KPC(ls_attr_));
   }
   return ret;
 }
 
-int ObBackupDataLSTaskMgr::update_black_server(
-    ObBackupLeaseService &lease_service,
-    common::ObISQLClient &sql_proxy,
-    const ObBackupLSTaskAttr &ls_attr,
-    const ObAddr &block_server)
+int ObBackupDataLSTaskMgr::handle_execute_over(
+    ObBackupDataService &backup_service, common::ObISQLClient &sql_proxy, const share::ObBackupLSTaskAttr &ls_attr,
+    const share::ObHAResultInfo &result_info)
 {
-  int ret  = OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  ObBackupLSTaskAttr new_ls_attr;
+  ObSqlString extra_condition;
+  share::ObBackupDataType backup_data_type;
   int64_t full_replica_num = 0;
-  ObSqlString black_server_sql_string("");
-  ObSEArray<ObAddr, OB_MAX_MEMBER_NUMBER> new_black_servers_;
-  if (!block_server.is_valid() || !ls_attr.is_valid()) {
+  if (!ls_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(block_server), K(ls_attr));
+    LOG_WARN("invalid argument", K(ret), K(ls_attr));
+  } else if (OB_FAIL(new_ls_attr.assign(ls_attr))) {
+    LOG_WARN("failed to assign ls attr", K(ret), K(ls_attr));
+  } else if (OB_FAIL(extra_condition.assign_fmt(
+      "%s = %ld and %s = %ld and %s='%s'", OB_STR_TURN_ID, ls_attr.turn_id_, OB_STR_RETRY_ID, ls_attr.retry_id_,
+      OB_STR_STATUS, ls_attr.status_.get_str()))) {
+    LOG_WARN("failed to assign extra condition", K(ret));
+  } else if (OB_FALSE_IT(new_ls_attr.end_ts_ = ObTimeUtility::current_time())) {
   } else if (OB_FAIL(ObBackupUtils::get_full_replica_num(ls_attr.tenant_id_, full_replica_num))) {
     LOG_WARN("failed to get full replica num", K(ret));
-  } else if (ls_attr.black_servers_.count() + 1 == full_replica_num) {
-    // all replicas are in black servers, clear the black servers.
-  } else if (OB_FAIL(new_black_servers_.assign(ls_attr.black_servers_))) {
-    LOG_WARN("failed to assign black servers", K(ret));
-  } else if (OB_FAIL(new_black_servers_.push_back(block_server))) {
-    LOG_WARN("failed to push back black server", K(ret));
-  } else if (OB_FAIL(ls_attr.get_black_server_str(new_black_servers_, black_server_sql_string))) {
-    LOG_WARN("failed to get black server str", K(ret), K(new_black_servers_));
-  }
-  if (FAILEDx(lease_service.check_lease())) {
-    LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
-  } else if (OB_FAIL(ObBackupLSTaskOperator::update_black_server(
-      sql_proxy, ls_attr.task_id_, ls_attr.tenant_id_, ls_attr.ls_id_, black_server_sql_string.string()))) {
-    LOG_WARN("[DATA_BACKUP]failed to update block server", K(ret), K(ls_attr), K(black_server_sql_string));
+  } else if (new_ls_attr.black_servers_.count() + 1 == full_replica_num && OB_FALSE_IT(new_ls_attr.black_servers_.reset())) {
+  } else if (OB_SUCCESS != result_info.result_ && OB_FAIL(new_ls_attr.black_servers_.push_back(result_info.addr_))) {
+    LOG_WARN("failed to push back black server", K(ret), K(result_info));
+  } else if (OB_FALSE_IT(new_ls_attr.result_ = result_info.result_)) {
+  } else if (OB_FALSE_IT(new_ls_attr.status_ = ObBackupTaskStatus::FINISH)) {
+  } else if (OB_FAIL(result_info.get_comment_str(new_ls_attr.comment_))) {
+    LOG_WARN("failed to get comment str", K(ret));
+  } else if (OB_FAIL(ObBackupLSTaskOperator::report_ls_task(sql_proxy, new_ls_attr, extra_condition))) {
+    LOG_WARN("failed to report ls task", K(ret), K(new_ls_attr), K(extra_condition));
+  } else if (!ls_attr.task_type_.is_backup_data()) {
+    // do nothing
+  } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
+    LOG_WARN("failed to get backup data type", K(ret), K(ls_attr));
+  } else if (OB_FAIL(backup::ObLSBackupOperator::mark_ls_task_info_final(ls_attr.task_id_, ls_attr.tenant_id_,
+      ls_attr.ls_id_, ls_attr.turn_id_, ls_attr.retry_id_, backup_data_type, sql_proxy))) {
+    LOG_WARN("[DATA_BACKUP]failed to update ls task info final to True", K(ret), K(ls_attr));
   }
   return ret;
 }
 
 int ObBackupDataLSTaskMgr::redo_ls_task(
-    ObBackupLeaseService &lease_service,
+    ObBackupDataService &backup_service,
     common::ObISQLClient &sql_proxy,
     const ObBackupLSTaskAttr &ls_attr,
     const int64_t start_turn_id,
@@ -331,22 +341,39 @@ int ObBackupDataLSTaskMgr::redo_ls_task(
 {
   int ret  = OB_SUCCESS;
   share::ObBackupDataType backup_data_type;
+  ObBackupLSTaskAttr new_ls_attr;
+  ObSqlString extra_condition;
   if (!ls_attr.is_valid() || start_turn_id <= 0 || turn_id <= 0 || retry_id < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(ls_attr), K(start_turn_id), K(turn_id), K(retry_id));
-  } else if (OB_FAIL(lease_service.check_lease())) {
-    LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
-  } else if (OB_FAIL(ObBackupLSTaskOperator::redo_ls_task(sql_proxy, ls_attr, start_turn_id, turn_id, retry_id))) {
-    LOG_WARN("[DATA_BACKUP]failed to redo ls task", K(ret), K(ls_attr), K(start_turn_id), K(turn_id), K(retry_id));
-  } else if (!ls_attr.task_type_.is_backup_data()) {
-    // do nothing
-  } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
-    LOG_WARN("failed to get backup data type", K(ret));
-  } else if (OB_FAIL(backup::ObLSBackupOperator::insert_ls_backup_task_info(ls_attr.tenant_id_, ls_attr.task_id_,
-      turn_id, retry_id, ls_attr.ls_id_, ls_attr.backup_set_id_, backup_data_type, sql_proxy))) {
-    LOG_WARN("failed to insert ls backup task info", K(ret), K(ls_attr), K(backup_data_type));
+  } else if (OB_FAIL(new_ls_attr.assign(ls_attr))) {
+    LOG_WARN("failed to assign new ls attr", K(ret), K(ls_attr));
+  } else if (OB_FAIL(extra_condition.assign_fmt(
+    "%s = %ld and %s = %ld and %s='%s'", OB_STR_TURN_ID, ls_attr.turn_id_, OB_STR_RETRY_ID, ls_attr.retry_id_,
+      OB_STR_STATUS, ls_attr.status_.get_str()))) {
+    LOG_WARN("failed to assign extra condition", K(ret));
   } else {
-    LOG_INFO("redo ls task", K(turn_id), K(retry_id), K(ls_attr));
+    new_ls_attr.start_turn_id_ = start_turn_id;
+    new_ls_attr.turn_id_ = turn_id;
+    new_ls_attr.retry_id_ = retry_id;
+    new_ls_attr.status_ = ObBackupTaskStatus::INIT;
+    new_ls_attr.result_ = OB_SUCCESS;
+    new_ls_attr.dst_.reset();
+    new_ls_attr.task_trace_id_.reset();
+    if (OB_FAIL(backup_service.check_leader())) {
+      LOG_WARN("[DATA_BACKUP]failed to check leader", K(ret));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::report_ls_task(sql_proxy, new_ls_attr, extra_condition))) {
+      LOG_WARN("[DATA_BACKUP]failed to redo ls task", K(ret), K(new_ls_attr), K(extra_condition));
+    } else if (!ls_attr.task_type_.is_backup_data()) {
+      // do nothing
+    } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
+      LOG_WARN("failed to get backup data type", K(ret));
+    } else if (OB_FAIL(backup::ObLSBackupOperator::insert_ls_backup_task_info(ls_attr.tenant_id_, ls_attr.task_id_,
+        turn_id, retry_id, ls_attr.ls_id_, ls_attr.backup_set_id_, backup_data_type, sql_proxy))) {
+      LOG_WARN("failed to insert ls backup task info", K(ret), K(ls_attr), K(backup_data_type), K(turn_id), K(retry_id));
+    } else {
+      LOG_INFO("redo ls task", K(turn_id), K(retry_id), K(ls_attr));
+    }
   }
   return ret;
 }
@@ -358,7 +385,7 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
   if (OB_ISNULL(job_attr_) || OB_ISNULL(ls_attr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]attr should not be null", K(ret), KP_(job_attr), KP_(ls_attr));
-  } else if (OB_SUCCESS == ls_attr_->result_/* || OB_LS_NOT_EXIST == ls_attr_->result_*/) { // TODO(yangyi.yyy): change turn need use another error code in 4.1
+  } else if (OB_SUCCESS == ls_attr_->result_ || OB_LS_NOT_EXIST == ls_attr_->result_ || OB_NO_TABLET_NEED_BACKUP == ls_attr_->result_) {
     finish_cnt++;
   } else {
     bool ls_can_retry = true;
@@ -377,7 +404,6 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
         } 
         break;
       }
-      case ObBackupDataTaskType::BACKUP_DATA_SYS: 
       case ObBackupDataTaskType::BACKUP_DATA_MINOR:
       case ObBackupDataTaskType::BACKUP_DATA_MAJOR:
       case ObBackupDataTaskType::BACKUP_BUILD_INDEX: {
@@ -410,7 +436,7 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
       } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(ls_attr_->tenant_id_)))) {
         LOG_WARN("fail to start trans", K(ret));
       } else {
-        if (OB_FAIL(redo_ls_task(*lease_service_, trans, *ls_attr_, ls_attr_->start_turn_id_, 
+        if (OB_FAIL(redo_ls_task(*backup_service_, trans, *ls_attr_, ls_attr_->start_turn_id_,
           ls_attr_->turn_id_, next_retry_id))) {
             LOG_WARN("[DATA_BACKUP]failed to redo ls task", K(ret), KPC(ls_attr_));
         } 
@@ -431,30 +457,12 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
       }
     } else {
       ret = ls_attr_->result_;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(job_attr_->comment_.assign(ls_attr_->comment_))) {
+        LOG_WARN("failed to assign comment", K(ret), K(tmp_ret));
+      }
       LOG_WARN("ls task failed, backup can't not continue", K(ret), KPC(ls_attr_));
     }
-  }
-  return ret;
-}
-
-int ObBackupDataLSTaskMgr::mark_ls_task_info_final(
-    ObBackupLeaseService &lease_service,
-    common::ObISQLClient &sql_proxy,
-    const ObBackupLSTaskAttr &ls_attr)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupDataType backup_data_type;
-  if (ObBackupDataTaskType::Type::BACKUP_PLUS_ARCHIVE_LOG == ls_attr.task_type_.type_
-      || ObBackupDataTaskType::Type::BACKUP_BUILD_INDEX == ls_attr.task_type_.type_) { // do nothing
-  } else if (OB_FAIL(lease_service.check_lease())) {
-    LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
-  } else if (!ls_attr.task_type_.is_backup_data()) {
-    // do nothing
-  } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
-    LOG_WARN("failed to get backup data type", K(ret), K(ls_attr));
-  } else if (OB_FAIL(backup::ObLSBackupOperator::mark_ls_task_info_final(ls_attr.task_id_, ls_attr.tenant_id_, ls_attr.ls_id_,
-      ls_attr.turn_id_, ls_attr.retry_id_, backup_data_type, sql_proxy))) {
-    LOG_WARN("[DATA_BACKUP]failed to update ls task info final to True", K(ret), K(ls_attr));
   }
   return ret;
 }
@@ -466,7 +474,6 @@ int ObBackupDataLSTaskMgr::cancel(int64_t &finish_cnt)
   // DOING: call cancel_task interface of task_scheduler and update status to FINISH and result to OB_CANCELED;
   // FINISH: just update status to FINISH and result to OB_CANCELED
   int ret = OB_SUCCESS;
-  int64_t end_ts = ObTimeUtility::current_time();
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::FINISH;
   if (ObBackupTaskStatus::Status::PENDING == ls_attr_->status_.status_
@@ -480,9 +487,11 @@ int ObBackupDataLSTaskMgr::cancel(int64_t &finish_cnt)
       }
     }
   }
+  ls_attr_->result_ = OB_CANCELED;
+  ls_attr_->end_ts_ = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status, OB_CANCELED, end_ts))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance status", K(ret), KPC(ls_attr_), K(next_status));
+  } else if (OB_FAIL(advance_status_(next_status))) {
+    LOG_WARN("[DATA_BACKUP]failed to advance status", K(ret), K(*ls_attr_), K(next_status));
   } else {
     ++finish_cnt;
   }

@@ -928,6 +928,7 @@ int ObLogArchivePieceContext::get_piece_meta_info_(const int64_t piece_id)
   share::ObArchiveStore archive_store;
   bool piece_meta_exist = true;
   bool is_ls_in_piece = false;
+  bool is_ls_gc = false;
   palf::LSN min_lsn;
   palf::LSN max_lsn;
   if (piece_id > round_context_.max_piece_id_ || piece_id < round_context_.min_piece_id_) {
@@ -940,7 +941,7 @@ int ObLogArchivePieceContext::get_piece_meta_info_(const int64_t piece_id)
     CLOG_LOG(WARN, "check single piece file exist failed", K(ret), K(piece_id), KPC(this));
   } else if (! piece_meta_exist) {
     // single piece file not exist, active piece
-  } else if (OB_FAIL(get_ls_inner_piece_info_(id_, dest_id_, round_id, piece_id, min_lsn, max_lsn, is_ls_in_piece))) {
+  } else if (OB_FAIL(get_ls_inner_piece_info_(id_, dest_id_, round_id, piece_id, min_lsn, max_lsn, is_ls_in_piece, is_ls_gc))) {
     CLOG_LOG(WARN, "get ls inner piece info failed", K(ret), K(round_id), K(piece_id), K(id_));
   }
 
@@ -953,7 +954,11 @@ int ObLogArchivePieceContext::get_piece_meta_info_(const int64_t piece_id)
       if (is_ls_in_piece) {
         inner_piece_context_.min_lsn_in_piece_ = min_lsn;
         inner_piece_context_.max_lsn_in_piece_ = max_lsn;
-        if (inner_piece_context_.min_lsn_in_piece_ == inner_piece_context_.max_lsn_in_piece_) {
+        if (is_ls_gc) {
+          inner_piece_context_.state_ = InnerPieceContext::State::GC;
+          inner_piece_context_.min_file_id_ = cal_archive_file_id_(inner_piece_context_.min_lsn_in_piece_);
+          inner_piece_context_.max_file_id_ = cal_archive_file_id_(inner_piece_context_.max_lsn_in_piece_);
+        } else if (inner_piece_context_.min_lsn_in_piece_ == inner_piece_context_.max_lsn_in_piece_) {
           inner_piece_context_.state_ = InnerPieceContext::State::EMPTY;
         } else {
           inner_piece_context_.state_ = InnerPieceContext::State::FROZEN;
@@ -976,13 +981,20 @@ int ObLogArchivePieceContext::get_piece_meta_info_(const int64_t piece_id)
   return ret;
 }
 
-int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id, const int64_t dest_id,
-    const int64_t round_id, const int64_t piece_id, palf::LSN &min_lsn, palf::LSN &max_lsn, bool &exist)
+int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id,
+    const int64_t dest_id,
+    const int64_t round_id,
+    const int64_t piece_id,
+    palf::LSN &min_lsn,
+    palf::LSN &max_lsn,
+    bool &exist,
+    bool &gc)
 {
   int ret = OB_SUCCESS;
   share::ObArchiveStore archive_store;
   share::ObSingleLSInfoDesc desc;
   exist = false;
+  gc = false;
   if (OB_FAIL(archive_store.init(archive_dest_))) {
     CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
   } else if (OB_FAIL(archive_store.read_single_ls_info(dest_id, round_id, piece_id, id, desc))
@@ -998,6 +1010,7 @@ int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id, 
         K(round_id), K(piece_id), K(id), K(desc));
   } else {
     exist = true;
+    gc = desc.deleted_;
     min_lsn = palf::LSN(desc.min_lsn_);
     max_lsn = palf::LSN(desc.max_lsn_);
   }

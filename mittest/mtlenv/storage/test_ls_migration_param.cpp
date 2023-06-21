@@ -55,6 +55,7 @@ public:
   static const int64_t TEST_LS_ID = 101;
 
   blocksstable::ObSSTableMeta sstable_meta_;
+  common::ObArenaAllocator allocator_;
 };
 
 TestLSMigrationParam::TestLSMigrationParam()
@@ -92,6 +93,7 @@ void TestLSMigrationParam::TearDownTestCase()
 
 void TestLSMigrationParam::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
 
@@ -122,8 +124,6 @@ void TestLSMigrationParam::SetUp()
   sstable_meta_.basic_meta_.latest_row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
   sstable_meta_.basic_meta_.data_index_tree_height_ = 0;
   sstable_meta_.macro_info_.macro_meta_info_.addr_ = addr;
-
-  sstable_meta_.allocator_ = &t3m->get_tenant_allocator();
   ASSERT_TRUE(sstable_meta_.check_meta());
   sstable_meta_.is_inited_ = true;
   ASSERT_TRUE(sstable_meta_.is_valid());
@@ -152,7 +152,6 @@ TEST_F(TestLSMigrationParam, test_migrate_sstable_param)
 {
   int ret = OB_SUCCESS;
 
-  common::ObIAllocator &allocator = MTL(ObTenantMetaMemMgr*)->get_tenant_allocator();
   ObMigrationSSTableParam sstable_param;
   ObITable::TableKey key;
   key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
@@ -190,7 +189,9 @@ TEST_F(TestLSMigrationParam, test_migrate_sstable_param)
   sstable_param.basic_meta_.master_key_id_                 = sstable_meta_.basic_meta_.master_key_id_;
   MEMCPY(sstable_param.basic_meta_.encrypt_key_, sstable_meta_.basic_meta_.encrypt_key_,
       share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-  ASSERT_EQ(OB_SUCCESS, sstable_param.column_checksums_.assign(sstable_meta_.column_checksums_));
+  for (int64_t i = 0; i < sstable_meta_.get_col_checksum_cnt(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, sstable_param.column_checksums_.push_back(sstable_meta_.get_col_checksum()[i]));
+  }
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(sstable_meta_.is_valid());
   ASSERT_TRUE(sstable_param.is_valid());
@@ -199,19 +200,25 @@ TEST_F(TestLSMigrationParam, test_migrate_sstable_param)
 TEST_F(TestLSMigrationParam, test_placeholder_storage_schema)
 {
   int ret = OB_SUCCESS;
-  ObStorageSchema storage_schema;
   ObArenaAllocator allocator;
+  ObStorageSchema storage_schema;
   compaction::ObMediumCompactionInfoList medium_info_list;
+  ObTabletFullMemoryMdsData full_memory_mds_data;
 
-  ret = ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(allocator, storage_schema, medium_info_list);
+  ret = ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(allocator, storage_schema, medium_info_list, full_memory_mds_data);
   ASSERT_EQ(OB_SUCCESS, ret);
 
+  void *ptr = nullptr;
   ObTablet placeholder_tablet;
-  ret = placeholder_tablet.storage_schema_.init(allocator, storage_schema);
+  ASSERT_NE(nullptr, ptr = allocator.alloc(sizeof(ObStorageSchema)));
+  placeholder_tablet.storage_schema_addr_.ptr_ = new (ptr) ObStorageSchema();
+  ret = placeholder_tablet.storage_schema_addr_.get_ptr()->init(allocator, storage_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
-  placeholder_tablet.tablet_meta_.compat_mode_ = lib::Worker::get_compatibility_mode();
 
-  ret = placeholder_tablet.build_read_info(allocator);
+  placeholder_tablet.tablet_meta_.compat_mode_ = lib::Worker::get_compatibility_mode();
+  ASSERT_NE(nullptr, ptr = allocator.alloc(sizeof(ObRowkeyReadInfo)));
+  placeholder_tablet.rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
+  placeholder_tablet.build_read_info(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -230,7 +237,7 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
 
   ObTabletHandle src_handle;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  ret = t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, src_key, ls_handle, src_handle, false);
+  ret = t3m->create_tmp_tablet(WashTabletPriority::WTP_HIGH, src_key, allocator_, ls_handle, src_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::schema::ObTableSchema table_schema;
@@ -239,12 +246,11 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ObTableHandleV2 empty_handle;
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
-  ret = src_handle.get_obj()->init(src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      empty_tablet_id, empty_tablet_id, scn, 2022, table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, empty_handle, ls_handle.get_ls()->get_freezer());
+  ret = src_handle.get_obj()->init(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
+      scn, 2022, table_schema,
+      lib::Worker::CompatMode::MYSQL, store_flag, nullptr, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObMigrationTabletParam tablet_param;
@@ -257,16 +263,22 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   dst_key.tablet_id_ = 1003;
 
   ObTabletHandle dst_handle;
-  ret = t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, dst_key, ls_handle, dst_handle, false);
+  ret = t3m->create_tmp_tablet(WashTabletPriority::WTP_HIGH, dst_key, allocator_, ls_handle, dst_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ret = dst_handle.get_obj()->init(tablet_param, false, ls_handle.get_ls()->get_freezer());
+  ret = dst_handle.get_obj()->init(allocator_, tablet_param, false, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   const ObTabletMeta &src_meta = src_handle.get_obj()->get_tablet_meta();
   const ObTabletMeta &dst_meta = dst_handle.get_obj()->get_tablet_meta();
+  LOG_INFO("dump meta", K(src_meta));
+  LOG_INFO("dump meta", K(dst_meta));
   ASSERT_TRUE(src_meta.is_valid());
   ASSERT_TRUE(dst_meta.is_valid());
+
+  // check create_schema_version_ in tablet meta/migrate param
+  ASSERT_TRUE(table_schema.get_schema_version() == src_meta.create_schema_version_);
+  ASSERT_TRUE(table_schema.get_schema_version() == tablet_param.create_schema_version_);
 }
 
 TEST_F(TestLSMigrationParam, test_migration_param_compat)
@@ -287,7 +299,7 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
 
   ObTabletHandle src_handle;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  ret = t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, src_key, ls_handle, src_handle, false);
+  ret = t3m->create_tmp_tablet(WashTabletPriority::WTP_HIGH, src_key, allocator_, ls_handle, src_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::schema::ObTableSchema table_schema;
@@ -296,12 +308,11 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ObTableHandleV2 empty_handle;
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
-  ret = src_handle.get_obj()->init(src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      empty_tablet_id, empty_tablet_id, scn, 2022, table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, empty_handle, ls_handle.get_ls()->get_freezer());
+  ret = src_handle.get_obj()->init(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
+      scn, 2022, table_schema,
+      lib::Worker::CompatMode::MYSQL, store_flag, nullptr, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObMigrationTabletParam tablet_param;
@@ -309,9 +320,15 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(tablet_param.is_valid());
 
+  // check create_schema_version_ in tablet meta/migrate param
+  ASSERT_TRUE(table_schema.get_schema_version() == src_handle.get_obj()->get_tablet_meta().create_schema_version_);
+  ASSERT_TRUE(table_schema.get_schema_version() == tablet_param.create_schema_version_);
+
+  tablet_param.ddl_commit_scn_.convert_for_tx(20230403);
   int64_t pos = 0;
   ret = tablet_param.serialize(buf, buf_len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
+  OB_LOG(INFO, "cooper", K(tablet_param));
 
   // normal deserialize
   ObMigrationTabletParam des_param;
@@ -319,14 +336,31 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   ret = des_param.deserialize(buf, buf_len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(des_param.is_valid());
+  OB_LOG(INFO, "cooper", K(des_param));
+}
 
-  // deserialize old format
-  pos = 24; // magic_number_ + version_ + length_
-  des_param.reset();
+TEST_F(TestLSMigrationParam, test_deleted_tablet_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t buf_len = 4096;
+  char buf[buf_len] = {};
+  share::ObLSID ls_id(1);
+  ObTabletID tablet_id(200001);
+  ObMigrationTabletParam param;
+  ret = param.build_deleted_tablet_info(ls_id, tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(param.is_valid());
+
+  int64_t pos = 0;
+  ret = param.serialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  pos = 0;
+  ObMigrationTabletParam des_param;
   ret = des_param.deserialize(buf, buf_len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_TRUE(des_param.is_valid());
 }
+
 } // namespace storage
 } // namespace oceanbase
 

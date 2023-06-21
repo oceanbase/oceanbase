@@ -49,7 +49,7 @@ public:
   bool is_valid() const { return is_inited_; }
   const ObDirectLoadOriginTableMeta &get_meta() const {return meta_; }
   const ObTabletHandle &get_tablet_handle() const { return tablet_handle_; }
-  const ObTableStoreIterator &get_table_iter() const { return table_iter_; }
+  const ObTableStoreIterator &get_table_iter() const { return *(table_iter_.table_iter()); }
   blocksstable::ObSSTable *get_major_sstable() const { return major_sstable_; }
   TO_STRING_KV(K_(meta), K_(tablet_handle), K_(table_iter), KP_(major_sstable));
 private:
@@ -57,7 +57,7 @@ private:
 private:
   ObDirectLoadOriginTableMeta meta_;
   ObTabletHandle tablet_handle_;
-  ObTableStoreIterator table_iter_;
+  ObTabletTableIterator table_iter_;
   blocksstable::ObSSTable *major_sstable_;
   bool is_inited_;
 };

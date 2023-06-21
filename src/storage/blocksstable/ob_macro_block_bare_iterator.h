@@ -42,7 +42,7 @@ public:
       const char *macro_block_buf,
       const int64_t macro_block_buf_size,
       const ObDatumRange &range,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &rowkey_read_info,
       const bool is_left_border,
       const bool is_right_border);
   int get_next_micro_block_data(ObMicroBlockData &micro_block);
@@ -59,7 +59,7 @@ private:
   int check_macro_block_data_integrity(const char *payload_buf, const int64_t payload_size);
   int locate_range(
       const ObDatumRange &range,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &index_read_info,
       const bool is_left_border,
       const bool is_right_border);
   int set_reader(const ObRowStoreType store_type);
@@ -102,7 +102,7 @@ public:
   int get_macro_block_header(ObSSTableMacroBlockHeader &macro_header);
   int get_curr_micro_block_data(const ObMicroBlockData *&block_data);
   int get_curr_micro_block_row_cnt(int64_t &row_count);
-  OB_INLINE const common::ObIArray<share::schema::ObColDesc> &get_column_descs() const
+  OB_INLINE const common::ObIArray<share::schema::ObColDesc> &get_rowkey_column_descs() const
   { return col_read_info_.get_columns_desc(); }
   int get_column_checksums(const int64_t *&column_checksums);
 private:
@@ -112,7 +112,7 @@ private:
   ObMicroBlockBareIterator micro_iter_;
   const ObObjMeta *column_types_;
   const int64_t *column_checksums_;
-  ObTableReadInfo col_read_info_;
+  ObRowkeyReadInfo col_read_info_;
   common::ObIAllocator *allocator_;
   ObIMicroBlockReader *micro_reader_;
   ObMicroBlockData curr_micro_block_data_;

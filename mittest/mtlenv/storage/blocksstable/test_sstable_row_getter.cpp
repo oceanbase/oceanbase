@@ -67,7 +67,7 @@ void TestSSTableRowGetter::SetUp()
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle_));
 
-  prepare_query_param(true, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(true);
 }
 
 void TestSSTableRowGetter::TearDown()

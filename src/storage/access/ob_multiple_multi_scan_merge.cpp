@@ -66,7 +66,7 @@ int ObMultipleMultiScanMerge::open(const ObIArray<ObDatumRange> &ranges)
 int ObMultipleMultiScanMerge::calc_scan_range()
 {
   int ret = OB_SUCCESS;
-  const ObTableReadInfo *read_info = nullptr;
+  const ObITableReadInfo *read_info = nullptr;
 
   if (!curr_rowkey_.is_valid()) {
     // no row has been iterated

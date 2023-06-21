@@ -124,7 +124,7 @@ int ObPartitionMerger::open_macro_writer(ObMergeParameter &merge_param)
   } else if (OB_UNLIKELY(!merge_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid merge parameter", K(ret), K(merge_param));
-  } else if (OB_ISNULL(table = merge_ctx_->tables_handle_.get_tables().at(0))) {
+  } else if (OB_ISNULL(table = merge_ctx_->tables_handle_.get_table(0))) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(WARN, "sstable is null", K(ret));
   } else if (!table->is_sstable() && is_major_merge_type(merge_ctx_->param_.merge_type_)) {
@@ -397,7 +397,7 @@ int ObPartitionMerger::get_macro_block_count_to_rewrite(const ObMergeParameter &
   check_macro_need_merge_ = true;
   if (merge_ctx_->is_full_merge_ || merge_ctx_->tables_handle_.get_count() == 0) {
     // minor merge and full merge no need to calculate rewrite block cnt
-  } else if (!merge_ctx_->tables_handle_.get_tables().at(0)->is_sstable()) {
+  } else if (OB_UNLIKELY(!merge_ctx_->tables_handle_.get_table(0)->is_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "Unexpected first table for major merge", K(ret), K(merge_ctx_->tables_handle_));
   } else {
@@ -407,7 +407,7 @@ int ObPartitionMerger::get_macro_block_count_to_rewrite(const ObMergeParameter &
     const int64_t progressive_merge_num = merge_ctx_->progressive_merge_num_;
     const bool need_calc_progressive_merge = is_major_merge_type(merge_param.merge_type_) && merge_ctx_->progressive_merge_step_ < progressive_merge_num;
     const bool need_check_macro_merge = !is_major_merge_type(merge_param.merge_type_) || data_store_desc_.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0;
-    if (OB_ISNULL(first_sstable = static_cast<ObSSTable *>(merge_ctx_->tables_handle_.get_tables().at(0)))) {
+    if (OB_ISNULL(first_sstable = static_cast<ObSSTable *>(merge_ctx_->tables_handle_.get_table(0)))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected null first sstable", K(ret), K(merge_ctx_->tables_handle_));
     } else if (need_calc_progressive_merge || need_check_macro_merge) {
@@ -416,7 +416,7 @@ int ObPartitionMerger::get_macro_block_count_to_rewrite(const ObMergeParameter &
       if (OB_FAIL(first_sstable->scan_secondary_meta(
           allocator_,
           merge_param.merge_range_,
-          merge_ctx_->tablet_handle_.get_obj()->get_index_read_info(),
+          merge_ctx_->tablet_handle_.get_obj()->get_rowkey_read_info(),
           blocksstable::DATA_BLOCK_META,
           sec_meta_iter))) {
         LOG_WARN("Fail to scan secondary meta", K(ret), K(merge_param.merge_range_));
@@ -781,7 +781,7 @@ int ObPartitionMajorMerger::rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters)
   } else {
     STORAGE_LOG(DEBUG, "Rewrite macro block", KPC(iter));
     curr_macro_id = curr_macro->macro_block_id_;
-    // TODO maybe we need use macro_block_ctx to decide wheather the result row came from the same macro block
+    // TODO maybe we need use macro_block_ctx to decide whether the result row came from the same macro block
     while (OB_SUCC(ret) && !iter->is_iter_end() && iter->is_macro_block_opened()) {
       if (OB_FAIL(merge_same_rowkey_iters(minimum_iters))) {
         STORAGE_LOG(WARN, "failed to merge_same_rowkey_iters", K(ret), K(minimum_iters));
@@ -1684,8 +1684,11 @@ int ObPartitionMergeDumper::judge_disk_free_space(const char *dir_name, ObITable
     if (OB_FAIL(FileDirectoryUtils::get_disk_space(dir_name, total_space, free_space))) {
       STORAGE_LOG(WARN, "Failed to get disk space ", K(ret), K(dir_name));
     } else if (table->is_sstable()) {
-      if (free_space
-          - static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().get_total_macro_block_count() *
+      ObSSTableMetaHandle sst_meta_hdl;
+      if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+        LOG_WARN("fail to get sstable meta handle", K(ret));
+      } else if (free_space
+          - sst_meta_hdl.get_sstable_meta().get_total_macro_block_count() *
           OB_DEFAULT_MACRO_BLOCK_SIZE
           < ObPartitionMergeDumper::DUMP_TABLE_DISK_FREE_PERCENTAGE * total_space) {
         ret = OB_SERVER_OUTOF_DISK_SPACE;
@@ -1744,13 +1747,12 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
       }
     }
     // dump all sstables in this merge
-    ObIArray<ObITable *> &tables = ctx.tables_handle_.get_tables();
     char file_name[OB_MAX_FILE_NAME_LENGTH];
     lib::ObMutexGuard guard(ObPartitionMergeDumper::lock);
-    for (int idx = 0; OB_SUCC(ret) && idx < tables.count(); ++idx) {
-      ObITable *table = tables.at(idx);
+    for (int idx = 0; OB_SUCC(ret) && idx < ctx.tables_handle_.get_count(); ++idx) {
+      ObITable *table = ctx.tables_handle_.get_table(idx);
       if (OB_ISNULL(table)) {
-        STORAGE_LOG(WARN, "The store is NULL", K(idx), K(tables));
+        STORAGE_LOG(WARN, "The store is NULL", K(idx), K(ctx.tables_handle_));
       } else if (OB_FAIL(compaction::ObPartitionMergeDumper::judge_disk_free_space(dump_table_dir,
                          table))) {
         if (OB_SERVER_OUTOF_DISK_SPACE != ret) {

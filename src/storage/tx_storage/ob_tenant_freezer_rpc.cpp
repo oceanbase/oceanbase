@@ -20,11 +20,13 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_tenant_freezer_common.h"
+#include "storage/multi_data_source/mds_table_mgr.h"
 
 namespace oceanbase
 {
 using namespace storage;
 using namespace share;
+using namespace storage::mds;
 using namespace rootserver;
 namespace obrpc
 {
@@ -59,6 +61,10 @@ int ObTenantFreezerP::process()
   } else if (storage::MAJOR_FREEZE == arg_.freeze_type_) {
     if (OB_FAIL(do_major_freeze_())) {
       LOG_WARN("do major freeze failed", K(ret));
+    }
+  } else if (storage::MDS_TABLE_FREEZE == arg_.freeze_type_) {
+    if (OB_FAIL(do_mds_table_freeze_())) {
+      LOG_WARN("do mds table freeze failed.", KR(ret), K(arg_));
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -164,6 +170,51 @@ int ObTenantFreezerP::do_major_freeze_()
   }
 
   LOG_INFO("finish tenant major freeze", KR(ret), K(tenant_id), K(frozen_scn));
+  return ret;
+}
+
+int ObTenantFreezerP::do_mds_table_freeze_()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("start mds table self freeze task in rpc handle thread", K(arg_));
+
+  common::ObSharedGuard<ObLSIterator> iter_guard;
+  ObLSService *ls_srv = MTL(ObLSService *);
+
+  if (OB_FAIL(ls_srv->get_ls_iter(iter_guard, ObLSGetMod::TXSTORAGE_MOD))) {
+    LOG_WARN("[TenantFreezer] fail to get log stream iterator", K(ret));
+  } else {
+    int ls_cnt = 0;
+    while (OB_SUCC(ret)) {
+      ObLS *ls = nullptr;
+      MdsTableMgrHandle mgr_handle;
+      ObMdsTableMgr *mds_table_mgr = nullptr;
+
+      if (OB_FAIL(iter_guard->get_next(ls))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next ls failed.", KR(ret), K(arg_));
+        }
+      } else if (OB_ISNULL(ls) || OB_ISNULL(ls->get_tablet_svr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls is unexpected nullptr", KR(ret), K(arg_));
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ls->flush_mds_table(INT64_MAX))) {
+          LOG_WARN("flush mds table failed", KR(tmp_ret), KPC(ls));
+        }
+      }
+      ++ls_cnt;
+    }
+
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+      if (0 == ls_cnt) {
+        LOG_WARN("[TenantFreezer] no logstream", K(ret), K(ls_cnt));
+      }
+    }
+  }
+
+  LOG_INFO("finish mds table self freeze task in rpc handle thread", KR(ret), K(arg_));
   return ret;
 }
 

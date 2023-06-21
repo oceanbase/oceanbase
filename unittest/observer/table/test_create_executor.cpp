@@ -148,6 +148,7 @@ TestCreateExecutor::TestCreateExecutor()
 
 void TestCreateExecutor::SetUp()
 {
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   schema_service_.init();
   create_table_schema(&table_schema_, columns_);
   schema_service_.add_table_schema(table_schema_, 1);

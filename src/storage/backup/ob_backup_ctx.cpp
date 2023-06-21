@@ -23,6 +23,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/backup/ob_backup_data_table_operator.h"
 
 #include <algorithm>
 
@@ -261,130 +262,6 @@ void ObSimpleBackupStatMgr::reset_stat_list_()
   }
 }
 
-/* ObBackupFileWriteCtx */
-
-ObBackupFileWriteCtx::ObBackupFileWriteCtx()
-    : is_inited_(false),
-      file_size_(0),
-      max_file_size_(0),
-      io_fd_(),
-      dev_handle_(NULL),
-      data_buffer_("BackupCtx"),
-      bandwidth_throttle_(NULL)
-{}
-
-ObBackupFileWriteCtx::~ObBackupFileWriteCtx()
-{}
-
-int ObBackupFileWriteCtx::open(const int64_t max_file_size, const common::ObIOFd &io_fd,
-    common::ObIODevice &dev_handle, common::ObInOutBandwidthThrottle &bandwidth_throttle)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("backup data ctx init twice", K(ret));
-  } else if (max_file_size < 0 || !io_fd.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(max_file_size), K(io_fd));
-  } else if (OB_FAIL(data_buffer_.ensure_space(OB_DEFAULT_MACRO_BLOCK_SIZE))) {
-    LOG_WARN("failed to ensure space", K(ret));
-  } else {
-    file_size_ = 0;
-    max_file_size_ = max_file_size;
-    io_fd_ = io_fd;
-    dev_handle_ = &dev_handle;
-    bandwidth_throttle_ = &bandwidth_throttle;
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObBackupFileWriteCtx::append_buffer(const blocksstable::ObBufferReader &buffer, const bool is_last_part)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("file write ctx do not init", K(ret));
-  } else if (!buffer.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(buffer));
-  } else if (OB_FAIL(write_buffer_(buffer.data(), buffer.length(), is_last_part))) {
-    LOG_WARN("failed to write buffer", K(ret), K(buffer), K(is_last_part));
-  } else {
-    LOG_DEBUG("append buffer to file write ctx", K(buffer));
-  }
-  return ret;
-}
-
-int ObBackupFileWriteCtx::close()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("file write ctx do not init", K(ret));
-  } else if (OB_FAIL(commit_file_())) {
-    LOG_WARN("failed to commit file", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupFileWriteCtx::write_buffer_(const char *buf, const int64_t len, const bool is_last_part)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || len <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(buf), K(len));
-  } else if (OB_FAIL(data_buffer_.write(buf, len))) {
-    LOG_WARN("failed to write file writer", K(ret), K(buf), K(len));
-  } else if (OB_FAIL(flush_buffer_(is_last_part))) {
-    LOG_WARN("failed to flush buffer", K(ret), K(is_last_part));
-  }
-  return ret;
-}
-
-bool ObBackupFileWriteCtx::check_can_flush_(const bool is_last_part) const
-{
-  return is_last_part || data_buffer_.length() >= OB_MAX_BACKUP_MEM_BUF_LEN;
-}
-
-int ObBackupFileWriteCtx::flush_buffer_(const bool is_last_part)
-{
-  int ret = OB_SUCCESS;
-  int64_t write_size = 0;
-  const int64_t offset = file_size_;
-  if (!check_can_flush_(is_last_part)) {
-    LOG_DEBUG("can not flush now", K(is_last_part), K(data_buffer_));
-  } else if (OB_ISNULL(dev_handle_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dev handle should not be null", K(ret));
-  } else if (OB_FAIL(dev_handle_->pwrite(io_fd_, offset, data_buffer_.length(), data_buffer_.data(), write_size))) {
-    LOG_WARN("failed to write data buffer", K(ret), K(data_buffer_));
-  } else if (data_buffer_.length() != write_size) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("write length not equal buffer length", K(offset), K(data_buffer_.length()), K(write_size));
-  } else {
-    file_size_ += write_size;
-    data_buffer_.reuse();
-  }
-  return ret;
-}
-
-int ObBackupFileWriteCtx::commit_file_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(dev_handle_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dev handle should not be null", K(ret));
-  } else if (OB_FAIL(flush_buffer_(true /*is_last_part*/))) {
-    LOG_WARN("failed to flush buffer", K(ret));
-  } else if (OB_FAIL(dev_handle_->close(io_fd_))) {
-    LOG_WARN("failed to close file", K(ret), K_(io_fd));
-  } else {
-    LOG_INFO("backup file write ctx commit file");
-  }
-  return ret;
-}
-
 /* ObBackupDataCtx */
 
 ObBackupDataCtx::ObBackupDataCtx()
@@ -399,15 +276,14 @@ ObBackupDataCtx::ObBackupDataCtx()
       macro_index_buffer_node_(),
       meta_index_buffer_node_(),
       file_trailer_(),
-      tmp_buffer_("BackupCtx"),
-      bandwidth_throttle_(NULL)
+      tmp_buffer_("BackupDataCtx")
 {}
 
 ObBackupDataCtx::~ObBackupDataCtx()
 {}
 
 int ObBackupDataCtx::open(const ObLSBackupDataParam &param, const share::ObBackupDataType &backup_data_type,
-    const int64_t file_id, common::ObInOutBandwidthThrottle &bandwidth_throttle)
+    const int64_t file_id)
 {
   int ret = OB_SUCCESS;
   static const int64_t BUF_SIZE = 4 * 1024 * 1024;
@@ -431,7 +307,6 @@ int ObBackupDataCtx::open(const ObLSBackupDataParam &param, const share::ObBacku
     file_id_ = file_id;
     file_offset_ = 0;
     backup_data_type_ = backup_data_type;
-    bandwidth_throttle_ = &bandwidth_throttle;
     is_inited_ = true;
     if (OB_FAIL(prepare_file_write_ctx_(param, backup_data_type, file_id))) {
       LOG_WARN("failed to prepare file write ctx", K(ret), K(param), K(backup_data_type), K(file_id));
@@ -543,14 +418,11 @@ int ObBackupDataCtx::prepare_file_write_ctx_(
   int ret = OB_SUCCESS;
   share::ObBackupPath backup_path;
   const int64_t data_file_size = get_data_file_size();
-  if (OB_ISNULL(bandwidth_throttle_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("bandwidth_throttle is NULL", K(ret));
-  } else if (OB_FAIL(get_macro_block_backup_path_(file_id, backup_path))) {
+  if (OB_FAIL(get_macro_block_backup_path_(file_id, backup_path))) {
     LOG_WARN("failed to get macro block backup path", K(ret), K(file_id));
   } else if (OB_FAIL(open_file_writer_(backup_path))) {
     LOG_WARN("failed to open file writer", K(ret), K(backup_path));
-  } else if (OB_FAIL(file_write_ctx_.open(data_file_size, io_fd_, *dev_handle_, *bandwidth_throttle_))) {
+  } else if (OB_FAIL(file_write_ctx_.open(data_file_size, io_fd_, *dev_handle_))) {
     LOG_WARN("failed to open file write ctx", K(ret), K(param), K(type), K(backup_path), K(data_file_size), K(file_id));
   }
   return ret;
@@ -952,7 +824,8 @@ ObLSBackupCtx::ObLSBackupCtx()
       backup_retry_ctx_(),
       sql_proxy_(NULL),
       rebuild_seq_(),
-      check_tablet_info_cost_time_()
+      check_tablet_info_cost_time_(),
+      backup_tx_table_filled_tx_scn_(share::SCN::min_scn())
 {}
 
 ObLSBackupCtx::~ObLSBackupCtx()
@@ -964,7 +837,7 @@ int ObLSBackupCtx::open(
     const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObTabletID> tablet_list;
+  ObArray<common::ObTabletID> tablet_list;
   ObILSTabletIdReader *reader = NULL;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -998,8 +871,8 @@ int ObLSBackupCtx::open(
     } else if (OB_FAIL(get_all_tablet_id_list_(reader, tablet_list))) {
       LOG_WARN("failed to get all tablet id list", K(ret));
     } else if (tablet_list.empty()) {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("no tablet in log stream", K(ret), K(param));
+      ret = OB_NO_TABLET_NEED_BACKUP;
+      LOG_WARN("no tablet in log stream need to backup", K(ret), K(param));
     } else if (OB_FAIL(seperate_tablet_id_list_(tablet_list, sys_tablet_id_list_, data_tablet_id_list_))) {
       LOG_WARN("failed to seperate tablet id list", K(ret), K(tablet_list));
     } else if (OB_FAIL(recover_last_retry_ctx_())) {
@@ -1549,10 +1422,11 @@ int ObLSBackupCtx::get_all_tablet_id_list_(
   int ret = OB_SUCCESS;
   const int64_t turn_id = param_.turn_id_;
   const share::ObLSID &ls_id = param_.ls_id_;
+  ObArray<common::ObTabletID> tablet_id_list;
   if (OB_ISNULL(reader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream tablet id reader should not be null", K(ret));
-  } else if (OB_FAIL(reader->get_tablet_id_list(turn_id, ls_id, tablet_list))) {
+  } else if (OB_FAIL(reader->get_tablet_id_list(backup_data_type_, turn_id, ls_id, tablet_list))) {
     LOG_WARN("failed to get all tablet id list", K(ret), K_(param));
   } else {
     LOG_INFO("get all tablet id list", K_(param), K(tablet_list));
@@ -1561,7 +1435,8 @@ int ObLSBackupCtx::get_all_tablet_id_list_(
 }
 
 int ObLSBackupCtx::seperate_tablet_id_list_(const common::ObIArray<common::ObTabletID> &tablet_id_list,
-    common::ObIArray<common::ObTabletID> &sys_tablet_id_list, common::ObIArray<common::ObTabletID> &data_tablet_id_list)
+    common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
+    common::ObIArray<common::ObTabletID> &data_tablet_id_list)
 {
   int ret = OB_SUCCESS;
   sys_tablet_id_list.reset();
@@ -1646,7 +1521,7 @@ int ObLSBackupCtx::check_need_skip_major_(const common::ObTabletID &tablet_id, b
 int ObLSBackupCtx::get_next_tablet_(common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObTabletID> *list_ptr = backup_data_type_.is_sys_backup() ? &sys_tablet_id_list_ : &data_tablet_id_list_;
+  ObArray<common::ObTabletID> *list_ptr = backup_data_type_.is_sys_backup() ? &sys_tablet_id_list_ : &data_tablet_id_list_;
   if (OB_ISNULL(list_ptr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("list ptr should not be null", K(ret));

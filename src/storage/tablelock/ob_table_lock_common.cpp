@@ -84,13 +84,26 @@ DEFINE_GET_SERIALIZE_SIZE(ObLockID)
   return size;
 }
 
+int ObLockID::convert_to(common::ObTabletID &tablet_id) const
+{
+  int ret = OB_SUCCESS;
+  common::ObTabletID tmp_id(obj_id_);
+  if (!is_tablet_lock() || !tmp_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can not convert to", K(ret), K_(obj_type), K_(obj_id));
+  } else {
+    tablet_id = tmp_id;
+  }
+  return ret;
+}
+
 int ObLockID::set(const ObLockOBJType &type, const uint64_t obj_id)
 {
   int ret = OB_SUCCESS;
 
   if (!is_lock_obj_type_valid(type) || !is_valid_id(obj_id)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "init fail", K(ret), K(type), K(obj_id));
+    LOG_WARN("init fail", K(ret), K(type), K(obj_id));
   } else {
     obj_type_ = type;
     obj_id_ = obj_id;

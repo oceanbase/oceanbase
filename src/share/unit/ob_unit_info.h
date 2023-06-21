@@ -37,6 +37,7 @@ public:
   };
 public:
   static const char *const unit_status_strings[UNIT_STATUS_MAX];
+  static Status str_to_unit_status(const ObString &str);
 public:
   ObUnit();
   ~ObUnit() {}
@@ -86,6 +87,34 @@ struct ObUnitInfo
   ObResourcePool pool_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitInfo);
+};
+
+struct ObSimpleUnitGroup
+{
+public:
+ ObSimpleUnitGroup(uint64_t unit_group_id, ObUnit::Status status) : unit_group_id_(unit_group_id), status_(status) {}
+ ObSimpleUnitGroup(){reset();}
+ ~ObSimpleUnitGroup() {}
+ void reset()
+ {
+  unit_group_id_ = OB_INVALID_ID;
+  status_ = ObUnit::UNIT_STATUS_MAX;
+ }
+ bool is_valid() const;
+ int assign(const ObSimpleUnitGroup &other)
+ {
+  unit_group_id_ = other.unit_group_id_;
+  status_ = other.status_;
+  return OB_SUCCESS;
+ }
+ bool is_active() const
+ { return ObUnit::UNIT_STATUS_ACTIVE == status_; }
+ uint64_t get_unit_group_id() const { return unit_group_id_; }
+ ObUnit::Status get_status() const  { return status_; }
+ TO_STRING_KV(K_(unit_group_id), K_(status));
+private:
+  uint64_t unit_group_id_;
+  ObUnit::Status status_;
 };
 
 }//end namespace share

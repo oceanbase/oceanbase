@@ -70,9 +70,7 @@ TEST_F(TestDiskIntermResult, disk_write_read)
   ret = ObIntermResultManager::get_instance()->alloc_result(ir);
   ASSERT_EQ(OB_SUCCESS, ret);
   lib::ObMallocAllocator *malloc_allocator = lib::ObMallocAllocator::get_instance();
-  ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID, common::ObCtxIds::WORK_AREA);
+  ret = malloc_allocator->create_and_add_tenant_allocator(OB_SYS_TENANT_ID);
   ASSERT_EQ(OB_SUCCESS, ret);
   malloc_allocator->set_tenant_limit(OB_SYS_TENANT_ID, 1L << 30);
   ASSERT_EQ(OB_SUCCESS, ret);

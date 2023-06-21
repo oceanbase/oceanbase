@@ -31,7 +31,7 @@ int ObTableAccessContext::init_column_scale_info(ObTableScanParam &scan_param)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected table parameter to init column scale info", K(ret), KPC(scan_param.table_param_));
   } else {
-    const ObIArray<share::schema::ObColumnParam *> *out_col_param = &scan_param.table_param_->get_read_info().get_columns();
+    const ObIArray<share::schema::ObColumnParam *> *out_col_param = scan_param.table_param_->get_read_info().get_columns();
     const ObIArray<int32_t> *out_col_project = &scan_param.table_param_->get_output_projector();
     for (int64_t i = 0; OB_SUCC(ret) && i < out_col_project->count(); ++i) {
       share::schema::ObColumnParam *col_param = NULL;

@@ -49,6 +49,12 @@ enum ObTableLockTaskType
   UNLOCK_SUBPARTITION = 8,
   LOCK_OBJECT = 9,
   UNLOCK_OBJECT = 10,
+  LOCK_DDL_TABLE = 11,
+  UNLOCK_DDL_TABLE = 12,
+  LOCK_DDL_TABLET = 13,
+  UNLOCK_DDL_TABLET = 14,
+  LOCK_ALONE_TABLET = 15,
+  UNLOCK_ALONE_TABLET = 16,
   MAX_TASK_TYPE,
 };
 
@@ -109,6 +115,7 @@ public:
     LOCK_TABLE_REQ =          4,
     LOCK_PARTITION_REQ =      5,
     LOCK_TABLET_REQ =         6,
+    LOCK_ALONE_TABLET_REQ =   7,
   };
 public:
   ObLockRequest() :
@@ -197,6 +204,35 @@ public:
 };
 using ObUnLockTabletRequest = ObLockTabletRequest;
 
+struct ObLockTabletsRequest : public ObLockTableRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObLockTabletsRequest() : tablet_ids_()
+  { type_ = ObLockMsgType::LOCK_TABLET_REQ; }
+  virtual ~ObLockTabletsRequest() { reset(); }
+  virtual void reset();
+  virtual bool is_valid() const;
+  INHERIT_TO_STRING_KV("ObLockTableRequest", ObLockTableRequest, K_(tablet_ids));
+ public:
+  common::ObTabletIDArray tablet_ids_;
+};
+
+struct ObLockAloneTabletRequest : public ObLockTabletsRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObLockAloneTabletRequest() : ls_id_()
+  { type_ = ObLockMsgType::LOCK_ALONE_TABLET_REQ; }
+  virtual ~ObLockAloneTabletRequest() { reset(); }
+  virtual void reset();
+  virtual bool is_valid() const;
+  INHERIT_TO_STRING_KV("ObLockTabletsRequest", ObLockTabletsRequest, K_(ls_id));
+ public:
+  share::ObLSID ls_id_;
+};
+using ObUnLockAloneTabletRequest = ObLockAloneTabletRequest;
+
 class ObTableLockTaskRequest final
 {
   OB_UNIS_VERSION(1);
@@ -234,13 +270,14 @@ public:
   ObLockParam param_;
   transaction::ObTxDesc *tx_desc_;
 private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableLockTaskRequest);
   bool need_release_tx_;
 };
 
 class ObLockTaskBatchRequest final
 {
   OB_UNIS_VERSION(1);
- public:
+public:
   ObLockTaskBatchRequest() :
       task_type_(INVALID_LOCK_TASK_TYPE),
       lsid_(),
@@ -256,16 +293,16 @@ class ObLockTaskBatchRequest final
   bool is_valid() const;
   int assign(const ObLockTaskBatchRequest &arg);
 
-  TO_STRING_KV(K(task_type_), K(lsid_), K(params_));
- public:
+  TO_STRING_KV(K(task_type_), K(lsid_), K(params_), KPC(tx_desc_));
+public:
   ObTableLockTaskType task_type_;
   share::ObLSID lsid_; // go to which ls to lock.
   common::ObSArray<ObLockParam> params_;
   transaction::ObTxDesc *tx_desc_;
- private:
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLockTaskBatchRequest);
   bool need_release_tx_;
 };
-
 
 class ObTableLockTaskResult final
 {
@@ -274,20 +311,27 @@ public:
   ObTableLockTaskResult()
     : ret_code_(common::OB_SUCCESS),
     tx_result_ret_code_(common::OB_SUCCESS),
-    tx_result_() {}
+    tx_result_(),
+    can_retry_(false),
+    success_pos_(-1) {}
   ~ObTableLockTaskResult() {}
 
   int get_ret_code() const { return ret_code_; }
   int get_tx_result_code() const { return tx_result_ret_code_; }
   transaction::ObTxExecResult &get_tx_result() { return tx_result_; }
+  bool can_retry() const { return can_retry_; }
+  int64_t get_success_pos() const { return success_pos_; }
 
-  TO_STRING_KV(K(ret_code_), K(tx_result_));
+  TO_STRING_KV(K(ret_code_), K(tx_result_ret_code_), K(tx_result_), K(can_retry_), K(success_pos_));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLockTaskResult);
 public:
   int ret_code_;
   int tx_result_ret_code_;
   transaction::ObTxExecResult tx_result_;
+  // retry param
+  bool can_retry_;          // whether we can retry this task or not
+  int64_t success_pos_;     // the pos we need begin to retry
 };
 
 // --------------------- used for client request ------------------------------

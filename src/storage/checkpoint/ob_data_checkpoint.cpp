@@ -617,7 +617,7 @@ int ObDataCheckpoint::traversal_flush_()
   // based on the order of rec_scn. So we should can simply use a small
   // number for flush tasks.
   const int MAX_DATA_CHECKPOINT_FLUSH_COUNT = 10000;
-  ObSEArray<ObTableHandleV2, 64> flush_tasks;
+  ObSEArray<ObTableHandleV2, 16> flush_tasks;
 
   {
     ObSpinLockGuard guard(lock_);
@@ -635,9 +635,10 @@ int ObDataCheckpoint::traversal_flush_()
              && MAX_DATA_CHECKPOINT_FLUSH_COUNT >= flush_tasks.count()) {
         ObFreezeCheckpoint *ob_freeze_checkpoint = iterator.get_next();
         memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(ob_freeze_checkpoint);
-        ObTableHandleV2 handle(memtable, t3m, ObITable::TableType::DATA_MEMTABLE);
-        if (!memtable->get_is_flushed()
-            && OB_FAIL(flush_tasks.push_back(handle))) {
+        ObTableHandleV2 handle;
+        if (OB_FAIL(handle.set_table(memtable, t3m, ObITable::TableType::DATA_MEMTABLE))) {
+          STORAGE_LOG(WARN, "set table handle fail", K(ret), KPC(memtable));
+        } else if (!memtable->get_is_flushed() && OB_FAIL(flush_tasks.push_back(handle))) {
           TRANS_LOG(WARN, "add table to flush tasks failed", KPC(memtable));
         }
       }

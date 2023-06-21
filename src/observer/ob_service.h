@@ -142,16 +142,20 @@ public:
   int backup_build_index(const obrpc::ObBackupBuildIdxArg &arg);
   int check_backup_dest_connectivity(const obrpc::ObCheckBackupConnectivityArg &arg);
   int backup_meta(const obrpc::ObBackupMetaArg &arg);
-  int check_not_backup_tablet_create_scn(const obrpc::ObBackupCheckTabletArg &arg);
   int check_backup_task_exist(const obrpc::ObBackupCheckTaskArg &arg, bool &res);
   int check_sys_task_exist(const share::ObTaskId &arg, bool &res);
   int check_migrate_task_exist(const share::ObTaskId &arg, bool &res);
   int delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg);
+  int report_backup_over(const obrpc::ObBackupTaskRes &res);
+  int report_backup_clean_over(const obrpc::ObBackupTaskRes &res);
+
   int get_ls_sync_scn(const obrpc::ObGetLSSyncScnArg &arg,
                            obrpc::ObGetLSSyncScnRes &result);
   int force_set_ls_as_single_replica(const obrpc::ObForceSetLSAsSingleReplicaArg &arg);
   int refresh_tenant_info(const obrpc::ObRefreshTenantInfoArg &arg,
                           obrpc::ObRefreshTenantInfoRes &result);
+  int get_ls_replayed_scn(const obrpc::ObGetLSReplayedScnArg &arg,
+                          obrpc::ObGetLSReplayedScnRes &result);
   int estimate_partition_rows(const obrpc::ObEstPartArg &arg,
                               obrpc::ObEstPartRes &res) const;
   int estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,

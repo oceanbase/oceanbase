@@ -55,7 +55,8 @@ inline bool is_multi_version_merge(const ObMergeType &merge_type)
 {
   return MINOR_MERGE == merge_type
       || MINI_MERGE == merge_type
-      || HISTORY_MINOR_MERGE == merge_type;
+      || HISTORY_MINOR_MERGE == merge_type
+      || BACKFILL_TX_MERGE == merge_type;
 }
 inline bool is_history_minor_merge(const ObMergeType &merge_type)
 {

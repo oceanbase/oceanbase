@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define UNIITTEST_DEBUG
+#define UNITTEST_DEBUG
 
 #include "share/ob_occam_thread_pool.h"
 #include <gtest/gtest.h>

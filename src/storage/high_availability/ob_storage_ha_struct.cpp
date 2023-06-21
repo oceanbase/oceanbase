@@ -15,6 +15,10 @@
 #include "storage/ls/ob_ls_meta_package.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tablet/ob_tablet.h"
+#include "storage/tablet/ob_tablet_common.h"
+#include "storage/tablet/ob_tablet_iterator.h"
+#include "storage/ls/ob_ls_tablet_service.h"
 
 namespace oceanbase
 {
@@ -67,11 +71,32 @@ bool ObMigrationOpType::need_keep_old_tablet(const TYPE &type)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check need keep old tablet get invaid argument", K(ret), K(type));
   } else if (ObMigrationOpType::REBUILD_LS_OP == type || ObMigrationOpType::CHANGE_LS_OP == type) {
-    bool_ret = true;
+    // TODO(yangyi.yyy): fix in 5.0: open this restriction if support tablet link
+    bool_ret = false;
   } else {
     bool_ret = false;
   }
   return bool_ret;
+}
+
+int ObMigrationOpType::get_ls_wait_status(const TYPE &type, ObMigrationStatus &wait_status)
+{
+  int ret = OB_SUCCESS;
+  wait_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  if (!is_valid(type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invaid argument", K(ret), K(type));
+  } else if (ObMigrationOpType::MIGRATE_LS_OP == type) {
+    wait_status = ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT;
+  } else if (ObMigrationOpType::ADD_LS_OP == type) {
+    wait_status = ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT;
+  } else if (ObMigrationOpType::REBUILD_LS_OP == type) {
+    wait_status = ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT;
+  } else {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("type is not valid", K(type));
+  }
+  return ret;
 }
 
 /******************ObMigrationStatusHelper*********************/
@@ -147,10 +172,6 @@ int ObMigrationStatusHelper::trans_fail_status(const ObMigrationStatus &cur_stat
       fail_status = OB_MIGRATION_STATUS_MIGRATE_FAIL;
       break;
     }
-    case OB_MIGRATION_STATUS_REBUILD: {
-      fail_status = OB_MIGRATION_STATUS_REBUILD;
-      break;
-    }
     case OB_MIGRATION_STATUS_CHANGE: {
       fail_status = OB_MIGRATION_STATUS_NONE;
       break;
@@ -164,6 +185,15 @@ int ObMigrationStatusHelper::trans_fail_status(const ObMigrationStatus &cur_stat
       fail_status = OB_MIGRATION_STATUS_NONE;
       break;
     }
+    case OB_MIGRATION_STATUS_MIGRATE_WAIT : {
+      fail_status = OB_MIGRATION_STATUS_MIGRATE_FAIL;
+      break;
+    }
+    case OB_MIGRATION_STATUS_ADD_WAIT : {
+      fail_status = OB_MIGRATION_STATUS_ADD_FAIL;
+      break;
+    }
+    //rebuild and rebuild_wait need use trans_rebuild_fail_status interface
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid cur status for fail", K(ret), K(cur_status));
@@ -213,6 +243,22 @@ int ObMigrationStatusHelper::trans_reboot_status(const ObMigrationStatus &cur_st
       reboot_status = OB_MIGRATION_STATUS_NONE;
       break;
     }
+    case OB_MIGRATION_STATUS_MIGRATE_WAIT : {
+      reboot_status = OB_MIGRATION_STATUS_MIGRATE_FAIL;
+      break;
+    }
+    case OB_MIGRATION_STATUS_ADD_WAIT : {
+      reboot_status = OB_MIGRATION_STATUS_ADD_FAIL;
+      break;
+    }
+    case OB_MIGRATION_STATUS_REBUILD_WAIT: {
+      reboot_status = OB_MIGRATION_STATUS_REBUILD;
+      break;
+    }
+    case OB_MIGRATION_STATUS_REBUILD_FAIL : {
+      reboot_status = OB_MIGRATION_STATUS_REBUILD_FAIL;
+      break;
+    }
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid cur status for fail", K(ret), K(cur_status));
@@ -242,19 +288,134 @@ bool ObMigrationStatusHelper::check_can_restore(const ObMigrationStatus &cur_sta
   return OB_MIGRATION_STATUS_NONE == cur_status;
 }
 
-bool ObMigrationStatusHelper::check_allow_gc(const ObMigrationStatus &cur_status)
+int ObMigrationStatusHelper::check_transfer_dest_ls_status_(
+    const ObLSID &transfer_ls_id,
+    bool &allow_gc)
 {
-  bool allow_gc = true;
-
-  if (OB_MIGRATION_STATUS_ADD == cur_status
-      || OB_MIGRATION_STATUS_MIGRATE == cur_status
-      || OB_MIGRATION_STATUS_REBUILD == cur_status
-      || OB_MIGRATION_STATUS_CHANGE == cur_status
-      || OB_MIGRATION_STATUS_RESTORE_STANDBY == cur_status
-      || OB_MIGRATION_STATUS_HOLD == cur_status) {
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = nullptr;
+  ObLS *dest_ls = nullptr;
+  ObLSHandle ls_handle;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  if (!transfer_ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls id is invalid", K(ret), K(transfer_ls_id));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(transfer_ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+    if (OB_LS_NOT_EXIST == ret) {
+      LOG_INFO("transfer dest ls not exist", K(ret), K(transfer_ls_id));
+      allow_gc = true;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ls", K(ret), K(transfer_ls_id));
+    }
+  } else if (OB_ISNULL(dest_ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(dest_ls), K(transfer_ls_id));
+  } else if (OB_FAIL(dest_ls->get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), KPC(dest_ls));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT == migration_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT == migration_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT == migration_status) {
     allow_gc = false;
   }
+  return ret;
+}
 
+int ObMigrationStatusHelper::check_ls_transfer_tablet_(const share::ObLSID &ls_id, bool &allow_gc)
+{
+  int ret = OB_SUCCESS;
+  allow_gc = false;
+  ObLSService *ls_service = nullptr;
+  ObLS *ls = nullptr;
+  ObLSHandle ls_handle;
+  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  ObInnerLSStatus create_status;
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls id is invalid", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls not exist", K(ret), K(ls_id));
+  } else if (FALSE_IT(create_status = ls->get_ls_meta().get_ls_create_status())) {
+  } else if (ObInnerLSStatus::COMMITTED != create_status) {
+    allow_gc = true;
+  } else if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
+    LOG_WARN( "failed to build ls tablet iter", KR(ret));
+  } else {
+    ObTabletHandle tablet_handle;
+    ObTablet *tablet = NULL;
+    ObTabletCreateDeleteMdsUserData user_data;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
+        if (OB_ITER_END == ret) {
+          allow_gc = true;
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get tablet", KR(ret), K(tablet_handle), K(ls_id));
+        }
+      } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle), K(ls_id));
+      } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet is NULL", KR(ret), K(ls_id));
+      } else if (tablet->is_ls_inner_tablet()) {
+        // do nothing
+      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+        if (OB_EMPTY_RESULT == ret) {
+          LOG_INFO("tablet_status is null, ls is allowed to be GC", KR(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_, K(ls_id));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get latest tablet status", K(ret), KP(tablet), K(ls_id));
+        }
+      } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
+          && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
+        // do nothing
+      } else if (OB_FAIL(check_transfer_dest_ls_status_(user_data.transfer_ls_id_, allow_gc))) {
+        LOG_WARN("failed to check ls transfer tablet", K(ret), K(ls), K(user_data));
+      } else if (!allow_gc) {
+        LOG_INFO("The ls is not allowed to be GC because it is also dependent on other ls", K(user_data),
+            K(ls_id), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMigrationStatusHelper::check_allow_gc(const share::ObLSID &ls_id, const ObMigrationStatus &cur_status, bool &allow_gc)
+{
+  int ret = OB_SUCCESS;
+  allow_gc = false;
+  if (check_allow_gc_abandoned_ls(cur_status)) {
+    allow_gc = true;
+  } else if (OB_MIGRATION_STATUS_NONE != cur_status) {
+    allow_gc = false;
+  } else if (OB_FAIL(check_ls_transfer_tablet_(ls_id, allow_gc))) {
+    LOG_WARN("failed to check ls transfer tablet", K(ret), K(ls_id));
+  } else {
+  }
+  return ret;
+}
+
+bool ObMigrationStatusHelper::check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status)
+{
+  bool allow_gc = false;
+  if (OB_MIGRATION_STATUS_ADD_FAIL == cur_status
+      || OB_MIGRATION_STATUS_MIGRATE_FAIL == cur_status
+      || OB_MIGRATION_STATUS_REBUILD_FAIL == cur_status) {
+    allow_gc = true;
+  }
   return allow_gc;
 }
 
@@ -291,9 +452,9 @@ int ObMigrationStatusHelper::check_can_change_status(
       break;
     }
     case OB_MIGRATION_STATUS_ADD: {
-      if (OB_MIGRATION_STATUS_HOLD == change_status
-          || OB_MIGRATION_STATUS_ADD == change_status
-          || OB_MIGRATION_STATUS_ADD_FAIL == change_status) {
+      if (OB_MIGRATION_STATUS_ADD == change_status
+          || OB_MIGRATION_STATUS_ADD_FAIL == change_status
+          || OB_MIGRATION_STATUS_ADD_WAIT == change_status) {
         can_change = true;
       }
       break;
@@ -305,9 +466,9 @@ int ObMigrationStatusHelper::check_can_change_status(
       break;
     }
     case OB_MIGRATION_STATUS_MIGRATE: {
-      if (OB_MIGRATION_STATUS_HOLD == change_status
-          || OB_MIGRATION_STATUS_MIGRATE == change_status
-          || OB_MIGRATION_STATUS_MIGRATE_FAIL == change_status) {
+      if (OB_MIGRATION_STATUS_MIGRATE == change_status
+          || OB_MIGRATION_STATUS_MIGRATE_FAIL == change_status
+          || OB_MIGRATION_STATUS_MIGRATE_WAIT == change_status) {
         can_change = true;
       }
       break;
@@ -320,7 +481,8 @@ int ObMigrationStatusHelper::check_can_change_status(
     }
     case OB_MIGRATION_STATUS_REBUILD: {
       if (OB_MIGRATION_STATUS_NONE == change_status
-          || OB_MIGRATION_STATUS_REBUILD == change_status) {
+          || OB_MIGRATION_STATUS_REBUILD == change_status
+          || OB_MIGRATION_STATUS_REBUILD_WAIT == change_status) {
         can_change = true;
       }
       break;
@@ -348,6 +510,34 @@ int ObMigrationStatusHelper::check_can_change_status(
       }
       break;
     }
+    case OB_MIGRATION_STATUS_MIGRATE_WAIT: {
+      if (OB_MIGRATION_STATUS_HOLD == change_status
+          || OB_MIGRATION_STATUS_MIGRATE_FAIL == change_status) {
+        can_change = true;
+      }
+      break;
+    }
+    case OB_MIGRATION_STATUS_ADD_WAIT: {
+      if (OB_MIGRATION_STATUS_HOLD == change_status
+          || OB_MIGRATION_STATUS_ADD_FAIL == change_status) {
+        can_change = true;
+      }
+      break;
+    }
+    case OB_MIGRATION_STATUS_REBUILD_WAIT: {
+      if (OB_MIGRATION_STATUS_NONE == change_status
+          || OB_MIGRATION_STATUS_REBUILD_WAIT == change_status
+          || OB_MIGRATION_STATUS_REBUILD == change_status) {
+        can_change = true;
+      }
+      break;
+    }
+    case OB_MIGRATION_STATUS_REBUILD_FAIL: {
+      if (OB_MIGRATION_STATUS_REBUILD_FAIL == change_status) {
+        can_change = true;
+      }
+      break;
+    }
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid cur status for fail", K(ret), K(cur_status));
@@ -361,6 +551,47 @@ bool ObMigrationStatusHelper::is_valid(const ObMigrationStatus &status)
 {
   return status >= ObMigrationStatus::OB_MIGRATION_STATUS_NONE
       && status < ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+}
+
+int ObMigrationStatusHelper::trans_rebuild_fail_status(
+    const ObMigrationStatus &cur_status,
+    const bool is_in_member_list,
+    const bool is_ls_deleted,
+    ObMigrationStatus &fail_status)
+{
+  int ret = OB_SUCCESS;
+  fail_status = OB_MIGRATION_STATUS_MAX;
+
+  if (OB_MIGRATION_STATUS_REBUILD != cur_status && OB_MIGRATION_STATUS_REBUILD_WAIT != cur_status) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(cur_status));
+  } else if (!is_in_member_list || is_ls_deleted) {
+    fail_status = OB_MIGRATION_STATUS_REBUILD_FAIL;
+  } else {
+    fail_status = OB_MIGRATION_STATUS_REBUILD;
+  }
+  return ret;
+}
+
+int ObMigrationStatusHelper::check_migration_in_final_state(
+    const ObMigrationStatus &status,
+    bool &in_final_state)
+{
+  int ret = OB_SUCCESS;
+  in_final_state = false;
+
+  if (!is_valid(status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check migration in final state get invalid argument", K(ret), K(status));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL == status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL == status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status) {
+    in_final_state = true;
+  } else {
+    in_final_state = false;
+  }
+  return ret;
 }
 
 /******************ObMigrationOpArg*********************/
@@ -420,7 +651,6 @@ bool ObTabletsTransferArg::is_valid() const
 
 void ObTabletsTransferArg::reset()
 {
-  //TODO(muwei.ym) fix tenant id
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
   src_.reset();
@@ -564,7 +794,9 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_CHECKSUM_ERROR :
     case OB_DDL_SSTABLE_RANGE_CROSS :
     case OB_TENANT_NOT_EXIST :
-    case OB_NO_NEED_REBUILD :
+    case OB_TRANSFER_SYS_ERROR :
+    case OB_INVALID_TABLE_STORE :
+    case OB_UNEXPECTED_TABLET_STATUS :
       bret = false;
       break;
     default:
@@ -769,6 +1001,138 @@ int ObCopySSTableMacroRangeInfo::assign(const ObCopySSTableMacroRangeInfo &sstab
   }
   return ret;
 }
+
+/******************ObLSRebuildStatus*********************/
+ObLSRebuildStatus::ObLSRebuildStatus()
+  : status_(NONE)
+{
+}
+
+ObLSRebuildStatus::ObLSRebuildStatus(const STATUS &status)
+ : status_(status)
+{
+}
+
+ObLSRebuildStatus &ObLSRebuildStatus::operator=(const ObLSRebuildStatus &status)
+{
+  if (this != &status) {
+    status_ = status.status_;
+  }
+  return *this;
+}
+
+ObLSRebuildStatus &ObLSRebuildStatus::operator=(const STATUS &status)
+{
+  status_ = status;
+  return *this;
+}
+
+void ObLSRebuildStatus::reset()
+{
+  status_ = MAX;
+}
+
+bool ObLSRebuildStatus::is_valid() const
+{
+  return status_ >= NONE && status_ < MAX;
+}
+
+int ObLSRebuildStatus::set_status(int32_t status)
+{
+  int ret = OB_SUCCESS;
+  if (status < NONE|| status >= MAX) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid status", K(ret), K(status));
+  } else {
+    status_ = static_cast<STATUS>(status);
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObLSRebuildStatus, status_);
+
+/******************ObLSRebuildType*********************/
+ObLSRebuildType::ObLSRebuildType()
+  : type_(NONE)
+{
+}
+
+ObLSRebuildType::ObLSRebuildType(const TYPE &type)
+  : type_(type)
+{
+}
+
+ObLSRebuildType &ObLSRebuildType::operator=(const ObLSRebuildType &type)
+{
+  if (this != &type) {
+    type_ = type.type_;
+  }
+  return *this;
+}
+
+ObLSRebuildType &ObLSRebuildType::operator=(const TYPE &type)
+{
+  type_ = type;
+  return *this;
+}
+
+void ObLSRebuildType::reset()
+{
+  type_ = MAX;
+}
+
+bool ObLSRebuildType::is_valid() const
+{
+  return type_ >= NONE && type_ < MAX;
+}
+
+int ObLSRebuildType::set_type(int32_t type)
+{
+  int ret = OB_SUCCESS;
+  if (type < NONE|| type >= MAX) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", K(ret), K(type));
+  } else {
+    type_ = static_cast<TYPE>(type);
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObLSRebuildType, type_);
+
+/******************ObLSRebuildInfo*********************/
+ObLSRebuildInfo::ObLSRebuildInfo()
+  : status_(),
+    type_()
+{
+}
+
+void ObLSRebuildInfo::reset()
+{
+  status_.reset();
+  type_.reset();
+}
+
+bool ObLSRebuildInfo::is_valid() const
+{
+  return status_.is_valid()
+      && type_.is_valid()
+      && ((ObLSRebuildStatus::NONE == status_ && ObLSRebuildType::NONE == type_)
+          || (ObLSRebuildStatus::NONE != status_ && ObLSRebuildType::NONE != type_));
+}
+
+bool ObLSRebuildInfo::is_in_rebuild() const
+{
+  return ObLSRebuildStatus::NONE != status_;
+}
+
+bool ObLSRebuildInfo::operator ==(const ObLSRebuildInfo &other) const
+{
+  return status_ == other.status_
+      && type_ == other.type_;
+}
+
+OB_SERIALIZE_MEMBER(ObLSRebuildInfo, status_, type_);
 
 }
 }

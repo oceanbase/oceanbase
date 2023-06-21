@@ -76,7 +76,7 @@ private:
   int get_major_parallel_ranges(
       const blocksstable::ObSSTable *first_major_sstable,
       const int64_t tablet_size,
-      const ObTableReadInfo &index_read_info);
+      const ObITableReadInfo &rowkey_read_info);
 private:
   ParallelMergeType parallel_type_;
   common::ObSEArray<blocksstable::ObDatumRange, 16> range_array_;

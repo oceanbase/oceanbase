@@ -17,6 +17,10 @@ namespace oceanbase
 {
 namespace storage
 {
+namespace mds
+{
+class ObMdsTableMergeDagParam;
+}
 struct ObDDLTableMergeDagParam;
 }
 
@@ -35,6 +39,9 @@ public:
       const bool is_emergency = false);
   static int schedule_ddl_table_merge_dag(
       storage::ObDDLTableMergeDagParam &param,
+      const bool is_emergency = false);
+  static int schedule_mds_table_merge_dag(
+      storage::mds::ObMdsTableMergeDagParam &param,
       const bool is_emergency = false);
 };
 

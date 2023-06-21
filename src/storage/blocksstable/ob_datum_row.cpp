@@ -506,6 +506,9 @@ DEF_TO_STRING(ObDatumRow)
       K_(snapshot_version), K_(fast_filter_skipped), K_(have_uncommited_row), K_(group_idx), K_(count), K_(datum_buffer));
   if (NULL != buf && buf_len >= 0) {
     if (NULL != storage_datums_) {
+      J_COMMA();
+      J_NAME("datums");
+      J_COLON();
       J_ARRAY_START();
       for (int64_t i = 0; i < count_; ++i) {
         databuff_printf(buf, buf_len, pos, "col_id=%ld:", i);
@@ -563,7 +566,6 @@ ObStorageDatumUtils::ObStorageDatumUtils()
     cmp_funcs_(),
     hash_funcs_(),
     ext_hash_func_(),
-    allocator_(nullptr),
     is_oracle_mode_(false),
     is_inited_(false)
 {}
@@ -576,7 +578,6 @@ int ObStorageDatumUtils::transform_multi_version_col_desc(const ObIArray<share::
                                                           ObIArray<share::schema::ObColDesc> &mv_col_descs)
 {
   int ret = OB_SUCCESS;
-
   if (OB_UNLIKELY(schema_rowkey_cnt > col_descs.count())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to transform mv col descs", K(ret), K(schema_rowkey_cnt), K(col_descs));
@@ -613,6 +614,7 @@ int ObStorageDatumUtils::init(const ObIArray<share::schema::ObColDesc> &col_desc
 {
   int ret = OB_SUCCESS;
   ObSEArray<share::schema::ObColDesc, 32> mv_col_descs;
+  int64_t mv_rowkey_cnt = 0;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -623,66 +625,103 @@ int ObStorageDatumUtils::init(const ObIArray<share::schema::ObColDesc> &col_desc
     STORAGE_LOG(WARN, "Invalid argument to init storage datum utils", K(ret), K(col_descs), K(schema_rowkey_cnt));
   } else if (OB_FAIL(transform_multi_version_col_desc(col_descs, schema_rowkey_cnt, mv_col_descs))) {
     STORAGE_LOG(WARN, "Failed to transform multi version col descs", K(ret));
-  } else {
-    is_oracle_mode_ = is_oracle_mode;
-    cmp_funcs_.set_allocator(&allocator);
-    hash_funcs_.set_allocator(&allocator);
-    if (OB_FAIL(cmp_funcs_.reserve(mv_col_descs.count()))) {
-      STORAGE_LOG(WARN, "Failed to reserve cmp func array", K(ret));
-    } else if (OB_FAIL(hash_funcs_.reserve(mv_col_descs.count()))) {
-      STORAGE_LOG(WARN, "Failed to reserve hash func array", K(ret));
-    } else {
-      // support column order index until next task done
-      //
-      // we could use the cmp funcs in the basic funcs directlly
-      bool is_null_last = is_oracle_mode_;
-      ObCmpFunc cmp_func;
-      ObHashFunc hash_func;
-      for (int64_t i = 0; OB_SUCC(ret) && i < mv_col_descs.count(); i++) {
-        const share::schema::ObColDesc &col_desc = mv_col_descs.at(i);
-        //TODO @hanhui support desc rowkey
-        bool is_ascending = true || col_desc.col_order_ == ObOrderType::ASC;
-        bool has_lob_header = is_lob_storage(col_desc.col_type_.get_type());
-        sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_desc.col_type_.get_type(),
-                                                                          col_desc.col_type_.get_collation_type(),
-                                                                          col_desc.col_type_.get_scale(),
-                                                                          is_oracle_mode,
-                                                                          has_lob_header);
-        if (OB_UNLIKELY(nullptr == basic_funcs
-                       || nullptr == basic_funcs->null_last_cmp_
-                       || nullptr == basic_funcs->murmur_hash_)) {
-          ret = OB_ERR_SYS;
-          STORAGE_LOG(ERROR, "Unexpected null basic funcs", K(ret), K(col_desc));
-        } else {
-          cmp_func.cmp_func_ = is_null_last ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
-          hash_func.hash_func_ = basic_funcs->murmur_hash_;
-          if (OB_FAIL(hash_funcs_.push_back(hash_func))) {
-            STORAGE_LOG(WARN, "Failed to push back hash func", K(ret), K(i), K(col_desc));
-          } else if (is_ascending) {
-            if (OB_FAIL(cmp_funcs_.push_back(ObStorageDatumCmpFunc(cmp_func)))) {
-              STORAGE_LOG(WARN, "Failed to push back cmp func", K(ret), K(i), K(col_desc));
-            }
-          } else {
-            ret = OB_ERR_SYS;
-            STORAGE_LOG(WARN, "Unsupported desc column order", K(ret), K(col_desc), K(i));
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(ObExtendType, CS_TYPE_BINARY);
-      if (OB_UNLIKELY(nullptr == basic_funcs || nullptr == basic_funcs->murmur_hash_)) {
-        ret = OB_ERR_SYS;
-        STORAGE_LOG(ERROR, "Unexpected null basic funcs for extend type", K(ret));
-      } else {
-        ext_hash_func_.hash_func_ = basic_funcs->murmur_hash_;
-        rowkey_cnt_ = schema_rowkey_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-        col_cnt_ = mv_col_descs.count();
-        allocator_ = &allocator;
-        is_inited_ = true;
-      }
-    }
+  } else if (FALSE_IT(mv_rowkey_cnt = schema_rowkey_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
+  } else if (OB_FAIL(cmp_funcs_.init(mv_rowkey_cnt, allocator))) {
+    STORAGE_LOG(WARN, "Failed to reserve cmp func array", K(ret));
+  } else if (OB_FAIL(hash_funcs_.init(mv_rowkey_cnt, allocator))) {
+    STORAGE_LOG(WARN, "Failed to reserve hash func array", K(ret));
+  } else if (OB_FAIL(inner_init(mv_col_descs, mv_rowkey_cnt, is_oracle_mode))) {
+    STORAGE_LOG(WARN, "Failed to inner init datum utils", K(ret), K(mv_col_descs), K(mv_rowkey_cnt));
+  }
 
+  return ret;
+}
+
+int ObStorageDatumUtils::init(const common::ObIArray<share::schema::ObColDesc> &col_descs,
+                              const int64_t schema_rowkey_cnt,
+                              const bool is_oracle_mode,
+                              const int64_t arr_buf_len,
+                              char *arr_buf)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<share::schema::ObColDesc, 32> mv_col_descs;
+  int64_t pos = 0;
+  int64_t mv_rowkey_cnt = 0;
+
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "ObStorageDatumUtils init twice", K(ret), K(*this));
+  } else if (OB_UNLIKELY(schema_rowkey_cnt < 0 || schema_rowkey_cnt > OB_MAX_ROWKEY_COLUMN_NUMBER
+                  || schema_rowkey_cnt > col_descs.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to init storage datum utils", K(ret), K(col_descs), K(schema_rowkey_cnt));
+  } else if (OB_FAIL(transform_multi_version_col_desc(col_descs, schema_rowkey_cnt, mv_col_descs))) {
+    STORAGE_LOG(WARN, "Failed to transform multi version col descs", K(ret));
+  } else if (FALSE_IT(mv_rowkey_cnt = schema_rowkey_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
+  } else if (OB_FAIL(cmp_funcs_.init(mv_rowkey_cnt, arr_buf_len, arr_buf, pos))) {
+    STORAGE_LOG(WARN, "Failed to init compare function array", K(ret));
+  } else if (OB_FAIL(hash_funcs_.init(mv_rowkey_cnt, arr_buf_len, arr_buf, pos))) {
+    STORAGE_LOG(WARN, "Failed to init hash function array", K(ret));
+  } else if (OB_FAIL(inner_init(mv_col_descs, mv_rowkey_cnt, is_oracle_mode))) {
+    STORAGE_LOG(WARN, "Failed to inner init datum utils", K(ret), K(mv_col_descs), K(mv_rowkey_cnt));
+  }
+  return ret;
+}
+
+int ObStorageDatumUtils::inner_init(
+    const common::ObIArray<share::schema::ObColDesc> &mv_col_descs,
+    const int64_t mv_rowkey_col_cnt,
+    const bool is_oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  is_oracle_mode_ = is_oracle_mode;
+  // support column order index until next task done
+  //
+  // we could use the cmp funcs in the basic funcs directlly
+  bool is_null_last = is_oracle_mode_;
+  ObCmpFunc cmp_func;
+  ObHashFunc hash_func;
+  for (int64_t i = 0; OB_SUCC(ret) && i < mv_rowkey_col_cnt; i++) {
+    const share::schema::ObColDesc &col_desc = mv_col_descs.at(i);
+    //TODO @hanhui support desc rowkey
+    bool is_ascending = true || col_desc.col_order_ == ObOrderType::ASC;
+    bool has_lob_header = is_lob_storage(col_desc.col_type_.get_type());
+    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_desc.col_type_.get_type(),
+                                                                      col_desc.col_type_.get_collation_type(),
+                                                                      col_desc.col_type_.get_scale(),
+                                                                      is_oracle_mode,
+                                                                      has_lob_header);
+    if (OB_UNLIKELY(nullptr == basic_funcs
+                    || nullptr == basic_funcs->null_last_cmp_
+                    || nullptr == basic_funcs->murmur_hash_)) {
+      ret = OB_ERR_SYS;
+      STORAGE_LOG(ERROR, "Unexpected null basic funcs", K(ret), K(col_desc));
+    } else {
+      cmp_func.cmp_func_ = is_null_last ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
+      hash_func.hash_func_ = basic_funcs->murmur_hash_;
+      if (OB_FAIL(hash_funcs_.push_back(hash_func))) {
+        STORAGE_LOG(WARN, "Failed to push back hash func", K(ret), K(i), K(col_desc));
+      } else if (is_ascending) {
+        if (OB_FAIL(cmp_funcs_.push_back(ObStorageDatumCmpFunc(cmp_func)))) {
+          STORAGE_LOG(WARN, "Failed to push back cmp func", K(ret), K(i), K(col_desc));
+        }
+      } else {
+        ret = OB_ERR_SYS;
+        STORAGE_LOG(WARN, "Unsupported desc column order", K(ret), K(col_desc), K(i));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(ObExtendType, CS_TYPE_BINARY);
+    if (OB_UNLIKELY(nullptr == basic_funcs || nullptr == basic_funcs->murmur_hash_)) {
+      ret = OB_ERR_SYS;
+      STORAGE_LOG(ERROR, "Unexpected null basic funcs for extend type", K(ret));
+    } else {
+      ext_hash_func_.hash_func_ = basic_funcs->murmur_hash_;
+      rowkey_cnt_ = mv_rowkey_col_cnt;
+      col_cnt_ = mv_col_descs.count();
+      is_inited_ = true;
+    }
   }
 
   return ret;
@@ -694,9 +733,13 @@ void ObStorageDatumUtils::reset()
   col_cnt_ = 0;
   cmp_funcs_.reset();
   hash_funcs_.reset();
-  allocator_ = nullptr;
   ext_hash_func_.hash_func_ = nullptr;
   is_inited_ = false;
+}
+
+int64_t ObStorageDatumUtils::get_deep_copy_size() const
+{
+  return cmp_funcs_.get_deep_copy_size() + hash_funcs_.get_deep_copy_size();
 }
 
 int ObGhostRowUtil::is_ghost_row(

@@ -652,14 +652,14 @@ int ObFreezer::freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> 
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_UNLIKELY(!enable_)) {
+    ret = OB_NOT_RUNNING;
     LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
   } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
     // no need freeze now, a ls freeze is running or will be running
     ret = OB_SUCCESS;
-    FLOG_INFO("[Freezer] ls freeze is running, no need freeze again", K(ret), K(ls_id), K(tablet_id));
+    LOG_INFO("[Freezer] ls freeze is running, no need freeze again", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(set_freeze_flag_without_inc_freeze_clock())) {
-    ret = OB_SUCCESS;
-    FLOG_INFO("[Freezer] freeze is running", K(ret), K(ls_id), K(tablet_id));
+    LOG_INFO("[Freezer] freeze is running", K(ret), K(ls_id), K(tablet_id));
   } else {
     // succeed to set freeze flag
     if (OB_FAIL(get_ls_weak_read_scn(freeze_snapshot_version))) {
@@ -679,8 +679,8 @@ int ObFreezer::freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> 
                                                    false/*is_force*/))) {
       TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
     } else if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
-                                                       handle,
-                                                       ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+                                                       handle, 0,
+                                                       ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
       TRANS_LOG(WARN, "[Freezer] fail to get tablet", K(ret), K(ls_id), K(tablet_id));
       stat_.add_diagnose_info("fail to get tablet");
     } else if (FALSE_IT(tablet = handle.get_obj())) {
@@ -765,8 +765,8 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
                                                    true/*is_force*/))) {
       TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
     } else if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
-                                                       handle,
-                                                       ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+                                                       handle, 0,
+                                                       ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
       TRANS_LOG(WARN, "[Freezer] fail to get tablet for freeze", K(ret), K(ls_id), K(tablet_id));
       stat_.add_diagnose_info("fail to get tablet");
     } else if (FALSE_IT(tablet = handle.get_obj())) {
@@ -927,8 +927,8 @@ int ObFreezer::tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id
                                                    false/*is_force*/))) {
       TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
     } else if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
-                                                  handle,
-                                                  ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+                                                  handle, 0,
+                                                  ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
       TRANS_LOG(WARN, "[Freezer] fail to get tablet", K(ret), K(ls_id), K(tablet_id));
       stat_.add_diagnose_info("fail to get tablet");
     } else if (FALSE_IT(tablet = handle.get_obj())) {
@@ -1051,7 +1051,8 @@ int ObFreezer::batch_tablet_freeze_(const ObIArray<ObTabletID> &tablet_ids, ObFu
     ObTabletMemtableMgr *memtable_mgr = nullptr;
     if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
                                                 handle,
-                                                ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+                                                ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT,
+                                                ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
       TRANS_LOG(WARN, "[Freezer] fail to get tablet", K(ret), K(ls_id), K(tablet_id));
       stat_.add_diagnose_info("fail to get tablet");
     } else if (FALSE_IT(tablet = handle.get_obj())) {
@@ -1228,12 +1229,13 @@ int ObFreezer::submit_log_for_freeze()
         if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
           TRANS_LOG(WARN, "[Freezer] failed to traverse trans ctx to submit redo log", K(ret),
                     K(ls_id), K(cost_time), K(fail_tx_id));
-          ADD_SUSPECT_INFO(MINI_MERGE,
-                           ls_id, tablet_id,
-                           "traverse_trans_to_submit_redo_log failed",
-                           K(ret),
-                           K(fail_tx_id));
           stat_.add_diagnose_info("traverse_trans_to_submit_redo_log failed");
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MINI_MERGE,
+                          ls_id, tablet_id, ObSuspectInfoType::SUSPECT_SUBMIT_LOG_FOR_FREEZE,
+                          static_cast<int64_t>(ret), fail_tx_id.get_id()))) {
+            TRANS_LOG(WARN, "failed to add suspect info", K(tmp_ret));
+          }
         }
       }
     }
@@ -1383,9 +1385,8 @@ int ObFreezer::create_memtable_if_no_active_memtable(ObTablet *tablet)
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(last_frozen_memtable)) {
       schema_version = last_frozen_memtable->get_max_schema_version();
-    } else if (OB_FAIL(tablet->get_schema_version_from_storage_schema(schema_version))) {
-      LOG_WARN("[Freezer] failed to get schema version", K(ret), K(ls_id), K(tablet_id));
     } else {
+      schema_version = tablet->get_tablet_meta().max_sync_storage_schema_version_;
       //do nothing
     }
     // create new memtable
@@ -1438,8 +1439,7 @@ int ObFreezer::set_freeze_flag_without_inc_freeze_clock()
   do {
     old_v = ATOMIC_LOAD(&freeze_flag_);
     if (is_freeze(old_v)) {
-      ret = OB_ENTRY_EXIST;
-      TRANS_LOG(WARN, "[Freezer] freeze is running!", K(ret), K(ls_id));
+      ret = OB_EAGAIN;
       break;
     }
     new_v = old_v | (1 << 31);
@@ -1461,7 +1461,7 @@ int ObFreezer::set_freeze_flag()
   do {
     old_v = ATOMIC_LOAD(&freeze_flag_);
     if (is_freeze(old_v)) {
-      ret = OB_ENTRY_EXIST;
+      ret = OB_EAGAIN;
       TRANS_LOG(WARN, "[Freezer] freeze is running!", K(ret), K(ls_id));
       break;
     }
@@ -1622,7 +1622,7 @@ int ObFreezer::get_newest_clog_checkpoint_scn(const ObTabletID &tablet_id,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret));
   } else if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
-      handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+      handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     TRANS_LOG(WARN, "[Freezer] fail to get tablet", K(ret), K(ls_id), K(tablet_id));
   } else {
     clog_checkpoint_scn = handle.get_obj()->get_tablet_meta().clog_checkpoint_scn_;
@@ -1645,7 +1645,7 @@ int ObFreezer::get_newest_snapshot_version(const ObTabletID &tablet_id,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret));
   } else if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
-      handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+      handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     TRANS_LOG(WARN, "[Freezer] fail to get tablet", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(snapshot_version.convert_for_tx(handle.get_obj()->get_snapshot_version()))) {
     TRANS_LOG(WARN, "[Freezer] fail to convert from ts", K(ret), K(ls_id), K(tablet_id));

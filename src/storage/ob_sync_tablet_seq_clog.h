@@ -19,6 +19,8 @@
 #include "share/ob_ls_id.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "storage/ddl/ob_ddl_clog.h"
+#include "storage/multi_data_source/mds_ctx.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 
 namespace oceanbase
 {
@@ -47,14 +49,13 @@ private:
   uint64_t autoinc_seq_;
 };
 
-class ObSyncTabletSeqLogCb : public logservice::AppendCb
+class ObSyncTabletSeqMdsLogCb : public logservice::AppendCb
 {
 public:
-  ObSyncTabletSeqLogCb()
-  : is_inited_(false), state_(ObDDLClogState::STATE_INIT), the_other_release_this_(false),
-    ret_code_(OB_SUCCESS), ls_id_(), tablet_id_(), new_autoinc_seq_(0) {}
-  int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const uint64_t new_autoinc_seq);
-  virtual ~ObSyncTabletSeqLogCb() = default;
+  ObSyncTabletSeqMdsLogCb();
+  virtual ~ObSyncTabletSeqMdsLogCb() = default;
+
+  int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t writer_id);
   virtual int on_success() override;
   virtual int on_failure() override;
   void try_release();
@@ -62,14 +63,13 @@ public:
   inline bool is_failed() const { return state_ == ObDDLClogState::STATE_FAILED; }
   inline bool is_finished() const { return state_ != ObDDLClogState::STATE_INIT; }
   inline int get_ret_code() const { return ret_code_; }
+  mds::MdsCtx &get_mds_ctx() { return mds_ctx_; }
 private:
-  bool is_inited_;
   ObDDLClogState state_;
   bool the_other_release_this_;
   int ret_code_;
-  share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
-  uint64_t new_autoinc_seq_;
+  ObTabletHandle tablet_handle_;
+  mds::MdsCtx mds_ctx_;
 };
 
 } // namespace storage

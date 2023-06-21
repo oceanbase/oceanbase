@@ -21,7 +21,6 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/time/ob_time_utility.h"
-#include "share/backup/ob_backup_manager.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "share/ob_tablet_checksum_operator.h"

@@ -14,6 +14,8 @@
 #include "ob_backup_clean_ls_task_mgr.h"
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_backup_clean_struct.h"
+#include "ob_backup_schedule_task.h"
+#include "ob_backup_task_scheduler.h"
 
 namespace oceanbase
 {
@@ -29,7 +31,6 @@ ObBackupCleanLSTaskMgr::ObBackupCleanLSTaskMgr()
    ls_attr_(nullptr),
    task_scheduler_(nullptr),
    sql_proxy_(nullptr),
-   lease_service_(nullptr),
    backup_service_(nullptr) 
 {
 }
@@ -43,8 +44,7 @@ int ObBackupCleanLSTaskMgr::init(
     ObBackupCleanLSTaskAttr &ls_attr,
     ObBackupTaskScheduler &task_scheduler,
     common::ObISQLClient &sql_proxy,
-    ObBackupLeaseService &lease_service,
-    ObBackupService &backup_service)
+    ObBackupCleanService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -58,7 +58,6 @@ int ObBackupCleanLSTaskMgr::init(
     ls_attr_ = &ls_attr;
     task_scheduler_ = &task_scheduler;
     sql_proxy_ = &sql_proxy;
-    lease_service_ = &lease_service;
     backup_service_ = &backup_service; 
     is_inited_ = true;
   }
@@ -116,7 +115,7 @@ int ObBackupCleanLSTaskMgr::add_task_()
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*task_attr_, *ls_attr_))) {
     LOG_WARN("failed to build task", K(ret), KP(task_attr_), KP(ls_attr_));
-  } else if (OB_FAIL(advance_ls_task_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
+  } else if (OB_FAIL(advance_ls_task_status(*backup_service_, *sql_proxy_, *ls_attr_, next_status))) {
     LOG_WARN("failed to advance ls task status", K(ret), K(*task_attr_));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
     LOG_WARN("failed to add task", K(ret), K(*task_attr_), K(task));
@@ -127,7 +126,7 @@ int ObBackupCleanLSTaskMgr::add_task_()
 }
 
 int ObBackupCleanLSTaskMgr::advance_ls_task_status(
-    ObBackupLeaseService &lease_service,
+    ObBackupCleanService &backup_service,
     common::ObISQLClient &sql_proxy, 
     const ObBackupCleanLSTaskAttr &ls_attr, 
     const ObBackupTaskStatus &next_status, 
@@ -138,8 +137,8 @@ int ObBackupCleanLSTaskMgr::advance_ls_task_status(
   if (!next_status.is_valid() || !ls_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid next_status or invalid ls_attr", K(ret), K(next_status), K(ls_attr));
-  } else if (OB_FAIL(lease_service.check_lease())) {
-    LOG_WARN("failed to check lease", K(ret));
+  } else if (OB_FAIL(backup_service.check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(ObBackupCleanLSTaskOperator::advance_ls_task_status(sql_proxy, ls_attr, next_status, result, end_ts))) {
     LOG_WARN("failed to advance log stream status", K(ret), K(ls_attr), K(result), K(next_status));
   }
@@ -147,7 +146,7 @@ int ObBackupCleanLSTaskMgr::advance_ls_task_status(
 }
 
 int ObBackupCleanLSTaskMgr::redo_ls_task(
-    ObBackupLeaseService &lease_service,
+    ObBackupCleanService &backup_service,
     common::ObISQLClient &sql_proxy, 
     const ObBackupCleanLSTaskAttr &ls_attr,
     const int64_t retry_id)
@@ -156,8 +155,8 @@ int ObBackupCleanLSTaskMgr::redo_ls_task(
   if (!ls_attr.is_valid() || retry_id < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_attr));
-  } else if (OB_FAIL(lease_service.check_lease())) {
-    LOG_WARN("failed to check lease", K(ret));
+  } else if (OB_FAIL(backup_service.check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(ObBackupCleanLSTaskOperator::redo_ls_task(sql_proxy, ls_attr, retry_id))) {
     LOG_WARN("failed to redo ls task", K(ret), K(ls_attr));
   } 
@@ -172,7 +171,7 @@ int ObBackupCleanLSTaskMgr::finish_(int64_t &finish_cnt)
   } else if (ObBackupUtils::is_need_retry_error(ls_attr_->result_)) {
     int64_t cur_ts = ObTimeUtility::current_time();
     if (cur_ts > ls_attr_->start_ts_ + OB_BACKUP_RETRY_TIME_INTERVAL) {
-      if (OB_FAIL(redo_ls_task(*lease_service_, *sql_proxy_, *ls_attr_, ls_attr_->retry_id_ + 1/*increase retry id*/))) {
+      if (OB_FAIL(redo_ls_task(*backup_service_, *sql_proxy_, *ls_attr_, ls_attr_->retry_id_ + 1/*increase retry id*/))) {
         LOG_WARN("failed to redo ls task", K(ret), KP(ls_attr_));
       } else {
         backup_service_->wakeup();
@@ -185,15 +184,15 @@ int ObBackupCleanLSTaskMgr::finish_(int64_t &finish_cnt)
 }
 
 int ObBackupCleanLSTaskMgr::statistic_info(
-    ObBackupLeaseService &lease_service, 
+    ObBackupCleanService &backup_service,
     common::ObISQLClient &sql_proxy, 
     const ObBackupCleanLSTaskAttr &ls_attr)
 {
   int ret = OB_SUCCESS;
   ObBackupCleanStats stats = ls_attr.stats_;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(lease_service.check_lease())) {
-    LOG_WARN("failed to check lease", K(ret));
+  } else if (OB_FAIL(backup_service.check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(ObBackupCleanLSTaskOperator::update_stats_(
       sql_proxy, ls_attr.task_id_, ls_attr.tenant_id_, ls_attr.ls_id_, stats))) {
     LOG_WARN("failed to update stats", K(ret));
@@ -223,7 +222,7 @@ int ObBackupCleanLSTaskMgr::cancel(int64_t &finish_cnt)
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(advance_ls_task_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status, OB_CANCELED, end_ts))) {
+  } else if (OB_FAIL(advance_ls_task_status(*backup_service_, *sql_proxy_, *ls_attr_, next_status, OB_CANCELED, end_ts))) {
     LOG_WARN("failed to advance status", K(ret), K(*ls_attr_), K(next_status));
   } else {
     ++finish_cnt;

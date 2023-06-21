@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define UNIITTEST_DEBUG
+#define UNITTEST_DEBUG
 #include "share/ob_occam_time_guard.h"
 #include <gtest/gtest.h>
 #include <thread>
@@ -101,6 +101,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_ob_occam_time_guard.log");
   oceanbase::common::ObLogger &logger = oceanbase::common::ObLogger::get_logger();
+  oceanbase::common::ObTscTimestamp::get_instance().init();
   logger.set_file_name("test_ob_occam_time_guard.log", false);
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   testing::InitGoogleTest(&argc, argv);

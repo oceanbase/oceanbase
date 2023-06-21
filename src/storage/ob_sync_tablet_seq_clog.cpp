@@ -14,6 +14,7 @@
 
 #include "lib/objectpool/ob_concurrency_objpool.h"
 #include "lib/utility/serialization.h"
+#include "share/ob_tablet_autoincrement_param.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/tablet/ob_tablet.h"
@@ -92,100 +93,61 @@ int64_t ObSyncTabletSeqLog::get_serialize_size() const
   return size;
 }
 
-int ObSyncTabletSeqLogCb::init(const ObLSID &ls_id,
-                               const ObTabletID &tablet_id, 
-                               const uint64_t new_autoinc_seq)
+
+ObSyncTabletSeqMdsLogCb::ObSyncTabletSeqMdsLogCb()
+  : state_(ObDDLClogState::STATE_INIT),
+    the_other_release_this_(false),
+    ret_code_(OB_SUCCESS),
+    tablet_handle_(),
+    mds_ctx_(mds::MdsWriter(mds::WriterType::AUTO_INC_SEQ))
+{
+}
+
+int ObSyncTabletSeqMdsLogCb::init(const ObLSID &ls_id, const ObTabletID &tablet_id, const int64_t writer_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K(is_inited_));
+  ObLSHandle ls_handle;
+  ObLSService *ls_srv = MTL(ObLSService *);
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id or tablet id", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls handle failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is unexpected null", K(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id,
+                                                    tablet_handle_,
+                                                    0,
+                                                    ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("failed to get tablet", K(ls_id), K(tablet_id));
   } else {
-    ls_id_ = ls_id;
-    tablet_id_ = tablet_id;
-    new_autoinc_seq_ = new_autoinc_seq;
-    is_inited_ = true;
+    mds_ctx_.set_writer(mds::MdsWriter(mds::WriterType::AUTO_INC_SEQ, writer_id));
   }
   return ret;
 }
 
-int ObSyncTabletSeqLogCb::on_success()
+int ObSyncTabletSeqMdsLogCb::on_success()
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObTabletHandle tablet_handle;
-  ObTabletAutoincSeq autoinc_seq;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is unexpected null", K(ret));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      ob_abort();
-    }
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_autoinc_seq(autoinc_seq))) {
-    LOG_WARN("fail to get latest autoinc seq", K(ret));
-  } else if (OB_FAIL(autoinc_seq.set_autoinc_seq_value(new_autoinc_seq_))) {
-    LOG_WARN("failed to set autoinc seq value", K(ret), K(new_autoinc_seq_));
-  } else if (OB_FAIL(tablet_handle.get_obj()->save_multi_source_data_unit(&autoinc_seq,
-                                                                          __get_scn(),
-                                                                          false/*for_replay*/,
-                                                                          memtable::MemtableRefOp::DEC_REF,
-                                                                          true/*is_callback*/))) {
-    LOG_WARN("failed to save autoinc seq", K(ret), K(autoinc_seq));
-  }
   ret_code_ = ret;
   state_ = STATE_SUCCESS;
+  mds_ctx_.single_log_commit(__get_scn(), __get_scn());
   try_release();
-  return OB_SUCCESS;
+  return ret;
 }
 
-int ObSyncTabletSeqLogCb::on_failure()
+int ObSyncTabletSeqMdsLogCb::on_failure()
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObTabletHandle tablet_handle;
-  ObTabletAutoincSeq autoinc_seq;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is unexpected null", K(ret));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      ob_abort();
-    }
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_autoinc_seq(autoinc_seq))) {
-    LOG_WARN("fail to get latest autoinc seq", K(ret));
-  } else if (OB_FAIL(tablet_handle.get_obj()->save_multi_source_data_unit(&autoinc_seq,
-                                                                          SCN::invalid_scn()/*scn*/,
-                                                                          false/*for_replay*/,
-                                                                          memtable::MemtableRefOp::DEC_REF,
-                                                                          true/*is_callback*/))) {
-    LOG_WARN("failed to save autoinc seq", K(ret), K(autoinc_seq));
-  }
   ret_code_ = ret;
   state_ = STATE_FAILED;
+  mds_ctx_.single_log_abort();
   try_release();
-  return OB_SUCCESS;
+  return ret;
 }
 
-void ObSyncTabletSeqLogCb::try_release()
+void ObSyncTabletSeqMdsLogCb::try_release()
 {
   if (ATOMIC_BCAS(&the_other_release_this_, false, true)) {
   } else {

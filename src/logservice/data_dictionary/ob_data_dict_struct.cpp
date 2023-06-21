@@ -388,10 +388,32 @@ int ObDictTenantMeta::incremental_data_update(const share::ObLSAttr &ls_attr)
   if (OB_UNLIKELY(! ls_attr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     DDLOG(WARN, "ls attr is invalid", KR(ret), K(ls_attr));
-  } else if (share::is_ls_create_end_op(ls_attr.get_ls_operatin_type())) {
+  } else if (share::is_ls_create_end_op(ls_attr.get_ls_operation_type())) {
     if (OB_FAIL(ls_arr_.push_back(ls_attr.get_ls_id()))) {
       DDLOG(WARN, "ls_arr_ push_back failed", KR(ret), K(ls_attr), K(ls_arr_));
+    } else {
+      DDLOG(TRACE, "ls_arr_ push back succ", K(ls_attr), K(ls_arr_));
     }
+  } else if (share::is_ls_drop_end_op(ls_attr.get_ls_operation_type())) {
+    int64_t ls_idx = -1;
+    const ObLSID &ls_id = ls_attr.get_ls_id();
+    ARRAY_FOREACH(ls_arr_, idx) {
+      const ObLSID &cur_ls_id = ls_arr_.at(idx);
+      // assume there is no duplicate ls_id in ls_arr_
+      if (cur_ls_id == ls_id) {
+        ls_idx = idx;
+        break;
+      }
+    }
+
+    if (-1 != ls_idx) {
+      if (OB_FAIL(ls_arr_.remove(ls_idx))) {
+        DDLOG(ERROR, "remove ls from ls_arr failed", K(ls_idx), K(ls_arr_), K(ls_attr));
+      } else {
+        DDLOG(TRACE, "remove ls from ls_arr finished", K(ls_idx), K(ls_arr_), K(ls_attr));
+      }
+    }
+
   } else {}
 
   return ret;

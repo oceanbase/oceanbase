@@ -18,7 +18,6 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_locality_parser.h"
 #include "share/ob_time_utility2.h"
-#include "share/backup/ob_log_archive_backup_info_mgr.h"
 #include "share/ob_encryption_util.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
@@ -2550,7 +2549,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
             stmt->set_is_preview(false);
           } else {
             if (T_TABLE_LIST == node->type_) {
-      // TODO table list restore not support, fix this 4.1
+      // TODO table list restore not support, fix this 4.3
               ret = OB_NOT_SUPPORTED;
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "table list restore is");
               // store database_name/table_name with case sensitive.
@@ -3788,6 +3787,45 @@ int ObBackupDatabaseResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("Failed to set param", K(ret), K(tenant_id), K(incremental));
     } else {
       stmt_ = stmt;
+    }
+  }
+  return ret;
+}
+
+int ObCancelRestoreResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_CANCEL_RESTORE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_CANCEL_RESTORE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(1 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cancel restore is not supported under cluster version 4_2_0_0", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "cancel restore is");
+  } else {
+    ObCancelRestoreStmt *stmt = NULL;
+    if (OB_ISNULL(stmt = create_stmt<ObCancelRestoreStmt>())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to create stmt", K(ret));
+    } else if (OB_UNLIKELY(T_IDENT != parse_tree.children_[0]->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node", K(ret));
+    } else {
+      ObString tenant_name;
+      tenant_name.assign_ptr(parse_tree.children_[0]->str_value_, parse_tree.children_[0]->str_len_);
+      stmt->get_drop_tenant_arg().exec_tenant_id_ = OB_SYS_TENANT_ID;
+      stmt->get_drop_tenant_arg().if_exist_ = false;
+      stmt->get_drop_tenant_arg().force_drop_ = true;
+      stmt->get_drop_tenant_arg().delay_to_drop_ = false;
+      stmt->get_drop_tenant_arg().open_recyclebin_ = false;
+      stmt->get_drop_tenant_arg().tenant_name_ = tenant_name;
+      stmt->get_drop_tenant_arg().drop_only_in_restore_ = true;
     }
   }
   return ret;

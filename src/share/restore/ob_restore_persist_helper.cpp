@@ -562,7 +562,7 @@ int ObHisRestoreJobPersistInfo::fill_dml(ObDMLSqlSplicer &dml) const
   ADD_COMMON_COLUMN_DML_WITH_VALUE(status, status_str);
 
   ADD_LONG_STR_COLUMN_DML(description);
-  ADD_LONG_STR_COLUMN_DML(comment);
+  ADD_FIXED_STR_COLUMN_DML(comment);
   
   return ret;
 }

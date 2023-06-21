@@ -17,6 +17,8 @@
 #include "ob_i_table.h"
 #include "compaction/ob_i_compaction_filter.h"
 #include "compaction/ob_compaction_util.h"
+#include "share/scheduler/ob_dag_scheduler_config.h"
+#include "storage/compaction/ob_compaction_diagnose.h"
 
 namespace oceanbase
 {
@@ -107,7 +109,32 @@ public:
   BasicInfo info_[ARRAY_IDX_MAX];
 };
 
-struct ObSSTableMergeInfo final
+struct PartTableInfo {
+  PartTableInfo()
+  : is_major_merge_(false),
+    table_cnt_(0),
+    snapshot_version_(0),
+    start_scn_(0),
+    end_scn_(0)
+  {}
+  void reset()
+  {
+    is_major_merge_ = false;
+    table_cnt_ = 0;
+    snapshot_version_ = 0;
+    start_scn_ = 0;
+    end_scn_ = 0;
+  }
+  void fill_info(char *buf, const int64_t buf_len) const;
+  TO_STRING_KV(K_(is_major_merge), K_(table_cnt), K_(snapshot_version), K_(start_scn), K_(end_scn));
+  bool is_major_merge_;
+  int32_t table_cnt_;
+  int64_t snapshot_version_;
+  int64_t start_scn_;
+  int64_t end_scn_;
+};
+
+struct ObSSTableMergeInfo final : public compaction::ObIDiagnoseInfo
 {
 public:
   ObSSTableMergeInfo();
@@ -124,10 +151,16 @@ public:
                K_(new_micro_count_in_new_macro), K_(multiplexed_micro_count_in_new_macro),
                K_(total_row_count), K_(incremental_row_count), K_(new_flush_data_rate),
                K_(is_full_merge), K_(progressive_merge_round), K_(progressive_merge_num),
-               K_(concurrent_cnt), K_(parallel_merge_info), K_(filter_statistics), K_(participant_table_str),
+               K_(concurrent_cnt), K_(dag_ret), K_(task_id), K_(retry_cnt), K_(add_time),
+               K_(parallel_merge_info), K_(filter_statistics), K_(participant_table_info),
                K_(macro_id_list), K_(comment));
+
+  int fill_comment(char *buf, const int64_t buf_len) const;
+
+  virtual void shallow_copy(ObIDiagnoseInfo *other) override;
+  static const int64_t MERGE_INFO_COMMENT_LENGTH = 96;
+
 public:
-  uint64_t tenant_id_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int64_t compaction_scn_; // major_scn OR minor end_log_ts
@@ -151,11 +184,18 @@ public:
   int64_t progressive_merge_num_;
   int64_t concurrent_cnt_;
   int64_t macro_bloomfilter_count_;
+  // from dag warn info
+  int64_t dag_ret_;
+  common::ObCurTraceId::TraceId task_id_;
+  int64_t retry_cnt_;
+  // from suspect info
+  int64_t add_time_;
+  //
   ObParalleMergeInfo parallel_merge_info_;
   compaction::ObICompactionFilter::ObFilterStatistics filter_statistics_;
-  char participant_table_str_[common::OB_PART_TABLE_INFO_LENGTH];
+  PartTableInfo participant_table_info_;
   char macro_id_list_[common::OB_MACRO_ID_INFO_LENGTH];
-  char comment_[common::OB_COMPACTION_EVENT_STR_LENGTH];
+  char comment_[MERGE_INFO_COMMENT_LENGTH];
 };
 
 }  // end namespace storage

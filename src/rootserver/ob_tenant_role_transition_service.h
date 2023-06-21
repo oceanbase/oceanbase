@@ -55,6 +55,17 @@ public:
   static const char* const RESTORE_TO_STANDBY_LOG_MOD_STR;
 };
 
+/**
+  * @description:
+  *    Find the ls_id that are not in the array_r from array_l, and refresh the location of these ls
+  * @param[in] array_l
+  * @param[in] array_r
+  * @param[in] tenant_id
+  * @return return code
+  */
+template <typename ARRAY>
+int do_nonblock_renew(const ARRAY &array_l, const ARRAY &array_r, const uint64_t tenant_id);
+
 /*description:
  * for primary to standby and standby to primary
  */
@@ -81,6 +92,11 @@ struct LSAccessModeInfo
            const int64_t mode_version, const palf::AccessMode &access_mode);
   int assign(const LSAccessModeInfo &other);
   void reset();
+  share::ObLSID get_ls_id() const
+  {
+    return ls_id_;
+  }
+
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(leader_addr),
                K_(mode_version), K_(access_mode));
   uint64_t tenant_id_;
@@ -104,6 +120,9 @@ public:
   int do_switch_access_mode_to_append(const share::ObAllTenantInfo &tenant_info,
                              const share::ObTenantRole &target_tenant_role);
   int do_switch_access_mode_to_raw_rw(const share::ObAllTenantInfo &tenant_info);
+  int get_tenant_ref_scn_(share::SCN &ref_scn);
+  //before primary tenant switchover to standby, must set sys LS's sync_scn to lastest
+  int report_sys_ls_sync_scn_();
   void set_switchover_epoch(const int64_t switchover_epoch)
   {
     switchover_epoch_ = switchover_epoch;
@@ -155,20 +174,6 @@ public:
 
   void broadcast_tenant_info(const char* const log_mode);
 
-private:
-  int do_failover_to_primary_(const share::ObAllTenantInfo &tenant_info);
-  int do_prepare_flashback_(share::ObAllTenantInfo &tenant_info);
-  int do_flashback_(const share::ObAllTenantInfo &tenant_info);
-  int change_ls_access_mode_(palf::AccessMode target_access_mode,
-                             const share::SCN &ref_scn);
-  int update_tenant_stat_info_();
-  int get_ls_access_mode_(ObIArray<LSAccessModeInfo> &ls_access_info);
-  int do_change_ls_access_mode_(const ObIArray<LSAccessModeInfo> &ls_access_info,
-                                palf::AccessMode target_access_mode,
-                                const share::SCN &ref_scn);
-  int do_switch_access_mode_to_flashback(
-    const share::ObAllTenantInfo &tenant_info);
-
   /**
    * @description:
    *    get specified ls list sync_scn by rpc, which is named as checkpoint
@@ -178,12 +183,25 @@ private:
    * @param[out] checkpoints switchover checkpoint
    * @return return code
    */
-  int get_checkpoints_by_rpc_(
+  static int get_checkpoints_by_rpc(
       const uint64_t tenant_id,
       const share::ObLSStatusInfoIArray &status_info_array,
       const bool get_latest_scn,
       ObIArray<obrpc::ObCheckpoint> &checkpoints
   );
+
+private:
+  int do_failover_to_primary_(const share::ObAllTenantInfo &tenant_info);
+  int do_prepare_flashback_(share::ObAllTenantInfo &tenant_info);
+  int do_flashback_();
+  int change_ls_access_mode_(palf::AccessMode target_access_mode,
+                             const share::SCN &ref_scn);
+  int get_ls_access_mode_(ObIArray<LSAccessModeInfo> &ls_access_info);
+  int do_change_ls_access_mode_(const ObIArray<LSAccessModeInfo> &ls_access_info,
+                                palf::AccessMode target_access_mode,
+                                const share::SCN &ref_scn);
+  int do_switch_access_mode_to_flashback(
+    const share::ObAllTenantInfo &tenant_info);
 
   /**
    * @description:
@@ -221,6 +239,13 @@ private:
 
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
+  int check_and_update_sys_ls_recovery_stat_in_switchover_(
+      const uint64_t tenant_id,
+      const bool switch_to_primary,
+      ObMySQLTransaction &trans,
+      const SCN &max_sys_ls_sync_scn/* SYS LS real max sync scn */,
+      const SCN &target_tenant_sync_scn/* tenant target sync scn in switchover */);
+  int wait_ls_balance_task_finish_();
 
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;

@@ -48,7 +48,10 @@ private:
     POINTER_REF,
     IN_MEMORY,
     TABLET_REF,
-    WASH_SCORE
+    WASH_SCORE,
+    TABLET_PTR,
+    INITIAL_STATE,
+    OLD_CHAIN
   };
 public:
   ObAllVirtualTabletPtr();
@@ -63,18 +66,19 @@ private:
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
   // 释放上一个租户的资源
   virtual void release_last_tenant() override;
-
   int get_next_tablet_pointer(
       ObTabletMapKey &tablet_key,
       ObTabletPointerHandle &pointer_handle,
       ObTabletHandle &tablet_handle);
 
 private:
-  static const int64_t ADDRESS_LEN = 128;
+  static const int64_t STR_LEN = 128;
 private:
   common::ObAddr addr_;
   char ip_buf_[common::OB_IP_STR_BUFF];
-  char address_[ADDRESS_LEN];
+  char address_[STR_LEN];
+  char pointer_[STR_LEN];
+  char old_chain_[STR_LEN];
   /* 跨租户访问的资源必须由ObMultiTenantOperator来处理释放*/
   storage::ObTenantTabletPtrWithInMemObjIterator *tablet_iter_;
   void *iter_buf_;

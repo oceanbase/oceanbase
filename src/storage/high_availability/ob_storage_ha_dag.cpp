@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
@@ -40,10 +41,12 @@ ObStorageHAResultMgr::~ObStorageHAResultMgr()
 
 int ObStorageHAResultMgr::set_result(
     const int32_t result,
-    const bool allow_retry)
+    const bool allow_retry,
+    const enum ObDagType::ObDagTypeEnum type)
 {
   int ret = OB_SUCCESS;
   common::SpinWLockGuard guard(lock_);
+  const uint64_t tenant_id = MTL_ID();
   if (OB_SUCCESS == result_ && OB_SUCCESS != result) {
     result_ = result;
     allow_retry_ = allow_retry;
@@ -51,10 +54,12 @@ int ObStorageHAResultMgr::set_result(
       LOG_WARN("failed to push trace id into array", K(ret));
     } else {
       SERVER_EVENT_ADD("storage_ha", "set_first_result",
+        "tenant_id", tenant_id,
         "result", result,
         "allow_retry", allow_retry,
         "retry_count", retry_count_,
-        "failed_task_id", to_cstring(failed_task_id_list_));
+        "failed_task_id", to_cstring(failed_task_id_list_),
+        "dag_type", OB_DAG_TYPES[type].dag_type_str_);
       FLOG_INFO("set first result", K(result), K(allow_retry), K(retry_count_), K(failed_task_id_list_));
     }
   }
@@ -88,6 +93,24 @@ int ObStorageHAResultMgr::check_allow_retry(bool &allow_retry)
       //do nohitng
     } else {
       allow_retry = false;
+    }
+  }
+  return ret;
+}
+
+int ObStorageHAResultMgr::get_first_failed_task_id(share::ObTaskId &task_id)
+{
+  int ret = OB_SUCCESS;
+  common::SpinRLockGuard guard(lock_);
+  if (OB_SUCCESS != result_) {
+    ARRAY_FOREACH(failed_task_id_list_, i) {
+      task_id.set(failed_task_id_list_.at(i));
+      break;
+    }
+
+    if (task_id.is_invalid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get first failed task id", K(ret));
     }
   }
   return ret;
@@ -129,13 +152,14 @@ ObIHADagNetCtx::~ObIHADagNetCtx()
 
 int ObIHADagNetCtx::set_result(
     const int32_t result,
-    const bool need_retry)
+    const bool need_retry,
+    const enum share::ObDagType::ObDagTypeEnum type)
 {
   int ret = OB_SUCCESS;
   if (!is_valid()) {
-    ret = OB_NOT_INIT;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ha dag net ctx is not init", K(ret), K(*this));
-  } else if (OB_FAIL(result_mgr_.set_result(result, need_retry))) {
+  } else if (OB_FAIL(result_mgr_.set_result(result, need_retry, type))) {
     LOG_WARN("failed to set result", K(ret), K(result), K(*this));
   }
   return ret;
@@ -151,8 +175,8 @@ int ObIHADagNetCtx::check_allow_retry(bool &allow_retry)
   int ret = OB_SUCCESS;
   allow_retry = false;
   if (!is_valid()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ha dag net ctx do not init", K(ret), K(*this));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ha dag net ctx is invalid", K(ret), K(*this));
   } else if (OB_FAIL(result_mgr_.check_allow_retry(allow_retry))) {
     LOG_WARN("failed to check need retry", K(ret), K(*this));
   }
@@ -164,9 +188,22 @@ int ObIHADagNetCtx::get_result(int32_t &result)
   int ret = OB_SUCCESS;
   result = OB_SUCCESS;
   if (!is_valid()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ha dag net ctx do not init", K(ret), K(*this));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ha dag net ctx is invalid", K(ret), K(*this));
   } else if (OB_FAIL(result_mgr_.get_result(result))) {
+    LOG_WARN("failed to get result", K(ret), K(*this));
+  }
+  return ret;
+}
+
+int ObIHADagNetCtx::get_first_failed_task_id(share::ObTaskId &task_id)
+{
+  int ret = OB_SUCCESS;
+  task_id.reset();
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ha dag net ctx is invalid", K(ret), K(*this));
+  } else if (OB_FAIL(result_mgr_.get_first_failed_task_id(task_id))) {
     LOG_WARN("failed to get result", K(ret), K(*this));
   }
   return ret;
@@ -189,8 +226,8 @@ int ObIHADagNetCtx::check_is_in_retry(bool &is_in_retry)
   int32_t retry_count = 0;
 
   if (!is_valid()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ha dag net ctx do not init", K(ret), K(*this));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ha dag net ctx is invalid", K(ret), K(*this));
   } else if (OB_FAIL(result_mgr_.get_retry_count(retry_count))) {
     LOG_WARN("failed to get result", K(ret), K(*this));
   } else {
@@ -205,8 +242,8 @@ int ObIHADagNetCtx::get_retry_count(int32_t &retry_count)
   retry_count = 0;
 
   if (!is_valid()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ha dag net ctx do not init", K(ret), K(*this));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ha dag net ctx is invalid", K(ret), K(*this));
   } else if (OB_FAIL(result_mgr_.get_retry_count(retry_count))) {
     LOG_WARN("failed to get result", K(ret), K(*this));
   }
@@ -215,11 +252,9 @@ int ObIHADagNetCtx::get_retry_count(int32_t &retry_count)
 
 /******************ObStorageHADag*********************/
 ObStorageHADag::ObStorageHADag(
-    const share::ObDagType::ObDagTypeEnum &dag_type,
-    const ObStorageHADagType sub_type)
+    const share::ObDagType::ObDagTypeEnum &dag_type)
   : ObIDag(dag_type),
     ha_dag_net_ctx_(),
-    sub_type_(sub_type),
     result_mgr_(),
     compat_mode_(lib::Worker::CompatMode::MYSQL)
 {
@@ -267,7 +302,8 @@ bool ObStorageHADag::check_can_retry()
 
 int ObStorageHADag::set_result(
     const int32_t result,
-    const bool allow_retry)
+    const bool allow_retry,
+    const enum share::ObDagType::ObDagTypeEnum type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ha_dag_net_ctx_)) {
@@ -275,7 +311,7 @@ int ObStorageHADag::set_result(
     LOG_WARN("storage ha dag do not init", K(ret), KP(ha_dag_net_ctx_));
   } else if (OB_SUCCESS == result) {
     //do nothing
-  } else if (OB_FAIL(result_mgr_.set_result(result, allow_retry))) {
+  } else if (OB_FAIL(result_mgr_.set_result(result, allow_retry, type))) {
     LOG_WARN("failed to set result", K(ret), K(result), KPC(ha_dag_net_ctx_));
   }
   return ret;
@@ -302,9 +338,9 @@ int ObStorageHADag::report_result()
   if (OB_FAIL(ret)) {
   } else if (OB_SUCCESS == result) {
     //do nothing
-  } else if (OB_FAIL(ha_dag_net_ctx_->set_result(result, true /*allow_retry*/))) {
+  } else if (OB_FAIL(ha_dag_net_ctx_->set_result(result, true /*allow_retry*/, get_type()))) {
     LOG_WARN("failed to set ha dag net ctx result", K(ret), KPC(ha_dag_net_ctx_));
-  } 
+  }
   return ret;
 }
 
@@ -337,14 +373,16 @@ int ObStorageHADagUtils::deal_with_fo(
   if (OB_SUCCESS == err || OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("deal with fo get invalid argument", K(ret), K(err), KP(dag));
-  } else if (ObDagType::DAG_TYPE_MIGRATE != dag->get_type() && ObDagType::DAG_TYPE_RESTORE != dag->get_type()
-      && ObDagType::DAG_TYPE_BACKFILL_TX != dag->get_type()) {
+  } else if (0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "MIGRATE")
+      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "RESTORE")
+      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "BACKFILL_TX")
+      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "TRANSFER")) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag type is unexpected", K(ret), KPC(dag));
   } else if (OB_ISNULL(ha_dag = static_cast<ObStorageHADag *>(dag))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ha dag should not be NULL", K(ret), KPC(ha_dag));
-  } else if (OB_FAIL(ha_dag->set_result(err, allow_retry))) {
+  } else if (OB_FAIL(ha_dag->set_result(err, allow_retry, dag->get_type()))) {
     LOG_WARN("failed to set result", K(ret), K(err));
   }
   return ret;
@@ -367,6 +405,46 @@ int ObStorageHADagUtils::get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handl
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", KR(ret), K(ls_id), KP(ls));
+  }
+  return ret;
+}
+
+int ObStorageHADagUtils::check_self_in_member_list(
+    const share::ObLSID &ls_id,
+    bool &is_in_member_list)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  logservice::ObLogHandler *log_handler = NULL;
+  common::ObMemberList member_list;
+  common::GlobalLearnerList learner_list;
+  int64_t paxos_replica_num = 0;
+  const ObAddr &self_addr = GCONF.self_addr_;
+  is_in_member_list = false;
+
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check self in member list get invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
+  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handler should not be NULL", K(ret));
+  } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
+    LOG_WARN("failed to get paxos member list", K(ret));
+  } else if (member_list.contains(self_addr)) {
+    is_in_member_list = true;
+  } else if (OB_FAIL(log_handler->get_global_learner_list(learner_list))) {
+    LOG_WARN("failed to get learner member list", K(ret));
+  } else if (learner_list.contains(self_addr)) {
+    is_in_member_list = true;
+  } else {
+    is_in_member_list = false;
+    LOG_INFO("self is not in member list", K(ret), K(member_list), K(learner_list), K(self_addr), K(ls_id));
   }
   return ret;
 }
@@ -588,8 +666,10 @@ int ObStorageHATaskUtils::check_major_sstable_need_copy_(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  ObTableHandleV2 table_handle;
   const ObSSTable *sstable = nullptr;
+  ObITable *table = nullptr;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  ObSSTableMetaHandle sst_meta_hdl;
 
   if (!param.table_key_.is_major_sstable()) {
     ret = OB_INVALID_ARGUMENT;
@@ -597,20 +677,20 @@ int ObStorageHATaskUtils::check_major_sstable_need_copy_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(param), K(tablet_handle));
+  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
   } else {
-    const ObSSTableArray &major_sstable_array = tablet->get_table_store().get_major_sstables();
+    const ObSSTableArray &major_sstable_array = table_store_wrapper.get_member()->get_major_sstables();
     if (major_sstable_array.empty()) {
       need_copy = true;
-    } else if (OB_FAIL(major_sstable_array.get_table(param.table_key_, table_handle))) {
+    } else if (OB_FAIL(major_sstable_array.get_table(param.table_key_, table))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(major_sstable_array));
-    } else if (!table_handle.is_valid()) {
+    } else if (nullptr == table) {
       need_copy = true;
-    } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
-      LOG_WARN("failed to get sstable", K(ret), K(param), K(table_handle));
-    } else if (OB_ISNULL(sstable)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sstable should not be NULL", K(ret), K(table_handle), K(param));
-    } else if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sstable->get_meta()))) {
+    } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
+    } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
+      LOG_WARN("failed to get sstable meta handle", K(ret));
+    } else if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sst_meta_hdl.get_sstable_meta()))) {
       LOG_WARN("failed to check sstable meta", K(ret), K(param), KPC(sstable));
     } else {
       need_copy = false;
@@ -626,9 +706,8 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  ObTableHandleV2 table_handle;
   const ObSSTable *sstable = nullptr;
-  ObTablesHandleArray tables_handle_array;
+  ObTableStoreIterator minor_table_iter;
 
   if (!param.table_key_.is_minor_sstable()) {
     ret = OB_INVALID_ARGUMENT;
@@ -636,23 +715,29 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(param), K(tablet_handle));
-  } else if (OB_FAIL(tablet->get_table_store().get_mini_minor_sstables(tables_handle_array))) {
+  } else if (OB_FAIL(tablet->get_mini_minor_sstables(minor_table_iter))) {
     LOG_WARN("failed to get tables handle array", K(ret), K(param));
-  } else if (tables_handle_array.empty()) {
+  } else if (0 == minor_table_iter.count()) {
     need_copy = true;
   } else {
-    const ObIArray<ObITable *> &minor_sstables = tables_handle_array.get_tables();
     bool found = false;
-    for (int64_t i = 0; i < minor_sstables.count() && OB_SUCC(ret) && !found; ++i) {
-      const ObITable *table = minor_sstables.at(i);
-      if (OB_ISNULL(table)) {
+
+    while (OB_SUCC(ret)) {
+      ObITable *table = nullptr;
+      if (OB_FAIL(minor_table_iter.get_next(table))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to iterate minor tables", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("minor sstable should not be NULL", K(ret), KP(table), K(minor_sstables));
+        LOG_WARN("minor sstable should not be NULL", K(ret), KP(table), K(minor_table_iter));
       } else if (table->get_key() == param.table_key_) {
-        const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
         found = true;
         need_copy = true;
-        //TODO(muwei.ym) Fix it in 4.1.
+        //TODO(muwei.ym) Fix it in 4.3
         //Need copy should be false and reuse local minor sstable.
       }
     }
@@ -671,9 +756,10 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  ObTableHandleV2 table_handle;
+  ObITable *table = nullptr;
   const ObSSTable *sstable = nullptr;
-  ObTablesHandleArray tables_handle_array;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  ObSSTableMetaHandle sst_meta_hdl;
 
   if (!param.table_key_.is_ddl_dump_sstable()) {
     ret = OB_INVALID_ARGUMENT;
@@ -681,31 +767,31 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(param), K(tablet_handle));
+  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
   } else {
-    const ObSSTableArray &ddl_sstable_array = tablet->get_table_store().get_ddl_sstables();
-    const ObSSTableArray &major_sstable_array = tablet->get_table_store().get_major_sstables();
+    const ObSSTableArray &ddl_sstable_array = table_store_wrapper.get_member()->get_ddl_sstables();
+    const ObSSTableArray &major_sstable_array = table_store_wrapper.get_member()->get_major_sstables();
 
     if (!major_sstable_array.empty()) {
       need_copy = false;
     } else if (ddl_sstable_array.empty()) {
       need_copy = true;
-    } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, table_handle))) {
+    } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, table))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(ddl_sstable_array));
-    } else if (!table_handle.is_valid()) {
-      const SCN start_scn = ddl_sstable_array.get_table(0)->get_start_scn();
-      const SCN end_scn = ddl_sstable_array.get_table(ddl_sstable_array.count() - 1)->get_end_scn();
+    } else if (nullptr == table) {
+      const SCN start_scn = ddl_sstable_array.get_boundary_table(false)->get_start_scn();
+      const SCN end_scn = ddl_sstable_array.get_boundary_table(true)->get_end_scn();
       if (param.table_key_.scn_range_.start_scn_ >= start_scn
           && param.table_key_.scn_range_.end_scn_ <= end_scn) {
         need_copy = false;
       } else {
         need_copy = true;
       }
-    } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
-      LOG_WARN("failed to get sstable", K(ret), K(param), K(table_handle));
-    } else if (OB_ISNULL(sstable)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sstable should not be NULL", K(ret), K(table_handle), K(param));
-    } else if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sstable->get_meta()))) {
+    } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
+    } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
+      LOG_WARN("failed to get sstable meta handle", K(ret));
+    } else if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sst_meta_hdl.get_sstable_meta()))) {
       LOG_WARN("failed to check sstable meta", K(ret), K(param), KPC(sstable));
     } else {
       need_copy = false;

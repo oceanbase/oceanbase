@@ -13,6 +13,7 @@
 #include "ob_row_conflict_handler.h"
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/tx_table/ob_tx_table_guards.h"
 
 namespace oceanbase {
 using namespace common;
@@ -47,12 +48,13 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccValueI
   return ret;
 }
 
-int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuard &tx_table_guard,
+int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuards &tx_table_guards,
                                                                    const ObTransID &read_trans_id,
                                                                    const ObTransID &data_trans_id,
                                                                    const int64_t sql_sequence,
                                                                    const int64_t trans_version,
                                                                    const int64_t snapshot_version,
+                                                                   const share::SCN &end_scn,
                                                                    ObStoreRowLockState &lock_state) {
   int ret = OB_SUCCESS;
   // If a transaction is committed, the trans_id of it is 0, which is invalid.
@@ -64,13 +66,12 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuar
     }
   } else {
     ObTxTable *tx_table = nullptr;
-    int64_t read_epoch = ObTxTable::INVALID_READ_EPOCH;
-    if (!tx_table_guard.is_valid()) {
+    if (!tx_table_guards.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "tx table guard is invalid", KR(ret));
-    } else if (OB_FAIL(tx_table_guard.check_row_locked(
-                        read_trans_id, data_trans_id, sql_sequence, lock_state))){
-      TRANS_LOG(WARN, "check row locked fail", K(ret), K(read_trans_id), K(data_trans_id), K(sql_sequence), K(read_epoch), K(lock_state));
+    } else if (OB_FAIL(tx_table_guards.check_row_locked(
+        read_trans_id, data_trans_id, sql_sequence, end_scn, lock_state))){
+      TRANS_LOG(WARN, "check row locked fail", K(ret), K(read_trans_id), K(data_trans_id), K(sql_sequence), K(lock_state));
     }
     if (lock_state.is_locked_ && read_trans_id != lock_state.lock_trans_id_) {
       ret = OB_TRY_LOCK_ROW_CONFLICT;
@@ -93,7 +94,8 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
                                                  const ObTabletID tablet_id,
                                                  const share::ObLSID ls_id,
                                                  const int64_t last_compact_cnt,
-                                                 const int64_t total_trans_node_cnt)
+                                                 const int64_t total_trans_node_cnt,
+                                                 const share::SCN &trans_scn)
 {
   int ret = OB_TRY_LOCK_ROW_CONFLICT;
   ObLockWaitMgr *lock_wait_mgr = NULL;
@@ -133,9 +135,9 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
       lock_state.is_locked_ = false;
       if (lock_state.is_delayed_cleanout_) {
         auto lock_data_sequence = lock_state.lock_data_sequence_;
-        auto &tx_table_guard = acc_ctx.get_tx_table_guard();
-        if (OB_FAIL(tx_table_guard.check_row_locked(
-                tx_id, conflict_tx_id, lock_data_sequence, lock_state))) {
+        auto &tx_table_guards = acc_ctx.get_tx_table_guards();
+        if (OB_FAIL(tx_table_guards.check_row_locked(
+                tx_id, conflict_tx_id, lock_data_sequence, trans_scn, lock_state))) {
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));
         }
       } else {

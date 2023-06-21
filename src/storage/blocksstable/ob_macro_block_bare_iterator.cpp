@@ -108,7 +108,7 @@ int ObMicroBlockBareIterator::open(
     const char *macro_block_buf,
     const int64_t macro_block_buf_size,
     const ObDatumRange &range,
-    const ObTableReadInfo &index_read_info,
+    const ObITableReadInfo &rowkey_read_info,
     const bool is_left_border,
     const bool is_right_border)
 {
@@ -117,9 +117,9 @@ int ObMicroBlockBareIterator::open(
     ret = OB_INIT_TWICE;
     LOG_WARN("already inited", K(ret));
   } else if (OB_ISNULL(macro_block_buf)
-      || OB_UNLIKELY(macro_block_buf_size <= 0 || !range.is_valid() || !index_read_info.is_valid())) {
+      || OB_UNLIKELY(macro_block_buf_size <= 0 || !range.is_valid() || !rowkey_read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid macro block buf", KP(macro_block_buf), K(macro_block_buf_size), K(range), K(index_read_info));
+    LOG_WARN("Invalid macro block buf", KP(macro_block_buf), K(macro_block_buf_size), K(range), K(rowkey_read_info));
   } else if (OB_FAIL(common_header_.deserialize(macro_block_buf, macro_block_buf_size, read_pos_))) {
     LOG_WARN("Failed to deserialize macro header", K(ret), KP(macro_block_buf), K(macro_block_buf_size));
   } else if (OB_FAIL(common_header_.check_integrity())) {
@@ -144,8 +144,8 @@ int ObMicroBlockBareIterator::open(
     end_idx_ = macro_block_header_.fixed_header_.micro_block_count_ - 1;
     iter_idx_ = begin_idx_;
     is_inited_ = true;
-  } else if (OB_FAIL(locate_range(range, index_read_info, is_left_border, is_right_border))) {
-    LOG_WARN("fail to locate range for micro block", K(ret), K(range), K(index_read_info));
+  } else if (OB_FAIL(locate_range(range, rowkey_read_info, is_left_border, is_right_border))) {
+    LOG_WARN("fail to locate range for micro block", K(ret), K(range), K(rowkey_read_info));
   } else {
     is_inited_ = true;
   }
@@ -270,7 +270,7 @@ int ObMicroBlockBareIterator::check_macro_block_data_integrity(
 
 int ObMicroBlockBareIterator::locate_range(
     const ObDatumRange &range,
-    const ObTableReadInfo &index_read_info,
+    const ObITableReadInfo &rowkey_read_info,
     const bool is_left_border,
     const bool is_right_border)
 {
@@ -284,8 +284,8 @@ int ObMicroBlockBareIterator::locate_range(
   } else if (OB_ISNULL(reader_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null micro reader", K(ret));
-  } else if (OB_FAIL(reader_->init(index_block, index_read_info))) {
-    LOG_WARN("Fail to init reader for index block", K(ret), K(index_block), K(index_read_info));
+  } else if (OB_FAIL(reader_->init(index_block, &(rowkey_read_info.get_datum_utils())))) {
+    LOG_WARN("Fail to init reader for index block", K(ret), K(index_block), K(rowkey_read_info));
   } else if (OB_FAIL(reader_->locate_range(
       range, is_left_border, is_right_border, begin_idx_, end_idx_, true))) {
     if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
@@ -380,6 +380,8 @@ int ObMacroBlockRowBareIterator::open(
     LOG_WARN("invalid macro header", K(ret), K(macro_header));
   } else {
     const int64_t column_cnt = macro_header.fixed_header_.column_count_;
+    const int64_t schema_rowkey_cnt = macro_header.fixed_header_.rowkey_column_count_
+                - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     column_types_ = macro_header.column_types_;
     column_checksums_ = macro_header.column_checksum_;
     if (OB_FAIL(row_.init(*allocator_, column_cnt))) {
@@ -388,7 +390,8 @@ int ObMacroBlockRowBareIterator::open(
 
     ObSEArray<share::schema::ObColDesc, 16> columns;
     share::schema::ObColDesc col_desc;
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < macro_header.fixed_header_.get_col_type_array_cnt(); ++i) {
+      col_desc.col_id_ = common::OB_APP_MIN_COLUMN_ID + i;
       col_desc.col_type_ = column_types_[i];
       if (OB_FAIL(columns.push_back(col_desc))) {
         LOG_WARN("Fail to push col desc to columns", K(ret));
@@ -397,13 +400,10 @@ int ObMacroBlockRowBareIterator::open(
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(col_read_info_.init(*allocator_,
-                macro_header.fixed_header_.column_count_
-                - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
-                macro_header.fixed_header_.rowkey_column_count_
-                - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+                macro_header.fixed_header_.column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+                schema_rowkey_cnt,
                 lib::is_oracle_mode(),
-                columns,
-                true))) {
+                columns))) {
       LOG_WARN("Fail to init column read info", K(ret), K(macro_header));
     } else if (OB_FAIL(init_micro_reader(static_cast<ObRowStoreType>(
                     macro_header.fixed_header_.row_store_type_)))) {
@@ -460,9 +460,8 @@ int ObMacroBlockRowBareIterator::open_leaf_index_micro_block(const bool is_macro
   } else if (OB_UNLIKELY(!curr_micro_block_data_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Read an invalid micro block data", K(ret));
-  } else if (OB_FAIL(micro_reader_->init(
-      curr_micro_block_data_, *col_read_info_.get_index_read_info()))) {
-    LOG_WARN("Fail to init micro block reader", K(ret), K_(curr_micro_block_data), K_(col_read_info));
+  } else if (OB_FAIL(micro_reader_->init(curr_micro_block_data_, nullptr))) {
+    LOG_WARN("Fail to init micro block reader", K(ret), K_(curr_micro_block_data));
   } else if (OB_FAIL(micro_reader_->get_row_count(curr_block_row_cnt_))) {
     LOG_WARN("Fail to get micro block row count", K(ret));
   } else {
@@ -484,8 +483,8 @@ int ObMacroBlockRowBareIterator::open_next_micro_block()
   } else if (OB_UNLIKELY(!curr_micro_block_data_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Read an invalid micro block data", K(ret));
-  } else if (OB_FAIL(micro_reader_->init(curr_micro_block_data_, col_read_info_))) {
-    LOG_WARN("Fail to init micro block reader", K(ret), K_(curr_micro_block_data), K_(col_read_info));
+  } else if (OB_FAIL(micro_reader_->init(curr_micro_block_data_, nullptr))) {
+    LOG_WARN("Fail to init micro block reader", K(ret), K_(curr_micro_block_data));
   } else if (OB_FAIL(micro_reader_->get_row_count(curr_block_row_cnt_))) {
     LOG_WARN("Fail to get micro block row count", K(ret));
   } else {

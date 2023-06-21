@@ -43,6 +43,11 @@ public:
     LOG_INFO("TearDownTestCase");
     MockTenantModuleEnv::get_instance().destroy();
   }
+
+  void SetUp()
+  {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
+  }
 };
 
 static ObTZInfoMap map;

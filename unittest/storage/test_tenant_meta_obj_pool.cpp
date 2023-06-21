@@ -37,14 +37,12 @@ public:
   static const int64_t MAX_TEST_TABLET_CNT_IN_OBJ_POOL = 10000;
 
 private:
-  TryWashTabletFunc wash_func_;
   ObTenantMetaObjPool<ObTablet> obj_pool_;
   ObTenantMetaMemMgr t3m_;
 };
 
 TestTenantMetaObjPool::TestTenantMetaObjPool()
-  : wash_func_(t3m_),
-    obj_pool_(common::OB_SERVER_TENANT_ID, MAX_TEST_TABLET_CNT_IN_OBJ_POOL, "TestPool", ObCtxIds::META_OBJ_CTX_ID, wash_func_),
+  : obj_pool_(common::OB_SERVER_TENANT_ID, MAX_TEST_TABLET_CNT_IN_OBJ_POOL, "TestPool", ObCtxIds::META_OBJ_CTX_ID),
     t3m_(common::OB_SERVER_TENANT_ID)
 {
 }

@@ -11,7 +11,6 @@
  */
 
 #include "share/config/ob_config_helper.h"
-#include "share/backup/ob_backup_info_mgr.h"
 #include "share/config/ob_config.h"
 #include "lib/ob_running_mode.h"
 #include "lib/utility/ob_macro_utils.h"

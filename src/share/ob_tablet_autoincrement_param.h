@@ -19,6 +19,7 @@
 #include "common/object/ob_obj_type.h"
 #include "common/ob_tablet_id.h"
 #include "storage/memtable/ob_multi_source_data.h"
+#include "storage/meta_mem/ob_storage_meta_cache.h"
 
 namespace oceanbase
 {
@@ -153,31 +154,68 @@ public:
   uint64_t autoinc_seq_;
 };
 
-class ObTabletAutoincSeq : public memtable::ObIMultiSourceDataUnit
+class ObTabletAutoincSeq : public memtable::ObIMultiSourceDataUnit, public storage::ObIStorageMetaObj
 {
 public:
-  OB_UNIS_VERSION_V(1);
+  //friend class ObTabletAutoincSeqMdsUserData;
+  const int32_t AUTOINC_SEQ_VERSION = 1;
 public:
   ObTabletAutoincSeq();
-  ~ObTabletAutoincSeq()
-  {
-    reset();
-  }
-  int assign(const ObTabletAutoincSeq &other);
+  ~ObTabletAutoincSeq();
+
+  int assign(common::ObIAllocator &allocator, const ObTabletAutoincSeq &other);
+  // Only for old multi_data_source
+  // Free origin data with allocator and alloc new.
+  // TODO yq: remove later
   virtual int deep_copy(const ObIMultiSourceDataUnit *src, ObIAllocator *allocator) override;
+  virtual int deep_copy(
+      char *dst_buf,
+      const int64_t buf_size,
+      storage::ObIStorageMetaObj *&value) const;
+  virtual int64_t get_deep_copy_size() const { return sizeof(ObTabletAutoincSeq) + sizeof(ObTabletAutoincInterval) * intervals_count_; }
   virtual void reset() override;
   virtual bool is_valid() const override;
-  virtual inline int64_t get_data_size() const override { return sizeof(ObTabletAutoincSeq); }
+  virtual inline int64_t get_data_size() const override { return get_deep_copy_size(); }
   virtual inline memtable::MultiSourceDataUnitType type() const override
   {
     return memtable::MultiSourceDataUnitType::TABLET_SEQ;
   }
   int get_autoinc_seq_value(uint64_t &autoinc_seq);
-  int set_autoinc_seq_value(const uint64_t autoinc_seq);
-  const common::ObSArray<ObTabletAutoincInterval> &get_intervals() const { return intervals_; }
-  TO_STRING_KV(K_(intervals));
+  int set_autoinc_seq_value(
+    common::ObArenaAllocator &allocator,
+    const uint64_t autoinc_seq);
+  const share::ObTabletAutoincInterval* get_intervals() const { return intervals_; }
+  int64_t get_intervals_count() const { return intervals_count_; }
+
+  int serialize(
+      char *buf,
+      const int64_t buf_len,
+      int64_t &pos) const;
+  // multi source deserialize with ObIAllocator, will set allocator_
+  int deserialize(
+      common::ObIAllocator &allocator,
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos);
+  int64_t get_serialize_size() const;
+
+  TO_STRING_KV(K_(version), K_(intervals_count), KPC_(intervals));
 private:
-  common::ObSArray<ObTabletAutoincInterval> intervals_;
+  int deserialize_(
+      common::ObIAllocator &allocator,
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos);
+  int serialize_(
+      char *buf,
+      const int64_t buf_len,
+      int64_t &pos) const;
+  int64_t get_serialize_size_(void) const;
+private:
+  int64_t version_;
+  ObIAllocator *allocator_;
+  share::ObTabletAutoincInterval *intervals_;
+  int64_t intervals_count_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletAutoincSeq);
 };
 

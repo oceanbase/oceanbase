@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_SQL_RESOLVE_OB_TABLEGROUP_RESOLVER_H
 #define OCEANBASE_SQL_RESOLVE_OB_TABLEGROUP_RESOLVER_H
+#include "lib/ob_define.h"
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "share/ob_rpc_struct.h"
@@ -94,6 +95,7 @@ int ObTableGroupResolver::resolve_tablegroup_option(T *stmt, ParseNode *node)
   } else {
     ParseNode *option_node = NULL;
     int32_t num = node->num_child_;
+    bool has_tablegroup_sharding_option = false;
     for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
       option_node = node->children_[i];
       switch (option_node->type_) {
@@ -203,6 +205,35 @@ int ObTableGroupResolver::resolve_tablegroup_option(T *stmt, ParseNode *node)
           }
           break;
         }
+        case T_TABLEGROUP_SHARDING: {
+          if (nullptr == option_node->children_ || option_node->num_child_ != 1) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_RESV_LOG(WARN, "invalid tablegroup sharding attribute", K(ret),
+                         "num_child", option_node->num_child_);
+          } else if (OB_UNLIKELY(nullptr == option_node->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "option_node child is null", K(ret));
+          } else {
+            has_tablegroup_sharding_option = true;
+            int64_t sharding_length = option_node->children_[0]->str_len_;
+            const char *sharding_str = option_node->children_[0]->str_value_;
+            common::ObString tablegroup_sharding;
+            tablegroup_sharding.assign_ptr(sharding_str, static_cast<int32_t>(sharding_length));
+            if (tablegroup_sharding != OB_PARTITION_SHARDING_NONE && tablegroup_sharding != OB_PARTITION_SHARDING_PARTITION
+                && tablegroup_sharding != OB_PARTITION_SHARDING_ADAPTIVE) {
+              ret = OB_INVALID_ARGUMENT;
+              SQL_RESV_LOG(WARN, "invalid tablegroup sharding attribute", K(ret),
+                         "sharding", tablegroup_sharding);
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sharding");
+            } else if (OB_FAIL(stmt->set_tablegroup_sharding(tablegroup_sharding))) {
+              SQL_LOG(WARN, "set_tablegroup_sharding", K(ret));
+            }
+          }
+          if (OB_SUCC(ret) && OB_FAIL(alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::SHARDING))) {
+            SQL_LOG(WARN, "fail to add member", K(ret));
+          }
+          break;
+        }
         case T_MAX_USED_PART_ID: {
           // max_used_part_id is deprecated in 4.0, we just ignore and show warnings
           LOG_USER_WARN(OB_NOT_SUPPORTED, "max_used_part_id");
@@ -223,5 +254,3 @@ int ObTableGroupResolver::resolve_tablegroup_option(T *stmt, ParseNode *node)
 } //namespace sql
 } //namespace oceanbase
 #endif
-
-

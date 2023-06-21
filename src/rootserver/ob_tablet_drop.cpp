@@ -319,7 +319,7 @@ int ObTabletDrop::execute()
               ret = OB_TIMEOUT;
               LOG_WARN("already timeout", KR(ret), K(ctx));
             } else if (OB_FAIL(conn->register_multi_data_source(tenant_id_, iter->first,
-                               transaction::ObTxDataSourceType::REMOVE_TABLET, buf, buf_len))) {
+                                transaction::ObTxDataSourceType::DELETE_TABLET_NEW_MDS, buf, buf_len))) {
               LOG_WARN("fail to register_tx_data", KR(ret), K(arg), K(buf), K(buf_len));
               if (OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_NOT_MASTER == ret) {
                 LOG_INFO("fail to find leader, try again", K_(tenant_id), K(arg));

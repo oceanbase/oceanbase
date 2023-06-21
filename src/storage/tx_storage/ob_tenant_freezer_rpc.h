@@ -49,6 +49,7 @@ protected:
 private:
   int do_tx_data_table_freeze_();
   int do_major_freeze_();
+  int do_mds_table_freeze_();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantFreezerP);
 };

@@ -121,15 +121,6 @@ public:
   // get all ls ids
   int get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array);
 
-  // tablet operation
-  int create_tablet(const obrpc::ObBatchCreateTabletArg &batch_arg,
-                    obrpc::ObCreateTabletBatchRes &result);
-  // remove tablets from a ls
-  // @param [in] arg, all the remove parameters needed.
-  // @param [out] result, the return code of the remove op.
-  int remove_tablet(const obrpc::ObBatchRemoveTabletArg &batch_arg,
-                    obrpc::ObRemoveTabletRes &result);
-
   // tablet operation in transactions
   // Create tablets for a ls
   // @param [in] tx_desc, trans descriptor

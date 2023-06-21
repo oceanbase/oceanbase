@@ -1113,7 +1113,7 @@ public:
     return tls_id_.is_sys_log_stream() && ! multi_data_source_info_.is_valid();
   }
   const MultiDataSourceInfo &get_multi_data_source_info() const { return multi_data_source_info_; }
-  const share::ObLSAttr &get_ls_attr() const { return multi_data_source_info_.get_ls_attr(); }
+  const share::ObLSAttrArray &get_ls_attr_arr() const { return multi_data_source_info_.get_ls_attr_arr(); }
   DictTenantArray &get_dict_tenant_array() { return multi_data_source_info_.get_dict_tenant_array(); }
   DictDatabaseArray &get_dict_database_array() { return multi_data_source_info_.get_dict_database_array(); }
   DictTableArray &get_dict_table_array() { return multi_data_source_info_.get_dict_table_array(); }

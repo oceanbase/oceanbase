@@ -15,7 +15,6 @@
 
 #include "storage/ob_storage_schema.h"
 #include "lib/container/ob_array_array.h"
-#include "storage/compaction/ob_partition_merge_policy.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase
@@ -26,23 +25,38 @@ class ObTablet;
 }
 namespace compaction
 {
-
 struct ObParallelMergeInfo
 {
 public:
   ObParallelMergeInfo()
-   : parallel_info_(0),
-     parallel_end_key_list_(nullptr),
+   : compat_(PARALLEL_INFO_VERSION_V1),
+     list_size_(0),
+     reserved_(0),
+     parallel_store_rowkey_list_(nullptr),
+     parallel_datum_rowkey_list_(nullptr),
      allocator_(nullptr)
   {}
   ~ObParallelMergeInfo() { destroy(); } // attention!!! use destroy to free memory
   int init(common::ObIAllocator &allocator, const ObParallelMergeInfo &other);
   void destroy();
+  void clear()
+  {
+    list_size_ = 0;
+    parallel_store_rowkey_list_ = nullptr;
+    parallel_datum_rowkey_list_ = nullptr;
+  }
+  int64_t get_size() const { return list_size_; }
   bool is_valid() const
   {
-    return list_size_ == 0 || nullptr != parallel_end_key_list_;
+    return list_size_ == 0
+      || (PARALLEL_INFO_VERSION_V0 == compat_ && nullptr != parallel_store_rowkey_list_)
+      || (PARALLEL_INFO_VERSION_V1 == compat_ && nullptr != parallel_datum_rowkey_list_);
   }
 
+  template<typename T>
+  int deep_copy_list(common::ObIAllocator &allocator, const T *src, T *&dst);
+  template<typename T>
+  void destroy(T *&array);
   // serialize & deserialize
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
@@ -51,14 +65,26 @@ public:
       const int64_t data_len,
       int64_t &pos);
   int64_t get_serialize_size() const;
-
   int generate_from_range_array(
       ObIAllocator &allocator,
       common::ObArrayArray<ObStoreRange> &paral_range);
-
+  int deep_copy_datum_rowkey(
+    const int64_t idx,
+    ObIAllocator &allocator,
+    blocksstable::ObDatumRowkey &rowkey) const;
+public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MAX_PARALLEL_RANGE_SERIALIZE_LEN = 1 * 1024 * 1024;
   static const int64_t VALID_CONCURRENT_CNT = 1;
+  static const int64_t PARALLEL_INFO_VERSION_V0 = 0; // StoreRowkey
+  static const int64_t PARALLEL_INFO_VERSION_V1 = 1; // DatumRowkey
+private:
+  int generate_datum_rowkey_list(
+    ObIAllocator &allocator,
+    ObArrayArray<ObStoreRange> &paral_range);
+  int generate_store_rowkey_list(
+    ObIAllocator &allocator,
+    ObArrayArray<ObStoreRange> &paral_range);
 
   union {
     uint32_t parallel_info_;
@@ -68,12 +94,76 @@ public:
       uint32_t reserved_        : 20;
     };
   };
-  ObStoreRowkey *parallel_end_key_list_; // concurrent_cnt - 1
-
+  // concurrent_cnt - 1; valid when compat_ = PARALLEL_INFO_VERSION_V0
+  ObStoreRowkey *parallel_store_rowkey_list_;
+  // concurrent_cnt - 1; valid when compat_ = PARALLEL_INFO_VERSION_V1
+  blocksstable::ObDatumRowkey *parallel_datum_rowkey_list_;
   ObIAllocator *allocator_;
 };
 
-struct ObMediumCompactionInfo final : public memtable::ObIMultiSourceDataUnit
+
+struct ObMediumCompactionInfoKey final
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObMediumCompactionInfoKey()
+    : medium_snapshot_(0)
+  {}
+  ObMediumCompactionInfoKey(const ObMediumCompactionInfoKey &other)
+    : medium_snapshot_(other.medium_snapshot_)
+  {}
+  ObMediumCompactionInfoKey(const int64_t medium_snapshot)
+    : medium_snapshot_(medium_snapshot)
+  {}
+  ObMediumCompactionInfoKey &operator=(const ObMediumCompactionInfoKey &other)
+  {
+    medium_snapshot_ = other.medium_snapshot_;
+    return *this;
+  }
+  ~ObMediumCompactionInfoKey() = default;
+
+  void reset() { medium_snapshot_ = 0; }
+  bool is_valid() const { return medium_snapshot_ > 0; }
+  ObMediumCompactionInfoKey &operator=(const int64_t medium_snapshot)
+  {
+    medium_snapshot_ = medium_snapshot;
+    return *this;
+  }
+
+  bool operator<(const ObMediumCompactionInfoKey& rhs) const
+  {
+    return medium_snapshot_ < rhs.medium_snapshot_;
+  }
+  bool operator<=(const ObMediumCompactionInfoKey& rhs) const
+  {
+    return medium_snapshot_ <= rhs.medium_snapshot_;
+  }
+  bool operator>(const ObMediumCompactionInfoKey& rhs) const
+  {
+    return medium_snapshot_ > rhs.medium_snapshot_;
+  }
+  bool operator>=(const ObMediumCompactionInfoKey& rhs) const
+  {
+    return medium_snapshot_ >= rhs.medium_snapshot_;
+  }
+  bool operator==(const ObMediumCompactionInfoKey& rhs) const
+  {
+    return medium_snapshot_ == rhs.medium_snapshot_;
+  }
+  bool operator!=(const ObMediumCompactionInfoKey& rhs) const
+  {
+    return medium_snapshot_ != rhs.medium_snapshot_;
+  }
+  int64_t get_medium_snapshot() const { return medium_snapshot_; }
+  void set_medium_snapshot(const int64_t medium_snapshot) { medium_snapshot_ = medium_snapshot; }
+
+  TO_STRING_KV(K_(medium_snapshot));
+private:
+  int64_t medium_snapshot_;
+};
+
+struct ObMediumCompactionInfo final : public common::ObDLinkBase<ObMediumCompactionInfo>
 {
 public:
   enum ObCompactionType
@@ -82,14 +172,14 @@ public:
     MAJOR_COMPACTION = 1,
     COMPACTION_TYPE_MAX,
   };
-  const static char *ObCompactionTypeStr[];
-  const static char *get_compaction_type_str(enum ObCompactionType type);
+  static const char *ObCompactionTypeStr[];
+  static const char *get_compaction_type_str(enum ObCompactionType type);
 public:
   ObMediumCompactionInfo();
-  virtual ~ObMediumCompactionInfo();
+  ~ObMediumCompactionInfo();
 
+  int assign(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
   int init(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
-  int save_storage_schema(ObIAllocator &allocator, const storage::ObStorageSchema &storage_schema);
   int gene_parallel_info(
       ObIAllocator &allocator,
       common::ObArrayArray<ObStoreRange> &paral_range);
@@ -98,26 +188,14 @@ public:
   static inline bool is_major_compaction(const ObCompactionType type) { return MAJOR_COMPACTION == type; }
   inline bool is_major_compaction() const { return is_major_compaction((ObCompactionType)compaction_type_); }
   inline bool is_medium_compaction() const { return is_medium_compaction((ObCompactionType)compaction_type_); }
-  inline void clear_parallel_range()
+  void clear_parallel_range()
   {
-    parallel_merge_info_.list_size_ = 0;
-    parallel_merge_info_.parallel_end_key_list_ = nullptr;
+    parallel_merge_info_.clear();
     contain_parallel_range_ = false;
   }
-
-  // ObIMultiSourceDataUnit section
-  virtual int deep_copy(const ObIMultiSourceDataUnit *src, ObIAllocator *allocator) override;
-  virtual void reset() override;
-  virtual bool is_valid() const override;
-  virtual inline int64_t get_data_size() const override { return sizeof(ObMediumCompactionInfo); }
-  virtual inline memtable::MultiSourceDataUnitType type() const override
-  {
-    return memtable::MultiSourceDataUnitType::MEDIUM_COMPACTION_INFO;
-  }
-  virtual int64_t get_version() const override { return medium_snapshot_; }
-  virtual bool is_save_last() const override { return false; }
+  void reset();
+  bool is_valid() const;
   bool from_cur_cluster() const { return cluster_id_ == GCONF.cluster_id; }
-
   // serialize & deserialize
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
@@ -128,13 +206,10 @@ public:
   int64_t get_serialize_size() const;
 
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
-  TO_STRING_KV(K_(cluster_id), K_(medium_compat_version), K_(data_version),
-      "compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_), K_(cluster_id),
-      K_(medium_snapshot), K_(storage_schema),
-      K_(contain_parallel_range), K_(parallel_merge_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 public:
   static const int64_t MEIDUM_COMPAT_VERSION = 1;
+  static const int64_t MEIDUM_COMPAT_VERSION_V2 = 2;
 
 private:
   static const int32_t SCS_ONE_BIT = 1;
@@ -155,6 +230,7 @@ public:
   uint64_t cluster_id_; // for backup database to throw MEDIUM_COMPACTION clog
   uint64_t data_version_;
   int64_t medium_snapshot_;
+  int64_t last_medium_snapshot_;
   storage::ObStorageSchema storage_schema_;
   ObParallelMergeInfo parallel_merge_info_;
 };

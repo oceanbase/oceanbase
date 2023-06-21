@@ -90,23 +90,6 @@ int ObVTableLocationService::init(
   return ret;
 }
 
-void ObVTableLocationService::stop()
-{
-  update_queue_.stop();
-}
-
-void ObVTableLocationService::wait()
-{
-  update_queue_.wait();
-}
-
-int ObVTableLocationService::destroy()
-{
-  int ret = OB_SUCCESS;
-  update_queue_.destroy();
-  vtable_cache_.destroy();
-  return ret;
-}
 //TODO: 1.remove ObPartitionLocation 2.add auto renew 3.cached by tenant_id
 int ObVTableLocationService::vtable_get(
     const uint64_t tenant_id,
@@ -221,7 +204,7 @@ int ObVTableLocationService::renew_vtable_location_(
     LOG_WARN("update_vtable_location failed",  KR(ret), K(table_id));
   } else {
     ObTaskController::get().allow_next_syslog();
-    LOG_INFO("renew vtable location success",  KR(ret), K(table_id), K(locations));
+    LOG_INFO("renew vtable location success",  KR(ret), K(tenant_id), K(table_id), K(locations));
   }
   return ret;
 }
@@ -505,6 +488,30 @@ int ObVTableLocationService::location2cache_value_(
   }
   NG_TRACE(plc_serialize_end);
   return ret;
+}
+
+void ObVTableLocationService::stop()
+{
+  update_queue_.stop();
+}
+
+void ObVTableLocationService::wait()
+{
+  update_queue_.wait();
+}
+
+int ObVTableLocationService::destroy()
+{
+  int ret = OB_SUCCESS;
+  update_queue_.destroy();
+  vtable_cache_.destroy();
+  return ret;
+}
+
+int ObVTableLocationService::reload_config()
+{
+  // nothing need reload
+  return OB_SUCCESS;
 }
 
 } // end namespace share

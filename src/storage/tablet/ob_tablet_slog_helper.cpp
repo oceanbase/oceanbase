@@ -30,85 +30,64 @@ namespace oceanbase
 {
 namespace storage
 {
-int ObTabletSlogHelper::write_create_tablet_slog(
-    const ObTabletHandle &tablet_handle,
-    ObMetaDiskAddr &disk_addr)
+int ObTabletSlogHelper::write_update_tablet_slog(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    const ObMetaDiskAddr &disk_addr)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+  const ObTabletMapKey tablet_key(ls_id, tablet_id);
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !disk_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tablet_handle));
+    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(disk_addr));
   } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) { // make sure that all data or meta written on the macro block is flushed
     LOG_WARN("fail to fsync_block", K(ret));
   } else {
-    ObCreateTabletLog slog_entry(tablet_handle.get_obj());
+    ObUpdateTabletLog slog_entry(ls_id, tablet_id, disk_addr);
     ObStorageLogParam log_param;
     log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
-        ObRedoLogSubType::OB_REDO_LOG_PUT_TABLET);
+        ObRedoLogSubType::OB_REDO_LOG_UPDATE_TABLET);
     log_param.data_ = &slog_entry;
     if (OB_FAIL(MTL(ObStorageLogger*)->write_log(log_param))) {
       LOG_WARN("fail to write slog for creating tablet", K(ret), K(log_param));
     } else {
-      disk_addr = log_param.disk_addr_;;
+      do {
+        if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->report_slog(tablet_key, log_param.disk_addr_))) {
+          if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+            LOG_WARN("fail to report slog", K(ret), K(tablet_key));
+          } else if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
+            LOG_WARN("fail to report slog due to memory limit", K(ret), K(tablet_key));
+          }
+        }
+      } while (OB_ALLOCATE_MEMORY_FAILED == ret);
     }
   }
-
   return ret;
 }
 
-int ObTabletSlogHelper::write_create_tablet_slog(
-    const common::ObIArray<ObTabletHandle> &tablet_handle_array,
-    common::ObIArray<ObMetaDiskAddr> &disk_addr_array)
+int ObTabletSlogHelper::write_empty_shell_tablet_slog(ObTablet *tablet, ObMetaDiskAddr &disk_addr)
 {
   int ret = OB_SUCCESS;
-  const int64_t tablet_count = tablet_handle_array.count();
-  const int32_t cmd = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
-      ObRedoLogSubType::OB_REDO_LOG_PUT_TABLET);
-  ObSArray<ObCreateTabletLog> slog_array;
-  ObSArray<ObStorageLogParam> param_array;
-
-  if (OB_FAIL(slog_array.reserve(tablet_count))) {
-    LOG_WARN("failed to reserve for slog array", K(ret), K(tablet_count));
-  } else if (OB_FAIL(param_array.reserve(tablet_count))) {
-    LOG_WARN("failed to reserve for param array", K(ret), K(tablet_count));
-  } else if (OB_FAIL(disk_addr_array.reserve(tablet_count))) {
-    LOG_WARN("failed to reserve for disk addr array", K(ret), K(tablet_count));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; ++i) {
-    const ObTabletHandle &tablet_handle = tablet_handle_array.at(i);
-    if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet handle is invalid", K(ret), K(tablet_handle));
-    } else {
-      ObCreateTabletLog slog_entry(tablet_handle.get_obj());
-      if (OB_FAIL(slog_array.push_back(slog_entry))) {
-        LOG_WARN("fail to push slog entry into slog array", K(ret), K(slog_entry), K(i));
-      }
-    }
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; i++) {
-    ObStorageLogParam log_param(cmd, &slog_array[i]);
-    if (OB_FAIL(param_array.push_back(log_param))) {
-      LOG_WARN("fail to push log param into param array", K(ret), K(log_param), K(i));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) { // make sure that all data or meta written on the macro block is flushed
-    LOG_WARN("fail to fsync_block", K(ret));
-  } else if (OB_FAIL(MTL(ObStorageLogger*)->write_log(param_array))) {
-    LOG_WARN("fail to write slog for batch creating tablet", K(ret), K(param_array));
+  if (OB_UNLIKELY(!tablet->is_empty_shell())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("the tablet is not empty shell", K(ret), K(tablet));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; i++) {
-      if (OB_FAIL(disk_addr_array.push_back(param_array[i].disk_addr_))) {
-        LOG_WARN("fail to push disk addr into disk addr array", K(ret), K(i), K(tablet_count));
-      }
+    const ObTabletMapKey tablet_key(tablet->get_tablet_meta().ls_id_, tablet->get_tablet_meta().tablet_id_);
+    ObEmptyShellTabletLog slog_entry(tablet->get_tablet_meta().ls_id_,
+                                     tablet->get_tablet_meta().tablet_id_,
+                                     tablet);
+    ObStorageLogParam log_param;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+        ObRedoLogSubType::OB_REDO_LOG_EMPTY_SHELL_TABLET);
+    log_param.data_ = &slog_entry;
+    if (OB_FAIL(MTL(ObStorageLogger*)->write_log(log_param))) {
+      LOG_WARN("fail to write slog for empty shell tablet", K(ret), K(log_param));
+    } else if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->report_slog(tablet_key, log_param.disk_addr_))) {
+      LOG_WARN("fail to report slog", K(ret), K(tablet_key));
+    } else {
+      disk_addr = log_param.disk_addr_;
     }
   }
-
   return ret;
 }
 
@@ -148,6 +127,27 @@ int ObTabletSlogHelper::write_remove_tablet_slog(
     }
   }
 
+  return ret;
+}
+
+int ObTabletSlogHelper::write_remove_tablet_slog(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    ObDeleteTabletLog slog_entry(ls_id, tablet_id);
+    ObStorageLogParam log_param;
+    log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+        ObRedoLogSubType::OB_REDO_LOG_DELETE_TABLET);
+    log_param.data_ = &slog_entry;
+    if (OB_FAIL(MTL(ObStorageLogger*)->write_log(log_param))) {
+      LOG_WARN("fail to write slog for creating tablet", K(ret), K(log_param));
+    }
+  }
   return ret;
 }
 

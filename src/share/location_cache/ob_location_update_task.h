@@ -30,21 +30,25 @@ public:
       : cluster_id_(OB_INVALID_CLUSTER_ID),
         tenant_id_(OB_INVALID_TENANT_ID),
         ls_id_(),
+        renew_for_tenant_(false),
         add_timestamp_(OB_INVALID_TIMESTAMP) {}
   explicit ObLSLocationUpdateTask(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
+      const bool renew_for_tenant,
       const int64_t add_timestamp)
       : cluster_id_(cluster_id),
         tenant_id_(tenant_id),
         ls_id_(ls_id),
+        renew_for_tenant_(renew_for_tenant),
         add_timestamp_(add_timestamp) {}
   virtual ~ObLSLocationUpdateTask() {}
   int init(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
+      const bool renew_for_tenant,
       const int64_t add_timestamp);
   int assign(const ObLSLocationUpdateTask &other);
   virtual void reset();
@@ -64,12 +68,14 @@ public:
   inline int64_t get_tenant_id() const { return tenant_id_; }
   inline ObLSID get_ls_id() const { return ls_id_; }
   inline int64_t get_add_timestamp() const { return add_timestamp_; }
+  inline bool is_renew_for_tenant() const { return renew_for_tenant_; }
 
-  TO_STRING_KV(K_(cluster_id), K_(tenant_id), K_(ls_id), K_(add_timestamp));
+  TO_STRING_KV(K_(cluster_id), K_(tenant_id), K_(ls_id), K_(renew_for_tenant), K_(add_timestamp));
 private:
   int64_t cluster_id_;
   uint64_t tenant_id_;
   ObLSID ls_id_;
+  bool renew_for_tenant_; // renew all ls location caches for tenant
   int64_t add_timestamp_;
 };
 

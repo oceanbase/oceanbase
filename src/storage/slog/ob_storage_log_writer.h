@@ -51,7 +51,6 @@ public:
 
   int delete_log_file(const int64_t file_id);
   int get_using_disk_space(int64_t &using_space) const;
-  inline int64_t get_pwrite_ts() const { return file_handler_.get_pwrite_ts(); }
 
   int start_log(const common::ObLogCursor &start_cursor);
 

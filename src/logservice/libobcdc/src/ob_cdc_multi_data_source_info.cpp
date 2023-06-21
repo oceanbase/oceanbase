@@ -52,7 +52,7 @@ int MultiDataSourceNode::init(
     common::ObString data;
     data.assign_ptr(reinterpret_cast<const char *>(buf), buf_size);
 
-    if (OB_FAIL(tx_buf_node_.init(type, data))) {
+    if (OB_FAIL(tx_buf_node_.init(type, data, share::SCN(), nullptr))) {
       LOG_ERROR("init tx_buf_node failed", KR(ret), K(lsn), K(type), K(data), K(buf_size));
     }
   }
@@ -67,8 +67,7 @@ void MultiDataSourceNode::reset()
 }
 
 MultiDataSourceInfo::MultiDataSourceInfo() :
-    has_ls_table_op_(false),
-    ls_attr_(),
+    ls_attr_arr_(),
     tablet_change_info_arr_(),
     has_ddl_trans_op_(false),
     dict_tenant_metas_(),
@@ -78,13 +77,26 @@ MultiDataSourceInfo::MultiDataSourceInfo() :
 
 void MultiDataSourceInfo::reset()
 {
-  has_ls_table_op_ = false;
-  ls_attr_.reset();
+  ls_attr_arr_.reset();
   tablet_change_info_arr_.reset();
   has_ddl_trans_op_ = false;
   dict_tenant_metas_.reset();
   dict_database_metas_.reset();
   dict_table_metas_.reset();
+}
+
+int MultiDataSourceInfo::push_back_ls_table_op(const share::ObLSAttr &ls_attr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! ls_attr.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid ls_attr in multi_data_source_log", KR(ret), K(ls_attr), KPC(this));
+  } else if (OB_FAIL(ls_attr_arr_.push_back(ls_attr))) {
+    LOG_ERROR("push_back ls_attr into multi_data_source_info failed", KR(ret), K(ls_attr), KPC(this));
+  }
+
+  return ret;
 }
 
 int MultiDataSourceInfo::push_back_tablet_change_info(const ObCDCTabletChangeInfo &tablet_change_info)
@@ -106,8 +118,8 @@ int64_t MultiDataSourceInfo::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
 
   if (NULL != buf && buf_len > 0) {
-    if (has_ls_table_op_) {
-      (void)common::databuff_printf(buf, buf_len, pos, "{ls_table_op: %s", to_cstring(ls_attr_));
+    if (has_ls_table_op()) {
+      (void)common::databuff_printf(buf, buf_len, pos, "{ls_table_op: %s", to_cstring(ls_attr_arr_));
     } else {
       (void)common::databuff_printf(buf, buf_len, pos, "has_ls_table_op: false");
     }

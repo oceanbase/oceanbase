@@ -60,12 +60,15 @@ public:
              common::ObISQLClient &client,
              const uint64_t tenant_id,
              uint64_t &data_version);
+
   // parse GCONF.all_server_list
   // @params[in]  excluded_server_list, servers which will not be included in the output
   // @params[out] config_all_server_list, servers in (GCONF.all_server_list - excluded_server_list)
   static int parse_all_server_list(
     const ObArray<ObAddr> &excluded_server_list,
     ObArray<ObAddr> &config_all_server_list);
+
+  static bool is_tenant_enable_rebalance(const uint64_t tenant_id);
 };
 }//end namespace share
 }//end namespace oceanbase

@@ -193,7 +193,7 @@ public:
   ObMicroBlockHeader header_;
   ObMicroBlockData data_;
   ObMicroBlockData payload_data_;
-  const ObTableReadInfo *read_info_;
+  const ObITableReadInfo *read_info_;
   const ObMicroIndexInfo *micro_index_info_;
 };
 
@@ -204,7 +204,8 @@ public:
   ObIMicroBlockReaderInfo()
       : is_inited_(false),
       row_count_(-1),
-      read_info_(nullptr)
+      read_info_(nullptr),
+	  datum_utils_(nullptr)
   {}
   virtual ~ObIMicroBlockReaderInfo() { reset(); }
   OB_INLINE int64_t row_count() const { return row_count_; }
@@ -212,12 +213,14 @@ public:
   {
     row_count_ = -1;
     read_info_ = nullptr;
+    datum_utils_ = nullptr;
     is_inited_ = false;
   }
 
   bool is_inited_;
   int64_t row_count_;
-  const ObTableReadInfo *read_info_;
+  const ObITableReadInfo *read_info_;
+  const ObStorageDatumUtils *datum_utils_;
 };
 
 class ObIMicroBlockGetReader : public ObIMicroBlockReaderInfo
@@ -231,12 +234,12 @@ public:
   virtual int get_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
-      const ObTableReadInfo &read_info,
+      const ObITableReadInfo &read_info,
       ObDatumRow &row) = 0;
   virtual int exist_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
-      const ObTableReadInfo &read_info,
+      const ObITableReadInfo &read_info,
       bool &exist,
       bool &found) = 0;
 protected:
@@ -270,7 +273,12 @@ public:
   virtual void reset() { ObIMicroBlockReaderInfo::reset(); }
   virtual int init(
       const ObMicroBlockData &block_data,
-      const ObTableReadInfo &read_info) = 0;
+      const ObITableReadInfo &read_info) = 0;
+  //when there is not read_info in input parameters, it indicates reading all columns from all rows
+  //when the incoming datum_utils is nullptr, it indicates not calling locate_range or find_bound
+  virtual int init(
+      const ObMicroBlockData &block_data,
+	  const ObStorageDatumUtils *datum_utils) = 0;
   virtual int get_row(const int64_t index, ObDatumRow &row) = 0;
   virtual int get_row_header(
       const int64_t row_idx,

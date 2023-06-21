@@ -177,6 +177,7 @@ int TestDataFilePrepareUtil::init(
     storage_env_.user_row_cache_priority_ = 1;
     storage_env_.fuse_row_cache_priority_ = 1;
     storage_env_.tablet_ls_cache_priority_ = 1;
+    storage_env_.storage_meta_cache_priority_ = 10;
     storage_env_.ethernet_speed_ = 1000000;
     storage_env_.redundancy_level_ = ObStorageEnv::NORMAL_REDUNDANCY;
 
@@ -288,7 +289,8 @@ int TestDataFilePrepareUtil::open()
           storage_env_.user_row_cache_priority_,
           storage_env_.fuse_row_cache_priority_,
           storage_env_.bf_cache_priority_,
-          storage_env_.bf_cache_miss_count_threshold_))) {
+          storage_env_.bf_cache_miss_count_threshold_,
+          storage_env_.storage_meta_cache_priority_))) {
         STORAGE_LOG(WARN, "Fail to init OB_STORE_CACHE, ", K(ret), K(storage_env_.data_dir_));
       } else if (OB_FAIL(ObIOManager::get_instance().start())) {
         STORAGE_LOG(WARN, "Fail to star io mgr", K(ret));

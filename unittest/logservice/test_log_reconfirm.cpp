@@ -104,10 +104,10 @@ void TestLogReconfirm::set_default_config_meta()
   default_mlist.add_server(self_);
   GlobalLearnerList learners;
   LogConfigMeta config_meta;
-  LogConfigInfo init_config_info;
+  LogConfigInfoV2 init_config_info;
   LogConfigVersion init_config_version;
   init_config_version.generate(curr_proposal_id, 0);
-  init_config_info.config_version_ = init_config_version;
+  init_config_info.config_.config_version_ = init_config_version;
   EXPECT_EQ(OB_SUCCESS, init_config_info.generate(default_mlist, 1, learners, init_config_version));
   config_meta.curr_ = init_config_info;
   mock_mm_.log_ms_meta_ = config_meta;

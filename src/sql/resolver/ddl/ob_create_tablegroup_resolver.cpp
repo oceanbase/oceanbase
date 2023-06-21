@@ -41,6 +41,15 @@ int ObCreateTablegroupResolver::resolve(const ParseNode &parse_tree)
       OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ is null or parser is error", K(ret));
+  } else {
+    uint64_t compat_version = OB_INVALID_VERSION;
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can not create tablegroup while observer is upgrading", KR(ret), K(tenant_id));
+    }
   }
   ObString tablegroup_name;
   if (OB_SUCC(ret)) {
@@ -99,14 +108,19 @@ int ObCreateTablegroupResolver::resolve(const ParseNode &parse_tree)
   if (OB_FAIL(ret)) {
     //nothing todo
   } else if (OB_NOT_NULL(node->children_[PARTITION_OPTION])) {
+    //ignore partition after 4.2
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "create tablegroup with partition");
+  }
+  // set default sharding attribute
+  if (OB_SUCC(ret)) {
     ObTablegroupSchema &tablegroup_schema = create_tablegroup_stmt->get_create_tablegroup_arg().tablegroup_schema_;
-    if (OB_FAIL(resolve_partition_table_option(create_tablegroup_stmt,
-                                               node->children_[PARTITION_OPTION],
-                                               tablegroup_schema))) {
-      SQL_RESV_LOG(WARN, "resolve partition option failed", K(ret));
-    } else {} //do nothing
+    ObString sharding_default(OB_PARTITION_SHARDING_ADAPTIVE);
+    if (tablegroup_schema.get_sharding().empty()) {
+      if (OB_FAIL(tablegroup_schema.set_sharding(sharding_default))) {
+        LOG_WARN("set_default_sharding fail", K(ret));
+      }
+    }
   }
   SQL_RESV_LOG(INFO, "resolve create tablegroup finish", K(ret), K(tablegroup_name));
   return ret;
 }
-

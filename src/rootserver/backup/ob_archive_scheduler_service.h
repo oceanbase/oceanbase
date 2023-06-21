@@ -13,12 +13,10 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_ARCHIVE_SCHEDULER_SERVICE_H_
 #define OCEANBASE_ROOTSERVER_OB_ARCHIVE_SCHEDULER_SERVICE_H_
 
+#include "ob_backup_base_service.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/container/ob_iarray.h"
 #include "share/backup/ob_backup_struct.h"
-#include "rootserver/ob_i_backup_scheduler.h"
-#include "rootserver/ob_thread_idling.h"
-#include "rootserver/ob_rs_reentrant_thread.h"
 
 namespace oceanbase
 {
@@ -31,66 +29,30 @@ namespace common {
   class ObMySQLProxy;
 }
 
-namespace share {
- class ObIBackupLeaseService;
-}
-
 namespace rootserver
 {
 
-class ObZoneManager;
-class ObUnitManager;
-
-class ObArchiveThreadIdling final: public ObThreadIdling
+class ObArchiveSchedulerService final : public ObBackupBaseService
 {
 public:
-  explicit ObArchiveThreadIdling(volatile bool &stop);
+  ObArchiveSchedulerService();
+  virtual ~ObArchiveSchedulerService() {}
+
   const int64_t RESERVED_FETCH_US = 10 * 1000 * 1000; // 10s, used for fetch observer log archive status
   const int64_t MIN_IDLE_INTERVAL_US = 2 * 1000 * 1000; // 2s
   const int64_t FAST_IDLE_INTERVAL_US = 10 * 1000 * 1000; // 10s, used during BEGINNING or STOPPING
   //const int64_t MAX_IDLE_INTERVAL_US = 60 * 1000 * 1000; // 60s
   const int64_t MAX_IDLE_INTERVAL_US = 10 * 1000 * 1000; // 60s
-  virtual int64_t get_idle_interval_us();
-  void set_checkpoint_interval(const int64_t interval_us);
-
-private:
-  int64_t idle_time_us_;
-  DISALLOW_COPY_AND_ASSIGN(ObArchiveThreadIdling);
-};
-
-class ObArchiveSchedulerService final : public ObIBackupScheduler
-{
-public:
-  ObArchiveSchedulerService();
-  ~ObArchiveSchedulerService() {}
+  static int mtl_init(ObArchiveSchedulerService *&archive_service);
 
   int init(
-    ObZoneManager &zone_mgr,
-    ObUnitManager &unit_manager,
-    share::schema::ObMultiVersionSchemaService *schema_service,
+    share::schema::ObMultiVersionSchemaService &schema_service,
     obrpc::ObSrvRpcProxy &rpc_proxy,
-    common::ObMySQLProxy &sql_proxy,
-    share::ObIBackupLeaseService &backup_lease_info);
-  
-  bool is_working() const override
-  {
-    return is_working_;
-  }
+    common::ObMySQLProxy &sql_proxy);
 
-  int blocking_run() override
-  {
-    BLOCKING_RUN_IMPLEMENT();
-  }
-
-  int start() override;
-  void stop() override;
-  void wait() override;
-  int destroy();
-  void run3() override;
+  void run2() override;
   // force cancel archive
-  int force_cancel(const uint64_t tenant_id) override;
-
-  void wakeup();
+  int force_cancel(const uint64_t tenant_id);
 
   int open_archive_mode(const uint64_t tenant_id, const common::ObIArray<uint64_t> &archive_tenant_ids);
 
@@ -108,7 +70,6 @@ public:
 
 private:
   int process_();
-  int inner_process_(const uint64_t tenant_id);
   int start_tenant_archive_(const uint64_t tenant_id);
   // Return the first error that failed to start archive if force_start is true. Otherwise,
   // ignore all error.
@@ -119,21 +80,17 @@ private:
   int stop_tenant_archive_(const uint64_t tenant_id);
   int get_all_tenant_ids_(common::ObIArray<uint64_t> &tenantid_array);
 
-
+  void set_checkpoint_interval_(const int64_t interval_us);
   int open_tenant_archive_mode_(const common::ObIArray<uint64_t> &tenant_ids_array);
   int open_tenant_archive_mode_(const uint64_t tenant_id);
   int close_tenant_archive_mode_(const common::ObIArray<uint64_t> &tenant_ids_array);
   int close_tenant_archive_mode_(const uint64_t tenant_id);
 
   bool is_inited_;
-  bool is_working_;
-  mutable ObArchiveThreadIdling idling_;
-  ObZoneManager *zone_mgr_;
-  ObUnitManager *unit_mgr_;
+  uint64_t tenant_id_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
-  share::ObIBackupLeaseService *backup_lease_service_;
 
   DISALLOW_COPY_AND_ASSIGN(ObArchiveSchedulerService);
 };

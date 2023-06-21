@@ -27,167 +27,100 @@ namespace storage
 class ObTabletTableStore;
 class ObTabletTablesSet;
 class ObTenantMetaMemMgr;
+class ObITableArray;
 
-// TODO maybe need 2-d array to store ObSSTableArray, ObMemtableArray, ObExtendArray
-class ObITableArray
+class ObSSTableArray
 {
 public:
-  ObITableArray();
-  virtual ~ObITableArray();
+  friend class ObTabletTableStore;
+  ObSSTableArray() : cnt_(0), sstable_array_(nullptr), is_inited_(false) {}
+  virtual ~ObSSTableArray() {}
 
-  int init(common::ObIAllocator &allocator, const int64_t count);
-  int copy(common::ObIAllocator &allocator, const ObITableArray &other, const bool allow_empty_table = false);
-  int init_and_copy(
-    common::ObIAllocator &allocator,
-    const common::ObIArray<ObITable *> &tables,
-    const int64_t start_pos = 0);
-  bool empty() const { return count_ <= 0; }
-  bool is_valid() const { return is_inited_ && count_ > 0; }
-  int64_t count() const { return count_; }
-  virtual void destroy();
+  void reset();
+  int init(
+      ObArenaAllocator &allocator,
+      const ObIArray<ObITable *> &tables,
+      const int64_t start_pos = 0);
+  int init(ObArenaAllocator &allocator, const blocksstable::ObSSTable *sstable);
+  int init(
+      ObArenaAllocator &allocator,
+      const ObIArray<ObITable *> &tables,
+      const ObIArray<ObMetaDiskAddr> &addrs,
+      const int64_t start_pos,
+      const int64_t count);
+  int init(
+      ObArenaAllocator &allocator,
+      const ObSSTableArray &other);
+  int64_t get_deep_copy_size() const;
+  int deep_copy(char *dst_buf, const int64_t buf_size, int64_t &pos, ObSSTableArray &dst_array) const;
 
-  int assign(const int64_t pos, ObITable * const table);
-  void reset_table(const int64_t pos);
+  int64_t get_serialize_size() const;
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  blocksstable::ObSSTable *operator[](const int64_t pos) const;
+  blocksstable::ObSSTable *at(const int64_t pos) const;
+  ObITable *get_boundary_table(const bool is_last) const;
+  int get_all_tables(ObIArray<ObITable *> &tables) const;
+  int get_table(const ObITable::TableKey &table_key, ObITable *&table) const;
+  int inc_macro_ref(bool &is_success) const;
+  void dec_macro_ref() const;
 
-  virtual int get_all_tables(common::ObIArray<ObITable *> &tables) const;
-  virtual int get_all_tables(storage::ObTablesHandleArray &tables) const;
-  virtual ObITable *get_boundary_table(const bool last) const;
-  int get_table(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const;
-  OB_INLINE ObITable *get_table(const int64_t pos) const { return (pos < count_ && pos >= 0) ? array_[pos] : nullptr; }
-  OB_INLINE ObITable *operator[](const int64_t pos) const { return (pos < count_ && pos >= 0) ? array_[pos] : nullptr; }
-  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(count), KP_(array));
-
-public:
-  storage::ObTenantMetaMemMgr* meta_mem_mgr_;
-  ObITable **array_;
-  common::ObIAllocator *allocator_;
-  int64_t count_;
+  OB_INLINE bool is_valid() const
+  {
+    return 0 == cnt_ || (is_inited_ && cnt_ > 0 && nullptr != sstable_array_);
+  }
+  OB_INLINE int64_t count() const { return cnt_; }
+  OB_INLINE bool empty() const { return 0 == cnt_; }
+  TO_STRING_KV(K_(cnt), K_(is_inited));
+private:
+  int inc_meta_ref_cnt(bool &inc_success) const;
+  int inc_data_ref_cnt(bool &inc_success) const;
+  void dec_meta_ref_cnt() const;
+  void dec_data_ref_cnt() const;
+  int inner_init(
+      ObArenaAllocator &allocator,
+      const ObIArray<ObITable *> &tables,
+      const int64_t start_pos,
+      const int64_t end_pos);
+private:
+  int64_t cnt_;
+  blocksstable::ObSSTable **sstable_array_;
   bool is_inited_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObITableArray);
-};
-
-class ObSSTableArray: public ObITableArray
-{
-public:
-  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  virtual int64_t get_serialize_size() const;
-  virtual int deserialize(
-    common::ObIAllocator &allocator,
-    const char *buf,
-    const int64_t data_len,
-    int64_t &pos);
-  int get_min_schema_version(int64_t &min_schema_version) const;
-};
-
-class ObExtendTableArray: public ObITableArray
-{
-public:
-  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  virtual int64_t get_serialize_size() const;
-  virtual int deserialize(
-    common::ObIAllocator &allocator,
-    const char *buf,
-    const int64_t data_len,
-    int64_t &pos);
-
-private:
-  virtual int get_all_tables(common::ObIArray<ObITable *> &sstables) const override { UNUSED(sstables); return OB_NOT_SUPPORTED; }
-  virtual ObITable *get_boundary_table(const bool last) const { UNUSED(last); return nullptr; }
+  DISALLOW_COPY_AND_ASSIGN(ObSSTableArray);
 };
 
 class ObMemtableArray
 {
 public:
-  ObMemtableArray();
-  virtual ~ObMemtableArray();
-  void destroy();
-  OB_INLINE int64_t count() const { return (nullptr == array_) ? 0 : array_->count(); }
-  OB_INLINE bool empty() const { return 0 == count(); }
-  OB_INLINE ObITable *get_table(const int64_t idx) const { return (idx < count() && idx >= 0) ? array_->at(idx) : nullptr; }
-  OB_INLINE ObITable *operator[](const int64_t idx) { return get_table(idx); }
-  OB_INLINE ObITable *operator[](const int64_t idx) const { return get_table(idx); }
+  static constexpr int64_t MEMTABLE_ARRAY_SIZE =16;
+  ObMemtableArray() : memtable_array_(), count_(0) {}
+  OB_INLINE memtable::ObMemtable *operator[](const int64_t pos) const
+  {
+    OB_ASSERT(pos < count_ && pos >= 0);
+    return memtable_array_[pos];
+  }
+  OB_INLINE void reset() { new (this) ObMemtableArray(); }
+  OB_INLINE int64_t count() const { return count_; }
+  OB_INLINE bool empty() const { return 0 == count_; }
+  OB_INLINE bool is_valid() const { return !empty(); }
 
-  int init(common::ObIAllocator *allocator);
-  int init(common::ObIAllocator *allocator, const ObMemtableArray &other);
-  int build(common::ObIArray<ObTableHandleV2> &handle_array, const int64_t start_pos = 0);
-  int rebuild(common::ObIArray<ObTableHandleV2> &handle_array);
+  int build(common::ObIArray<ObITable *> &table_array, const int64_t start_pos = 0);
+  int rebuild(const common::ObIArray<ObITable *> &table_array);
   int rebuild(
       const share::SCN &clog_checkpoint_scn,
-      common::ObIArray<ObTableHandleV2> &handle_array);
-  int prepare_allocate();
-  int find(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const;
+      common::ObIArray<ObITable *> &table_array);
+  int find(const ObITable::TableKey &table_key, ObITable *&table) const;
   int find(const share::SCN &start_scn, const int64_t base_version, ObITable *&table, int64_t &mem_pos) const;
-  TO_STRING_KV(K_(is_inited), KPC_(array));
+  int assign(ObMemtableArray &dst_array) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
-  int add_table(ObITable * const table);
-  void reset_table(const int64_t pos);
-
-public:
-  static const int64_t DEFAULT_TABLE_CNT = 16;
-  storage::ObTenantMetaMemMgr* meta_mem_mgr_;
-  common::ObIAllocator *allocator_;
-  common::ObSEArray<ObITable *, DEFAULT_TABLE_CNT, common::ObIAllocator&> *array_;
-  bool is_inited_;
+  int trim_empty_last_memtable();
+  memtable::ObMemtable *memtable_array_[MEMTABLE_ARRAY_SIZE];
+  int64_t count_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableArray);
 };
-
-class ObTableStoreIterator
-{
-public:
-  friend class ObPrintTableStoreIterator;
-  static const int64_t DEFAULT_TABLET_CNT = 16;
-  typedef common::ObSEArray<ObITable *, DEFAULT_TABLET_CNT> TableArray;
-
-  explicit ObTableStoreIterator(const bool reverse_iter = false);
-  virtual ~ObTableStoreIterator();
-  void reset();
-  void resume();
-  bool is_valid() const { return array_.count() > 0; }
-  int64_t count() const { return array_.count(); }
-
-  int copy(const ObTableStoreIterator &other);
-  int add_tables(ObMemtableArray &array, const int64_t start_pos = 0);
-  int add_tables(ObITable **start, const int64_t count = 1);
-  int add_table(ObITable *input_table);
-  int get_next(ObITable *&table);
-
-  ObITable *get_boundary_table(const bool is_last);
-
-  int set_retire_check();
-  bool check_store_expire() const { return (NULL == memstore_retired_) ? false : ATOMIC_LOAD(memstore_retired_); }
-  TO_STRING_KV(K_(array), K_(pos), K_(memstore_retired), K_(step));
-
-private:
-  TableArray array_;
-  int64_t pos_;
-  int64_t step_;
-  bool * memstore_retired_;
-};
-
-
-class ObPrintTableStoreIterator
-{
-public:
-  ObPrintTableStoreIterator(const ObTableStoreIterator &iter);
-  virtual ~ObPrintTableStoreIterator();
-  int64_t to_string(char *buf, const int64_t buf_len) const;
-private:
-  void table_to_string(
-      ObITable *table,
-      char *buf,
-      const int64_t buf_len,
-      int64_t &pos) const;
-private:
-  const ObTableStoreIterator::TableArray &array_;
-  int64_t pos_;
-  int64_t step_;
-  bool *memstore_retired_;
-};
-
-#define PRINT_TS_ITER(x) (ObPrintTableStoreIterator(x))
-
 
 struct ObTableStoreUtil
 {
@@ -215,6 +148,14 @@ struct ObTableStoreUtil
     int &result_code_;
   };
 
+  struct ObTableHandleV2LogTsRangeReverseCompare {
+    explicit ObTableHandleV2LogTsRangeReverseCompare(int &sort_ret)
+      : result_code_(sort_ret) {}
+    bool operator()(const ObTableHandleV2 &lhandle, const ObTableHandleV2 &rhandle) const;
+
+    int &result_code_;
+  };
+
   struct ObTableHandleV2SnapshotVersionCompare {
     explicit ObTableHandleV2SnapshotVersionCompare(int &sort_ret)
       : result_code_(sort_ret) {}
@@ -223,10 +164,11 @@ struct ObTableStoreUtil
     int &result_code_;
   };
 
-  static int compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, bool &bret);
+  static int compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, const bool is_ascend, bool &bret);
   static int compare_table_by_snapshot_version(const ObITable *ltable, const ObITable *rtable, bool &bret);
 
   static int sort_minor_tables(ObArray<ObITable *> &tables);
+  static int reverse_sort_minor_table_handles(ObArray<ObTableHandleV2> &table_handles);
   static int sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables);
 
   static bool check_include_by_scn_range(const ObITable &ltable, const ObITable &rtable);

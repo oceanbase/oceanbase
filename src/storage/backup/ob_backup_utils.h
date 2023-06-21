@@ -30,6 +30,14 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase {
+namespace storage
+{
+struct ObBackupLSMetaInfosDesc;
+}
+namespace share
+{
+class SCN;
+}
 namespace backup {
 
 struct ObLSBackupCtx;
@@ -39,15 +47,18 @@ class ObBackupMacroBlockIndexStore;
 class ObBackupUtils {
 public:
   static int get_sstables_by_data_type(const storage::ObTabletHandle &tablet_handle, const share::ObBackupDataType &backup_data_type,
-      storage::ObTabletTableStore &table_store, common::ObIArray<storage::ObITable *> &sstable_array);
+      const storage::ObTabletTableStore &table_store, common::ObIArray<storage::ObITable *> &sstable_array);
   static int check_tablet_with_major_sstable(const storage::ObTabletHandle &tablet_handle, bool &with_major);
   static int fetch_macro_block_logic_id_list(const storage::ObTabletHandle &tablet_handle,
       const blocksstable::ObSSTable &sstable, common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list);
   static int report_task_result(const int64_t job_id, const int64_t task_id, const uint64_t tenant_id,
       const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const share::ObTaskId trace_id,
-      const int64_t result, ObBackupReportCtx &report_ctx);
+      const share::ObTaskId &dag_id, const int64_t result, ObBackupReportCtx &report_ctx);
   static int check_ls_validity(const uint64_t tenant_id, const share::ObLSID &ls_id);
   static int check_ls_valid_for_backup(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t local_rebuild_seq);
+  static int calc_start_replay_scn(const share::ObBackupSetTaskAttr &set_task_attr,
+      const storage::ObBackupLSMetaInfosDesc &ls_meta_infos, const share::ObTenantArchiveRoundAttr &round_attr,
+      share::SCN &start_replay_scn);
 private:
   static int check_tablet_minor_sstable_validity_(const storage::ObTabletHandle &tablet_handle,
       const common::ObIArray<storage::ObITable *> &minor_sstable_array);
@@ -269,14 +280,19 @@ private:
   int prepare_batch_tablet_(const uint64_t tenant_id, const share::ObLSID &ls_id);
   int prepare_tablet_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       const share::ObBackupDataType &backup_data_type, int64_t &count);
+
+  // make sure clog checkpoint scn of the returned tablet is >= consistent_scn.
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle);
+  int get_consistent_scn_(share::SCN &consistent_scn) const;
+  int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type,
+                             const share::ObBackupDataType &backup_data_type);
   int get_tablet_skipped_type_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id, share::ObBackupSkippedType &skipped_type);
-  int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type);
   int hold_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
   int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
-      const share::ObBackupDataType &backup_data_type, common::ObIArray<storage::ObITable *> &sstable_array);
+      const ObTabletTableStore &table_store, const share::ObBackupDataType &backup_data_type,
+      common::ObIArray<storage::ObITable *> &sstable_array);
   int prepare_tablet_logic_id_reader_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, const blocksstable::ObSSTable &sstable,
       ObITabletLogicMacroIdReader *&reader);
@@ -290,10 +306,14 @@ private:
   int check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id, bool &need_skip);
   int inner_check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id,
       const common::ObArray<ObBackupMacroBlockIDPair> &reused_pair_list, bool &need_skip);
+  int check_tablet_status_(const storage::ObTabletHandle &tablet_handle, bool &is_normal);
   int check_tablet_continuity_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       const storage::ObTabletHandle &tablet_handle);
-  int build_meta_index_store_(const share::ObBackupDataType &backup_data_type);
-  int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type, int64_t &retry_id);
+  int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);
+  int build_tenant_meta_index_store_(const share::ObBackupDataType &backup_data_type);
+  int get_tenant_meta_index_turn_id_(int64_t &turn_id);
+  int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, int64_t &retry_id);
   int check_tablet_replica_validity_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type);
   int compare_prev_item_(const ObBackupProviderItem &item);

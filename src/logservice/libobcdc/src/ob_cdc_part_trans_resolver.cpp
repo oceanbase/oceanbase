@@ -743,8 +743,6 @@ int ObCDCPartTransResolver::handle_commit_(
   } else if (OB_FAIL(obtain_task_(tx_id, part_trans_task, is_resolving_miss_log))) {
     LOG_ERROR("obtain_part_trans_task fail while reading commit log", KR(ret), K_(tls_id), K(tx_id), K(lsn),
         K(commit_log), K(missing_info));
-  } else if (OB_FAIL(part_trans_task->push_multi_data_source_data(lsn, commit_log.get_multi_source_data(), true/*is_commit_log*/))) {
-    LOG_ERROR("push_multi_data_source_data failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(commit_log), KPC(part_trans_task));
     // TODO 下面是否检查sys日志流里非DDL/非LS_TABLE的事务？
   } else if (!part_trans_task->has_read_commit_info()) {
     if (is_resolving_miss_log) {

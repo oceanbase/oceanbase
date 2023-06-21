@@ -17,8 +17,10 @@
 #define protected public
 #define private public
 
+#include "storage/tablet/ob_tablet_persister.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/schema_utils.h"
 #include "storage/mock_ob_log_handler.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
@@ -53,15 +55,29 @@ int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
 
 namespace storage
 {
-int ObTenantCheckpointSlogHandler::read_from_ckpt(const ObMetaDiskAddr &phy_addr,
-    char *buf, const int64_t buf_len, int64_t &r_len)
-{
-  return OB_NOT_SUPPORTED;
-}
 
-int ObTablet::update_msd_cache_on_pointer()
+int ObTablet::check_and_set_initial_state()
 {
   return OB_SUCCESS;
+}
+
+int ObTabletPersister::acquire_tablet(
+    const ObTabletPoolType &type,
+    const ObTabletMapKey &key,
+    const bool try_smaller_pool,
+    ObTabletHandle &new_handle)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(try_smaller_pool);
+  if (new_handle.is_valid()) {
+    // nothing to do
+  } else {
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
+    if (OB_FAIL(t3m->acquire_tablet_from_pool(type, WashTabletPriority::WTP_LOW, key, new_handle))) {
+      LOG_WARN("fail to acquire tablet from pool", K(ret), K(key), K(type));
+    }
+  }
+  return ret;
 }
 
 class TestTenantMetaMemMgr : public ::testing::Test
@@ -76,7 +92,8 @@ public:
   static void TearDownTestCase();
 
   void prepare_data_schema(ObTableSchema &table_schema);
-
+  void prepare_create_sstable_param();
+  void gc_all_tablets();
 public:
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 3;
   static const int64_t TEST_COLUMN_CNT = 6;
@@ -87,6 +104,9 @@ public:
   const uint64_t tenant_id_;
   share::ObLSID ls_id_;
   ObTenantMetaMemMgr t3m_;
+  ObTabletCreateSSTableParam param_;
+  share::schema::ObTableSchema table_schema_;
+  common::ObArenaAllocator allocator_;
 };
 
 // record the old_t3m just for ls remove
@@ -94,7 +114,10 @@ ObTenantMetaMemMgr *old_t3m = nullptr;
 TestTenantMetaMemMgr::TestTenantMetaMemMgr()
   : tenant_id_(TEST_TENANT_ID),
     ls_id_(TEST_LS_ID),
-    t3m_(TEST_TENANT_ID)
+    t3m_(TEST_TENANT_ID),
+    param_(),
+    table_schema_(),
+    allocator_()
 {
 }
 
@@ -106,6 +129,7 @@ void TestTenantMetaMemMgr::SetUpTestCase()
   SAFE_DESTROY_INSTANCE.init();
   SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  ObClockGenerator::init();
 
   // create ls
   ObLSHandle ls_handle;
@@ -116,12 +140,15 @@ void TestTenantMetaMemMgr::SetUpTestCase()
 
 void TestTenantMetaMemMgr::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
   ret = t3m_.init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTenantBase *tenant_base = MTL_CTX();
   tenant_base->set(&t3m_);
+  TestSchemaUtils::prepare_data_schema(table_schema_);
+  prepare_create_sstable_param();
 }
 
 void TestTenantMetaMemMgr::TearDownTestCase()
@@ -129,7 +156,6 @@ void TestTenantMetaMemMgr::TearDownTestCase()
   int ret = OB_SUCCESS;
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
-
   SAFE_DESTROY_INSTANCE.stop();
   SAFE_DESTROY_INSTANCE.wait();
   SAFE_DESTROY_INSTANCE.destroy();
@@ -138,6 +164,9 @@ void TestTenantMetaMemMgr::TearDownTestCase()
 
 void TestTenantMetaMemMgr::TearDown()
 {
+  table_schema_.reset();
+  t3m_.stop();
+  t3m_.wait();
   t3m_.destroy();
 
   // return to the old t3m to make ls destroy success.
@@ -194,13 +223,57 @@ void TestTenantMetaMemMgr::prepare_data_schema(ObTableSchema &table_schema)
   LOG_INFO("dump data table schema", LITERAL_K(TEST_ROWKEY_COLUMN_CNT), K(table_schema));
 }
 
+void TestTenantMetaMemMgr::prepare_create_sstable_param()
+{
+  const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  param_.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+  param_.table_key_.tablet_id_ = 1;
+  param_.table_key_.version_range_.base_version_ = ObVersionRange::MIN_VERSION;
+  param_.table_key_.version_range_.snapshot_version_ = 0;
+  param_.schema_version_ = table_schema_.get_schema_version();
+  param_.create_snapshot_version_ = 0;
+  param_.progressive_merge_round_ = table_schema_.get_progressive_merge_round();
+  param_.progressive_merge_step_ = 0;
+  param_.table_mode_ = table_schema_.get_table_mode_struct();
+  param_.index_type_ = table_schema_.get_index_type();
+  param_.rowkey_column_cnt_ = table_schema_.get_rowkey_column_num()
+          + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  param_.root_block_addr_.set_none_addr();
+  param_.data_block_macro_meta_addr_.set_none_addr();
+  param_.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  param_.data_index_tree_height_ = 0;
+  param_.index_blocks_cnt_ = 0;
+  param_.data_blocks_cnt_ = 0;
+  param_.micro_block_cnt_ = 0;
+  param_.use_old_macro_block_count_ = 0;
+  param_.column_cnt_ = table_schema_.get_column_count() + multi_version_col_cnt;
+  param_.data_checksum_ = 0;
+  param_.occupy_size_ = 0;
+  param_.ddl_scn_.set_min();
+  param_.filled_tx_scn_.set_min();
+  param_.original_size_ = 0;
+  param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  param_.encrypt_id_ = 0;
+  param_.master_key_id_ = 0;
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
+}
+
+void TestTenantMetaMemMgr::gc_all_tablets()
+{
+  bool all_tablet_cleaned = false;
+  while (!all_tablet_cleaned) {
+    t3m_.gc_tablets_in_queue(all_tablet_cleaned); // do not use MTL t3m
+  }
+}
+
 class TestConcurrentT3M : public share::ObThreadPool
 {
 public:
   TestConcurrentT3M(
       const int64_t thread_cnt,
       ObTenantMetaMemMgr &t3m_,
-      ObTenantBase *tenant_base);
+      ObTenantBase *tenant_base,
+      common::ObArenaAllocator &allocator);
   virtual ~TestConcurrentT3M();
   virtual void run1();
 
@@ -212,17 +285,20 @@ private:
   ObTenantMetaMemMgr &t3m_;
   ObTenantBase *tenant_base_;
   common::SpinRWLock lock_;
+  common::ObArenaAllocator &allocator_;
 };
 
 TestConcurrentT3M::TestConcurrentT3M(
     const int64_t thread_cnt,
     ObTenantMetaMemMgr &t3m,
-    ObTenantBase *tenant_base)
+    ObTenantBase *tenant_base,
+    common::ObArenaAllocator &allocator)
   : thread_cnt_(thread_cnt),
     ls_id_(TestTenantMetaMemMgr::TEST_LS_ID),
     t3m_(t3m),
     tenant_base_(tenant_base),
-    lock_()
+    lock_(),
+    allocator_(allocator)
 {
   set_thread_count(static_cast<int32_t>(thread_cnt_));
 }
@@ -250,10 +326,13 @@ void TestConcurrentT3M::run1()
   while (count-- > 0) {
     ObTablet *tablet = nullptr;
     key.tablet_id_ = thread_idx_ * TABLET_CNT_PER_THREAD * 10 + count + 1;
-    int ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
-    ASSERT_EQ(common::OB_SUCCESS, ret);
-    ASSERT_TRUE(handle.is_valid());
-
+    {
+      SpinWLockGuard guard(lock_);
+      int ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+      handle.t3m_ = &t3m_; // temporary code, use local t3m
+      ASSERT_EQ(common::OB_SUCCESS, ret);
+      ASSERT_TRUE(handle.is_valid());
+    }
     tablet = handle.get_obj();
     ASSERT_TRUE(nullptr != tablet);
     ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
@@ -265,19 +344,23 @@ void TestConcurrentT3M::run1()
 
     tablet = handle.get_obj();
     ASSERT_TRUE(nullptr != tablet);
-    ASSERT_TRUE(nullptr != handle.obj_pool_);
+    ASSERT_TRUE(nullptr != handle.allocator_);
+    if (0 == count % N) { /* mock empty tablet to del successfully */
+      tablet->table_store_addr_.addr_.set_none_addr();
+      tablet->storage_schema_addr_.addr_.set_none_addr();
+      tablet->mds_data_.auto_inc_seq_.addr_.set_none_addr();
+      tablet->rowkey_read_info_ = nullptr;
+    }
 
     ObMetaDiskAddr addr;
-    ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
-    ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
-
     addr.first_id_ = 1;
     addr.second_id_ = 2;
     addr.offset_ = 0;
     addr.size_ = 4096;
     addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+    handle.get_obj()->set_tablet_addr(addr);
 
-    ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+    ret = t3m_.compare_and_swap_tablet(key, handle, handle);
     ASSERT_EQ(common::OB_SUCCESS, ret);
 
     ObMetaPointerHandle<ObTabletMapKey, ObTablet> ptr_hdl(t3m_.tablet_map_);
@@ -287,7 +370,7 @@ void TestConcurrentT3M::run1()
     ASSERT_EQ(common::OB_SUCCESS, ret);
     ASSERT_TRUE(addr == ptr_hdl.ptr_->ptr_->phy_addr_);
     ASSERT_TRUE(handle.obj_ == ptr_hdl.ptr_->ptr_->obj_.ptr_);
-    ASSERT_TRUE(handle.obj_pool_ == ptr_hdl.ptr_->ptr_->obj_.pool_);
+    ASSERT_TRUE(handle.allocator_ == ptr_hdl.ptr_->ptr_->obj_.allocator_);
 
     handle.reset();
 
@@ -308,41 +391,27 @@ TEST_F(TestTenantMetaMemMgr, test_bucket_cnt)
   // ASSERT_EQ(unify_bucket_num, t3m_lock_bkt_cnt);
   ASSERT_EQ(unify_bucket_num, t3m_map_bkt_cnt);
   ASSERT_EQ(unify_bucket_num, t3m_map_lock_bkt_cnt);
-
-  const int64_t unify_pin_set_bkt_cnt = common::hash::cal_next_prime(ObTenantMetaMemMgr::DEFAULT_BUCKET_NUM);
-  const int64_t pin_set_lock_bkt_cnt = t3m_.pin_set_lock_.bucket_cnt_;
-  const int64_t pin_set_bkt_cnt = t3m_.pinned_tablet_set_.ht_.get_bucket_count();
-  ASSERT_NE(unify_pin_set_bkt_cnt, 0);
-  ASSERT_EQ(unify_pin_set_bkt_cnt, pin_set_lock_bkt_cnt);
-  ASSERT_EQ(unify_pin_set_bkt_cnt, pin_set_bkt_cnt);
 }
 
 TEST_F(TestTenantMetaMemMgr, test_sstable)
 {
-  int ret = OB_SUCCESS;
-  ObTableHandleV2 handle;
-
-  ret = t3m_.acquire_sstable(handle);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_TRUE(nullptr != handle.table_);
-  ASSERT_EQ(1, t3m_.sstable_pool_.inner_used_num_);
-  ASSERT_EQ(1, handle.get_table()->get_ref());
-
-  handle.table_->inc_ref();
-  t3m_.release_sstable(static_cast<ObSSTable *>(handle.table_));
-  ASSERT_EQ(1, t3m_.sstable_pool_.inner_used_num_);
-  ASSERT_EQ(2, handle.get_table()->get_ref());
-
-  handle.table_->dec_ref();
-  t3m_.release_sstable(static_cast<ObSSTable *>(handle.table_));
-  ASSERT_EQ(1, t3m_.sstable_pool_.inner_used_num_);
-  ASSERT_EQ(1, handle.get_table()->get_ref());
-
-  handle.reset();
-  ASSERT_EQ(1, t3m_.sstable_pool_.inner_used_num_);
-  ASSERT_EQ(1, t3m_.free_tables_queue_.size());
-
-  t3m_.release_sstable(static_cast<ObSSTable *>(handle.table_));
+  void *buf = nullptr;
+  ObSSTable *sstable = nullptr;
+  ObArenaAllocator allocator;
+  ASSERT_NE(nullptr, (buf = allocator.alloc(sizeof(ObSSTable))));
+  sstable = new (buf) ObSSTable();
+  sstable->is_tmp_sstable_ = true;
+  ObTableHandleV2 sstable_handle;
+  ObTableHandleV2 handle2;
+  ASSERT_EQ(OB_SUCCESS, sstable_handle.set_sstable(sstable, &allocator));
+  ASSERT_EQ(1, sstable->get_ref());
+  handle2 = sstable_handle;
+  ASSERT_EQ(2, sstable->get_ref());
+  handle2.reset();
+  ASSERT_EQ(1, sstable->get_ref());
+  sstable_handle.reset();
+  ASSERT_EQ(0, sstable->get_ref());
+  ASSERT_EQ(false, sstable->is_tmp_sstable_);
 }
 
 TEST_F(TestTenantMetaMemMgr, test_memtable)
@@ -477,9 +546,10 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
   tablet = handle.get_obj();
   ASSERT_TRUE(nullptr == tablet);
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
@@ -495,22 +565,19 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
   ASSERT_TRUE(!tmp_handle.is_valid());
 
   ASSERT_TRUE(nullptr != tablet);
-  ASSERT_TRUE(nullptr != handle.obj_pool_);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_TRUE(nullptr != handle.allocator_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
 
   ObMetaDiskAddr addr;
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
-  ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
-  ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-
   addr.first_id_ = 1;
   addr.second_id_ = 2;
   addr.offset_ = 0;
   addr.size_ = 4096;
   addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+  handle.get_obj()->set_tablet_addr(addr);
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+  ret = t3m_.compare_and_swap_tablet(key, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
@@ -522,18 +589,18 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
   ret = t3m_.tablet_map_.inc_handle_ref(ptr_hdl.ptr_);
   ASSERT_TRUE(addr == ptr_hdl.ptr_->ptr_->phy_addr_);
   ASSERT_TRUE(handle.obj_ == ptr_hdl.ptr_->ptr_->obj_.ptr_);
-  ASSERT_TRUE(handle.obj_pool_ == ptr_hdl.ptr_->ptr_->obj_.pool_);
+  ASSERT_TRUE(handle.allocator_ == ptr_hdl.ptr_->ptr_->obj_.allocator_);
 
   ObMetaDiskAddr old_addr;
   old_addr.set_none_addr();
-  ret = t3m_.compare_and_swap_tablet_pure_address_without_object(key, old_addr, addr);
-  ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ret = t3m_.compare_and_swap_tablet(key, old_addr, addr);
+  ASSERT_EQ(common::OB_NOT_THE_OBJECT, ret);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
   handle.reset();
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
 
   ret = t3m_.get_tablet(WashTabletPriority::WTP_HIGH, key, handle);
@@ -543,22 +610,28 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
   tablet = handle.get_obj();
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
+  /* mock empty tablet to del successfully */
+  tablet->table_store_addr_.addr_.set_none_addr();
+  tablet->storage_schema_addr_.addr_.set_none_addr();
+  tablet->mds_data_.auto_inc_seq_.addr_.set_none_addr();
+  tablet->rowkey_read_info_ = nullptr;
 
   tablet->tablet_meta_.ls_id_ = key.ls_id_;
   tablet->tablet_meta_.tablet_id_ = key.tablet_id_;
   handle.reset();
 
-  ret = t3m_.try_wash_tablet(1);
-  ASSERT_EQ(common::OB_NOT_INIT, ret);
+  void *free_obj = nullptr;
+  ret = t3m_.try_wash_tablet(typeid(ObTenantMetaMemMgr::ObNormalTabletBuffer), free_obj);
+  ASSERT_EQ(common::OB_ITER_END, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   ret = t3m_.del_tablet(key);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
 
   ptr_hdl.reset();
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
 
 TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
@@ -574,9 +647,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
@@ -584,15 +658,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  // set tx data
-  ObTabletTxMultiSourceDataUnit &tx_data = tablet->tablet_meta_.tx_data_;
-  tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
-  share::SCN scn;
-  scn.convert_for_logservice(12345);
-  tx_data.tx_scn_ = scn;
-  tx_data.tablet_status_ = ObTabletStatus::NORMAL;
-
-  ObTableHandleV2 table_handle;
+  ObSSTable sstable;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -607,9 +675,12 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_sstable(table_handle);
+  ObTabletCreateSSTableParam param;
+  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(table_schema, tablet_id, 100, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  table_handle.get_table()->set_table_type(ObITable::TableType::MAJOR_SSTABLE);
+
+  ret = ObTabletCreateDeleteHelper::create_sstable(param, allocator_, sstable);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_scn;
   create_scn.convert_from_ts(ObTimeUtility::fast_current_time());
@@ -617,40 +688,48 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
+  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, table_handle, &freezer);
+      lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
-  ObMetaDiskAddr addr;
-  addr.first_id_ = 1;
-  addr.second_id_ = 2;
-  addr.offset_ = 0;
-  addr.size_ = 4096;
-  addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+  ObTabletHandle new_handle;
+  ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
+      *tablet, allocator_, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+  ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
+  ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
+  tablet = new_handle.get_obj();
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
 
-  handle.reset();
+  void *free_obj = nullptr;
+  new_handle.reset();
   ASSERT_EQ(1, tablet->get_ref());
-  ret = t3m_.try_wash_tablet(1);
+  ret = t3m_.try_wash_tablet(typeid(ObTenantMetaMemMgr::ObNormalTabletBuffer), free_obj);
   ASSERT_EQ(common::OB_SUCCESS, ret);
+  ASSERT_EQ(free_obj, ObMetaObjBufferHelper::get_meta_obj_buffer_ptr(reinterpret_cast<char *>(tablet)));
+  t3m_.tablet_buffer_pool_.free_obj(free_obj);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   ObMetaDiskAddr none_addr;
   none_addr.set_none_addr();
-  ret = t3m_.compare_and_swap_tablet_pure_address_without_object(key, addr, none_addr);
+  ret = t3m_.compare_and_swap_tablet(key, addr, none_addr);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
-  ret = t3m_.tablet_map_.erase(key);
+  ObTabletHandle tmp_handle;
+  ret = t3m_.tablet_map_.erase(key, tmp_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  tmp_handle.reset();
+  gc_all_tablets();
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
 
 TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
@@ -666,9 +745,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
@@ -676,7 +756,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  ObTableHandleV2 table_handle;
+  ObSSTable sstable;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -691,9 +773,12 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_sstable(table_handle);
+  ObTabletCreateSSTableParam param;
+  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(table_schema, tablet_id, 100, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  table_handle.get_table()->set_table_type(ObITable::TableType::MAJOR_SSTABLE);
+
+  ret = ObTabletCreateDeleteHelper::create_sstable(param, allocator_, sstable);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_scn;
   create_scn.convert_from_ts(ObTimeUtility::fast_current_time());
@@ -701,51 +786,50 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
+  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema, lib::Worker::CompatMode::MYSQL,
-      store_flag, table_handle, &freezer);
+      store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
-  // set tx data
-  ObTabletTxMultiSourceDataUnit &tx_data = tablet->tablet_meta_.tx_data_;
-  tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
-  share::SCN scn;
-  scn.convert_for_logservice(12345);
-  tx_data.tx_scn_ = scn;
-  tx_data.tablet_status_ = ObTabletStatus::NORMAL;
+  ObTabletHandle new_handle;
+  ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
+      *tablet, allocator_, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
 
-  ObMetaDiskAddr addr;
-  addr.first_id_ = 1;
-  addr.second_id_ = 2;
-  addr.offset_ = 0;
-  addr.size_ = 4096;
-  addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+  ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+  ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
+  tablet = new_handle.get_obj();
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
 
-  handle.reset();
+  void *free_obj = nullptr;
+  new_handle.reset();
   ASSERT_EQ(1, tablet->get_ref());
-  ret = t3m_.try_wash_tablet(1);
+  ret = t3m_.try_wash_tablet(typeid(ObTenantMetaMemMgr::ObNormalTabletBuffer), free_obj);
   ASSERT_EQ(common::OB_SUCCESS, ret);
+  ASSERT_EQ(free_obj, ObMetaObjBufferHelper::get_meta_obj_buffer_ptr(reinterpret_cast<char *>(tablet)));
+  t3m_.tablet_buffer_pool_.free_obj(free_obj);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   ObMetaDiskAddr mem_addr;
   ret = mem_addr.set_mem_addr(0, 0);
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ret = t3m_.compare_and_swap_tablet_pure_address_without_object(key, addr, mem_addr);
+  ret = t3m_.compare_and_swap_tablet(key, addr, mem_addr);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
 
-  ret = t3m_.tablet_map_.erase(key);
+  ObTabletHandle tmp_handle;
+  ret = t3m_.tablet_map_.erase(key, tmp_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  tmp_handle.reset();
+  gc_all_tablets();
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
-
 
 TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
 {
@@ -760,9 +844,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
@@ -770,15 +855,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  // set tx data
-  ObTabletTxMultiSourceDataUnit &tx_data = tablet->tablet_meta_.tx_data_;
-  tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
-  share::SCN scn;
-  scn.convert_for_logservice(12345);
-  tx_data.tx_scn_ = scn;
-  tx_data.tablet_status_ = ObTabletStatus::NORMAL;
-
-  ObTableHandleV2 table_handle;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -799,38 +877,43 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
+  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema, lib::Worker::CompatMode::MYSQL,
-      store_flag, table_handle, &freezer);
+      store_flag, nullptr, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
-  ObMetaDiskAddr addr;
-  addr.first_id_ = 1;
-  addr.second_id_ = 2;
-  addr.offset_ = 0;
-  addr.size_ = 4096;
-  addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+  ObTabletHandle new_handle;
+  ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
+      *tablet, allocator_, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+  ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
+  tablet = new_handle.get_obj();
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
 
-  handle.reset();
+  void *free_obj = nullptr;
+  new_handle.reset();
   ASSERT_EQ(1, tablet->get_ref());
-  ret = t3m_.try_wash_tablet(1);
+  ret = t3m_.try_wash_tablet(typeid(ObTenantMetaMemMgr::ObNormalTabletBuffer), free_obj);
   ASSERT_EQ(common::OB_SUCCESS, ret);
+  t3m_.tablet_buffer_pool_.free_obj(free_obj);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
-  ret = t3m_.tablet_map_.erase(key);
+  ObTabletHandle tmp_handle;
+  ret = t3m_.tablet_map_.erase(key, tmp_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  tmp_handle.reset();
+  gc_all_tablets();
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
 
-TEST_F(TestTenantMetaMemMgr, test_not_wash_in_tx_tablet)
+/*TEST_F(TestTenantMetaMemMgr, test_not_wash_in_tx_tablet)
 {
   int ret = OB_SUCCESS;
   const ObTabletID tablet_id(1234567890);
@@ -843,9 +926,10 @@ TEST_F(TestTenantMetaMemMgr, test_not_wash_in_tx_tablet)
   ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
@@ -853,7 +937,7 @@ TEST_F(TestTenantMetaMemMgr, test_not_wash_in_tx_tablet)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  ObTableHandleV2 table_handle;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> all_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -874,63 +958,54 @@ TEST_F(TestTenantMetaMemMgr, test_not_wash_in_tx_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
+  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema, lib::Worker::CompatMode::MYSQL,
-      store_flag, table_handle, &freezer);
+      store_flag, nullptr, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
-  ObMetaDiskAddr addr;
-  addr.first_id_ = 1;
-  addr.second_id_ = 2;
-  addr.offset_ = 0;
-  addr.size_ = 4096;
-  addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+  ObTabletHandle new_handle;
+  ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
+      *tablet, allocator_, all_write_ctxs, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+  ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
+  tablet = new_handle.get_obj();
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
+  new_handle.reset();
 
-  // set tx data, status is DELETING
-  ObTabletTxMultiSourceDataUnit &tx_data = tablet->tablet_meta_.tx_data_;
-  tx_data.tx_id_ = 666;
-  share::SCN scn;
-  scn.convert_for_logservice(888);
-  tx_data.tx_scn_ = scn;
-  tx_data.tablet_status_ = ObTabletStatus::DELETING;
-  ret = handle.get_obj()->set_tx_data_in_tablet_pointer(tx_data);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
+  // get tablet pointer
+  ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(handle.get_obj()->pointer_hdl_.get_resource_ptr());
+
+  // pin tabet
   ASSERT_EQ(common::OB_SUCCESS, t3m_.insert_pinned_tablet(key));
-  handle.reset();
-  ASSERT_EQ(1, tablet->get_ref());
-  ret = t3m_.try_wash_tablet(1);
-  ASSERT_EQ(common::OB_ALLOCATE_MEMORY_FAILED, ret); // wash failed
+  void *free_obj = nullptr;
+  ret = t3m_.try_wash_tablet(typeid(ObTenantMetaMemMgr::ObNormalTabletBuffer), free_obj);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+  ASSERT_EQ(nullptr, free_obj); // pinned tablet can't be washed.
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(1, t3m_.tablet_buffer_pool_.inner_used_num_);
 
-  // set status to DELETED
-  tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
-  scn.convert_for_logservice(999);
-  tx_data.tx_scn_ = scn;
-  tx_data.tablet_status_ = ObTabletStatus::DELETED;
-  ret = t3m_.get_tablet(WashTabletPriority::WTP_HIGH, key, handle);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
-  ret = handle.get_obj()->set_tx_data_in_tablet_pointer(tx_data);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
-  handle.reset();
+  // unpin tablet
   ASSERT_EQ(common::OB_SUCCESS, t3m_.erase_pinned_tablet(key));
-
-  ret = t3m_.try_wash_tablet(1);
+  ret = t3m_.try_wash_tablet(typeid(ObTenantMetaMemMgr::ObNormalTabletBuffer), free_obj);
   ASSERT_EQ(common::OB_SUCCESS, ret); // wash succeeded
+  ASSERT_NE(nullptr, free_obj);
+  t3m_.tablet_buffer_pool_.free_obj(free_obj);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
-  ret = t3m_.tablet_map_.erase(key);
+  ObTabletHandle tmp_handle;
+  ret = t3m_.tablet_map_.erase(key, tmp_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
-}
+  tmp_handle.reset();
+  gc_all_tablets();
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
+}*/
 
 TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
 {
@@ -945,9 +1020,10 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
@@ -955,14 +1031,9 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  ObTabletTxMultiSourceDataUnit &tx_data = tablet->tablet_meta_.tx_data_;
-  tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
-  share::SCN scn;
-  scn.convert_for_logservice(12345);
-  tx_data.tx_scn_ = scn;
-  tx_data.tablet_status_ = ObTabletStatus::NORMAL;
-
-  ObTableHandleV2 table_handle;
+  ObSSTable sstable;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -972,47 +1043,17 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   MockObLogHandler log_handler;
   ObFreezer freezer;
   ObTableSchema table_schema;
-  ObTabletCreateSSTableParam param;
   prepare_data_schema(table_schema);
 
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_sstable(table_handle);
+  ObTabletCreateSSTableParam param;
+  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(table_schema, tablet_id, 100, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
-  param.table_key_.tablet_id_ = tablet_id;
-  param.table_key_.version_range_.base_version_ = ObVersionRange::MIN_VERSION;
-  param.table_key_.version_range_.snapshot_version_ = 1;
-  param.schema_version_ = table_schema.get_schema_version();
-  param.create_snapshot_version_ = 0;
-  param.progressive_merge_round_ = table_schema.get_progressive_merge_round();
-  param.progressive_merge_step_ = 0;
-  param.table_mode_ = table_schema.get_table_mode_struct();
-  param.index_type_ = table_schema.get_index_type();
-  param.rowkey_column_cnt_ = table_schema.get_rowkey_column_num()
-            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  param.root_block_addr_.set_none_addr();
-  param.data_block_macro_meta_addr_.set_none_addr();
-  param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-  param.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-  param.data_index_tree_height_ = 0;
-  param.index_blocks_cnt_ = 0;
-  param.data_blocks_cnt_ = 0;
-  param.micro_block_cnt_ = 0;
-  param.use_old_macro_block_count_ = 0;
-  param.column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
-  param.data_checksum_ = 0;
-  param.occupy_size_ = 0;
-  param.ddl_scn_.set_min();
-  param.filled_tx_scn_.set_min();
-  param.original_size_ = 0;
-  param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-  param.encrypt_id_ = 0;
-  param.master_key_id_ = 0;
-  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
-  ASSERT_EQ(OB_SUCCESS, static_cast<ObSSTable *>(table_handle.get_table())->init(param, &t3m_.get_tenant_allocator()));
+
+  ret = ObTabletCreateDeleteHelper::create_sstable(param, allocator_, sstable);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
 
   share::SCN create_scn;
   create_scn.convert_from_ts(ObTimeUtility::fast_current_time());
@@ -1020,36 +1061,45 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
+  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, table_handle, &freezer);
+      lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
-  ObMetaDiskAddr addr;
-  ret = ObTabletSlogHelper::write_create_tablet_slog(handle, addr);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
+  ObTabletHandle new_handle;
+  ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
+      *tablet, allocator_, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+  ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
+  tablet = new_handle.get_obj();
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(1, t3m_.tablet_buffer_pool_.inner_used_num_);
 
-  handle.reset();
+  void *free_obj = nullptr;
+  new_handle.reset();
   ASSERT_EQ(1, tablet->get_ref());
-  ret = t3m_.try_wash_tablet(1);
+  ret = t3m_.try_wash_tablet(typeid(ObTenantMetaMemMgr::ObNormalTabletBuffer), free_obj);
   ASSERT_EQ(common::OB_SUCCESS, ret);
+  ASSERT_EQ(free_obj, ObMetaObjBufferHelper::get_meta_obj_buffer_ptr(reinterpret_cast<char *>(tablet)));
+  t3m_.tablet_buffer_pool_.free_obj(free_obj);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   common::ObArenaAllocator allocator;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.get_tablet_with_allocator(WashTabletPriority::WTP_HIGH, key, allocator, handle));
   ASSERT_TRUE(handle.is_valid());
 
-  ret = t3m_.tablet_map_.erase(key);
+  ObTabletHandle tmp_handle;
+  ret = t3m_.tablet_map_.erase(key, tmp_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  tmp_handle.reset();
+  gc_all_tablets();
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
 
 TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
@@ -1066,9 +1116,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
@@ -1076,13 +1127,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  // set tx data
-  ObTabletTxMultiSourceDataUnit &tx_data = tablet->tablet_meta_.tx_data_;
-  tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
-  tx_data.tx_scn_.convert_for_logservice(12345);
-  tx_data.tablet_status_ = ObTabletStatus::NORMAL;
-
-  ObTableHandleV2 table_handle;
+  ObSSTable sstable;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -1098,8 +1143,6 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_sstable(table_handle);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param.table_key_.tablet_id_ = tablet_id;
@@ -1132,7 +1175,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
-  ASSERT_EQ(OB_SUCCESS, static_cast<ObSSTable *>(table_handle.get_table())->init(param, &t3m_.get_tenant_allocator()));
+  ASSERT_EQ(OB_SUCCESS, sstable.init(param, &allocator_));
 
   share::SCN create_scn;
   create_scn.convert_from_ts(ObTimeUtility::fast_current_time());
@@ -1140,9 +1183,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
+  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, table_handle, &freezer);
+      lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -1150,28 +1193,34 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   addr.offset_ = 0;
   addr.size_ = 4096;
   addr.type_ = ObMetaDiskAddr::DiskType::MEM;
+  handle.get_obj()->set_tablet_addr(addr);
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+  ret = t3m_.compare_and_swap_tablet(key, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
 
+  void *free_obj = nullptr;
   handle.reset();
   ASSERT_EQ(1, tablet->get_ref());
-  ret = t3m_.try_wash_tablet(1);
+  ret = t3m_.try_wash_tablet(typeid(ObTenantMetaMemMgr::ObNormalTabletBuffer), free_obj);
   ASSERT_EQ(common::OB_SUCCESS, ret);
+  ASSERT_EQ(nullptr, free_obj); // memory address tablet can't be washed.
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   ObMetaDiskAddr none_addr;
   none_addr.set_none_addr();
-  ret = t3m_.compare_and_swap_tablet_pure_address_without_object(key, addr, none_addr);
+  ret = t3m_.compare_and_swap_tablet(key, addr, none_addr);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
 
-  ret = t3m_.tablet_map_.erase(key);
+  ObTabletHandle tmp_handle;
+  ret = t3m_.tablet_map_.erase(key, tmp_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
+  tmp_handle.reset();
+  gc_all_tablets();
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
 
 TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
@@ -1187,39 +1236,26 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
   tablet = handle.get_obj();
   ASSERT_TRUE(nullptr != tablet);
 
-  tablet->inc_ref();
   handle.reset();
   ASSERT_TRUE(!handle.is_valid());
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
 
   ret = t3m_.del_tablet(key);
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
 
-  t3m_.release_tablet(tablet);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
-  ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-
-  tablet->dec_ref();
-  t3m_.release_tablet(tablet);
-  tablet = nullptr;
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
-  ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-
-  t3m_.release_tablet(tablet);
-  ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
-  ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
+  handle.t3m_ = &t3m_; // temporary code, use local t3m
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_TRUE(handle.is_valid());
 
@@ -1233,22 +1269,17 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   ASSERT_TRUE(!tmp_handle.is_valid());
 
   ObMetaDiskAddr addr;
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
-  ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
-  ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_TRUE(handle.is_valid());
-
   addr.first_id_ = 1;
   addr.second_id_ = 2;
   addr.offset_ = 0;
   addr.size_ = 4096;
   addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+  handle.get_obj()->set_tablet_addr(addr);
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
+  ret = t3m_.compare_and_swap_tablet(key, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   ObMetaPointerHandle<ObTabletMapKey, ObTablet> ptr_hdl(t3m_.tablet_map_);
   ret = t3m_.tablet_map_.map_.get_refactored(key, ptr_hdl.ptr_);
@@ -1256,7 +1287,7 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   ret = t3m_.tablet_map_.inc_handle_ref(ptr_hdl.ptr_);
   ASSERT_TRUE(addr == ptr_hdl.ptr_->ptr_->phy_addr_);
   ASSERT_TRUE(handle.obj_ == ptr_hdl.ptr_->ptr_->obj_.ptr_);
-  ASSERT_TRUE(handle.obj_pool_ == ptr_hdl.ptr_->ptr_->obj_.pool_);
+  ASSERT_TRUE(handle.allocator_ == ptr_hdl.ptr_->ptr_->obj_.allocator_);
 
   ret = t3m_.get_tablet(WashTabletPriority::WTP_HIGH, key, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -1270,17 +1301,17 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
 
   handle.reset();
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   ObTabletHandle old_handle;
   ret = t3m_.get_tablet(WashTabletPriority::WTP_HIGH, key, old_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_TRUE(old_handle.is_valid());
 
-  ret = t3m_.acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle, false);
+  ret = t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(2, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(1, t3m_.tablet_buffer_pool_.inner_used_num_);
   ASSERT_TRUE(handle.is_valid());
 
   tablet = handle.get_obj();
@@ -1294,46 +1325,28 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   addr.size_ = 4096;
   addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
 
-  ret = t3m_.compare_and_swap_tablet(key, addr, old_handle, handle);
+  tablet->set_tablet_addr(addr);
+  ret = t3m_.compare_and_swap_tablet(key, old_handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(2, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(1, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   old_handle.reset();
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(1, t3m_.tablet_buffer_pool_.inner_used_num_);
 
   handle.reset();
-  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
+  ASSERT_EQ(1, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
 
 TEST_F(TestTenantMetaMemMgr, test_multi_tablet)
 {
   const int64_t thread_cnt = 16;
   ObTenantBase *tenant_base = MTL_CTX();
-  TestConcurrentT3M multi_thread(thread_cnt, t3m_, tenant_base);
+  TestConcurrentT3M multi_thread(thread_cnt, t3m_, tenant_base, allocator_);
 
   int ret = multi_thread.start();
   ASSERT_EQ(OB_SUCCESS, ret);
   multi_thread.wait();
-}
-
-TEST_F(TestTenantMetaMemMgr, test_last_min_sstable_set)
-{
-  ObTableHandleV2 table_handle;
-  ASSERT_EQ(OB_SUCCESS, t3m_.acquire_sstable(table_handle));
-  ASSERT_TRUE(nullptr != table_handle.get_table());
-  ObITable *table = static_cast<ObITable *>(table_handle.get_table());
-  table->key_.tablet_id_ = 1;
-  table->key_.scn_range_.start_scn_.set_base();
-  table->key_.scn_range_.end_scn_.convert_for_tx(100);
-  table->key_.table_type_ = ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE;
-
-  ASSERT_EQ(OB_SUCCESS, t3m_.record_min_minor_sstable(ls_id_, table_handle));
-  ASSERT_EQ(1, t3m_.last_min_minor_sstable_set_.size());
-
-  table->key_.scn_range_.end_scn_.convert_for_tx(400);
-  ASSERT_EQ(OB_SUCCESS, t3m_.record_min_minor_sstable(ls_id_, table_handle));
-  ASSERT_EQ(1, t3m_.last_min_minor_sstable_set_.size());
 }
 
 TEST_F(TestTenantMetaMemMgr, test_tablet_wash_priority)
@@ -1370,27 +1383,25 @@ TEST_F(TestTenantMetaMemMgr, test_table_gc)
     ASSERT_NE(nullptr, t3m_.pool_arr_[static_cast<int>(type)]);
   }
   for (type = ObITable::TableType::MAJOR_SSTABLE; type < ObITable::TableType::MAX_TABLE_TYPE; type = (ObITable::TableType)(type + 1)) {
-    ASSERT_NE(nullptr, t3m_.pool_arr_[static_cast<int>(type)]);
+    if (type != ObITable::TableType::DDL_MEM_SSTABLE) {
+      ASSERT_EQ(nullptr, t3m_.pool_arr_[static_cast<int>(type)]);
+    }
   }
   // check the count of tables in every pool before acquirement
   ASSERT_EQ(0, t3m_.memtable_pool_.inner_used_num_);
-  ASSERT_EQ(0, t3m_.sstable_pool_.inner_used_num_);
   ASSERT_EQ(0, t3m_.tx_data_memtable_pool_.inner_used_num_);
   ASSERT_EQ(0, t3m_.tx_ctx_memtable_pool_.inner_used_num_);
   ASSERT_EQ(0, t3m_.lock_memtable_pool_.inner_used_num_);
 
   // acquire tables and set table_type
-  ObTableHandleV2 sstable_handle;
   ObTableHandleV2 memtable_handle;
   ObTableHandleV2 tx_data_memtable_handle;
   ObTableHandleV2 tx_ctx_memtable_handle;
   ObTableHandleV2 lock_memtable_handle;
-  ASSERT_EQ(OB_SUCCESS, t3m_.acquire_sstable(sstable_handle));
   ASSERT_EQ(OB_SUCCESS, t3m_.acquire_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, t3m_.acquire_tx_data_memtable(tx_data_memtable_handle));
   ASSERT_EQ(OB_SUCCESS, t3m_.acquire_tx_ctx_memtable(tx_ctx_memtable_handle));
   ASSERT_EQ(OB_SUCCESS, t3m_.acquire_lock_memtable(lock_memtable_handle));
-  sstable_handle.table_->set_table_type(ObITable::TableType::MAJOR_SSTABLE);
   memtable_handle.table_->set_table_type(ObITable::TableType::DATA_MEMTABLE);
   tx_data_memtable_handle.table_->set_table_type(ObITable::TableType::TX_DATA_MEMTABLE);
   tx_ctx_memtable_handle.table_->set_table_type(ObITable::TableType::TX_CTX_MEMTABLE);
@@ -1398,13 +1409,11 @@ TEST_F(TestTenantMetaMemMgr, test_table_gc)
 
   // check the count of tables in every pool before reset
   ASSERT_EQ(1, t3m_.memtable_pool_.inner_used_num_);
-  ASSERT_EQ(1, t3m_.sstable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tx_data_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tx_ctx_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.lock_memtable_pool_.inner_used_num_);
 
   // reset all handles
-  sstable_handle.reset();
   memtable_handle.reset();
   tx_data_memtable_handle.reset();
   tx_ctx_memtable_handle.reset();
@@ -1412,13 +1421,12 @@ TEST_F(TestTenantMetaMemMgr, test_table_gc)
 
   // check the count of tables in every pool after reset
   ASSERT_EQ(1, t3m_.memtable_pool_.inner_used_num_);
-  ASSERT_EQ(1, t3m_.sstable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tx_data_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.tx_ctx_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.lock_memtable_pool_.inner_used_num_);
 
   // check the count of tables in free queue
-  ASSERT_EQ(5, t3m_.free_tables_queue_.size());
+  ASSERT_EQ(4, t3m_.free_tables_queue_.size());
 
   // recycle all tables
   bool all_table_cleaned = false; // no use
@@ -1426,7 +1434,6 @@ TEST_F(TestTenantMetaMemMgr, test_table_gc)
 
   // check the count after gc
   ASSERT_EQ(0, t3m_.memtable_pool_.inner_used_num_);
-  ASSERT_EQ(0, t3m_.sstable_pool_.inner_used_num_);
   ASSERT_EQ(0, t3m_.tx_data_memtable_pool_.inner_used_num_);
   ASSERT_EQ(0, t3m_.tx_ctx_memtable_pool_.inner_used_num_);
   ASSERT_EQ(0, t3m_.lock_memtable_pool_.inner_used_num_);
@@ -1483,6 +1490,69 @@ TEST_F(TestTenantMetaMemMgr, test_heap)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, heap.count());
 }
+
+TEST_F(TestTenantMetaMemMgr, test_full_tablet_queue)
+{
+  ObFullTabletCreator full_creator;
+  ObTablet *tmp_tablet;
+  ASSERT_EQ(OB_SUCCESS, full_creator.init(500));
+  ASSERT_NE(nullptr, tmp_tablet = OB_NEWx(ObTablet, &allocator_));
+  MacroBlockId tmp_id;
+  tmp_id.second_id_ = 100;
+  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_mem_addr(0, 2112));
+  tmp_tablet->inc_ref();
+  ObTabletHandle tablet_handle;
+  tablet_handle.set_obj(tmp_tablet, &allocator_, &t3m_);
+  tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
+
+  ASSERT_FALSE(tmp_tablet->is_valid());  // test invalid tablet
+  ASSERT_EQ(OB_INVALID_ARGUMENT, full_creator.push_tablet_to_queue(tablet_handle));
+  ASSERT_EQ(0, full_creator.persist_queue_cnt_);
+
+  // mock valid empty shell tablet
+  tmp_tablet->table_store_addr_.addr_.set_none_addr();
+  tmp_tablet->storage_schema_addr_.addr_.set_none_addr();
+  tmp_tablet->mds_data_.auto_inc_seq_.addr_.set_none_addr();
+  tmp_tablet->rowkey_read_info_ = nullptr;
+  ASSERT_TRUE(tmp_tablet->is_valid());
+
+  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_block_addr(tmp_id, 0, 2112)); // test addr
+  ASSERT_EQ(OB_INVALID_ARGUMENT, full_creator.push_tablet_to_queue(tablet_handle));
+  ASSERT_EQ(0, full_creator.persist_queue_cnt_);
+
+  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_mem_addr(0, 2112));
+  ASSERT_EQ(OB_SUCCESS, full_creator.push_tablet_to_queue(tablet_handle));
+  ASSERT_EQ(1, full_creator.persist_queue_cnt_);
+  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_block_addr(tmp_id, 0, 2112));
+  ASSERT_EQ(OB_SUCCESS, full_creator.remove_tablet_from_queue(tablet_handle)); // skip block
+  ASSERT_EQ(1, full_creator.persist_queue_cnt_);
+
+  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_mem_addr(0, 2112));
+  ASSERT_EQ(OB_SUCCESS, full_creator.remove_tablet_from_queue(tablet_handle));
+  ASSERT_EQ(0, full_creator.persist_queue_cnt_);
+  ASSERT_EQ(full_creator.transform_head_.get_obj(), full_creator.transform_tail_.get_obj());
+  ASSERT_FALSE(full_creator.transform_tail_.is_valid());
+
+  ASSERT_EQ(OB_SUCCESS, full_creator.push_tablet_to_queue(tablet_handle));
+  ASSERT_EQ(1, full_creator.persist_queue_cnt_);
+  ASSERT_EQ(full_creator.transform_head_.get_obj(), full_creator.transform_tail_.get_obj());
+  ASSERT_EQ(full_creator.transform_head_.get_obj(), tablet_handle.get_obj());
+  ASSERT_FALSE(tablet_handle.get_obj()->next_full_tablet_guard_.is_valid());
+
+
+  ASSERT_EQ(OB_SUCCESS, full_creator.pop_tablet(tablet_handle));
+  ASSERT_EQ(0, full_creator.persist_queue_cnt_);
+  ASSERT_FALSE(tablet_handle.get_obj()->next_full_tablet_guard_.is_valid());
+  ASSERT_EQ(full_creator.transform_head_.get_obj(), full_creator.transform_tail_.get_obj());
+  ASSERT_FALSE(full_creator.transform_tail_.is_valid());
+
+  ASSERT_EQ(OB_ITER_END, full_creator.pop_tablet(tablet_handle));
+  ASSERT_FALSE(full_creator.transform_head_.is_valid());
+
+  tablet_handle.obj_ = nullptr; // do not use handle to gc invalid tablet
+  tablet_handle.reset();
+}
+
 } // end namespace storage
 } // end namespace oceanbase
 

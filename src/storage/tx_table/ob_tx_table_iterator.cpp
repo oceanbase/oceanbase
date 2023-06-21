@@ -415,32 +415,33 @@ int ObTxDataSingleRowGetter::init(const transaction::ObTransID &tx_id)
 int ObTxDataSingleRowGetter::get_next_row(ObTxData &tx_data)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!iter_param_.tablet_handle_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected invalid tablet handle", K(ret), K(iter_param_.tablet_handle_));
+  if (sstables_.empty()) {
+    ret = OB_ITER_END;
+    STORAGE_LOG(WARN, "This tablet does not have sstables.", KR(ret));
   } else {
-    ObTabletTableStore &table_store = iter_param_.tablet_handle_.get_obj()->get_table_store();
-    ObSSTableArray &sstables = table_store.get_minor_sstables();
-
-    if (sstables.empty()) {
-      ret = OB_ITER_END;
-      STORAGE_LOG(WARN, "This tablet does not have sstables.", KR(ret), K(table_store));
-    } else {
-      tx_data_buffers_.reset();
-      ret = get_next_row_(sstables, tx_data);
-      if (OB_TIMEOUT == ret || OB_DISK_HUNG == ret) {
-        ret = OB_EAGAIN;
-        STORAGE_LOG(WARN, "modify ret code from OB_TIMEOUT or OB_DISK_HUNG to OB_EAGAIN", KR(ret));
-      } else if (OB_FAIL(ret)) {
-        recycled_scn_ = static_cast<ObSSTable*>(sstables[0])->get_filled_tx_scn();
-        STORAGE_LOG(WARN, "get tx data from sstable failed", K(recycled_scn_));
+    tx_data_buffers_.reset();
+    ret = get_next_row_(sstables_, tx_data);
+    if (OB_TIMEOUT == ret || OB_DISK_HUNG == ret) {
+      ret = OB_EAGAIN;
+      STORAGE_LOG(WARN,
+                  "modify ret code from OB_TIMEOUT or OB_DISK_HUNG to OB_EAGAIN",
+                  KR(ret));
+    } else if (OB_FAIL(ret)) {
+      ObSSTableMetaHandle sst_meta_handle;
+      int tmp_ret = static_cast<ObSSTable*>(sstables_[0])->get_meta(sst_meta_handle);
+      if (OB_TMP_FAIL(tmp_ret)) {
+        STORAGE_LOG(WARN, "get sstable meta handle failed", KR(tmp_ret));
+        recycled_scn_.set_invalid();
+      } else {
+        recycled_scn_ = sst_meta_handle.get_sstable_meta().get_filled_tx_scn();
       }
+      STORAGE_LOG(WARN, "get tx data from sstable failed", KR(ret), KR(tmp_ret), K(recycled_scn_));
     }
   }
   return ret;
 }
 
-int ObTxDataSingleRowGetter::get_next_row_(ObSSTableArray &sstables, ObTxData &tx_data)
+int ObTxDataSingleRowGetter::get_next_row_(const ObSSTableArray &sstables, ObTxData &tx_data)
 {
   int ret = OB_SUCCESS;
 
@@ -503,7 +504,7 @@ int ObTxDataSingleRowGetter::get_next_row_(ObSSTableArray &sstables, ObTxData &t
 }
 
 int ObTxDataSingleRowGetter::get_row_from_sstables_(blocksstable::ObDatumRowkey &row_key,
-                                                    ObSSTableArray &sstables,
+                                                    const ObSSTableArray &sstables,
                                                     const ObTableIterParam &iter_param,
                                                     ObTableAccessContext &access_context,
                                                     ObStringHolder &temp_buffer,
@@ -512,15 +513,22 @@ int ObTxDataSingleRowGetter::get_row_from_sstables_(blocksstable::ObDatumRowkey 
   int ret = OB_SUCCESS;
 
   ObStoreRowIterator *row_iter = nullptr;
-  ObITable *table = nullptr;
+  ObSSTable *table = nullptr;
   int tmp_ret = OB_SUCCESS;
   bool find = false;
   const blocksstable::ObDatumRow *row = nullptr;
   for (int i = sstables.count() - 1; OB_SUCC(ret) && !find && i >= 0; i--) {
+    ObStorageMetaHandle sstable_handle;
     if (OB_ISNULL(table = sstables[i])) {
       ret = OB_ERR_SYS;
       STORAGE_LOG(ERROR, "Unexpected null table", KR(ret), K(i), K(sstables));
-    } else if (OB_FAIL(table->get(iter_param, access_context, row_key, row_iter))) {
+    } else if (table->is_loaded()) {
+    } else if (OB_FAIL(ObTabletTableStore::load_sstable(table->get_addr(), sstable_handle))) {
+      STORAGE_LOG(WARN, "fail to load sstable", K(ret), KPC(table));
+    } else if (OB_FAIL(sstable_handle.get_sstable(table))) {
+      STORAGE_LOG(WARN, "fail to get sstable", K(ret), K(sstable_handle));
+    }
+    if (FAILEDx(table->get(iter_param, access_context, row_key, row_iter))) {
       STORAGE_LOG(WARN, "Failed to get param", KR(ret), KPC(table));
     } else if (OB_FAIL(row_iter->get_next_row(row))) {
       if (OB_ITER_END != ret) {
@@ -612,10 +620,7 @@ int ObCommitVersionsGetter::get_next_row(ObCommitVersionsArray &commit_versions)
   if (OB_SUCC(ret)) {
     ObStoreRowIterator *row_iter = nullptr;
     const ObDatumRow *row = nullptr;
-    if (!iter_param_.tablet_handle_.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "tablet handle in iter param is invalid", KR(ret), K(iter_param_));
-    } else if (OB_FAIL(table_->get(iter_param_, access_context, row_key, row_iter))) {
+    if (OB_FAIL(table_->get(iter_param_, access_context, row_key, row_iter))) {
       STORAGE_LOG(WARN, "Failed to get param", K(ret), KPC(table_));
     } else if (OB_FAIL(row_iter->get_next_row(row))) {
       STORAGE_LOG(ERROR, "Failed to get pre-process data for upper trans version calculation",

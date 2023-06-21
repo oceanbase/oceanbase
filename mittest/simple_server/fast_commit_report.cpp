@@ -123,10 +123,8 @@ int ObMemtable::flush(share::ObLSID ls_id)
                 K(ls_id), K(*this), K(mt_stat_.ready_for_flush_time_));
       compaction::ADD_SUSPECT_INFO(MINI_MERGE,
                        ls_id, get_tablet_id(),
-                       "memtable can not create dag successfully",
-                       "has been ready for flush time:",
+                       ObSuspectInfoType::SUSPECT_MEMTABLE_CANT_CREATE_DAG,
                        cur_time - mt_stat_.ready_for_flush_time_,
-                       "ready for flush time:",
                        mt_stat_.ready_for_flush_time_);
     }
     compaction::ObTabletMergeDagParam param;

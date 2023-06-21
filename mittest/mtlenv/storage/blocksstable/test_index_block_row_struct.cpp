@@ -53,6 +53,7 @@ void TestIndexBlockRowStruct::TearDownTestCase()
 
 void TestIndexBlockRowStruct::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   desc_.ls_id_.id_ = 1;
   desc_.tablet_id_.id_ = 1;
   desc_.micro_block_size_ = 8 * 1024;

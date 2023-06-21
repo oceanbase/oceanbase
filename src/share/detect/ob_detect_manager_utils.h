@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include "lib/container/ob_array.h"
 #include "share/detect/ob_detectable_id.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_share_info.h"
 

@@ -48,8 +48,7 @@ ObLogFileHandler::ObLogFileHandler()
     io_fd_(),
     file_group_(),
     file_size_(0),
-    tenant_id_(OB_INVALID_TENANT_ID),
-    pwrite_ts_(0)
+    tenant_id_(OB_INVALID_TENANT_ID)
 {
 }
 
@@ -74,7 +73,6 @@ int ObLogFileHandler::init(
     tenant_id_ = tenant_id;
     log_dir_ = log_dir;
     file_size_ = file_size;
-    pwrite_ts_ = 0;
   }
 
   if (OB_FAIL(ret)) {
@@ -103,7 +101,6 @@ void ObLogFileHandler::destroy()
   file_group_.destroy();
   file_size_ = 0;
   is_inited_ = false;
-  pwrite_ts_ = 0;
   LOG_DEBUG("log file handler destroyed");
 }
 
@@ -298,60 +295,6 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
   }
   return ret;
 }
-/*
-int ObLogFileHandler::inner_write(const ObIOFd &io_fd, void *buf, const int64_t size,
-    const int64_t offset)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_ISNULL(buf) || size <= 0 || offset < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), KP(buf), K(size), K(offset));
-  } else if (!io_fd.is_normal_file()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("io fd is not normal file", K(ret), K(io_fd));
-  } else if (OB_FAIL(inner_write_impl(io_fd, buf, size, offset, tenant_id_))){
-    LOG_WARN("fail to write", K(ret), KP(buf), K(size), K(offset));
-  }
-  return ret;
-}
-
-int ObLogFileHandler::inner_write_impl(const ObIOFd &io_fd, void *buf, const int64_t size,
-    const int64_t offset, const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ObIOInfo io_info;
-  io_info.flag_.set_mode(ObIOMode::WRITE);
-
-  if (OB_SUCC(ret)) {
-    io_info.tenant_id_ = tenant_id;
-    io_info.fd_ = io_fd;
-    io_info.offset_ = offset;
-    io_info.size_ = size;
-    io_info.flag_.set_group_id(THIS_WORKER.get_group_id());
-    io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    io_info.buf_ = reinterpret_cast<const char *>(buf);
-    io_info.callback_ = nullptr;
-
-    ObIOHandle io_handle;
-    io_handle.reset();
-    int io_errno = OB_SUCCESS;
-    const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
-    if (OB_FAIL(ObIOManager::get_instance().aio_write(io_info, io_handle))) {
-      LOG_WARN("fail to aio_write", K(ret), K(io_info), K(io_timeout_ms));
-    } else if(OB_FAIL(io_handle.wait(io_timeout_ms))) {
-      LOG_WARN("failed to wait for aio_write", K(ret), K(io_timeout_ms));
-    } else if (OB_FAIL(io_handle.get_fs_errno(io_errno))) {
-      LOG_WARN("failed to get_fs_errno for aio_write", K(ret), K(io_errno));
-    } else {
-      ret = io_errno;
-    }
-  }
-  return ret;
-}
-*/
 
 int ObLogFileHandler::unlink(const char* file_path)
 {
@@ -391,20 +334,34 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
     LOG_WARN("io fd is not normal file", K(ret), K_(io_fd));
   } else {
     int64_t retry_cnt = 0;
-    int64_t write_size = 0;
-    const int64_t start_ts = ObTimeUtility::current_time();
-    ATOMIC_STORE(&pwrite_ts_, start_ts);
     do {
-      if (OB_FAIL(THE_IO_DEVICE->pwrite(io_fd_, offset, size, buf, write_size))) {
+      ObIOInfo io_info;
+      io_info.flag_.set_write();
+      io_info.tenant_id_ = tenant_id_;
+      io_info.fd_ = io_fd_;
+      io_info.offset_ = offset;
+      io_info.size_ = size;
+      io_info.flag_.set_group_id(THIS_WORKER.get_group_id());
+      io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+      io_info.buf_ = reinterpret_cast<const char *>(buf);
+      io_info.callback_ = nullptr;
+      ObIOHandle io_handle;
+      const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
+      if (OB_FAIL(ObIOManager::get_instance().aio_write(io_info, io_handle))) {
+        LOG_WARN("fail to aio_write", K(ret), K(io_info), K(io_timeout_ms));
+      } else if(OB_FAIL(io_handle.wait(io_timeout_ms))) {
+        LOG_WARN("failed to wait for aio_write", K(ret), K(io_timeout_ms));
+      }
+
+      if (OB_FAIL(ret)) {
         retry_cnt ++;
         if (REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {
-          LOG_WARN("fail to write", K(ret), KP(buf), K(size), K(offset), K(retry_cnt), K(write_size));
+          LOG_WARN("fail to aio_write", K(ret), K(io_info), K(retry_cnt));
         } else {
           ob_usleep(static_cast<uint32_t>(SLEEP_TIME_US));
         }
       }
     } while (OB_FAIL(ret));
-    ATOMIC_STORE(&pwrite_ts_, 0);
   }
 
   return ret;

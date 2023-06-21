@@ -61,6 +61,7 @@ ob_set_subtarget(ob_logservice common_mixed
   replayservice/ob_log_replay_service.cpp
   replayservice/ob_replay_handler.cpp
   replayservice/ob_replay_status.cpp
+  replayservice/ob_tablet_replay_executor.cpp
 )
 
 ob_set_subtarget(ob_logservice leader_coordinator

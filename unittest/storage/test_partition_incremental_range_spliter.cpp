@@ -29,11 +29,6 @@ namespace storage
 using namespace blocksstable;
 using namespace common;
 
-int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
-{
-  return 1000;
-}
-
 static int get_number(const char *str, const char *&endpos, int64_t &num)
 {
   int ret = OB_SUCCESS;
@@ -614,13 +609,15 @@ class TestPartitionIncrementalRangeSliter : public ::testing::Test
 public:
   TestPartitionIncrementalRangeSliter()
     : tenant_id_(1), tenant_base_(tenant_id_), merge_ctx_(param_, allocator_), buf_(nullptr), is_inited_(false)
-  {}
+  {
+    major_sstable_.meta_ = &major_sstable_meta_;
+    minor_sstable_.meta_ = &minor_sstable_meta_;
+  }
   virtual ~TestPartitionIncrementalRangeSliter() {}
 
 public:
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   void set_tablet_size(int64_t tablet_size)
   {
@@ -629,9 +626,12 @@ private:
   }
   void set_major_sstable_meta(int64_t macro_block_count, int64_t occupy_size, int64_t row_count)
   {
-    major_sstable_.meta_.basic_meta_.data_macro_block_count_ = macro_block_count;
-    major_sstable_.meta_.basic_meta_.occupy_size_ = occupy_size;
-    major_sstable_.meta_.basic_meta_.row_count_ = row_count;
+    major_sstable_.meta_->basic_meta_.data_macro_block_count_ = macro_block_count;
+    major_sstable_.meta_->basic_meta_.occupy_size_ = occupy_size;
+    major_sstable_.meta_->basic_meta_.row_count_ = row_count;
+    major_sstable_.addr_.set_none_addr();
+    major_sstable_.data_macro_block_count_ = macro_block_count;
+    major_sstable_.meta_->is_inited_ = true;
   }
   int set_major_sstable_macro_blocks(const ObString &str);
   void reset_major_sstable()
@@ -662,7 +662,11 @@ private:
   ObStorageSchema storage_schema_;
   ObTablet tablet_;
   ObMockSSTableV2 major_sstable_;
+  ObSSTableMeta major_sstable_meta_;
+  ObStorageMetaHandle mock_major_sstable_handle_;
   ObSSTable minor_sstable_;  // 增量
+  ObSSTableMeta minor_sstable_meta_;
+  ObStorageMetaHandle mock_minor_sstable_handle_;
   compaction::ObTabletMergeCtx merge_ctx_;
   ObSEArray<ObColDesc, 3> col_descs_;
 
@@ -675,10 +679,11 @@ private:
 
 void TestPartitionIncrementalRangeSliter::SetUp()
 {
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   if (!is_inited_) {
+    int ret = OB_SUCCESS;
     OB_SERVER_BLOCK_MGR.super_block_.body_.macro_block_size_ = 1;
 
-    int ret = OB_SUCCESS;
     ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, tenant_id_);
     ret = t3m->init();
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -699,27 +704,37 @@ void TestPartitionIncrementalRangeSliter::SetUp()
     // major sstable
     major_sstable_.set_table_type(ObITable::MAJOR_SSTABLE);
     major_sstable_.key_.tablet_id_ = 1;
-    major_sstable_.meta_.basic_meta_.data_macro_block_count_ = 0;
-    major_sstable_.meta_.basic_meta_.occupy_size_ = 0;
-    major_sstable_.meta_.basic_meta_.row_count_ = 0;
+    major_sstable_.meta_->basic_meta_.data_macro_block_count_ = 0;
+    major_sstable_.meta_->basic_meta_.occupy_size_ = 0;
+    major_sstable_.meta_->basic_meta_.row_count_ = 0;
     major_sstable_.valid_for_reading_ = true;
+    major_sstable_.addr_.set_none_addr();
+    major_sstable_.data_macro_block_count_ =  major_sstable_.meta_->basic_meta_.data_macro_block_count_;
+    major_sstable_.meta_->is_inited_ = true;
 
     // minor sstable
     minor_sstable_.set_table_type(ObITable::MINOR_SSTABLE);
     minor_sstable_.key_.tablet_id_ = 1;
+    minor_sstable_.addr_.set_none_addr();
+    minor_sstable_.data_macro_block_count_ = minor_sstable_.meta_->basic_meta_.data_macro_block_count_;
+    minor_sstable_.meta_->is_inited_ = true;
 
     // merge ctx
     merge_ctx_.schema_ctx_.storage_schema_ = &storage_schema_;
-    ASSERT_EQ(OB_SUCCESS, merge_ctx_.tables_handle_.add_table(&major_sstable_));
-    ASSERT_EQ(OB_SUCCESS, merge_ctx_.tables_handle_.add_table(&minor_sstable_));
+    ASSERT_EQ(OB_SUCCESS, merge_ctx_.tables_handle_.add_sstable(&major_sstable_, mock_major_sstable_handle_));
+    ASSERT_EQ(OB_SUCCESS, merge_ctx_.tables_handle_.add_sstable(&minor_sstable_, mock_minor_sstable_handle_));
     merge_ctx_.tablet_handle_.obj_ = &tablet_;
+    merge_ctx_.tablet_handle_.allocator_ = &allocator_;
     ObColDesc col_desc;
-    col_desc.col_id_ = 1;
+    col_desc.col_id_ = 1 + common::OB_APP_MIN_COLUMN_ID;
     col_desc.col_type_.set_int();
     col_descs_.reset();
     ASSERT_EQ(OB_SUCCESS, col_descs_.push_back(col_desc));
     ASSERT_EQ(OB_SUCCESS, storage::ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(col_descs_));
-    ASSERT_EQ(OB_SUCCESS, tablet_.full_read_info_.init(allocator_, 16000, 1, lib::is_oracle_mode(), col_descs_, true));
+    void *ptr = nullptr;
+    ASSERT_NE(nullptr, ptr = allocator_.alloc(sizeof(ObRowkeyReadInfo)));
+    tablet_.rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
+    ASSERT_EQ(OB_SUCCESS, tablet_.rowkey_read_info_->init(allocator_, col_descs_.count(), 1, lib::is_oracle_mode(), col_descs_));
 
     // buf
     buf_ = static_cast<char *>(allocator_.alloc(MAX_BUF_LENGTH));
@@ -735,7 +750,7 @@ void TestPartitionIncrementalRangeSliter::SetUp()
 void TestPartitionIncrementalRangeSliter::TearDown()
 {
   ASSERT_TRUE(is_inited_);
-  merge_ctx_.tablet_handle_.get_obj()->full_read_info_.reset();
+  merge_ctx_.tablet_handle_.get_obj()->rowkey_read_info_->reset();
   merge_ctx_.tablet_handle_.obj_ = nullptr;
   reset_major_sstable();
   reset_ranges();

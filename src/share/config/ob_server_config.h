@@ -56,6 +56,8 @@ const char* const FREEZE_TRIGGER_PERCENTAGE = "freeze_trigger_percentage";
 const char* const WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE = "writing_throttling_trigger_percentage";
 const char* const COMPATIBLE = "compatible";
 const char* const WEAK_READ_VERSION_REFRESH_INTERVAL = "weak_read_version_refresh_interval";
+const char* const PARTITION_BALANCE_SCHEDULE_INTERVAL = "partition_balance_schedule_interval";
+const char* const BALANCER_IDLE_TIME = "balancer_idle_time";
 class ObServerMemoryConfig;
 
 class ObServerConfig : public ObCommonConfig
@@ -80,7 +82,6 @@ public:
 
   virtual ObServerRole get_server_type() const { return common::OB_SERVER; }
   virtual bool is_debug_sync_enabled() const { return static_cast<int64_t>(debug_sync_timeout) > 0; }
-  virtual bool is_rebalance_enabled() { return !in_major_version_upgrade_mode() && enable_rebalance; }
   virtual bool is_rereplication_enabled() { return !in_major_version_upgrade_mode() && enable_rereplication; }
 
   virtual double user_location_cpu_quota() const { return location_cache_cpu_quota; }

@@ -225,10 +225,6 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcAdminFlushBalanceInfoP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObGetTenantSchemaVersionsP, *gctx_.root_service_);
 
-    // backup and restore
-    RPC_PROCESSOR(rootserver::ObRpcBackupDataResP, *gctx_.root_service_);
-    RPC_PROCESSOR(rootserver::ObRpcBackupLSCleanResP, *gctx_.root_service_);
-    RPC_PROCESSOR(rootserver::ObRpcBackupComplLogResP, *gctx_.root_service_);
     //update optimizer statistic
     RPC_PROCESSOR(rootserver::ObRpcUpdateStatCacheP, *gctx_.root_service_);
 

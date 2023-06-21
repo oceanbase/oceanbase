@@ -130,7 +130,7 @@ void TestLinkedMacroBlock::write_items(ObArray<ItemInfo> &item_arr)
 
   ObIArray<MacroBlockId> &block_list = item_writer.get_meta_block_list();
 
-  block_handle_.add_macro_blocks(block_list, true);
+  block_handle_.add_macro_blocks(block_list);
 
   ASSERT_EQ(OB_SUCCESS, item_writer.get_entry_block(entry_block_));
 }

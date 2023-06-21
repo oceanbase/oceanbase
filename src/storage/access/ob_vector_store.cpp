@@ -89,7 +89,7 @@ int ObVectorStore::init(const ObTableAccessParam &param)
       LOG_WARN("Fail to init col params", K(ret));
     } else if (OB_FAIL(map_types_.init(expr_count))) {
       LOG_WARN("Fail to init map types", K(ret));
-    } else if (OB_FAIL(row_buf_.init(*context_.stmt_allocator_, param.iter_param_.get_full_out_col_cnt()))) {
+    } else if (OB_FAIL(row_buf_.init(*context_.stmt_allocator_, param.iter_param_.get_max_out_col_cnt()))) {
       LOG_WARN("Fail to init datum ro types", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr_count; i++) {

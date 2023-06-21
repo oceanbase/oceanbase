@@ -44,6 +44,7 @@ struct ObTxNodeArg
   int64_t seq_no_;
   // scn_ is thee log ts of the redo log
   share::SCN scn_;
+  int64_t column_cnt_;
 
   TO_STRING_KV(KP_(data),
                KP_(old_row),
@@ -51,20 +52,23 @@ struct ObTxNodeArg
                K_(acc_checksum),
                K_(memstore_version),
                K_(seq_no),
-               K_(scn));
+               K_(scn),
+               K_(column_cnt));
 
   // Constructor for leader
   ObTxNodeArg(const ObMemtableData *data,
               const ObRowData *old_row,
               const int64_t memstore_version,
-              const int64_t seq_no)
+              const int64_t seq_no,
+              const int64_t column_cnt)
     : data_(data),
     old_row_(old_row),
     modify_count_(UINT32_MAX),
     acc_checksum_(0),
     memstore_version_(memstore_version),
     seq_no_(seq_no),
-    scn_(share::SCN::max_scn()) {}
+    scn_(share::SCN::max_scn()),
+    column_cnt_(column_cnt) {}
 
   // Constructor for follower
   ObTxNodeArg(const ObMemtableData *data,
@@ -73,14 +77,16 @@ struct ObTxNodeArg
               const int64_t seq_no,
               const uint32_t modify_count,
               const uint32_t acc_checksum,
-              const share::SCN scn)
+              const share::SCN scn,
+              const int64_t column_cnt)
     : data_(data),
     old_row_(old_row),
     modify_count_(modify_count),
     acc_checksum_(acc_checksum),
     memstore_version_(memstore_version),
     seq_no_(seq_no),
-    scn_(scn) {}
+    scn_(scn),
+    column_cnt_(column_cnt) {}
 
   void reset() {
     data_ = NULL;
@@ -90,6 +96,7 @@ struct ObTxNodeArg
     memstore_version_ = 0;
     seq_no_ = 0;
     scn_ = share::SCN::min_scn();
+    column_cnt_ = 0;
   }
 };
 

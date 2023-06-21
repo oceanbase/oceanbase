@@ -11,12 +11,14 @@
  */
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "ob_schedule_dag_func.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
+#include "lib/oblog/ob_log_module.h"
 #include "share/scheduler/ob_dag_scheduler.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_tx_table_merge_task.h"
-#include "lib/oblog/ob_log_module.h"
+#include "storage/multi_data_source/ob_mds_table_merge_dag.h"
+#include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 
 namespace oceanbase
 {
@@ -28,13 +30,12 @@ namespace compaction
 
 #define CREATE_DAG(T) \
   { \
-    T *dag = nullptr; \
-    if (OB_FAIL(MTL(ObTenantDagScheduler*)->create_and_add_dag(&param, dag, is_emergency))) {  \
+    if (OB_FAIL(MTL(ObTenantDagScheduler*)->create_and_add_dag<T>(&param, is_emergency))) {  \
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) { \
         LOG_WARN("failed to create merge dag", K(ret), K(param)); \
       } \
     } else { \
-      LOG_DEBUG("success to schedule tablet merge dag", K(ret), K(param), K(*dag)); \
+      LOG_DEBUG("success to schedule tablet merge dag", K(ret), K(param)); \
     } \
   }
 
@@ -68,6 +69,15 @@ int ObScheduleDagFunc::schedule_ddl_table_merge_dag(
 {
   int ret = OB_SUCCESS;
   CREATE_DAG(ObDDLTableMergeDag);
+  return ret;
+}
+
+int ObScheduleDagFunc::schedule_mds_table_merge_dag(
+    storage::mds::ObMdsTableMergeDagParam &param,
+    const bool is_emergency)
+{
+  int ret = OB_SUCCESS;
+  CREATE_DAG(storage::mds::ObMdsTableMergeDag);
   return ret;
 }
 

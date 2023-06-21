@@ -227,7 +227,7 @@ int ObIOAllocator::init(const uint64_t tenant_id, const int64_t memory_limit)
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || memory_limit <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(memory_limit));
-  } else if (OB_FAIL(inner_allocator_.init(OB_MALLOC_BIG_BLOCK_SIZE,
+  } else if (OB_FAIL(inner_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                            ObModIds::OB_IO_CONTROL,
                                            tenant_id,
                                            memory_limit))) {
@@ -2516,10 +2516,14 @@ int ObIORunner::handle(ObIORequest *req)
       } else if (!req->can_callback()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("io request can not do callback", K(ret), K(*req));
-      } else if (OB_FAIL(req->copied_callback_->process(OB_SUCCESS == req->ret_code_.io_ret_))) {
+      } else if (OB_FAIL(req->ret_code_.io_ret_)) {
+        //failed, ignore
+      } else if (OB_FAIL(req->copied_callback_->process(req->get_io_data_buf(), req->io_info_.size_))) {
         LOG_WARN("fail to callback", K(ret), K(*req), K(MTL_ID()));
       }
       req->time_log_.callback_finish_ts_ = ObTimeUtility::fast_current_time();
+      //recycle buffer after process
+      req->free_io_buffer();
     }
     req->finish(ret);
   }

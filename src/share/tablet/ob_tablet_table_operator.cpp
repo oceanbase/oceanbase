@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/tablet/ob_tablet_table_operator.h"
-#include "share/tablet/ob_tablet_info.h" // ObTabletReplica, ObTabletInfo
 #include "share/ob_errno.h" // KR(ret)
 #include "share/inner_table/ob_inner_table_schema.h" // OB_ALL_TABLET_META_TABLE_TNAME
 #include "share/ob_dml_sql_splicer.h" // ObDMLSqlSplicer
@@ -30,7 +29,7 @@ using namespace common;
 namespace share
 {
 ObTabletTableOperator::ObTabletTableOperator()
-    : inited_(false), sql_proxy_(NULL)
+    : inited_(false), sql_proxy_(NULL), batch_size_(MAX_BATCH_COUNT)
 {
 }
 
@@ -48,6 +47,7 @@ int ObTabletTableOperator::init(ObISQLClient &sql_proxy)
   } else {
     sql_proxy_ = &sql_proxy;
     inited_ = true;
+    batch_size_ = MAX_BATCH_COUNT;
   }
   return ret;
 }
@@ -56,6 +56,7 @@ void ObTabletTableOperator::reset()
 {
   inited_ = false;
   sql_proxy_ = NULL;
+  batch_size_ = 0;
 }
 
 int ObTabletTableOperator::get(
@@ -190,7 +191,7 @@ int ObTabletTableOperator::batch_get(
     LOG_WARN("fail to reserve tablet_infos", KR(ret), K(pairs_cnt));
   } else {
     int64_t start_idx = 0;
-    int64_t end_idx = min(MAX_BATCH_COUNT, pairs_cnt);
+    int64_t end_idx = min(batch_size_, pairs_cnt);
     while (OB_SUCC(ret) && (start_idx < end_idx)) {
       if (OB_FAIL(inner_batch_get_by_sql_(
           *sql_proxy_,
@@ -203,7 +204,7 @@ int ObTabletTableOperator::batch_get(
             KR(ret), K(tenant_id), K(tablet_ls_pairs), K(start_idx), K(end_idx));
       } else {
         start_idx = end_idx;
-        end_idx = min(start_idx + MAX_BATCH_COUNT, pairs_cnt);
+        end_idx = min(start_idx + batch_size_, pairs_cnt);
       }
     }
   }
@@ -463,13 +464,13 @@ int ObTabletTableOperator::batch_update(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), "replicas count", replicas.count());
   } else {
     int64_t start_idx = 0;
-    int64_t end_idx = min(MAX_BATCH_COUNT, replicas.count());
+    int64_t end_idx = min(batch_size_, replicas.count());
     while (OB_SUCC(ret) && (start_idx < end_idx)) {
       if (OB_FAIL(inner_batch_update_by_sql_(tenant_id, replicas, start_idx, end_idx, sql_client))) {
         LOG_WARN("fail to inner batch update", KR(ret), K(tenant_id), K(replicas), K(start_idx));
       } else {
         start_idx = end_idx;
-        end_idx = min(start_idx + MAX_BATCH_COUNT, replicas.count());
+        end_idx = min(start_idx + batch_size_, replicas.count());
       }
     }
   }
@@ -629,13 +630,13 @@ int ObTabletTableOperator::batch_remove(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), "replicas count", replicas.count());
   } else {
     int64_t start_idx = 0;
-    int64_t end_idx = min(MAX_BATCH_COUNT, replicas.count());
+    int64_t end_idx = min(batch_size_, replicas.count());
     while (OB_SUCC(ret) && (start_idx < end_idx)) {
       if (OB_FAIL(inner_batch_remove_by_sql_(tenant_id, replicas, start_idx, end_idx, sql_client))) {
         LOG_WARN("fail to inner batch remove", KR(ret), K(tenant_id), K(replicas), K(start_idx));
       } else {
         start_idx = end_idx;
-        end_idx = min(start_idx + MAX_BATCH_COUNT, replicas.count());
+        end_idx = min(start_idx + batch_size_, replicas.count());
       }
     }
   }

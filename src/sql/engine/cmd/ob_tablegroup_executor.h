@@ -56,9 +56,6 @@ public:
   virtual ~ObAlterTablegroupExecutor() {}
   int execute(ObExecContext &ctx, ObAlterTablegroupStmt &stmt);
 private:
-  int check_alter_partition(ObExecContext &ctx,
-                            ObAlterTablegroupStmt &stmt,
-                            const obrpc::ObAlterTablegroupArg &arg);
   DISALLOW_COPY_AND_ASSIGN(ObAlterTablegroupExecutor);
 };
 

@@ -229,7 +229,7 @@ public:
           try_delete_this_task_if_there_is_no_handle = true;
         }
       }
-  #ifdef UNIITTEST_DEBUG
+  #ifdef UNITTEST_DEBUG
       ob_usleep(10_ms);
   #endif
       // try delete task if:
@@ -263,7 +263,7 @@ public:
       ObOccamTimerTask *task = this;
       int64_t schedule_time = ObClockGenerator::getRealClock();
       TaskWrapper commit_task(func_shared_ptr_, task, need_delete, schedule_time);
-#ifdef UNIITTEST_DEBUG
+#ifdef UNITTEST_DEBUG
       OCCAM_LOG(DEBUG, "print size of", K(sizeof(commit_task)));
 #endif
       switch (task_priority_) {

@@ -46,7 +46,6 @@ public:
   int init(const ObITable::TableKey &table_key, const share::ObLSID &ls_id);
 
   void reset();
-
   int on_memtable_flushed() override;
   bool is_frozen_memtable() const override;
   bool is_active_memtable() const override;
@@ -79,28 +78,6 @@ public:
                   const blocksstable::ObDatumRowkey &rowkey,
                   blocksstable::ObDatumRow &row) override;
 
-  virtual int set(storage::ObStoreCtx &ctx,
-                  const uint64_t table_id,
-                  const storage::ObTableReadInfo &read_info,
-                  const common::ObIArray<share::schema::ObColDesc> &columns,
-                  const storage::ObStoreRow &row,
-                  const share::ObEncryptMeta *encrypt_meta) override;
-
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   common::ObNewRowIterator &row_iter) override;
-
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   const common::ObNewRow &row) override;
-
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   const blocksstable::ObDatumRowkey &rowkey) override;
-
   virtual int get(const storage::ObTableIterParam &param,
                   storage::ObTableAccessContext &context,
                   const blocksstable::ObDatumRowkey &rowkey,
@@ -124,7 +101,6 @@ public:
 private:
   bool is_inited_;
   bool is_frozen_;
-  share::ObLSID ls_id_;
   ObTxCtxTable ls_ctx_mgr_guard_;
   common::ObSpinLock flush_lock_;
 };

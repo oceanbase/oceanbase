@@ -647,7 +647,6 @@ DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice background thread may be hung");
 DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
 DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
-//DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
 DEFINE_ERROR(OB_ARBITRATION_INFO_QUERY_FAILED, -4758, -1, "HY000", "the arbitration service may be unavailable, please check and retry");
 DEFINE_ERROR(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, -4759, -1, "HY000", "An error was ignored when accessing virtual table, actual error code: %d");
 DEFINE_ERROR(OB_LS_OFFLINE, -4760, -1, "HY000", "log stream is offline");
@@ -1792,7 +1791,7 @@ DEFINE_ERROR(OB_TRANSFER_DETECT_ACTIVE_TRANS, -7114, -1, "HY000", "transfer dete
 DEFINE_ERROR(OB_TRANSFER_SRC_LS_NOT_EXIST, -7115, -1, "HY000", "transfer src ls does not exist");
 DEFINE_ERROR(OB_TRANSFER_SRC_TABLET_NOT_EXIST, -7116, -1, "HY000", "transfer src tablet does not exist");
 DEFINE_ERROR(OB_LS_NEED_REBUILD, -7117, -1, "HY000", "ls need rebuild");
-
+DEFINE_ERROR(OB_OBSOLETE_CLOG_NEED_SKIP, -7118, -1, "HY000", "obsolete clog need skip");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for gis  -7201 ---- -7300
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

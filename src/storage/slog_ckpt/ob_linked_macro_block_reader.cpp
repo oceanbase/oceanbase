@@ -271,6 +271,9 @@ int ObLinkedMacroBlockItemReader::get_next_item(
   char *&item_buf, int64_t &item_buf_len, ObMetaDiskAddr &addr)
 {
   int ret = OB_SUCCESS;
+  item_buf = nullptr;
+  item_buf_len = 0;
+  addr.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLinkedMacroBlockItemReader has not been inited", K(ret));

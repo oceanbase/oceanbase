@@ -25,15 +25,18 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 
 namespace oceanbase
 {
 using namespace share;
 namespace storage
 {
-
+using namespace mds;
 
 typedef ObMemstoreAllocatorMgr::TAllocator ObTenantMemstoreAllocator;
+
+double ObTenantFreezer::MDS_TABLE_FREEZE_TRIGGER_TENANT_PERCENTAGE = 5;
 
 ObTenantFreezer::ObTenantFreezer()
 	: is_inited_(false),
@@ -606,6 +609,38 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
   return ret;
 }
 
+// design document :
+int ObTenantFreezer::check_and_freeze_mds_table_()
+{
+  int ret = OB_SUCCESS;
+
+  if (REACH_TIME_INTERVAL(10 * 1000 * 1000 /*10 seconds*/)) {
+    bool trigger_flush = false;
+    int64_t total_memory = lib::get_tenant_memory_limit(tenant_info_.tenant_id_);
+    int64_t trigger_freeze_memory = total_memory * (ObTenantFreezer::MDS_TABLE_FREEZE_TRIGGER_TENANT_PERCENTAGE / 100);
+    ObTenantMdsAllocator &mds_allocator = MTL(ObTenantMdsService *)->get_allocator();
+    int64_t hold_memory = mds_allocator.hold();
+
+    if (OB_UNLIKELY(0 == trigger_freeze_memory)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid trigger freeze memory",
+                K(trigger_freeze_memory),
+                K(total_memory),
+                K(ObTenantFreezer::MDS_TABLE_FREEZE_TRIGGER_TENANT_PERCENTAGE));
+    } else if (hold_memory >= trigger_freeze_memory) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(post_mds_table_freeze_request_())) {
+        LOG_WARN("[TenantFreezer] fail to do mds table self freeze", K(tmp_ret));
+      }
+
+      LOG_INFO(
+          "[TenantFreezer] Trigger Mds Table Self Freeze. ", KR(tmp_ret), K(total_memory), K(trigger_freeze_memory));
+    }
+  }
+
+  return ret;
+}
+
 int ObTenantFreezer::check_and_do_freeze()
 {
   int ret = OB_SUCCESS;
@@ -623,6 +658,8 @@ int ObTenantFreezer::check_and_do_freeze()
     LOG_WARN("[TenantFreezer] check and freeze normal data failed.", KR(ret));
   } else if (OB_FAIL(check_and_freeze_tx_data_())) {
     LOG_WARN("[TenantFreezer] check and freeze tx data failed.", KR(ret));
+  } else if (OB_FAIL(check_and_freeze_mds_table_())) {
+    LOG_WARN("[TenantFreezer] check and freeze mds table failed.", KR(ret));
   }
 
   int64_t check_and_freeze_end_ts = ObTimeUtil::current_time();
@@ -1158,6 +1195,22 @@ int ObTenantFreezer::post_tx_data_freeze_request_()
   } else {
     ObTenantFreezeArg arg;
     arg.freeze_type_ = ObFreezeType::TX_DATA_TABLE_FREEZE;
+    if (OB_FAIL(rpc_proxy_.to(self_).by(tenant_info_.tenant_id_).post_freeze_request(arg, &tenant_mgr_cb_))) {
+      LOG_WARN("[TenantFreezer] fail to post freeze request", K(arg), KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTenantFreezer::post_mds_table_freeze_request_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant manager not init", KR(ret));
+  } else {
+    ObTenantFreezeArg arg;
+    arg.freeze_type_ = ObFreezeType::MDS_TABLE_FREEZE;
     if (OB_FAIL(rpc_proxy_.to(self_).by(tenant_info_.tenant_id_).post_freeze_request(arg, &tenant_mgr_cb_))) {
       LOG_WARN("[TenantFreezer] fail to post freeze request", K(arg), KR(ret));
     }

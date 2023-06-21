@@ -174,7 +174,7 @@ int ObStorageLogger::start_log(const ObLogCursor &start_cursor)
     STORAGE_REDO_LOG(WARN, "SLogger has been started", K(ret));
   } else if (OB_UNLIKELY(!start_cursor.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_REDO_LOG(WARN, "invalid arguments", K(ret));
+    STORAGE_REDO_LOG(WARN, "invalid arguments", K(ret), K(start_cursor));
   } else if (OB_FAIL(log_writer_->start_log(start_cursor))) {
     STORAGE_REDO_LOG(WARN, "fail to pass the start_cursor to log_writer_", K(ret), K(start_cursor));
   } else {

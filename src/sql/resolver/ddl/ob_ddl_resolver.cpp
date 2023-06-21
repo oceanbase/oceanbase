@@ -1952,7 +1952,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
       case T_TABLE_CHECKSUM:
       case T_DELAY_KEY_WRITE:
       case T_AVG_ROW_LENGTH: {
-        break; 
+        break;
       }
       case T_EXTERNAL_FILE_LOCATION: {
         ParseNode *string_node = NULL;
@@ -6226,7 +6226,7 @@ int ObDDLResolver::resolve_list_partition_elements(ParseNode *node,
 
 // 主要用于在 alter table 时检查需要修改的列是否为外键列
 // 如果该列属于外键列，不允许修改外键列的类型
-int ObDDLResolver::check_column_in_foreign_key(const ObTableSchema &table_schema, 
+int ObDDLResolver::check_column_in_foreign_key(const ObTableSchema &table_schema,
                                                const ObString &column_name,
                                                const bool is_drop_column)
 {
@@ -6250,10 +6250,10 @@ int ObDDLResolver::check_column_in_foreign_key(const ObTableSchema &table_schema
         }
         if (table_schema.get_table_id() == foreign_key_info.child_table_id_) {
           if (is_drop_column) {
-            // To be compatible with Mysql 5.6 and 8.0, follwing behavior on child table are allowed on OB 4.0: 
+            // To be compatible with Mysql 5.6 and 8.0, follwing behavior on child table are allowed on OB 4.0:
             // 1. drop foreign key non-related columns and drop any foreign key in one sql;
             // 2. drop the foreign key and its' some/all related columns in one sql.
-            // Thus, RS should report OB_ERR_ALTER_COLUMN_FK if drop fk related column without drop this fk. 
+            // Thus, RS should report OB_ERR_ALTER_COLUMN_FK if drop fk related column without drop this fk.
           } else {
             for (int64_t j = 0; OB_SUCC(ret) && j < foreign_key_info.child_column_ids_.count(); j++) {
               if (alter_column->get_column_id() == foreign_key_info.child_column_ids_.at(j)) {
@@ -9145,10 +9145,10 @@ int ObDDLResolver::resolve_partition_hash_or_key(
 
 /*
   4.1 检查interval_expr是否是立即数或者，1+1 不算
-  4.2 expr的类型是否和col匹配 否则 ORA-14752 
+  4.2 expr的类型是否和col匹配 否则 ORA-14752
 */
 int ObDDLResolver::resolve_interval_node(ObResolverParams &params,
-                                         ParseNode *interval_node, 
+                                         ParseNode *interval_node,
                                          common::ColumnType &col_dt,
                                          int64_t precision,
                                          int64_t scale,
@@ -9166,7 +9166,7 @@ int ObDDLResolver::resolve_interval_node(ObResolverParams &params,
       ret = OB_ERR_INVALID_DATA_TYPE_INTERVAL_TABLE;
     } else {
       ObRawExpr *interval_value_expr = NULL;
-      OZ (ObResolverUtils::resolve_partition_range_value_expr(params, *expr_node, "interval_part", 
+      OZ (ObResolverUtils::resolve_partition_range_value_expr(params, *expr_node, "interval_part",
                                              PARTITION_FUNC_TYPE_RANGE_COLUMNS,
                                              interval_value_expr, false, true));
       if (ret == OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED) {
@@ -9179,11 +9179,11 @@ int ObDDLResolver::resolve_interval_node(ObResolverParams &params,
         common::ObObjType expr_type = interval_value_expr->get_data_type();
         switch (col_dt) {
           case ObIntType:
-          case ObFloatType: 
+          case ObFloatType:
           case ObDoubleType:
           case ObNumberFloatType:
           case ObNumberType: {
-            if (expr_type != ObIntType && expr_type != ObFloatType 
+            if (expr_type != ObIntType && expr_type != ObFloatType
                && expr_type != ObNumberType && expr_type != ObDoubleType) {
               ret = OB_ERR_INTERVAL_EXPR_NOT_CORRECT_TYPE;
               LOG_WARN("fail to check interval expr datatype", K(expr_type), K(col_dt), K(ret));
@@ -9192,7 +9192,7 @@ int ObDDLResolver::resolve_interval_node(ObResolverParams &params,
               acc.set_precision(precision);
               acc.set_scale(scale);
               interval_value_expr->set_accuracy(acc);
-            } 
+            }
             if (OB_SUCC(ret)) {
               ParamStore dummy_params;
               ObRawExprFactory expr_factory(*(params.allocator_));
@@ -9225,7 +9225,7 @@ int ObDDLResolver::resolve_interval_node(ObResolverParams &params,
             }
             break;
           }
-          case ObDateTimeType: 
+          case ObDateTimeType:
           case ObTimestampNanoType: {
             if (expr_type != ObIntervalYMType && expr_type != ObIntervalDSType) {
               ret = OB_ERR_INTERVAL_EXPR_NOT_CORRECT_TYPE;
@@ -9244,7 +9244,7 @@ int ObDDLResolver::resolve_interval_node(ObResolverParams &params,
         interval_value_expr_out = interval_value_expr;
       }
     }
-  } 
+  }
 
   return ret;
 }
@@ -9259,13 +9259,13 @@ int ObDDLResolver::resolve_interval_expr_low(ObResolverParams &params,
   const ObColumnSchemaV2 *col_schema = NULL;
   common::ColumnType col_dt = ObNullType;
   /* 1. interval 分区只支持一个分区键 否则 ORA-14750*/
-  if (OB_SUCC(ret)) { 
+  if (OB_SUCC(ret)) {
     if (table_schema.get_partition_key_column_num() > 1) {
       ret = OB_ERR_INTERVAL_CLAUSE_HAS_MORE_THAN_ONE_COLUMN;
       SQL_RESV_LOG(WARN, "interval clause has more then one column", K(ret));
     }
   }
-  
+
   /* 2. interval 分区列只支持数据类型： number, date, float, timestamp。 否则 ORA-14751 */
   if (OB_SUCC(ret)) {
     uint64_t col_id = OB_INVALID_ID;
@@ -9328,7 +9328,7 @@ int ObDDLResolver::resolve_interval_clause(ObPartitionedStmt *stmt,
       LOG_WARN("failed to resolve interval expr low", K(ret));
     } else {
       stmt->set_interval_expr(interval_value);
-    } 
+    }
   }
   return ret;
 }

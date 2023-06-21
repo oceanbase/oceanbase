@@ -168,7 +168,7 @@ int ObBloomFilterBuildTask::build_bloom_filter()
       } else {
         ObStorageDatumUtils datum_utils;
         ObDatumRowkey rowkey;
-        if (OB_FAIL(datum_utils.init(macro_bare_iter->get_column_descs(),
+        if (OB_FAIL(datum_utils.init(macro_bare_iter->get_rowkey_column_descs(),
                                      macro_header.fixed_header_.rowkey_column_count_,
                                      compat_mode == lib::Worker::CompatMode::ORACLE,
                                      allocator_))) {

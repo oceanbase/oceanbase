@@ -15,7 +15,6 @@ namespace common
 ObDataBlockCachePreWarmer::ObDataBlockCachePreWarmer()
   : base_percentage_(0),
     cache_(nullptr),
-    read_info_(nullptr),
     rest_size_(0),
     warm_size_percentage_(100),
     update_step_(0),
@@ -33,7 +32,6 @@ ObDataBlockCachePreWarmer::~ObDataBlockCachePreWarmer()
 void ObDataBlockCachePreWarmer::reset()
 {
   cache_ = nullptr;
-  read_info_ = nullptr;
   base_percentage_ = 0;
   rest_size_ = 0;
   warm_size_percentage_ = 100;
@@ -48,10 +46,10 @@ void ObDataBlockCachePreWarmer::reuse()
   cache_handle_.reset();
 }
 
-void ObDataBlockCachePreWarmer::init(const ObTableReadInfo &read_info)
+void ObDataBlockCachePreWarmer::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_init(DATA_BLOCK_CACHE_PERCENTAGE, read_info, OB_STORE_CACHE.get_block_cache()))) {
+  if (OB_FAIL(inner_init(DATA_BLOCK_CACHE_PERCENTAGE, OB_STORE_CACHE.get_block_cache()))) {
     COMMON_LOG(WARN, "Fail to inner init data block cache pre warmer", K(ret));
   }
 }
@@ -62,9 +60,9 @@ int ObDataBlockCachePreWarmer::reserve_kvpair(const blocksstable::ObMicroBlockDe
   int ret = OB_SUCCESS;
 
   int64_t kvpair_size = 0;
-  if (OB_UNLIKELY(nullptr == cache_ || nullptr == read_info_)) {
+  if (OB_UNLIKELY(nullptr == cache_)) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "The block cache pre warmer is not inited", K(ret), KP(cache_), KP(read_info_));
+    COMMON_LOG(WARN, "The block cache pre warmer is not inited", K(ret), KP(cache_));
   } else if (OB_UNLIKELY(!micro_block_desc.is_valid() || level < 0)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(micro_block_desc), K(level));
@@ -72,9 +70,9 @@ int ObDataBlockCachePreWarmer::reserve_kvpair(const blocksstable::ObMicroBlockDe
     if (level < TOP_LEVEL && (rest_size_ <= 0 || !warm_block(level))) {
       ret = OB_BUF_NOT_ENOUGH;
     } else if (FALSE_IT(reuse())) {
-    } else if (OB_FAIL(cache_->reserve_kvpair(micro_block_desc, *read_info_, inst_handle_,
+    } else if (OB_FAIL(cache_->reserve_kvpair(micro_block_desc, inst_handle_,
                                               cache_handle_, kvpair_, kvpair_size))) {
-      COMMON_LOG(WARN, "Fail to reserve block cache value", K(ret), K(micro_block_desc), KPC(read_info_));
+      COMMON_LOG(WARN, "Fail to reserve block cache value", K(ret), K(micro_block_desc));
     } else {
       rest_size_ = MAX(0, rest_size_ - kvpair_size);
     }
@@ -116,17 +114,15 @@ int ObDataBlockCachePreWarmer::update_and_put_kvpair(const blocksstable::ObMicro
 }
 
 int ObDataBlockCachePreWarmer::inner_init(const int64_t percentage,
-                                           const ObTableReadInfo &read_info,
                                            blocksstable::ObIMicroBlockCache &block_cache)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(percentage < 0 || !read_info.is_valid())) {
+  if (OB_UNLIKELY(percentage < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), K(percentage), K(read_info));
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(percentage));
   } else {
     cache_ = &block_cache;
-    read_info_ = &read_info;
     warm_size_percentage_ = percentage;
     inner_update_rest();
   }
@@ -183,10 +179,10 @@ ObIndexBlockCachePreWarmer::~ObIndexBlockCachePreWarmer()
 {
 }
 
-void ObIndexBlockCachePreWarmer::init(const ObTableReadInfo &read_info)
+void ObIndexBlockCachePreWarmer::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_init(INDEX_BLOCK_CACHE_PERCENTAGE, read_info, OB_STORE_CACHE.get_index_block_cache()))) {
+  if (OB_FAIL(inner_init(INDEX_BLOCK_CACHE_PERCENTAGE, OB_STORE_CACHE.get_index_block_cache()))) {
     COMMON_LOG(WARN, "Fail to inner init index block cache pre warmer", K(ret));
   }
 }

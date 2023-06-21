@@ -31,6 +31,7 @@ namespace storage
 int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res, int64_t &snapshot_version, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
+  const int64_t retry_interval = 100 * 1000L;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -38,8 +39,23 @@ int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &
   } else if (OB_ISNULL(common_rpc_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy is null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->timeout(GCONF._ob_ddl_timeout).create_hidden_table(arg, res))) {
-    LOG_WARN("failed to create hidden table", KR(ret), K(arg));
+  }
+
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(common_rpc_proxy->timeout(GCONF._ob_ddl_timeout).create_hidden_table(arg, res))) {
+      LOG_WARN("failed to create hidden table", KR(ret), K(arg));
+    } else {
+      break;
+    }
+    if (OB_FAIL(ret) && (OB_EAGAIN == ret || OB_TRANS_KILLED == ret)) {
+      ob_usleep(retry_interval);
+      if (OB_FAIL(THIS_WORKER.check_status())) { // overwrite ret
+        LOG_WARN("failed to check status", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
   }

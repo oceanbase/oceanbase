@@ -64,6 +64,16 @@ public:
   int nonblock_renew(
       const uint64_t tenant_id,
       const ObTabletID &tablet_id);
+  // Batch renew the mapping between the tablet and LS synchronously
+  // @param [in] tenant_id: target tenant which the tablet belongs to
+  // @param [in] tablet_ids: target tablet_id list
+  // @param [out] ls_ids: array of ls_ids that tablet belongs to
+  // @return OB_SUCCESS: process successfully
+  //         other: inner_sql execution error
+  int batch_renew_tablet_ls_cache(
+      const uint64_t tenant_id,
+      const ObList<common::ObTabletID, common::ObIAllocator> &tablet_list,
+      common::ObIArray<ObTabletLSCache> &tablet_ls_caches);
   // Add update task into async_queue_.
   int add_update_task(const ObTabletLSUpdateTask &task);
   // Process update tasks.
@@ -87,12 +97,11 @@ private:
       const ObTabletID &tablet_id,
       ObTabletLSCache &tablet_cache);
   int update_cache_(const ObTabletLSCache &tablet_cache);
-  int inner_get_by_sql_(
-      const uint64_t tenant_id,
-      const ObTabletID &tablet_id,
-      ObTabletLSCache &tablet_cache);
   int set_timeout_ctx_(common::ObTimeoutCtx &ctx);
   bool is_valid_key_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
+  int erase_cache_(const uint64_t tenant_id, const ObTabletID &tablet_id);
+  bool belong_to_sys_ls_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
+
   const int64_t MINI_MODE_UPDATE_THREAD_CNT = 1;
   const int64_t USER_TASK_QUEUE_SIZE = 200 * 1000; // 20W partitions
   const int64_t MINI_MODE_USER_TASK_QUEUE_SIZE = 10 * 1000; // 1W partitions

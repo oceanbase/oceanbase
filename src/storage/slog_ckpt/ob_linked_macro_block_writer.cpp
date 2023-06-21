@@ -131,6 +131,15 @@ void ObLinkedMacroBlockWriter::reset()
   write_ctx_.reset();
   handle_.reset();
   entry_block_id_.reset();
+  io_desc_.reset();
+}
+
+void ObLinkedMacroBlockWriter::reuse_for_next_round()
+{
+  is_inited_ = false;
+  handle_.reset();
+  entry_block_id_.reset();
+  io_desc_.reset();
 }
 
 //================== ObLinkedMacroBlockItemWriter =============================
@@ -440,6 +449,18 @@ int ObLinkedMacroBlockItemWriter::close()
 
 void ObLinkedMacroBlockItemWriter::reset()
 {
+  inner_reset();
+  block_writer_.reset();
+}
+
+void ObLinkedMacroBlockItemWriter::reuse_for_next_round()
+{
+  inner_reset();
+  block_writer_.reuse_for_next_round();
+}
+
+void ObLinkedMacroBlockItemWriter::inner_reset()
+{
   is_inited_ = false;
   is_closed_ = false;
   written_items_cnt_ = 0;
@@ -448,7 +469,6 @@ void ObLinkedMacroBlockItemWriter::reset()
   pre_block_inflight_items_cnt_ = 0;
   curr_block_inflight_items_cnt_ = 0;
   allocator_.reset();
-  block_writer_.reset();
   item_size_arr_.reset();
   item_disk_addr_arr_.reset();
   io_buf_ = nullptr;
