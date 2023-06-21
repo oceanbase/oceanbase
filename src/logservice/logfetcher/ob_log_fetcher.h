@@ -256,6 +256,8 @@ public:
   virtual void print_stat();
 
 private:
+  int suggest_cached_rpc_res_count_(const int64_t min_res_cnt,
+      const int64_t max_res_cnt);
   int init_self_addr_();
   void print_fetcher_stat_();
   int print_delay();
