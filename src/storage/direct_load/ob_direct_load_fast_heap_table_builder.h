@@ -67,6 +67,7 @@ private:
 private:
   ObDirectLoadFastHeapTableBuildParam param_;
   common::ObArenaAllocator allocator_;
+  common::ObArenaAllocator slice_writer_allocator_;
   ObDirectLoadFastHeapTableTabletContext *fast_heap_table_tablet_ctx_;
   ObSSTableInsertSliceWriter *slice_writer_;
   ObDirectLoadFastHeapTableTabletWriteCtx write_ctx_;
