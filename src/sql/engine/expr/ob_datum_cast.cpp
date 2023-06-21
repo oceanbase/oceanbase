@@ -8721,8 +8721,7 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
           } else if (out_acc.get_length() == text_length
                      || (ObCharType != out_type && ObNCharType != out_type)
                      || (lib::is_mysql_mode()
-                         && ob_is_char(out_type, expr.datum_meta_.cs_type_)
-                         && !(SMO_PAD_CHAR_TO_FULL_LENGTH & session->get_sql_mode()))) {
+                         && ob_is_char(out_type, expr.datum_meta_.cs_type_))) {
             // do not padding
             LOG_DEBUG("no need to padding", K(ret), K(out_acc.get_length()),
                                             K(text_length), K(text));
