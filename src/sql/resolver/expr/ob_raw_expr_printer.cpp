@@ -4033,7 +4033,7 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
         if (lib::is_oracle_mode()) {
           DATA_PRINTF("char(%d %s)", len, get_length_semantics_str(length_semantics));
         } else {
-          if (len > 0) {
+          if (len >= 0) {
             DATA_PRINTF("char(%d) charset %s", len, ObCharset::charset_name(
                         static_cast<ObCollationType>(collation)));
           } else {
