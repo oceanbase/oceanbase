@@ -360,7 +360,6 @@ public:
   inline void set_resolve_active_memtable_left_boundary(bool flag) { ATOMIC_STORE(&resolve_active_memtable_left_boundary_, flag); }
   inline bool get_resolve_active_memtable_left_boundary() { return ATOMIC_LOAD(&resolve_active_memtable_left_boundary_); }
   void set_freeze_state(const int64_t state);
-  int get_merge_priority_info(ObMergePriorityInfo &merge_priority_info) const;
   void set_minor_merged();
   int64_t get_minor_merged_time() const { return minor_merged_time_; }
   common::ObIAllocator &get_allocator() {return local_allocator_;}

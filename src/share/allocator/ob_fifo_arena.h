@@ -159,6 +159,7 @@ public:
   void free(Handle& ref);
   int64_t allocated() const { return ATOMIC_LOAD(&allocated_); }
   int64_t retired() const { return ATOMIC_LOAD(&retired_); }
+  int64_t reclaimed() const { return ATOMIC_LOAD(&reclaimed_); }
   int64_t hold() const {
     int64_t rsize = ATOMIC_LOAD(&reclaimed_);
     int64_t asize = ATOMIC_LOAD(&allocated_);

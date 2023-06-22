@@ -73,12 +73,39 @@ public:
   int64_t kvcache_mem_;
 
   int64_t active_memstore_used_;
+  int64_t freezable_active_memstore_used_;
   int64_t total_memstore_used_;
   int64_t total_memstore_hold_;
-
   int64_t max_cached_memstore_size_;
+
 private:
   DISABLE_COPY_ASSIGN(ObTenantFreezeCtx);
+};
+
+struct ObTenantStatistic
+{
+public:
+  ObTenantStatistic();
+  ~ObTenantStatistic() { reset(); }
+  void reset();
+public:
+  int64_t active_memstore_used_;
+  int64_t total_memstore_used_;
+  int64_t total_memstore_hold_;
+  int64_t memstore_freeze_trigger_;
+  int64_t memstore_limit_;
+  int64_t tenant_memory_limit_;
+  int64_t tenant_memory_hold_;
+  int64_t kvcache_mem_;
+  int64_t memstore_can_get_now_;
+  int64_t max_cached_memstore_size_;
+
+  // these used to analysis write/frozen/release speed of tenant memstore
+  int64_t memstore_allocated_pos_;
+  int64_t memstore_frozen_pos_;
+  int64_t memstore_reclaimed_pos_;
+private:
+  DISABLE_COPY_ASSIGN(ObTenantStatistic);
 };
 
 // store the tenant info, such as memory limit, memstore limit,

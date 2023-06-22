@@ -91,7 +91,7 @@ int ObAccessService::check_tenant_out_of_memstore_limit_(bool &is_out_of_mem)
   is_out_of_mem = false;
   ObTenantFreezer *freezer = nullptr;
   freezer = MTL(ObTenantFreezer *);
-  if (OB_FAIL(freezer->check_tenant_out_of_memstore_limit(is_out_of_mem))) {
+  if (OB_FAIL(freezer->check_memstore_full(is_out_of_mem))) {
     LOG_WARN("check tenant out of memstore limit", K(ret));
   } else {
     // do nothing

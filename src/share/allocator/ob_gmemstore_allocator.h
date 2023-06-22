@@ -61,17 +61,15 @@ public:
     memtable::ObMemtable& mt_;
     GAlloc* host_;
     ArenaHandle arena_handle_;
-    AllocHandle(memtable::ObMemtable& mt): mt_(mt), host_(NULL), last_freeze_timestamp_(0) {
+    AllocHandle(memtable::ObMemtable& mt): mt_(mt), host_(NULL) {
       do_reset();
     }
     void do_reset() {
       ListHandle::reset();
       arena_handle_.reset();
       host_ = NULL;
-      last_freeze_timestamp_ = 0;
     }
     int64_t get_group_id() const { return id_ < 0? INT64_MAX: (id_ % Arena::MAX_CACHED_GROUP_COUNT); }
-    int64_t get_last_freeze_timestamp() const { return last_freeze_timestamp_; }
     int init(uint64_t tenant_id);
     void set_host(GAlloc* host) { host_ = host; }
     void destroy() {
@@ -107,23 +105,18 @@ public:
         host_->set_frozen(*this);
       }
     }
-    INHERIT_TO_STRING_KV("ListHandle", ListHandle, KP_(host), K_(arena_handle),
-        K_(last_freeze_timestamp));
-  private:
-    int64_t last_freeze_timestamp_;
+    INHERIT_TO_STRING_KV("ListHandle", ListHandle, KP_(host), K_(arena_handle));
   };
 
 public:
   ObGMemstoreAllocator():
       lock_(common::ObLatchIds::MEMSTORE_ALLOCATOR_LOCK),
       hlist_(),
-      arena_(),
-      last_freeze_timestamp_(0) {}
+      arena_() {}
   ~ObGMemstoreAllocator() {}
 public:
   int init(uint64_t tenant_id)
   {
-    update_last_freeze_timestamp();
     return arena_.init(tenant_id);
   }
   void init_handle(AllocHandle& handle, uint64_t tenant_id);
@@ -141,18 +134,25 @@ public:
     return ret;
   }
 public:
-  int64_t get_mem_active_memstore_used() {
+  int64_t get_active_memstore_used() {
     int64_t hazard = hlist_.hazard();
     return  hazard == INT64_MAX? 0: (arena_.allocated() - hazard);
   }
-  int64_t get_frozen_memstore_pos() const {
+  int64_t get_freezable_active_memstore_used() {
     int64_t hazard = hlist_.hazard();
-    return  hazard == INT64_MAX? 0: hazard;
+    return  hazard == INT64_MAX? 0: (arena_.retired() - hazard);
   }
   int64_t get_max_cached_memstore_size() const {
     return arena_.get_max_cached_memstore_size();
   }
-  int64_t get_mem_total_memstore_used() const { return arena_.hold(); }
+  int64_t get_total_memstore_used() const { return arena_.hold(); }
+  int64_t get_frozen_memstore_pos() const {
+    int64_t hazard = hlist_.hazard();
+    return  hazard == INT64_MAX? 0: hazard;
+  }
+  int64_t get_memstore_reclaimed_pos() const { return arena_.reclaimed(); }
+  int64_t get_memstore_allocated_pos() const { return arena_.allocated(); }
+  int64_t get_retire_clock() const { return arena_.retired(); }
   void log_frozen_memstore_info(char* buf, int64_t limit) {
     if (NULL != buf && limit > 0) {
       FrozenMemstoreInfoLogger logger(buf, limit);
@@ -182,15 +182,6 @@ public:
   {
     return arena_.expected_wait_time(seq);
   }
-  int64_t get_retire_clock() const { return arena_.retired(); }
-  bool exist_active_memtable_below_clock(const int64_t clock) const {
-    return hlist_.hazard() < clock;
-  }
-  int64_t get_last_freeze_timestamp() { return ATOMIC_LOAD(&last_freeze_timestamp_); }
-  void update_last_freeze_timestamp()
-  {
-    ATOMIC_STORE(&last_freeze_timestamp_, ObTimeUtility::current_time());
-  }
 private:
   int64_t nway_per_group();
   int set_memstore_threshold_without_lock(uint64_t tenant_id);
@@ -198,7 +189,6 @@ private:
   Lock lock_;
   HandleList hlist_;
   Arena arena_;
-  int64_t last_freeze_timestamp_;
 };
 
 }; // end namespace common

@@ -46,6 +46,7 @@ ObTenantFreezeCtx::ObTenantFreezeCtx()
     max_mem_memstore_can_get_now_(0),
     kvcache_mem_(0),
     active_memstore_used_(0),
+    freezable_active_memstore_used_(0),
     total_memstore_used_(0),
     total_memstore_hold_(0),
     max_cached_memstore_size_(0)
@@ -61,9 +62,43 @@ void ObTenantFreezeCtx::reset()
   max_mem_memstore_can_get_now_ = 0;
   kvcache_mem_ = 0;
   active_memstore_used_ = 0;
+  freezable_active_memstore_used_ = 0;
   total_memstore_used_ = 0;
   total_memstore_hold_ = 0;
   max_cached_memstore_size_ = 0;
+}
+
+ObTenantStatistic::ObTenantStatistic()
+  : active_memstore_used_(0),
+    total_memstore_used_(0),
+    total_memstore_hold_(0),
+    memstore_freeze_trigger_(0),
+    memstore_limit_(0),
+    tenant_memory_limit_(0),
+    tenant_memory_hold_(0),
+    kvcache_mem_(0),
+    memstore_can_get_now_(0),
+    max_cached_memstore_size_(0),
+    memstore_allocated_pos_(0),
+    memstore_frozen_pos_(0),
+    memstore_reclaimed_pos_(0)
+{}
+
+void ObTenantStatistic::reset()
+{
+  active_memstore_used_ = 0;
+  total_memstore_used_ = 0;
+  total_memstore_hold_ = 0;
+  memstore_freeze_trigger_ = 0;
+  memstore_limit_ = 0;
+  tenant_memory_limit_ = 0;
+  tenant_memory_hold_ = 0;
+  kvcache_mem_ = 0;
+  memstore_can_get_now_ = 0;
+  max_cached_memstore_size_ = 0;
+  memstore_allocated_pos_ = 0;
+  memstore_frozen_pos_ = 0;
+  memstore_reclaimed_pos_ = 0;
 }
 
 ObTenantInfo::ObTenantInfo()
