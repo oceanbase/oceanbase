@@ -138,7 +138,7 @@ public:
     other.ref_handle_ = tmp.ref_handle_;
 
     // If not reset tmp in this line, the reference count of current cache_obj_
-    //  will be mistakely decrease.
+    //  will be mistakenly decrease.
     tmp.reset();
   }
   TO_STRING_KV(K_(cache_obj));
