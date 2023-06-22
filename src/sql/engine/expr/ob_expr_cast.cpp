@@ -329,7 +329,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
      LOG_WARN("adjust udt cast sub type failed", K(ret));
   } else if (OB_UNLIKELY(!cast_supported(type1.get_type(), type1.get_collation_type(),
                                         dst_type.get_type(), dst_type.get_collation_type()))) {
-    if (session->is_ps_prepare_stage()) {
+    if (session->is_varparams_sql_prepare()) {
       type.set_null();
       LOG_TRACE("ps prepare phase ignores type deduce error");
     } else {
@@ -346,7 +346,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   } else if (!check_cast_allowed(type1.get_type(), type1.get_collation_type(),
                                  dst_type.get_type(), dst_type.get_collation_type(),
                                  is_explicit_cast)) {
-    if (session->is_ps_prepare_stage()) {
+    if (session->is_varparams_sql_prepare()) {
       type.set_null();
       LOG_TRACE("ps prepare phase ignores type deduce error");
     } else {
