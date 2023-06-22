@@ -1797,7 +1797,7 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
       }
       // 对于已经copy成功的new obj释放内存
       if (OB_FAIL(ret) && OB_NOT_NULL(data)) {
-        for (int64_t j = 0; j <= i; ++j) {
+        for (int64_t j = 0; j <= i && j < src->get_count(); ++j) {
           int tmp = ObUserDefinedType::destruct_obj(new_objs[j]);
           if (OB_SUCCESS != tmp) {
             LOG_WARN("fail torelease memory", K(ret), K(tmp));
