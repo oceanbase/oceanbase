@@ -5704,6 +5704,8 @@ def_table_schema(
 # 469 : __all_mview_refresh_change_stats
 # 470 : __all_mview_refresh_stmt_stats
 
+# 471 : __all_dbms_lock_allocated
+
 ################################################################################
 
 
@@ -12584,6 +12586,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 # 15394: __all_mview_refresh_stats
 # 15395: __all_mview_refresh_change_stats
 # 15396: __all_mview_refresh_stmt_stats
+
+# 15397: __all_dbms_lock_allocated
 
 ################################################################################
 # System View (20000,30000]
@@ -45563,6 +45567,8 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
 # 25253: DBA_OB_MVIEW_REFRESH_STATS
 # 25254: DBA_OB_MVIEW_REFRESH_CHANGE_STATS
 # 25255: DBA_OB_MVIEW_REFRESH_STMT_STATS
+
+# 25256: DBMS_LOCK_ALLOCATED
 
 #### End Data Dictionary View
 ################################################################################
