@@ -650,12 +650,12 @@ int ObMemtableArray::build(
 
   ObITable *table = nullptr;
   for (int64_t i = start_pos; OB_SUCC(ret) && i < table_array.count(); ++i) {
-    memtable::ObMemtable *memtable = nullptr;
+    memtable::ObIMemtable *memtable = nullptr;
     table = table_array.at(i);
     if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
-    } else if (FALSE_IT(memtable = reinterpret_cast<memtable::ObMemtable *>(table))) {
+    } else if (FALSE_IT(memtable = reinterpret_cast<memtable::ObIMemtable *>(table))) {
     } else if (memtable->is_empty()) {
       FLOG_INFO("empty memtable discarded", KPC(memtable));
     } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
@@ -679,16 +679,16 @@ int ObMemtableArray::rebuild(const common::ObIArray<ObITable *> &table_array)
   if (OB_FAIL(trim_empty_last_memtable())) {
     LOG_WARN("failed to trim empty last memtable", K(ret));
   } else {
-    const memtable::ObMemtable *last_memtable = count_ > 0 ? memtable_array_[count_ - 1] : nullptr;
+    const memtable::ObIMemtable *last_memtable = count_ > 0 ? memtable_array_[count_ - 1] : nullptr;
     const share::SCN endscn = (NULL == last_memtable) ? share::SCN::min_scn() : last_memtable->get_end_scn();
 
     for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
-      memtable::ObMemtable *memtable = nullptr;
+      memtable::ObIMemtable *memtable = nullptr;
       ObITable *table = table_array.at(i);
       if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
-      } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
+      } else if (FALSE_IT(memtable = static_cast<memtable::ObIMemtable *>(table))) {
       } else if (memtable->is_empty()) {
         FLOG_INFO("Empty memtable discarded", KPC(memtable));
       } else if (table->get_end_scn() < endscn) {
@@ -718,12 +718,12 @@ int ObMemtableArray::rebuild(
   } else {
     // use clog checkpoint scn to filter memtable array
     for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
-      memtable::ObMemtable *memtable = nullptr;
+      memtable::ObIMemtable *memtable = nullptr;
       ObITable *table = table_array.at(i);
       if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
-      } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
+      } else if (FALSE_IT(memtable = static_cast<memtable::ObIMemtable *>(table))) {
       } else if (memtable->is_empty()) {
         FLOG_INFO("Empty memtable discarded", K(ret), KPC(memtable));
       } else if (table->get_end_scn() <= clog_checkpoint_scn) {
@@ -829,7 +829,7 @@ int64_t ObMemtableArray::to_string(char *buf, const int64_t buf_len) const
     J_NAME("ObMemtableArray");
     J_KV(KP(this),
         K_(count),
-        "memtable_ptr_array", ObArrayWrap<memtable::ObMemtable *>(memtable_array_, count_));
+        "memtable_ptr_array", ObArrayWrap<memtable::ObIMemtable *>(memtable_array_, count_));
     J_OBJ_END();
   }
   return pos;

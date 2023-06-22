@@ -95,7 +95,7 @@ class ObMemtableArray
 public:
   static constexpr int64_t MEMTABLE_ARRAY_SIZE =16;
   ObMemtableArray() : memtable_array_(), count_(0) {}
-  OB_INLINE memtable::ObMemtable *operator[](const int64_t pos) const
+  OB_INLINE memtable::ObIMemtable *operator[](const int64_t pos) const
   {
     OB_ASSERT(pos < count_ && pos >= 0);
     return memtable_array_[pos];
@@ -116,7 +116,7 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
   int trim_empty_last_memtable();
-  memtable::ObMemtable *memtable_array_[MEMTABLE_ARRAY_SIZE];
+  memtable::ObIMemtable *memtable_array_[MEMTABLE_ARRAY_SIZE];
   int64_t count_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableArray);
