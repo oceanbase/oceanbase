@@ -700,8 +700,9 @@ int ObRebuildService::check_can_rebuild_(
     LOG_WARN("failed to get paxos member list and learner list", K(ret), KPC(ls));
   } else if (ObLSRebuildType::TRANSFER == rebuild_ctx.type_
       && tenant_info.is_primary() && member_list.contains(self_addr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls cannot do rebuild", K(ret), K(rebuild_ctx), K(tenant_info), K(member_list));
+    //primary will has this condition
+    can_rebuild = false;
+    LOG_INFO("ls cannot do rebuild", K(rebuild_ctx), K(tenant_info), K(member_list));
   } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log service should not be NULL", K(ret), KP(log_service));

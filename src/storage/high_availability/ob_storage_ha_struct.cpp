@@ -354,6 +354,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(const share::ObLSID &ls_i
     ObTabletHandle tablet_handle;
     ObTablet *tablet = NULL;
     ObTabletCreateDeleteMdsUserData user_data;
+    bool unused_committed_flag = false;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
@@ -371,7 +372,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(const share::ObLSID &ls_i
         LOG_WARN("tablet is NULL", KR(ret), K(ls_id));
       } else if (tablet->is_ls_inner_tablet()) {
         // do nothing
-      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, unused_committed_flag))) {
         if (OB_EMPTY_RESULT == ret) {
           LOG_INFO("tablet_status is null, ls is allowed to be GC", KR(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_, K(ls_id));
           ret = OB_SUCCESS;
