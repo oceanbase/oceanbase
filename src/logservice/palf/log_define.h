@@ -403,6 +403,25 @@ enum PurgeThrottlingType
   MAX_PURGE_TYPE
 };
 
+inline const char *purge_throttling_type_2_str(const PurgeThrottlingType type)
+{
+#define EXTRACT_PURGE_TYPE(type_var) ({ case(type_var): return #type_var; })
+  switch(type)
+  {
+    EXTRACT_PURGE_TYPE(INVALID_PURGE_TYPE);
+    EXTRACT_PURGE_TYPE(PURGE_BY_RECONFIRM);
+    EXTRACT_PURGE_TYPE(PURGE_BY_CHECK_BARRIER_CONDITION);
+    EXTRACT_PURGE_TYPE(PURGE_BY_PRE_CHECK_FOR_CONFIG);
+    EXTRACT_PURGE_TYPE(PURGE_BY_CHECK_SERVERS_LSN_AND_VERSION);
+    EXTRACT_PURGE_TYPE(PURGE_BY_GET_MC_REQ);
+    EXTRACT_PURGE_TYPE(PURGE_BY_NOTIFY_FETCH_LOG);
+
+    default:
+      return "Invalid Type";
+  }
+#undef EXTRACT_PURGE_TYPE
+}
+
 bool need_force_purge(PurgeThrottlingType type);
 
 const char *get_purge_throttling_type_str(PurgeThrottlingType type);

@@ -15,6 +15,7 @@
 
 #include "lib/utility/ob_unify_serialize.h"                    // OB_UNIS_VERSION
 #include "lib/utility/ob_print_utils.h"                        // TO_STRING_KV
+#include "log_define.h"
 #include "log_meta_info.h"
 #include "log_learner.h"                             // LogLearner, LogLearnerList
 #include "logservice/palf/lsn.h"                                     // LSN
@@ -32,6 +33,20 @@ enum PushLogType
   FETCH_LOG_RESP = 1,
 };
 
+inline const char *push_log_type_2_str(const PushLogType type)
+{
+#define EXTRACT_PUSH_LOG_TYPE(type_var) ({ case(type_var): return #type_var; })
+  switch(type)
+  {
+    EXTRACT_PUSH_LOG_TYPE(PUSH_LOG);
+    EXTRACT_PUSH_LOG_TYPE(FETCH_LOG_RESP);
+
+    default:
+      return "Invalid Type";
+  }
+#undef EXTRACT_PUSH_LOG_TYPE
+}
+
 struct LogPushReq {
   OB_UNIS_VERSION(1);
 public:
@@ -45,7 +60,7 @@ public:
   ~LogPushReq();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(push_log_type), K_(msg_proposal_id), K_(prev_log_proposal_id),
+  TO_STRING_KV("push_log_type", push_log_type_2_str((PushLogType)push_log_type_), K_(msg_proposal_id), K_(prev_log_proposal_id),
                K_(prev_lsn), K_(curr_lsn), K_(write_buf));
   int16_t push_log_type_;
   int64_t msg_proposal_id_;
@@ -78,6 +93,21 @@ enum FetchLogType
   FETCH_MODE_META = 2,
 };
 
+inline const char *fetch_type_2_str(const FetchLogType type)
+{
+#define EXTRACT_FETCH_TYPE(type_var) ({ case(type_var): return #type_var; })
+  switch(type)
+  {
+    EXTRACT_FETCH_TYPE(FETCH_LOG_FOLLOWER);
+    EXTRACT_FETCH_TYPE(FETCH_LOG_LEADER_RECONFIRM);
+    EXTRACT_FETCH_TYPE(FETCH_MODE_META);
+
+    default:
+      return "Invalid Type";
+  }
+#undef EXTRACT_FETCH_TYPE
+}
+
 struct LogFetchReq {
   OB_UNIS_VERSION(1);
 public:
@@ -94,7 +124,7 @@ public:
   ~LogFetchReq();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(msg_proposal_id), K_(fetch_type), K_(prev_lsn), K_(lsn), K_(fetch_log_size),
+  TO_STRING_KV(K_(msg_proposal_id), "fetch_type", fetch_type_2_str((FetchLogType)fetch_type_), K_(prev_lsn), K_(lsn), K_(fetch_log_size),
       K_(fetch_log_count), K_(accepted_mode_pid));
   int16_t fetch_type_;
   int64_t msg_proposal_id_;

@@ -67,6 +67,27 @@ enum FetchTriggerType
   ADD_MEMBER_PRE_CHECK = 8,
 };
 
+inline const char *fetch_trigger_type_2_str(const FetchTriggerType type)
+{
+#define EXTRACT_TRIGGER_TYPE(type_var) ({ case(type_var): return #type_var; })
+  switch(type)
+  {
+    EXTRACT_TRIGGER_TYPE(LOG_LOOP_TH);
+    EXTRACT_TRIGGER_TYPE(SLIDING_CB);
+    EXTRACT_TRIGGER_TYPE(LEADER_RECONFIRM);
+    EXTRACT_TRIGGER_TYPE(NOTIFY_REBUILD);
+    EXTRACT_TRIGGER_TYPE(LEARNER_REGISTER);
+    EXTRACT_TRIGGER_TYPE(CLEAN_CACHED_LOG);
+    EXTRACT_TRIGGER_TYPE(MODE_META_BARRIER);
+    EXTRACT_TRIGGER_TYPE(RECONFIRM_NOTIFY_FETCH);
+    EXTRACT_TRIGGER_TYPE(ADD_MEMBER_PRE_CHECK);
+
+    default:
+      return "Invalid Type";
+  }
+#undef EXTRACT_TRIGGER_TYPE
+}
+
 enum TruncateType
 {
   INVALID_TRUNCATE_TYPE = 0,
@@ -74,11 +95,40 @@ enum TruncateType
   TRUNCATE_LOG = 2,
 };
 
+inline const char *truncate_type_2_str(const TruncateType type)
+{
+#define EXTRACT_TRUNCATE_TYPE(type_var) ({ case(type_var): return #type_var; })
+  switch(type)
+  {
+    EXTRACT_TRUNCATE_TYPE(INVALID_TRUNCATE_TYPE);
+    EXTRACT_TRUNCATE_TYPE(TRUNCATE_CACHED_LOG_TASK);
+    EXTRACT_TRUNCATE_TYPE(TRUNCATE_LOG);
+
+    default:
+      return "Invalid Type";
+  }
+#undef EXTRACT_TRUNCATE_TYPE
+}
+
 enum FreezeMode
 {
   PERIOD_FREEZE_MODE = 0,
   FEEDBACK_FREEZE_MODE,
 };
+
+inline const char *freeze_mode_2_str(const FreezeMode mode)
+{
+#define EXTRACT_FREEZE_MODE(type_var) ({ case(type_var): return #type_var; })
+  switch(mode)
+  {
+    EXTRACT_FREEZE_MODE(PERIOD_FREEZE_MODE);
+    EXTRACT_FREEZE_MODE(FEEDBACK_FREEZE_MODE);
+
+    default:
+      return "Invalid Mode";
+  }
+#undef EXTRACT_FREEZE_MODE
+}
 
 struct TruncateLogInfo
 {
@@ -98,7 +148,7 @@ struct TruncateLogInfo
     truncate_begin_lsn_.reset();
     truncate_log_proposal_id_ = INVALID_PROPOSAL_ID;
   }
-  TO_STRING_KV(K_(truncate_type), K_(truncate_log_id), K_(truncate_begin_lsn), K_(truncate_log_proposal_id));
+  TO_STRING_KV("truncate_type", truncate_type_2_str(truncate_type_), K_(truncate_log_id), K_(truncate_begin_lsn), K_(truncate_log_proposal_id));
 };
 
 class UpdateMatchLsnFunc
@@ -270,7 +320,10 @@ public:
   K_(max_flushed_lsn), K_(max_flushed_end_lsn), K_(max_flushed_log_pid), K_(committed_end_lsn),    \
   K_(last_slide_log_id), K_(last_slide_scn), K_(last_slide_lsn), K_(last_slide_end_lsn),        \
   K_(last_slide_log_pid), K_(last_slide_log_accum_checksum), K_(last_fetch_end_lsn),               \
-  K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn), K_(last_truncate_lsn), KP(this));
+  K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn), K_(last_truncate_lsn),           \
+  K_(last_fetch_req_time), K_(is_truncating), K_(is_rebuilding), K_(last_rebuild_lsn),          \
+  "freeze_mode", freeze_mode_2_str(freeze_mode_), \
+  "last_fetch_trigger_type", fetch_trigger_type_2_str(last_fetch_trigger_type_), KP(this));
 private:
   int do_init_mem_(const int64_t palf_id,
                    const PalfBaseInfo &palf_base_info,
