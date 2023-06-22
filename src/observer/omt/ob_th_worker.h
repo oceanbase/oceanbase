@@ -139,7 +139,6 @@ private:
 
   int64_t last_wakeup_ts_;
   int64_t* blocking_ts_;
-  int64_t ru_cputime_;
   int64_t idle_us_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);

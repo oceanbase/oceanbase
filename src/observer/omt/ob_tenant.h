@@ -412,8 +412,6 @@ public:
   int64_t max_worker_cnt() const;
   lib::Worker::CompatMode get_compat_mode() const;
   OB_INLINE share::ObTenantSpace &ctx() { return *ctx_; }
-
-  OB_INLINE void add_ru_cputime(int64_t ru_utime) { IGNORE_RETURN ATOMIC_FAA(reinterpret_cast<uint64_t *>(&ru_cputime_us_), ru_utime); }
   int rdlock(common::ObLDHandle &handle);
   int wrlock(common::ObLDHandle &handle);
   int try_rdlock(common::ObLDHandle &handle);
@@ -471,7 +469,7 @@ public:
   OB_INLINE bool user_sched_enabled() const { return !disable_user_sched_; }
   OB_INLINE double get_token_usage() const { return token_usage_; }
   OB_INLINE int64_t get_worker_time() const { return ATOMIC_LOAD(&worker_us_); }
-  OB_INLINE int64_t get_ru_cputime() const { return ATOMIC_LOAD(&ru_cputime_us_); }
+  OB_INLINE int64_t get_cpu_time() const { return ATOMIC_LOAD(&cpu_time_us_); }
   int64_t get_rusage_time();
   // sql throttle
   void update_sql_throttle_metrics(const ObSqlThrottleMetrics &metrics)
@@ -600,7 +598,7 @@ public:
   lib::ObQueryRateLimiter sql_limiter_;
   // idle time between two checkpoints
   int64_t worker_us_;
-  int64_t ru_cputime_us_ CACHE_ALIGNED;
+  int64_t cpu_time_us_ CACHE_ALIGNED;
 }; // end of class ObTenant
 
 OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const

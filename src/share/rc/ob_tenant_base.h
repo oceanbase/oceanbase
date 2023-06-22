@@ -403,8 +403,8 @@ template<class T> struct Identity {};
 
 public:
   // TGHelper need
-  virtual int pre_run(lib::Threads*) override;
-  virtual int end_run(lib::Threads*) override;
+  virtual int pre_run(lib::Thread*) override;
+  virtual int end_run(lib::Thread*) override;
   virtual void tg_create_cb(int tg_id) override;
   virtual void tg_destroy_cb(int tg_id) override;
 
@@ -556,6 +556,11 @@ private:
   bool enable_tenant_ctx_check_;
   int64_t thread_count_;
   bool mini_mode_;
+
+  using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
+  using ThreadList = common::ObDList<ThreadListNode>;
+  ThreadList thread_list_;
+  lib::ObMutex thread_list_lock_;
 };
 
 using ReleaseCbFunc = std::function<int (common::ObLDHandle&)>;

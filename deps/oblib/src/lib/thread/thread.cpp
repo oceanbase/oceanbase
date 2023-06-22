@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX LIB
 
 #include "thread.h"
+#include "threads.h"
 #include <pthread.h>
 #include <sys/syscall.h>
 #include "lib/ob_errno.h"
@@ -45,18 +46,10 @@ Thread &Thread::current()
   return *current_thread_;
 }
 
-Thread::Thread()
-    : Thread(nullptr)
-{}
-
-Thread::Thread(int64_t stack_size)
-    : Thread(nullptr, stack_size)
-{}
-
-Thread::Thread(Runnable runnable, int64_t stack_size)
+Thread::Thread(Threads *threads, int64_t idx, int64_t stack_size)
     : pth_(0),
-      runnable_(runnable),
-      tenant_id_(OB_SERVER_TENANT_ID),
+      threads_(threads),
+      idx_(idx),
 #ifndef OB_USE_ASAN
       stack_addr_(nullptr),
 #endif
@@ -64,7 +57,10 @@ Thread::Thread(Runnable runnable, int64_t stack_size)
       stop_(true),
       join_concurrency_(0),
       pid_before_stop_(0),
-      tid_before_stop_(0)
+      tid_before_stop_(0),
+      tid_(0),
+      thread_list_node_(this),
+      cpu_time_(0)
 {}
 
 Thread::~Thread()
@@ -75,60 +71,50 @@ Thread::~Thread()
 int Thread::start()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(runnable_)) {
-    ret = OB_INVALID_ARGUMENT;
+  const int64_t count = ATOMIC_FAA(&total_thread_count_, 1);
+  if (count >= get_max_thread_num() - OB_RESERVED_THREAD_NUM) {
+    ATOMIC_FAA(&total_thread_count_, -1);
+    ret = OB_SIZE_OVERFLOW;
+    LOG_ERROR("thread count reach limit", K(ret), "current count", count);
+  } else if (stack_size_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid stack_size", K(ret), K(stack_size_));
+#ifndef OB_USE_ASAN
+  } else if (OB_ISNULL(stack_addr_ = g_stack_allocer.alloc(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), stack_size_ + SIG_STACK_SIZE))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc stack memory failed", K(stack_size_));
+#endif
   } else {
-    const int64_t count = ATOMIC_FAA(&total_thread_count_, 1);
-    if (count >= get_max_thread_num() - OB_RESERVED_THREAD_NUM) {
+    pthread_attr_t attr;
+    bool need_destroy = false;
+    int pret = pthread_attr_init(&attr);
+    if (pret == 0) {
+      need_destroy = true;
+#ifndef OB_USE_ASAN
+      pret = pthread_attr_setstack(&attr, stack_addr_, stack_size_);
+#endif
+    }
+    if (pret == 0) {
+      stop_ = false;
+      pret = pthread_create(&pth_, &attr, __th_start, this);
+      if (pret != 0) {
+        LOG_ERROR("pthread create failed", K(pret), K(errno));
+        pth_ = 0;
+      }
+    }
+    if (0 != pret) {
       ATOMIC_FAA(&total_thread_count_, -1);
-      ret = OB_SIZE_OVERFLOW;
-      LOG_ERROR("thread count reach limit", K(ret), "current count", count);
-    } else if (stack_size_ <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid stack_size", K(ret), K(stack_size_));
-#ifndef OB_USE_ASAN
-    } else if (OB_ISNULL(stack_addr_ = g_stack_allocer.alloc(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), stack_size_ + SIG_STACK_SIZE))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc stack memory failed", K(stack_size_));
-#endif
-    } else {
-      pthread_attr_t attr;
-      bool need_destroy = false;
-      int pret = pthread_attr_init(&attr);
-      if (pret == 0) {
-        need_destroy = true;
-#ifndef OB_USE_ASAN
-        pret = pthread_attr_setstack(&attr, stack_addr_, stack_size_);
-#endif
-      }
-      if (pret == 0) {
-        stop_ = false;
-        pret = pthread_create(&pth_, &attr, __th_start, this);
-        if (pret != 0) {
-          LOG_ERROR("pthread create failed", K(pret), K(errno));
-          pth_ = 0;
-        }
-      }
-      if (0 != pret) {
-        ATOMIC_FAA(&total_thread_count_, -1);
-        ret = OB_ERR_SYS;
-        stop_ = true;
-      }
-      if (need_destroy) {
-        pthread_attr_destroy(&attr);
-      }
+      ret = OB_ERR_SYS;
+      stop_ = true;
+    }
+    if (need_destroy) {
+      pthread_attr_destroy(&attr);
     }
   }
   if (OB_FAIL(ret)) {
     destroy();
   }
   return ret;
-}
-
-int Thread::start(Runnable runnable)
-{
-  runnable_ = runnable;
-  return start();
 }
 
 void Thread::stop()
@@ -155,6 +141,28 @@ void Thread::stop()
   }
 #endif
   stop_ = true;
+}
+
+uint64_t Thread::get_tenant_id() const
+{
+  uint64_t tenant_id = OB_SERVER_TENANT_ID;
+  IRunWrapper *run_wrapper_ = threads_->get_run_wrapper();
+  if (OB_NOT_NULL(run_wrapper_)) {
+    tenant_id = run_wrapper_->id();
+  }
+  return tenant_id;
+}
+
+void Thread::run()
+{
+  IRunWrapper *run_wrapper_ = threads_->get_run_wrapper();
+  if (OB_NOT_NULL(run_wrapper_)) {
+    run_wrapper_->pre_run(this);
+    threads_->run(idx_);
+    run_wrapper_->end_run(this);
+  } else {
+    threads_->run(idx_);
+  }
 }
 
 void Thread::dump_pth() // for debug pthread join faileds
@@ -210,7 +218,6 @@ void Thread::wait()
 #endif
     }
     destroy_stack();
-    runnable_ = nullptr;
     if (1 <= ATOMIC_AAF(&join_concurrency_, -1)) {
       ob_abort();
     }
@@ -246,6 +253,7 @@ void* Thread::__th_start(void *arg)
   Thread * const th = reinterpret_cast<Thread*>(arg);
   ob_set_thread_tenant_id(th->get_tenant_id());
   current_thread_ = th;
+  th->tid_ = gettid();
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);
   abort_unless(stack_header->check_magic());
@@ -301,7 +309,7 @@ void* Thread::__th_start(void *arg)
         WITH_CONTEXT(*mem_context) {
           try {
             in_try_stmt = true;
-            th->runnable_();
+            th->run();
             in_try_stmt = false;
           } catch (OB_BASE_EXCEPTION &except) {
             // we don't catch other exception because we don't know how to handle it
@@ -319,6 +327,69 @@ void* Thread::__th_start(void *arg)
 
   ATOMIC_FAA(&total_thread_count_, -1);
   return nullptr;
+}
+
+int Thread::get_cpu_time_inc(int64_t &cpu_time_inc)
+{
+  int ret = OB_SUCCESS;
+  const pid_t pid = getpid();
+  const int64_t tid = tid_;
+  int64_t cpu_time = 0;
+  cpu_time_inc = 0;
+
+  int fd = -1;
+  int64_t read_size = -1;
+  int32_t PATH_BUFSIZE = 512;
+  int32_t MAX_LINE_LENGTH = 1024;
+  int32_t VALUE_BUFSIZE = 32;
+  char stat_path[PATH_BUFSIZE];
+  char stat_content[MAX_LINE_LENGTH];
+
+  if (tid == 0) {
+    ret = OB_NOT_INIT;
+  } else {
+    snprintf(stat_path, PATH_BUFSIZE, "/proc/%d/task/%ld/stat", pid, tid);
+    if ((fd = ::open(stat_path, O_RDONLY)) < 0) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("open file error", K((const char *)stat_path), K(errno), KERRMSG, K(ret));
+    } else if ((read_size = read(fd, stat_content, MAX_LINE_LENGTH)) < 0) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("read file error",
+          K((const char *)stat_path),
+          K((const char *)stat_content),
+          K(ret),
+          K(errno),
+          KERRMSG,
+          K(ret));
+    } else {
+      // do nothing
+    }
+    if (fd >= 0) {
+      close(fd);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const int USER_TIME_FIELD_INDEX = 13;
+    const int SYSTEM_TIME_FIELD_INDEX = 14;
+    int field_index = 0;
+    char *save_ptr = nullptr;
+    char *field_ptr = strtok_r(stat_content, " ", &save_ptr);
+    while (field_ptr != NULL) {
+      if (field_index == USER_TIME_FIELD_INDEX) {
+        cpu_time += std::stoul(field_ptr) * 1000000 / sysconf(_SC_CLK_TCK);
+      }
+      if (field_index == SYSTEM_TIME_FIELD_INDEX) {
+        cpu_time += std::stoul(field_ptr) * 1000000 / sysconf(_SC_CLK_TCK);
+        break;
+      }
+      field_ptr = strtok_r(NULL, " ", &save_ptr);
+      field_index++;
+    }
+    cpu_time_inc = cpu_time - cpu_time_;
+    cpu_time_ = cpu_time;
+  }
+  return ret;
 }
 
 namespace oceanbase

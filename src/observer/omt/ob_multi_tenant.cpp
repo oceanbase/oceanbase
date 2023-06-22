@@ -2115,7 +2115,7 @@ int ObMultiTenant::get_tenant_cpu_time(const uint64_t tenant_id, int64_t &cpu_ti
   int ret = OB_SUCCESS;
   ObTenant *tenant = nullptr;
   cpu_time = 0;
-  if (GCONF.enable_cgroup) {
+  if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
     ret = GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time);
   } else {
     if (!lock_.try_rdlock()) {
@@ -2123,7 +2123,7 @@ int ObMultiTenant::get_tenant_cpu_time(const uint64_t tenant_id, int64_t &cpu_ti
     } else {
       if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
       } else {
-        cpu_time = tenant->get_ru_cputime();
+        cpu_time = tenant->get_cpu_time();
       }
       lock_.unlock();
     }

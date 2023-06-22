@@ -290,26 +290,42 @@ ObCgroupCtrl *ObTenantBase::get_cgroup()
   return cgroup_ctrl;
 }
 
-int ObTenantBase::pre_run(lib::Threads *th)
+int ObTenantBase::pre_run(lib::Thread* thread)
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(this);
   ObCgroupCtrl *cgroup_ctrl = get_cgroup();
-  if (cgroup_ctrl != nullptr) {
+  if (cgroup_ctrl != nullptr && cgroup_ctrl->is_valid()) {
     ret = cgroup_ctrl->add_self_to_cgroup(id_);
   }
+  {
+    ThreadListNode *node = thread->get_thread_list_node();
+    lib::ObMutexGuard guard(thread_list_lock_);
+    if (OB_ISNULL(node)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Fail to allocate memory", K(ret));
+    } else if (!thread_list_.add_last(node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("add to thread list fail", K(ret));
+    }
+  }
   ATOMIC_INC(&thread_count_);
-  LOG_INFO("tenant thread pre_run", K(MTL_ID()), K(ret), K(thread_count_), KP(th));
+  LOG_INFO("tenant thread pre_run", K(MTL_ID()), K(ret), K(thread_count_), KP(thread));
   return ret;
 }
 
-int ObTenantBase::end_run(lib::Threads *th)
+int ObTenantBase::end_run(lib::Thread* thread)
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(nullptr);
   ObCgroupCtrl *cgroup_ctrl = get_cgroup();
-  if (cgroup_ctrl != nullptr) {
+  if (cgroup_ctrl != nullptr && cgroup_ctrl->is_valid()) {
     ret = cgroup_ctrl->remove_self_from_cgroup(id_);
+  }
+  {
+    ThreadListNode *node = (ThreadListNode *) thread->get_thread_list_node();
+    lib::ObMutexGuard guard(thread_list_lock_);
+    thread_list_.remove(node);
   }
   ATOMIC_DEC(&thread_count_);
   LOG_INFO("tenant thread end_run", K(id_), K(ret), K(thread_count_));

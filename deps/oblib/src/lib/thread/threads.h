@@ -21,28 +21,10 @@
 #include "lib/lock/ob_spin_rwlock.h"
 
 extern int64_t global_thread_stack_size;
-
 namespace oceanbase {
 namespace lib {
 
-class Threads;
-class IRunWrapper
-{
-public:
-  virtual ~IRunWrapper() {}
-  virtual int pre_run(Threads*)
-  {
-    int ret = OB_SUCCESS;
-    return ret;
-  }
-  virtual int end_run(Threads*)
-  {
-    int ret = OB_SUCCESS;
-    return ret;
-  }
-  virtual uint64_t id() const = 0;
-};
-
+class IRunWrapper;
 class Threads
 {
 public:
@@ -83,10 +65,15 @@ public:
   {
     run_wrapper_ = run_wrapper;
   }
+  IRunWrapper * get_run_wrapper()
+  {
+    return run_wrapper_;
+  }
   virtual int start();
   virtual void stop();
   virtual void wait();
   void destroy();
+  virtual void run(int64_t idx);
 
 public:
   template <class Functor>
@@ -112,12 +99,11 @@ protected:
   void set_thread_idx(int64_t idx) { thread_idx_ = idx; }
 
 private:
-  virtual void run(int64_t idx);
   virtual void run1() {}
 
   int do_thread_recycle();
-  /// \brief Create thread with start entry \c entry.
-  int create_thread(Thread *&thread, std::function<void()> entry);
+  /// \brief Create thread
+  int create_thread(Thread *&thread, int64_t idx);
 
   /// \brief Destroy thread.
   void destroy_thread(Thread *thread);
