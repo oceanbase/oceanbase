@@ -59,26 +59,6 @@ bool ObConfigConsChecker::check(const ObConfigItem &t) const
          && (NULL == right_ ? true : right_->check(t));
 }
 
-bool ObConfigGreaterThan::check(const ObConfigItem &t) const
-{
-  return t > val_;
-}
-
-bool ObConfigGreaterEqual::check(const ObConfigItem &t) const
-{
-  return t >= val_;
-}
-
-bool ObConfigLessThan::check(const ObConfigItem &t) const
-{
-  return t < val_;
-}
-
-bool ObConfigLessEqual::check(const ObConfigItem &t) const
-{
-  return t <= val_;
-}
-
 bool ObConfigEvenIntChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
