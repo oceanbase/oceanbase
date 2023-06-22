@@ -765,14 +765,8 @@ int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, SCN &max
   // That will leads some log of type of create log stream is archived before been replayed. In this case,
   // we should limit tenant archive progress not more than the GTS.
   int ret = OB_SUCCESS;
-  ObAllTenantInfo tenant_info;
-  const bool for_update = false;
-  if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, for_update, tenant_info))) {
-    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (OB_FALSE_IT(max_checkpoint_scn = tenant_info.get_standby_scn())) {
-  } else if (SCN::base_scn() >= max_checkpoint_scn) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("max_checkpoint_scn not valid", K(ret), K(tenant_info));
+  if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id_, max_checkpoint_scn))) {
+    LOG_WARN("failed to get max checkpoint scn.", K(ret), K_(tenant_id));
   }
   return ret;
 }
