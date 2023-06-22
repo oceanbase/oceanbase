@@ -2837,7 +2837,7 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
 
 void ObXAService::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
 {
-  const ObTransID &tx_id = tx_desc->tid();
+  const ObTransID tx_id = tx_desc->tid();
   if (OB_UNLIKELY(!is_inited_)) {
     TRANS_LOG_RET(WARN, OB_NOT_INIT, "xa service not inited");
   } else {
