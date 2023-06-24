@@ -405,6 +405,8 @@ int ObTablet::init(
 
   if (FAILEDx(build_read_info(*allocator_))) {
     LOG_WARN("failed to build read info", K(ret));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else if (FALSE_IT(set_mem_addr())) {
@@ -556,6 +558,8 @@ int ObTablet::init(
     LOG_WARN("failed to init mds data", K(ret), K(old_mds_data));
   } else if (OB_FAIL(build_read_info(*allocator_))) {
     LOG_WARN("fail to build read info", K(ret));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else if (FALSE_IT(set_mem_addr())) {
