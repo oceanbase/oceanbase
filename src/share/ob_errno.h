@@ -1401,7 +1401,6 @@ constexpr int OB_TRANSFER_DETECT_ACTIVE_TRANS = -7114;
 constexpr int OB_TRANSFER_SRC_LS_NOT_EXIST = -7115;
 constexpr int OB_TRANSFER_SRC_TABLET_NOT_EXIST = -7116;
 constexpr int OB_LS_NEED_REBUILD = -7117;
-constexpr int OB_OBSOLETE_CLOG_NEED_SKIP = -7118;
 constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
 constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
 constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
@@ -3383,7 +3382,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_SRC_LS_NOT_EXIST__USER_ERROR_MSG "transfer src ls does not exist"
 #define OB_TRANSFER_SRC_TABLET_NOT_EXIST__USER_ERROR_MSG "transfer src tablet does not exist"
 #define OB_LS_NEED_REBUILD__USER_ERROR_MSG "ls need rebuild"
-#define OB_OBSOLETE_CLOG_NEED_SKIP__USER_ERROR_MSG "obsolete clog need skip"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -5475,7 +5473,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_SRC_LS_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7115, transfer src ls does not exist"
 #define OB_TRANSFER_SRC_TABLET_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7116, transfer src tablet does not exist"
 #define OB_LS_NEED_REBUILD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7117, ls need rebuild"
-#define OB_OBSOLETE_CLOG_NEED_SKIP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7118, obsolete clog need skip"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
@@ -5941,7 +5938,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2088];
+extern int g_all_ob_errnos[2087];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -1791,7 +1791,7 @@ DEFINE_ERROR(OB_TRANSFER_DETECT_ACTIVE_TRANS, -7114, -1, "HY000", "transfer dete
 DEFINE_ERROR(OB_TRANSFER_SRC_LS_NOT_EXIST, -7115, -1, "HY000", "transfer src ls does not exist");
 DEFINE_ERROR(OB_TRANSFER_SRC_TABLET_NOT_EXIST, -7116, -1, "HY000", "transfer src tablet does not exist");
 DEFINE_ERROR(OB_LS_NEED_REBUILD, -7117, -1, "HY000", "ls need rebuild");
-DEFINE_ERROR(OB_OBSOLETE_CLOG_NEED_SKIP, -7118, -1, "HY000", "obsolete clog need skip");
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for gis  -7201 ---- -7300
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -113,8 +113,8 @@ int ObMediumCompactionClogHandler::inner_replay(
   } else if (OB_FAIL(tablet_id.deserialize(buffer, buffer_size, new_pos))) {
     LOG_WARN("fail to deserialize tablet id", K(ret), K(buffer_size), K(pos), K(tablet_id));
   } else if (OB_FAIL(ls_->replay_get_tablet(tablet_id, scn, handle))) {
-    if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
-      LOG_INFO("clog is obsolete, should skip replay", K(ret), K(tablet_id));
+    if (OB_TABLET_NOT_EXIST == ret) {
+      LOG_INFO("tablet not exist", K(ret), K(tablet_id));
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(tablet_id));

@@ -604,7 +604,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
   ObTabletHandle tablet_handle;
 
   if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_, tablet_handle))) {
-    if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
+    if (OB_TABLET_NOT_EXIST == ret) {
       ctx_->force_no_need_replay_checksum();
       ret = OB_SUCCESS;
       TRANS_LOG(WARN, "[Replay Tx] tablet gc, skip this log entry", K(ret), K(row_head.tablet_id_),
