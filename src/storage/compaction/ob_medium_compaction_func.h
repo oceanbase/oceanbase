@@ -66,7 +66,10 @@ protected:
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
       share::ObTabletCompactionScnInfo &ret_info);
-  int prepare_medium_info(const ObGetMergeTablesResult &result, ObMediumCompactionInfo &medium_info);
+  int prepare_medium_info(
+    const ObGetMergeTablesResult &result,
+    const int64_t schema_version,
+    ObMediumCompactionInfo &medium_info);
   int init_parallel_range(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
@@ -95,14 +98,16 @@ protected:
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
       ObIAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
-      ObGetMergeTablesResult &result);
+      ObGetMergeTablesResult &result,
+      int64_t &schema_version);
   static int choose_major_snapshot(
       ObLS &ls,
       ObTablet &tablet,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
       ObIAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
-      ObGetMergeTablesResult &result);
+      ObGetMergeTablesResult &result,
+      int64_t &schema_version);
   static int check_need_merge_and_schedule(
       ObLS &ls,
       ObTablet &tablet,
@@ -112,7 +117,8 @@ protected:
   int choose_new_medium_snapshot(
     const int64_t max_reserved_snapshot,
     ObMediumCompactionInfo &medium_info,
-    ObGetMergeTablesResult &result);
+    ObGetMergeTablesResult &result,
+    int64_t &schema_version);
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
   static int get_table_id(
       ObMultiVersionSchemaService &schema_service,
@@ -130,7 +136,8 @@ protected:
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
       ObIAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
-      ObGetMergeTablesResult &result);
+      ObGetMergeTablesResult &result,
+      int64_t &schema_version);
   static ChooseMediumScn choose_medium_scn[MEDIUM_FUNC_CNT];
 
 private:

@@ -130,9 +130,6 @@ public:
     common::ObIArray<share::ObSnapshotInfo> &snapshots);
 
   void prepare_schema(share::schema::ObTableSchema &table_schema);
-  int prepare_medium_list(
-      const char *snapshot_list,
-      ObTabletHandle &tablet_handle);
   int construct_array(
       const char *snapshot_list,
       ObIArray<int64_t> &array);
@@ -420,7 +417,7 @@ int TestCompactionPolicy::mock_tablet(
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tablet_handle))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else if (OB_FAIL(tablet->init(allocator, ls_id, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
+  } else if (OB_FAIL(tablet->init(allocator, ls_id, tablet_id, tablet_id,
       SCN::min_scn(), snapshot_version, table_schema, compat_mode, table_store_flag, nullptr, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
@@ -451,21 +448,6 @@ int TestCompactionPolicy::construct_array(
         array.push_back(atoi(s));
       }
     }
-  }
-  return ret;
-}
-
-int TestCompactionPolicy::prepare_medium_list(
-    const char *snapshot_list,
-    ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  ObTablet &tablet = *tablet_handle.get_obj();
-  construct_array(snapshot_list, array_);
-  tablet.medium_info_list_addr_.get_ptr()->reset_list();
-  for (int i = 0; OB_SUCC(ret) && i < array_.count(); ++i) {
-    medium_info_.medium_snapshot_ = array_.at(i);
-    ret = tablet.medium_info_list_addr_.get_ptr()->add_medium_compaction_info(medium_info_);
   }
   return ret;
 }
@@ -1066,52 +1048,51 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
   ASSERT_EQ(OB_NO_NEED_MERGE, ret);
 }
 
-TEST_F(TestCompactionPolicy, test_minor_with_medium)
+TEST_F(TestCompactionPolicy, test_medium_info_serialize)
 {
   int ret = OB_SUCCESS;
-  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
-  ASSERT_TRUE(nullptr != mgr);
+  // prepare parallel_rowkey_list
+  const int64_t concurrent_cnt = 5;
+  ObArenaAllocator allocator;
+  ObDatumRowkey datum_rowkey_list[concurrent_cnt];
+  ObDatumRowkey tmp_datum_rowkey;
+  ObStorageDatum datums[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
+  tmp_datum_rowkey.assign(datums, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER);
 
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  share::SCN scn;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(140, 1, 0)));
+  medium_info_.contain_parallel_range_ = true;
+  medium_info_.parallel_merge_info_.list_size_ = concurrent_cnt;
+  medium_info_.parallel_merge_info_.parallel_datum_rowkey_list_ = datum_rowkey_list;
 
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  for (int64_t idx = 0; idx < concurrent_cnt; ++idx) {
+    tmp_datum_rowkey.datums_[0].set_string("aaaaa");
+    tmp_datum_rowkey.datums_[1].set_int(idx);
+    tmp_datum_rowkey.datum_cnt_ = 2;
+    if (OB_FAIL(tmp_datum_rowkey.deep_copy(
+      medium_info_.parallel_merge_info_.parallel_datum_rowkey_list_[idx] /*dst*/, allocator))) {
+      LOG_WARN("failed to deep copy datum rowkey", KR(ret), K(idx), K(tmp_datum_rowkey));
+    }
+  }
+
+  const int64_t buf_len = ObParallelMergeInfo::MAX_PARALLEL_RANGE_SERIALIZE_LEN;
+  char medium_info_buf[buf_len];
+  int64_t write_pos = 0;
+  ret = medium_info_.serialize(medium_info_buf, buf_len, write_pos);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(medium_info_.get_serialize_size(), write_pos);
 
-  const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "11            150          200        200        200      \n"
-      "11            200          250        250        250      \n"
-      "11            250          300        300        300      \n"
-      "11            300          340        340        340      \n";
+  ObMediumCompactionInfo deserialize_medium_info;
+  int64_t pos = 0;
+  ret = deserialize_medium_info.deserialize(allocator, medium_info_buf, write_pos, pos);
+  ASSERT_EQ(pos, write_pos);
 
-  ret = prepare_tablet(key_data, 340, 340);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINOR_MERGE;
-  param.merge_version_ = 0;
-  ObGetMergeTablesResult result;
-  FakeLS ls;
-
-  prepare_medium_list("240", tablet_handle_);
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, check_result_tables_handle("250, 300, 340", result));
-
-  prepare_medium_list("150", tablet_handle_);
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, check_result_tables_handle("200, 250, 300, 340", result));
-
-  prepare_medium_list("300", tablet_handle_);
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
-
+  ASSERT_EQ(deserialize_medium_info.contain_parallel_range_, true);
+  ASSERT_EQ(deserialize_medium_info.parallel_merge_info_.list_size_, concurrent_cnt);
+  for (int64_t idx = 0; idx < concurrent_cnt; ++idx) {
+    ASSERT_TRUE(
+      medium_info_.parallel_merge_info_.parallel_datum_rowkey_list_[idx].datums_[0]
+       == deserialize_medium_info.parallel_merge_info_.parallel_datum_rowkey_list_[idx].datums_[0]);
+    ASSERT_TRUE(idx == deserialize_medium_info.parallel_merge_info_.parallel_datum_rowkey_list_[idx].datums_[1].get_int());
+  }
 }
 
 } //unittest
@@ -1120,7 +1101,7 @@ TEST_F(TestCompactionPolicy, test_minor_with_medium)
 
 int main(int argc, char **argv)
 {
-  system("rm -rf test_compaction_policy.log");
+  system("rm -rf test_compaction_policy.log*");
   OB_LOGGER.set_file_name("test_compaction_policy.log");
   OB_LOGGER.set_log_level("DEBUG");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");

@@ -101,8 +101,6 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
       table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_ERROR("major sstable not exist", K(ret), KPC(table_store_wrapper.get_member()));
-  } else if (OB_FAIL(base_table->get_frozen_schema_version(result.base_schema_version_))) {
-    LOG_WARN("failed to get frozen schema version", K(ret));
   } else if (OB_FAIL(result.handle_.add_sstable(base_table, table_store_wrapper.get_meta_handle()))) {
     LOG_WARN("failed to add base_table to result", K(ret));
   } else if (base_table->get_snapshot_version() >= param.merge_version_) {
@@ -316,40 +314,11 @@ int ObPartitionMergePolicy::deal_with_minor_result(
     LOG_WARN("failed to check continues", K(ret), K(result));
   } else if (OB_FAIL(get_multi_version_start(merge_type, ls, tablet, result.version_range_))) {
     LOG_WARN("failed to get kept multi_version_start", K(ret), K(merge_type), K(tablet));
-  } else if (OB_FAIL(tablet.get_schema_version_from_storage_schema(result.schema_version_))) {
-    LOG_WARN("failed to get schema version from storage schema", K(ret));
   } else {
-    if (tablet.is_ls_inner_tablet()) {
-      // do nothing
-      result.base_schema_version_ = result.schema_version_;
-    } else if (MINI_MERGE == merge_type) {
-      ObITable *table = NULL;
-      result.base_schema_version_ = result.schema_version_;
-      int64_t max_schema_version_on_memtable = 0;
-      int64_t unused_max_column_cnt_on_memtable = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < result.handle_.get_count(); ++i) {
-        if (OB_ISNULL(table = result.handle_.get_table(i)) || !table->is_memtable()) {
-          ret = OB_ERR_SYS;
-          LOG_ERROR("get unexpected table", KPC(table), K(ret));
-        } else if (OB_FAIL(reinterpret_cast<ObMemtable *>(table)->get_schema_info(
-            max_schema_version_on_memtable, unused_max_column_cnt_on_memtable))) {
-          LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(table));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        result.schema_version_ = MAX(result.schema_version_, max_schema_version_on_memtable);
-      }
-    } else { // for minor
-      if (OB_FAIL(result.handle_.get_table(0)->get_frozen_schema_version(result.base_schema_version_))) {
-        LOG_WARN("failed to get frozen schema version", K(ret), K(result));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      result.version_range_.base_version_ = 0;
-      if (OB_SUCC(ret) && !is_mini_merge(merge_type)) {
-        if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
-          LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
-        }
+    result.version_range_.base_version_ = 0;
+    if (OB_SUCC(ret) && !is_mini_merge(merge_type)) {
+      if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
+        LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(tablet));
       }
     }
   }
@@ -1329,17 +1298,13 @@ int ObAdaptiveMergePolicy::get_meta_merge_tables(
     }
   } else if (OB_FAIL(result.handle_.check_continues(nullptr))) {
     LOG_WARN("failed to check continues", K(ret), K(result));
-  } else if (OB_FAIL(tablet.get_schema_version_from_storage_schema(result.schema_version_))) {
-    LOG_WARN("failed to ge schema version from storage schema", K(ret));
   } else if (FALSE_IT(result.suggest_merge_type_ = META_MAJOR_MERGE)) {
   } else if (FALSE_IT(result.version_range_.snapshot_version_ =
       MIN(tablet.get_snapshot_version(), result.version_range_.snapshot_version_))) {
-    // choose version should less than tablet::snapshot
+    // chosen version should less than tablet::snapshot
   } else if (OB_FAIL(ObPartitionMergePolicy::get_multi_version_start(
       param.merge_type_, ls, tablet, result.version_range_))) {
     LOG_WARN("failed to get multi version_start", K(ret));
-  } else if (OB_FAIL(result.handle_.get_table(0)->get_frozen_schema_version(result.base_schema_version_))) {
-    LOG_WARN("failed to get frozen schema version", K(ret), K(result));
   } else {
     FLOG_INFO("succeed to get meta major merge tables", K(result), K(table_store_wrapper));
   }

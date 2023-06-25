@@ -795,7 +795,7 @@ int ObMemtableArray::find(
         ret = OB_ERR_SYS;
         LOG_WARN("table must not null", K(ret), KPC(memtable), KPC(this));
       } else if (memtable->get_end_scn() == start_scn) {
-        if (static_cast<memtable::ObIMemtable *>(memtable)->get_snapshot_version() > base_version) {
+        if (memtable->get_snapshot_version() > base_version) {
           mem_pos = i;
           table = memtable;
           break;

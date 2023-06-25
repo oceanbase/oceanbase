@@ -1065,8 +1065,10 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
       if (part_ctx->need_update_schema_version(log_id, scn)) {
         ctx.mvcc_acc_ctx_.mem_ctx_->set_table_version(table_version);
       }
-      set_max_data_schema_version(table_version);
-      set_max_column_cnt(column_cnt);
+      if (dml_flag != blocksstable::ObDmlFlag::DF_LOCK) {
+        set_max_data_schema_version(table_version);
+        set_max_column_cnt(column_cnt);
+      }
     }
   }
   return ret;
@@ -2294,6 +2296,7 @@ int64_t ObMemtable::get_max_column_cnt() const
 }
 
 int ObMemtable::get_schema_info(
+    const int64_t input_column_cnt,
     int64_t &max_schema_version_on_memtable,
     int64_t &max_column_cnt_on_memtable) const
 {
@@ -2302,8 +2305,7 @@ int ObMemtable::get_schema_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (get_max_column_cnt() > max_column_cnt_on_memtable
-    || get_max_data_schema_version() > max_schema_version_on_memtable) {
+  } else if (get_max_column_cnt() > input_column_cnt) {
     TRANS_LOG(INFO, "column cnt or schema version is updated by memtable", KPC(this),
       K(max_column_cnt_on_memtable), K(max_schema_version_on_memtable));
     max_column_cnt_on_memtable = MAX(max_column_cnt_on_memtable, get_max_column_cnt());

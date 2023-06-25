@@ -254,8 +254,6 @@ struct ObGetMergeTablesResult
   common::ObVersionRange version_range_;
   ObTablesHandleArray handle_;
   int64_t merge_version_;
-  int64_t base_schema_version_;
-  int64_t schema_version_;
   int64_t create_snapshot_version_;
   ObMergeType suggest_merge_type_;
   bool update_tablet_directly_;
@@ -271,7 +269,7 @@ struct ObGetMergeTablesResult
   void reset();
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
-  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(base_schema_version), K_(schema_version),
+  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version),
       K_(create_snapshot_version), K_(suggest_merge_type), K_(handle),
       K_(update_tablet_directly), K_(schedule_major), K_(read_base_version));
 };

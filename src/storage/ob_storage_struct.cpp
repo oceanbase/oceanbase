@@ -133,8 +133,6 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
   : version_range_(),
     handle_(),
     merge_version_(),
-    base_schema_version_(INVALID_INT_VALUE),
-    schema_version_(INVALID_INT_VALUE),
     create_snapshot_version_(INVALID_INT_VALUE),
     suggest_merge_type_(INVALID_MERGE_TYPE),
     update_tablet_directly_(false),
@@ -149,8 +147,6 @@ bool ObGetMergeTablesResult::is_valid() const
   return scn_range_.is_valid()
       && handle_.get_count() >= 1
       && merge_version_ >= 0
-      && base_schema_version_ >= 0
-      && schema_version_ >= 0
       && create_snapshot_version_ >= 0
       && (suggest_merge_type_ > INVALID_MERGE_TYPE && suggest_merge_type_ < MERGE_TYPE_MAX);
 }
@@ -167,8 +163,6 @@ void ObGetMergeTablesResult::reset()
   version_range_.reset();
   handle_.reset();
   merge_version_ = ObVersionRange::MIN_VERSION;
-  base_schema_version_ = INVALID_INT_VALUE;
-  schema_version_ = INVALID_INT_VALUE;
   create_snapshot_version_ = 0;
   suggest_merge_type_ = INVALID_MERGE_TYPE;
   schedule_major_ = false;
@@ -185,8 +179,6 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
   } else {
     version_range_ = src.version_range_;
     merge_version_ = src.merge_version_;
-    base_schema_version_ = src.base_schema_version_;
-    schema_version_ = src.schema_version_;
     create_snapshot_version_ = src.create_snapshot_version_;
     suggest_merge_type_ = src.suggest_merge_type_;
     schedule_major_ = src.schedule_major_;

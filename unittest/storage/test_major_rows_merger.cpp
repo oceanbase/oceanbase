@@ -141,8 +141,6 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
 
   table_merge_schema_.reset();
   OK(table_merge_schema_.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-  merge_context.schema_ctx_.base_schema_version_ = table_schema_.get_schema_version();
-  merge_context.schema_ctx_.schema_version_ = table_schema_.get_schema_version();
   merge_context.schema_ctx_.storage_schema_ = &table_merge_schema_;
 
   merge_context.is_full_merge_ = is_full_merge;
