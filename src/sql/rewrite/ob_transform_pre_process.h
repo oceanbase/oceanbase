@@ -600,8 +600,9 @@ struct DistinctObjMeta
                                 ObIArray<ObRawExpr*> &column_ref_remove_const_exprs);
 
   int transform_cast_multiset_for_stmt(ObDMLStmt *&stmt, bool &is_happened);
-  int transform_cast_multiset_for_expr(ObRawExpr *&expr, bool &trans_happened);
-  int add_constructor_to_multiset(ObQueryRefRawExpr *multiset_expr,
+  int transform_cast_multiset_for_expr(ObDMLStmt &stmt, ObRawExpr *&expr, bool &trans_happened);
+  int add_constructor_to_multiset(ObDMLStmt &stmt,
+                                  ObQueryRefRawExpr *multiset_expr,
                                   const pl::ObPLDataType &elem_type,
                                   bool& trans_happened);
   int add_column_conv_to_multiset(ObQueryRefRawExpr *multiset_expr,

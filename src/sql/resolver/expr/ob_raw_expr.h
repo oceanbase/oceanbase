@@ -1530,7 +1530,8 @@ struct ObResolveContext
     is_for_pivot_(false),
     is_for_dynamic_sql_(false),
     is_for_dbms_sql_(false),
-    tg_timing_event_(TG_TIMING_EVENT_INVALID)
+    tg_timing_event_(TG_TIMING_EVENT_INVALID),
+    view_ref_id_(OB_INVALID_ID)
   {
   }
 
@@ -1574,6 +1575,7 @@ struct ObResolveContext
   bool is_for_dynamic_sql_;
   bool is_for_dbms_sql_;
   TgTimingEvent tg_timing_event_; // for msyql trigger
+  uint64_t view_ref_id_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;
