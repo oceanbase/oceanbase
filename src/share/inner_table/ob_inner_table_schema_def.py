@@ -5703,8 +5703,8 @@ def_table_schema(
 # 468 : __all_mview_refresh_stats
 # 469 : __all_mview_refresh_change_stats
 # 470 : __all_mview_refresh_stmt_stats
-
 # 471 : __all_dbms_lock_allocated
+# 472 : __wr_control
 
 ################################################################################
 
@@ -12218,6 +12218,7 @@ def_table_schema(
 # 12411: __all_virtual_mview_refresh_stats
 # 12412: __all_virtual_mview_refresh_change_stats
 # 12413: __all_virtual_mview_refresh_stmt_stats
+# 12414: __all_virtual_wr_control
 # 余留位置
 #
 
@@ -12484,6 +12485,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
+# 15306: __all_virtual_wr_control
 
 #######################################################################
 # oracle agent table index is defined after the System table Index area
@@ -27758,6 +27760,8 @@ def_table_schema(
 # 21440: DBA_OB_MVIEW_REFRESH_STATS
 # 21441: DBA_OB_MVIEW_REFRESH_CHANGE_STATS
 # 21442: DBA_OB_MVIEW_REFRESH_STMT_STATS
+# 21443: DBA_WR_CONTROL
+# 21444: CDB_WR_CONTROL
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -45567,8 +45571,8 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
 # 25253: DBA_OB_MVIEW_REFRESH_STATS
 # 25254: DBA_OB_MVIEW_REFRESH_CHANGE_STATS
 # 25255: DBA_OB_MVIEW_REFRESH_STMT_STATS
-
 # 25256: DBMS_LOCK_ALLOCATED
+# 25257: DBA_WR_CONTROL
 
 #### End Data Dictionary View
 ################################################################################
