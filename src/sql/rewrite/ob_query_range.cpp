@@ -6953,6 +6953,12 @@ if (OB_SUCC(ret) ) { \
         include_start = true; \
       } else if (cmp > 0) { \
         include_start = false; \
+      } else if (is_oracle_mode() && \
+                 ((column_type.get_type() == ObCharType && start.get_type() == ObVarcharType) || \
+                  (column_type.get_type() == ObNCharType && start.get_type() == ObNVarchar2Type))) { \
+        /* when char compare with varchar, same string may need return due to padding blank. \
+           e.g. c1(char(3)) > '1'(varchar(1)) will return '1  ' */ \
+        include_start = true; \
       } \
       start = *dest_val; \
     } \
