@@ -89,10 +89,13 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
             var_name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
           } else if (T_OBJ_ACCESS_REF == var->type_) { //Oracle mode
             const ParseNode *name_node = NULL;
-            if (OB_ISNULL(name_node = var->children_[0]) || OB_UNLIKELY(var->children_[1] != NULL) ||
-                OB_UNLIKELY(name_node->type_ != T_IDENT)) {
+            if (OB_ISNULL(name_node = var->children_[0])) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("Variable name is not an identifier type", K(ret));
+              LOG_WARN("get unexpected null", K(ret));
+            } else if (OB_UNLIKELY(name_node->type_ != T_IDENT) || OB_UNLIKELY(var->children_[1] != NULL)) {
+              ret = OB_ERR_UNKNOWN_SET_OPTION;
+              LOG_WARN("unknown SET option", K(ret), K(name_node->type_), K(var->children_[1]));
+              LOG_USER_ERROR(OB_ERR_UNKNOWN_SET_OPTION, name_node->str_value_);
             } else {
               var_node.is_system_variable_ = true; //PL的set语句在PL resolver里解析，不会走到这里，所以到这里的肯定是系统变量的缺省写法
               var_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
