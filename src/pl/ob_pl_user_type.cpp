@@ -1802,6 +1802,7 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
           if (OB_SUCCESS != tmp) {
             LOG_WARN("fail torelease memory", K(ret), K(tmp));
           }
+          new_objs[j].set_type(ObMaxType);
         }
         if (NULL == allocator) {
           coll_allocator->reset();
