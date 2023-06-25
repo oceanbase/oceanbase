@@ -102,7 +102,8 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       && scope_ != T_FIELD_LIST_SCOPE
       && scope_ != T_GROUP_SCOPE
       && scope_ != T_WHERE_SCOPE
-      && scope_ != T_NONE_SCOPE) {
+      && scope_ != T_NONE_SCOPE
+      && scope_ != T_ORDER_SCOPE) {
     //expr is a alias column ref
     //alias column target list
     PRINT_QUOT;

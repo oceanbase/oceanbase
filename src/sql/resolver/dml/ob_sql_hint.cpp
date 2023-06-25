@@ -668,7 +668,7 @@ int ObQueryHint::print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt,
     if (OB_FAIL(print_outline_data(plan_text))) {
       LOG_WARN("failed to print outline data", K(ret));
     }
-  } else if (!has_outline_data()) {
+  } else if (!has_outline_data() || OB_INVALID_ID != stmt.get_dblink_id()) {
     // Not outline data, print current stmt hint here.
     // If stmt is the first stmt can add hint, print global hint and hint with qb name.
     // For query "select_1 union all select_2", root stmt is "union all" and the first stmt to print hint is select_1
