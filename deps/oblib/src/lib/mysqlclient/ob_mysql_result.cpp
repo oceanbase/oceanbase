@@ -117,6 +117,15 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
     } else {
       length = tmp_length;
     }
+    if (ObIntervalYMType == ob_type || ObIntervalDSType == ob_type) {
+      precision = -1;
+      length = -1;
+      if (DBLINK_DRV_OCI == link_type) {
+        scale = (ObIntervalYMType == ob_type)  ? tmp_precision : (tmp_precision * 10 + tmp_scale);
+      } else {
+        // do nothing, keep the value of scale unchanged
+      }
+    }
   }
   if (ObDoubleType == ob_type || ObFloatType == ob_type) {
     precision = -1;
