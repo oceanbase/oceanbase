@@ -12037,6 +12037,9 @@ int ObLogPlan::build_location_related_tablet_ids()
     if (OB_ISNULL(table_part_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid partition info", K(ret));
+    } else if (0 == table_part_info->get_phy_tbl_location_info().get_partition_cnt()) {
+      // partition count is 0 means no matching partition for data table, no need to calculate
+      // related tablet ids for it.
     } else if (!table_part_info->get_table_location().use_das() &&
                OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(
                        table_part_info->get_table_location(), *optimizer_context_.get_exec_ctx(), map))) {
