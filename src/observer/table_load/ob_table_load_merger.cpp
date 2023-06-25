@@ -194,6 +194,7 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.table_data_desc_ = store_ctx_->table_data_desc_;
   merge_param.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
   merge_param.col_descs_ = &(store_ctx_->ctx_->schema_.column_descs_);
+  merge_param.cmp_funcs_ = &(store_ctx_->ctx_->schema_.cmp_funcs_);
   merge_param.is_heap_table_ = store_ctx_->ctx_->schema_.is_heap_table_;
   merge_param.is_fast_heap_table_ = store_ctx_->is_fast_heap_table_;
   merge_param.online_opt_stat_gather_ = param_.online_opt_stat_gather_;
