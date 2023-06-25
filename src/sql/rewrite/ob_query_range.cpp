@@ -4418,6 +4418,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           LOG_WARN("Light copy key part and items failed", K(ret));
         } else if (is_reach_mem_limit_) {
           res_gt = new_l_cur;
+          always_true = true;
         } else if(OB_FAIL(deep_copy_key_part_and_items(r_cur, new_r_cur))) {
           LOG_WARN("Right copy key part and items failed", K(ret));
         } else if (OB_ISNULL(new_l_cur) || OB_ISNULL(new_r_cur)) {
@@ -4425,6 +4426,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           LOG_WARN("get unexpected null", K(ret), K(new_l_cur), K(new_r_cur));
         } else if (is_reach_mem_limit_) {
           res_gt = new_r_cur;
+          always_true = true;
         } else if (new_l_cur->is_like_key()) {
           result = new_r_cur;
         } else if (new_r_cur->is_like_key()) {
@@ -4469,7 +4471,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           }
         }
 
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && !is_reach_mem_limit_) {
           result->link_gt(rest);
           // link to the or_next_ list
           if (NULL != tail) {
