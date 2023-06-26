@@ -592,7 +592,7 @@ int ObLSRestoreTaskMgr::reload_tablets_()
       } else {
         const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
         const ObTabletID &tablet_id = tablet_meta.tablet_id_;
-        if (tablet_meta.has_transfer_table()) {
+        if (tablet_meta.has_transfer_table() && ls_restore_status.is_quick_restore()) {
           // restore status must be FULL or EMPTY.
           // These tablets which have transfer info have higher priority to restore minor.
           if (OB_FAIL(schedule_tablet_set_.exist_refactored(tablet_id))) {
