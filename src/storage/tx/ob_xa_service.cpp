@@ -200,18 +200,23 @@ int ObXAService::local_one_phase_xa_commit_(const ObXATransID &xid,
   ObTransID moke_tx_id;
 
   if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(trans_id, alloc, xa_ctx))) {
-    if (OB_FAIL(query_xa_coord_from_tableone(MTL_ID(), xid, coordinator, moke_tx_id, state, end_flag))) {
-      if (OB_ITER_END == ret) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = query_xa_coord_from_tableone(MTL_ID(), xid, coordinator,
+            moke_tx_id, state, end_flag))) {
+      if (OB_ITER_END == tmp_ret) {
         ret = OB_TRANS_XA_NOTA;
         TRANS_LOG(WARN, "xid is not valid", K(ret), K(xid));
       } else {
-        TRANS_LOG(WARN, "query xa scheduler failed", K(ret), K(xid));
+        TRANS_LOG(WARN, "query xa scheduler failed", K(tmp_ret), K(xid));
       }
     } else if (coordinator.is_valid()) {
       ret = OB_TRANS_XA_PROTO;
       TRANS_LOG(WARN, "xa has entered the commit phase", K(ret), K(trans_id), K(xid), K(coordinator));
     } else {
       TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(trans_id));
+    }
+    if (OB_SUCCESS == ret) {
+      TRANS_LOG(ERROR, "unexpected return code", K(ret), K(xid), K(trans_id));
     }
   } else if (OB_ISNULL(xa_ctx)) {
     ret = OB_ERR_UNEXPECTED;
