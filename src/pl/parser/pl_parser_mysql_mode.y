@@ -1990,7 +1990,12 @@ scalar_data_type:
   }
   | pl_obj_access_ref '%' ROWTYPE
   {
-    malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ROWTYPE, 1, $1);
+    if (parse_ctx->is_for_trigger_ && parse_ctx->is_inner_parse_) {
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ROWTYPE, 1, $1);
+    } else {
+      obpl_mysql_yyerror(&@3, parse_ctx, "Syntax Error\n");
+      YYERROR;
+    }
   }
 ;
 
