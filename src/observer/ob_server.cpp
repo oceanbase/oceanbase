@@ -1717,11 +1717,6 @@ int ObServer::init_config()
     LOG_ERROR("some config setting is not valid", KR(ret));
   } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
     LOG_ERROR("reload memory config failed", KR(ret));
-#ifdef ENABLE_500_MEMORY_LIMIT
-  } else if (config_._enable_system_tenant_memory_limit &&
-             OB_FAIL(ObMallocAllocator::get_instance()->set_500_tenant_limit())) {
-    LOG_ERROR("set the limit of tenant 500 failed", KR(ret));
-#endif
   } else if (!is_arbitration_mode() && OB_FAIL(set_running_mode())) {
     LOG_ERROR("set running mode failed", KR(ret));
   } else {

@@ -139,6 +139,7 @@ static constexpr const char *usage_str =
 "{{row1}, {row2}, ...} = select_schema_slot()\n"
 "{{row1}, {row2}, ...} = dump_thread_info()\n"
 "{{row1}, {row2}, ...} = select_malloc_sample_info()\n"
+"int = enable_system_tenant_memory_limit(boolean)\n"
 ;
 
 class LuaVtableGenerator
@@ -1986,6 +1987,28 @@ int select_malloc_sample_info(lua_State *L)
   return 1;
 }
 
+// int = enable_system_tenant_memory_limit(boolean)
+int enable_system_tenant_memory_limit(lua_State* L)
+{
+  int ret = OB_SUCCESS;
+  int argc = lua_gettop(L);
+  if (1 != argc) {
+    OB_LOG(ERROR, "call enable_system_tenant_memory_limit() failed, bad arguments count, should be 1.");
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    luaL_checktype(L, 1, LUA_TBOOLEAN);
+    int enable = lua_toboolean(L, 1);
+#ifdef ENABLE_500_MEMORY_LIMIT
+    ObMallocAllocator::get_instance()->set_500_tenant_limit(!enable/*unlimited*/);
+#endif
+    lua_pushinteger(L, 1);
+  }
+  if (OB_FAIL(ret)) {
+    lua_pushinteger(L, -1);
+  }
+  return 1;
+}
+
 // API end
 
 int get_tenant_sysstat(int64_t tenant_id, int64_t statistic, int64_t &value)
@@ -2113,6 +2136,7 @@ void APIRegister::register_api(lua_State* L)
   lua_register(L, "select_schema_slot", select_schema_slot);
   lua_register(L, "dump_thread_info", dump_thread_info);
   lua_register(L, "select_malloc_sample_info", select_malloc_sample_info);
+  lua_register(L, "enable_system_tenant_memory_limit", enable_system_tenant_memory_limit);
 }
 
 int APIRegister::flush()

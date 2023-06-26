@@ -403,7 +403,7 @@ int ObMallocAllocator::with_resource_handle_invoke(uint64_t tenant_id, InvokeFun
   return ret;
 }
 #ifdef ENABLE_500_MEMORY_LIMIT
-int ObMallocAllocator::set_500_tenant_limit()
+int ObMallocAllocator::set_500_tenant_limit(const bool unlimited)
 {
   int ret = OB_SUCCESS;
   for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
@@ -420,6 +420,9 @@ int ObMallocAllocator::set_500_tenant_limit()
     auto ta = get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ctx_id);
     if (OB_NOT_NULL(ta)) {
       int64_t ctx_limit = ObCtxIds::DEFAULT_CTX_ID == ctx_id ? (3LL<<30) : (50LL<<20);
+      if (unlimited) {
+        ctx_limit = INT64_MAX;
+      }
       if (OB_FAIL(ta->set_limit(ctx_limit))) {
         LIB_LOG(WARN, "set limit of 500 tenant failed", K(ret), K(ctx_limit),
                 "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id));
