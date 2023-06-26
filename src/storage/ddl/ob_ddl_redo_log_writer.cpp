@@ -1160,7 +1160,7 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id_, tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+  } else if (OB_FAIL(ls->get_tablet(tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
     LOG_WARN("create ddl kv mgr failed", K(ret));
@@ -1242,17 +1242,24 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                tablet_id,
                                                tablet_handle,
-                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+                                               ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_ISNULL(tablet_handle.get_obj())) {
     ret = OB_ERR_SYS;
     LOG_WARN("tablet handle is null", K(ret), K(ls_id), K(tablet_id));
   } else {
-    ObSSTable *first_major_sstable = static_cast<ObSSTable *>(
-        tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
-    if (OB_ISNULL(first_major_sstable)) {
+    ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+    ObSSTableMetaHandle sst_meta_hdl;
+    const ObSSTable *first_major_sstable = nullptr;
+    if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+            LOG_WARN("fail to fetch table store", K(ret));
+    } else if (OB_FALSE_IT(first_major_sstable = static_cast<const ObSSTable *>(
+        table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)))) {
+    } else if (OB_ISNULL(first_major_sstable)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("no major after wait merge success", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(first_major_sstable->get_meta(sst_meta_hdl))) {
+      LOG_WARN("fail to get sstable meta handle", K(ret));
     } else if (OB_UNLIKELY(first_major_sstable->get_key() != table_key)) {
       ret = OB_SNAPSHOT_DISCARDED;
       LOG_WARN("ddl major sstable dropped, snapshot holding may have bug", K(ret), KPC(first_major_sstable), K(table_key), K(tablet_id), K(execution_id), K(ddl_task_id));
@@ -1263,7 +1270,8 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
                                                          table_id,
                                                          execution_id,
                                                          ddl_task_id,
-                                                         first_major_sstable->get_meta().get_col_checksum()))) {
+                                                         sst_meta_hdl.get_sstable_meta().get_col_checksum(),
+                                                         sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt()))) {
           LOG_WARN("report ddl column checksum failed", K(ret), K(ls_id), K(tablet_id), K(execution_id), K(ddl_task_id));
         } else {
           break;
@@ -1529,7 +1537,7 @@ int ObDDLRedoLogWriterCallback::init(const ObDDLMacroBlockType block_type,
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                ddl_kv_mgr_handle.get_obj()->get_tablet_id(),
                                                tablet_handle,
-                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+                                               ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet handle failed", K(ret), KPC(ddl_kv_mgr_handle.get_obj()));
   } else {
     block_type_ = block_type;

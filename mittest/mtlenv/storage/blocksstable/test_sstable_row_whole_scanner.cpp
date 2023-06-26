@@ -100,8 +100,7 @@ void TestSSTableRowWholeScanner::generate_range(
 
 void TestSSTableRowWholeScanner::prepare_query_param(const bool is_reverse_scan)
 {
-  TestIndexBlockDataPrepare::prepare_query_param(
-      is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  TestIndexBlockDataPrepare::prepare_query_param(is_reverse_scan);
   context_.query_flag_.whole_macro_scan_ = true;
 }
 

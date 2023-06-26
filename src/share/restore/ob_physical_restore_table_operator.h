@@ -115,6 +115,14 @@ public:
    * */
   int get_job_by_tenant_name(const ObString &tenant_name,
                            ObPhysicalRestoreJob &job_info);
+
+  /*
+   * description: check all ls has restored to consistent_scn
+   * @param[out] return true while restore has finished.
+   * @param[out] return success or failed while is finished.
+   * */
+  int check_finish_restore_to_consistent_scn(
+    bool &is_finished, bool &is_success);
 public:
   static const char* get_physical_restore_mod_str(PhysicalRestoreMod mod);
   static const char* get_restore_status_str(PhysicalRestoreStatus status);

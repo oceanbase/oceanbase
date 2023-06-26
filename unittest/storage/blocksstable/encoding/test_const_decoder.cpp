@@ -657,7 +657,7 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_with_expection)
 int main(int argc, char **argv)
 {
   system("rm -f test_const_decoder.log*");
-  OB_LOGGER.set_file_name("test_const_decoder.log", true, false);
+  OB_LOGGER.set_file_name("test_const_decoder.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

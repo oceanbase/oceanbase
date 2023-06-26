@@ -38,7 +38,7 @@ namespace palf
 {
 class LogSlidingWindow;
 class LogStateMgr;
-class LogConfigInfo;
+class LogConfigInfoV2;
 class LogConfigMeta;
 class LSN;
 class LogEngine;
@@ -68,6 +68,8 @@ enum LogConfigChangeType
   UPGRADE_LEARNER_TO_ACCEPTOR,
   STARTWORKING,
   FORCE_SINGLE_MEMBER,
+  TRY_LOCK_CONFIG_CHANGE,
+  UNLOCK_CONFIG_CHANGE,
 };
 
 inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
@@ -96,6 +98,18 @@ inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
 }
 
 typedef common::ObArrayHashMap<common::ObAddr, common::ObRegion> LogMemberRegionMap;
+
+// Note: We need to check if the cluster has been upgraded to version 4.2.
+//       If not, invalid config_version is allowed because OBServer v4.1
+//       may send a LogConfigChangeCmd (with invalid config_version) to
+//       the leader v4.2, we need to allow the reconfiguration.
+inline bool need_check_config_version(const LogConfigChangeType type)
+{
+  const bool is_cluster_already_4200 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+  return (is_cluster_already_4200) &&
+         (ADD_MEMBER == type || ADD_MEMBER_AND_NUM == type ||
+          SWITCH_LEARNER_TO_ACCEPTOR == type);
+}
 
 inline bool is_add_log_sync_member_list(const LogConfigChangeType type)
 {
@@ -155,6 +169,24 @@ inline bool is_may_change_replica_num(const LogConfigChangeType type)
   return is_add_member_list(type) || is_remove_member_list(type) || CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type;
 }
 
+inline bool is_paxos_member_list_change(const LogConfigChangeType type)
+{
+  return (ADD_MEMBER == type || REMOVE_MEMBER == type
+      || ADD_MEMBER_AND_NUM == type || REMOVE_MEMBER_AND_NUM == type
+      || SWITCH_LEARNER_TO_ACCEPTOR == type || SWITCH_ACCEPTOR_TO_LEARNER == type
+      || CHANGE_REPLICA_NUM == type);
+}
+
+inline bool is_try_lock_config_change(const LogConfigChangeType type)
+{
+  return TRY_LOCK_CONFIG_CHANGE == type;
+}
+
+inline bool is_unlock_config_change(const LogConfigChangeType type)
+{
+  return UNLOCK_CONFIG_CHANGE == type;
+}
+
 struct LogConfigChangeArgs
 {
 public:
@@ -165,26 +197,39 @@ public:
       new_replica_num_(0),
       config_version_(),
       ref_scn_(),
+      lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING),
       type_(INVALID_LOG_CONFIG_CHANGE_TYPE) { }
 
-  LogConfigChangeArgs(const LogConfigVersion &config_version,
-                      const share::SCN &ref_scn,
+  LogConfigChangeArgs(const common::ObMember &server,
+                      const int64_t new_replica_num,
+                      const LogConfigVersion &config_version,
                       const LogConfigChangeType type)
-    : server_(), curr_member_list_(), curr_replica_num_(0), new_replica_num_(0),
-      config_version_(config_version), ref_scn_(ref_scn), type_(type) { }
+    : server_(server), curr_member_list_(), curr_replica_num_(0), new_replica_num_(new_replica_num),
+      config_version_(config_version), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type) { }
 
   LogConfigChangeArgs(const common::ObMember &server,
                       const int64_t new_replica_num,
                       const LogConfigChangeType type)
     : server_(server), curr_member_list_(), curr_replica_num_(0), new_replica_num_(new_replica_num),
-      config_version_(), ref_scn_(), type_(type) { }
+      config_version_(), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type) { }
 
   LogConfigChangeArgs(const common::ObMemberList &member_list,
                       const int64_t curr_replica_num,
                       const int64_t new_replica_num,
                       const LogConfigChangeType type)
     : server_(), curr_member_list_(member_list), curr_replica_num_(curr_replica_num), new_replica_num_(new_replica_num),
-      config_version_(), ref_scn_(), type_(type) { }
+      config_version_(), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type) { }
+
+  LogConfigChangeArgs(const int64_t lock_owner,
+                      const int64_t lock_type,
+                      const LogConfigChangeType type)
+    : server_(), curr_member_list_(), curr_replica_num_(0), new_replica_num_(),
+      config_version_(), ref_scn_(), lock_owner_(lock_owner),
+      lock_type_(lock_type), type_(type) { }
 
   ~LogConfigChangeArgs()
   {
@@ -192,14 +237,43 @@ public:
   }
   bool is_valid() const;
   void reset();
+
+  const char *Type2Str(const LogConfigChangeType state) const
+  {
+    #define CHECK_LOG_CONFIG_TYPE_STR(x) case(LogConfigChangeType::x): return #x
+    switch(state)
+    {
+      CHECK_LOG_CONFIG_TYPE_STR(CHANGE_REPLICA_NUM);
+      CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER);
+      CHECK_LOG_CONFIG_TYPE_STR(ADD_ARB_MEMBER);
+      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER);
+      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_ARB_MEMBER);
+      CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER_AND_NUM);
+      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER_AND_NUM);
+      CHECK_LOG_CONFIG_TYPE_STR(ADD_LEARNER);
+      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_LEARNER);
+      CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR);
+      CHECK_LOG_CONFIG_TYPE_STR(SWITCH_ACCEPTOR_TO_LEARNER);
+      CHECK_LOG_CONFIG_TYPE_STR(DEGRADE_ACCEPTOR_TO_LEARNER);
+      CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
+      CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
+      CHECK_LOG_CONFIG_TYPE_STR(TRY_LOCK_CONFIG_CHANGE);
+      CHECK_LOG_CONFIG_TYPE_STR(UNLOCK_CONFIG_CHANGE);
+      default:
+        return "Invalid";
+    }
+    #undef CHECK_LOG_CONFIG_TYPE_STR
+  }
   TO_STRING_KV(K_(server), K_(curr_member_list), K_(curr_replica_num), K_(new_replica_num),
-      K_(config_version), K_(ref_scn), "type", LogConfigChangeType2Str(type_));
+               K_(config_version), K_(ref_scn), K_(lock_owner), K_(lock_type), "type", LogConfigChangeType2Str(type_));
   common::ObMember server_;
   common::ObMemberList curr_member_list_;
   int64_t curr_replica_num_;
   int64_t new_replica_num_;
   LogConfigVersion config_version_;
   share::SCN ref_scn_;
+  int64_t lock_owner_;
+  int64_t lock_type_;
   LogConfigChangeType type_;
 };
 
@@ -338,10 +412,11 @@ public:
   //    else return other errno
   virtual int get_replica_num(int64_t &replica_num) const;
   const common::ObAddr &get_parent() const;
+  int get_config_change_lock_stat(int64_t &lock_owner, bool &is_locked);
   virtual int leader_do_loop_work(bool &need_change_config);
   virtual int switch_state();
   virtual int wait_log_barrier(const LogConfigChangeArgs &args,
-                               const LogConfigInfo &new_config_info) const;
+                               const LogConfigInfoV2 &new_config_info) const;
   virtual int renew_config_change_barrier();
   // ================= Config Change =================
 
@@ -349,7 +424,7 @@ public:
                                      const int64_t proposal_id,
                                      const int64_t election_epoch,
                                      bool &is_already_finished,
-                                     LogConfigInfo &new_config_info) const;
+                                     LogConfigInfoV2 &new_config_info) const;
   int pre_sync_config_log_and_mode_meta(const common::ObMember &server, const int64_t proposal_id);
   int start_change_config(int64_t &proposal_id,
                           int64_t &election_epoch,
@@ -382,10 +457,10 @@ public:
   virtual int submit_broadcast_leader_info(const int64_t proposal_id) const;
   virtual void reset_status();
   int check_follower_sync_status(const LogConfigChangeArgs &args,
-                                 const LogConfigInfo &new_config_info,
+                                 const LogConfigInfoV2 &new_config_info,
                                  bool &added_member_has_new_version) const;
   int wait_log_barrier_(const LogConfigChangeArgs &args,
-                        const LogConfigInfo &new_config_info) const;
+                        const LogConfigInfoV2 &new_config_info) const;
   int wait_log_barrier_before_start_working_(const LogConfigChangeArgs &args);
   int sync_meta_for_arb_election_leader();
   void set_sync_to_degraded_learners();
@@ -434,19 +509,22 @@ private:
   static constexpr int64_t MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION = 2 * 1000 * 1000;
   static constexpr int64_t MAX_WAIT_BARRIER_TIME_US_FOR_STABLE_LOG = 1 * 1000 * 1000;
 private:
-  int set_initial_config_info_(const LogConfigInfo &config_info,
+  int set_initial_config_info_(const LogConfigInfoV2 &config_info,
                                const int64_t proposal_id,
                                LogConfigVersion &init_config_version);
   bool can_memberlist_majority_(const int64_t new_member_list_len, const int64_t new_replica_num) const;
   int check_config_change_args_(const LogConfigChangeArgs &args, bool &is_already_finished) const;
+  int check_config_change_args_by_type_(const LogConfigChangeArgs &args, bool &is_already_finished) const;
   int check_config_version_matches_state_(const LogConfigChangeType &type, const LogConfigVersion &config_version) const;
   int generate_new_config_info_(const int64_t proposal_id,
                                 const LogConfigChangeArgs &args,
-                                LogConfigInfo &new_config_info) const;
-  int append_config_info_(const LogConfigInfo &config_info);
-  int apply_config_info_(const LogConfigInfo &config_info);
-  int update_match_lsn_map_(const LogConfigChangeArgs &args, const LogConfigInfo &new_config_info);
-  int update_election_meta_(const LogConfigInfo &info);
+                                LogConfigInfoV2 &new_config_info) const;
+
+
+  int append_config_info_(const LogConfigInfoV2 &config_info);
+  int apply_config_info_(const LogConfigInfoV2 &config_info);
+  int update_match_lsn_map_(const LogConfigChangeArgs &args, const LogConfigInfoV2 &new_config_info);
+  int update_election_meta_(const LogConfigInfoV2 &info);
   int update_election_meta_(const ObMemberList &member_list,
                             const LogConfigVersion &config_version,
                             const int64_t new_replica_num);
@@ -490,7 +568,7 @@ private:
                                      bool &has_same_version,
                                      int64_t &last_slide_log_id) const;
   int sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
-                                  const LogConfigInfo &new_config_info,
+                                  const LogConfigInfoV2 &new_config_info,
                                   const bool need_purge_throttling,
                                   const bool need_remote_check,
                                   const int64_t conn_timeout_us,
@@ -499,7 +577,7 @@ private:
                                   LSN &added_member_flushed_end_lsn,
                                   int64_t &added_member_last_slide_log_id) const;
   int check_follower_sync_status_(const LogConfigChangeArgs &args,
-                                  const LogConfigInfo &new_config_info,
+                                  const LogConfigInfoV2 &new_config_info,
                                   bool &added_member_has_new_version) const;
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                          const int64_t proposal_id,

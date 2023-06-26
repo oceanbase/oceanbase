@@ -14,8 +14,9 @@
 #include "ob_backup_clean_scheduler.h"
 #include "ob_backup_clean_ls_task_mgr.h"
 #include "ob_backup_clean_task_mgr.h"
+#include "ob_backup_schedule_task.h"
+#include "ob_backup_task_scheduler.h"
 #include "share/backup/ob_backup_clean_operator.h"
-#include "share/backup/ob_backup_manager.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "rootserver/ob_root_utils.h"
 #include "share/backup/ob_backup_helper.h"
@@ -32,32 +33,32 @@ namespace rootserver
 ObBackupCleanScheduler::ObBackupCleanScheduler()
  : ObIBackupJobScheduler(BackupJobType::BACKUP_CLEAN_JOB),
    is_inited_(false),
+   tenant_id_(OB_INVALID_TENANT_ID),
    sql_proxy_(nullptr),
    rpc_proxy_(nullptr),
    schema_service_(nullptr),
-   lease_service_(nullptr),
    task_scheduler_(nullptr),
    backup_service_(nullptr)
 {
 }
 
 int ObBackupCleanScheduler::init(
+    const uint64_t tenant_id,
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     share::schema::ObMultiVersionSchemaService &schema_service,
-    ObBackupLeaseService &lease_service,
     ObBackupTaskScheduler &task_scheduler,
-    ObBackupService &backup_service)
+    ObBackupCleanService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else {
+    tenant_id_ = tenant_id;
     sql_proxy_ = &sql_proxy;
     rpc_proxy_ = &rpc_proxy;
     schema_service_ = &schema_service;
-    lease_service_ = &lease_service;
     task_scheduler_ = &task_scheduler;
     backup_service_ = &backup_service;
     is_inited_ = true;
@@ -207,66 +208,32 @@ int ObBackupCleanScheduler::do_get_need_reload_task_(
   return ret;
 }
 
-int ObBackupCleanScheduler::get_all_normal_tenants_(ObIArray<uint64_t> &tenants)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  ObArray<uint64_t> tmp_tenantid_array;
-  if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_tenant_ids(tmp_tenantid_array))) {
-    LOG_WARN("failed to get tenant ids", K(ret));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenantid_array.count(); ++i) {
-    const uint64_t tenant_id = tmp_tenantid_array.at(i);
-    const ObTenantSchema *tenant_info = nullptr;
-    if (is_user_tenant(tenant_id)) {
-    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
-      LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-    } else if (tenant_info->is_normal()) {
-      if (OB_FAIL(tenants.push_back(tenant_id))) {
-        LOG_WARN("failed to push back tenant id", K(ret), K(tenant_id));
-      }
-    } 
-  }
-  return ret;
-}
-
 int ObBackupCleanScheduler::get_need_reload_task(
     common::ObIAllocator &allocator, 
     common::ObIArray<ObBackupScheduleTask *> &tasks)
 {
   int ret = OB_SUCCESS;
   bool for_update = false;
-  ObArray<uint64_t> tenant_ids;
+  ObArray<ObBackupCleanJobAttr> jobs;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(get_all_normal_tenants_(tenant_ids))) {
-    LOG_WARN("fail to get all normal tenants", K(ret));
+  } else if (OB_FAIL(ObBackupCleanJobOperator::get_jobs(*sql_proxy_, tenant_id_, for_update, jobs))) {
+    LOG_WARN("failed to get backup clean jobs", K(ret));
+  } else if (jobs.empty()) {
+    LOG_INFO("[BACKUP_CLEAN]no job need to reload");
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
-      const uint64_t tenant_id = tenant_ids.at(i);
-      ObArray<ObBackupCleanJobAttr> jobs;
-      if (OB_FAIL(ObBackupCleanJobOperator::get_jobs(*sql_proxy_, tenant_id, for_update, jobs))) {
-        LOG_WARN("failed to get backup clean jobs", K(ret));
-      } else if (jobs.empty()) {
-        LOG_INFO("[BACKUP_CLEAN]no job need to reload");
-      } else {
-        bool is_valid = false;
-        for (int i = 0; OB_SUCC(ret) && i < jobs.count(); ++i) {
-          const ObBackupCleanJobAttr &job = jobs.at(i);
-          if (is_sys_tenant(job.tenant_id_) || ObBackupCleanStatus::Status::DOING != job.status_.status_) {
-            // do nothing
-          } else if (OB_FAIL(ObBackupCleanCommon::check_tenant_status(*schema_service_, job.tenant_id_, is_valid))) {
-            LOG_WARN("failed to check tenant status", K(ret));
-          } else if (!is_valid) {
-            LOG_INFO("[BACKUP_CLEAN]tenant status is not valid, no need to reload task");
-          } else if (OB_FAIL(get_job_need_reload_task(job, allocator, tasks))){
-            LOG_WARN("failed to get job need reload task", K(ret)); 
-          }
-        }
+    bool is_valid = false;
+    for (int i = 0; OB_SUCC(ret) && i < jobs.count(); ++i) {
+      const ObBackupCleanJobAttr &job = jobs.at(i);
+      if (is_sys_tenant(job.tenant_id_) || ObBackupCleanStatus::Status::DOING != job.status_.status_) {
+        // do nothing
+      } else if (OB_FAIL(ObBackupCleanCommon::check_tenant_status(*schema_service_, job.tenant_id_, is_valid))) {
+        LOG_WARN("failed to check tenant status", K(ret));
+      } else if (!is_valid) {
+        LOG_INFO("[BACKUP_CLEAN]tenant status is not valid, no need to reload task");
+      } else if (OB_FAIL(get_job_need_reload_task(job, allocator, tasks))){
+        LOG_WARN("failed to get job need reload task", K(ret));
       }
     }
   }
@@ -380,8 +347,8 @@ int ObBackupCleanScheduler::cancel_tenant_jobs_(const uint64_t tenant_id)
         ObBackupCleanStatus next_status;
         next_status.status_ = ObBackupCleanStatus::Status::CANCELING;
         int result = OB_CANCELED;
-        if (OB_FAIL(lease_service_->check_lease())) {
-          LOG_WARN("failed to check lease", K(ret));
+        if (OB_FAIL(backup_service_->check_leader())) {
+          LOG_WARN("failed to check leader", K(ret));
         } else if (OB_FAIL(ObBackupCleanJobOperator::advance_job_status(trans, job_attr, next_status, result, job_attr.end_ts_))) {
           LOG_WARN("failed to update backup delete job status to CANCELING", K(ret), K(job_attr));
         }
@@ -520,7 +487,7 @@ int ObBackupCleanScheduler::persist_job_task_(ObBackupCleanJobAttr &job_attr)
     if (OB_FAIL(get_next_job_id_(trans, job_attr.tenant_id_, job_attr.job_id_))) {
       LOG_WARN("failed to get next job id", K(ret));
     } else if (OB_FALSE_IT(job_attr.initiator_job_id_ = job_attr.job_id_)) {
-    } else if (OB_FAIL(lease_service_->check_lease())) { 
+    } else if (OB_FAIL(backup_service_->check_leader())) {
       LOG_WARN("failed to check leader", K(ret));
     } else if (OB_FAIL(ObBackupCleanJobOperator::insert_job(trans, job_attr))) {
       LOG_WARN("failed to insert user tenant backup clean job", K(ret), K(job_attr));
@@ -582,8 +549,8 @@ int ObBackupCleanScheduler::start_tenant_backup_clean_(const ObBackupCleanJobAtt
     } else if (OB_FAIL(new_job_attr.executor_tenant_id_.push_back(new_job_attr.tenant_id_))) {
       LOG_WARN("failed to push back tenant id", K(ret));
     } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.job_id_)) { 
-    } else if (OB_FAIL(lease_service_->check_lease())) { 
-      LOG_WARN("failed to check lease", K(ret));
+    } else if (OB_FAIL(backup_service_->check_leader())) {
+      LOG_WARN("failed to check leader", K(ret));
     } else if (OB_FAIL(ObBackupCleanJobOperator::insert_job(trans, new_job_attr))) {
       LOG_WARN("failed to insert backup clean job", K(ret), K(new_job_attr));
     } 
@@ -616,9 +583,8 @@ int ObBackupCleanScheduler::get_next_job_id_(common::ObISQLClient &trans, const 
 
 int ObBackupCleanScheduler::handle_execute_over(
     const ObBackupScheduleTask *task, 
-    bool &can_remove, 
-    const ObAddr &black_server,
-    const int execute_ret)
+    const share::ObHAResultInfo &result_info,
+    bool &can_remove)
 {
   //cases of call handle_execute_over
   //1. observer return a rpc to tell task scheduler task finish (success or fail)
@@ -649,8 +615,8 @@ int ObBackupCleanScheduler::handle_execute_over(
       ObBackupTaskStatus next_status;
       next_status.status_ = ObBackupTaskStatus::Status::FINISH;
       ls_attr.end_ts_ = ObTimeUtility::current_time(); 
-      if (OB_FAIL(ObBackupCleanLSTaskMgr::advance_ls_task_status(*lease_service_, trans, ls_attr, next_status, execute_ret, ls_attr.end_ts_))) {
-        LOG_WARN("failed to advance status", K(ret), K(ls_attr), K(next_status), K(execute_ret));
+      if (OB_FAIL(ObBackupCleanLSTaskMgr::advance_ls_task_status(*backup_service_, trans, ls_attr, next_status, result_info.result_, ls_attr.end_ts_))) {
+        LOG_WARN("failed to advance status", K(ret), K(ls_attr), K(next_status), K(result_info));
       } 
     } else {
       LOG_WARN("concurrent scenario! this task will need reload to redo.", K(ls_attr));
@@ -713,7 +679,7 @@ int ObBackupCleanScheduler::process_tenant_delete_jobs_(const uint64_t tenant_id
     if (!job_attr.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("backup clean job is not valid", K(ret), K(job_attr));
-    } else if (OB_FAIL(job_mgr->init(tenant_id, job_attr, *sql_proxy_, *rpc_proxy_, *task_scheduler_, *lease_service_, *schema_service_, *backup_service_))) {
+    } else if (OB_FAIL(job_mgr->init(tenant_id, job_attr, *sql_proxy_, *rpc_proxy_, *task_scheduler_, *schema_service_, *backup_service_))) {
       LOG_WARN("failed to init tenant backup clean job mgr", K(ret), K(job_attr));
     } else if (OB_SUCCESS != (tmp_ret = job_mgr->process())) { // tenant level backups are isolated
       LOG_WARN("failed to schedule tenant backup clean job", K(tmp_ret), K(job_attr));
@@ -734,28 +700,19 @@ int ObBackupCleanScheduler::process_tenant_delete_jobs_(const uint64_t tenant_id
 int ObBackupCleanScheduler::process()
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> tenant_ids;
+  ObArray<ObBackupCleanJobAttr> clean_jobs;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup clean scheduler not init", K(ret));
-  } else if (OB_FAIL(get_all_normal_tenants_(tenant_ids))) {
-    LOG_WARN("fail to get all normal tenants", K(ret));
+  } else if (OB_FAIL(ObBackupCleanJobOperator::get_jobs(*sql_proxy_, tenant_id_, false/*not update*/, clean_jobs))) {
+    LOG_WARN("failed to get backup clean jobs", K(ret));
+  } else if (clean_jobs.empty()) {
+    // do nothing
+  } else if (OB_FAIL(process_tenant_delete_jobs_(tenant_id_, clean_jobs))) {
+    LOG_WARN("failed to process tenant delete jobs", K(ret), K(tenant_id_), K(clean_jobs));
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
-      const uint64_t tenant_id = tenant_ids.at(i);
-      ObArray<ObBackupCleanJobAttr> clean_jobs;
-      if (OB_FAIL(ObBackupCleanJobOperator::get_jobs(*sql_proxy_, tenant_id, false/*not update*/, clean_jobs))) {
-        LOG_WARN("failed to get backup clean jobs", K(ret));
-      } else if (clean_jobs.empty()) {
-        // do nothing
-      } else if (OB_FAIL(process_tenant_delete_jobs_(tenant_id, clean_jobs))) {
-        LOG_WARN("failed to process tenant delete jobs", K(ret), K(tenant_id), K(clean_jobs));
-      } else {
-        FLOG_INFO("[BACKUP_CLEAN]finish process backup clean jobs", K(tenant_id), K(clean_jobs));
-      }
-    }
+    FLOG_INFO("[BACKUP_CLEAN]finish process backup clean jobs", K(tenant_id_), K(clean_jobs));
   }
-
   return ret;
 }
 
@@ -772,7 +729,6 @@ ObIBackupDeleteMgr::ObIBackupDeleteMgr()
     rpc_proxy_(nullptr),
     task_scheduler_(nullptr),
     schema_service_(nullptr),
-    lease_service_(nullptr),
     backup_service_(nullptr)
 {
 }
@@ -783,9 +739,8 @@ int ObIBackupDeleteMgr::init(
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     ObBackupTaskScheduler &task_scheduler,
-    ObBackupLeaseService  &lease_service,
     share::schema::ObMultiVersionSchemaService &schema_service,
-    ObBackupService &backup_service)
+    ObBackupCleanService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -801,7 +756,6 @@ int ObIBackupDeleteMgr::init(
     rpc_proxy_ = &rpc_proxy;
     task_scheduler_ = &task_scheduler;
     schema_service_ = &schema_service;
-    lease_service_ = &lease_service;
     backup_service_ = &backup_service;
     is_inited_ = true;
   }
@@ -816,7 +770,6 @@ void ObIBackupDeleteMgr::reset()
   rpc_proxy_ = nullptr;
   task_scheduler_ = nullptr;
   schema_service_ = nullptr;
-  lease_service_ = nullptr;
   backup_service_ = nullptr;
   is_inited_ = false;
 }
@@ -861,7 +814,7 @@ int ObUserTenantBackupDeleteMgr::deal_non_reentrant_job(const int error)
 #endif
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(task_mgr.init(job_attr_->tenant_id_, task_attr.task_id_, *job_attr_, *sql_proxy_,
-              *rpc_proxy_, *task_scheduler_, *lease_service_, *backup_service_))) {
+              *rpc_proxy_, *task_scheduler_, *backup_service_))) {
             LOG_WARN("failed to init set task mgr", K(ret));
           } else if (OB_FAIL(task_mgr.deal_failed_task(task_attr.result_))) {
             LOG_WARN("failed to deal failed set task", K(ret), K(task_attr));
@@ -1030,7 +983,7 @@ int ObUserTenantBackupDeleteMgr::move_to_history_()
         SMART_VAR(ObBackupCleanTaskMgr, task_mgr) {
           const ObBackupCleanTaskAttr &task_attr = task_attrs.at(i);
           if (OB_FAIL(task_mgr.init(tenant_id_, task_attr.task_id_, *job_attr_, trans,
-            *rpc_proxy_, *task_scheduler_, *lease_service_, *backup_service_))) {
+            *rpc_proxy_, *task_scheduler_, *backup_service_))) {
             LOG_WARN("failed to init set task mgr", K(ret));
           } else if (OB_FAIL(task_mgr.process())) {
             LOG_WARN("failed to task move history", K(ret), K(task_attr));
@@ -1103,7 +1056,7 @@ int ObUserTenantBackupDeleteMgr::do_cancel_()
         const ObBackupCleanTaskAttr &task_attr = task_attrs.at(i);
         if (ObBackupCleanStatus::Status::CANCELING == task_attr.status_.status_) { 
           if (OB_FAIL(task_mgr.init(tenant_id_, task_attr.task_id_, *job_attr_, *sql_proxy_, *rpc_proxy_,
-              *task_scheduler_, *lease_service_, *backup_service_))) {
+              *task_scheduler_, *backup_service_))) {
             LOG_WARN("failed to init set task mgr", K(ret));
           } else if (OB_FAIL(task_mgr.process())) {
             LOG_WARN("failed to cancel task", K(ret), K(task_attr));
@@ -1187,7 +1140,7 @@ int ObUserTenantBackupDeleteMgr::do_backup_clean_tasks_(const ObArray<ObBackupCl
           || ObBackupCleanStatus::Status::CANCELED == task_attr.status_.status_) {
         // do nothing
       } else if (OB_FAIL(task_mgr.init(tenant_id_, task_attr.task_id_, *job_attr_, *sql_proxy_,
-          *rpc_proxy_, *task_scheduler_, *lease_service_, *backup_service_))) {
+          *rpc_proxy_, *task_scheduler_, *backup_service_))) {
         LOG_WARN("failed to init set task mgr", K(ret));
       } else if (OB_FAIL(task_mgr.process())) {
         LOG_WARN("failed to process task", K(ret), K(task_attr));
@@ -1497,8 +1450,8 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_tasks_(
     } else if (!task_attr.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("backup clean set task is valid", K(ret), K(task_attr), K(backup_set_info));
-    } else if (OB_FAIL(lease_service_->check_lease())) {
-      LOG_WARN("failed to check lease", K(ret));
+    } else if (OB_FAIL(backup_service_->check_leader())) {
+      LOG_WARN("failed to check leader", K(ret));
     } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
       LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
     } else {
@@ -1522,8 +1475,8 @@ int ObUserTenantBackupDeleteMgr::persist_backup_piece_task_(
     } else if (!task_attr.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("backup clean set task is valid", K(ret));
-    } else if (OB_FAIL(lease_service_->check_lease())) {
-      LOG_WARN("failed to check lease", K(ret));
+    } else if (OB_FAIL(backup_service_->check_leader())) {
+      LOG_WARN("failed to check leader", K(ret));
     } else if (OB_FAIL(ObBackupCleanTaskOperator::insert_backup_clean_task(trans, task_attr))) {
       LOG_WARN("failed to insert backup task", K(ret), K(task_attr));
     }
@@ -1654,8 +1607,8 @@ int ObUserTenantBackupDeleteMgr::advance_job_status_(
     const int64_t end_ts)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(lease_service_->check_lease())) {
-    LOG_WARN("failed to check lease", K(ret));
+  if (OB_FAIL(backup_service_->check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(ObBackupCleanJobOperator::advance_job_status(trans, *job_attr_, next_status, result, end_ts))) {
     LOG_WARN("failed to advance job status", K(ret), K(*job_attr_), K(next_status), K(result), K(end_ts));
   }
@@ -1750,8 +1703,6 @@ int ObSysTenantBackupDeleteMgr::handle_user_tenant_backup_delete_()
 
 int ObSysTenantBackupDeleteMgr::do_handle_user_tenant_backup_delete_(const uint64_t &tenant_id)
 {
-  // TODO: adjust usr srv rpc proxy when has tenant backup thread.
-
   int ret = OB_SUCCESS;
   common::ObAddr rs_addr;
   obrpc::ObBackupCleanArg backup_delete_arg;
@@ -1830,7 +1781,7 @@ int ObSysTenantBackupDeleteMgr::statistic_user_tenant_job_()
 int ObSysTenantBackupDeleteMgr::move_to_history_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(lease_service_->check_lease())) {
+  if (OB_FAIL(backup_service_->check_leader())) {
     LOG_WARN("fail to check leader", K(ret));
   } else if (OB_FAIL(ObBackupCleanJobOperator::move_job_to_his(*sql_proxy_, job_attr_->tenant_id_, job_attr_->job_id_))) {
     LOG_WARN("failed to move job to history table", K(ret), K(*job_attr_));
@@ -1868,7 +1819,7 @@ int ObSysTenantBackupDeleteMgr::cancel_user_tenant_job_()
         || ObBackupCleanStatus::Status::DOING == tmp_job_attr.status_.status_) {
       ObBackupCleanStatus next_status;
       next_status.status_ = ObBackupCleanStatus::Status::CANCELING;
-      if (OB_FAIL(lease_service_->check_lease())) {
+      if (OB_FAIL(backup_service_->check_leader())) {
         LOG_WARN("fail to check leader", K(ret));
       } else if (OB_FAIL(ObBackupCleanJobOperator::advance_job_status(*sql_proxy_, tmp_job_attr, next_status))) {
         LOG_WARN("fail to advance user job to CANCELING", K(ret), K(tmp_job_attr), K(next_status));
@@ -1899,7 +1850,7 @@ int ObSysTenantBackupDeleteMgr::advance_status_(
     const int64_t end_ts)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(lease_service_->check_lease())) {
+  if (OB_FAIL(backup_service_->check_leader())) {
     LOG_WARN("fail to check leader", K(ret));
   } else if (OB_FAIL(ObBackupCleanJobOperator::advance_job_status(sql_proxy, *job_attr_, next_status, result, end_ts))) {
     LOG_WARN("failed to advance job status", K(ret), K(*job_attr_), K(next_status), K(result), K(end_ts));
@@ -1911,32 +1862,32 @@ int ObSysTenantBackupDeleteMgr::advance_status_(
 ObBackupAutoObsoleteDeleteTrigger::ObBackupAutoObsoleteDeleteTrigger()
  : ObIBackupTrigger(BackupTriggerType::BACKUP_AUTO_DELETE_TRIGGER),
    is_inited_(false),
+   tenant_id_(OB_INVALID_TENANT_ID),
    sql_proxy_(nullptr),
    rpc_proxy_(nullptr),
    schema_service_(nullptr),
-   lease_service_(nullptr),
    task_scheduler_(nullptr),
    backup_service_(nullptr)
 {
 }
 
 int ObBackupAutoObsoleteDeleteTrigger::init(
+    const uint64_t tenant_id,
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     share::schema::ObMultiVersionSchemaService &schema_service,
-    ObBackupLeaseService &lease_service,
     ObBackupTaskScheduler &task_scheduler,
-    ObBackupService &backup_service)
+    ObBackupCleanService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else {
+    tenant_id_ = tenant_id;
     sql_proxy_ = &sql_proxy;
     rpc_proxy_ = &rpc_proxy;
     schema_service_ = &schema_service;
-    lease_service_ = &lease_service;
     task_scheduler_ = &task_scheduler;
     backup_service_ = &backup_service;
     is_inited_ = true;
@@ -1996,29 +1947,24 @@ int ObBackupAutoObsoleteDeleteTrigger::start_auto_delete_obsolete_data_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup auto delete obsolete bakcup do not init", K(ret));
-  } else if (OB_FAIL(ObBackupCleanCommon::get_all_tenants(*schema_service_,tenant_ids))) {
-    LOG_WARN("failed to get all tenants", K(ret));
-  } else {
-    for (int i = 0; i < tenant_ids.count(); ++i) {
-      const uint64_t tenant_id = tenant_ids.at(i);
-      recovery_window = 0;
-      default_delete_policy.reset(); 
-      obrpc::ObBackupCleanArg arg;
-      arg.initiator_tenant_id_ = tenant_id; // cluster-level automatic backup clean
-      arg.tenant_id_ = tenant_id;
-      arg.type_ = ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP;
-      if (OB_FAIL(ObDeletePolicyOperator::get_default_delete_policy(*sql_proxy_, arg.tenant_id_, default_delete_policy))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("failed to get all tenants", K(ret), K(arg));
-        }
-      } else if (OB_FAIL(get_delete_policy_parameter_(default_delete_policy, recovery_window))) {
-      } else if (recovery_window <= 0) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("recovery window is unepxected", K(ret), K(arg), K(recovery_window));
-      } else if (FALSE_IT(arg.value_ = now_ts - recovery_window)) {
-      } else if (OB_FAIL(backup_service_->handle_backup_delete(arg))) {
-        LOG_WARN("failed to schedule backup clean", K(ret), K(arg));
+  } else if (is_meta_tenant(tenant_id_)) {
+    recovery_window = 0;
+    default_delete_policy.reset();
+    obrpc::ObBackupCleanArg arg;
+    arg.initiator_tenant_id_ = tenant_id_; // cluster-level automatic backup clean
+    arg.tenant_id_ = tenant_id_;
+    arg.type_ = ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP;
+    if (OB_FAIL(ObDeletePolicyOperator::get_default_delete_policy(*sql_proxy_, arg.tenant_id_, default_delete_policy))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("failed to get all tenants", K(ret), K(arg));
       }
+    } else if (OB_FAIL(get_delete_policy_parameter_(default_delete_policy, recovery_window))) {
+    } else if (recovery_window <= 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("recovery window is unepxected", K(ret), K(arg), K(recovery_window));
+    } else if (FALSE_IT(arg.value_ = now_ts - recovery_window)) {
+    } else if (OB_FAIL(backup_service_->handle_backup_delete(arg))) {
+      LOG_WARN("failed to schedule backup clean", K(ret), K(arg));
     }
     FLOG_INFO("[BACKUP_CLEAN] finish schedule auto delete", K(tenant_ids));
   }

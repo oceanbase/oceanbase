@@ -174,12 +174,10 @@ int ObTxDataMemtableMgr::create_memtable_(const SCN clog_checkpoint_scn,
   } else if (OB_ISNULL(tx_data_memtable)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "dynamic cast failed", KR(ret), KPC(this));
-  } else if (OB_FAIL(tx_data_memtable->init(table_key, slice_allocator_, this, buckets_cnt))) {
+  } else if (OB_FAIL(tx_data_memtable->init(table_key, slice_allocator_, this, freezer_, buckets_cnt))) {
     STORAGE_LOG(WARN, "memtable init fail.", KR(ret), KPC(tx_data_memtable));
   } else if (OB_FAIL(add_memtable_(handle))) {
     STORAGE_LOG(WARN, "add memtable fail.", KR(ret));
-  } else if (OB_FAIL(tx_data_memtable->set_freezer(freezer_))) {
-    STORAGE_LOG(WARN, "tx_data_memtable set freezer failed", KR(ret), KPC(tx_data_memtable));
   } else {
     // create memtable success
     STORAGE_LOG(INFO, "create tx data memtable done", KR(ret), KPC(tx_data_memtable));

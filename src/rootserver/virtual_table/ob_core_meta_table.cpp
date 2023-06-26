@@ -168,6 +168,7 @@ int ObCoreMetaTable::get_full_row(const ObTableSchema *table,
       ADD_COLUMN(set_int, table, "data_size", replica.get_data_size(), columns);
       ADD_COLUMN(set_int, table, "required_size", replica.get_required_size(), columns);
       ADD_TEXT_COLUMN(ObLongTextType, table, "learner_list", learner_list, columns);
+      ADD_COLUMN(set_int, table, "rebuild", replica.get_rebuild(), columns);
     }
 
     if (OB_FAIL(ret)) {

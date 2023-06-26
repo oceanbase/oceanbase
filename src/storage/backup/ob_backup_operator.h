@@ -42,7 +42,7 @@ public:
       common::ObISQLClient &sql_client);
   // __all_backup_set_files
   static int get_prev_backup_set_desc(const uint64_t tenant_id, const int64_t backup_set_id, const int64_t dest_id,
-      share::ObBackupSetDesc &backup_set_desc, common::ObISQLClient &sql_client);
+      share::ObBackupSetFileDesc &prev_desc, common::ObISQLClient &sql_client);
   // __all_backup_ls_task
   static int report_ls_task_finish(const uint64_t tenant_id, const int64_t task_id, const share::ObLSID &ls_id,
       const int64_t turn_id, const int64_t retry_id, const int64_t result, common::ObISQLClient &sql_client);

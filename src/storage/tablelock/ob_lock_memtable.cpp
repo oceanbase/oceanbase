@@ -45,7 +45,6 @@ namespace tablelock
 ObLockMemtable::ObLockMemtable()
   : ObIMemtable(),
     is_inited_(false),
-    ls_id_(),
     freeze_scn_(SCN::min_scn()),
     flushed_scn_(SCN::min_scn()),
     rec_scn_(SCN::max_scn()),
@@ -100,7 +99,6 @@ void ObLockMemtable::reset()
   rec_scn_.set_max();
   pre_rec_scn_.set_max();
   max_committed_scn_.reset();
-  ls_id_.reset();
   ObITable::reset();
   obj_lock_map_.reset();
   freeze_scn_.reset();
@@ -131,45 +129,66 @@ int ObLockMemtable::lock_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  int64_t USLEEP_TIME = 100 * 1000; // 100 ms
   ObMemtableCtx *mem_ctx = NULL;
-  bool lock_exist = false;
+  bool need_retry = false;
   ObTableLockMode lock_mode_in_same_trans = 0x0;
+  bool lock_exist = false;
   ObLockStep succ_step = STEP_BEGIN;
   ObTxIDSet conflict_tx_set;
-  ObMvccWriteGuard guard(true);
 
   // 1. record lock myself(check conflict).
   // 2. record lock at memtable ctx.
   // 3. create lock callback and list it on the callback list of memtable ctx.
-  if (OB_FAIL(guard.write_auth(ctx))) {
-    LOG_WARN("not allow lock table.", K(ret), K(ctx));
-  } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
-  } else if (OB_FAIL(mem_ctx->check_lock_exist(lock_op.lock_id_,
-                                               lock_op.owner_id_,
-                                               lock_op.lock_mode_,
-                                               lock_op.op_type_,
-                                               lock_exist,
-                                               lock_mode_in_same_trans))) {
-    LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
-  } else if (lock_exist) {
-    // do nothing
-  } else if (FALSE_IT(lock_upgrade(lock_mode_in_same_trans, lock_op))) {
-  } else if (OB_FAIL(obj_lock_map_.lock(param,
-                                        ctx,
-                                        lock_op,
-                                        lock_mode_in_same_trans,
-                                        conflict_tx_set))) {
-    if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
-        ret != OB_OBJ_LOCK_EXIST) {
-      LOG_WARN("record lock at lock map mgr failed.", K(ret), K(lock_op));
+  do {
+    // retry if there is lock conflict at part trans ctx.
+    need_retry = false;
+    {
+      succ_step = STEP_BEGIN;
+      lock_exist = false;
+      lock_mode_in_same_trans = 0x0;
+      conflict_tx_set.reset();
+      ObMvccWriteGuard guard(true);
+      if (ObClockGenerator::getClock() >= param.expired_time_) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("lock timeout", K(ret), K(param));
+      } else if (OB_FAIL(guard.write_auth(ctx))) {
+        LOG_WARN("not allow lock table.", K(ret), K(ctx));
+      } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
+      } else if (OB_FAIL(mem_ctx->check_lock_exist(lock_op.lock_id_,
+                                                   lock_op.owner_id_,
+                                                   lock_op.lock_mode_,
+                                                   lock_op.op_type_,
+                                                   lock_exist,
+                                                   lock_mode_in_same_trans))) {
+        LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
+      } else if (lock_exist) {
+        // do nothing
+      } else if (FALSE_IT(lock_upgrade(lock_mode_in_same_trans, lock_op))) {
+      } else if (OB_FAIL(obj_lock_map_.lock(param,
+                                            ctx,
+                                            lock_op,
+                                            lock_mode_in_same_trans,
+                                            conflict_tx_set))) {
+        if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
+            ret != OB_OBJ_LOCK_EXIST) {
+          LOG_WARN("record lock at lock map mgr failed.", K(ret), K(lock_op));
+        }
+      } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
+      } else if (OB_FAIL(mem_ctx->add_lock_record(lock_op))) {
+        if (OB_EAGAIN == ret) {
+          need_retry = true;
+        }
+        LOG_WARN("record lock at mem_ctx failed.", K(ret), K(lock_op));
+      }
+      if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
+        obj_lock_map_.remove_lock_record(lock_op);
+      }
     }
-  } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
-  } else if (OB_FAIL(mem_ctx->add_lock_record(lock_op))) {
-    LOG_WARN("record lock at mem_ctx failed.", K(ret), K(lock_op));
-  }
-  if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
-    obj_lock_map_.remove_lock_record(lock_op);
-  }
+    if (need_retry) {
+      ob_usleep(USLEEP_TIME);
+    }
+  } while (need_retry);
   // return success if lock twice.
   if (ret == OB_OBJ_LOCK_EXIST) {
     ret = OB_SUCCESS;
@@ -220,39 +239,59 @@ int ObLockMemtable::unlock_(
     const int64_t expired_time)
 {
   int ret = OB_SUCCESS;
+  int64_t USLEEP_TIME = 100 * 1000; // 100 ms
   ObMemtableCtx *mem_ctx = NULL;
   bool lock_op_exist = false;
+  bool need_retry = false;
   ObTableLockMode unused_lock_mode_in_same_trans = 0x0;
   ObLockStep succ_step = STEP_BEGIN;
-  ObMvccWriteGuard guard(true);
 
   // 1. record unlock op myself(check conflict).
   // 2. record unlock op at memtable ctx.
   // 3. create unlock callback and list it on the callback list of memtable ctx.
-  if (OB_FAIL(guard.write_auth(ctx))) {
-    LOG_WARN("not allow unlock table.", K(ret), K(ctx));
-  } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
-    // check whether the unlock op exist already
-  } else if (OB_FAIL(mem_ctx->check_lock_exist(unlock_op.lock_id_,
-                                               unlock_op.owner_id_,
-                                               unlock_op.lock_mode_,
-                                               unlock_op.op_type_,
-                                               lock_op_exist,
-                                               unused_lock_mode_in_same_trans))) {
-    LOG_WARN("failed to check lock exist ", K(ret), K(unlock_op));
-  } else if (lock_op_exist) {
-    // do nothing
-  } else if (OB_FAIL(obj_lock_map_.unlock(unlock_op,
-                                          is_try_lock,
-                                          expired_time))) {
-    LOG_WARN("record lock at lock map mgr failed.", K(ret), K(unlock_op));
-  } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
-  } else if (OB_FAIL(mem_ctx->add_lock_record(unlock_op))) {
-    LOG_WARN("record lock at mem_ctx failed.", K(ret), K(unlock_op));
-  }
-  if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
-    obj_lock_map_.remove_lock_record(unlock_op);
-  }
+  do {
+    // retry if there is lock conflict at part trans ctx.
+    need_retry = false;
+    {
+      succ_step = STEP_BEGIN;
+      lock_op_exist = false;
+      unused_lock_mode_in_same_trans = 0x0;
+      ObMvccWriteGuard guard(true);
+      if (ObClockGenerator::getClock() >= expired_time) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("unlock timeout", K(ret), K(unlock_op), K(expired_time));
+      } else if (OB_FAIL(guard.write_auth(ctx))) {
+        LOG_WARN("not allow unlock table.", K(ret), K(ctx));
+      } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
+        // check whether the unlock op exist already
+      } else if (OB_FAIL(mem_ctx->check_lock_exist(unlock_op.lock_id_,
+                                                   unlock_op.owner_id_,
+                                                   unlock_op.lock_mode_,
+                                                   unlock_op.op_type_,
+                                                   lock_op_exist,
+                                                   unused_lock_mode_in_same_trans))) {
+        LOG_WARN("failed to check lock exist ", K(ret), K(unlock_op));
+      } else if (lock_op_exist) {
+        // do nothing
+      } else if (OB_FAIL(obj_lock_map_.unlock(unlock_op,
+                                              is_try_lock,
+                                              expired_time))) {
+        LOG_WARN("record lock at lock map mgr failed.", K(ret), K(unlock_op));
+      } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
+      } else if (OB_FAIL(mem_ctx->add_lock_record(unlock_op))) {
+        if (OB_EAGAIN == ret) {
+          need_retry = true;
+        }
+        LOG_WARN("record lock at mem_ctx failed.", K(ret), K(unlock_op));
+      }
+      if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
+        obj_lock_map_.remove_lock_record(unlock_op);
+      }
+    }
+    if (need_retry) {
+      ob_usleep(USLEEP_TIME);
+    }
+  } while (need_retry);
   return ret;
 }
 
@@ -657,62 +696,6 @@ int ObLockMemtable::get(
 }
 
 
-int ObLockMemtable::set(
-    storage::ObStoreCtx &ctx,
-    const uint64_t table_id,
-    const storage::ObTableReadInfo &read_info,
-    const ObIArray<share::schema::ObColDesc> &columns,
-    const storage::ObStoreRow &row,
-    const share::ObEncryptMeta *encrypt_meta)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(columns);
-  UNUSED(row);
-  UNUSED(encrypt_meta);
-  return OB_NOT_SUPPORTED;
-}
-
-int ObLockMemtable::lock(
-    storage::ObStoreCtx &ctx,
-    const uint64_t table_id,
-    const storage::ObTableReadInfo &read_info,
-    ObNewRowIterator &row_iter)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(row_iter);
-  return OB_NOT_SUPPORTED;
-}
-
-int ObLockMemtable::lock(
-    storage::ObStoreCtx &ctx,
-    const uint64_t table_id,
-    const storage::ObTableReadInfo &read_info,
-    const ObNewRow &row)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(row);
-  return OB_NOT_SUPPORTED;
-}
-
-int ObLockMemtable::lock(
-    storage::ObStoreCtx &ctx,
-    const uint64_t table_id,
-    const storage::ObTableReadInfo &read_info,
-    const blocksstable::ObDatumRowkey &rowkey)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(rowkey);
-  return OB_NOT_SUPPORTED;
-}
-
 int ObLockMemtable::get(
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context,
@@ -897,7 +880,7 @@ int ObLockMemtable::replay_row(
   int ret = OB_SUCCESS;
 
   ObLockID lock_id;
-  ObTableLockOwnerID owner_id = 0;
+  ObTableLockOwnerID owner_id(0);
   ObTableLockMode lock_mode = NO_LOCK;
   ObTableLockOpType lock_op_type = ObTableLockOpType::UNKNOWN_TYPE;
   int64_t seq_no = 0;

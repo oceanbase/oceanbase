@@ -95,7 +95,6 @@ private:
       ObMicroBlockDataHandle &micro_handle,
       bool consider_multi_version,
        ObPartitionEst &est);
-  int construct_rowkey_read_info();
   ObMicroBlockDataHandle &get_read_handle()
   {
     return micro_handles_[level_++ % DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
@@ -109,7 +108,6 @@ private:
   ObMicroBlockDataHandle micro_handles_[DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
   blocksstable::ObMicroBlockData index_block_data_;
   const ObIndexSSTableEstimateContext &context_;
-  ObTableReadInfo data_read_info_;
   common::ObArenaAllocator allocator_;
 };
 

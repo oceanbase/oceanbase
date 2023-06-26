@@ -234,7 +234,7 @@ int ObDIThreadTenantCache::get_node(uint64_t tenant_id, ObDITenantCollect *&tena
   if (OB_ISNULL(tenant_collect = tenant_cache_.get_node(tenant_id))) {
     if (nullptr == extend_tenant_cache_) {
       extend_tenant_cache_ = OB_NEW(ObDIBaseTenantCache<MAX_TENANT_NUM_PER_SERVER>,
-                                    SET_USE_500("di_tenant_cache"));
+                                    SET_USE_UNEXPECTED_500("di_tenant_cache"));
     }
     if (nullptr != extend_tenant_cache_) {
       tenant_collect = extend_tenant_cache_->get_node(tenant_id, true /*replace*/);

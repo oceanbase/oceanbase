@@ -2644,8 +2644,6 @@ int ObSchemaPrinter::print_tablegroup_definition(
     SHARE_SCHEMA_LOG(WARN, "fail to print create tablegroup prefix", K(ret), K(tablegroup_schema->get_tablegroup_name()));
   } else if (OB_FAIL(print_tablegroup_definition_tablegroup_options(*tablegroup_schema, buf, buf_len, pos, agent_mode))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print tablegroup options", K(ret), K(*tablegroup_schema));
-  } else if (OB_FAIL(print_tablegroup_definition_partition_options(*tablegroup_schema, buf, buf_len, pos, agent_mode, tz_info))) {
-    SHARE_SCHEMA_LOG(WARN, "fail to print partition options", K(ret), K(*tablegroup_schema));
   }
   SHARE_SCHEMA_LOG(DEBUG, "print tablegroup schema", K(ret), K(*tablegroup_schema));
   return ret;
@@ -2703,66 +2701,22 @@ int ObSchemaPrinter::print_tablegroup_definition_tablegroup_options(
       SHARE_SCHEMA_LOG(WARN, "fail to print tablegroup_id", K(ret), K(tablegroup_schema.get_tablegroup_id()));
     }
   }
-  return ret;
-}
-
-int ObSchemaPrinter::print_tablegroup_definition_partition_options(
-    const ObTablegroupSchema &tablegroup_schema,
-    char* buf,
-    const int64_t& buf_len,
-    int64_t& pos,
-    bool agent_mode,
-    const ObTimeZoneInfo *tz_info) const
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
-  if (tablegroup_id <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablegroup_id is invalid", K(ret), K(tablegroup_id));
-  } else if (is_sys_tablegroup_id(tablegroup_id)) {
-    // skip
-  } else if (PARTITION_LEVEL_ONE == tablegroup_schema.get_part_level()
-             || PARTITION_LEVEL_TWO == tablegroup_schema.get_part_level()) {
-    ObString disp_part_fun_expr_str;
-    ObSqlString disp_part_str;
-    bool is_subpart = false;
-    const ObPartitionSchema *partition_schema = &tablegroup_schema;
-    if (PARTITION_LEVEL_TWO == tablegroup_schema.get_part_level()) {
-      is_subpart = true;
-    }
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n"))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print enter", K(ret));
-    } else if (OB_FAIL(print_tablegroup_partition_func(tablegroup_schema, disp_part_str, is_subpart))) {
-      SHARE_SCHEMA_LOG(WARN, "failed to print part func", K(ret));
-    } else if (FALSE_IT(disp_part_fun_expr_str = disp_part_str.string())) {
-      // will not reach here
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " %.*s",
-                                       disp_part_fun_expr_str.length(),
-                                       disp_part_fun_expr_str.ptr()))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to printf partition expr", K(ret), K(disp_part_fun_expr_str));
-    } else if (is_subpart && partition_schema->sub_part_template_def_valid()) {
-      if (OB_FAIL(print_template_sub_partition_elements(partition_schema, buf, buf_len, pos, tz_info, true))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to print sub partition elements", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      bool tablegroup_def = true;
-      bool print_sub_part_element = !partition_schema->sub_part_template_def_valid();
-      if (tablegroup_schema.is_range_part()) {
-        if (OB_FAIL(print_range_partition_elements(partition_schema, buf, buf_len, pos,
-                                                   print_sub_part_element, agent_mode, tablegroup_def, tz_info))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
-        }
-      } else if (tablegroup_schema.is_list_part()) {
-        if (OB_FAIL(print_list_partition_elements(partition_schema, buf, buf_len, pos,
-                                                  print_sub_part_element, agent_mode, tablegroup_def, tz_info))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
-        }
-      } else if (is_hash_like_part(tablegroup_schema.get_part_option().get_part_func_type())) {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " partitions %ld\n", tablegroup_schema.get_first_part_num()))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to printf partition number", K(ret), K(tablegroup_schema.get_first_part_num()));
-        }
+  if (OB_SUCC(ret)) {
+    bool is_oracle_mode = false;
+    uint64_t compat_version = OB_INVALID_VERSION;
+    uint64_t tenant_id = tablegroup_schema.get_tenant_id();
+    if (OB_FAIL(tablegroup_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to check oracle mode", KR(ret), K(tablegroup_id));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+    } else if (compat_version >= DATA_VERSION_4_2_0_0) {
+      const ObString sharding = tablegroup_schema.get_sharding();
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                                  is_oracle_mode
+                                  ? " SHARDING = \"%.*s\""
+                                  : " SHARDING = %.*s",
+                                  sharding.length(), sharding.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print tablegroup sharding", K(ret), K(tablegroup_schema.get_sharding()));
       }
     }
   }

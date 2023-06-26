@@ -418,6 +418,7 @@ public:
   }
 
   T &get_first() { return root_.next->data; }
+  const T &get_first() const { return root_.next->data; }
   T &get_last() { return root_.prev->data; }
 
   OB_INLINE iterator begin()

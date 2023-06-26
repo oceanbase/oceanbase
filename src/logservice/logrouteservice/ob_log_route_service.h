@@ -286,6 +286,10 @@ private:
   int update_server_list_(
       const ObLSRouterKey &router_key,
       ObLSRouterValue &router_value);
+  // query the GV$OB_UNITS
+  int query_units_info_and_update_(
+      const ObLSRouterKey &router_key,
+      ObLSRouterValue &router_value);
   int update_all_server_and_zone_cache_();
   void free_mem_();
 
@@ -353,7 +357,7 @@ private:
   bool is_inited_;
   int64_t cluster_id_;
   bool is_tenant_mode_;
-  uint64_t tenant_id_;
+  int64_t source_tenant_id_;
   volatile bool is_stopped_ CACHE_ALIGNED;
   LSRouteKeySet ls_route_key_set_;
   LSRouterMap ls_router_map_;

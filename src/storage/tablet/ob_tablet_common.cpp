@@ -16,9 +16,6 @@ namespace oceanbase
 {
 namespace storage
 {
-const int64_t ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US;
-const int64_t ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
-const int64_t ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US;
 const int64_t ObTabletCommon::FINAL_TX_ID;
 } // namespace storage
 } // namespace oceanbase

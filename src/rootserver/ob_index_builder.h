@@ -78,12 +78,17 @@ public:
                       const bool global_index_without_column_info,
                       share::schema::ObTableSchema &index_schema);
   int submit_drop_index_task(
+      common::ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema &data_schema,
       const share::schema::ObTableSchema &index_schema,
+      const int64_t schema_version,
       const obrpc::ObDropIndexArg &arg,
-      int64_t &task_id);
+      common::ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
   int submit_build_index_task(common::ObMySQLTransaction &trans,
                               const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema *data_schema,
+                              const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
                               const share::schema::ObTableSchema *index_schema,
                               const int64_t parallelism,
                               common::ObIAllocator &allocator,

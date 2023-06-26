@@ -32,7 +32,7 @@ public:
   int open(
       const blocksstable::ObSSTable &sstable,
       const blocksstable::ObDatumRange &range,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
       const bool is_reverse_scan);
   int upgrade_to_macro(const blocksstable::ObDatumRange &range);
@@ -53,7 +53,6 @@ private:
   int get_current_block_id(blocksstable::ObMicroBlockId &micro_block_id);
 
 private:
-  const blocksstable::ObSSTableMeta *sstable_meta_;
   int64_t macro_count_;
   int64_t micro_count_;
   blocksstable::ObDatumRowkey curr_key_;
@@ -162,7 +161,7 @@ private:
   int open_range(blocksstable::ObDatumRange &range);
 private:
   ObTableAccessContext *access_ctx_;
-  const ObTableReadInfo *read_info_;
+  const ObITableReadInfo *read_info_;
   ObMultipleScanMerge *scan_merge_;
   int64_t block_num_;
   common::ObArenaAllocator range_allocator_;

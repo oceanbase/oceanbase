@@ -264,6 +264,25 @@ bool ObTenantInfoLoader::is_sys_ls_leader_()
   return is_sys_ls_leader;
 }
 
+int ObTenantInfoLoader::get_max_ls_id(uint64_t &tenant_id, ObLSID &max_ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  const uint64_t mtl_tenant_id = MTL_ID();
+  tenant_id = OB_INVALID_TENANT_ID;
+  max_ls_id.reset();
+  if (OB_SYS_TENANT_ID == mtl_tenant_id || is_meta_tenant(mtl_tenant_id)) {
+    tenant_id = mtl_tenant_id;
+    max_ls_id = ObLSID::SYS_LS_ID;
+  } else if (OB_FAIL(get_tenant_info(tenant_info))) {
+    LOG_WARN("get_tenant_info failed", KR(ret));
+  } else {
+    tenant_id = tenant_info.get_tenant_id();
+    max_ls_id = tenant_info.get_max_ls_id();
+  }
+  return ret;
+}
+
 bool ObTenantInfoLoader::act_as_standby_()
 {
   int ret = OB_SUCCESS;

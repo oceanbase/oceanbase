@@ -81,8 +81,7 @@ private:
   ObTabletHandle tablet_handle_;
   int64_t ls_id_;
   char ip_buf_[common::OB_IP_STR_BUFF];
-  common::ObArray<storage::ObITable *> all_tables_;
-  int64_t table_idx_;
+  storage::ObTableStoreIterator table_store_iter_;
   void *iter_buf_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTableMgr);

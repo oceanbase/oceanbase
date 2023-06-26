@@ -140,6 +140,7 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
   } else {
+    DEBUG_SYNC(BEFORE_CHECKPOINT_TASK);
     ObLS *ls = nullptr;
     int ls_cnt = 0;
     for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {

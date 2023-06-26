@@ -49,10 +49,10 @@ int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info,
     const int64_t init_log_proposal_id = (prev_log_proposal_id != INVALID_PROPOSAL_ID)? \
         prev_log_proposal_id: PALF_INITIAL_PROPOSAL_ID;
     const SCN init_ref_scn = (prev_scn.is_valid() ? prev_scn: SCN::min_scn());
-    LogConfigInfo init_config_info;
+    LogConfigInfoV2 init_config_info;
     LogConfigVersion init_config_version;
     init_config_version.generate(init_log_proposal_id, 0);
-    init_config_info.config_version_ = init_config_version;
+    init_config_info.generate(init_config_version);
     version_ = LOG_META_VERSION;
     log_prepare_meta_.generate(LogVotedFor(), init_log_proposal_id);
     log_config_meta_.generate_for_default(init_log_proposal_id, init_config_info, init_config_info);

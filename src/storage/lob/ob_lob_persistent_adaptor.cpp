@@ -78,12 +78,11 @@ int ObPersistentLobApator::scan_lob_meta(
     uint64_t tenant_id = MTL_ID();
     // 2. prepare tablet scan param
     scan_param.tablet_id_ = lob_meta_tablet.get_obj()->get_tablet_meta().tablet_id_;
+    scan_param.schema_version_ = lob_meta_tablet.get_obj()->get_tablet_meta().max_sync_storage_schema_version_;
     const uint64_t table_id = 0;
     scan_param.table_param_ = param.meta_tablet_param_;
     if (OB_FAIL(build_common_scan_param(param, table_id, ObLobMetaUtil::LOB_META_COLUMN_CNT, scan_param))) {
       LOG_WARN("build common scan param failed.", K(ret));
-    } else if (OB_FAIL(lob_meta_tablet.get_obj()->get_schema_version_from_storage_schema(scan_param.schema_version_))) {
-      LOG_WARN("get lob meta storage schema version failed.", K(ret));
     } else if (OB_FAIL(prepare_table_param(param, scan_param, true))) {
       LOG_WARN("prepare lob meta table param failed.", K(ret));
     } else {
@@ -153,13 +152,12 @@ int ObPersistentLobApator::get_lob_data(
       ObTableScanParam scan_param;
       scan_param.table_param_ = param.piece_tablet_param_;
       scan_param.tablet_id_ = lob_piece_tablet.get_obj()->get_tablet_meta().tablet_id_;
+      scan_param.schema_version_ = lob_piece_tablet.get_obj()->get_tablet_meta().max_sync_storage_schema_version_;
       const uint64_t table_id = 0;
       bool tmp_scan_backward = param.scan_backward_;
       param.scan_backward_ = false;
       if (OB_FAIL(build_common_scan_param(param, table_id, ObLobPieceUtil::LOB_PIECE_COLUMN_CNT, scan_param))) {
         LOG_WARN("build common scan param failed.", K(ret));
-      } else if (OB_FAIL(lob_piece_tablet.get_obj()->get_schema_version_from_storage_schema(scan_param.schema_version_))) {
-        LOG_WARN("get lob meta storage schema version failed.", K(ret));
       } else if (OB_FAIL(prepare_table_param(param, scan_param, false))) {
         LOG_WARN("prepare lob meta table param failed.", K(ret));
       } else {
@@ -313,6 +311,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.sql_mode_ = SMO_DEFAULT;
   dml_base_param.encrypt_meta_ = &dml_base_param.encrypt_meta_legacy_;
   dml_base_param.snapshot_ = param.snapshot_;
+  dml_base_param.check_schema_version_ = false; // lob tablet should not check schema version
   if (param.seq_no_st_ != -1) {
     if (param.used_seq_cnt_ < param.total_seq_cnt_) {
       dml_base_param.spec_seq_no_ = param.seq_no_st_ + param.used_seq_cnt_;
@@ -342,7 +341,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
       if (OB_FAIL(get_lob_tablet_schema(tenant_id, true, *table_schema, dml_base_param.tenant_schema_version_))) {
         LOG_WARN("failed get lob tablet schema.", K(ret));
       } else {
-        dml_base_param.schema_version_ = lob_meta_tablet.get_obj()->get_storage_schema().get_schema_version();
+        dml_base_param.schema_version_ = lob_meta_tablet.get_obj()->get_tablet_meta().max_sync_storage_schema_version_;
       }
     } else {
       /**
@@ -626,7 +625,7 @@ int ObPersistentLobApator::build_lob_piece_table_dml(
       if (OB_FAIL(get_lob_tablet_schema(tenant_id, false, *table_schema, dml_base_param.tenant_schema_version_))) {
         LOG_WARN("failed get lob tablet schema.", K(ret));
       } else {
-        dml_base_param.schema_version_ = lob_piece_tablet.get_obj()->get_storage_schema().get_schema_version();
+        dml_base_param.schema_version_ = lob_piece_tablet.get_obj()->get_tablet_meta().max_sync_storage_schema_version_;
       }
     } else {
       /**
@@ -852,8 +851,6 @@ int ObPersistentLobApator::build_common_scan_param(
     // sessions
     scan_param.snapshot_ = param.snapshot_;
     scan_param.sql_mode_ = param.sql_mode_;
-    // shcema version
-    scan_param.schema_version_ = -1;
     // common set
     scan_param.allocator_ = param.allocator_;
     scan_param.for_update_ = false;
@@ -896,10 +893,10 @@ int ObPersistentLobApator::get_lob_tablets(
     ObTabletHandle &lob_piece_tablet)
 {
   int ret = OB_SUCCESS;
-  ObTabletBindingInfo ddl_data;
+  ObTabletBindingMdsUserData ddl_data;
   if (OB_FAIL(inner_get_tablet(ls_id, data_tablet_id, data_tablet))) {
     LOG_WARN("failed to get data tablet", K(ret), K(ls_id), K(data_tablet_id));
-  } else if (OB_FAIL(data_tablet.get_obj()->get_ddl_data(ddl_data))) {
+  } else if (OB_FAIL(data_tablet.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
     LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet));
   } else {
     const common::ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;

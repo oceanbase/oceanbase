@@ -333,7 +333,7 @@ int ObCandiTabletLoc::get_selected_replica(ObRoutePolicy::CandidateReplica &repl
 }
 
 int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &partition_id,
-							      const ObObjectID &first_level_part_id,
+                                                              const ObObjectID &first_level_part_id,
                                                               const common::ObTabletID &tablet_id,
                                                               const ObLSLocation &partition_location)
 {
@@ -343,7 +343,7 @@ int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &
     LOG_ERROR("partition location has not been set yet, but replica idx has been selected",
               K(ret), K(*this), K(partition_location));
   } else if (OB_FAIL(opt_tablet_loc_.assign_with_only_readable_replica(partition_id,
-								       first_level_part_id,
+                                                                       first_level_part_id,
                                                                        tablet_id,
                                                                        partition_location))) {
     LOG_WARN("fail to assign partition location with only readable replica",

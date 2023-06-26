@@ -73,12 +73,12 @@ int ObDropPrimaryKeyTask::process()
         }
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END:
-        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, ObDDLTaskStatus::LOCK_TABLE))) {
+        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, ObDDLTaskStatus::OBTAIN_SNAPSHOT))) {
           LOG_WARN("fail to wait trans end", K(ret));
         }
         break;
-      case ObDDLTaskStatus::LOCK_TABLE:
-        if (OB_FAIL(lock_table(ObDDLTaskStatus::REDEFINITION))) {
+      case ObDDLTaskStatus::OBTAIN_SNAPSHOT:
+        if (OB_FAIL(obtain_snapshot(ObDDLTaskStatus::REDEFINITION))) {
           LOG_WARN("fail to wait trans end", K(ret));
         }
         break;
@@ -134,7 +134,7 @@ void ObDropPrimaryKeyTask::flt_set_status_span_tag() const
     FLT_SET_TAG(ddl_ret_code, ret_code_);
     break;
   }
-  case ObDDLTaskStatus::LOCK_TABLE: {
+  case ObDDLTaskStatus::OBTAIN_SNAPSHOT: {
     FLT_SET_TAG(ddl_ret_code, ret_code_);
     break;
   }

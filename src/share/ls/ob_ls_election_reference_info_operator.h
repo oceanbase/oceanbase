@@ -19,6 +19,7 @@
 #include "lib/container/ob_array.h"//ObArray
 #include "lib/container/ob_iarray.h"//ObIArray
 #include "logservice/palf/lsn.h"//LSN
+#include "share/ob_tenant_switchover_status.h"
 
 namespace oceanbase
 {

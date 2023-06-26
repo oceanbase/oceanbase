@@ -16,6 +16,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
+#include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_clog_encrypt_info.h" // TODO: remove with old trans interface
 #include "storage/tx/ob_trans_service.h"
 
@@ -27,18 +28,109 @@ using namespace transaction::tablelock;
 namespace observer
 {
 
-#define BATCH_PROCESS(arg, func_name)                               \
-  ({                                                                \
-    int ret = OB_SUCCESS;                                           \
-    ObAccessService *access_srv = MTL(ObAccessService *);           \
-    for (int i = 0; i < arg.params_.count() && OB_SUCC(ret); i++) { \
-      if (OB_FAIL(access_srv->func_name(arg.lsid_,                  \
-                                        *(arg.tx_desc_),            \
-                                        arg.params_[i]))) {         \
-        LOG_WARN("failed to exec", K(ret), K(arg.params_[i]));      \
-      }                                                             \
-    }                                                               \
-    ret;                                                            \
+int check_exist(const share::ObLSID &ls_id, ObLSHandle &ls_handle)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = nullptr;
+  ObLS *ls = nullptr;
+  if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::TABLELOCK_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int check_exist(const ObLockTaskBatchRequest &arg,
+                const common::ObTabletID  &tablet_id,
+                ObLSHandle ls_handle)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  ObTabletHandle tablet_handle;
+  ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
+  ObTabletCreateDeleteMdsUserData data;
+  bool is_commited = false;
+  if (ObTableLockTaskType::LOCK_ALONE_TABLET == arg.task_type_ ||
+      ObTableLockTaskType::UNLOCK_ALONE_TABLET == arg.task_type_) {
+    // alone tablet does not check exist
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->get_tablet(tablet_id,
+                                    tablet_handle,
+                                    0,
+                                    ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("get tablet with timeout failed", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
+      data, is_commited))) {
+    LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret));
+  } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
+  } else if (ObTabletStatus::NORMAL == tablet_status
+             || ObTabletStatus::TRANSFER_OUT == tablet_status
+             || ObTabletStatus::TRANSFER_IN == tablet_status) {
+    // do nothing
+  } else if (ObTabletStatus::DELETED == tablet_status
+             || ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status) {
+    // tablet shell
+    ret = OB_TABLET_NOT_EXIST;
+    LOG_INFO("tablet is already deleted", KR(ret), K(tablet_id));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+#define BATCH_PROCESS(arg, func_name, result)                           \
+  ({                                                                    \
+    int ret = OB_SUCCESS;                                               \
+    ObAccessService *access_srv = MTL(ObAccessService *);               \
+    ObLSHandle ls_handle;                                               \
+    common::ObTabletID tablet_id;                                       \
+    if (OB_FAIL(check_exist(arg.lsid_, ls_handle))) {                   \
+      LOG_WARN("check ls failed", K(ret), K(arg));                      \
+      if (OB_LS_NOT_EXIST == ret) {                                     \
+        result.can_retry_ = true;                                       \
+      }                                                                 \
+    } else {                                                            \
+      for (int i = 0; i < arg.params_.count() && OB_SUCC(ret); i++) {   \
+        if (arg.params_[i].lock_id_.is_tablet_lock()) {                 \
+          if (OB_FAIL(arg.params_[i].lock_id_.convert_to(tablet_id))) { \
+            LOG_WARN("convert lock id to tablet id failed", K(ret),     \
+                     K(arg.params_[i].lock_id_));                       \
+          } else if (OB_FAIL(check_exist(arg,                           \
+                                         tablet_id,                     \
+                                         ls_handle))) {                 \
+            LOG_WARN("check tablet failed", K(ret), K(tablet_id),       \
+                     K(arg.params_[i].expired_time_), K(ls_handle));    \
+            if (OB_TABLET_NOT_EXIST == ret) {                           \
+              result.can_retry_ = true;                                 \
+            }                                                           \
+          }                                                             \
+        }                                                               \
+        if (OB_FAIL(ret)) {                                             \
+        } else if (OB_FAIL(access_srv->func_name(arg.lsid_,             \
+                                                 *(arg.tx_desc_),       \
+                                                 arg.params_[i]))) {    \
+          LOG_WARN("failed to exec", K(ret), K(arg.params_[i]));        \
+        } else if (arg.params_[i].lock_id_.is_tablet_lock() &&          \
+                   OB_FAIL(check_exist(arg,                             \
+                                       tablet_id,                       \
+                                       ls_handle))) {                   \
+          LOG_WARN("check tablet failed", K(ret), K(tablet_id),         \
+                   K(arg.params_[i].expired_time_), K(ls_handle));      \
+        } else {                                                        \
+          result.success_pos_ = i;                                      \
+        }                                                               \
+      }                                                                 \
+    }                                                                   \
+    ret;                                                                \
   })
 
 int ObTableLockTaskP::process()
@@ -180,15 +272,16 @@ int ObBatchLockTaskP::process()
     switch (arg_.task_type_) {
       case ObTableLockTaskType::PRE_CHECK_TABLET: {
         // NOTE: yanyuan.cxf pre check should not check timeout
-        ret = BATCH_PROCESS(arg_, pre_check_lock);
+        ret = BATCH_PROCESS(arg_, pre_check_lock, result_);
         break;
       }
       case ObTableLockTaskType::LOCK_TABLE:
       case ObTableLockTaskType::LOCK_PARTITION:
       case ObTableLockTaskType::LOCK_SUBPARTITION:
       case ObTableLockTaskType::LOCK_TABLET:
-      case ObTableLockTaskType::LOCK_OBJECT: {
-        if (OB_FAIL(BATCH_PROCESS(arg_, lock_obj))) {
+      case ObTableLockTaskType::LOCK_OBJECT:
+      case ObTableLockTaskType::LOCK_ALONE_TABLET: {
+        if (OB_FAIL(BATCH_PROCESS(arg_, lock_obj, result_))) {
           LOG_WARN("failed to exec lock obj operation", K(ret), K(arg_));
         }
         break;
@@ -235,8 +328,9 @@ int ObHighPriorityBatchLockTaskP::process()
       case ObTableLockTaskType::UNLOCK_PARTITION:
       case ObTableLockTaskType::UNLOCK_SUBPARTITION:
       case ObTableLockTaskType::UNLOCK_TABLET:
-      case ObTableLockTaskType::UNLOCK_OBJECT: {
-        if (OB_FAIL(BATCH_PROCESS(arg_, unlock_obj))) {
+      case ObTableLockTaskType::UNLOCK_OBJECT:
+      case ObTableLockTaskType::UNLOCK_ALONE_TABLET: {
+        if (OB_FAIL(BATCH_PROCESS(arg_, unlock_obj, result_))) {
           LOG_WARN("failed to exec unlock obj operation", K(ret), K(arg_));
         }
         break;

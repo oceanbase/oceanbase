@@ -243,6 +243,7 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
     } else if (0 != (err = ob_pthread_create(&pn->pd, NULL, pn_thread_func, pn))) {
       pn_destroy(pn);
     } else {
+      pn->has_stopped_ = false;
       pn_grp->pn_array[count++] = pn;
     }
   }
@@ -369,18 +370,25 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
 PN_API void pn_stop(uint64_t gid)
 {
   pn_grp_t *pgrp = locate_grp(gid);
-  for (int tid = 0; tid < pgrp->count; tid++) {
-    pn_t *pn = get_pn_for_send(pgrp, tid);
-    ATOMIC_STORE(&pn->is_stop_, true);
+  if (pgrp != NULL) {
+    for (int tid = 0; tid < pgrp->count; tid++) {
+      pn_t *pn = get_pn_for_send(pgrp, tid);
+      ATOMIC_STORE(&pn->is_stop_, true);
+    }
   }
 }
 
 PN_API void pn_wait(uint64_t gid)
 {
   pn_grp_t *pgrp = locate_grp(gid);
-  for (int tid = 0; tid < pgrp->count; tid++) {
-    pn_t *pn = get_pn_for_send(pgrp, tid);
-    pthread_join(pn->pd, NULL);
+  if (pgrp != NULL) {
+    for (int tid = 0; tid < pgrp->count; tid++) {
+      pn_t *pn = get_pn_for_send(pgrp, tid);
+      if (!pn->has_stopped_) {
+        pthread_join(pn->pd, NULL);
+        pn->has_stopped_ = true;
+      }
+    }
   }
 }
 

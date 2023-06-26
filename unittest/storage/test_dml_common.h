@@ -217,21 +217,7 @@ int TestDmlCommon::create_data_tablet(
     STORAGE_LOG(WARN, "failed to build pure data tablet arg", K(ret),
         K(tenant_id), K(ls_id), K(tablet_id));
   } else {
-    transaction::ObMulSourceDataNotifyArg trans_flags;
-    trans_flags.tx_id_ = 123;
-    trans_flags.scn_ = share::SCN::invalid_scn();
-    trans_flags.for_replay_ = false;
-
-    ObLS *ls = ls_handle.get_ls();
-    if (OB_FAIL(ls->get_tablet_svr()->on_prepare_create_tablets(arg, trans_flags))) {
-      STORAGE_LOG(WARN, "failed to prepare create tablets", K(ret), K(arg));
-    } else if (FALSE_IT(trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 100))) {
-    } else if (OB_FAIL(ls->get_tablet_svr()->on_redo_create_tablets(arg, trans_flags))) {
-      STORAGE_LOG(WARN, "failed to redo create tablets", K(ret), K(arg));
-    } else if (FALSE_IT(trans_flags.scn_ = share::SCN::plus(trans_flags.scn_, 1))) {
-    } else if (OB_FAIL(ls->get_tablet_svr()->on_commit_create_tablets(arg, trans_flags))) {
-      STORAGE_LOG(WARN, "failed to commit create tablets", K(ret), K(arg));
-    }
+    ret = OB_NOT_SUPPORTED;
   }
 
   return ret;
@@ -247,18 +233,14 @@ int TestDmlCommon::create_data_and_index_tablets(
   ObLSHandle ls_handle;
   obrpc::ObBatchCreateTabletArg arg;
 
-  share::SCN log_scn;
   if (OB_FAIL(create_ls(tenant_id, ls_id, ls_handle))) {
     STORAGE_LOG(WARN, "failed to create ls", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(build_mixed_tablets_arg(tenant_id, ls_id,
       data_tablet_id, index_tablet_id_array, arg))) {
     STORAGE_LOG(WARN, "failed to build pure data tablet arg", K(ret),
         K(tenant_id), K(ls_id), K(data_tablet_id), K(index_tablet_id_array));
-  } else if (OB_FAIL(log_scn.convert_for_logservice(1))) {
-    STORAGE_LOG(WARN, "failed to convert_for_logservice", K(ret));
-
-  } else if (OB_FAIL(ls_handle.get_ls()->batch_create_tablets(arg, log_scn, true/*is_replay*/))) {
-    STORAGE_LOG(WARN, "failed to batch create tablets", K(ret), K(arg));
+  } else {
+    ret = OB_NOT_SUPPORTED;
   }
 
   return ret;

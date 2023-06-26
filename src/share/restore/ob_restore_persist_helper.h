@@ -21,6 +21,7 @@
 #include "share/restore/ob_ls_restore_status.h"
 #include "share/restore/ob_restore_type.h"
 #include "share/scn.h"
+#include "share/backup/ob_backup_struct.h"
 
 namespace oceanbase
 {
@@ -229,7 +230,7 @@ struct ObLSRestoreProgressPersistInfo final : public ObIInnerTableRow
   int64_t total_bytes_;
   int64_t finish_bytes_;
   ObTaskId trace_id_;
-  common::ObSqlString comment_;
+  ObHAResultInfo::Comment comment_;
   int result_;
 
   ObLSRestoreProgressPersistInfo() {
@@ -313,7 +314,7 @@ struct ObHisRestoreJobPersistInfo final : public ObIInnerTableRow
 
   int status_;
   LongString description_;
-  LongString comment_;
+  ObHAResultInfo::Comment comment_;
 
   ObHisRestoreJobPersistInfo() : key_() {
     initiator_job_id_ = -1;

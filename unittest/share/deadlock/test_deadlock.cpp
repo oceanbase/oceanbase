@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define UNIITTEST_DEBUG
+#define UNITTEST_DEBUG
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public

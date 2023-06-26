@@ -240,7 +240,7 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
           break;
         }
         case OWNER_ID:
-          cur_row_.cells_[i].set_int(lock_op.owner_id_);
+          cur_row_.cells_[i].set_int(lock_op.owner_id_.id());
           break;
         case CREATE_TRANS_ID:
           cur_row_.cells_[i].set_int(lock_op.create_trans_id_.get_id());

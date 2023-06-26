@@ -14,7 +14,9 @@
 #define OCEANBASE_STORAGE_OB_TABLET_SERVICE_CLOG_REPLAY_EXECUTOR
 
 #include <stdint.h>
+#include "common/ob_tablet_id.h"
 #include "logservice/palf/lsn.h"
+#include "logservice/replayservice/ob_tablet_replay_executor.h"
 #include "share/scn.h"
 
 namespace oceanbase
@@ -23,36 +25,43 @@ namespace storage
 {
 class ObLS;
 
-class ObTabletServiceClogReplayExecutor final
+class ObTabletServiceClogReplayExecutor final : public logservice::ObTabletReplayExecutor
 {
 public:
-  static int execute(
-      ObLS *ls,
+  ObTabletServiceClogReplayExecutor();
+  int init(
       const char *buf,
       const int64_t log_size,
       const int64_t pos,
-      const palf::LSN &lsn,
       const share::SCN &scn);
-public:
-  TO_STRING_KV(KP(ls_), K(lsn_), K(scn_));
+
+  TO_STRING_KV(KP_(buf),
+               K_(buf_size),
+               K_(pos),
+               K_(scn));
+
+protected:
+  bool is_replay_update_user_data_() const override
+  {
+    return false;
+  }
+
+  // replay to the tablet
+  // @return OB_SUCCESS, replay successfully, data has written to tablet.
+  // @return OB_EAGAIN, failed to replay, need retry.
+  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
+  // @return other error codes, failed to replay.
+  int do_replay_(ObTabletHandle &handle) override;
+
+  virtual bool is_replay_update_mds_table_() const override
+  {
+    return false;
+  }
 
 private:
-  ObTabletServiceClogReplayExecutor(
-      ObLS *ls,
-      const palf::LSN &lsn,
-      const share::SCN &scn);
-  ~ObTabletServiceClogReplayExecutor() = default;
-  ObTabletServiceClogReplayExecutor(const ObTabletServiceClogReplayExecutor&) = delete;
-  ObTabletServiceClogReplayExecutor &operator=(const ObTabletServiceClogReplayExecutor&) = delete;
-private:
-  int replay_update_storage_schema(
-      const share::SCN &scn,
-      const char *buf,
-      const int64_t buf_size,
-      const int64_t pos);
-private:
-  ObLS *ls_;
-  palf::LSN lsn_;
+  const char *buf_;
+  int64_t buf_size_;
+  int64_t pos_;
   share::SCN scn_;
 };
 

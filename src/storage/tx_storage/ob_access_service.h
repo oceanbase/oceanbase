@@ -64,11 +64,13 @@ public:
     void reset();
     ObStoreCtx &get_store_ctx() { return ctx_; }
     ObLSHandle &get_ls_handle() { return handle_; }
+    ObTabletHandle &get_tablet_handle() { return tablet_handle_; }
   private:
     bool is_inited_;
     ObStoreCtx ctx_;
     share::ObLSID ls_id_;
     ObLSHandle handle_;
+    ObTabletHandle tablet_handle_;
     int64_t init_ts_;
   };
 public:
@@ -221,6 +223,13 @@ protected:
       const common::ObTabletID &tablet_id,
       const common::ObOptDmlStatType dml_stat_type,
       const int64_t affected_rows);
+  int get_source_ls_tx_table_guard_(ObStoreCtxGuard &ctx_guard);
+  int construct_store_ctx_other_variables_(
+      ObLS &ls,
+      const common::ObTabletID &tablet_id,
+      const int64_t timeout,
+      const share::SCN &snapshot,
+      ObStoreCtxGuard &ctx_guard);
 private:
   bool is_inited_;
   uint64_t tenant_id_;

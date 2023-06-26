@@ -796,6 +796,19 @@ private:
   common::ObSArray<uint64_t> backup_tenant_ids_;
 };
 
+class ObCancelRestoreStmt : public ObSystemCmdStmt
+{
+public:
+  ObCancelRestoreStmt()
+    : ObSystemCmdStmt(stmt::T_CANCEL_RESTORE),
+      drop_tenant_arg_() {}
+  virtual ~ObCancelRestoreStmt() {}
+  obrpc::ObDropTenantArg &get_drop_tenant_arg() { return drop_tenant_arg_; }
+	TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(drop_tenant_arg));
+private:
+  obrpc::ObDropTenantArg drop_tenant_arg_;
+};
+
 class ObBackupBackupsetStmt : public ObSystemCmdStmt
 {
 public:

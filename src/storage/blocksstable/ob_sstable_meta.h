@@ -62,6 +62,7 @@ public:
   OB_INLINE share::SCN get_filled_tx_scn() const { return filled_tx_scn_; }
   OB_INLINE int16_t get_data_index_tree_height() const { return data_index_tree_height_; }
   OB_INLINE int64_t get_recycle_version() const { return recycle_version_; }
+  OB_INLINE int16_t get_sstable_seq() const { return sstable_logic_seq_; }
   int decode_for_compat(const char *buf, const int64_t data_len, int64_t &pos);
 
   int set_upper_trans_version(const int64_t upper_trans_version);
@@ -112,7 +113,7 @@ public:
   int64_t upper_trans_version_;
   // major/meta major: snapshot version; others: max commit version
   int64_t max_merged_trans_version_;
-  // recycle_version only avaliable for minor sstable, recored recycled multi version start
+  // recycle_version only available for minor sstable, recored recycled multi version start
   int64_t recycle_version_;
   share::SCN ddl_scn_; // only used in DDL SSTable, all MB in DDL SSTable should have the same scn(start_scn)
   share::SCN filled_tx_scn_; // only for rebuild
@@ -135,7 +136,7 @@ class ObSSTableMeta final
 public:
   ObSSTableMeta();
   ~ObSSTableMeta();
-  int init(const storage::ObTabletCreateSSTableParam &param, common::ObIAllocator *allocator);
+  int init(const storage::ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool contain_uncommitted_row() const { return basic_meta_.contain_uncommitted_row_; }
@@ -144,8 +145,9 @@ public:
   }
   OB_INLINE ObSSTableBasicMeta &get_basic_meta() { return basic_meta_; }
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
-  OB_INLINE const common::ObIArray<int64_t> &get_col_checksum() const { return column_checksums_; }
-  OB_INLINE int64_t get_row_count() const { return basic_meta_.row_count_; }
+  OB_INLINE int64_t get_col_checksum_cnt() const { return column_checksum_count_; }
+  OB_INLINE int64_t *get_col_checksum() const { return column_checksums_; }
+  OB_INLINE int64_t get_data_checksum() const { return basic_meta_.data_checksum_; }
   OB_INLINE int64_t get_rowkey_column_count() const { return basic_meta_.rowkey_column_count_; }
   OB_INLINE int64_t get_column_count() const { return basic_meta_.column_cnt_; }
   OB_INLINE int64_t get_schema_rowkey_column_count() const
@@ -158,31 +160,94 @@ public:
   }
 
   OB_INLINE int16_t get_index_tree_height() const { return basic_meta_.data_index_tree_height_; }
+  OB_INLINE ObSSTableStatus get_status() const
+  {
+    return static_cast<ObSSTableStatus>(basic_meta_.status_);
+  }
+  OB_INLINE int64_t get_occupy_size() const { return basic_meta_.occupy_size_; }
+  OB_INLINE int64_t get_row_count() const { return basic_meta_.row_count_; }
+  OB_INLINE int64_t get_data_micro_block_count() const
+  {
+    return basic_meta_.get_data_micro_block_count();
+  }
+  // FIXME: do we really need all these get_xxx_macro_block_count() interfaces?
+  OB_INLINE int64_t get_data_macro_block_count() const
+  {
+    return basic_meta_.get_data_macro_block_count();
+  }
+  OB_INLINE int64_t get_index_macro_block_count() const
+  {
+    return basic_meta_.get_index_macro_block_count();
+  }
+  OB_INLINE int64_t get_linked_macro_block_count() const
+  {
+    return macro_info_.get_linked_block_count();
+  }
+  OB_INLINE int64_t get_total_use_old_macro_block_count() const
+  {
+    return basic_meta_.get_total_use_old_macro_block_count();
+  }
+  OB_INLINE int64_t get_total_macro_block_count() const
+  {
+    return basic_meta_.get_total_macro_block_count();
+  }
+  OB_INLINE int64_t get_upper_trans_version() const
+  {
+    return basic_meta_.get_upper_trans_version();
+  }
+  OB_INLINE int64_t get_max_merged_trans_version() const
+  {
+    return basic_meta_.get_max_merged_trans_version();
+  }
+  OB_INLINE int64_t get_create_snapshot_version() const
+  {
+    return basic_meta_.get_create_snapshot_version();
+  }
+  OB_INLINE share::SCN get_ddl_scn() const { return basic_meta_.get_ddl_scn(); }
+  OB_INLINE share::SCN get_filled_tx_scn() const { return basic_meta_.get_filled_tx_scn(); }
+  OB_INLINE int16_t get_data_index_tree_height() const { return basic_meta_.get_data_index_tree_height(); }
+  OB_INLINE int64_t get_recycle_version() const { return basic_meta_.get_recycle_version(); }
+  OB_INLINE int16_t get_sstable_seq() const { return basic_meta_.get_sstable_seq(); }
+  OB_INLINE int64_t get_schema_version() const { return basic_meta_.schema_version_; }
+  OB_INLINE int64_t get_progressive_merge_round() const { return basic_meta_.progressive_merge_round_; }
+  OB_INLINE int64_t get_progressive_merge_step() const { return basic_meta_.progressive_merge_step_; }
   OB_INLINE const ObRootBlockInfo &get_root_info() const { return data_root_info_; }
   OB_INLINE const ObSSTableMacroInfo &get_macro_info() const { return macro_info_; }
-  int get_index_tree_root(
-      const ObTableReadInfo &index_read_info,
-      blocksstable::ObMicroBlockData &index_data,
-      const bool need_transform);
-  int load_root_block_data(); //TODO:@jinzhu remove me after using kv cache.
+  int load_root_block_data(common::ObArenaAllocator &allocator); //TODO:@jinzhu remove me after using kv cache.
+  inline int transform_root_block_data(common::ObArenaAllocator &allocator)
+  {
+    return data_root_info_.transform_root_block_data(allocator);
+  }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
-      common::ObIAllocator *allocator,
+      common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
   int64_t get_serialize_size() const;
-  TO_STRING_KV(K_(basic_meta), K(column_checksums_.count()),
-               K_(data_root_info), K_(macro_info), KP_(allocator), K_(column_checksums));
+  int64_t get_variable_size() const;
+  inline int64_t get_deep_copy_size() const
+  {
+    return sizeof(ObSSTableMeta) + get_variable_size();
+  }
+  int deep_copy(
+      char *buf,
+      const int64_t buf_len,
+      int64_t &pos,
+      ObSSTableMeta *&dest) const;
+  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info));
 private:
   bool check_meta() const;
-  int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObIAllocator *allocator);
-  int init_data_index_tree_info(const storage::ObTabletCreateSSTableParam &param);
-  int prepare_column_checksum(const common::ObIArray<int64_t> &column_checksums);
-  int transform_root_block_data(const ObTableReadInfo &read_info);
+  int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
+  int init_data_index_tree_info(
+      const storage::ObTabletCreateSSTableParam &param,
+      common::ObArenaAllocator &allocator);
+  int prepare_column_checksum(
+      const common::ObIArray<int64_t> &column_checksums,
+      common::ObArenaAllocator &allocator);
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(
-      common::ObIAllocator *allocator,
+      common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
@@ -190,15 +255,14 @@ private:
 private:
   friend class ObSSTable;
   static const int64_t SSTABLE_META_VERSION = 1;
-  typedef common::ObFixedArray<int64_t, common::ObIAllocator> ColChecksumArray;
 private:
-  bool is_inited_;
-  common::ObIAllocator *allocator_;
-  common::TCRWLock lock_;
   ObSSTableBasicMeta basic_meta_;
-  ColChecksumArray column_checksums_;
   ObRootBlockInfo data_root_info_;
   ObSSTableMacroInfo macro_info_;
+  int64_t *column_checksums_;
+  int64_t column_checksum_count_;
+  // The following fields don't to persist
+  bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);
 };
 
@@ -243,8 +307,14 @@ private:
       const ObSSTableBasicMeta &old_sstable_basic_meta,
       const ObSSTableBasicMeta &new_sstable_basic_meta);
   static int check_sstable_column_checksum_(
+      const int64_t *old_column_checksum,
+      const int64_t old_column_count,
+      const int64_t *new_column_checksum,
+      const int64_t new_column_count);
+  static int check_sstable_column_checksum_(
       const common::ObIArray<int64_t> &old_column_checksum,
-      const common::ObIArray<int64_t> &new_column_checksum);
+      const int64_t *new_column_checksum,
+      const int64_t new_column_count);
 };
 
 

@@ -593,8 +593,6 @@ int ObLogRestoreHandler::check_restore_done(const SCN &recovery_end_scn, bool &d
     } else if (OB_UNLIKELY(!recovery_end_scn.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       CLOG_LOG(WARN, "invalid argument", K(ret), K(recovery_end_scn));
-    } else if (! is_strong_leader(role_)) {
-      ret = OB_NOT_MASTER;
     } else if (restore_context_.seek_done_) {
       end_lsn = restore_context_.lsn_;
     } else if (OB_FAIL(palf_handle_.get_end_scn(end_scn))) {

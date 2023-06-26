@@ -48,8 +48,6 @@ private:
       const char *macro_block_buf,
       const int64_t macro_block_buf_size);
   static int calc_micro_column_checksum(
-      const int64_t column_cnt,
-      const common::ObIArray<share::schema::ObColDesc> &out_cols,
       ObIMicroBlockReader &reader,
       ObDatumRow &datum_row,
       int64_t *column_checksum);
@@ -61,7 +59,6 @@ private:
       const char *macro_block_buf,
       const int64_t macro_block_buf_size,
       ObSSTableMacroBlockHeader &header,
-      common::ObIArray<share::schema::ObColDesc> &columns,
       const int64_t *&column_checksum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMacroBlockChecker);

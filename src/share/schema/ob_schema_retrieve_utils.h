@@ -638,6 +638,12 @@ public:
 
   template<typename TABLE_SCHEMA>
   static int cascaded_generated_column(TABLE_SCHEMA &table_schema);
+
+  template<typename T>
+  static int retrieve_table_latest_schema_versions(
+      T &result,
+      ObIArray<ObTableLatestSchemaVersion> &table_schema_versions);
+
 private:
   template<typename T>
   static bool compare_table_id(const T *table_schema, const uint64_t table_id);

@@ -189,7 +189,15 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           // clog_checkpoint_ts
           cur_row_.cells_[i].set_uint64(!ls_info.tablet_change_checkpoint_scn_.is_valid() ? 0 : ls_info.tablet_change_checkpoint_scn_.get_val_for_tx());
           break;
+        case OB_APP_MIN_COLUMN_ID + 14:
+          // tablet_change_checkpoint_scn
+          cur_row_.cells_[i].set_uint64(!ls_info.tablet_change_checkpoint_scn_.is_valid() ? 0 : ls_info.tablet_change_checkpoint_scn_.get_val_for_inner_table_field());
+          break;
         default:
+        case OB_APP_MIN_COLUMN_ID + 15:
+          // transfer_scn
+          cur_row_.cells_[i].set_uint64(!ls_info.transfer_scn_.is_valid() ? 0 : ls_info.transfer_scn_.get_val_for_inner_table_field());
+          break;
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));
           break;

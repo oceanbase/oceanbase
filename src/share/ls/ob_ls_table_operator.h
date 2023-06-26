@@ -118,6 +118,20 @@ public:
       const uint64_t tenant_id,
       const ObAddr &server,
       int64_t &residual_count);
+  // batch get ls info
+  //
+  // @param [in] cluster_id, target cluster_id
+  // @parma [in] tenant_id,  target tenant_id
+  // @param [in] ls_ids,  target ls_id array
+  // @param [in] mode, determine data source of sys tenant's ls info
+  // @param [out] ls_infos, information of ls
+  // @return OB_ERR_DUP_ARGUMENT if ls_ids have duplicate values
+  int batch_get(
+      const int64_t cluster_id,
+      const uint64_t tenant_id,
+      const common::ObIArray<ObLSID> &ls_ids,
+      const ObLSTable::Mode mode,
+      common::ObIArray<ObLSInfo> &ls_infos);
 private:
   // to use inmemory path to get and update informations
   int set_use_memory_ls_(ObIRsListChangeCb &rs_list_change_cb);

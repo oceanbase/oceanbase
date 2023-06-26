@@ -110,7 +110,7 @@ void TestRangeSpliter::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, gen_create_tablet_arg(tenant_id_, ls_id, tablet_id, create_tablet_arg, 1, &table_schema));
 
   ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(*ls_tablet_svr, create_tablet_arg));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, ObMultiVersionSSTableTest::allocator_));
 }
 
 void TestRangeSpliter::TearDownTestCase()
@@ -351,7 +351,7 @@ void TestRangeSpliter::prepare_sstable_handle(ObTableHandleV2 &handle,
   prepare_data_end(handle);
   ObSSTable *sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, handle.get_sstable(sstable));
-  sstable->meta_.basic_meta_.occupy_size_ = (2<<20) * macro_cnt;
+  sstable->meta_->basic_meta_.occupy_size_ = (2<<20) * macro_cnt;
   sstable->key_.table_type_ = ObITable::MINOR_SSTABLE;
 }
 
@@ -369,7 +369,7 @@ TEST_F(TestRangeSpliter, test_single_basic)
 
   split_range.set_whole_range();
   prepare_sstable_handle(handle, 0, 20, 10);
-  const ObTableReadInfo *index_read_info = full_read_info_.get_index_read_info();
+  const ObTableReadInfo *index_read_info = &full_read_info_;
 
   ASSERT_EQ(OB_SUCCESS, sstables.push_back(handle.table_));
   ASSERT_EQ(OB_SUCCESS, range_spliter.get_range_split_info(sstables, *index_read_info, split_range, range_split_info));
@@ -450,7 +450,7 @@ TEST_F(TestRangeSpliter, test_single_multi_sstable)
   prepare_sstable_handle(handle1, 5, 15, 20);
   ASSERT_EQ(OB_SUCCESS, sstables.push_back(handle1.table_));
 
-  const ObTableReadInfo *index_read_info = full_read_info_.get_index_read_info();
+  const ObTableReadInfo *index_read_info = &full_read_info_;
 
   ASSERT_EQ(OB_SUCCESS, range_spliter.get_range_split_info(sstables, *index_read_info, split_range, range_split_info));
   range_split_info.set_parallel_target(2);
@@ -508,7 +508,7 @@ TEST_F(TestRangeSpliter, test_micro_level_split)
 
   split_range.set_whole_range();
   prepare_sstable_handle(handle, 0, 2, 10, 10);
-  const ObTableReadInfo *index_read_info = full_read_info_.get_index_read_info();
+  const ObTableReadInfo *index_read_info = &full_read_info_;
 
   ASSERT_EQ(OB_SUCCESS, sstables.push_back(handle.table_));
   ASSERT_EQ(OB_SUCCESS, range_spliter.get_range_split_info(sstables, *index_read_info, split_range, range_split_info));

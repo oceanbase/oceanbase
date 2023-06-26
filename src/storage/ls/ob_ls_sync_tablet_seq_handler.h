@@ -13,14 +13,13 @@
 #ifndef OCEANBASE_STORAGE_LS_SYNC_TABLET_SEQ_HANDLER_
 #define OCEANBASE_STORAGE_LS_SYNC_TABLET_SEQ_HANDLER_
 
+#include "common/ob_tablet_id.h"
+#include "share/scn.h"
 #include "logservice/ob_log_base_type.h"
 
 namespace oceanbase
 {
-namespace share
-{
-class SCN;
-}
+
 namespace storage
 {
 class ObLS;

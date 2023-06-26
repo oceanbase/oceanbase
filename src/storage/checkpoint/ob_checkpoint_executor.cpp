@@ -134,13 +134,13 @@ inline void get_min_rec_scn_service_type_by_index_(int index, char* service_type
 int ObCheckpointExecutor::update_clog_checkpoint()
 {
   int ret = OB_SUCCESS;
-  //avoid checkpoint concurrently
-  WLockGuard guard(rwlock_);
+  RLockGuard guard(rwlock_);
   if (update_checkpoint_enabled_) {
     ObFreezer *freezer = ls_->get_freezer();
     if (OB_NOT_NULL(freezer)) {
       SCN checkpoint_scn;
       checkpoint_scn.set_max();
+      WLockGuard guard_for_update_clog_checkpoint(rwlock_for_update_clog_checkpoint_);
       if (OB_FAIL(freezer->get_max_consequent_callbacked_scn(checkpoint_scn))) {
         STORAGE_LOG(WARN, "get_max_consequent_callbacked_scn failed", K(ret), K(freezer->get_ls_id()));
       } else {

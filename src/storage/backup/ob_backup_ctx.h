@@ -22,12 +22,13 @@
 #include "lib/utility/utility.h"
 #include "share/ob_ls_id.h"
 #include "share/backup/ob_backup_path.h"
-#include "storage/backup/ob_backup_reader.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_tmp_file.h"
 #include "storage/backup/ob_backup_utils.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/backup/ob_backup_file_writer_ctx.h"
+#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase {
 namespace backup {
@@ -95,7 +96,7 @@ int ObSimpleBackupStatMgr::get_missing_items_(
   missing.reset();
   if (lhs.count() < rhs.count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("count not expected", K(ret), K(lhs.count()), K(rhs.count()));
+    STORAGE_LOG(WARN, "count not expected", K(ret), K(lhs.count()), K(rhs.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < lhs.count(); ++i) {
       bool exist = false;
@@ -109,7 +110,7 @@ int ObSimpleBackupStatMgr::get_missing_items_(
       }
       if (OB_SUCC(ret) && !exist) {
         if (OB_FAIL(missing.push_back(lhs_item))) {
-          LOG_WARN("failed to push back", K(ret), K(lhs_item));
+          STORAGE_LOG(WARN, "failed to push back", K(ret), K(lhs_item));
         }
       }
     }
@@ -123,51 +124,16 @@ int ObSimpleBackupStatMgr::print_missing_items_(const common::ObIArray<T> &missi
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < missing.count(); ++i) {
     const T &item = missing.at(i);
-    LOG_ERROR("BACKUP ITEM IS MISSING", K_(tenant_id), K_(ls_id), K(item));
+    STORAGE_LOG(ERROR, "BACKUP ITEM IS MISSING", K_(tenant_id), K_(ls_id), K(item));
   }
   return ret;
 }
-
-struct ObBackupFileWriteCtx {
-public:
-  ObBackupFileWriteCtx();
-  virtual ~ObBackupFileWriteCtx();
-  int open(const int64_t max_file_size, const common::ObIOFd &io_fd, common::ObIODevice &device_handle,
-      common::ObInOutBandwidthThrottle &bandwidth_throttle);
-  bool is_opened() const
-  {
-    return is_inited_;
-  }
-  int append_buffer(const blocksstable::ObBufferReader &buffer, const bool is_last_part = false);
-  int64_t get_file_size() const
-  {
-    return file_size_;
-  }
-  int close();
-
-private:
-  int write_buffer_(const char *buf, const int64_t len, const bool is_last_part);
-  bool check_can_flush_(const bool is_last_part) const;
-  int flush_buffer_(const bool is_last_part);
-  int commit_file_();
-
-private:
-  bool is_inited_;
-  int64_t file_size_;
-  int64_t max_file_size_;
-  common::ObIOFd io_fd_;
-  common::ObIODevice *dev_handle_;
-  blocksstable::ObSelfBufferWriter data_buffer_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  DISALLOW_COPY_AND_ASSIGN(ObBackupFileWriteCtx);
-};
 
 struct ObBackupDataCtx {
 public:
   ObBackupDataCtx();
   virtual ~ObBackupDataCtx();
-  int open(const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id,
-      common::ObInOutBandwidthThrottle &bandwidth_throttle);
+  int open(const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id);
   int write_backup_file_header(const ObBackupFileHeader &file_header);
   int write_macro_block_data(const blocksstable::ObBufferReader &macro_data,
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
@@ -232,7 +198,6 @@ public:
   ObBackupIndexBufferNode meta_index_buffer_node_;
   ObBackupDataFileTrailer file_trailer_;
   blocksstable::ObSelfBufferWriter tmp_buffer_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataCtx);
 };
 
@@ -254,7 +219,7 @@ struct ObBackupRecoverRetryCtx {
   blocksstable::ObLogicMacroBlockId need_skip_logic_id_;
   common::ObArray<ObBackupMacroBlockIDPair> reused_pair_list_;
 };
-
+class ObILSTabletIdReader;
 struct ObLSBackupCtx {
 public:
   ObLSBackupCtx();
@@ -341,6 +306,7 @@ public:
   common::ObMySQLProxy *sql_proxy_;
   int64_t rebuild_seq_; // rebuild seq of backup ls meta
   int64_t check_tablet_info_cost_time_;
+  share::SCN backup_tx_table_filled_tx_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupCtx);
 };
 

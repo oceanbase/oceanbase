@@ -22,6 +22,7 @@
 #include "share/ob_cluster_version.h"
 #include "rootserver/ob_rs_job_table_operator.h"
 #include "share/backup/ob_backup_path.h"
+#include "share/ls/ob_ls_info.h"
 #include <algorithm>
 
 using namespace oceanbase::common;
@@ -47,6 +48,7 @@ static const char* phy_restore_status_str_array[PHYSICAL_RESTORE_MAX_STATUS] = {
   "CREATE_TENANT",
   "RESTORE_PRE",
   "RESTORE_CREATE_INIT_LS",
+  "PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN",
   "RESTORE_WAIT_LS",
   "POST_CHECK",
   "UPGRADE",
@@ -211,14 +213,11 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, comment);
 
     // restore_scn
-    if (OB_SUCC(ret)) {
-      ADD_COLUMN_WITH_UINT_VALUE(job_info, restore_scn, (job_info.get_restore_scn().get_val_for_inner_table_field()));
-    }
+    ADD_COLUMN_WITH_UINT_VALUE(job_info, restore_scn, (job_info.get_restore_scn().get_val_for_inner_table_field()));
+    // consistent_scn
+    ADD_COLUMN_WITH_UINT_VALUE(job_info, consistent_scn, (job_info.get_consistent_scn().get_val_for_inner_table_field()));
     //restore_type
-    if (OB_SUCC(ret)) {
-       ADD_COLUMN_WITH_VALUE(job_info, restore_type, (int64_t)(job_info.get_restore_type()));
-    }
-    // post_data_version
+    ADD_COLUMN_WITH_VALUE(job_info, restore_type, (int64_t)(job_info.get_restore_type()));
     if (OB_SUCC(ret)) {
       uint64_t post_data_version = job_info.get_post_data_version();
       int64_t len = ObClusterVersion::print_version_str(
@@ -486,6 +485,21 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         }
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (name == "consistent_scn") {
+        uint64_t current_value = share::OB_INVALID_SCN_VAL;
+        SCN consistent_scn;
+        if (OB_FAIL(retrieve_uint_value(result, current_value))) {
+          LOG_WARN("fail to retrive int value", K(ret), "column_name", "consistent_scn");
+        } else if (OB_FAIL(consistent_scn.convert_for_inner_table_field(current_value))) {
+          LOG_WARN("fail to set restore scn", K(ret));
+        } else {
+          (job).set_consistent_scn(consistent_scn);
+        }
+      }
+    }
+
     RETRIEVE_STR_VALUE(restore_option, job);
     RETRIEVE_STR_VALUE(backup_dest, job);
     RETRIEVE_STR_VALUE(description, job);
@@ -998,3 +1012,63 @@ int ObPhysicalRestoreTableOperator::get_restore_job_by_sql_(
   return ret;
 }
 
+int ObPhysicalRestoreTableOperator::check_finish_restore_to_consistent_scn(
+    bool &is_finished, bool &is_success)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (is_sys_tenant(exec_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id cannot be sys", KR(ret), K_(tenant_id));
+  } else {
+    is_finished = true;
+    is_success = true;
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select a.ls_id, b.restore_status, b.replica_status from %s as a "
+              "left join %s as b on a.ls_id = b.ls_id",
+              OB_ALL_LS_STATUS_TNAME, OB_ALL_LS_META_TABLE_TNAME))) {
+        LOG_WARN("failed to assign sql", K(ret));
+      } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K(sql));
+      } else {
+        int64_t ls_id = 0;
+        share::ObLSRestoreStatus ls_restore_status;
+        int32_t restore_status = -1;
+        while (OB_SUCC(ret) && OB_SUCC(result->next())
+            && !(is_finished && !is_success)) {
+          EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "restore_status", restore_status, int32_t);
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
+            LOG_WARN("failed to set status", KR(ret), K(restore_status));
+          } else if (ls_restore_status.is_restore_failed()) {
+            //restore failed
+            is_finished = true;
+            is_success = false;
+          } else {
+            const ObLSRestoreStatus target_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN);
+            if (ls_restore_status.get_status() < target_status.get_status()
+                && !ls_restore_status.is_restore_none()
+                && is_finished && is_success) {
+              is_finished = false;
+            }
+          }
+        } // while
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}

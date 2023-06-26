@@ -49,6 +49,8 @@ public:
     int get_next_row(const ObExprPtrIArray &row);
     void set_uniq_row_checker(ObDMLOpUniqueRowChecker *uniq_row_checker)
     { uniq_row_checker_ = uniq_row_checker; }
+    void close()
+    { row_store_it_.reset(); }
 private:
     int init_data_source(ObChunkDatumStore &row_datum_store,
                          ObEvalCtx *eval_ctx);

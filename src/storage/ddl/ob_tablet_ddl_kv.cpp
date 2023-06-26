@@ -87,6 +87,8 @@ int ObDDLKV::init_sstable_param(const share::ObLSID &ls_id,
   ObLSService *ls_service = MTL(ObLSService *);
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
+  const ObStorageSchema *storage_schema_ptr = nullptr;
+  ObArenaAllocator allocator;
   if (OB_UNLIKELY(!ls_id.is_valid() || !table_key.is_valid() || !ddl_start_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(table_key), K(ddl_start_scn));
@@ -95,11 +97,13 @@ int ObDDLKV::init_sstable_param(const share::ObLSID &ls_id,
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                table_key.tablet_id_,
                                                tablet_handle,
-                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+                                               ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet failed", K(ret));
+  } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(allocator, storage_schema_ptr))) {
+    LOG_WARN("load storage schema fail", K(ret), K(table_key));
   } else {
     int64_t column_count = 0;
-    const ObStorageSchema &storage_schema = tablet_handle.get_obj()->get_storage_schema();
+    const ObStorageSchema &storage_schema = *storage_schema_ptr;
     const int64_t root_block_size = sizeof(ObBlockMetaTree);
     const ObDataStoreDesc &data_desc = block_meta_tree_.get_data_desc();
     if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(column_count))) {
@@ -151,6 +155,7 @@ int ObDDLKV::init_sstable_param(const share::ObLSID &ls_id,
       }
     }
   }
+  ObTablet::free_storage_schema(allocator, storage_schema_ptr);
   return ret;
 }
 
@@ -588,12 +593,15 @@ int ObDDLKV::insert_block_meta_tree(const ObDDLMacroHandle &macro_handle, blocks
     LOG_WARN("insert macro block failed", K(ret), K(macro_handle), KPC(data_macro_meta));
   } else {
     const ObDataBlockMetaVal &meta_val = data_macro_meta->get_meta_val();
-    meta_.get_basic_meta().data_macro_block_count_ += 1;
-    meta_.get_basic_meta().data_micro_block_count_ += meta_val.micro_block_count_;
-    meta_.get_basic_meta().row_count_ += meta_val.row_count_;
-    meta_.get_basic_meta().data_checksum_ = ob_crc64_sse42(meta_.get_basic_meta().data_checksum_, &meta_val.data_checksum_, sizeof(meta_val.data_checksum_));
-    meta_.get_basic_meta().occupy_size_ += meta_val.occupy_size_;
-    meta_.get_basic_meta().original_size_ += meta_val.original_size_;
+    meta_->get_basic_meta().data_macro_block_count_ += 1;
+    data_macro_block_count_ =  meta_->get_basic_meta().data_macro_block_count_;
+    meta_->get_basic_meta().data_micro_block_count_ += meta_val.micro_block_count_;
+    meta_->get_basic_meta().max_merged_trans_version_ = max(meta_->get_basic_meta().max_merged_trans_version_, meta_val.max_merged_trans_version_);
+    max_merged_trans_version_ = meta_->get_basic_meta().max_merged_trans_version_ ;
+    meta_->get_basic_meta().row_count_ += meta_val.row_count_;
+    meta_->get_basic_meta().data_checksum_ = ob_crc64_sse42(meta_->get_basic_meta().data_checksum_, &meta_val.data_checksum_, sizeof(meta_val.data_checksum_));
+    meta_->get_basic_meta().occupy_size_ += meta_val.occupy_size_;
+    meta_->get_basic_meta().original_size_ += meta_val.original_size_;
   }
   return ret;
 }
@@ -626,7 +634,7 @@ int ObDDLKV::freeze(const SCN &freeze_scn)
   return ret;
 }
 
-int ObDDLKV::prepare_sstable()
+int ObDDLKV::prepare_sstable(const bool need_check/*=true*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -635,11 +643,12 @@ int ObDDLKV::prepare_sstable()
   } else if (!is_freezed()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl kv not freezed", K(ret), K(*this));
-  } else if (OB_FAIL(wait_pending())) {
+  } else if (need_check && OB_FAIL(wait_pending())) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("wait pending failed", K(ret));
     }
-  } else {
+  }
+  if (OB_SUCC(ret)) {
     TCWLockGuard guard(lock_);
     if (OB_FAIL(block_meta_tree_.build_sorted_rowkeys())) {
       LOG_WARN("build sorted keys failed", K(ret), K(block_meta_tree_));
@@ -666,7 +675,8 @@ int ObDDLKV::close()
   } else if (OB_FAIL(block_meta_tree_.get_sorted_meta_array(meta_array))) {
     LOG_WARN("get sorted meta array failed", K(ret));
   } else {
-    ObTableHandleV2 table_handle;
+    ObArenaAllocator allocator("DDLUpTabStore");
+    ObSSTable sstable;
     ObTabletDDLParam ddl_param;
     ddl_param.tenant_id_ = MTL_ID();
     ddl_param.ls_id_ = ls_id_;
@@ -677,10 +687,10 @@ int ObDDLKV::close()
     ddl_param.start_scn_ = ddl_start_scn_;
     ddl_param.snapshot_version_ = snapshot_version_;
     ddl_param.data_format_version_ = data_format_version_;
-    if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(ddl_param, meta_array, nullptr/*first_ddl_sstable*/, table_handle))) {
+    if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(ddl_param, meta_array, nullptr/*first_ddl_sstable*/, allocator, sstable))) {
       LOG_WARN("create ddl sstable failed", K(ret), K(ddl_param));
-    } else if (OB_FAIL(ObTabletDDLUtil::update_ddl_table_store(ddl_param, table_handle))) {
-      LOG_WARN("update ddl table store failed", K(ret), K(ddl_param), K(table_handle));
+    } else if (OB_FAIL(ObTabletDDLUtil::update_ddl_table_store(ddl_param, allocator, sstable))) {
+      LOG_WARN("update ddl table store failed", K(ret), K(ddl_param), K(sstable));
     } else {
       is_closed_ = true;
       LOG_INFO("ddl kv closed success", K(*this));

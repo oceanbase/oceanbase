@@ -153,44 +153,6 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_not_in_tenant()
   return ret;
 }
 
-int ObMigrateUnitFinishChecker::get_all_tenant_related_ls_status_info(
-    const uint64_t tenant_id,
-    common::ObIArray<share::ObLSStatusInfo> &ls_status_info_array)
-{
-  int ret = OB_SUCCESS;
-  ls_status_info_array.reset();
-  share::ObLSStatusOperator ls_status_operator;
-  if (OB_UNLIKELY(is_meta_tenant(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is null", KR(ret), KP(sql_proxy_));
-  } else if (is_sys_tenant(tenant_id)) {
-    if (OB_FAIL(ls_status_operator.get_all_ls_status_by_order(
-            tenant_id, ls_status_info_array, *sql_proxy_))) {
-      LOG_WARN("fail to get all ls status", KR(ret), K(tenant_id));
-    }
-  } else { // user tenant
-    const uint64_t user_tenant_id = tenant_id;
-    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-    common::ObArray<share::ObLSStatusInfo> user_ls_status_info_array;
-    common::ObArray<share::ObLSStatusInfo> meta_ls_status_info_array;
-    if (OB_FAIL(ls_status_operator.get_all_ls_status_by_order(
-            user_tenant_id, user_ls_status_info_array, *sql_proxy_))) {
-      LOG_WARN("fail to get all ls status by order", KR(ret), K(user_tenant_id));
-    } else if (OB_FAIL(ls_status_operator.get_all_ls_status_by_order(
-            meta_tenant_id, meta_ls_status_info_array, *sql_proxy_))) {
-      LOG_WARN("fail to get all ls status by order", KR(ret), K(meta_tenant_id));
-    } else if (OB_FAIL(append(ls_status_info_array, user_ls_status_info_array))) {
-      LOG_WARN("fail to append", KR(ret));
-    } else if (OB_FAIL(append(ls_status_info_array, meta_ls_status_info_array))) {
-      LOG_WARN("fail to append", KR(ret));
-    }
-  }
-  return ret;
-}
-
 int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
     const uint64_t tenant_id)
 {
@@ -203,14 +165,19 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
   } else {
     LOG_INFO("try check migrate unit finish by tenant", K(tenant_id));
     DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
                         unit_mgr_,
                         zone_mgr_,
                         schema_service_);
-    common::ObArray<share::ObLSStatusInfo> ls_status_info_array;
-    if (OB_FAIL(get_all_tenant_related_ls_status_info(tenant_id, ls_status_info_array))) {
+    ObLSStatusInfoArray ls_status_info_array;
+    share::ObLSStatusOperator ls_status_operator;
+    if (OB_FAIL(ls_status_operator.get_all_tenant_related_ls_status_info(
+      *sql_proxy_, tenant_id, ls_status_info_array))) {
       LOG_WARN("fail to get all ls status", KR(ret), K(tenant_id));
     } else if (OB_FAIL(dr_ls_info.init())) {
       LOG_WARN("fail to init disaster log stream info", KR(ret));

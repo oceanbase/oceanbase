@@ -69,7 +69,7 @@ void TestMultiVersionIndexSSTableEstimator::SetUp()
 
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle_));
   prepare_context();
-  prepare_query_param(false, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(false);
 }
 
 void TestMultiVersionIndexSSTableEstimator::TearDown()

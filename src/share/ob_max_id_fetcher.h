@@ -41,6 +41,7 @@ enum ObMaxIdType
   OB_MAX_USED_LS_GROUP_ID_TYPE,
   OB_MAX_USED_SYS_PL_OBJECT_ID_TYPE, /* used for sys package object id */
   OB_MAX_USED_OBJECT_ID_TYPE,        /* used for all kinds of user schema objects */
+  OB_MAX_USED_LOCK_OWNER_ID_TYPE,
   OB_MAX_USED_REWRITE_RULE_VERSION_TYPE,
 
   /* the following ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */

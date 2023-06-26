@@ -18,6 +18,9 @@
 #include "common/ob_tablet_id.h"
 #include "share/scn.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/tablet/ob_tablet_multi_source_data.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
+#include "storage/tx_storage/ob_empty_shell_task.h"
 
 namespace oceanbase
 {
@@ -26,14 +29,15 @@ namespace storage
 class ObLS;
 namespace checkpoint
 {
-
+#define TABLET_PERSIST                  0x01  /* tablet persist trigger */
+#define TABLET_GC                       0x02  /* tablet gc trigger */
 class ObTabletGCHandler
 {
   friend class ObTabletGCService;
 public:
   ObTabletGCHandler()
     : ls_(NULL),
-      tablet_persist_trigger_(0),
+      tablet_persist_trigger_(TABLET_PERSIST | TABLET_GC),
       update_enabled_(true),
       is_inited_(false)
   {}
@@ -48,22 +52,38 @@ public:
 
   uint8_t &get_tablet_persist_trigger() { return tablet_persist_trigger_; }
   static bool is_set_tablet_persist_trigger(uint8_t tablet_persist_trigger)
-  { return 0 != (tablet_persist_trigger & 1); }
+  { return 0 != (tablet_persist_trigger & TABLET_PERSIST); }
   static bool is_tablet_gc_trigger(uint8_t tablet_persist_trigger)
-  { return 0 != (tablet_persist_trigger & 2); }
+  { return 0 != (tablet_persist_trigger & TABLET_GC); }
   bool is_tablet_gc_trigger_and_reset();
-  int check_tablet_gc_for_standby_(bool &cannot_gc, ObTabletHandle &tablet_handle);
-  int check_tablet_gc_(bool &cannot_gc, ObTabletHandle &tablet_handle);
+
   void set_tablet_persist_trigger();
   void set_tablet_gc_trigger();
   uint8_t get_tablet_persist_trigger_and_reset();
-  int get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_create_tablet_ids,
-                               bool &need_retry,
-                               bool only_deleted = false);
+  int check_tablet_need_persist_(
+      ObTabletHandle &tablet_handle,
+      bool &need_persist,
+      bool &need_retry,
+      const share::SCN &decided_scn);
+  int check_tablet_need_gc_(
+      ObTabletHandle &tablet_handle,
+      bool &need_gc,
+      bool &need_retry,
+      const share::SCN &decided_scn);
+  int get_unpersist_tablet_ids(common::ObIArray<ObTabletHandle> &deleted_tablets,
+      common::ObTabletIDArray &unpersist_tablet_ids,
+      const bool only_persist,
+      bool &need_retry,
+      const share::SCN &decided_scn);
   int flush_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids,
-                                 const share::SCN checkpoint_scn);
-  int gc_tablets(bool &is_gc, bool &need_retry);
+                                 const share::SCN &decided_scn);
+  int get_max_tablet_transfer_scn(const common::ObIArray<ObTabletHandle> &deleted_tablets, share::SCN &transfer_scn);
+  int set_ls_transfer_scn(const common::ObIArray<ObTabletHandle> &deleted_tablets);
+  int gc_tablets(const common::ObIArray<ObTabletHandle> &deleted_tablets);
   bool check_stop() { return ATOMIC_LOAD(&update_enabled_) == false; }
+  void disable_gc();
+  void enable_gc();
+  int set_tablet_change_checkpoint_scn(const share::SCN &scn);
   int offline();
   void online();
   TO_STRING_KV(K_(tablet_persist_trigger), K_(is_inited));
@@ -71,16 +91,17 @@ public:
 private:
   static const int64_t FLUSH_CHECK_MAX_TIMES;
   static const int64_t FLUSH_CHECK_INTERVAL;
-  int freeze_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids);
+  int freeze_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids,
+                                  const share::SCN &decided_scn);
   int wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
-                                        const share::SCN checkpoint_scn);
+                                        const share::SCN &decided_scn);
   bool is_finish() { obsys::ObWLockGuard lock(wait_lock_, false); return lock.acquired(); }
   void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
   void set_start() { ATOMIC_STORE(&update_enabled_, true); }
 
 public:
   obsys::ObRWLock wait_lock_;
-  obsys::ObRWLock gc_lock_;
+  lib::ObMutex gc_lock_;
 
 private:
   storage::ObLS *ls_;
@@ -95,9 +116,9 @@ public:
   ObTabletGCService()
     : is_inited_(false),
       timer_for_tablet_change_(),
-      timer_for_tablet_gc_(),
       tablet_change_task_(*this),
-      tablet_gc_task_(*this)
+      timer_for_tablet_shell_(),
+      tablet_shell_task_(*this)
   {}
 
   static int mtl_init(ObTabletGCService *&m);
@@ -127,22 +148,11 @@ private:
     ObTabletGCService &tablet_gc_service_;
   };
 
-  class ObTabletGCTask : public common::ObTimerTask
-  {
-  public:
-    ObTabletGCTask(ObTabletGCService &tablet_gc_service)
-      : tablet_gc_service_(tablet_gc_service)
-    {}
-    virtual ~ObTabletGCTask() {}
-
-    virtual void runTimerTask();
-  private:
-    ObTabletGCService &tablet_gc_service_;
-  };
   common::ObTimer timer_for_tablet_change_;
-  common::ObTimer timer_for_tablet_gc_;
   ObTabletChangeTask tablet_change_task_;
-  ObTabletGCTask tablet_gc_task_;
+
+  common::ObTimer timer_for_tablet_shell_;
+  ObEmptyShellTask tablet_shell_task_;
 };
 
 } // checkpoint

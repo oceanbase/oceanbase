@@ -93,7 +93,7 @@ TEST_F(TestLogStateMgr, replay_to_leader_active)
   default_mlist.add_server(self_);
   GlobalLearnerList learners;
   LogConfigMeta config_meta;
-  LogConfigInfo init_config_info;
+  LogConfigInfoV2 init_config_info;
   LogConfigVersion init_config_version;
   EXPECT_EQ(OB_SUCCESS, init_config_version.generate(1, 0));
   EXPECT_EQ(OB_SUCCESS, init_config_info.generate(default_mlist, 1, learners, init_config_version));

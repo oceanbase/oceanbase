@@ -34,15 +34,16 @@ struct ObDDLTaskKey final
 {
 public:
   ObDDLTaskKey();
-  ObDDLTaskKey(const int64_t object_id, const int64_t schema_version);
+  ObDDLTaskKey(const uint64_t tenant_id, const int64_t object_id, const int64_t schema_version);
   ~ObDDLTaskKey() = default;
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObDDLTaskKey &other) const;
-  bool is_valid() const { return OB_INVALID_ID != object_id_ && schema_version_ > 0; }
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_ID != object_id_ && schema_version_ > 0; }
   int assign(const ObDDLTaskKey &other);
-  TO_STRING_KV(K_(object_id), K_(schema_version));
+  TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version));
 public:
+  uint64_t tenant_id_;
   int64_t object_id_;
   int64_t schema_version_;
 };
@@ -248,6 +249,13 @@ public:
       const int64_t task_id,
       const share::ObDDLType ddl_type,
       bool &has_conflict_ddl);
+
+  static int check_has_index_task(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      const uint64_t index_table_id,
+      bool &has_index_task);
 
   static int insert_record(
       common::ObISQLClient &proxy,
@@ -461,7 +469,7 @@ public:
   int64_t get_ret_code() const { return ret_code_; }
   int64_t get_task_id() const { return task_id_; }
   ObDDLTaskID get_ddl_task_id() const { return ObDDLTaskID(tenant_id_, task_id_); }
-  ObDDLTaskKey get_task_key() const { return ObDDLTaskKey(target_object_id_, schema_version_); }
+  ObDDLTaskKey get_task_key() const { return ObDDLTaskKey(tenant_id_, target_object_id_, schema_version_); }
   int64_t get_parent_task_id() const { return parent_task_id_; }
   int64_t get_task_version() const { return task_version_; }
   int64_t get_parallelism() const { return parallelism_; }
@@ -473,7 +481,7 @@ public:
   void set_longops_stat(share::ObDDLLongopsStat *longops_stat) { longops_stat_ = longops_stat; }
   share::ObDDLLongopsStat *get_longops_stat() const { return longops_stat_; }
   int64_t get_data_format_version() const { return data_format_version_; }
-  static int fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id);
+  static int fetch_new_task_id(ObMySQLProxy &sql_proxy, const uint64_t tenant_id, int64_t &new_task_id);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const;
   virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos);
   virtual int64_t get_serialize_param_size() const;

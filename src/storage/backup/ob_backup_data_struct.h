@@ -26,6 +26,10 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase {
+
+namespace share {
+class ObLocationService;
+}
 namespace backup {
 
 static const int64_t OB_DEFAULT_BACKUP_CONCURRENCY = 2;
@@ -93,7 +97,9 @@ struct ObLSBackupParam {
   int convert_to(const ObBackupIndexLevel &index_level, const share::ObBackupDataType &backup_data_type,
       ObBackupIndexMergeParam &merge_param);
   int assign(const ObBackupIndexMergeParam &param);
-  TO_STRING_KV(K_(task_id), K_(backup_dest), K_(tenant_id), K_(dest_id), K_(backup_set_desc), K_(ls_id), K_(turn_id), K_(retry_id));
+  TO_STRING_KV(K_(job_id), K_(task_id), K_(backup_dest), K_(tenant_id), K_(dest_id), K_(backup_set_desc), K_(ls_id),
+      K_(turn_id), K_(retry_id));
+  int64_t job_id_;
   int64_t task_id_;
   share::ObBackupDest backup_dest_;
   uint64_t tenant_id_;
@@ -666,7 +672,7 @@ struct ObBackupSkippedTablet {
   ~ObBackupSkippedTablet();
   bool is_valid() const;
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(turn_id), K_(retry_id), K_(tablet_id),
-      K_(ls_id), K_(backup_set_id), K_(skipped_type));
+      K_(ls_id), K_(backup_set_id), K_(skipped_type), K_(data_type));
   int64_t task_id_;
   uint64_t tenant_id_;
   int64_t turn_id_;
@@ -675,16 +681,18 @@ struct ObBackupSkippedTablet {
   share::ObLSID ls_id_;
   int64_t backup_set_id_;
   share::ObBackupSkippedType skipped_type_;
+  share::ObBackupDataType data_type_;
 };
 
 struct ObBackupReportCtx final {
   ObBackupReportCtx();
   ~ObBackupReportCtx();
   bool is_valid() const;
-  TO_STRING_KV(KP_(rs_mgr), KP_(sql_proxy), KP_(rs_rpc_proxy));
-  share::ObRsMgr *rs_mgr_;
+  TO_STRING_KV(KP_(location_service), KP_(sql_proxy), KP_(rpc_proxy));
+
+  share::ObLocationService *location_service_;
   common::ObMySQLProxy *sql_proxy_;
-  obrpc::ObCommonRpcProxy *rs_rpc_proxy_;
+  obrpc::ObSrvRpcProxy *rpc_proxy_;
 };
 
 }  // namespace backup

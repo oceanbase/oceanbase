@@ -220,6 +220,10 @@ public:
     MockTenantModuleEnv::get_instance().destroy();
   }
 
+  void SetUp()
+  {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
+  }
   static void create_ls()
   {
     ObCreateLSArg arg;
@@ -565,7 +569,7 @@ TEST_F(TestLSRestoreHandler, wait_state)
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->update_state_handle_());
   EXPECT_EQ(ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META, ls->get_ls_restore_handler()->state_handler_->ls_restore_status_);
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->state_handler_->do_restore());
-  EXPECT_EQ(ObLSRestoreStatus::Status::QUICK_RESTORE, ls->ls_meta_.restore_status_);
+  EXPECT_EQ(ObLSRestoreStatus::Status::RESTORE_TO_CONSISTENT_SCN, ls->ls_meta_.restore_status_);
   // leader in wait quick restore
   ls->get_ls_restore_handler()->state_handler_ = nullptr;
   ls->ls_meta_.restore_status_ = ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE;
@@ -615,12 +619,12 @@ TEST_F(TestLSRestoreHandler, wait_state)
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->update_state_handle_());
   EXPECT_EQ(ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META, ls->get_ls_restore_handler()->state_handler_->ls_restore_status_);
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->state_handler_->do_restore());
-  EXPECT_EQ(ObLSRestoreStatus::Status::QUICK_RESTORE, ls->ls_meta_.restore_status_);
+  EXPECT_EQ(ObLSRestoreStatus::Status::RESTORE_TO_CONSISTENT_SCN, ls->ls_meta_.restore_status_);
 
   leader_status = ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE;
   ls->ls_meta_.restore_status_ = ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META;
   EXPECT_EQ(OB_SUCCESS, ls->get_ls_restore_handler()->state_handler_->do_restore());
-  EXPECT_EQ(ObLSRestoreStatus::Status::QUICK_RESTORE, ls->ls_meta_.restore_status_);
+  EXPECT_EQ(ObLSRestoreStatus::Status::RESTORE_TO_CONSISTENT_SCN, ls->ls_meta_.restore_status_);
 
   leader_status = ObLSRestoreStatus::Status::RESTORE_TABLETS_META;
   ls->ls_meta_.restore_status_ = ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META;

@@ -39,7 +39,7 @@ struct TxDataReadSchema
 {
   ObTableIterParam iter_param_;
   ObTableReadInfo read_info_;
-  ObTableReadInfo full_read_info_;
+  ObRowkeyReadInfo full_read_info_;
 
   TxDataReadSchema() : iter_param_(), read_info_(), full_read_info_() {}
 };
@@ -252,8 +252,6 @@ public: // getter and setter
 private:
   virtual ObTxDataMemtableMgr *get_memtable_mgr_() { return memtable_mgr_; }
 
-  int get_ls_min_end_scn_in_latest_tablets_(share::SCN &min_end_ts);
-
   int init_slice_allocator_();
 
   int init_arena_allocator_();
@@ -283,7 +281,6 @@ private:
   int insert_into_memtable_(ObTxDataMemtable *tx_data_memtable, ObTxData *&tx_data);
 
   // free the whole undo status list allocated by slice allocator
-  int get_min_end_scn_from_single_tablet_(ObTabletHandle &tablet_handle, share::SCN &end_scn);
 
   int deep_copy_undo_status_list_(const ObUndoStatusList &in_list, ObUndoStatusList &out_list);
   int init_tx_data_read_schema_();
@@ -295,7 +292,7 @@ private:
   int calc_upper_trans_scn_(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
 
   int update_freeze_trigger_threshold_();
-  
+
   int check_need_update_memtables_cache_(bool &need_update);
 
   int get_tx_data_in_memtables_cache_(const transaction::ObTransID tx_id,

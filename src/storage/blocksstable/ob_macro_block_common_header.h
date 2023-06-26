@@ -42,6 +42,7 @@ public:
     SSTableIndex = 6,
     SSTableMacroMeta = 7,
     SharedSSTableData = 8,
+    SharedMetaData = 9,
     MaxMacroType,
   };
   static_assert(
@@ -67,7 +68,10 @@ public:
   bool is_bloom_filter_data_block() const { return MacroBlockType::BloomFilterData == attr_; }
   bool is_sstable_index_block() const { return MacroBlockType::SSTableIndex ==  attr_; }
   bool is_sstable_macro_meta_block() const { return MacroBlockType::SSTableMacroMeta == attr_; }
-  bool is_shared_macro_block() const { return MacroBlockType::SharedSSTableData == attr_; }
+  bool is_shared_macro_block() const
+  {
+    return MacroBlockType::SharedSSTableData == attr_ || MacroBlockType::SharedMetaData == attr_;
+  }
   int32_t get_header_size() const { return header_size_; }
   int32_t get_version() const { return version_; }
   int32_t get_magic() const { return magic_; }

@@ -30,8 +30,9 @@
 #include "storage/backup/ob_backup_utils.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/ls/ob_ls_tablet_service.h"
-#include "share/backup/ob_backup_data_store.h"
+#include "storage/backup/ob_backup_data_store.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/backup/ob_backup_extern_info_mgr.h"
 #include "share/backup/ob_archive_store.h"
 
 namespace oceanbase {
@@ -95,16 +96,6 @@ enum ObBackupDagNetSubType : int64_t {
   LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET = 3,
 };
 
-enum ObBackupDagSubType : int64_t {
-  LOG_STREAM_BACKUP_META_DAG = 0,
-  LOG_STREAM_BACKUP_PREPARE_DAG = 1,
-  LOG_STREAM_BACKUP_PREFETCH_DAG = 2,
-  LOG_STREAM_BACKUP_DATA_DAG = 3,
-  LOG_STREAM_BACKUP_BUILD_INDEX_DAG = 4,
-  LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG = 5,
-  LOG_STREAM_BACKUP_FINISH_DAG = 6,
-};
-
 class ObBackupDagNet : public share::ObIDagNet
 {
 public:
@@ -116,27 +107,6 @@ public:
 protected:
   ObBackupDagNetSubType sub_type_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupDagNet);
-};
-
-class ObLSBackupMetaDagNet : public ObBackupDagNet {
-public:
-  ObLSBackupMetaDagNet();
-  virtual ~ObLSBackupMetaDagNet();
-  virtual int init_by_param(const share::ObIDagInitParam *param) override;
-  virtual int start_running() override;
-  virtual bool operator==(const share::ObIDagNet &other) const override;
-  virtual bool is_valid() const override;
-  virtual int64_t hash() const override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
-  virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
-  INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(param));
-
-private:
-  bool is_inited_;
-  ObLSBackupDagInitParam param_;
-  ObBackupReportCtx report_ctx_;
-  share::SCN start_scn_;
-  DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaDagNet);
 };
 
 class ObLSBackupDataDagNet : public ObBackupDagNet {
@@ -160,14 +130,14 @@ public:
   }
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(param));
 
-private:
+protected:
   int inner_init_before_run_();
   int get_batch_size_(int64_t &batch_size);
   int prepare_backup_tablet_provider_(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
       ObLSBackupCtx &ls_backup_ctx, ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy,
       ObIBackupTabletProvider *&provider);
 
-private:
+protected:
   bool is_inited_;
   ObLSBackupStage start_stage_;
   share::ObBackupDataType backup_data_type_;
@@ -179,6 +149,18 @@ private:
   ObBackupReportCtx report_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupDataDagNet);
 };
+
+class ObLSBackupMetaDagNet : public ObLSBackupDataDagNet {
+public:
+  ObLSBackupMetaDagNet();
+  virtual ~ObLSBackupMetaDagNet();
+  virtual int start_running() override;
+  virtual bool operator==(const share::ObIDagNet &other) const override;
+  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
+  DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaDagNet);
+};
+
 
 class ObBackupBuildTenantIndexDagNet : public ObBackupDagNet {
 public:
@@ -223,27 +205,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDagNet);
 };
 
-class ObBackupDag : public share::ObIDag
-{
-public:
-  explicit ObBackupDag(const ObBackupDagSubType &sub_type);
-  virtual ~ObBackupDag();
-  virtual bool is_ha_dag() const override { return true; }
-  ObBackupDagSubType get_sub_type() const { return sub_type_; };
-  INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(sub_type));
-protected:
-  ObBackupDagSubType sub_type_;
-  DISALLOW_COPY_AND_ASSIGN(ObBackupDag);
-};
 
-class ObLSBackupMetaDag : public ObBackupDag {
+class ObLSBackupMetaDag : public share::ObIDag {
 public:
   ObLSBackupMetaDag();
   virtual ~ObLSBackupMetaDag();
   int init(const share::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
@@ -258,7 +228,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaDag);
 };
 
-class ObLSBackupPrepareDag : public ObBackupDag {
+class ObLSBackupPrepareDag : public share::ObIDag {
 public:
   ObLSBackupPrepareDag();
   virtual ~ObLSBackupPrepareDag();
@@ -267,7 +237,7 @@ public:
       ObBackupMacroBlockTaskMgr &task_mgr, ObBackupIndexKVCache &index_kv_cache);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
@@ -289,7 +259,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupPrepareDag);
 };
 
-class ObLSBackupFinishDag : public ObBackupDag {
+class ObLSBackupFinishDag : public share::ObIDag {
 public:
   ObLSBackupFinishDag();
   virtual ~ObLSBackupFinishDag();
@@ -297,7 +267,7 @@ public:
       ObBackupIndexKVCache &index_kv_cache);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int64_t hash() const override;
   virtual bool check_can_schedule() override;
@@ -314,9 +284,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupFinishDag);
 };
 
-class ObLSBackupDataDag : public ObBackupDag {
+class ObLSBackupDataDag : public share::ObIDag {
 public:
-  ObLSBackupDataDag(const ObBackupDagSubType &sub_type = ObBackupDagSubType::LOG_STREAM_BACKUP_DATA_DAG);
+  ObLSBackupDataDag();
+  ObLSBackupDataDag(const share::ObDagType::ObDagTypeEnum type);
   virtual ~ObLSBackupDataDag();
   int init(const int64_t task_id, const ObLSBackupDagInitParam &param, const share::ObBackupDataType &backup_data_type,
       const ObBackupReportCtx &report_ctx, ObLSBackupCtx &ls_backup_ctx, ObIBackupTabletProvider &provider,
@@ -325,7 +296,7 @@ public:
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
   virtual int64_t hash() const override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
@@ -342,7 +313,6 @@ protected:
   ObBackupIndexKVCache *index_kv_cache_;
   ObBackupReportCtx report_ctx_;
   ObArray<ObBackupProviderItem> backup_items_;
-  common::ObInOutBandwidthThrottle bandwidth_throttle_;
   share::ObIDag *index_rebuild_dag_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupDataDag);
 };
@@ -354,14 +324,13 @@ public:
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
   virtual int64_t hash() const override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPrefetchBackupInfoDag);
 };
 
-class ObLSBackupIndexRebuildDag : public ObBackupDag {
+class ObLSBackupIndexRebuildDag : public share::ObIDag {
 public:
   ObLSBackupIndexRebuildDag();
   virtual ~ObLSBackupIndexRebuildDag();
@@ -369,7 +338,7 @@ public:
       const ObBackupIndexLevel &index_level, const ObBackupReportCtx &report_ctx, ObBackupMacroBlockTaskMgr *task_mgr,
       ObIBackupTabletProvider *provider, ObBackupIndexKVCache *index_kv_cache, ObLSBackupCtx *ctx);
   virtual int create_first_task() override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator==(const ObIDag &other) const override;
   virtual int64_t hash() const override;
@@ -389,11 +358,10 @@ private:
   ObBackupMacroBlockTaskMgr *task_mgr_;
   ObIBackupTabletProvider *provider_;
   ObBackupIndexKVCache *index_kv_cache_;
-  common::ObInOutBandwidthThrottle bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupIndexRebuildDag);
 };
 
-class ObLSBackupComplementLogDag : public ObBackupDag {
+class ObLSBackupComplementLogDag : public share::ObIDag {
 public:
   ObLSBackupComplementLogDag();
   virtual ~ObLSBackupComplementLogDag();
@@ -401,7 +369,7 @@ public:
       const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id,
       const int64_t retry_id, const share::SCN &start_scn, const share::SCN &end_scn, const ObBackupReportCtx &report_ctx);
   virtual int create_first_task() override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator==(const ObIDag &other) const override;
   virtual int64_t hash() const override;
@@ -434,14 +402,8 @@ public:
 
 private:
   int advance_checkpoint_by_flush_(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &start_scn);
-  int get_backup_meta_ctx_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      ObBackupLSMetaInfo &ls_meta_info, common::ObArray<common::ObTabletID> &tablet_id_list);
+  int backup_ls_meta_and_tablet_metas_(const uint64_t tenant_id, const share::ObLSID &ls_id);
   int backup_ls_meta_package_(const ObBackupLSMetaInfo &ls_meta_info);
-  int backup_ls_tablet_list_(
-      const share::SCN &scn, const share::ObLSID &ls, const common::ObIArray<common::ObTabletID> &tablet_id_list);
-  int build_backup_data_ls_tablet_desc_(const share::ObLSID &ls_id, const share::SCN &scn,
-      const common::ObIArray<common::ObTabletID> &tablet_id, share::ObBackupDataTabletToLSDesc &info);
-
 
 private:
   bool is_inited_;
@@ -461,14 +423,16 @@ public:
   virtual int process() override;
 
 private:
+  int get_consistent_scn_(share::SCN &consistent_scn) const;
   int may_need_advance_checkpoint_();
   int fetch_cur_ls_rebuild_seq_(int64_t &rebuild_seq);
   int fetch_backup_ls_meta_(share::SCN &clog_checkpoint_scn);
-  int check_tx_data_can_explain_user_data_();
+  int prepare_backup_tx_table_filled_tx_scn_();
+  int check_ls_created_after_backup_start_(const ObLSID &ls_id, bool &created_after_backup);
   int get_backup_tx_data_table_filled_tx_scn_(share::SCN &filled_tx_scn);
   int prepare_meta_index_store_(ObBackupMetaIndexStore &meta_index_store);
-  int get_sys_ls_retry_id_(int64_t &retry_id);
-  int prepare_meta_index_store_param_(const int64_t retry_id, ObBackupIndexStoreParam &param);
+  int get_sys_ls_turn_and_retry_id_(int64_t &turn_id, int64_t &retry_id);
+  int prepare_meta_index_store_param_(const int64_t turn_id, const int64_t retry_id, ObBackupIndexStoreParam &param);
   int get_cur_ls_min_filled_tx_scn_(share::SCN &min_filled_tx_scn);
   int get_tablet_min_filled_tx_scn_(ObTabletHandle &tablet_handle,
       share::SCN &min_filled_tx_scn, bool &has_minor_sstable);
@@ -496,16 +460,26 @@ public:
   virtual int process() override;
 
 private:
+  int setup_macro_index_store_(const ObLSBackupDagInitParam &param,
+      const share::ObBackupDataType &backup_data_type, const ObBackupSetDesc &backup_set_desc,
+      const ObBackupReportCtx &report_ctx,  ObBackupIndexStoreParam &index_store_param, ObBackupMacroBlockIndexStore &index_store);
+  int inner_init_macro_index_store_for_inc_(const ObLSBackupDagInitParam &param,
+      const share::ObBackupDataType &backup_data_type, const ObBackupReportCtx &report_ctx);
+  int inner_init_macro_index_store_for_turn_(const ObLSBackupDagInitParam &param,
+      const share::ObBackupDataType &backup_data_type, const ObBackupReportCtx &report_ctx);
+  int64_t get_prev_turn_id_(const int64_t cur_turn_id);
   int inner_process_();
   int check_backup_items_valid_(const common::ObIArray<ObBackupProviderItem> &items);
   int get_prev_backup_set_desc_(const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &cur_backup_set_desc,
-      share::ObBackupSetDesc &prev_backup_set_desc);
+      share::ObBackupSetFileDesc &prev_backup_set_info);
   int get_tenant_macro_index_retry_id_(const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &prev_backup_set_desc,
       const share::ObBackupDataType &backup_data_type, const int64_t turn_id, int64_t &retry_id);
   int get_need_copy_item_list_(const common::ObIArray<ObBackupProviderItem> &list,
       common::ObIArray<ObBackupProviderItem> &need_copy_list, common::ObIArray<ObBackupProviderItem> &no_need_copy_list,
       common::ObIArray<ObBackupPhysicalID> &no_need_copy_macro_index_list);
   int check_backup_item_need_copy_(
+      const ObBackupProviderItem &item, bool &need_copy, ObBackupMacroBlockIndex &macro_index);
+  int inner_check_backup_item_need_copy_when_change_turn_(
       const ObBackupProviderItem &item, bool &need_copy, ObBackupMacroBlockIndex &macro_index);
   int generate_next_prefetch_dag_();
   int generate_backup_dag_(const int64_t task_id, const common::ObIArray<ObBackupProviderItem> &items);
@@ -519,7 +493,8 @@ private:
   ObIBackupTabletProvider *provider_;
   ObBackupMacroBlockTaskMgr *task_mgr_;
   ObBackupIndexKVCache *index_kv_cache_;
-  ObBackupMacroBlockIndexStore macro_index_store_;
+  ObBackupMacroBlockIndexStore macro_index_store_for_inc_;
+  ObBackupMacroBlockIndexStore macro_index_store_for_turn_;
   share::ObIDag *index_rebuild_dag_;
   DISALLOW_COPY_AND_ASSIGN(ObPrefetchBackupInfoTask);
 };
@@ -530,15 +505,12 @@ public:
   virtual ~ObLSBackupDataTask();
   int init(const int64_t task_id, const share::ObBackupDataType &backup_data_type,
       const common::ObIArray<ObBackupProviderItem> &backup_items, const ObLSBackupDataParam &param,
-      const ObBackupReportCtx &report_ctx, common::ObInOutBandwidthThrottle &bandwidth_throttle,
-      ObLSBackupCtx &ls_backup_ctx, ObIBackupTabletProvider &provider, ObBackupMacroBlockTaskMgr &task_mgr,
-      ObBackupIndexKVCache &kv_cache, share::ObIDag *index_rebuild_dag);
+      const ObBackupReportCtx &report_ctx, ObLSBackupCtx &ls_backup_ctx, ObIBackupTabletProvider &provider,
+      ObBackupMacroBlockTaskMgr &task_mgr, ObBackupIndexKVCache &kv_cache, share::ObIDag *index_rebuild_dag);
   virtual int process() override;
 
 private:
   int may_inject_simulated_error_();
-  int report_tablet_skipped_(const common::ObTabletID &tablet_id,
-      const share::ObBackupSkippedType &skipped_type);
 
 private:
   int build_backup_file_header_(ObBackupFileHeader &file_header);
@@ -595,7 +567,6 @@ private:
   ObBackupReportCtx report_ctx_;
   share::ObBackupDataType backup_data_type_;
   ObBackupDataCtx backup_data_ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   ObLSBackupCtx *ls_backup_ctx_;
   ObIBackupTabletProvider *provider_;
   ObBackupMacroBlockTaskMgr *task_mgr_;
@@ -614,7 +585,7 @@ public:
   virtual ~ObBackupIndexRebuildTask();
   int init(const ObLSBackupDataParam &param, const ObBackupIndexLevel &index_level, ObLSBackupCtx *ls_backup_ctx,
       ObIBackupTabletProvider *provider, ObBackupMacroBlockTaskMgr *task_mgr, ObBackupIndexKVCache *kv_cache,
-      common::ObInOutBandwidthThrottle &bandwidth_throttle, const ObBackupReportCtx &report_ctx);
+      const ObBackupReportCtx &report_ctx);
   virtual int process() override;
 
 private:
@@ -635,7 +606,6 @@ private:
   ObIBackupTabletProvider *provider_;
   ObBackupMacroBlockTaskMgr *task_mgr_;
   ObBackupIndexKVCache *index_kv_cache_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   ObBackupReportCtx report_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupIndexRebuildTask);
 };

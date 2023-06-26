@@ -12,8 +12,11 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_src_provider.h"
+#include "ob_storage_ha_utils.h"
 #include "share/location_cache/ob_location_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tx_storage/ob_ls_handle.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase {
@@ -98,41 +101,12 @@ int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const SCN 
 int ObStorageHASrcProvider::get_ls_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  static const int64_t DEFAULT_CHECK_LS_LEADER_TIMEOUT = 1 * 60 * 1000 * 1000L;  // 1min
-  const int64_t cluster_id = GCONF.cluster_id;
-  if (OB_ISNULL(GCTX.location_service_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("location cache is NULL", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
+  leader.reset();
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
-  } else {
-    uint32_t renew_count = 0;
-    const uint32_t max_renew_count = 10;
-    const int64_t retry_us = 200 * 1000;
-    const int64_t start_ts = ObTimeUtility::current_time();
-    do {
-      if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(cluster_id, tenant_id, ls_id, leader))) {
-        if (OB_LS_LOCATION_NOT_EXIST == ret && renew_count++ < max_renew_count) {  // retry ten times
-          LOG_WARN("failed to get location and force renew", K(ret), K(tenant_id), K(ls_id), K(cluster_id));
-          if (OB_SUCCESS != (tmp_ret = GCTX.location_service_->nonblock_renew(cluster_id, tenant_id, ls_id))) {
-            LOG_WARN("failed to nonblock renew from location cache", K(tmp_ret), K(ls_id), K(cluster_id));
-          } else if (ObTimeUtility::current_time() - start_ts > DEFAULT_CHECK_LS_LEADER_TIMEOUT) {
-            renew_count = max_renew_count;
-          } else {
-            ob_usleep(retry_us);
-          }
-        }
-      } else {
-        LOG_INFO("get ls leader", K(tenant_id), K(ls_id), K(leader), K(cluster_id));
-      }
-    } while (OB_LS_LOCATION_NOT_EXIST == ret && renew_count < max_renew_count);
-
-    if (OB_SUCC(ret) && !leader.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("leader addr is invalid", K(ret), K(tenant_id), K(ls_id), K(leader), K(cluster_id));
-    }
+  } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, ls_id, leader))) {
+    LOG_WARN("failed to get ls leader", K(ret), K(tenant_id), K(ls_id));
   }
   return ret;
 }
@@ -142,22 +116,14 @@ int ObStorageHASrcProvider::fetch_ls_member_list_(const uint64_t tenant_id, cons
 {
   int ret = OB_SUCCESS;
   addr_list.reset();
-  ObStorageHASrcInfo src_info;
-  src_info.src_addr_ = leader_addr;
-  src_info.cluster_id_ = GCONF.cluster_id;
-  obrpc::ObFetchLSMemberListInfo member_info;
   if (OB_ISNULL(storage_rpc_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage rpc should not be null", K(ret));
   } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !leader_addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(leader_addr));
-  } else if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
-    LOG_WARN("failed to post ls member list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
-  } else if (OB_FAIL(member_info.member_list_.get_addr_array(addr_list))) {
-    LOG_WARN("failed to get addr array", K(ret), K(member_info));
-  } else {
-    FLOG_INFO("fetch ls member list", K(tenant_id), K(ls_id), K(leader_addr), K(member_info));
+  } else if (OB_FAIL(get_ls_member_list_(tenant_id, ls_id, leader_addr, addr_list))) {
+    LOG_WARN("failed to get ls member list", K(ret), K(tenant_id), K(ls_id), K(leader_addr));
   }
   return ret;
 }
@@ -189,7 +155,7 @@ int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t choose_member_idx = -1;
-  SCN max_clog_checkpoint_scn;
+  SCN max_clog_checkpoint_scn = SCN::min_scn();
   for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); ++i) {
     const common::ObAddr &addr = addr_list.at(i);
     obrpc::ObFetchLSMetaInfoResp ls_info;
@@ -204,7 +170,6 @@ int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const
       } else {
         LOG_WARN("failed to check version", K(ret), K(tenant_id), K(ls_id), K(ls_info));
       }
-    // TODO: muwei make sure this is right
     } else if (!ObReplicaTypeCheck::is_full_replica(REPLICA_TYPE_FULL)) {
       LOG_INFO("do not choose this src", K(tenant_id), K(ls_id), K(addr), K(ls_info));
     } else if (local_clog_checkpoint_scn > ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn()) {
@@ -223,6 +188,10 @@ int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const
       if (ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn() > max_clog_checkpoint_scn) {
         max_clog_checkpoint_scn = ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn();
         choose_member_idx = i;
+      } else if (ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn() == max_clog_checkpoint_scn
+          && !ls_info.has_transfer_table_) {
+        max_clog_checkpoint_scn = ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn();
+        choose_member_idx = i;
       }
     }
   }
@@ -233,6 +202,53 @@ int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const
     } else {
       choosen_src_addr = addr_list.at(choose_member_idx);
     }
+  }
+  return ret;
+}
+
+int ObStorageHASrcProvider::get_ls_member_list_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObAddr &leader_addr,
+    common::ObIArray<common::ObAddr> &addr_list)
+{
+  int ret = OB_SUCCESS;
+  addr_list.reset();
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObStorageHASrcInfo src_info;
+  src_info.src_addr_ = leader_addr;
+  src_info.cluster_id_ = GCONF.cluster_id;
+  obrpc::ObFetchLSMemberListInfo member_info;
+  ObLSService *ls_service = nullptr;
+
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !leader_addr.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get ls member list get invalid argument", K(ret), K(tenant_id), K(ls_id), K(leader_addr));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("fail to get log stream", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
+    LOG_WARN("failed to post ls member list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
+    //overwrite ret
+    member_info.reset();
+    if (OB_FAIL(ls->get_log_handler()->get_election_leader(src_info.src_addr_))) {
+      LOG_WARN("failed to get election leader", K(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
+      LOG_WARN("failed to post ls member list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(member_info.member_list_.get_addr_array(addr_list))) {
+    LOG_WARN("failed to get addr array", K(ret), K(member_info));
+  } else {
+    FLOG_INFO("fetch ls member list", K(tenant_id), K(ls_id), K(src_info), K(member_info));
   }
   return ret;
 }

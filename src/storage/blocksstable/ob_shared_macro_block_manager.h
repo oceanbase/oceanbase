@@ -63,6 +63,7 @@ public:
   void stop();
   void wait();
   int64_t get_shared_block_cnt();
+  void get_cur_shared_block(MacroBlockId &macro_id);
   int write_block(const char* buf, const int64_t size, ObBlockInfo &block_info, ObMacroBlocksWriteCtx &write_ctx);
   int add_block(const MacroBlockId &block_id, const int64_t block_size);
   int free_block(const MacroBlockId &block_id, const int64_t block_size);
@@ -137,12 +138,13 @@ private:
       ObSSTableIndexBuilder &sstable_index_builder,
       ObIndexBlockRebuilder &index_block_rebuilder);
   int rebuild_sstable(
+      common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const ObSSTable &old_sstable,
       const uint64_t data_version,
       ObSSTableIndexBuilder &sstable_index_builder,
       ObIndexBlockRebuilder &index_block_rebuilder,
-      ObTableHandleV2 &table_handle);
+      ObSSTable &new_sstable);
   int prepare_data_desc(
       const ObTablet &tablet,
       const ObSSTableBasicMeta &basic_meta,
@@ -158,11 +160,11 @@ private:
       const ObSSTable &sstable,
       ObMacroBlockHandle &block_handle);
   int create_new_sstable(
+      common::ObArenaAllocator &allocator,
       const ObSSTableMergeRes &res,
-      const ObTablet &tablet,
       const ObSSTable &old_table,
       const ObBlockInfo &block_info,
-      ObTableHandleV2 &table_handle) const;
+      ObSSTable &new_sstable) const;
   int parse_merge_type(const ObSSTable &sstable, ObMergeType &merge_type) const;
   int try_switch_macro_block();
   int check_write_complete(const MacroBlockId &macro_id, const int64_t macro_size);

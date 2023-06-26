@@ -44,12 +44,13 @@ enum PhysicalRestoreStatus
   PHYSICAL_RESTORE_CREATE_TENANT = 0,          // restore tenant schema
   PHYSICAL_RESTORE_PRE = 1,                    // set parameters
   PHYSICAL_RESTORE_CREATE_INIT_LS = 2,         // create init ls
-  PHYSICAL_RESTORE_WAIT_LS = 3,                // check all ls restore finish and sync ts is restore
-  PHYSICAL_RESTORE_POST_CHECK = 4,             // check tenant is in restore, set tenant to normal
-  PHYSICAL_RESTORE_UPGRADE = 5,                // upgrade post
-  PHYSICAL_RESTORE_SUCCESS = 6,                // restore success
-  PHYSICAL_RESTORE_FAIL = 7,                   // restore fail
-  PHYSICAL_RESTORE_WAIT_TENANT_RESTORE_FINISH = 8, //sys tenant wait user tenant restore finish
+  PHYSICAL_RESTORE_WAIT_CONSISTENT_SCN = 3,    // wait clog recover to consistent scn
+  PHYSICAL_RESTORE_WAIT_LS = 4,                // check all ls restore finish and sync ts is restore
+  PHYSICAL_RESTORE_POST_CHECK = 5,             // check tenant is in restore, set tenant to normal
+  PHYSICAL_RESTORE_UPGRADE = 6,                // upgrade post
+  PHYSICAL_RESTORE_SUCCESS = 7,                // restore success
+  PHYSICAL_RESTORE_FAIL = 8,                   // restore fail
+  PHYSICAL_RESTORE_WAIT_TENANT_RESTORE_FINISH = 9, //sys tenant wait user tenant restore finish
   PHYSICAL_RESTORE_MAX_STATUS
 };
 
@@ -160,6 +161,7 @@ public:
 
   Property_declare_int(int64_t, restore_start_ts)
   Property_declare_int(share::SCN, restore_scn)
+  Property_declare_int(share::SCN, consistent_scn)
   Property_declare_int(uint64_t, post_data_version)
   Property_declare_int(uint64_t, source_cluster_version)
   Property_declare_int(uint64_t, source_data_version)

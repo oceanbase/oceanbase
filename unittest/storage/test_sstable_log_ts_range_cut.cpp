@@ -40,19 +40,24 @@ public:
   static void generate_mock_sstable(
       const int64_t start_log_ts,
       const int64_t end_log_ts,
-      ObSSTable &sstable)
+      ObSSTable &sstable,
+      blocksstable::ObSSTableMeta &meta)
   {
+    meta.basic_meta_.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    meta.basic_meta_.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    meta.basic_meta_.status_ = SSTABLE_READY_FOR_READ;
+    meta.data_root_info_.addr_.set_none_addr();
+    meta.macro_info_.macro_meta_info_.addr_.set_none_addr();
+    meta.basic_meta_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+    meta.is_inited_ = true;
+
     sstable.key_.table_type_ = ObITable::MINOR_SSTABLE;
     sstable.key_.tablet_id_ = 1;
     sstable.key_.scn_range_.start_scn_.convert_for_gts(start_log_ts);
     sstable.key_.scn_range_.end_scn_.convert_for_gts(end_log_ts);
-    sstable.meta_.basic_meta_.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-    sstable.meta_.basic_meta_.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    sstable.meta_ = &meta;
+
     sstable.valid_for_reading_ = true;
-    sstable.meta_.basic_meta_.status_ = SSTABLE_WRITE_BUILDING;
-    sstable.meta_.data_root_info_.addr_.set_none_addr();
-    sstable.meta_.macro_info_.macro_meta_info_.addr_.set_none_addr();
-    sstable.meta_.basic_meta_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   }
 };
 
@@ -98,18 +103,22 @@ private:
 TEST_F(TestSSTableScnRangeCut, sstable_scn_range_no_cross_and_continue)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
   ObTabletTableStore tablet_table_store;
 
   ObSSTable sstable1;
-  TestMockSSTable::generate_mock_sstable(0, 100, sstable1);
+  blocksstable::ObSSTableMeta meta1;
+  TestMockSSTable::generate_mock_sstable(0, 100, sstable1, meta1);
 
   ObSSTable sstable2;
-  TestMockSSTable::generate_mock_sstable(100, 200, sstable2);
+  blocksstable::ObSSTableMeta meta2;
+  TestMockSSTable::generate_mock_sstable(100, 200, sstable2, meta2);
 
   ObSSTable sstable3;
-  TestMockSSTable::generate_mock_sstable(200, 300, sstable3);
+  blocksstable::ObSSTableMeta meta3;
+  TestMockSSTable::generate_mock_sstable(200, 300, sstable3, meta3);
   ObArray<ObITable *> minor_sstables;
-  ObTablesHandleArray tables_handle;
+  ObArray<ObITable *> cut_minor_sstables;
 
   ret = minor_sstables.push_back(&sstable1);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -117,18 +126,17 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_no_cross_and_continue)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = minor_sstables.push_back(&sstable3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables, tables_handle);
+  ret = tablet_table_store.cut_ha_sstable_scn_range_(allocator, minor_sstables, cut_minor_sstables);
   ASSERT_EQ(OB_SUCCESS, ret);
-  tables_handle.meta_mem_mgr_ = nullptr;
 
-  ASSERT_EQ(0, tables_handle.get_table(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(100, tables_handle.get_table(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(0, cut_minor_sstables.at(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, cut_minor_sstables.at(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(100, tables_handle.get_table(1)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(200, tables_handle.get_table(1)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, cut_minor_sstables.at(1)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, cut_minor_sstables.at(1)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(200, tables_handle.get_table(2)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(300, tables_handle.get_table(2)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, cut_minor_sstables.at(2)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(300, cut_minor_sstables.at(2)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 }
 
 
@@ -140,19 +148,23 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_no_cross_and_continue)
 TEST_F(TestSSTableScnRangeCut, sstable_scn_range_is_not_continue)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
   ObTabletTableStore tablet_table_store;
 
   ObSSTable sstable1;
-  TestMockSSTable::generate_mock_sstable(0, 100, sstable1);
+  blocksstable::ObSSTableMeta meta1;
+  TestMockSSTable::generate_mock_sstable(0, 100, sstable1, meta1);
 
   ObSSTable sstable2;
-  TestMockSSTable::generate_mock_sstable(200, 300, sstable2);
+  blocksstable::ObSSTableMeta meta2;
+  TestMockSSTable::generate_mock_sstable(200, 300, sstable2, meta2);
 
   ObSSTable sstable3;
-  TestMockSSTable::generate_mock_sstable(300, 500, sstable3);
+  blocksstable::ObSSTableMeta meta3;
+  TestMockSSTable::generate_mock_sstable(300, 500, sstable3, meta3);
 
   ObArray<ObITable *> minor_sstables;
-  ObTablesHandleArray tables_handle;
+  ObArray<ObITable *> cut_minor_sstables;
 
   ret = minor_sstables.push_back(&sstable1);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -160,9 +172,8 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_is_not_continue)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = minor_sstables.push_back(&sstable3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables, tables_handle);
+  ret = tablet_table_store.cut_ha_sstable_scn_range_(allocator, minor_sstables, cut_minor_sstables);
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
-  tables_handle.meta_mem_mgr_ = nullptr;
 }
 
 
@@ -174,19 +185,23 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_is_not_continue)
 TEST_F(TestSSTableScnRangeCut, sstable_scn_range_contain)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
   ObTabletTableStore tablet_table_store;
 
   ObSSTable sstable1;
-  TestMockSSTable::generate_mock_sstable(0, 100, sstable1);
+  blocksstable::ObSSTableMeta meta1;
+  TestMockSSTable::generate_mock_sstable(0, 100, sstable1, meta1);
 
   ObSSTable sstable2;
-  TestMockSSTable::generate_mock_sstable(0, 200, sstable2);
+  blocksstable::ObSSTableMeta meta2;
+  TestMockSSTable::generate_mock_sstable(0, 200, sstable2, meta2);
 
   ObSSTable sstable3;
-  TestMockSSTable::generate_mock_sstable(200, 500, sstable3);
+  blocksstable::ObSSTableMeta meta3;
+  TestMockSSTable::generate_mock_sstable(200, 500, sstable3, meta3);
 
   ObArray<ObITable *> minor_sstables;
-  ObTablesHandleArray tables_handle;
+  ObArray<ObITable *> cut_minor_sstables;
 
   ret = minor_sstables.push_back(&sstable1);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -194,18 +209,17 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_contain)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = minor_sstables.push_back(&sstable3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables, tables_handle);
+  ret = tablet_table_store.cut_ha_sstable_scn_range_(allocator, minor_sstables, cut_minor_sstables);
   ASSERT_EQ(OB_SUCCESS, ret);
-  tables_handle.meta_mem_mgr_ = nullptr;
 
-  ASSERT_EQ(0, tables_handle.get_table(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(100, tables_handle.get_table(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(0, cut_minor_sstables.at(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, cut_minor_sstables.at(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(100, tables_handle.get_table(1)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(200, tables_handle.get_table(1)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, cut_minor_sstables.at(1)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, cut_minor_sstables.at(1)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(200, tables_handle.get_table(2)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(500, tables_handle.get_table(2)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, cut_minor_sstables.at(2)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(500, cut_minor_sstables.at(2)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
 }
 
@@ -217,19 +231,23 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_contain)
 TEST_F(TestSSTableScnRangeCut, sstable_scn_range_has_overlap)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
   ObTabletTableStore tablet_table_store;
 
   ObSSTable sstable1;
-  TestMockSSTable::generate_mock_sstable(0, 100, sstable1);
+  blocksstable::ObSSTableMeta meta1;
+  TestMockSSTable::generate_mock_sstable(0, 100, sstable1, meta1);
 
   ObSSTable sstable2;
-  TestMockSSTable::generate_mock_sstable(50, 200, sstable2);
+  blocksstable::ObSSTableMeta meta2;
+  TestMockSSTable::generate_mock_sstable(50, 200, sstable2, meta2);
 
   ObSSTable sstable3;
-  TestMockSSTable::generate_mock_sstable(200, 500, sstable3);
+  blocksstable::ObSSTableMeta meta3;
+  TestMockSSTable::generate_mock_sstable(200, 500, sstable3, meta3);
 
   ObArray<ObITable *> minor_sstables;
-  ObTablesHandleArray tables_handle;
+  ObArray<ObITable *> cut_minor_sstables;
 
   ret = minor_sstables.push_back(&sstable1);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -237,18 +255,17 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_has_overlap)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = minor_sstables.push_back(&sstable3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables, tables_handle);
+  ret = tablet_table_store.cut_ha_sstable_scn_range_(allocator, minor_sstables, cut_minor_sstables);
   ASSERT_EQ(OB_SUCCESS, ret);
-  tables_handle.meta_mem_mgr_ = nullptr;
 
-  ASSERT_EQ(0, tables_handle.get_table(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(100, tables_handle.get_table(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(0, cut_minor_sstables.at(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, cut_minor_sstables.at(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(100, tables_handle.get_table(1)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(200, tables_handle.get_table(1)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, cut_minor_sstables.at(1)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, cut_minor_sstables.at(1)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(200, tables_handle.get_table(2)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
-  ASSERT_EQ(500, tables_handle.get_table(2)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, cut_minor_sstables.at(2)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(500, cut_minor_sstables.at(2)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 }
 
 

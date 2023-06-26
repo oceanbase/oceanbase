@@ -260,7 +260,7 @@ void TestSSTableRowScanner::test_border(const bool is_reverse_scan)
   ObDatumRange range;
 
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // full table scan
   range.set_whole_range();
@@ -327,7 +327,7 @@ TEST_F(TestSSTableRowScanner, test_random)
 
   bool is_reverse_scan = false;
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
   for (int64_t i = HIT_ALL; i < HIT_MAX; ++i) {
     test_one_case(range, start, end, is_reverse_scan, i);
   }
@@ -335,7 +335,7 @@ TEST_F(TestSSTableRowScanner, test_random)
 
   is_reverse_scan = true;
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
   for (int64_t i = HIT_ALL; i < HIT_MAX; ++i) {
     test_one_case(range, start, end, is_reverse_scan, i);
   }

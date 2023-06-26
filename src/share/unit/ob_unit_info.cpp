@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#define USING_LOG_PREFIX SHARE
 #include <cmath>
 
 #include "ob_unit_info.h"
@@ -23,6 +23,22 @@ const char *const ObUnit::unit_status_strings[ObUnit::UNIT_STATUS_MAX] = {
   "ACTIVE",
   "DELETING",
 };
+
+ObUnit::Status ObUnit::str_to_unit_status(const ObString &str)
+{
+  ObUnit::Status unit_status = UNIT_STATUS_MAX;
+  if (str.empty()) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "str is empty", K(str));
+  } else {
+    for (int64_t i = 0; i < ARRAYSIZEOF(unit_status_strings); ++i) {
+      if (0 == str.case_compare(unit_status_strings[i])) {
+        unit_status = static_cast<ObUnit::Status>(i);
+        break;
+      }
+    }
+  }
+  return unit_status;
+}
 
 ObUnit::ObUnit()
 {

@@ -399,6 +399,34 @@ private:
   common::ObThreadCond cond_;
 };
 
+struct ObLSExistState final
+{
+public:
+  enum State
+  {
+    INVALID_STATE = -1,
+    UNCREATED,
+    DELETED,
+    EXISTING,
+    MAX_STATE
+  };
+  ObLSExistState() : state_(INVALID_STATE) {}
+  ObLSExistState(State state) : state_(state) {}
+  ~ObLSExistState() {}
+  void reset() { state_ = INVALID_STATE; }
+  void set_existing() { state_ = EXISTING; }
+  void set_deleted() { state_ = DELETED; }
+  void set_uncreated() { state_ = UNCREATED; }
+  bool is_valid() const { return state_ > INVALID_STATE && state_ < MAX_STATE; }
+  bool is_existing() const { return EXISTING == state_; }
+  bool is_deleted() const { return DELETED == state_; }
+  bool is_uncreated() const { return UNCREATED == state_; }
+
+  TO_STRING_KV(K_(state));
+private:
+  State state_;
+};
+
 } // end namespace share
 } // end namespace oceanbase
 #endif

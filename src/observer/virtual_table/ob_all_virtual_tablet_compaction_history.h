@@ -14,6 +14,7 @@
 #define OB_ALL_VIRTUAL_TABLET_COMPACTION_HISTORY_H_
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
+#include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/ob_sstable_struct.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
 
@@ -66,11 +67,8 @@ private:
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
   virtual void release_last_tenant() override
   {
-    major_info_idx_ = 0;
-    major_info_cnt_ = 0;
-    minor_info_idx_ = 0;
-    minor_info_cnt_ = 0;
-    get_info_cnt_flag_ = true;
+    major_merge_info_iter_.reset();
+    minor_merge_info_iter_.reset();
   }
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
@@ -79,12 +77,9 @@ private:
   char participant_table_str_[common::OB_PART_TABLE_INFO_LENGTH];
   char macro_id_list_[common::OB_MACRO_ID_INFO_LENGTH];
   char comment_[common::OB_COMPACTION_EVENT_STR_LENGTH];
-  int64_t major_info_idx_;
-  int64_t major_info_cnt_;
-  int64_t minor_info_idx_;
-  int64_t minor_info_cnt_;
   ObSSTableMergeInfo merge_info_;
-  bool get_info_cnt_flag_;
+  compaction::ObIDiagnoseInfoMgr::Iterator major_merge_info_iter_;
+  compaction::ObIDiagnoseInfoMgr::Iterator minor_merge_info_iter_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTabletCompactionHistory);
 };
 

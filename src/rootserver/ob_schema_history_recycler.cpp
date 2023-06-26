@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "share/ob_schema_status_proxy.h"
-#include "share/backup/ob_backup_info_mgr.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "rootserver/ob_schema_history_recycler.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
@@ -567,31 +566,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      // step 3. backup reserved_schema_version
-      ObBackupInfoMgr &bk_info = ObBackupInfoMgr::get_instance();
-      if (OB_FAIL(check_inner_stat())) {
-        LOG_WARN("schema history recycler is stopped", KR(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
-        const uint64_t tenant_id = tenant_ids.at(i);
-        int64_t reserved_schema_version = OB_INVALID_VERSION;
-        bool is_backup = false;
-        if (OB_FAIL(bk_info.get_delay_delete_schema_version(
-            tenant_id, *schema_service_, is_backup, reserved_schema_version))) {
-          LOG_WARN("fail to get reserved schema version", KR(ret), K(tenant_id));
-        } else if (is_backup && reserved_schema_version > 0) {
-          if (OB_FAIL(fill_recycle_schema_versions(
-              tenant_id, reserved_schema_version, recycle_schema_versions))) {
-            LOG_WARN("fail to fill recycle schema versions",
-                     KR(ret), K(tenant_id), K(reserved_schema_version));
-          }
-        }
-        LOG_INFO("[SCHEMA_RECYCLE] get recycle schema version "
-                 "by backup reserved schema version",
-                 KR(ret), K(tenant_id), K(is_backup), K(reserved_schema_version));
-      }
-    }
+
     if (OB_SUCC(ret)) {
       // step 4. restore point
       // int64_t schema_version = 0;

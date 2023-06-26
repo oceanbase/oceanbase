@@ -224,11 +224,10 @@ int ObLSBackupOperator::mark_ls_task_info_final(const int64_t task_id, const uin
 }
 
 int ObLSBackupOperator::get_prev_backup_set_desc(const uint64_t tenant_id, const int64_t backup_set_id, const int64_t dest_id,
-    ObBackupSetDesc &prev_backup_set_desc, common::ObISQLClient &sql_client)
+    share::ObBackupSetFileDesc &prev_desc, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   share::ObBackupSetFileDesc cur_desc;
-  share::ObBackupSetFileDesc prev_desc;
   const bool for_update = false;
   if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(
           sql_client, for_update, backup_set_id, OB_START_INCARNATION, tenant_id, dest_id, cur_desc))) {
@@ -244,9 +243,6 @@ int ObLSBackupOperator::get_prev_backup_set_desc(const uint64_t tenant_id, const
                  dest_id,
                  prev_desc))) {
     LOG_WARN("failed to get backup set", K(ret), K(cur_desc.prev_inc_backup_set_id_), K(tenant_id));
-  } else {
-    prev_backup_set_desc.backup_set_id_ = prev_desc.backup_set_id_;
-    prev_backup_set_desc.backup_type_= prev_desc.backup_type_;
   }
   return ret;
 }
@@ -330,8 +326,8 @@ int ObLSBackupOperator::report_tablet_skipped(
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(skipped_tablet));
   } else if (OB_FAIL(fill_backup_skipped_tablet_(skipped_tablet, dml_splicer))) {
     LOG_WARN("failed to fill backup skipped tablet", K(ret), K(skipped_tablet));
-  } else if (OB_FAIL(dml_splicer.splice_insert_update_sql(OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, sql))) {
-    LOG_WARN("failed to splice insert update sql", K(ret), K(tenant_id), K(skipped_tablet), K(sql));
+  } else if (OB_FAIL(dml_splicer.splice_insert_sql(OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, sql))) {
+    LOG_WARN("failed to splice update sql", K(ret), K(sql));
   } else if (OB_FAIL(sql_client.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute sql", K(ret), K(sql));
   } else {
@@ -430,11 +426,12 @@ int ObLSBackupOperator::parse_ls_task_info_results_(
 int ObLSBackupOperator::fill_backup_skipped_tablet_(const ObBackupSkippedTablet &task_info, share::ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
+  int turn_id = task_info.data_type_.is_minor_backup() ? task_info.turn_id_ : share::ObBackupSkipTabletAttr::BASE_MAJOR_TURN_ID + task_info.turn_id_;
   if (OB_FAIL(dml.add_pk_column("task_id", task_info.task_id_))) {
     LOG_WARN("failed to add pk column", K(task_info));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", task_info.tenant_id_))) {
     LOG_WARN("failed to add pk column", K(task_info));
-  } else if (OB_FAIL(dml.add_pk_column("turn_id", task_info.turn_id_))) {
+  } else if (OB_FAIL(dml.add_pk_column("turn_id", turn_id))) {
     LOG_WARN("failed to add pk column", K(task_info));
   } else if (OB_FAIL(dml.add_pk_column("retry_id", task_info.retry_id_))) {
     LOG_WARN("failed to add pk column", K(task_info));

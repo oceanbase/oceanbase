@@ -149,6 +149,8 @@ constexpr int LOG_WRITE_FLAG = O_RDWR | O_DIRECT | O_SYNC;
 constexpr mode_t FILE_OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 // =========== Disk io end ====================
 
+const int64_t OB_INVALID_CONFIG_CHANGE_LOCK_OWNER = -1;
+
 enum ObReplicaState {
   INVALID_STATE = 0,
   INIT = 1,
@@ -400,6 +402,25 @@ enum PurgeThrottlingType
   PURGE_BY_NOTIFY_FETCH_LOG = 6,
   MAX_PURGE_TYPE
 };
+
+inline const char *purge_throttling_type_2_str(const PurgeThrottlingType type)
+{
+#define EXTRACT_PURGE_TYPE(type_var) ({ case(type_var): return #type_var; })
+  switch(type)
+  {
+    EXTRACT_PURGE_TYPE(INVALID_PURGE_TYPE);
+    EXTRACT_PURGE_TYPE(PURGE_BY_RECONFIRM);
+    EXTRACT_PURGE_TYPE(PURGE_BY_CHECK_BARRIER_CONDITION);
+    EXTRACT_PURGE_TYPE(PURGE_BY_PRE_CHECK_FOR_CONFIG);
+    EXTRACT_PURGE_TYPE(PURGE_BY_CHECK_SERVERS_LSN_AND_VERSION);
+    EXTRACT_PURGE_TYPE(PURGE_BY_GET_MC_REQ);
+    EXTRACT_PURGE_TYPE(PURGE_BY_NOTIFY_FETCH_LOG);
+
+    default:
+      return "Invalid Type";
+  }
+#undef EXTRACT_PURGE_TYPE
+}
 
 bool need_force_purge(PurgeThrottlingType type);
 

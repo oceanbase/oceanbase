@@ -64,7 +64,7 @@ TEST_F(TestSSTableSecMetaIterator, test_basic)
 {
   ObArray<ObDataMacroBlockMeta> data_macro_metas;
   uint64_t tenant_id = MTL_ID();
-  const ObTableReadInfo &index_read_info = tablet_handle_.get_obj()->get_index_read_info();
+  const ObITableReadInfo &index_read_info = tablet_handle_.get_obj()->get_rowkey_read_info();
   ObSSTableSecMetaIterator meta_iter;
   ObDataMacroBlockMeta data_macro_meta;
   ObDatumRange range;
@@ -254,14 +254,14 @@ TEST_F(TestSSTableSecMetaIterator, test_basic)
     }
   }
   ObDatumRowkey endkey;
-  ASSERT_EQ(OB_SUCCESS, sstable_.get_last_rowkey(index_read_info, allocator_, endkey));
+  ASSERT_EQ(OB_SUCCESS, sstable_.get_last_rowkey(allocator_, endkey));
   ASSERT_EQ(OB_ITER_END, tmp_ret);
 }
 
 TEST_F(TestSSTableSecMetaIterator, test_dual_iter)
 {
   uint64_t tenant_id = MTL_ID();
-  const ObTableReadInfo &index_read_info = tablet_handle_.get_obj()->get_index_read_info();
+  const ObITableReadInfo &index_read_info = tablet_handle_.get_obj()->get_rowkey_read_info();
   ObDualMacroMetaIterator dual_iter;
   ObMacroBlockDesc macro_desc;
   ObDataMacroBlockMeta data_macro_meta;
@@ -307,7 +307,7 @@ TEST_F(TestSSTableSecMetaIterator, test_dual_iter)
 TEST_F(TestSSTableSecMetaIterator, test_basic_range_spliter)
 {
   const int64_t target_parallel_cnt = 3;
-  const ObTableReadInfo &index_read_info = tablet_handle_.get_obj()->get_index_read_info();
+  const ObITableReadInfo &index_read_info = tablet_handle_.get_obj()->get_rowkey_read_info();
   ObPartitionRangeSpliter range_spliter;
   ObRangeSplitInfo range_info;
   ObArray<ObITable *> tables;
@@ -318,7 +318,7 @@ TEST_F(TestSSTableSecMetaIterator, test_basic_range_spliter)
   store_range.get_end_key().set_max();
   ASSERT_EQ(OB_SUCCESS, range_spliter.get_range_split_info(
       tables, index_read_info, store_range, range_info));
-  ASSERT_EQ(range_info.max_macro_block_count_, sstable_.get_meta().get_basic_meta().data_macro_block_count_);
+  ASSERT_EQ(range_info.max_macro_block_count_, sstable_.get_data_macro_block_count());
   // ASSERT_EQ(range_info.total_size_, sstable_.get_meta().basic_meta_.occupy_size_);
   range_info.set_parallel_target(target_parallel_cnt);
   ASSERT_EQ(OB_SUCCESS, range_spliter.split_ranges(range_info, allocator_, true, range_array_1));
@@ -334,7 +334,7 @@ TEST_F(TestSSTableSecMetaIterator, test_basic_range_spliter)
   store_range.get_end_key().assign(row_cells, TEST_ROWKEY_COLUMN_CNT);
   ASSERT_EQ(OB_SUCCESS, range_spliter.get_range_split_info(
       tables, index_read_info, store_range, range_info));
-  ASSERT_EQ(range_info.max_macro_block_count_, sstable_.get_meta().get_basic_meta().data_macro_block_count_);
+  ASSERT_EQ(range_info.max_macro_block_count_, sstable_.get_data_macro_block_count());
   // ASSERT_EQ(range_info.total_size_, sstable_.get_meta().basic_meta_.occupy_size_);
   range_info.set_parallel_target(target_parallel_cnt);
   ASSERT_EQ(OB_SUCCESS, range_spliter.split_ranges(range_info, allocator_, false, range_array_2));

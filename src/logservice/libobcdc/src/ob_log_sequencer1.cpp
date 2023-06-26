@@ -868,7 +868,7 @@ int ObLogSequencer::handle_multi_data_source_info_(
           }
         } else if (tablet_change_info.is_delete_tablet_op()) {
           // 1. delete tablet should wait all task in dml_parse done.
-          if (OB_FAIL(wait_until_parser_done_(stop_flag))) {
+          if (OB_FAIL(wait_until_parser_done_("delete_tablet_op", stop_flag))) {
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("wait_until_parser_done_ failed", KR(ret), KPC(part_trans_task));
             }
@@ -888,24 +888,48 @@ int ObLogSequencer::handle_multi_data_source_info_(
       ObLogDDLProcessor *ddl_processor = TCTX.ddl_processor_;
       LOG_DEBUG("handle_ddl_trans and mds for data_dict mode begin", KPC(part_trans_task));
 
-      if (OB_ISNULL(ddl_processor)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("expect valid ddl_processor", KR(ret));
-      // Barrier transaction: should wait all task in dml_parser/reader/Formatter done.
-      } else if (OB_FAIL(wait_until_formatter_done_(stop_flag))) {
-        if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("wait_until_formatter_done_ failed", KR(ret), KPC(part_trans_task));
-        }
-      } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, stop_flag))) {
-        if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("handle_ddl_trans for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
-        }
-      } else if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
-          && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
-        LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
-            K(stop_flag));
+      if (part_trans_task->get_multi_data_source_info().is_empty_dict_info()) {
+        _LOG_INFO("[IS_NOT_BARRIER] [EMPTY_DICT] tls_id=%s trans_id=%s is_sp=%d",
+            to_cstring(part_trans_task->get_tls_id()),
+            to_cstring(part_trans_task->get_trans_id()),
+            part_trans_task->is_single_ls_trans());
       } else {
-        LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
+        bool is_not_barrier = false;
+        ObSchemaOperationType op_type;
+
+        if (OB_FAIL(part_trans_task->check_for_ddl_trans(is_not_barrier, op_type))) {
+          LOG_ERROR("part_trans_task check_for_ddl_trans failed", KR(ret), KPC(part_trans_task), K(is_not_barrier));
+        } else if (is_not_barrier) {
+          _LOG_INFO("[IS_NOT_BARRIER] [DDL] tls_id=%s trans_id=%s is_dist=%d OP_TYPE=%s(%d)",
+              to_cstring(part_trans_task->get_tls_id()),
+              to_cstring(part_trans_task->get_trans_id()),
+              part_trans_task->is_dist_trans(),
+              ObSchemaOperation::type_str(op_type), op_type);
+        } else {
+          // Barrier transaction: should wait all task in dml_parser/reader/Formatter done.
+          if (OB_FAIL(wait_until_formatter_done_(stop_flag))) {
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("wait_until_formatter_done_ failed", KR(ret), KPC(part_trans_task));
+            }
+          } // wait_until_formatter_done_
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(ddl_processor)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("expect valid ddl_processor", KR(ret));
+        } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, stop_flag))) {
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("handle_ddl_trans for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
+          }
+        } else if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
+            && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
+          LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
+              K(stop_flag));
+        } else {
+          LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
+        }
       }
     }
 
@@ -960,7 +984,9 @@ int ObLogSequencer::handle_ddl_multi_data_source_info_(
   return ret;
 }
 
-int ObLogSequencer::wait_until_parser_done_(volatile bool &stop_flag)
+int ObLogSequencer::wait_until_parser_done_(
+    const char *caller,
+    volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
 
@@ -979,7 +1005,7 @@ int ObLogSequencer::wait_until_parser_done_(volatile bool &stop_flag)
         const static int64_t PRINT_WAIT_PARSER_TIMEOUT = 10 * _SEC_;
         if (REACH_TIME_INTERVAL(PRINT_WAIT_PARSER_TIMEOUT)) {
           LOG_INFO("DDL barrier waiting reader and dml_parser empty",
-              K(reader_task_count), K(dml_parser_task_count));
+              K(caller), K(reader_task_count), K(dml_parser_task_count));
         } else {
           LOG_DEBUG("DDL barrier waiting reader and dml_parser empty",
               K(reader_task_count), K(dml_parser_task_count));
@@ -1007,7 +1033,7 @@ int ObLogSequencer::wait_until_formatter_done_(volatile bool &stop_flag)
   if (OB_ISNULL(TCTX.formatter_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("formatter is null", KR(ret));
-  } else if (OB_FAIL(wait_until_parser_done_(stop_flag))) {
+  } else if (OB_FAIL(wait_until_parser_done_("wait_formatted", stop_flag))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("wait_until_parser_done_ failed", KR(ret));
     }
@@ -1032,8 +1058,8 @@ int ObLogSequencer::wait_until_formatter_done_(volatile bool &stop_flag)
           LOG_DEBUG("DDL barrier transaction waiting Formatter empty",
               K(formatter_br_task_count), K(formatter_log_entray_task_count), K(lob_merger_task_count));
         }
-        // sleep 100ms and retry
-        const static int64_t WAIT_FORMATTER_EMPTY_TIME = 100 * 1000;
+        // sleep 10ms and retry
+        const static int64_t WAIT_FORMATTER_EMPTY_TIME = 10 * 1000;
         ob_usleep(WAIT_FORMATTER_EMPTY_TIME);
       } else {
         break;

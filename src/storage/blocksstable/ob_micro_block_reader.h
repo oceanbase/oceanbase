@@ -40,7 +40,7 @@ protected:
                          const bool lower_bound,
                          const int64_t begin_idx,
                          const int64_t end_idx,
-                         const ObTableReadInfo &read_info,
+                         const ObStorageDatumUtils &datum_utils,
                          int64_t &row_idx,
                          bool &equal);
   OB_INLINE int init(const ObMicroBlockData &block_data);
@@ -67,7 +67,12 @@ public:
   virtual void reset();
   virtual int init(
       const ObMicroBlockData &block_data,
-      const ObTableReadInfo &read_info) override;
+      const ObITableReadInfo &read_info) override;
+  //when there is not read_info in input parameters, it indicates reading all columns from all rows
+  //when the incoming datum_utils is nullptr, it indicates not calling locate_range or find_bound
+  virtual int init(
+      const ObMicroBlockData &block_data,
+	  const ObStorageDatumUtils *datum_utils) override;
   virtual int get_row(const int64_t index, ObDatumRow &row) override;
   virtual int get_row_header(
       const int64_t row_idx,
@@ -148,18 +153,18 @@ public:
   virtual int get_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
-      const ObTableReadInfo &read_info,
+      const storage::ObITableReadInfo &read_info,
       ObDatumRow &row) final;
   virtual int exist_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
-      const ObTableReadInfo &read_info,
+      const storage::ObITableReadInfo &read_info,
       bool &exist,
       bool &found) final;
   int locate_rowkey(const ObDatumRowkey &rowkey, int64_t &row_idx);
 protected:
   int inner_init(const ObMicroBlockData &block_data,
-                 const ObTableReadInfo &read_info,
+                 const ObITableReadInfo &read_info,
                  const ObDatumRowkey &rowkey);
 private:
   int locate_rowkey_fast_path(const ObDatumRowkey &rowkey,

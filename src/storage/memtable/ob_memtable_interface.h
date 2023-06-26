@@ -143,64 +143,22 @@ struct ObMergePriorityInfo
 class ObIMemtable: public storage::ObITable
 {
 public:
-  ObIMemtable() : snapshot_version_(share::SCN::max_scn())
+  ObIMemtable() : ls_id_(), snapshot_version_(share::SCN::max_scn())
   {}
   virtual ~ObIMemtable() {}
-
+  virtual share::ObLSID &get_ls_id() { return ls_id_;}
   virtual int get(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
       const blocksstable::ObDatumRowkey &rowkey,
       blocksstable::ObDatumRow &row) = 0;
 
-  // Insert/Delete/Update row
-  //
-  // @param [in] ctx, transaction
-  // @param [in] table_id
-  // @param [in] column_ids, input columns
-  // @param [in] row, row to be set
-  //
-  virtual int set(storage::ObStoreCtx &ctx,
-                  const uint64_t table_id,
-                  const storage::ObTableReadInfo &read_info,
-                  const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
-                  const storage::ObStoreRow &row,
-                  const share::ObEncryptMeta *encrypt_meta) = 0;
-  //
-  // Lock rows
-  //
-  // @param [in] ctx, transaction
-  // @param [in] table_id
-  // @param [in] row_iter, input iterator
-  // @param [in] lock_flag, operation flag
-  //
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   common::ObNewRowIterator &row_iter) = 0;
-  //
-  // Lock single row
-  //
-  // @param [in] ctx, transaction
-  // @param [in] table_id
-  // @param [in] row, row to be locked
-  // @param [in] lock_flag, operation flag
-  //
-  virtual int lock(storage::ObStoreCtx &ctx,
-                  const uint64_t table_id,
-                  const storage::ObTableReadInfo &read_info,
-                  const common::ObNewRow &row) = 0;
-  //
-  // Lock single row
-  //
-  // @param [in] ctx, transaction
-  // @param [in] table_id
-  // @param [in] rowkey, row to be locked
-  //
-  virtual int lock(storage::ObStoreCtx &ctx,
-                  const uint64_t table_id,
-                  const storage::ObTableReadInfo &read_info,
-                  const blocksstable::ObDatumRowkey &rowkey) = 0;
+  virtual int64_t get_frozen_trans_version() { return 0; }
+  virtual int major_freeze(const common::ObVersion &version)
+  { UNUSED(version); return common::OB_SUCCESS; }
+  virtual int minor_freeze(const common::ObVersion &version)
+  { UNUSED(version); return common::OB_SUCCESS; }
+
   virtual void inc_pending_lob_count() {}
   virtual void dec_pending_lob_count() {}
   virtual int on_memtable_flushed() { return common::OB_SUCCESS; }
@@ -268,6 +226,7 @@ public:
     return false;
   }
 protected:
+  share::ObLSID ls_id_;
   share::SCN snapshot_version_;
 };
 

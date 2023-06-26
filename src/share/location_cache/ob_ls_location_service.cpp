@@ -101,7 +101,6 @@ int ObLSLocationUpdateQueueSet::add_task(const ObLSLocationUpdateTask &task)
     LOG_WARN("invalid task", KR(ret), K(task));
   } else {
     uint64_t tenant_id = task.get_tenant_id();
-    ObLSID ls_id = task.get_ls_id();
     if (is_sys_tenant(tenant_id)) { // high priority
       if (OB_FAIL(sys_tenant_queue_.add(task))) {
         if (OB_EAGAIN != ret) {
@@ -279,13 +278,13 @@ int ObLSLocationService::get(
     LOG_WARN("invalid key for get",
         KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
   } else {
-    ret = get_from_cache(cluster_id, tenant_id, ls_id, location);
+    ret = get_from_cache_(cluster_id, tenant_id, ls_id, location);
     if (OB_SUCCESS != ret && OB_CACHE_NOT_HIT != ret) {
       LOG_WARN("get location from cache failed",
           KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
     } else if (OB_CACHE_NOT_HIT == ret
         || location.get_renew_time() <= expire_renew_time) {
-      if (OB_FAIL(renew_location(cluster_id, tenant_id, ls_id, location))) {
+      if (OB_FAIL(renew_location_(cluster_id, tenant_id, ls_id, location))) {
         LOG_WARN("renew location failed",
             KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
       }
@@ -415,7 +414,7 @@ int ObLSLocationService::nonblock_get(
     LOG_WARN("invalid key for get",
         KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
   } else {
-    ret = get_from_cache(cluster_id, tenant_id, ls_id, location);
+    ret = get_from_cache_(cluster_id, tenant_id, ls_id, location);
     if (OB_SUCCESS != ret && OB_CACHE_NOT_HIT != ret) {
       LOG_WARN("get location from cache failed",
           KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
@@ -467,7 +466,31 @@ int ObLSLocationService::nonblock_renew(
         KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
   } else {
     const int64_t now = ObTimeUtility::current_time();
-    ObLSLocationUpdateTask task(cluster_id, tenant_id, ls_id, now);
+    const bool renew_all_tenant = false;
+    ObLSLocationUpdateTask task(cluster_id, tenant_id, ls_id, renew_all_tenant, now);
+    if (OB_FAIL(add_update_task(task))) {
+      LOG_WARN("add location update task failed", KR(ret), K(task));
+    }
+  }
+  return ret;
+}
+
+int ObLSLocationService::nonblock_renew(
+    const int64_t cluster_id,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service not init", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id
+      || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid log stream key", KR(ret), K(cluster_id), K(tenant_id));
+  } else {
+    const int64_t now = ObTimeUtility::current_time();
+    const bool renew_all_tenant = true;
+    ObLSLocationUpdateTask task(cluster_id, tenant_id, SYS_LS, renew_all_tenant, now);
     if (OB_FAIL(add_update_task(task))) {
       LOG_WARN("add location update task failed", KR(ret), K(task));
     }
@@ -512,23 +535,29 @@ int ObLSLocationService::batch_process_tasks(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected task count", KR(ret), "tasks count", tasks.count());
   } else {
-    const uint64_t tenant_id = tasks.at(0).get_tenant_id();
+    const ObLSLocationUpdateTask &task = tasks.at(0);
+    const uint64_t tenant_id = task.get_tenant_id();
     const uint64_t superior_tenant_id = get_private_table_exec_tenant_id(tenant_id);
     ObLSLocation location;
+    ObArray<ObLSLocation> locations;
     if (OB_ISNULL(GCTX.schema_service_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.schema_service_ is null", KR(ret));
     } else if (!GCTX.schema_service_->is_tenant_full_schema(superior_tenant_id)) {
       // do not process tasks if tenant schema is not ready
       if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
-        LOG_WARN("tenant schema is not ready, need wait", KR(ret), K(superior_tenant_id), K(tasks));
+        LOG_WARN("tenant schema is not ready, need wait", KR(ret), K(superior_tenant_id), K(task));
       }
-    } else if (OB_FAIL(renew_location(
-        tasks.at(0).get_cluster_id(),
-        tasks.at(0).get_tenant_id(),
-        tasks.at(0).get_ls_id(),
+    } else if (task.is_renew_for_tenant()) {
+      if (OB_FAIL(renew_location_for_tenant(task.get_cluster_id(), task.get_tenant_id(), locations))) {
+        LOG_WARN("renew cache for tenant failed", KR(ret), K(task));
+      }
+    } else if (OB_FAIL(renew_location_(
+        task.get_cluster_id(),
+        task.get_tenant_id(),
+        task.get_ls_id(),
         location))) {
-      LOG_WARN("fail to renew location", KR(ret), "task", tasks.at(0));
+      LOG_WARN("fail to renew location", KR(ret), K(task));
     }
   }
   return ret;
@@ -593,7 +622,7 @@ int ObLSLocationService::reload_config()
 }
 
 //FIXME: Not used. The GC logic needs to be reconsidered. Should not rely on __all_ls_status.
-int ObLSLocationService::build_tenant_ls_info_hash(ObTenantLsInfoHashMap &hash)
+int ObLSLocationService::build_tenant_ls_info_hash_(ObTenantLsInfoHashMap &hash)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
@@ -650,7 +679,7 @@ int ObLSLocationService::check_and_clear_dead_cache()
       LOG_WARN("check and generate dead cache error", KR(ret));
     } else if (total_arr.count() <= 0) {
       LOG_INFO("no dead cache need to clear", K(total_arr));
-    } else if (OB_FAIL(build_tenant_ls_info_hash(hash))) {
+    } else if (OB_FAIL(build_tenant_ls_info_hash_(hash))) {
       LOG_WARN("build tenant ls info hash error", KR(ret), K(total_arr));
     } else {
       LOG_INFO("start to clear dead cache");
@@ -689,70 +718,29 @@ int ObLSLocationService::renew_all_ls_locations()
   ObCurTraceId::init(GCONF.self_addr_);
   int ret = OB_SUCCESS;
   int ret_fail = OB_SUCCESS;
-  ObArray<ObLSInfo> ls_infos;
   ObArray<uint64_t> tenant_ids;
-  const bool can_erase = true;
-  const int64_t renew_all_ls_loc_timeout = GCONF.location_cache_refresh_sql_timeout;
-  const bool inner_table_only = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("get tenant_ids failed", KR(ret));
   } else {
+    ObArray<ObLSLocation> locations;
     ARRAY_FOREACH_NORET(tenant_ids, idx) {
       // ignore ret to ensure that each tenant's renewing is independent.
       ret = OB_SUCCESS;
-      ls_infos.reset();
+      locations.reset();
       const uint64_t tenant_id = tenant_ids.at(idx);
-      ObTimeoutCtx ctx;
       if (!is_valid_tenant_id(tenant_id)
           || is_virtual_tenant_id(tenant_id)) {
         continue;
-      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(
-              ctx,
-              renew_all_ls_loc_timeout))) {
-        LOG_WARN("fail to set default_timeout_ctx", KR(ret));
-      } else if (OB_FAIL(lst_->get_by_tenant(tenant_id, inner_table_only, ls_infos))) {
-        LOG_WARN("fail to get all ls info", KR(ret), K(tenant_id), K(ls_infos));
-      } else {
-        ARRAY_FOREACH_N(ls_infos, i, cnt) {
-          const ObLSInfo &ls_info = ls_infos.at(i);
-          ObLSLocation old_location;
-          ObLSLocation new_location;
-          bool is_same = false;
-          int tmp_ret = OB_SUCCESS;
-          // get from cache does not affect renew process
-          if (OB_SUCCESS != (tmp_ret = get_from_cache(
-              GCONF.cluster_id,
-              ls_info.get_tenant_id(),
-              ls_info.get_ls_id(),
-              old_location))) {
-            if (OB_CACHE_NOT_HIT == tmp_ret) {
-              tmp_ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("fail to get from cache", KR(tmp_ret), K(ls_info));
-            }
-          }
-          if (OB_FAIL(fill_location(GCONF.cluster_id, ls_info, new_location))) {
-            LOG_WARN("fail to fill location", KR(ret), K(ls_info));
-          } else if (OB_FAIL(update_cache(
-              GCONF.cluster_id,
-              new_location.get_tenant_id(),
-              new_location.get_ls_id(),
-              can_erase,
-              new_location))) {
-            LOG_WARN("fail to update cache", KR(ret), K(tenant_id), K(new_location));
-          }
-          if (OB_SUCC(ret) && (OB_SUCCESS == tmp_ret) && !new_location.is_same_with(old_location)) {
-            FLOG_INFO("[LS_LOCATION]ls location cache has changed", KR(ret), K(old_location), K(new_location));
-          }
-        }
+      } else if (OB_FAIL(renew_location_for_tenant(GCONF.cluster_id, tenant_id, locations))) {
+        LOG_WARN("renew cache for tenant failed", KR(ret), K(tenant_id));
       }
       if (OB_FAIL(ret)) {
         ret_fail = ret;
       }
     } // end ARRAY_FOREACH_NORET
-    ret = ret_fail;
+    ret = OB_FAIL(ret) ? ret : ret_fail;
   }
   return ret;
 }
@@ -794,6 +782,30 @@ int ObLSLocationService::renew_all_ls_locations_by_rpc()
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) { // 10s
       FLOG_INFO("[LS_LOCATION] Get ls leaders by RPC", KR(ret), K(dests), K(leaders));
     }
+  }
+  return ret;
+}
+
+int ObLSLocationService::renew_location_for_tenant(
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    common::ObIArray<ObLSLocation> &locations)
+{
+  int ret = OB_SUCCESS;
+  locations.reset();
+  const bool can_erase = true;
+  const int64_t timeout = GCONF.location_cache_refresh_sql_timeout;
+  const bool inner_table_only = false;
+  ObTimeoutCtx ctx;
+  ObArray<ObLSInfo> ls_infos;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, timeout))) {
+    LOG_WARN("fail to set default_timeout_ctx", KR(ret));
+  } else if (OB_FAIL(lst_->get_by_tenant(tenant_id, inner_table_only, ls_infos))) {
+    LOG_WARN("fail to get all ls info", KR(ret), K(tenant_id), K(ls_infos));
+  } else if (OB_FAIL(batch_update_caches_(cluster_id, ls_infos, can_erase, locations))) {
+    LOG_WARN("batch update caches failed", KR(ret), K(cluster_id), K(tenant_id), K(can_erase));
   }
   return ret;
 }
@@ -869,8 +881,67 @@ int ObLSLocationService::detect_ls_leaders_(
         }
       } // end for
     }
+  }
+  return ret;
+}
 
+int ObLSLocationService::batch_update_caches_(
+    const int64_t cluster_id,
+    const common::ObIArray<ObLSInfo> &ls_infos,
+    const bool can_erase,
+    common::ObIArray<ObLSLocation> &locations)
+{
+  int ret = OB_SUCCESS;
+  int ret_fail = OB_SUCCESS;
+  locations.reset();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid cluster_id", KR(ret), K(cluster_id));
+  } else if (OB_FAIL(locations.reserve(ls_infos.count()))) {
+    LOG_WARN("reserve failed", KR(ret), "count", ls_infos.count());
+  }
+  ARRAY_FOREACH(ls_infos, i) {
+    const ObLSInfo &ls_info = ls_infos.at(i);
+    ObLSLocation old_location;
+    ObLSLocation new_location;
+    bool is_same = false;
+    int tmp_ret = OB_SUCCESS;
 
+    // get from cache does not affect renew process
+    if (OB_TMP_FAIL(get_from_cache_(
+        cluster_id,
+        ls_info.get_tenant_id(),
+        ls_info.get_ls_id(),
+        old_location))) {
+      if (OB_CACHE_NOT_HIT == tmp_ret) {
+        tmp_ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get from cache", KR(tmp_ret), K(ls_info));
+      }
+    }
+
+    if (FAILEDx(fill_location_(cluster_id, ls_info, new_location))) {
+      LOG_WARN("fail to fill location", KR(ret), K(ls_info));
+    } else if (new_location.get_replica_locations().empty()) {
+      if (!can_erase) {
+        // do nothing
+      } else if (OB_FAIL(erase_location_(cluster_id, ls_info.get_tenant_id(), ls_info.get_ls_id()))) {
+        LOG_WARN("fail to erase location", KR(ret), K(cluster_id), K(ls_info));
+      }
+    } else if (OB_FAIL(update_cache_(
+        cluster_id,
+        new_location.get_tenant_id(),
+        new_location.get_ls_id(),
+        new_location))) {
+      LOG_WARN("fail to update cache", KR(ret), K(new_location));
+    } else if (OB_FAIL(locations.push_back(new_location))) {
+      LOG_WARN("push back failed", KR(ret), K(new_location));
+    }
+    if (OB_SUCC(ret) && (OB_SUCCESS == tmp_ret) && !new_location.is_same_with(old_location)) {
+      FLOG_INFO("[LS_LOCATION]ls location cache has changed", KR(ret), K(old_location), K(new_location));
+    }
   }
   return ret;
 }
@@ -885,7 +956,7 @@ bool ObLSLocationService::is_valid_key(
       && ls_id.is_valid_with_tenant(tenant_id);
 }
 
-int ObLSLocationService::get_from_cache(
+int ObLSLocationService::get_from_cache_(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
@@ -912,65 +983,35 @@ int ObLSLocationService::get_from_cache(
   return ret;
 }
 
-int ObLSLocationService::renew_location(
+int ObLSLocationService::renew_location_(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
     ObLSLocation &location)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObLSLocation old_location;
-  ObTimeoutCtx ctx;
   location.reset();
-  ObLSInfo ls_info;
-  const bool can_erase = true;
-  int64_t default_timeout = GCONF.location_cache_refresh_sql_timeout;
+  ObSEArray<ObLSID, 1> ls_ids;
+  ObSEArray<ObLSLocation, 1> ls_locations;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!is_valid_key(cluster_id, tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
-  } else if (OB_ISNULL(lst_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst_ is null", KR(ret));
-  }
-
-  // get from cache just for printing cache changes log
-  if (OB_FAIL(ret)) {
-  } else if (OB_SUCCESS != (tmp_ret = get_from_cache(cluster_id, tenant_id, ls_id, old_location))) {
-    if (OB_CACHE_NOT_HIT == tmp_ret) {
-      tmp_ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to get from cache", KR(tmp_ret), K(cluster_id), K(tenant_id), K(ls_id));
-    }
-  }
-
-  if (FAILEDx(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
-    LOG_WARN("fail to set default_timeout_ctx", KR(ret));
-  } else if (OB_FAIL(lst_->get(cluster_id, tenant_id,
-             ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
-    LOG_WARN("fail to get log stream info by operator",
-        KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
-    if (ObLocationServiceUtility::treat_sql_as_timeout(ret)) {
-      ret = OB_GET_LOCATION_TIME_OUT;
-    }
-  } else if (OB_FAIL(fill_location(cluster_id, ls_info, location))) {
-    LOG_WARN("fail to fill location", KR(ret), K(ls_info));
-  } else if (OB_FAIL(update_cache(cluster_id, tenant_id, ls_id, can_erase, location))) {
-    LOG_WARN("fail to update cache", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
-  } else if (location.get_replica_locations().count() < 1) {
+  } else if (OB_FAIL(ls_ids.push_back(ls_id))) {
+    LOG_WARN("push back faile", KR(ret), K(ls_ids));
+  } else if (OB_FAIL(batch_renew_ls_locations(cluster_id, tenant_id, ls_ids, ls_locations))) {
+    LOG_WARN("batch renew ls locations failed", KR(ret), K(cluster_id), K(tenant_id), K(ls_ids));
+  } else if (ls_locations.empty()) {
     ret = OB_LS_LOCATION_NOT_EXIST;
     LOG_WARN("get empty location from meta table", KR(ret), K(location));
-  }
-  // print cache changes
-  if (OB_SUCC(ret) && (OB_SUCCESS == tmp_ret) && !location.is_same_with(old_location)) {
-    FLOG_INFO("[LS_LOCATION]ls location cache has changed", KR(ret), K(old_location), "new_location", location);
+  } else if (OB_FAIL(location.assign(ls_locations.at(0)))) {
+    LOG_WARN("assign failed", KR(ret), K(ls_locations));
   }
   return ret;
 }
 
-int ObLSLocationService::fill_location(
+int ObLSLocationService::fill_location_(
     const int64_t cluster_id,
     const ObLSInfo &ls_info,
     ObLSLocation &location)
@@ -1014,11 +1055,10 @@ int ObLSLocationService::fill_location(
   return ret;
 }
 
-int ObLSLocationService::update_cache(
+int ObLSLocationService::update_cache_(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
-    const bool can_erase,
     ObLSLocation &location)
 {
   int ret = OB_SUCCESS;
@@ -1029,14 +1069,8 @@ int ObLSLocationService::update_cache(
   } else if (!cache_key.is_valid() || !location.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cache_key), K(location));
-  } else if (location.get_replica_locations().count() < 1) {
-    if (!can_erase) {
-      ret = OB_LS_LOCATION_NOT_EXIST;
-      LOG_WARN("location is empty", KR(ret),
-          K(cluster_id), K(tenant_id), K(ls_id), K(can_erase), K(location));
-    } else if (OB_FAIL(erase_location(cluster_id, tenant_id, ls_id))) {
-      LOG_WARN("fail to erase location", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
-    }
+  } else if (location.get_replica_locations().empty()) {
+    // skip empty location
   } else if (OB_FAIL(inner_cache_.update(from_rpc, cache_key, location))) {
     LOG_WARN("put location to user location cache failed",
         KR(ret), K(from_rpc), K(cache_key), K(location));
@@ -1047,7 +1081,7 @@ int ObLSLocationService::update_cache(
   return ret;
 }
 
-int ObLSLocationService::erase_location(
+int ObLSLocationService::erase_location_(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id)
@@ -1172,6 +1206,51 @@ int ObLSLocationService::dump_cache()
         }
       } // end foreach tenant_ids
       ret = OB_FAIL(ret) ? ret : fail_ret;
+    }
+  }
+  return ret;
+}
+
+int ObLSLocationService::batch_renew_ls_locations(
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    const common::ObIArray<ObLSID> &ls_ids,
+    common::ObIArray<ObLSLocation> &ls_locations)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id
+      || !is_valid_tenant_id(tenant_id)
+      || ls_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(ls_ids));
+  } else {
+    ObArray<ObLSInfo> ls_infos;
+    const bool can_erase = true;
+    ObLSLocation location;
+    ObTimeoutCtx ctx;
+    const int64_t default_timeout = GCONF.location_cache_refresh_sql_timeout;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
+      LOG_WARN("fail to set default_timeout_ctx", KR(ret));
+    } else if (OB_FAIL(lst_->batch_get(
+        cluster_id,
+        tenant_id,
+        ls_ids,
+        ObLSTable::DEFAULT_MODE,
+        ls_infos))) {
+      if (ObLocationServiceUtility::treat_sql_as_timeout(ret)) {
+        int previous_ret = ret;
+        ret = OB_GET_LOCATION_TIME_OUT;
+        LOG_WARN("the sql used to get ls locations error, treat as timeout",
+            KR(ret), K(previous_ret), K(ls_ids));
+      } else {
+        LOG_WARN("fail to batch get ls info by operator",
+            KR(ret), K(cluster_id), K(tenant_id), K(ls_ids));
+      }
+    } else if (OB_FAIL(batch_update_caches_(cluster_id, ls_infos, can_erase, ls_locations))) {
+      LOG_WARN("batch update caches failed", KR(ret),
+          K(cluster_id), K(ls_infos), K(can_erase), K(ls_locations));
     }
   }
   return ret;

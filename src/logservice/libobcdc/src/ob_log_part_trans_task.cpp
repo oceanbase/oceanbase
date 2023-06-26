@@ -2463,8 +2463,8 @@ int PartTransTask::push_multi_data_source_data(
           }
           break;
         }
-        case transaction::ObTxDataSourceType::CREATE_TABLET:
-        case transaction::ObTxDataSourceType::REMOVE_TABLET:
+        case transaction::ObTxDataSourceType::CREATE_TABLET_NEW_MDS:
+        case transaction::ObTxDataSourceType::DELETE_TABLET_NEW_MDS:
         {
           if (! is_commit_log) {
             if (OB_FAIL(alloc_and_save_multi_data_source_node_(lsn, mds_buffer_node))) {
@@ -2475,20 +2475,22 @@ int PartTransTask::push_multi_data_source_data(
         }
         case transaction::ObTxDataSourceType::LS_TABLE:
         {
-          if (is_commit_log) {
+          // only push_back ls_op in multi_data_source_log, in case of reentrant of commit_log
+          // while handling miss_log.
+          if (! is_commit_log) {
             int64_t pos = 0;
-            share::ObLSAttr &ls_attr = multi_data_source_info_.get_ls_attr();
+            share::ObLSAttr ls_attr;;
 
             if (OB_FAIL(ls_attr.deserialize(data.ptr(), data_buf_size, pos))) {
               LOG_ERROR("deserialize ls_table_op failed", KR(ret), K_(tls_id), K_(trans_id), K(lsn),
                   K(mds_buffer_node), K(ls_attr));
+            } else if (OB_FAIL(multi_data_source_info_.push_back_ls_table_op(ls_attr))) {
+              LOG_ERROR("push_back ls_table_op info multi_data_source_info failed", KR(ret),
+                  K_(tls_id), K_(trans_id), K(lsn), K(mds_buffer_node), K(ls_attr));
+            } else {
+              LOG_INFO("resolver found ls_attr in multi_data_source log", K_(tls_id), K_(trans_id), K(lsn),
+                  K(mds_buffer_node), K(ls_attr));
             }
-          } else if (multi_data_source_info_.has_ls_table_op()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("expect at most one ls_table_op per trans", KR(ret), K_(tls_id), K_(trans_id), K(lsn),
-                K(mds_buffer_node), K_(multi_data_source_info));
-          } else {
-            multi_data_source_info_.set_has_ls_table_op();
           }
           break;
         }
@@ -2640,7 +2642,10 @@ int PartTransTask::get_database_schema_info_with_inc_dict(
   return ret;
 }
 
-int PartTransTask::get_table_meta_with_inc_dict(const uint64_t tenant_id, const uint64_t table_id, const datadict::ObDictTableMeta *&tb_meta)
+int PartTransTask::get_table_meta_with_inc_dict(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const datadict::ObDictTableMeta *&tb_meta)
 {
   int ret = OB_SUCCESS;
 
@@ -2675,6 +2680,45 @@ int PartTransTask::get_table_meta_with_inc_dict(const uint64_t tenant_id, const 
   } else {
     // ONLY used for SYS_LS PartTransTask of DDL_TRANS
     ret = OB_ENTRY_NOT_EXIST;
+  }
+
+  return ret;
+}
+
+int PartTransTask::check_for_ddl_trans(
+    bool &is_not_barrier,
+    ObSchemaOperationType &op_type) const
+{
+  int ret = OB_SUCCESS;
+  is_not_barrier = false;
+  int64_t other_ddl_count = 0;
+  IStmtTask *stmt_task = get_stmt_list().head_;
+
+  while (NULL != stmt_task && OB_SUCC(ret)) {
+    DdlStmtTask *ddl_stmt = dynamic_cast<DdlStmtTask *>(stmt_task);
+
+    if (OB_UNLIKELY(! stmt_task->is_ddl_stmt()) || OB_ISNULL(ddl_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid DDL statement", KR(ret), KPC(stmt_task), K(ddl_stmt));
+    } else {
+      op_type = static_cast<ObSchemaOperationType>(ddl_stmt->get_operation_type());
+
+      if (OB_DDL_CREATE_TABLE == op_type
+          || OB_DDL_TRUNCATE_TABLE == op_type) {
+        is_not_barrier = true;
+      } else {
+        ++other_ddl_count;
+      }
+      stmt_task = stmt_task->get_next();
+    }
+  } // while
+
+  if (OB_SUCC(ret)) {
+    // Normally, a DDL transaction only contains one DDL statement.
+    // If there are multiple statements, the DDL transaction is treated as barrier to avoid misjudgments
+    if (other_ddl_count > 0) {
+      is_not_barrier = false;
+    }
   }
 
   return ret;
@@ -2975,32 +3019,42 @@ int PartTransTask::commit(
       type_ = TASK_TYPE_DDL_TRANS;
     } else if (multi_data_source_info_.has_ls_table_op()) {
       type_ = TASK_TYPE_LS_OP_TRANS;
-      const share::ObLSAttr &ls_attr = multi_data_source_info_.get_ls_attr();;
+      int64_t idx = 0;
+      int64_t ls_attr_cnt = 0;
+      const share::ObLSAttrArray &ls_attr_arr = multi_data_source_info_.get_ls_attr_arr();;
 
-      if (OB_UNLIKELY(! ls_attr.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("ls_attr from multi_data_source is not valid", KR(ret), K(ls_attr), KPC(this));
-      } else if (OB_FAIL(ObLogLSOpProcessor::process_ls_op(tls_id_.get_tenant_id(), commit_log_lsn, commit_log_submit_ts,
-          ls_attr))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_ERROR("ObLogLSOpProcessor process_ls_op failed", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
-              K(commit_log_submit_ts), K(ls_attr));
-        } else {
-          if (is_data_dict_mode) {
-            // In Data dictionary, it need to fetch the log of the baseline data dict before adding a tenant,
-            // and if it encounter a log stream operation in the process of building the data dictionary,
-            // it need to ignore it and rely on the incremental replay process of the data dictionary.
-            ret = OB_SUCCESS;
-            LOG_INFO("ObLogLSOpProcessor process_ls_op when tenant is not exist", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
-                K(commit_log_submit_ts), K(ls_attr));
-          } else {
+      ARRAY_FOREACH_N(ls_attr_arr, idx, ls_attr_cnt)
+      {
+        const share::ObLSAttr &ls_attr = ls_attr_arr.at(idx);
+
+        if (OB_UNLIKELY(! ls_attr.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("ls_attr from multi_data_source is not valid", KR(ret), K(idx), K(ls_attr_cnt), K(ls_attr), K(ls_attr_arr), KPC(this));
+        } else if (OB_FAIL(ObLogLSOpProcessor::process_ls_op(
+            tls_id_.get_tenant_id(),
+            commit_log_lsn,
+            commit_log_submit_ts,
+            ls_attr))) {
+          if (OB_ENTRY_NOT_EXIST != ret) {
             LOG_ERROR("ObLogLSOpProcessor process_ls_op failed", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
                 K(commit_log_submit_ts), K(ls_attr));
+          } else {
+            if (is_data_dict_mode) {
+              // In Data dictionary, it need to fetch the log of the baseline data dict before adding a tenant,
+              // and if it encounter a log stream operation in the process of building the data dictionary,
+              // it need to ignore it and rely on the incremental replay process of the data dictionary.
+              ret = OB_SUCCESS;
+              LOG_INFO("ObLogLSOpProcessor process_ls_op when tenant is not exist", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
+                  K(commit_log_submit_ts), K(ls_attr));
+            } else {
+              LOG_ERROR("ObLogLSOpProcessor process_ls_op failed", KR(ret), K(tls_id_), K(tx_id), K(commit_log_lsn),
+                  K(commit_log_submit_ts), K(ls_attr), K(idx), K(ls_attr_arr));
+            }
           }
+        } else {
+          LOG_INFO("ObLogLSOpProcessor process_ls_op succ", K(tls_id_), K(tx_id), K(commit_log_lsn),
+              K(commit_log_submit_ts), K(ls_attr), K(idx), K(ls_attr_arr));
         }
-      } else {
-        LOG_INFO("ObLogLSOpProcessor process_ls_op succ", K(tls_id_), K(tx_id), K(commit_log_lsn),
-            K(commit_log_submit_ts), K(ls_attr));
       }
     } else {
       ret = OB_NOT_SUPPORTED;

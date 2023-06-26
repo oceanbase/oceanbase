@@ -67,7 +67,7 @@ int ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
 int ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
   ObSSTable *sstable,
   const ObDatumRange &scan_range,
-  const ObTableReadInfo &index_read_info,
+  const ObITableReadInfo &index_read_info,
   ObIAllocator &allocator,
   ObIDirectLoadDatumRowkeyIterator *&rowkey_iter)
 {
@@ -478,14 +478,14 @@ int ObDirectLoadMergeRangeSplitter::construct_origin_table_rowkey_iter(
   ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
   if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
         origin_table->get_major_sstable(), scan_range_,
-        origin_table->get_tablet_handle().get_obj()->get_index_read_info(), allocator_,
+        origin_table->get_tablet_handle().get_obj()->get_rowkey_read_info(), allocator_,
         rowkey_iter))) {
     LOG_WARN("fail to construct rowkey iter", KR(ret));
   } else if (OB_FAIL(rowkey_iters_.push_back(rowkey_iter))) {
     LOG_WARN("fail to push back rowkey iter", KR(ret));
   } else {
     total_block_count_ +=
-      origin_table->get_major_sstable()->get_meta().get_basic_meta().data_macro_block_count_;
+      origin_table->get_major_sstable()->get_data_macro_block_count();
   }
   return ret;
 }
@@ -595,14 +595,14 @@ int ObDirectLoadMultipleMergeTabletRangeSplitter::construct_origin_table_rowkey_
   ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
   if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
         origin_table->get_major_sstable(), scan_range_,
-        origin_table->get_tablet_handle().get_obj()->get_index_read_info(), allocator_,
+        origin_table->get_tablet_handle().get_obj()->get_rowkey_read_info(), allocator_,
         rowkey_iter))) {
     LOG_WARN("fail to construct rowkey iter", KR(ret));
   } else if (OB_FAIL(rowkey_iters_.push_back(rowkey_iter))) {
     LOG_WARN("fail to push back rowkey iter", KR(ret));
   } else {
     total_block_count_ +=
-      origin_table->get_major_sstable()->get_meta().get_basic_meta().data_macro_block_count_;
+      origin_table->get_major_sstable()->get_data_macro_block_count();
   }
   return ret;
 }
@@ -791,7 +791,7 @@ int ObDirectLoadMultipleMergeRangeSplitter::get_rowkeys_by_origin(
   scan_range.set_whole_range();
   if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
         origin_table->get_major_sstable(), scan_range,
-        origin_table->get_tablet_handle().get_obj()->get_index_read_info(), allocator,
+        origin_table->get_tablet_handle().get_obj()->get_rowkey_read_info(), allocator,
         rowkey_iter))) {
     LOG_WARN("fail to construct rowkey iter", KR(ret));
   } else {

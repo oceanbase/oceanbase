@@ -551,8 +551,7 @@ void ObChunkDatumStore::reset()
   blocks_.reset();
   cur_blk_ = NULL;
   cur_blk_buffer_ = nullptr;
-  free_block(tmp_dump_blk_);
-  tmp_dump_blk_ = nullptr;
+  free_tmp_dump_blk(); // just in case, not necessary. tmp block always freed instantly after use
   while (!free_list_.is_empty()) {
     Block *item = free_list_.remove_first();
     mem_hold_ -= item->get_buffer()->mem_size();
@@ -2385,12 +2384,12 @@ void ObChunkDatumStore::Iterator::reset_cursor(const int64_t file_size)
   read_blk_ = NULL;
   read_blk_buf_ = NULL;
 
-  while (NULL != cached_.get_first()) {
-    free_block(cached_.remove_first(), default_block_size_, force_free);
+  while (NULL != icached_.get_first()) {
+    free_block(icached_.remove_first(), default_block_size_, force_free);
   }
 
-  while (NULL != free_list_.get_first()) {
-    free_block(free_list_.remove_first(), default_block_size_, force_free);
+  while (NULL != ifree_list_.get_first()) {
+    free_block(ifree_list_.remove_first(), default_block_size_, force_free);
   }
 
   if (nullptr != blk_holder_ptr_) {
@@ -2558,8 +2557,8 @@ int ObChunkDatumStore::Iterator::alloc_block(Block *&blk, const int64_t size)
 {
   int ret = OB_SUCCESS;
   try_free_cached_blocks();
-  if (size == default_block_size_ && NULL != free_list_.get_first()) {
-    blk = free_list_.remove_first();
+  if (size == default_block_size_ && NULL != ifree_list_.get_first()) {
+    blk = ifree_list_.remove_first();
     ObChunkDatumStore::init_block_buffer(blk, size, blk);
   } else if (OB_FAIL(store_->alloc_block_buffer(blk, size, true))) {
     LOG_WARN("alloc block buffer failed", K(ret), K(size));
@@ -2586,13 +2585,13 @@ void ObChunkDatumStore::Iterator::free_block(Block *blk, const int64_t size,
         *((int64_t *)((char *)blk + size - sizeof(int64_t))) = age_->get();
         // Save memory size to %blk_size_
         blk->blk_size_ = size;
-        cached_.add_last(blk);
+        icached_.add_last(blk);
       } else {
         if (size == default_block_size_ && !force_free) {
 #ifndef NDEBUG
           memset((char *)blk + sizeof(*blk), 0xAA, size - sizeof(*blk));
 #endif
-          free_list_.add_last(blk);
+          ifree_list_.add_last(blk);
         } else {
           do_phy_free = true;
         }
@@ -2613,17 +2612,17 @@ void ObChunkDatumStore::Iterator::try_free_cached_blocks()
 {
   const int64_t read_age = NULL == age_ ? INT64_MAX : age_->get();
   // try free age expired blocks
-  while (NULL != cached_.get_first()) {
-    Block *b = cached_.get_first();
+  while (NULL != icached_.get_first()) {
+    Block *b = icached_.get_first();
     // age is stored in tail of block, see free_block()
     const int64_t age = *((int64_t *)((char *)b + b->blk_size_ - sizeof(int64_t)));
     if (age < read_age) {
-      b = cached_.remove_first();
+      b = icached_.remove_first();
       if (b->blk_size_ == default_block_size_) {
 #ifndef NDEBUG
         memset((char *)b + sizeof(*b), 0xAA, b->blk_size_ - sizeof(*b));
 #endif
-        free_list_.add_last(b);
+        ifree_list_.add_last(b);
       } else {
         const bool force_free = true;
         free_block(b, b->blk_size_, force_free);

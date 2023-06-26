@@ -84,8 +84,7 @@ TEST_F(TestIndexBlockRowScanner, transform)
       root_block_data_buf_);
   char * extra_buf = reinterpret_cast<char *>(allocator_.alloc(extra_size));
   ASSERT_NE(nullptr, extra_buf);
-  ASSERT_EQ(OB_SUCCESS, index_block_transformer.transform(
-          tablet_handle_.get_obj()->get_index_read_info(), root_block_data_buf_, extra_buf, extra_size));
+  ASSERT_EQ(OB_SUCCESS, index_block_transformer.transform(root_block_data_buf_, extra_buf, extra_size));
   const ObIndexBlockDataHeader *idx_blk_header
       = reinterpret_cast<const ObIndexBlockDataHeader *>(extra_buf);
   for (int64_t i = 0; i < idx_blk_header->row_cnt_; ++i) {
@@ -155,15 +154,14 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
       root_block_data_buf_);
   char * extra_buf = reinterpret_cast<char *>(allocator_.alloc(extra_size));
   ASSERT_NE(nullptr, extra_buf);
-  ASSERT_EQ(OB_SUCCESS, transformer.transform(
-          tablet_handle_.get_obj()->get_index_read_info(), root_block_data_buf_, extra_buf, extra_size));
+  ASSERT_EQ(OB_SUCCESS, transformer.transform(root_block_data_buf_, extra_buf, extra_size));
   const ObIndexBlockDataHeader *root_blk_header
       = reinterpret_cast<const ObIndexBlockDataHeader *>(extra_buf);
 
   ASSERT_EQ(OB_SUCCESS, idx_scanner.init(
-      agg_projector, agg_column_schema, &tablet_handle_.get_obj()->get_index_read_info(), allocator_, query_flag, 0));
+      agg_projector, agg_column_schema, tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(), allocator_, query_flag, 0));
   ASSERT_EQ(OB_SUCCESS, raw_idx_scanner.init(
-      agg_projector, agg_column_schema, &tablet_handle_.get_obj()->get_index_read_info(), allocator_, query_flag, 0));
+      agg_projector, agg_column_schema, tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(), allocator_, query_flag, 0));
 
   ObMacroBlockHandle macro_handle;
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
@@ -180,8 +178,6 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
           idx_row_header->get_macro_id(),
           idx_row,
           query_flag,
-          tablet_handle_.get_obj()->get_index_read_info(),
-          tablet_handle_,
           macro_handle));
 
   ASSERT_EQ(OB_SUCCESS, macro_handle.wait(2000)); // Wait at most 2 sec
@@ -238,8 +234,8 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
 int main(int argc, char **argv)
 {
   system("rm -f test_index_block_row_scanner.log*");
-  OB_LOGGER.set_file_name("test_index_block_row_scanner.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  OB_LOGGER.set_file_name("test_index_block_row_scanner.log", true, false);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

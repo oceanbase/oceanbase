@@ -15,7 +15,6 @@
 #include <signal.h>
 #define private public
 #include "share/scn.h"
-#include "storage/slog/ob_storage_logger.h"
 #include "env/ob_simple_cluster_test_base.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/leader_coordinator/ob_failure_detector.h"
@@ -25,9 +24,7 @@ const std::string TEST_NAME = "rto_func";
 const int64_t CLOG_HANG_TIME_THRESHOLD_US = 5 * 1000 * 1000;
 int64_t mock_fatal_err_ts = OB_INVALID_TIMESTAMP;
 bool mock_clog_disk_hang = false;
-bool mock_sstable_io_hang = false;
-//slog的路径全部为inline函数,暂时无法mock
-//bool mock_slog_io_hang = false;
+bool mock_disk_io_hang = false;
 bool mock_clog_disk_full = false;
 using namespace oceanbase;
 namespace oceanbase
@@ -39,7 +36,7 @@ namespace common
 int ObIOFaultDetector::get_device_health_status(ObDeviceHealthStatus &dhs,
     int64_t &device_abnormal_time)
 {
-  if (mock_sstable_io_hang) {
+  if (mock_disk_io_hang) {
     dhs = DEVICE_HEALTH_WARNING;
     device_abnormal_time = mock_fatal_err_ts - GCONF.data_storage_warning_tolerance_time;
   } else {
@@ -105,16 +102,16 @@ TEST_F(ObRTOTest, basic_rto)
     usleep(100 * 1000);
   }
 
-  //mock sstable io hang
+  //mock disk io hang
   mock_fatal_err_ts = ObTimeUtility::fast_current_time();
-  mock_sstable_io_hang = true;
-  while (!MTL(ObFailureDetector*)->has_add_sstable_hang_event_) {
-    CLOG_LOG(INFO, "waiting detect sstable io hang");
+  mock_disk_io_hang = true;
+  while (!MTL(ObFailureDetector*)->has_add_data_disk_hang_event_) {
+    CLOG_LOG(INFO, "waiting detect disk io hang");
     usleep(100 * 1000);
   }
-  mock_sstable_io_hang = false;
-  while (MTL(ObFailureDetector*)->has_add_sstable_hang_event_) {
-    CLOG_LOG(INFO, "waiting recover sstable io hang");
+  mock_disk_io_hang = false;
+  while (MTL(ObFailureDetector*)->has_add_data_disk_hang_event_) {
+    CLOG_LOG(INFO, "waiting recover disk io hang");
     usleep(100 * 1000);
   }
 }

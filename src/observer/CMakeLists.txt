@@ -239,7 +239,10 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_transaction_checkpoint.cpp
   virtual_table/ob_all_virtual_checkpoint.cpp
   virtual_table/ob_all_virtual_macro_block_marker_status.cpp
+  virtual_table/ob_all_virtual_tablet_buffer_info.cpp
+  virtual_table/ob_all_virtual_mds_node_stat.cpp
   virtual_table/ob_all_virtual_malloc_sample_info.cpp
+  virtual_table/ob_all_virtual_mds_event_history.cpp
   virtual_table/ob_all_virtual_memory_context_stat.cpp
   virtual_table/ob_all_virtual_memory_info.cpp
   virtual_table/ob_all_virtual_memstore_info.cpp

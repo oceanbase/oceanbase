@@ -36,7 +36,7 @@ public:
   virtual ~ObPartitionMergeProgress();
   void reset();
   OB_INLINE bool is_inited() const { return is_inited_; }
-  int init(ObTabletMergeCtx *ctx, const storage::ObTableReadInfo &read_info);
+  int init(ObTabletMergeCtx *ctx);
   virtual int update_merge_progress(const int64_t idx, const int64_t scanned_row_count, const int64_t output_block_cnt);
   virtual int finish_merge_progress(const int64_t output_cnt);
   int update_merge_info(storage::ObSSTableMergeInfo &merge_info);
@@ -59,7 +59,6 @@ protected:
 
 protected:
   common::ObIAllocator &allocator_;
-  const storage::ObTableReadInfo *read_info_;
   ObTabletMergeDag *merge_dag_;
   int64_t *scanned_row_cnt_arr_;
   int64_t *output_block_cnt_arr_;

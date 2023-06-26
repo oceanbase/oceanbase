@@ -169,6 +169,7 @@ TestDataCheckpoint::TestDataCheckpoint() {}
 
 void TestDataCheckpoint::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   tenant_id_ = MTL_ID();
 }
 void TestDataCheckpoint::TearDown()

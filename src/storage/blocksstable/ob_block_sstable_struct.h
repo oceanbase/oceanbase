@@ -207,6 +207,7 @@ struct ObStorageEnv
   int64_t user_row_cache_priority_;
   int64_t fuse_row_cache_priority_;
   int64_t bf_cache_priority_;
+  int64_t storage_meta_cache_priority_;
   int64_t bf_cache_miss_count_threshold_;
 
   int64_t ethernet_speed_;
@@ -232,6 +233,7 @@ struct ObStorageEnv
                K_(fuse_row_cache_priority),
                K_(bf_cache_priority),
                K_(bf_cache_miss_count_threshold),
+               K_(storage_meta_cache_priority),
                K_(ethernet_speed));
 };
 
@@ -526,7 +528,7 @@ struct ObMicroBlockEncodingCtx
   int64_t micro_block_size_;
   int64_t rowkey_column_cnt_;
   int64_t column_cnt_;
-  common::ObIArray<share::schema::ObColDesc> *col_descs_;
+  const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   ObMicroBlockEncoderOpt encoder_opt_;
 
   mutable int64_t estimate_block_size_;
@@ -1004,7 +1006,7 @@ public:
       J_NAME("nothing");
     } else {
       J_OBJ_START();
-      J_KV(K_(macro_id), K_(last_access_time), K_(mem_ref_cnt), K_(disk_ref_cnt));
+      J_KV(K_(macro_id), K_(last_access_time), K_(ref_cnt));
       J_OBJ_END();
     }
     return pos;
@@ -1012,8 +1014,7 @@ public:
 public:
   MacroBlockId macro_id_;
   int64_t last_access_time_;
-  int32_t mem_ref_cnt_;
-  int32_t disk_ref_cnt_;
+  int64_t ref_cnt_;
 };
 
 class ObMacroBlockMarkerStatus final
@@ -1029,6 +1030,7 @@ public:
                K_(linked_block_count),
                K_(tmp_file_count),
                K_(data_block_count),
+               K_(shared_data_block_count),
                K_(index_block_count),
                K_(ids_block_count),
                K_(disk_block_count),
@@ -1036,10 +1038,12 @@ public:
                K_(hold_count),
                K_(pending_free_count),
                K_(free_count),
+               K_(shared_meta_block_count),
                K_(mark_cost_time),
                K_(sweep_cost_time),
                KTIME_(start_time),
                KTIME_(last_end_time),
+               K_(mark_finished),
                K_(hold_info));
 public:
   int64_t total_block_count_;
@@ -1047,6 +1051,7 @@ public:
   int64_t linked_block_count_;
   int64_t tmp_file_count_;
   int64_t data_block_count_;
+  int64_t shared_data_block_count_;
   int64_t index_block_count_;
   int64_t ids_block_count_;
   int64_t disk_block_count_;
@@ -1054,10 +1059,12 @@ public:
   int64_t hold_count_;
   int64_t pending_free_count_;
   int64_t free_count_;
+  int64_t shared_meta_block_count_;
   int64_t mark_cost_time_;
   int64_t sweep_cost_time_;
   int64_t start_time_;
   int64_t last_end_time_;
+  bool mark_finished_;
   ObSimpleMacroBlockInfo hold_info_;
 };
 

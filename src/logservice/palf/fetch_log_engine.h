@@ -58,7 +58,7 @@ public:
   int64_t get_accepted_mode_pid() const { return accepted_mode_pid_; }
   FetchLogTask& operator=(const FetchLogTask &task);
 
-  TO_STRING_KV(K_(timestamp_us), K_(id), K_(server), K_(fetch_type), K_(proposal_id),
+  TO_STRING_KV(K_(timestamp_us), K_(id), K_(server), "fetch_type", fetch_type_2_str(fetch_type_), K_(proposal_id),
                K_(prev_lsn), K_(start_lsn), K_(log_size), K_(log_count), K_(accepted_mode_pid));
 private:
   int64_t timestamp_us_;

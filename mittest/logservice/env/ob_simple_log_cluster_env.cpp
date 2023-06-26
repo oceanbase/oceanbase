@@ -652,13 +652,15 @@ int ObSimpleLogClusterTestEnv::switch_leader(const int64_t id, const int64_t new
   common::ObAddr leader_addr = cluster[new_leader_idx]->get_addr();
   PalfHandleImplGuard old_leader, new_leader;
   std::vector<PalfHandleImplGuard*> palf_list;
+
+  CLOG_LOG(INFO, "begin to switch_leader");
   if (OB_FAIL(get_leader(id, old_leader, old_leader_idx))) {
     PALF_LOG(WARN, "get_leader failed", K(ret), K(id));
   } else {
     EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
     EXPECT_EQ(OB_SUCCESS, get_palf_handle_guard(palf_list, leader_addr, new_leader));
-    while (old_leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_version_ >
-          new_leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_version_) {
+    while (old_leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_ >
+          new_leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_) {
       ::usleep(500);
     }
     new_leader.reset();
@@ -666,7 +668,7 @@ int ObSimpleLogClusterTestEnv::switch_leader(const int64_t id, const int64_t new
     ObTenantEnv::set_tenant(cluster[old_leader_idx]->get_tenant_base());
     old_leader.palf_handle_impl_->change_leader_to(leader_addr);
     CLOG_LOG(INFO, "switch_leader success", K(ret), "prev_leader:", cluster[prev_leader_idx_]->get_addr(), "new_leader:", cluster[new_leader_idx]->get_addr(),
-             "old_leader:", cluster[old_leader_idx]->get_addr());
+             "old_leader:", cluster[old_leader_idx]->get_addr(), K(old_leader_idx), K(new_leader_idx));
     prev_leader_idx_ = new_leader_idx;
     // 确保election已经切主成功.
     do {

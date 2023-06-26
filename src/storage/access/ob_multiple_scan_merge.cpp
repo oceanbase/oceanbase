@@ -69,7 +69,7 @@ int ObMultipleScanMerge::init(
   if (OB_FAIL(ObMultipleMerge::init(param, context, get_table_param))) {
     STORAGE_LOG(WARN, "failed to init ObMultipleMerge", K(ret), K(param), K(context), K(get_table_param));
   } else {
-    const ObTableReadInfo *read_info = nullptr;
+    const ObITableReadInfo *read_info = nullptr;
     if (OB_ISNULL(read_info = access_param_->iter_param_.get_read_info())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Failed to get out col descs", K(ret));

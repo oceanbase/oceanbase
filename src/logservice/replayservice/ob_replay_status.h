@@ -163,19 +163,7 @@ public:
   int64_t retry_cost_; //此任务重试的总耗时时间
   void *log_buf_;
 
-  TO_STRING_KV(K(ls_id_),
-               K(log_type_),
-               K(lsn_),
-               K(scn_),
-               K(is_pre_barrier_),
-               K(is_post_barrier_),
-               K(log_size_),
-               K(replay_hint_),
-               K(is_raw_write_),
-               K(first_handle_ts_),
-               K(replay_cost_),
-               K(retry_cost_),
-               KP(log_buf_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // replay service task基类

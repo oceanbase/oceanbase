@@ -17,6 +17,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/thread_local/ob_tsi_utils.h"
 #include "lib/container/ob_array.h"
+#include "lib/string/ob_sql_string.h"
 
 namespace oceanbase
 {
@@ -124,16 +125,18 @@ public:
     ATOMIC_STORE(&is_delete_, true);
   }
   void print() {
-    ObArray<int32_t> mod_ref;
-    mod_ref.reserve((int64_t)(T::TOTAL_MAX_MOD));
+    int tmp_ret = OB_SUCCESS;
+    ObSqlString msg;
     for (int mod = 0; mod < static_cast<int>(T::TOTAL_MAX_MOD); mod++) {
       int32_t ref_cnt = 0;
       for (int idx = 0; idx < MAX_CPU_NUM; idx++) {
         ref_cnt += ref_mgr_[idx].ref_info_[mod].get_ref_cnt();
       }
-      mod_ref.push_back(ref_cnt);
+      if (OB_SUCCESS != (tmp_ret = msg.append_fmt("%s%d:%d", mod>0?",":"", mod, ref_cnt))) {
+        COMMON_LOG_RET(WARN, tmp_ret, "failed to add msg", K(mod), K(ref_cnt), K(msg));
+      }
     }
-    COMMON_LOG(INFO, "RefMgr mod ref", "type", typeid(T).name(), K(this), K(mod_ref));
+    COMMON_LOG(INFO, "RefMgr mod ref", "type", typeid(T).name(), K(this), K(msg));
   }
 private:
   void lock_all_slot() {

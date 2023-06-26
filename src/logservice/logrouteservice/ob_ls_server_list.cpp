@@ -236,7 +236,7 @@ bool LSSvrList::need_switch_server(const ObLSRouterKey &key,
       // Switch the Server scenario and consider that the Server is always serving
       svr_item.check_and_update_serve_info(true/*is_always_serving*/, next_lsn, is_log_served, is_svr_invalid);
 
-      LOG_INFO("need_switch_server", K(key), K(next_lsn), K(cur_svr), K(svr_item), K(is_log_served), K(is_svr_invalid));
+      LOG_TRACE("need_switch_server", K(key), K(next_lsn), K(cur_svr), K(svr_item), K(is_log_served), K(is_svr_invalid));
 
       if (is_log_served && !is_svr_invalid  && !blacklist.exist(svr_item.svr_)) {
         if (cur_svr == svr_item.svr_) {
@@ -368,7 +368,7 @@ int LSSvrList::get_next_server_based_on_blacklist_(const palf::LSN &next_lsn,
 int64_t LSSvrList::LSNRange::to_string(char *buffer, int64_t length) const
 {
   int64_t pos = 0;
-  (void)databuff_printf(buffer, length, pos, "LSN:{%ld, %ld}",
+  (void)databuff_printf(buffer, length, pos, "LSN:{%lu, %lu}",
       start_lsn_.val_, end_lsn_.val_);
 
   return pos;

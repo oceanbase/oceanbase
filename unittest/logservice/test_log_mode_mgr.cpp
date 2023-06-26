@@ -75,7 +75,7 @@ public:
     const int64_t init_pid = 1;
     LogConfigInfo config_info;
     LogConfigMeta config_meta;
-    LogConfigInfo default_config_info;
+    LogConfigInfoV2 default_config_info;
     ObMemberList init_member_list;
     GlobalLearnerList learner_list;
     LogConfigVersion init_config_version;

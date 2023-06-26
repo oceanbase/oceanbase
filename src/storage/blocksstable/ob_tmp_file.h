@@ -122,10 +122,8 @@ public:
     return block_cache_handles_;
   }
   OB_INLINE int64_t get_last_read_offset() const { return last_read_offset_; }
-  int64_t get_extent_idx_from_cache(const int64_t offset) const;
-  void update_extent_idx_cache(const int64_t last_extent_id,
-                               const int64_t last_extent_min_offset,
-                               const int64_t last_extent_max_offset);
+  int64_t get_last_extent_id() const;
+  void set_last_extent_id(const int64_t last_extent_id);
 
   TO_STRING_KV(KP_(buf), K_(size), K_(is_read), K_(has_wait), K_(expect_read_size),
       K_(last_read_offset), K_(io_flag), K_(update_offset_in_file));
@@ -148,9 +146,8 @@ private:
   common::ObSEArray<ObTmpFileIOHandle::ObIOReadHandle, 1> io_handles_;
   common::ObSEArray<ObTmpFileIOHandle::ObPageCacheHandle, 1> page_cache_handles_;
   common::ObSEArray<ObTmpFileIOHandle::ObBlockCacheHandle, 1> block_cache_handles_;
+  int64_t last_fd_;
   int64_t last_extent_id_;
-  int64_t last_extent_min_offset_;
-  int64_t last_extent_max_offset_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
@@ -275,10 +272,7 @@ private:
   int64_t small_file_prealloc_size();
   int64_t big_file_prealloc_size();
   int64_t find_first_extent(const int64_t offset);
-  void update_extent_idx_cache(const int64_t last_extent_id,
-                               const int64_t last_extent_min_offset,
-                               const int64_t last_extent_max_offset);
-  int64_t get_extent_idx_from_cache(const int64_t offset) const;
+  int64_t get_extent_cache(const int64_t offset, const ObTmpFileIOHandle &handle);
 
 private:
   // NOTE:

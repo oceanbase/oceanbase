@@ -2203,6 +2203,7 @@ def					str_to_date('04/30/2004 ', '%m/%d/%Y ')	10	10	10	Y	128	0	63
 | 2004-04-30                              |
 +-----------------------------------------+
 
+###ADD CASE
 select '+' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def					'+' + 1	5	23	1	N	32897	31	63

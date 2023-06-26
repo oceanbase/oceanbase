@@ -2026,6 +2026,7 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
                                 const ParamStore *param_store)
 {
   int ret = OB_SUCCESS;
+  ObSqlPrinter sql_printer(stmt, schema_guard, print_params, param_store);
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(stmt), K(ret));
@@ -2035,78 +2036,86 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
   } else if (!stmt->is_dml_stmt()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected stmt type", K(stmt->get_stmt_type()), K(stmt->get_query_ctx()->get_sql_stmt()), K(ret));
-  } else {
-    //First try 64K buf on the stack, if it fails, then try 128K.
-    //If it still fails, allocate 256K from the heap. If it continues to fail, expand twice each time.
-    SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
-      if (OB_FAIL(print_sql(allocator,
-                            buf,
-                            sizeof(buf),
-                            stmt,
-                            sql,
-                            schema_guard,
-                            print_params,
-                            param_store))) {
-          LOG_WARN("failed to print sql", K(sizeof(buf)), K(ret));
-      }
-    }
-    if (OB_SIZE_OVERFLOW == ret) {
-      ret = OB_SUCCESS;
-      SMART_VAR(char[OB_MAX_SQL_LENGTH * 2], buf) {
-        if (OB_FAIL(print_sql(allocator,
-                              buf,
-                              sizeof(buf),
-                              stmt,
-                              sql,
-                              schema_guard,
-                              print_params,
-                              param_store))) {
-          LOG_WARN("failed to print sql", K(sizeof(buf)), K(ret));
-        }
-      }
-    }
-    if (OB_SIZE_OVERFLOW == ret) {
-      bool is_succ = false;
-      ret = OB_SUCCESS;
-      for (int64_t i = 4; OB_SUCC(ret) && !is_succ && i <= 1024; i = i * 2) {
-        ObArenaAllocator alloc;
-        const int64_t length = OB_MAX_SQL_LENGTH * i;
-        char *buf = NULL;
-        if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(length)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc memory for set sql", K(ret), K(length));
-        } else if (OB_FAIL(print_sql(allocator,
-                                     buf,
-                                     length,
-                                     stmt,
-                                     sql,
-                                     schema_guard,
-                                     print_params,
-                                     param_store))) {
-          LOG_WARN("failed to print sql", K(length), K(i), K(ret));
-        }
-        if (OB_SUCC(ret)) {
-          is_succ = true;
-        } else if (OB_SIZE_OVERFLOW == ret) {
-          ret = OB_SUCCESS;
-        }
-      }
-    }
+  } else if (OB_FAIL(sql_printer.do_print(allocator, sql))) {
+    LOG_WARN("failed to print sql", K(ret));
   }
   return ret;
 }
 
-int ObSQLUtils::print_sql(ObIAllocator &allocator,
-                          char *buf,
+int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
+{
+  int ret = OB_SUCCESS;
+  //First try 64K buf on the stack, if it fails, then try 128K.
+  //If it still fails, allocate 256K from the heap. If it continues to fail, expand twice each time.
+  int64_t res_len = 0;
+  char *final_buf = NULL;
+  SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
+    MEMSET(buf, 0, sizeof(buf));
+    if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
+        LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
+    } else {
+      final_buf = buf;
+    }
+  }
+  if (OB_SIZE_OVERFLOW == ret) {
+    ret = OB_SUCCESS;
+    SMART_VAR(char[OB_MAX_SQL_LENGTH * 2], buf) {
+      MEMSET(buf, 0, sizeof(buf));
+      if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
+        LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
+      } else {
+        final_buf = buf;
+      }
+    }
+  }
+  if (OB_SIZE_OVERFLOW == ret) {
+    bool is_succ = false;
+    ret = OB_SUCCESS;
+    for (int64_t i = 4; OB_SUCC(ret) && !is_succ && i <= 1024; i = i * 2) {
+      ObArenaAllocator alloc;
+      const int64_t length = OB_MAX_SQL_LENGTH * i;
+      char *buf = NULL;
+      if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(length)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory for sql", K(ret), K(length));
+      } else if (FALSE_IT(MEMSET(buf, 0, length))) {
+      } else if (OB_FAIL(inner_print(buf, length, res_len))) {
+        LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        is_succ = true;
+        final_buf = buf;
+      } else if (OB_SIZE_OVERFLOW == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, ObString(res_len, final_buf), result))) {
+    LOG_WARN("fail to deep copy delete stmt string", K(ret));
+  }
+  return ret;
+}
+
+int ObSqlPrinter::inner_print(char *buf, int64_t buf_len, int64_t &res_len)
+{
+  return ObSQLUtils::print_sql(buf,
+                               buf_len,
+                               res_len,
+                               stmt_,
+                               schema_guard_,
+                               print_params_,
+                               param_store_);
+}
+
+int ObSQLUtils::print_sql(char *buf,
                           int64_t buf_len,
+                          int64_t &res_len,
                           const ObStmt *stmt,
-                          ObString &sql,
                           ObSchemaGetterGuard *schema_guard,
                           ObObjPrintParams print_params,
                           const ParamStore *param_store)
 {
   int ret = OB_SUCCESS;
-  MEMSET(buf, 0, buf_len);
   int64_t pos = 0;
   const ObDMLStmt *reconstruct_stmt = NULL;
   if (OB_ISNULL(stmt)) {
@@ -2141,8 +2150,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
       printer.enable_print_temp_table_as_cte();
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print select stmt", K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-        LOG_WARN("fail to deep copy select stmt string", K(ret));
       } else { /*do nothing*/ }
     }
       break;
@@ -2158,8 +2165,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print insert stmt", K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-        LOG_WARN("fail to deep copy insert stmt string", K(ret));
       } else { /*do nothing*/ }
     }
       break;
@@ -2176,8 +2181,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print insert stmt", K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-        LOG_WARN("fail to deep copy insert stmt string", K(ret));
       } else { /*do nothing*/ }
     }
       break;
@@ -2193,8 +2196,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print delete stmt", K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-        LOG_WARN("fail to deep copy delete stmt string", K(ret));
       } else { /*do nothing*/ }
     }
       break;
@@ -2210,8 +2211,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print update stmt", K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-        LOG_WARN("fail to deep copy update stmt string", K(ret));
       } else { /*do nothing*/ }
     }
       break;
@@ -2227,8 +2226,6 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("failed to print merge stmt", K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-        LOG_WARN("failed to deep copy merge stmt string", K(ret));
       }
     }
       break;
@@ -2238,6 +2235,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
       break;
     }
   }
+  res_len = pos;
   return ret;
 }
 

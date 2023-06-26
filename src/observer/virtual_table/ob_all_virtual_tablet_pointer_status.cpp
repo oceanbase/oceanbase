@@ -126,6 +126,7 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
   ObTabletPointerHandle ptr_hdl;
   ObTabletHandle tablet_hdl;
   ObTablet *tablet = nullptr;
+  int64_t pos = 0;
   const ObTabletPointer *tablet_pointer = nullptr;
   share::ObLSID ls_id;
   ObTabletID tablet_id;
@@ -171,7 +172,7 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(tablet_id.id());
           break;
         case ADDRESS:
-          tablet_pointer->get_addr().to_string(address_, ADDRESS_LEN);
+          tablet_pointer->get_addr().to_string(address_, STR_LEN);
           cur_row_.cells_[i].set_varchar(address_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
@@ -186,6 +187,25 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
           break;
         case WASH_SCORE:
           cur_row_.cells_[i].set_int(nullptr == tablet ? 0 : tablet->get_wash_score());
+          break;
+        case TABLET_PTR:
+          MEMSET(pointer_, 0, STR_LEN);
+          pos = 0;
+          databuff_print_obj(pointer_, STR_LEN, pos, static_cast<void *>(tablet));
+          cur_row_.cells_[i].set_varchar(pointer_);
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        case INITIAL_STATE:
+          cur_row_.cells_[i].set_bool(tablet_pointer->get_initial_state());
+          break;
+        case OLD_CHAIN:
+          MEMSET(old_chain_, 0, STR_LEN);
+          if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->print_old_chain(key, *tablet_pointer, STR_LEN, old_chain_))) {
+            SERVER_LOG(WARN, "fail to print old chain", K(ret), K(key), KPC(tablet_pointer));
+          } else {
+            cur_row_.cells_[i].set_varchar(old_chain_);
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

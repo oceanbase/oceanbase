@@ -1113,7 +1113,7 @@ public:
     return tls_id_.is_sys_log_stream() && ! multi_data_source_info_.is_valid();
   }
   const MultiDataSourceInfo &get_multi_data_source_info() const { return multi_data_source_info_; }
-  const share::ObLSAttr &get_ls_attr() const { return multi_data_source_info_.get_ls_attr(); }
+  const share::ObLSAttrArray &get_ls_attr_arr() const { return multi_data_source_info_.get_ls_attr_arr(); }
   DictTenantArray &get_dict_tenant_array() { return multi_data_source_info_.get_dict_tenant_array(); }
   DictDatabaseArray &get_dict_database_array() { return multi_data_source_info_.get_dict_database_array(); }
   DictTableArray &get_dict_table_array() { return multi_data_source_info_.get_dict_table_array(); }
@@ -1129,6 +1129,14 @@ public:
   // doesn't contains table_meta for specifed table, otherwise use table_meta in inc_data_dict.
   // NOTICE: ONLY AVALIABLE FOR DDL_TRANS.
   int get_table_meta_with_inc_dict(const uint64_t tenant_id, const uint64_t table_id, const datadict::ObDictTableMeta *&tb_meta);
+
+  // Check if the DDL transaction needs to be treated as a barrier.
+  //
+  // @param [out] is_not_barrier is not a barrier
+  // @param [out] op_type Schema operation type
+  int check_for_ddl_trans(
+      bool &is_not_barrier,
+      ObSchemaOperationType &op_type) const;
 
   TO_STRING_KV(
       "state", serve_state_,

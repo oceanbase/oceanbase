@@ -68,7 +68,8 @@ public:
   {
     palf_handle_ = NULL;
   }
-  int handle_config_change_cmd(const LogConfigChangeCmd &req) const;
+  int handle_config_change_cmd(const LogConfigChangeCmd &req,
+                               LogConfigChangeCmdResp &resp) const;
 private:
   int get_reporter_(ObLogReporterAdapter *&reporter) const;
 private:

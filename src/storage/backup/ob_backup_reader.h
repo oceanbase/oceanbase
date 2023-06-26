@@ -17,13 +17,13 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/hash/ob_cuckoo_hashmap.h"
 #include "share/ob_ls_id.h"
-#include "share/backup/ob_backup_data_store.h"
-#include "storage/backup/ob_backup_extern_info_mgr.h"
+#include "storage/backup/ob_backup_data_store.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
+#include "storage/tablet/ob_tablet_member_wrapper.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
@@ -45,7 +45,8 @@ public:
   virtual int init(const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id) = 0;
   virtual int get_tablet_id_list(
-      const int64_t turn_id, const share::ObLSID &ls_id, common::ObIArray<common::ObTabletID> &tablet_id_list) = 0;
+      share::ObBackupDataType &backup_data_type, const int64_t turn_id,
+      const share::ObLSID &ls_id, common::ObIArray<common::ObTabletID> &tablet_id_list) = 0;
   virtual ObLSTabletIdReaderType get_type() const = 0;
 
 protected:
@@ -62,7 +63,8 @@ public:
   int init(const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id);
   virtual int get_tablet_id_list(
-      const int64_t turn_id, const share::ObLSID &ls_id, common::ObIArray<common::ObTabletID> &tablet_id_list) override;
+      share::ObBackupDataType &backup_data_type, const int64_t turn_id,
+      const share::ObLSID &ls_id, common::ObIArray<common::ObTabletID> &tablet_id_list) override;
   virtual ObLSTabletIdReaderType get_type() const override
   {
     return LS_TABLET_ID_READER;
@@ -74,7 +76,7 @@ private:
   uint64_t tenant_id_;
   share::ObBackupSetDesc backup_set_desc_;
   share::ObLSID ls_id_;
-  share::ObBackupDataStore store_;
+  storage::ObBackupDataStore store_;
   DISALLOW_COPY_AND_ASSIGN(ObLSTabletIdReader);
 };
 
@@ -269,6 +271,7 @@ private:
 private:
   common::ObArray<storage::ObITable *> sstable_array_;
   blocksstable::ObSelfBufferWriter buffer_writer_;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMetaBackupReader);
 };
 

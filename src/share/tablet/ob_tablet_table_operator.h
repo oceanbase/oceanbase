@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_TABLET_TABLE_OPERATOR
 
 #include "lib/container/ob_iarray.h" //ObIArray
+#include "share/tablet/ob_tablet_info.h" // ObTabletReplica, ObTabletInfo
 
 namespace oceanbase
 {
@@ -31,8 +32,6 @@ class ObMySQLResult;
 }
 namespace share
 {
-class ObTabletReplica;
-class ObTabletInfo;
 class ObDMLSqlSplicer;
 class ObTabletLSPair;
 class ObLSID;
@@ -50,6 +49,7 @@ public:
   virtual ~ObTabletTableOperator();
   int init(common::ObISQLClient &sql_proxy_);
   void reset();
+  void set_batch_size(int64_t batch_size) {batch_size_ = batch_size;}
   int get(
       const uint64_t tenant_id,
       const common::ObTabletID &tablet_id,
@@ -177,6 +177,7 @@ private:
   const static int64_t MAX_BATCH_COUNT = 100;
   bool inited_;
   common::ObISQLClient *sql_proxy_;
+  int64_t batch_size_;
 };
 } // end namespace share
 } // end namespace oceanbase

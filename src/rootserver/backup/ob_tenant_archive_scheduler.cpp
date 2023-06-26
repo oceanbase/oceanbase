@@ -387,8 +387,7 @@ static int round_checkpoint_cb(
  * ------------------------------ObArchiveHandler---------------------
  */
 ObArchiveHandler::ObArchiveHandler()
-  : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
-    zone_mgr_(nullptr), unit_mgr_(nullptr), rpc_proxy_(nullptr),
+  : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), rpc_proxy_(nullptr),
     sql_proxy_(nullptr), schema_service_(nullptr), round_handler_(),
     archive_table_op_()
 {
@@ -397,8 +396,6 @@ ObArchiveHandler::ObArchiveHandler()
 
 int ObArchiveHandler::init(
     const uint64_t tenant_id,
-    ObZoneManager &zone_mgr,
-    ObUnitManager &unit_manager,
     share::schema::ObMultiVersionSchemaService *schema_service,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     common::ObMySQLProxy &sql_proxy)
@@ -417,8 +414,6 @@ int ObArchiveHandler::init(
     LOG_WARN("failed to init archive round", K(ret), K(tenant_id));
   } else {
     tenant_id_ = tenant_id;
-    zone_mgr_ = &zone_mgr;
-    unit_mgr_ = &unit_manager;
     schema_service_ = schema_service;
     rpc_proxy_ = &rpc_proxy;
     sql_proxy_ = &sql_proxy;
@@ -770,14 +765,8 @@ int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, SCN &max
   // That will leads some log of type of create log stream is archived before been replayed. In this case,
   // we should limit tenant archive progress not more than the GTS.
   int ret = OB_SUCCESS;
-  ObAllTenantInfo tenant_info;
-  const bool for_update = false;
-  if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, for_update, tenant_info))) {
-    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (OB_FALSE_IT(max_checkpoint_scn = tenant_info.get_standby_scn())) {
-  } else if (SCN::base_scn() >= max_checkpoint_scn) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("max_checkpoint_scn not valid", K(ret), K(tenant_info));
+  if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id_, max_checkpoint_scn))) {
+    LOG_WARN("failed to get max checkpoint scn.", K(ret), K_(tenant_id));
   }
   return ret;
 }

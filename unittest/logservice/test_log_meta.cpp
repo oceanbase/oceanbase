@@ -69,10 +69,10 @@ TEST(TestLogMeta, test_log_meta)
   EXPECT_EQ(OB_SUCCESS, curr_config_version.generate(curr_log_proposal_id, curr_config_seq));
   EXPECT_TRUE(curr_config_version.is_valid());
 
-  LogConfigInfo prev_config_info;
+  LogConfigInfoV2 prev_config_info;
   EXPECT_EQ(OB_INVALID_ARGUMENT, prev_config_info.generate(prev_member_list, -1, prev_learner_list, prev_config_version));
   EXPECT_EQ(OB_SUCCESS, prev_config_info.generate(prev_member_list, prev_replica_num, prev_learner_list, prev_config_version));
-  LogConfigInfo curr_config_info;
+  LogConfigInfoV2 curr_config_info;
   EXPECT_EQ(OB_SUCCESS, curr_config_info.generate(curr_member_list, curr_replica_num, curr_learner_list, curr_config_version));
   EXPECT_TRUE(curr_config_info.is_valid());
   EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
@@ -90,8 +90,19 @@ TEST(TestLogMeta, test_log_meta)
   LogReplicaPropertyMeta replica_meta1;
   EXPECT_EQ(OB_SUCCESS, replica_meta1.generate(true, LogReplicaType::NORMAL_REPLICA));
 
+  const int64_t init_log_proposal_id(0);
+  LogConfigMeta log_config_meta;
+  LogConfigInfoV2 init_config_info;
+  LogConfigVersion init_config_version;
+  EXPECT_EQ(OB_SUCCESS, init_config_version.generate(init_log_proposal_id, 0));
+  EXPECT_EQ(OB_SUCCESS, init_config_info.generate(init_config_version));
+  log_config_meta.version_ = LogConfigMeta::LOG_CONFIG_META_VERSION_INC;
+  log_config_meta.proposal_id_ = init_log_proposal_id;
+  log_config_meta.curr_ = init_config_info;
+  log_config_meta.prev_ = init_config_info;
   LogMeta log_meta1;
   log_meta1.update_log_prepare_meta(log_prepare_meta1);
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_config_meta(log_config_meta));
   // Test invalid
   EXPECT_FALSE(log_meta1.is_valid());
 
@@ -134,8 +145,8 @@ TEST(TestLogMeta, test_log_meta_generate)
   EXPECT_EQ(OB_SUCCESS, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, palf::NORMAL_REPLICA));
   EXPECT_EQ(meta1.log_prepare_meta_.log_proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_config_meta_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
-  EXPECT_EQ(meta1.log_config_meta_.curr_.config_version_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
-  EXPECT_EQ(meta1.log_config_meta_.prev_.config_version_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
+  EXPECT_EQ(meta1.log_config_meta_.curr_.config_.config_version_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
+  EXPECT_EQ(meta1.log_config_meta_.prev_.config_.config_version_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_mode_meta_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_mode_meta_.mode_version_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_snapshot_meta_.base_lsn_, base_info.curr_lsn_);

@@ -24,6 +24,8 @@
 #include "storage/ob_i_store.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
+#include "storage/meta_mem/ob_storage_meta_cache.h"
+#include "share/leak_checker/obj_leak_checker.h"
 #include "share/ob_table_range.h"
 #include "share/scn.h"
 
@@ -91,6 +93,7 @@ public:
     REMOTE_LOGICAL_MINOR_SSTABLE = 15,
     DDL_MEM_SSTABLE = 16,
     // < add new sstable before here, See is_sstable()
+
     MAX_TABLE_TYPE
   };
 
@@ -126,7 +129,6 @@ public:
     OB_INLINE bool is_ddl_mem_sstable() const { return ObITable::is_ddl_mem_sstable(table_type_); }
     OB_INLINE bool is_table_with_scn_range() const { return ObITable::is_table_with_scn_range(table_type_); }
     OB_INLINE bool is_remote_logical_minor_sstable() const { return ObITable::is_remote_logical_minor_sstable(table_type_); }
-
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
     OB_INLINE share::SCN get_start_scn() const { return scn_range_.start_scn_; }
     OB_INLINE share::SCN get_end_scn() const { return scn_range_.end_scn_; }
@@ -169,10 +171,16 @@ public:
   virtual int exist(
       ObStoreCtx &ctx,
       const uint64_t table_id,
-      const storage::ObTableReadInfo &read_info,
+      const storage::ObITableReadInfo &read_info,
       const blocksstable::ObDatumRowkey &rowkey,
       bool &is_exist,
       bool &has_found);
+  virtual int exist(
+      const ObTableIterParam &param,
+	  ObTableAccessContext &context,
+	  const blocksstable::ObDatumRowkey &rowkey,
+	  bool &is_exist,
+	  bool &has_found);
 
   virtual int exist(
       ObRowsInfo &rowsInfo,
@@ -212,9 +220,9 @@ public:
   virtual int64_t get_max_merged_trans_version() const { return get_snapshot_version(); }
   virtual int get_frozen_schema_version(int64_t &schema_version) const = 0;
 
-  void inc_ref();
+  virtual void inc_ref();
   virtual int64_t dec_ref();
-  inline int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
+  virtual int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
 
   // TODO @hanhui so many table type judgement
   virtual bool is_sstable() const { return is_sstable(key_.table_type_); }
@@ -365,9 +373,9 @@ inline int64_t ObITable::dec_ref()
 
 class ObTableHandleV2 final
 {
+  friend class ObTablesHandleArray;
 public:
   ObTableHandleV2();
-  ObTableHandleV2(ObITable *table, ObTenantMetaMemMgr *t3m, ObITable::TableType type);
   ~ObTableHandleV2();
 
   bool is_valid() const;
@@ -376,6 +384,7 @@ public:
   OB_INLINE ObITable *get_table() { return table_; }
   OB_INLINE const ObITable *get_table() const { return table_; }
   OB_INLINE common::ObIAllocator *get_allocator() { return allocator_; }
+  OB_INLINE const ObStorageMetaHandle &get_meta_handle() { return meta_handle_; }
 
   int get_sstable(blocksstable::ObSSTable *&sstable);
   int get_sstable(const blocksstable::ObSSTable *&sstable) const;
@@ -394,47 +403,59 @@ public:
   ObTableHandleV2 &operator= (const ObTableHandleV2 &other);
 
   int set_table(ObITable *const table, ObTenantMetaMemMgr *const t3m, const ObITable::TableType table_type);
-  int set_table(ObITable *table, common::ObIAllocator *allocator);
+  // TODO: simplify set_sstable interfaces
+  // only used when create stand alone sstable
+  int set_sstable(ObITable *table, common::ObIAllocator *allocator);
+  // set sstable when lifetime is guaranteed by tablet
+  int set_sstable_with_tablet(ObITable *table);
+  int set_sstable(ObITable *table, const ObStorageMetaHandle &meta_handle);
 
-  TO_STRING_KV(KP_(table), KP(t3m_), KP(allocator_), K(table_type_));
-
+  TO_STRING_KV(KP_(table), KP(t3m_), KP(allocator_), K(table_type_),
+      K_(meta_handle), K_(lifetime_guaranteed_by_tablet));
 private:
   ObITable *table_;
   ObTenantMetaMemMgr *t3m_;
   common::ObIAllocator *allocator_;
+  ObStorageMetaHandle meta_handle_;
   ObITable::TableType table_type_;
+  bool lifetime_guaranteed_by_tablet_;
 };
 
 class ObTablesHandleArray final
 {
 public:
   typedef common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> TableArray;
+  typedef common::ObArray<storage::ObStorageMetaHandle> MetaHandleArray;
+  typedef common::ObArray<storage::ObTableHandleV2> HandlesArray;
   ObTablesHandleArray();
   ~ObTablesHandleArray();
   void reset();
-  OB_INLINE bool empty() const { return tables_.empty(); }
-  OB_INLINE int64_t get_count() const { return tables_.count(); }
-  OB_INLINE common::ObIArray<storage::ObITable *> &get_tables() { return tables_; }
-  OB_INLINE const common::ObIArray<storage::ObITable *> &get_tables() const { return tables_; }
-  OB_INLINE ObITable *get_table(const int64_t idx) const { return (idx < 0 || idx >= tables_.count()) ? nullptr : tables_.at(idx); }
+  OB_INLINE bool empty() const { return handles_array_.empty(); }
+  OB_INLINE int64_t get_count() const { return handles_array_.count(); }
+  OB_INLINE ObITable *get_table(const int64_t idx) const
+  {
+    return (idx < 0 || idx >= handles_array_.count()) ? nullptr : handles_array_.at(idx).table_;
+  }
 
-  int add_table(ObITable *table);
-  int add_table(ObITable *table, common::ObIAllocator *allocator);
-  int add_table(ObTableHandleV2 &handle);
+  int get_table(const int64_t idx, ObTableHandleV2 &table_handle) const;
+  int get_table(const ObITable::TableKey &table_key, ObTableHandleV2 &table_handle) const;
+  // TODO: simplify this add_sstable interface
+  int add_sstable(ObITable *table, const ObStorageMetaHandle &meta_handle);
+  int add_memtable(ObITable *table);
+  int add_table(const ObTableHandleV2 &handle);
   int assign(const ObTablesHandleArray &other);
   int get_tables(common::ObIArray<ObITable *> &tables) const;
   int get_first_memtable(memtable::ObIMemtable *&memtable) const;
   int get_all_minor_sstables(common::ObIArray<ObITable *> &tables) const;
   int check_continues(const share::ObScnRange *scn_range) const;
-  TableArray::iterator table_begin() { return tables_.begin(); }
-  TableArray::iterator table_end() { return tables_.end(); }
   DECLARE_TO_STRING;
 
 private:
-  storage::ObTenantMetaMemMgr *meta_mem_mgr_;
-  common::ObIAllocator *allocator_;
+  int tablet_id_check(const common::ObTabletID &tablet_id);
+
+private:
   common::ObTabletID tablet_id_;
-  TableArray tables_;
+  HandlesArray handles_array_;
   DISALLOW_COPY_AND_ASSIGN(ObTablesHandleArray);
 };
 

@@ -8622,7 +8622,8 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
             ret = OB_SUCCESS;
           } else if ((ob_is_clob(src_meta.type_, src_meta.cs_type_)
                       || ob_is_clob_locator(src_meta.type_, src_meta.cs_type_)
-                      || expr.args_[0]->obj_meta_.is_xml_sql_type()) && lib::is_oracle_mode()) {
+                      || expr.args_[0]->obj_meta_.is_xml_sql_type()
+                      || (expr.args_[0]->type_ == T_FUN_SYS_CAST && expr.args_[0]->args_[0]->obj_meta_.is_xml_sql_type())) && lib::is_oracle_mode()) {
             if (ob_is_nchar(expr.datum_meta_.type_)
                 || ob_is_char(expr.datum_meta_.type_, expr.datum_meta_.cs_type_)) {
               ret = OB_OPERATE_OVERFLOW;
@@ -8720,8 +8721,7 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
           } else if (out_acc.get_length() == text_length
                      || (ObCharType != out_type && ObNCharType != out_type)
                      || (lib::is_mysql_mode()
-                         && ob_is_char(out_type, expr.datum_meta_.cs_type_)
-                         && !(SMO_PAD_CHAR_TO_FULL_LENGTH & session->get_sql_mode()))) {
+                         && ob_is_char(out_type, expr.datum_meta_.cs_type_))) {
             // do not padding
             LOG_DEBUG("no need to padding", K(ret), K(out_acc.get_length()),
                                             K(text_length), K(text));

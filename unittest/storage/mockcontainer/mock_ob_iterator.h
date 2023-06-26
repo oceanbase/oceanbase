@@ -436,7 +436,7 @@ public:
   int get_next_row(const storage::ObStoreRow *&row);
   int init(ObStoreRowIterator *iter,
            common::ObIAllocator &alloc,
-           ObTableReadInfo &read_info);
+           const ObITableReadInfo &read_info);
   int reset_scanner();
   bool end_of_block() {
     return current_ == -1 ||
@@ -450,7 +450,7 @@ public:
   ObIMicroBlockRowScanner *scanner_;
   ObIMicroBlockReader *reader_;
   ObDatumRow row_;
-  const ObTableReadInfo *read_info_;
+  const ObITableReadInfo *read_info_;
   ObStoreRow sstable_row_;
 };
 

@@ -229,7 +229,6 @@ private:
     void rm_map(void *ptr);
   private:
     ObExternalRef hash_ref_;
-    ObMemAttr attr_;
     ObSmallAllocator node_alloc_;
     ObConcurrentFIFOAllocator dir_alloc_;
     ObConcurrentFIFOAllocator cnter_alloc_;
@@ -625,31 +624,26 @@ template <typename Key, typename Value, typename MemMgrTag>
 ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::HashMapMemMgrCore()
   : map_array_lock_(common::ObLatchIds::HASH_MAP_LOCK)
 {
-  attr_.label_ = ObModIds::OB_LINEAR_HASH_MAP;
-  SET_USE_500(attr_);
   // Init node alloc.
-  int ret = node_alloc_.init(static_cast<int64_t>(sizeof(Node)), attr_);
+  int ret = node_alloc_.init(static_cast<int64_t>(sizeof(Node)), SET_USE_500("LinearHashMapNo"));
   if (OB_FAIL(ret)) {
     LIB_LOG(WARN, "failed to init node alloc", K(ret));
   }
   int64_t total_limit = 128 * (1L << 30); // 128GB
   int64_t page_size = 0;
-  if (!lib::is_mini_mode()) {
-    //
-    page_size = OB_MALLOC_BIG_BLOCK_SIZE;
-  } else {
+  if (lib::is_mini_mode()) {
     total_limit *= lib::mini_mode_resource_ratio();
-    page_size = OB_MALLOC_MIDDLE_BLOCK_SIZE;
   }
+  page_size = OB_MALLOC_MIDDLE_BLOCK_SIZE;
   // Init dir alloc.
   ret = dir_alloc_.init(total_limit, 2 * page_size, page_size);
-  dir_alloc_.set_attr(attr_);
+  dir_alloc_.set_attr(SET_USE_500("LinearHashMapDi"));
   if (OB_FAIL(ret)) {
     LIB_LOG(WARN, "failed to init dir alloc", K(ret));
   }
   // Init counter alloc.
   ret = cnter_alloc_.init(total_limit, 2 * page_size, page_size);
-  cnter_alloc_.set_attr(attr_);
+  cnter_alloc_.set_attr(SET_USE_500("LinearHashMapCn"));
   if (OB_FAIL(ret)) {
     LIB_LOG(WARN, "failed to init cnter alloc", K(ret));
   }

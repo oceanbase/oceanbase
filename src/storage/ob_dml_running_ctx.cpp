@@ -22,6 +22,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/ob_value_row_iterator.h"
+#include "storage/memtable/ob_memtable_context.h"
 
 namespace oceanbase
 {
@@ -76,8 +77,8 @@ int ObDMLRunningCtx::init(
     const uint64_t table_id = dml_param_.table_param_->get_data_table().get_table_id();
     const int64_t version = dml_param_.schema_version_;
     const int64_t tenant_schema_version = dml_param_.tenant_schema_version_;
-    if (!tablet_handle.get_obj()->is_lob_meta_tablet() &&
-        OB_FAIL(check_schema_version(*schema_service, tenant_id, table_id, tenant_schema_version, version, tablet_handle))) {
+    if (dml_param_.check_schema_version_ && OB_FAIL(check_schema_version(*schema_service, tenant_id, table_id,
+        tenant_schema_version, version, tablet_handle))) {
       LOG_WARN("failed to check schema version", K(ret), K(tenant_id), K(tenant_schema_version), K(table_id), K(version));
     }
   }
@@ -92,6 +93,7 @@ int ObDMLRunningCtx::init(
   } else if (NULL != column_ids && OB_FAIL(prepare_column_info(*column_ids))) {
     LOG_WARN("fail to get column descriptions and column map", K(ret), K(*column_ids));
   } else {
+    store_ctx_.mvcc_acc_ctx_.mem_ctx_->set_table_version(dml_param_.schema_version_);
     store_ctx_.table_version_ = dml_param_.schema_version_;
     column_ids_ = column_ids;
     is_inited_ = true;
@@ -135,9 +137,10 @@ int ObDMLRunningCtx::prepare_relative_table(
   if (OB_FAIL(relative_table_.init(&schema, tablet_handle.get_obj()->get_tablet_meta().tablet_id_,
       schema.is_storage_index_table() && !schema.can_read_index()))) {
     LOG_WARN("fail to init relative_table_", K(ret), K(tablet_handle), K(schema.get_index_status()));
-  } else if (FALSE_IT(relative_table_.tablet_iter_.tablet_handle_ = tablet_handle)) {
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_read_tables(
-      read_snapshot.get_val_for_tx(), relative_table_.tablet_iter_, relative_table_.allow_not_ready()))) {
+  } else if (OB_FAIL(relative_table_.tablet_iter_.set_tablet_handle(tablet_handle))) {
+    LOG_WARN("fail to set tablet handle to iter", K(ret), K(relative_table_.tablet_iter_));
+  } else if (OB_FAIL(relative_table_.tablet_iter_.refresh_read_tables_from_tablet(
+      read_snapshot.get_val_for_tx(), relative_table_.allow_not_ready()))) {
     LOG_WARN("failed to get relative table read tables", K(ret));
   }
   return ret;
@@ -189,8 +192,13 @@ int ObDMLRunningCtx::check_schema_version(
     LOG_WARN("table version mismatch", K(ret), K(table_id), K(table_version), K(table_schema->get_schema_version()));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObTabletBindingHelper::check_schema_version(tablet_handle, table_version))) {
-      LOG_WARN("failed to check schema version", K(ret));
+    const int64_t current_time = ObClockGenerator::getClock();
+    const int64_t timeout = dml_param_.timeout_ - current_time;
+    if (OB_UNLIKELY(timeout <= 0)) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("check schema version timeout", K(ret), K(current_time), "dml_param_timeout", dml_param_.timeout_);
+    } else if (OB_FAIL(tablet_handle.get_obj()->check_schema_version_with_cache(table_version, timeout))) {
+      LOG_WARN("failed to check schema version", K(ret), K(table_version), K(timeout));
     }
   }
   return ret;

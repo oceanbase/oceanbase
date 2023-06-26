@@ -26,51 +26,39 @@ namespace oceanbase
 namespace storage
 {
 
-class ObSSTableMergeInfoIterator
-{
-public:
-  ObSSTableMergeInfoIterator();
-  virtual ~ObSSTableMergeInfoIterator();
-  int open(const int64_t tenant_id);
-  int get_next_merge_info(ObSSTableMergeInfo &merge_info);
-  void reset();
-private:
-  int next_tenant(share::ObTenantSwitchGuard &tenant_guard);
-private:
-  omt::TenantIdList all_tenants_;
-  int64_t tenant_idx_;
-  int64_t cur_tenant_id_;
-  int64_t major_info_idx_;
-  int64_t major_info_cnt_;
-  int64_t minor_info_idx_;
-  int64_t minor_info_cnt_;
-  bool is_opened_;
-};
-
 class ObTenantSSTableMergeInfoMgr
 {
 public:
   static int mtl_init(ObTenantSSTableMergeInfoMgr *&sstable_merge_info);
+  static int64_t cal_max();
+  static int get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
+      compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
+      ObSSTableMergeInfo &info, char *buf, const int64_t buf_len);
   // TODO need init memory limit with tenant config
-  int init(const int64_t memory_limit = MERGE_INFO_MEMORY_LIMIT);
-  int add_sstable_merge_info(ObSSTableMergeInfo &merge_info);
   ObTenantSSTableMergeInfoMgr();
   virtual ~ObTenantSSTableMergeInfoMgr();
+  int init(const int64_t page_size=compaction::ObIDiagnoseInfoMgr::INFO_PAGE_SIZE);
+  int add_sstable_merge_info(ObSSTableMergeInfo &input_info);
   void destroy();
+  int open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
+                compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter);
 
-  int get_major_info(const int64_t idx, ObSSTableMergeInfo &merge_info);
-  int get_minor_info(const int64_t idx, ObSSTableMergeInfo &merge_info);
-  int get_major_info_array_cnt() const { return major_merge_infos_.size(); }
-  int get_minor_info_array_cnt() const { return minor_merge_infos_.size(); }
+  int set_max(int64_t max_size);
+  int gc_info();
+
+  // for unittest
+  int size();
+
+public:
+  static const int64_t MEMORY_PERCENTAGE = 2;   // max size = tenant memory size * MEMORY_PERCENTAGE / 100
+  static const int64_t MINOR_MEMORY_PERCENTAGE = 75;
+  static const int64_t POOL_MAX_SIZE = 256LL * 1024LL * 1024LL; // 256MB
+
 private:
-  void release_info(ObSSTableMergeInfo &merge_info);
-  static const int64_t MERGE_INFO_MEMORY_LIMIT = 64LL * 1024LL * 1024LL; //64MB
   bool is_inited_;
-  common::ObArenaAllocator allocator_;
-  compaction::ObInfoRingArray<ObSSTableMergeInfo> major_merge_infos_;
-  compaction::ObInfoRingArray<ObSSTableMergeInfo> minor_merge_infos_;
+  compaction::ObIDiagnoseInfoMgr major_info_pool_;
+  compaction::ObIDiagnoseInfoMgr minor_info_pool_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantSSTableMergeInfoMgr);
-
 };
 
 }//storage

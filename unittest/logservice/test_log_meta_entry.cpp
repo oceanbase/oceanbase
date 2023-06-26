@@ -64,8 +64,8 @@ TEST(TestLogMetaEntry, test_log_meta_entry)
   common::GlobalLearnerList curr_learner_list;
   curr_learner_list.add_learner(learner2);
 
-  LogConfigInfo prev_config_info;
-  LogConfigInfo curr_config_info;
+  LogConfigInfoV2 prev_config_info;
+  LogConfigInfoV2 curr_config_info;
   LogConfigVersion prev_config_version;
   LogConfigVersion curr_config_version;
 
@@ -92,6 +92,7 @@ TEST(TestLogMetaEntry, test_log_meta_entry)
   char buf[BUFSIZE];
   int64_t pos = 0;
   // Test serialize and deserialize
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_config_meta(log_config_meta1));
   EXPECT_EQ(OB_SUCCESS, log_meta1.serialize(buf, BUFSIZE, pos));
   EXPECT_EQ(pos, log_meta1.get_serialize_size());
 

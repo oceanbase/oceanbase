@@ -13,21 +13,24 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_BACKUP_TASK_SCHEDULER_H_
 #define OCEANBASE_ROOTSERVER_OB_BACKUP_TASK_SCHEDULER_H_
 
+#include "ob_backup_base_service.h"
 #include "ob_backup_schedule_task.h"
-#include "ob_backup_lease_service.h"
-#include "lib/lock/ob_thread_cond.h"
-#include "rootserver/ob_rs_reentrant_thread.h"
-#include "rootserver/ob_thread_idling.h"
-#include "share/ob_srv_rpc_proxy.h"
+#include "ob_backup_service.h"
+
 namespace oceanbase 
 {
 namespace lib
 {
 class ObMutex;
 }
+
+namespace share
+{
+class ObZoneInfo;
+}
+
 namespace rootserver 
 {
-class ObZoneManager;
 class ObBackupTaskScheduler;
 class ObBackupService;
 class ObBackupTaskSchedulerQueue 
@@ -40,16 +43,11 @@ public:
   ObBackupTaskSchedulerQueue();
   virtual ~ObBackupTaskSchedulerQueue();
 
-  int init(ObTenantBackupScheduleTaskStatMap &tenant_stat_map,
-           ObServerBackupScheduleTaskStatMap &server_stat_map,
-           ObZoneManager &zone_manager,
-	         ObBackupService &backup_mgr,
-           const int64_t bucket_num, 
+  int init(const int64_t bucket_num,
            obrpc::ObSrvRpcProxy *rpc_proxy,
            ObBackupTaskScheduler *task_scheduler,
            const int64_t max_size,
-           common::ObMySQLProxy &sql_proxy,
-           ObBackupLeaseService &lease_service);
+           common::ObMySQLProxy &sql_proxy);
 
   // try to add task in queue
   // return OB_ENTRY_EXIST if insert a task which already in queue
@@ -61,7 +59,7 @@ public:
   // then set to scheduler state and move to schedule_list;
   // return OB_SUCCESS or assign NULL to task, if no task can be scheduled
   int pop_task(ObBackupScheduleTask *&output_task, common::ObArenaAllocator &allocator);
-  int execute_over(const ObBackupScheduleTask &task, const int execute_ret);
+  int execute_over(const ObBackupScheduleTask &task, const share::ObHAResultInfo &result_info);
   // remove task 
   // When finished, task memory will be released and %task can not be used again.
   int reload_task(const ObArray<ObBackupScheduleTask *> &need_reload_tasks);
@@ -82,6 +80,8 @@ private:
   virtual int get_all_zones_(const ObIArray<share::ObBackupZone> &backup_zone,
                              const ObIArray<share::ObBackupRegion> &backup_region,
                              ObIArray<share::ObBackupZone> &zones);
+  int get_tenant_zone_list_(const uint64_t tenant_id, ObIArray<common::ObZone> &zone_list);
+  int get_zone_list_from_region_(const ObRegion &region, ObIArray<common::ObZone> &zone_list);
   int choose_dst_(const ObBackupScheduleTask &task, 
                   const ObIArray<share::ObBackupServer> &servers,
                   ObAddr &dst,
@@ -114,9 +114,9 @@ private:
   lib::ObMutex mutex_;
   int64_t max_size_;
   // Count the number of tasks per tenant. key: tenant_id, value :struct for task_cnt
-  ObTenantBackupScheduleTaskStatMap *tenant_stat_map_;
+  ObTenantBackupScheduleTaskStatMap tenant_stat_map_;
   // Count the number of tasks per server, key: server_addr value :struct for statistical information
-  ObServerBackupScheduleTaskStatMap *server_stat_map_;
+  ObServerBackupScheduleTaskStatMap server_stat_map_;
   common::ObFIFOAllocator task_allocator_;
   // task in wait_list waiting to schedule
   TaskList wait_list_;
@@ -126,23 +126,14 @@ private:
   TaskMap task_map_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupTaskScheduler *task_scheduler_;
-  ObZoneManager *zone_mgr_;
-  ObBackupService *backup_service_;
   common::ObMySQLProxy *sql_proxy_; 
-  ObBackupLeaseService *lease_service_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTaskSchedulerQueue);
 };
 
-class ObBackupSchedulerIdling : public ObThreadIdling {
-public:
-  explicit ObBackupSchedulerIdling(volatile bool &stop) : ObThreadIdling(stop) {}
-  virtual int64_t get_idle_interval_us();
-};
-
-class ObBackupTaskScheduler : public ObRsReentrantThread 
+class ObBackupTaskScheduler : public ObBackupBaseService
 {
 public:
-  const static int64_t MAX_BACKUP_TASK_QUEUE_LIMIT = 1 << 20;
+  const static int64_t MAX_BACKUP_TASK_QUEUE_LIMIT = 1024;
   const static int64_t CONCURRENCY_LIMIT_INTERVAL = 10 * 60 * 1000000L;  // 10min
   const static int64_t BACKUP_TASK_CONCURRENCY = 1;
   const static int64_t BACKUP_SERVER_DATA_LIMIT_INTERVAL = 20 * 60 * 1000000; // 60 min;
@@ -150,18 +141,19 @@ public:
 
 public:
   ObBackupTaskScheduler();
-
-  int init(ObZoneManager *zone_mgr_,
-           obrpc::ObSrvRpcProxy *rpc_proxy,
-           ObBackupService *backup_mgr,
+  virtual ~ObBackupTaskScheduler() {}
+  static int mtl_init(ObBackupTaskScheduler *&backup_task_scheduler);
+  int init(obrpc::ObSrvRpcProxy *rpc_proxy,
            common::ObMySQLProxy &sql_proxy,
-           ObBackupLeaseService &lease_service);
+           share::schema::ObMultiVersionSchemaService &schema_service);
 
-  virtual void run3() override;
-  virtual int blocking_run() { BLOCKING_RUN_IMPLEMENT(); }
-  void stop();
-  void wakeup();
-  int idle() const;
+  virtual void run2() override final;
+  virtual void destroy() override final;
+  virtual void switch_to_follower_forcedly() override;
+  virtual int switch_to_leader() override;
+  virtual int switch_to_follower_gracefully() override;
+  virtual int resume_leader() override;
+
 public:
   // add_task() will nerver block
   // Return OB_ENTRY_EXIST if the task already exist in the scheduler
@@ -171,37 +163,34 @@ public:
   virtual int check_task_exist(const ObBackupScheduleTaskKey key, bool &is_exist);
   // call when task execute finish
   // remove task from scheduler
-  virtual int execute_over(const ObBackupScheduleTask &input_task, const int &execute_ret);
+  virtual int execute_over(const ObBackupScheduleTask &input_task, const share::ObHAResultInfo &result_info);
   virtual int get_all_tasks(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks);
   virtual int cancel_tasks(const BackupJobType &type, const uint64_t job_id, const uint64_t tenant_id);
   int cancel_tasks(const BackupJobType &type, const uint64_t tenant_id);
+  int get_backup_job(const BackupJobType &type, ObIBackupJobScheduler *&job);
+  int register_backup_srv(ObBackupService &srv);
   int reuse();
-  int reload_task_(int64_t &last_reload_task_ts, bool &reload_flag);
-  share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }
+  uint64_t get_exec_tenant_id() { return gen_user_tenant_id(tenant_id_); }
 private:
+  int reload_task_(int64_t &last_reload_task_ts, bool &reload_flag);
   // Send task to execute.
   int execute_task_(const ObBackupScheduleTask &task);
   int do_execute_(const ObBackupScheduleTask &task);
   void dump_statistics_(int64_t &last_dump_time);
   int check_alive_(int64_t &last_check_task_on_server_ts, bool &reload_flag);
   int pop_and_send_task_();
+
+  int check_tenant_status_normal_(bool &is_normal);
   
 private:
   bool is_inited_;
-  mutable ObBackupSchedulerIdling idling_;
+  uint64_t tenant_id_;
   lib::ObMutex scheduler_mtx_;
-  // Count the number of tasks per tenant. key: tenant_id, value :struct for task_cnt
-  ObTenantBackupScheduleTaskStatMap tenant_stat_map_;
-  // Count the number of tasks per server, key: server_addr value :struct for statistical information
-  ObServerBackupScheduleTaskStatMap server_stat_map_;
   ObBackupTaskSchedulerQueue queue_;
-  // scheduler's self server addr
-  common::ObAddr self_;
-  ObZoneManager *zone_mgr_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
-  ObBackupService *backup_service_;
-  ObBackupLeaseService *lease_service_;
+  common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
+  common::ObArray<ObBackupService *> backup_srv_array_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTaskScheduler);
 };
 

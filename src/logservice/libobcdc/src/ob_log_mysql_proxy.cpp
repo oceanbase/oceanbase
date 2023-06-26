@@ -191,7 +191,9 @@ int ObLogMysqlProxy::detect_tenant_mode_(ServerProviderType *server_provider)
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("invalid mysql_conn_config", KR(ret), K(config));
           } else if (OB_FAIL(conn.init(config, enable_ssl_client_authentication))) {
-            LOG_ERROR("init ObLogMySQLConnector failed", KR(ret), K(config), K(enable_ssl_client_authentication));
+            LOG_WARN("init ObLogMySQLConnector failed", KR(ret), K(config), K(enable_ssl_client_authentication));
+            // reset OB_SUCCESS, need retry
+            ret = OB_SUCCESS;
           } else {
             is_oracle_mode_ = conn.is_oracle_mode();
             detect_succ = true;

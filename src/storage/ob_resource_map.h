@@ -162,8 +162,7 @@ public:
   virtual ~ObResourceMap();
   int init(const int64_t bucket_num, const ObMemAttr &attr,
       const int64_t total_limit, const int64_t hold_limit, const int64_t page_size);
-  template <typename Callback = ObResourceDefaultCallback<Key,Value>>
-  int get(const Key &key, ObResourceHandle<Value> &handle, Callback callback = ObResourceDefaultCallback<Key, Value>());
+  int get(const Key &key, ObResourceHandle<Value> &handle);
   template <typename Callback = ObResourceDefaultCallback<Key, Value>>
   int set(const Key &key, Value &value, Callback callback = ObResourceDefaultCallback<Key, Value>());
   template <typename Callback = ObResourceDefaultCallback<Key,Value>>
@@ -175,11 +174,9 @@ public:
   common::ObIAllocator &get_allocator() { return allocator_; }
   int inc_handle_ref(ObResourceValueStore<Value> *ptr);
 protected:
-  template <typename Callback = ObResourceDefaultCallback<Key,Value>>
   int get_without_lock(
       const Key &key,
-      ObResourceHandle<Value> &handle,
-      Callback callback = ObResourceDefaultCallback<Key, Value>());
+      ObResourceHandle<Value> &handle);
   void free_resource(ObResourceValueStore<Value> *ptr);
 protected:
   typedef ObResourceValueStore<Value> ValueStore;
@@ -240,8 +237,7 @@ int ObResourceMap<Key, Value>::init(
 }
 
 template <typename Key, typename Value>
-template <typename Callback>
-int ObResourceMap<Key, Value>::get(const Key &key, ObResourceHandle<Value> &handle, Callback callback)
+int ObResourceMap<Key, Value>::get(const Key &key, ObResourceHandle<Value> &handle)
 {
   int ret = OB_SUCCESS;
   uint64_t hash_val = 0;
@@ -250,18 +246,16 @@ int ObResourceMap<Key, Value>::get(const Key &key, ObResourceHandle<Value> &hand
   } else {
     common::ObBucketHashRLockGuard guard(bucket_lock_, hash_val);
     handle.reset();
-    ret = get_without_lock(key, handle, callback);
+    ret = get_without_lock(key, handle);
   }
   return ret;
 }
 
 template <typename Key,
           typename Value>
-template <typename Callback>
 int ObResourceMap<Key, Value>::get_without_lock(
     const Key &key,
-    ObResourceHandle<Value> &handle,
-    Callback callback)
+    ObResourceHandle<Value> &handle)
 {
   int ret = common::OB_SUCCESS;
   ValueStore *ptr = NULL;
@@ -274,17 +268,10 @@ int ObResourceMap<Key, Value>::get_without_lock(
     } else {
       ret = common::OB_ENTRY_NOT_EXIST;
     }
+  } else if (OB_FAIL(ptr->inc_ref_cnt())) {
+    STORAGE_LOG(WARN, "fail to increase ref count", K(ret));
   } else {
-    common::hash::HashMapPair<Key, Value *> pair;
-    pair.first = key;
-    pair.second = ptr->get_value_ptr();
-    if (OB_FAIL(callback(pair))) {
-      STORAGE_LOG(WARN, "fail to callback", K(ret));
-    } else if (OB_FAIL(inc_handle_ref(ptr))) {
-      STORAGE_LOG(WARN, "fail to inc handle ref count", K(ret));
-    } else {
-      handle.ptr_ = ptr;
-    }
+    handle.ptr_ = ptr;
   }
   return ret;
 }

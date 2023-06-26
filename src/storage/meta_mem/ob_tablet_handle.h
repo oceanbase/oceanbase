@@ -16,6 +16,7 @@
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "share/leak_checker/obj_leak_checker.h"
 #include "storage/tablet/ob_table_store_util.h"
+#include "storage/tablet/ob_tablet_table_store_iterator.h"
 
 namespace oceanbase
 {
@@ -35,37 +36,71 @@ private:
   typedef ObMetaObjGuard<ObTablet> Base;
 public:
   ObTabletHandle();
-  ObTabletHandle(const Base &other);
+  ObTabletHandle(
+      const Base &other,
+      const WashTabletPriority priority);
   ObTabletHandle(const ObTabletHandle &other);
   virtual ~ObTabletHandle();
   ObTabletHandle &operator = (const ObTabletHandle &other);
   virtual void reset() override;
   virtual bool need_hold_time_check() const override { return true; }
-  void set_wash_priority(WashTabletPriority priority) { wash_priority_ = priority; }
+  void set_wash_priority(const WashTabletPriority priority) { wash_priority_ = priority; }
+  common::ObArenaAllocator *get_allocator() { return static_cast<common::ObArenaAllocator *>(allocator_); }
+  void disallow_copy_and_assign() { allow_copy_and_assign_ = false; }
+  bool is_tmp_tablet() const { return !allow_copy_and_assign_; }
+  char *get_buf() { return reinterpret_cast<char *>(obj_); }
+  int64_t get_buf_len() const { return get_buf_header().buf_len_; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
   int64_t calc_wash_score(const WashTabletPriority priority) const;
+  ObMetaObjBufferHeader &get_buf_header() const
+  {
+    return ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char *>(obj_));
+  }
 private:
   WashTabletPriority wash_priority_;
+  bool allow_copy_and_assign_;
   DEFINE_OBJ_LEAK_DEBUG_NODE(node_);
 };
 
 class ObTabletTableIterator final
 {
+  friend class ObTablet;
+  friend class ObLSTabletService;
 public:
-  ObTabletTableIterator() = default;
+  ObTabletTableIterator() : tablet_handle_(), table_store_iter_(), transfer_src_handle_(nullptr) {}
+  explicit ObTabletTableIterator(const bool is_reverse) : tablet_handle_(), table_store_iter_(is_reverse), transfer_src_handle_(nullptr) {}
+
+  ObTabletTableIterator(const ObTabletTableIterator& other) { *this = other; } ;
+  void operator=(const ObTabletTableIterator& other);
   ~ObTabletTableIterator() { reset(); }
   void reset()
   {
+    table_store_iter_.reset();
     tablet_handle_.reset();
-    table_iter_.reset();
+    if (nullptr != transfer_src_handle_) {
+      transfer_src_handle_->~ObTabletHandle();
+      ob_free(transfer_src_handle_);
+      transfer_src_handle_ = nullptr;
+    }
   }
-  // TODO: @yht146439 fix me. return tablet_handle_.is_valid() && table_iter.is_valid();
-  bool is_valid() const { return tablet_handle_.is_valid() || table_iter_.is_valid(); }
-  TO_STRING_KV(K_(tablet_handle), K_(table_iter));
-public:
+  bool is_valid() const { return tablet_handle_.is_valid() || table_store_iter_.is_valid(); }
+  ObTableStoreIterator *table_iter();
+  const ObTableStoreIterator *table_iter() const;
+  const ObTablet *get_tablet() const { return tablet_handle_.get_obj(); }
+  ObTablet *get_tablet() { return tablet_handle_.get_obj(); }
+  const ObTabletHandle &get_tablet_handle() { return tablet_handle_; }
+  int set_tablet_handle(const ObTabletHandle &tablet_handle);
+  int set_transfer_src_tablet_handle(const ObTabletHandle &tablet_handle);
+  int refresh_read_tables_from_tablet(
+      const int64_t snapshot_version,
+      const bool allow_no_ready_read,
+      const bool major_sstable_only = false);
+  TO_STRING_KV(K_(tablet_handle), K_(transfer_src_handle), K_(table_store_iter));
+private:
   ObTabletHandle tablet_handle_;
-  ObTableStoreIterator table_iter_;
+  ObTableStoreIterator table_store_iter_;
+  ObTabletHandle *transfer_src_handle_;
 };
 
 struct ObGetTableParam

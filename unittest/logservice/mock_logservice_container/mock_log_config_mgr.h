@@ -97,7 +97,7 @@ public:
   int get_curr_member_list(common::ObMemberList &member_list, int64_t &replica_num) const
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(log_ms_meta_.curr_.get_expected_paxos_memberlist(member_list, replica_num))) {
+    if (OB_FAIL(log_ms_meta_.curr_.config_.get_expected_paxos_memberlist(member_list, replica_num))) {
       PALF_LOG(WARN, "get_expected_paxos_memberlist failed", KR(ret), K_(palf_id), K_(self));
     }
     return ret;
@@ -105,10 +105,10 @@ public:
   int get_log_sync_member_list(common::ObMemberList &member_list, int64_t &replica_num) const
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.log_sync_memberlist_))) {
+    if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.config_.log_sync_memberlist_))) {
       PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), KPC(this));
     } else {
-      replica_num = log_ms_meta_.curr_.log_sync_replica_num_;
+      replica_num = log_ms_meta_.curr_.config_.log_sync_replica_num_;
     }
     return ret;
   }
@@ -130,15 +130,15 @@ public:
         reconfig_barrier_.prev_end_lsn_.is_valid())) {
       is_before_barrier = true;
       barrier_lsn = reconfig_barrier_.prev_end_lsn_;
-      if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.log_sync_memberlist_))) {
+      if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.config_.log_sync_memberlist_))) {
         PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
       } else {
-        replica_num = log_ms_meta_.prev_.log_sync_replica_num_;
+        replica_num = log_ms_meta_.prev_.config_.log_sync_replica_num_;
       }
-    } else if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.log_sync_memberlist_))) {
+    } else if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.config_.log_sync_memberlist_))) {
       PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
     } else {
-      replica_num = log_ms_meta_.curr_.log_sync_replica_num_;
+      replica_num = log_ms_meta_.curr_.config_.log_sync_replica_num_;
     }
     return ret;
   }
@@ -146,7 +146,7 @@ public:
   {
     int ret = OB_SUCCESS;
     GlobalLearnerList all_learners;
-    if (OB_FAIL(log_ms_meta_.curr_.convert_to_complete_config(member_list, replica_num, all_learners))) {
+    if (OB_FAIL(log_ms_meta_.curr_.config_.convert_to_complete_config(member_list, replica_num, all_learners))) {
       PALF_LOG(WARN, "convert_to_complete_config failed", K(ret), KPC(this));
     }
     return ret;
@@ -154,7 +154,7 @@ public:
   int get_prev_member_list(common::ObMemberList &member_list) const
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.log_sync_memberlist_))) {
+    if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.config_.log_sync_memberlist_))) {
       PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), KPC(this));
     }
     return ret;
@@ -167,14 +167,14 @@ public:
   int get_config_version(LogConfigVersion &config_version) const
   {
     int ret = OB_SUCCESS;
-    config_version = log_ms_meta_.curr_.config_version_;
+    config_version = log_ms_meta_.curr_.config_.config_version_;
     return ret;
   }
   int get_replica_num(int64_t &replica_num) const
   {
     int ret = OB_SUCCESS;
     common::ObMemberList member_list;
-    if (OB_FAIL(log_ms_meta_.curr_.get_expected_paxos_memberlist(member_list, replica_num))) {
+    if (OB_FAIL(log_ms_meta_.curr_.config_.get_expected_paxos_memberlist(member_list, replica_num))) {
       PALF_LOG(WARN, "get_expected_paxos_memberlist failed", KR(ret), KPC(this));
     }
     return ret;

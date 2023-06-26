@@ -1210,7 +1210,7 @@ int LogSlidingWindow::feedback_freeze_last_log_()
   bool is_need_handle = false;
   if (FEEDBACK_FREEZE_MODE != freeze_mode_) {
     // Only FEEDBACK_FREEZE_MODE need exec this fucntion
-    PALF_LOG(TRACE, "current freeze mode is not feedback", K_(palf_id), K_(self), K_(freeze_mode));
+    PALF_LOG(TRACE, "current freeze mode is not feedback", K_(palf_id), K_(self), "freeze_mode", freeze_mode_2_str(freeze_mode_));
   } else if (OB_FAIL(lsn_allocator_.try_freeze(last_log_end_lsn, last_log_id))) {
     PALF_LOG(WARN, "lsn_allocator try_freeze failed", K(ret), K_(palf_id), K_(self), K(last_log_end_lsn), K(last_log_id));
   } else if (last_log_id <= 0) {
@@ -1250,7 +1250,7 @@ int LogSlidingWindow::check_and_switch_freeze_mode()
       (void) feedback_freeze_last_log_();
     }
   } else {}
-  PALF_LOG(TRACE, "finish check_and_switch_freeze_mode", K_(palf_id), K_(self), K(total_append_cnt), K_(freeze_mode));
+  PALF_LOG(TRACE, "finish check_and_switch_freeze_mode", K_(palf_id), K_(self), K(total_append_cnt), "freeze_mode", freeze_mode_2_str(freeze_mode_));
   return ret;
 }
 
@@ -1262,7 +1262,7 @@ int LogSlidingWindow::period_freeze_last_log()
   bool is_need_handle = false;
   if (PERIOD_FREEZE_MODE != freeze_mode_) {
     // Only PERIOD_FREEZE_MODE need exec this fucntion
-    PALF_LOG(TRACE, "current freeze mode is not period", K_(palf_id), K_(self), K_(freeze_mode));
+    PALF_LOG(TRACE, "current freeze mode is not period", K_(palf_id), K_(self), "freeze_mode", freeze_mode_2_str(freeze_mode_));
   } else if (OB_FAIL(lsn_allocator_.try_freeze(last_log_end_lsn, last_log_id))) {
     PALF_LOG(WARN, "lsn_allocator try_freeze failed", K(ret), K_(palf_id), K_(self), K(last_log_end_lsn), K(last_log_id));
   } else if (last_log_id <= 0) {
@@ -1902,7 +1902,7 @@ int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
   } else if (false == need_execute_fetch_(fetch_log_type)) {
     if (palf_reach_time_interval(5 * 1000 * 1000, fetch_failure_print_time_)) {
       PALF_LOG(INFO, "no need execute fetch", K(ret), K_(palf_id), K_(self), K(fetch_log_type),
-          K_(last_fetch_trigger_type), K_(last_fetch_req_time));
+          "last_fetch_trigger_type", fetch_trigger_type_2_str(last_fetch_trigger_type_), K_(last_fetch_req_time));
     }
   } else if (FetchTriggerType::MODE_META_BARRIER == fetch_log_type) {
     int64_t last_slide_log_id = OB_INVALID_LOG_ID;
@@ -2047,7 +2047,7 @@ int LogSlidingWindow::do_fetch_log_(const FetchTriggerType &trigger_type,
           K(fetch_log_count), K(fetch_start_lsn), K(prev_lsn), K(fetch_start_log_id),
           K(last_slide_log_id), K(fetch_log_size), K(accepted_mode_pid), K_(last_fetch_req_time),
           K_(last_fetch_end_lsn), K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn),
-          K(trigger_type), KPC(this));
+          "trigger_type", fetch_trigger_type_2_str(trigger_type), KPC(this));
     }
   }
   return ret;

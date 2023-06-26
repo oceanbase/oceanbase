@@ -216,6 +216,7 @@ TestCheckpointExecutor::TestCheckpointExecutor()
 
 void TestCheckpointExecutor::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   tenant_id_ = MTL_ID();
 }
 
@@ -281,6 +282,7 @@ TEST_F(TestCheckpointExecutor, calculate_checkpoint)
   checkpoint_executor2->register_handler(TIMESTAMP_LOG_BASE_TYPE, &service1);
   ASSERT_EQ(OB_SUCCESS, checkpoint_executor2->init(ls2, &mock_log_handler_));
   checkpoint_executor2->start();
+
 
   ASSERT_EQ(OB_SUCCESS, checkpoint_executor2->update_clog_checkpoint());
   tmp.val_ = 5;

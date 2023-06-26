@@ -107,6 +107,10 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
     LOG_ERROR("invalid tenant id", K(attr.tenant_id_));
     attr.tenant_id_ = OB_SERVER_TENANT_ID;
   }
+  if (OB_SERVER_TENANT_ID == attr.tenant_id_ &&
+      attr.use_500() && !attr.expect_500()) {
+    attr.ctx_id_ = ObCtxIds::UNEXPECTED_IN_500;
+  }
   lib::ObMemAttr inner_attr = attr;
   bool do_not_use_me = false;
   if (FORCE_EXPLICT_500_MALLOC()) {
@@ -185,7 +189,7 @@ void *ObMallocAllocator::realloc(
   } else if (OB_ISNULL(nptr = allocator->realloc(ptr, size, inner_attr))) {
     // do nothing
   }
-  return nptr;;
+  return nptr;
 #endif
 }
 
@@ -243,7 +247,7 @@ ObTenantCtxAllocatorGuard ObMallocAllocator::get_tenant_ctx_allocator(uint64_t t
 {
   if (OB_LIKELY(tl_ta != NULL && tl_ta->get_tenant_id() == tenant_id)) {
     const bool lock = false;
-    return ObTenantCtxAllocatorGuard(&tl_ta[ctx_id], lock);;
+    return ObTenantCtxAllocatorGuard(&tl_ta[ctx_id], lock);
   }
   return get_tenant_ctx_allocator_without_tlcache(tenant_id, ctx_id);
 }
@@ -398,6 +402,40 @@ int ObMallocAllocator::with_resource_handle_invoke(uint64_t tenant_id, InvokeFun
   }
   return ret;
 }
+#ifdef ENABLE_500_MEMORY_LIMIT
+int ObMallocAllocator::set_500_tenant_limit()
+{
+  int ret = OB_SUCCESS;
+  for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
+    if (ObCtxIds::SCHEMA_SERVICE == ctx_id ||
+        ObCtxIds::PKT_NIO == ctx_id ||
+        ObCtxIds::CO_STACK == ctx_id ||
+        ObCtxIds::LIBEASY == ctx_id ||
+        ObCtxIds::GLIBC == ctx_id ||
+        ObCtxIds::LOGGER_CTX_ID== ctx_id ||
+        ObCtxIds::RPC_CTX_ID == ctx_id ||
+        ObCtxIds::UNEXPECTED_IN_500 == ctx_id) {
+      continue;
+    }
+    auto ta = get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ctx_id);
+    if (OB_NOT_NULL(ta)) {
+      int64_t ctx_limit = ObCtxIds::DEFAULT_CTX_ID == ctx_id ? (3LL<<30) : (50LL<<20);
+      if (OB_FAIL(ta->set_limit(ctx_limit))) {
+        LIB_LOG(WARN, "set limit of 500 tenant failed", K(ret), K(ctx_limit),
+                "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id));
+      } else {
+        LIB_LOG(INFO, "set limit of 500 tenant succeed", K(ret), K(ctx_limit),
+                "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LIB_LOG(WARN, "tenant ctx allocator is not exist", K(ret),
+              "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObMallocAllocator::set_tenant_limit(uint64_t tenant_id, int64_t bytes)
 {

@@ -56,7 +56,8 @@ int ObIMvccCtx::register_row_commit_cb(
     const int64_t data_size,
     const ObRowData *old_row,
     ObMemtable *memtable,
-    const int64_t seq_no)
+    const int64_t seq_no,
+    const int64_t column_cnt)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = false;
@@ -66,9 +67,10 @@ int ObIMvccCtx::register_row_commit_cb(
       || OB_ISNULL(value)
       || OB_ISNULL(node)
       || data_size <= 0
-      || OB_ISNULL(memtable)) {
+      || OB_ISNULL(memtable)
+      || column_cnt <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(key), K(value), K(node), K(data_size), K(memtable));
+    TRANS_LOG(WARN, "invalid argument", K(key), K(value), K(node), K(data_size), K(memtable), K(column_cnt));
   } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
@@ -80,7 +82,8 @@ int ObIMvccCtx::register_row_commit_cb(
             data_size,
             old_row,
             is_replay,
-            seq_no);
+            seq_no,
+            column_cnt);
     cb->set_is_link();
 
     if (OB_FAIL(append_callback(cb))) {
@@ -102,7 +105,8 @@ int ObIMvccCtx::register_row_replay_cb(
     const int64_t data_size,
     ObMemtable *memtable,
     const int64_t seq_no,
-    const SCN scn)
+    const SCN scn,
+    const int64_t column_cnt)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = true;
@@ -122,7 +126,8 @@ int ObIMvccCtx::register_row_replay_cb(
             data_size,
             NULL,
             is_replay,
-            seq_no);
+            seq_no,
+            column_cnt);
     {
       ObRowLatchGuard guard(value->latch_);
       cb->link_trans_node();

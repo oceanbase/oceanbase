@@ -139,14 +139,8 @@ bool ObArchiveRoundHandler::can_suspend_archive(const ObTenantArchiveRoundAttr &
 int ObArchiveRoundHandler::decide_start_scn_(SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  ObAllTenantInfo tenant_info;
-  const bool for_update = false;
-  if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, sql_proxy_, for_update, tenant_info))) {
-    LOG_WARN("failed to get tenant info", K(ret), K_(tenant_id));
-  } else if (OB_FALSE_IT(start_scn = tenant_info.get_standby_scn())){
-  } else if (SCN::base_scn() >= start_scn) {
-    ret = OB_EAGAIN;
-    LOG_WARN("start_scn not valid, need wait", K(ret), K(tenant_info));
+  if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id_, start_scn))) {
+    LOG_WARN("failed to decide archive start scn.", K(ret), K_(tenant_id));
   }
   return ret;
 }

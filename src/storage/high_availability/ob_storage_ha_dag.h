@@ -16,59 +16,12 @@
 #include "share/scheduler/ob_dag_scheduler.h"
 #include "storage/ob_storage_rpc.h"
 #include "ob_storage_ha_struct.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "ob_storage_restore_struct.h"
-#include "ob_storage_ha_reader.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-
-enum class ObStorageHADagType : uint64_t
-{
-  /*ObLSPrepareMigration*/
-  INITIAL_PREPARE_MIGRATION_DAG = 0,
-  START_PREPARE_MIGRATION_DAG = 1,
-  TABLET_BACKFILL_TX_MIGRATION_DAG = 2,
-  FINISH_BACKFILL_TX_MIGRATION_DAG = 3,
-  FINISH_PREPARE_MIGRATION_DAG = 4,
-
-  /*ObLSMigration*/
-  INITIAL_MIGRATION_DAG = 5,
-  START_MIGRATION_DAG = 6,
-  SYS_TABLETS_MIGRATION_DAG = 7,
-  DATA_TABLETS_MIGRATION_DAG = 8,
-  TABLET_GROUP_MIGRATION_DAG = 9,
-  TBALET_MIGRATION_DAG = 10,
-  FINISH_MIGRATION_DAG = 11,
-
-  /*ObLSCompleteMigration*/
-  INITIAL_COMPLETE_MIGRATION_DAG = 12,
-  START_COMPLETE_MIGRATION_DAG = 13,
-  FINISH_COMPLETE_MIGRATION_DAG = 14,
-
-  /*ObLSRestore*/
-  INITIAL_LS_RESTORE_DAG = 15,
-  START_LS_RESTORE_DAG = 16,
-  SYS_TABLETS_RETORE_DAG = 17,
-  DATA_TABLETS_META_RESTORE_DAG = 18,
-  TABLET_GROUP_META_RETORE_DAG = 19,
-  FINISH_LS_RESTORE_DAG = 20,
-
-  /*ObTabletGroupRestore*/
-  INITIAL_TABLET_GROUP_RESTORE_DAG = 21,
-  START_TABLET_GROUP_RESTORE_DAG = 22,
-  TABLET_GROUP_RESTORE_DAG = 23,
-  FINISH_TABELT_GROUP_RESTORE_DAG = 24,
-  TABLET_RESTORE_DAG = 25,
-
-  /*ObTabletBackfillTX*/
-  TABLET_BACKFILL_TX_DAG = 26,
-  FINISH_BACKFILL_TX_DAG = 27,
-
-  MAX_TYPE,
-};
 
 struct ObStorageHAResultMgr final
 {
@@ -76,12 +29,14 @@ public:
   ObStorageHAResultMgr();
   ~ObStorageHAResultMgr();
   int get_result(int32_t &result);
-  int set_result(const int32_t result, const bool allow_retry);
+  int set_result(const int32_t result, const bool allow_retry,
+      const enum share::ObDagType::ObDagTypeEnum type = ObDagType::DAG_TYPE_MAX);
   bool is_failed() const;
   int check_allow_retry(bool &allow_retry);
   void reuse();
   void reset();
   int get_retry_count(int32_t &retry_count);
+  int get_first_failed_task_id(share::ObTaskId &task_id);
   TO_STRING_KV(K_(result), K_(retry_count), K_(allow_retry), K_(failed_task_id_list));
 
 private:
@@ -106,6 +61,7 @@ public:
     LS_RESTORE = 3,
     TABLET_GROUP_RESTORE = 4,
     BACKFILL_TX = 5,
+    TRANSFER_BACKFILL_TX = 6,
     MAX
   };
 
@@ -114,7 +70,8 @@ public:
   virtual int fill_comment(char *buf, const int64_t buf_len) const = 0;
   virtual DagNetCtxType get_dag_net_ctx_type() = 0;
   virtual bool is_valid() const = 0;
-  int set_result(const int32_t result, const bool need_retry);
+  int set_result(const int32_t result, const bool need_retry,
+      const enum share::ObDagType::ObDagTypeEnum type = ObDagType::DAG_TYPE_MAX);
   bool is_failed() const;
   virtual int check_allow_retry(bool &allow_retry);
   int get_result(int32_t &result);
@@ -122,6 +79,7 @@ public:
   void reset();
   int check_is_in_retry(bool &is_in_retry);
   int get_retry_count(int32_t &retry_count);
+  int get_first_failed_task_id(share::ObTaskId &task_id);
 
   VIRTUAL_TO_STRING_KV(K("ObIHADagNetCtx"), K_(result_mgr));
 private:
@@ -133,28 +91,25 @@ private:
 class ObStorageHADag : public share::ObIDag
 {
 public:
-  explicit ObStorageHADag(
-      const share::ObDagType::ObDagTypeEnum &dag_type,
-      const ObStorageHADagType sub_type);
+  explicit ObStorageHADag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObStorageHADag();
   virtual int inner_reset_status_for_retry();
   virtual bool check_can_retry();
   int check_is_in_retry(bool &is_in_retry);
 
-  int set_result(const int32_t result, const bool allow_retry = true);
+  int set_result(const int32_t result, const bool allow_retry = true,
+      const enum share::ObDagType::ObDagTypeEnum type = ObDagType::DAG_TYPE_MAX);
   virtual int report_result();
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
-  ObStorageHADagType get_sub_type() const { return sub_type_; }
   ObIHADagNetCtx *get_ha_dag_net_ctx() const { return ha_dag_net_ctx_; }
   virtual bool is_ha_dag() const override { return true; }
 
-  INHERIT_TO_STRING_KV("ObIDag", ObIDag, KPC_(ha_dag_net_ctx), K_(sub_type), K_(result_mgr));
+  INHERIT_TO_STRING_KV("ObIDag", ObIDag, KPC_(ha_dag_net_ctx), K_(result_mgr));
 protected:
   ObIHADagNetCtx *ha_dag_net_ctx_;
-  ObStorageHADagType sub_type_;
   ObStorageHAResultMgr result_mgr_;
   lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHADag);
@@ -170,6 +125,9 @@ public:
   static int get_ls(
       const share::ObLSID &ls_id,
       ObLSHandle &ls_handle);
+  static int check_self_in_member_list(
+      const share::ObLSID &ls_id,
+      bool &is_in_member_list);
 };
 
 class ObHATabletGroupCtx

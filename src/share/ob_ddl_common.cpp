@@ -833,7 +833,7 @@ int ObDDLUtil::ddl_get_tablet(
     ObLSHandle &ls_handle,
     const ObTabletID &tablet_id,
     storage::ObTabletHandle &tablet_handle,
-    const int64_t get_timeout_ts)
+    storage::ObMDSGetTabletMode mode)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -845,7 +845,7 @@ int ObDDLUtil::ddl_get_tablet(
   } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet_with_timeout(tablet_id,
                                                                    tablet_handle,
                                                                    timeout_ts,
-                                                                   get_timeout_ts))) {
+                                                                   mode))) {
     LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
     if (OB_ALLOCATE_MEMORY_FAILED == ret) {
       ret = OB_TIMEOUT;

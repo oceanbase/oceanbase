@@ -124,18 +124,19 @@ private:
   ObTenantTabletIterator *tablet_iter_;
   common::ObArenaAllocator tablet_allocator_;
   ObTabletHandle tablet_handle_;
+  common::ObSEArray<ObColDesc, 16> cols_desc_;
   int64_t ls_id_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char range_buf_[common::OB_MAX_RANGE_LENGTH + 1]; // extra byte for '\0'
-  common::ObSEArray<storage::ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> all_tables_;
+  storage::ObTableStoreIterator table_store_iter_;
   blocksstable::ObSSTable *curr_sstable_;
+  blocksstable::ObSSTableMetaHandle curr_sstable_meta_handle_;
   blocksstable::ObIMacroBlockIterator *macro_iter_;
-  int64_t other_block_idx_;
+  blocksstable::ObMacroIdIterator other_blk_iter_;
   ObArenaAllocator iter_allocator_;
   ObArenaAllocator rowkey_allocator_;
   blocksstable::ObDatumRange curr_range_;
   common::ObObj objs_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
-  int64_t table_idx_;
   int64_t block_idx_;
   void *iter_buf_;
 private:

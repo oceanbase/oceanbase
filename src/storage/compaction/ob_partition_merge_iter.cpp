@@ -93,16 +93,18 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
   int ret = OB_SUCCESS;
   ObSSTable *sstable = nullptr;
   SCN snapshot_version;
+  int64_t schema_stored_col_cnt = 0;
   if (OB_UNLIKELY(nullptr == column_ids_ || nullptr == table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null column_ids", K(ret), KPC(this));
+  } else if (OB_FAIL(merge_param.merge_schema_->get_store_column_count(schema_stored_col_cnt, true/*full_col*/))) {
+    LOG_WARN("failed to get storage count", K(ret), KPC(merge_param.merge_schema_));
   } else if (OB_FAIL(read_info_.init(
               allocator_,
-              merge_param.merge_schema_->get_column_count(),
+              schema_stored_col_cnt,
               schema_rowkey_column_cnt_,
               lib::is_oracle_mode(),
-              *column_ids_,
-              true))) {
+              *column_ids_))) {
     LOG_WARN("Fail to init read_info", K(ret));
   } else if (OB_FAIL(access_param_.init_merge_param(tablet_id_.id(), tablet_id_,
                                                     read_info_, is_multi_version_merge(merge_param.merge_type_)))) {
@@ -128,8 +130,9 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
       LOG_WARN("Failed to init table access context", K(ret), K(query_flag));
     } else {
       access_context_.trans_state_mgr_ = merge_param.trans_state_mgr_;
-      // always use end_scn for safety
-      access_context_.merge_scn_ = merge_param.scn_range_.end_scn_;
+      // 1.normal minor merge merge scn equal to end scn
+      // 2.backfill may merge scn is bigger than end scn
+      access_context_.merge_scn_ = merge_param.merge_scn_;
     }
   }
   return ret;
@@ -429,12 +432,12 @@ int ObPartitionMacroMergeIter::inner_init(const ObMergeParameter &merge_param)
   void *buf = nullptr;
 
   ObSSTable *sstable = static_cast<ObSSTable *>(table_);
-  const ObTableReadInfo *index_read_info = merge_param.full_read_info_->get_index_read_info();
-  if (OB_ISNULL(index_read_info)) {
+  const ObITableReadInfo *rowkey_read_info_ = merge_param.rowkey_read_info_;
+  if (OB_ISNULL(rowkey_read_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null index read info", K(ret));
   } else if (OB_FAIL(sstable->scan_macro_block(
-      merge_range_, *index_read_info, stmt_allocator_, macro_block_iter_, false, true, true))) {
+      merge_range_, *rowkey_read_info_, stmt_allocator_, macro_block_iter_, false, true, true))) {
     LOG_WARN("Fail to scan macro block", K(ret));
   } else if (OB_ISNULL(buf = stmt_allocator_.alloc(sizeof(ObSSTableRowWholeScanner)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -502,7 +505,7 @@ int ObPartitionMacroMergeIter::exist(const ObDatumRow *row, bool &is_exist)
     ObDatumRowkey rowkey;
     if (OB_FAIL(rowkey.assign(row->storage_datums_, schema_rowkey_column_cnt_))) {
       STORAGE_LOG(WARN, "Failed to assign rowkey", K(ret), KPC(row), K_(schema_rowkey_column_cnt));
-    } else if (OB_FAIL(table_->exist(store_ctx_, tablet_id_.id(), read_info_, rowkey, is_exist, has_found))) {
+    } else if (OB_FAIL(table_->exist(access_param_.iter_param_, access_context_, rowkey, is_exist, has_found))) {
       LOG_WARN("Failed to check row if exist", K(ret), KPC(row));
     }
   }
@@ -1318,8 +1321,8 @@ int ObPartitionMinorMacroMergeIter::inner_init(const ObMergeParameter &merge_par
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  const ObTableReadInfo *index_read_info = merge_param.full_read_info_->get_index_read_info();
-  if (OB_ISNULL(index_read_info)) {
+  const ObITableReadInfo *rowkey_read_info_ = merge_param.rowkey_read_info_;
+  if (OB_ISNULL(rowkey_read_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null index read info", K(ret));
   } else if (OB_FAIL(common_minor_inner_init(merge_param))) {
@@ -1337,13 +1340,13 @@ int ObPartitionMinorMacroMergeIter::inner_init(const ObMergeParameter &merge_par
     ObSSTable *sstable = static_cast<ObSSTable *>(table_);
     if (OB_FAIL(sstable->scan_macro_block(
         merge_range_,
-        *index_read_info,
+        *rowkey_read_info_,
         stmt_allocator_,
         macro_block_iter_,
         false, /* reverse scan */
         false, /* need micro info */
         true /* need secondary meta */))) {
-    LOG_WARN("Fail to scan macro block", K(ret), KPC(merge_param.full_read_info_));
+    LOG_WARN("Fail to scan macro block", K(ret));
     }
   }
 

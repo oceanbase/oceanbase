@@ -41,6 +41,7 @@ public:
   virtual int set_primary_zone(const common::ObString &zone) = 0;
   virtual int set_locality(const common::ObString &locality) = 0;
   virtual int set_tablegroup_id(uint64_t tablegroup_id) = 0;
+  virtual int set_tablegroup_sharding(const common::ObString &sharding) = 0;
 
   int64_t get_part_func_expr_num() { return part_func_expr_num_; }
   void set_part_func_expr_num(int64_t expr_num) { part_func_expr_num_ = expr_num; }

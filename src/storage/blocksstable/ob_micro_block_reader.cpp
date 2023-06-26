@@ -35,13 +35,13 @@ public:
       ReaderType *reader,
       const char *data_begin,
       const int32_t *index_data,
-      const ObTableReadInfo *read_info)
+      const ObStorageDatumUtils *datum_utils)
       : ret_(ret),
       equal_(equal),
       reader_(reader),
       data_begin_(data_begin),
       index_data_(index_data),
-      read_info_(read_info) {}
+      datum_utils_(datum_utils) {}
   ~PreciseCompare() {}
   inline bool operator() (const int64_t row_idx, const ObDatumRowkey &rowkey)
   {
@@ -61,11 +61,11 @@ private:
       // do nothing
     } else if (OB_FAIL(reader_->compare_meta_rowkey(
                 rowkey,
-                *read_info_,
+                *datum_utils_,
                 data_begin_ + index_data_[row_idx],
                 index_data_[row_idx + 1] - index_data_[row_idx],
                 compare_result))) {
-      LOG_WARN("fail to compare rowkey", K(ret), K(rowkey), KPC_(read_info));
+      LOG_WARN("fail to compare rowkey", K(ret), K(rowkey), KPC_(datum_utils));
     } else {
       bret = lower_bound ? compare_result < 0 : compare_result > 0;
       // binary search will keep searching after find the first equal item,
@@ -83,7 +83,7 @@ private:
   ReaderType *reader_;
   const char *data_begin_;
   const int32_t *index_data_;
-  const ObTableReadInfo *read_info_;
+  const ObStorageDatumUtils *datum_utils_;
 };
 
 ObIMicroBlockFlatReader::ObIMicroBlockFlatReader()
@@ -115,7 +115,7 @@ int ObIMicroBlockFlatReader::find_bound_(
     const bool lower_bound,
     const int64_t begin_idx,
     const int64_t end_idx,
-    const ObTableReadInfo &read_info,
+    const ObStorageDatumUtils &datum_utils,
     int64_t &row_idx,
     bool &equal)
 {
@@ -132,7 +132,7 @@ int ObIMicroBlockFlatReader::find_bound_(
         &flat_row_reader_,
         data_begin_,
         index_data_,
-        &read_info);
+        &datum_utils);
     ObRowIndexIterator begin_iter(begin_idx);
     ObRowIndexIterator end_iter(end_idx);
     ObRowIndexIterator found_iter;
@@ -142,7 +142,7 @@ int ObIMicroBlockFlatReader::find_bound_(
       found_iter = std::upper_bound(begin_iter, end_iter, key, flat_compare);
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("fail to lower bound rowkey", K(ret), K(key), K(lower_bound), K(read_info));
+      LOG_WARN("fail to lower bound rowkey", K(ret), K(key), K(lower_bound), K(datum_utils));
     } else {
       row_idx = *found_iter;
     }
@@ -171,7 +171,7 @@ int ObIMicroBlockFlatReader::init(const ObMicroBlockData &block_data)
  * */
 int ObMicroBlockGetReader::inner_init(
     const ObMicroBlockData &block_data,
-    const ObTableReadInfo &read_info,
+    const ObITableReadInfo &read_info,
     const ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
@@ -192,7 +192,7 @@ int ObMicroBlockGetReader::inner_init(
 int ObMicroBlockGetReader::get_row(
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
-    const ObTableReadInfo &read_info,
+    const ObITableReadInfo &read_info,
     ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
@@ -221,7 +221,7 @@ int ObMicroBlockGetReader::get_row(
 int ObMicroBlockGetReader::exist_row(
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
-    const ObTableReadInfo &read_info,
+    const ObITableReadInfo &read_info,
     bool &exist,
     bool &found)
 {
@@ -261,7 +261,7 @@ int ObMicroBlockGetReader::locate_rowkey(const ObDatumRowkey &rowkey, int64_t &r
   } else if (need_binary_search) {
     bool is_equal = false;
     if (OB_FAIL(ObIMicroBlockFlatReader::find_bound_(rowkey, true/*lower_bound*/, 0, row_count_,
-        *read_info_, row_idx, is_equal))) {
+        read_info_->get_datum_utils(), row_idx, is_equal))) {
       LOG_WARN("fail to lower_bound rowkey", K(ret));
     } else if (row_count_ == row_idx || !is_equal) {
       row_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
@@ -306,7 +306,7 @@ int ObMicroBlockGetReader::locate_rowkey_fast_path(const ObDatumRowkey &rowkey,
           LOG_WARN("Unexpected row_idx", K(ret), K(tmp_row_idx), K(row_count_), K(rowkey), KPC_(read_info));
         } else if (OB_FAIL(flat_row_reader_.compare_meta_rowkey(
                       rowkey,
-                      *read_info_,
+                      read_info_->get_datum_utils(),
                       data_begin_ + index_data_[tmp_row_idx],
                       index_data_[tmp_row_idx + 1] - index_data_[tmp_row_idx],
                       compare_result))) {
@@ -341,7 +341,7 @@ void ObMicroBlockReader::reset()
 
 int ObMicroBlockReader::init(
     const ObMicroBlockData &block_data,
-    const ObTableReadInfo &read_info)
+    const ObITableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -355,6 +355,7 @@ int ObMicroBlockReader::init(
   } else {
     row_count_ = header_->row_count_;
     read_info_ = &read_info;
+    datum_utils_ = &(read_info.get_datum_utils());
     is_inited_ = true;
   }
 
@@ -363,6 +364,30 @@ int ObMicroBlockReader::init(
   }
   return ret;
 }
+
+int ObMicroBlockReader::init(
+    const ObMicroBlockData &block_data,
+	const ObStorageDatumUtils *datum_utils)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    reset();
+  }
+  if (OB_FAIL(ObIMicroBlockFlatReader::init(block_data))) {
+    LOG_WARN("fail to init, ", K(ret));
+  } else {
+    row_count_ = header_->row_count_;
+    read_info_ = nullptr;
+    datum_utils_ = datum_utils;
+    is_inited_ = true;
+  }
+
+  if (IS_NOT_INIT) {
+    reset();
+  }
+  return ret;
+}
+
 
 int ObMicroBlockReader::find_bound(
     const ObDatumRowkey &key,
@@ -375,19 +400,19 @@ int ObMicroBlockReader::find_bound(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init");
-  } else if (OB_UNLIKELY(!key.is_valid() || begin_idx < 0 || nullptr == read_info_)) {
+  } else if (OB_UNLIKELY(!key.is_valid() || begin_idx < 0 || nullptr == datum_utils_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), K(begin_idx), K(row_count_),
-             KP_(data_begin), KP_(index_data), KP_(read_info));
+             KP_(data_begin), KP_(index_data), KP_(datum_utils));
   } else if (OB_FAIL(ObIMicroBlockFlatReader::find_bound_(
           key,
           lower_bound,
           begin_idx,
           row_count_,
-          *read_info_,
+          *datum_utils_,
           row_idx,
           equal))) {
-    LOG_WARN("failed to find bound", K(ret), K(lower_bound), K(begin_idx), K_(row_count), KPC_(read_info));
+    LOG_WARN("failed to find bound", K(ret), K(lower_bound), K(begin_idx), K_(row_count), KPC_(datum_utils));
   }
   return ret;
 }
@@ -411,11 +436,10 @@ int ObMicroBlockReader::get_row(const int64_t index, ObDatumRow &row)
     ret = OB_NOT_INIT;
     LOG_WARN("should init reader first, ", K(ret));
   } else if(OB_UNLIKELY(nullptr == header_ ||
-                        nullptr == read_info_ ||
                         index < 0 || index >= header_->row_count_ ||
                         !row.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(index), K(row), KPC_(header), KPC_(read_info));
+    LOG_WARN("invalid argument", K(ret), K(index), K(row), KPC_(header));
   } else if (OB_FAIL(flat_row_reader_.read_row(
               data_begin_ + index_data_[index],
               index_data_[index + 1] - index_data_[index],
@@ -536,7 +560,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
     const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets();
     const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
     const common::ObIArray<ObStorageDatum> &default_datums = filter.get_default_datums();
-    const common::ObIArray<int32_t> &cols_index = read_info_->get_columns_index();
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
     for (int64_t row_idx = pd_filter_info.start_; OB_SUCC(ret) && row_idx < pd_filter_info.end_; ++row_idx) {
       if (nullptr != parent && parent->can_skip_filter(row_idx)) {
@@ -706,7 +730,7 @@ int ObMicroBlockReader::get_row_count(
   } else {
     count = 0;
     int64_t row_idx = common::OB_INVALID_INDEX;
-    const common::ObIArray<int32_t> &cols_index = read_info_->get_columns_index();
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     int64_t col_idx = cols_index.at(col);
     ObStorageDatum datum;
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
@@ -743,7 +767,7 @@ int ObMicroBlockReader::get_min_or_max(
     LOG_WARN("Invalid argument", K(ret), KPC(header_), KPC_(read_info), K(row_cap), K(col));
   } else {
     int64_t row_idx = common::OB_INVALID_INDEX;
-    const common::ObIArray<int32_t> &cols_index = read_info_->get_columns_index();
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
     int64_t col_idx = cols_index.at(col);
     ObStorageDatum datum;
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {

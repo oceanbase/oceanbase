@@ -320,13 +320,6 @@ public:
       const int64_t& buf_len,
       int64_t& pos,
       bool agent_mode = false) const;
-  int print_tablegroup_definition_partition_options(
-      const share::schema::ObTablegroupSchema &tablegroup_schema,
-      char* buf,
-      const int64_t& buf_len,
-      int64_t& pos,
-      bool agent_mode,
-      const common::ObTimeZoneInfo *tz_info) const;
   int print_tenant_definition(uint64_t tenant_id,
                               common::ObMySQLProxy *sql_proxy,
                               char* buf,

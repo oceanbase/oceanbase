@@ -150,7 +150,7 @@ void ObIndexBlockMicroIterator::reset()
 
 int ObIndexBlockMicroIterator::init(
     const blocksstable::ObDatumRange &range,
-    const ObTableReadInfo &table_read_info,
+    const ObITableReadInfo &table_read_info,
     const blocksstable::MacroBlockId &macro_id,
     const common::ObIArray<blocksstable::ObMicroIndexInfo> &micro_block_infos,
     const common::ObIArray<blocksstable::ObDatumRowkey> &endkeys,

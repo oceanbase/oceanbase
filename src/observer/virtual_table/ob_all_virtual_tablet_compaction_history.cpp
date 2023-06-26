@@ -26,12 +26,9 @@ ObAllVirtualTabletCompactionHistory::ObAllVirtualTabletCompactionHistory()
       participant_table_str_(),
       macro_id_list_(),
       comment_(),
-      major_info_idx_(0),
-      major_info_cnt_(0),
-      minor_info_idx_(0),
-      minor_info_cnt_(0),
       merge_info_(),
-      get_info_cnt_flag_(true)
+      major_merge_info_iter_(),
+      minor_merge_info_iter_()
 {
 }
 
@@ -67,29 +64,20 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
   ObObj *cells = cur_row_.cells_;
   int64_t compression_ratio = 0;
   int n = 0;
-  if (get_info_cnt_flag_) {
-    major_info_cnt_ = MTL(ObTenantSSTableMergeInfoMgr *)->get_major_info_array_cnt();
-    minor_info_cnt_ = MTL(ObTenantSSTableMergeInfoMgr *)->get_minor_info_array_cnt();
-    get_info_cnt_flag_ = false;
+  if (!major_merge_info_iter_.is_opened() && !minor_merge_info_iter_.is_opened()) {
+    if (OB_FAIL(MTL(ObTenantSSTableMergeInfoMgr *)->open_iter(major_merge_info_iter_, minor_merge_info_iter_))) {
+      STORAGE_LOG(WARN, "fail to open ObTenantSSTableMergeInfoMgr::Iterator", K(ret));
+    }
   }
 
-  while (OB_SUCC(ret)) {
-    if (major_info_idx_ < major_info_cnt_) {
-      if (OB_FAIL(MTL(ObTenantSSTableMergeInfoMgr *)->get_major_info(major_info_idx_, merge_info_))) {
-        STORAGE_LOG(WARN, "Fail to get merge info", K(ret), K_(major_info_idx));
-      } else {
-        major_info_idx_++;
-        break;
+  if (OB_SUCC(ret)) {
+    if (FALSE_IT(MEMSET(comment_, '\0', sizeof(comment_)))) {
+    } else if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_merge_info_iter_,
+                minor_merge_info_iter_,
+                merge_info_, comment_, sizeof(comment_)))){
+      if (OB_ITER_END != ret) {
+        STORAGE_LOG(WARN, "fail to get next sstable merge info", K(ret));
       }
-    } else if (minor_info_idx_ < minor_info_cnt_) {
-      if (OB_FAIL(MTL(ObTenantSSTableMergeInfoMgr *)->get_minor_info(minor_info_idx_, merge_info_))) {
-        STORAGE_LOG(WARN, "Fail to get merge info", K(ret), K_(minor_info_idx));
-      } else {
-        minor_info_idx_++;
-        break;
-      }
-    } else {
-      ret = OB_ITER_END;
     }
   }
 
@@ -203,7 +191,7 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       break;
     case PARTICIPANT_TABLE_INFO:
       MEMSET(participant_table_str_, '\0', sizeof(participant_table_str_));
-      MEMCPY(participant_table_str_, merge_info_.participant_table_str_, strlen(merge_info_.participant_table_str_));
+      merge_info_.participant_table_info_.fill_info(participant_table_str_, sizeof(participant_table_str_));
       cells[i].set_varchar(participant_table_str_);
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
@@ -214,8 +202,7 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     case COMMENT:
-      MEMSET(comment_, '\0', sizeof(comment_));
-      MEMCPY(comment_, merge_info_.comment_, strlen(merge_info_.comment_));
+      merge_info_.fill_comment(comment_, sizeof(comment_));
       cells[i].set_varchar(comment_);
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;

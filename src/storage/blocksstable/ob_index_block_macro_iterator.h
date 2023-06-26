@@ -70,7 +70,7 @@ public:
   virtual int open(
       ObSSTable &sstable,
       const ObDatumRange &range,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
       const bool is_reverse = false,
       const bool need_record_micro_info = false) = 0;
@@ -91,7 +91,7 @@ public:
   virtual int open(
       ObSSTable &sstable,
       const ObDatumRange &range,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
       const bool is_reverse = false,
       const bool need_record_micro_info = false) override;
@@ -120,7 +120,6 @@ private:
 
 private:
   const blocksstable::ObSSTable *sstable_;
-  const ObTableReadInfo *index_read_info_;
   const ObDatumRange *iter_range_;
   ObIndexBlockTreeCursor tree_cursor_;
   common::ObIAllocator *allocator_; // allocator for member struct and macro endkeys
@@ -155,7 +154,7 @@ public:
   virtual int open(
       ObSSTable &sstable,
       const ObDatumRange &query_range,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
       const bool is_reverse_scan = false,
       const bool need_record_micro_info = false) override;

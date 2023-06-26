@@ -72,7 +72,8 @@ public:
 public:
   virtual bool operator == (const ObIDag &other) const override;
   virtual int64_t hash() const override;
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
+
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool ignore_warning() override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
@@ -150,34 +151,39 @@ public:
   static int create_ddl_sstable(const ObTabletDDLParam &ddl_param,
                                 const ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array,
                                 const blocksstable::ObSSTable *first_ddl_sstable,
-                                ObTableHandleV2 &table_handle);
+                                common::ObArenaAllocator &allocator,
+                                blocksstable::ObSSTable &sstable);
 
   static int create_ddl_sstable(blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
                                 const ObTabletDDLParam &ddl_param,
                                 const blocksstable::ObSSTable *first_ddl_sstable,
-                                ObTableHandleV2 &table_handle);
+                                common::ObArenaAllocator &allocator,
+                                blocksstable::ObSSTable &sstable);
 
   static int update_ddl_table_store(const ObTabletDDLParam &ddl_param,
-                                    const ObTableHandleV2 &table_handle);
+                                    common::ObArenaAllocator &allocator,
+                                    blocksstable::ObSSTable &sstable);
 
-  static int compact_ddl_sstable(const ObTablesHandleArray &ddl_sstables,
-                                 const ObTableReadInfo &read_info,
+  static int compact_ddl_sstable(ObTableStoreIterator &ddl_sstable_iter,
+                                 const ObITableReadInfo &read_info,
                                  const bool is_commit,
                                  const share::SCN &rec_scn,
                                  ObTabletDDLParam &ddl_param,
-                                 ObTableHandleV2 &table_handle);
+                                 common::ObArenaAllocator &allocator,
+                                 blocksstable::ObSSTable &sstable);
 
   static int report_ddl_checksum(const share::ObLSID &ls_id,
                                  const ObTabletID &tablet_id,
                                  const uint64_t table_id,
                                  const int64_t execution_id,
                                  const int64_t ddl_task_id,
-                                 const ObIArray<int64_t> &column_checksums);
+                                 const int64_t *column_checksums,
+                                 const int64_t column_count);
   static int check_and_get_major_sstable(const share::ObLSID &ls_id,
                                          const ObTabletID &tablet_id,
-                                         const blocksstable::ObSSTable *&first_major_sstable);
-
-  static int check_data_integrity(const ObTablesHandleArray &ddl_sstables,
+                                         const blocksstable::ObSSTable *&first_major_sstable,
+                                         ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper);
+  static int check_data_integrity(ObTableStoreIterator &ddl_sstable_iter,
                                   const share::SCN &start_scn,
                                   const share::SCN &prepare_scn,
                                   bool &is_data_complete);

@@ -76,6 +76,9 @@ public:
                                       common::ObIArray<ObUnit> &units);
   int get_units_by_tenant(const uint64_t tenant_id,
                           common::ObIArray<ObUnit> &units) const;
+  int get_unit_groups_by_tenant(const uint64_t tenant_id,
+                          common::ObIArray<ObSimpleUnitGroup> &unit_groups) const;
+
 private:
   static int zone_list2str(const common::ObIArray<common::ObZone> &zone_list,
                            char *str, const int64_t buf_size);
@@ -96,6 +99,8 @@ private:
   int read_tenant(const common::sqlclient::ObMySQLResult &result, uint64_t &tenant_id) const;
   int read_tenants(common::ObSqlString &sql,
                    common::ObIArray<uint64_t> &tenants) const;
+  int read_unit_group(const common::sqlclient::ObMySQLResult &result, ObSimpleUnitGroup &unit_group) const;
+  int read_unit_groups(common::ObSqlString &sql, common::ObIArray<ObSimpleUnitGroup> &unit_groups) const;
 private:
   bool inited_;
   common::ObMySQLProxy *proxy_;

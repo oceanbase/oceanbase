@@ -42,8 +42,6 @@ public:
   TestMicroBlockWriter() : allocator_(ObModIds::TEST), read_info_() {};
   void SetUp();
   virtual void TearDown() {}
-  static void SetUpTestCase() {}
-  static void TearDownTestCase() {}
   void test_alloc(char *&ptr, const int64_t size);
 
 protected:
@@ -78,6 +76,7 @@ void TestMicroBlockWriter::test_alloc(char *&ptr, const int64_t size)
 
 void TestMicroBlockWriter::SetUp()
 {
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   const int64_t table_id = 3001;
   ObTableSchema table_schema;
   ObColumnSchemaV2 column;
@@ -168,7 +167,7 @@ TEST_F(TestMicroBlockWriter, append_success)
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
   ObTableReadInfo read_info;
   ASSERT_EQ(OB_SUCCESS, read_info_.init(
-      allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(), columns));
+      allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
   ObMicroBlockReader reader;
   ObMicroBlockData block(buf, size);
   ret = reader.init(block, read_info_);

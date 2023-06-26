@@ -105,15 +105,15 @@ int ObDirectLoadOriginTable::prepare_tables()
   int ret = OB_SUCCESS;
   ObITable *table = nullptr;
   ObSSTable *major_sstable = nullptr;
-  ObTabletTableIterator tablet_table_iter;
-  tablet_table_iter.tablet_handle_ = tablet_handle_;
-  if (OB_FAIL(tablet_handle_.get_obj()->get_read_tables(INT64_MAX, tablet_table_iter,
-                                                        false /*allow_not_ready*/))) {
+  table_iter_.reset();
+  if (OB_FAIL(table_iter_.set_tablet_handle(tablet_handle_))) {
+    LOG_WARN("Failed to set tablet handle to tablet table iter", K(ret));
+  } else if (OB_FAIL(table_iter_.refresh_read_tables_from_tablet(INT64_MAX, false /*allow_not_ready*/))) {
     LOG_WARN("fail to get read tables", KR(ret), K(tablet_handle_));
   }
   // find major sstable
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(tablet_table_iter.table_iter_.get_next(table))) {
+    if (OB_FAIL(table_iter_.table_iter()->get_next(table))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next table", KR(ret));
       } else {
@@ -134,8 +134,6 @@ int ObDirectLoadOriginTable::prepare_tables()
     if (OB_ISNULL(major_sstable)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected not found major sstable", KR(ret), KPC(table));
-    } else if (OB_FAIL(table_iter_.copy(tablet_table_iter.table_iter_))) {
-      LOG_WARN("fail to copy table iter", KR(ret));
     } else {
       major_sstable_ = major_sstable;
     }
@@ -250,8 +248,9 @@ int ObDirectLoadOriginTableScanner::init_table_access_param()
     }
   }
   if (OB_SUCC(ret)) {
+    //TODO(jianming.cjq): check init_dml_access_param
     if (OB_FAIL(table_access_param_.init_dml_access_param(relative_table,
-                                                          origin_table_->get_tablet_handle().get_obj()->get_full_read_info(),
+                                                          origin_table_->get_tablet_handle().get_obj()->get_rowkey_read_info(),
                                                           schema_param_,
                                                           &col_ids_))) {
       LOG_WARN("fail to init merge param", KR(ret));
@@ -297,8 +296,9 @@ int ObDirectLoadOriginTableScanner::init_table_access_ctx()
 int ObDirectLoadOriginTableScanner::init_get_table_param()
 {
   int ret = OB_SUCCESS;
-  get_table_param_.tablet_iter_.tablet_handle_ = origin_table_->get_tablet_handle();
-  if (OB_FAIL(get_table_param_.tablet_iter_.table_iter_.copy(origin_table_->get_table_iter()))) {
+  if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(origin_table_->get_tablet_handle()))) {
+    LOG_WARN("Failed to set tablet handle to tablet table iter", K(ret));
+  } else if (OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(INT64_MAX, false /*allow_not_ready*/))) {
     LOG_WARN("fail to copy table iter", KR(ret));
   }
   return ret;

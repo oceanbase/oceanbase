@@ -103,7 +103,9 @@ public:
   bool operator==(const ObTabletID &other) const { return id_ == other.id_; }
   bool operator!=(const ObTabletID &other) const { return id_ != other.id_; }
   bool operator< (const ObTabletID &other) const { return id_ <  other.id_; }
+  bool operator<=(const ObTabletID &other) const { return id_ <= other.id_; }
   bool operator> (const ObTabletID &other) const { return id_ >  other.id_; }
+  bool operator>=(const ObTabletID &other) const { return id_ >= other.id_; }
   int compare(const ObTabletID &other) const
   {
     if (id_ == other.id_) {

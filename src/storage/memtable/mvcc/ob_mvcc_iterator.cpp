@@ -128,6 +128,11 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   //
   //        NB: For cursor, it will have its snapshot_tx_id different from
   //        reader_tx_id.
+  const ObTransID &snapshot_tx_id = ctx_->snapshot_.tx_id_;
+  const ObTransID &reader_tx_id = ctx_->tx_id_;
+  const int64_t snapshot_seq_no = ctx_->snapshot_.scn_;
+
+  const SCN snapshot_version = ctx_->get_snapshot_version();
   const bool read_latest = flag.is_read_latest();
   const ObTransID &data_tx_id = iter->get_tx_id();
 
@@ -141,7 +146,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const bool is_aborted = iter->is_aborted();
   const bool is_elr = iter->is_elr();
   const bool is_delayed_cleanout = iter->is_delayed_cleanout();
-
+  const SCN scn = iter->get_scn();
   // Opt1: data is decided
   if ((is_committed || is_aborted || is_elr)
       // Opt2: data is not decided while we donot need cleanout
@@ -218,10 +223,15 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     ObLockForReadArg lock_for_read_arg(*ctx_,
                                        data_tx_id,
                                        iter->get_seq_no(),
-                                       read_latest);
+                                       read_latest,
+                                       scn);
 
-    if (OB_FAIL(ctx_->get_tx_table_guard().lock_for_read(
-            lock_for_read_arg, can_read, data_version, is_determined_state, *cleanout_op, *recheck_op))) {
+    if (OB_FAIL(ctx_->get_tx_table_guards().lock_for_read(lock_for_read_arg,
+                                        can_read,
+                                        data_version,
+                                        is_determined_state,
+                                        *cleanout_op,
+                                        *recheck_op))) {
       TRANS_LOG(WARN, "lock for read failed", KPC(iter), K(lock_for_read_arg));
     } else if (can_read && ctx_->get_snapshot_version() >= data_version) {
       // Case 5.1: data is cleanout by lock for read and can be read by reader's
@@ -258,8 +268,13 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
 int ObMvccValueIterator::try_cleanout_tx_node_(ObMvccTransNode *tnode)
 {
   int ret = OB_SUCCESS;
-  if (!(tnode->is_committed() || tnode->is_aborted()) && tnode->is_delayed_cleanout() &&
-      OB_FAIL(ctx_->get_tx_table_guard().cleanout_tx_node(tnode->tx_id_, *value_, *tnode, true /*need_row_latch*/))) {
+  auto tx_table_guards = ctx_->get_tx_table_guards();
+  if (!(tnode->is_committed() || tnode->is_aborted())
+      && tnode->is_delayed_cleanout()
+      && OB_FAIL(tx_table_guards.cleanout_tx_node(tnode->tx_id_,
+                                            *value_,
+                                            *tnode,
+                                            true     /*need_row_latch*/))) {
     TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*value_), K(*tnode));
   }
   return ret;

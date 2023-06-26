@@ -100,61 +100,76 @@ int ObAllVirtualMacroBlockMarkerStatus::inner_get_next_row(common::ObNewRow *&ro
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 5: {
+        // shared_meta_block_count
+        cur_row_.cells_[i].set_int(marker_status_.shared_meta_block_count_);
+        break;
+      }
+      case OB_APP_MIN_COLUMN_ID + 6: {
         // tmp_file_block_count
         cur_row_.cells_[i].set_int(marker_status_.tmp_file_count_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 6: {
+      case OB_APP_MIN_COLUMN_ID + 7: {
         // data_block_count
         cur_row_.cells_[i].set_int(marker_status_.data_block_count_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 7: {
+      case OB_APP_MIN_COLUMN_ID + 8: {
+        // shared_data_block_count
+        cur_row_.cells_[i].set_int(marker_status_.shared_data_block_count_);
+        break;
+      }
+      case OB_APP_MIN_COLUMN_ID + 9: {
         // disk_block_count_
         cur_row_.cells_[i].set_int(marker_status_.disk_block_count_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 8: {
+      case OB_APP_MIN_COLUMN_ID + 10: {
         // bloomfilter_count_
         cur_row_.cells_[i].set_int(marker_status_.bloomfiter_count_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 9: {
+      case OB_APP_MIN_COLUMN_ID + 11: {
         // hold_count_
         cur_row_.cells_[i].set_int(marker_status_.hold_count_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 10: {
+      case OB_APP_MIN_COLUMN_ID + 12: {
         // pending_free_count_
         cur_row_.cells_[i].set_int(marker_status_.pending_free_count_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 11: {
+      case OB_APP_MIN_COLUMN_ID + 13: {
         // free_count_
         cur_row_.cells_[i].set_int(marker_status_.free_count_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 12: {
+      case OB_APP_MIN_COLUMN_ID + 14: {
         // mark_cost_time
         cur_row_.cells_[i].set_int(marker_status_.mark_cost_time_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 13: {
+      case OB_APP_MIN_COLUMN_ID + 15: {
         // sweep_cost_time
         cur_row_.cells_[i].set_int(marker_status_.sweep_cost_time_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 14: {
+      case OB_APP_MIN_COLUMN_ID + 16: {
         // start_marker_time
         cur_row_.cells_[i].set_timestamp(marker_status_.start_time_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 15: {
+      case OB_APP_MIN_COLUMN_ID + 17: {
         // last_marker_end_time
         cur_row_.cells_[i].set_timestamp(marker_status_.last_end_time_);
         break;
       }
-      case OB_APP_MIN_COLUMN_ID + 16: {
+      case OB_APP_MIN_COLUMN_ID + 18: {
+        // whether finished marking
+        cur_row_.cells_[i].set_bool(marker_status_.mark_finished_);
+        break;
+      }
+      case OB_APP_MIN_COLUMN_ID + 19: {
         // comment
         cur_row_.cells_[i].set_varchar(comment_);
         cur_row_.cells_[i].set_collation_type(collcation_type);

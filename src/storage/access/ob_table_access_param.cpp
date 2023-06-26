@@ -29,11 +29,10 @@ ObTableIterParam::ObTableIterParam()
     : table_id_(0),
       tablet_id_(),
       read_info_(nullptr),
-      full_read_info_(nullptr),
+      rowkey_read_info_(nullptr),
       out_cols_project_(NULL),
       agg_cols_project_(NULL),
       pushdown_filter_(nullptr),
-      tablet_handle_(),
       is_multi_version_minor_merge_(false),
       need_scn_(false),
       is_same_schema_column_(false),
@@ -50,16 +49,14 @@ ObTableIterParam::ObTableIterParam()
 
 ObTableIterParam::~ObTableIterParam()
 {
-  tablet_handle_.reset();
 }
 
 void ObTableIterParam::reset()
 {
   table_id_ = 0;
   tablet_id_.reset();
-  tablet_handle_.reset();
   read_info_ = nullptr;
-  full_read_info_ = nullptr;
+  rowkey_read_info_ = nullptr;
   out_cols_project_ = NULL;
   agg_cols_project_ = NULL;
   is_multi_version_minor_merge_ = false;
@@ -80,24 +77,7 @@ bool ObTableIterParam::is_valid() const
 {
   return (OB_INVALID_ID != table_id_ || tablet_id_.is_valid()) // TODO: use tablet id replace table id
       && OB_NOT_NULL(read_info_) && read_info_->is_valid()
-      && (nullptr == full_read_info_ || full_read_info_->is_valid_full_read_info());
-}
-
-int ObTableIterParam::check_read_info_valid()
-{
-  int ret = OB_SUCCESS;
-
-  if (nullptr != full_read_info_ && nullptr != read_info_) {
-    if (read_info_->is_oracle_mode() != full_read_info_->is_oracle_mode()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "Unexpected compat mode", K(ret), K(lib::is_oracle_mode()), KPC(read_info_), KPC(full_read_info_));
-    } else if (read_info_->get_schema_rowkey_count() != full_read_info_->get_schema_rowkey_count()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "Unexpected rowkey count in read info", K(ret), KPC(read_info_), KPC(full_read_info_));
-    }
-  }
-
-  return ret;
+      && (nullptr == rowkey_read_info_ || rowkey_read_info_->is_valid());
 }
 
 int ObTableIterParam::refresh_lob_column_out_status()
@@ -119,8 +99,8 @@ int ObTableIterParam::refresh_lob_column_out_status()
 bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag) const
 {
   bool bret = is_x86() && query_flag.is_use_fuse_row_cache() && !query_flag.is_read_latest() &&
-      nullptr != full_read_info_ && !need_scn_ && is_same_schema_column_
-       && !has_virtual_columns_ && !has_lob_column_out_;
+              nullptr != rowkey_read_info_ && !need_scn_ && is_same_schema_column_ &&
+              !has_virtual_columns_ && !has_lob_column_out_;
   return bret;
 }
 
@@ -140,7 +120,7 @@ DEF_TO_STRING(ObTableIterParam)
   J_KV(K_(table_id),
        K_(tablet_id),
        KPC_(read_info),
-       KPC_(full_read_info),
+       KPC_(rowkey_read_info),
        KPC_(out_cols_project),
        KPC_(pushdown_filter),
        K_(is_multi_version_minor_merge),
@@ -204,6 +184,7 @@ int ObTableAccessParam::init(
     iter_param_.table_id_ = table_param.get_table_id();
     iter_param_.tablet_id_ = scan_param.tablet_id_;
     iter_param_.read_info_ = &table_param.get_read_info();
+    iter_param_.rowkey_read_info_ = &tablet_handle.get_obj()->get_rowkey_read_info();
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
     iter_param_.agg_cols_project_ = &table_param.get_aggregate_projector();
     iter_param_.need_scn_ = scan_param.need_scn_;
@@ -218,10 +199,8 @@ int ObTableAccessParam::init(
     row2exprs_projector_ = scan_param.row2exprs_projector_;
     output_sel_mask_ = &table_param.get_output_sel_mask();
 
-    iter_param_.tablet_handle_ = tablet_handle;
-    iter_param_.full_read_info_ = &tablet_handle.get_obj()->get_full_read_info();
     iter_param_.is_same_schema_column_ =
-        iter_param_.read_info_->get_schema_column_count() == iter_param_.full_read_info_->get_schema_column_count();
+        iter_param_.read_info_->get_schema_column_count() == iter_param_.rowkey_read_info_->get_schema_column_count();
 
     iter_param_.pd_storage_flag_ = scan_param.pd_storage_flag_;
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
@@ -240,9 +219,7 @@ int ObTableAccessParam::init(
     iter_param_.vectorized_enabled_ = nullptr != get_op() && get_op()->is_vectorized();
     iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
 
-    if (OB_FAIL(iter_param_.check_read_info_valid())) {
-      STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
-    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+    if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
       STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
     } else if (scan_param.use_index_skip_scan() &&
         OB_FAIL(get_prefix_cnt_for_skip_scan(scan_param, iter_param_))) {
@@ -278,7 +255,7 @@ int ObTableAccessParam::get_prefix_cnt_for_skip_scan(const ObTableScanParam &sca
 int ObTableAccessParam::init_merge_param(
     const uint64_t table_id,
     const common::ObTabletID &tablet_id,
-    const ObTableReadInfo &read_info,
+    const ObITableReadInfo &read_info,
     const bool is_multi_version_minor_merge)
 {
   int ret = OB_SUCCESS;
@@ -291,21 +268,15 @@ int ObTableAccessParam::init_merge_param(
     iter_param_.tablet_id_ = tablet_id;
     iter_param_.is_multi_version_minor_merge_ = is_multi_version_minor_merge;
     iter_param_.read_info_ = &read_info;
-    iter_param_.full_read_info_ = &read_info;
-    if (OB_FAIL(iter_param_.check_read_info_valid())) {
-      STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
-    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
-      STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
-    } else {
-      is_inited_ = true;
-    }
+    iter_param_.rowkey_read_info_ = &read_info;
+    is_inited_ = true;
   }
   return ret;
 }
 
 int ObTableAccessParam::init_dml_access_param(
     const ObRelativeTable &table,
-    const ObTableReadInfo &full_read_info,
+    const ObITableReadInfo &rowkey_read_info,
     const share::schema::ObTableSchemaParam &schema_param,
     const ObIArray<int32_t> *out_cols_project)
 {
@@ -318,9 +289,9 @@ int ObTableAccessParam::init_dml_access_param(
     iter_param_.table_id_ = table.get_table_id();
     iter_param_.tablet_id_ = table.get_tablet_id();
     iter_param_.read_info_ = &schema_param.get_read_info();
-    iter_param_.full_read_info_ = &full_read_info;
+    iter_param_.rowkey_read_info_ = &rowkey_read_info;
     iter_param_.is_same_schema_column_ =
-        iter_param_.read_info_->get_schema_column_count() == iter_param_.full_read_info_->get_schema_column_count();
+        iter_param_.read_info_->get_schema_column_count() == iter_param_.rowkey_read_info_->get_schema_column_count();
     iter_param_.out_cols_project_ = out_cols_project;
     for (int64_t i = 0; i < schema_param.get_columns().count(); i++) {
       if (schema_param.get_columns().at(i)->is_virtual_gen_col()) {
@@ -328,9 +299,7 @@ int ObTableAccessParam::init_dml_access_param(
         break;
       }
     }
-    if (OB_FAIL(iter_param_.check_read_info_valid())) {
-      STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
-    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+    if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
       STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
     } else {
       is_inited_ = true;
@@ -363,7 +332,7 @@ int set_row_scn(
 {
   int ret = OB_SUCCESS;
   const ObColDescIArray *out_cols = nullptr;
-  const ObTableReadInfo *read_info = iter_param.get_read_info();
+  const ObITableReadInfo *read_info = iter_param.get_read_info();
   if (OB_UNLIKELY(nullptr == read_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null read info", K(ret));

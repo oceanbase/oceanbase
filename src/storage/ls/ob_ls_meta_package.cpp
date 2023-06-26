@@ -29,13 +29,16 @@ ObLSMetaPackage::ObLSMetaPackage()
 }
 
 ObLSMetaPackage::ObLSMetaPackage(const ObLSMetaPackage &other)
-  : ls_meta_(other.ls_meta_),
-    palf_meta_(other.palf_meta_)
+    : ls_meta_(other.ls_meta_), palf_meta_(other.palf_meta_)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dup_ls_meta_.copy(other.dup_ls_meta_))) {
     ret = OB_ERR_UNEXPECTED;
     DUP_TABLE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "copy dup ls meta failed", K(dup_ls_meta_),
+                      K(other.dup_ls_meta_))
+  } else if (!dup_ls_meta_.is_valid()) {
+    dup_ls_meta_.ls_id_ = ls_meta_.ls_id_;
+    DUP_TABLE_LOG_RET(INFO, OB_SUCCESS, "copy a old version dup ls meta without ls_id_", KPC(this),
                       K(other.dup_ls_meta_))
   }
 }
@@ -50,6 +53,10 @@ ObLSMetaPackage &ObLSMetaPackage::operator=(const ObLSMetaPackage &other)
       ret = OB_ERR_UNEXPECTED;
       DUP_TABLE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "copy dup ls meta failed", K(dup_ls_meta_),
                         K(other.dup_ls_meta_))
+    } else if (!dup_ls_meta_.is_valid()) {
+      dup_ls_meta_.ls_id_ = ls_meta_.ls_id_;
+      DUP_TABLE_LOG_RET(INFO, OB_SUCCESS, "copy a old version dup ls meta without ls_id_",
+                        KPC(this), K(other.dup_ls_meta_))
     }
   }
   return *this;

@@ -30,7 +30,6 @@
 #include "rootserver/ob_root_service.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "share/backup/ob_backup_info_mgr.h"
 #include "share/ob_primary_zone_util.h"
 #include "share/ob_upgrade_utils.h"
 #include "share/rc/ob_context.h"
@@ -38,6 +37,7 @@
 #include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
 #include "share/ob_tenant_info_proxy.h" // ObAllTenantInfoProxy
+#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {
@@ -297,9 +297,9 @@ int ObTableGroupChecker::inspect_(
   ObArray<uint64_t> table_ids;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("tablegroup checker is not init", K(ret));
+    LOG_WARN("tablegroup checker is not init", KR(ret));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard failed", K(ret), K(tenant_id));
+    LOG_WARN("get schema guard failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id, table_ids))) {
     LOG_WARN("fail to get table_ids", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(GCTX.root_service_)) {
@@ -322,11 +322,12 @@ int ObTableGroupChecker::inspect_(
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table))) {
         LOG_WARN("get table schema failed", K(ret), KT(table_id));
       } else if (OB_ISNULL(table)) {
-        //ignore table not exist
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table not exist", KR(ret), K(table_id));
       } else if (is_sys_table(table->get_table_id()) || !table->has_partition()) {
         // skip, check the partitioned user table
       } else if (OB_FAIL(check_part_option(*table, schema_guard))) {
-        LOG_WARN("check part option fail", KPC(table));
+        LOG_WARN("check part option fail", KR(ret), KPC(table));
       } else {}
     }
   }
@@ -347,15 +348,16 @@ int ObTableGroupChecker::inspect_(
 //       in addition, the partition_num, partition_type, partition_value and number of expression vectors of tables must be same.
 //    2) tablegroup is partitioned, the partition_num, partition_type, partition_value and number of expression vectors
 //       of tables in tablegroup should be same.
-int ObTableGroupChecker::check_part_option(const ObTableSchema &table, ObSchemaGetterGuard &schema_guard)
+int ObTableGroupChecker::check_part_option(const ObSimpleTableSchemaV2 &table, ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObSqlString user_error;
   const uint64_t tenant_id = table.get_tenant_id();
   const uint64_t tablegroup_id = table.get_tablegroup_id();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("tablegroup checker is not init", K(ret));
+    LOG_WARN("tablegroup checker is not init", KR(ret));
   } else if (OB_INVALID_ID == tablegroup_id) {
     // skip check while tablegroup_id is default value
   } else if (!table.is_user_table()) {
@@ -364,218 +366,62 @@ int ObTableGroupChecker::check_part_option(const ObTableSchema &table, ObSchemaG
    //skip check while already in part_option_not_match_set_
    if (OB_HASH_EXIST != tmp_ret) {
      ret = tmp_ret;
-     LOG_WARN("fail to check if tablegroup_id exist", K(ret), K(tablegroup_id));
+     LOG_WARN("fail to check if tablegroup_id exist", KR(ret), K(tablegroup_id));
    }
   } else {
-    const ObTableSchema *table_in_map;
+    const ObSimpleTableSchemaV2 *table_in_map = NULL;
     bool is_matched = true;
-    if (is_sys_tablegroup_id(tablegroup_id)) {
+    const ObTablegroupSchema *tablegroup = NULL;
+    const ObSimpleTableSchemaV2 *primary_table_schema = NULL;
+    if (OB_FAIL(schema_guard.get_tablegroup_schema(tenant_id, tablegroup_id, tablegroup))) {
+      LOG_WARN("fail to get tablegroup schema", KR(ret), K(tenant_id), KT(tablegroup_id));
+    } else if (OB_ISNULL(tablegroup)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablegroup schema is null", KR(ret), KT(tablegroup_id));
+    } else if (tablegroup->get_sharding() == OB_PARTITION_SHARDING_NONE) {
+      //no need to check,just ignore
+    } else if (tablegroup->get_sharding() == OB_PARTITION_SHARDING_PARTITION
+              || tablegroup->get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE) {
+      bool check_sub_part = tablegroup->get_sharding() == OB_PARTITION_SHARDING_PARTITION ? false : true;
       if (OB_FAIL(check_part_option_map_.get_refactored(tablegroup_id, table_in_map))) {
-        //set into map while not in check_part_option_map_
+        //set to the map while not in check_part_option_map_
         if (OB_HASH_NOT_EXIST == ret) {
-          ObTableSchema *new_table_schema = NULL;
-          if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_, table, new_table_schema))) {
-            LOG_WARN("alloc schema failed", K(ret), K(table));
-          } else if (OB_FAIL(check_part_option_map_.set_refactored(tablegroup_id, new_table_schema))) {
-            LOG_WARN("set table_schema in hashmap fail", K(ret), K(tablegroup_id), K(new_table_schema));
+          if (OB_FAIL(schema_guard.get_primary_table_schema_in_tablegroup(tenant_id, tablegroup_id, primary_table_schema))) {
+            LOG_WARN("fail to get primary table schema in tablegroup", KR(ret), K(tablegroup_id));
+          } else if (OB_ISNULL(primary_table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("primary table schema is NULL", KR(ret), K(tenant_id), K(tablegroup_id));
+          } else if (OB_FAIL(check_part_option_map_.set_refactored(tablegroup_id, primary_table_schema))) {
+            LOG_WARN("set table_schema in hashmap fail", KR(ret), K(tablegroup_id), KPC(primary_table_schema));
           }
         } else {
-          LOG_WARN("check tablegroup_id in hashmap fail", K(ret), K(tablegroup_id));
+          LOG_WARN("check tablegroup_id in hashmap fail", KR(ret), K(tablegroup_id));
         }
       } else if (OB_ISNULL(table_in_map)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table_in_map is null ptr", K(ret));
-      } else if (OB_FAIL(check_if_part_option_equal(*table_in_map, table, is_matched))) {
-        LOG_WARN("check if part option equal fail", K(ret), KPC(table_in_map), K(table));
+        LOG_WARN("table_is_map is NULL", KR(ret), K(tablegroup_id));
+      } else if (OB_FAIL(ObSimpleTableSchemaV2::compare_partition_option(table, *table_in_map, check_sub_part, is_matched, &user_error))) {
+        LOG_WARN("fail to check partition option", KR(ret), K(table), KPC(table_in_map));
       }
     } else {
-      const ObTablegroupSchema *tablegroup = NULL;
-      if (OB_FAIL(schema_guard.get_tablegroup_schema(tenant_id, tablegroup_id, tablegroup))) {
-        LOG_WARN("fail to get tablegroup schema", K(ret), K(tenant_id), KT(tablegroup_id));
-      } else if (OB_ISNULL(tablegroup)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablegroup schema is null", K(ret), KT(tablegroup_id));
-      } else if (PARTITION_LEVEL_ZERO == tablegroup->get_part_level()) {
-        if (PARTITION_LEVEL_ZERO == table.get_part_level()) {
-          // no need to check partition_option of nonpartitioned table
-        } else if (1 != table.get_all_part_num()) {
-          is_matched = false;
-        } else if (OB_FAIL(check_part_option_map_.get_refactored(tablegroup_id, table_in_map))) {
-          //set to the map while not in check_part_option_map_
-          if (OB_HASH_NOT_EXIST == ret) {
-            if (OB_FAIL(check_part_option_map_.set_refactored(tablegroup_id, &table))) {
-              LOG_WARN("set table_schema in hashmap fail", K(ret), K(tablegroup_id), K(table));
-            }
-          } else {
-            LOG_WARN("check tablegroup_id in hashmap fail", K(ret), K(tablegroup_id));
-          }
-        } else if (OB_FAIL(check_if_part_option_equal_v2(table, *table_in_map, is_matched))) {
-          LOG_WARN("check if part option equal fail", K(ret), KPC(table_in_map), K(table));
-        }
-      } else {
-        if (OB_FAIL(check_if_part_option_equal_v2(table, *tablegroup, is_matched))) {
-          LOG_WARN("check if part option equal fail", K(ret), KPC(tablegroup), K(table));
-        }
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sharding type not suit", KR(ret), KPC(tablegroup));
     }
     if (OB_FAIL(ret) || is_matched) {
       //skip
     } else if (OB_FAIL(part_option_not_match_set_.set_refactored(tablegroup_id))) {
-      LOG_WARN("set tablegroup_id in hashset fail", K(ret));
+      LOG_WARN("set tablegroup_id in hashset fail", KR(ret));
+    } else if (OB_ISNULL(table_in_map)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_is_map is NULL", KR(ret), K(tablegroup_id));
     } else {
       LOG_INFO("tables in one tablegroup have different part/subpart option",
-               K(tablegroup_id), "table_id", table.get_table_id());
+               K(tablegroup_id), "table_id", table.get_table_id(), K(user_error), K(table_in_map->get_table_id()));
     }
   }
   return ret;
 }
 
-// For tablegroups created before 2.0, partition_type and partition_num of tables in tablegroup should be equal
-int ObTableGroupChecker::check_if_part_option_equal(const ObTableSchema &t1, const ObTableSchema &t2, bool &is_matched)
-{
-  int ret = OB_SUCCESS;
-  is_matched = false;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablegroup checker is not init", K(ret));
-  } else {
-    is_matched = t1.get_part_level() == t2.get_part_level()
-                 && t1.get_part_option().get_part_func_type() == t2.get_part_option().get_part_func_type()
-                 && t1.get_part_option().get_part_num() == t2.get_part_option().get_part_num()
-                 && t1.get_sub_part_option().get_part_func_type() == t2.get_sub_part_option().get_part_func_type()
-                 && t1.get_sub_part_option().get_part_num() == t2.get_sub_part_option().get_part_num();
-    if (!is_matched) {
-      LOG_ERROR("tables in one tablegroup have different part/subpart option",
-                "table1_id", t1.get_table_id(),
-                "table1_part_level", t1.get_part_level(),
-                "table1_database_id", t1.get_database_id(),
-                "table1_tenant_id", t1.get_tenant_id(),
-                "table1_part_option", t1.get_part_option(),
-                "table1_subpart_option", t1.get_sub_part_option(),
-                "table2_id", t2.get_table_id(),
-                "table2_part_level", t2.get_part_level(),
-                "table2_database_id", t2.get_database_id(),
-                "table2_tenant_id", t2.get_tenant_id(),
-                "table2_part_option", t2.get_part_option(),
-                "table2_subpart_option", t2.get_sub_part_option());
-    }
-  }
-  return ret;
-}
-
-// For tablegroup create after 2.0, the check of partition_option is more strict.
-// You need to check the partition mode, the number of partitions, the number of expression vectors and the value of the partition point
-// FIXME:Support non templated subpartition
-template<typename SCHEMA>
-int ObTableGroupChecker::check_if_part_option_equal_v2(const ObTableSchema &table, const SCHEMA &schema, bool &is_matched)
-{
-  int ret = OB_SUCCESS;
-  is_matched = false;
-  bool is_oracle_mode = false;
-  bool schema_is_oracle_mode = false;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablegroup checker is not init", K(ret));
-  } else if (OB_FAIL(table.check_if_oracle_compat_mode(is_oracle_mode))) {
-    LOG_WARN("fail to check oracle mode", KR(ret), K(table));
-  } else if (OB_FAIL(schema.check_if_oracle_compat_mode(schema_is_oracle_mode))) {
-    LOG_WARN("fail to check oracle mode", KR(ret), K(schema));
-  } else {
-    is_matched = is_oracle_mode == schema_is_oracle_mode
-                 && table.get_part_level() == schema.get_part_level()
-                 && (table.get_part_option().get_part_func_type() == schema.get_part_option().get_part_func_type()
-                     || (is_key_part(table.get_part_option().get_part_func_type()) && is_key_part(schema.get_part_option().get_part_func_type())))
-                 && table.get_part_option().get_part_num() == schema.get_part_option().get_part_num()
-                 && (table.get_sub_part_option().get_part_func_type() == schema.get_sub_part_option().get_part_func_type()
-                     || (is_key_part(table.get_sub_part_option().get_part_func_type()) && is_key_part(schema.get_sub_part_option().get_part_func_type())))
-                 && table.get_sub_part_option().get_part_num() == schema.get_sub_part_option().get_part_num();
-    // check expr value
-    if (!is_matched) {
-      // skip
-    } else if (PARTITION_LEVEL_ONE <= table.get_part_level()) {
-      if (table.is_key_part()) {
-        int64_t table_expr_num = OB_INVALID_INDEX;
-        int64_t schema_expr_num = OB_INVALID_INDEX;
-        if (OB_FAIL(table.calc_part_func_expr_num(table_expr_num))) {
-          LOG_WARN("fail to get table part_func_expr_num", K(ret));
-        } else if (OB_FAIL(schema.calc_part_func_expr_num(schema_expr_num))) {
-          LOG_WARN("fail to get schema part_func_expr_num", K(ret));
-        }
-        is_matched = (table_expr_num == schema_expr_num);
-      } else if (table.is_range_part()
-                 || table.is_list_part()) {
-        if (OB_ISNULL(table.get_part_array())
-            || OB_ISNULL(schema.get_part_array())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("partition_array is null", K(ret), K(schema), K(table));
-        } else {
-          is_matched = true;
-          const int64_t table_part_num = table.get_part_option().get_part_num();
-          const int64_t schema_part_num = schema.get_part_option().get_part_num();
-          const ObPartitionFuncType part_func_type = table.get_part_option().get_part_func_type();
-          for (int64_t i = 0; OB_SUCC(ret) && is_matched && i < table_part_num; i++) {
-            is_matched = false;
-            ObPartition *table_part = table.get_part_array()[i];
-            for (int64_t j = 0; OB_SUCC(ret) && !is_matched && j < schema_part_num; j++) {
-              ObPartition *schema_part = schema.get_part_array()[j];
-              if (OB_ISNULL(schema_part) || OB_ISNULL(table_part)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("partition is null", K(ret), KPC(schema_part), KPC(table_part));
-              } else if (OB_FAIL(ObPartitionUtils::check_partition_value(
-                         is_oracle_mode, *schema_part, *table_part, part_func_type, is_matched))) {
-                LOG_WARN("fail to check partition value", KPC(schema_part), KPC(table_part), K(part_func_type));
-              }
-            }
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret) || !is_matched) {
-      // skip
-    } else if (PARTITION_LEVEL_TWO == table.get_part_level()) {
-      if (table.is_key_subpart()) {
-        int64_t table_expr_num = OB_INVALID_INDEX;
-        int64_t schema_expr_num = OB_INVALID_INDEX;
-        if (OB_FAIL(table.calc_subpart_func_expr_num(table_expr_num))) {
-          LOG_WARN("fail to get table subpart_func_expr_num", K(ret));
-        } else if (OB_FAIL(schema.calc_subpart_func_expr_num(schema_expr_num))) {
-          LOG_WARN("fail to get schema subpart_func_expr_num", K(ret));
-        }
-        is_matched = (table_expr_num == schema_expr_num);
-      } else if (table.is_range_subpart()
-                 || table.is_list_subpart()) {
-        if (OB_ISNULL(table.get_def_subpart_array())
-            || OB_ISNULL(schema.get_def_subpart_array())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("partition_array is null", K(ret), K(schema), K(table));
-        } else {
-          is_matched = true;
-          const int64_t table_sub_part_num = table.get_sub_part_option().get_part_num();
-          const int64_t schema_sub_part_num = schema.get_sub_part_option().get_part_num();
-          const ObPartitionFuncType part_func_type = table.get_sub_part_option().get_part_func_type();
-          for (int64_t i = 0; OB_SUCC(ret) && is_matched && i < table_sub_part_num; i++) {
-            is_matched = false;
-            ObSubPartition *table_part = table.get_def_subpart_array()[i];
-            for (int64_t j = 0; OB_SUCC(ret) && !is_matched && j < schema_sub_part_num; j++) {
-              ObSubPartition *schema_part = schema.get_def_subpart_array()[j];
-              if (OB_ISNULL(schema_part) || OB_ISNULL(table_part)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("partition is null", K(ret), KPC(schema_part), KPC(table_part));
-              } else if (OB_FAIL(ObPartitionUtils::check_partition_value(
-                         is_oracle_mode, *schema_part, *table_part, part_func_type, is_matched))) {
-                LOG_WARN("fail to check partition value", KPC(schema_part), KPC(table_part), K(part_func_type));
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  if (!is_matched) {
-      LOG_ERROR("table & tablegroup partition option not match", K(ret), K(table), K(schema));
-  }
-  return ret;
-}
 ////////////////////////////////////////////////////////////////
 ObInspector::ObInspector(ObRootService &rs)
     :ObAsyncTimerTask(rs.get_inspect_task_queue()),

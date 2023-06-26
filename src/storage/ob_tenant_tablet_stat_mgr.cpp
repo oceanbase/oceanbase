@@ -317,24 +317,6 @@ void ObTabletStream::refresh()
   past_buckets_.refresh(tablet_stat, has_retired_stat);
 }
 
-template <uint32_t SIZE>
-int ObTabletStream::get_bucket_tablet_stat(
-    const ObTabletStatBucket<SIZE> &bucket,
-    common::ObIArray<ObTabletStat> &tablet_stats) const
-{
-  int ret = OB_SUCCESS;
-  int64_t idx = bucket.head_idx_;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < bucket.count(); ++i) {
-    int64_t curr_idx = bucket.get_idx(idx);
-    if (OB_FAIL(tablet_stats.push_back(bucket.units_[curr_idx]))) {
-      LOG_WARN("failed to add tablet stat", K(ret), K(idx));
-    }
-    ++idx;
-  }
-  return ret;
-}
-
 int ObTabletStream::get_all_tablet_stat(common::ObIArray<ObTabletStat> &tablet_stats) const
 {
   int ret = OB_SUCCESS;

@@ -34,21 +34,13 @@ int ObLSLifeAgentManager::create_new_ls(
   if (OB_UNLIKELY(!ls_info.is_valid() || !create_ls_scn.is_valid() || zone_priority.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_info), K(create_ls_scn), K(zone_priority));
-  } else if (OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
-    LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(ls_info));
-  } else if (OB_FAIL(create_new_ls_in_trans(ls_info, create_ls_scn, zone_priority, working_sw_status, trans))) {
-    LOG_WARN("failed to create new ls", KR(ret), K(ls_info), K(create_ls_scn), K(zone_priority));
+  } else {
+    TAKE_IN_TRANS(create_new_ls, proxy_,
+        exec_tenant_id, ls_info, create_ls_scn, zone_priority, working_sw_status);
   }
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-
   return ret;
 }
+
 int ObLSLifeAgentManager::drop_ls(const uint64_t &tenant_id,
                                   const share::ObLSID &ls_id,
                                   const ObTenantSwitchoverStatus &working_sw_status)
@@ -59,19 +51,10 @@ int ObLSLifeAgentManager::drop_ls(const uint64_t &tenant_id,
   if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id));
-  } else if (OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
-    LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
-  } else if (OB_FAIL(drop_ls_in_trans(tenant_id, ls_id, working_sw_status, trans))) {
-    LOG_WARN("failed to create new ls", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    TAKE_IN_TRANS(drop_ls, proxy_, exec_tenant_id, tenant_id,
+                 ls_id, working_sw_status);
   }
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-
   return ret;
 
 }
@@ -90,22 +73,10 @@ int ObLSLifeAgentManager::set_ls_offline(const uint64_t &tenant_id,
         || (!ls_is_dropping_status(ls_status) && !ls_is_tenant_dropping_status(ls_status)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id), K(drop_scn), K(ls_status));
-  } else if (OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
-    LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
-  } else if (OB_FAIL(set_ls_offline_in_trans(tenant_id, ls_id, ls_status, drop_scn,
-                                             working_sw_status, trans))) {
-    LOG_WARN("failed to create new ls", KR(ret), K(tenant_id), K(ls_id),
-        K(ls_status), K(drop_scn));
+  } else {
+    TAKE_IN_TRANS(set_ls_offline, proxy_, exec_tenant_id, tenant_id,
+        ls_id, ls_status, drop_scn, working_sw_status);
   }
-
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-
   return ret;
 }
 

@@ -743,6 +743,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   alter_table_arg_.hidden_table_id_ = target_object_id_;
   // offline ddl is allowed on table with trigger(enable/disable).
   alter_table_arg_.need_rebuild_trigger_ = true;
+  alter_table_arg_.task_id_ = task_id_;
   alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
   ObRootService *root_service = GCTX.root_service_;
   ObSchemaGetterGuard schema_guard;
@@ -849,12 +850,12 @@ int ObTableRedefinitionTask::process()
         }
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END:
-        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, ObDDLTaskStatus::LOCK_TABLE))) {
+        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, ObDDLTaskStatus::OBTAIN_SNAPSHOT))) {
           LOG_WARN("fail to wait trans end", K(ret));
         }
         break;
-      case ObDDLTaskStatus::LOCK_TABLE:
-        if (OB_FAIL(lock_table(ObDDLTaskStatus::CHECK_TABLE_EMPTY))) {
+      case ObDDLTaskStatus::OBTAIN_SNAPSHOT:
+        if (OB_FAIL(obtain_snapshot(ObDDLTaskStatus::CHECK_TABLE_EMPTY))) {
           LOG_WARN("fail to lock table", K(ret));
         }
         break;
@@ -1077,11 +1078,11 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
       }
       break;
     }
-    case ObDDLTaskStatus::LOCK_TABLE: {
+    case ObDDLTaskStatus::OBTAIN_SNAPSHOT: {
       if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
                                   pos,
-                                  "STATUS: ACQUIRE TABLE LOCK"))) {
+                                  "STATUS: OBTAIN SNAPSHOT"))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;
@@ -1232,7 +1233,7 @@ void ObTableRedefinitionTask::flt_set_status_span_tag() const
     FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_ret_code, ret_code_);
     break;
   }
-  case ObDDLTaskStatus::LOCK_TABLE: {
+  case ObDDLTaskStatus::OBTAIN_SNAPSHOT: {
     FLT_SET_TAG(ddl_ret_code, ret_code_);
     break;
   }

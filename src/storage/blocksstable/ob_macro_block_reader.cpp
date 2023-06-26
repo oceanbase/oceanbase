@@ -367,7 +367,7 @@ ObSSTableDataBlockReader::ObSSTableDataBlockReader()
   : data_(NULL), size_(0), common_header_(), macro_header_(), linked_header_(),
     bloomfilter_header_(NULL), column_types_(NULL), column_orders_(NULL),
     column_checksum_(NULL), macro_reader_(), allocator_(ObModIds::OB_CS_SSTABLE_READER),
-    hex_print_buf_(nullptr), is_trans_sstable_(false), is_inited_(false)
+    hex_print_buf_(nullptr), is_trans_sstable_(false), is_inited_(false), column_type_array_cnt_(0)
 {
 }
 
@@ -405,6 +405,7 @@ int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const b
         column_types_ = macro_header_.column_types_;
         column_orders_ = macro_header_.column_orders_;
         column_checksum_ = macro_header_.column_checksum_;
+        column_type_array_cnt_ = macro_header_.fixed_header_.get_col_type_array_cnt();
       }
       break;
     }
@@ -473,7 +474,7 @@ int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
     switch (common_header_.get_type()) {
     case ObMacroBlockCommonHeader::SSTableData:
       ObSSTablePrinter::print_macro_block_header(&macro_header_);
-      if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_))) {
+      if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.get_col_type_array_cnt()))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
       } else if (OB_FAIL(dump_sstable_macro_block(false))) {
         LOG_WARN("Failed to dump sstable macro block", K(ret));
@@ -490,7 +491,7 @@ int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
       break;
     case ObMacroBlockCommonHeader::SSTableIndex:
       ObSSTablePrinter::print_macro_block_header(&macro_header_);
-      if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_))) {
+      if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.column_count_))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
       } else if (OB_FAIL(dump_sstable_macro_block(true))) {
         LOG_WARN("Failed to dump sstable macro block", K(ret));
@@ -660,7 +661,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
         ObSSTablePrinter::print_store_row_hex(row, column_types_, OB_DEFAULT_MACRO_BLOCK_SIZE, hex_print_buf_);
       } else {
         ObSSTablePrinter::print_store_row(
-            row, column_types_, block_header->rowkey_column_count_, is_index_block, is_trans_sstable_);
+            row, column_types_, column_type_array_cnt_, is_index_block, is_trans_sstable_);
       }
 
       if (is_index_block) {
@@ -751,7 +752,7 @@ int ObSSTableDataBlockReader::dump_bloom_filter_data_block()
   return ret;
 }
 
-int ObSSTableDataBlockReader::dump_column_info(const int64_t col_cnt)
+int ObSSTableDataBlockReader::dump_column_info(const int64_t col_cnt, const int64_t type_array_col_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(col_cnt < 0)
@@ -763,8 +764,13 @@ int ObSSTableDataBlockReader::dump_column_info(const int64_t col_cnt)
         KP_(column_types), KP_(column_orders), KP_(column_checksum));
   } else if (col_cnt > 0) {
     ObSSTablePrinter::print_cols_info_start("column_index", "column_type", "column_order", "column_checksum", "collation_type");
-    for (int64_t i = 0; i < col_cnt; ++i) {
+    int64_t i = 0;
+    for (; i < type_array_col_cnt; ++i) {
       ObSSTablePrinter::print_cols_info_line(i, column_types_[i].get_type(), column_orders_[i],
+          column_checksum_[i], column_types_[i].get_collation_type());
+    }
+    for (; i < col_cnt; ++i) {
+      ObSSTablePrinter::print_cols_info_line(i, ObUnknownType, ASC,
           column_checksum_[i], column_types_[i].get_collation_type());
     }
     ObSSTablePrinter::print_end_line();

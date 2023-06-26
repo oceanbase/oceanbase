@@ -22,6 +22,7 @@
 #include "lib/list/ob_list.h"
 #include "lib/trace/ob_trace_event.h"
 #include "logservice/palf/lsn.h"
+#include "logservice/ob_log_base_header.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_ls_id.h"
 #include "share/allocator/ob_reserve_arena.h"
@@ -287,11 +288,13 @@ struct ObLockForReadArg
   ObLockForReadArg(memtable::ObMvccAccessCtx &acc_ctx,
                    ObTransID data_trans_id,
                    int64_t data_sql_sequence,
-                   bool read_latest)
+                   bool read_latest,
+                   share::SCN scn)
     : mvcc_acc_ctx_(acc_ctx),
     data_trans_id_(data_trans_id),
     data_sql_sequence_(data_sql_sequence),
-    read_latest_(read_latest) {}
+    read_latest_(read_latest),
+    scn_(scn) {}
 
   DECLARE_TO_STRING;
 
@@ -299,6 +302,7 @@ struct ObLockForReadArg
   ObTransID data_trans_id_;
   int64_t data_sql_sequence_;
   bool read_latest_;
+  share::SCN scn_; // Compare with transfer_start_scn, sstable is end_scn, and memtable is ObMvccTransNode scn
 };
 
 class ObTransKey final
@@ -745,12 +749,9 @@ class ObTransVersion
 {
 public:
   static const int64_t INVALID_TRANS_VERSION = -1;
+  static const int64_t MAX_TRANS_VERSION = INT64_MAX;
 public:
-  static bool is_valid(const int64_t trans_version)
-  { return trans_version >= 0; }
-private:
-  ObTransVersion() {}
-  ~ObTransVersion() {}
+  static bool is_valid(const int64_t trans_version) { return trans_version >= 0; }
 };
 
 typedef ObMonotonicTs MonotonicTs;
@@ -1553,7 +1554,10 @@ public:
 
   int insert_mds_node(const ObTxBufferNode &buf_node);
   int rollback_last_mds_node();
-  int fill_mds_log(ObTxMultiDataSourceLog &mds_log, ObTxMDSRange &mds_range, bool &need_barrier);
+  int fill_mds_log(ObTxMultiDataSourceLog &mds_log,
+                   ObTxMDSRange &mds_range,
+                   logservice::ObReplayBarrierType &barrier_flag,
+                   share::SCN &mds_base_scn);
   int copy_to(ObTxBufferNodeArray &tmp_array) const;
 
   int64_t get_unsubmitted_size() const { return unsubmitted_size_; }
@@ -1567,10 +1571,14 @@ public:
 
   bool is_contain(const ObTxDataSourceType target_type) const;
 
+  void set_need_retry_submit_mds(bool need_retry) { need_retry_submit_mds_ = need_retry; };
+  bool need_retry_submit_mds() { return need_retry_submit_mds_; }
+
   TO_STRING_KV(K(unsubmitted_size_), K(mds_list_.size()));
 
 private:
   // TransModulePageAllocator allocator_;
+  bool need_retry_submit_mds_;
   int64_t unsubmitted_size_;
   ObTxBufferNodeList mds_list_;
   ObTxBufferNodeList::iterator submitted_iterator_;
@@ -1615,6 +1623,9 @@ public:
       redo_lsns_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "REDO_LSNS")),
       prepare_log_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PREPARE_INFO")) {}
 public:
+  int generate_mds_buffer_ctx_array();
+  void mrege_buffer_ctx_array_to_multi_data_source() const;
+  void clear_buffer_ctx_in_multi_data_source();
   void reset();
   // can not destroy in tx_ctx_table
   void destroy();
@@ -1651,6 +1662,7 @@ public:
   LogOffSet prev_record_lsn_;
   ObRedoLSNArray redo_lsns_;
   ObTxBufferNodeArray multi_data_source_;
+  ObTxBufferCtxArray mds_buffer_ctx_array_;
   // check
   common::ObAddr scheduler_;
   share::SCN prepare_version_;

@@ -65,62 +65,112 @@ OB_SERIALIZE_MEMBER(ObTabletAutoincParam,
 
 OB_SERIALIZE_MEMBER(ObMigrateTabletAutoincSeqParam, src_tablet_id_, dest_tablet_id_, ret_code_, autoinc_seq_);
 
-ObTabletAutoincSeq::ObTabletAutoincSeq() : intervals_()
+
+ObTabletAutoincSeq::ObTabletAutoincSeq()
+  : version_(AUTOINC_SEQ_VERSION),
+    allocator_(nullptr),
+    intervals_(nullptr),
+    intervals_count_(0)
 {
-  intervals_.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "TabletAutoInc"));
 }
 
-int ObTabletAutoincSeq::assign(const ObTabletAutoincSeq &other)
+ObTabletAutoincSeq::~ObTabletAutoincSeq()
+{
+  reset();
+}
+
+int ObTabletAutoincSeq::assign(common::ObIAllocator &allocator, const ObTabletAutoincSeq &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(intervals_.assign(other.intervals_))) {
-    LOG_WARN("failed to assign intervals", K(ret));
+
+  if (this != &other) {
+    reset();
+
+    void *buf = nullptr;
+    if (0 == other.intervals_count_) {
+      LOG_DEBUG("intervals count equals 0", K(ret));
+    } else if (OB_ISNULL(buf = allocator.alloc(other.intervals_count_ * sizeof(ObTabletAutoincInterval)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc memory failed", K(ret));
+    } else {
+      allocator_ = &allocator;
+      intervals_count_ = other.intervals_count_;
+      intervals_ = new (buf) ObTabletAutoincInterval[other.intervals_count_]();
+      for (int64_t i = 0; i < other.intervals_count_; ++i) {
+        intervals_[i] = other.intervals_[i];
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      reset();
+    }
+  }
+
+  return ret;
+}
+
+int ObTabletAutoincSeq::deep_copy(
+    char *buf,
+    const int64_t buf_size,
+    ObIStorageMetaObj *&value) const
+{
+  int ret = OB_SUCCESS;
+  value = nullptr;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size < get_deep_copy_size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invaild argument", K(ret), KP(buf), K(buf_size), K(get_deep_copy_size()));
+  } else {
+    ObTabletAutoincSeq *new_seq = new (buf) ObTabletAutoincSeq();
+    new_seq->intervals_ = new (buf + sizeof(ObTabletAutoincSeq)) ObTabletAutoincInterval[intervals_count_]();
+    for (int64_t i = 0; i < intervals_count_; ++i) {
+      new_seq->intervals_[i] = intervals_[i];
+    }
+    new_seq->intervals_count_ = intervals_count_;
+    new_seq->allocator_ = nullptr;
+
+    if (OB_SUCC(ret)) {
+      value = new_seq;
+    }
   }
   return ret;
 }
 
 int ObTabletAutoincSeq::deep_copy(const ObIMultiSourceDataUnit *src, ObIAllocator *allocator)
 {
-  UNUSED(allocator);
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(src)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid src info", K(ret));
-  } else if (OB_UNLIKELY(src->type() != type())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid type", K(ret));
-  } else if (OB_FAIL(assign(*static_cast<const ObTabletAutoincSeq *>(src)))) {
-    LOG_WARN("failed to copy tablet autoinc seq", K(ret));
-  }
+  int ret = OB_NOT_SUPPORTED;
+
   return ret;
 }
 
 void ObTabletAutoincSeq::reset()
 {
-  intervals_.reset();
+  if (0 != intervals_count_ && nullptr != intervals_) {
+    for (int64_t i = 0; i < intervals_count_ ; ++i) {
+      intervals_[i].~ObTabletAutoincInterval();
+    }
+    if (OB_NOT_NULL(allocator_)) {
+      allocator_->free(intervals_);
+      allocator_ = nullptr;
+    }
+    intervals_ = nullptr;
+  }
+  intervals_count_ = 0;
 }
 
 bool ObTabletAutoincSeq::is_valid() const
 {
-  bool valid = true;
-
-  if (intervals_.empty()) {
-    valid = false;
-  }
-  // TODO(shuangcan.yjw): verify elemetns in array
-
-  return valid;
+  return 0 != intervals_count_ && nullptr != intervals_;
 }
 
 int ObTabletAutoincSeq::get_autoinc_seq_value(uint64_t &autoinc_seq)
 {
   int ret = OB_SUCCESS;
-  if (intervals_.count() == 0) {
+  if (0 == intervals_count_) {
     autoinc_seq = 1;
-  } else if (intervals_.count() == 1) {
+  } else if (1 == intervals_count_) {
     // currently, there will only be one interval
-    for (int64_t i = 0; OB_SUCC(ret) && i < intervals_.count(); i++) {
-      const ObTabletAutoincInterval &interval = intervals_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < intervals_count_; i++) {
+      const ObTabletAutoincInterval &interval = intervals_[i];
       if (interval.end_ > interval.start_) {
         autoinc_seq = interval.start_;
         break;
@@ -133,19 +183,25 @@ int ObTabletAutoincSeq::get_autoinc_seq_value(uint64_t &autoinc_seq)
   return ret;
 }
 
-int ObTabletAutoincSeq::set_autoinc_seq_value(const uint64_t autoinc_seq)
+int ObTabletAutoincSeq::set_autoinc_seq_value(
+    common::ObArenaAllocator &allocator,
+    const uint64_t autoinc_seq)
 {
   int ret = OB_SUCCESS;
-  // currently, there will only be one interval
-  if (intervals_.count() == 0) {
+  if (0 == intervals_count_) {
     ObTabletAutoincInterval interval;
     interval.start_ = autoinc_seq;
     interval.end_ = INT64_MAX;
-    if (OB_FAIL(intervals_.push_back(interval))) {
-      LOG_WARN("failed to push autoinc interval", K(ret));
+    intervals_count_ = 1;
+    void *buf = nullptr;
+    if(OB_ISNULL(buf = allocator.alloc(sizeof(share::ObTabletAutoincInterval) * intervals_count_))) {
+      LOG_WARN("fail to allocate memory", K(ret));
+    } else {
+      intervals_ = new (buf) ObTabletAutoincInterval[intervals_count_];
+      intervals_[intervals_count_ - 1] = interval;
     }
-  } else if (intervals_.count() == 1) {
-    intervals_.at(0).start_ = autoinc_seq;
+  } else if (1 == intervals_count_) {
+    intervals_[0].start_ = autoinc_seq;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected autoinc seq interval count", K(ret));
@@ -153,7 +209,107 @@ int ObTabletAutoincSeq::set_autoinc_seq_value(const uint64_t autoinc_seq)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTabletAutoincSeq, intervals_);
+int ObTabletAutoincSeq::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(AUTOINC_SEQ_VERSION);
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+        LOG_WARN("fail to serialize", K(ret), KP(buf), K(buf_len), K(pos));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      int64_t serial_size = pos - pos_bak;
+      int64_t tmp_pos = 0;
+      int64_t expect_size = get_serialize_size_();
+      if (expect_size < serial_size) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expect size < serial size", K(ret), KP(expect_size), K(serial_size));
+      } else {
+        ret = common::serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos, serial_size);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletAutoincSeq::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE_ARRAY(intervals_, intervals_count_);
+  return ret;
+}
+
+// multi source deserialize with ObIAllocator.
+int ObTabletAutoincSeq::deserialize(
+    common::ObIAllocator &allocator,
+    const char *buf,
+    const int64_t data_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  OB_UNIS_DECODEx(version_);
+  OB_UNIS_DECODEx(len);
+  if (OB_SUCC(ret)) {
+    int64_t tmp_pos = 0;
+    if (OB_FAIL(deserialize_(allocator, buf + pos, len, tmp_pos))) {
+      LOG_WARN("fail to deserialize", K(ret), "slen", len, K(pos));
+    } else if (OB_UNLIKELY(len != tmp_pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deserialize length is not correct", K(ret), K(len), K(pos));
+    } else {
+      pos = pos + tmp_pos;
+    }
+  }
+  return ret;
+}
+
+int ObTabletAutoincSeq::deserialize_(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  void *ptr = nullptr;
+  if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &intervals_count_))) {
+    LOG_WARN("fail to decode ob array count", K(ret));
+  } else if (0 == intervals_count_) {
+    LOG_DEBUG("intervals count equals 0", K(ret), K_(intervals_count));
+  } else if (OB_ISNULL(ptr = allocator.alloc(intervals_count_ * sizeof(ObTabletAutoincInterval)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory failed", K(ret), K(intervals_count_));
+  } else {
+    allocator_ = &allocator;
+    intervals_ = new (ptr) ObTabletAutoincInterval[intervals_count_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < intervals_count_; i++) {
+      ObTabletAutoincInterval &item = intervals_[i];
+      if (OB_FAIL(item.deserialize(buf, data_len, pos))) {
+        LOG_WARN("fail to decode array item", K(ret), K(i), K_(intervals_count), K(item));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    reset();
+  }
+  return ret;
+}
+
+int64_t ObTabletAutoincSeq::get_serialize_size() const
+{
+  int64_t len = get_serialize_size_();
+  SERIALIZE_SIZE_HEADER(version_);
+  return len;
+}
+
+int64_t ObTabletAutoincSeq::get_serialize_size_(void) const
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN_ARRAY(intervals_, intervals_count_);
+  return len;
+}
 
 }// end namespace share
 }// end namespace oceanbase

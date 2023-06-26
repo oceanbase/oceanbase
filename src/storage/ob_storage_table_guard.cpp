@@ -130,7 +130,7 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
     LOG_WARN("ls is null", K(ret), K(ls_id));
   }
 
-  while (OB_SUCC(ret) && need_to_refresh_table(iter.table_iter_)) {
+  while (OB_SUCC(ret) && need_to_refresh_table(*iter.table_iter())) {
     if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
         tablet_id,
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
@@ -140,7 +140,7 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
            "table id", relative_table.get_table_id());
     } else {
       // no worry. iter will hold tablet reference and its life cycle is longer than guard
-      tablet_ = iter.tablet_handle_.get_obj();
+      tablet_ = iter.get_tablet();
       // TODO: check if seesion is killed
       if (store_ctx_.timeout_ > 0) {
         const int64_t query_left_time = store_ctx_.timeout_ - ObTimeUtility::current_time();
@@ -369,10 +369,29 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
   bool bool_ret = false;
   bool for_replace_tablet_meta = false;
   int exit_flag = -1;
-
-  ObITable *table = iter.get_boundary_table(true);
+  ObITable *table = iter.get_last_memtable();
+  bool need_create_memtable = false;
   if (NULL == table || !table->is_memtable()) {
-    // TODO: get the newest schema_version from tablet
+    need_create_memtable = true;
+  } else {
+    memtable::ObIMemtable *memtable = static_cast<memtable::ObIMemtable *>(table);
+    ObLSID ls_id = memtable->get_ls_id();
+    if (OB_UNLIKELY(!ls_id.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get memtable ls_id", K(ret), KPC(table));
+    } else if (ls_id != store_ctx_.ls_->get_ls_id()) {
+      if (OB_UNLIKELY(!table->is_data_memtable())) {
+        ret =OB_ERR_UNEXPECTED;
+        ObLSID curr_ls_id = store_ctx_.ls_->get_ls_id();
+        LOG_WARN("table is not data memtable, it does not allow ls_id to be different", K(ret), K(ls_id), K(curr_ls_id), KPC(table));
+      } else {
+        // TODO (wenjinyu.wjy) Active memtable is not allowed while ls_id is different
+        need_create_memtable = true;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (need_create_memtable) {
     const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
     if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->create_memtable(tablet_id, 0/*schema version*/, for_replay_))) {
       LOG_WARN("fail to create a boundary memtable", K(ret), K(tablet_id));
@@ -419,7 +438,6 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
       }
     }
   }
-
   return bool_ret;
 }
 

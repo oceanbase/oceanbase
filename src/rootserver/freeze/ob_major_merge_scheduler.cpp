@@ -609,14 +609,21 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
             // 2. Greater: In backup-restore situation, tablets may have higher snapshot_version, which
             // is larger than current frozen_scn.
             //
-            // cur_all_merged_scn >= ori_all_merged_scn
+            // cur_all_merged_scn >=< ori_all_merged_scn
             // 1. Greater: all_merged_scn will increase like last_merged_scn after major compaction
             // 2. Equal: In backup-restore situation, tablets may have higher snapshot_version(eg. version=10).
             // If major_freeze with version=4, all_merged_scn will be updated to 10; if major_freeze with version=5,
             // all_merged_scn will still be 10.
-            if ((cur_all_merged_scn < cur_merged_scn)
-                || (cur_all_merged_scn < ori_all_merged_scn)
-                || (cur_merged_scn < info.last_merged_scn())) {
+            // 3. Smaller: In backup-restore situation, part of tablets with higher compaction_scn
+            // (e.g., 5) are reported to __all_tablet_meta_table earlier, part of tablets with lower
+            // compaction_scn (e.g., 4) are reported to __all_tablet_meta_table later. all_merged_scn
+            // will fall back.
+            if (cur_all_merged_scn < ori_all_merged_scn) {
+              // do not generate error code, just print one log for analyzing
+              LOG_WARN("all_merged_scn fall back", K(cur_merged_scn), K(cur_all_merged_scn),
+                K(ori_all_merged_scn), K(info));
+            }
+            if ((cur_all_merged_scn < cur_merged_scn) || (cur_merged_scn < info.last_merged_scn())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_ERROR("unexpected merged scn", KR(ret), K(merged), K(cur_merged_scn), K(cur_all_merged_scn),
                 K(ori_all_merged_scn), K(info));

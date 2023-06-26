@@ -21,9 +21,8 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_config.h"
-#include "share/backup/ob_backup_lease_info_mgr.h"
 #include "storage/tx/ob_i_ts_source.h"
-#include "share/backup/ob_backup_data_store.h"
+#include "storage/backup/ob_backup_data_store.h"
 #include "share/backup/ob_archive_struct.h"
 #include "storage/tx/ob_ts_mgr.h"
 
@@ -2125,49 +2124,17 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_BACKUP_FILE_NOT_EXIST :
     case OB_LOG_ARCHIVE_INTERRUPTED :
     case OB_LOG_ARCHIVE_NOT_RUNNING :
+    case OB_BACKUP_CAN_NOT_START :
+    case OB_BACKUP_IN_PROGRESS :
+    case OB_TABLET_NOT_EXIST :
     case OB_CHECKSUM_ERROR :
+    case OB_VERSION_NOT_MATCH:
       bret = false;
       break;
     default:
       break;
   }
   return bret;
-}
-
-int ObBackupUtils::retry_get_tenant_schema_guard(
-    const uint64_t tenant_id,
-    schema::ObMultiVersionSchemaService &schema_service,
-    const int64_t tenant_schema_version,
-    schema::ObSchemaGetterGuard &schema_guard)
-{
-  int ret = OB_SUCCESS;
-  const schema::ObMultiVersionSchemaService::RefreshSchemaMode refresh_mode =
-      schema::ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_FALLBACK;
-
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
-      || tenant_schema_version < OB_INVALID_VERSION)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(tenant_id), K(tenant_schema_version));
-  } else {
-    int retry_times = 0;
-    const int64_t sys_schema_version = OB_INVALID_VERSION;//sys_schema_version use latest
-    while (retry_times < MAX_RETRY_TIMES) {
-      if (OB_FAIL(schema_service.get_tenant_schema_guard(
-          tenant_id,
-          schema_guard,
-          tenant_schema_version,
-          sys_schema_version,
-          refresh_mode))) {
-        STORAGE_LOG(WARN, "fail to get schema, sleep 1s and retry",
-            K(ret), K(tenant_id), K(tenant_schema_version), K(sys_schema_version));
-        ob_usleep(RETRY_INTERVAL);
-      } else {
-        break;
-      }
-      ++retry_times;
-    }
-  }
-  return ret;
 }
 
 int ObBackupUtils::convert_timestamp_to_date(
@@ -2334,30 +2301,6 @@ int ObBackupUtils::check_is_tmp_file(const common::ObString &file_name, bool &is
         is_tmp_file = false;
       }
     }
-  }
-  return ret;
-}
-
-int ObBackupUtils::calc_start_replay_scn(
-    const share::ObBackupSetTaskAttr &set_task_attr,
-    const share::ObBackupLSMetaInfosDesc &ls_meta_infos,
-    const share::ObTenantArchiveRoundAttr &round_attr,
-    share::SCN &start_replay_scn)
-{
-  int ret = OB_SUCCESS;
-  SCN tmp_start_replay_scn = set_task_attr.start_scn_;
-  // To ensure that restore can be successfully initiated,
-  // we need to avoid clearing too many logs and the start_replay_scn less than the start_scn of the first piece.
-  // so we choose the minimum palf_base_info.prev_log_info_.scn firstly, to ensure keep enough logs.
-  // Then we choose the max(minimum palf_base_info.prev_log_info_.scn, round_attr.start_scn) as the start_replay_scn,
-  // to ensure the start_replay_scn is greater than the start scn of first piece
-  ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i, cnt, OB_SUCC(ret)) {
-    const palf::PalfBaseInfo &palf_base_info = ls_meta_infos.ls_meta_packages_.at(i).palf_meta_;
-    tmp_start_replay_scn = SCN::min(tmp_start_replay_scn, palf_base_info.prev_log_info_.scn_);
-  }
-  if (OB_SUCC(ret)) {
-    start_replay_scn = SCN::max(tmp_start_replay_scn, round_attr.start_scn_);
-    LOG_INFO("calculate start replay scn finish", K(start_replay_scn), K(ls_meta_infos), K(round_attr));
   }
   return ret;
 }
@@ -3060,6 +3003,7 @@ int ObBackupStatus::set_status(const char *str)
     for (int64_t i = 0; i < count; ++i) {
       if (0 == s.case_compare(status_strs[i])) {
         status_ = static_cast<Status>(i);
+        break;
       }
     }
   }
@@ -3069,7 +3013,7 @@ int ObBackupStatus::set_status(const char *str)
 int ObBackupStatus::get_backup_data_type(share::ObBackupDataType &backup_data_type) const
 {
   int ret = OB_SUCCESS;
-  if (BACKUP_DATA_SYS == status_) {
+  if (BACKUP_USER_META == status_) {
     backup_data_type.set_sys_data_backup();
   } else if (BACKUP_DATA_MINOR == status_) {
     backup_data_type.set_minor_data_backup();
@@ -3194,6 +3138,102 @@ void ObBackupStats::reset()
   finish_file_count_ = 0;
 }
 
+ObHAResultInfo::ObHAResultInfo(
+    const FailedType &type,
+    const ObLSID &ls_id,
+    const ObAddr &addr,
+    const ObTaskId &trace_id,
+    const int result)
+{
+  type_ = type;
+  ls_id_ = ls_id;
+  trace_id_ = trace_id;
+  addr_ = addr;
+  result_ = result;
+}
+
+ObHAResultInfo::ObHAResultInfo(
+    const FailedType &type,
+    const ObAddr &addr,
+    const ObTaskId &trace_id,
+    const int result)
+{
+  type_ = type;
+  trace_id_ = trace_id;
+  addr_ = addr;
+  result_ = result;
+}
+
+const char *ObHAResultInfo::get_failed_type_str() const
+{
+  const char *ret = "";
+  const char *type_strs[] = {
+    "ROOT_SERVICE",
+    "RESTORE_DATA",
+    "RESTORE_CLOG",
+    "BACKUP_DATA",
+    "BACKUP_CLEAN"
+  };
+  if (type_ < ROOT_SERVICE || type_ >= MAX_FAILED_TYPE) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid failed type", K(type_));
+  } else {
+    ret = type_strs[type_];
+  }
+  return ret;
+}
+
+bool ObHAResultInfo::is_valid() const
+{
+  return !trace_id_.is_invalid() && addr_.is_valid() &&  MAX_FAILED_TYPE > type_ && ROOT_SERVICE <= type_;
+}
+
+int ObHAResultInfo::get_comment_str(Comment &comment) const
+{
+  int ret = OB_SUCCESS;
+  const char *type = get_failed_type_str();
+  char trace_id[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+  char addr_buf[OB_MAX_SERVER_ADDR_SIZE] = "";
+  const char *err_code_str = OB_SUCCESS == result_ ? "" : common::ob_strerror(result_);
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid result info", K(ret), KPC(this));
+  } else if (OB_SUCCESS == result_) { // empty comment when result is OB_SUCCESS
+  } else if (OB_FALSE_IT(trace_id_.to_string(trace_id, OB_MAX_TRACE_ID_BUFFER_SIZE))) {
+  } else if (OB_FAIL(addr_.ip_port_to_string(addr_buf, OB_MAX_SERVER_ADDR_SIZE))) {
+    LOG_WARN("failed to convert addr to string", K(ret), K(addr_));
+  } else if (ROOT_SERVICE == type_) {
+    if (OB_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
+        "(ROOTSERVICE)addr: %.*s, result: %d(%s), trace_id: %.*s",
+        static_cast<int>(OB_MAX_SERVER_ADDR_SIZE), addr_buf,
+        result_,
+        err_code_str,
+        static_cast<int>(OB_MAX_TRACE_ID_BUFFER_SIZE), trace_id))) {
+      LOG_WARN("failed to fill comment", K(ret));
+    }
+  } else if (OB_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
+      "(SERVER)ls_id: %lu, addr: %.*s, module: %s, result: %d(%s), trace_id: %.*s",
+      ls_id_.id(),
+      static_cast<int>(OB_MAX_SERVER_ADDR_SIZE), addr_buf,
+      type,
+      result_,
+      err_code_str,
+      static_cast<int>(OB_MAX_TRACE_ID_BUFFER_SIZE), trace_id))) {
+    LOG_WARN("failed to fill comment", K(ret));
+  }
+  return ret;
+}
+
+int ObHAResultInfo::assign(const ObHAResultInfo &that)
+{
+  int ret = OB_SUCCESS;
+  type_ = that.type_;
+  trace_id_ = that.trace_id_;
+  ls_id_ = that.ls_id_;
+  addr_ = that.addr_;
+  result_ = that.result_;
+  return ret;
+}
+
 ObBackupJobAttr::ObBackupJobAttr()
   : job_id_(0),
     tenant_id_(0),
@@ -3214,7 +3254,8 @@ ObBackupJobAttr::ObBackupJobAttr()
     status_(),
     result_(0),
     can_retry_(true),
-    retry_count_(0)
+    retry_count_(0),
+    comment_()
 {
 }
 
@@ -3232,6 +3273,8 @@ int ObBackupJobAttr::assign(const ObBackupJobAttr &other)
     LOG_WARN("failed to assign passwd", K(ret), K(other.passwd_));
   } else if (OB_FAIL(executor_tenant_id_.assign(other.executor_tenant_id_))) {
     LOG_WARN("failed to assign backup tenant id", K(ret), K(other.executor_tenant_id_));
+  } else if (OB_FAIL(comment_.assign(other.comment_))) {
+    LOG_WARN("failed to assign comment", K(ret));
   } else {
     job_id_ = other.job_id_;
     tenant_id_ = other.tenant_id_;
@@ -3361,21 +3404,20 @@ bool ObBackupJobAttr::is_valid() const
 
 bool ObBackupDataTaskType::is_valid() const
 {
-  return type_ >= Type::BACKUP_DATA_SYS && type_ < Type::BACKUP_MAX;
+  return type_ >= Type::BACKUP_META && type_ < Type::BACKUP_MAX;
 }
 
 const char* ObBackupDataTaskType::get_str() const
 {
   const char *str = "UNKNOWN";
   const char *type_strs[] = {
-    "BACKUP_DATA_SYS",
+    "BACKUP_META",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
     "PLUS_ARCHIVE_LOG",
-    "BUILD_INDEX",
-    "BACKUP_META"
+    "BUILD_INDEX"
   };
-  if (type_ < Type::BACKUP_DATA_SYS || type_ >= Type::BACKUP_MAX) {
+  if (type_ < Type::BACKUP_META || type_ >= Type::BACKUP_MAX) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid compressor type", K(type_));
   } else {
     str = type_strs[type_];
@@ -3388,12 +3430,11 @@ int ObBackupDataTaskType::set_type(const char *buf)
     int ret = OB_SUCCESS;
   ObString s(buf);
   const char *type_strs[] = {
-    "BACKUP_DATA_SYS",
+    "BACKUP_META",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
     "PLUS_ARCHIVE_LOG",
     "BUILD_INDEX",
-    "BACKUP_META"
   };
   const int64_t count = ARRAYSIZEOF(type_strs);
   if (s.empty()) {
@@ -3415,7 +3456,7 @@ int ObBackupDataTaskType::get_backup_data_type(share::ObBackupDataType &backup_d
   if (!is_backup_data()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("not suitable backup type", K(ret));
-  } else if (BACKUP_DATA_SYS == type_) {
+  } else if (BACKUP_META == type_) {
     backup_data_type.set_sys_data_backup();
   } else if (BACKUP_DATA_MINOR == type_) {
     backup_data_type.set_minor_data_backup();
@@ -3438,13 +3479,16 @@ ObBackupSetTaskAttr::ObBackupSetTaskAttr()
     user_ls_start_scn_(),
     data_turn_id_(0),
     meta_turn_id_(0),
+    minor_turn_id_(0),
+    major_turn_id_(0),
     status_(),
     encryption_mode_(ObBackupEncryptionMode::EncryptionMode::NONE),
     passwd_(),
     stats_(),
     backup_path_(0),
     retry_cnt_(0),
-    result_(0)
+    result_(0),
+    comment_()
 {
 }
 
@@ -3469,6 +3513,8 @@ int ObBackupSetTaskAttr::assign(const ObBackupSetTaskAttr &other)
     LOG_WARN("failed to assign passwd", K(ret));
   } else if (OB_FAIL(backup_path_.assign(other.backup_path_.ptr()))) {
     LOG_WARN("failed to assign backup path", K(ret), K(other.backup_path_));
+  } else if (OB_FAIL(comment_.assign(other.comment_))) {
+    LOG_WARN("failed to assign comment", K(ret));
   } else {
     stats_.assign(other.stats_);
     incarnation_id_ = other.incarnation_id_;
@@ -3485,6 +3531,8 @@ int ObBackupSetTaskAttr::assign(const ObBackupSetTaskAttr &other)
     meta_turn_id_ = other.meta_turn_id_;
     user_ls_start_scn_ = other.user_ls_start_scn_;
     retry_cnt_ = other.retry_cnt_;
+    minor_turn_id_ = other.minor_turn_id_;
+    major_turn_id_ = other.major_turn_id_;
   }
   return ret;
 }
@@ -3508,7 +3556,9 @@ ObBackupLSTaskAttr::ObBackupLSTaskAttr()
     start_turn_id_(0),
     turn_id_(0),
     retry_id_(0),
-    result_(0)
+    result_(0),
+    comment_(),
+    max_tablet_checkpoint_scn_()
 {
 }
 
@@ -3522,7 +3572,8 @@ bool ObBackupLSTaskAttr::is_valid() const
       && backup_type_.is_valid()
       && status_.is_valid()
       && start_ts_ > 0
-      && turn_id_ > 0;
+      && turn_id_ > 0
+      && max_tablet_checkpoint_scn_.is_valid();
 }
 
 int ObBackupLSTaskAttr::get_black_server_str(const ObIArray<ObAddr> &black_servers, ObSqlString &sql_string) const
@@ -3585,6 +3636,8 @@ int ObBackupLSTaskAttr::assign(const ObBackupLSTaskAttr &other)
     LOG_WARN("invalid argument", K(ret), K(other));
   } else if (OB_FAIL(append(black_servers_, other.black_servers_))) {
     LOG_WARN("failed to append black servers", K(ret));
+  } else if (OB_FAIL(comment_.assign(other.comment_))) {
+    LOG_WARN("failed to assign comment", K(ret));
   } else {
     stats_.assign(other.stats_);
     task_id_ = other.task_id_;
@@ -3604,6 +3657,7 @@ int ObBackupLSTaskAttr::assign(const ObBackupLSTaskAttr &other)
     turn_id_ = other.turn_id_;
     retry_id_ = other.retry_id_;
     result_ = other.result_;
+    max_tablet_checkpoint_scn_ = other.max_tablet_checkpoint_scn_;
   }
   return ret;
 }
@@ -3611,7 +3665,8 @@ int ObBackupLSTaskAttr::assign(const ObBackupLSTaskAttr &other)
 OB_SERIALIZE_MEMBER(ObBackupSetFileDesc, backup_set_id_, incarnation_, tenant_id_, dest_id_, backup_type_,
     plus_archivelog_, date_, prev_full_backup_set_id_, prev_inc_backup_set_id_, stats_, start_time_, end_time_, status_,
     result_, encryption_mode_, passwd_, file_status_, backup_path_, start_replay_scn_, min_restore_scn_,
-    tenant_compatible_, backup_compatible_, data_turn_id_, meta_turn_id_, cluster_version_);
+    tenant_compatible_, backup_compatible_, data_turn_id_, meta_turn_id_, cluster_version_,
+    minor_turn_id_, major_turn_id_, consistent_scn_);
 
 ObBackupSetFileDesc::ObBackupSetFileDesc()
   : backup_set_id_(0),
@@ -3638,7 +3693,10 @@ ObBackupSetFileDesc::ObBackupSetFileDesc()
     backup_compatible_(Compatible::MAX_COMPATIBLE_VERSION),
     data_turn_id_(0),
     meta_turn_id_(0),
-    cluster_version_(0)
+    cluster_version_(0),
+    minor_turn_id_(0),
+    major_turn_id_(0),
+    consistent_scn_()
 {
 }
 
@@ -3669,6 +3727,9 @@ void ObBackupSetFileDesc::reset()
   data_turn_id_ = 0;
   meta_turn_id_ = 0;
   cluster_version_ = 0;
+  minor_turn_id_ = 0;
+  major_turn_id_ = 0;
+  consistent_scn_.reset();
 }
 
 
@@ -3805,31 +3866,34 @@ int ObBackupSetFileDesc::assign(const ObBackupSetFileDesc &other)
     data_turn_id_ = other.data_turn_id_;
     meta_turn_id_ = other.meta_turn_id_;
     cluster_version_ = other.cluster_version_;
+    minor_turn_id_ = other.minor_turn_id_;
+    major_turn_id_ = other.major_turn_id_;
+    consistent_scn_ = other.consistent_scn_;
   }
   return ret;
 }
 
 ObBackupSkipTabletAttr::ObBackupSkipTabletAttr()
-  : task_id_(0),
-    tenant_id_(0),
-    turn_id_(0),
-    retry_id_(0),
-    backup_set_id_(0),
-    tablet_id_(0),
-    ls_id_(),
+  : tablet_id_(),
     skipped_type_()
 {
 }
 
+int ObBackupSkipTabletAttr::assign(const ObBackupSkipTabletAttr &that)
+{
+  int ret = OB_SUCCESS;
+  if (!that.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(that));
+  } else {
+    tablet_id_ = that.tablet_id_;
+    skipped_type_ = that.skipped_type_;
+  }
+  return ret;
+}
 bool ObBackupSkipTabletAttr::is_valid() const
 {
-  return task_id_ > 0
-      && tenant_id_ > 0
-      && turn_id_ > 0
-      && retry_id_ > 0
-      && tablet_id_.is_valid()
-      && backup_set_id_ > 0
-      && ls_id_.is_valid()
+  return tablet_id_.is_valid()
       && skipped_type_.is_valid();
 }
 

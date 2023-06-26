@@ -116,6 +116,7 @@ public:
 public:
   bool is_valid() const;
   void reset();
+  //for unitest
   int generate(const common::ObMemberList &memberlist,
                const int64_t replica_num,
                const common::GlobalLearnerList &learnerlist,
@@ -156,6 +157,84 @@ public:
   LogConfigVersion config_version_;
 };
 
+enum ConfigChangeLockType
+{
+  LOCK_NOTHING = 0x0,
+  LOCK_PAXOS_MEMBER_CHANGE = 0x1,         // binary 00001
+  LOCK_PAXOS_REPLICA_NUMBER_CHANGE = 0x2,     // binary 00010 (TODO)
+  LOCK_LEARNER_CHANGE = 0x4,            // binary 00100(TODO)
+  LOCK_ACCESS_MODE_CHANGE = 0x8,          // binary 01000 (TODO)
+  LOCK_ARBITRATION_MEMBER_CHANGE = 0x10,      // binary 10000 (TODO)
+};
+
+bool is_valid_config_lock_type(int64_t lock_type);
+
+struct LogLockMeta
+{
+public:
+  LogLockMeta() {reset();}
+  ~LogLockMeta() {reset();}
+  void reset();
+  bool is_valid() const;
+  int generate(const int64_t lock_owner, const int64_t lock_type);
+  void operator=(const LogLockMeta &lock_meta);
+  bool operator==(const LogLockMeta &lock_meta) const;
+  void reset_as_unlocked();
+  void unlock();
+  bool is_locked() const;
+  bool is_lock_owner_valid() const;
+  TO_STRING_KV(K_(version), K_(lock_type), K_(lock_owner), K_(lock_time));
+  NEED_SERIALIZE_AND_DESERIALIZE;
+public:
+  static constexpr int64_t LOG_LOCK_META_VERSION = 1;
+  int64_t version_;//for compatibilty
+  int64_t lock_owner_;// owner of lock
+  int64_t lock_type_;// ConfigChangeLockType
+  int64_t lock_time_;// the timestamp of executing locking or unlocking. default as OB_INVALID_TIMESTAMP, using fordebugging
+};
+
+struct LogConfigInfoV2
+{
+public:
+  LogConfigInfoV2();
+  ~LogConfigInfoV2();
+public:
+  static constexpr int64_t LOG_CONFIG_INFO_VERSION = 1;
+  bool is_valid() const;
+  void reset();
+  //for init with default
+  int generate(const LogConfigVersion &config_version);
+  //for serialize compaction
+  int generate(const LogConfigInfo &config_info);
+  //for deserialization from lower version
+  int transform_for_deserialize(const LogConfigInfo &config_info);
+  int convert_to_complete_config(common::ObMemberList &all_paxos_memberlist,
+                                 int64_t &all_paxos_replica_num,
+                                 GlobalLearnerList &all_learners) const;
+  bool is_config_change_locked() const;
+
+  //for unitest
+  int generate(const common::ObMemberList &memberlist,
+               const int64_t replica_num,
+               const common::GlobalLearnerList &learnerlist,
+               const LogConfigVersion &config_version);
+  //for unitest
+  int generate(const common::ObMemberList &memberlist,
+               const int64_t replica_num,
+               const common::GlobalLearnerList &learnerlist,
+               const LogConfigVersion &config_version,
+               const LogLockMeta &lock_meta);
+  // For unittest
+  void operator=(const LogConfigInfoV2 &config_info);
+  bool operator==(const LogConfigInfoV2 &config_info) const;
+  TO_STRING_KV(K_(version), K_(config), K_(lock_meta));
+  NEED_SERIALIZE_AND_DESERIALIZE;
+public:
+  int64_t version_;
+  LogConfigInfo config_;
+  LogLockMeta lock_meta_;
+};
+
 // Change member log for consenus
 struct LogConfigMeta {
 public:
@@ -165,11 +244,11 @@ public:
 public:
   // Note: the function will generate a default version_.
   int generate_for_default(const int64_t proposal_id,
-                           const LogConfigInfo &prev_config_info,
-                           const LogConfigInfo &curr_config_info);
+                           const LogConfigInfoV2 &prev_config_info,
+                           const LogConfigInfoV2 &curr_config_info);
   int generate(const int64_t proposal_id,
-               const LogConfigInfo &prev_config_info,
-               const LogConfigInfo &curr_config_info,
+               const LogConfigInfoV2 &prev_config_info,
+               const LogConfigInfoV2 &curr_config_info,
                const int64_t prev_log_proposal_id,
                const LSN &prev_lsn,
                const int64_t prev_mode_pid);
@@ -182,8 +261,8 @@ public:
   int64_t version_;
   // ====== members in VERSION 1 ========
   int64_t proposal_id_;
-  LogConfigInfo prev_;
-  LogConfigInfo curr_;
+  LogConfigInfoV2 prev_;//modified in version_42
+  LogConfigInfoV2 curr_;//modified in version_42
   // ====== added members in VERSION 2 ========
   int64_t prev_log_proposal_id_;
   LSN prev_lsn_;
@@ -191,6 +270,7 @@ public:
 
   static constexpr int64_t LOG_CONFIG_META_VERSION = 1;
   static constexpr int64_t LOG_CONFIG_META_VERSION_INC = 2;
+  static constexpr int64_t LOG_CONFIG_META_VERSION_42 = 3;//LogConfigInfo-->LogConfigInfoV2
 };
 
 struct LogModeMeta {

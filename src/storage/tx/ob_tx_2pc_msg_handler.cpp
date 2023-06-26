@@ -263,7 +263,8 @@ void ObPartTransCtx::build_tx_common_msg_(const ObLSID &receiver,
 int ObPartTransCtx::post_orphan_msg_(const ObTwoPhaseCommitMsgType &msg_type,
                                      const ObTxMsg &recv_msg,
                                      const common::ObAddr &self_addr,
-                                     ObITransRpc* rpc)
+                                     ObITransRpc* rpc,
+                                     const bool ls_deleted)
 {
   int ret = OB_SUCCESS;
 
@@ -291,9 +292,29 @@ int ObPartTransCtx::post_orphan_msg_(const ObTwoPhaseCommitMsgType &msg_type,
     build_tx_common_msg_(recv_msg,
                          self_addr,
                          clear_req);
-    if (OB_FAIL(MTL(ObTransService*)->get_max_decided_scn(clear_req.sender_, clear_req.max_commit_log_scn_))) {
-      TRANS_LOG(WARN, "get max get_max_decided_scn failed", K(ret), K(clear_req));
+    ObTransService *trans_service = MTL(ObTransService *);
+    if (OB_ISNULL(trans_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "trans service is null", K(ret));
+    } else if (ls_deleted) {
+      bool unused = false;
+      SCN scn;
+      ObITsMgr *ts_mgr = trans_service->get_ts_mgr();
+      if (OB_ISNULL(ts_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "ts mgr is null", K(ret));
+      } else if (OB_FAIL(ts_mgr->get_ts_sync(MTL_ID(), 1000000, scn, unused))) {
+        TRANS_LOG(WARN, "get gts sync failed", K(ret));
+      } else {
+        clear_req.max_commit_log_scn_ = scn;
+      }
+      TRANS_LOG(INFO, "ls is deleted, use gts to build clear request", K(ret), K(clear_req));
     } else {
+      if (OB_FAIL(trans_service->get_max_decided_scn(clear_req.sender_, clear_req.max_commit_log_scn_))) {
+        TRANS_LOG(WARN, "get max get_max_decided_scn failed", K(ret), K(clear_req));
+      }
+    }
+    if (OB_SUCC(ret)) {
       ret = rpc->post_msg(recv_msg.get_sender_addr(), clear_req);
     }
     break;
@@ -949,7 +970,8 @@ int ObPartTransCtx::handle_tx_2pc_clear_resp(const Ob2pcClearRespMsg &msg)
 
 int ObPartTransCtx::handle_tx_orphan_2pc_msg(const ObTxMsg &recv_msg,
                                              const common::ObAddr& self_addr,
-                                             ObITransRpc* rpc)
+                                             ObITransRpc* rpc,
+                                             const bool ls_deleted)
 {
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "handle_tx_orphan_2pc_msg", K(recv_msg));
@@ -978,7 +1000,8 @@ int ObPartTransCtx::handle_tx_orphan_2pc_msg(const ObTxMsg &recv_msg,
   } else if (need_ack && OB_FAIL(post_orphan_msg_(send_msg_type,
                                                   recv_msg,
                                                   self_addr,
-                                                  rpc))) {
+                                                  rpc,
+                                                  ls_deleted))) {
     TRANS_LOG(WARN, "post_orphan_msg_ failed", KR(ret), K(recv_msg), K(send_msg_type));
   }
   return ret;

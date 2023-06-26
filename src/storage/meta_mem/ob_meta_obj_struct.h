@@ -17,6 +17,7 @@
 #include "common/ob_clock_generator.h"
 #include "share/ob_define.h"
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
+#include "storage/blocksstable/ob_macro_block_handle.h"
 
 namespace oceanbase
 {
@@ -26,8 +27,6 @@ class MacroBlockId;
 }
 namespace storage
 {
-
-class ObTenantMetaMemMgr;
 
 class ObMetaDiskAddr final
 {
@@ -40,8 +39,6 @@ public:
     MAX = 4,
   };
 public:
-  static const int64_t ROOT_BLOCK_SIZE_LIMIT = 16 << 10; // 16KB
-public:
   ObMetaDiskAddr();
   ~ObMetaDiskAddr() = default;
   void reset();
@@ -50,6 +47,7 @@ public:
 
   bool operator ==(const ObMetaDiskAddr &other) const;
   bool operator !=(const ObMetaDiskAddr &other) const;
+  bool is_equal_for_persistence(const ObMetaDiskAddr &other) const;
 
   OB_INLINE bool is_block() const { return BLOCK == type_; }
   OB_INLINE bool is_disked() const { return BLOCK == type_ || FILE == type_; }
@@ -57,10 +55,15 @@ public:
   OB_INLINE bool is_memory() const { return MEM == type_; }
   OB_INLINE bool is_none() const { return NONE == type_; }
   OB_INLINE void set_none_addr() { type_ = NONE; }
+  OB_INLINE void set_seq(const uint64_t seq) { seq_ = seq; }
   OB_INLINE int64_t file_id() const { return file_id_; }
   OB_INLINE uint64_t size() const { return size_; }
   OB_INLINE uint64_t offset() const { return offset_; }
+  OB_INLINE uint64_t seq() const { return seq_; }
   OB_INLINE DiskType type() const { return static_cast<DiskType>(type_); }
+  OB_INLINE void inc_seq() { seq_++; }
+  OB_INLINE blocksstable::MacroBlockId block_id() const {
+      return blocksstable::MacroBlockId(first_id_, second_id_, third_id_);}
 
   int get_block_addr(
       blocksstable::MacroBlockId &macro_id,
@@ -87,12 +90,12 @@ public:
 
   OB_UNIS_VERSION(1);
 private:
-  static const uint64_t MD_FID_BIT_OFFSET = 30;
-  static const uint64_t MD_FID_BIT_SIZE = 30;
-  static const uint64_t MD_FID_BIT_TYPE = 4;
-  static const uint64_t MAX_OFFSET = (0x1UL << MD_FID_BIT_OFFSET) - 1;
-  static const uint64_t MAX_SIZE = (0x1UL << MD_FID_BIT_SIZE) - 1;
-  static const uint64_t MAX_TYPE = (0x1UL << MD_FID_BIT_TYPE) - 1;
+  static const uint64_t FOURTH_ID_BIT_OFFSET = 30;
+  static const uint64_t FOURTH_ID_BIT_SIZE = 30;
+  static const uint64_t FOURTH_ID_BIT_TYPE = 4;
+  static const uint64_t MAX_OFFSET = (0x1UL << FOURTH_ID_BIT_OFFSET) - 1;
+  static const uint64_t MAX_SIZE = (0x1UL << FOURTH_ID_BIT_SIZE) - 1;
+  static const uint64_t MAX_TYPE = (0x1UL << FOURTH_ID_BIT_TYPE) - 1;
 private:
   union {
     int64_t first_id_;
@@ -107,10 +110,14 @@ private:
   union {
     int64_t fourth_id_;
     struct {
-      uint64_t offset_ : MD_FID_BIT_OFFSET;
-      uint64_t size_   : MD_FID_BIT_SIZE;
-      uint64_t type_   : MD_FID_BIT_TYPE;
+      uint64_t offset_ : FOURTH_ID_BIT_OFFSET;
+      uint64_t size_   : FOURTH_ID_BIT_SIZE;
+      uint64_t type_   : FOURTH_ID_BIT_TYPE;
     };
+  };
+  union { // doesn't serialize
+    int64_t fifth_id_;
+    uint64_t seq_;
   };
 };
 
@@ -119,13 +126,16 @@ class ObMetaObj
 {
 public:
   ObMetaObj();
-  virtual ~ObMetaObj() = default;
+  virtual ~ObMetaObj() { reset(); };
+  virtual void reset();
 
-  TO_STRING_KV(KP_(pool), KP_(ptr));
+  TO_STRING_KV(KP_(pool), KP_(allocator), KP_(ptr), KP_(t3m));
 
 public:
-  ObTenantMetaObjPool<T> *pool_;
+  ObITenantMetaObjPool *pool_;
+  common::ObIAllocator *allocator_;
   T *ptr_;
+  ObTenantMetaMemMgr *t3m_;
 };
 
 template <typename T>
@@ -139,7 +149,7 @@ public:
   virtual void reset();
 
   virtual void set_obj(ObMetaObj<T> &obj);
-  virtual void set_obj(T *obj, common::ObIAllocator *allocator);
+  virtual void set_obj(T *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m);
 
   OB_INLINE virtual T *get_obj();
   OB_INLINE virtual T *get_obj() const;
@@ -150,24 +160,46 @@ public:
 
   ObMetaObjGuard<T> &operator = (const ObMetaObjGuard<T> &other);
 
-  VIRTUAL_TO_STRING_KV(KP_(obj), KP_(obj_pool), KP_(allocator));
+  VIRTUAL_TO_STRING_KV(KP_(obj), KP_(obj_pool), KP_(allocator), KP_(t3m));
 
 protected:
   static const int64_t HOLD_OBJ_MAX_TIME = 2 * 60 * 60 * 1000 * 1000L; // 2h
   virtual void reset_obj();
 
 protected:
+  // TODO(zhuixin.gsy) rm *obj_pool_ and *allocator_
   T *obj_;
-  ObTenantMetaObjPool<T> *obj_pool_;
+  ObITenantMetaObjPool *obj_pool_;
   common::ObIAllocator *allocator_;
+  ObTenantMetaMemMgr *t3m_;
   int64_t hold_start_time_;
+};
+
+class ObIStorageMetaObj
+{
+public:
+  ObIStorageMetaObj() = default;
+  virtual ~ObIStorageMetaObj() = default;
+  virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const = 0;
+  virtual int64_t get_deep_copy_size() const = 0;
 };
 
 template <typename T>
 ObMetaObj<T>::ObMetaObj()
   : pool_(nullptr),
-    ptr_(nullptr)
+    allocator_(nullptr),
+    ptr_(nullptr),
+    t3m_(MTL(ObTenantMetaMemMgr*))
 {
+}
+
+template <typename T>
+void ObMetaObj<T>::reset()
+{
+  pool_ = nullptr;
+  allocator_ = nullptr;
+  ptr_ = nullptr;
+  t3m_ = nullptr;
 }
 
 template <typename T>
@@ -175,7 +207,7 @@ ObMetaObjGuard<T>::ObMetaObjGuard()
   : obj_(nullptr),
     obj_pool_(nullptr),
     allocator_(nullptr),
-    hold_start_time_(INT64_MAX)
+    t3m_(nullptr)
 {
 }
 
@@ -184,7 +216,7 @@ ObMetaObjGuard<T>::ObMetaObjGuard(const ObMetaObjGuard<T> &other)
   : obj_(nullptr),
     obj_pool_(nullptr),
     allocator_(nullptr),
-    hold_start_time_(INT64_MAX)
+    t3m_(nullptr)
 {
   *this = other;
 }
@@ -199,33 +231,39 @@ template <typename T>
 void ObMetaObjGuard<T>::set_obj(ObMetaObj<T> &obj)
 {
   reset();
-  obj_pool_ = obj.pool_;
   if (nullptr != obj.ptr_) {
-    if (nullptr == obj.pool_) {
+    if (OB_UNLIKELY((nullptr == obj.pool_ && nullptr == obj.allocator_) || nullptr == obj.t3m_)) {
       STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K(obj));
       ob_abort();
     } else {
-      obj_ = obj.ptr_;
-      obj_->inc_ref();
-      hold_start_time_ = ObClockGenerator::getClock();
+      obj_pool_ = obj.pool_;
+      allocator_ = obj.allocator_;
+      t3m_ = obj.t3m_;
     }
+    obj_ = obj.ptr_;
+    obj_->inc_ref();
+    hold_start_time_ = ObClockGenerator::getClock();
   }
 }
 
 template <typename T>
-void ObMetaObjGuard<T>::set_obj(T *obj, common::ObIAllocator *allocator)
+void ObMetaObjGuard<T>::set_obj(T *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m)
 {
   reset();
   allocator_ = allocator;
-  if (nullptr != obj) {
-   if (nullptr == allocator) {
-     STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "allocator is nullptr", KP(obj), KP(allocator));
-     ob_abort();
-   } else {
-     obj_ = obj;
-     obj_->inc_ref();
-     hold_start_time_ = ObClockGenerator::getClock();
-   }
+  t3m_ = t3m;
+  if (nullptr == obj && nullptr == allocator && nullptr == t3m) {
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid args to set", KP(obj), KP(allocator), KP(t3m));
+    ob_abort();
+  } else if (nullptr != obj) {
+    if (nullptr == allocator || nullptr == t3m) {
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "allocator is nullptr", KP(obj), KP(allocator), KP(t3m));
+      ob_abort();
+    } else {
+      obj_ = obj;
+      obj_->inc_ref();
+      hold_start_time_ = ObClockGenerator::getClock();
+    }
   }
 }
 
@@ -235,12 +273,14 @@ void ObMetaObjGuard<T>::reset()
   reset_obj();
   obj_pool_ = nullptr;
   allocator_ = nullptr;
+  t3m_ = nullptr;
 }
 
 template <typename T>
 OB_INLINE bool ObMetaObjGuard<T>::is_valid() const
 {
   return nullptr != obj_
+      && nullptr != t3m_
       && ((nullptr != obj_pool_ && nullptr == allocator_) || (nullptr == obj_pool_ && nullptr != allocator_));
 }
 
@@ -257,6 +297,7 @@ ObMetaObjGuard<T> &ObMetaObjGuard<T>::operator = (const ObMetaObjGuard<T> &other
     reset();
     obj_pool_ = other.obj_pool_;
     allocator_ = other.allocator_;
+    t3m_ = other.t3m_;
     if (nullptr != other.obj_) {
       if (OB_UNLIKELY(!other.is_valid())) {
         STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool and allocator is nullptr", K(other), KPC(this));
@@ -290,7 +331,9 @@ template <typename T>
 OB_INLINE void ObMetaObjGuard<T>::get_obj(ObMetaObj<T> &obj) const
 {
   obj.pool_ = obj_pool_;
+  obj.allocator_ = allocator_;
   obj.ptr_ = obj_;
+  obj.t3m_ = t3m_;
 }
 
 template <typename T>
@@ -310,7 +353,7 @@ void ObMetaObjGuard<T>::reset_obj()
       }
       if (0 == ref_cnt) {
         if (nullptr != obj_pool_) {
-          obj_pool_->release(obj_);
+          obj_pool_->free_obj(obj_);
         } else {
           STORAGE_LOG(DEBUG, "release obj from allocator", KP(obj_), KP(allocator_));
           obj_->reset();
@@ -321,11 +364,10 @@ void ObMetaObjGuard<T>::reset_obj()
         STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "obj ref cnt may be leaked", K(ref_cnt), KPC(this));
       }
       obj_ = nullptr;
+      t3m_ = nullptr;
     }
   }
-  hold_start_time_ = INT64_MAX;
 }
-
 } // end namespace storage
 } // end namespace oceanbase
 

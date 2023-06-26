@@ -14,6 +14,7 @@
 
 #include "ob_backup_task_scheduler.h"
 #include "ob_backup_service.h"
+#include "rootserver/ob_root_service.h"
 #include "lib/lock/ob_mutex.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/profile/ob_trace_id.h"
@@ -22,8 +23,14 @@
 #include "share/ob_rpc_struct.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "share/ob_srv_rpc_proxy.h"
-#include "share/ob_all_server_tracer.h"
+#include "share/ob_zone_table_operation.h"
+#include "share/ob_zone_info.h"
+#include "share/ob_unit_table_operator.h"
+#include "share/backup/ob_backup_server_mgr.h"
+#include "share/ob_srv_rpc_proxy.h"
+
 namespace oceanbase
+
 {
 using namespace common;
 using namespace lib;
@@ -35,18 +42,15 @@ ObBackupTaskSchedulerQueue::ObBackupTaskSchedulerQueue()
   : is_inited_(false),
     mutex_(common::ObLatchIds::BACKUP_LOCK),
     max_size_(0),
-    tenant_stat_map_(nullptr),
-    server_stat_map_(nullptr),
+    tenant_stat_map_("BackUpTMap"),
+    server_stat_map_("BackUpSMap"),
     task_allocator_(),
     wait_list_(),
     schedule_list_(),
     task_map_(),
     rpc_proxy_(nullptr),
     task_scheduler_(nullptr),
-    zone_mgr_(nullptr),
-    backup_service_(nullptr),
-    sql_proxy_(nullptr),
-    lease_service_(nullptr)
+    sql_proxy_(nullptr)
 {
 }
 
@@ -91,43 +95,40 @@ void ObBackupTaskSchedulerQueue::reset()
     }
   }
   task_map_.clear();
+  tenant_stat_map_.reuse();
+  server_stat_map_.reuse();
 }
 
 int ObBackupTaskSchedulerQueue::init(
-    ObTenantBackupScheduleTaskStatMap &tenant_stat_map,
-    ObServerBackupScheduleTaskStatMap &server_stat_map, 
-    ObZoneManager &zone_manager,
-	  ObBackupService &backup_service,
     const int64_t bucket_num, 
     obrpc::ObSrvRpcProxy *rpc_proxy,
     ObBackupTaskScheduler *task_scheduler,
 		const int64_t max_size,
-    common::ObMySQLProxy &sql_proxy,
-    ObBackupLeaseService &lease_service)
+    common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   const char *OB_BACKUP_TASK_SCHEDULER = "backupTaskScheduler";
+  const ObMemAttr attr(MTL_ID(), OB_BACKUP_TASK_SCHEDULER);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup scheduler queue init twice", K(ret));
   } else if (bucket_num <= 0 || nullptr == rpc_proxy || nullptr == task_scheduler) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(bucket_num), K(rpc_proxy), K(task_scheduler));
-  } else if (OB_FAIL(task_map_.create(bucket_num, OB_BACKUP_TASK_SCHEDULER))) {
+  } else if (OB_FAIL(tenant_stat_map_.init(ObBackupTaskScheduler::MAX_BACKUP_TASK_QUEUE_LIMIT))) {
+    LOG_WARN("init tenant stat failed", K(ret));
+  } else if (OB_FAIL(server_stat_map_.init(ObBackupTaskScheduler::MAX_BACKUP_TASK_QUEUE_LIMIT))) {
+    LOG_WARN("init server stat failed", K(ret));
+  } else if (OB_FAIL(task_map_.create(bucket_num, attr))) {
     LOG_WARN("fail to init task map", K(ret), K(bucket_num));
-  } else if (OB_FAIL(task_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                                          ObMemAttr(common::OB_SERVER_TENANT_ID, OB_BACKUP_TASK_SCHEDULER)))) {
+  } else if (OB_FAIL(task_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
     LOG_WARN("fail to init task allocator", K(ret));
   } else {
     max_size_ = max_size;
-    tenant_stat_map_ = &tenant_stat_map;
-    server_stat_map_ = &server_stat_map;
-    zone_mgr_ = &zone_manager;
+    task_allocator_.set_label(OB_BACKUP_TASK_SCHEDULER);
     rpc_proxy_ = rpc_proxy;
     task_scheduler_ = task_scheduler;
-	  backup_service_ = &backup_service;
     sql_proxy_ = &sql_proxy;
-    lease_service_ = &lease_service;
     is_inited_ = true;
   }
   return ret;
@@ -140,6 +141,7 @@ int ObBackupTaskSchedulerQueue::push_task(const ObBackupScheduleTask &task)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler queue not inited", K(ret));
+  } else if (task_scheduler_->has_set_stop()) {
   } else if (get_task_cnt_() >= max_size_) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("task scheduler queue is full, cant't push task", K(ret), K(get_task_cnt_()));
@@ -241,12 +243,12 @@ int ObBackupTaskSchedulerQueue::dump_statistics()
       get_wait_task_cnt_(),
       "executing_task_cnt",
       get_in_schedule_task_cnt_());
-    ObServerBackupScheduleTaskStatMap::HashTable::const_iterator sit = server_stat_map_->get_hash_table().begin();
-    for (; sit != server_stat_map_->get_hash_table().end(); ++sit) {
+    ObServerBackupScheduleTaskStatMap::HashTable::const_iterator sit = server_stat_map_.get_hash_table().begin();
+    for (; sit != server_stat_map_.get_hash_table().end(); ++sit) {
       LOG_INFO("server task", "stat", sit->v_);
     }
-    ObTenantBackupScheduleTaskStatMap::HashTable::const_iterator tit = tenant_stat_map_->get_hash_table().begin();
-    for (; tit != tenant_stat_map_->get_hash_table().end(); ++tit) {
+    ObTenantBackupScheduleTaskStatMap::HashTable::const_iterator tit = tenant_stat_map_.get_hash_table().begin();
+    for (; tit != tenant_stat_map_.get_hash_table().end(); ++tit) {
       LOG_INFO("tenant task", "stat", tit->v_);
     }
   }
@@ -316,23 +318,7 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, com
         LOG_WARN("set server stat faled", K(ret), K(dst));
       } else {
         wait_list_.remove(task);
-        bool is_valid = false;
-        if (OB_FAIL(lease_service_->check_lease())) {
-          LOG_WARN("fail to check lease", K(ret));
-        } else if (OB_FAIL(ObBackupDataScheduler::check_tenant_status(task_scheduler_->get_schema_service(), 
-            task->get_tenant_id(), is_valid))) {
-          LOG_WARN("fail to check tenant status", K(ret));
-        } else if (!is_valid) {
-    // TODO: remove this check tenant status when tenant thread is ready
-          // tenant has been dropped, so just remove the task from wait list, and don't add it into schedule list
-          int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = clean_server_ref_(dst, task->get_type()))) {
-            LOG_ERROR("fail to clean server ref", K(ret), KPC(task));
-          }
-          if (OB_SUCCESS != (tmp_ret = clean_tenant_ref_(task->get_tenant_id()))) {
-            LOG_ERROR("fail to clean tenant ref", K(ret), KPC(task));
-          }
-        } else if (OB_FAIL(task->update_dst_and_doing_status(*sql_proxy_))) {
+        if (OB_FAIL(task->update_dst_and_doing_status(*sql_proxy_))) {
           LOG_WARN("fail to update task dst in internal table", K(ret), KPC(task), K(dst));
         } else if (!schedule_list_.add_last(task)) { // This step must be successful
           ret = OB_ERR_UNEXPECTED;
@@ -381,7 +367,7 @@ int ObBackupTaskSchedulerQueue::get_backup_region_and_zone_(
     ObIArray<ObBackupRegion> &backup_region)
 {
   int ret = OB_SUCCESS;
-  // TODO(chongrong.th) redefine backup region and backup zone in 4.1
+  // TODO(chongrong.th) redefine backup region and backup zone in 4.3
   return ret;
 }
 
@@ -392,19 +378,22 @@ int ObBackupTaskSchedulerQueue::get_all_servers_(
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupZone> all_zones;
+  share::ObBackupServerMgr server_mgr;
   if (!servers.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(servers));
   } else if (OB_FAIL(get_all_zones_(backup_zone, backup_region, all_zones))) {
     LOG_WARN("failed to get all zones", K(ret), K(backup_zone), K(backup_region));
+  } else if (OB_FAIL(server_mgr.init(task_scheduler_->get_exec_tenant_id(), *sql_proxy_))) {
+    LOG_WARN("fail to init server operator", K(ret));
   } else {
+    const bool force_update = false;
     ObArray<ObAddr> tmp_server_list;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_zones.count(); ++i) {
       tmp_server_list.reuse();
       const ObZone &zone = all_zones.at(i).zone_;
       const int64_t priority = all_zones.at(i).priority_;
-      // **FIXME (linqiucen.lqc): temp. solution, this will be replaced when transfer branch is merged
-      if (OB_FAIL(SVR_TRACER.get_alive_servers(zone, tmp_server_list))) {
+      if (OB_FAIL(server_mgr.get_alive_servers(force_update, zone, tmp_server_list))) {
         LOG_WARN("failed to get alive servers", KR(ret), K(zone));
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < tmp_server_list.count(); ++j) {
@@ -429,6 +418,7 @@ int ObBackupTaskSchedulerQueue::get_all_zones_(
     ObIArray<ObBackupZone> &zones)
 {
   int ret = OB_SUCCESS;
+  ObArray<common::ObZone> zone_list;
   ObArray<ObZone> tmp_zones;
   if (!zones.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -441,7 +431,7 @@ int ObBackupTaskSchedulerQueue::get_all_zones_(
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_region.count(); ++i) {
       const ObRegion &region = backup_region.at(i).region_;
       const int64_t priority = backup_region.at(i).priority_;
-      if (OB_FAIL(zone_mgr_->get_zone(region, tmp_zones))) {
+      if (OB_FAIL(get_zone_list_from_region_(region, tmp_zones))) {
         LOG_WARN("fail to get zones", K(ret), K(region));
       } else {
         for (int j = 0; OB_SUCC(ret) && j < tmp_zones.count(); ++j) {
@@ -456,8 +446,8 @@ int ObBackupTaskSchedulerQueue::get_all_zones_(
       }
     }
   } else {
-    if (OB_FAIL(zone_mgr_->get_zone(tmp_zones))) {
-      LOG_WARN("failed to get zones", KR(ret));
+    if (OB_FAIL(get_tenant_zone_list_(task_scheduler_->get_exec_tenant_id(), tmp_zones))) {
+      LOG_WARN("fail to get zone list of tenant", K(ret), "tenant_id", task_scheduler_->get_exec_tenant_id());
     } else {
       // priority = 0 to express all the zone has the same priority
       int64_t priority = 0;
@@ -472,6 +462,61 @@ int ObBackupTaskSchedulerQueue::get_all_zones_(
       }
     }
   } 
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::get_zone_list_from_region_(const common::ObRegion &region, ObIArray<ObZone> &zone_list)
+{
+  int ret = OB_SUCCESS;
+  ObArray<common::ObZone> tmp_zone_list;
+  common::ObRegion tmp_region;
+  if (region.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("region is empty", K(region), K(ret));
+  } else if (OB_FAIL(get_tenant_zone_list_(task_scheduler_->get_exec_tenant_id(), tmp_zone_list))) {
+    LOG_WARN("fail to get zone list of tenant", K(ret), "tenant_id", task_scheduler_->get_exec_tenant_id());
+  }
+  SMART_VAR(share::ObZoneInfo, info) {
+    ARRAY_FOREACH_X(tmp_zone_list, i, cur, OB_SUCC(ret)) {
+      const common::ObZone &zone = tmp_zone_list.at(i);
+      info.reset();
+      info.zone_ = zone;
+      if (OB_FAIL(share::ObZoneTableOperation::load_zone_info(*sql_proxy_, info))) {
+        LOG_WARN("fail to load zone info", K(ret));
+      } else if (!info.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid zone info", K(ret), K(info));
+      } else if (OB_FAIL(info.get_region(tmp_region))) {
+        LOG_WARN("fail to get region", K(ret));
+      } else if (region == tmp_region) {
+        if (OB_FAIL(zone_list.push_back(zone))) {
+          LOG_WARN("fail to push backup zone", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::get_tenant_zone_list_(const uint64_t tenant_id, ObIArray<common::ObZone> &zone_list)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<share::ObUnit> units;
+  share::ObUnitTableOperator unit_op;
+  if (OB_FAIL(unit_op.init(*sql_proxy_))) {
+    LOG_WARN("fail to init unit table operator", K(ret));
+  } else if (OB_FAIL(unit_op.get_units_by_tenant(tenant_id, units))) {
+    LOG_WARN("fail to get units by tenant", K(ret), K(tenant_id));
+  } else if (units.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("units must not be empty", K(ret), K(tenant_id));
+  }
+  ARRAY_FOREACH_X(units, i, cur, OB_SUCC(ret)) {
+    const share::ObUnit &unit = units.at(i);
+    if (OB_FAIL(zone_list.push_back(unit.zone_))) {
+      LOG_WARN("fail to push back zone", K(ret), K(unit));
+    }
+  }
   return ret;
 }
 
@@ -591,7 +636,7 @@ int ObBackupTaskSchedulerQueue::check_server_can_become_dst_(
   ObServerBackupScheduleTaskStatMap::Item *server_stat = nullptr;
   if (OB_FAIL(key.init(server, type))) {
     LOG_WARN("fail to init ObBackupServerStatKey", K(ret));
-  } else if (OB_FAIL(server_stat_map_->locate(key, server_stat))) {
+  } else if (OB_FAIL(server_stat_map_.locate(key, server_stat))) {
     LOG_WARN("fail to get server stat item", K(ret), K(key));
   } else if (OB_UNLIKELY(nullptr == server_stat)) {
     ret = OB_ERR_UNEXPECTED;
@@ -617,7 +662,7 @@ int ObBackupTaskSchedulerQueue::set_server_stat_(const ObAddr &dst, const Backup
     LOG_WARN("fail to init ObBackupServerStatKey", K(ret), K(dst), K(type));
   } else {
     ObServerBackupScheduleTaskStatMap::Item *server_stat = NULL;
-    if (OB_FAIL(server_stat_map_->locate(key, server_stat))) {
+    if (OB_FAIL(server_stat_map_.locate(key, server_stat))) {
       LOG_WARN("fail to locate server stat", K(ret), K(key));
     } else if (OB_UNLIKELY(nullptr == server_stat)) {
       ret = OB_ERR_UNEXPECTED;
@@ -639,7 +684,7 @@ int ObBackupTaskSchedulerQueue::set_tenant_stat_(const int64_t &tenant_id)
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else {
     ObTenantBackupScheduleTaskStatMap::Item *tenant_stat = NULL;
-    if (OB_FAIL(tenant_stat_map_->locate(tenant_id, tenant_stat))) {
+    if (OB_FAIL(tenant_stat_map_.locate(tenant_id, tenant_stat))) {
       LOG_WARN("fail to locate tenant stat", K(ret), K(tenant_id));
     } else if (OB_UNLIKELY(nullptr == tenant_stat)) {
       ret = OB_ERR_UNEXPECTED;
@@ -664,7 +709,7 @@ int ObBackupTaskSchedulerQueue::clean_server_ref_(const ObAddr &dst, const Backu
     LOG_WARN("fail to init ObBackupServerStatKey", K(ret));
   } else {
     ObServerBackupScheduleTaskStatMap::Item *server_stat = NULL;
-    if (OB_FAIL(server_stat_map_->locate(key, server_stat))) {
+    if (OB_FAIL(server_stat_map_.locate(key, server_stat))) {
       LOG_ERROR("fail to locate server stat", K(ret), K(key));
     } else if (OB_UNLIKELY(nullptr == server_stat)) {
       ret = OB_ERR_UNEXPECTED;
@@ -686,7 +731,7 @@ int ObBackupTaskSchedulerQueue::clean_tenant_ref_(const int64_t &tenant_id)
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else {
     ObTenantBackupScheduleTaskStatMap::Item *tenant_stat = NULL;
-    if (OB_FAIL(tenant_stat_map_->locate(tenant_id, tenant_stat))) {
+    if (OB_FAIL(tenant_stat_map_.locate(tenant_id, tenant_stat))) {
       LOG_ERROR("fail to locate tenant stat", K(ret), K(tenant_id));
     } else if (nullptr == tenant_stat) {
       ret = OB_ERR_UNEXPECTED;
@@ -712,7 +757,7 @@ int ObBackupTaskSchedulerQueue::clean_task_map(const ObBackupScheduleTaskKey &ta
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::execute_over(const ObBackupScheduleTask &task, const int execute_ret)
+int ObBackupTaskSchedulerQueue::execute_over(const ObBackupScheduleTask &task, const share::ObHAResultInfo &result_info)
 {
   int ret = OB_SUCCESS;
   ObBackupScheduleTask *tmp_task = nullptr;
@@ -726,19 +771,20 @@ int ObBackupTaskSchedulerQueue::execute_over(const ObBackupScheduleTask &task, c
   } else if (!dst.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task's dst is not valid", K(ret), K(task));
-	} else if (OB_FAIL(backup_service_->get_job(task.get_type(), job))) {
-    LOG_WARN("failed to get task's job", K(ret));
+	} else if (OB_FAIL(task_scheduler_->get_backup_job(task.get_type(), job))) {
+    LOG_WARN("failed to get backup service", K(ret));
   } else if (nullptr == job) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("job is nullptr", K(ret), K(task));
   } else {
     ObMutexGuard guard(mutex_);
-    if (OB_FAIL(get_schedule_task_(task, tmp_task))) { // if task not exist in map ,tmp_task = nullptr
+    if (task_scheduler_->has_set_stop()) {
+    } else if (OB_FAIL(get_schedule_task_(task, tmp_task))) { // if task not exist in map ,tmp_task = nullptr
       LOG_WARN("get schedule task failed", K(ret));
     } else if (nullptr == tmp_task) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("in schedule list task not found", K(task));
-    } else if (OB_FAIL(job->handle_execute_over(tmp_task, can_remove, dst, execute_ret))) {
+    } else if (OB_FAIL(job->handle_execute_over(tmp_task, result_info, can_remove))) {
       LOG_WARN("failed to handle execute over", K(ret), K(task));
     } else if (!can_remove) {
     } else if (OB_FAIL(remove_task_(tmp_task, in_schedule))) {
@@ -1066,147 +1112,162 @@ int ObBackupTaskSchedulerQueue::get_schedule_tasks(
   return ret;
 }
 
-int64_t ObBackupSchedulerIdling::get_idle_interval_us()
-{
-  const int64_t backup_check_interval = GCONF._backup_idle_time;
-  return backup_check_interval;
-}
-
 // ObBackupTaskScheduler
 ObBackupTaskScheduler::ObBackupTaskScheduler()
-  : ObRsReentrantThread(true),
-    is_inited_(false),
-    idling_(stop_),
-    scheduler_mtx_(common::ObLatchIds::BACKUP_LOCK),
-    tenant_stat_map_(),
-    server_stat_map_(),
+  : is_inited_(false),
+    tenant_id_(OB_INVALID_TENANT_ID),
     queue_(),
-    self_(),
-    zone_mgr_(nullptr),
     rpc_proxy_(nullptr),
-    backup_service_(nullptr),
-    lease_service_(nullptr),
-    schema_service_(nullptr)
+    sql_proxy_(nullptr),
+    schema_service_(nullptr),
+    backup_srv_array_()
 {
+}
+
+int ObBackupTaskScheduler::mtl_init(ObBackupTaskScheduler *&backup_task_scheduler)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  obrpc::ObSrvRpcProxy *rpc_proxy = GCTX.srv_rpc_proxy_;
+  share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
+  } else if (OB_ISNULL(rpc_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scheam service can not be NULL", K(ret), KP(schema_service));
+  } else if (OB_FAIL(backup_task_scheduler->init(rpc_proxy, *sql_proxy, *schema_service))) {
+    LOG_WARN("fail to init backup_task_scheduler", K(ret));
+  }
+  return ret;
 }
 
 int ObBackupTaskScheduler::init(
-    ObZoneManager *zone_mgr,
     obrpc::ObSrvRpcProxy *rpc_proxy,
-	  ObBackupService *backup_mgr,
     common::ObMySQLProxy &sql_proxy,
-    ObBackupLeaseService &lease_service)
+    share::schema::ObMultiVersionSchemaService &schema_service)
 {
   int ret = OB_SUCCESS;
-  const int64_t backup_task_scheduler_thread_cnt = 1;
-  const char *BACKUPTASKSCHEDULER = "BackupTaskScheduler";
-  share::schema::ObMultiVersionSchemaService *service = GCTX.schema_service_;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(nullptr == rpc_proxy || nullptr == zone_mgr || nullptr == service)) {
+  } else if (OB_UNLIKELY(nullptr == rpc_proxy)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(rpc_proxy), K(zone_mgr));
-  } else if (OB_FAIL(create(backup_task_scheduler_thread_cnt, BACKUPTASKSCHEDULER))) {
-    LOG_WARN("create backup task scheduler thread failed", K(ret), K(backup_task_scheduler_thread_cnt));
+    LOG_WARN("invalid argument", K(ret), K(rpc_proxy));
+  } else if (OB_FAIL(create("BACKUP_SCHE", *this, ObWaitEventIds::BACKUP_TASK_SCHEDULER_COND_WAIT))) {
+    LOG_WARN("create backup task scheduler thread failed", K(ret));
   } else {
-    zone_mgr_ = zone_mgr;
+    tenant_id_ = MTL_ID();
     rpc_proxy_ = rpc_proxy;
-    backup_service_ = backup_mgr;
-    lease_service_ = &lease_service;
-    schema_service_ = service;
-    if (OB_FAIL(tenant_stat_map_.init(MAX_BACKUP_TASK_QUEUE_LIMIT))) {
-      LOG_WARN("init tenant stat failed", K(ret), LITERAL_K(MAX_BACKUP_TASK_QUEUE_LIMIT));
-    } else if (OB_FAIL(server_stat_map_.init(MAX_BACKUP_TASK_QUEUE_LIMIT))) {
-      LOG_WARN("init server stat failed", K(ret), LITERAL_K(MAX_BACKUP_TASK_QUEUE_LIMIT));
-    } else if (OB_FAIL(queue_.init(tenant_stat_map_, server_stat_map_,
-        *zone_mgr, *backup_mgr, MAX_BACKUP_TASK_QUEUE_LIMIT, rpc_proxy_, this, MAX_BACKUP_TASK_QUEUE_LIMIT, sql_proxy, lease_service))) {
+    schema_service_ = &schema_service;
+    if (OB_FAIL(queue_.init(MAX_BACKUP_TASK_QUEUE_LIMIT, rpc_proxy_, this, MAX_BACKUP_TASK_QUEUE_LIMIT, sql_proxy))) {
       LOG_WARN("init rebalance task queue failed", K(ret), LITERAL_K(MAX_BACKUP_TASK_QUEUE_LIMIT));
     } else {
+      sql_proxy_ = &sql_proxy;
       is_inited_ = true;
     }
   }
   return ret;
 }
 
-void ObBackupTaskScheduler::stop()
+void ObBackupTaskScheduler::destroy()
 {
-  int tmp_ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    tmp_ret = OB_NOT_INIT;
-    LOG_WARN_RET(tmp_ret, "not init", K(tmp_ret));
-  } else {
-    ObRsReentrantThread::stop();
-    idling_.wakeup();
-  }
-  LOG_INFO("Backup task scheduler stop", K(tmp_ret));
+  reuse();
+  rpc_proxy_ = nullptr;
+  sql_proxy_ = nullptr;
+  schema_service_ = nullptr;
+  is_inited_ = false;
+  ObBackupBaseService::destroy();
 }
 
-int ObBackupTaskScheduler::idle() const
+int ObBackupTaskScheduler::switch_to_leader()
 {
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(idling_.idle())) {
-    LOG_WARN("idle failed", K(ret));
-  } else {
-    LOG_INFO("backup scheduler idle", "idle_time", idling_.get_idle_interval_us());
-  }
+  reuse();
+  return ObBackupBaseService::switch_to_leader();
+}
+
+void ObBackupTaskScheduler::switch_to_follower_forcedly()
+{
+  ObBackupBaseService::switch_to_follower_forcedly();
+  reuse();
+}
+
+int ObBackupTaskScheduler::switch_to_follower_gracefully()
+{
+  int ret = ObBackupBaseService::switch_to_follower_gracefully();
+  reuse();
   return ret;
 }
 
-void ObBackupTaskScheduler::wakeup()
+int ObBackupTaskScheduler::resume_leader()
 {
-  int tmp_ret = OB_SUCCESS;
-  if (!is_inited_) {
-    tmp_ret = OB_NOT_INIT;
-    LOG_WARN_RET(tmp_ret, "not init", K(tmp_ret));
-  } else {
-    idling_.wakeup();
-  }
+  reuse();
+  return ObBackupBaseService::resume_leader();
 }
 
-void ObBackupTaskScheduler::run3()
+void ObBackupTaskScheduler::run2()
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("backup task Scheduler start");
   ObCurTraceId::init(GCONF.self_addr_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
+    LOG_INFO("backup task Scheduler start");
     int64_t last_dump_time = ObTimeUtility::current_time();
     int64_t last_check_alive_ts = ObTimeUtility::current_time();
     int64_t last_reload_task_ts = ObTimeUtility::current_time();
     bool reload_flag = false;
-    while (!stop_) {
-      update_last_run_timestamp();
-      dump_statistics_(last_dump_time);
-      if (OB_FAIL(lease_service_->check_lease())) {
-        LOG_WARN("fail to check lease", K(ret));
-      } else if (OB_FAIL(reload_task_(last_reload_task_ts, reload_flag))) {
-        LOG_WARN("failed to reload task", K(ret));
-      } else {
-        // error code has no effect between pop_and_send_task() and check_alive()
-        if (OB_FAIL(pop_and_send_task_())) {
-          LOG_WARN("fail to pop and send task", K(ret));
-        }
-        if (OB_FAIL(check_alive_(last_check_alive_ts, reload_flag))) {
-          LOG_WARN("fail to check alive", K(ret));
-        }
-      }
-
-      if (0 == queue_.get_task_cnt()) {
-        if (OB_FAIL(idle())) {
-          LOG_WARN("idle failed", K(ret));
+    while (!has_set_stop()) {
+      bool is_normal = false;
+      if (!is_meta_tenant(tenant_id_)) { // only meta tenant has backup task need to schedule
+        set_idle_time(ObBackupBaseService::OB_MAX_IDLE_TIME);
+        idle();
+      } else if (OB_FAIL(check_tenant_status_normal_(is_normal))) {
+        LOG_WARN("fail to chaeck tenant status normal", K(ret));
+      } else if (is_normal) {
+        dump_statistics_(last_dump_time);
+        if (OB_FAIL(check_leader())) {
+          LOG_WARN("fail to check leader", K(ret));
+        } else if (OB_FAIL(reload_task_(last_reload_task_ts, reload_flag))) {
+          LOG_WARN("failed to reload task", K(ret));
         } else {
-          continue;
+          // error code has no effect between pop_and_send_task() and check_alive()
+          if (OB_FAIL(pop_and_send_task_())) {
+            LOG_WARN("fail to pop and send task", K(ret));
+          }
+          if (OB_FAIL(check_alive_(last_check_alive_ts, reload_flag))) {
+            LOG_WARN("fail to check alive", K(ret));
+          }
+        }
+
+        if (0 == queue_.get_task_cnt()) {
+          set_idle_time(60*1000*1000);
+          idle();
         }
       }
     }
+    LOG_INFO("backup task scheduler stop");
   }
-  LOG_INFO("backup task scheduler stop");
+}
+
+int ObBackupTaskScheduler::check_tenant_status_normal_(bool &is_normal)
+{
+  int ret = OB_SUCCESS;
+  is_normal = false;
+  share::schema::ObSchemaGetterGuard guard;
+  const share::schema::ObSimpleTenantSchema *tenant_info = nullptr;
+  if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id_, tenant_info))) {
+    LOG_WARN("fail to get tenant info", K(ret), K(tenant_id_));
+  } else if (tenant_info->is_normal()) {
+    is_normal = true;
+  }
+  return ret;
 }
 
 int ObBackupTaskScheduler::reload_task_(int64_t &last_reload_task_ts, bool &reload_flag)
@@ -1216,32 +1277,41 @@ int ObBackupTaskScheduler::reload_task_(int64_t &last_reload_task_ts, bool &relo
   const int64_t MAX_CHECK_TIME_INTERVAL = 10 * 60 * 1000 * 1000L;
   common::ObArenaAllocator allocator;
   ObArray<ObBackupScheduleTask *> need_reload_tasks;
-  if (!backup_service_->can_schedule() || now > MAX_CHECK_TIME_INTERVAL + last_reload_task_ts) {
-    if (OB_FAIL(backup_service_->get_need_reload_task(allocator, need_reload_tasks))) {
-      LOG_WARN("failed to get need reload tasks", K(ret));
-    } else if (need_reload_tasks.empty()) {
-    } else if (OB_FAIL(queue_.reload_task(need_reload_tasks))) {
-      LOG_WARN("failed to reload task", K(ret), K(need_reload_tasks));
-    } else {
-      LOG_INFO("succeed reload tasks", K(need_reload_tasks));
-    }
+  reload_flag = false;
+  ARRAY_FOREACH(backup_srv_array_, i) {
+    need_reload_tasks.reset();
+    ObBackupService *backup_service = backup_srv_array_.at(i);
+    if (!backup_service->can_schedule() || now > MAX_CHECK_TIME_INTERVAL + last_reload_task_ts) {
+      if (OB_FAIL(backup_service->get_need_reload_task(allocator, need_reload_tasks))) {
+        LOG_WARN("failed to get need reload tasks", K(ret));
+      } else if (need_reload_tasks.empty()) {
+      } else if (OB_FAIL(queue_.reload_task(need_reload_tasks))) {
+        LOG_WARN("failed to reload task", K(ret), K(need_reload_tasks));
+      } else {
+        LOG_INFO("succeed reload tasks", K(need_reload_tasks));
+      }
 
-    if (OB_SUCC(ret)) {
-      backup_service_->enable_backup();
-      last_reload_task_ts = now;
-      reload_flag = true;
-      backup_service_->wakeup();
-    } else {
-      backup_service_->disable_backup();
-    }
-    for (int j = 0; j < need_reload_tasks.count(); ++j) {
-      ObBackupScheduleTask *task = need_reload_tasks.at(j);
-      if (nullptr != task) {
-        task->~ObBackupScheduleTask();
-        task = nullptr;
+      if (OB_SUCC(ret)) {
+        backup_service->enable_backup();
+        last_reload_task_ts = now;
+        reload_flag = true;
+        backup_service->wakeup();
+      } else {
+        reload_flag = false;
+        backup_service->disable_backup();
+      }
+      ARRAY_FOREACH(need_reload_tasks, i) {
+        ObBackupScheduleTask *task = need_reload_tasks.at(i);
+        if (nullptr != task) {
+          task->~ObBackupScheduleTask();
+          task = nullptr;
+        }
       }
     }
-  } 
+  }
+  if (OB_SUCC(ret) && reload_flag) {
+    last_reload_task_ts = now;
+  }
   return ret;
 }
 
@@ -1271,13 +1341,18 @@ int ObBackupTaskScheduler::check_alive_(int64_t &last_check_task_on_server_ts, b
   int ret = OB_SUCCESS;
   ObArray<ObBackupScheduleTask *> schedule_tasks;
   ObArenaAllocator allocator;
+  share::ObBackupServerMgr server_mgr;
+  ObServerStatus server_status;
   Bool res = false;
+  bool force_update = false;
   const int64_t now = ObTimeUtility::current_time();
   const int64_t backup_task_keep_alive_interval = GCONF._backup_task_keep_alive_interval;
   const int64_t backup_task_keep_alive_timeout = GCONF._backup_task_keep_alive_timeout;
   if ((now <= backup_task_keep_alive_interval + last_check_task_on_server_ts) && !reload_flag) {
   } else if (OB_FAIL(queue_.get_schedule_tasks(schedule_tasks, allocator))) {
     LOG_WARN("get scheduelr tasks error", K(ret));
+  } else if (OB_FAIL(server_mgr.init(get_exec_tenant_id(), *sql_proxy_))) {
+    LOG_WARN("fail to init server mgr", K(ret));
   } else {
     last_check_task_on_server_ts = now;
     for (int64_t i = 0; OB_SUCC(ret) && i < schedule_tasks.count(); ++i) {
@@ -1290,15 +1365,13 @@ int ObBackupTaskScheduler::check_alive_(int64_t &last_check_task_on_server_ts, b
       check_task_arg.trace_id_ = task->get_trace_id();
       if ((now - task->get_generate_time() < backup_task_keep_alive_interval) && !reload_flag) {
         // no need to check alive, wait next turn
-      // **FIXME (linqiucen.lqc): temp. solution, this will be replaced when transfer branch is merged
-      } else if (OB_FAIL(SVR_TRACER.is_server_exist(dst, is_exist))) {
+      } else if (OB_FAIL(server_mgr.is_server_exist(dst, force_update, is_exist))) {
         LOG_WARN("fail to check server exist", K(ret), K(dst));
       } else if (!is_exist) {
         LOG_WARN("backup dest server is not exist", K(ret), K(dst));
-      // **FIXME (linqiucen.lqc): temp. solution, this will be replaced when transfer branch is merged
-      } else if (OB_FAIL(SVR_TRACER.get_server_info(dst, server_info))) {
-        LOG_WARN("fail to get server_info", K(ret), K(dst));
-      } else if (!server_info.is_active() || !server_info.in_service()) {
+      } else if (OB_FAIL(server_mgr.get_server_status(dst, force_update, server_status))) {
+        LOG_WARN("fail to get server status", K(ret), K(dst));
+      } else if (!server_status.is_active() || !server_status.in_service()) {
         is_exist = false;
         LOG_WARN("server status may not active or in service", K(ret), K(dst));
       } else if (OB_FAIL(rpc_proxy_->to(dst).check_backup_task_exist(check_task_arg, res))) {
@@ -1312,7 +1385,11 @@ int ObBackupTaskScheduler::check_alive_(int64_t &last_check_task_on_server_ts, b
       if (!is_exist) {
         LOG_INFO("task not on server, need remove", KPC(task));
         const int rc = OB_REBALANCE_TASK_NOT_IN_PROGRESS;
-        if (OB_FAIL(execute_over(*task, rc))) {
+        ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE,
+                                   task->get_dst(),
+                                   task->get_trace_id(),
+                                   rc);
+        if (OB_FAIL(execute_over(*task, result_info))) {
           LOG_WARN("do execute over failed", K(ret), KPC(task));
         }
       }
@@ -1334,7 +1411,6 @@ int ObBackupTaskScheduler::check_alive_(int64_t &last_check_task_on_server_ts, b
 int ObBackupTaskScheduler::execute_task_(const ObBackupScheduleTask &task)
 {
   int ret = OB_SUCCESS;
-  ObCurTraceId::init(self_);
   THIS_WORKER.set_timeout_ts(INT64_MAX);
   LOG_INFO("execute task", K(task));
   if (OB_FAIL(do_execute_(task))) {
@@ -1342,18 +1418,22 @@ int ObBackupTaskScheduler::execute_task_(const ObBackupScheduleTask &task)
   }
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = execute_over(task, ret))) {
-      LOG_WARN("do execute over failed", K(tmp_ret), K(ret), K(task));
+    ObHAResultInfo result_info(ObHAResultInfo::ROOT_SERVICE,
+                               task.get_dst(),
+                               task.get_trace_id(),
+                               ret);
+    if (OB_SUCCESS != (tmp_ret = execute_over(task, result_info))) {
+      LOG_WARN("do execute over failed", K(tmp_ret), K(result_info), K(task));
     }
   }
   return ret;
 }
 
-int ObBackupTaskScheduler::execute_over(const ObBackupScheduleTask &input_task, const int &execute_ret)
+int ObBackupTaskScheduler::execute_over(const ObBackupScheduleTask &input_task, const share::ObHAResultInfo &result_info)
 {
   int ret = OB_SUCCESS;
-	if (OB_FAIL(queue_.execute_over(input_task, execute_ret))) {
-    LOG_WARN("remove task failed", K(ret), K(input_task), K(execute_ret));
+  if (OB_FAIL(queue_.execute_over(input_task, result_info))) {
+    LOG_WARN("failed to execute over", K(ret), K(result_info));
   } else {
     wakeup();
   }
@@ -1377,21 +1457,23 @@ int ObBackupTaskScheduler::do_execute_(const ObBackupScheduleTask &task)
   int ret = OB_SUCCESS;
   // check dst server avaiable
   const ObAddr &online_server = task.get_dst();
-  bool is_alive = false;
+  bool is_exist = false;
   bool in_service = false;
-  common::ObAddr leader;
-  // **FIXME (linqiucen.lqc): temp. solution, this will be replaced when transfer branch is merged
-  if (OB_FAIL(SVR_TRACER.check_server_alive(online_server, is_alive))) {
+  const bool force_update = false;
+  share::ObBackupServerMgr server_mgr;
+  share::ObServerStatus server_status;
+  if (OB_FAIL(server_mgr.init(get_exec_tenant_id(), *sql_proxy_))) {
+    LOG_WARN("fail to init server mgr", K(ret));
+  } else if (OB_FAIL(server_mgr.is_server_exist(online_server, force_update, is_exist))) {
     LOG_WARN("check server alive failed", K(ret), K(online_server));
-  } else if (!is_alive) {
+  } else if (!is_exist) {
     ret = OB_REBALANCE_TASK_CANT_EXEC;
-    LOG_WARN("dst server not alive", K(ret), K(online_server));
-  // **FIXME (linqiucen.lqc): temp. solution, this will be replaced when transfer branch is merged
-  } else if (OB_FAIL(SVR_TRACER.check_in_service(online_server, in_service))) {
-    LOG_WARN("check in service failed", K(ret), K(online_server));
-  } else if (!in_service) {
+    LOG_WARN("dst server not exist", K(ret), K(online_server));
+  } else if (OB_FAIL(server_mgr.get_server_status(online_server, force_update, server_status))) {
+    LOG_WARN("fail to get server status", K(ret), K(online_server));
+  } else if (!server_status.is_active() || !server_status.in_service()) {
     ret = OB_REBALANCE_TASK_CANT_EXEC;
-    LOG_WARN("dst server not in service", K(ret), K(online_server));
+    LOG_WARN("server status may not active or in service, task can't execute", K(ret), K(online_server));
   } else if (OB_UNLIKELY(nullptr == rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), KP(rpc_proxy_));
@@ -1465,10 +1547,48 @@ int ObBackupTaskScheduler::reuse()
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
-    ObMutexGuard guard(scheduler_mtx_);
     queue_.reset();
-    server_stat_map_.reuse();
-    tenant_stat_map_.reuse();
+  }
+  return ret;
+}
+
+int ObBackupTaskScheduler::get_backup_job(const BackupJobType &type, ObIBackupJobScheduler *&job)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(scheduler_mtx_);
+  ARRAY_FOREACH(backup_srv_array_, i) {
+    ObBackupService *srv = backup_srv_array_.at(i);
+    if (OB_ISNULL(srv)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("backup service must not be null", K(ret));
+    } else if (OB_NOT_NULL(job = srv->get_scheduler(type))) {
+      if (job->get_job_type() != type) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("backup job not match job type", K(ret));
+      } else {
+        break;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    job = nullptr;
+  }
+  return ret;
+}
+
+int ObBackupTaskScheduler::register_backup_srv(ObBackupService &srv)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(scheduler_mtx_);
+  ARRAY_FOREACH(backup_srv_array_, i) {
+    if (&srv == backup_srv_array_.at(i)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("duplicate register", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(backup_srv_array_.push_back(&srv))) {
+    LOG_WARN("failed to push backup backup service", K(ret));
   }
   return ret;
 }

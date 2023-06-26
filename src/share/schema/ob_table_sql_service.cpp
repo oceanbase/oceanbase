@@ -30,7 +30,6 @@
 #include "observer/ob_server_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_trigger_sql_service.h"
-#include "share/backup/ob_backup_info_mgr.h"
 #include "rootserver/ob_root_service.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/ob_sql_utils.h"

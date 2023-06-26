@@ -229,6 +229,7 @@ int ObDropIndexTask::drop_index_impl()
   } else if (OB_FAIL(drop_index_sql.assign(drop_index_arg_.ddl_stmt_str_))) {
     LOG_WARN("assign user drop index sql failed", K(ret));
   } else {
+    int64_t ddl_rpc_timeout = 0;
     obrpc::ObDropIndexArg drop_index_arg;
     obrpc::ObDropIndexRes drop_index_res;
     drop_index_arg.tenant_id_         = tenant_id_;
@@ -241,8 +242,11 @@ int ObDropIndexTask::drop_index_impl()
     drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
     drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
     drop_index_arg.is_add_to_scheduler_ = false;
-    if (OB_FAIL(root_service_->get_common_rpc_proxy().drop_index(drop_index_arg, drop_index_res))) {
-      LOG_WARN("drop index failed", K(ret));
+    drop_index_arg.task_id_           = task_id_;
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
+      LOG_WARN("failed to get ddl rpc timeout", K(ret));
+    } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout).drop_index(drop_index_arg, drop_index_res))) {
+      LOG_WARN("drop index failed", K(ret), K(ddl_rpc_timeout));
     }
     LOG_INFO("drop index", K(ret), K(drop_index_sql.ptr()), K(drop_index_arg));
   }

@@ -258,7 +258,7 @@ int ObMultiSourceData::save_multi_source_data_unit(const T *const src, bool is_c
       if (units_[pos]->get_data_size() < data_size) {
         ret = common::OB_SIZE_OVERFLOW;
         TRANS_LOG(WARN, "no enough space to update multi_data_source_unit", K(ret), KP(src), K(pos));
-      } else if (OB_FAIL(units_[pos]->deep_copy_unit(src))) {
+      } else if (OB_FAIL(units_[pos]->deep_copy_unit(src, &allocator_))) {
         TRANS_LOG(WARN, "fail to deep copy to update data", K(ret), KP(src), KP(units_[pos]), K(pos));
       }
     }

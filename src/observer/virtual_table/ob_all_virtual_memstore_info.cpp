@@ -30,7 +30,7 @@ ObAllVirtualMemstoreInfo::ObAllVirtualMemstoreInfo()
     addr_(),
     ls_id_(share::ObLSID::INVALID_LS_ID),
     ls_iter_guard_(),
-    ls_tablet_iter_(),
+    ls_tablet_iter_(ObMDSGetTabletMode::READ_READABLE_COMMITED),
     tables_handle_(),
     memtable_array_pos_(0)
 {
@@ -343,36 +343,6 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
         case OB_APP_MIN_COLUMN_ID + 24: {
           // compaction info list
           cur_row_.cells_[i].set_varchar("-");
-          if (mt->is_data_memtable()) {
-            if (mt->has_multi_source_data_unit(MultiSourceDataUnitType::MEDIUM_COMPACTION_INFO)) {
-              int64_t pos = 0;
-              compaction::ObMediumCompactionInfo medium_info;
-              ObMultiSourceData::ObIMultiSourceDataUnitList dst_list;
-              if (OB_SUCC(mt->get_multi_source_data_unit_list(&medium_info, dst_list, allocator_))) {
-                int k = 0;
-                DLIST_FOREACH_X(info, dst_list, OB_SUCC(ret)) {
-                  common::databuff_printf(
-                      compaction_info_buf_,
-                      sizeof(compaction_info_buf_),
-                      pos,
-                      "medium%d_%ld,",
-                      k++,
-                      static_cast<const compaction::ObMediumCompactionInfo*>(info)->medium_snapshot_);
-                }
-                if (OB_SUCC(ret)) {
-                  cur_row_.cells_[i].set_varchar(compaction_info_buf_);
-                }
-              }
-
-
-              DLIST_FOREACH_REMOVESAFE_NORET(info, dst_list) {
-                dst_list.remove(info);
-                info->~ObIMultiSourceDataUnit();
-                allocator_->free(info);
-              }
-              COMMON_LOG(DEBUG, "medium_list", K(dst_list), K(cur_row_.cells_[i]));
-            }
-          }
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }

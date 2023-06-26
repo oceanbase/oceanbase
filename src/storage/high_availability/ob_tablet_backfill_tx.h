@@ -19,6 +19,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "ob_storage_ha_dag.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/memtable/ob_multi_source_data.h"
 
 namespace oceanbase
 {
@@ -69,7 +70,7 @@ class ObTabletBackfillTXDag : public ObStorageHADag
 public:
   ObTabletBackfillTXDag();
   virtual ~ObTabletBackfillTXDag();
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual bool operator == (const share::ObIDag &other) const override;
@@ -106,13 +107,21 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
   virtual int process() override;
-  VIRTUAL_TO_STRING_KV(K("ObTabletBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
+  VIRTUAL_TO_STRING_KV(K("ObTabletBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_), K_(tablet_id));
 private:
   int generate_backfill_tx_task_();
   int generate_table_backfill_tx_task_(
       ObFinishTabletBackfillTXTask *finish_tablet_backfill_tx_task,
-      common::ObIArray<ObITable *> &table_array);
-
+      common::ObIArray<ObTableHandleV2> &table_array);
+  int get_backfill_tx_memtables_(
+      ObTablet *tablet,
+      common::ObIArray<ObTableHandleV2> &table_array);
+  int get_backfill_tx_minor_sstables_(
+      ObTablet *tablet,
+      common::ObIArray<ObTableHandleV2> &minor_sstables);
+  int get_all_backfill_tx_tables_(
+      ObTablet *tablet,
+      common::ObIArray<ObTableHandleV2> &table_array);
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
@@ -136,9 +145,14 @@ public:
   VIRTUAL_TO_STRING_KV(K("ObTabletBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
 private:
   int prepare_merge_ctx_();
+  int check_need_merge_(bool &need_merge);
   int do_backfill_tx_();
   int prepare_partition_merge_();
   int update_merge_sstable_();
+  int read_msd_from_memtable_(ObUpdateTableStoreParam &param);
+  int traverse_frozen_memtable_(
+      const memtable::MultiSourceDataUnitType &type,
+      memtable::ObIMultiSourceDataUnit *msd);
 
 private:
   bool is_inited_;
@@ -179,7 +193,7 @@ class ObFinishBackfillTXDag : public ObStorageHADag
 public:
   ObFinishBackfillTXDag();
   virtual ~ObFinishBackfillTXDag();
-  virtual int fill_comment(char *buf, const int64_t buf_len) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator == (const share::ObIDag &other) const override;
   virtual int64_t hash() const override;
@@ -188,15 +202,11 @@ public:
   int init(
       const share::ObTaskId &task_id,
       const share::ObLSID &ls_id,
-      const share::SCN log_sync_scn,
+      const share::SCN &log_sync_scn,
+      ObArray<common::ObTabletID> &tablet_id_array,
       ObIHADagNetCtx *ha_dag_net_ctx);
   ObBackfillTXCtx *get_backfill_tx_ctx() { return &backfill_tx_ctx_; }
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
-protected:
-  int prepare_backfill_tx_ctx_(
-      const share::ObTaskId &task_id,
-      const share::ObLSID &ls_id,
-      const share::SCN log_sync_scn);
 
 protected:
   bool is_inited_;

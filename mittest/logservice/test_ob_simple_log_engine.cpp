@@ -467,7 +467,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_1, leader_idx_1, leader_1));
   EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx_1, palf_env));
 
-  LogIOWorker *log_io_worker = leader_1.palf_handle_impl_->log_engine_.log_io_worker_;;
+  LogIOWorker *log_io_worker = leader_1.palf_handle_impl_->log_engine_.log_io_worker_;
 
   int64_t prev_log_id_1 = 0;
   int64_t prev_has_batched_size = 0;
@@ -520,7 +520,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   IOTaskVerify io_task_verify_2(id_2, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_2, leader_idx_2, leader_2));
   {
-    LogIOWorker *log_io_worker = leader_2.palf_handle_impl_->log_engine_.log_io_worker_;;
+    LogIOWorker *log_io_worker = leader_2.palf_handle_impl_->log_engine_.log_io_worker_;
     // 聚合度为1的忽略
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_2));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_1, 1, id_1, 110));
@@ -589,7 +589,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   IOTaskVerify io_task_verify_3(id_3, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_3, leader_idx_3, leader_3));
   {
-    LogIOWorker *log_io_worker = leader_3.palf_handle_impl_->log_engine_.log_io_worker_;;
+    LogIOWorker *log_io_worker = leader_3.palf_handle_impl_->log_engine_.log_io_worker_;
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_3));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_1, 1, id_1, 110));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_2, 1, id_2, 110));
@@ -637,7 +637,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   IOTaskVerify io_task_verify_4(id_4, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_4, leader_idx_4, leader_4));
   {
-    LogIOWorker *log_io_worker = leader_4.palf_handle_impl_->log_engine_.log_io_worker_;;
+    LogIOWorker *log_io_worker = leader_4.palf_handle_impl_->log_engine_.log_io_worker_;
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_4));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_4, 10, id_4, 110));
     sleep(1);
@@ -673,7 +673,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   TruncateLogCbCtx ctx(LSN(0));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_5, leader_idx_5, leader_5));
   {
-    LogIOWorker *log_io_worker = leader_5.palf_handle_impl_->log_engine_.log_io_worker_;;
+    LogIOWorker *log_io_worker = leader_5.palf_handle_impl_->log_engine_.log_io_worker_;
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_5));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_5, 10, id_5, 110));
     LSN max_lsn = leader_5.palf_handle_impl_->sw_.get_max_lsn();
@@ -701,7 +701,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
    IOTaskVerify io_task_verify_6(id_6, log_engine->palf_epoch_);
    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_6, leader_idx_6, leader_6));
    {
-      LogIOWorker *log_io_worker = leader_6.palf_handle_impl_->log_engine_.log_io_worker_;;
+      LogIOWorker *log_io_worker = leader_6.palf_handle_impl_->log_engine_.log_io_worker_;
      {
        EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 15, id_6, MAX_LOG_BODY_SIZE));
        sleep(2);

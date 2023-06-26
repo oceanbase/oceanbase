@@ -79,7 +79,7 @@ bool ObSSTableMacroBlockHeader::is_valid() const
 
 ObSSTableMacroBlockHeader::FixedHeader::FixedHeader()
   : header_size_(0),
-    version_(SSTABLE_MACRO_BLOCK_HEADER_VERSION_V1),
+    version_(SSTABLE_MACRO_BLOCK_HEADER_VERSION_V2),
     magic_(SSTABLE_MACRO_BLOCK_HEADER_MAGIC),
     tablet_id_(ObTabletID::INVALID_TABLET_ID),
     logical_version_(0),
@@ -107,7 +107,8 @@ ObSSTableMacroBlockHeader::FixedHeader::FixedHeader()
 bool ObSSTableMacroBlockHeader::FixedHeader::is_valid() const
 {
   return header_size_ > 0
-      && SSTABLE_MACRO_BLOCK_HEADER_VERSION_V1 == version_
+      && SSTABLE_MACRO_BLOCK_HEADER_VERSION_V1 <= version_
+      && SSTABLE_MACRO_BLOCK_HEADER_VERSION_V2 >= version_
       && SSTABLE_MACRO_BLOCK_HEADER_MAGIC == magic_
       && 0 != tablet_id_
       && logical_version_ >= 0
@@ -128,7 +129,7 @@ bool ObSSTableMacroBlockHeader::FixedHeader::is_valid() const
 void ObSSTableMacroBlockHeader::FixedHeader::reset()
 {
   header_size_ = 0;
-  version_ = SSTABLE_MACRO_BLOCK_HEADER_VERSION_V1;
+  version_ = SSTABLE_MACRO_BLOCK_HEADER_VERSION_V2;
   magic_ = SSTABLE_MACRO_BLOCK_HEADER_MAGIC;
   tablet_id_ = ObTabletID::INVALID_TABLET_ID;
   logical_version_ = 0;
@@ -168,18 +169,19 @@ int ObSSTableMacroBlockHeader::serialize(char *buf, const int64_t buf_len, int64
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("macro block header is invalid", K(ret), K(*this));
   } else {
+    const int64_t col_type_array_cnt = fixed_header_.get_col_type_array_cnt();
     int64_t tmp_pos = pos;
     FixedHeader *fixed_header = reinterpret_cast<FixedHeader *>(buf + tmp_pos);
     *fixed_header = fixed_header_;
     tmp_pos += get_fixed_header_size();
     if (buf + tmp_pos != reinterpret_cast<char *>(column_types_)) {
-      MEMCPY(buf + tmp_pos, column_types_, fixed_header_.column_count_ * sizeof(ObObjMeta));
+      MEMCPY(buf + tmp_pos, column_types_, col_type_array_cnt * sizeof(ObObjMeta));
     }
-    tmp_pos += fixed_header_.column_count_ * sizeof(ObObjMeta);
+    tmp_pos += col_type_array_cnt * sizeof(ObObjMeta);
     if (buf + tmp_pos != reinterpret_cast<char *>(column_orders_)) {
-      MEMCPY(buf + tmp_pos, column_orders_, fixed_header_.column_count_ * sizeof(ObOrderType));
+      MEMCPY(buf + tmp_pos, column_orders_, col_type_array_cnt * sizeof(ObOrderType));
     }
-    tmp_pos += fixed_header_.column_count_ * sizeof(ObOrderType);
+    tmp_pos += col_type_array_cnt * sizeof(ObOrderType);
     if (buf + tmp_pos != reinterpret_cast<char *>(column_checksum_)) {
       MEMCPY(buf + tmp_pos, column_checksum_, fixed_header_.column_count_ * sizeof(int64_t));
     }
@@ -208,15 +210,16 @@ int ObSSTableMacroBlockHeader::deserialize(const char *buf, const int64_t data_l
     int64_t tmp_pos = pos;
     const FixedHeader *fixed_header = reinterpret_cast<const FixedHeader *>(buf + tmp_pos);
     fixed_header_ = *fixed_header;
+    const int64_t col_type_array_cnt = fixed_header_.get_col_type_array_cnt();
     tmp_pos += get_fixed_header_size();
     if (buf + tmp_pos != reinterpret_cast<char *>(column_types_)) {
       column_types_ = reinterpret_cast<ObObjMeta *>(const_cast<char *>(buf + tmp_pos));
     }
-    tmp_pos += fixed_header_.column_count_ * sizeof(ObObjMeta);
+    tmp_pos += col_type_array_cnt * sizeof(ObObjMeta);
     if (buf + tmp_pos != reinterpret_cast<char *>(column_orders_)) {
       column_orders_ = reinterpret_cast<ObOrderType *>(const_cast<char *>(buf + tmp_pos));
     }
-    tmp_pos += fixed_header_.column_count_ * sizeof(ObOrderType);
+    tmp_pos += col_type_array_cnt * sizeof(ObOrderType);
     if (buf + tmp_pos != reinterpret_cast<char *>(column_checksum_)) {
       column_checksum_ = reinterpret_cast<int64_t *>(const_cast<char *>(buf + tmp_pos));
     }
@@ -238,7 +241,8 @@ int ObSSTableMacroBlockHeader::deserialize(const char *buf, const int64_t data_l
 
 int64_t ObSSTableMacroBlockHeader::get_serialize_size() const
 {
-  return get_fixed_header_size() + get_variable_size_in_header(fixed_header_.column_count_);
+  return get_fixed_header_size() + get_variable_size_in_header(
+    fixed_header_.column_count_, fixed_header_.rowkey_column_count_, fixed_header_.version_);
 }
 
 int64_t ObSSTableMacroBlockHeader::get_fixed_header_size()
@@ -246,10 +250,14 @@ int64_t ObSSTableMacroBlockHeader::get_fixed_header_size()
   return sizeof(FixedHeader);
 }
 
-int64_t ObSSTableMacroBlockHeader::get_variable_size_in_header(const int64_t column_cnt)
+int64_t ObSSTableMacroBlockHeader::get_variable_size_in_header(
+    const int64_t column_cnt,
+    const int64_t rowkey_col_cnt,
+    const uint16_t version)
 {
-  return column_cnt * sizeof(ObObjMeta) /* ObObjMeta */
-       + column_cnt * sizeof(ObOrderType) /* column orders */
+  const int64_t col_type_array_cnt = SSTABLE_MACRO_BLOCK_HEADER_VERSION_V2 == version ? rowkey_col_cnt : column_cnt;
+  return col_type_array_cnt * sizeof(ObObjMeta) /* ObObjMeta */
+       + col_type_array_cnt * sizeof(ObOrderType) /* column orders */
        + column_cnt * sizeof(int64_t) /* column checksum */;
 }
 
@@ -270,8 +278,9 @@ int ObSSTableMacroBlockHeader::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(desc), KP(col_types), KP(col_orders), KP(col_checksum));
   } else {
+    fixed_header_.version_ = desc.get_fixed_header_version();
     fixed_header_.header_size_ = static_cast<int32_t>(get_fixed_header_size()
-        + get_variable_size_in_header(desc.row_column_count_));
+        + get_variable_size_in_header(desc.row_column_count_, desc.rowkey_column_count_, fixed_header_.version_));
     fixed_header_.tablet_id_ = desc.tablet_id_.id();
     fixed_header_.logical_version_ = desc.get_logical_version();
     fixed_header_.column_count_ =  static_cast<int32_t>(desc.row_column_count_);
@@ -287,9 +296,18 @@ int ObSSTableMacroBlockHeader::init(
     column_types_ = col_types;
     column_orders_ = col_orders;
     column_checksum_ = col_checksum;
-    for (int64_t i = 0; i < fixed_header_.column_count_; ++i) {
-      column_types_[i] = desc.col_desc_array_.at(i).col_type_;
-      column_orders_[i] = desc.col_desc_array_.at(i).col_order_;
+
+
+    const ObIArray<share::schema::ObColDesc> &col_descs = desc.is_major_merge() ? desc.get_full_stored_col_descs() :desc.get_rowkey_col_descs();
+    const int64_t col_descs_cnt = fixed_header_.get_col_type_array_cnt();
+    if (OB_UNLIKELY(col_descs_cnt > col_descs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col desc array is unexpected invalid", K(ret), K(col_descs_cnt), K(desc));
+    } else {
+      for (int64_t i = 0; i < col_descs_cnt; ++i) {
+        column_types_[i] = col_descs.at(i).col_type_;
+        column_orders_[i] = col_descs.at(i).col_order_;
+      }
     }
     //for compatibility, fill 0 to checksum and this will be serialized to disk
     for (int i = 0; i < fixed_header_.column_count_; i++) {
@@ -300,6 +318,7 @@ int ObSSTableMacroBlockHeader::init(
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
+
   return ret;
 }
 

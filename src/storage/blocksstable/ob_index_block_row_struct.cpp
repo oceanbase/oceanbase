@@ -133,8 +133,9 @@ int ObIndexBlockRowBuilder::init(const ObDataStoreDesc &desc)
     STORAGE_LOG(WARN, "Failed to init row", K(ret), K(desc.rowkey_column_count_));
   } else {
     rowkey_column_count_ = desc.rowkey_column_count_;
+    const ObIArray<share::schema::ObColDesc> &descs = desc.get_rowkey_col_descs();
     for (int64_t i = 0; i < rowkey_column_count_; ++i) {
-      rowkey_column_types_[i] = desc.col_desc_array_.at(i).col_type_;
+      rowkey_column_types_[i] = descs.at(i).col_type_;
     }
     is_inited_ = true;
   }
@@ -245,7 +246,7 @@ int ObIndexBlockRowBuilder::calc_data_size(const ObIndexBlockRowDesc &desc, int6
     LOG_WARN("Invalid index block row description", K(ret), K(desc));
   } else if (desc.is_secondary_meta_) {
     size = sizeof(ObIndexBlockRowHeader);
-  } else if (MAJOR_MERGE == desc.data_store_desc_->merge_type_) {
+  } else if (desc.data_store_desc_->is_major_merge()) {
     size = sizeof(ObIndexBlockRowHeader);
     // if (desc.is_pre_aggregated_) {
       // TODO: @saitong.zst Calculate aggregate size here
@@ -292,7 +293,7 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     header_->is_data_block_ = desc.is_data_block_;
     header_->is_leaf_block_ = desc.is_macro_node_;
     header_->is_macro_node_ = desc.is_macro_node_;
-    header_->is_major_node_ = desc.data_store_desc_->merge_type_ == MAJOR_MERGE;
+    header_->is_major_node_ = desc.data_store_desc_->is_major_merge();
     header_->has_string_out_row_ = desc.has_string_out_row_;
     header_->all_lob_in_row_ = !desc.has_lob_out_row_;
     // header_->is_pre_aggregated_ =

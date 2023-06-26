@@ -214,8 +214,6 @@ public:
   // reference count interfaces
   int inc_ref(const MacroBlockId &macro_id);
   int dec_ref(const MacroBlockId &macro_id);
-  int inc_disk_ref(const MacroBlockId &macro_id);
-  int dec_disk_ref(const MacroBlockId &macro_id);
   // If update_to_max_time is true, it means modify the last_write_time_ of the block to max,
   // which is used to skip the bad block inspection.
   int update_write_time(const MacroBlockId &macro_id, const bool update_to_max_time = false);
@@ -227,20 +225,20 @@ public:
 
   bool is_started() { return is_started_; }
 private:
-  struct BlockInfo {
-    int32_t mem_ref_cnt_;
-    int32_t disk_ref_cnt_;
+  struct BlockInfo
+  {
+    int64_t ref_cnt_;
     int64_t access_time_;
     int64_t last_write_time_;
-    BlockInfo() : mem_ref_cnt_(0), disk_ref_cnt_(0), access_time_(0), last_write_time_(INT64_MAX) {}
+
+    BlockInfo() : ref_cnt_(0), access_time_(0), last_write_time_(INT64_MAX) {}
     void reset()
     {
-      mem_ref_cnt_ = 0;
-      disk_ref_cnt_ = 0;
+      ref_cnt_ = 0;
       access_time_ = 0;
       last_write_time_ = INT64_MAX;
     }
-    TO_STRING_KV(K_(mem_ref_cnt), K_(disk_ref_cnt), K_(access_time), K_(last_write_time));
+    TO_STRING_KV(K_(ref_cnt), K_(access_time), K_(last_write_time));
   };
 
   class GetAllMacroBlockIdFunctor final
@@ -259,6 +257,7 @@ private:
   };
 
 private:
+  static constexpr double MARK_THRESHOLD = 0.2;
   static const int64_t SUPER_BLOCK_OFFSET = 0;
   static const int64_t DEFAULT_LOCK_BUCKET_COUNT = 2048;
   static const int64_t DEFAULT_PENDING_FREE_COUNT = 1024;
@@ -338,14 +337,26 @@ private:
   int mark_macro_blocks(
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId> &macro_id_set);
+  int mark_held_shared_block(
+      const MacroBlockId &macro_id,
+      MacroBlkIdMap &mark_info,
+      common::hash::ObHashSet<MacroBlockId> &macro_id_set);
   int mark_tenant_blocks(
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId> &macro_id_set);
-  int mark_tablet_blocks(
+  int mark_sstable_blocks(
       MacroBlkIdMap &mark_info,
       storage::ObTabletHandle &handle,
       common::hash::ObHashSet<MacroBlockId> &macro_id_set);
-  int mark_tenant_meta_blocks(
+  int mark_sstable_meta_block(
+      const blocksstable::ObSSTable &sstable,
+      MacroBlkIdMap &mark_info,
+      common::hash::ObHashSet<MacroBlockId> &macro_id_set);
+  int mark_tablet_meta_blocks(
+      MacroBlkIdMap &mark_info,
+      storage::ObTabletHandle &handle,
+      common::hash::ObHashSet<MacroBlockId> &macro_id_set);
+  int mark_tenant_ckpt_blocks(
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId> &macro_id_set,
       storage::ObTenantCheckpointSlogHandler &hdl);
@@ -355,6 +366,7 @@ private:
   int mark_server_meta_blocks(
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId> &macro_id_set);
+  bool continue_mark();
   int do_sweep(MacroBlkIdMap &mark_info);
 
   int update_mark_info(
@@ -364,7 +376,7 @@ private:
   int update_mark_info(
       const MacroBlockId &macro_id,
       MacroBlkIdMap &mark_info);
-  void update_marker_status();
+  void update_marker_status(const bool mark_finished);
   void disable_mark_sweep() { ATOMIC_SET(&is_mark_sweep_enabled_, false); }
   void enable_mark_sweep() { ATOMIC_SET(&is_mark_sweep_enabled_, true); }
   bool is_mark_sweep_enabled() { return ATOMIC_LOAD(&is_mark_sweep_enabled_); }
@@ -443,6 +455,7 @@ private:
   int64_t used_macro_cnt_[ObMacroBlockCommonHeader::MaxMacroType];
   int64_t mark_cost_time_;
   int64_t sweep_cost_time_;
+  int64_t reserved_count_;
   int64_t hold_count_;
   int64_t pending_free_count_;
   int64_t disk_block_count_;

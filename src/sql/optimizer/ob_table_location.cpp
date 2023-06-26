@@ -1348,6 +1348,8 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
              dml_stmt.get_query_ctx()->is_contain_select_for_update_ ||
              dml_stmt.get_query_ctx()->is_contain_inner_table_) {
     is_weak_read = false;
+  } else if (!MTL_IS_PRIMARY_TENANT()) {
+    is_weak_read = true;
   } else {
     ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;
     ObTxConsistencyType trans_consistency_type = ObTxConsistencyType::INVALID;

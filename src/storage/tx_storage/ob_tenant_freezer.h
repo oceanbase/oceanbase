@@ -21,6 +21,7 @@
 #include "share/ob_occam_timer.h"
 #include "share/ob_tenant_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer_rpc.h"
+#include "storage/multi_data_source/runtime_utility/mds_factory.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,8 @@ class ObTenantFreezer
 {
 friend ObTenantTxDataFreezeGuard;
 friend class ObFreezer;
+
+public:
   const static int64_t TIME_WHEEL_PRECISION = 100_ms;
   const static int64_t SLOW_FREEZE_INTERVAL = 30_s;
   const static int FREEZE_TRIGGER_THREAD_NUM= 1;
@@ -49,6 +52,8 @@ friend class ObFreezer;
   // replay use 1G/s
   const static int64_t REPLAY_RESERVE_MEMSTORE_BYTES = 100 * 1024 * 1024; // 100 MB
   const static int64_t MEMSTORE_USED_CACHE_REFRESH_INTERVAL = 100_ms;
+  static double MDS_TABLE_FREEZE_TRIGGER_TENANT_PERCENTAGE;
+
 public:
   ObTenantFreezer();
   ~ObTenantFreezer();
@@ -115,8 +120,10 @@ public:
                                const bool force_refresh = true);
   // get the tenant memstore limit.
   int get_tenant_memstore_limit(int64_t &mem_limit);
-  // this is used to check if the tenant's memstore is out.
-  int check_tenant_out_of_memstore_limit(bool &is_out_of_mem);
+  // this is used to check if the tenant's memstore is out at user side.
+  int check_memstore_full(bool &is_out_of_mem);
+  // this is used for internal check rather than user side.
+  int check_memstore_full_internal(bool &is_out_of_mem);
   // this check if a major freeze is needed
   bool tenant_need_major_freeze();
   // used to print a log.
@@ -140,6 +147,10 @@ public:
   ObServerConfig *get_config() { return config_; }
   bool exist_ls_freezing();
 private:
+  int check_memstore_full_(bool &last_result,
+                           int64_t &last_check_timestamp,
+                           bool &is_out_of_mem,
+                           const bool from_user = true);
   static int ls_freeze_(ObLS *ls,
                         const bool is_sync = true,
                         const bool force_freeze = true,
@@ -166,7 +177,9 @@ private:
   int retry_failed_major_freeze_(bool &triggered);
   int get_global_frozen_scn_(int64_t &frozen_version);
   int post_tx_data_freeze_request_();
+  int post_mds_table_freeze_request_();
   int get_tenant_mem_usage_(ObTenantFreezeCtx &ctx);
+  int get_tenant_mem_stat_(ObTenantStatistic &stat);
   static int get_freeze_trigger_(ObTenantFreezeCtx &ctx);
   static bool need_freeze_(const ObTenantFreezeCtx &ctx);
   bool is_minor_need_slow_(const ObTenantFreezeCtx &ctx);
@@ -179,6 +192,7 @@ private:
   int unset_tenant_slow_freeze_();
   int check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx);
   int check_and_freeze_tx_data_();
+  int check_and_freeze_mds_table_();
   int get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_mem_used);
   int get_ls_tx_data_mem_used_(ObLS *ls, int64_t &ls_tx_data_mem_used);
 private:

@@ -36,12 +36,17 @@ class ObMySQLProxy;
 class ObISQLClient;
 class ObMySQLTransaction;
 }
+namespace transaction
+{
+class ObTxBufferNode;
+}
 namespace share
 {
 class ObLSTableOperator;
 struct ObLSAttr;
 struct ObLSRecoveryStat;
 class SCN;
+class ObBalanceTaskHelper;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -77,6 +82,7 @@ public:
   DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
  //get log iterator by start_scn
+ //interface for thread0
  int seek_log_iterator_(const share::SCN &syn_scn,
                         palf::PalfBufferIterator &iterator);
  int process_ls_log_(const ObAllTenantInfo &tenant_info,
@@ -87,24 +93,40 @@ private:
                      const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
                         const share::SCN &syn_scn);
- int process_ls_operator_(const share::ObLSAttr &ls_attr,
-                          const share::SCN &syn_scn);
+ int process_ls_table_in_trans_(const transaction::ObTxBufferNode &node,
+                          const share::SCN &syn_scn,
+                          common::ObMySQLTransaction &trans);
  int create_new_ls_(const share::ObLSAttr &ls_attr,
                     const share::SCN &syn_scn,
                     common::ObMySQLTransaction &trans);
- int process_recovery_ls_manager();
- int construct_ls_recovery_stat(const share::SCN &syn_scn,
-                                share::ObLSRecoveryStat &ls_stat);
+ int construct_sys_ls_recovery_stat_based_on_sync_scn_(
+     const share::SCN &syn_scn,
+     ObLSRecoveryStat &ls_stat,
+     const ObAllTenantInfo &tenant_info);
  //wait other ls is larger than sycn ts
- int check_valid_to_operator_ls_(const share::ObLSAttr &ls_attr,
-                                 const share::SCN &syn_scn);
- int check_can_do_recovery_(const ObAllTenantInfo &tenant_info);
+ int check_valid_to_operator_ls_(const share::SCN &syn_scn);
  //readable scn need report
- int report_sys_ls_recovery_stat_(const share::SCN &sync_scn);
  void try_tenant_upgrade_end_();
  int get_min_data_version_(uint64_t &compatible);
  int process_ls_operator_in_trans_(const share::ObLSAttr &ls_attr,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
+ int porcess_alter_ls_group_(const share::ObLSAttr &ls_attr,
+                            const share::SCN &sync_scn,
+                            common::ObMySQLTransaction &trans);
+ int report_sys_ls_recovery_stat_(const share::SCN &sync_scn, const bool only_update_readable_scn,
+                                  const char* comment);
+ int report_sys_ls_recovery_stat_in_trans_(const share::SCN &sync_scn,
+                                           const bool only_update_readable_scn,
+                                           common::ObMySQLTransaction &trans,
+                                           const char* comment);
+
+ int process_ls_transfer_task_in_trans_(const transaction::ObTxBufferNode &node,
+     const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
+ //thread1
+ int do_standby_balance_();
+ int do_ls_balance_task_();
+ int do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
+                               common::ObMySQLTransaction &trans);
  int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
  void try_update_primary_ip_list();
  bool check_need_update_ip_list_(share::ObLogRestoreSourceItem &item);

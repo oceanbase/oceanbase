@@ -81,9 +81,12 @@ int ObParallelMergeCtx::init(compaction::ObTabletMergeCtx &merge_ctx)
     int64_t tablet_size = merge_ctx.get_schema()->get_tablet_size();
     bool enable_parallel_minor_merge = false;
     {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-      if (tenant_config.is_valid()) {
-        enable_parallel_minor_merge = tenant_config->_enable_parallel_minor_merge;
+      // TODO(yangyi.yyy): backfill tx merge do not allow parallel minor merge
+      if (!is_backfill_tx_merge(merge_ctx.param_.merge_type_)) {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        if (tenant_config.is_valid()) {
+          enable_parallel_minor_merge = tenant_config->_enable_parallel_minor_merge;
+        }
       }
     }
     if (enable_parallel_minor_merge && tablet_size > 0 && is_mini_merge(merge_ctx.param_.merge_type_)) {
@@ -121,23 +124,29 @@ int ObParallelMergeCtx::init(const compaction::ObMediumCompactionInfo &medium_in
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init parallel merge", K(ret), K(medium_info));
   } else {
-    const compaction::ObParallelMergeInfo &paral_info = medium_info.parallel_merge_info_;
-    range_array_.reset();
-
     ObDatumRange schema_rowkey_range;
     ObDatumRange multi_version_range;
-    schema_rowkey_range.start_key_.set_min_rowkey();
-    schema_rowkey_range.end_key_.set_min_rowkey();
-    schema_rowkey_range.set_left_open();
-    schema_rowkey_range.set_right_closed();
-    for (int i = 0; OB_SUCC(ret) && i < paral_info.list_size_ + 1; ++i) {
+    const compaction::ObParallelMergeInfo &paral_info = medium_info.parallel_merge_info_;
+    if (OB_UNLIKELY(!paral_info.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "parallel info is invalid", KR(ret), K(paral_info));
+    } else {
+      range_array_.reset();
+
+      schema_rowkey_range.start_key_.set_min_rowkey();
+      schema_rowkey_range.end_key_.set_min_rowkey();
+      schema_rowkey_range.set_left_open();
+      schema_rowkey_range.set_right_closed();
+    }
+
+    for (int i = 0; OB_SUCC(ret) && i < paral_info.get_size() + 1; ++i) {
       if (i > 0 && OB_FAIL(schema_rowkey_range.end_key_.deep_copy(schema_rowkey_range.start_key_, allocator_))) { // end_key -> start_key
         STORAGE_LOG(WARN, "failed to deep copy start key", K(ret), K(i), K(medium_info));
-      } else if (i < paral_info.list_size_) {
-        if (OB_FAIL(schema_rowkey_range.end_key_.from_rowkey(paral_info.parallel_end_key_list_[i].get_rowkey(), allocator_))) {
+      } else if (i < paral_info.get_size()) {
+        if (OB_FAIL(paral_info.deep_copy_datum_rowkey(i/*idx*/, allocator_, schema_rowkey_range.end_key_))) {
           STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(i), K(medium_info));
         }
-      } else { // i == paral_info.list_size_
+      } else { // i == paral_info.get_size()
         schema_rowkey_range.end_key_.set_max_rowkey();
       }
       multi_version_range.reset();
@@ -148,7 +157,7 @@ int ObParallelMergeCtx::init(const compaction::ObMediumCompactionInfo &medium_in
       }
     }
     if (OB_SUCC(ret)) {
-      concurrent_cnt_ = paral_info.list_size_ + 1;
+      concurrent_cnt_ = paral_info.get_size() + 1;
       parallel_type_ = PARALLEL_MAJOR;
       is_inited_ = true;
       STORAGE_LOG(INFO, "success to init parallel merge ctx", KPC(this));
@@ -217,7 +226,7 @@ int ObParallelMergeCtx::init_parallel_major_merge(compaction::ObTabletMergeCtx &
   } else {
     const int64_t tablet_size = merge_ctx.get_schema()->get_tablet_size();
     const ObSSTable *first_sstable = static_cast<const ObSSTable *>(first_table);
-    const int64_t macro_block_cnt = first_sstable->get_meta().get_macro_info().get_data_block_ids().count();
+    const int64_t macro_block_cnt = first_sstable->get_data_macro_block_count();
     if (OB_FAIL(get_concurrent_cnt(tablet_size, macro_block_cnt, concurrent_cnt_))) {
       STORAGE_LOG(WARN, "failed to get concurrent cnt", K(ret), K(tablet_size), K(concurrent_cnt_),
         KPC(first_sstable));
@@ -226,7 +235,7 @@ int ObParallelMergeCtx::init_parallel_major_merge(compaction::ObTabletMergeCtx &
         STORAGE_LOG(WARN, "failed to init serial merge", K(ret), KPC(first_sstable));
       }
     } else if (OB_FAIL(get_major_parallel_ranges(
-        first_sstable, tablet_size, merge_ctx.tablet_handle_.get_obj()->get_index_read_info()))) {
+        first_sstable, tablet_size, merge_ctx.tablet_handle_.get_obj()->get_rowkey_read_info()))) {
       STORAGE_LOG(WARN, "Failed to get concurrent cnt from first sstable",
           K(ret), K(tablet_size), K_(concurrent_cnt));
     } else {
@@ -304,7 +313,7 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObTabletMerge
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init parallel mini minor merge", K(ret), K(merge_ctx));
   } else {
-    const ObTableReadInfo &index_read_info = merge_ctx.tablet_handle_.get_obj()->get_index_read_info();
+    const ObITableReadInfo &rowkey_read_info = merge_ctx.tablet_handle_.get_obj()->get_rowkey_read_info();
     const int64_t tablet_size = merge_ctx.get_schema()->get_tablet_size();
     ObRangeSplitInfo range_info;
     ObSEArray<ObITable *, DEFAULT_STORE_CNT_IN_STORAGE> tables;
@@ -321,7 +330,7 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObTabletMerge
         STORAGE_LOG(WARN, "Unexpected tables handle for mini minor merge", K(ret),
                   K(merge_ctx.tables_handle_));
       }
-    } else if (OB_FAIL(range_spliter.get_range_split_info(tables, index_read_info, whole_range, range_info))) {
+    } else if (OB_FAIL(range_spliter.get_range_split_info(tables, rowkey_read_info, whole_range, range_info))) {
       STORAGE_LOG(WARN, "Failed to init range spliter", K(ret));
     } else if (OB_FAIL(calc_mini_minor_parallel_degree(tablet_size, range_info.total_size_, tables.count(),
                                                        range_info.parallel_target_count_))) {
@@ -411,7 +420,7 @@ int ObParallelMergeCtx::get_concurrent_cnt(
 int ObParallelMergeCtx::get_major_parallel_ranges(
     const blocksstable::ObSSTable *first_major_sstable,
     const int64_t tablet_size,
-    const ObTableReadInfo &index_read_info)
+    const ObITableReadInfo &rowkey_read_info)
 {
   int ret = OB_SUCCESS;
   int64_t macro_block_cnt = 0;
@@ -422,9 +431,10 @@ int ObParallelMergeCtx::get_major_parallel_ranges(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "concurrent cnt is invalid", K(ret), K_(concurrent_cnt));
   } else {
-    const int64_t macro_block_cnt = first_major_sstable->get_meta().get_macro_info().get_data_block_ids().count();
+    const int64_t macro_block_cnt = first_major_sstable->get_data_macro_block_count();
     const int64_t macro_block_cnt_per_range = (macro_block_cnt + concurrent_cnt_ - 1) / concurrent_cnt_;
 
+    ObSSTableMetaHandle sstable_meta_handle;
     ObDatumRowkeyHelper rowkey_helper;
     ObDatumRowkey macro_endkey;
     ObDatumRowkey multi_version_endkey;
@@ -436,11 +446,14 @@ int ObParallelMergeCtx::get_major_parallel_ranges(
     blocksstable::ObDataMacroBlockMeta blk_meta;
     blocksstable::ObSSTableSecMetaIterator *meta_iter = nullptr;
     ObDatumRange query_range;
-    int64_t schema_rowkey_cnt = first_major_sstable->get_meta().get_schema_rowkey_column_count();
+    int64_t schema_rowkey_cnt = 0;
     query_range.set_whole_range();
     if (OB_FAIL(first_major_sstable->scan_secondary_meta(allocator_, query_range,
-        index_read_info, DATA_BLOCK_META, meta_iter))) {
+       rowkey_read_info, DATA_BLOCK_META, meta_iter))) {
       STORAGE_LOG(WARN, "Failed to scan secondary meta", KR(ret), KPC(this));
+    } else if (OB_FAIL(first_major_sstable->get_meta(sstable_meta_handle))) {
+      STORAGE_LOG(WARN, "failed to get sstable meta handle", K(ret));
+    } else if (FALSE_IT(schema_rowkey_cnt = sstable_meta_handle.get_sstable_meta().get_schema_rowkey_column_count())) {
     } else if (OB_FAIL(rowkey_helper.reserve(schema_rowkey_cnt + 1))) {
       STORAGE_LOG(WARN, "Failed to ", K(ret), K(schema_rowkey_cnt));
     } else if (OB_FAIL(multi_version_endkey.assign(rowkey_helper.get_datums(), schema_rowkey_cnt + 1))) {

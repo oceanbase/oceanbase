@@ -5561,11 +5561,11 @@ int ObSchemaServiceSQLImpl::sort_table_partition_info(
     lib::CompatModeGuard g(is_oracle_mode ?
                       lib::Worker::CompatMode::ORACLE :
                       lib::Worker::CompatMode::MYSQL);
-    if (OB_FAIL(sort_partition_array(table_schema))) {
+    if (OB_FAIL(ObSchemaServiceSQLImpl::sort_partition_array(table_schema))) {
       LOG_WARN("failed to sort partition array", KR(ret), K(table_schema));
     } else if (OB_FAIL(try_mock_partition_array(table_schema))) {
       LOG_WARN("fail to mock partition array", KR(ret), K(table_schema));
-    } else if (OB_FAIL(sort_subpartition_array(table_schema))) {
+    } else if (OB_FAIL(ObSchemaServiceSQLImpl::sort_subpartition_array(table_schema))) {
       LOG_WARN("failed to sort subpartition array", KR(ret), K(table_schema));
     }
   }
@@ -5609,9 +5609,9 @@ int ObSchemaServiceSQLImpl::sort_tablegroup_partition_info(ObTablegroupSchema &t
     lib::CompatModeGuard g(is_oracle_mode ?
                       lib::Worker::CompatMode::ORACLE :
                       lib::Worker::CompatMode::MYSQL);
-    if (OB_FAIL(sort_partition_array(tablegroup_schema))) {
+    if (OB_FAIL(ObSchemaServiceSQLImpl::sort_partition_array(tablegroup_schema))) {
       LOG_WARN("failed to sort partition array", KR(ret), K(tablegroup_schema));
-    } else if (OB_FAIL(sort_subpartition_array(tablegroup_schema))) {
+    } else if (OB_FAIL(ObSchemaServiceSQLImpl::sort_subpartition_array(tablegroup_schema))) {
       LOG_WARN("failed to sort subpartition array", KR(ret), K(tablegroup_schema));
     }
   }
@@ -8281,6 +8281,36 @@ int ObSchemaServiceSQLImpl::get_first_trans_end_schema_version(
   return ret;
 }
 
+//just sort for table which is ready to add tablegroup
+int ObSchemaServiceSQLImpl::sort_table_partition_info_v2(
+    ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  if (!table_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table_schema", KR(ret), K(table_schema));
+  } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret),
+             "tenant_id", table_schema.get_tenant_id(), "table_id", table_schema.get_table_id());
+  } else {
+    // Value comparsion is differ from mysql and oracle. eg:
+    // mysql: min < null < other < max
+    // oracle: min < other < null < max
+    // To make sorted result stable, compat guard should be used.
+    lib::CompatModeGuard g(is_oracle_mode ?
+                      lib::Worker::CompatMode::ORACLE :
+                      lib::Worker::CompatMode::MYSQL);
+    if (OB_FAIL(ObSchemaServiceSQLImpl::sort_partition_array(table_schema))) {
+      LOG_WARN("failed to sort partition array", KR(ret), K(table_schema));
+    } else if (OB_FAIL(ObSchemaServiceSQLImpl::sort_subpartition_array(table_schema))) {
+      LOG_WARN("failed to sort subpartition array", KR(ret), K(table_schema));
+    }
+  }
+  LOG_TRACE("fetch partition info", KR(ret), K(table_schema));
+  return ret;
+}
+
 
 // link table.
 int ObSchemaServiceSQLImpl::get_link_table_schema(const ObDbLinkSchema *dblink_schema,
@@ -8733,6 +8763,41 @@ int ObSchemaServiceSQLImpl::try_mock_link_table_column(ObTableSchema &table_sche
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::get_table_latest_schema_versions(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const common::ObIArray<uint64_t> &table_ids,
+    common::ObIArray<ObTableLatestSchemaVersion> &table_schema_versions)
+{
+  int ret = OB_SUCCESS;
+  table_schema_versions.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || table_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_ids));
+  } else if (OB_FAIL(table_schema_versions.reserve(table_ids.count()))) {
+    LOG_WARN("reserve failed", KR(ret), "count", table_ids.count());
+  } else {
+    int64_t start_idx = 0;
+    int64_t end_idx = min(MAX_IN_QUERY_PER_TIME, table_ids.count());
+    while (OB_SUCC(ret) && start_idx < end_idx) {
+      if (OB_FAIL(fetch_table_latest_schema_versions_(
+          sql_client,
+          tenant_id,
+          table_ids,
+          start_idx,
+          end_idx,
+          table_schema_versions))) {
+        LOG_WARN("fail to fetch table latest schema versions",
+            KR(ret), K(tenant_id), K(table_ids), K(start_idx), K(end_idx));
+      } else {
+        start_idx = end_idx;
+        end_idx = min(start_idx + MAX_IN_QUERY_PER_TIME, table_ids.count());
+      }
+    }
+  }
+  return ret;
+}
+
 // this timeout context will take effective when ObTimeoutCtx/THIS_WORKER.timeout is not set.
 int ObSchemaServiceSQLImpl::set_refresh_full_schema_timeout_ctx_(
     ObISQLClient &sql_client,
@@ -8762,6 +8827,62 @@ int ObSchemaServiceSQLImpl::set_refresh_full_schema_timeout_ctx_(
               K(ori_worker_timeout),
               "calc_timeout", timeout,
               "actual_timeout", ctx.get_timeout());
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_table_latest_schema_versions_(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const common::ObIArray<uint64_t> &table_ids,
+    const int64_t start_idx,
+    const int64_t end_idx,
+    common::ObIArray<ObTableLatestSchemaVersion> &table_schema_versions)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || table_ids.empty()
+      || start_idx < 0
+      || start_idx >= end_idx
+      || end_idx > table_ids.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_ids), K(start_idx), K(end_idx));
+  } else if (OB_FAIL(sql.append_fmt(
+      "SELECT table_id, schema_version, is_deleted FROM "
+      "(SELECT table_id, schema_version, is_deleted, "
+      "ROW_NUMBER() OVER (PARTITION BY table_id ORDER BY schema_version DESC) AS rn "
+      "FROM %s WHERE tenant_id = 0 AND table_id IN (",
+      OB_ALL_TABLE_HISTORY_TNAME))) {
+    LOG_WARN("append fmt failed", KR(ret), K(sql));
+  } else {
+    for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
+      const uint64_t table_id = table_ids.at(idx);
+      if (OB_UNLIKELY(OB_INVALID_ID == table_ids.at(idx))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid table_id", KR(ret), K(table_id), K(table_ids));
+      } else if (OB_FAIL(sql.append_fmt("%s%lu", start_idx == idx ? "" : ", ", table_id))) {
+        LOG_WARN("append fmt failed", KR(ret), K(idx), K(table_id), K(sql));
+      }
+    }
+    if (FAILEDx(sql.append_fmt(")) WHERE rn = 1"))) {
+      LOG_WARN("append fmt failed", KR(ret), K(sql));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+          LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get result", KR(ret));
+        } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_latest_schema_versions(
+            *result,
+            table_schema_versions))) {
+          LOG_WARN("retrieve table latest schema versions failed",
+              KR(ret), K(tenant_id), K(table_ids));
+        }
+      } // end SMART_VAR
+    }
   }
   return ret;
 }

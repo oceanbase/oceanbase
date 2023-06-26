@@ -177,8 +177,6 @@ private:
   virtual int init_multiple_zone_deployment_table(common::ObISQLClient &sql_client);
   virtual int add_servers_in_rs_list(rootserver::ObServerZoneOpService &server_zone_op_service);
   virtual int wait_all_rs_in_service();
-  int init_backup_inner_table();
-  int init_backup_data();
   template<typename SCHEMA>
     int set_replica_options(SCHEMA &schema);
   int build_zone_region_list(

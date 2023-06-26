@@ -40,10 +40,12 @@ struct ObPhysicalCopyCtx
   virtual ~ObPhysicalCopyCtx();
   bool is_valid() const;
   void reset();
+
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(src_info), KP_(bandwidth_throttle),
       KP_(svr_rpc_proxy), K_(is_leader_restore), KP_(restore_base_info),
       KP_(meta_index_store), KP_(second_meta_index_store), KP_(ha_dag),
-      KP_(sstable_index_builder), KP_(restore_macro_block_id_mgr));
+      KP_(sstable_index_builder), KP_(restore_macro_block_id_mgr), K_(need_check_seq), K_(ls_rebuild_seq));
+  common::SpinRWLock lock_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -90,7 +92,7 @@ struct ObPhysicalCopyTaskInitParam final
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTaskInitParam);
 };
 
-class ObPhysicalCopyFinishTask;
+class ObSSTableCopyFinishTask;
 class ObPhysicalCopyTask : public share::ObITask
 {
 public:
@@ -98,7 +100,7 @@ public:
   virtual ~ObPhysicalCopyTask();
   int init(
       ObPhysicalCopyCtx *copy_ctx,
-      ObPhysicalCopyFinishTask *finish_task);
+      ObSSTableCopyFinishTask *finish_task);
   virtual int process() override;
   virtual int generate_next_task(ObITask *&next_task) override;
   VIRTUAL_TO_STRING_KV(K("ObPhysicalCopyFinishTask"), KP(this), KPC(copy_ctx_));
@@ -108,7 +110,7 @@ private:
   int fetch_macro_block_(
       const int64_t retry_times,
       ObMacroBlocksWriteCtx &copied_ctx);
-  int build_macro_block_copy_info_(ObPhysicalCopyFinishTask *finish_task);
+  int build_macro_block_copy_info_(ObSSTableCopyFinishTask *finish_task);
   int get_macro_block_reader_(
       ObICopyMacroBlockReader *&reader);
   int get_macro_block_ob_reader_(
@@ -132,28 +134,29 @@ private:
   static const int64_t OB_FETCH_MAJOR_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000L;// 1s
   bool is_inited_;
   ObPhysicalCopyCtx *copy_ctx_;
-  ObPhysicalCopyFinishTask *finish_task_;
+  ObSSTableCopyFinishTask *finish_task_;
   ObITable::TableKey copy_table_key_;
   const ObCopyMacroRangeInfo *copy_macro_range_info_;
-
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTask);
 };
 
-class ObPhysicalCopyFinishTask : public share::ObITask
+class ObSSTableCopyFinishTask : public share::ObITask
 {
 public:
-  ObPhysicalCopyFinishTask();
-  virtual ~ObPhysicalCopyFinishTask();
+  ObSSTableCopyFinishTask();
+  virtual ~ObSSTableCopyFinishTask();
   int init(
       const ObPhysicalCopyTaskInitParam &init_param);
   virtual int process() override;
   ObPhysicalCopyCtx *get_copy_ctx() { return &copy_ctx_; }
+  const ObMigrationSSTableParam *get_sstable_param() { return sstable_param_; }
   int get_macro_block_copy_info(
       ObITable::TableKey &copy_table_key,
       const ObCopyMacroRangeInfo *&copy_macro_range_info);
   int check_is_iter_end(bool &is_end);
+  int get_tablet_finish_task(ObTabletCopyFinishTask *&finish_task);
 
-  VIRTUAL_TO_STRING_KV(K("ObPhysicalCopyFinishTask"), KP(this), K(copy_ctx_));
+  VIRTUAL_TO_STRING_KV(K("ObSSTableCopyFinishTask"), KP(this), K(copy_ctx_));
 
 private:
   int get_cluster_version_(
@@ -202,7 +205,7 @@ private:
   ObLSTabletService *tablet_service_;
   ObSSTableIndexBuilder sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
-  DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyFinishTask);
+  DISALLOW_COPY_AND_ASSIGN(ObSSTableCopyFinishTask);
 };
 
 class ObTabletCopyFinishTask : public share::ObITask
@@ -222,6 +225,10 @@ public:
   int get_sstable(
       const ObITable::TableKey &table_key,
       ObTableHandleV2 &table_handle);
+  common::ObArenaAllocator &get_allocator() { return arena_allocator_; } // TODO: @jinzhu remove me later.
+  int set_tablet_status(const ObCopyTabletStatus::STATUS &status);
+  int get_tablet_status(ObCopyTabletStatus::STATUS &status);
+
 private:
   int create_new_table_store_with_major_();
   int create_new_table_store_with_ddl_();
@@ -241,11 +248,13 @@ private:
   ObLS *ls_;
   observer::ObIMetaReport *reporter_;
   ObStorageHADag *ha_dag_;
+  common::ObArenaAllocator arena_allocator_;
   ObTablesHandleArray minor_tables_handle_;
   ObTablesHandleArray ddl_tables_handle_;
   ObTablesHandleArray major_tables_handle_;
   ObTabletRestoreAction::ACTION restore_action_;
   const ObMigrationTabletParam *src_tablet_meta_;
+  storage::ObCopyTabletStatus::STATUS status_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);
 };
 

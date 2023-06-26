@@ -161,7 +161,7 @@ private:
 OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
 {
   int ret = OB_SUCCESS;
-  need_refresh = get_table_param_.tablet_iter_.table_iter_.check_store_expire();
+  need_refresh = get_table_param_.tablet_iter_.table_iter()->check_store_expire();
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_FORCE_REFRESH_TABLE) ret;
   if (OB_FAIL(ret)) {

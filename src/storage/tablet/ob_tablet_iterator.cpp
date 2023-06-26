@@ -26,11 +26,11 @@ namespace oceanbase
 {
 namespace storage
 {
-ObLSTabletIterator::ObLSTabletIterator(const int64_t timeout_us)
+ObLSTabletIterator::ObLSTabletIterator(const ObMDSGetTabletMode mode)
   : ls_tablet_service_(nullptr),
     tablet_ids_(),
     idx_(0),
-    timeout_us_(timeout_us)
+    mode_(mode)
 {
 }
 
@@ -49,7 +49,7 @@ void ObLSTabletIterator::reset()
 bool ObLSTabletIterator::is_valid() const
 {
   return nullptr != ls_tablet_service_
-      && timeout_us_ >= ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US;
+      && mode_ >= ObMDSGetTabletMode::READ_ALL_COMMITED;
 }
 
 int ObLSTabletIterator::get_next_tablet(ObTabletHandle &handle)
@@ -66,9 +66,9 @@ int ObLSTabletIterator::get_next_tablet(ObTabletHandle &handle)
         ret = OB_ITER_END;
       } else {
         const common::ObTabletID &tablet_id = tablet_ids_.at(idx_);
-        if (OB_FAIL(ls_tablet_service_->get_tablet(tablet_id, handle, timeout_us_))
+        if (OB_FAIL(ls_tablet_service_->get_tablet(tablet_id, handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S, mode_))
             && OB_TABLET_NOT_EXIST != ret) {
-          LOG_WARN("fail to get tablet", K(ret), K(idx_), K(tablet_id), K_(timeout_us));
+          LOG_WARN("fail to get tablet", K(ret), K(idx_), K(tablet_id), K_(mode));
         } else {
           handle.set_wash_priority(WashTabletPriority::WTP_LOW);
           ++idx_;
@@ -170,24 +170,24 @@ int ObHALSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  ObTabletTxMultiSourceDataUnit tx_data;
   ObTabletMapKey key;
   key.ls_id_ = ls_id_;
 
+  bool initial_state = true;
   while (OB_SUCC(ret)) {
     if (OB_UNLIKELY(tablet_ids_.count() == idx_)) {
       ret = OB_ITER_END;
     } else {
-      tx_data.reset();
+      initial_state = true;
       key.tablet_id_ = tablet_ids_.at(idx_);
-      if (OB_FAIL(t3m->get_tablet_pointer_tx_data(key, tx_data))) {
+      if (OB_FAIL(t3m->get_tablet_pointer_initial_state(key, initial_state))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ++idx_;
           ret = OB_SUCCESS;
         } else {
-          LOG_WARN("failed to get tx data from tablet pointer", K(ret), K(key));
+          LOG_WARN("failed to get tablet status from tablet pointer", K(ret), K(key));
         }
-      } else if (ObTabletStatus::MAX == tx_data.tablet_status_ && !need_initial_state_ ) {
+      } else if (initial_state && !need_initial_state_) {
         LOG_INFO("tablet is in initial state, should skip", K(ret), K(key));
         ++idx_;
       } else {
@@ -200,5 +200,47 @@ int ObHALSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
 
   return ret;
 }
+
+
+ObHALSTabletIterator::ObHALSTabletIterator(
+    const share::ObLSID &ls_id,
+    const bool need_initial_state)
+  : ls_tablet_service_(nullptr),
+    tablet_id_iter_(ls_id, need_initial_state)
+{}
+
+
+ObHALSTabletIterator::~ObHALSTabletIterator()
+{}
+
+bool ObHALSTabletIterator::is_valid() const
+{
+  return tablet_id_iter_.is_valid();
+}
+
+void ObHALSTabletIterator::reset()
+{
+  tablet_id_iter_.reset();
+}
+
+int ObHALSTabletIterator::get_next_tablet(ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id;
+  handle.reset();
+  if (OB_ISNULL(ls_tablet_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls tablet service is nullptr", K(ret), KP(ls_tablet_service_));
+  } else if (OB_FAIL(tablet_id_iter_.get_next_tablet_id(tablet_id))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("failed to get next tablet id", K(ret));
+    }
+  } else if (OB_FAIL(ls_tablet_service_->get_tablet(tablet_id, handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+  }
+
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

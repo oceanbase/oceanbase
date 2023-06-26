@@ -170,7 +170,7 @@ public:
   #endif
         ;
   }
-  static bool need_pre_replay_barrier(const ObTxLogType log_type, const ObTxDataSourceType data_source_type);
+  static logservice::ObReplayBarrierType need_replay_barrier(const ObTxLogType log_type, const ObTxDataSourceType data_source_type);
 };
 
 // ============================== Tx Log Header ==============================

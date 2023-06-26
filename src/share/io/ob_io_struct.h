@@ -279,7 +279,7 @@ public:
   void stop();
   void accumulate(const ObIORequest &req);
   int schedule_request(ObIORequest &req);
-  int init_group_queues(const uint64_t tenant_id, const int64_t group_num);
+  int init_group_queues(const uint64_t tenant_id, const int64_t group_num, ObIOAllocator *io_allocator);
   int update_group_queues(const uint64_t tenant_id, const int64_t group_num);
   int remove_phyqueues(const uint64_t tenant_id);
   int stop_phy_queues(const uint64_t tenant_id, const int64_t index);

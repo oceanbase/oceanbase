@@ -380,6 +380,8 @@ ObSimpleTablegroupSchema &ObSimpleTablegroupSchema::operator =(const ObSimpleTab
     partition_schema_version_ = other.partition_schema_version_;
     if (OB_FAIL(deep_copy_str(other.tablegroup_name_, tablegroup_name_))) {
       LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.sharding_, sharding_))) {
+      LOG_WARN("Fail to deep copy sharding", K(ret));
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -398,7 +400,8 @@ bool ObSimpleTablegroupSchema::operator ==(const ObSimpleTablegroupSchema &other
       && schema_version_ == other.schema_version_
       && tablegroup_name_ == other.tablegroup_name_
       && partition_status_ == other.partition_status_
-      && partition_schema_version_ == other.partition_schema_version_) {
+      && partition_schema_version_ == other.partition_schema_version_
+      && sharding_ == other.sharding_) {
     ret = true;
   }
 
@@ -414,6 +417,7 @@ void ObSimpleTablegroupSchema::reset()
   tablegroup_name_.reset();
   partition_status_ = PARTITION_STATUS_ACTIVE;
   partition_schema_version_ = 0;// Issues left over from history, set to 0
+  sharding_.reset();
 }
 
 bool ObSimpleTablegroupSchema::is_valid() const
@@ -434,6 +438,7 @@ int64_t ObSimpleTablegroupSchema::get_convert_size() const
 
   convert_size += sizeof(ObSimpleTablegroupSchema);
   convert_size += tablegroup_name_.length() + 1;
+  convert_size += sharding_.length() + 1;
 
   return convert_size;
 }
@@ -829,7 +834,7 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
           const SCHEMA_TYPE *schema = *iter;                                 \
           if (OB_ISNULL(schema)) {                                           \
             ret = OB_ERR_UNEXPECTED;                                         \
-            LOG_WARN("NULL ptr", K(schema));                                 \
+            LOG_WARN("NULL ptr", K(ret), KP(schema));                        \
           } else if (OB_FAIL(add_##SCHEMA(*schema))) {                       \
             LOG_WARN("add "#SCHEMA" failed", K(ret), K(*schema));            \
           }                                                                  \
@@ -3777,7 +3782,7 @@ int ObSchemaMgr::get_available_tenant_ids(ObIArray<uint64_t> &tenant_ids) const
       for (; OB_SUCC(ret) && iter != SCHEMA##_infos_.end() && !is_stop; iter++) { \
         if (OB_ISNULL(schema = *iter)) {                                         \
           ret = OB_ERR_UNEXPECTED;                                               \
-          LOG_WARN("NULL ptr", K(schema), K(ret));                               \
+          LOG_WARN("NULL ptr", K(ret), KP(schema));                              \
         } else if (tenant_id != schema->get_tenant_id()) {                       \
           is_stop = true;                                                        \
         } else if (OB_FAIL(schema_array.push_back(schema))) {                    \
@@ -3826,7 +3831,7 @@ GET_SCHEMAS_IN_TENANT_FUNC_DEFINE(tablegroup, ObSimpleTablegroupSchema, ObTenant
       for (; OB_SUCC(ret) && iter != table_infos_.end() && !is_stop; iter++) {   \
         if (OB_ISNULL(schema = *iter)) {                                         \
           ret = OB_ERR_UNEXPECTED;                                               \
-          LOG_WARN("NULL ptr", K(schema), K(ret));                               \
+          LOG_WARN("NULL ptr", K(ret), KP(schema));                              \
         } else if (tenant_id != schema->get_tenant_id()) {                       \
           is_stop = true;                                                        \
         } else if (dst_schema_id == schema->get_##DST_SCHEMA##_id()) {           \
@@ -3839,10 +3844,99 @@ GET_SCHEMAS_IN_TENANT_FUNC_DEFINE(tablegroup, ObSimpleTablegroupSchema, ObTenant
     return ret;                                                                  \
   }
 GET_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DEFINE(database);
-GET_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DEFINE(tablegroup);
+// GET_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DEFINE(tablegroup);
 GET_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DEFINE(tablespace);
 
 #undef GET_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DEFINE
+
+int ObSchemaMgr::get_primary_table_schema_in_tablegroup(
+      const uint64_t tenant_id,
+      const uint64_t tablegroup_id,
+      const ObSimpleTableSchemaV2 *&primary_table_schema) const
+  {
+    int ret = OB_SUCCESS;
+    primary_table_schema = NULL;
+    if (OB_UNLIKELY(!check_inner_stat())) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", KR(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
+               || OB_INVALID_ID == tablegroup_id)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(tenant_id),
+               "tablegroup_id", tablegroup_id);
+    } else if (OB_UNLIKELY(tenant_id_ != tenant_id)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("tenant_id not matched", KR(ret), K(tenant_id), K_(tenant_id));
+    } else {
+      const ObSimpleTableSchemaV2 *schema = NULL;
+      ObTenantTableId tenant_table_id_lower(tenant_id, OB_MIN_ID);
+      ConstTableIterator iter = table_infos_.lower_bound(tenant_table_id_lower,
+          compare_with_tenant_table_id);
+      bool is_stop = false;
+      for (; OB_SUCC(ret) && iter != table_infos_.end() && !is_stop; iter++) {
+        if (OB_ISNULL(schema = *iter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", KR(ret), KP(schema));
+        } else if (OB_UNLIKELY(tenant_id != schema->get_tenant_id())) {
+          is_stop = true;
+        } else if (tablegroup_id == schema->get_tablegroup_id()) {
+          if (schema->is_user_table()
+            || schema->is_mysql_tmp_table()
+            || schema->is_sys_table()) {
+            primary_table_schema = schema;
+            is_stop = true;
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+int ObSchemaMgr::get_table_schemas_in_tablegroup(
+    const uint64_t tenant_id,
+    const uint64_t dst_schema_id,
+    ObIArray<const ObSimpleTableSchemaV2 *> &schema_array) const
+{
+  int ret = OB_SUCCESS;
+  schema_array.reset();
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id
+              || OB_INVALID_ID == dst_schema_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id),
+              "tablegroup_id", dst_schema_id);
+  } else if (OB_INVALID_TENANT_ID != tenant_id_
+              && OB_SYS_TENANT_ID != tenant_id_
+              && tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    const ObSimpleTableSchemaV2 *schema = NULL;
+    ObTenantTableId tenant_table_id_lower(tenant_id, OB_MIN_ID);
+    ConstTableIterator iter = table_infos_.lower_bound(tenant_table_id_lower,
+        compare_with_tenant_table_id);
+    bool is_stop = false;
+    for (; OB_SUCC(ret) && iter != table_infos_.end() && !is_stop; iter++) {
+      if (OB_ISNULL(schema = *iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", K(ret), KP(schema));
+      } else if (tenant_id != schema->get_tenant_id()) {
+        is_stop = true;
+      } else if (dst_schema_id == schema->get_tablegroup_id()) {
+        if (schema->is_user_table()
+          || schema->is_mysql_tmp_table()
+          || schema->is_sys_table()) {
+          if (OB_FAIL(schema_array.push_back(schema))) {
+            LOG_WARN("failed to push back table schema", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObSchemaMgr::get_table_schemas_in_tenant(
     const uint64_t tenant_id,
@@ -3865,7 +3959,7 @@ int ObSchemaMgr::get_table_schemas_in_tenant(
     for (; OB_SUCC(ret) && iter != table_infos_.end() && !is_stop; iter++) {
       if (OB_ISNULL(schema = *iter)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL ptr", K(schema), K(ret));
+        LOG_WARN("NULL ptr",  K(ret), KP(schema));
       } else if (tenant_id != schema->get_tenant_id()) {
         is_stop = true;
       } else if (OB_FAIL(schema_array.push_back(schema))) {
@@ -4056,7 +4150,7 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         for (; OB_SUCC(ret) && iter != SCHEMA##_infos_.end() && !is_stop; iter++) { \
           if (OB_ISNULL(schema = *iter)) {                                         \
             ret = OB_ERR_UNEXPECTED;                                               \
-            LOG_WARN("NULL ptr", K(schema), K(ret));                               \
+            LOG_WARN("NULL ptr", K(ret), KP(schema));                              \
           } else if (tenant_id != schema->get_tenant_id()) {                       \
             is_stop = true;                                                        \
           } else if (OB_FAIL(schemas.push_back(schema))) {                         \
@@ -4828,7 +4922,7 @@ void ObSchemaMgr::dump() const
           iter != SCHEMA##_infos_.end(); iter++) {        \
         SCHEMA_TYPE *schema = *iter;                      \
         if (NULL == schema) {                             \
-          LOG_INFO("NULL ptr", K(schema));                \
+          LOG_INFO("NULL ptr", KP(schema));                \
         } else {                                          \
           LOG_INFO(#SCHEMA, K(*schema));                  \
         }                                                 \

@@ -137,9 +137,8 @@ public:
       K(check_table_empty_job_ret_code_), K(check_table_empty_job_time_));
 protected:
   int prepare(const share::ObDDLTaskStatus next_task_status);
-  int lock_table(const share::ObDDLTaskStatus next_task_status);
   int check_table_empty(const share::ObDDLTaskStatus next_task_status);
-  int obtain_snapshot();
+  int obtain_snapshot(const share::ObDDLTaskStatus next_task_status);
   bool check_can_validate_column_checksum(
       const bool is_oracle_mode,
       const share::schema::ObColumnSchemaV2 &src_column_schema,
@@ -149,7 +148,6 @@ protected:
       const share::schema::ObTableSchema &dest_table_schema,
       common::hash::ObHashMap<uint64_t, uint64_t> &validate_checksum_column_ids);
   int check_data_dest_tables_columns_checksum(const int64_t execution_id);
-  int unlock_table();
   int fail();
   int success();
   int hold_snapshot(const int64_t snapshot_version);

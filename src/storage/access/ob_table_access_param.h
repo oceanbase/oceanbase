@@ -82,28 +82,23 @@ public:
   virtual ~ObTableIterParam();
   void reset();
   bool is_valid() const;
-  int check_read_info_valid();
   int refresh_lob_column_out_status();
   bool enable_fuse_row_cache(const ObQueryFlag &query_flag) const;
-  const ObTableReadInfo *get_read_info(const bool is_get = false) const
+  const ObITableReadInfo *get_read_info(const bool is_get = false) const
   {
-    return (is_get) ? full_read_info_ : read_info_;
-  }
-  const ObTableReadInfo *get_full_read_info() const
-  {
-    return full_read_info_;
+	  return is_get ? rowkey_read_info_ : read_info_;
   }
   OB_INLINE int64_t get_out_col_cnt() const
   {
     return read_info_ != nullptr ? read_info_->get_request_count() : 0;
   }
+  OB_INLINE int64_t get_full_out_col_cnt() const
+  {
+    return (rowkey_read_info_ != nullptr) ? rowkey_read_info_->get_request_count() : 0;
+  }
   OB_INLINE int64_t get_schema_rowkey_count() const
   {
     return (nullptr != read_info_) ? read_info_->get_schema_rowkey_count() : 0;
-  }
-  OB_INLINE int64_t get_full_out_col_cnt() const
-  {
-    return (full_read_info_ != nullptr) ? full_read_info_->get_request_count() : 0;
   }
   OB_INLINE int64_t get_max_out_col_cnt() const
   {
@@ -111,7 +106,7 @@ public:
   }
   OB_INLINE const ObIArray<share::schema::ObColumnParam *> *get_col_params() const
   {
-    return (read_info_ != nullptr) ? &read_info_->get_columns() : nullptr;
+    return (read_info_ != nullptr) ? read_info_->get_columns() : nullptr;
   }
   OB_INLINE const ObColDescIArray *get_out_col_descs() const
   {
@@ -148,13 +143,11 @@ public:
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
-  const ObTableReadInfo *read_info_;
-  const ObTableReadInfo *full_read_info_;
+  const ObITableReadInfo *read_info_;
+  const ObITableReadInfo *rowkey_read_info_;
   const common::ObIArray<int32_t> *out_cols_project_;
   const common::ObIArray<int32_t> *agg_cols_project_;
   sql::ObPushdownFilterExecutor *pushdown_filter_;
-  // only used in io_callback for query, maybe invalid
-  ObTabletHandle tablet_handle_;
   // only used in ObMemTable
   bool is_multi_version_minor_merge_;
   bool need_scn_;
@@ -193,11 +186,11 @@ public:
   // used for merge
   int init_merge_param(const uint64_t table_id,
                        const common::ObTabletID &tablet_id,
-                       const ObTableReadInfo &read_info,
+                       const ObITableReadInfo &read_info,
                        const bool is_multi_version_merge = false);
   // used for get unique index conflict row
   int init_dml_access_param(const ObRelativeTable &table,
-                            const ObTableReadInfo &full_read_info,
+                            const ObITableReadInfo &rowkey_read_info,
                             const share::schema::ObTableSchemaParam &schema_param,
                             const common::ObIArray<int32_t> *out_cols_project);
   int get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);

@@ -148,12 +148,12 @@ public:
   virtual int get_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
-      const ObTableReadInfo &read_info,
+      const ObITableReadInfo &read_info,
       ObDatumRow &row) final;
   virtual int exist_row(
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
-      const ObTableReadInfo &read_info,
+      const ObITableReadInfo &read_info,
       bool &exist,
       bool &found);
 protected:
@@ -165,7 +165,7 @@ protected:
 private:
   int init_by_read_info(
       const ObMicroBlockData &block_data,
-      const ObTableReadInfo &read_info);
+      const storage::ObITableReadInfo &read_info);
   int init_by_columns_desc(
       const ObMicroBlockData &block_data,
       const int64_t schema_rowkey_cnt,
@@ -194,7 +194,12 @@ public:
   virtual void reset();
   virtual int init(
       const ObMicroBlockData &block_data,
-      const ObTableReadInfo &read_info) override;
+      const storage::ObITableReadInfo &read_info) override;
+  //when there is not read_info in input parameters, it indicates reading all columns from all rows
+  //when the incoming datum_utils is nullptr, it indicates not calling locate_range or find_bound
+  virtual int init(
+      const ObMicroBlockData &block_data,
+	  const ObStorageDatumUtils *datum_utils) override;
   virtual int get_row(const int64_t index, ObDatumRow &row) override;
   virtual int get_row_header(
       const int64_t row_idx,
@@ -223,8 +228,7 @@ public:
       char *buf,
       const int64_t size,
       const char *block,
-      const int64_t block_size,
-      const ObColDescIArray &full_schema_cols);
+      const int64_t block_size);
   static int update_cached_decoders(char *cache, const int64_t cache_size,
       const char *old_block, const char *cur_block, const int64_t block_size);
   // Filter interface for filter pushdown
@@ -345,9 +349,7 @@ private:
   const ObBlockCachedDecoderHeader *cached_decoder_;
   ObIRowIndex *row_index_;
   void *decoder_buf_;
-  char rowkey_decoder_buf_[sizeof(ObColumnDecoder) * common::OB_MAX_ROWKEY_COLUMN_NUMBER];
   ObColumnDecoder *decoders_;
-  ObColumnDecoder *rowkey_decoder_;
   // array size is double of max_column_count, because we may need two decoders for one column,
   // e.g.: column equal encoding, one for column equal decoder and one for referenced column decoder.
   ObFixedArray<const ObIColumnDecoder *, ObIAllocator> need_release_decoders_;

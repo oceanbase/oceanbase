@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "share/ob_cluster_version.h" // for GET_MIN_DATA_VERSION
 #include "lib/mysqlclient/ob_isql_client.h"
+#include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
 
 namespace oceanbase
 {
@@ -270,5 +271,20 @@ int ObShareUtil::parse_all_server_list(
   }
   return ret;
 }
+
+bool ObShareUtil::is_tenant_enable_rebalance(const uint64_t tenant_id)
+{
+  bool bret = false;
+  if (is_valid_tenant_id(tenant_id)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id));
+    } else {
+      bret = tenant_config->enable_rebalance;
+    }
+  }
+  return bret;
+}
+
 } //end namespace share
 } //end namespace oceanbase

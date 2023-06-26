@@ -73,6 +73,8 @@ bool ObSSTableBasicMeta::operator!=(const ObSSTableBasicMeta &other) const
 }
 bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
 {
+  // don't need to compare upper_trans_version, because meta's upper_trans_version
+  // may be different from sstable shell's
   return version_ == other.version_
       && length_ == other.length_
       && row_count_ == other.row_count_
@@ -91,7 +93,6 @@ bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
       && create_snapshot_version_ == other.create_snapshot_version_
       && progressive_merge_round_ == other.progressive_merge_round_
       && progressive_merge_step_ == other.progressive_merge_step_
-      && upper_trans_version_ == other.upper_trans_version_
       && max_merged_trans_version_ == other.max_merged_trans_version_
       && recycle_version_ == other.recycle_version_
       && ddl_scn_ == other.ddl_scn_
@@ -368,13 +369,12 @@ int ObSSTableBasicMeta::set_upper_trans_version(const int64_t upper_trans_versio
 
 //================================== ObSSTableMeta ==================================
 ObSSTableMeta::ObSSTableMeta()
-  : is_inited_(false),
-    allocator_(nullptr),
-    lock_(),
-    basic_meta_(),
-    column_checksums_(),
+  : basic_meta_(),
     data_root_info_(),
-    macro_info_()
+    macro_info_(),
+    column_checksums_(nullptr),
+    column_checksum_count_(0),
+    is_inited_(false)
 {
 }
 
@@ -383,7 +383,7 @@ ObSSTableMeta::~ObSSTableMeta()
   reset();
 }
 
-int ObSSTableMeta::load_root_block_data()
+int ObSSTableMeta::load_root_block_data(common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObMicroBlockDesMeta des_meta(basic_meta_.compressor_type_, basic_meta_.encrypt_id_,
@@ -391,49 +391,12 @@ int ObSSTableMeta::load_root_block_data()
   if (OB_UNLIKELY(SSTABLE_WRITE_BUILDING != basic_meta_.status_)) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("state is not match.", K(ret), K_(basic_meta_.status));
-  } else if (OB_FAIL(data_root_info_.load_root_block_data(des_meta))) {
+  } else if (OB_FAIL(data_root_info_.load_root_block_data(allocator, des_meta))) {
     LOG_WARN("fail to load root block data for data root info", K(ret), K(data_root_info_));
-  } else if (OB_FAIL(macro_info_.load_root_block_data(des_meta))) {
+  } else if (OB_FAIL(macro_info_.load_root_block_data(allocator, des_meta))) {
     LOG_WARN("fail to load root block data for macro info", K(ret), K(macro_info_));
   }
   return ret;
-}
-
-int ObSSTableMeta::get_index_tree_root(
-    const ObTableReadInfo &index_read_info,
-    blocksstable::ObMicroBlockData &index_data,
-    const bool need_transform)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("SSTable isn't initialized", K(ret));
-  } else if (OB_UNLIKELY(is_empty())) {
-    index_data.reset();
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("SSTable is empty", K(ret));
-  } else if (OB_UNLIKELY(!data_root_info_.get_addr().is_valid()
-                      || !data_root_info_.get_block_data().is_valid())) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("meta isn't ready for read", K(ret), K_(data_root_info));
-  } else if (!need_transform) {
-    // do not need transform
-    index_data = data_root_info_.get_block_data();
-  } else if (OB_NOT_NULL(data_root_info_.get_block_data().get_extra_buf())) {
-    // block is already transformed
-    index_data = data_root_info_.get_block_data();
-  } else if (OB_FAIL(transform_root_block_data(index_read_info))) {
-    LOG_WARN("fail to transform index tree root block data", K(ret), K(index_read_info), KPC(this));
-  } else {
-    index_data = data_root_info_.get_block_data();
-  }
-  return ret;
-}
-
-int ObSSTableMeta::transform_root_block_data(const ObTableReadInfo &read_info)
-{
-  TCWLockGuard guard(lock_);
-  return data_root_info_.transform_root_block_data(read_info);
 }
 
 void ObSSTableMeta::reset()
@@ -441,21 +404,20 @@ void ObSSTableMeta::reset()
   data_root_info_.reset();
   macro_info_.reset();
   basic_meta_.reset();
-  column_checksums_.reset();
-  allocator_ = nullptr;
+  column_checksums_ = nullptr;
+  column_checksum_count_ = 0;
   is_inited_ = false;
 }
 
 int ObSSTableMeta::init_base_meta(
     const ObTabletCreateSSTableParam &param,
-    common::ObIAllocator *allocator)
+    common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!param.is_valid()) || OB_ISNULL(allocator)) {
+  if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(param), KP(allocator));
+    LOG_WARN("invalid argument", K(ret), K(param));
   } else {
-    allocator_ = allocator;
     basic_meta_.status_ = SSTABLE_INIT;
     basic_meta_.row_count_ = param.row_count_;
     basic_meta_.occupy_size_ = param.occupy_size_;
@@ -490,20 +452,22 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.master_key_id_ = param.master_key_id_;
     MEMCPY(basic_meta_.encrypt_key_, param.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     basic_meta_.length_ = basic_meta_.get_serialize_size();
-    if (OB_FAIL(prepare_column_checksum(param.column_checksums_))) {
+    if (OB_FAIL(prepare_column_checksum(param.column_checksums_, allocator))) {
       LOG_WARN("fail to prepare column checksum", K(ret), K(param));
     }
   }
   return ret;
 }
 
-int ObSSTableMeta::init_data_index_tree_info(const storage::ObTabletCreateSSTableParam &param)
+int ObSSTableMeta::init_data_index_tree_info(
+    const storage::ObTabletCreateSSTableParam &param,
+    common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(allocator_) && OB_UNLIKELY(!param.is_valid())) {
+  if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid param", K(ret), K(param), KP(allocator_));
-  } else if (OB_FAIL(data_root_info_.init_root_block_info(allocator_, param.root_block_addr_,
+    LOG_WARN("invalid param", K(ret), K(param));
+  } else if (OB_FAIL(data_root_info_.init_root_block_info(allocator, param.root_block_addr_,
       param.root_block_data_))) {
     LOG_WARN("fail to init data root info", K(ret), K(param));
   } else {
@@ -512,17 +476,22 @@ int ObSSTableMeta::init_data_index_tree_info(const storage::ObTabletCreateSSTabl
   return ret;
 }
 
-int ObSSTableMeta::prepare_column_checksum(const common::ObIArray<int64_t> &column_checksums)
+int ObSSTableMeta::prepare_column_checksum(
+    const common::ObIArray<int64_t> &column_checksums,
+    common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  column_checksums_.set_allocator(allocator_);
-  if (OB_FAIL(column_checksums_.reserve(column_checksums.count()))) {
-    LOG_WARN("fail to reserve column checksums array", K(ret), "count", column_checksums.count());
+  const int64_t count = column_checksums.count();
+  if (OB_UNLIKELY(nullptr != column_checksums_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("column checksum isn't empty, cannot initialize twice", K(ret), KP(column_checksums_));
+  } else if (count > 0 && OB_ISNULL(column_checksums_ = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate column checksum memory", K(ret), K(count));
   } else {
+    column_checksum_count_ = column_checksums.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < column_checksums.count(); ++i) {
-      if (OB_FAIL(column_checksums_.push_back(column_checksums.at(i)))) {
-        LOG_WARN("fail to push back column checksum", K(ret), K(i));
-      }
+      column_checksums_[i] = column_checksums.at(i);
     }
   }
   return ret;
@@ -532,31 +501,30 @@ bool ObSSTableMeta::check_meta() const
 {
   return basic_meta_.is_valid()
       && data_root_info_.is_valid()
-      && macro_info_.is_valid()
-      && nullptr != allocator_;
+      && macro_info_.is_valid();
 }
 
 int ObSSTableMeta::init(
     const ObTabletCreateSSTableParam &param,
-    common::ObIAllocator *allocator)
+    common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot initialize twice", K(ret));
-  } else if (OB_UNLIKELY(!param.is_valid()) || OB_ISNULL(allocator)) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(param), KP(allocator));
+    LOG_WARN("invalid arguments", K(ret), K(param));
   } else if (OB_FAIL(init_base_meta(param, allocator))) {
-    LOG_WARN("fail to init basic meta", K(ret), K(param), KP(allocator));
-  } else if (OB_FAIL(init_data_index_tree_info(param))) {
-    LOG_WARN("fail to init data index tree info", K(ret), K(param), KP(allocator));
+    LOG_WARN("fail to init basic meta", K(ret), K(param));
+  } else if (OB_FAIL(init_data_index_tree_info(param, allocator))) {
+    LOG_WARN("fail to init data index tree info", K(ret), K(param));
   } else if (OB_UNLIKELY(SSTABLE_WRITE_BUILDING != basic_meta_.status_)) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("sstable state is not match.", K(ret), K(basic_meta_.status_));
   } else if (OB_FAIL(macro_info_.init_macro_info(allocator, param))) {
-    LOG_WARN("fail to init macro info", K(ret), K(param), KP(allocator));
-  } else if (OB_FAIL(load_root_block_data())) {
+    LOG_WARN("fail to init macro info", K(ret), K(param));
+  } else if (OB_FAIL(load_root_block_data(allocator))) {
     LOG_WARN("fail to load root block data", K(ret), K(param));
   } else if (OB_UNLIKELY(!check_meta())) {
     ret = OB_ERR_UNEXPECTED;
@@ -602,18 +570,20 @@ int ObSSTableMeta::serialize_(char *buf, const int64_t buf_len, int64_t &pos) co
   int ret = OB_SUCCESS;
   if (OB_FAIL(basic_meta_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize basic meta", K(ret), KP(buf), K(buf_len), K(pos), K_(basic_meta));
-  } else if (OB_FAIL(column_checksums_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("fail to serialize column checksums", K(ret), KP(buf), K(buf_len), K(pos));
-  } else if (OB_FAIL(data_root_info_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("fail to serialize data root info", K(ret), K(buf_len), K(pos), K(data_root_info_));
-  } else if (OB_FAIL(macro_info_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("fail to serialize macro info", K(ret), K(buf_len), K(pos), K(macro_info_));
+  } else {
+    OB_UNIS_ENCODE_ARRAY(column_checksums_, column_checksum_count_);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(data_root_info_.serialize(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize data root info", K(ret), K(buf_len), K(pos), K(data_root_info_));
+    } else if (OB_FAIL(macro_info_.serialize(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize macro info", K(ret), K(buf_len), K(pos), K(macro_info_));
+    }
   }
   return ret;
 }
 
 int ObSSTableMeta::deserialize(
-    common::ObIAllocator *allocator,
+    common::ObArenaAllocator &allocator,
     const char *buf,
     const int64_t data_len,
     int64_t &pos)
@@ -625,9 +595,9 @@ int ObSSTableMeta::deserialize(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot deserialize inited sstable meta", K(ret), K_(is_inited));
-  } else if (OB_ISNULL(allocator) || OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0 || pos < 0)) {
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0 || pos < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(allocator), KP(buf), K(data_len), K(pos));
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(data_len), K(pos));
   } else {
     OB_UNIS_DECODE(version);
     OB_UNIS_DECODE(len);
@@ -636,7 +606,7 @@ int ObSSTableMeta::deserialize(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("object version mismatch", K(ret), K(version));
     } else if (OB_FAIL(deserialize_(allocator, buf + pos, data_len, tmp_pos))) {
-      LOG_WARN("fail to deserialize_", K(ret), KP(allocator), K(data_len), K(tmp_pos), K(pos));
+      LOG_WARN("fail to deserialize_", K(ret), K(data_len), K(tmp_pos), K(pos));
     } else if (OB_UNLIKELY(len != tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, serialize may have bug", K(ret), K(len), K(tmp_pos), KPC(this));
@@ -652,19 +622,25 @@ int ObSSTableMeta::deserialize(
 }
 
 int ObSSTableMeta::deserialize_(
-    common::ObIAllocator *allocator,
+    common::ObArenaAllocator &allocator,
     const char *buf,
     const int64_t data_len,
     int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  allocator_ = allocator;
-  column_checksums_.set_allocator(allocator);
   if (OB_FAIL(basic_meta_.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize basic meta", K(ret), KP(buf), K(data_len), K(pos));
-  } else if (OB_FAIL(column_checksums_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("fail to deserialize column checksums", K(ret), KP(buf), K(data_len), K(pos));
   } else {
+    OB_UNIS_DECODE(column_checksum_count_);
+    if (OB_FAIL(ret)) {
+    } else if (column_checksum_count_ > 0 && OB_ISNULL(column_checksums_ = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * column_checksum_count_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate column checksum memory", K(ret), K(column_checksum_count_));
+    } else {
+      OB_UNIS_DECODE_ARRAY(column_checksums_, column_checksum_count_);
+    }
+  }
+  if (OB_SUCC(ret)) {
     ObMicroBlockDesMeta des_meta(basic_meta_.compressor_type_, basic_meta_.encrypt_id_,
                                  basic_meta_.master_key_id_, basic_meta_.encrypt_key_);
     if (OB_FAIL(data_root_info_.deserialize(allocator, des_meta, buf, data_len, pos))) {
@@ -691,10 +667,49 @@ int64_t ObSSTableMeta::get_serialize_size_() const
   int64_t len = 0;
   MacroBlockId id_map_entry_id;
   len += basic_meta_.get_serialize_size();
-  len += column_checksums_.get_serialize_size();
+  OB_UNIS_ADD_LEN_ARRAY(column_checksums_, column_checksum_count_);
   len += data_root_info_.get_serialize_size();
   len += macro_info_.get_serialize_size();
   return len;
+}
+
+int64_t ObSSTableMeta::get_variable_size() const
+{
+  return sizeof(int64_t) * column_checksum_count_ // column checksums
+       + data_root_info_.get_variable_size()
+       + macro_info_.get_variable_size();
+}
+
+int ObSSTableMeta::deep_copy(
+    char *buf,
+    const int64_t buf_len,
+    int64_t &pos,
+    ObSSTableMeta *&dest) const
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_pos = pos;
+  const int64_t deep_size = get_deep_copy_size();
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < deep_size + pos)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(deep_size), K(pos));
+  } else {
+    char *meta_buf = buf + pos;
+    dest = new (meta_buf) ObSSTableMeta();
+    pos += sizeof(ObSSTableMeta);
+    dest->basic_meta_ = basic_meta_;
+    dest->column_checksum_count_ = column_checksum_count_;
+    dest->column_checksums_ = reinterpret_cast<int64_t *>(buf + pos);
+    MEMCPY(dest->column_checksums_, column_checksums_, sizeof(int64_t) * column_checksum_count_);
+    pos += sizeof(int64_t) * column_checksum_count_;
+    if (OB_FAIL(data_root_info_.deep_copy(buf, buf_len, pos, dest->data_root_info_))) {
+      LOG_WARN("fail to deep copy data root info", K(ret), KP(buf), K(buf_len), K(pos), K(data_root_info_));
+    } else if (OB_FAIL(macro_info_.deep_copy(buf, buf_len, pos, dest->macro_info_))) {
+      LOG_WARN("fail to deep copy macro info", K(ret), KP(buf), K(buf_len), K(pos), K(macro_info_));
+    } else {
+      dest->is_inited_ = is_inited_;
+    }
+  }
+  return ret;
 }
 
 //================================== ObMigrationSSTableParam ==================================
@@ -868,10 +883,15 @@ int ObSSTableMetaChecker::check_sstable_meta_strict_equality(
   if (!old_sstable_meta.is_valid() || !new_sstable_meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("old sstable meta or new sstable meta is invalid", K(ret));
-  } else if (OB_UNLIKELY(old_sstable_meta.get_basic_meta() != new_sstable_meta.get_basic_meta()
-      || !is_array_equal(old_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum()))) {
+  } else if (OB_UNLIKELY(old_sstable_meta.get_basic_meta() != new_sstable_meta.get_basic_meta())) {
     ret = OB_INVALID_DATA;
-    LOG_WARN("new sstable meta is not equal to old sstable meta", K(ret));
+    LOG_WARN("new sstable basic meta is not equal to old one", K(ret));
+  } else if (OB_UNLIKELY(old_sstable_meta.get_col_checksum_cnt() != new_sstable_meta.get_col_checksum_cnt())) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("new sstable column checksum count is not equal to old one", K(ret));
+  } else if (OB_UNLIKELY(0 != MEMCMP(old_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum(), old_sstable_meta.get_col_checksum_cnt()))) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("new sstable column checksum is not equal to one", K(ret));
   }
 
   return ret;
@@ -888,8 +908,8 @@ int ObSSTableMetaChecker::check_sstable_meta(
     LOG_WARN("old sstable meta or new sstable meta is invalid", K(ret), K(old_sstable_meta), K(new_sstable_meta));
   } else if (OB_FAIL(check_sstable_basic_meta_(old_sstable_meta.get_basic_meta(), new_sstable_meta.get_basic_meta()))) {
     LOG_WARN("failed to check sstable basic meta", K(ret), K(old_sstable_meta), K(new_sstable_meta));
-    // TODO replace check_sstable_column_checksum_ with is_array_equal
-  } else if (OB_FAIL(check_sstable_column_checksum_(old_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum()))) {
+  } else if (OB_FAIL(check_sstable_column_checksum_(old_sstable_meta.get_col_checksum(), old_sstable_meta.get_col_checksum_cnt(),
+      new_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum_cnt()))) {
     LOG_WARN("failed to check sstable column checksum", K(ret), K(old_sstable_meta), K(new_sstable_meta));
   }
   return ret;
@@ -905,8 +925,6 @@ int ObSSTableMetaChecker::check_sstable_meta(
     LOG_WARN("migration param or new sstable meta is invalid", K(ret), K(migration_param), K(new_sstable_meta));
   } else if (OB_FAIL(check_sstable_basic_meta_(migration_param.basic_meta_, new_sstable_meta.get_basic_meta()))) {
     LOG_WARN("failed to check sstable basic meta", K(ret), K(migration_param), K(new_sstable_meta));
-  } else if (OB_FAIL(check_sstable_column_checksum_(migration_param.column_checksums_, new_sstable_meta.get_col_checksum()))) {
-    LOG_WARN("failed to check sstable column checksum", K(ret), K(migration_param), K(new_sstable_meta));
   }
   return ret;
 }
@@ -946,17 +964,19 @@ int ObSSTableMetaChecker::check_sstable_basic_meta_(
 }
 
 int ObSSTableMetaChecker::check_sstable_column_checksum_(
-    const common::ObIArray<int64_t> &old_column_checksum,
-    const common::ObIArray<int64_t> &new_column_checksum)
+    const int64_t *old_column_checksum,
+    const int64_t old_column_count,
+    const int64_t *new_column_checksum,
+    const int64_t new_column_count)
 {
   int ret = OB_SUCCESS;
-  if (old_column_checksum.count() != new_column_checksum.count()) {
+  if (old_column_count != new_column_count) {
     ret = OB_INVALID_DATA;
     LOG_WARN("col_checksum_ not match", K(ret), K(old_column_checksum), K(new_column_checksum));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < old_column_checksum.count(); ++i) {
-      const int64_t &old_col_checksum = old_column_checksum.at(i);
-      const int64_t &new_col_checksum = new_column_checksum.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < old_column_count; ++i) {
+      const int64_t &old_col_checksum = old_column_checksum[i];
+      const int64_t &new_col_checksum = new_column_checksum[i];
       if (old_col_checksum != new_col_checksum) {
         ret = OB_INVALID_DATA;
         LOG_WARN("column checksum not match", K(ret), K(i), K(old_col_checksum), K(new_col_checksum));
@@ -966,6 +986,27 @@ int ObSSTableMetaChecker::check_sstable_column_checksum_(
   return ret;
 }
 
+int ObSSTableMetaChecker::check_sstable_column_checksum_(
+    const common::ObIArray<int64_t> &old_column_checksum,
+    const int64_t *new_column_checksum,
+    const int64_t new_column_count)
+{
+  int ret = OB_SUCCESS;
+  if (old_column_checksum.count() != new_column_count) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("col_checksum_ not match", K(ret), K(old_column_checksum), K(new_column_checksum));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < old_column_checksum.count(); ++i) {
+      const int64_t &old_col_checksum = old_column_checksum.at(i);
+      const int64_t &new_col_checksum = new_column_checksum[i];
+      if (old_col_checksum != new_col_checksum) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("column checksum not match", K(ret), K(i), K(old_col_checksum), K(new_col_checksum));
+      }
+    }
+  }
+  return ret;
+}
 
 } // namespace blocksstable
 } // namespace oceanbase

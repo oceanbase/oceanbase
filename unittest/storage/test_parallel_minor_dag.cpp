@@ -56,7 +56,7 @@ public:
   const uint64_t tenant_id_;
   common::ObArenaAllocator allocator_;
   ObTenantBase tenant_base_;
-  ObSSTable fake_sstables_[MAX_SSTABLE_CNT];
+  ObSSTable *fake_sstables_[MAX_SSTABLE_CNT];
 };
 
 void TestParallelMinorDag::SetUpTestCase()
@@ -71,21 +71,31 @@ void TestParallelMinorDag::TearDownTestCase()
 
 void TestParallelMinorDag::SetUp()
 {
-    ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, tenant_id_);
-    ASSERT_EQ(OB_SUCCESS, t3m->init());
+  ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, tenant_id_);
+  ASSERT_EQ(OB_SUCCESS, t3m->init());
 
-    tenant_base_.set(t3m);
-    ObTenantEnv::set_tenant(&tenant_base_);
-    ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
+  tenant_base_.set(t3m);
+  ObTenantEnv::set_tenant(&tenant_base_);
+  ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
+
+  MEMSET(fake_sstables_, 0, sizeof(ObSSTable*) * MAX_SSTABLE_CNT );
 }
 
 void TestParallelMinorDag::TearDown()
 {
+  for (int i = 0; i < MAX_SSTABLE_CNT; ++i) {
+    if (nullptr != fake_sstables_[i]) {
+      fake_sstables_[i]->~ObSSTable();
+      allocator_.free(fake_sstables_[i]);
+      fake_sstables_[i] = nullptr;
+    }
+  }
+  allocator_.reset();
+
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
   t3m->destroy();
   ObTenantEnv::set_tenant(nullptr);
 }
-
 
 int TestParallelMinorDag::prepare_merge_result(
     const int64_t sstable_cnt,
@@ -105,25 +115,32 @@ int TestParallelMinorDag::prepare_merge_result(
 
   int64_t log_ts = 1;
   for (int i = 0; OB_SUCC(ret) && i < sstable_cnt; ++i) {
-    fake_sstables_[i].key_.scn_range_.start_scn_.convert_for_tx(log_ts++);
-    fake_sstables_[i].key_.scn_range_.end_scn_.convert_for_tx(log_ts);
-    if (OB_FAIL(result.handle_.add_table(&fake_sstables_[i]))) {
-      COMMON_LOG(WARN, "failed to push table", K(ret), K(i), K(fake_sstables_[i]));
+    char *buf = static_cast<char *>(allocator_.alloc(sizeof(ObSSTable)));
+    ObSSTable *tmp_sstable = new (buf) ObSSTable();
+    fake_sstables_[i] = tmp_sstable;
+    fake_sstables_[i]->key_.scn_range_.start_scn_.convert_for_tx(log_ts++);
+    fake_sstables_[i]->key_.scn_range_.end_scn_.convert_for_tx(log_ts);
+    fake_sstables_[i]->key_.table_type_ = ObITable::TableType::MINI_SSTABLE;
+    ObTableHandleV2 table_handle;
+    if (OB_FAIL(table_handle.set_sstable(fake_sstables_[i], &allocator_))) {
+      COMMON_LOG(WARN, "failed to set stable", K(ret));
+    } else if (OB_FAIL(result.handle_.add_table(table_handle))) {
+      COMMON_LOG(WARN, "failed to push table", K(ret), K(i), KPC(fake_sstables_[i]));
     }
   }
-  result.scn_range_.start_scn_ = fake_sstables_[0].key_.scn_range_.start_scn_;
-  result.scn_range_.end_scn_ = fake_sstables_[sstable_cnt - 1].key_.scn_range_.end_scn_;
+  result.scn_range_.start_scn_ = fake_sstables_[0]->key_.scn_range_.start_scn_;
+  result.scn_range_.end_scn_ = fake_sstables_[sstable_cnt - 1]->key_.scn_range_.end_scn_;
   return ret;
 }
 
 share::SCN TestParallelMinorDag::get_start_log_ts(const int64_t idx)
 {
-  return fake_sstables_[idx].key_.scn_range_.start_scn_;
+  return fake_sstables_[idx]->key_.scn_range_.start_scn_;
 }
 
 share::SCN TestParallelMinorDag::get_end_log_ts(const int64_t idx)
 {
-  return fake_sstables_[idx].key_.scn_range_.end_scn_;
+  return fake_sstables_[idx]->key_.scn_range_.end_scn_;
 }
 
 void check_result_valid(const ObGetMergeTablesResult &result)
@@ -190,9 +207,9 @@ TEST_F(TestParallelMinorDag, test_parallel_interval)
 }
 
 #define CHECK_IN_RANGE(start_log_ts, end_log_ts, flag) \
-    fake_sstables_[0].key_.scn_range_.start_scn_.convert_for_tx(start_log_ts); \
-    fake_sstables_[0].key_.scn_range_.end_scn_.convert_for_tx(end_log_ts); \
-    ASSERT_EQ(flag, range_mgr.in_execute_range(&fake_sstables_[0]));
+    fake_sstables_[0]->key_.scn_range_.start_scn_.convert_for_tx(start_log_ts); \
+    fake_sstables_[0]->key_.scn_range_.end_scn_.convert_for_tx(end_log_ts); \
+    ASSERT_EQ(flag, range_mgr.in_execute_range(fake_sstables_[0]));
 
 ObScnRange construct_scn_range(const int64_t start_scn, const int64_t end_scn)
 {
@@ -205,6 +222,9 @@ ObScnRange construct_scn_range(const int64_t start_scn, const int64_t end_scn)
 TEST_F(TestParallelMinorDag, test_range_mgr)
 {
   ObMinorExecuteRangeMgr range_mgr;
+  int64_t sstable_cnt = 40;
+  ObGetMergeTablesResult result;
+  ASSERT_EQ(OB_SUCCESS, prepare_merge_result(sstable_cnt, result));
 
   range_mgr.exe_range_array_.push_back(construct_scn_range(60, 80));
   range_mgr.exe_range_array_.push_back(construct_scn_range(50, 70));

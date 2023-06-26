@@ -188,6 +188,14 @@ DEF_TO_STRING(ObDatumRowkey)
   return pos;
 }
 
+void ObDatumRowkey::destroy(ObIAllocator &allocator)
+{
+  if (OB_NOT_NULL(datums_)) {
+    allocator.free(datums_);
+    datums_ = nullptr;
+  }
+  reset();
+}
 
 // shallow copy the obj value
 int ObDatumRowkey::from_rowkey(const ObRowkey &rowkey, common::ObIAllocator &allocator)

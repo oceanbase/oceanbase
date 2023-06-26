@@ -80,7 +80,7 @@ private:
       const ObMicroBlockData &block_data,
       const ObDatumRow *&row);
 private:
-  const ObTableReadInfo *read_info_;
+  const ObITableReadInfo *read_info_;
   ObDatumRow row_;
   ObDatumRow cache_project_row_;
 };

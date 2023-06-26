@@ -658,7 +658,7 @@ int ObDupTableLSHandler::ls_loop_handle()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  // TODO check stopped
+
   if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)
       || OB_ISNULL(ts_sync_mgr_ptr_)) {
     ret = OB_NOT_INIT;

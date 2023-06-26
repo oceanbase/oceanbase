@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define UNIITTEST_DEBUG
+#define UNITTEST_DEBUG
 
 #include "lib/function/ob_function.h"
 #include "lib/container/ob_array.h"

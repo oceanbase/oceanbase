@@ -267,6 +267,10 @@ public:
   int get_table_schemas_in_tablegroup(const uint64_t tenant_id,
                                       const uint64_t tablegroup_id,
                                       common::ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas);
+  int get_primary_table_schema_in_tablegroup(const uint64_t tenant_id,
+                                             const uint64_t tablegroup_id,
+                                             const ObSimpleTableSchemaV2 *&primary_table_schema);
+
   int get_table_schemas_in_tablespace(const uint64_t tenant_id,
                                       const uint64_t tablespace_id,
                                       common::ObIArray<const ObTableSchema *> &table_schemas);

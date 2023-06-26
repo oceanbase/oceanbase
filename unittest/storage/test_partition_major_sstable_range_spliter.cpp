@@ -209,7 +209,12 @@ class TestPartitionMajorSSTableRangeSliter : public ::testing::Test
 {
   static const int64_t MAX_BUF_LENGTH = 1024;
 public:
-  TestPartitionMajorSSTableRangeSliter() : buf_(nullptr), is_inited_(false) {}
+  TestPartitionMajorSSTableRangeSliter() : buf_(nullptr), is_inited_(false)
+  {
+    major_sstable_.meta_ = &sstable_meta_;
+    major_sstable_.addr_.set_none_addr();
+    major_sstable_.meta_->is_inited_ = true;
+  }
   virtual ~TestPartitionMajorSSTableRangeSliter() {}
 
 public:
@@ -219,9 +224,12 @@ public:
 private:
   void set_major_sstable_meta(int64_t macro_block_count, int64_t occupy_size, int64_t row_count)
   {
-    major_sstable_.meta_.basic_meta_.data_macro_block_count_ = macro_block_count;
-    major_sstable_.meta_.basic_meta_.occupy_size_ = occupy_size;
-    major_sstable_.meta_.basic_meta_.row_count_ = row_count;
+    major_sstable_.meta_->basic_meta_.data_macro_block_count_ = macro_block_count;
+    major_sstable_.meta_->basic_meta_.occupy_size_ = occupy_size;
+    major_sstable_.meta_->basic_meta_.row_count_ = row_count;
+    major_sstable_.addr_.set_none_addr();
+    major_sstable_.data_macro_block_count_ = macro_block_count;
+    major_sstable_.meta_->is_inited_ = true;
   }
   int set_major_sstable_macro_blocks(const ObString &str);
   void reset_major_sstable()
@@ -238,33 +246,38 @@ private:
 private:
   common::ObArenaAllocator allocator_;
   ObMockSSTableV2 major_sstable_;
+  ObSSTableMeta sstable_meta_;
   char *buf_;
   ObSEArray<ObColDesc, 3> col_descs_;
-  ObTableReadInfo full_read_info_;
+  ObTableReadInfo idx_read_info_;
   bool is_inited_;
 };
 
 void TestPartitionMajorSSTableRangeSliter::SetUp()
 {
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   if (!is_inited_) {
     OB_SERVER_BLOCK_MGR.super_block_.body_.macro_block_size_ = 1;
 
     // major sstable
     major_sstable_.set_table_type(ObITable::MAJOR_SSTABLE);
-    major_sstable_.meta_.basic_meta_.data_macro_block_count_ = 0;
-    major_sstable_.meta_.basic_meta_.occupy_size_ = 0;
-    major_sstable_.meta_.basic_meta_.row_count_ = 0;
+    major_sstable_.meta_->basic_meta_.data_macro_block_count_ = 0;
+    major_sstable_.meta_->basic_meta_.occupy_size_ = 0;
+    major_sstable_.meta_->basic_meta_.row_count_ = 0;
     major_sstable_.valid_for_reading_ = true;
+    major_sstable_.addr_.set_none_addr();
+    major_sstable_.data_macro_block_count_ = 0;
+    major_sstable_.meta_->is_inited_ = true;
 
     ObColDesc col_desc;
     col_desc.col_id_ = 1;
     col_desc.col_type_.set_int();
     col_descs_.reset();
-    full_read_info_.reset();
+    idx_read_info_.reset();
     ASSERT_EQ(OB_SUCCESS, col_descs_.push_back(col_desc));
     ASSERT_EQ(OB_SUCCESS, col_descs_.push_back(col_desc));
     ASSERT_EQ(OB_SUCCESS, storage::ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(col_descs_));
-    ASSERT_EQ(OB_SUCCESS, full_read_info_.init(allocator_, 16000, 1, lib::is_oracle_mode(), col_descs_, true));
+    ASSERT_EQ(OB_SUCCESS, idx_read_info_.init(allocator_, 2, 1, lib::is_oracle_mode(), col_descs_, nullptr/*storage_cols_index*/));
 
     // buf
     buf_ = static_cast<char *>(allocator_.alloc(MAX_BUF_LENGTH));
@@ -351,7 +364,7 @@ void TestPartitionMajorSSTableRangeSliter::inner_test_split_ranges(
     ASSERT_EQ(OB_SUCCESS, set_major_sstable_macro_blocks(macro_block_str));
   }
 
-  ASSERT_EQ(OB_SUCCESS, range_spliter.init(*full_read_info_.get_index_read_info(), &major_sstable_, tablet_size, allocator_));
+  ASSERT_EQ(OB_SUCCESS, range_spliter.init(idx_read_info_, &major_sstable_, tablet_size, allocator_));
   ASSERT_EQ(OB_SUCCESS, range_spliter.split_ranges(range_array));
   ASSERT_EQ(OB_SUCCESS, check_ranges_result(range_array, split_ranges, equal));
   ASSERT_TRUE(equal);
@@ -413,6 +426,7 @@ TEST_F(TestPartitionMajorSSTableRangeSliter, test_split_ranges)
 
 int main(int argc, char **argv)
 {
+  system("rm -f test_partition_major_sstable_range_spliter.log*");
   oceanbase::common::ObLogger::get_logger().set_file_name("test_partition_major_sstable_range_spliter.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   ::testing::InitGoogleTest(&argc, argv);

@@ -72,9 +72,9 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(remove_b_pid, remove_b_ele_epoch, args.type_));
     EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(args, remove_b_pid, remove_b_ele_epoch, remove_b_version));
 
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // 2. B is elected to be the leader
     block_net(leader_idx, b_idx);
@@ -88,7 +88,7 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
     unblock_net(leader_idx, b_idx);
 
     // 4. A's memberlist will be reset
-    EXPECT_UNTIL_EQ(true, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(true, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
     leader.reset();
 
     // 5. B remove C
@@ -101,9 +101,9 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(remove_c_pid, remove_c_ele_epoch, remove_c_args.type_));
     EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(remove_c_args, remove_c_pid, remove_c_ele_epoch, remove_c_version));
 
-    EXPECT_TRUE(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(c_addr));
-    EXPECT_FALSE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(c_addr));
-    EXPECT_TRUE(c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(c_addr));
+    EXPECT_TRUE(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(c_addr));
+    EXPECT_FALSE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(c_addr));
+    EXPECT_TRUE(c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(c_addr));
 
     // 6. the leader B revokes and takeover again
     for (auto srv: get_cluster()) {
@@ -117,8 +117,8 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
     EXPECT_UNTIL_EQ(true, b_handle->palf_handle_impl_->state_mgr_.is_leader_active());
 
     // 7. C will be removed successfully
-    EXPECT_FALSE(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(c_addr));
-    EXPECT_FALSE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(c_addr));
+    EXPECT_FALSE(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(c_addr));
+    EXPECT_FALSE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(c_addr));
 
     revert_cluster_palf_handle_guard(palf_list);
   }
@@ -155,21 +155,21 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(remove_b_pid, remove_b_ele_epoch, args.type_));
     EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(args, remove_b_pid, remove_b_ele_epoch, remove_b_version));
 
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // 1. A sends config meta to C
     block_net(leader_idx, b_idx);
     while (-1 == leader.palf_handle_impl_->config_mgr_.last_submit_config_log_time_us_ ||
-           c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr)) {
+           c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr)) {
       EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(args, remove_b_pid, remove_b_ele_epoch, remove_b_version));
       usleep(500);
     }
 
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_UNTIL_EQ(true, b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_UNTIL_EQ(false, c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(true, b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(false, c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // 2. B is elected to be the leader
     for (auto srv: get_cluster()) {
@@ -182,7 +182,7 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
     unblock_net(leader_idx, b_idx);
 
     // 4. A's memberlist will be reset
-    EXPECT_UNTIL_EQ(true, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(true, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     revert_cluster_palf_handle_guard(palf_list);
   }
@@ -220,21 +220,21 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.start_change_config(remove_b_pid, remove_b_ele_epoch, args.type_));
     EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(args, remove_b_pid, remove_b_ele_epoch, remove_b_version));
 
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // A sends config meta to C
     block_net(leader_idx, b_idx);
     while (-1 == leader.palf_handle_impl_->config_mgr_.last_submit_config_log_time_us_ ||
-           c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr)) {
+           c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr)) {
       EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(args, remove_b_pid, remove_b_ele_epoch, remove_b_version));
       usleep(500);
     }
 
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_UNTIL_EQ(true, b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_UNTIL_EQ(false, c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(true, b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(false, c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // 2. C is elected to be the leader
     for (auto srv: get_cluster()) {
@@ -247,8 +247,8 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
     unblock_net(leader_idx, b_idx);
 
     // 4. A's memberlist will be re-sync by C successfully
-    EXPECT_UNTIL_EQ(false, a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_UNTIL_EQ(false, c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(false, a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(false, c_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     leader.reset();
     revert_cluster_palf_handle_guard(palf_list);

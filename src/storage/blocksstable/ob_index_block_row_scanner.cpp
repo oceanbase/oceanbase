@@ -51,7 +51,6 @@ ObIndexBlockDataTransformer::~ObIndexBlockDataTransformer()
 
 // Transform block data to look-up format and store in transform buffer
 int ObIndexBlockDataTransformer::transform(
-    const ObTableReadInfo &read_info,
     const ObMicroBlockData &block_data,
     char *transform_buf,
     int64_t buf_len)
@@ -63,24 +62,19 @@ int ObIndexBlockDataTransformer::transform(
   ObDatumRow row;
   ObIMicroBlockReader *micro_reader = nullptr;
   ObIndexBlockDataHeader *idx_header = nullptr;
-  ObObjMeta *col_meta_array = nullptr;
   ObDatumRowkey *rowkey_arr = nullptr;
   ObStorageDatum *datum_buf = nullptr;
   char *data_buf = transform_buf;
   const ObMicroBlockHeader *micro_block_header =
       reinterpret_cast<const ObMicroBlockHeader *>(block_data.get_buf());
-  int64_t col_cnt = read_info.get_request_count();
-  if (OB_UNLIKELY(!read_info.is_valid()
-      || !block_data.is_valid()
-      || !micro_block_header->is_valid()
-      || read_info.get_request_count() !=  micro_block_header->column_count_)) {
+  int64_t col_cnt = micro_block_header->rowkey_column_count_ + 1;
+  if (OB_UNLIKELY(!block_data.is_valid() || !micro_block_header->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument",
-        K(ret), K(read_info), K(block_data), KPC(micro_block_header));
+    LOG_WARN("Invalid argument", K(ret), K(block_data), KPC(micro_block_header));
   } else if (OB_FAIL(get_reader(block_data.get_store_type(), micro_reader))) {
     LOG_WARN("Fail to set micro block reader", K(ret));
-  } else if (OB_FAIL(micro_reader->init(block_data, read_info))) {
-    LOG_WARN("Fail to init micro block reader", K(ret), K(block_data), K(read_info));
+  } else if (OB_FAIL(micro_reader->init(block_data, nullptr))) {
+    LOG_WARN("Fail to init micro block reader", K(ret), K(block_data));
   } else if (OB_FAIL(micro_reader->get_row_count(row_cnt))) {
     LOG_WARN("Fail to get row count", K(ret));
   } else if (FALSE_IT(size_required = get_transformed_block_mem_size(block_data))) {
@@ -92,15 +86,10 @@ int ObIndexBlockDataTransformer::transform(
   } else {
     idx_header = reinterpret_cast<ObIndexBlockDataHeader *>(data_buf);
     data_buf += sizeof(ObIndexBlockDataHeader);
-    col_meta_array = reinterpret_cast<ObObjMeta *>(data_buf);
-    data_buf += sizeof(ObObjMeta) * col_cnt;
     rowkey_arr = reinterpret_cast<ObDatumRowkey *>(data_buf);
     data_buf += sizeof(ObDatumRowkey) * row_cnt;
     datum_buf = reinterpret_cast<ObStorageDatum *> (data_buf);
-    const ObColDescIArray &col_descs = read_info.get_columns_desc();
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
-      col_meta_array[i] = col_descs.at(i).col_type_;
-    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
       row.reuse();
       if (OB_FAIL(micro_reader->get_row(i, row))) {
@@ -119,7 +108,6 @@ int ObIndexBlockDataTransformer::transform(
       idx_header->row_cnt_ = row_cnt;
       idx_header->col_cnt_ = col_cnt;
       idx_header->rowkey_array_ = rowkey_arr;
-      idx_header->col_meta_array_ = col_meta_array;
       idx_header->datum_array_ = datum_buf;
       STORAGE_LOG(DEBUG, "chaser debug transfer index block", KPC(idx_header), K(block_data.get_store_type()));
     }
@@ -144,31 +132,11 @@ int ObIndexBlockDataTransformer::update_index_block(
       || OB_ISNULL(micro_block_header)
       || OB_UNLIKELY(!micro_block_header->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid src micro block data", K(ret),
+    LOG_WARN("Invalid src micro block data", K(ret), K(src_idx_header),
         KP(micro_data), K(micro_data_size), KP(transform_buf), K(buf_len));
   } else {
-    ObArenaAllocator allocator;
-    ObTableReadInfo index_read_info;
-    ObSEArray<ObColDesc, OB_DEFAULT_SE_ARRAY_COUNT> index_col_desc;
     ObMicroBlockData target_block(micro_data, micro_data_size);
-    const int64_t schema_rowkey_cnt =
-        micro_block_header->rowkey_column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    if (OB_FAIL(index_col_desc.reserve(micro_block_header->column_count_))) {
-      LOG_WARN("Fail to reserve memory for col desc", K(ret));
-    }
-    ObColDesc col_desc;
-    for (int64_t i = 0; OB_SUCC(ret) && i < micro_block_header->column_count_; ++i) {
-      col_desc.reset();
-      col_desc.col_type_ = src_idx_header.col_meta_array_[i];
-      if (OB_FAIL(index_col_desc.push_back(col_desc))) {
-        LOG_WARN("Fail to push col desc into array", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(index_read_info.init(allocator, schema_rowkey_cnt + 1, schema_rowkey_cnt, lib::is_oracle_mode(), index_col_desc, true))) {
-      LOG_WARN("Fail to init column read info", K(ret), KPC(micro_block_header));
-    } else if (OB_FAIL(transform(index_read_info, target_block, transform_buf, buf_len))) {
+    if (OB_FAIL(transform(target_block, transform_buf, buf_len))) {
       LOG_WARN("Fail to re transform index block data", K(ret));
     }
   }
@@ -181,7 +149,6 @@ int64_t ObIndexBlockDataTransformer::get_transformed_block_mem_size(
 {
   return sizeof(ObIndexBlockDataHeader)
       + row_cnt * sizeof(ObDatumRowkey)
-      + idx_col_cnt * sizeof(ObObjMeta)
       + row_cnt * sizeof(ObStorageDatum) * idx_col_cnt;
 }
 
@@ -210,7 +177,7 @@ ObIndexBlockRowScanner::ObIndexBlockRowScanner()
     idx_data_header_(nullptr), macro_id_(), allocator_(nullptr),
     micro_reader_helper_(), micro_reader_(nullptr),
     block_meta_tree_(nullptr), datum_row_(nullptr), endkey_(),
-    idx_row_parser_(), index_read_info_(nullptr),
+    idx_row_parser_(), datum_utils_(nullptr),
     current_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     start_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     end_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
@@ -247,7 +214,7 @@ void ObIndexBlockRowScanner::reset()
     }
     datum_row_ = nullptr;
   }
-  index_read_info_ = nullptr;
+  datum_utils_ = nullptr;
   current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   end_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
@@ -265,7 +232,7 @@ void ObIndexBlockRowScanner::reset()
 int ObIndexBlockRowScanner::init(
     const ObIArray<int32_t> &agg_projector,
     const ObIArray<share::schema::ObColumnSchemaV2> &agg_column_schema,
-    const ObTableReadInfo *index_read_info,
+    const ObStorageDatumUtils &datum_utils,
     ObIAllocator &allocator,
     const common::ObQueryFlag &query_flag,
     const int64_t nested_offset)
@@ -274,9 +241,9 @@ int ObIndexBlockRowScanner::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Already inited", K(ret));
-  } else if (OB_UNLIKELY(agg_projector.count() != agg_column_schema.count() || nullptr == index_read_info)) {
+  } else if (OB_UNLIKELY(agg_projector.count() != agg_column_schema.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Agg meta count not same", K(ret), K(agg_projector), K(agg_column_schema), KP(index_read_info));
+    LOG_WARN("Agg meta count not same", K(ret), K(agg_projector), K(agg_column_schema));
   } else if (OB_FAIL(micro_reader_helper_.init(allocator))) {
     LOG_WARN("Fail to init micro reader helper", K(ret));
   } else {
@@ -285,7 +252,7 @@ int ObIndexBlockRowScanner::init(
     allocator_ = &allocator;
     is_reverse_scan_ = query_flag.is_reverse_scan();
     step_ = is_reverse_scan_ ? -1 : 1;
-    index_read_info_ = index_read_info;
+    datum_utils_ = &datum_utils;
     nested_offset_ = nested_offset;
     is_inited_ = true;
   }
@@ -440,16 +407,17 @@ int ObIndexBlockRowScanner::check_blockscan(
     if (IndexFormat::RAW_DATA == index_format_) {
       ObDatumRowkey last_endkey;
       ObDatumRow tmp_datum_row; // Normally will use local datum buf, won't allocate memory
-      if (OB_FAIL(tmp_datum_row.init(index_read_info_->get_request_count()))) {
+      const int64_t request_cnt = datum_utils_->get_rowkey_count() + 1;
+      if (OB_FAIL(tmp_datum_row.init(request_cnt))) {
         LOG_WARN("Fail to init tmp_datum_row", K(ret));
       } else if (OB_FAIL(micro_reader_->get_row(end_, tmp_datum_row))) {
         LOG_WARN("Fail to get last row of micro block", K(ret), K_(end));
-      } else if (OB_FAIL(last_endkey.assign(tmp_datum_row.storage_datums_, index_read_info_->get_rowkey_count()))) {
+      } else if (OB_FAIL(last_endkey.assign(tmp_datum_row.storage_datums_, datum_utils_->get_rowkey_count()))) {
         LOG_WARN("Fail to assign storage datum to endkey", K(ret), K(tmp_datum_row));
-      } else if (OB_FAIL(last_endkey.compare(rowkey, index_read_info_->get_datum_utils(), cmp_ret))) {
+      } else if (OB_FAIL(last_endkey.compare(rowkey, *datum_utils_, cmp_ret))) {
         LOG_WARN("Fail to compare rowkey", K(ret), K(last_endkey), K(rowkey));
       }
-    } else if (OB_FAIL((idx_data_header_->rowkey_array_ + end_)->compare(rowkey, index_read_info_->get_datum_utils(), cmp_ret))) {
+    } else if (OB_FAIL((idx_data_header_->rowkey_array_ + end_)->compare(rowkey, *datum_utils_, cmp_ret))) {
       LOG_WARN("Fail to compare rowkey", K(ret), K(rowkey));
     }
 
@@ -471,12 +439,13 @@ int ObIndexBlockRowScanner::init_by_micro_data(const ObMicroBlockData &idx_block
       if (OB_FAIL(micro_reader_helper_.get_reader(idx_block_data.get_store_type(), micro_reader_))) {
         LOG_WARN("Fail to get micro block reader", K(ret),
             K(idx_block_data), K(idx_block_data.get_store_type()));
-      } else if (OB_FAIL(micro_reader_->init(idx_block_data, *index_read_info_))) {
-        LOG_WARN("Fail to init micro reader", K(ret), K(idx_block_data), KPC(index_read_info_));
+      } else if (OB_FAIL(micro_reader_->init(idx_block_data, datum_utils_))) {
+        LOG_WARN("Fail to init micro reader", K(ret), K(idx_block_data));
       } else if (OB_FAIL(init_datum_row())) {
         LOG_WARN("Fail to init datum row", K(ret));
       } else {
         index_format_ = IndexFormat::RAW_DATA;
+        idx_data_header_ = nullptr;
       }
     } else {
       idx_data_header_ = reinterpret_cast<const ObIndexBlockDataHeader *>(idx_block_data.get_extra_buf());
@@ -515,7 +484,7 @@ int ObIndexBlockRowScanner::locate_key(const ObDatumRowkey &rowkey)
     }
     LOG_TRACE("Binary search rowkey with micro reader", K(ret), K(range), K(begin_idx), K(rowkey));
   } else if (IndexFormat::TRANSFORMED == index_format_) {
-    ObDatumComparor<ObDatumRowkey> cmp(index_read_info_->get_datum_utils(), ret);
+    ObDatumComparor<ObDatumRowkey> cmp(*datum_utils_, ret);
     const ObDatumRowkey *first = idx_data_header_->rowkey_array_;
     const ObDatumRowkey *last = idx_data_header_->rowkey_array_ + idx_data_header_->row_cnt_;
     const ObDatumRowkey *found = std::lower_bound(first, last, rowkey, cmp);
@@ -538,13 +507,13 @@ int ObIndexBlockRowScanner::locate_key(const ObDatumRowkey &rowkey)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block meta tree is null", K(ret));
     } else if (OB_FAIL(block_meta_tree_->locate_range(range,
-                                                      index_read_info_->get_datum_utils(),
+                                                      *datum_utils_,
                                                       true,// is_left_border
                                                       true,// is_right_border
                                                       begin_idx,
                                                       end_idx))) {
       if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
-        LOG_WARN("locate rowkey failed", K(ret), K(range), KPC(index_read_info_));
+        LOG_WARN("locate rowkey failed", K(ret), K(range));
       } else {
         current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
         ret = OB_SUCCESS; // return OB_ITER_END on get_next() for get
@@ -574,8 +543,8 @@ int ObIndexBlockRowScanner::locate_range(
   current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   if (IndexFormat::TRANSFORMED == index_format_) {
     bool is_begin_equal = false;
-    ObDatumComparor<ObDatumRowkey> lower_bound_cmp(index_read_info_->get_datum_utils(), ret);
-    ObDatumComparor<ObDatumRowkey> upper_bound_cmp(index_read_info_->get_datum_utils(), ret, false, false);
+    ObDatumComparor<ObDatumRowkey> lower_bound_cmp(*datum_utils_, ret);
+    ObDatumComparor<ObDatumRowkey> upper_bound_cmp(*datum_utils_, ret, false, false);
     const ObDatumRowkey *first = idx_data_header_->rowkey_array_;
     const ObDatumRowkey *last = idx_data_header_->rowkey_array_ + idx_data_header_->row_cnt_;
     if (!is_left_border || range.get_start_key().is_min_rowkey()) {
@@ -588,7 +557,7 @@ int ObIndexBlockRowScanner::locate_range(
         ret = OB_BEYOND_THE_RANGE;
       } else if (!range.get_border_flag().inclusive_start()) {
         bool is_equal = false;
-        if (OB_FAIL(start_found->equal(range.get_start_key(), index_read_info_->get_datum_utils(), is_equal))) {
+        if (OB_FAIL(start_found->equal(range.get_start_key(), *datum_utils_, is_equal))) {
           STORAGE_LOG(WARN, "Failed to check datum rowkey equal", K(ret), K(range), KPC(start_found));
         } else if (is_equal) {
           ++start_found;
@@ -645,12 +614,12 @@ int ObIndexBlockRowScanner::locate_range(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block meta tree is null", K(ret));
     } else if (OB_FAIL(block_meta_tree_->locate_range(range,
-                                                      index_read_info_->get_datum_utils(),
+                                                      *datum_utils_,
                                                       is_left_border,
                                                       is_right_border,
                                                       begin_idx,
                                                       end_idx))) {
-      LOG_WARN("locate rowkey failed", K(ret), K(range), KPC(index_read_info_));
+      LOG_WARN("locate rowkey failed", K(ret), K(range));
     }
   } else {
     ret = OB_NOT_SUPPORTED;
@@ -665,6 +634,12 @@ int ObIndexBlockRowScanner::locate_range(
   return ret;
 }
 
+void ObIndexBlockRowScanner::switch_context(const ObSSTable &sstable, const ObStorageDatumUtils &datum_utils)
+{
+  nested_offset_ = sstable.get_macro_offset();
+  datum_utils_ = &datum_utils;
+}
+
 int ObIndexBlockRowScanner::init_datum_row()
 {
   int ret = OB_SUCCESS;
@@ -676,13 +651,14 @@ int ObIndexBlockRowScanner::init_datum_row()
      datum_row_ = nullptr;
   }
   if (nullptr == datum_row_) {
+    int64_t request_cnt = datum_utils_->get_rowkey_count() + 1;
     void *buf = nullptr;
     if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObDatumRow)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory for datum row", K(ret));
     } else if (FALSE_IT(datum_row_ = new (buf) ObDatumRow())) {
-    } else if (OB_FAIL(datum_row_->init(*allocator_, index_read_info_->get_request_count()))) {
-      LOG_WARN("Fail to init datum row", K(ret), KPC(index_read_info_));
+    } else if (OB_FAIL(datum_row_->init(*allocator_, request_cnt))) {
+      LOG_WARN("Fail to init datum row", K(ret), K(request_cnt));
     }
 
     if (OB_FAIL(ret) && nullptr != buf) {
@@ -697,7 +673,7 @@ int ObIndexBlockRowScanner::read_curr_idx_row(const ObIndexBlockRowHeader *&idx_
 {
   int ret = OB_SUCCESS;
   idx_row_header = nullptr;
-  const int64_t rowkey_column_count = index_read_info_->get_rowkey_count();
+  const int64_t rowkey_column_count = datum_utils_->get_rowkey_count();
   if (IndexFormat::TRANSFORMED == index_format_) {
     const char *idx_data_buf = nullptr;
     if (OB_FAIL(idx_data_header_->get_index_data(current_, idx_data_buf))) {

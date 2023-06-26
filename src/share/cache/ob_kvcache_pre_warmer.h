@@ -21,12 +21,12 @@ public:
   virtual ~ObDataBlockCachePreWarmer();
   void reset();
   void reuse();
-  void init(const ObTableReadInfo &read_info);
+  void init();
   OB_INLINE bool is_valid() const { return nullptr != cache_; }
   int reserve_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc, const int64_t level = 0);
   int update_and_put_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc);
 protected:
-  int inner_init(const int64_t ratio, const ObTableReadInfo &read_info, blocksstable::ObIMicroBlockCache &block_cache);
+  int inner_init(const int64_t ratio, blocksstable::ObIMicroBlockCache &block_cache);
   void update_rest();
   void inner_update_rest();
   virtual void calculate_base_percentage(const int64_t free_memory);
@@ -40,7 +40,6 @@ private:
   static const int64_t TOP_LEVEL = 6;
 
   blocksstable::ObIMicroBlockCache *cache_;
-  const ObTableReadInfo *read_info_;
   int64_t rest_size_;
   int64_t warm_size_percentage_;
   int64_t update_step_;
@@ -54,7 +53,7 @@ class ObIndexBlockCachePreWarmer : public ObDataBlockCachePreWarmer
 public:
   ObIndexBlockCachePreWarmer();
   virtual ~ObIndexBlockCachePreWarmer();
-  void init(const ObTableReadInfo &read_info);
+  void init();
 protected:
   virtual void calculate_base_percentage(const int64_t free_memory) override;
 private:

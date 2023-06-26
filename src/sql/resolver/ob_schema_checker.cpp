@@ -847,7 +847,7 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const uint64_t t
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(table_id), K(ret));
+    LOG_WARN("invalid arguments", K(table_id), K(ret), K(lbt()));
   } else if (!is_link && OB_FAIL(get_table_schema_inner(tenant_id, table_id, table))) {
     LOG_WARN("get table schema failed", K(tenant_id), K(table_id), K(ret));
   } else if (is_link && OB_FAIL(get_link_table_schema_inner(table_id, table))) {

@@ -246,9 +246,6 @@ public:
   RPC_S(PR5 abort_redef_table, obrpc::OB_ABORT_REDEF_TABLE, (obrpc::ObAbortRedefTableArg));
   RPC_S(PR5 update_ddl_task_active_time, obrpc::OB_UPDATE_DDL_TASK_ACTIVE_TIME, (obrpc::ObUpdateDDLTaskActiveTimeArg));
 
-  RPC_S(PR5 backup_ls_data_res, OB_BACKUP_LS_DATA_RES, (ObBackupTaskRes));
-  RPC_S(PR5 delete_backup_ls_task_res, OB_DELETE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));
-
   RPC_S(PR5 disaster_recovery_task_reply, OB_DISASTER_RECOVERY_TASK_REPLY, (ObDRTaskReplyResult));
   RPC_S(PR5 backup_compl_log_res, obrpc::OB_BACKUP_COMPL_LOG_RES, (ObBackupTaskRes));
 

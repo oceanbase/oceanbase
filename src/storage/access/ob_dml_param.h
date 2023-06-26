@@ -186,7 +186,8 @@ struct ObDMLBaseParam
         spec_seq_no_(-1),
         snapshot_(),
         direct_insert_task_id_(0),
-        write_flag_()
+        write_flag_(),
+        check_schema_version_(true)
   {
   }
 
@@ -217,6 +218,7 @@ struct ObDMLBaseParam
   int64_t direct_insert_task_id_; // 0 means no direct insert
   // write flag for inner write processing
   concurrent_control::ObWriteFlag write_flag_;
+  bool check_schema_version_;
   bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0); }
   bool is_direct_insert() const { return (direct_insert_task_id_ > 0); }
   DECLARE_TO_STRING;

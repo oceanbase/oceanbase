@@ -124,8 +124,6 @@ public:
   public:
     ObITmpPageIOCallback();
     virtual ~ObITmpPageIOCallback();
-    virtual int alloc_io_buf(char *&io_buf, int64_t &io_buf_size,
-        int64_t &aligned_offset) override;
   protected:
     friend class ObTmpPageCache;
     virtual int process_page(const ObTmpPageCacheKey &key, const ObTmpPageCacheValue &value);
@@ -135,8 +133,6 @@ public:
     common::ObIAllocator *allocator_;
     int64_t offset_;   // offset in block
     int64_t buf_size_; // read size in block
-    char *io_buf_;     // for io assign
-    int64_t io_buf_size_;
     char *data_buf_;   // actual data buffer
   };
   class ObTmpPageIOCallback final : public ObITmpPageIOCallback
@@ -145,7 +141,7 @@ public:
     ObTmpPageIOCallback();
     ~ObTmpPageIOCallback();
     int64_t size() const override;
-    int inner_process(const bool is_success) override;
+    int inner_process(const char *data_buffer, const int64_t size) override;
     int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&callback) const override;
     const char *get_data() override;
     TO_STRING_KV(KP_(data_buf));
@@ -159,7 +155,7 @@ public:
     ObTmpMultiPageIOCallback();
     ~ObTmpMultiPageIOCallback();
     int64_t size() const override;
-    int inner_process(const bool is_success) override;
+    int inner_process(const char *data_buffer, const int64_t size) override;
     int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&callback) const override;
     const char *get_data() override;
     TO_STRING_KV(KP_(data_buf));

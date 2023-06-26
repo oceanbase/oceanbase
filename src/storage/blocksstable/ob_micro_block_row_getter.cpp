@@ -257,7 +257,9 @@ int ObMicroBlockRowGetter::get_block_row(
     if (store_row->row_flag_.is_not_exist()) {
       ++context_->table_store_stat_.get_row_.empty_read_cnt_;
       EVENT_INC(ObStatEventIds::GET_ROW_EMPTY_READ);
-      if (!context_->query_flag_.is_index_back() && context_->query_flag_.is_use_bloomfilter_cache() && !sstable_->is_small_sstable()) {
+      if (!context_->query_flag_.is_index_back()
+          && context_->query_flag_.is_use_bloomfilter_cache()
+          && !sstable_->is_small_sstable()) {
         (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
             MTL_ID(),
             param_->table_id_,
@@ -304,7 +306,7 @@ int ObMicroBlockRowGetter::get_cached_row(
 int ObMicroBlockRowGetter::project_cache_row(const ObRowCacheValue &value, ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  const ObTableReadInfo *read_info = nullptr;
+  const ObITableReadInfo *read_info = nullptr;
   if (OB_ISNULL(read_info = param_->get_read_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null read_info", K(ret), K_(param));
@@ -312,7 +314,7 @@ int ObMicroBlockRowGetter::project_cache_row(const ObRowCacheValue &value, ObDat
     LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info->get_request_count()));
   } else {
     const int64_t request_cnt = read_info->get_request_count();
-    const ObIArray<int32_t> &cols_index = read_info->get_columns_index();
+    const ObColumnIndexArray &cols_index = read_info->get_columns_index();
     row.row_flag_ = value.get_flag();
     row.count_ = read_info->get_request_count();
     ObStorageDatum *const datums = value.get_datums();
@@ -402,7 +404,7 @@ int ObMicroBlockRowGetter::get_not_exist_row(const ObDatumRowkey &rowkey, const 
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    const ObTableReadInfo *read_info = nullptr;
+    const ObITableReadInfo *read_info = nullptr;
     if (OB_ISNULL(read_info = param_->get_read_info())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null read_info", K(ret), K_(param));

@@ -164,6 +164,7 @@ public:
 
   virtual void SetUp() override
   {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
     fake_ls_(ls_);
   }
 

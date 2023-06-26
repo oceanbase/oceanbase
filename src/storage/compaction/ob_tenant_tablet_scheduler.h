@@ -63,7 +63,7 @@ public:
   ObCompactionScheduleIterator(
     const bool is_major,
     ObLSGetMod mod = ObLSGetMod::STORAGE_MOD,
-    const int64_t timeout_us = ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US)
+    const int64_t timeout_us = 0)
     : mod_(mod),
       is_major_(is_major),
       scan_finish_(false),
@@ -172,7 +172,9 @@ public:
   void stop_major_merge();
   void resume_major_merge();
   OB_INLINE bool could_major_merge_start() const { return major_merge_status_; }
-
+  void stop_schedule_medium(); // may block for waiting lock
+  void resume_schedule_medium();
+  OB_INLINE bool could_schedule_medium() const { return allow_schedule_medium_flag_; }
   int64_t get_frozen_version() const;
   int64_t get_merged_version() const { return merged_version_; }
   int64_t get_inner_table_merged_scn() const { return ATOMIC_LOAD(&inner_table_merged_scn_); }
@@ -184,8 +186,10 @@ public:
   int schedule_merge(const int64_t broadcast_version);
   int update_upper_trans_version_and_gc_sstable();
   int check_ls_compaction_finish(const share::ObLSID &ls_id);
-
   int schedule_all_tablets_minor();
+
+  int gc_info();
+  int set_max();
 
   // Schedule an async task to build bloomfilter for the given macro block.
   // The bloomfilter build task will be ignored if a same build task exists in the queue.
@@ -263,6 +267,13 @@ private:
     virtual ~MediumLoopTask() = default;
     virtual void runTimerTask() override;
   };
+  class InfoPoolResizeTask : public common::ObTimerTask
+  {
+  public:
+    InfoPoolResizeTask() = default;
+    virtual ~InfoPoolResizeTask() = default;
+    virtual void runTimerTask() override;
+  };
 public:
   static const int64_t INIT_COMPACTION_SCN = 1;
   typedef common::ObSEArray<ObGetMergeTablesResult, compaction::ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
@@ -280,6 +291,7 @@ private:
   static constexpr ObMergeType MERGE_TYPES[] = {
       MINOR_MERGE, HISTORY_MINOR_MERGE};
   static const int64_t SSTABLE_GC_INTERVAL = 30 * 1000 * 1000L; // 30s
+  static const int64_t INFO_POOL_RESIZE_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t DEFAULT_HASH_MAP_BUCKET_CNT = 1009;
   static const int64_t DEFAULT_COMPACTION_SCHEDULE_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL = 10 * 1000 * 1000L; // 10s
@@ -296,6 +308,7 @@ private:
   int merge_loop_tg_id_; // thread
   int medium_loop_tg_id_; // thread
   int sstable_gc_tg_id_; // thread
+  int info_pool_resize_tg_id_;   // thread
   int64_t schedule_interval_;
 
   common::ObDedupQueue bf_queue_;
@@ -305,13 +318,16 @@ private:
   int64_t inner_table_merged_scn_;
   ObScheduleStatistics schedule_stats_;
   MergeLoopTask merge_loop_task_;
-  MediumLoopTask medium_loop_task_;
+MediumLoopTask medium_loop_task_;
   SSTableGCTask sstable_gc_task_;
+  InfoPoolResizeTask info_pool_resize_task_;
   ObFastFreezeChecker fast_freeze_checker_;
   bool enable_adaptive_compaction_;
   ObCompactionScheduleIterator minor_ls_tablet_iter_;
   ObCompactionScheduleIterator medium_ls_tablet_iter_;
   int64_t error_tablet_cnt_; // for diagnose
+  mutable obsys::ObRWLock allow_schedule_medium_lock_;
+  mutable bool allow_schedule_medium_flag_;
   compaction::ObStorageLocalityCache ls_locality_cache_;
 };
 

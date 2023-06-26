@@ -100,7 +100,7 @@ void TestRootBlockInfo::prepare_tablet_read_info()
     desc.col_order_ = ObOrderType::ASC;
     ASSERT_EQ(OB_SUCCESS, columns.push_back(desc));
   }
-  ASSERT_EQ(OB_SUCCESS, table_read_info_.init(allocator_, schema_version, ROWKEY_COL_CNT, lib::is_oracle_mode(), columns, true));
+  ASSERT_EQ(OB_SUCCESS, table_read_info_.init(allocator_, schema_version, ROWKEY_COL_CNT, lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
 }
 
 void TestRootBlockInfo::prepare_block_root()
@@ -154,7 +154,7 @@ void TestRootBlockInfo::prepare_block_root()
   write_info.size_ = buf_size;
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::write_block(write_info, handle));
   block_addr_.second_id_ = handle.get_macro_id().second_id();
-  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(&allocator_, block_addr_, block_data_));
+  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, block_addr_, block_data_));
   ASSERT_TRUE(root_info_.is_valid());
 }
 
@@ -291,11 +291,11 @@ void TestMigrationSSTableParam::SetUp()
   ASSERT_TRUE(!sstable_meta_.is_valid());
   sstable_meta_.reset();
   ASSERT_TRUE(!sstable_meta_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, sstable_meta_.init(param_, &allocator_));
+  ASSERT_EQ(OB_SUCCESS, sstable_meta_.init(param_, allocator_));
   ASSERT_TRUE(sstable_meta_.is_valid());
   ASSERT_TRUE(sstable_meta_.data_root_info_.is_valid());
   ASSERT_TRUE(sstable_meta_.macro_info_.is_valid());
-  ASSERT_TRUE(sstable_meta_.get_col_checksum().count() > 0);
+  ASSERT_TRUE(sstable_meta_.get_col_checksum_cnt() > 0);
   table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   table_key_.tablet_id_ = 1101;
   table_key_.version_range_.base_version_ = 0;
@@ -314,14 +314,16 @@ void TestMigrationSSTableParam::TearDown()
 TEST_F(TestMigrationSSTableParam, test_check_sstable_meta)
 {
   int ret = OB_SUCCESS;
-  ObPhysicalCopyFinishTask finish_task;
+  ObSSTableCopyFinishTask finish_task;
   finish_task.is_inited_ = true;
   ObMigrationSSTableParam mig_param;
   ASSERT_TRUE(!mig_param.is_valid());
   mig_param.reset();
   ASSERT_TRUE(!mig_param.is_valid());
   mig_param.basic_meta_ = sstable_meta_.get_basic_meta();
-  ASSERT_EQ(OB_SUCCESS, mig_param.column_checksums_.assign(sstable_meta_.get_col_checksum()));
+  for (int64_t i = 0; i < sstable_meta_.get_col_checksum_cnt(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, mig_param.column_checksums_.push_back(sstable_meta_.get_col_checksum()[i]));
+  }
   mig_param.table_key_ = table_key_;
   ASSERT_TRUE(mig_param.is_valid());
   ASSERT_TRUE(mig_param.basic_meta_.is_valid());
@@ -329,7 +331,7 @@ TEST_F(TestMigrationSSTableParam, test_check_sstable_meta)
   ASSERT_TRUE(mig_param.table_key_.is_valid());
   ASSERT_EQ(sstable_meta_.get_basic_meta(), mig_param.basic_meta_);
   ASSERT_EQ(table_key_, mig_param.table_key_);
-  ASSERT_EQ(sstable_meta_.get_col_checksum().count(), mig_param.column_checksums_.count());
+  ASSERT_EQ(sstable_meta_.get_col_checksum_cnt(), mig_param.column_checksums_.count());
   ret = finish_task.check_sstable_meta_(mig_param, sstable_meta_);
   ASSERT_EQ(OB_SUCCESS, ret);
 

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX ARCHIVE
+#define USING_LOG_PREFIX RS
 #include "rootserver/backup/ob_archive_scheduler_service.h"
 #include "rootserver/backup/ob_tenant_archive_scheduler.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
@@ -19,9 +19,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/thread/ob_thread_name.h"
 #include "share/ob_srv_rpc_proxy.h"
-#include "share/backup/ob_backup_lease_info_mgr.h"
 #include "share/backup/ob_tenant_archive_round.h"
-
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -31,150 +29,62 @@ using namespace schema;
 using namespace obrpc;
 
 /**
- * ------------------------------ObArchiveThreadIdling---------------------
- */
-ObArchiveThreadIdling::ObArchiveThreadIdling(volatile bool &stop)
-  : ObThreadIdling(stop), idle_time_us_(MIN_IDLE_INTERVAL_US)
-{
-
-}
-
-int64_t ObArchiveThreadIdling::get_idle_interval_us()
-{
-  return idle_time_us_;
-}
-
-void ObArchiveThreadIdling::set_checkpoint_interval(const int64_t interval_us)
-{
-  const int64_t max_idle_us = interval_us / 2 - RESERVED_FETCH_US;
-  int64_t idle_time_us = 0;
-  if (interval_us <= 0) {
-    idle_time_us = MAX_IDLE_INTERVAL_US;
-  } else {
-    if (max_idle_us <= MIN_IDLE_INTERVAL_US) {
-      idle_time_us = MIN_IDLE_INTERVAL_US;
-    } else if (max_idle_us > MAX_IDLE_INTERVAL_US) {
-      idle_time_us = MAX_IDLE_INTERVAL_US;
-    } else {
-      idle_time_us = max_idle_us;
-    }
-  }
-
-  if (idle_time_us != idle_time_us_) {
-    FLOG_INFO("change idle_time_us", K(idle_time_us_), K(idle_time_us));
-    idle_time_us_ = idle_time_us;
-  }
-}
-
-
-/**
  * ------------------------------ObArchiveSchedulerService---------------------
  */
 ObArchiveSchedulerService::ObArchiveSchedulerService()
-  : is_inited_(false), is_working_(false), idling_(stop_),
-    zone_mgr_(nullptr), unit_mgr_(nullptr),
-    rpc_proxy_(nullptr), sql_proxy_(nullptr), schema_service_(nullptr), backup_lease_service_(nullptr)
+  : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), rpc_proxy_(nullptr), sql_proxy_(nullptr), schema_service_(nullptr)
 {
+}
 
+int ObArchiveSchedulerService::mtl_init(ObArchiveSchedulerService *&archive_service)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  obrpc::ObSrvRpcProxy *rpc_proxy = nullptr;
+  share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
+  if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
+  } else if (OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
+  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service should not be NULL", K(ret), KP(schema_service));
+  } else if (OB_FAIL(archive_service->init(*schema_service, *rpc_proxy, *sql_proxy))) {
+    LOG_WARN("fail to init tenant archive service", K(ret));
+  }
+  return ret;
 }
 
 int ObArchiveSchedulerService::init(
-  ObZoneManager &zone_mgr,
-  ObUnitManager &unit_manager,
-  share::schema::ObMultiVersionSchemaService *schema_service,
+  share::schema::ObMultiVersionSchemaService &schema_service,
   ObSrvRpcProxy &rpc_proxy,
-  common::ObMySQLProxy &sql_proxy,
-  share::ObIBackupLeaseService &backup_lease_service)
+  common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  const int64_t thread_cnt = 1;
-
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("archive scheduler init twice", K(ret));
-  } else if (OB_ISNULL(schema_service)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("schema_service is null", K(ret), KP(schema_service));
-  } else if (OB_FAIL(create(thread_cnt, "LOG_ARCHIVE_SERVICE"))) {
+  } else if (OB_FAIL(create("ArchiveSvr", *this, ObWaitEventIds::BACKUP_ARCHIVE_SERVICE_COND_WAIT))) {
     LOG_WARN("failed to create log archive thread", K(ret));
   } else {
-    zone_mgr_ = &zone_mgr;
-    unit_mgr_ = &unit_manager;
-    schema_service_ = schema_service;
+    schema_service_ = &schema_service;
     rpc_proxy_ = &rpc_proxy;
     sql_proxy_ = &sql_proxy;
-    backup_lease_service_ = &backup_lease_service;
+    tenant_id_ = gen_user_tenant_id(MTL_ID());
     is_inited_ = true;
   }
 
   return ret;
 }
 
-int ObArchiveSchedulerService::start()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObReentrantThread::logical_start())) {
-    LOG_WARN("failed to start", K(ret));
-  } else {
-    is_working_ = true;
-    LOG_INFO("start archive scheduler service");
-  }
-  return ret;
-}
-
-void ObArchiveSchedulerService::stop()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    ObRsReentrantThread::stop();
-    idling_.wakeup();
-    LOG_INFO("stop archive scheduler service");
-  }
-}
-
-void ObArchiveSchedulerService::wait()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    ObRsReentrantThread::wait();
-    LOG_INFO("wait archive scheduler service");
-  }
-}
-
-int ObArchiveSchedulerService::destroy()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    if(OB_FAIL(ObRsReentrantThread::destroy())) {
-      LOG_WARN("ObRsReentrantThread::destroy failed", K(ret));
-    }
-    is_inited_ = false;
-    LOG_INFO("destroy archive scheduler service", K(ret));
-  }
-  return ret;
-}
-
-void ObArchiveSchedulerService::wakeup()
-{
-  idling_.wakeup();
-}
-
-void ObArchiveSchedulerService::run3()
+void ObArchiveSchedulerService::run2()
 {
   int tmp_ret = OB_SUCCESS;
   int64_t round = 0;
   share::ObLogArchiveStatus::STATUS last_log_archive_status = ObLogArchiveStatus::INVALID;
 
-  lib::set_thread_name("ArcSrv");
   FLOG_INFO("ObArchiveSchedulerService run start");
   if (IS_NOT_INIT) {
     tmp_ret = OB_NOT_INIT;
@@ -184,7 +94,7 @@ void ObArchiveSchedulerService::run3()
       ++round;
       ObCurTraceId::init(GCONF.self_addr_);
       FLOG_INFO("start do ObArchiveSchedulerService round", K(round));
-      if (stop_) {
+      if (has_set_stop()) {
         tmp_ret = OB_IN_STOP_STATE;
         LOG_WARN_RET(tmp_ret, "exit for stop state", K(tmp_ret));
         break;
@@ -193,12 +103,9 @@ void ObArchiveSchedulerService::run3()
       }
 
       int64_t checkpoint_interval = 1 * 1000 * 1000L;
-      idling_.set_checkpoint_interval(checkpoint_interval);
-      if (OB_SUCCESS != (tmp_ret = idling_.idle())) {
-        LOG_WARN_RET(tmp_ret, "failed to to idling", K(tmp_ret));
-      }
+      set_checkpoint_interval_(checkpoint_interval);
+      idle();
     }
-    is_working_ = false;
   }
   FLOG_INFO("ObArchiveSchedulerService run finish");
 }
@@ -336,7 +243,7 @@ int ObArchiveSchedulerService::start_tenant_archive_(const uint64_t tenant_id)
   ObArchiveHandler archive_handler;
   // Only one dest is supported.
   const int64_t dest_no = 0;
-  if (OB_FAIL(archive_handler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(archive_handler.init(tenant_id, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init archive_handler", K(ret));
   } else if (OB_FAIL(archive_handler.enable_archive(dest_no))) {
     LOG_WARN("failed to enable archive tenant", K(ret), K(tenant_id), K(dest_no));
@@ -353,7 +260,7 @@ int ObArchiveSchedulerService::stop_tenant_archive_(const uint64_t tenant_id)
   ObArchiveHandler archive_handler;
   // Only one dest is supported.
   const int64_t dest_no = 0;
-  if (OB_FAIL(archive_handler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(archive_handler.init(tenant_id, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init archive_handler", K(ret), K(tenant_id));
   } else if (OB_FAIL(archive_handler.disable_archive(dest_no))) {
     LOG_WARN("failed to disable tenant archive", K(ret), K(tenant_id), K(dest_no));
@@ -367,28 +274,6 @@ int ObArchiveSchedulerService::stop_tenant_archive_(const uint64_t tenant_id)
 int ObArchiveSchedulerService::process_()
 {
   int ret = OB_SUCCESS;
-  // advance archive state.
-  ObArray<uint64_t> tenant_id_array;
-  ObArray<ObTenantArchiveRoundAttr> tenant_round_array;
-  if (OB_FAIL(get_all_tenant_ids_(tenant_id_array))) {
-    LOG_WARN("failed to get all meta tenant ids", K(ret));
-  }
-
-  // advance normal tenant state first.
-  int tmp_ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_id_array.count(); i++) {
-    const uint64_t &tenant_id = tenant_id_array.at(i);
-    if (OB_TMP_FAIL(inner_process_(tenant_id))) {
-      LOG_WARN("failed to process", K(tmp_ret), K(tenant_id));
-    }
-  }
-
-  return ret;
-}
-
-int ObArchiveSchedulerService::inner_process_(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObArchivePersistHelper archive_op;
   ObArchiveMode archive_mode;
@@ -400,7 +285,8 @@ int ObArchiveSchedulerService::inner_process_(const uint64_t tenant_id)
   bool no_round = false;
 
   ObArchiveHandler tenant_scheduler;
-  if (OB_FAIL(tenant_scheduler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  const uint64_t tenant_id = tenant_id_;
+  if (OB_FAIL(tenant_scheduler.init(tenant_id, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init tenant archive scheduler", K(ret), K(tenant_id));
   } else if (OB_TMP_FAIL(tenant_scheduler.checkpoint())) {
     LOG_WARN("failed to checkpoint", K(tmp_ret), K(tenant_id));
@@ -455,7 +341,6 @@ int ObArchiveSchedulerService::inner_process_(const uint64_t tenant_id)
       }
     }
   }
-
   return ret;
 }
 
@@ -494,6 +379,28 @@ int ObArchiveSchedulerService::get_all_tenant_ids_(common::ObIArray<uint64_t> &t
   }
 
   return ret;
+}
+
+void ObArchiveSchedulerService::set_checkpoint_interval_(const int64_t interval_us)
+{
+  const int64_t max_idle_us = interval_us / 2 - RESERVED_FETCH_US;
+  int64_t idle_time_us = 0;
+  if (interval_us <= 0) {
+    idle_time_us = MAX_IDLE_INTERVAL_US;
+  } else {
+    if (max_idle_us <= MIN_IDLE_INTERVAL_US) {
+      idle_time_us = MIN_IDLE_INTERVAL_US;
+    } else if (max_idle_us > MAX_IDLE_INTERVAL_US) {
+      idle_time_us = MAX_IDLE_INTERVAL_US;
+    } else {
+      idle_time_us = max_idle_us;
+    }
+  }
+
+  if (idle_time_us != get_idle_time()) {
+    FLOG_INFO("change idle_time_us", "idle_time_ts_", get_idle_time(), K(idle_time_us));
+    set_idle_time(idle_time_us);
+  }
 }
 
 int ObArchiveSchedulerService::open_archive_mode(const uint64_t tenant_id, const common::ObIArray<uint64_t> &archive_tenant_ids)
@@ -551,7 +458,7 @@ int ObArchiveSchedulerService::open_tenant_archive_mode_(const uint64_t tenant_i
 {
   int ret = OB_SUCCESS;
   ObArchiveHandler tenant_scheduler;
-  if (OB_FAIL(tenant_scheduler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(tenant_scheduler.init(tenant_id, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init tenant archive scheduler", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_scheduler.open_archive_mode())) {
     LOG_WARN("failed to open archive mode", K(ret), K(tenant_id));
@@ -613,7 +520,7 @@ int ObArchiveSchedulerService::close_tenant_archive_mode_(const uint64_t tenant_
 {
   int ret = OB_SUCCESS;
   ObArchiveHandler tenant_scheduler;
-  if (OB_FAIL(tenant_scheduler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(tenant_scheduler.init(tenant_id, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init tenant archive scheduler", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_scheduler.close_archive_mode())) {
     LOG_WARN("failed to close archive mode", K(ret), K(tenant_id));

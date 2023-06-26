@@ -135,7 +135,7 @@ int ObLSTabletService::insert_rows(
       } else if (first_bulk) {
         first_bulk = false;
         row_count_first_bulk = row_count;
-        const ObTableReadInfo &full_read_info = tablet_handle.get_obj()->get_full_read_info();
+        const ObITableReadInfo &full_read_info = tablet_handle.get_obj()->get_rowkey_read_info();
         if (OB_FAIL(rows_info.init(data_table, ctx, full_read_info))) {
           STORAGE_LOG(WARN, "Failed to init rows info", K(ret), K(data_table));
         } else if (OB_ISNULL(ptr = work_allocator.alloc(row_count * sizeof(ObStoreRow)))) {

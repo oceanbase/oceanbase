@@ -14,11 +14,12 @@
 #define OB_ADMIN_DUMP_BACKUP_DATA_EXECUTOR_H_
 #include "../ob_admin_executor.h"
 #include "storage/backup/ob_backup_data_struct.h"
-#include "share/backup/ob_backup_data_store.h"
+#include "storage/backup/ob_backup_data_store.h"
 #include "lib/string/ob_fixed_length_string.h"
 #include "share/backup/ob_archive_store.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "storage/backup/ob_backup_restore_util.h"
+#include "storage/backup/ob_backup_extern_info_mgr.h"
 namespace oceanbase {
 namespace tools {
 
@@ -34,6 +35,8 @@ public:
       backup::ObBackupDataFileTrailer &file_trailer);
   static int read_index_file_trailer(const common::ObString &backup_path, const common::ObString &storage_info_str,
       backup::ObBackupMultiLevelIndexTrailer &index_trailer);
+  static int read_tablet_metas_file_trailer(const common::ObString &backup_path, const common::ObString &storage_info_str,
+      backup::ObTabletInfoTrailer &tablet_meta_trailer);
   static int pread_file(const common::ObString &backup_path, const common::ObString &storage_info_str, const int64_t offset,
       const int64_t read_size, char *buf);
   static int get_backup_file_length(
@@ -119,10 +122,11 @@ private:
   int print_archive_single_ls_info_file_();
   int print_archive_piece_list_info_file_();
   int print_tenant_archive_piece_infos_file_();
+  int print_ls_tablet_meta_tablets_();
   int print_backup_format_file_();
   int print_tenant_backup_set_infos_();
   int print_backup_ls_meta_infos_file_();
-
+  int print_tablet_tx_data_file_();
 private:
   int inner_print_macro_block_(const int64_t offset, const int64_t length, const int64_t idx = -1);
   int inner_print_tablet_meta_(const int64_t offset, const int64_t length);
@@ -137,6 +141,7 @@ private:
   int inner_print_common_header_(const char *data_path, const char *storage_info_str);
 
 private:
+  int dump_tablet_trailer_(const backup::ObTabletInfoTrailer &tablet_meta_trailer);
   int dump_backup_file_header_(const backup::ObBackupFileHeader &file_header);
   int dump_common_header_(const share::ObBackupCommonHeader &common_header);
   int dump_data_file_trailer_(const backup::ObBackupDataFileTrailer &trailer);
@@ -156,12 +161,12 @@ private:
   int dump_backup_sstable_meta_(const backup::ObBackupSSTableMeta &sstable_meta);
   int dump_backup_macro_block_id_mapping_meta_(const backup::ObBackupMacroBlockIDMappingsMeta &mapping_meta);
   int dump_ls_attr_info_(const share::ObLSAttr &ls_attr);
-  int dump_tablet_to_ls_info_(const share::ObBackupDataTabletToLSInfo &tablet_to_ls_info);
-  int dump_tenant_locality_info_(const share::ObExternTenantLocalityInfoDesc &locality_info);
-  int dump_tenant_diagnose_info_(const share::ObExternTenantDiagnoseInfoDesc &diagnose_info);
+  int dump_tablet_to_ls_info_(const storage::ObBackupDataTabletToLSInfo &tablet_to_ls_info);
+  int dump_tenant_locality_info_(const storage::ObExternTenantLocalityInfoDesc &locality_info);
+  int dump_tenant_diagnose_info_(const storage::ObExternTenantDiagnoseInfoDesc &diagnose_info);
   int dump_backup_set_info(const share::ObBackupSetFileDesc &backup_set_info);
   int dump_tenant_backup_set_infos_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos);
-  int dump_backup_ls_meta_infos_file_(const share::ObBackupLSMetaInfosDesc &ls_meta_infos);
+  int dump_backup_ls_meta_infos_file_(const storage::ObBackupLSMetaInfosDesc &ls_meta_infos);
   int dump_archive_round_start_file_(const share::ObRoundStartDesc &round_start_file);
   int dump_archive_round_end_file_(const share::ObRoundEndDesc round_end_file);
   int dump_archive_piece_start_file_(const share::ObPieceStartDesc &piece_start_file);
@@ -180,7 +185,7 @@ private:
   int get_tenant_backup_set_infos_path_(const share::ObBackupSetDesc &backup_set_dir_name, 
       share::ObBackupPath &target_path);
   int get_backup_set_placeholder_dir_path(share::ObBackupPath &path);
-  int filter_backup_set_(const share::ObTenantBackupSetInfosDesc &tenant_backup_set_infos, 
+  int filter_backup_set_(const storage::ObTenantBackupSetInfosDesc &tenant_backup_set_infos,
       const ObSArray<share::ObBackupSetDesc> &placeholder_infos,
       ObIArray<share::ObBackupSetFileDesc> &target_backup_set);
 

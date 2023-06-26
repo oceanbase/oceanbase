@@ -135,6 +135,7 @@ protected:
 
 void TestMultiTenant::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   MTL_BIND(fake_init_compat_mode, nullptr);
 }
 

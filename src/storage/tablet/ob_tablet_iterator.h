@@ -34,7 +34,7 @@ class ObLSTabletIterator final
 {
   friend class ObLSTabletService;
 public:
-  explicit ObLSTabletIterator(const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
+  explicit ObLSTabletIterator(const ObMDSGetTabletMode mode);
   ~ObLSTabletIterator();
   ObLSTabletIterator(const ObLSTabletIterator&) = delete;
   ObLSTabletIterator &operator=(const ObLSTabletIterator&) = delete;
@@ -46,12 +46,12 @@ public:
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(KP_(ls_tablet_service), K_(tablet_ids), K_(idx), K_(timeout_us));
+  TO_STRING_KV(KP_(ls_tablet_service), K_(tablet_ids), K_(idx), K_(mode));
 private:
   ObLSTabletService *ls_tablet_service_;
   common::ObSEArray<common::ObTabletID, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> tablet_ids_;
   int64_t idx_;
-  const int64_t timeout_us_;
+  ObMDSGetTabletMode mode_;
 };
 
 class ObHALSTabletIDIterator final
@@ -77,6 +77,28 @@ private:
   int64_t idx_;
   const bool need_initial_state_;
 };
+
+
+class ObHALSTabletIterator final
+{
+  friend class ObLSTabletService;
+public:
+  explicit ObHALSTabletIterator(const share::ObLSID &ls_id, const bool need_initial_state);
+  ~ObHALSTabletIterator();
+  ObHALSTabletIterator(const ObHALSTabletIterator&) = delete;
+  ObHALSTabletIterator &operator=(const ObHALSTabletIterator&) = delete;
+public:
+  int get_next_tablet(ObTabletHandle &handle);
+
+  void reset();
+  bool is_valid() const;
+
+  TO_STRING_KV(KP_(ls_tablet_service), K_(tablet_id_iter));
+private:
+  ObLSTabletService *ls_tablet_service_;
+  ObHALSTabletIDIterator tablet_id_iter_;
+};
+
 } // namespace storage
 } // namespace oceanbase
 

@@ -112,6 +112,9 @@ class ObDDLKV : public blocksstable::ObSSTable
 public:
   ObDDLKV();
   virtual ~ObDDLKV();
+  virtual void inc_ref() override { ATOMIC_AAF(&ref_cnt_, 1); }
+  virtual int64_t dec_ref() override { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
+  virtual int64_t get_ref() const override { return ObITable::get_ref(); }
   int init(const share::ObLSID &ls_id,
            const common::ObTabletID &tablet_id,
            const share::SCN &ddl_start_scn,
@@ -124,7 +127,7 @@ public:
   int freeze(const share::SCN &freeze_scn);
   bool is_freezed() const { return ATOMIC_LOAD(&is_freezed_); }
   int close();
-  int prepare_sstable();
+  int prepare_sstable(const bool need_check = true);
   bool is_closed() const { return is_closed_; }
   share::SCN get_min_scn() const { return min_scn_; }
   share::SCN get_freeze_scn() const { return freeze_scn_; }

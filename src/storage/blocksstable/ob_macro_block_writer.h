@@ -57,7 +57,7 @@ public:
   ~ObMicroBlockBufferHelper() = default;
   int open(
       ObDataStoreDesc &data_store_desc,
-      ObTableReadInfo &read_info,
+      const ObITableReadInfo &read_info,
       common::ObIAllocator &allocator);
   int compress_encrypt_micro_block(ObMicroBlockDesc &micro_block_desc);
   int dump_micro_block_writer_buffer(const char *buf, const int64_t size);
@@ -81,7 +81,6 @@ private:
 
 private:
   ObDataStoreDesc *data_store_desc_;
-  ObTableReadInfo *read_info_;
   int64_t micro_block_merge_verify_level_;
   ObMicroBlockCompressor compressor_;
   ObMicroBlockEncryption encryption_;
@@ -205,7 +204,7 @@ private:
   ObMicroBlockReaderHelper reader_helper_;
   ObMicroBlockHashIndexBuilder hash_index_builder_;
   ObMicroBlockBufferHelper micro_helper_;
-  ObTableReadInfo read_info_;
+  ObRowkeyReadInfo read_info_;
   ObMacroBlock macro_blocks_[2];
   ObMacroBloomFilterCacheWriter bf_cache_writer_[2];//associate with macro_blocks
   int64_t current_index_;

@@ -26,6 +26,7 @@
 #include "storage/blocksstable/ob_row_reader.h"
 #include "ob_data_file_prepare.h"
 #include "storage/memtable/ob_nop_bitmap.h"
+#include "unittest/storage/mock_ob_table_read_info.h"
 
 #ifndef INT24_MIN
 #define INT24_MIN     (-8388607 - 1)
@@ -48,6 +49,7 @@ static ObSimpleMemLimitGetter getter;
 
 namespace unittest
 {
+
 class TestNewRowReader : public TestDataFilePrepare
 {
 public:
@@ -82,7 +84,7 @@ private:
   char *serialize_buf_;
 protected:
   ObRowGenerate row_generate_;
-  ObTableReadInfo read_info_;
+  MockObTableReadInfo read_info_;
   ObTableSchema table_schema_;
   ObArenaAllocator allocator_;
   common::ObArray<ObColDesc> full_schema_cols_;
@@ -95,9 +97,6 @@ int TestNewRowReader::init_read_columns(
 {
   int ret = OB_SUCCESS;
   read_info_.reset();
-  read_info_.cols_desc_.set_allocator(&allocator_);
-  read_info_.cols_index_.set_allocator(&allocator_);
-  read_info_.cols_param_.set_allocator(&allocator_);
   cols_desc.reuse();
   for (int64_t i = 0; OB_SUCC(ret) && i < projector.count(); ++i) {
     ObColDesc col_desc;
@@ -123,21 +122,14 @@ int TestNewRowReader::init_read_columns(
   }
   if (OB_FAIL(read_info_.init(
           allocator_,
-          16000,
+          writer_row.count_,
           row_generate_.get_schema().get_rowkey_column_num(),
           lib::is_oracle_mode(),
           cols_desc,
-          true,
           &projector))) {
     STORAGE_LOG(WARN, "failed to init column map");
   }
-  read_info_.schema_column_count_ = 10000;
-  read_info_.schema_rowkey_cnt_ = row_generate_.get_schema().get_rowkey_column_num();
-  read_info_.seq_read_column_count_ = read_info_.schema_rowkey_cnt_;
-  read_info_.cols_desc_.assign(cols_desc);
-  read_info_.cols_index_.assign(projector);
-  read_info_.rowkey_cnt_ = read_info_.schema_rowkey_cnt_;
-  read_info_.datum_utils_.init(cols_desc, read_info_.rowkey_cnt_, lib::is_oracle_mode(), allocator_);
+
   return ret;
 }
 
@@ -170,12 +162,11 @@ int TestNewRowReader::init_read_columns(
     col_desc.col_id_ = i + 30;
     ret = cols_desc.push_back(col_desc);
   }
-  if (OB_FAIL(read_info_.init(allocator_, 16000,
+  if (OB_FAIL(read_info_.init(allocator_, writer_row.count_,
           row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(),
           cols_desc))) {
     STORAGE_LOG(WARN, "failed to init column map");
   }
-  read_info_.rowkey_cnt_ = read_info_.schema_rowkey_cnt_;
   return ret;
 }
 
@@ -251,12 +242,10 @@ void TestNewRowReader::build_column_read_info(const int64_t rowkey_column_count,
   ObColDesc col_desc;
   // col desc is no use in flat reader
   for (int i = 0; i < writer_row.row_val_.count_; ++i) {
+    col_desc.col_id_ = i + common::OB_APP_MIN_COLUMN_ID;
     full_schema_cols_.push_back(col_desc);
   }
-  read_info_.init(allocator_, 16000, rowkey_column_count, lib::is_oracle_mode(), full_schema_cols_, true);
-  read_info_.rowkey_cnt_ = rowkey_column_count;
-  read_info_.memtable_cols_index_.reuse();
-  read_info_.memtable_cols_index_.assign(read_info_.cols_index_);
+  read_info_.init(allocator_,  writer_row.row_val_.count_, rowkey_column_count, lib::is_oracle_mode(), full_schema_cols_);
 }
 
 void TestNewRowReader::build_column_read_info(const int64_t rowkey_column_count, const ObDatumRow &writer_row)
@@ -267,12 +256,10 @@ void TestNewRowReader::build_column_read_info(const int64_t rowkey_column_count,
   ObColDesc col_desc;
   // col desc is no use in flat reader
   for (int i = 0; i < writer_row.count_; ++i) {
+    col_desc.col_id_ = i + common::OB_APP_MIN_COLUMN_ID;
     full_schema_cols_.push_back(col_desc);
   }
-  read_info_.init(allocator_, 16000, rowkey_column_count, lib::is_oracle_mode(), full_schema_cols_, true);
-  read_info_.rowkey_cnt_ = rowkey_column_count;
-  read_info_.memtable_cols_index_.reuse();
-  read_info_.memtable_cols_index_.assign(read_info_.cols_index_);
+  read_info_.init(allocator_,  writer_row.count_, rowkey_column_count, lib::is_oracle_mode(), full_schema_cols_);
 }
 
 void TestNewRowReader::check_read_datum_row(
@@ -370,7 +357,7 @@ void TestNewRowReader::check_read_datums(const char* buf, const int64_t buf_len,
   ObRowWriter row_writer;
   ret = row_writer.write(rowkey_cnt, datum_row, extra_buf, len);
   ASSERT_EQ(OB_SUCCESS, ret);
-  STORAGE_LOG(INFO, "check_read_datums, write datums");
+  STORAGE_LOG(INFO, "check_read_datums, write datums", K(datum_row));
 
   // read with ObTableReadInfo
   ObRowReader row_reader2;
@@ -839,7 +826,6 @@ TEST_F(TestNewRowReader, test_read_row)
       &read_info_,
       reader_row);
   ASSERT_EQ(OB_SUCCESS, ret);
-
   ASSERT_TRUE(column_num == reader_row.count_);
   //every obj should equal
   for (int64_t i = 0; i < column_num; ++i) {
@@ -962,7 +948,7 @@ TEST_F(TestNewRowReader, test_read_row_in_random_order)
     reader_row.count_ = num;
     ret = row_reader.read_row(buf, pos, &read_info_, reader_row);
     ASSERT_EQ(OB_SUCCESS, ret);
-
+    STORAGE_LOG(INFO, "projector2", K(reader_row), K(writer_row));
     for (int i = 0; i < reader_row.count_; ++i) {
       STORAGE_LOG(INFO, "projector2", K(i), K(column_idx_array2[i]), K(reader_row.storage_datums_[i]));
       ObStorageDatum datum;
@@ -1643,7 +1629,7 @@ TEST_F(TestLoopCells, test_loop_cells)
 int main(int argc, char **argv)
 {
   system("rm -rf test_row_reader.log");
-  OB_LOGGER.set_file_name("test_row_reader.log", true, true);
+  OB_LOGGER.set_file_name("test_row_reader.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

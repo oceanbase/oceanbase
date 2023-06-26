@@ -19,6 +19,7 @@
 #include "share/ob_get_compat_mode.h"
 #include "share/ob_ddl_task_executor.h"
 #include "share/schema/ob_tenant_schema_service.h"
+#include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/ddl/ob_complement_data_task.h"
@@ -610,6 +611,8 @@ int ObUniqueIndexChecker::wait_trans_end(ObIDag *dag)
   return ret;
 }
 
+/* ObUniqueCheckingDag */
+
 ObUniqueCheckingDag::ObUniqueCheckingDag()
   : ObIDag(ObDagType::DAG_TYPE_UNIQUE_CHECKING), is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), tablet_id_(), is_scan_index_(false),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_UNIQ_CHECK), index_schema_(nullptr), data_table_schema_(nullptr), callback_(nullptr),
@@ -745,7 +748,7 @@ int ObUniqueCheckingDag::alloc_global_index_task_callback(
       ObModIds::OB_CS_BUILD_INDEX))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-  } else if (OB_ISNULL(callback = new (buf) ObGlobalUniqueIndexCallback(tablet_id, index_id, data_table_id, schema_version, task_id))) {
+  } else if (OB_ISNULL(callback = new (buf) ObGlobalUniqueIndexCallback(tenant_id_, tablet_id, index_id, data_table_id, schema_version, task_id))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "fail to placement new local index callback", K(ret));
   } else {
@@ -768,20 +771,19 @@ int64_t ObUniqueCheckingDag::hash() const
   return hash_val;
 }
 
-int ObUniqueCheckingDag::fill_comment(char *buf, const int64_t buf_len) const
+int ObUniqueCheckingDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   int64_t index_id = 0;
   if (NULL != index_schema_) {
     index_id = index_schema_->get_table_id();
   }
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, "unique check task: tablet_id=%s index_id=%ld",
-      to_cstring(tablet_id_), index_id))) {
-    STORAGE_LOG(WARN, "failed to fill comment", K(ret), K(tablet_id_), K(index_id));
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+                                static_cast<int64_t>(tablet_id_.id()), index_id))) {
+    STORAGE_LOG(WARN, "failed to fill info param", K(ret));
   }
   return ret;
 }
@@ -974,8 +976,8 @@ int ObSimpleUniqueCheckingTask::process()
 }
 
 ObGlobalUniqueIndexCallback::ObGlobalUniqueIndexCallback(
-    const common::ObTabletID &tablet_id, const uint64_t index_id, const uint64_t data_table_id, const int64_t schema_version, const int64_t task_id)
-  : tablet_id_(tablet_id), index_id_(index_id), data_table_id_(data_table_id), schema_version_(schema_version), task_id_(task_id)
+    const uint64_t tenant_id, const common::ObTabletID &tablet_id, const uint64_t index_id, const uint64_t data_table_id, const int64_t schema_version, const int64_t task_id)
+  : tenant_id_(tenant_id), tablet_id_(tablet_id), index_id_(index_id), data_table_id_(data_table_id), schema_version_(schema_version), task_id_(task_id)
 {
 }
 
@@ -990,6 +992,7 @@ int ObGlobalUniqueIndexCallback::operator()(const int ret_code)
   arg.source_table_id_ = data_table_id_;
   arg.schema_version_ = schema_version_;
   arg.task_id_ = task_id_;
+  arg.tenant_id_ = tenant_id_;
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
       ret = OB_E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;

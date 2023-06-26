@@ -60,7 +60,7 @@ public:
            const int64_t schema_version,
            const int64_t consumer_group_id,
            const obrpc::ObAlterTableArg &alter_table_arg,
-           const int64_t task_status = share::ObDDLTaskStatus::LOCK_TABLE,
+           const int64_t task_status = share::ObDDLTaskStatus::MODIFY_AUTOINC,
            const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
@@ -72,7 +72,6 @@ public:
   virtual void flt_set_status_span_tag() const override;
   virtual int cleanup_impl() override;
 private:
-  int lock_table();
   int unlock_table();
   int modify_autoinc();
   int wait_trans_end();

@@ -165,7 +165,6 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
                 schema_rowkey_cnt,
                 lib::is_oracle_mode(),
                 tmp_col_descs,
-                false,
                 &tmp_cols_index,
                 &tmp_cols))) {
       LOG_WARN("Fail to init read info", K(ret));

@@ -114,8 +114,6 @@ int ObAlterTablegroupExecutor::execute(ObExecContext &ctx, ObAlterTablegroupStmt
     const_cast<obrpc::ObAlterTablegroupArg&>(alter_tablegroup_arg).ddl_stmt_str_ = first_stmt;
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_alter_partition(ctx, stmt, alter_tablegroup_arg))) {
-    LOG_WARN("check alter partition failed", K(ret));
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
@@ -127,76 +125,6 @@ int ObAlterTablegroupExecutor::execute(ObExecContext &ctx, ObAlterTablegroupStmt
   } else if (OB_FAIL(common_rpc_proxy->alter_tablegroup(alter_tablegroup_arg))) {
     LOG_WARN("rpc proxy alter table group failed", "dst", common_rpc_proxy->get_server(), K(ret), K(alter_tablegroup_arg));
   }
-  return ret;
-}
-
-int ObAlterTablegroupExecutor::check_alter_partition(ObExecContext &ctx,
-                                                     ObAlterTablegroupStmt &stmt,
-                                                     const obrpc::ObAlterTablegroupArg &arg)
-{
-  int ret = OB_SUCCESS;
-  if (arg.is_alter_partitions()) {
-    const ObTablegroupSchema &tablegroup_schema = arg.alter_tablegroup_schema_;
-    if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::ADD_PARTITION)
-        || arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::PARTITIONED_TABLE)
-        || arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::REORGANIZE_PARTITION)
-        || arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION)) {
-      ObPartition **partition_array = tablegroup_schema.get_part_array();
-      int64_t real_part_num = tablegroup_schema.get_partition_num();
-      const int64_t fun_expr_num = stmt.get_part_func_expr_num();
-      if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION)) {
-        real_part_num = tablegroup_schema.get_part_option().get_part_num();
-      }
-      if (tablegroup_schema.is_range_part()) {
-        ObSEArray<ObObj, 8> range_partition_obj;
-        ObIArray<ObRawExpr *> &range_values_exprs = stmt.get_part_values_exprs();
-        if (OB_ISNULL(partition_array)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("partition_array is NULL", K(ret));
-        } else if (OB_FAIL(ObPartitionExecutorUtils::cast_range_expr_to_obj(
-                ctx,
-                range_values_exprs,
-                fun_expr_num,
-                stmt::T_ALTER_TABLEGROUP,
-                false, //is_subpart
-                real_part_num,
-                partition_array,
-                NULL,
-                range_partition_obj))) {
-          LOG_WARN("partition_array is NULL", K(ret));
-        }
-      } else if (tablegroup_schema.is_list_part()) {
-        if (OB_ISNULL(partition_array)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("partition_array is NULL", K(ret));
-        } else  if (OB_FAIL(ObPartitionExecutorUtils::cast_list_expr_to_obj(ctx,
-                                                                            stmt,
-                                                                            false,
-                                                                            partition_array,
-                                                                            NULL))) {
-          LOG_WARN("failed cast list to expr", K(ret));
-        }
-      } else if (!arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::PARTITIONED_TABLE)) {
-        ret = OB_ERR_ONLY_ON_RANGE_LIST_PARTITION;
-        LOG_WARN("unexpected partition type", K(ret),
-                 "partition type", tablegroup_schema.get_part_option().get_part_func_type());
-      }
-      if (OB_FAIL(ret)) {
-      } else if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION)) {
-        //由于split在不引起二义性的情况下，可以不指定high_value，part_num需要和实际range_value_expr对应
-        //在解析完成后可以置为正确的partition_num
-        const_cast<ObTablegroupSchema &>(tablegroup_schema).get_part_option().set_part_num(
-          tablegroup_schema.get_partition_num());
-      }
-    } else if (arg.alter_option_bitset_.has_member(obrpc::ObAlterTablegroupArg::DROP_PARTITION)) {
-      // do-nothing
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("no operation", K(arg), K(ret));
-    }
-    LOG_DEBUG("dump table schema", K(tablegroup_schema));
-  }
-
   return ret;
 }
 }  // namespace sql

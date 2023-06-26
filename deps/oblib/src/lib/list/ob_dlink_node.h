@@ -119,10 +119,10 @@ void ObDLinkBase<Derived>::replace_by(Derived *e)
 template <typename Derived>
 void ObDLinkBase<Derived>::add(Derived *prev, Derived *e, Derived *next)
 {
-  prev->next_ = e;
   e->prev_ = prev;
-  next->prev_ = e;
   e->next_ = next;
+  prev->next_ = e;
+  next->prev_ = e;
 }
 
 template <typename Derived>
@@ -139,6 +139,7 @@ template<typename T>
 struct ObDLinkNode: public ObDLinkBase<ObDLinkNode<T> >
 {
   ObDLinkNode():data_() {};
+  ObDLinkNode(T data):data_(data) {};
   ~ObDLinkNode() {};
 
   T &get_data() {return data_;};

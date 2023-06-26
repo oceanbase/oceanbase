@@ -200,8 +200,10 @@ int ObTxTable::create_tablet(const lib::Worker::CompatMode compat_mode, const SC
       LOG_WARN("create ctx tablet failed", K(ret));
     }
     if (OB_FAIL(ret)) {
-      int tmp_ret = remove_tablet();
-      LOG_WARN("remove tablet init failed", K(tmp_ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(remove_tablet())) {
+        LOG_WARN("remove tablet failed", K(tmp_ret));
+      }
     }
   }
   return ret;
@@ -271,75 +273,25 @@ int ObTxTable::get_ctx_table_schema_(const uint64_t tenant_id, share::schema::Ob
   return ret;
 }
 
-int ObTxTable::gen_create_tablet_arg_(const ObTabletID &tablet_id,
-                                      const uint64_t tenant_id,
-                                      const ObLSID ls_id,
-                                      const lib::Worker::CompatMode compat_mode,
-                                      const schema::ObTableSchema &table_schema,
-                                      obrpc::ObBatchCreateTabletArg &arg)
+int ObTxTable::create_ctx_tablet_(
+    const uint64_t tenant_id,
+    const ObLSID ls_id,
+    const lib::Worker::CompatMode compat_mode,
+    const share::SCN &create_scn)
 {
   int ret = OB_SUCCESS;
-  ObCreateTabletInfo create_tablet_info;
-  ObArray<common::ObTabletID> tablet_ids;
-  ObArray<int64_t> tablet_schema_idxs;
-
-  // frozen_timestamp: next merge time
-
-  arg.reset();
-  // create ObCreateTabletInfo
-  if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-    LOG_WARN("insert tablet id failed", K(ret), K(tablet_id));
-    // only one tablet, only one schema
-  } else if (OB_FAIL(tablet_schema_idxs.push_back(0))) {
-    LOG_WARN("insert tablet schema idx failed", K(ret));
-    // TODO ls inited in sys tenant, the special tablet always init as mysql mode?? @cxf262476
-  } else if (OB_FAIL(create_tablet_info.init(
-                 tablet_ids, tablet_id, tablet_schema_idxs, compat_mode, false /*is_create_bind_hidden_tablets*/))) {
-    LOG_WARN("create tablet info init failed", K(ret), K(tablet_ids), K(tablet_id));
-  // create ObBatchCreateTabletArg
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, SCN::base_scn(), false/*need_check_tablet_cnt*/))) {
-    LOG_WARN("ObBatchCreateTabletArg init create tablet failed", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
-    LOG_WARN("add table schema failed", K(ret), K(table_schema));
-  } else if (OB_FAIL(arg.tablets_.push_back(create_tablet_info))) {
-    LOG_WARN("add create tablet info failed", K(ret), K(create_tablet_info));
-  }
-
-  return ret;
-}
-
-int ObTxTable::gen_remove_tablet_arg_(const common::ObTabletID &tablet_id,
-                                      const uint64_t tenant_id,
-                                      const share::ObLSID ls_id,
-                                      obrpc::ObBatchRemoveTabletArg &arg)
-{
-  int ret = OB_SUCCESS;
-  arg.reset();
-  if (OB_FAIL(arg.tablet_ids_.push_back(tablet_id))) {
-    LOG_WARN("insert tablet id failed", K(ret), K(tablet_id));
-  } else {
-    arg.id_ = ls_id;
-  }
-  return ret;
-}
-
-int ObTxTable::create_ctx_tablet_(const uint64_t tenant_id,
-                                  const ObLSID ls_id,
-                                  const lib::Worker::CompatMode compat_mode,
-                                  const SCN &create_scn)
-{
-  int ret = OB_SUCCESS;
-  obrpc::ObBatchCreateTabletArg arg;
-  const bool no_need_write_clog = true;
   share::schema::ObTableSchema table_schema;
-  SCN tmp_scn;
-
   if (OB_FAIL(get_ctx_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get ctx table schema failed", K(ret));
-  } else if (OB_FAIL(gen_create_tablet_arg_(LS_TX_CTX_TABLET, tenant_id, ls_id, compat_mode, table_schema, arg))) {
-    LOG_WARN("gen create tablet arg failed", K(ret), K(LS_TX_CTX_TABLET), K(tenant_id), K(ls_id), K(table_schema));
-  } else if (OB_FAIL(ls_->batch_create_tablets(arg, create_scn, no_need_write_clog))) {
-    LOG_WARN("create ctx tablet failed", K(ret), K(arg), K(create_scn));
+  } else if (OB_FAIL(ls_->create_ls_inner_tablet(ls_id,
+                                                 LS_TX_CTX_TABLET,
+                                                 ObLS::LS_INNER_TABLET_FROZEN_SCN,
+                                                 table_schema,
+                                                 compat_mode,
+                                                 create_scn))) {
+    LOG_WARN("create tx ctx tablet failed", K(ret), K(ls_id),
+             K(LS_TX_CTX_TABLET), K(ObLS::LS_INNER_TABLET_FROZEN_SCN),
+             K(table_schema), K(compat_mode), K(create_scn));
   }
   return ret;
 }
@@ -446,19 +398,21 @@ int ObTxTable::get_data_table_schema_(const uint64_t tenant_id, share::schema::O
 int ObTxTable::create_data_tablet_(const uint64_t tenant_id,
                                    const ObLSID ls_id,
                                    const lib::Worker::CompatMode compat_mode,
-                                   const SCN &create_scn)
+                                   const share::SCN &create_scn)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObBatchCreateTabletArg arg;
-  const bool no_need_write_clog = true;
   share::schema::ObTableSchema table_schema;
-
   if (OB_FAIL(get_data_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get data table schema failed", K(ret));
-  } else if (OB_FAIL(gen_create_tablet_arg_(LS_TX_DATA_TABLET, tenant_id, ls_id, compat_mode, table_schema, arg))) {
-    LOG_WARN("gen create tablet arg failed", K(ret), K(LS_TX_DATA_TABLET), K(tenant_id), K(ls_id), K(table_schema));
-  } else if (OB_FAIL(ls_->batch_create_tablets(arg, create_scn, no_need_write_clog))) {
-    LOG_WARN("create ctx tablet failed", K(ret), K(arg), K(create_scn));
+  } else if (OB_FAIL(ls_->create_ls_inner_tablet(ls_id,
+                                                 LS_TX_DATA_TABLET,
+                                                 ObLS::LS_INNER_TABLET_FROZEN_SCN,
+                                                 table_schema,
+                                                 compat_mode,
+                                                 create_scn))) {
+    LOG_WARN("create tx data tablet failed", K(ret), K(ls_id),
+             K(LS_TX_DATA_TABLET), K(ObLS::LS_INNER_TABLET_FROZEN_SCN),
+             K(table_schema), K(compat_mode), K(create_scn));
   }
   return ret;
 }
@@ -466,31 +420,9 @@ int ObTxTable::create_data_tablet_(const uint64_t tenant_id,
 int ObTxTable::remove_tablet_(const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObBatchRemoveTabletArg arg;
-  const bool no_need_write_clog = true;
-  uint64_t tenant_id = ls_->get_tenant_id();
-  if (OB_FAIL(gen_remove_tablet_arg_(tablet_id, tenant_id, ls_->get_ls_id(), arg))) {
-    LOG_WARN("gen remove tablet arg failed", K(ret), K(tablet_id), K(tenant_id), K(ls_->get_ls_id()));
-  } else if (OB_FAIL(ls_->batch_remove_tablets(arg, no_need_write_clog))) {
-    LOG_WARN("remove tablet failed", K(ret), K(arg));
-  }
-  return ret;
-}
-
-int ObTxTable::remove_data_tablet_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(remove_tablet_(LS_TX_DATA_TABLET))) {
-    LOG_WARN("remove tablet failed", K(ret), K(LS_TX_DATA_TABLET));
-  }
-  return ret;
-}
-
-int ObTxTable::remove_ctx_tablet_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(remove_tablet_(LS_TX_CTX_TABLET))) {
-    LOG_WARN("remove tablet failed", K(ret), K(LS_TX_CTX_TABLET));
+  const share::ObLSID &ls_id = ls_->get_ls_id();
+  if (OB_FAIL(ls_->remove_ls_inner_tablet(ls_id, tablet_id))) {
+    LOG_WARN("remove ls inner tablet failed", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
 }
@@ -499,11 +431,11 @@ int ObTxTable::remove_tablet()
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(ls_)) {
-    if (OB_FAIL(remove_data_tablet_())) {
-      LOG_WARN("remove data tablet failed", K(ret));
+    if (OB_FAIL(remove_tablet_(LS_TX_DATA_TABLET))) {
+      LOG_WARN("remove tx data tablet failed", K(ret));
     }
-    if (OB_FAIL(remove_ctx_tablet_())) {
-      LOG_WARN("remove ctx tablet failed", K(ret));
+    if (OB_FAIL(remove_tablet_(LS_TX_CTX_TABLET))) {
+      LOG_WARN("remove tx ctx tablet failed", K(ret));
     }
   }
   return ret;
@@ -514,6 +446,7 @@ int ObTxTable::load_tx_ctx_table_()
   int ret = OB_SUCCESS;
   ObTabletHandle handle;
   ObTablet *tablet;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
 
   if (NULL == ls_tablet_svr) {
@@ -522,14 +455,25 @@ int ObTxTable::load_tx_ctx_table_()
   } else if (OB_FAIL(ls_tablet_svr->get_tablet(LS_TX_CTX_TABLET, handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (FALSE_IT(tablet = handle.get_obj())) {
+  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_CTX_TABLET, 0 /* schema_version */))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else {
-    ObTabletTableStore &table_store = tablet->get_table_store();
-    ObSSTableArray &sstables = table_store.get_minor_sstables();
+    const ObSSTableArray &sstables = table_store_wrapper.get_member()->get_minor_sstables();
 
     if (!sstables.empty()) {
-      ret = restore_tx_ctx_table_(*sstables[0]);
+      ObStorageMetaHandle sstable_handle;
+      ObSSTable *sstable = static_cast<ObSSTable *>(sstables[0]);
+      if (sstable->is_loaded()) {
+      } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable_handle))) {
+        LOG_WARN("fail to load sstable", K(ret), KPC(sstable));
+      } else if (OB_FAIL(sstable_handle.get_sstable(sstable))) {
+        LOG_WARN("fail to get sstable", K(ret), K(sstable_handle));
+      }
+      if (FAILEDx(restore_tx_ctx_table_(*sstable))) {
+        LOG_WARN("fail to restore tx ctx table", K(ret), KPC(sstable));
+      }
     }
   }
 
@@ -626,15 +570,19 @@ int ObTxTable::restore_tx_ctx_table_(ObITable &trans_sstable)
     LOG_WARN("failed to push back meta", K(ret), K(meta));
   } else if (OB_FAIL(columns.push_back(value))) {
     LOG_WARN("failed to push back value", K(ret), K(value));
-  } else if (OB_FAIL(read_info.init(allocator,
-                                    LS_TX_CTX_SCHEMA_COLUMN_CNT,
-                                    LS_TX_CTX_SCHEMA_ROWKEY_CNT,
-                                    lib::is_oracle_mode(),
-                                    columns))) {
+  } else if (OB_FAIL(read_info.init(
+              allocator,
+              LS_TX_CTX_SCHEMA_COLUMN_CNT,
+              LS_TX_CTX_SCHEMA_ROWKEY_CNT,
+              lib::is_oracle_mode(),
+              columns,
+              nullptr/*storage_cols_index*/))) {
     LOG_WARN("Fail to init read_info", K(ret));
   } else if (FALSE_IT(iter_param.read_info_ = &read_info)) {
-  } else if (FALSE_IT(iter_param.full_read_info_ = &read_info)) {
-  } else if (OB_FAIL(trans_sstable.scan(iter_param, access_context, whole_range, row_iter))) {
+  } else if (OB_FAIL(trans_sstable.scan(iter_param,
+                                        access_context,
+                                        whole_range,
+                                        row_iter))) {
     LOG_WARN("failed to scan trans table", K(ret));
   } else if (NULL == row_iter) {
     // do nothing
