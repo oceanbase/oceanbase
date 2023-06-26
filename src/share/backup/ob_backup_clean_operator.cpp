@@ -308,7 +308,6 @@ int ObBackupCleanJobOperator::do_parse_job_result_(
 {
   int ret = OB_SUCCESS;
   int64_t real_length = 0;
-  char backup_path[OB_MAX_BACKUP_DEST_LENGTH] = "";
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
   char clean_type_str[OB_DEFAULT_STATUS_LENTH] = "";
   char job_level[OB_SYS_TASK_TYPE_LENGTH] = "";
@@ -333,8 +332,6 @@ int ObBackupCleanJobOperator::do_parse_job_result_(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(parse_int_(parameter_str, parameter))) {
     LOG_WARN("failed to parse parameter", K(ret), K(parameter_str));
-  } else if (OB_FAIL(job.backup_path_.assign(backup_path))) {
-    LOG_WARN("failed to set backup path", K(ret), K(backup_path));
   } else if (OB_FAIL(job.status_.set_status(status_str))) {
     LOG_WARN("failed to set status", K(ret), K(status_str));
   } else if (FALSE_IT(job.clean_type_ = ObNewBackupCleanType::get_type(clean_type_str))) {
@@ -772,6 +769,7 @@ int ObBackupCleanTaskOperator::do_parse_task_result_(
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, task_attr.result_, int);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TOTAL_LS_COUNT, task_attr.total_ls_count_, int);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_FINISH_LS_COUNT, task_attr.finish_ls_count_, int);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_BACKUP_PATH, backup_path, OB_MAX_BACKUP_DEST_LENGTH, real_length);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(task_attr.backup_path_.assign(backup_path))) {
     LOG_WARN("failed to set backup path", K(ret), K(backup_path));
@@ -1057,9 +1055,9 @@ int ObBackupCleanLSTaskOperator::get_ls_tasks_from_task_id(
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(fill_select_ls_task_sql_(sql))) {
-        LOG_WARN("failed to fill select ls task sql", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" where %s=%ld order by end_ts", OB_STR_TASK_ID, task_id))) {
+      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%ld order by end_ts",
+          OB_ALL_BACKUP_DELETE_LS_TASK_TNAME, OB_STR_TASK_ID, task_id))) {
+        LOG_WARN("failed to append fmt", K(ret));
       } else if (need_lock && OB_FAIL(sql.append_fmt(" for update"))) {
         LOG_WARN("failed to append sql", K(ret));
       } else if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
@@ -1093,10 +1091,8 @@ int ObBackupCleanLSTaskOperator::get_ls_task(
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(fill_select_ls_task_sql_(sql))) {
-        LOG_WARN("failed to fill select ls task sql", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" where %s=%ld and %s=%ld and %s=%ld",
-          OB_STR_TASK_ID, task_id, OB_STR_LS_ID, ls_id.id(), OB_STR_TENANT_ID, tenant_id))) {
+      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%ld and %s=%ld and %s=%ld",
+          OB_ALL_BACKUP_DELETE_LS_TASK_TNAME, OB_STR_TASK_ID, task_id, OB_STR_LS_ID, ls_id.id(), OB_STR_TENANT_ID, tenant_id))) {
         LOG_WARN("failed append sql", K(ret),K(sql));
       } else if (need_lock && OB_FAIL(sql.append_fmt(" for update"))) {
         LOG_WARN("failed to append sql", K(ret));
@@ -1117,40 +1113,6 @@ int ObBackupCleanLSTaskOperator::get_ls_task(
       }
     }
   }
-  return ret;
-}
-int ObBackupCleanLSTaskOperator::fill_select_ls_task_sql_(ObSqlString &sql)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(sql.assign_fmt("select %s", OB_STR_TASK_ID))) {
-    LOG_WARN("failed to assign fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_TENANT_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_LS_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_JOB_ID))) {
-    LOG_WARN("failed to append fmt", K(ret)); 
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_STATUS))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_TASK_TYPE))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_ROUND_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_START_TS))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_END_TS))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_TASK_TRACE_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_RESULT))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_RETRY_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(" from %s", OB_ALL_BACKUP_DELETE_LS_TASK_TNAME))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } 
   return ret;
 }
 
@@ -1189,6 +1151,8 @@ int ObBackupCleanLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBa
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
   char task_type_str[64] = "";
   char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+  char server_str[OB_MAX_SERVER_ADDR_SIZE] = { 0 };
+  int64_t port = 0;
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TASK_ID, ls_attr.task_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_JOB_ID, ls_attr.job_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, ls_attr.tenant_id_, uint64_t);
@@ -1200,13 +1164,23 @@ int ObBackupCleanLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBa
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_END_TS, ls_attr.end_ts_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, ls_attr.result_, int);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RETRY_ID, ls_attr.retry_id_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TOTAL_BYTES, ls_attr.stats_.total_bytes_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DELETE_BYTES, ls_attr.stats_.delete_bytes_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TOTAL_FILES_COUNT, ls_attr.stats_.total_files_count_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DELETE_FILES_COUNT, ls_attr.stats_.delete_files_count_, int64_t);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_TASK_TRACE_ID, trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE, real_length);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_SEVER_IP, server_str, OB_MAX_SERVER_ADDR_SIZE, real_length);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_SERVER_PORT, port, int64_t);
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ls_attr.status_.set_status(status_str))) {
     LOG_WARN("failed to set status", K(ret), K(status_str));
   } else if (FALSE_IT(ls_attr.task_type_ = ObBackupCleanTaskType::get_type(task_type_str))) {
   } else if (strcmp(trace_id_str, "") != 0 && OB_FAIL(ls_attr.task_trace_id_.set(trace_id_str))) {
     LOG_WARN("failed to set ls task trace id", K(ret), K(trace_id_str));
+  } else if (!ls_attr.dst_.set_ip_addr(server_str, static_cast<int32_t>(port))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to set server ip and port", K(ret), K(server_str), K(port));
   } else {
     if (ls_attr.is_delete_backup_set_task()) {
       EXTRACT_INT_FIELD_MYSQL(result, OB_STR_ID, ls_attr.backup_set_id_, int64_t);
