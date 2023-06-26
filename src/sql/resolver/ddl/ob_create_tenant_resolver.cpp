@@ -190,7 +190,7 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
 
       if (OB_SUCC(ret)) {
         if (OB_UNLIKELY(collation_type != ObCharset::get_default_collation_oracle(charset_type))) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_CHARACTER_SET_MISMATCH;
           LOG_WARN("collation isn't corresponding to charset in oracle mode", K(ret), 
                    K(collation_type), K(ObCharset::get_default_collation_oracle(charset_type)));
         }
