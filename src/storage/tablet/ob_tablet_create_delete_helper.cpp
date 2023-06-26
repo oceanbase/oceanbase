@@ -1275,6 +1275,7 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
 
   if (OB_FAIL(ret)) {
   } else if (should_skip) {
+  } else if (!is_valid) {
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret), K(key));
   } else if (OB_UNLIKELY(!trans_flags.for_replay_
