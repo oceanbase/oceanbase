@@ -57,6 +57,7 @@ private:
   int backup_sys_meta_();
   int do_backup_meta_(ObIArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int backup_user_meta_();
+  int calc_consistent_scn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, share::SCN &consistent_scn);
   int check_need_change_meta_turn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, bool &need_change_turn);
   int change_meta_turn_(const share::ObBackupLSTaskAttr &sys_ls_task);
   int get_backup_user_meta_task_(ObIArray<share::ObBackupLSTaskAttr> &ls_task);

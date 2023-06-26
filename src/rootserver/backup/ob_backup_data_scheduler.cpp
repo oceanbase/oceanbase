@@ -848,7 +848,6 @@ int ObBackupDataScheduler::handle_execute_over(
   } else {
     // first get task from __all_backup_log_stream_task
     ObBackupLSTaskAttr ls_attr;
-    ObSqlString extra_condition;
     ObMySQLTransaction trans;
     ObLSID ls_id(task->get_ls_id());
     if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(task->get_tenant_id())))) {

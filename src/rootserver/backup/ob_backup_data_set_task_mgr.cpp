@@ -494,14 +494,6 @@ int ObBackupSetTaskMgr::backup_user_meta_()
     ROOTSERVICE_EVENT_ADD("backup_data", "before_backup_data");
     share::SCN consistent_scn;
     bool need_change_meta_turn = false;
-
-    // let consistent_scn be the biggest max_tablet_checkpoint_scn_ of all the ls.
-    consistent_scn.set_min();
-    ARRAY_FOREACH(ls_task, i) {
-      const ObBackupLSTaskAttr &task = ls_task.at(i);
-      consistent_scn = MAX(consistent_scn, task.max_tablet_checkpoint_scn_);
-    }
-
     if (OB_FAIL(check_need_change_meta_turn_(ls_task, need_change_meta_turn))) {
       LOG_WARN("failed to check need change meta turn", K(ret), K(ls_task));
     } else if (need_change_meta_turn) {
@@ -509,6 +501,8 @@ int ObBackupSetTaskMgr::backup_user_meta_()
       if (OB_FAIL(change_meta_turn_(sys_ls_task))) {
         LOG_WARN("failed to change meta turn", K(ret));
       }
+    } else if (OB_FAIL(calc_consistent_scn_(ls_task, consistent_scn))) {
+      LOG_WARN("failed to calc consistent scn", K(ret), K(ls_task));
     } else if (OB_FAIL(merge_ls_meta_infos_(ls_task))) {
       LOG_WARN("fail to merge ls meta infos", K(ret), K(ls_task));
     } else if (OB_FAIL(merge_tablet_to_ls_info_(consistent_scn, ls_task))) {
@@ -540,6 +534,21 @@ int ObBackupSetTaskMgr::backup_user_meta_()
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::calc_consistent_scn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, share::SCN &consistent_scn)
+{
+  int ret = OB_SUCCESS;
+  consistent_scn.set_min();
+  // let consistent_scn be the biggest max_tablet_checkpoint_scn_ of all the ls and the cur gts.
+  if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, job_attr_->tenant_id_, true, consistent_scn))) {
+    LOG_WARN("failed to get backup scn", K(ret), "tenant_id", job_attr_->tenant_id_);
+  }
+  ARRAY_FOREACH(ls_tasks, i) {
+    const ObBackupLSTaskAttr &task = ls_tasks.at(i);
+    consistent_scn = MAX(consistent_scn, task.max_tablet_checkpoint_scn_);
   }
   return ret;
 }
