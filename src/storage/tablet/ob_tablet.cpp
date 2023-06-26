@@ -4922,16 +4922,14 @@ int ObTablet::update_memtables()
     LOG_INFO("no memtable in memtable mgr", K(ret));
   } else if (OB_FAIL(memtable_mgr->get_all_memtables(inc_memtables))) {
     LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
-  } else if (OB_FAIL(rebuild_memtable(inc_memtables))) {
-    LOG_ERROR("failed to rebuild table store memtables", K(ret), K(inc_memtables), KPC(this));
   } else if (is_ls_inner_tablet() && OB_FAIL(rebuild_memtable(inc_memtables))) {
-    LOG_ERROR("failed to rebuild table store memtables for ls inner tablet", K(ret), K(inc_memtables));
+    LOG_ERROR("failed to rebuild table store memtables for ls inner tablet", K(ret), K(inc_memtables), KPC(this));
   } else if (!is_ls_inner_tablet() && memtable_count_ > 0 && OB_FAIL(rebuild_memtable(inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables for normal tablet when current memtable exists", K(ret), K(inc_memtables), KPC(this));
   } else if (!is_ls_inner_tablet() && memtable_count_ == 0 && OB_FAIL(rebuild_memtable(tablet_meta_.clog_checkpoint_scn_, inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables for normal tablet when current memtable does not exist", K(ret),
         "clog_checkpoint_scn", tablet_meta_.clog_checkpoint_scn_,
-        K(inc_memtables));
+        K(inc_memtables), KPC(this));
   }
   LOG_DEBUG("update memtables", K(ret), K(inc_memtables));
   return ret;
