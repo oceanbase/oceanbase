@@ -594,8 +594,8 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
 {
   int ret = OB_SUCCESS;
   ObArchiveService *archive_service = MTL(ObArchiveService*);
-  bool force_wait = true;
-  bool ignore = true;
+  bool force_wait = false;
+  bool ignore = false;
   SCN scn = SCN::min_scn();
   LSN lsn;
   SCN readable_scn = SCN::min_scn();
@@ -630,15 +630,12 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
-  } else if (scn == offline_scn) {
+  } else if (scn >= offline_scn) {
     if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
-  } else if (scn > offline_scn) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "ls_archive_progress larger than offline scn", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   } else {
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait archive", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   }
