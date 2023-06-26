@@ -9976,6 +9976,7 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
       ObRawExpr *check_constraint_expr = NULL;
       ObConstraint tmp_constraint;
       ObSEArray<ObQualifiedName, 1> columns;
+      ObString constraint_str;
       if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_CHECK
           && (*iter)->get_constraint_type() != CONSTRAINT_TYPE_NOT_NULL) {
         continue;
@@ -10011,8 +10012,13 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
                  (*iter)->is_no_validate() &&
                  (!resolve_check_for_optimizer || !(*iter)->get_rely_flag())) {
         continue;
+      } else if (ob_write_string(*params_.allocator_, (*iter)->get_check_expr_str(), constraint_str)) {
+        LOG_WARN("failed to write string", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
+                 *params_.allocator_, params_.session_info_->get_dtc_params(), constraint_str))) {
+        LOG_WARN("failed to convert sql text", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
-                 (*iter)->get_check_expr_str(), *(params_.allocator_), node))) {
+                 constraint_str, *(params_.allocator_), node))) {
         LOG_WARN("parse expr node from string failed", K(ret));
       } else if (OB_FAIL(ObResolverUtils::resolve_check_constraint_expr(
                  params_, node, *table_schema, tmp_constraint, check_constraint_expr, NULL, &columns))) {

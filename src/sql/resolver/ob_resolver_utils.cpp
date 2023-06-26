@@ -4235,8 +4235,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                                   *expr_factory,
                                                                   expr,
                                                                   expr_changed));
-      OZ (expr->formalize(session_info));
     }
+    OZ (expr->formalize(session_info));
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();

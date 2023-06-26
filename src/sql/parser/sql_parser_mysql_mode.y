@@ -739,6 +739,14 @@ expr opt_as column_label
     if (0 == $3->str_len_) {
       alias_name_node->str_value_ = NULL;
       alias_name_node->str_len_ = 0;
+    } else if (result->is_not_utf8_connection_) {
+      alias_name_node->str_value_ = parse_str_convert_utf8(result->charset_info_, $3->str_value_,
+                                                           result->malloc_pool_, &(alias_name_node->str_len_),
+                                                           &(result->extra_errno_));
+      if (OB_PARSER_ERR_ILLEGAL_NAME == result->extra_errno_) {
+        yyerror(NULL, result, "alias '%s' is illegal\n", $3->str_value_);
+        YYABORT_UNEXPECTED;
+      }
     } else {
       dup_node_string($3, alias_name_node, result->malloc_pool_);
     }
@@ -9480,6 +9488,14 @@ expr %prec LOWER_PARENS
     if (NULL == $3->str_value_) {
       alias_name_node->str_value_ = NULL;
       alias_name_node->str_len_ = 0;
+    } else if (result->is_not_utf8_connection_) {
+      alias_name_node->str_value_ = parse_str_convert_utf8(result->charset_info_, $3->str_value_,
+                                                           result->malloc_pool_, &(alias_name_node->str_len_),
+                                                           &(result->extra_errno_));
+      if (OB_PARSER_ERR_ILLEGAL_NAME == result->extra_errno_) {
+        yyerror(NULL, result, "alias '%s' is illegal\n", $3->str_value_);
+        YYABORT_UNEXPECTED;
+      }
     } else {
       dup_node_string($3, alias_name_node, result->malloc_pool_);
     }
