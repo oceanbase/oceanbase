@@ -4508,6 +4508,35 @@ bool ObDMLStmt::is_set_stmt() const
 }
 
 
+int ObDMLStmt::check_has_cursor_expression(bool &has_cursor_expr) const
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr *ref_query = NULL;
+  has_cursor_expr = false;
+  for (int64_t j = 0; OB_SUCC(ret) && !has_cursor_expr && j < subquery_exprs_.count(); ++j) {
+    if (OB_ISNULL(ref_query = subquery_exprs_.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (ref_query->is_cursor()) {
+      has_cursor_expr = true;
+    }
+  }
+  ObSEArray<ObSelectStmt *, 4> child_stmts;
+  if (OB_SUCC(ret) && !has_cursor_expr && OB_FAIL(get_child_stmts(child_stmts))) {
+    LOG_WARN("fail to get child stmt");
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has_cursor_expr && i < child_stmts.count(); i ++) {
+    const ObSelectStmt *stmt = child_stmts.at(i);
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(stmt->check_has_cursor_expression(has_cursor_expr)))) {
+      LOG_WARN("failed to check child stmt has function table", K(ret));
+    }
+  }
+  return ret;
+}
+
 ObJtColBaseInfo::ObJtColBaseInfo()
   : col_type_(0),
     truncate_(0),

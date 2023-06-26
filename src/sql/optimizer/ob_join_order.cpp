@@ -1246,6 +1246,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                     get_plan()->get_optimizer_context().has_pl_udf() ||
                     get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
+                    get_plan()->get_optimizer_context().has_cursor_expression() ||
                     is_batch_update_table;
     //this sql force to use DAS TSC:
     //batch update table(multi queries or arraybinding)
