@@ -1757,10 +1757,11 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       out_key_part->id_ = id;
       out_key_part->pos_ = *pos;
       out_key_part->null_safe_ = (T_OP_NSEQ == c_type);
-      if (!const_expr->cnt_param_expr()
+      if ((!const_expr->cnt_param_expr()
           || (!const_expr->has_flag(CNT_DYNAMIC_PARAM)
               && T_OP_LIKE == c_type
-              && NULL != query_range_ctx_->params_)) {
+              && NULL != query_range_ctx_->params_))
+          && !const_expr->has_flag(CNT_LAST_INSERT_ID)) {
         val = const_val;
       } else {
         if (OB_FAIL(get_final_expr_val(const_expr, val))) {
