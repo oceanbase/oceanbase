@@ -345,7 +345,7 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
       tablet->get_tablet_meta().tablet_id_, max_merged_snapshot, min_reserved_snapshot))) {
     LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(table_id));
   } else {
-	  max_reserved_snapshot = MAX(ls_.get_min_reserved_snapshot(), min_reserved_snapshot);
+    max_reserved_snapshot = MAX(ls_.get_min_reserved_snapshot(), min_reserved_snapshot);
   }
   return ret;
 }
@@ -353,8 +353,7 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
 int ObMediumCompactionScheduleFunc::choose_new_medium_snapshot(
   const int64_t max_reserved_snapshot,
   ObMediumCompactionInfo &medium_info,
-  ObGetMergeTablesResult &result,
-  int64_t &schema_version)
+  ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = tablet_handle_.get_obj();
@@ -371,32 +370,43 @@ int ObMediumCompactionScheduleFunc::choose_new_medium_snapshot(
     LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
              K(medium_info), K(max_reserved_snapshot), K_(weak_read_ts), K(snapshot_gc_ts));
   }
-  if (OB_SUCC(ret)) { // update schema version for cur medium scn
-    ObSEArray<storage::ObITable *, MAX_MEMSTORE_CNT> memtables;
-    const ObStorageSchema *schema_on_tablet = nullptr;
-    int64_t store_column_cnt_in_schema = 0;
-    if (OB_FAIL(tablet->get_memtables(memtables, true/*need_active*/))) {
-      LOG_WARN("failed to get memtables", KR(ret), KPC(tablet));
-    } else if (OB_FAIL(tablet->load_storage_schema(allocator_, schema_on_tablet))) {
-      LOG_WARN("fail to load storage schema", K(ret), KPC(this));
-    } else if (OB_FAIL(schema_on_tablet->get_store_column_count(store_column_cnt_in_schema, true/*full_col*/))) {
-      LOG_WARN("failed to get store column count", K(ret), K(store_column_cnt_in_schema));
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::choose_medium_schema_version(
+    const ObMediumCompactionInfo &medium_info,
+    ObTablet &tablet,
+    int64_t &schema_version)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tablet_snapshot_version = tablet.get_snapshot_version();
+  const ObStorageSchema *schema_on_tablet = nullptr;
+  int64_t store_column_cnt_in_schema = 0;
+  ObSEArray<storage::ObITable *, MAX_MEMSTORE_CNT> memtables;
+
+  if (OB_FAIL(tablet.load_storage_schema(allocator_, schema_on_tablet))) {
+    LOG_WARN("fail to load storage schema", K(ret));
+  } else if (FALSE_IT(schema_version = schema_on_tablet->schema_version_)) {
+  } else if (medium_info.medium_snapshot_ <= tablet_snapshot_version) {
+    // do nothing, use schema version on tablet
+  } else if (OB_FAIL(schema_on_tablet->get_store_column_count(store_column_cnt_in_schema, true/*full_col*/))) {
+    LOG_WARN("failed to get store column count", K(ret), K(store_column_cnt_in_schema));
+  } else if (OB_FAIL(tablet.get_memtables(memtables, true/*need_active*/))) {
+    LOG_WARN("failed to get memtables", KR(ret), K(tablet));
+  }
+
+  int64_t max_schema_version_on_memtable = 0;
+  int64_t max_column_cnt_on_memtable = 0; // placeholder
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < memtables.count(); ++idx) {
+    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(memtables.at(idx));
+    if (memtable->get_snapshot_version() <= tablet_snapshot_version) {
+      // continue
+    } else if (OB_FAIL(memtable->get_schema_info(
+      store_column_cnt_in_schema, max_schema_version_on_memtable, max_column_cnt_on_memtable))) {
+      LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(memtable));
     } else {
-      int64_t max_schema_version_on_memtable = 0;
-      int64_t unused_max_column_cnt_on_memtable = 0;
-      for (int64_t idx = 0; OB_SUCC(ret) && idx < memtables.count(); ++idx) {
-        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(memtables.at(idx));
-        if (OB_FAIL(memtable->get_schema_info(
-            store_column_cnt_in_schema,
-            max_schema_version_on_memtable, unused_max_column_cnt_on_memtable))) {
-          LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(memtable));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        schema_version = MAX(max_schema_version_on_memtable, schema_version);
-        LOG_INFO("chosen new medium snapshot", K(ret), KPC(this),
-            K(medium_info), K(max_reserved_snapshot), K(result), K(max_schema_version_on_memtable));
-      }
+      schema_version = MAX(schema_version, max_schema_version_on_memtable);
+      break;
     }
   }
   return ret;
@@ -449,11 +459,12 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
         // do nothing
       } else if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
         LOG_WARN("failed to get multi_version_start", K(ret), KPC(this));
-      } else if (medium_info.medium_snapshot_ < max_reserved_snapshot) {
+      } else if (medium_info.medium_snapshot_ < max_reserved_snapshot &&
+          OB_FAIL(choose_new_medium_snapshot(max_reserved_snapshot, medium_info, result))) {
         // chosen medium snapshot is far too old
-        if (OB_FAIL(choose_new_medium_snapshot(max_reserved_snapshot, medium_info, result, schema_version))) {
-          LOG_WARN("failed to choose new medium snapshot", KR(ret), K(medium_info));
-        }
+        LOG_WARN("failed to choose new medium snapshot", KR(ret), K(max_reserved_snapshot), K(medium_info));
+      } else if (OB_FAIL(choose_medium_schema_version(medium_info, *tablet, schema_version))) {
+        LOG_WARN("failed to choose medium schema version", K(ret), K(tablet));
       }
 
       if (OB_SUCC(ret) && !is_major) {

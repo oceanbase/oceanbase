@@ -115,10 +115,13 @@ protected:
       const ObMediumCompactionInfo::ObCompactionType compaction_type);
   int schedule_next_medium_primary_cluster(const int64_t major_snapshot, ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat);
   int choose_new_medium_snapshot(
-    const int64_t max_reserved_snapshot,
-    ObMediumCompactionInfo &medium_info,
-    ObGetMergeTablesResult &result,
-    int64_t &schema_version);
+      const int64_t max_reserved_snapshot,
+      ObMediumCompactionInfo &medium_info,
+      ObGetMergeTablesResult &result);
+  int choose_medium_schema_version(
+      const ObMediumCompactionInfo &medium_info,
+      ObTablet &tablet,
+      int64_t &schema_version);
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
   static int get_table_id(
       ObMultiVersionSchemaService &schema_service,
