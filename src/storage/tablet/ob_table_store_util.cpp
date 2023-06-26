@@ -178,7 +178,9 @@ int ObSSTableArray::inner_init(
       }
     }
     if (OB_FAIL(ret)) {
-      for (int64_t j = i - 2; j >= start_pos; --j) {
+      // So the current one is not rolled back, because it may not go to the deep copy or go to
+      // the deep copy internal rollback.
+      for (int64_t j = i - start_pos - 2; j >= 0; --j) {
         sstable_array_[j]->~ObSSTable();
         sstable_array_[j] = nullptr;
       }
