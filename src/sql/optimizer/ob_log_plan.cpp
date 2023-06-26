@@ -10291,7 +10291,7 @@ int ObLogPlan::classify_rownum_exprs(const ObIArray<ObRawExpr*> &rownum_exprs,
                                             const_expr, filter_exprs,
                                             start_exprs, limit_expr))) {
       LOG_WARN("failed to classify rownum expr", K(ret));
-    } else if (const_expr == limit_expr) {
+    } else if (const_expr == limit_expr && T_INVALID == limit_rownum_type) {
       limit_rownum_type = expr_type;
     }
   }
