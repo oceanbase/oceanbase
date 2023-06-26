@@ -502,7 +502,7 @@ END_P SET_VAR DELIMITER
 %type <node> get_diagnostics_stmt get_statement_diagnostics_stmt get_condition_diagnostics_stmt statement_information_item_list condition_information_item_list statement_information_item condition_information_item statement_information_item_name condition_information_item_name condition_arg
 %type <node> method_opt method_list method extension
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
-%type <node> switchover_tenant_stmt switchover_clause
+%type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format external_table_partition_option
 %type <node> dynamic_sampling_hint
@@ -16943,10 +16943,10 @@ RELEASE SAVEPOINT var_name
  *===========================================================*/
 
 switchover_tenant_stmt:
-ALTER SYSTEM switchover_clause
+ALTER SYSTEM switchover_clause opt_verify
 {
   (void)($2);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SWITCHOVER, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SWITCHOVER, 2, $3, $4);
 }
 ;
 
@@ -16963,6 +16963,14 @@ ACTIVATE STANDBY opt_tenant_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_SWITCHOVER_TO_STANDBY, 1, $4);
 }
+;
+
+opt_verify:
+VERIFY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VERIFY); }
+| /* EMPTY */
+{ $$ = NULL; }
 ;
 
 recover_tenant_stmt:
