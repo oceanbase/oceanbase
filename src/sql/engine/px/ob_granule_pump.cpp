@@ -1556,7 +1556,7 @@ int ObGranulePump::regenerate_gi_task()
   no_more_task_from_shared_pool_ = false;
   for (int i = 0; i < pump_args_.count() && OB_SUCC(ret); ++i) {
     ObGranulePumpArgs &arg = pump_args_.at(i);
-    if (add_new_gi_task(arg)) {
+    if (OB_FAIL(add_new_gi_task(arg))) {
       LOG_WARN("failed to add new gi task", K(ret));
     }
   }
