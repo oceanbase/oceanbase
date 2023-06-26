@@ -894,25 +894,6 @@ int ObServer::start()
     }
     FLOG_INFO("check if multi tenant synced", KR(ret), K(stop_), K(synced));
 
-    /*
-     * FIXME: skip partition service op first
-    if (OB_SUCC(ret)) {
-      do {
-        if (stop_) {
-          ret = OB_SERVER_IS_STOPPING;
-        // } else if (OB_FAIL(ObPartitionService::get_instance().wait_start_finish())) {
-          if (OB_EAGAIN == ret) {
-            ob_usleep(100 * 1000);
-          } else {
-            LOG_ERROR("wait scan inner table failed", KR(ret));
-          }
-        } else {
-          LOG_INFO("[NOTICE] wait scan inner table success");
-        }
-      } while (OB_EAGAIN == ret);
-    }
-    */
-
     bool schema_ready = false;
     while (OB_SUCC(ret) && !stop_ && !schema_ready) {
       schema_ready = schema_service_.is_sys_full_schema();
@@ -941,14 +922,34 @@ int ObServer::start()
     }
     LOG_INFO("[NOTICE] check if sys srs usable", K(ret), K(stop_));
 
+    // check log replay and user tenant schema refresh status
     if (OB_SUCC(ret)) {
       if (stop_) {
         ret = OB_SERVER_IS_STOPPING;
         FLOG_WARN("server is in stopping status", KR(ret));
-      } else if (OB_FAIL(check_server_can_start_service())) {
-        LOG_ERROR("fail to check server can start service", KR(ret));
       } else {
-        FLOG_INFO("success to check server can start service", KR(ret));
+        ObSEArray<uint64_t, 16> tenant_ids;
+        const int64_t MAX_CHECK_TIME = 15 * 60 * 1000 * 1000L; // 15min
+        const int64_t start_ts = ObTimeUtility::current_time();
+        int64_t schema_refreshed_ts = 0;
+        const int64_t expire_time = start_ts + MAX_CHECK_TIME;
+
+        if (OB_FAIL(multi_tenant_.get_mtl_tenant_ids(tenant_ids))) {
+          FLOG_ERROR("get mtl tenant ids fail", KR(ret));
+        } else if (tenant_ids.count() <= 0) {
+          // do nothing
+        } else {
+          // check user tenant schema refresh
+          check_user_tenant_schema_refreshed(tenant_ids, expire_time);
+          schema_refreshed_ts = ObTimeUtility::current_time();
+          // check log replay status
+          check_log_replay_over(tenant_ids, expire_time);
+        }
+        FLOG_INFO("[OBSERVER_NOTICE] check log replay and user tenant schema finished",
+            KR(ret),
+            K(tenant_ids),
+            "refresh_schema_cost_us", schema_refreshed_ts - start_ts,
+            "replay_log_cost_us", ObTimeUtility::current_time() - schema_refreshed_ts);
       }
     }
   }
@@ -2735,76 +2736,62 @@ int ObServer::reload_bandwidth_throttle_limit(int64_t network_speed)
   return ret;
 }
 
-int ObServer::check_server_can_start_service()
+void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tenant_ids, const int64_t expire_time)
 {
-  int ret = OB_SUCCESS;
-  int64_t min_wrs = INT64_MAX;
-  // TODO: implement this function
-  return ret;
-  /*
+  for (int64_t i = 0; i < tenant_ids.count()
+                      && ObTimeUtility::current_time() < expire_time; ++i) {
+    uint64_t tenant_id = tenant_ids.at(i);
+    bool tenant_schema_refreshed = false;
+    while (!tenant_schema_refreshed
+          && !stop_
+          && ObTimeUtility::current_time() < expire_time) {
 
-  //On the standby database, it is very likely that the minimum standby machine-readable timestamp cannot be pushed because the main database does not exist.
-  //Do not stop the server from starting, otherwise you may not be able to create a connection
-  int64_t get_min_wrs_ts = ObTimeUtility::current_time();
-  do {
-    bool can_start_service = true;
-    if (stop_) {
-      ret = OB_SERVER_IS_STOPPING;
-    } else {
-      //Check whether the lagging amount of all partitions of the machine is greater than max_stale_time_for_weak_consistency. If true, it cannot be restarted
-      int64_t tmp_min_wrs = INT64_MAX;
-      weak_read_service_.check_server_can_start_service(can_start_service, tmp_min_wrs);
-      if (!can_start_service) {
-        const int64_t STANDBY_WAIT_WRS_DURATION = 60 * 1000 * 1000;
-        const int64_t current_time = ObTimeUtility::current_time();
-        if (min_wrs != tmp_min_wrs) {
-          get_min_wrs_ts = current_time;
-          min_wrs = tmp_min_wrs;
-        }
-
-        if (GCTX.is_standby_cluster() && STANDBY_WAIT_WRS_DURATION < current_time - get_min_wrs_ts
-            // && ObPartitionService::get_instance().is_scan_disk_finished()) {
-          //If it is in the standby database, and the minimum standby machine readable timestamp has been one minute, there is no way to continue advancing, and the clog playback has ended,
-          //You need to let go of this processing
-          ret = OB_SUCCESS;
-          LOG_INFO("[NOTICE] in standby cluster, no need to wait weak read timestamp", K(min_wrs),
-              "hanging time", current_time - get_min_wrs_ts);
-        } else {
-          ret = OB_EAGAIN;
-          ob_usleep(1000 * 1000);
-          if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-            LOG_INFO("[NOTICE] clog is behind, service starting need to wait !");
-          }
-        }
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
-  } while (OB_EAGAIN == ret);
-
-  //Wait for OBS to load information related to cluster_info
-  if (OB_SUCC(ret)) {
-    ObClusterRole cluster_role = INVALID_CLUSTER_ROLE;
-    share::ServerServiceStatus server_status = OBSERVER_INVALID_STATUS;
-    while (OB_SUCC(ret)) {
-      gctx_.get_cluster_role_and_status(cluster_role, server_status);
-      if (OBSERVER_INVALID_STATUS == server_status
-          || INVALID_CLUSTER_ROLE == cluster_role) {
-        ob_usleep(1000 * 1000);
+      tenant_schema_refreshed = is_user_tenant(tenant_id) ?
+          gctx_.schema_service_->is_tenant_refreshed(tenant_id) : true;
+      if (!tenant_schema_refreshed) {
+        // check wait and retry
+        usleep(1000 * 1000);
         if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-          LOG_INFO("[NOTICE] not load cluster info, service starting need to wait !");
+          FLOG_INFO("[OBSERVER_NOTICE] Refreshing user tenant schema, need to wait ", K(tenant_id));
         }
-        if (stop_) {
-          ret = OB_SERVER_IS_STOPPING;
-          break;
-        }
+        // check success
+      } else if (i == tenant_ids.count() - 1) {
+        FLOG_INFO("[OBSERVER_NOTICE] Refresh all user tenant schema successfully ", K(tenant_ids));
+        // check timeout
+      } else if (ObTimeUtility::current_time() > expire_time) {
+        FLOG_INFO("[OBSERVER_NOTICE] Refresh user tenant schema timeout ", K(tenant_id));
       } else {
-        break;
+        FLOG_INFO("[OBSERVER_NOTICE] Refresh user tenant schema successfully ", K(tenant_id));
       }
     }
   }
-  return ret;
-*/
+}
+
+void ObServer::check_log_replay_over(const ObIArray<uint64_t> &tenant_ids, const int64_t expire_time)
+{
+  for (int64_t i = 0; i < tenant_ids.count()
+                      && ObTimeUtility::current_time() < expire_time; ++i) {
+    SCN min_version;
+    uint64_t tenant_id = tenant_ids.at(i);
+    bool can_start_service = false;
+    while (!can_start_service
+          && !stop_
+          && ObTimeUtility::current_time() < expire_time) {
+      weak_read_service_.check_tenant_can_start_service(tenant_id, can_start_service, min_version);
+        // check wait and retry
+      if (!can_start_service) {
+        usleep(1000 * 1000);
+        // check success
+      } else if (i == tenant_ids.count() -1) {
+        FLOG_INFO("[OBSERVER_NOTICE] all tenant replay log finished, start to service ", K(tenant_ids));
+        // check timeout
+      } else if (ObTimeUtility::current_time() > expire_time) {
+        FLOG_INFO("[OBSERVER_NOTICE] replay log timeout and force to start service ", K(tenant_id));
+      } else {
+        // do nothing
+      }
+    }
+  }
 }
 
 ObServer::ObCTASCleanUpTask::ObCTASCleanUpTask()
