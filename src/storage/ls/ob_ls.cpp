@@ -1443,6 +1443,7 @@ int ObLS::replay_get_tablet_no_check(const common::ObTabletID &tablet_id,
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet", K(ret), K(key));
     } else if (scn <= tablet_change_checkpoint_scn) {
+      ret = OB_OBSOLETE_CLOG_NEED_SKIP;
       LOG_WARN("tablet already gc", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
     } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_max_replayed_scn(ls_meta_.ls_id_, max_scn))) {
       LOG_WARN("failed to get_max_replayed_scn", KR(ret), K_(ls_meta), K(scn), K(tablet_id));
@@ -1461,7 +1462,9 @@ int ObLS::replay_get_tablet_no_check(const common::ObTabletID &tablet_id,
         ret = OB_EAGAIN;
         LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
       } else {
-        LOG_INFO("tablet already gc, but scn is more than tablet_change_checkpoint_scn", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
+        ret = OB_OBSOLETE_CLOG_NEED_SKIP;
+        LOG_INFO("tablet already gc, but scn is more than tablet_change_checkpoint_scn", KR(ret),
+            K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
       }
     }
   }
@@ -1479,41 +1482,37 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", KR(ret));
   } else if (OB_FAIL(replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(ls_meta_.ls_id_));
-  } else {
+  } else if (tablet_id.is_ls_inner_tablet()) {
+    // do nothing
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id), K(scn));
+  } else if (tablet->is_empty_shell()) {
     ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
     ObTabletCreateDeleteMdsUserData data;
-    bool is_commited = false;
-    if (tablet_id.is_ls_inner_tablet()) {
-      // do nothing
-    } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(data, is_commited))) {
-      if (OB_EMPTY_RESULT == ret) {
-          LOG_WARN("rewrite errcode to EAGAIN", KR(ret), K(tablet_id), K(ls_meta_.ls_id_));
-        ret = OB_EAGAIN;
-      } else {
-        LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret), K(tablet_id), K(ls_meta_.ls_id_));
-      }
-    } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
-    } else if (ObTabletStatus::NORMAL == tablet_status
-        || ObTabletStatus::TRANSFER_OUT == tablet_status
-        || ObTabletStatus::TRANSFER_IN == tablet_status) {
-      // do nothing
-    } else if (ObTabletStatus::DELETED == tablet_status
-        || ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status) {
-      // tablet shell
-      ret = OB_TABLET_NOT_EXIST;
-      LOG_INFO("tablet is already deleted", KR(ret), K(tablet_id), K(ls_meta_.ls_id_), K(scn));
-    } else {
+    bool is_committed = false;
+    if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
+      LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
+    } else if (!is_committed) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_INFO("invalid status", KR(ret), K(tablet_id), K(ls_meta_.ls_id_), K(tablet_status), K(scn));
+      LOG_WARN("tablet is empty shell but user data is uncommitted, unexpected", K(ret), KPC(tablet));
+    } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
+    } else if (ObTabletStatus::DELETED != tablet_status
+        && ObTabletStatus::TRANSFER_OUT_DELETED != tablet_status) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet is empty shell but user data is unexpected", K(ret), KPC(tablet));
+    } else {
+      ret = OB_OBSOLETE_CLOG_NEED_SKIP;
+      LOG_INFO("tablet is already deleted, need skip", KR(ret), K(tablet_id), K(ls_meta_.ls_id_), K(scn));
     }
   }
-
   if (OB_SUCC(ret)) {
     handle = tablet_handle;
   }

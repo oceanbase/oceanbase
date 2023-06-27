@@ -81,8 +81,8 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
   } else if (can_skip_replay) {
     // do nothing
   } else if (CLICK_FAIL(replay_get_tablet_(ls_handle, tablet_id, scn, tablet_handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      CLOG_LOG(INFO, "tablet not exist, replay skip", K(ret), K(ls_id), K(scn));
+    if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
+      CLOG_LOG(INFO, "clog is already obsolete, should skip replay", K(ret), K(ls_id), K(scn));
       ret = OB_SUCCESS;
     } else if (OB_EAGAIN == ret) {
       CLOG_LOG_LIMIT(WARN, "need retry to get tablet", K(ret), K(ls_id), K(scn));
