@@ -69,7 +69,7 @@ public:
   ~ObPxSqcHandler() = default;
   static constexpr const char *OP_LABEL = ObModIds::ObModIds::OB_SQL_SQC_HANDLER;
   static ObPxSqcHandler *get_sqc_handler();
-  static void release_handler(ObPxSqcHandler *sqc_handler);
+  static void release_handler(ObPxSqcHandler *sqc_handler, int &report_ret);
   void reset() ;
   void release(bool &all_released) {
     int64_t reference_count = ATOMIC_AAF(&reference_count_, -1);
@@ -130,7 +130,7 @@ public:
 
 private:
   void init_flt_content();
-  int destroy_sqc();
+  int destroy_sqc(int &report_ret);
 private:
   lib::MemoryContext mem_context_;
   uint64_t tenant_id_;
