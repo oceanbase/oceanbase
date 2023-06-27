@@ -221,29 +221,22 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
   } else if (!is_compatible) {
     /* do nothing */
   } else {
-    uint64_t first_masks = 0;
-    uint64_t second_masks = 0;
-    uint64_t expected_masks = std::pow(2, first_part_keys.count()) - 1;
-    for (int64_t i = 0; OB_SUCC(ret) && i < first_part_keys.count(); i++) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < second_part_keys.count(); j++) {
-        bool is_equal = false;
-        for(int64_t k = 0; OB_SUCC(ret) && !is_equal && k < first_keys.count(); k++) {
-          if (OB_FAIL(is_expr_equivalent(equal_sets,
-                                        first_part_keys.at(i),
-                                        second_part_keys.at(j),
-                                        first_keys.at(k),
-                                        second_keys.at(k),
-                                        is_equal))) {
-            LOG_WARN("failed to check expr equivalent", K(ret));
-          } else if (is_equal) {
-            first_masks += 1 << i;
-            second_masks += 1 << j;
-          }
-        }
+    is_cover = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_cover && i < first_part_keys.count(); i++) {
+      bool is_equal = false;
+      for(int64_t j = 0; OB_SUCC(ret) && !is_equal && j < first_keys.count(); j++) {
+        if (OB_FAIL(is_expr_equivalent(equal_sets,
+                                       first_part_keys.at(i),
+                                       second_part_keys.at(i),
+                                       first_keys.at(j),
+                                       second_keys.at(j),
+                                       is_equal))) {
+          LOG_WARN("failed to check expr equivalent", K(ret));
+        } else { /*do nothing*/ }
       }
-    }
-    if (OB_SUCC(ret)) {
-      is_cover = (first_masks == expected_masks) && (second_masks == expected_masks);
+      if (OB_SUCC(ret) && !is_equal) {
+        is_cover = false;
+      }
     }
   }
   return ret;
