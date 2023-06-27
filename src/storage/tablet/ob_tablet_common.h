@@ -26,8 +26,8 @@ namespace storage
   isolation level in a database.
 
   READ_ALL_COMMITED:
-    Read committed row after transaction committed, except deletion transaction.
-    Return tablet in NORMAL, TRANSFER_IN, TRANSFER_OUT status.
+    Read committed row after transaction committed, except empty shell.
+    Return tablet in NORMAL, TRANSFER_IN, TRANSFER_OUT, DELETED, TRANSFER_OUT_DELETED status.
     Not return CREATING and DELETING who was abandoned from 4.2.
     In addition, you should NOT pass read timeout under this mode.
 

@@ -325,7 +325,7 @@ TEST_F(TestTabletStatusCache, get_transfer_out_tablet)
   // mode is READ_ALL_COMMITED, snapshot status is transfer out deleted, not allow to get
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1 * 1000 * 1000/*timeout_us*/,
       ObMDSGetTabletMode::READ_ALL_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
-  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
 
   // begin transfer out deleted transaction
   user_data.tablet_status_ = ObTabletStatus::DELETED;
