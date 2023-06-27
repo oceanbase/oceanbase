@@ -1091,7 +1091,7 @@ int ObTenantFreezer::get_freeze_trigger_(ObTenantFreezeCtx &ctx)
     LOG_WARN("[TenantFreezer] fail to get resource mgr", KR(ret), K(tenant_id));
     ret = OB_SUCCESS;
     memstore_freeze_trigger =
-      get_freeze_trigger_percentage_() * mem_memstore_limit / 100;
+      mem_memstore_limit / 100 * get_freeze_trigger_percentage_();
   } else {
     int64_t tenant_mem_limit = get_tenant_memory_limit(tenant_id);
     int64_t tenant_mem_hold = get_tenant_memory_hold(tenant_id);
@@ -1126,7 +1126,7 @@ int ObTenantFreezer::get_freeze_trigger_(ObTenantFreezeCtx &ctx)
       min = MIN(mem_memstore_limit, max_mem_memstore_can_get_now);
     }
 
-    memstore_freeze_trigger =  get_freeze_trigger_percentage_() * min / 100;
+    memstore_freeze_trigger = min / 100 * get_freeze_trigger_percentage_();
   }
   // result
   ctx.max_mem_memstore_can_get_now_ = max_mem_memstore_can_get_now;
