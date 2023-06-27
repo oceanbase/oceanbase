@@ -1982,10 +1982,8 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
       tablet, old_minor_tables, need_add_minor_tables, new_minor_tables))) {
     LOG_WARN("failed to combin ha minor sstables", K(ret), K(old_store), K(param));
   } else if (new_minor_tables.empty()) { // no minor tables
-    if ((tablet.get_tablet_meta().start_scn_ != tablet.get_tablet_meta().clog_checkpoint_scn_
-        && !tablet.get_tablet_meta().has_transfer_table())
-        || (tablet.get_tablet_meta().has_transfer_table()
-            && tablet.get_tablet_meta().transfer_info_.transfer_start_scn_ != tablet.get_tablet_meta().clog_checkpoint_scn_)) {
+    if (tablet.get_tablet_meta().has_transfer_table()
+        && tablet.get_tablet_meta().transfer_info_.transfer_start_scn_ != tablet.get_tablet_meta().clog_checkpoint_scn_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(new_minor_tables), K(param), K(old_store));
     } else {
