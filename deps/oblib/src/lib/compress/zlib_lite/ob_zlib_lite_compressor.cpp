@@ -11,7 +11,7 @@
  */
 
 #include "ob_zlib_lite_compressor.h"
-#include "zlib_lite_src/CodecDeflateQpl.h"
+#include "zlib_lite_src/codec_deflate_qpl.h"
 #include "zlib_lite_src/deflate.h"
 #include "zlib_lite_src/zlib.h"
 #include "lib/ob_errno.h"
@@ -36,67 +36,65 @@ ObZlibLiteCompressor::~ObZlibLiteCompressor()
 int ObZlibLiteCompressor::zlib_compress(char *dest, int64_t *dest_len, const char *source, int64_t source_len)
 {
   z_stream stream;
-  int err = -1;
+  int err = Z_OK;
 
   stream.next_in = (z_const Bytef *)source;
   stream.avail_in = (uInt)source_len;
 #ifdef MAXSEG_64K
   /* Check for source > 64K on 16-bit machine: */
-  if ((uLong)stream.avail_in != sourceLen) return Z_BUF_ERROR;
+  if ((uLong)stream.avail_in != source_len) return Z_BUF_ERROR;
 #endif
   stream.next_out = (Bytef *)dest;
   stream.avail_out = (uInt)*dest_len;
-  if ((uLong)stream.avail_out != *dest_len) return Z_BUF_ERROR;
-
   stream.zalloc = (alloc_func)0;
   stream.zfree = (free_func)0;
   stream.opaque = (voidpf)0;
 
-  err = deflateInit2_(&stream, compress_level, Z_DEFLATED, window_bits, DEF_MEM_LEVEL,
-                      Z_DEFAULT_STRATEGY, ZLIB_VERSION, (int)sizeof(z_stream));
-  if (err != Z_OK) return err;
-
-  err = deflate(&stream, Z_FINISH);
-  if (err != Z_STREAM_END) {
+  if ((uLong)stream.avail_out != *dest_len) {
+    err = Z_BUF_ERROR;
+  } else if (Z_OK != (err = deflateInit2_(&stream, compress_level, Z_DEFLATED, window_bits, DEF_MEM_LEVEL,
+                                          Z_DEFAULT_STRATEGY, ZLIB_VERSION, (int)sizeof(z_stream)))) {
+    LIB_LOG(WARN, "deflateInit2_ failed", K(err));
+  } else if (Z_STREAM_END != (err = deflate(&stream, Z_FINISH))) {
     deflateEnd(&stream);
-    return err == Z_OK ? Z_BUF_ERROR : err;
+    err == Z_OK ? Z_BUF_ERROR : err;
+  } else {
+    *dest_len = stream.total_out;
+    err = deflateEnd(&stream);
   }
-  *dest_len = stream.total_out;
-
-  err = deflateEnd(&stream);
   return err;
 }
 
 int ObZlibLiteCompressor::zlib_decompress(char *dest, int64_t *dest_len, const char *source, int64_t source_len)
 {
   z_stream stream;
-  int err = -1;
+  int err = Z_OK;
 
   stream.next_in = (z_const Bytef *)source;
   stream.avail_in = (uInt)source_len;
-  /* Check for source > 64K on 16-bit machine: */
-  if ((uLong)stream.avail_in != source_len) return Z_BUF_ERROR;
-
   stream.next_out = (Bytef *)dest;
   stream.avail_out = (uInt)*dest_len;
-  if ((uLong)stream.avail_out != *dest_len) return Z_BUF_ERROR;
-
   stream.zalloc = (alloc_func)0;
   stream.zfree = (free_func)0;
-
-  err = inflateInit2_(&stream, window_bits, ZLIB_VERSION, (int)sizeof(z_stream));
-  if (err != Z_OK) return err;
-
-  err = inflate(&stream, Z_FINISH);
-  if (err != Z_STREAM_END) {
+  
+  /* Check for source > 64K on 16-bit machine: */
+  if ((uLong)stream.avail_in != source_len || (uLong)stream.avail_out != *dest_len) {
+    err = Z_BUF_ERROR;
+  } else if (Z_OK != (err = inflateInit2_(&stream, window_bits, ZLIB_VERSION,
+                                          (int)sizeof(z_stream)))) {
+    LIB_LOG(WARN, "inflateInit2_ failed", K(err));
+  } else {
+    err = inflate(&stream, Z_FINISH);
+    if (err != Z_STREAM_END) {
       inflateEnd(&stream);
-      if (err == Z_NEED_DICT || (err == Z_BUF_ERROR && stream.avail_in == 0))
-          return Z_DATA_ERROR;
-      return err;
+      if (err == Z_NEED_DICT || (err == Z_BUF_ERROR && stream.avail_in == 0)) {
+        err = Z_DATA_ERROR;
+      }
+    } else {
+      *dest_len = stream.total_out;
+      err = inflateEnd(&stream);
+    }
   }
-  *dest_len = stream.total_out;
-
-  err = inflateEnd(&stream);
   return err;
 }
 

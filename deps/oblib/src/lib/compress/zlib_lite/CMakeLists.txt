@@ -25,8 +25,8 @@ oblib_add_library(zlib_lite
   zlib_lite_src/zlib.h
   zlib_lite_src/zutil.c
   zlib_lite_src/zutil.h
-  zlib_lite_src/CodecDeflateQpl.cpp
-  zlib_lite_src/CodecDeflateQpl.h)
+  zlib_lite_src/codec_deflate_qpl.cpp
+  zlib_lite_src/codec_deflate_qpl.h)
 
 if(${ARCHITECTURE} STREQUAL "x86_64")
   target_include_directories(zlib_lite PUBLIC "${DEP_DIR}/include/")
