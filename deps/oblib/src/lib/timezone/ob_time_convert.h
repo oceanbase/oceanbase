@@ -400,6 +400,11 @@ public:
                               const ObString &nlf_format,
                               const bool is_oracle_mode,
                               uint64_t &scn_value);
+  //convert a scn to timestamp str with ns
+  //invoker need to gurantee scn_val is valid
+  static int scn_to_str(const uint64_t scn_val,
+                        const ObTimeZoneInfo *sys_tz_info,
+                        char *buf, int64_t buf_len, int64_t &pos);
   //ob_time store local time
   static int str_to_tz_offset(const ObTimeConvertCtx &cvrt_ctx, ObTime &ob_time);
   //ob_time store local time
