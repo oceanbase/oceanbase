@@ -1532,6 +1532,11 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
   } else if (!tx_start_transfer_in_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx start transfer in info is unexpected", K(ret), K(tx_start_transfer_in_info));
+  } else if (OB_FAIL(check_can_skip_replay_(scn, tx_start_transfer_in_info, skip_replay))) {
+    LOG_WARN("failed to check can skip replay commit", K(ret), K(scn), K(tx_start_transfer_in_info));
+  } else if (skip_replay) {
+    b_ret = true;
+    LOG_INFO("skip replay start transfer in commit", K(scn), K(tx_start_transfer_in_info));
   } else {
     if (OB_FAIL(check_can_skip_check_transfer_src_tablet_(scn, tx_start_transfer_in_info, can_skip_check_src))) {
       LOG_WARN("failed to check can skip check transfer src tablet", K(ret), K(tx_start_transfer_in_info));

@@ -3458,9 +3458,7 @@ int ObTenantDagScheduler::cancel_dag_net(const ObDagId &dag_id)
       }
     }
 
-    if (OB_SUCC(ret)) {
-      notify();
-    }
+    // Donot call notify(), may cause dead lock.
   }
   return ret;
 }
