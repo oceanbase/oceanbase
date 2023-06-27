@@ -215,7 +215,9 @@ int ObUpdateResolver::try_expand_returning_exprs()
       ObIArray<ObAssignment> &assignments = tables_info.at(0)->assignments_;
       ObRawExprCopier copier(*params_.expr_factory_);
       for (int64_t i = 0; OB_SUCC(ret) && i < assignments.count(); ++i) {
-        if (OB_FAIL(copier.add_replaced_expr(assignments.at(i).column_expr_,
+        if (assignments.at(i).column_expr_->is_xml_column()) {
+          // skip and will rewite in transform stage
+        } else if (OB_FAIL(copier.add_replaced_expr(assignments.at(i).column_expr_,
                                              assignments.at(i).expr_))) {
           LOG_WARN("failed to add replaced expr", K(ret));
         }

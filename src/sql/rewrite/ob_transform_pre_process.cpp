@@ -6461,6 +6461,7 @@ int ObTransformPreProcess::replace_udt_assignment_exprs(ObDMLStmt *stmt,
     }
     if (OB_SUCC(ret) && assign.column_expr_->is_xml_column()) {
       ObRawExpr *new_value_expr = NULL;
+      ObRawExpr *old_column_expr = assign.column_expr_;
       if (OB_FAIL(transform_udt_column_value_expr(stmt, table_info, value_expr, new_value_expr))){
         LOG_WARN("failed to transform udt value exprs", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*ctx_->expr_factory_,
@@ -6480,6 +6481,25 @@ int ObTransformPreProcess::replace_udt_assignment_exprs(ObDMLStmt *stmt,
           assign.expr_ = new_value_expr;
         }
       }
+      // process returning clause for update
+      if (OB_SUCC(ret) && stmt->get_stmt_type() == stmt::T_UPDATE) {
+        ObDelUpdStmt *update_stmt = static_cast<ObDelUpdStmt *>(stmt);
+        if (update_stmt->is_returning()) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < update_stmt->get_returning_exprs().count(); i++) {
+            ObRawExpr *sys_makexml_expr = NULL;
+            if (OB_ISNULL(hidd_col)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("hidden col is NULL", K(ret), K(i), K(j));
+            } else if (OB_FAIL(transform_xml_binary(new_value_expr, sys_makexml_expr))) {
+              LOG_WARN("fail to create sys_makexml expr", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(update_stmt->get_returning_exprs().at(i),
+                                                                  old_column_expr,
+                                                                  sys_makexml_expr))) {
+              LOG_WARN("fail to replace xml column in returning exprs", K(ret), K(i));
+            }
+          } // end for
+        }
+      } //end if: process returning clause
     }
   }
 
@@ -6694,6 +6714,8 @@ int ObTransformPreProcess::transform_query_udt_columns_exprs(const ObIArray<ObPa
         OB_FAIL(scopes.push_back(SCOPE_BASIC_TABLE)) ||
         OB_FAIL(scopes.push_back(SCOPE_DICT_FIELDS)) ||
         OB_FAIL(scopes.push_back(SCOPE_SHADOW_COLUMN)) ||
+        ((stmt->get_stmt_type() == stmt::T_INSERT || stmt->get_stmt_type() == stmt::T_UPDATE) &&
+          OB_FAIL(scopes.push_back(SCOPE_RETURNING))) ||
         (stmt->get_stmt_type() != stmt::T_MERGE && OB_FAIL(scopes.push_back(SCOPE_INSERT_VECTOR)))) {
       LOG_WARN("Fail to create scope array.", K(ret));
     }
@@ -6941,6 +6963,47 @@ int ObTransformPreProcess::transform_udt_columns(const ObIArray<ObParentDMLStmt>
             }
           }
         }
+        // process returning exprs
+        if (OB_SUCC(ret) && insert_stmt->is_returning()) {
+          ObIArray<ObRawExpr*> &column_convert = insert_stmt->get_column_conv_exprs();
+          const ObIArray<ObColumnRefRawExpr *> &table_columns = insert_stmt->get_insert_table_info().column_exprs_;
+          ObSEArray<std::pair<int64_t, int64_t>, 8> xml_col_idxs; // use pair to store xml col idx and its hidden col idx
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); i++) {
+            ObColumnRefRawExpr *ref_col = table_columns.at(i);
+            if (ref_col->is_xml_column()) {
+              bool is_found = false;
+              for (int64_t j = 0; OB_SUCC(ret) && !is_found && j < table_columns.count(); j++) {
+                if (ref_col->get_column_id() != table_columns.at(j)->get_column_id() &&
+                    ref_col->get_udt_set_id() == table_columns.at(j)->get_udt_set_id()) {
+                  is_found = true;
+                  xml_col_idxs.push_back(std::make_pair(i, j));
+                }
+              } // end for
+              if (!is_found) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to find hidden column", K(ret), K(i));
+              }
+            }
+          } // end for
+
+          CK(column_convert.count() == table_columns.count());
+          for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_returning_exprs().count(); i++) {
+            for (int64_t j = 0; OB_SUCC(ret) && j < xml_col_idxs.count(); j++) {
+              ObRawExpr *hidd_col = NULL;
+              ObRawExpr *sys_makexml_expr = NULL;
+              if (OB_ISNULL(hidd_col = column_convert.at(xml_col_idxs.at(j).second))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("hidden col is NULL", K(ret), K(i), K(j));
+              } else if (OB_FAIL(transform_xml_binary(hidd_col, sys_makexml_expr))) {
+                LOG_WARN("fail to create expr sys_makexml", K(ret));
+              } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(insert_stmt->get_returning_exprs().at(i),
+                                                                table_columns.at(xml_col_idxs.at(j).first),
+                                                                sys_makexml_expr))) {
+                LOG_WARN("fail to replace xml column in returning exprs", K(ret), K(i), K(j));
+              }
+            }
+          }
+        } // end if
       }
   }
   return ret;
