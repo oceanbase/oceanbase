@@ -1540,6 +1540,7 @@
 #import logging
 #import getopt
 #import time
+#import actions
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_checker.log'
@@ -1926,9 +1927,13 @@
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn != finished_scn and max_received_scn > 0""")
-#  if results[0][0] > 0 :
-#    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
+#  (desc, results) = query_cur.exec_query("""select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'""")
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif results[0][0] != '4.0.0.0':
+#    (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn != finished_scn and max_received_scn > 0""")
+#    if results[0][0] > 0 :
+#      fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
