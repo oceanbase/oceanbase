@@ -143,6 +143,14 @@ int ObTenantRoleTransitionService::failover_to_primary()
   if (OB_FAIL(ret)) {
   } else {
     (void)broadcast_tenant_info(ObTenantRoleTransitionConstants::SWITCH_TO_PRIMARY_LOG_MOD_STR);
+    ObBroadcastSchemaArg arg;
+    arg.tenant_id_ = tenant_id_;
+    if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("common rpc proxy is null", KR(ret), KP(GCTX.rs_mgr_), KP(GCTX.rs_rpc_proxy_));
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to_rs(*GCTX.rs_mgr_).broadcast_schema(arg))) {
+      LOG_WARN("failed to broadcast schema", KR(ret), K(arg));
+    }
   }
 
   const int64_t cost = ObTimeUtility::current_time() - start_service_time;
