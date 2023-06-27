@@ -152,6 +152,10 @@ public:
   {
     return contain_uncommitted_row_;
   }
+  OB_INLINE share::SCN get_filled_tx_scn() const
+  {
+    return filled_tx_scn_;
+  }
   bool is_empty() const
   {
     return 0 == data_macro_block_count_;
@@ -221,7 +225,7 @@ public:
 
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(addr), K_(upper_trans_version),
       K_(max_merged_trans_version), K_(data_macro_block_count), K_(nested_size),
-      K_(nested_offset), K_(contain_uncommitted_row), KPC_(meta), K_(valid_for_reading));
+      K_(nested_offset), K_(contain_uncommitted_row), K_(filled_tx_scn), KPC_(meta), K_(valid_for_reading));
 
 private:
   int check_valid_for_reading();
@@ -280,6 +284,7 @@ protected:
   // in-memory
   bool valid_for_reading_;
   bool is_tmp_sstable_;
+  share::SCN filled_tx_scn_;
   // serialized
   blocksstable::ObSSTableMeta *meta_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTable);
