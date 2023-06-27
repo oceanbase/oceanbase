@@ -59,7 +59,7 @@ int ObTabletMediumInfoReader::init(common::ObArenaAllocator &allocator)
       } else {
         mds_end_ = true; // no mds table, directly iter end
         ret = OB_SUCCESS;
-        LOG_INFO("no mds table", K(ret), K_(mds_end));
+        LOG_DEBUG("no mds table", K(ret), K_(mds_end));
       }
     } else if (OB_FAIL(mds_iter_.init(mds_table))) {
       LOG_WARN("failed to init mds iter", K(ret));
