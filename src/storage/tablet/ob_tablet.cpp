@@ -4919,7 +4919,7 @@ int ObTablet::update_memtables()
   if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable_mgr", K(ret));
   } else if (!memtable_mgr->has_memtable()) {
-    LOG_INFO("no memtable in memtable mgr", K(ret));
+    LOG_INFO("no memtable in memtable mgr", K(ret), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_);
   } else if (OB_FAIL(memtable_mgr->get_all_memtables(inc_memtables))) {
     LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
   } else if (is_ls_inner_tablet() && OB_FAIL(rebuild_memtable(inc_memtables))) {
@@ -5018,7 +5018,9 @@ int ObTablet::read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &m
   } else if (OB_FAIL(inner_get_mds_table(mds_table_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      LOG_INFO("mds table does not exist, may be released", K(ret));
+      LOG_INFO("mds table does not exist, may be released", K(ret),
+          "ls_id", tablet_meta_.ls_id_,
+          "tablet_id", tablet_meta_.tablet_id_);
     } else {
       LOG_WARN("failed to get mds table", K(ret));
     }
@@ -5707,14 +5709,12 @@ int ObTablet::check_new_mds_with_cache(
         if (OB_TABLET_NOT_EXIST != ret) {
           LOG_WARN("failed to check status for new mds", KR(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(timeout));
         }
+      } else {
+        LOG_INFO("refresh tablet status cache", K(ret), K(ls_id), K(tablet_id), K(tablet_status_cache_),
+            K(snapshot_version), KP(this));
       }
     }
   }
-
-  // Todo yq: for quick debug, remove later
-  ObTaskController::get().allow_next_syslog();
-  LOG_INFO("get tablet status from cache", K(ret), K(r_valid), K(tablet_id), K(ls_id), K(tablet_status_cache_),
-           K(snapshot_version), KP(this));
 
   return ret;
 }
@@ -5795,15 +5795,14 @@ int ObTablet::check_schema_version_with_cache(
         } else if (FALSE_IT(ddl_data_cache_.set_value(tmp_ddl_data))) {
         } else if (OB_FAIL(check_schema_version(schema_version))) {
           LOG_WARN("fail to check schema version", K(ret), K(ddl_data_cache_));
+        } else {
+          LOG_INFO("refresh ddl data cache", K(ret), K(ls_id), K(tablet_id), K(ddl_data_cache_),
+              K(schema_version), K(timeout), KP(this));
         }
       }
     }
   }
 
-  // Todo yq: for quick debug, remove later
-  ObTaskController::get().allow_next_syslog();
-  LOG_INFO("check ddl info schema version with cache", K(ret), K(r_valid), K(tablet_id), K(ls_id), K(ddl_data_cache_),
-           K(schema_version), K(timeout), KP(this));
   return ret;
 }
 
@@ -5855,15 +5854,14 @@ int ObTablet::check_snapshot_readable_with_cache(
         } else if (FALSE_IT(ddl_data_cache_.set_value(tmp_ddl_data))) {
         } else if (OB_FAIL(check_snapshot_readable(snapshot_version))) {
           LOG_WARN("fail to check snapshot version", K(ret), K(ddl_data_cache_));
+        } else {
+          LOG_INFO("refresh ddl data cache", K(ret), K(ls_id), K(tablet_id), K(ddl_data_cache_),
+              K(snapshot_version), K(timeout), KP(this));
         }
       }
     }
   }
 
-  // Todo yq: for quick debug, remove later
-  ObTaskController::get().allow_next_syslog();
-  LOG_INFO("check ddl info snapshot readable with cache", K(ret), K(r_valid), K(tablet_id), K(ls_id), K(ddl_data_cache_),
-           K(snapshot_version), K(timeout), KP(this));
   return ret;
 }
 
