@@ -97,11 +97,10 @@ struct ObSchemaMergeCtx
     }
   }
   common::ObArenaAllocator &allocator_;
-  int64_t base_schema_version_;
   int64_t schema_version_;
   const ObStorageSchema *storage_schema_; // schema for all merge
 
-  TO_STRING_KV(K_(base_schema_version), K_(schema_version), KPC_(storage_schema));
+  TO_STRING_KV(K_(schema_version), KPC_(storage_schema));
 };
 
 class ObCompactionTimeGuard : public common::occam::ObOccamTimeGuard

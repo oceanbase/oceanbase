@@ -159,13 +159,13 @@ int ObSSTableArray::inner_init(
     cnt_ = 0;
     sstable_array_ = nullptr;
   } else {
-    cnt_ = count;
-    sstable_array_ = static_cast<ObSSTable **>(allocator.alloc(sizeof(ObSSTable *) * cnt_));
+    sstable_array_ = static_cast<ObSSTable **>(allocator.alloc(sizeof(ObSSTable *) * count));
     if (OB_ISNULL(sstable_array_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory for sstable address array", K(ret), K_(cnt));
     }
-    for (int64_t i = start_pos; OB_SUCC(ret) && i < start_pos + count; ++i) {
+    int64_t i = start_pos;
+    for (; OB_SUCC(ret) && i < start_pos + count; ++i) {
       ObITable *table = tables.at(i);
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
@@ -178,10 +178,18 @@ int ObSSTableArray::inner_init(
       }
     }
     if (OB_FAIL(ret)) {
+      // So the current one is not rolled back, because it may not go to the deep copy or go to
+      // the deep copy internal rollback.
+      for (int64_t j = i - start_pos - 2; j >= 0; --j) {
+        sstable_array_[j]->~ObSSTable();
+        sstable_array_[j] = nullptr;
+      }
       if (nullptr != sstable_array_) {
         allocator.free(sstable_array_);
         sstable_array_ = nullptr;
       }
+    } else {
+      cnt_ = count;
     }
   }
   return ret;
@@ -789,7 +797,7 @@ int ObMemtableArray::find(
         ret = OB_ERR_SYS;
         LOG_WARN("table must not null", K(ret), KPC(memtable), KPC(this));
       } else if (memtable->get_end_scn() == start_scn) {
-        if (static_cast<memtable::ObIMemtable *>(memtable)->get_snapshot_version() > base_version) {
+        if (memtable->get_snapshot_version() > base_version) {
           mem_pos = i;
           table = memtable;
           break;

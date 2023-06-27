@@ -37,7 +37,7 @@ namespace compaction
  */
 
 ObPartitionMerger::ObPartitionMerger()
-  : allocator_("partMerger"),
+  : allocator_("partMerger", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     merge_ctx_(nullptr),
     merge_progress_(nullptr),
     partition_fuser_(nullptr),

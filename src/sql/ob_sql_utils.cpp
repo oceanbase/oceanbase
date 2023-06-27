@@ -2048,13 +2048,12 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
   //First try 64K buf on the stack, if it fails, then try 128K.
   //If it still fails, allocate 256K from the heap. If it continues to fail, expand twice each time.
   int64_t res_len = 0;
-  char *final_buf = NULL;
   SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
     MEMSET(buf, 0, sizeof(buf));
     if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
-    } else {
-      final_buf = buf;
+    } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+      LOG_WARN("fail to deep copy string", K(ret));
     }
   }
   if (OB_SIZE_OVERFLOW == ret) {
@@ -2063,8 +2062,8 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       MEMSET(buf, 0, sizeof(buf));
       if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
-      } else {
-        final_buf = buf;
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+        LOG_WARN("fail to deep copy string", K(ret));
       }
     }
   }
@@ -2081,18 +2080,17 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       } else if (FALSE_IT(MEMSET(buf, 0, length))) {
       } else if (OB_FAIL(inner_print(buf, length, res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+        LOG_WARN("fail to deep copy string", K(ret));
       }
       if (OB_SUCC(ret)) {
         is_succ = true;
-        final_buf = buf;
       } else if (OB_SIZE_OVERFLOW == ret) {
         ret = OB_SUCCESS;
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, ObString(res_len, final_buf), result))) {
-    LOG_WARN("fail to deep copy delete stmt string", K(ret));
-  }
+
   return ret;
 }
 

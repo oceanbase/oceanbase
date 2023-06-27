@@ -23,6 +23,7 @@
 #include "ob_weak_read_util.h"                               //ObWeakReadUtil
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx/ob_ts_mgr.h"
 #include "logservice/ob_log_service.h"
 
 namespace oceanbase
@@ -134,29 +135,56 @@ int ObWeakReadService::get_cluster_version(const uint64_t tenant_id, SCN &versio
   return ret;
 }
 
-// TODO shanyan.g
-void ObWeakReadService::check_server_can_start_service(bool &can_start_service,
-                                                       int64_t &min_wrs) const
+int ObWeakReadService::check_tenant_can_start_service(const uint64_t tenant_id,
+                                                      bool &can_start_service,
+                                                      SCN &version) const
 {
-  UNUSEDx(can_start_service, min_wrs);
-  // int ret = OB_SUCCESS;
-  // int64_t safe_weak_read_snapshot = INT64_MAX;
-  // ObPartitionService &ps = ObPartitionService::get_instance();
-  // if (OB_FAIL(ps.check_can_start_service(can_start_service, safe_weak_read_snapshot, pkey))) {
-  //   LOG_WARN("partition service check can start service error", KR(ret));
-  // } else if (!can_start_service) {
-  //   if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-  //     LOG_INFO("[WRS] [NOTICE] server can not start service", K(can_start_service),
-  //         K(safe_weak_read_snapshot),
-  //         "delta", ObTimeUtility::current_time() - safe_weak_read_snapshot, K(pkey));
-  //   }
-  // } else {
-  //   LOG_INFO("[WRS] [NOTICE] server can start service", K(can_start_service), K(safe_weak_read_snapshot),
-  //       "delta", ObTimeUtility::current_time() - safe_weak_read_snapshot, K(pkey));
-  // }
-  // if (OB_SUCC(ret)) {
-  //   min_wrs = safe_weak_read_snapshot;
-  // }
+  int ret = OB_SUCCESS;
+  SCN gts_scn;
+  ObLSID ls_id;
+  SCN min_version;
+
+  MTL_SWITCH(tenant_id) {
+    ObTenantWeakReadService *twrs = MTL(ObTenantWeakReadService *);
+    if (OB_ISNULL(twrs)) {
+      ret = OB_ERR_UNEXPECTED;
+      FLOG_ERROR("MTL ObTenantWeakReadService object is NULL", K(twrs), K(tenant_id), KR(ret));
+    } else if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, NULL, gts_scn))) {
+      FLOG_WARN("[WRS] [OBSERVER_NOTICE] get gts scn error", K(ret), K(tenant_id));
+    } else if (OB_FAIL(twrs->check_can_start_service(gts_scn,
+                                                     can_start_service,
+                                                     min_version,
+                                                     ls_id))) {
+      FLOG_WARN("get tenant weak read service cluster version fail", KR(ret), K(tenant_id));
+    } else if (!can_start_service) {
+      version = min_version;
+    } else {
+      // success
+    }
+  } else {
+    FLOG_WARN("change tenant context fail when get weak read service cluster version",
+        KR(ret), K(tenant_id));
+  }
+
+  if (can_start_service) {
+    FLOG_INFO("[WRS] [OBSERVER_NOTICE] current tenant start service successfully",
+        K(tenant_id),
+        "target_ts", gts_scn.convert_to_ts(),
+        "min_ts", (min_version.is_valid() ? min_version.convert_to_ts() : 0),
+        "delta_us", (min_version.is_valid() ? (gts_scn.convert_to_ts() - min_version.convert_to_ts()) : 0));
+  } else {
+    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+      int64_t tmp_version = min_version.is_valid() ? min_version.convert_to_ts() : 0;
+      FLOG_INFO("[WRS] [OBSERVER_NOTICE] waiting log replay... ",
+          K(ret),
+          K(tenant_id),
+          K(can_start_service),
+          "min_version", tmp_version,
+          "delta", ObTimeUtility::current_time() - tmp_version,
+          "slowest_ls_id", ls_id);
+    }
+  }
+  return ret;
 }
 
 void ObWeakReadService::process_get_cluster_version_rpc(const uint64_t tenant_id,

@@ -865,9 +865,6 @@ int ObTabletTableBackfillTXTask::prepare_merge_ctx_()
       LOG_WARN("failed to add table into tables handle", K(ret), K(table_handle_));
     } else if (OB_FAIL(tablet_merge_ctx_.get_storage_schema_to_merge(tablet_merge_ctx_.tables_handle_))) {
       LOG_ERROR("Fail to get storage schema", K(ret), K(tablet_merge_ctx_));
-    } else {
-      //get_basic_info_from_result result
-      tablet_merge_ctx_.schema_ctx_.base_schema_version_ = tablet_merge_ctx_.schema_ctx_.schema_version_;
     }
 
     if (OB_FAIL(ret)) {

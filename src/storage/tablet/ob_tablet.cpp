@@ -4456,6 +4456,10 @@ int ObTablet::get_storage_schema_for_transfer_in(
     LOG_WARN("memtable mgr should not be NULL", K(ret), KP(memtable_mgr));
   } else if (OB_FAIL(memtable_mgr->get_all_memtables(memtables))) {
     LOG_WARN("failed to get all memtables", K(ret), KPC(this));
+  } else if (OB_FAIL(load_storage_schema(allocator, tablet_storage_schema))) {
+    LOG_WARN("fail to load storage schema", K(ret), K_(storage_schema_addr));
+  } else if (OB_FAIL(tablet_storage_schema->get_store_column_count(store_column_cnt_in_schema, true/*full_col*/))) {
+    LOG_WARN("failed to get store column count", K(ret), K(store_column_cnt_in_schema));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
       ObITable *table = memtables.at(i).get_table();
@@ -4463,6 +4467,7 @@ int ObTablet::get_storage_schema_for_transfer_in(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table in tables_handle is invalid", K(ret), KP(table));
       } else if (OB_FAIL(static_cast<memtable::ObMemtable *>(table)->get_schema_info(
+          store_column_cnt_in_schema,
           max_schema_version_in_memtable, max_column_cnt_in_memtable))) {
         LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(table));
       }
@@ -4470,12 +4475,8 @@ int ObTablet::get_storage_schema_for_transfer_in(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(load_storage_schema(allocator, tablet_storage_schema))) {
-    LOG_WARN("fail to load storage schema", K(ret), K_(storage_schema_addr));
   } else if (OB_FAIL(storage_schema.deep_copy(tablet_storage_schema, &allocator))) {
     LOG_WARN("failed to get tx data from tablet", K(ret), K(ls_id), K(tablet_id), KPC(tablet_storage_schema));
-  } else if (OB_FAIL(storage_schema.get_store_column_count(store_column_cnt_in_schema, true/*full_col*/))) {
-    LOG_WARN("failed to get store column count", K(ret), K(store_column_cnt_in_schema));
   } else {
     int64_t old_column_cnt = storage_schema.get_column_count();
     int64_t old_schema_version = storage_schema.get_schema_version();
@@ -4921,16 +4922,14 @@ int ObTablet::update_memtables()
     LOG_INFO("no memtable in memtable mgr", K(ret));
   } else if (OB_FAIL(memtable_mgr->get_all_memtables(inc_memtables))) {
     LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
-  } else if (OB_FAIL(rebuild_memtable(inc_memtables))) {
-    LOG_ERROR("failed to rebuild table store memtables", K(ret), K(inc_memtables), KPC(this));
   } else if (is_ls_inner_tablet() && OB_FAIL(rebuild_memtable(inc_memtables))) {
-    LOG_ERROR("failed to rebuild table store memtables for ls inner tablet", K(ret), K(inc_memtables));
+    LOG_ERROR("failed to rebuild table store memtables for ls inner tablet", K(ret), K(inc_memtables), KPC(this));
   } else if (!is_ls_inner_tablet() && memtable_count_ > 0 && OB_FAIL(rebuild_memtable(inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables for normal tablet when current memtable exists", K(ret), K(inc_memtables), KPC(this));
   } else if (!is_ls_inner_tablet() && memtable_count_ == 0 && OB_FAIL(rebuild_memtable(tablet_meta_.clog_checkpoint_scn_, inc_memtables))) {
     LOG_ERROR("failed to rebuild table store memtables for normal tablet when current memtable does not exist", K(ret),
         "clog_checkpoint_scn", tablet_meta_.clog_checkpoint_scn_,
-        K(inc_memtables));
+        K(inc_memtables), KPC(this));
   }
   LOG_DEBUG("update memtables", K(ret), K(inc_memtables));
   return ret;

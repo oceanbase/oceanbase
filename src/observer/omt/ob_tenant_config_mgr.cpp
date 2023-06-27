@@ -211,7 +211,7 @@ int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)
         }
         bool need_del = true;
         for (int i = 0; i < tenants.count(); ++i) {
-          if (tenant_id == tenants.at(i)) {
+          if (tenant_id == tenants.at(i) || GCTX.omt_->has_tenant(tenant_id)) {
             need_del = false;
             break;
           }

@@ -150,9 +150,8 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
   if (merge_param_->is_heap_table_ ) {
     for (int64_t i = 0; OB_SUCC(ret) && i < merge_param_->table_data_desc_.column_count_; i++) {
       const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
-      const common::ObCmpFunc &cmp_func = merge_param_->datum_utils_->get_cmp_funcs().at(
-                                                            i + extra_rowkey_cnt + 1).get_cmp_func();
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i + 1);
+      const ObCmpFunc &cmp_func = merge_param_->cmp_funcs_->at(i + 1).get_cmp_func();
       ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
       bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {
@@ -164,8 +163,8 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < merge_param_->rowkey_column_num_; i++) {
       const ObStorageDatum &datum = datum_row.storage_datums_[i];
-      const common::ObCmpFunc &cmp_func = merge_param_->datum_utils_->get_cmp_funcs().at(i).get_cmp_func();
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
+      const ObCmpFunc &cmp_func = merge_param_->cmp_funcs_->at(i).get_cmp_func();
       ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
       bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {
@@ -176,8 +175,8 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
     }
     for (int64_t i = merge_param_->rowkey_column_num_; OB_SUCC(ret) && i < merge_param_->table_data_desc_.column_count_; i++) {
       const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt];
-      const common::ObCmpFunc &cmp_func = merge_param_->datum_utils_->get_cmp_funcs().at(i + extra_rowkey_cnt).get_cmp_func();
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
+      const ObCmpFunc &cmp_func = merge_param_->cmp_funcs_->at(i).get_cmp_func();
       ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
       bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {

@@ -674,7 +674,9 @@ int ObTenantTabletStatMgr::get_tablet_analyzer(
   ObTenantSysStat sys_stat;
 
   if (OB_FAIL(get_latest_tablet_stat(ls_id, tablet_id, analyzer.tablet_stat_))) {
-    LOG_WARN("failed to get latest tablet stat", K(ret), K(ls_id), K(tablet_id));
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get latest tablet stat", K(ret), K(ls_id), K(tablet_id));
+    }
   } else if (OB_FAIL(get_sys_stat(sys_stat))) {
     LOG_WARN("failed to get sys stat", K(ret));
   } else {

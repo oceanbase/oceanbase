@@ -1122,6 +1122,7 @@ static const NonReservedKeyword Oracle_non_reserved_keywords[] =
   {"variables", VARIABLES},
   {"variance", VARIANCE},
   {"verbose", VERBOSE},
+  {"verify", VERIFY},
   {"version", VERSION},
   {"materialized", MATERIALIZED},
   {"virtual", VIRTUAL},

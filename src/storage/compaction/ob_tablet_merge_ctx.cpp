@@ -488,7 +488,6 @@ ObCompactionTimeGuard & ObCompactionTimeGuard::operator=(const ObCompactionTimeG
 
 ObSchemaMergeCtx::ObSchemaMergeCtx(ObArenaAllocator &allocator)
   : allocator_(allocator),
-    base_schema_version_(0),
     schema_version_(0),
     storage_schema_(nullptr)
 {
@@ -584,7 +583,6 @@ bool ObTabletMergeCtx::is_valid() const
          && !tables_handle_.empty()
          && create_snapshot_version_ >= 0
          && schema_ctx_.schema_version_ >= 0
-         && schema_ctx_.base_schema_version_ >= 0
          && NULL != schema_ctx_.storage_schema_
          && schema_ctx_.storage_schema_->is_valid()
          && sstable_logic_seq_ >= 0
@@ -740,7 +738,7 @@ int ObTabletMergeCtx::init_get_medium_compaction_info(
   if (FAILEDx(check_medium_info_and_last_major(medium_info, get_merge_table_result))) {
     LOG_WARN("failed to check medium info and last major sstable", KR(ret), K(medium_info), K(get_merge_table_result));
   } else {
-    get_merge_table_result.schema_version_ = medium_info.storage_schema_.schema_version_;
+    schema_ctx_.schema_version_ = medium_info.storage_schema_.schema_version_;
     data_version_ = medium_info.data_version_;
     is_tenant_major_merge_ = medium_info.is_major_compaction();
   }
@@ -976,8 +974,6 @@ int ObTabletMergeCtx::get_basic_info_from_result(
       }
     }
 
-    schema_ctx_.base_schema_version_ = get_merge_table_result.base_schema_version_;
-    schema_ctx_.schema_version_ = get_merge_table_result.schema_version_;
     create_snapshot_version_ = get_merge_table_result.create_snapshot_version_;
     schedule_major_ = get_merge_table_result.schedule_major_;
   }
@@ -1103,6 +1099,9 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
   if (OB_FAIL(tablet_handle_.get_obj()->load_storage_schema(allocator_, schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret), K_(tablet_handle));
   } else if (is_mini_merge(merge_type) && !param_.tablet_id_.is_ls_inner_tablet()) {
+    if (OB_FAIL(schema_on_tablet->get_store_column_count(column_cnt_in_schema, true/*full_col*/))) {
+      LOG_WARN("failed to get store column count", K(ret), K(column_cnt_in_schema));
+    }
     ObITable *table = nullptr;
     memtable::ObMemtable *memtable = nullptr;
     for (int i = merge_tables_handle.get_count() - 1; OB_SUCC(ret) && i >= 0; --i) {
@@ -1112,14 +1111,13 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
       } else if (OB_ISNULL(memtable = dynamic_cast<memtable::ObMemtable *>(table))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table pointer does not point to a ObMemtable object", KPC(table));
-      } else if (OB_FAIL(memtable->get_schema_info(
+      } else if (OB_FAIL(memtable->get_schema_info(column_cnt_in_schema,
           max_schema_version_in_memtable, max_column_cnt_in_memtable))) {
         LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(memtable));
       }
     } // end of for
 
-    if (FAILEDx(schema_on_tablet->get_store_column_count(column_cnt_in_schema, true/*full_col*/))) {
-      LOG_WARN("failed to get store column count", K(ret), K(column_cnt_in_schema));
+    if (OB_FAIL(ret)) {
     } else if (max_column_cnt_in_memtable > column_cnt_in_schema
       || max_schema_version_in_memtable > schema_on_tablet->get_schema_version()) {
       // need alloc new storage schema & set column cnt

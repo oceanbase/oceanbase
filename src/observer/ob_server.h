@@ -17,6 +17,8 @@
 #include "lib/signal/ob_signal_worker.h"
 #include "lib/net/ob_net_util.h"
 #include "lib/random/ob_mysql_random.h"
+#include "lib/container/ob_iarray.h"
+
 
 #include "share/stat/ob_opt_stat_service.h"
 #include "share/ratelimit/ob_rl_mgr.h"
@@ -290,7 +292,8 @@ private:
   int init_refresh_network_speed_task();
   int init_refresh_cpu_frequency();
   int set_running_mode();
-  int check_server_can_start_service();
+  void check_user_tenant_schema_refreshed(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
+  void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   int try_create_hidden_sys();
   int parse_mode();
 

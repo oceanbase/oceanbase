@@ -1264,7 +1264,7 @@ int ObBackupTaskScheduler::check_tenant_status_normal_(bool &is_normal)
     LOG_WARN("fail to get schema guard", K(ret), K(tenant_id_));
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id_, tenant_info))) {
     LOG_WARN("fail to get tenant info", K(ret), K(tenant_id_));
-  } else if (tenant_info->is_normal()) {
+  } else if (OB_NOT_NULL(tenant_info) && tenant_info->is_normal()) {
     is_normal = true;
   }
   return ret;

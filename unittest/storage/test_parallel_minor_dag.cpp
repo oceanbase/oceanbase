@@ -108,8 +108,6 @@ int TestParallelMinorDag::prepare_merge_result(
   result.version_range_.snapshot_version_ = 100;
   result.version_range_.multi_version_start_ = 100;
   result.merge_version_ = 0;
-  result.base_schema_version_ = 0;
-  result.schema_version_ = 0;
   result.create_snapshot_version_ = 0;
   result.suggest_merge_type_ = MINOR_MERGE;
 

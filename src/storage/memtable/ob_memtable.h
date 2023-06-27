@@ -321,6 +321,7 @@ public:
   void set_max_column_cnt(const int64_t column_cnt);
   int64_t get_max_column_cnt() const;
   int get_schema_info(
+    const int64_t input_column_cnt,
     int64_t &max_schema_version_on_memtable,
     int64_t &max_column_cnt_on_memtable) const;
   int row_compact(ObMvccRow *value,
@@ -491,8 +492,8 @@ public:
   // TODO(handora.qc) ready_for_flush interface adjustment
   bool is_can_flush() { return ObMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn(); }
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), KP_(memtable_mgr), K_(timestamp), K_(state),
-                       K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(write_ref_cnt), K_(local_allocator),
-                       K_(unsubmitted_cnt), K_(unsynced_cnt),
+                       K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(max_column_cnt),
+                       K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt), K_(unsynced_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
                        K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version), K_(migration_clog_checkpoint_scn),
                        K_(is_tablet_freeze), K_(is_force_freeze), K_(contain_hotspot_row),

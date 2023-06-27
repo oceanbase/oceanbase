@@ -455,6 +455,8 @@ constexpr int OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE = -4759;
 constexpr int OB_LS_OFFLINE = -4760;
 constexpr int OB_LS_IS_DELETED = -4761;
 constexpr int OB_SKIP_CHECKING_LS_STATUS = -4762;
+constexpr int OB_ERR_USE_ROWID_FOR_UPDATE = -4763;
+constexpr int OB_ERR_UNKNOWN_SET_OPTION = -4764;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2310,6 +2312,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_OFFLINE__USER_ERROR_MSG "log stream is offline"
 #define OB_LS_IS_DELETED__USER_ERROR_MSG "log stream is deleted"
 #define OB_SKIP_CHECKING_LS_STATUS__USER_ERROR_MSG "This operation has been finished without checking ls status"
+#define OB_ERR_USE_ROWID_FOR_UPDATE__USER_ERROR_MSG "invalid user.table.column, table.column, or column specification"
+#define OB_ERR_UNKNOWN_SET_OPTION__USER_ERROR_MSG "unknown SET option \'%s\'"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -4401,6 +4405,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_OFFLINE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4760, log stream is offline"
 #define OB_LS_IS_DELETED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4761, log stream is deleted"
 #define OB_SKIP_CHECKING_LS_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4762, This operation has been finished without checking ls status"
+#define OB_ERR_USE_ROWID_FOR_UPDATE__ORA_USER_ERROR_MSG "ORA-01747: invalid user.table.column, table.column, or column specification"
+#define OB_ERR_UNKNOWN_SET_OPTION__ORA_USER_ERROR_MSG "ORA-00600: unknown SET option \'%s\'"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5938,7 +5944,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2087];
+extern int g_all_ob_errnos[2089];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -497,6 +497,10 @@ public:
       const share::schema::ObTableSchema &hidden_table_schema,
       const uint64_t session_id,
       ObDDLSQLTransaction &trans);
+  int check_hidden_table_constraint_exist(
+      const ObTableSchema *hidden_table_schema,
+      const ObTableSchema *orig_table_schema,
+      ObSchemaGetterGuard &schema_guard);
 
   /**
    * This function is called by the storage layer in the three stage of offline ddl.

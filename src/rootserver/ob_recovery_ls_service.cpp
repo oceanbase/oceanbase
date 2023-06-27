@@ -155,6 +155,8 @@ void ObRecoveryLSService::do_work()
           }
         }
       } else {
+        DEBUG_SYNC(STOP_RECOVERY_LS_THREAD1);
+
         if (!start_scn.is_valid()) {
           ObLSRecoveryStat ls_recovery_stat;
           if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,

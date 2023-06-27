@@ -77,9 +77,10 @@ public:
   /// @param [out] version     wrs version
   virtual int get_cluster_version(const uint64_t tenant_id, share::SCN &version) = 0;
 
-  /// check server can start service or not
-  virtual void check_server_can_start_service(bool &can_start_service,
-                                              int64_t &min_wrs) const = 0;
+  /// check tenant can start service or not
+  virtual int check_tenant_can_start_service(const uint64_t tenant_id,
+                                             bool &can_start_service,
+                                             share::SCN &version) const = 0;
 
   /// get RPC instance
   virtual ObIWrsRpc &get_wrs_rpc() = 0;

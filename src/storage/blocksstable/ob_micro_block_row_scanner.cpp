@@ -895,12 +895,13 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
         ++context_->table_store_stat_.logical_read_cnt_;
       }
     }
-  } else {
+  } else if (OB_UNLIKELY(OB_SUCCESS == ret || OB_ITER_END == ret)) {
     if (!reverse_scan_ && (last_ < reader_->row_count() - 1) &&
         !is_row_empty(prev_micro_row_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected locate range", K(ret), K_(start), K_(last), K_(reverse_scan), KPC_(range),
-               K_(prev_micro_row), K_(macro_id));
+               K_(macro_id), K_(prev_micro_row_.row_flag), K_(prev_micro_row_.mvcc_row_flag),
+               K_(prev_micro_row_.count), K_(prev_micro_row_.have_uncommited_row));
     }
   }
   return ret;
@@ -918,6 +919,8 @@ int ObMultiVersionMicroBlockRowScanner::locate_cursor_to_read(bool &found_first_
     if (OB_FAIL(end_of_block())) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("failed to judge end of block or not", K(ret), K_(macro_id));
+      } else if (finish_scanning_cur_rowkey_) {
+        reuse_prev_micro_row();
       }
     } else if (finish_scanning_cur_rowkey_) {
       if (!is_last_multi_version_row_) {
