@@ -30,8 +30,8 @@ zlib_lite_src/CodecDeflateQpl.h)
 
 if(${ARCHITECTURE} STREQUAL "x86_64")
     target_include_directories(zlib_lite PUBLIC "${DEP_DIR}/include/")
-    target_link_libraries(zlib_lite PUBLIC "${DEP_DIR}/lib/libqpl.a")
-    target_link_libraries(zlib_lite PUBLIC "${DEP_DIR}/lib/libusdm_drv.a")
+    target_link_libraries(zlib_lite PUBLIC "${DEP_DIR}/lib64/libqpl.a")
+    target_link_libraries(zlib_lite PUBLIC "${DEP_DIR}/lib64/libusdm_drv.a")
     target_compile_definitions(zlib_lite PUBLIC -DENABLE_QPL_COMPRESSION)
 endif()
 
