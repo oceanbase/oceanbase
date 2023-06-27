@@ -78,7 +78,7 @@ PalfHandleImpl::PalfHandleImpl()
     mode_change_lock_(),
     flashback_lock_(),
     last_dump_info_time_us_(OB_INVALID_TIMESTAMP),
-    is_flashback_done_(false),
+    flashback_state_(LogFlashbackState::FLASHBACK_INIT),
     last_check_sync_time_us_(OB_INVALID_TIMESTAMP),
     last_renew_loc_time_us_(OB_INVALID_TIMESTAMP),
     last_print_in_sync_time_us_(OB_INVALID_TIMESTAMP),
@@ -3859,7 +3859,6 @@ int PalfHandleImpl::inner_after_truncate_prefix_blocks(const TruncatePrefixBlock
 int PalfHandleImpl::inner_after_flashback(const FlashbackCbCtx &flashback_ctx)
 {
   int ret = OB_SUCCESS;
-  is_flashback_done_ = true;
   // do nothing
   return ret;
 }
@@ -4268,7 +4267,7 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
     FlashbackCbCtx flashback_cb_ctx(flashback_scn);
     const LSN max_lsn = get_max_lsn();
     const LSN end_lsn = get_end_lsn();
-    is_flashback_done_ = false;
+    flashback_state_ = LogFlashbackState::FLASHBACK_INIT;
     PALF_EVENT("[BEGIN FLASHBACK]", palf_id_, KPC(this), K(mode_version), K(flashback_scn), K(timeout_us),
         K(end_lsn), K(max_lsn));
     do {
@@ -4279,8 +4278,15 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
     } while (0);
     TimeoutChecker not_timeout(timeout_us);
     while (OB_SUCC(ret) && OB_SUCC(not_timeout())) {
-      if (is_flashback_done_ == true) {
-        RLockGuard guard(lock_);
+      RLockGuard guard(lock_);
+      if (LogFlashbackState::FLASHBACK_FAILED == flashback_state_) {
+        ret = OB_EAGAIN;
+        PALF_LOG(WARN, "flashback failed", K(ret), KPC(this), K(mode_version), K(flashback_scn));
+      } else if (LogFlashbackState::FLASHBACK_RECONFIRM == flashback_state_) {
+        ret = OB_EAGAIN;
+        PALF_LOG(WARN, "can not flashback a reconfirming leader", K(ret), KPC(this),
+            K(mode_version), K(flashback_scn));
+      } else if (LogFlashbackState::FLASHBACK_SUCCESS == flashback_state_) {
         const SCN &curr_end_scn = get_end_scn();
         const SCN &curr_max_scn = get_max_scn();
         if (flashback_scn >= curr_max_scn) {
@@ -4292,9 +4298,6 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
         }
         PALF_EVENT("[END FLASHBACK]", palf_id_, K(ret), KPC(this), K(mode_version),
             K(flashback_scn), K(timeout_us), K(curr_end_scn), K(curr_max_scn), K(time_guard));
-        FLOG_INFO("[END FLASHBACK PALF_DUMP]", K(ret), K_(palf_id), K_(self), "[SlidingWindow]", sw_,
-            "[StateMgr]", state_mgr_, "[ConfigMgr]", config_mgr_, "[ModeMgr]", mode_mgr_,
-            "[LogEngine]", log_engine_, "[Reconfirm]", reconfirm_);
         plugins_.record_flashback_event(palf_id_, mode_version, flashback_scn, curr_end_scn, curr_max_scn);
         break;
       } else {
@@ -4302,6 +4305,9 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
         PALF_LOG(INFO, "flashback not finished", K(ret), KPC(this), K(flashback_scn), K(log_engine_));
       }
     }
+    FLOG_INFO("[END FLASHBACK PALF_DUMP]", K(ret), K_(palf_id), K_(self), "[SlidingWindow]", sw_,
+        "[StateMgr]", state_mgr_, "[ConfigMgr]", config_mgr_, "[ModeMgr]", mode_mgr_,
+        "[LogEngine]", log_engine_, "[Reconfirm]", reconfirm_);
   }
   if (OB_SUCCESS == lock_ret) {
     flashback_lock_.unlock();
@@ -4369,12 +4375,14 @@ int PalfHandleImpl::inner_flashback(const share::SCN &flashback_scn)
     PALF_LOG(ERROR, "PalfHandleImpl not inited", KPC(this));
   } else if (state_mgr_.is_leader_reconfirm()) {
     PALF_LOG(INFO, "can not do flashback in leader reconfirm state", KPC(this), K(flashback_scn));
+    flashback_state_ = LogFlashbackState::FLASHBACK_RECONFIRM;
   } else if (OB_FAIL(get_block_id_by_scn_for_flashback_(flashback_scn, start_block))
              && OB_ENTRY_NOT_EXIST != ret) {
     PALF_LOG(ERROR, "get_block_id_by_scn_for_flashback_ failed", K(ret), KPC(this), K(flashback_scn));
   } else if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
     PALF_LOG(WARN, "there is no log on disk, flashback successfully", K(ret), KPC(this), K(flashback_scn));
+    flashback_state_ = LogFlashbackState::FLASHBACK_SUCCESS;
   } else if (FALSE_IT(start_lsn_of_block.val_ = start_block * PALF_BLOCK_SIZE)) {
   } else if (OB_FAIL(log_engine_.begin_flashback(start_lsn_of_block))) {
     PALF_LOG(ERROR, "LogEngine begin_flashback failed", K(ret), K(start_lsn_of_block));
@@ -4384,8 +4392,10 @@ int PalfHandleImpl::inner_flashback(const share::SCN &flashback_scn)
   } else if (OB_FAIL(log_engine_.end_flashback(start_lsn_of_block))) {
     PALF_LOG(ERROR, "LogEngine end_flashback failed", K(ret), K(start_lsn_of_block), K(flashback_scn));
   } else {
+    flashback_state_ = LogFlashbackState::FLASHBACK_SUCCESS;
     PALF_LOG(INFO, "inner_flashback success", K(ret), KPC(this), K(flashback_scn));
   }
+  flashback_state_ = (OB_FAIL(ret))? LogFlashbackState::FLASHBACK_FAILED: flashback_state_;
   return ret;
 }
 

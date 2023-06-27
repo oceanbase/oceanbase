@@ -156,7 +156,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
     LogConfigInfo new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(upgrade_b_args, upgrade_b_pid, upgrade_b_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_b_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_b_args, new_config_info, not_timeout));
 
     const LSN &leader_max_flushed_end_lsn = leader.palf_handle_impl_->sw_.max_flushed_end_lsn_;
     EXPECT_GT(leader.palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
@@ -272,7 +272,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
     LogConfigInfo new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(upgrade_a_args, upgrade_a_pid, upgrade_a_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_a_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_a_args, new_config_info, not_timeout));
     EXPECT_GT(leader.palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
     EXPECT_GT(b_handle->palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
 
@@ -632,7 +632,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
     LogConfigInfo new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(remove_e_args, remove_e_pid, remove_e_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(remove_e_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(remove_e_args, new_config_info, not_timeout));
     const LSN &remove_e_barrier = leader.palf_handle_impl_->config_mgr_.checking_barrier_.prev_end_lsn_;
     leader.palf_handle_impl_->state_mgr_.reset_changing_config_with_arb();
 
