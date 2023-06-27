@@ -15495,6 +15495,38 @@ int ObDDLSQLTransaction::register_tx_data(
   return ret;
 }
 
+int ObDDLService::check_hidden_table_constraint_exist(
+    const ObTableSchema *hidden_table_schema,
+    const ObTableSchema *orig_table_schema,
+    ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  for (ObTableSchema::const_constraint_iterator iter = hidden_table_schema->constraint_begin();
+      OB_SUCC(ret) && iter != hidden_table_schema->constraint_end(); ++iter) {
+    if (OB_ISNULL(*iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("iter is NULL", K(ret));
+    } else {
+      const ObString &cst_name = (*iter)->get_constraint_name();
+      bool is_check_constraint_name_exist = false;
+      const ObConstraint *cst = orig_table_schema->get_constraint(cst_name);
+      if (cst == nullptr) { // duplicate name which is not from orig table
+        if (OB_FAIL(check_constraint_name_is_exist(schema_guard,
+                *hidden_table_schema,
+                cst_name,
+                false,
+                is_check_constraint_name_exist))) {
+          LOG_WARN("fail to check constraint name is exist or not", K(ret), K(cst_name));
+        } else if (is_check_constraint_name_exist) {
+          ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+          LOG_WARN("check constraint name is duplicate", K(ret), K(cst_name));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
@@ -15547,6 +15579,10 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
       } else if (OB_FAIL(rebuild_hidden_table_foreign_key_in_trans(alter_table_arg,
           *orig_table_schema, *hidden_table_schema, true/*rebuild_child_table_fk*/, schema_guard, trans, fk_cst_ids))) {
         LOG_WARN("failed to rebuild hidden table fk", K(ret));
+      } else if (OB_FAIL(check_hidden_table_constraint_exist(hidden_table_schema,
+                                                             orig_table_schema,
+                                                             schema_guard))) {
+        LOG_WARN("failed to check hidden table constraint existence", K(ret));
       } else {
         if (OB_SUCC(ret) && alter_table_arg.need_rebuild_trigger_) {
           if (OB_FAIL(rebuild_triggers_on_hidden_table(*orig_table_schema,
