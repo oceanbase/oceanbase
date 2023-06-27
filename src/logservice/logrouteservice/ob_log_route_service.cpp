@@ -1000,7 +1000,7 @@ int ObLogRouteService::query_units_info_and_update_(
         LOG_WARN("query the GV$OB_UNITS failed, need retry", KR(ret));
         ret = OB_SUCCESS;
       } else {
-        LOG_ERROR("query the GV$OB_UNITS failed", KR(ret));
+        LOG_WARN("query the GV$OB_UNITS failed, will be retried later", KR(ret));
       }
     } else {
       ObUnitsRecordInfo::ObUnitsRecordArray &units_record_array = units_record_info.get_units_record_array();

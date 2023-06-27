@@ -101,6 +101,10 @@ public:
       && (0 == dict_database_metas_.count())
       && (0 == dict_table_metas_.count());
   }
+  bool is_contains_multiple_table_metas() const
+  {
+    return dict_table_metas_.count() > 1;
+  }
 
   int get_new_tenant_scehma_info(
       const uint64_t tenant_id,

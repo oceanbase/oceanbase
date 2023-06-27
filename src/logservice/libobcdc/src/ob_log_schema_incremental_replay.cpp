@@ -82,19 +82,19 @@ int ObLogSchemaIncReplay::replay(
         K(tenant_count), K(database_count), K(table_count));
 
     if (OB_SUCC(ret) && tenant_count > 0) {
-      if (OB_FAIL(replay_tenant_metas_(tenant_metas, tenant_info))) {
+      if (OB_FAIL(replay_tenant_metas_(trans_id, tenant_metas, tenant_info))) {
         LOG_ERROR("replay_tenant_metas_ failed", KR(ret), K(tenant_metas), K(tenant_info));
       }
     }
 
     if (OB_SUCC(ret) && database_count > 0) {
-      if (OB_FAIL(replay_database_metas_(database_metas, tenant_info))) {
+      if (OB_FAIL(replay_database_metas_(trans_id, database_metas, tenant_info))) {
         LOG_ERROR("replay_database_metas_ failed", KR(ret), K(database_metas), K(tenant_info));
       }
     }
 
     if (OB_SUCC(ret) && table_count > 0) {
-      if (OB_FAIL(replay_table_metas_(table_metas, tenant_info))) {
+      if (OB_FAIL(replay_table_metas_(trans_id, table_metas, tenant_info))) {
         LOG_ERROR("replay_table_metas_ failed", KR(ret), K(table_metas), K(tenant_info));
       }
     }
@@ -106,6 +106,7 @@ int ObLogSchemaIncReplay::replay(
 }
 
 int ObLogSchemaIncReplay::replay_tenant_metas_(
+    const transaction::ObTransID &trans_id,
     const ObIArray<const datadict::ObDictTenantMeta*> &tenant_metas,
     ObDictTenantInfo &tenant_info)
 {
@@ -115,7 +116,9 @@ int ObLogSchemaIncReplay::replay_tenant_metas_(
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogSchemaIncReplay is not initialized", KR(ret));
   } else {
-    ISTAT("replay_tenant_metas begin", "tenant_count", tenant_metas.count(), K(tenant_metas));
+    const uint64_t tenant_id = tenant_info.get_tenant_id();
+    ISTAT("replay_tenant_metas begin", K(tenant_id), K(trans_id),
+        "tenant_count", tenant_metas.count(), K(tenant_metas));
 
     ARRAY_FOREACH_N(tenant_metas, idx, count) {
       datadict::ObDictTenantMeta *tenant_meta = const_cast<datadict::ObDictTenantMeta *>(tenant_metas.at(idx));
@@ -139,6 +142,7 @@ int ObLogSchemaIncReplay::replay_tenant_metas_(
 }
 
 int ObLogSchemaIncReplay::replay_database_metas_(
+    const transaction::ObTransID &trans_id,
     const ObIArray<const datadict::ObDictDatabaseMeta*> &database_metas,
     ObDictTenantInfo &tenant_info)
 {
@@ -148,7 +152,9 @@ int ObLogSchemaIncReplay::replay_database_metas_(
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogSchemaIncReplay is not initialized", KR(ret));
   } else {
-    ISTAT("replay_database_metas begin", "database_count", database_metas.count(), K(database_metas));
+    const uint64_t tenant_id = tenant_info.get_tenant_id();
+    ISTAT("replay_database_metas begin", K(tenant_id), K(trans_id),
+        "database_count", database_metas.count(), K(database_metas));
 
     ARRAY_FOREACH_N(database_metas, idx, count) {
       const datadict::ObDictDatabaseMeta *database_meta = database_metas.at(idx);
@@ -172,6 +178,7 @@ int ObLogSchemaIncReplay::replay_database_metas_(
 }
 
 int ObLogSchemaIncReplay::replay_table_metas_(
+    const transaction::ObTransID &trans_id,
     const ObIArray<const datadict::ObDictTableMeta*> &table_metas,
     ObDictTenantInfo &tenant_info)
 {
@@ -181,7 +188,9 @@ int ObLogSchemaIncReplay::replay_table_metas_(
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogSchemaIncReplay is not initialized", KR(ret));
   } else {
-    ISTAT("replay_table_metas begin", "table_count", table_metas.count(), K(table_metas));
+    const uint64_t tenant_id = tenant_info.get_tenant_id();
+    ISTAT("replay_table_metas begin", K(tenant_id), K(trans_id),
+        "table_count", table_metas.count(), K(table_metas));
 
     ARRAY_FOREACH_N(table_metas, idx, count) {
       const datadict::ObDictTableMeta *table_meta = table_metas.at(idx);

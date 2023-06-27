@@ -530,7 +530,7 @@ int ObLogAllSvrCache::update_unit_info_cache_()
       LOG_WARN("query the GV$OB_UNITS failed, need retry", KR(ret));
       ret = OB_SUCCESS;
     } else {
-      LOG_ERROR("query the GV$OB_UNITS failed", KR(ret));
+      LOG_WARN("query the GV$OB_UNITS failed, will be retried later", KR(ret));
     }
   } else {
     int64_t next_version = cur_version_ + 1;
