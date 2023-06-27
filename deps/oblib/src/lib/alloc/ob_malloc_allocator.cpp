@@ -419,7 +419,7 @@ int ObMallocAllocator::set_500_tenant_limit(const bool unlimited)
     }
     auto ta = get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ctx_id);
     if (OB_NOT_NULL(ta)) {
-      int64_t ctx_limit = ObCtxIds::DEFAULT_CTX_ID == ctx_id ? (3LL<<30) : (50LL<<20);
+      int64_t ctx_limit = ObCtxIds::DEFAULT_CTX_ID == ctx_id ? (4LL<<30) : (50LL<<20);
       if (unlimited) {
         ctx_limit = INT64_MAX;
       }
