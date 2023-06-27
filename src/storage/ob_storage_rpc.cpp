@@ -2863,7 +2863,7 @@ int ObStorageFetchLSViewP::process()
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
     char * buf = NULL;
-    const int64_t MAX_TABLET_NUM = 100;
+    const int64_t MAX_TABLET_NUM = 32;
 
     int64_t filled_tablet_count = 0;
     int64_t total_tablet_count = 0;
