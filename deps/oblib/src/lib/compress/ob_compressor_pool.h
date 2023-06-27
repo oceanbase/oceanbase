@@ -26,8 +26,10 @@
 #include "zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.h"
 #include "zlib_lite/ob_zlib_lite_compressor.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 class ObCompressorPool
 {
