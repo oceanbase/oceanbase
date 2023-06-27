@@ -1901,7 +1901,8 @@ do { \
               LOG_WARN("unexpected, object type defined inside package", K(ret), K(udt_var_name), K(db_name));
               // pkg.object_type.routine
               // impossible, because a object type cann't be defined inside a package
-            } else if (FALSE_IT(secondary_namespace->try_resolve_udt_name(udt_var_name, udt_name, udt_id, pl::ObPLExternalNS::ExternalType::PKG_VAR, pkg_id))) {
+            } else if (FALSE_IT(secondary_namespace->try_resolve_udt_name(
+              udt_var_name, udt_name, udt_id, false, pl::ObPLExternalNS::ExternalType::PKG_VAR, pkg_id))) {
             } else if (OB_FAIL(schema_checker->get_udt_id(session_info->get_effective_tenant_id(),
                                               session_info->get_database_id(),
                                               OB_INVALID_ID, udt_name, udt_id))) {
@@ -2045,6 +2046,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
               ParseNode *udt_udf_self_param_node = NULL;
               ObRawExpr *self_param = NULL;
               access_ident.udf_info_.is_new_keyword_used_ = is_new_key_word_used;
+              ObRawExpr *self_expr = NULL;
               if (OB_FAIL(ObResolverUtils::transform_func_sys_to_udf(&ctx_.expr_factory_.get_allocator(),
                                                                      &func_node,
                                                                      q_name.database_name_,
@@ -2052,7 +2054,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
                                                                      udf_node))) {
                 LOG_WARN("transform fun sys to udf node failed", K(ret));
               } else if (OB_FAIL(resolve_udf_info(udf_node, false, access_ident.udf_info_,
-                                                  udt_udf_self_param_node, self_param))) {
+                                                  self_expr, self_param))) {
                 LOG_WARN("process udf node failed", K(ret));
               } else if (OB_ISNULL(udf_expr = access_ident.udf_info_.ref_expr_)) {
                 ret = OB_ERR_UNEXPECTED;
@@ -5952,8 +5954,8 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
 int ObRawExprResolverImpl::resolve_udf_info(const ParseNode *node,
                                             bool record_udf_info,
                                             ObUDFInfo &udf_info,
-                                            ParseNode *extra_param,
-                                            ObRawExpr *extra_expr)
+                                            ObRawExpr *member_self_expr,
+                                            ObRawExpr *static_self_expr)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr *func_expr = NULL;
@@ -5982,21 +5984,21 @@ int ObRawExprResolverImpl::resolve_udf_info(const ParseNode *node,
       LOG_WARN("invalid paramters node", K(ret), K(node->children_[1]));
     } else {
       // 先处理udt member function的self参数，self参数是第一个参数
-      if (OB_SUCC(ret) && OB_NOT_NULL(extra_param)) {
-        ObRawExpr *param_expr = NULL;
+      if (OB_SUCC(ret) && OB_NOT_NULL(member_self_expr)) {
+        /* ObRawExpr *param_expr = NULL;
         if (OB_FAIL(recursive_resolve(extra_param, param_expr))) {
           LOG_WARN("fail to recursive resolve udf parameters", K(ret), K(extra_param));
-        } else if (OB_FAIL(func_expr->add_param_expr(param_expr))) {
-          LOG_WARN("fail to add param expr", K(ret), K(param_expr));
-        } else if (OB_FAIL(param_expr->add_flag(IS_UDT_UDF_SELF_PARAM))) {
+        } else */ if (OB_FAIL(func_expr->add_param_expr(member_self_expr))) {
+          LOG_WARN("fail to add param expr", K(ret), K(member_self_expr));
+        } else if (OB_FAIL(member_self_expr->add_flag(IS_UDT_UDF_SELF_PARAM))) {
           LOG_WARN("fail to add flag", K(ret));
         } else {
           udf_info.udf_param_num_++;
           udf_info.is_contain_self_param_ = true;
         }
       }
-      if (OB_SUCC(ret) && OB_ISNULL(extra_param) && OB_NOT_NULL(extra_expr)) {
-        OZ (func_expr->add_param_expr(extra_expr));
+      if (OB_SUCC(ret) && OB_ISNULL(member_self_expr) && OB_NOT_NULL(static_self_expr)) {
+        OZ (func_expr->add_param_expr(static_self_expr));
         udf_info.udf_param_num_++;
         udf_info.is_contain_self_param_ = true;
       }
@@ -6046,21 +6048,21 @@ int ObRawExprResolverImpl::resolve_udf_info(const ParseNode *node,
     }
   } else {
     // if param is null, such as routine(), we also have to mock a param
-    if (OB_SUCC(ret) && OB_NOT_NULL(extra_param)) {
-      ObRawExpr *param_expr = NULL;
+    if (OB_SUCC(ret) && OB_NOT_NULL(member_self_expr)) {
+      /* ObRawExpr *param_expr = NULL;
       if (OB_FAIL(recursive_resolve(extra_param, param_expr))) {
         LOG_WARN("fail to recursive resolve udf parameters", K(ret), K(extra_param));
-      } else if (OB_FAIL(func_expr->add_param_expr(param_expr))) {
-        LOG_WARN("fail to add param expr", K(ret), K(param_expr));
-      } else if (OB_FAIL(param_expr->add_flag(IS_UDT_UDF_SELF_PARAM))) {
+      } else */if (OB_FAIL(func_expr->add_param_expr(member_self_expr))) {
+        LOG_WARN("fail to add param expr", K(ret), K(member_self_expr));
+      } else if (OB_FAIL(member_self_expr->add_flag(IS_UDT_UDF_SELF_PARAM))) {
         LOG_WARN("fail to add flag", K(ret));
       } else {
         udf_info.udf_param_num_++;
         udf_info.is_contain_self_param_ = true;
       }
     }
-    if (OB_SUCC(ret) && OB_ISNULL(extra_param) && OB_NOT_NULL(extra_expr)) {
-      OZ (func_expr->add_param_expr(extra_expr));
+    if (OB_SUCC(ret) && OB_ISNULL(member_self_expr) && OB_NOT_NULL(static_self_expr)) {
+      OZ (func_expr->add_param_expr(static_self_expr));
       udf_info.udf_param_num_++;
       udf_info.is_contain_self_param_ = true;
     }

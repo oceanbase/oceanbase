@@ -1334,6 +1334,7 @@ public:
   int try_resolve_udt_name(const ObString &udt_var_name,
                            ObString &udt_type_name,
                            uint64_t &udt_id,
+                           bool is_collection_elem = false,
                            pl::ObPLExternalNS::ExternalType external_type
                             = pl::ObPLExternalNS::ExternalType::INVALID_VAR,
                            uint64_t parent_id = OB_INVALID_ID) const;

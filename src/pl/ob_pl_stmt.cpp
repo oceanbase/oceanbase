@@ -2744,6 +2744,7 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
 int ObPLBlockNS::try_resolve_udt_name(const ObString &udt_var_name,
                                       ObString &udt_type_name,
                                       uint64_t &udt_id,
+                                      bool is_collection_elem,
                                       pl::ObPLExternalNS::ExternalType external_type,
                                       uint64_t parent_id) const
 {
@@ -2753,17 +2754,28 @@ int ObPLBlockNS::try_resolve_udt_name(const ObString &udt_var_name,
   int64_t var_idx = OB_INVALID_INDEX;
   udt_id = OB_INVALID_ID;
   const pl::ObUserDefinedType *user_type = NULL;
+  const pl::ObPLUserTypeTable *type_table = get_type_table();
 
   OX (udt_id = OB_INVALID_ID);
-  OZ (resolve_symbol(
-    udt_var_name, external_type, type, parent_id, var_idx));
+  OZ (resolve_symbol(udt_var_name, external_type, type, parent_id, var_idx));
+  if (OB_SUCC(ret) && OB_INVALID_INDEX != var_idx) {
+    if (type.is_collection_type() && is_collection_elem) {
+      uint64_t collection_id = type.get_user_type_id();
+      const pl::ObUserDefinedType *user_type = NULL;
+      const pl::ObCollectionType *coll_type = NULL;
+      OZ (get_pl_data_type_by_id(collection_id, user_type));
+      OX (coll_type = static_cast<const pl::ObCollectionType *>(user_type));
+      if (OB_SUCC(ret)
+          && OB_NOT_NULL(coll_type)
+          && coll_type->get_element_type().is_record_type()
+          && pl::ObPLTypeFrom::PL_TYPE_UDT == coll_type->get_element_type().get_type_from()) {
+        udt_id = coll_type->get_element_type().get_user_type_id();
+      }
+    } else if ((type.is_record_type() || type.is_opaque_type())
+               && type.is_udt_type()) {
 
-  if (OB_SUCC(ret)
-      && var_idx != OB_INVALID_INDEX
-      && (type.is_record_type() || type.is_opaque_type())
-      && type.is_udt_type()) {
-
-    OX (udt_id = type.get_user_type_id());
+      OX (udt_id = type.get_user_type_id());
+    }
     CK (OB_NOT_NULL(get_type_table()));
     OX (user_type = get_type_table()->get_type(udt_id));
     if (OB_SUCC(ret) && OB_ISNULL(user_type)) {

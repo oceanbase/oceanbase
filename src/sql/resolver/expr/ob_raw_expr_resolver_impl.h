@@ -179,7 +179,7 @@ private:
   static bool should_contain_order_by_clause(const ObItemType func_type);
   int process_udf_node(const ParseNode *node, bool record_udf_info, ObRawExpr *&expr);
   int resolve_udf_info(const ParseNode *node, bool record_udf_info, ObUDFInfo &udf_info,
-                       ParseNode *extra_param = NULL, ObRawExpr *extar_expr = NULL);
+                       ObRawExpr *member_self_expr = NULL, ObRawExpr *static_self_expr = NULL);
   int process_sqlerrm_node(const ParseNode *node, ObRawExpr *&expr);
   int process_plsql_var_node(const ParseNode *node, ObRawExpr *&expr);
   int process_call_param_node(const ParseNode *node, ObRawExpr *&expr);
