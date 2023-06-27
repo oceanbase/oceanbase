@@ -85,12 +85,16 @@ private:
   int open_tenant_archive_mode_(const uint64_t tenant_id);
   int close_tenant_archive_mode_(const common::ObIArray<uint64_t> &tenant_ids_array);
   int close_tenant_archive_mode_(const uint64_t tenant_id);
+  int can_do_schedule_();
+  int switch_to_leader() override;
+  int resume_leader() override;
 
   bool is_inited_;
   uint64_t tenant_id_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
+  int64_t switch_leader_timestamp_;
 
   DISALLOW_COPY_AND_ASSIGN(ObArchiveSchedulerService);
 };
