@@ -99,7 +99,7 @@ int ObIMicroBlockRowScanner::init(
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(row_.init(*context.stmt_allocator_, param.get_max_out_col_cnt()))) {
+    if (OB_FAIL(row_.init(allocator_, param.get_max_out_col_cnt()))) {
       STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
     } else {
       param_ = &param;
