@@ -135,7 +135,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
 
     exec_info_.scheduler_ = scheduler;
     exec_info_.trans_type_ = TransType::SP_TRANS;
-    last_ask_scheduler_status_ts_ = 0;
+    last_ask_scheduler_status_ts_ = ObClockGenerator::getClock();
     cluster_id_ = cluster_id;
     epoch_ = epoch;
     pending_write_ = 0;
