@@ -720,6 +720,10 @@ int ObSharedBlockReaderWriter::inner_write_block(
   if (OB_SUCC(ret)) {
     macro_handle.reset();
     int64_t pos = 0;
+    const int64_t prev_pos = data_.pos();
+    const int64_t prev_offset = offset_;
+    const int64_t prev_align_offset = align_offset_;
+    const bool prev_hanging = hanging_;
     if (OB_FAIL(header.serialize(data_.current(), header.header_size_, pos))) {
       LOG_WARN("Fail to serialize header", K(ret), K(header));
     } else {
@@ -730,14 +734,14 @@ int ObSharedBlockReaderWriter::inner_write_block(
       macro_info.size_ = align_store_size;
       macro_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       // io_callback
-      if (OB_FAIL(data_.advance(store_size))) {
-        LOG_WARN("Fail to advance size", K(ret), K(store_size));
-      } else if (OB_FAIL(addr.set_block_addr(macro_handle_.get_macro_id(),
-                                             offset_,
-                                             blk_size))) {
+      if (OB_FAIL(addr.set_block_addr(macro_handle_.get_macro_id(),
+                                      offset_,
+                                      blk_size))) {
         LOG_WARN("Fail to set block addr", K(ret));
       } else if (OB_FAIL(block_handle.add_meta_addr(addr))) {
         LOG_WARN("Fail to add meta addr", K(ret), K(addr));
+      } else if (OB_FAIL(data_.advance(store_size))) {
+        LOG_WARN("Fail to advance size", K(ret), K(store_size));
       } else {
         offset_ += store_size;
       }
@@ -757,6 +761,19 @@ int ObSharedBlockReaderWriter::inner_write_block(
       LOG_DEBUG("zhuixin debug inner write block", K(ret), K(header), K(size), K(need_flush),
           K(need_align), K(store_size), K(align_store_size), K(offset_), K(align_offset_),
           K(hanging_), K(addr), K(macro_handle));
+    }
+    // roll back status
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(data_.set_pos(prev_pos))) {
+        LOG_ERROR("fail to roll back data buffer", K(ret), K(tmp_ret), K(prev_pos), K(header));
+        ob_usleep(1000 * 1000);
+        ob_abort();
+      } else {
+        offset_ = prev_offset;
+        align_offset_ = prev_align_offset;
+        hanging_ = prev_hanging;
+      }
     }
   }
   return ret;
