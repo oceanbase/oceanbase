@@ -1317,7 +1317,7 @@ int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
     ret = convert_sys_errno();
     SHARE_LOG(WARN, "Failed to get disk space", K(ret), K(sstable_dir_));
   } else {
-    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
+    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize));
     const int64_t max_file_size = block_file_size_ + free_space - reserved_size;
     /* when datafile_maxsize is large than current datafile_size, we should return
        the Maximun left space that can be extend. */
