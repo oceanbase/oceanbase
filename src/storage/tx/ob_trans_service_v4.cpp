@@ -212,7 +212,7 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
     } else {
       TRANS_LOG(TRACE, "local ls commit tx started", K(tx));
     }
-  } else if (OB_FAIL(do_commit_tx_slowpath_(tx, expire_ts))) {
+  } else if (OB_FAIL(do_commit_tx_slowpath_(tx))) {
     TRANS_LOG(WARN, "commit tx slowpath fail", K(ret),
               K_(tx.coord_id), K_(tx.commit_parts), K(tx));
   } else {
@@ -225,38 +225,36 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
   return ret;
 }
 
+#define DELETED_UNRETRYABLE_ERROR(ret)  (OB_LS_IS_DELETED == ret)
 /*
  * try send commit msg to coordinator, and register retry task
  * if msg send fail, the retry task will retry later
  * if both register task fail and send are failed, the commit failed
  */
-int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts)
+int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTxCommitMsg commit_msg;
-  bool post_msg_fail = false;
-  if (OB_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
-    TRANS_LOG(WARN, "build tx commit msg fail", K(ret), K(tx));
+  bool post_succ = false;
+  if (OB_TMP_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
+    TRANS_LOG(WARN, "build tx commit msg fail", K(tmp_ret), K(tx));
     // build msg fail won't cause commit fail, later driven by retry timer
-    post_msg_fail = true;
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
-    TRANS_LOG(WARN, "post tx commit msg fail", K(ret), K(tx), K(commit_msg));
-    // send msg fail won't cause commit fail, later driven by retry timer
-    post_msg_fail = true;
-    ret = OB_SUCCESS;
-  }
-
-  if (post_msg_fail) {
-    if (OB_FAIL(register_commit_retry_task_(tx, POST_COMMIT_REQ_RETRY_INTERVAL))) {
-      TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(tx));
+  } else if (OB_TMP_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
+    TRANS_LOG(WARN, "post tx commit msg fail", K(tmp_ret), K(tx), K(commit_msg));
+    if (DELETED_UNRETRYABLE_ERROR(tmp_ret)) {
+      ret = tx.commit_times_ > 0 ? OB_TRANS_UNKNOWN : OB_TRANS_KILLED;
     }
   } else {
-    if (OB_FAIL(register_commit_retry_task_(tx))) {
-      TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(tx));
-    }
+    post_succ = true;
+    ++tx.commit_times_;
   }
-  TRANS_LOG(TRACE, "do commit tx slowpath", K(ret), K(post_msg_fail), K(tx));
+
+  if (OB_SUCC(ret) &&
+      OB_FAIL(register_commit_retry_task_(tx, post_succ ? INT64_MAX : POST_COMMIT_REQ_RETRY_INTERVAL))) {
+    TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(post_succ), K(tx));
+  }
+  TRANS_LOG(TRACE, "do commit tx slowpath", K(ret), K(post_succ), K(tx));
   return ret;
 }
 
@@ -362,23 +360,9 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   } else if (tx.commit_expire_ts_ <= now) {
     TRANS_LOG(WARN, "tx commit timeout", K_(tx.commit_expire_ts), K(tx));
     handle_tx_commit_result_(tx, OB_TRANS_STMT_TIMEOUT);
-  } else {
-    ObTxCommitMsg commit_msg;
-    if (OB_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
-      TRANS_LOG(WARN, "build tx commit msg fail", K(ret), K(tx));
-    } else if (OB_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
-      TRANS_LOG(WARN, "post commit msg fail", K(ret), K(tx));
-    }
-    // register again
-    if (OB_FAIL(ret)) {
-      if (OB_FAIL(register_commit_retry_task_(tx, POST_COMMIT_REQ_RETRY_INTERVAL))) {
-        TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
-      }
-    } else {
-      if (OB_FAIL(register_commit_retry_task_(tx))) {
-        TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
-      }
-    }
+  } else if (OB_FAIL(do_commit_tx_slowpath_(tx))) {
+    TRANS_LOG(WARN, "retry do commit tx failed", K(ret), K(tx));
+    handle_tx_commit_result_(tx, ret);
   }
   ref_cnt = tx.get_ref();
   tx.lock_.unlock();
@@ -1726,16 +1710,14 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
 {
   int ret = OB_SUCCESS;
   SCN commit_version;
-  if (OB_FAIL(local_ls_commit_tx_(msg.tx_id_,
-                                  msg.receiver_,
-                                  msg.parts_,
-                                  msg.expire_ts_,
-                                  msg.app_trace_info_,
-                                  msg.request_id_,
-                                  commit_version,
-                                  msg.sender_addr_))) {
-    TRANS_LOG(WARN, "handle tx commit request fail", K(ret), K(msg));
-  }
+  ret = local_ls_commit_tx_(msg.tx_id_,
+                            msg.receiver_,
+                            msg.parts_,
+                            msg.expire_ts_,
+                            msg.app_trace_info_,
+                            msg.request_id_,
+                            commit_version,
+                            msg.sender_addr_);
   result.reset();
   result.init(ret, msg.get_timestamp());
   result.private_data_ = commit_version;
@@ -1815,12 +1797,12 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
 int ObTransService::get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                                 const ObTransID &tx_id,
                                                 int &state,
-                                                SCN &commit_version)
+                                                SCN &commit_version,
+                                                SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   ObTxTableGuard tx_table_guard;
   int64_t _state = 0;
-  SCN recycled_scn;
   if (OB_FAIL(get_tx_table_guard_(NULL, lsid, tx_table_guard))) {
     TRANS_LOG(WARN, "get tx table guard failed", KR(ret), K(lsid), KPC(this));
   } else if (!tx_table_guard.is_valid()) {

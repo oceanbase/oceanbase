@@ -438,8 +438,9 @@ protected:
   share::ObLSID coord_id_;           // coordinator ID
   int64_t commit_expire_ts_;         // commit operation deadline
   share::ObLSArray commit_parts_;    // participants to do commit
-  share::SCN commit_version_;         // Tx commit version
+  share::SCN commit_version_;        // Tx commit version
   int commit_out_;                   // the commit result
+  int commit_times_;                 // times of sent commit request
   /* internal abort cause */
   int16_t abort_cause_;              // Tx Aborted cause
   bool can_elr_;                     // can early lock release
@@ -530,6 +531,7 @@ public:
                K_(parts),
                K_(exec_info_reap_ts),
                K_(commit_version),
+               K_(commit_times),
                KP_(commit_cb),
                K_(cluster_id),
                K_(cluster_version),
