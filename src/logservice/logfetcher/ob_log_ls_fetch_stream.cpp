@@ -1234,7 +1234,7 @@ int FetchStream::handle_fetch_log_error_(
   if (OB_SUCCESS != rcode.rcode_) {
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_RPC;
-    if (OB_NOT_NULL(ls_fetch_ctx_)) {
+    if (OB_NOT_NULL(ls_fetch_ctx_) && OB_IN_STOP_STATE != ret) {
       ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
                                   IObLogErrHandler::ErrType::FETCH_LOG,
                                   trace_id,
@@ -1249,7 +1249,7 @@ int FetchStream::handle_fetch_log_error_(
     // Other errors, switch server directly
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_SERVER;
-    if (OB_NOT_NULL(ls_fetch_ctx_)) {
+    if (OB_NOT_NULL(ls_fetch_ctx_) && OB_IN_STOP_STATE != ret ) {
       ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
                                   IObLogErrHandler::ErrType::FETCH_LOG,
                                   trace_id,

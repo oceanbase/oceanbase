@@ -387,6 +387,8 @@ int ObLogAllSvrCache::update_zone_cache_()
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("query all zone info need retry", KR(ret));
       ret = OB_SUCCESS;
+    } else if (OB_IN_STOP_STATE == ret) {
+      LOG_WARN("ls is in stop state when query zone info", KR(ret));
     } else {
       LOG_ERROR("query all zone info fail", KR(ret));
     }
@@ -394,6 +396,8 @@ int ObLogAllSvrCache::update_zone_cache_()
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("query all zone type need retry", KR(ret));
       ret = OB_SUCCESS;
+    } else if (OB_IN_STOP_STATE == ret) {
+      LOG_WARN("ls is in stop state when query zone type info", KR(ret));
     } else {
       LOG_ERROR("query all zone type fail", KR(ret));
     }
@@ -463,6 +467,8 @@ int ObLogAllSvrCache::update_server_cache_()
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("query all server info need retry", KR(ret));
       ret = OB_SUCCESS;
+    } else if (OB_IN_STOP_STATE == ret) {
+      LOG_WARN("ls is in stop state when query server info", KR(ret));
     } else {
       LOG_ERROR("query all server info fail", KR(ret));
     }
@@ -529,6 +535,8 @@ int ObLogAllSvrCache::update_unit_info_cache_()
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("query the GV$OB_UNITS failed, need retry", KR(ret));
       ret = OB_SUCCESS;
+    } else if (OB_IN_STOP_STATE == ret) {
+      LOG_WARN("ls is in stop state when query units info", KR(ret));
     } else {
       LOG_WARN("query the GV$OB_UNITS failed, will be retried later", KR(ret));
     }
