@@ -3857,11 +3857,12 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
     sub_state_.set_state_log_submitting();
     sub_state_.set_state_log_submitted();
     // elr
-    if (can_elr_) {
+    const bool has_row_updated = mt_ctx_.has_row_updated();
+    if (can_elr_ && has_row_updated) {
       if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ELR_COMMIT))) {
         TRANS_LOG(WARN, "set tx data state", K(ret));
       }
-      elr_handler_.check_and_early_lock_release(mt_ctx_.has_row_updated(), this);
+      elr_handler_.check_and_early_lock_release(has_row_updated, this);
     }
   }
   if (OB_SUCC(ret) && is_contain(cb_arg_array, ObTxLogType::TX_ABORT_LOG)) {
