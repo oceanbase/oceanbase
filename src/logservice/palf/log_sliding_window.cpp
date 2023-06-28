@@ -2788,21 +2788,27 @@ int LogSlidingWindow::get_majority_lsn_(const ObMemberList &member_list,
     ObAddr tmp_server;
     LsnTsInfo tmp_val;
     for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
+      int tmp_ret = OB_SUCCESS;
       tmp_server.reset();
       if (OB_FAIL(member_list.get_server_by_index(i, tmp_server))) {
         PALF_LOG(WARN, "get_server_by_index failed", K(ret), K_(palf_id), K_(self));
-      } else if (OB_FAIL(match_lsn_map_.get(tmp_server, tmp_val))) {
-        // 预期不应该失败，每次成员变更时同步更新保持map与member_list一致
-        PALF_LOG(WARN, "match_lsn_map_ get failed", K(ret), K_(palf_id), K_(self), K(tmp_server));
+      } else if (OB_TMP_FAIL(match_lsn_map_.get(tmp_server, tmp_val))) {
+        // Note: the leader may generate committed_end_lsn based on previous member list,
+        // members in member_list may do not exist in match_lsn_map. For example, removing D from
+        // (ABCD), previous member_list is (ABCD) but D has been removed from match_lsn_map.
+        // Therefore, we just skip members that do not exist in match_lsn_map.
+        PALF_LOG(WARN, "match_lsn_map_ get failed", K(tmp_ret), K_(palf_id), K_(self), K(tmp_server));
       } else {
-        valid_member_cnt++;
-        lsn_array[i] = tmp_val.lsn_;
+        lsn_array[valid_member_cnt++] = tmp_val.lsn_;
         PALF_LOG(TRACE, "current matched lsn", K_(palf_id), K_(self), "server:", tmp_server, "lsn:", tmp_val.lsn_);
       }
     }
   } while(0);
 
-  if (OB_SUCC(ret)) {
+  if (valid_member_cnt < replica_num / 2 + 1) {
+    PALF_LOG(WARN, "match_lsn_map do not reach majority", K(ret), K_(palf_id), K_(self),
+        K(member_list), K(replica_num), K(valid_member_cnt));
+  } else if (OB_SUCC(ret)) {
     std::sort(lsn_array, lsn_array + valid_member_cnt, LSNCompare());
     assert(replica_num / 2 < OB_MAX_MEMBER_NUMBER);
     result_lsn = lsn_array[replica_num / 2];

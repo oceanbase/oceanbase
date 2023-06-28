@@ -716,6 +716,8 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
 
   EXPECT_EQ(leader.palf_handle_impl_->self_, new_leader.palf_handle_impl_->self_);
 
+  // waiting for upgrading
+  is_upgraded(leader, id);
   EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->config_mgr_.get_log_sync_member_list( \
       leader_member_list, leader_replica_num));
   EXPECT_EQ(2, leader_member_list.get_member_number());

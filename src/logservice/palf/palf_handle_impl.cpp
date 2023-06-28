@@ -1060,6 +1060,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     // adding D, and member_list of D if still empty, D cann't vote for any one, therefore no one
     // can be elected to be leader.
     if (is_add_member_list(args.type_)) {
+      RLockGuard guard(lock_);
       (void) config_mgr_.pre_sync_config_log_and_mode_meta(args.server_, proposal_id);
     }
     // step 2: config change remote precheck
@@ -1089,6 +1090,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
             K(ret), K_(palf_id), K_(self), K(args));
       } else {
         if (false == added_member_has_new_version) {
+          RLockGuard guard(lock_);
           (void) config_mgr_.pre_sync_config_log_and_mode_meta(args.server_, proposal_id);
         }
         ret = OB_SUCCESS;
@@ -2458,8 +2460,7 @@ int PalfHandleImpl::receive_mode_meta(const common::ObAddr &server,
     PALF_LOG(WARN, "invalid arguments", K(ret), KPC(this), K(server), K(proposal_id), K(mode_meta));
   } else if (OB_FAIL(try_update_proposal_id_(server, proposal_id))) {
     PALF_LOG(WARN, "try_update_proposal_id_ failed", KR(ret), KPC(this), K(server), K(proposal_id));
-  } else if (false == is_applied_mode_meta && OB_SUCCESS != (lock_ret = lock_.rdlock())) {
-  } else if (true == is_applied_mode_meta && OB_SUCCESS != (lock_ret = lock_.wrlock())) {
+  } else if (OB_SUCCESS != (lock_ret = lock_.wrlock())) {
   } else if (false == mode_mgr_.can_receive_mode_meta(proposal_id, mode_meta, has_accepted)) {
     PALF_LOG(WARN, "can_receive_mode_meta failed", KR(ret), KPC(this), K(proposal_id), K(mode_meta));
   } else if (true == has_accepted) {
@@ -2477,11 +2478,7 @@ int PalfHandleImpl::receive_mode_meta(const common::ObAddr &server,
   PALF_LOG(INFO, "receive_mode_meta finish", KR(ret), KPC(this), K(server), K(proposal_id),
       K(is_applied_mode_meta), K(mode_meta));
   if (OB_SUCCESS == lock_ret) {
-    if (is_applied_mode_meta) {
-      lock_.wrunlock();
-    } else {
-      lock_.rdunlock();
-    }
+    lock_.wrunlock();
   }
   return ret;
 }
@@ -3813,7 +3810,7 @@ int PalfHandleImpl::inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_c
   PALF_LOG(INFO, "inner_after_flush_meta", K(flush_meta_cb_ctx));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (MODE_META == flush_meta_cb_ctx.type_ && true == flush_meta_cb_ctx.is_applied_mode_meta_) {
+  } else if (MODE_META == flush_meta_cb_ctx.type_) {
     WLockGuard guard(lock_);
     ret = after_flush_mode_meta_(flush_meta_cb_ctx.proposal_id_,
                                  flush_meta_cb_ctx.is_applied_mode_meta_,
@@ -3826,11 +3823,6 @@ int PalfHandleImpl::inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_c
         break;
       case CHANGE_CONFIG_META:
         ret = after_flush_config_change_meta_(flush_meta_cb_ctx.proposal_id_, flush_meta_cb_ctx.config_version_);
-        break;
-      case MODE_META:
-        ret = after_flush_mode_meta_(flush_meta_cb_ctx.proposal_id_,
-                                     flush_meta_cb_ctx.is_applied_mode_meta_,
-                                     flush_meta_cb_ctx.log_mode_meta_);
         break;
       case SNAPSHOT_META:
         ret = after_flush_snapshot_meta_(flush_meta_cb_ctx.base_lsn_);

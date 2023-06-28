@@ -243,6 +243,8 @@ public:
   void switch_append_to_flashback(PalfHandleImplGuard &leader, int64_t &mode_version);
   void switch_flashback_to_append(PalfHandleImplGuard &leader, int64_t &mode_version);
   void set_disk_options_for_throttling(PalfEnvImpl &palf_env_impl);
+  bool is_degraded(const PalfHandleImplGuard &leader, const int64_t degraded_server_idx);
+  bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id);
 public:
   static int64_t palf_id_;
 private:

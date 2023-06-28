@@ -444,15 +444,26 @@ int LogConfigMgr::get_log_sync_member_list_for_generate_committed_lsn(
   int ret = OB_SUCCESS;
   LSN prev_committed_end_lsn;
   sw_->get_committed_end_lsn(prev_committed_end_lsn);
+  const int64_t prev_mode_pid = mode_mgr_->get_last_submit_mode_meta().proposal_id_;
   is_before_barrier = false;
   barrier_lsn = LSN(PALF_INITIAL_LSN_VAL);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
   } else if (OB_UNLIKELY(prev_committed_end_lsn < reconfig_barrier_.prev_end_lsn_ &&
-      reconfig_barrier_.prev_end_lsn_.is_valid())) {
+      reconfig_barrier_.prev_end_lsn_.is_valid() &&
+      prev_mode_pid == reconfig_barrier_.prev_mode_pid_)) {
     is_before_barrier = true;
     barrier_lsn = reconfig_barrier_.prev_end_lsn_;
+    // Scenario: 2F1A
+    // 1. A reconfiguration (upgrade B) has been executed successfully with log_barrier 100
+    // 2. the palf group is flashed back to 50, but reconfig_barrier in LogConfigMgr is still 100
+    // 3. change to APPEND mode
+    // 4. the leader may commit logs in (50, 100) by prev_member_list(A)
+    // Note: to address above issue, we check mode_proposal_id. The previous memberlist will
+    // be used only when the reconfir_barrier_.prev_mode_pid_ is equal to current mode
+    // proposal_id. That means access mode hasn’t been changed (PALF hasn’t been flashed back)
+    // since last reconfiguration.
     if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.config_.log_sync_memberlist_))) {
       PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
     } else {
