@@ -1120,6 +1120,51 @@ void ObStorageUnBlockTxArg::reset()
 OB_SERIALIZE_MEMBER(ObStorageUnBlockTxArg, tenant_id_, ls_id_, gts_);
 
 
+ObStorageConfigChangeOpArg::ObStorageConfigChangeOpArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    type_(MAX),
+    lock_owner_(0),
+    lock_timeout_(0)
+{
+}
+
+bool ObStorageConfigChangeOpArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+    && ls_id_.is_valid()
+    && type_ >= LOCK_CONFIG_CHANGE
+    && type_ < MAX;
+}
+
+void ObStorageConfigChangeOpArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  type_ = MAX;
+  lock_owner_ = 0;
+  lock_timeout_ = 0;
+}
+
+OB_SERIALIZE_MEMBER(ObStorageConfigChangeOpArg, tenant_id_,
+  ls_id_, type_, lock_owner_, lock_timeout_);
+
+ObStorageConfigChangeOpRes::ObStorageConfigChangeOpRes()
+  : palf_lock_owner_(0),
+    is_locked_(false),
+    op_succ_(false)
+{
+}
+
+void ObStorageConfigChangeOpRes::reset()
+{
+  palf_lock_owner_ = 0;
+  is_locked_ = false;
+  op_succ_ = false;
+}
+
+OB_SERIALIZE_MEMBER(ObStorageConfigChangeOpRes, palf_lock_owner_, is_locked_, op_succ_);
+
 template <ObRpcPacketCode RPC_CODE>
 ObStorageStreamRpcP<RPC_CODE>::ObStorageStreamRpcP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
   : bandwidth_throttle_(bandwidth_throttle),
@@ -3050,6 +3095,126 @@ int ObStorageUnBlockTxP::process()
   return ret;
 }
 
+ObStorageLockConfigChangeP::ObStorageLockConfigChangeP(
+    common::ObInOutBandwidthThrottle *bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObStorageLockConfigChangeP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  const share::ObLSID &ls_id = arg_.ls_id_;
+  const int64_t lock_owner = arg_.lock_owner_;
+  const int64_t lock_timeout = arg_.lock_timeout_;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = NULL;
+    ObLS *ls = NULL;
+    if (!arg_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get invalid args", K(ret), K_(arg));
+    } else if (arg_.type_ != ObStorageConfigChangeOpArg::LOCK_CONFIG_CHANGE) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("type not match", K(ret), K_(arg));
+    } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_FAIL(ls->try_lock_config_change(lock_owner, lock_timeout))) {
+      LOG_WARN("failed to try lock config config", K(ret), K_(arg));
+    } else {
+      result_.op_succ_ = true;
+      LOG_INFO("lock config change success", K(arg_));
+    }
+  }
+  return ret;
+}
+
+ObStorageUnlockConfigChangeP::ObStorageUnlockConfigChangeP(
+    common::ObInOutBandwidthThrottle *bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObStorageUnlockConfigChangeP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  const share::ObLSID &ls_id = arg_.ls_id_;
+  const int64_t lock_owner = arg_.lock_owner_;
+  const int64_t lock_timeout = arg_.lock_timeout_;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = NULL;
+    ObLS *ls = NULL;
+    if (!arg_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get invalid args", K(ret), K_(arg));
+    } else if (arg_.type_ != ObStorageConfigChangeOpArg::UNLOCK_CONFIG_CHANGE) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("type not match", K(ret), K_(arg));
+    } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_FAIL(ls->unlock_config_change(lock_owner, lock_timeout))) {
+      LOG_WARN("failed to try lock config config", K(ret), K_(arg));
+    } else {
+      result_.op_succ_ = true;
+      LOG_INFO("unlock config change success", K(arg_));
+    }
+  }
+  return ret;
+}
+
+ObStorageGetLogConfigStatP::ObStorageGetLogConfigStatP(
+    common::ObInOutBandwidthThrottle *bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObStorageGetLogConfigStatP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  const share::ObLSID &ls_id = arg_.ls_id_;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = NULL;
+    ObLS *ls = NULL;
+    if (!arg_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get invalid args", K(ret), K_(arg));
+    } else if (arg_.type_ != ObStorageConfigChangeOpArg::GET_CONFIG_CHANGE_LOCK_STAT) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("type not match", K(ret), K_(arg));
+    } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_FAIL(ls->get_config_change_lock_stat(result_.palf_lock_owner_, result_.is_locked_))) {
+      LOG_WARN("failed to try lock config config", K(ret), K_(arg));
+    } else {
+      result_.op_succ_ = true;
+      LOG_INFO("get config change lock stat success", K(arg_), K(result_));
+    }
+  }
+  return ret;
+}
 
 } //namespace obrpc
 
@@ -3645,6 +3810,106 @@ int ObStorageRpc::unblock_tx(
   return ret;
 }
 
+int ObStorageRpc::lock_config_change(
+    const uint64_t tenant_id,
+    const ObStorageHASrcInfo &src_info,
+    const share::ObLSID &ls_id,
+    const int64_t lock_owner,
+    const int64_t lock_timeout)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+  } else {
+    ObStorageConfigChangeOpArg arg;
+    ObStorageConfigChangeOpRes res;
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.type_ = ObStorageConfigChangeOpArg::LOCK_CONFIG_CHANGE;
+    arg.lock_owner_ = lock_owner;
+    arg.lock_timeout_ = lock_timeout;
+    const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .timeout(timeout)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .lock_config_change(arg, res))) {
+      LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObStorageRpc::unlock_config_change(
+    const uint64_t tenant_id,
+    const ObStorageHASrcInfo &src_info,
+    const share::ObLSID &ls_id,
+    const int64_t lock_owner,
+    const int64_t lock_timeout)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+  } else {
+    ObStorageConfigChangeOpArg arg;
+    ObStorageConfigChangeOpRes res;
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.type_ = ObStorageConfigChangeOpArg::UNLOCK_CONFIG_CHANGE;
+    arg.lock_owner_ = lock_owner;
+    arg.lock_timeout_ = lock_timeout;
+    const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .timeout(timeout)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .unlock_config_change(arg, res))) {
+      LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObStorageRpc::get_config_change_lock_stat(
+    const uint64_t tenant_id,
+    const ObStorageHASrcInfo &src_info,
+    const share::ObLSID &ls_id,
+    int64_t &palf_lock_owner,
+    bool &is_locked)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+  } else {
+    ObStorageConfigChangeOpArg arg;
+    ObStorageConfigChangeOpRes res;
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.type_ = ObStorageConfigChangeOpArg::GET_CONFIG_CHANGE_LOCK_STAT;
+    const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .timeout(timeout)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .get_config_change_lock_stat(arg, res))) {
+      LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
+    } else {
+      palf_lock_owner = res.palf_lock_owner_;
+      is_locked = res.is_locked_;
+    }
+  }
+  return ret;
+}
 
 } // storage
 } // oceanbase

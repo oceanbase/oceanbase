@@ -712,6 +712,47 @@ public:
   share::SCN gts_;
 };
 
+struct ObStorageConfigChangeOpArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum TYPE
+  {
+    LOCK_CONFIG_CHANGE = 0,
+    UNLOCK_CONFIG_CHANGE = 1,
+    GET_CONFIG_CHANGE_LOCK_STAT = 2,
+    MAX,
+  };
+public:
+  ObStorageConfigChangeOpArg();
+  ~ObStorageConfigChangeOpArg() {}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(lock_owner), K_(lock_timeout));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  TYPE type_;
+  int64_t lock_owner_;
+  int64_t lock_timeout_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageConfigChangeOpArg);
+};
+
+struct ObStorageConfigChangeOpRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageConfigChangeOpRes();
+  ~ObStorageConfigChangeOpRes() {}
+  void reset();
+  TO_STRING_KV(K_(palf_lock_owner), K_(is_locked), K_(op_succ));
+  int64_t palf_lock_owner_;
+  bool is_locked_;
+  bool op_succ_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageConfigChangeOpRes);
+};
+
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
 {
@@ -744,6 +785,9 @@ public:
   RPC_S(PR5 block_tx, OB_HA_BLOCK_TX, (ObStorageBlockTxArg));
   RPC_S(PR5 kill_tx, OB_HA_KILL_TX, (ObStorageKillTxArg));
   RPC_S(PR5 unblock_tx, OB_HA_UNBLOCK_TX, (ObStorageUnBlockTxArg));
+  RPC_S(PR5 lock_config_change, OB_HA_LOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
+  RPC_S(PR5 unlock_config_change, OB_HA_UNLOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
+  RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
 };
 
 template <ObRpcPacketCode RPC_CODE>
@@ -1035,6 +1079,36 @@ protected:
   int process();
 };
 
+class ObStorageLockConfigChangeP:
+    public ObStorageStreamRpcP<OB_HA_LOCK_CONFIG_CHANGE>
+{
+public:
+  explicit ObStorageLockConfigChangeP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageLockConfigChangeP() {}
+protected:
+  int process();
+};
+
+class ObStorageUnlockConfigChangeP:
+    public ObStorageStreamRpcP<OB_HA_UNLOCK_CONFIG_CHANGE>
+{
+public:
+  explicit ObStorageUnlockConfigChangeP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageUnlockConfigChangeP() {}
+protected:
+  int process();
+};
+
+class ObStorageGetLogConfigStatP:
+    public ObStorageStreamRpcP<OB_HA_GET_CONFIG_CHANGE_LOCK_STAT>
+{
+public:
+  explicit ObStorageGetLogConfigStatP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageGetLogConfigStatP() {}
+protected:
+  int process();
+};
+
 } // obrpc
 
 
@@ -1164,6 +1238,24 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       const share::SCN &gts) = 0;
+  virtual int lock_config_change(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const int64_t lock_owner,
+      const int64_t lock_timeout) = 0;
+  virtual int unlock_config_change(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const int64_t lock_owner,
+      const int64_t lock_timeout) = 0;
+  virtual int get_config_change_lock_stat(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      int64_t &palf_lock_owner,
+      bool &is_locked) = 0;
 };
 
 class ObStorageRpc: public ObIStorageRpc
@@ -1286,6 +1378,24 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       const share::SCN &gts);
+  virtual int lock_config_change(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const int64_t lock_owner,
+      const int64_t lock_timeout);
+  virtual int unlock_config_change(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const int64_t lock_owner,
+      const int64_t lock_timeout);
+  virtual int get_config_change_lock_stat(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      int64_t &palf_lock_owner,
+      bool &is_locked);
 
 private:
   bool is_inited_;

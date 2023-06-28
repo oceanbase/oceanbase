@@ -29,8 +29,7 @@ public:
       const common::ObArray<share::ObLSID> &lock_ls_list, const common::ObMemberList &member_list,
       const ObTransferLockStatus &status, common::ObMySQLProxy &sql_proxy);
   static int lock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status, ObLS *ls,
-      common::ObMySQLProxy &sql_proxy);
+      const common::ObMemberList &member_list, const ObTransferLockStatus &status, common::ObMySQLProxy &sql_proxy);
   static int unlock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
       const common::ObMemberList &member_list, const ObTransferLockStatus &status, common::ObMySQLProxy &sql_proxy);
 
@@ -50,9 +49,12 @@ private:
 
 private:
   /* palf lock config*/
-  static int try_lock_config_change(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, ObLS *ls);
-  static int record_config_change_lock_stat(const ObTransferTaskLockInfo &lock_info, ObLS *ls);
-  static int unlock_config_change(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, ObLS *ls);
+  static int try_lock_config_change_(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout);
+  static int try_lock_config_change_fallback_(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout);
+  static int get_config_change_lock_stat_(const ObTransferTaskLockInfo &lock_info, int64_t &palf_lock_owner, bool &is_locked);
+  static int get_config_change_lock_stat_fallback_(const ObTransferTaskLockInfo &lock_info, int64_t &palf_lock_owner, bool &is_locked);
+  static int unlock_config_change_(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout);
+  static int unlock_config_change_fallback_(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout);
 
 private:
   static int check_lock_status_(
@@ -60,7 +62,7 @@ private:
   static int check_unlock_status_(const bool palf_is_locked, const int64_t palf_lock_owner,
       const int64_t inner_table_lock_owner, bool &need_unlock, bool &need_relock_before_unlock);
   static int relock_before_unlock_(const ObTransferTaskLockInfo &lock_info, const int64_t palf_lock_owner,
-      const int64_t lock_timeout, ObLS *ls);
+      const int64_t lock_timeout);
 
 private:
   static const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;  // 10s
