@@ -1027,6 +1027,8 @@ int ObSql::do_real_prepare(const ObString &sql,
       LOG_WARN("generate stmt failed", K(ret));
     } else if (!is_from_pl
               && !is_inner_sql
+              && !(ObStmt::is_dml_write_stmt(stmt_type) && // returning into from oci not supported
+                   static_cast<ObDelUpdStmt*>(basic_stmt)->get_returning_into_exprs().count() > 0)
               && enable_udr
               && OB_FAIL(ObUDRUtils::match_udr_item(sql, session, allocator, item_guard))) {
       if (!ObSQLUtils::check_need_disconnect_parser_err(ret)) {
