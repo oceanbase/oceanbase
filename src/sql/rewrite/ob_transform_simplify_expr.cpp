@@ -2679,7 +2679,7 @@ int ObTransformSimplifyExpr::remove_case_when_predicate(ObDMLStmt *stmt, bool &t
 int ObTransformSimplifyExpr::inner_remove_case_when_predicate(
                         ObQueryCtx *query_ctx,
                         ObRawExpr *&expr, 
-                        ObIArray<ObRawExpr*> &check_exprs,
+                        const ObIArray<ObRawExpr*> &check_exprs,
                         bool &trans_happened) 
 {
   int ret = OB_SUCCESS;
@@ -2709,7 +2709,7 @@ int ObTransformSimplifyExpr::inner_remove_case_when_predicate(
 
 int ObTransformSimplifyExpr::do_remove_case_when_predicate(ObQueryCtx *query_ctx,
                                                            ObRawExpr *&expr,
-                                                           ObIArray<ObRawExpr*> &check_exprs,
+                                                           const ObIArray<ObRawExpr*> &check_exprs,
                                                            bool &trans_happened) {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -2734,14 +2734,19 @@ int ObTransformSimplifyExpr::do_remove_case_when_predicate(ObQueryCtx *query_ctx
         LOG_WARN("unexpect null case when expr", K(when), K(then), K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < check_exprs.count(); ++i) {
-          if (when->same_as(*check_exprs.at(i), &context)) {
-            if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
-              LOG_WARN("append equal param info failed", K(ret));
-            } else {
-              expr = then;
-              trans_happened = true;
-              break;
-            }
+          // if (when->same_as(*check_exprs.at(i), &context)) {
+          //   if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
+          //     LOG_WARN("append equal param info failed", K(ret));
+          //   } else {
+          //     expr = then;
+          //     trans_happened = true;
+          //     break;
+          //   }
+          // }
+          if (ObOptimizerUtil::find_item(check_exprs, when)) {
+            expr = then;
+            trans_happened = true;
+            break;
           }
         }
       }

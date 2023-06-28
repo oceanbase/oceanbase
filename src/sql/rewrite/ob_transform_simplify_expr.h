@@ -170,11 +170,11 @@ private:
   int inner_remove_case_when_predicate(
                                        ObQueryCtx *query_ctx,
                                        ObRawExpr *&expr,
-                                       ObIArray<ObRawExpr*> &check_exprs,
+                                       const ObIArray<ObRawExpr*> &check_exprs,
                                        bool &trans_happened);
   int do_remove_case_when_predicate(ObQueryCtx *query_ctx, 
                                     ObRawExpr *&expr, 
-                                    ObIArray<ObRawExpr*> &check_exprs, 
+                                    const ObIArray<ObRawExpr*> &check_exprs, 
                                     bool &trans_happened);
   
   int convert_case_when_predicate(ObDMLStmt *stmt, bool &trans_happened);
