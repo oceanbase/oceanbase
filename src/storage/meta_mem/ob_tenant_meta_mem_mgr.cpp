@@ -469,13 +469,17 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
     }
     const int64_t recycled_cnt = sstable_cnt + data_memtable_cnt + tx_data_memtable_cnt + tx_ctx_memtable_cnt +
         lock_memtable_cnt;
+    const int64_t tablets_mem = tablet_buffer_pool_.total() + large_tablet_buffer_pool_.total() + full_tablet_creator_.total();
     if (recycled_cnt > 0) {
       FLOG_INFO("Successfully finish table gc", K(sstable_cnt), K(data_memtable_cnt),
-        K(tx_data_memtable_cnt), K(tx_ctx_memtable_cnt), K(lock_memtable_cnt),
-        K(pending_cnt), K(recycled_cnt), K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(ddl_kv_pool_), K(memtable_pool_),
+        K(tx_data_memtable_cnt), K(tx_ctx_memtable_cnt), K(lock_memtable_cnt), K(pending_cnt), K(recycled_cnt),
+        K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem),
+        K(ddl_kv_pool_), K(memtable_pool_),
         "tablet count", tablet_map_.count());
     } else if (REACH_COUNT_INTERVAL(100)) {
-      FLOG_INFO("Recycle 0 table", K(ret), K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(ddl_kv_pool_), K(memtable_pool_),
+      FLOG_INFO("Recycle 0 table", K(ret),
+          K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem),
+          K(ddl_kv_pool_), K(memtable_pool_),
           "tablet count", tablet_map_.count());
     }
   }
