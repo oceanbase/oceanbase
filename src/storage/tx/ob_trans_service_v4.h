@@ -357,6 +357,7 @@ int wait_follower_readable_(ObLS &ls,
                             const share::SCN &snapshot,
                             const ObTxReadSnapshot::SRC src);
 MonotonicTs get_req_receive_mts_();
+bool is_ls_dropped_(const share::ObLSID ls_id);
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

@@ -557,7 +557,13 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
     auto &p = parts_[i];
     if (p.id_ == a.id_) {
       hit = true;
-      if (p.epoch_ <= 0) {
+      if (p.epoch_ == ObTxPart::EPOCH_DEAD) {
+        if (a.epoch_ != ObTxPart::EPOCH_DEAD) {
+          flags_.PART_EPOCH_MISMATCH_ = true;
+          ret = OB_TRANS_NEED_ROLLBACK;
+          TRANS_LOG(WARN, "epoch missmatch", K(ret), K(a), K(p));
+        }
+      } else if (p.epoch_ <= 0) {
         p.epoch_ = a.epoch_;
       } else if (a.epoch_ > 0 && p.epoch_ != a.epoch_) {
         flags_.PART_EPOCH_MISMATCH_ = true;
@@ -567,7 +573,7 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
       if (OB_SUCC(ret)) {
         p.addr_ = a.addr_;
         p.first_scn_ = std::min(a.first_scn_, p.first_scn_);
-        p.last_scn_ = std::max(a.last_scn_, p.last_scn_);
+        p.last_scn_ = (INT64_MAX == p.last_scn_) ? a.last_scn_ : std::max(a.last_scn_, p.last_scn_);
         p.last_touch_ts_ = exec_info_reap_ts_ + 1;
       }
       break;
@@ -599,7 +605,7 @@ int ObTxDesc::update_clean_part(const share::ObLSID &id,
   p.epoch_ = epoch;
   p.addr_ = addr;
   p.first_scn_ = INT64_MAX;
-  p.last_scn_ = INT64_MIN;
+  p.last_scn_ = ObSequence::get_max_seq_no();
   return update_part_(p, false);
 }
 

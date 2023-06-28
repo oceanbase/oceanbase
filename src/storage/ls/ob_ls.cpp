@@ -1810,6 +1810,20 @@ int ObLS::set_ls_rebuild()
   return ret;
 }
 
+bool ObLS::is_in_gc()
+{
+  int bret = false;
+  int ret = OB_SUCCESS;
+  logservice::LSGCState state;
+  if (OB_FAIL(get_gc_state(state))) {
+    LOG_WARN("get ls gc state fail", K(state));
+  } else if (logservice::LSGCState::INVALID_LS_GC_STATE == state) {
+    LOG_WARN("invalid ls gc state", K(state));
+  } else if (state != logservice::LSGCState::NORMAL) {
+    bret = true;
+  }
+  return bret;
+}
 
 }
 }

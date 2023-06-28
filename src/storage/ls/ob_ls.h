@@ -224,6 +224,7 @@ public:
   void set_create_state(const ObInnerLSStatus new_status);
   ObInnerLSStatus get_create_state() const;
   bool is_need_gc() const;
+  bool is_in_gc();
   bool is_enable_for_restore() const;
   // for rebuild
   // remove inner tablet, the memtable and minor sstable of data tablet, disable replay
