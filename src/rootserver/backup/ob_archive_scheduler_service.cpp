@@ -36,13 +36,16 @@ ObArchiveSchedulerService::ObArchiveSchedulerService()
 {
 }
 
-int ObArchiveSchedulerService::mtl_init(ObArchiveSchedulerService *&archive_service)
+int ObArchiveSchedulerService::init()
 {
   int ret = OB_SUCCESS;
   common::ObMySQLProxy *sql_proxy = nullptr;
   obrpc::ObSrvRpcProxy *rpc_proxy = nullptr;
   share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
-  if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("archive scheduler init twice", K(ret));
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
   } else if (OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
@@ -51,27 +54,12 @@ int ObArchiveSchedulerService::mtl_init(ObArchiveSchedulerService *&archive_serv
   } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service should not be NULL", K(ret), KP(schema_service));
-  } else if (OB_FAIL(archive_service->init(*schema_service, *rpc_proxy, *sql_proxy))) {
-    LOG_WARN("fail to init tenant archive service", K(ret));
-  }
-  return ret;
-}
-
-int ObArchiveSchedulerService::init(
-  share::schema::ObMultiVersionSchemaService &schema_service,
-  ObSrvRpcProxy &rpc_proxy,
-  common::ObMySQLProxy &sql_proxy)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("archive scheduler init twice", K(ret));
   } else if (OB_FAIL(create("ArchiveSvr", *this, ObWaitEventIds::BACKUP_ARCHIVE_SERVICE_COND_WAIT))) {
     LOG_WARN("failed to create log archive thread", K(ret));
   } else {
-    schema_service_ = &schema_service;
-    rpc_proxy_ = &rpc_proxy;
-    sql_proxy_ = &sql_proxy;
+    schema_service_ = schema_service;
+    rpc_proxy_ = rpc_proxy;
+    sql_proxy_ = sql_proxy;
     tenant_id_ = gen_user_tenant_id(MTL_ID());
     is_inited_ = true;
   }

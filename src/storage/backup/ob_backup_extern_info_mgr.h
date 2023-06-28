@@ -24,7 +24,6 @@
 
 #ifndef STORAGE_LOG_STREAM_BACKUP_EXTERN_INFO_MGR_H_
 #define STORAGE_LOG_STREAM_BACKUP_EXTERN_INFO_MGR_H_
-// TODO(chongrong.th) merge this file to ob_backup_data_store.h later.
 namespace oceanbase {
 namespace backup {
 

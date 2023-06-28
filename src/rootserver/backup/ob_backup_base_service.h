@@ -12,6 +12,7 @@
 #define OCEANBASE_ROOTSERVER_OB_BACKUP_BASE_SERVICE_H_
 
 #include "lib/thread/thread_mgr_interface.h"
+#include "rootserver/ob_tenant_thread_helper.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "logservice/ob_log_base_type.h"
 #include "storage/ls/ob_ls.h"
@@ -44,6 +45,8 @@ public:
   void wait();
   void idle();
   void wakeup();
+  void mtl_thread_stop();
+  void mtl_thread_wait();
   void set_idle_time(const int64_t interval_time_us) { interval_idle_time_us_ = interval_time_us; }
   int64_t get_idle_time() const { return interval_idle_time_us_; }
   // role change

@@ -824,6 +824,8 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
         ret = OB_ERR_UNEXPECTED;
          LOG_WARN("tablet restore status is invalid", K(ret), K(tablet_id), K(action_restore_status),
              K(tablet_restore_status), K(ctx_->arg_));
+      } else if (ObTabletRestoreStatus::is_undefined(tablet_restore_status)) {
+        LOG_INFO("tablet restore status is undefined, skip restore it", K(ret));
       } else if (OB_FAIL(ObTabletRestoreStatus::check_can_change_status(tablet_restore_status,
           action_restore_status, can_change))) {
         LOG_WARN("failed to check can change status", K(ret), K(tablet_restore_status),
