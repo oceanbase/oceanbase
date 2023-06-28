@@ -1619,7 +1619,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         OZ (ObResolverUtils::resolve_synonym_object_recursively(
           schema_checker, synonym_checker,
           tenant_id, db_id, name, object_db_id, object_name, exist));
-        if (exist && (OB_INVALID_INDEX == parent_id || parent_id == object_db_id)) {
+        if (exist) {
           OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx));
         }
       }
