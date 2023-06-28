@@ -51,7 +51,7 @@ public:
       const share::ObTransferTabletInfo &tablet_info,
       mds::BufferCtx &buffer_ctx);
 protected:
-  virtual bool is_replay_update_user_data_() const override
+  virtual bool is_replay_update_tablet_status_() const override
   {
     return true;
   }
@@ -569,7 +569,7 @@ public:
       mds::BufferCtx &user_ctx);
 
 protected:
-  bool is_replay_update_user_data_() const override
+  bool is_replay_update_tablet_status_() const override
   {
     return true;
   }

@@ -128,7 +128,7 @@ int ObTabletReplayExecutor::replay_get_tablet_(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "log stream should not be NULL", KR(ret), K(scn));
-  } else if (is_replay_update_user_data_()) {
+  } else if (is_replay_update_tablet_status_()) {
     if (OB_FAIL(ls->replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
       CLOG_LOG(WARN, "replay get table failed", KR(ret), "ls_id", ls->get_ls_id());
     }
@@ -140,7 +140,7 @@ int ObTabletReplayExecutor::replay_get_tablet_(
 
 int ObTabletReplayExecutor::replay_check_restore_status_(storage::ObTabletHandle &tablet_handle)
 {
-  const bool update_user_data = is_replay_update_user_data_();
+  const bool update_user_data = is_replay_update_tablet_status_();
   return ObTabletReplayExecutor::replay_check_restore_status(tablet_handle, update_user_data);
 }
 
@@ -179,7 +179,7 @@ int ObTabletReplayExecutor::check_can_skip_replay_(
   can_skip = false;
   ObLS *ls = nullptr;
   share::SCN tablet_change_scn = share::SCN::min_scn();
-  if (!is_replay_update_user_data_()) {
+  if (!is_replay_update_tablet_status_()) {
     can_skip = false;
   } else if (!scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

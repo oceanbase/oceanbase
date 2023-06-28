@@ -2189,7 +2189,7 @@ int ObTablet::get_read_tables(
   return ret;
 }
 
-// TODO (wenjinyu.wjy) need to be moved to ObLSTableService
+// TODO (wenjinyu.wjy) need to be moved to ObLSTableService in 4.3
 int ObTablet::get_src_tablet_read_tables_(
     const int64_t snapshot_version,
     const bool allow_no_ready_read,
@@ -2229,7 +2229,6 @@ int ObTablet::get_src_tablet_read_tables_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(user_data));
   }
-  // TODO (wenjinyu.wjy) need to supplement the continuity check of src and dest tables
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(iter.table_store_iter_.transfer_src_table_store_handle_)) {
       void *meta_hdl_buf = ob_malloc(sizeof(ObStorageMetaHandle), ObMemAttr(MTL_ID(), "TransferMetaH"));
@@ -2275,8 +2274,6 @@ int ObTablet::auto_get_read_tables(
     bool allow_not_ready = succ_get_src_tables ? true : allow_no_ready_read;
     if (OB_FAIL(get_read_tables_(snapshot_version, iter.table_store_iter_, iter.table_store_iter_.table_store_handle_, allow_not_ready))) {
       LOG_WARN("failed to get read tables from table store", K(ret), K(*this));
-    } else if (OB_UNLIKELY(succ_get_src_tables)) {
-      LOG_DEBUG("succ get read tables", K(iter), K(allow_not_ready), K(snapshot_version), K(tablet_meta_)); // TODO (wenjinyu.wjy) it will be deleted later
     }
   }
   return ret;
