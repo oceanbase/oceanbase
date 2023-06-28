@@ -425,7 +425,7 @@ ObStorageMetaHandle::~ObStorageMetaHandle()
 int ObStorageMetaHandle::get_value(const ObStorageMetaValue *&value)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(wait(GCONF._data_storage_io_timeout / 1000L))) {
+  if (!io_handle_.is_empty() && OB_FAIL(wait(GCONF._data_storage_io_timeout / 1000L))) { /*wait if not hit cache*/
     LOG_WARN("fail to wait", K(ret), KPC(this));
   } else {
     value = cache_handle_.get_cache_value()->value_;
@@ -463,12 +463,10 @@ bool ObStorageMetaHandle::is_valid() const
 int ObStorageMetaHandle::wait(const int64_t timeout_ms)
 {
   int ret = OB_SUCCESS;
-  UNUSED(timeout_ms);
-  // TODO(zhuixin.gsy) use timeout_ms to wait
   if (OB_UNLIKELY(!phy_addr_.is_block())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected meta address", K(ret), K_(phy_addr));
-  } else if (OB_FAIL(io_handle_.wait())) {
+  } else if (OB_FAIL(io_handle_.wait(timeout_ms))) {
     LOG_WARN("fail to wait io handle", K(ret), K(io_handle_));
   }
   return ret;

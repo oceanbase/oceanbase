@@ -203,7 +203,7 @@ int ObFullTabletCreator::persist_tablet()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected not memory tablet addr", K(ret), K(key), K(addr), K(old_handle), K(old_tablet->is_empty_shell()));
     } else if (addr != old_addr) {
-      if (addr.is_block()) {
+      if (addr.is_disked()) {
         LOG_INFO("full tablet has been persisted, skip this", K(ret), K(key), K(old_addr), K(addr));
       } else {
         ret = OB_NOT_THE_OBJECT; // create_memtable may change the addr, push back to queue
