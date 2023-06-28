@@ -83,7 +83,7 @@ int calc_unistr(const ObString &src,
       for (int i = 0; OB_SUCC(ret) && i < 4; ++i) {
         if (!scanner.next_character(encoding_inner, wchar_inner, ret)) {
           if (OB_SUCC(ret)) {
-            ret = OB_ERR_MUST_BE_FOLLOWED_BY_FOUR_HEXDECIMAL_CHARACTERS_OR_ANOTHER;
+            ret = OB_ERR_MUST_BE_FOLLOWED_BY_FOUR_HEXADECIMAL_CHARACTERS_OR_ANOTHER;
           }
           LOG_WARN("fail to get next character", K(ret));
         } else if (0 == i && '\\' == wchar_inner) {
@@ -105,7 +105,7 @@ int calc_unistr(const ObString &src,
           } else if ('a' <= wchar_inner && wchar_inner <= 'f') {
             value = wchar_inner - 'a' + 10;
           } else {
-            ret = OB_ERR_MUST_BE_FOLLOWED_BY_FOUR_HEXDECIMAL_CHARACTERS_OR_ANOTHER;
+            ret = OB_ERR_MUST_BE_FOLLOWED_BY_FOUR_HEXADECIMAL_CHARACTERS_OR_ANOTHER;
             LOG_WARN("fail to get next character", K(ret));
           }
           if (OB_SUCC(ret)) {

@@ -40,7 +40,7 @@ MySQL:
 
 Oracle:
 	Oracle Error Code: ORA-01017
-	Message: invalid username/password; logon deniedd
+	Message: invalid username/password; logon denied
 	Related OceanBase Error Code:
 		OB_ERR_LOGIN_DENIED(-5845)
 $ob_error 5858
