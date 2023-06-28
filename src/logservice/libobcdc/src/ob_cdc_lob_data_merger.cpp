@@ -16,6 +16,7 @@
 #include "ob_cdc_lob_aux_meta_storager.h"    // ObCDCLobAuxMetaStorager
 #include "ob_log_instance.h"                 // TCTX
 #include "ob_log_formatter.h"                // IObLogFormatter
+#include "ob_log_trace_id.h"                 // ObLogTraceIdGuard
 
 using namespace oceanbase::common;
 
@@ -130,6 +131,7 @@ int ObCDCLobDataMerger::handle(void *data, const int64_t thread_index, volatile 
 {
   int ret = OB_SUCCESS;
   set_cdc_thread_name("LobDtMerger", thread_index);
+  ObLogTraceIdGuard trace_guard;
   LobColumnFragmentCtx *task = static_cast<LobColumnFragmentCtx *>(data);
 
   if (IS_NOT_INIT) {

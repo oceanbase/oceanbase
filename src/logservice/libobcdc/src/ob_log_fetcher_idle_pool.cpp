@@ -21,6 +21,7 @@
 
 #include "ob_log_instance.h"              // IObLogErrHandler
 #include "ob_ls_worker.h"                 // IObLSWorker
+#include "ob_log_trace_id.h"              // ObLogTraceIdGuard
 
 using namespace oceanbase::common;
 
@@ -143,6 +144,7 @@ void ObLogFetcherIdlePool::mark_stop_flag()
 void ObLogFetcherIdlePool::run(const int64_t thread_index)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not inited");

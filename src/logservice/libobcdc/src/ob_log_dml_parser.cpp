@@ -21,6 +21,7 @@
 #include "ob_log_part_trans_parser.h"   // IObLogPartTransParser
 #include "ob_ms_queue_thread.h"         // BitSet
 #include "ob_log_resource_collector.h"  // IObLogResourceCollector
+#include "ob_log_trace_id.h"
 
 using namespace oceanbase::common;
 
@@ -161,6 +162,7 @@ int ObLogDmlParser::handle(void *data,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   ObLogEntryTask *task = (ObLogEntryTask *)(data);
   PartTransTask *part_trans_task = NULL;
 

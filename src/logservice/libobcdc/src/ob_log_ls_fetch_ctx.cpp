@@ -527,11 +527,7 @@ int LSFetchCtx::read_miss_tx_log(
   } else {
 
     if (OB_FAIL(part_trans_resolver_->read(buf, buf_len, pos, lsn, submit_ts, serve_info_, missing, tsi))) {
-      if (OB_ITEM_NOT_SETTED == ret) {
-        // if found new generated miss log while resolving misslog, FetchStream will
-        // found new_generated_missing_info not empty and goon with misslog process
-        ret = OB_SUCCESS;
-      } else {
+      if (OB_ITEM_NOT_SETTED != ret) {
         LOG_ERROR("resolve miss_log fail", KR(ret), K(log_entry), K(log_base_header), K(lsn), K(missing));
       }
     }

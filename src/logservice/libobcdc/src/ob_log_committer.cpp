@@ -29,6 +29,7 @@
 #include "ob_log_binlog_record_pool.h"  // IObLogBRPool
 #include "ob_log_config.h"              // ObLogConfig
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 #define _STAT(level, fmt, args...) _OBLOG_COMMITTER_LOG(level, "[STAT] [COMMITTER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_COMMITTER_LOG(level, "[STAT] [COMMITTER] " fmt, ##args)
@@ -704,6 +705,7 @@ int ObLogCommitter::dispatch_heartbeat_binlog_record_(const int64_t heartbeat_ti
 void ObLogCommitter::heartbeat_routine()
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("committer has not been initialized");
@@ -777,6 +779,7 @@ void ObLogCommitter::heartbeat_routine()
 void ObLogCommitter::commit_routine()
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("committer has not been initialized");

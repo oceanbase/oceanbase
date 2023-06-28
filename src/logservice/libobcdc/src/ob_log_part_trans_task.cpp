@@ -2141,6 +2141,7 @@ PartTransTask::PartTransTask() :
     ref_cnt_(0),
     multi_data_source_node_arr_(),
     multi_data_source_info_(),
+    segment_buf_(),
     checkpoint_seq_(0),
     global_trans_seq_(0),
     global_schema_version_(OB_INVALID_VERSION),
@@ -2275,6 +2276,7 @@ void PartTransTask::reset()
   ref_cnt_ = 0;
   multi_data_source_node_arr_.reset();
   multi_data_source_info_.reset();
+  segment_buf_.reset();
   checkpoint_seq_ = 0;
   global_trans_seq_ = 0;
   global_schema_version_ = OB_INVALID_VERSION;

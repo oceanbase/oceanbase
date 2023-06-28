@@ -42,38 +42,38 @@ IObCDCPartTransResolver::MissingLogInfo::~MissingLogInfo()
 IObCDCPartTransResolver::MissingLogInfo
 &IObCDCPartTransResolver::MissingLogInfo::operator=(const IObCDCPartTransResolver::MissingLogInfo &miss_log_info)
 {
-  this->miss_redo_or_state_lsn_arr_ = miss_log_info.miss_redo_or_state_lsn_arr_;
-  this->miss_record_log_lsn_ = miss_log_info.miss_record_log_lsn_;
+  this->miss_redo_lsn_arr_ = miss_log_info.miss_redo_lsn_arr_;
+  this->miss_record_or_state_log_lsn_ = miss_log_info.miss_record_or_state_log_lsn_;
   this->need_reconsume_commit_log_entry_ = miss_log_info.need_reconsume_commit_log_entry_;
   this->is_resolving_miss_log_ = miss_log_info.is_resolving_miss_log_;
   return *this;
 }
 
-int IObCDCPartTransResolver::MissingLogInfo::set_miss_record_log_lsn(const palf::LSN &record_log_lsn)
+int IObCDCPartTransResolver::MissingLogInfo::set_miss_record_or_state_log_lsn(const palf::LSN &record_log_lsn)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!record_log_lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("set_miss_record_log_lsn invalid record_log_lsn", KR(ret), K(record_log_lsn));
-  } else if (OB_UNLIKELY(miss_record_log_lsn_.is_valid())) {
+    LOG_ERROR("set_miss_record_or_state_log_lsn invalid record_log_lsn", KR(ret), K(record_log_lsn));
+  } else if (OB_UNLIKELY(miss_record_or_state_log_lsn_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("miss_record_log_lsn already set, should not set again!", KR(ret), K(record_log_lsn), KPC(this));
+    LOG_ERROR("miss_record_or_state_log_lsn already set, should not set again!", KR(ret), K(record_log_lsn), KPC(this));
   } else {
-    miss_record_log_lsn_ = record_log_lsn;
+    miss_record_or_state_log_lsn_ = record_log_lsn;
   }
 
   return ret;
 }
 
-int IObCDCPartTransResolver::MissingLogInfo::get_miss_record_log_lsn(palf::LSN &miss_record_lsn) const
+int IObCDCPartTransResolver::MissingLogInfo::get_miss_record_or_state_log_lsn(palf::LSN &miss_record_lsn) const
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!miss_record_log_lsn_.is_valid())) {
+  if (OB_UNLIKELY(!miss_record_or_state_log_lsn_.is_valid())) {
     ret = OB_ENTRY_NOT_EXIST;
   } else {
-    miss_record_lsn = miss_record_log_lsn_;
+    miss_record_lsn = miss_record_or_state_log_lsn_;
   }
 
   return ret;
@@ -86,9 +86,9 @@ int IObCDCPartTransResolver::MissingLogInfo::push_back_single_miss_log_lsn(const
   if (OB_UNLIKELY(!misslog_lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("misslog lsn invalid", KR(ret), K(misslog_lsn));
-  } else if (OB_FAIL(miss_redo_or_state_lsn_arr_.push_back(misslog_lsn))) {
+  } else if (OB_FAIL(miss_redo_lsn_arr_.push_back(misslog_lsn))) {
     LOG_ERROR("push_back misslog lsn to missinglog_lsn_array fail", KR(ret),
-        K(misslog_lsn), K_(miss_redo_or_state_lsn_arr));
+        K(misslog_lsn), K_(miss_redo_lsn_arr));
   }
 
   return ret;
@@ -102,9 +102,9 @@ int IObCDCPartTransResolver::MissingLogInfo::push_back_missing_log_lsn_arr(const
   for(int64_t idx = 0; OB_SUCC(ret) && idx < misslog_lsn_arr.count(); idx++) {
     const palf::LSN &lsn = misslog_lsn_arr.at(idx);
 
-    if (OB_FAIL(miss_redo_or_state_lsn_arr_.push_back(misslog_lsn_arr.at(idx)))) {
+    if (OB_FAIL(miss_redo_lsn_arr_.push_back(misslog_lsn_arr.at(idx)))) {
       LOG_ERROR("push_back_missing_log_lsn_arr failed", KR(ret),
-          K(misslog_lsn_arr), K(idx), K(miss_redo_or_state_lsn_arr_), K(lsn));
+          K(misslog_lsn_arr), K(idx), K(miss_redo_lsn_arr_), K(lsn));
     }
   }
 
@@ -113,9 +113,9 @@ int IObCDCPartTransResolver::MissingLogInfo::push_back_missing_log_lsn_arr(const
 
 int64_t IObCDCPartTransResolver::MissingLogInfo::get_total_misslog_cnt() const
 {
-  int64_t cnt_ret = miss_redo_or_state_lsn_arr_.count();
+  int64_t cnt_ret = miss_redo_lsn_arr_.count();
 
-  if (miss_record_log_lsn_.is_valid()) {
+  if (miss_record_or_state_log_lsn_.is_valid()) {
     cnt_ret +=1;
   }
 
@@ -125,7 +125,7 @@ int64_t IObCDCPartTransResolver::MissingLogInfo::get_total_misslog_cnt() const
 int IObCDCPartTransResolver::MissingLogInfo::sort_and_unique_missing_log_lsn()
 {
   auto fn = [](palf::LSN &lsn1, palf::LSN &lsn2) { return lsn1 < lsn2; };
-  return sort_and_unique_array(miss_redo_or_state_lsn_arr_, fn);
+  return sort_and_unique_array(miss_redo_lsn_arr_, fn);
 }
 
 // ***************  ObCDCPartTransResolver public functions ***************** //
@@ -189,11 +189,22 @@ int ObCDCPartTransResolver::read(
 
     while (OB_SUCC(ret)) {
       transaction::ObTxLogHeader tx_header;
-      if (OB_FAIL(tx_log_block.get_next_log(tx_header))) {
+      //
+      if (OB_FAIL(read_trans_header_(
+          lsn,
+          tx_log_block_header.get_tx_id(),
+          missing_info.is_resolving_miss_log(),
+          tx_log_block,
+          tx_header))) {
         if (OB_ITER_END != ret) {
-          LOG_ERROR("get_next_log from tx_log_block failed", KR(ret), K_(tls_id), K(lsn),
+          LOG_ERROR("read_trans_header_ from tx_log_block failed", KR(ret), K_(tls_id), K(lsn),
             K(tx_log_block_header), K(tx_log_block), K(tx_header), K(has_redo_in_cur_entry));
         }
+      } else if (OB_UNLIKELY(transaction::ObTxLogType::TX_BIG_SEGMENT_LOG == tx_header.get_tx_log_type())) {
+        // ignore.
+        LOG_DEBUG("ignore tx_big_segment_log which is not collect complete",
+              K_(tls_id), K(lsn), K(tx_log_block_header), K(tx_header));
+        ret = OB_ITER_END;
       } else if (missing_info.need_reconsume_commit_log_entry()
           && ! (transaction::ObTxLogType::TX_COMMIT_LOG == tx_header.get_tx_log_type())) {
         // ignore tx_log which is not commit_log if is_reconsuming_commit_log_entry.
@@ -269,6 +280,57 @@ int ObCDCPartTransResolver::offline(volatile bool &stop_flag)
 }
 
 // ***************  ObCDCPartTransResolver private functions ***************** //
+
+
+int ObCDCPartTransResolver::read_trans_header_(
+    const palf::LSN &lsn,
+    const transaction::ObTransID &tx_id,
+    const bool is_resolving_miss_log,
+    transaction::ObTxLogBlock &tx_log_block,
+    transaction::ObTxLogHeader &tx_header)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(tx_log_block.get_next_log(tx_header))) {
+    if (OB_LOG_ALREADY_SPLIT == ret) {
+      // need use big_segment_buf
+      PartTransTask *part_trans_task = NULL;
+
+      if (OB_UNLIKELY(transaction::ObTxLogType::TX_BIG_SEGMENT_LOG != tx_header.get_tx_log_type())) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_ERROR("expected TX_BIG_SEGMENT_LOG but not", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(tx_header), K(is_resolving_miss_log));
+      } else if (OB_FAIL(obtain_task_(tx_id, part_trans_task, is_resolving_miss_log))) {
+        LOG_ERROR("obtain_task_ failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(is_resolving_miss_log));
+      } else if (OB_FAIL(tx_log_block.get_next_log(tx_header, part_trans_task->get_segment_buf()))) {
+        if (OB_LOG_TOO_LARGE == ret) {
+          // note: will change ret to OB_SUCCESS if push_fetched_log_entry success.
+          if (OB_FAIL(part_trans_task->push_fetched_log_entry(lsn))) {
+            LOG_ERROR("push_fetched_log_entry of BigSegmentBuf Log failed", KR(ret));
+          } else {
+            LOG_DEBUG("handle_big_segment_buf part done", K_(tls_id), K(tx_id), K(lsn), K(tx_header));
+          }
+        } else if (OB_NO_NEED_UPDATE == ret) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("consume tx_log_block while segment_buf is collected done and not reseted", KR(ret),
+              K_(tls_id), K(lsn), K(tx_id), K(tx_header));
+        } else if (OB_START_LOG_CURSOR_INVALID == ret) {
+          // consume tx_big_segment_log in middle of parts log.
+          // 1. reset segment buf and reset ret to OB_SUCCESS
+          // 2. not mark fetched_logentry_list.
+          // 3. wait misslog to find all log_entry of the TX_BIG_SEGMENT_LOG
+          part_trans_task->get_segment_buf()->reset();
+          ret = OB_SUCCESS;
+          LOG_DEBUG("found half_part of big_segment_buf tx_log, should ignore and fetch by misslog later",
+              K_(tls_id), K(tx_id), K(lsn), K(tx_header));
+        }
+      }
+    } else if (OB_ITER_END != ret) {
+      LOG_ERROR("get_next_log from tx_log_block failed", KR(ret), K_(tls_id), K(lsn), K(tx_id), K(is_resolving_miss_log), K(tx_header));
+    }
+  }
+
+  return ret;
+}
 
 int ObCDCPartTransResolver::read_trans_log_(
     const transaction::ObTxLogBlockHeader &tx_log_block_header,
@@ -424,7 +486,13 @@ int ObCDCPartTransResolver::handle_redo_(
     LOG_ERROR("obtain_task_ fail", KR(ret), K_(tls_id), K(tx_id), K(lsn),
         K(handling_miss_log));
   } else if (OB_FAIL(push_fetched_log_entry_(lsn, *task))) {
-    LOG_ERROR("push_fetched_log_entry failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), KPC(task));
+    if (OB_ENTRY_EXIST == ret) {
+      LOG_WARN("redo already fetched, ignore", KR(ret), K_(tls_id), K(tx_id), K(lsn),
+          "task_sorted_log_entry_info", task->get_sorted_log_entry_info());
+      ret = OB_SUCCESS;
+    } else {
+      LOG_ERROR("push_fetched_log_entry failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), KPC(task));
+    }
   } else if (OB_FAIL(task->push_redo_log(
       tx_id,
       lsn,
@@ -504,9 +572,9 @@ int ObCDCPartTransResolver::handle_record_(
       LOG_ERROR("obtain PartTransTask failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(record_log), K(missing_info));
     } else if (OB_FAIL(part_trans_task->push_back_recored_redo_lsn_arr(prev_redo_lsns, lsn, false/*has_redo_in_cur_entry*/))) {
       LOG_ERROR("push_back_recored_redo_lsn_arr failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(record_log), K(prev_redo_lsns), KPC(part_trans_task));
-    } else if (OB_UNLIKELY(! missing_info.is_empty())) {
+    } else if (OB_UNLIKELY(missing_info.has_miss_record_or_state_log())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("expect empty missing_info while resolving record_log", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(record_log),
+      LOG_ERROR("expect prev miss_record_or_state_log handled while resolving record_log", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(record_log),
           K(missing_info), KPC(part_trans_task));
     } else if (is_resolving_miss_log) {
       // push back all prev_log_lsns into missing_info
@@ -515,7 +583,7 @@ int ObCDCPartTransResolver::handle_record_(
             K(missing_info), KPC(part_trans_task));
       } else if (is_first_record) {
         part_trans_task->mark_read_first_record();
-      } else if (OB_FAIL(missing_info.set_miss_record_log_lsn(prev_record_lsn))) {
+      } else if (OB_FAIL(missing_info.set_miss_record_or_state_log_lsn(prev_record_lsn))) {
         LOG_ERROR("push prev_record_lsn into missing_info failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(record_log),
             K(is_first_record), K(missing_info), KPC(part_trans_task));
       } else {
@@ -528,7 +596,7 @@ int ObCDCPartTransResolver::handle_record_(
       } else if (is_first_record) {
         part_trans_task->mark_read_first_record();
         LOG_DEBUG("mark_read_first_record", K_(tls_id), K(tx_id), K(lsn), K(record_log));
-      } else if (OB_FAIL(missing_info.set_miss_record_log_lsn(prev_record_lsn))) {
+      } else if (OB_FAIL(missing_info.set_miss_record_or_state_log_lsn(prev_record_lsn))) {
         LOG_ERROR("push prev_record_lsn into missing_info failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(record_log),
             K(is_first_record), K(missing_info), KPC(part_trans_task));
       }
@@ -621,6 +689,7 @@ int ObCDCPartTransResolver::handle_commit_info_(
     const transaction::ObXATransID &xid = commit_info_log.get_xid();
     const transaction::ObRedoLSNArray &prev_redo_lsns = commit_info_log.get_redo_lsns();
     const palf::LSN &prev_record_lsn = commit_info_log.get_prev_record_lsn();
+    const bool has_record_log = prev_record_lsn.is_valid();
 
     if (OB_FAIL(part_trans_task->set_commit_info(trace_id, trace_info, is_dup_tx, xid))) {
       LOG_ERROR("set_commit_info failed", KR(ret), K_(tls_id), K(lsn), K(commit_info_log), KPC(part_trans_task));
@@ -631,19 +700,21 @@ int ObCDCPartTransResolver::handle_commit_info_(
     } else if (OB_FAIL(part_trans_task->push_back_recored_redo_lsn_arr(prev_redo_lsns, lsn, has_redo_in_cur_entry))) {
       LOG_ERROR("push_back_recored_redo_lsn_arr failed", KR(ret), K(prev_redo_lsns), KPC(part_trans_task));
     } else if (is_resolving_miss_log) {
-      // TODO pushback prev_redo_lsns to missing_info;
       if (OB_FAIL(missing_info.push_back_missing_log_lsn_arr(prev_redo_lsns))) {
         LOG_ERROR("push_back_missing_log_lsn_arr fail", KR(ret), K(commit_info_log), K(missing_info), KPC(part_trans_task));
-      } else if (prev_record_lsn.is_valid() && OB_FAIL(missing_info.set_miss_record_log_lsn(prev_record_lsn))) {
-        LOG_ERROR("set_miss_record_log_lsn failed", KR(ret), K(commit_info_log), K(missing_info), KPC(part_trans_task));
+      } else if (prev_record_lsn.is_valid() && OB_FAIL(missing_info.set_miss_record_or_state_log_lsn(prev_record_lsn))) {
+        LOG_ERROR("set_miss_record_or_state_log_lsn failed", KR(ret), K(commit_info_log), K(missing_info), KPC(part_trans_task));
       }
     } else if (! part_trans_task->has_find_first_record()) {
       // check if (1) trans doesn't have record_log; (2) trans has record_log but found log_miss
-      if (OB_FAIL(check_redo_log_list_(prev_redo_lsns, *part_trans_task, missing_info))) {
+      if (OB_UNLIKELY(has_record_log && missing_info.need_reconsume_commit_log_entry())) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_ERROR("all record_log should already fetched while reconsume log_entry", KR(ret), K_(tls_id), K(commit_info_log));
+      } else if (OB_FAIL(check_redo_log_list_(prev_redo_lsns, *part_trans_task, missing_info))) {
         LOG_ERROR("check_redo_log_list_ failed", KR(ret), K(commit_info_log), K(missing_info), KPC(part_trans_task));
         // To handle log seq like: record redo redo redo commit_info, obcdc start after last record.
         // prev_record_log_lsn is valid && not find first record
-      } else if (prev_record_lsn.is_valid() && OB_FAIL(missing_info.set_miss_record_log_lsn(prev_record_lsn))) {
+      } else if (has_record_log && OB_FAIL(missing_info.set_miss_record_or_state_log_lsn(prev_record_lsn))) {
         LOG_ERROR("push prev_record_lsn failed", KR(ret), K(prev_record_lsn), K(missing_info), KPC(part_trans_task));
       }
     } else {
@@ -683,7 +754,7 @@ int ObCDCPartTransResolver::handle_prepare_(
     const palf::LSN &commit_info_lsn = prepare_log.get_prev_lsn();
 
     if (commit_info_lsn.is_valid()) {
-      if (OB_FAIL(missing_info.push_back_single_miss_log_lsn(commit_info_lsn))) {
+      if (OB_FAIL(missing_info.set_miss_record_or_state_log_lsn(commit_info_lsn))) {
         LOG_ERROR("push_back_missing_log_lsn fail", KR(ret), K_(tls_id), K(tx_id),
             K(prepare_log), K(commit_info_lsn), K(missing_info), KPC(part_trans_task));
       } else {
@@ -743,7 +814,8 @@ int ObCDCPartTransResolver::handle_commit_(
   } else if (OB_FAIL(obtain_task_(tx_id, part_trans_task, is_resolving_miss_log))) {
     LOG_ERROR("obtain_part_trans_task fail while reading commit log", KR(ret), K_(tls_id), K(tx_id), K(lsn),
         K(commit_log), K(missing_info));
-    // TODO 下面是否检查sys日志流里非DDL/非LS_TABLE的事务？
+  } else if (OB_FAIL(part_trans_task->push_multi_data_source_data(lsn, commit_log.get_multi_source_data(), true/*is_commit_log*/))) {
+    LOG_ERROR("push_multi_data_source_data failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(commit_log), KPC(part_trans_task));
   } else if (!part_trans_task->has_read_commit_info()) {
     if (is_resolving_miss_log) {
       // commit info is miss log and handled done, reconsumeing commit_log
@@ -770,7 +842,7 @@ int ObCDCPartTransResolver::handle_commit_(
         //   LOG_ERROR("handle unserverd single CommitLog(commit_log with invalid prev_log_lsn in dist_trans) failed",
         //       KR(ret), K_(tls_id), K(tx_id), K(commit_log), K(lsn));
         // }
-      } else if (OB_FAIL(missing_info.push_back_single_miss_log_lsn(prev_log_lsn))) {
+      } else if (OB_FAIL(missing_info.set_miss_record_or_state_log_lsn(prev_log_lsn))) {
         LOG_ERROR("push_back_single_miss_log_lsn failed", KR(ret), K_(tls_id), K(tx_id), K(commit_log), K(missing_info));
       } else {
         missing_info.set_need_reconsume_commit_log_entry();

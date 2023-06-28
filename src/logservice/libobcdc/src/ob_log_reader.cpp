@@ -21,6 +21,7 @@
 #include "ob_log_store_service.h"                // IObStoreService
 #include "ob_log_utils.h"                        // get_timestamp
 #include "ob_log_factory.h"                      // ReadLogBuf, ReadLogBufFactory
+#include "ob_log_trace_id.h"                     // ObLogTraceIdGuard
 
 using namespace oceanbase::common;
 
@@ -168,6 +169,7 @@ void ObLogReader::print_stat_info()
 int ObLogReader::handle(void *data, const int64_t thread_index, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   ObLogEntryTask *task = static_cast<ObLogEntryTask *>(data);
 
   if (OB_UNLIKELY(! inited_)) {

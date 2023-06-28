@@ -28,7 +28,7 @@
 #include "share/scn.h"
 //#include <cstdint>
 
-// #define OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+#define OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
 
 namespace oceanbase
 {

@@ -76,15 +76,15 @@ public:
 
     void reset()
     {
-      miss_redo_or_state_lsn_arr_.reset();
-      miss_record_log_lsn_.reset();
+      miss_redo_lsn_arr_.reset();
+      miss_record_or_state_log_lsn_.reset();
       need_reconsume_commit_log_entry_ = false;
       is_resolving_miss_log_ = false;
     }
   public:
     /// has misslog or not
     /// @retval bool      ture if has miss_log(including redo/commit_info/prepare/commit and record_log)
-    bool is_empty() const { return miss_redo_or_state_lsn_arr_.count() <= 0 && !miss_record_log_lsn_.is_valid(); }
+    bool is_empty() const { return miss_redo_lsn_arr_.count() <= 0 && !miss_record_or_state_log_lsn_.is_valid(); }
     /// set need reconsume the state log(currently need reconsume commit_info(currently enable reentrant)/commit log)
     void set_need_reconsume_commit_log_entry() { need_reconsume_commit_log_entry_ = true; }
     bool need_reconsume_commit_log_entry() const { return need_reconsume_commit_log_entry_; }
@@ -92,39 +92,40 @@ public:
     void set_resolving_miss_log() { is_resolving_miss_log_ = true; }
     bool is_resolving_miss_log() const { return is_resolving_miss_log_; }
 
-    int set_miss_record_log_lsn(const palf::LSN &record_log_lsn);
-    int get_miss_record_log_lsn(palf::LSN &miss_record_lsn) const;
-    ObLogLSNArray &get_miss_redo_or_state_log_arr() { return miss_redo_or_state_lsn_arr_; }
+    int set_miss_record_or_state_log_lsn(const palf::LSN &record_log_lsn);
+    bool has_miss_record_or_state_log() const { return miss_record_or_state_log_lsn_.is_valid(); }
+    int get_miss_record_or_state_log_lsn(palf::LSN &miss_record_lsn) const;
+    ObLogLSNArray &get_miss_redo_lsn_arr() { return miss_redo_lsn_arr_; }
+    void reset_miss_record_or_state_log_lsn() { miss_record_or_state_log_lsn_.reset(); }
     int push_back_single_miss_log_lsn(const palf::LSN &misslog_lsn);
 
     template<typename LSN_ARRAY>
     int push_back_missing_log_lsn_arr(const LSN_ARRAY &miss_log_lsn_arr);
 
     int64_t get_total_misslog_cnt() const;
-    // 由于record日志要放到所有misslog的最后面去获取，不能排序或者排序时排除record日志的LSN
-    // 这里只处理miss_redo_or_state_log_lsn_arr
     int sort_and_unique_missing_log_lsn();
 
     TO_STRING_KV(
-        K_(miss_redo_or_state_lsn_arr),
-        K_(miss_record_log_lsn),
+        "miss_redo_count", miss_redo_lsn_arr_.count(),
+        K_(miss_redo_lsn_arr),
+        K_(miss_record_or_state_log_lsn),
         K_(need_reconsume_commit_log_entry),
         K_(is_resolving_miss_log));
 
   private:
-    // miss log lsn array: redo log and state_log(commit_info/prepare)
-    ObLogLSNArray miss_redo_or_state_lsn_arr_;
-    // record log lsn
-    palf::LSN miss_record_log_lsn_;
-    // if reconsume the log_entry or not after handling miss_log
+    // miss redo log lsn array
+    ObLogLSNArray miss_redo_lsn_arr_;
+    // miss record log or state log(commit_info/prepare) lsn
+    palf::LSN miss_record_or_state_log_lsn_;
+    // need reconsume the log_entry or not after handling miss_log or not.
     // reconsume if:
-    //    (1) find miss_log while resolving commit_log to submit the part_trans_task
-    //    (2) find miss_log while resolving commit_info_log in case of commit_log
-    //        is the the same log_entry. NOTE: won't reconsume if commit_log is a miss_log.
+    //    (1) find miss_log by check redo is complete or not while resolving commit_log
+    //    (2) find miss_log not empty while resolving commit_log(miss_log found while resolving prepare/commit_info log
+    //        with the the same log_entry with commit_log).
     bool need_reconsume_commit_log_entry_;
 
     // resolving miss log
-    // directly append miss log lsn if found miss log while resolving
+    // will directly append prev_log lsn while resolving miss_log
     bool is_resolving_miss_log_;
     // TODO use a int8_t instead the two bool variable, may add is_reconsuming var for handle commit_info and commit log
   };
@@ -241,6 +242,12 @@ private:
 
 private:
   // ******* tx log handler ******** //
+  int read_trans_header_(
+      const palf::LSN &lsn,
+      const transaction::ObTransID &tx_id,
+      const bool is_resolving_miss_log,
+      transaction::ObTxLogBlock &tx_log_block,
+      transaction::ObTxLogHeader &tx_header);
   // read trans log from tx_log_block as ObTxxxxLog and resolve the tx log.
   int read_trans_log_(
       const transaction::ObTxLogBlockHeader &tx_log_block_header,
