@@ -6596,7 +6596,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     bool is_found = false;
     const ParamStore &param_store = plan_ctx->get_param_store();
     for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < param_store.count(); ++i) {
-      if (param_store.at(i).is_ext()) {
+      if (param_store.at(i).is_ext_sql_array()) {
         phy_plan.set_first_array_index(i);
         is_found = true;
       }
