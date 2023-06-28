@@ -12486,7 +12486,10 @@ def_table_schema(
                       CAST(mp.collation_database AS CHAR(32)) as DATABASE_COLLATION
                     from
                       mysql.proc as mp
+                      join oceanbase.__all_database a
+                      on mp.DB = a.DATABASE_NAME
                       join oceanbase.__all_routine as r on mp.specific_name = r.routine_name
+                      and r.DATABASE_ID = a.DATABASE_ID
                       left join oceanbase.__all_routine_param as rp on rp.subprogram_id = r.subprogram_id
                       and rp.tenant_id = r.tenant_id
                       and rp.routine_id = r.routine_id
