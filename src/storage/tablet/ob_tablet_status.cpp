@@ -95,58 +95,5 @@ int64_t ObTabletStatus::get_serialize_size() const
 {
   return serialization::encoded_length_i8(static_cast<int8_t>(status_));
 }
-
-bool ObTabletStatus::is_valid_status(const Status current_status, const Status target_status)
-{
-  bool b_ret = true;
-
-  switch (current_status) {
-    case CREATING:
-      if (target_status != NORMAL && target_status != DELETED) {
-        b_ret = false;
-      }
-      break;
-    case NORMAL:
-      if (target_status != DELETING && target_status != NORMAL
-          && target_status != TRANSFER_OUT && target_status != TRANSFER_IN) {
-        b_ret = false;
-      }
-      break;
-    case DELETING:
-      if (target_status != NORMAL && target_status != DELETED
-          && target_status != DELETING) {
-        b_ret = false;
-      }
-      break;
-    case DELETED:
-      break;
-    case MAX:
-      if (target_status != CREATING && target_status != DELETED) {
-        b_ret = false;
-      }
-      break;
-    case TRANSFER_OUT:
-      if (target_status != NORMAL && target_status != TRANSFER_OUT_DELETED && target_status != TRANSFER_OUT) {
-        b_ret = false;
-      }
-      break;
-    case TRANSFER_IN:
-      if (target_status != NORMAL && target_status != DELETED && target_status != TRANSFER_IN) {
-        b_ret = false;
-      }
-      break;
-    case TRANSFER_OUT_DELETED:
-      if (target_status != DELETED && target_status != TRANSFER_OUT_DELETED && target_status != TRANSFER_OUT_DELETED) {
-        b_ret = false;
-      }
-      break;
-    default:
-      b_ret = false;
-      break;
-  }
-
-  return b_ret;
-}
-
 } // namespace storage
 } // namespace oceanbase

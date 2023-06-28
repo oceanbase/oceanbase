@@ -114,9 +114,8 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
     if (OB_UNLIKELY(snapshot_version != ObTransVersion::MAX_TRANS_VERSION)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("read all committed mode should only pass max scn", K(ret), K(key), K(mode), K(snapshot_version));
-    } else if (OB_UNLIKELY(tablet->is_empty_shell())) {
-       ret = OB_TABLET_NOT_EXIST;
-       LOG_WARN("tablet is empty shell", K(ret), K(tablet->get_tablet_meta()));
+    } else if (OB_FAIL(tablet->check_tablet_status_for_read_all_committed())) {
+      LOG_WARN("failed to check tablet status", K(ret), K(key));
     }
   } else if (ObMDSGetTabletMode::READ_READABLE_COMMITED == mode) {
     if (OB_FAIL(tablet->check_new_mds_with_cache(snapshot_version, timeout_us))) {

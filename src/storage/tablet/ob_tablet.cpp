@@ -5729,6 +5729,23 @@ int ObTablet::check_new_mds_with_cache(
   return ret;
 }
 
+int ObTablet::check_tablet_status_for_read_all_committed()
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID &tablet_id = get_tablet_meta().tablet_id_;
+  const ObLSID &ls_id = get_tablet_meta().ls_id_;
+  ObTabletCreateDeleteMdsUserData user_data;
+  // first make sure tablet is in any committed state
+  // then check if it is a empty shell
+  if (OB_FAIL(get_tablet_status(share::SCN::max_scn(), user_data, 0/*timeout*/))) {
+    LOG_WARN("failed to get tablet status", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_UNLIKELY(!user_data.tablet_status_.is_valid() || is_empty_shell())) {
+    ret = OB_TABLET_NOT_EXIST;
+    LOG_WARN("tablet does not exist", K(ret), K(ls_id), K(tablet_id), K(user_data));
+  }
+  return ret;
+}
+
 int ObTablet::set_tablet_status(
     const ObTabletCreateDeleteMdsUserData &tablet_status,
     mds::MdsCtx &ctx)
