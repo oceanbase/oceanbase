@@ -1234,6 +1234,7 @@ int ObRecordType::init_obj(ObSchemaGetterGuard &schema_guard,
     LOG_WARN("memory allocate failed", K(ret));
   } else {
     MEMSET(data, 0, init_size);
+    new (data) ObPLRecord(get_user_type_id(), get_record_member_count());
     obj.set_extend(reinterpret_cast<int64_t>(data), type_, init_size);
   }
   return ret;
@@ -1320,7 +1321,7 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
     record->set_count(record_members_.count());
     ObObj null_value;
     ObDataType *data_type = record->get_element_type();
-    bool* not_null = record->get_not_null();
+    bool *not_null = record->get_not_null();
     char *new_dst = reinterpret_cast<char*>(record->get_element());
     int64_t new_dst_len = get_member_count() * sizeof(ObObj);
     int64_t new_dst_pos = 0;
@@ -1330,11 +1331,28 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid record element type", K(ret), K(i), K(type), KPC(this));
       } else if (ObSMUtils::update_from_bitmap(null_value, bitmap, i)) {
+        ObObj* value = reinterpret_cast<ObObj*>(new_dst + new_dst_pos);
         if (!type->is_obj_type()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("complex value nerver be null", K(ret), K(*this), K(i), KPC(type));
+          const ObUserDefinedType *user_type = NULL;
+          ObPLUDTNS ns(schema_guard);
+          ObArenaAllocator local_allocator;
+          int64_t ptr = 0;
+          ObPLComposite *composite = NULL;
+          if (OB_FAIL(ns.get_user_type(type->get_user_type_id(), user_type, &local_allocator))) {
+            LOG_WARN("failed to get user type", K(ret), KPC(type));
+          } else if (OB_ISNULL(user_type)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get element type", K(ret), KPC(type));
+          } else if (OB_FAIL(user_type->newx(allocator, &ns, ptr))) {
+            LOG_WARN("failed to newx", K(ret), KPC(type));
+          } else if (OB_ISNULL(composite = reinterpret_cast<ObPLComposite*>(ptr))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error, got null composite value", K(ret));
+          } else {
+            composite->set_null();
+            value->set_extend(ptr, type->get_type());
+          }
         } else {
-          ObObj* value = reinterpret_cast<ObObj*>(new_dst + new_dst_pos);
           value->set_null();
           new_dst_pos += sizeof(ObObj);
         }
