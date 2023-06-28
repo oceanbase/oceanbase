@@ -138,6 +138,9 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
   if (!unit.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(unit));
+  } else if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    ret = OB_SERVER_IS_INIT;
+    LOG_WARN("slog replay not finish", KR(ret),K(unit));
   } else if (is_meta_tenant(unit.tenant_id_)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can not create meta tenant", K(ret), K(unit));
