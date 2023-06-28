@@ -60,6 +60,8 @@ public:
   virtual int64_t to_string(char *buffer, int64_t length) const;
   inline int64_t get_block_size() const { return LOCAL_BLOCK_SIZE; }
   inline const BlockAllocatorT &get_block_allocator() const { return block_alloc_; }
+  void set_tenant_id(int64_t tenant_id) { block_alloc_.set_tenant_id(tenant_id); }
+  void set_ctx_id(int64_t ctx_id) { block_alloc_.set_ctx_id(ctx_id); }
 
   virtual bool empty() const;
 
