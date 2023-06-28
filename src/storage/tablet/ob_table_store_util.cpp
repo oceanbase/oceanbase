@@ -263,6 +263,7 @@ int ObSSTableArray::deserialize(
     const int64_t ptr_array_size = sizeof(ObSSTable *) * cnt_;
     const int64_t obj_array_size = sizeof(ObSSTable) * cnt_;
     char *buff = nullptr;
+    int64_t deserialized_cnt = 0;
     if (OB_ISNULL(buff = static_cast<char *>(allocator.alloc(ptr_array_size + obj_array_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory for sstable array", K(ret), K_(cnt), K(ptr_array_size), K(obj_array_size));
@@ -273,14 +274,23 @@ int ObSSTableArray::deserialize(
         sstable_array_[i] = obj_array + i;
         if (OB_FAIL(sstable_array_[i]->deserialize(allocator, buf, data_len, pos))) {
           LOG_WARN("fail to deserialized sstable address", K(ret));
+        } else {
+          ++deserialized_cnt;
         }
       }
     }
     if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < deserialized_cnt; ++i) {
+        ObSSTable *des_sstable = sstable_array_[i];
+        if (nullptr != des_sstable) {
+          des_sstable->~ObSSTable();
+        }
+      }
       if (nullptr != sstable_array_) {
         allocator.free(sstable_array_);
         sstable_array_ = nullptr;
       }
+      cnt_ = 0;
     } else {
       is_inited_ = true;
     }
