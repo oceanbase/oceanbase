@@ -245,7 +245,7 @@ int ObChunkDatumStore::Block::add_row(const common::ObIArray<ObExpr*> &exprs, Ob
     StoredRow *sr = NULL;
     if (OB_FAIL(StoredRow::build(sr, exprs, ctx, buf->head(), row_size, row_extend_size))) {
       LOG_WARN("build stored row failed", K(ret));
-    } else if (OB_FAIL(buf->advance(row_size))) {
+    } else if (OB_FAIL(buf->advance(sr->row_size_))) {
       LOG_WARN("fill buffer head failed", K(ret), K(buf), K(row_size));
     } else {
       rows_++;
