@@ -1593,16 +1593,21 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
       mask_set.get_not_mask(remain);
       auto remain_cnt = remain.count();
       TRANS_LOG(DEBUG, "unmasked parts", K(remain), K(tx), K(retries));
-      if (remain_cnt) {
+      // post msg to participants
+      if (remain_cnt > 0) {
         tx.rpc_cond_.reset(); /* reset rpc_cond */
-        if (OB_FAIL(batch_post_tx_msg_(msg, remain))) {
+        int post_succ_num = 0;
+        if (OB_FAIL(batch_post_rollback_savepoint_msg_(tx, msg, remain, post_succ_num))) {
           TRANS_LOG(WARN, "batch post tx msg fail", K(msg), K(remain), K(retries));
           if (is_location_service_renew_error(ret)) {
             // ignore ret
             ret = OB_SUCCESS;
           }
-        }
-        if (OB_SUCC(ret)) {
+        } else { remain_cnt = post_succ_num; }
+      }
+      // if post failed, wait awhile and retry
+      // if post succ, wait responses
+      if (OB_SUCC(ret) && remain_cnt > 0) {
           // wait result
           int rpc_ret = OB_SUCCESS;
           if (OB_FAIL(tx.rpc_cond_.wait(waittime, rpc_ret))) {
@@ -1631,13 +1636,14 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
               ret = rpc_ret;
             }
           }
-        }
       }
+      // check request complete
       if (OB_SUCC(ret) && mask_set.is_all_mask()) {
         TRANS_LOG(INFO, "all savepoint rollback succeed", K_(tx.tx_id),
                   K(remain_cnt), K(waittime), K(retries));
         break;
       }
+      // interrupted, fail fastly
       if (tx.flags_.INTERRUPTED_) {
         ret = OB_ERR_INTERRUPTED;
         TRANS_LOG(WARN, "rollback was interrupted", K_(tx.tx_id),
