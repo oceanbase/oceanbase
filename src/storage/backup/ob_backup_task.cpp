@@ -45,6 +45,7 @@
 #include "share/backup/ob_archive_path.h"
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_data_table_operator.h"
+#include "share/backup/ob_backup_connectivity.h"
 #include <algorithm>
 
 using namespace oceanbase::blocksstable;
@@ -5080,8 +5081,8 @@ int ObLSBackupComplementLogTask::locate_archive_file_id_by_scn_(
   const int64_t dest_id = piece_attr.key_.dest_id_;
   const int64_t round_id = piece_attr.key_.round_id_;
   const int64_t piece_id = piece_attr.key_.piece_id_;
-  if (OB_FAIL(archive_dest.set(piece_attr.path_.str()))) {
-    LOG_WARN("failed to set archive dest", K(ret), K(piece_attr));
+  if (OB_FAIL(get_archive_backup_dest_(piece_attr.path_, archive_dest))) {
+    LOG_WARN("failed to get archive backup dest", K(ret), K(piece_attr));
   } else if (OB_FAIL(ObArchiveFileUtils::locate_file_by_scn(archive_dest,
       dest_id, round_id, piece_id, ls_id, scn, file_id))) {
     LOG_WARN("failed to locate file by scn", K(ret), K(archive_dest), K(ls_id), K(scn), K(piece_attr));
@@ -5160,8 +5161,8 @@ int ObLSBackupComplementLogTask::get_src_backup_piece_dir_(const share::ObLSID &
 {
   int ret = OB_SUCCESS;
   ObBackupDest archive_dest;
-  if (OB_FAIL(archive_dest.set(piece_attr.path_.str()))) {
-    LOG_WARN("failed to set archive dest", K(ret), K(piece_attr));
+  if (OB_FAIL(get_archive_backup_dest_(piece_attr.path_, archive_dest))) {
+    LOG_WARN("failed to get archive backup dest", K(ret), K(piece_attr));
   } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(archive_dest,
           piece_attr.key_.dest_id_,
           piece_attr.key_.round_id_,
@@ -5179,8 +5180,8 @@ int ObLSBackupComplementLogTask::get_src_backup_file_path_(
 {
   int ret = OB_SUCCESS;
   ObBackupDest archive_dest;
-  if (OB_FAIL(archive_dest.set(piece_file.path_.str()))) {
-    LOG_WARN("failed to set archive dest", K(ret), K(piece_file));
+  if (OB_FAIL(get_archive_backup_dest_(piece_file.path_, archive_dest))) {
+    LOG_WARN("failed to get archive backup dest", K(ret), K(piece_file));
   } else if (OB_FAIL(ObArchivePathUtil::get_ls_archive_file_path(archive_dest,
           piece_file.dest_id_,
           piece_file.round_id_,
@@ -5373,7 +5374,7 @@ int ObLSBackupComplementLogTask::get_copy_src_and_dest_(
     const BackupPieceFile &piece_file, share::ObBackupDest &src, share::ObBackupDest &dest)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(src.set(piece_file.path_.str()))) {
+  if (OB_FAIL(get_archive_backup_dest_(piece_file.path_, src))) {
     LOG_WARN("failed to set archive dest", K(ret), K(piece_file));
   } else if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(
       backup_dest_, backup_set_desc_, dest))) {
@@ -5570,6 +5571,19 @@ int ObLSBackupComplementLogTask::copy_piece_start_file(const BackupPieceFile &pi
     LOG_WARN("failed to read round start", K(ret), K(piece_file));
   } else if (OB_FAIL(dest_store.write_piece_start(dest_dest_id, round_id, piece_id, create_scn, desc))) {
     LOG_WARN("failed to write round start", K(ret), K(piece_file));
+  }
+  return ret;
+}
+
+int ObLSBackupComplementLogTask::get_archive_backup_dest_(
+    const ObBackupPathString &path, share::ObBackupDest &archive_dest)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(
+      *report_ctx_.sql_proxy_, tenant_id_, path, archive_dest))) {
+    LOG_WARN("failed to get archive dest", K(ret), K(tenant_id_), K(path));
+  } else {
+    LOG_INFO("succ get backup dest", K(tenant_id_), K(path));
   }
   return ret;
 }
