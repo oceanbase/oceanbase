@@ -3312,7 +3312,10 @@ int ObStorageRpc::check_start_transfer_tablets(
     arg.dest_ls_id_ = dest_ls_id;
     if (OB_FAIL(arg.tablet_list_.assign(tablet_array))) {
       LOG_WARN("failed to assign tablet list", K(ret), K(tablet_array));
-    } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).check_start_transfer_tablets(arg))) {
+    } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                                  .by(tenant_id)
+                                  .dst_cluster_id(src_info.cluster_id_)
+                                  .check_start_transfer_tablets(arg))) {
       LOG_WARN("failed to check src transfer tablets", K(ret), K(src_info), K(arg));
     }
   }
@@ -3338,7 +3341,10 @@ int ObStorageRpc::get_ls_active_trans_count(
     ObGetLSActiveTransCountArg arg;
     arg.tenant_id_ = tenant_id;
     arg.src_ls_id_ = ls_id;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).get_ls_active_trans_count(arg, res))) {
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .get_ls_active_trans_count(arg, res))) {
       LOG_WARN("failed to get ls active trans count", K(ret), K(src_info), K(arg));
     } else {
       active_trans_count = res.active_trans_count_;
@@ -3371,8 +3377,11 @@ int ObStorageRpc::get_transfer_start_scn(
     arg.src_ls_id_ = ls_id;
     if (OB_FAIL(arg.tablet_list_.assign(tablet_list))) {
       LOG_WARN("failed to assign tablet list", K(ret), K(tablet_list));
-    } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
-        .timeout(GET_TRANSFER_START_SCN_TIMEOUT).get_transfer_start_scn(arg, res))) {
+    } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                                  .by(tenant_id)
+                                  .dst_cluster_id(src_info.cluster_id_)
+                                  .timeout(GET_TRANSFER_START_SCN_TIMEOUT)
+                                  .get_transfer_start_scn(arg, res))) {
       LOG_WARN("failed to get transfer start scn", K(ret), K(src_info), K(arg));
     } else {
       transfer_start_scn = res.start_scn_;
@@ -3400,7 +3409,10 @@ int ObStorageRpc::fetch_ls_replay_scn(
     ObFetchLSReplayScnRes res;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).fetch_ls_replay_scn(arg, res))) {
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .fetch_ls_replay_scn(arg, res))) {
       LOG_WARN("failed to fetch ls replay scn", K(ret), K(src_info), K(arg));
     } else {
       ls_replay_scn = res.replay_scn_;
@@ -3430,8 +3442,10 @@ int ObStorageRpc::check_tablets_logical_table_replaced(
     arg.ls_id_ = dest_ls_id;
     if (OB_FAIL(arg.tablet_list_.assign(tablet_array))) {
       LOG_WARN("failed to assign tablet array", K(ret), K(tablet_array));
-    } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
-        .check_transfer_tablet_backfill_completed(arg, res))) {
+    } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                                  .by(tenant_id)
+                                  .dst_cluster_id(src_info.cluster_id_)
+                                  .check_transfer_tablet_backfill_completed(arg, res))) {
       LOG_WARN("failed to check tablets backfill completed", K(ret), K(src_info), K(arg));
     } else {
       backfill_finished = res.backfill_finished_;
@@ -3464,8 +3478,11 @@ int ObStorageRpc::replace_member(
     arg.added_member_ = added_member;
     arg.removed_member_ = removed_member;
     arg.ls_transfer_scn_ = ls_transfer_scn;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).timeout(timeout)
-        .dst_cluster_id(src_info.cluster_id_).replace_member(arg, res))) {
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .timeout(timeout)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .replace_member(arg, res))) {
       LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
     } else {
       FLOG_INFO("replace member", K(tenant_id), K(src_info), K(ls_id), K(ls_transfer_scn));
@@ -3498,9 +3515,12 @@ int ObStorageRpc::add_member(
     arg.member_ = added_member;
     arg.new_replica_num_ = new_replica_num;
     arg.ls_transfer_scn_ = ls_transfer_scn;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).timeout(timeout)
-        .dst_cluster_id(src_info.cluster_id_).add_member(arg, res))) {
-      LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .timeout(timeout)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .add_member(arg, res))) {
+      LOG_WARN("failed to add member", K(ret), K(src_info), K(arg));
     }
   }
   return ret;
@@ -3530,9 +3550,12 @@ int ObStorageRpc::switch_learner_to_acceptor(
     arg.learner_ = learner;
     arg.new_replica_num_ = new_replica_num;
     arg.ls_transfer_scn_ = ls_transfer_scn;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).timeout(timeout)
-        .dst_cluster_id(src_info.cluster_id_).switch_learner_to_acceptor(arg, res))) {
-      LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .timeout(timeout)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .switch_learner_to_acceptor(arg, res))) {
+      LOG_WARN("failed to switch learner to acceptor", K(ret), K(src_info), K(arg));
     }
   }
   return ret;
@@ -3556,7 +3579,10 @@ int ObStorageRpc::block_tx(
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
     arg.gts_ = gts;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).block_tx(arg))) {
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .block_tx(arg))) {
       LOG_WARN("failed to block tx", K(ret), K(src_info), K(arg));
     }
   }
@@ -3581,8 +3607,11 @@ int ObStorageRpc::kill_tx(
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
     arg.gts_ = gts;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).kill_tx(arg))) {
-      LOG_WARN("failed to block tx", K(ret), K(src_info), K(arg));
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .kill_tx(arg))) {
+      LOG_WARN("failed to kill tx", K(ret), K(src_info), K(arg));
     }
   }
   return ret;
@@ -3606,7 +3635,10 @@ int ObStorageRpc::unblock_tx(
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
     arg.gts_ = gts;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).unblock_tx(arg))) {
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .unblock_tx(arg))) {
       LOG_WARN("failed to unblock tx", K(ret), K(src_info), K(arg));
     }
   }
