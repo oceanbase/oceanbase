@@ -704,7 +704,7 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
         ret = OB_EAGAIN;
       }
 
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag, initial_complete_migration_dag))) {
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag, start_complete_dag))) {
         LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
       } else {
         finish_complete_dag = nullptr;
@@ -717,15 +717,16 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
     }
 
     if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_complete_dag)) {
+        scheduler->free_dag(*finish_complete_dag, start_complete_dag);
+        finish_complete_dag = nullptr;
+      }
+
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_complete_dag)) {
         scheduler->free_dag(*start_complete_dag, initial_complete_migration_dag);
         start_complete_dag = nullptr;
       }
 
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_complete_dag)) {
-        scheduler->free_dag(*finish_complete_dag, initial_complete_migration_dag);
-        finish_complete_dag = nullptr;
-      }
       if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
         LOG_WARN("failed to set complete migration result", K(ret), K(tmp_ret), K(*ctx_));
       }
