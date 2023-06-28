@@ -61,6 +61,7 @@ public:
   const uint64_t tenant_id_;
   share::ObLSID ls_id_;
   ObTenantBase *tenant_base_;
+  common::ObArenaAllocator allocator_;
 };
 
 TestTabletStatus::TestTabletStatus(const uint64_t tenant_id)
@@ -72,6 +73,7 @@ TestTabletStatus::TestTabletStatus(const uint64_t tenant_id)
 
 void TestTabletStatus::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   t3m->stop();
@@ -172,7 +174,7 @@ TEST_F(TestTabletStatus, misc)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
 
-  ret = t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle, false);
+  ret = t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(tablet_handle.is_valid());
 
@@ -181,7 +183,6 @@ TEST_F(TestTabletStatus, misc)
   TestSchemaUtils::prepare_data_schema(table_schema);
   const transaction::ObTransID tx_id = 1;
   const int64_t snapshot_version = 1;
-  ObTableHandleV2 table_handle;
   const lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
   ObTabletID empty_tablet_id;
   ObFreezer *freezer = ls->get_freezer();
@@ -190,14 +191,11 @@ TEST_F(TestTabletStatus, misc)
   tablet->tablet_meta_.tx_data_.tablet_status_ = ObTabletStatus::CREATING; // mock
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
-      share::SCN::base_scn(), snapshot_version, table_schema, compat_mode, store_flag, table_handle, freezer);
+  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
+      share::SCN::base_scn(), snapshot_version, table_schema, compat_mode, store_flag, nullptr, freezer);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObMetaDiskAddr mem_addr;
-  mem_addr.type_ = ObMetaDiskAddr::DiskType::MEM;
-  mem_addr.size_ = sizeof(ObTablet);
-  ret = t3m->compare_and_swap_tablet(key, mem_addr, tablet_handle, tablet_handle);
+  ret = t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // set tx data

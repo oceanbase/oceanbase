@@ -149,6 +149,7 @@ void ObTransCtx::set_exiting_()
   if (!is_exiting_) {
     is_exiting_ = true;
     print_trace_log_if_necessary_();
+    ls_tx_ctx_mgr_->dec_active_tx_count();
 
     const int64_t ctx_ref = get_ref();
     if (NULL == ls_tx_ctx_mgr_) {

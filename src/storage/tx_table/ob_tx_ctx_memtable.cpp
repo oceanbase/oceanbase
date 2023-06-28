@@ -28,7 +28,6 @@ ObTxCtxMemtable::ObTxCtxMemtable()
   : ObIMemtable(),
     is_inited_(false),
     is_frozen_(false),
-    ls_id_(),
     ls_ctx_mgr_guard_(),
     flush_lock_()
 {
@@ -115,59 +114,6 @@ int ObTxCtxMemtable::get(const storage::ObTableIterParam &param,
   UNUSED(context);
   UNUSED(rowkey);
   UNUSED(row);
-  return OB_NOT_SUPPORTED;
-}
-
-
-int ObTxCtxMemtable::set(storage::ObStoreCtx &ctx,
-                         const uint64_t table_id,
-                         const storage::ObTableReadInfo &read_info,
-                         const common::ObIArray<share::schema::ObColDesc> &columns,
-                         const storage::ObStoreRow &row,
-                         const share::ObEncryptMeta *encrypt_meta)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(columns);
-  UNUSED(row);
-  UNUSED(encrypt_meta);
-  return OB_NOT_SUPPORTED;
-}
-
-int ObTxCtxMemtable::lock(storage::ObStoreCtx &ctx,
-                          const uint64_t table_id,
-                          const storage::ObTableReadInfo &read_info,
-                          common::ObNewRowIterator &row_iter)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(row_iter);
-  return OB_NOT_SUPPORTED;
-}
-
-int ObTxCtxMemtable::lock(storage::ObStoreCtx &ctx,
-                          const uint64_t table_id,
-                          const storage::ObTableReadInfo &read_info,
-                          const common::ObNewRow &row)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(row);
-  return OB_NOT_SUPPORTED;
-}
-
-int ObTxCtxMemtable::lock(storage::ObStoreCtx &ctx,
-                          const uint64_t table_id,
-                          const storage::ObTableReadInfo &read_info,
-                          const blocksstable::ObDatumRowkey &rowkey)
-{
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(rowkey);
   return OB_NOT_SUPPORTED;
 }
 

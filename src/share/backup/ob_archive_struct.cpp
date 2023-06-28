@@ -1084,6 +1084,22 @@ bool ObLSDestRoundSummary::is_valid() const
   return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid();
 }
 
+int ObLSDestRoundSummary::check_is_last_piece_for_deleted_ls(const int64_t piece_id, bool &last_piece) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t biggest_piece_id = max_piece_id();
+  if (!is_deleted_) {
+    last_piece = false;
+  } else if (piece_id > biggest_piece_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid piece id", K(ret), K(piece_id), KPC(this));
+  } else {
+    last_piece = (piece_id == biggest_piece_id);
+  }
+
+  return ret;
+}
+
 /**
  * ------------------------------ObDestRoundSummary---------------------
  */

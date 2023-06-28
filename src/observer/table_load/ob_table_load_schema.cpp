@@ -16,6 +16,8 @@ namespace observer
 using namespace common;
 using namespace share::schema;
 using namespace table;
+using namespace blocksstable;
+using namespace sql;
 
 int ObTableLoadSchema::get_schema_guard(uint64_t tenant_id, ObSchemaGetterGuard &schema_guard)
 {
@@ -188,11 +190,15 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to get store column count", KR(ret));
     } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, false))) {
       LOG_WARN("fail to get column descs", KR(ret));
+    } else if (OB_FAIL(prepare_col_desc(table_schema, column_descs_))) {
+      LOG_WARN("fail to prepare column descs", KR(ret));
     } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
       LOG_WARN("fail to get multi version column descs", KR(ret));
     } else if (OB_FAIL(datum_utils_.init(multi_version_column_descs_, rowkey_column_count_,
                                          lib::is_oracle_mode(), allocator_))) {
       LOG_WARN("fail to init datum utils", KR(ret));
+    } else if (OB_FAIL(init_cmp_funcs(column_descs_, lib::is_oracle_mode()))) {
+      LOG_WARN("fail to init cmp funcs", KR(ret));
     }
     if (OB_SUCC(ret)) {
       ObArray<ObTabletID> tablet_ids;
@@ -221,6 +227,57 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
           }
         }
       }//end for
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
+      ObColDesc &col_desc = col_descs.at(i);
+      const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid column schema", K(column_schema));
+      } else {
+        col_desc.col_type_.set_scale(column_schema->get_data_scale());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::init_cmp_funcs(const ObArray<ObColDesc> &col_descs,
+                                      const bool is_oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  const bool is_null_last = is_oracle_mode;
+  ObCmpFunc cmp_func;
+  if (OB_FAIL(cmp_funcs_.init(col_descs.count(), allocator_))) {
+    LOG_WARN("fail to init cmp funcs array", KR(ret), K(col_descs.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
+    const ObColDesc &col_desc = col_descs.at(i);
+    const bool has_lob_header = is_lob_storage(col_desc.col_type_.get_type());
+    ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
+      col_desc.col_type_.get_type(), col_desc.col_type_.get_collation_type(),
+      col_desc.col_type_.get_scale(), is_oracle_mode, has_lob_header);
+    if (OB_UNLIKELY(nullptr == basic_funcs || nullptr == basic_funcs->null_last_cmp_ ||
+                    nullptr == basic_funcs->murmur_hash_)) {
+      ret = OB_ERR_SYS;
+      LOG_ERROR("Unexpected null basic funcs", KR(ret), K(col_desc));
+    } else {
+      cmp_func.cmp_func_ =
+        is_null_last ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
+      if (OB_FAIL(cmp_funcs_.push_back(ObStorageDatumCmpFunc(cmp_func)))) {
+        LOG_WARN("Failed to push back cmp func", KR(ret), K(i), K(col_desc));
+      }
     }
   }
   return ret;

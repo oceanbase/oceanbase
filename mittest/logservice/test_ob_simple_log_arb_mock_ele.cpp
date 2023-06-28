@@ -117,8 +117,8 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
     sleep(2);
     EXPECT_EQ(leader_last_committed_end_lsn, leader.palf_handle_impl_->sw_.committed_end_lsn_);
 
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // 2. the leader A revokes and takeover again
     for (auto srv: get_cluster()) {
@@ -141,7 +141,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_LE(leader_last_committed_end_lsn, leader.palf_handle_impl_->sw_.committed_end_lsn_);
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->one_stage_config_change_(degrade_b_args, TIMEOUT_US));
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // 4. leader A tries to upgrade B
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
@@ -156,7 +156,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
     LogConfigInfo new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(upgrade_b_args, upgrade_b_pid, upgrade_b_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_b_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_b_args, new_config_info, not_timeout));
 
     const LSN &leader_max_flushed_end_lsn = leader.palf_handle_impl_->sw_.max_flushed_end_lsn_;
     EXPECT_GT(leader.palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
@@ -180,7 +180,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
     }
     EXPECT_UNTIL_EQ(true, a_handle->palf_handle_impl_->state_mgr_.is_leader_active());
 
-    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
     EXPECT_EQ(leader_max_flushed_end_lsn, leader.palf_handle_impl_->sw_.committed_end_lsn_);
 
     dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
@@ -231,8 +231,8 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
     sleep(2);
     EXPECT_EQ(leader_last_committed_end_lsn, leader.palf_handle_impl_->sw_.committed_end_lsn_);
 
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // 2. the leader A revokes and B takeover
     for (auto srv: get_cluster()) {
@@ -253,8 +253,8 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
     // 3. leader B degrades A
     leader.reset();
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
-    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     LogConfigChangeArgs degrade_a_args(ObMember(a_addr, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->one_stage_config_change_(degrade_a_args, TIMEOUT_US));
@@ -272,7 +272,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
     LogConfigInfo new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(upgrade_a_args, upgrade_a_pid, upgrade_a_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_a_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_a_args, new_config_info, not_timeout));
     EXPECT_GT(leader.palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
     EXPECT_GT(b_handle->palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
 
@@ -280,7 +280,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
       leader.palf_handle_impl_->config_mgr_.change_config_(upgrade_a_args, upgrade_a_pid, upgrade_a_ele_epoch, upgrade_a_version);
     }
     EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(upgrade_a_args, upgrade_a_pid, upgrade_a_ele_epoch, upgrade_a_version));
-    EXPECT_UNTIL_EQ(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_version_, b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_version_);
+    EXPECT_UNTIL_EQ(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_, b_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_);
 
     // 5. the leader B revokes and A takeover
     for (auto srv: get_cluster()) {
@@ -296,7 +296,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
     }
     EXPECT_UNTIL_EQ(true, a_handle->palf_handle_impl_->state_mgr_.is_leader_active());
 
-    EXPECT_TRUE(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(a_handle->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
     dynamic_cast<ObSimpleLogServer*>(get_cluster()[b_idx])->log_service_.get_arbitration_service()->start();
@@ -356,12 +356,12 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_no_leader
 
     // A sends config meta to C
     while (-1 == leader.palf_handle_impl_->config_mgr_.last_submit_config_log_time_us_ ||
-           c_handle->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr)) {
+           c_handle->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr)) {
       EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config_(degrade_b_args, degrade_b_pid, degrade_b_ele_epoch, degrade_b_version));
       usleep(500);
     }
 
-    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // 2. the leader A revokes and takeover again
     for (auto srv: get_cluster()) {
@@ -379,7 +379,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_no_leader
     }
     dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
     EXPECT_UNTIL_EQ(true, a_handle->palf_handle_impl_->state_mgr_.is_leader_active());
-    EXPECT_UNTIL_EQ(true, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.degraded_learnerlist_.contains(b_addr));
+    EXPECT_UNTIL_EQ(true, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.contains(b_addr));
 
     unblock_net(leader_idx, b_idx);
     dynamic_cast<ObSimpleLogServer*>(get_cluster()[b_idx])->log_service_.get_arbitration_service()->start();
@@ -478,7 +478,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_when_arb_crash
     block_net(leader_idx, b_idx);
     sleep(4);
     // the leader can not degrade successfully
-    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+    EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
     // start to degrade B manually, do not allow
     LogConfigChangeArgs args(ObMember(b_addr, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
@@ -541,12 +541,12 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_arb_degrade_probe)
     EXPECT_TRUE(dynamic_cast<ObSimpleLogServer*>(get_cluster()[d_idx])->deliver_.need_filter_packet_by_pcode_blacklist(ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG));
     EXPECT_TRUE(dynamic_cast<ObSimpleLogServer*>(get_cluster()[e_idx])->deliver_.need_filter_packet_by_pcode_blacklist(ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG));
     sleep(6);
-    EXPECT_EQ(0, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.degraded_learnerlist_.get_member_number());
+    EXPECT_EQ(0, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.get_member_number());
 
     // CASE 2. D block_net, E UNKNOWN, do not degrade
     block_net(leader_idx, d_idx);
     sleep(2);
-    EXPECT_EQ(0, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.degraded_learnerlist_.get_member_number());
+    EXPECT_EQ(0, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.get_member_number());
 
     // CASE 3. D block_net, E block_net, degrade
     block_net(leader_idx, e_idx);
@@ -557,15 +557,15 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_arb_degrade_probe)
     unblock_net(leader_idx, d_idx);
     unblock_net(leader_idx, e_idx);
     sleep(2);
-    EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.degraded_learnerlist_.get_member_number());
+    EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.get_member_number());
 
     // CASE 5. D unblock_net and unblock_pcode, upgrade E
     unblock_pcode(d_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
-    EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.degraded_learnerlist_.contains(d_addr));
+    EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.contains(d_addr));
 
     // CASE 6. E unblock_net and unblock_pcode, upgrade E
     unblock_pcode(e_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
-    EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.degraded_learnerlist_.contains(d_addr));
+    EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.contains(d_addr));
 
     revert_cluster_palf_handle_guard(palf_list);
   }
@@ -632,7 +632,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
     LogConfigInfo new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(remove_e_args, remove_e_pid, remove_e_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(remove_e_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(remove_e_args, new_config_info, not_timeout));
     const LSN &remove_e_barrier = leader.palf_handle_impl_->config_mgr_.checking_barrier_.prev_end_lsn_;
     leader.palf_handle_impl_->state_mgr_.reset_changing_config_with_arb();
 

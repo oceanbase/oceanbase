@@ -259,8 +259,9 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
           }
         }
         final_result = (0 == left_cnt);
-        result.count_ = former.count_;
+        result.count_ = MAX(result.count_, former.count_);
         nop_pos.count_ = left_cnt;
+        STORAGE_LOG(DEBUG, "fuse row", K(ret), K(former), K(result));
       }
     } else {
       ret = common::OB_INVALID_ARGUMENT;

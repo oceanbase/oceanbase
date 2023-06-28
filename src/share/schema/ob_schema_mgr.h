@@ -256,9 +256,10 @@ public:
                K_(schema_version),
                K_(tablegroup_name),
                K_(partition_status),
-               K_(partition_schema_version));
+               K_(partition_schema_version),
+               K_(sharding));
   virtual void reset();
-  inline bool is_valid() const;
+  bool is_valid() const;
   inline int64_t get_convert_size() const;
   inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   inline uint64_t get_tenant_id() const { return tenant_id_; }
@@ -270,6 +271,9 @@ public:
   { return deep_copy_str(tablegroup_name, tablegroup_name_); }
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
+  inline int set_sharding(const common::ObString &sharding)
+  { return deep_copy_str(sharding, sharding_); }
+  inline const common::ObString &get_sharding() const { return sharding_; }
   inline ObTenantTablegroupId get_tenant_tablegroup_id() const
   { return ObTenantTablegroupId(tenant_id_, tablegroup_id_); }
 
@@ -286,6 +290,10 @@ public:
   bool is_in_splitting() const { return  partition_status_ == PARTITION_STATUS_LOGICAL_SPLITTING
                                          || partition_status_ == PARTITION_STATUS_PHYSICAL_SPLITTING; }
   bool has_self_partition() const { return false; }
+
+  bool is_sharding_none() const { return sharding_ == OB_PARTITION_SHARDING_NONE; }
+  bool is_sharding_partition() const { return sharding_ == OB_PARTITION_SHARDING_PARTITION; }
+  bool is_sharding_adaptive() const { return sharding_ == OB_PARTITION_SHARDING_ADAPTIVE; }
 private:
   uint64_t tenant_id_;
   uint64_t tablegroup_id_;
@@ -293,6 +301,7 @@ private:
   common::ObString tablegroup_name_;
   ObPartitionStatus partition_status_;
   int64_t partition_schema_version_;
+  common::ObString sharding_;
 };
 
 template<class K, class V>
@@ -761,6 +770,10 @@ public:
       const uint64_t tenant_id,
       common::ObIArray<const ObSimpleTableSchemaV2 *> &schema_array) const;
   #undef GET_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DECLARE
+  int get_primary_table_schema_in_tablegroup(
+      const uint64_t tenant_id,
+      const uint64_t tablegroup_id,
+      const ObSimpleTableSchemaV2 *&primary_table_schema) const;
   int check_database_exists_in_tablegroup(
       const uint64_t tenant_id,
       const uint64_t tablegroup_id,

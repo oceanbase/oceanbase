@@ -6461,10 +6461,8 @@ int ObTransformPreProcess::replace_udt_assignment_exprs(ObDMLStmt *stmt,
     }
     if (OB_SUCC(ret) && assign.column_expr_->is_xml_column()) {
       ObRawExpr *new_value_expr = NULL;
-      if (value_expr->is_const_raw_expr() &&
-          OB_FAIL(transform_udt_column_value_xml_parse(table_info, value_expr, value_expr))) {
-        LOG_WARN("failed to transform udt value exprs", K(ret));
-      } else if (OB_FAIL(transform_udt_column_value_expr(stmt, table_info, value_expr, new_value_expr))){
+      ObRawExpr *old_column_expr = assign.column_expr_;
+      if (OB_FAIL(transform_udt_column_value_expr(stmt, table_info, value_expr, new_value_expr))){
         LOG_WARN("failed to transform udt value exprs", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*ctx_->expr_factory_,
                                                                 *ctx_->allocator_,
@@ -6483,6 +6481,25 @@ int ObTransformPreProcess::replace_udt_assignment_exprs(ObDMLStmt *stmt,
           assign.expr_ = new_value_expr;
         }
       }
+      // process returning clause for update
+      if (OB_SUCC(ret) && stmt->get_stmt_type() == stmt::T_UPDATE) {
+        ObDelUpdStmt *update_stmt = static_cast<ObDelUpdStmt *>(stmt);
+        if (update_stmt->is_returning()) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < update_stmt->get_returning_exprs().count(); i++) {
+            ObRawExpr *sys_makexml_expr = NULL;
+            if (OB_ISNULL(hidd_col)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("hidden col is NULL", K(ret), K(i), K(j));
+            } else if (OB_FAIL(transform_xml_binary(new_value_expr, sys_makexml_expr))) {
+              LOG_WARN("fail to create sys_makexml expr", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(update_stmt->get_returning_exprs().at(i),
+                                                                  old_column_expr,
+                                                                  sys_makexml_expr))) {
+              LOG_WARN("fail to replace xml column in returning exprs", K(ret), K(i));
+            }
+          } // end for
+        }
+      } //end if: process returning clause
     }
   }
 
@@ -6697,6 +6714,8 @@ int ObTransformPreProcess::transform_query_udt_columns_exprs(const ObIArray<ObPa
         OB_FAIL(scopes.push_back(SCOPE_BASIC_TABLE)) ||
         OB_FAIL(scopes.push_back(SCOPE_DICT_FIELDS)) ||
         OB_FAIL(scopes.push_back(SCOPE_SHADOW_COLUMN)) ||
+        ((stmt->get_stmt_type() == stmt::T_INSERT || stmt->get_stmt_type() == stmt::T_UPDATE) &&
+          OB_FAIL(scopes.push_back(SCOPE_RETURNING))) ||
         (stmt->get_stmt_type() != stmt::T_MERGE && OB_FAIL(scopes.push_back(SCOPE_INSERT_VECTOR)))) {
       LOG_WARN("Fail to create scope array.", K(ret));
     }
@@ -6942,124 +6961,50 @@ int ObTransformPreProcess::transform_udt_columns(const ObIArray<ObParentDMLStmt>
                                                                   *value_desc, *hidd_col))) {
               LOG_WARN("failed to push back column conv exprs", K(ret));
             }
-            for (int64_t j = 0; OB_SUCC(ret) && j < row_count; ++j) {
-              ObRawExpr *value_expr = value_vector.at(i + j * column_count);
-              ObRawExpr *new_value_expr = NULL;
-              if (OB_FAIL(transform_udt_column_value_xml_parse(insert_stmt->get_insert_table_info(),
-                                                              value_expr,
-                                                              new_value_expr))) {
-                LOG_WARN("failed to transform udt value exprs", K(ret));
-              } else {
-                value_vector.at(i + j * column_count) = new_value_expr;
-                trans_happened = true;
+          }
+        }
+        // process returning exprs
+        if (OB_SUCC(ret) && insert_stmt->is_returning()) {
+          ObIArray<ObRawExpr*> &column_convert = insert_stmt->get_column_conv_exprs();
+          const ObIArray<ObColumnRefRawExpr *> &table_columns = insert_stmt->get_insert_table_info().column_exprs_;
+          ObSEArray<std::pair<int64_t, int64_t>, 8> xml_col_idxs; // use pair to store xml col idx and its hidden col idx
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); i++) {
+            ObColumnRefRawExpr *ref_col = table_columns.at(i);
+            if (ref_col->is_xml_column()) {
+              bool is_found = false;
+              for (int64_t j = 0; OB_SUCC(ret) && !is_found && j < table_columns.count(); j++) {
+                if (ref_col->get_column_id() != table_columns.at(j)->get_column_id() &&
+                    ref_col->get_udt_set_id() == table_columns.at(j)->get_udt_set_id()) {
+                  is_found = true;
+                  xml_col_idxs.push_back(std::make_pair(i, j));
+                }
+              } // end for
+              if (!is_found) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to find hidden column", K(ret), K(i));
+              }
+            }
+          } // end for
+
+          CK(column_convert.count() == table_columns.count());
+          for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_returning_exprs().count(); i++) {
+            for (int64_t j = 0; OB_SUCC(ret) && j < xml_col_idxs.count(); j++) {
+              ObRawExpr *hidd_col = NULL;
+              ObRawExpr *sys_makexml_expr = NULL;
+              if (OB_ISNULL(hidd_col = column_convert.at(xml_col_idxs.at(j).second))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("hidden col is NULL", K(ret), K(i), K(j));
+              } else if (OB_FAIL(transform_xml_binary(hidd_col, sys_makexml_expr))) {
+                LOG_WARN("fail to create expr sys_makexml", K(ret));
+              } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(insert_stmt->get_returning_exprs().at(i),
+                                                                table_columns.at(xml_col_idxs.at(j).first),
+                                                                sys_makexml_expr))) {
+                LOG_WARN("fail to replace xml column in returning exprs", K(ret), K(i), K(j));
               }
             }
           }
-        }
+        } // end if
       }
-  }
-  return ret;
-}
-
-int ObTransformPreProcess::transform_udt_column_value_xml_parse(ObDmlTableInfo &table_info, ObRawExpr *old_expr, ObRawExpr *&new_expr)
-{
-  int ret = OB_SUCCESS;
-  // param 0 indicate type is document or content
-  // param 1 is xml text for parsing
-  // param 2 indicate wellformed or not
-  // param 3 is output format only used with xmlagg, should be removed when xml binary ready
-  ObSysFunRawExpr *make_xml_expr = NULL;
-  ObConstRawExpr *type_expr = NULL;
-  ObConstRawExpr *form_expr = NULL;
-  ObConstRawExpr *in_agg_expr = NULL;
-
-  ObObjParam old_expr_type;
-  if (old_expr->get_expr_type() == T_QUESTIONMARK) {
-    const ParamStore &param_store = ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store();
-    ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(old_expr);
-    int64_t param_idx = param_expr->get_value().get_unknown();
-    if (param_idx < 0 || param_idx >= param_store.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
-    } else {
-      old_expr_type = param_store.at(param_idx);
-    }
-  } else {
-    old_expr_type.set_meta_type(old_expr->get_result_meta());
-    old_expr_type.set_accuracy(old_expr->get_accuracy());
-  }
-
-  if (OB_FAIL(ret))  {
-  } else if (old_expr->is_xml_expr() || ob_is_user_defined_sql_type(old_expr_type.get_type())) {
-    // do nothing
-    new_expr = old_expr;
-  } else if (ob_is_xml_pl_type(old_expr_type.get_type(), old_expr_type.get_udt_id())) {
-    // add implicit cast to sql xmltype
-    ObCastMode cast_mode = CM_NONE;
-    ObExprResType sql_udt_type;
-    sql_udt_type.set_sql_udt(ObXMLSqlType); // set subschema id
-    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx_->session_info_, cast_mode))) {
-      LOG_WARN("get default cast mode failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
-                                          ctx_->expr_factory_, ctx_->session_info_,
-                                          *old_expr,  sql_udt_type, cast_mode, new_expr))) {
-      LOG_WARN("try add cast expr above failed", K(ret));
-    } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
-      LOG_WARN("failed to add flag", K(ret));
-    }
-  } else if (old_expr_type.is_clob()) {
-    // for oracle compatibility
-    ret = OB_ERR_INVALID_XML_DATATYPE;
-    LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "ANYDATA", "CLOB");
-    LOG_WARN("invalid type, expect ANYDATA", K(ret), K(old_expr_type.get_type()));
-  } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_FUN_SYS_XMLPARSE, make_xml_expr))) {
-    LOG_WARN("failed to create fun make xml binary expr", K(ret));
-  } else if (OB_ISNULL(make_xml_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("xml expr is null", K(ret));
-  } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_INT, type_expr))) {
-    LOG_WARN("create dest type expr failed", K(ret));
-  } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_INT, form_expr))) {
-    LOG_WARN("create dest type expr failed", K(ret));
-  } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_INT, in_agg_expr))) {
-    LOG_WARN("create dest type expr failed", K(ret));
-  } else if (OB_ISNULL(type_expr) || OB_ISNULL(form_expr) || OB_ISNULL(in_agg_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("const expr is null", K(type_expr), K(form_expr), K(in_agg_expr));
-  } else {
-    ObObj val;
-    val.set_int(0); //ObExprXmlparse::OB_XML_DOCUMENT
-    type_expr->set_value(val);
-    type_expr->set_param(val);
-    ObObj well_form;
-    well_form.set_int(0);  // OB_XML_NOT_WELLFORMED
-    form_expr->set_value(well_form);
-    form_expr->set_param(well_form);
-    ObObj in_agg;
-    in_agg.set_int(0);
-    in_agg_expr->set_value(in_agg);
-    in_agg_expr->set_param(in_agg);
-
-    if (OB_FAIL(make_xml_expr->add_param_expr(type_expr))) {
-      LOG_WARN("fail to add param expr", K(ret));
-    } else if (OB_FAIL(make_xml_expr->add_param_expr(old_expr))) {
-      LOG_WARN("fail to add param expr", K(ret));
-    } else if (OB_FAIL(make_xml_expr->add_param_expr(form_expr))) {
-      LOG_WARN("fail to add param expr", K(ret));
-    } else if (OB_FAIL(make_xml_expr->add_param_expr(in_agg_expr))) {
-      LOG_WARN("fail to add param expr", K(ret));
-    } else {
-      make_xml_expr->set_func_name(ObString::make_string(N_XMLPARSE));
-      if (OB_FAIL(make_xml_expr->formalize(ctx_->session_info_))) {
-        LOG_WARN("make xml epxr formlize fail", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::add_const_param_constraints(make_xml_expr, ctx_))) {
-        LOG_WARN("failed to add const param constraints", K(ret));
-      }
-      new_expr = make_xml_expr;
-    }
   }
   return ret;
 }

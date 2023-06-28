@@ -228,7 +228,8 @@ public:
     lock_data_sequence_(0),
     lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
     is_delayed_cleanout_(false),
-    mvcc_row_(NULL) {}
+    mvcc_row_(NULL),
+    trans_scn_(share::SCN::max_scn()) {}
   void reset();
   TO_STRING_KV(K_(is_locked),
                K_(trans_version),
@@ -236,7 +237,8 @@ public:
                K_(lock_data_sequence),
                K_(lock_dml_flag),
                K_(is_delayed_cleanout),
-               KP_(mvcc_row));
+               KP_(mvcc_row),
+               K_(trans_scn));
 
   bool is_locked_;
   share::SCN trans_version_;
@@ -245,6 +247,7 @@ public:
   blocksstable::ObDmlFlag lock_dml_flag_;
   bool is_delayed_cleanout_;
   memtable::ObMvccRow *mvcc_row_;
+  share::SCN trans_scn_; // sstable takes end_scn, memtable takes scn_ of ObMvccTransNode
 };
 
 
@@ -320,7 +323,7 @@ public:
       bool is_memtable_iter_row_check);
   static int check_lock_row_valid(
       const blocksstable::ObDatumRow &row,
-      const ObTableReadInfo &read_info);
+      const ObITableReadInfo &read_info);
 };
 
 #define STORE_ITER_ROW_IN_GAP 1

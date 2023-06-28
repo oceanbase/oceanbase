@@ -70,6 +70,7 @@ public:
   ObDASTableLoc *get_table_loc_by_id(uint64_t table_loc_id, uint64_t ref_table_id);
   ObDASTableLoc *get_external_table_loc_by_id(uint64_t table_loc_id, uint64_t ref_table_id);
   DASTableLocList &get_table_loc_list() { return table_locs_; }
+  const DASTableLocList &get_table_loc_list() const { return table_locs_; }
   DASDelCtxList& get_das_del_ctx_list() {return  del_ctx_list_;}
   DASTableLocList &get_external_table_loc_list() { return external_table_locs_; }
   int extended_tablet_loc(ObDASTableLoc &table_loc,
@@ -85,7 +86,7 @@ public:
   int get_das_tablet_mapper(const uint64_t ref_table_id,
                             ObDASTabletMapper &tablet_mapper,
                             const DASTableIDArrayWrap *related_table_ids = nullptr);
-  bool has_same_lsid(share::ObLSID *lsid);
+  int get_all_lsid(share::ObLSArray &ls_ids);
   int64_t get_related_tablet_cnt() const;
   void set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { snapshot_ = snapshot; }
   transaction::ObTxReadSnapshot &get_snapshot() { return snapshot_; }

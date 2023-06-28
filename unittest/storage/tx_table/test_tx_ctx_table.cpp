@@ -36,13 +36,6 @@ using namespace storage;
 using namespace blocksstable;
 using namespace share;
 
-namespace storage
-{
-int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
-{
-  return 1000;
-}
-}
 
 namespace unittest
 {
@@ -110,6 +103,7 @@ public:
 protected:
   virtual void SetUp() override
   {
+    oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
     ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01),
                              (transaction::ObDupTableLSHandler *)(0x02));
     freezer_.init(&ls_);
@@ -212,7 +206,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ObColDesc col_desc;
   columns_.push_back(col_desc);
   param.reset();
-  read_info.init(allocator, 16000, 1, lib::is_oracle_mode(), columns_);
+  read_info.init(allocator, 16000, 1, lib::is_oracle_mode(), columns_, nullptr/*storage_cols_index*/);
   param.tablet_id_ = tablet_id_;
   param.read_info_ = &read_info;
   param.is_multi_version_minor_merge_ = true;

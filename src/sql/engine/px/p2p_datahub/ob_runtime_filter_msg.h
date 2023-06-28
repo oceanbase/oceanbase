@@ -126,8 +126,7 @@ public:
   virtual int destroy() {
     lower_bounds_.reset();
     upper_bounds_.reset();
-    null_first_cmp_funcs_.reset();
-    null_last_cmp_funcs_.reset();
+    cmp_funcs_.reset();
     need_null_cmp_flags_.reset();
     cells_size_.reset();
     allocator_.reset();
@@ -156,7 +155,6 @@ public:
     ObEvalCtx &eval_ctx,
     uint64_t *batch_hash_values) override;
   virtual int reuse() override;
-  int might_contain(ObIArray<ObDatum> &vals, bool &is_match);
   int adjust_cell_size();
 private:
   int get_min(ObIArray<ObDatum> &vals);
@@ -170,8 +168,7 @@ public:
   ObFixedArray<ObDatum, common::ObIAllocator> upper_bounds_;
   ObFixedArray<bool, common::ObIAllocator> need_null_cmp_flags_;
   ObFixedArray<MinMaxCellSize, common::ObIAllocator> cells_size_;
-  ObCmpFuncs null_first_cmp_funcs_;
-  ObCmpFuncs null_last_cmp_funcs_;
+  ObCmpFuncs cmp_funcs_;
 };
 
 class ObRFInFilterMsg : public ObP2PDatahubMsgBase

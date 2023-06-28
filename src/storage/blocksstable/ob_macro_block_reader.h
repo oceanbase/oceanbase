@@ -129,7 +129,7 @@ private:
       const bool is_index_block,
       ObMacroBlockRowBareIterator &macro_bare_iter);
   int dump_sstable_micro_data(const ObMicroBlockData &micro_data, const bool is_index_block);
-  int dump_column_info(const int64_t col_cnt);
+  int dump_column_info(const int64_t col_cnt, const int64_t type_array_col_cnt);
   bool check_need_print(const uint64_t tablet_id, const int64_t scn);
 private:
   // raw data
@@ -151,6 +151,7 @@ private:
   char *hex_print_buf_;
   bool is_trans_sstable_;
   bool is_inited_;
+  int64_t column_type_array_cnt_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableDataBlockReader);
 };

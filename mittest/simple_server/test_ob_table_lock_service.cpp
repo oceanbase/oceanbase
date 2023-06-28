@@ -295,11 +295,11 @@ TEST_F(ObTableLockServiceTest, lock_table)
 {
   LOG_INFO("ObTableLockServiceTest::lock_table");
   int ret = OB_SUCCESS;
-  ObTableLockOwnerID OWNER_ONE = 1;
-  ObTableLockOwnerID OWNER_TWO = 2;
+  ObTableLockOwnerID OWNER_ONE(1);
+  ObTableLockOwnerID OWNER_TWO(2);
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
-  ObTableLockOwnerID lock_owner = 0;
+  ObTableLockOwnerID lock_owner(0);
   share::ObTenantSwitchGuard tenant_guard;
 
   ret = tenant_guard.switch_to(OB_SYS_TENANT_ID);
@@ -389,8 +389,8 @@ TEST_F(ObTableLockServiceTest, lock_part)
   uint64_t table_id = 0;
   ObSEArray<ObObjectID, 1> part_ids;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID OWNER_ONE = 1;
-  ObTableLockOwnerID OWNER_TWO = 2;
+  ObTableLockOwnerID OWNER_ONE(1);
+  ObTableLockOwnerID OWNER_TWO(2);
   ObLockPartitionRequest lock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
@@ -500,11 +500,11 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   // 2.1 unlock tablet of one part table
   // 2.2 unlock tablet of multi part table
   int ret = OB_SUCCESS;
-  ObTableLockOwnerID OWNER_ONE = 1;
-  ObTableLockOwnerID OWNER_TWO = 2;
+  ObTableLockOwnerID OWNER_ONE(1);
+  ObTableLockOwnerID OWNER_TWO(2);
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
-  ObTableLockOwnerID lock_owner = 0;
+  ObTableLockOwnerID lock_owner(0);
   share::ObTenantSwitchGuard tenant_guard;
   ObTabletIDArray tablet_list;
 
@@ -611,7 +611,7 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   ObTransService *txs = nullptr;
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID OWNER_ONE = 1;
+  ObTableLockOwnerID OWNER_ONE(1);
   ObLockTableRequest lock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
@@ -691,7 +691,8 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   ObTransService *txs = nullptr;
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID OWNER_ONE = 1;
+  ObTableLockOwnerID OWNER_ONE(1);
+  ObTableLockOwnerID DEFAULT_OWNER_ID(0);
   ObLockTableRequest lock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
@@ -812,7 +813,7 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.6");
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               0);
+                                               DEFAULT_OWNER_ID);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 2.7 recheck after unlock
@@ -843,7 +844,7 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   ObTransService *txs = nullptr;
   uint64_t obj_id1 = 1010;
   ObTableLockMode lock_mode1 = SHARE;
-  ObTableLockOwnerID OWNER_ONE = 1;
+  ObTableLockOwnerID OWNER_ONE(1);
   ObLockObjRequest lock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;

@@ -121,7 +121,11 @@ int ObLobPieceBuilder::set_basic_infos(
   // priority same with data table schema
   aux_lob_piece_schema.set_tenant_id(data_schema.get_tenant_id());
   aux_lob_piece_schema.set_database_id(data_schema.get_database_id());
-  aux_lob_piece_schema.set_tablegroup_id(data_schema.get_tablegroup_id());
+  if (is_inner_table(data_schema.get_table_id())) {
+    aux_lob_piece_schema.set_tablegroup_id(data_schema.get_tablegroup_id());
+  } else {
+    aux_lob_piece_schema.set_tablegroup_id(OB_INVALID_ID);
+  }
   aux_lob_piece_schema.set_load_type(data_schema.get_load_type());
   aux_lob_piece_schema.set_def_type(data_schema.get_def_type());
   aux_lob_piece_schema.set_charset_type(data_schema.get_charset_type());

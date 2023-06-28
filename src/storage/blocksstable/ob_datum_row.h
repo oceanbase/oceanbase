@@ -17,6 +17,7 @@
 #include "common/ob_tablet_id.h"
 #include "share/datum/ob_datum.h"
 #include "share/datum/ob_datum_funcs.h"
+#include "storage/meta_mem/ob_fixed_meta_obj_array.h"
 #include "storage/tx/ob_trans_define.h"
 #include "common/row/ob_row.h"
 #include "storage/ob_storage_util.h"
@@ -185,6 +186,16 @@ public:
   }
   OB_INLINE void format_str(char *str, int8_t len) const
   { return format_dml_str(whole_flag_, str, len); }
+  OB_INLINE int32_t get_delta() const
+  {
+    int32_t ret_val  = 0;
+    if (is_extra_delete()) {
+      ret_val = -1;
+    } else if (is_insert()) {
+      ret_val = 1;
+    }
+    return ret_val;
+  }
 
   TO_STRING_KV("flag", get_dml_str(ObDmlFlag(flag_)), K_(flag_type)) ;
 private:
@@ -387,7 +398,7 @@ public:
   /*
    *row estimate section
    */
-  OB_INLINE int32_t get_delta() const;
+  OB_INLINE int32_t get_delta() const { return row_flag_.get_delta(); }
 
   DECLARE_TO_STRING;
 
@@ -446,37 +457,52 @@ private:
   common::ObCmpFunc cmp_func_;
 };
 
-typedef common::ObFixedArray<ObStorageDatumCmpFunc, common::ObIAllocator> ObStoreCmpFuncs;
+typedef storage::ObFixedMetaObjArray<ObStorageDatumCmpFunc> ObStoreCmpFuncs;
+typedef storage::ObFixedMetaObjArray<common::ObHashFunc> ObStoreHashFuncs;
 struct ObStorageDatumUtils
 {
 public:
   ObStorageDatumUtils();
   ~ObStorageDatumUtils();
+  // init with array memory from allocator
   int init(const common::ObIArray<share::schema::ObColDesc> &col_descs,
            const int64_t schema_rowkey_cnt,
            const bool is_oracle_mode,
            common::ObIAllocator &allocator);
+  // init with array memory on fixed size memory buffer
+  int init(const common::ObIArray<share::schema::ObColDesc> &col_descs,
+           const int64_t schema_rowkey_cnt,
+           const bool is_oracle_mode,
+           const int64_t arr_buf_len,
+           char *arr_buf);
   void reset();
-  OB_INLINE bool is_valid() const { return is_inited_; }
+  OB_INLINE bool is_valid() const
+  {
+    return is_inited_ && cmp_funcs_.count() >= rowkey_cnt_ && hash_funcs_.count() >= rowkey_cnt_;
+  }
   OB_INLINE bool is_oracle_mode() const { return is_oracle_mode_; }
   OB_INLINE int64_t get_rowkey_count() const { return rowkey_cnt_; }
   OB_INLINE int64_t get_column_count() const { return col_cnt_; }
   OB_INLINE const ObStoreCmpFuncs &get_cmp_funcs() const { return cmp_funcs_; }
-  OB_INLINE const common::ObHashFuncs &get_hash_funcs() const { return hash_funcs_; }
+  OB_INLINE const ObStoreHashFuncs &get_hash_funcs() const { return hash_funcs_; }
   OB_INLINE const common::ObHashFunc &get_ext_hash_funcs() const { return ext_hash_func_; }
-  TO_STRING_KV(K_(is_oracle_mode), K_(rowkey_cnt), K_(col_cnt), KP_(allocator), K_(is_inited));
+  int64_t get_deep_copy_size() const;
+  TO_STRING_KV(K_(is_oracle_mode), K_(rowkey_cnt), K_(col_cnt), K_(is_inited), K_(is_oracle_mode));
 private:
   //TODO to be removed by @hanhui
   int transform_multi_version_col_desc(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                                        const int64_t schema_rowkey_cnt,
                                        common::ObIArray<share::schema::ObColDesc> &mv_col_descs);
+  int inner_init(
+      const common::ObIArray<share::schema::ObColDesc> &mv_col_descs,
+      const int64_t mv_rowkey_col_cnt,
+      const bool is_oracle_mode);
 private:
-  int32_t rowkey_cnt_;
+  int32_t rowkey_cnt_;  // multi version rowkey
   int32_t col_cnt_;
-  ObStoreCmpFuncs cmp_funcs_;
-  common::ObHashFuncs hash_funcs_;
+  ObStoreCmpFuncs cmp_funcs_; // multi version rowkey cmp funcs
+  ObStoreHashFuncs hash_funcs_;  // multi version rowkey cmp funcs
   common::ObHashFunc ext_hash_func_;
-  ObIAllocator *allocator_;
   bool is_oracle_mode_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageDatumUtils);
@@ -648,16 +674,6 @@ OB_INLINE bool ObStorageDatum::operator==(const common::ObObj &other) const
   return bret;
 }
 
-OB_INLINE int32_t ObDatumRow::get_delta() const
-{
-  int32_t delta = 0;
-  if (row_flag_.is_extra_delete()) {
-    delta = -1;
-  } else if (row_flag_.is_insert()) {
-    delta = 1;
-  }
-  return delta;
-}
 OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len) const
 {
   int64_t pos = 0;

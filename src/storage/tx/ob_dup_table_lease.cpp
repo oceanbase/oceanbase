@@ -952,9 +952,9 @@ int ObDupTableLSLeaseMgr::LeaderLeaseMgrStatFunctor::operator()(
     }
     // update cnt_ for next read
     cnt_++;
-
-    DUP_TABLE_LOG(DEBUG, "insert one row in svr list", K(ret), K(tmp_stat), K(cnt_),
-                  K(hash_pair.second.confirmed_lease_info_), K(collect_arr_));
+    // for debug
+    DUP_TABLE_LOG(INFO, "insert one row in svr list", K(ret), K(tmp_stat), K(cnt_),
+                  K(hash_pair.second), K(collect_arr_));
   }
 
   return ret;

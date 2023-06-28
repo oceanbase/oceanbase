@@ -353,7 +353,7 @@ public:
   inline void set_urowid(const ObURowIDData &urowid_data)
   {
     ptr_ = reinterpret_cast<const char *>(urowid_data.rowid_content_);
-    pack_ = static_cast<uint32_t>(urowid_data.rowid_len_);//TODO(yongle.xh): need check
+    pack_ = static_cast<uint32_t>(urowid_data.rowid_len_);
   }
   inline void set_urowid(const char *ptr, const int64_t size)
   {

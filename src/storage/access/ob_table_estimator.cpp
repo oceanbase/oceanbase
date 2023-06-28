@@ -102,11 +102,11 @@ int ObTableEstimator::estimate_multi_scan_row_count(
 {
   int ret = OB_SUCCESS;
   ObPartitionEst tmp_cost;
-  const ObTableReadInfo &full_read_info = base_input.tablet_handle_.get_obj()->get_full_read_info();
+  const ObITableReadInfo &rowkey_read_info = base_input.tablet_handle_.get_obj()->get_rowkey_read_info();
   for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
     const ObDatumRange &range = ranges.at(i);
     bool is_single_rowkey = false;
-    if (OB_FAIL(range.is_single_rowkey(full_read_info.get_datum_utils(), is_single_rowkey))) {
+    if (OB_FAIL(range.is_single_rowkey(rowkey_read_info.get_datum_utils(), is_single_rowkey))) {
       STORAGE_LOG(WARN, "Failed to check range is single rowkey", K(ret), K(range));
     } else if (is_single_rowkey) {
       // Back off to get mode if range contains single row key.

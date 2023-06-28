@@ -14,10 +14,12 @@
 #include "ob_ls_remove_member_dag.h"
 #include "observer/ob_server.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_service.h"
 #include "lib/hash/ob_hashset.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -124,15 +126,16 @@ int64_t ObLSRemoveMemberDag::hash() const
   return hash_value;
 }
 
-int ObLSRemoveMemberDag::fill_comment(char *buf, const int64_t buf_len) const
+int ObLSRemoveMemberDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls remove member dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, "ls remove member dag: ls_id = %s, remove_member = %s",
-      to_cstring(ctx_.arg_.ls_id_) ,to_cstring(ctx_.arg_.remove_member_.get_server())))) {
-    LOG_WARN("failed to fill comment", K(ret), K(ctx_));
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+                                  ctx_.arg_.ls_id_.id(),
+                                  "remove_member", to_cstring(ctx_.arg_.remove_member_.get_server())))) {
+    LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;
 }
@@ -353,6 +356,7 @@ int ObLSRemoveMemberTask::transform_member_(ObLS *ls)
   const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
   const ObReplicaType &src_type = ctx_->arg_.src_.get_replica_type();
   const ObReplicaType &dest_type = ctx_->arg_.dest_.get_replica_type();
+  palf::LogConfigVersion config_version;
 
   if (!ctx_->arg_.type_.is_transform_member()) {
     ret = OB_ERR_UNEXPECTED;
@@ -364,15 +368,40 @@ int ObLSRemoveMemberTask::transform_member_(ObLS *ls)
         LOG_WARN("failed to switch acceptor to learner", KR(ret), KPC(ctx_));
       }
     } else if (ObReplicaTypeCheck::is_readonly_replica(src_type) && ObReplicaTypeCheck::is_full_replica(dest_type)) {
-      //R -> F
-      //TODO(muwei.ym) need consider add F to member list with TRANSFER
-      if (OB_FAIL(ls->switch_learner_to_acceptor(ctx_->arg_.src_, ctx_->arg_.new_paxos_replica_number_, change_member_list_timeout_us))) {
+      if (OB_FAIL(switch_learner_to_acceptor_(ls))) {
         LOG_WARN("failed to switch learner to acceptor", KR(ret), KPC(ctx_));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("replica type is unexpected", K(ret), KPC(ctx_));
     }
+  }
+  return ret;
+}
+
+int ObLSRemoveMemberTask::switch_learner_to_acceptor_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_svr = NULL;
+  ObStorageRpc *storage_rpc = NULL;
+  ObStorageHASrcInfo src_info;
+  src_info.cluster_id_ = GCONF.cluster_id;
+  share::SCN ls_transfer_scn;
+  const uint64_t tenant_id = ctx_->arg_.tenant_id_;
+  const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_FAIL(ls->get_transfer_scn(ls_transfer_scn))) {
+    LOG_WARN("failed to get transfer scn", K(ret), KP(ls));
+  } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, ctx_->arg_.ls_id_, src_info.src_addr_))) {
+    LOG_WARN("failed to get ls leader", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
+  } else if (OB_FAIL(storage_rpc->switch_learner_to_acceptor(tenant_id, src_info, ctx_->arg_.ls_id_, ctx_->arg_.src_,
+      ctx_->arg_.new_paxos_replica_number_, ls_transfer_scn, timeout))) {
+    LOG_WARN("failed to switch learner to acceptor", K(ret), KPC(ctx_));
   }
   return ret;
 }
@@ -397,6 +426,7 @@ int ObLSRemoveMemberTask::report_to_rs_()
     res.task_id_ = ctx_->arg_.task_id_;
     res.tenant_id_ = ctx_->arg_.tenant_id_;
     res.ls_id_ = ctx_->arg_.ls_id_;
+    res.result_ = ctx_->result_;
     while (retry_count++ < MAX_RETRY_TIMES) {
       if (OB_FAIL(rs_mgr->get_master_root_server(rs_addr))) {
         STORAGE_LOG(WARN, "get master root service failed", K(ret));

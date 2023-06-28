@@ -617,6 +617,12 @@ const char *const OB_SERVER_ROLE_VAR_NAME = "__ob_server_role";
 //trace id
 const char *const OB_TRACE_ID_VAR_NAME = "__ob_trace_id";
 
+//balance partition sharding
+const char *const OB_PARTITION_SHARDING_NONE = "NONE";
+const char *const OB_PARTITION_SHARDING_PARTITION = "PARTITION";
+const char *const OB_PARTITION_SHARDING_ADAPTIVE = "ADAPTIVE";
+
+
 // backup and restore
 const int64_t OB_MAX_CLUSTER_NAME_LENGTH = OB_MAX_APP_NAME_LENGTH;
 const int64_t OB_MAX_URI_LENGTH = 2048;
@@ -801,6 +807,8 @@ const char *const OB_DIAG_TENANT_NAME = "diag";
 const char *const OB_DDL_ID_VAR_NAME = "__oceanbase_ddl_id";
 const int64_t OB_MAX_DDL_ID_STR_LENGTH = 64;
 const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 7L * 24L * 60L * 60L * 1000L * 1000L; // 7days
+
+const int64_t OB_MAX_PARTITION_SHARDING_LENGTH = 10;
 
 // The default user name of the standby database to log in to the main database
 const char *const OB_STANDBY_USER_NAME = "__oceanbase_inner_standby_user";
@@ -2343,7 +2351,7 @@ OB_INLINE int64_t ob_gettid()
 
 OB_INLINE uint64_t& ob_get_tenant_id()
 {
-  thread_local uint64_t tenant_id = 0;;
+  thread_local uint64_t tenant_id = 0;
   return tenant_id;
 }
 

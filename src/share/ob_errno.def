@@ -647,11 +647,13 @@ DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice background thread may be hung");
 DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
 DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
-//DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
 DEFINE_ERROR(OB_ARBITRATION_INFO_QUERY_FAILED, -4758, -1, "HY000", "the arbitration service may be unavailable, please check and retry");
 DEFINE_ERROR(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, -4759, -1, "HY000", "An error was ignored when accessing virtual table, actual error code: %d");
 DEFINE_ERROR(OB_LS_OFFLINE, -4760, -1, "HY000", "log stream is offline");
 DEFINE_ERROR(OB_LS_IS_DELETED, -4761, -1, "HY000", "log stream is deleted");
+DEFINE_ERROR(OB_SKIP_CHECKING_LS_STATUS, -4762, -1, "HY000", "This operation has been finished without checking ls status");
+DEFINE_ORACLE_ERROR(OB_ERR_USE_ROWID_FOR_UPDATE, -4763, -1, "HY000", "invalid user.table.column, table.column, or column specification", 1747, "invalid user.table.column, table.column, or column specification");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_UNKNOWN_SET_OPTION, -4764, -1, "HY000", "unknown SET option", "unknown SET option \'%s\'", 600, "unknown SET option", "unknown SET option \'%s\'");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -2011,6 +2013,8 @@ DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARC
 DEFINE_ERROR(OB_RESTORE_LOG_TO_END, -9093, -1, "HY000", "Restore log to end");
 DEFINE_ERROR(OB_LS_RESTORE_FAILED, -9094, -1, "HY000", "Restore log stream failed");
 DEFINE_ERROR(OB_NO_TABLET_NEED_BACKUP, -9095, -1, "HY000", "No tablet need backup");
+DEFINE_ERROR(OB_ERR_RESTORE_STANDBY_VERSION_LAG, -9096, -1, "HY000", "standby binary version is lower than primary data version, standby need upgrade");
+DEFINE_ERROR(OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED, -9097, -1, "HY000", "primary tenant has been dropped");
 // end of backup and restore error codes 9001 ~ 9099
 
 ////////////////////////////////////////////////////////////////
@@ -2283,6 +2287,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_VARIABLE_NOT_IN_SELECT_LIST, -9745, -1, "HY000", "var
 DEFINE_ORACLE_ERROR(OB_ERR_MULTI_RECORD, -9746, -1, "HY000", "coercion into multiple record targets not supported", 494, "coercion into multiple record targets not supported");
 DEFINE_ERROR(OB_ERR_MALFORMED_PS_PACKET, -9747, -1, "HY000", "malformed ps packet");
 DEFINE_ERROR(OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK, -9748, 1351, "HY000", "View's SELECT contains a variable or parameter");
+DEFINE_ORACLE_ERROR(OB_ERR_OBJECT_NOT_EXIST, -9749, -1, "HY000", "object does not exist", 6564, "object does not exist", "object %.*s does not exist");
+
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

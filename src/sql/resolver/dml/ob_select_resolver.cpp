@@ -1427,7 +1427,13 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
         LOG_WARN("of node is null", K(ret));
       } else if (OB_FAIL(resolve_sql_expr(*column_node, expr))) {
         LOG_WARN("failed to resolve sql expr", K(ret));
-      } else if (OB_ISNULL(expr) || OB_UNLIKELY(!expr->is_column_ref_expr())) {
+      } else if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is invalid", K(ret), K(expr));
+      } else if (is_oracle_mode() && expr->get_data_type() == ObURowIDType) {
+        ret = OB_ERR_USE_ROWID_FOR_UPDATE;
+        LOG_WARN("FOR UPDATE OF ROWID is illegal", K(ret), K(*expr));
+      } else if (OB_UNLIKELY(!expr->is_column_ref_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is invalid", K(ret), K(expr));
       } else {
@@ -1523,13 +1529,7 @@ int ObSelectResolver::set_for_update_oracle(ObSelectStmt &stmt,
   if (stmt.is_set_stmt()) {
     ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
     LOG_WARN("invalid for update", K(ret));
-  } else if (col != NULL && col->get_data_type() == ObURowIDType &&
-             ObCharset::case_insensitive_equal(to_cstring(col->get_column_name()), OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid user.table.column, table.column, or column specification");
-    LOG_WARN("pseudo_column rowid is not supported for update", K(col->get_column_name()), K(col->get_data_type()));
   }
-
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_size(); ++i) {
     TableItem *table = NULL;
     if (OB_ISNULL(table = stmt.get_table_item(i))) {

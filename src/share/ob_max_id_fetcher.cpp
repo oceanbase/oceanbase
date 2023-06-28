@@ -49,6 +49,7 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_logstrema_group_id", "max used log stream group id"},
   { "ob_max_used_sys_pl_object_id", "max used sys pl object id"},
   { "ob_max_used_object_id", "max used object id"},
+  { "ob_max_used_lock_owner_id", "max used lock owner id"},
   { "ob_max_used_rewrite_rule_version", "max used rewrite rule version"},
   /* the following id_type will be changed to ob_max_used_object_id and won't be persisted. */
   { "ob_max_used_table_id", "max used table id"},
@@ -112,6 +113,7 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_LS_GROUP_ID_TYPE:
     case OB_MAX_USED_SYS_PL_OBJECT_ID_TYPE:
     case OB_MAX_USED_OBJECT_ID_TYPE:
+    case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
     case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE: {
       dst = src;
       break;
@@ -299,6 +301,7 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
         case OB_MAX_USED_SERVER_ID_TYPE:
         case OB_MAX_USED_DDL_TASK_ID_TYPE:
         case OB_MAX_USED_UNIT_GROUP_ID_TYPE:
+        case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
         case OB_MAX_USED_LS_ID_TYPE:
         case OB_MAX_USED_LS_GROUP_ID_TYPE:
         case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE: {

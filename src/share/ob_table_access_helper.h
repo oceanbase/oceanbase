@@ -211,7 +211,7 @@ public:
                                        condition,
                                        output_array);
   }
-  template <int N, typename ...T>
+  template <typename ...T>
   static int read_multi_row(const uint64_t tenant_id,
                             const std::initializer_list<const char *> &columns,
                             const ObString &table,
@@ -550,6 +550,19 @@ private:
     TIMEGUARD_INIT(OCCAM, 1_s, 60_s);
     int ret = common::OB_SUCCESS;
     if (CLICK_FAIL(row->get_int(column, value))) {
+      OB_LOG(WARN, "get_column_from_signle_row failed", KR(ret), K(MTL_ID()), K(column));
+    } else {
+      OB_LOG(TRACE, "get_column_from_signle_row success", KR(ret), K(MTL_ID()), K(column), K(value));
+    }
+    return ret;
+  }
+  static int get_signle_column_from_signle_row_(common::sqlclient::ObMySQLResult *row,
+                                                const char *column,
+                                                uint64_t &value)
+  {
+    TIMEGUARD_INIT(OCCAM, 1_s, 60_s);
+    int ret = common::OB_SUCCESS;
+    if (CLICK_FAIL(row->get_uint(column, value))) {
       OB_LOG(WARN, "get_column_from_signle_row failed", KR(ret), K(MTL_ID()), K(column));
     } else {
       OB_LOG(TRACE, "get_column_from_signle_row success", KR(ret), K(MTL_ID()), K(column), K(value));

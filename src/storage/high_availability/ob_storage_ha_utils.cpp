@@ -11,13 +11,25 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_storage_ha_utils.h"
+#include "observer/ob_server_struct.h"
+#include "share/config/ob_server_config.h"
+#include "share/location_cache/ob_location_service.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "share/scn.h"
+#include "share/ls/ob_ls_info.h"
+#include "ob_storage_ha_struct.h"
+#include "share/ls/ob_ls_table_operator.h"
+#include "observer/ob_server_event_history_table_operator.h"
+#include "observer/ob_server_struct.h"
+#include "observer/ob_service.h"
 #include "share/ob_version.h"
 #include "share/ob_cluster_version.h"
+#include "storage/ob_storage_rpc.h"
+#include "storage/tx/ob_ts_mgr.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::share;
 
@@ -25,6 +37,48 @@ namespace oceanbase
 {
 namespace storage
 {
+
+int ObStorageHAUtils::get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  static const int64_t DEFAULT_CHECK_LS_LEADER_TIMEOUT = 1 * 60 * 1000 * 1000L;  // 1min
+  const int64_t cluster_id = GCONF.cluster_id;
+  if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("location cache is NULL", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
+  } else {
+    uint32_t renew_count = 0;
+    const uint32_t max_renew_count = 10;
+    const int64_t retry_us = 200 * 1000;
+    const int64_t start_ts = ObTimeUtility::current_time();
+    do {
+      if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(cluster_id, tenant_id, ls_id, leader))) {
+        if (OB_LS_LOCATION_NOT_EXIST == ret && renew_count++ < max_renew_count) {  // retry ten times
+          LOG_WARN("failed to get location and force renew", K(ret), K(tenant_id), K(ls_id), K(cluster_id));
+          if (OB_SUCCESS != (tmp_ret = GCTX.location_service_->nonblock_renew(cluster_id, tenant_id, ls_id))) {
+            LOG_WARN("failed to nonblock renew from location cache", K(tmp_ret), K(ls_id), K(cluster_id));
+          } else if (ObTimeUtility::current_time() - start_ts > DEFAULT_CHECK_LS_LEADER_TIMEOUT) {
+            renew_count = max_renew_count;
+          } else {
+            ob_usleep(retry_us);
+          }
+        }
+      } else {
+        LOG_INFO("get ls leader", K(tenant_id), K(ls_id), K(leader), K(cluster_id));
+      }
+    } while (OB_LS_LOCATION_NOT_EXIST == ret && renew_count < max_renew_count);
+
+    if (OB_SUCC(ret) && !leader.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("leader addr is invalid", K(ret), K(tenant_id), K(ls_id), K(leader), K(cluster_id));
+    }
+  }
+  return ret;
+}
 
 int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const common::ObAddr &src_addr, const common::ObTabletID &tablet_id, common::ObISQLClient &sql_client)
@@ -70,6 +124,27 @@ int ObStorageHAUtils::check_server_version(const uint64_t server_version)
       ret = OB_MIGRATE_NOT_COMPATIBLE;
       LOG_WARN("migrate server not compatible", K(ret), K(server_version), K(cur_server_version));
     }
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::report_ls_meta_table(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const storage::ObMigrationStatus &migration_status)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSReplica ls_replica;
+  share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
+  const bool inner_table_only = false;
+  if (OB_FAIL(GCTX.ob_service_->fill_ls_replica(tenant_id, ls_id, ls_replica))) {
+    LOG_WARN("failed to fill ls replica", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(lst_operator->update(ls_replica, inner_table_only))) {
+    LOG_WARN("failed to update ls meta table", K(ret), K(ls_replica));
+  } else {
+    SERVER_EVENT_ADD("storage_ha", "report_ls_meta_table",
+                      "tenant_id", tenant_id,
+                      "ls_id", ls_id,
+                      "migration_status", migration_status);
+    LOG_INFO("report ls meta table", K(ls_replica));
   }
   return ret;
 }
@@ -135,6 +210,163 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
       }
     }
   }
+  return ret;
+}
+
+int ObStorageHAUtils::check_ls_deleted(
+    const share::ObLSID &ls_id,
+    bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tenant_id = MTL_ID();
+  ObLSExistState state = ObLSExistState::MAX_STATE;
+  is_deleted = false;
+
+  // sys tenant should always return LS_NORMAL
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get ls status from inner table get invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(ObLocationService::check_ls_exist(tenant_id, ls_id, state))) {
+    LOG_WARN("failed to check ls exist", K(ret), K(tenant_id), K(ls_id));
+  } else if (state.is_deleted()) {
+    is_deleted = true;
+  } else {
+    is_deleted = false;
+  }
+  return ret;
+}
+
+
+bool ObTransferUtils::is_need_retry_error(const int err)
+{
+  bool bool_ret = false;
+  //white list
+  switch (err) {
+  //Has active trans need retry
+  case OB_TRANSFER_MEMBER_LIST_NOT_SAME:
+  case OB_PARTITION_NOT_LEADER:
+  case OB_TRANS_TIMEOUT:
+      bool_ret = true;
+      break;
+    default:
+      break;
+  }
+  return bool_ret;
+}
+
+int ObTransferUtils::block_tx(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_svr = NULL;
+  common::ObAddr leader_addr;
+  ObStorageHASrcInfo src_info;
+  ObStorageRpc *storage_rpc = NULL;
+  share::SCN gts;
+  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
+  } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, ls_id, leader_addr))) {
+    LOG_WARN("failed to get ls leader", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_gts(tenant_id, gts))) {
+    LOG_WARN("failed to get gts", K(ret), K(tenant_id));
+  } else {
+    src_info.src_addr_ = leader_addr;
+    src_info.cluster_id_ = GCONF.cluster_id;
+    if (OB_FAIL(storage_rpc->block_tx(tenant_id, src_info, ls_id, gts))) {
+      LOG_WARN("failed to block tx", K(ret), K(tenant_id), K(src_info), K(ls_id), K(gts));
+    }
+  }
+  return ret;
+}
+
+// TODO(yangyi.yyy): get gts before block and kill tx, unblock no need get gts
+int ObTransferUtils::kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_svr = NULL;
+  common::ObAddr leader_addr;
+  ObStorageHASrcInfo src_info;
+  ObStorageRpc *storage_rpc = NULL;
+  share::SCN gts;
+  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
+  } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, ls_id, leader_addr))) {
+    LOG_WARN("failed to get ls leader", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_gts(tenant_id, gts))) {
+    LOG_WARN("failed to get gts", K(ret), K(tenant_id));
+  } else {
+    src_info.src_addr_ = leader_addr;
+    src_info.cluster_id_ = GCONF.cluster_id;
+    if (OB_FAIL(storage_rpc->kill_tx(tenant_id, src_info, ls_id, gts))) {
+      LOG_WARN("failed to block tx", K(ret), K(tenant_id), K(src_info), K(ls_id), K(gts));
+    }
+  }
+  return ret;
+}
+
+int ObTransferUtils::unblock_tx(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_svr = NULL;
+  common::ObAddr leader_addr;
+  ObStorageHASrcInfo src_info;
+  ObStorageRpc *storage_rpc = NULL;
+  share::SCN gts;
+
+  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
+  } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, ls_id, leader_addr))) {
+    LOG_WARN("failed to get ls leader", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_gts(tenant_id, gts))) {
+    LOG_WARN("failed to get gts", K(ret), K(tenant_id));
+  } else {
+    src_info.src_addr_ = leader_addr;
+    src_info.cluster_id_ = GCONF.cluster_id;
+    if (OB_FAIL(storage_rpc->unblock_tx(tenant_id, src_info, ls_id, gts))) {
+      LOG_WARN("failed to block tx", K(ret), K(tenant_id), K(src_info), K(ls_id), K(gts));
+    }
+  }
+  return ret;
+}
+
+int ObTransferUtils::get_gts(const uint64_t tenant_id, SCN &gts)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id is invalid", K(ret), K(tenant_id));
+  } else {
+    ret = OB_EAGAIN;
+    const transaction::MonotonicTs stc = transaction::MonotonicTs::current_time();
+    transaction::MonotonicTs unused_ts(0);
+    const int64_t start_time = ObTimeUtility::fast_current_time();
+    const int64_t TIMEOUT = 10 * 1000 * 1000; //10s
+    while (OB_EAGAIN == ret) {
+      if (ObTimeUtility::fast_current_time() - start_time > TIMEOUT) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("get gts timeout", KR(ret), K(start_time), K(TIMEOUT));
+      } else if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, stc, NULL, gts, unused_ts))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to get gts", KR(ret), K(tenant_id));
+        } else {
+          // waiting 10ms
+          ob_usleep(10L * 1000L);
+        }
+      }
+    }
+  }
+  LOG_INFO("get tenant gts", KR(ret), K(tenant_id), K(gts));
   return ret;
 }
 

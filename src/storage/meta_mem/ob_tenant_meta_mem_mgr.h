@@ -36,6 +36,7 @@
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/tablet/ob_full_tablet_creator.h"
 #include "lib/signal/ob_signal_utils.h"
 
 namespace oceanbase
@@ -62,9 +63,16 @@ class ObTenantMetaMemMgr;
 class ObTxDataMemtable;
 class ObTxCtxMemtable;
 class ObLSMemberMemtable;
-class ObTabletTxMultiSourceDataUnit;
+class ObTabletCreateDeleteMdsUserData;
 
-struct ObTenantMetaMemStatus
+enum class ObTabletPoolType : uint8_t
+{
+  TP_NORMAL = 0,
+  TP_LARGE  = 1,
+  TP_MAX
+};
+
+struct ObTenantMetaMemStatus final
 {
 public:
   ObTenantMetaMemStatus();
@@ -79,34 +87,82 @@ public:
   TO_STRING_KV(K_(name), K(total_size_), K(used_size_), K(used_obj_cnt_), K(free_obj_cnt_), K(each_obj_size_));
 };
 
+struct ObTabletBufferInfo final
+{
+public:
+  ObTabletBufferInfo()
+    : ls_id_(), tablet_id_(),
+      tablet_buffer_ptr_(nullptr), tablet_(nullptr),
+      pool_type_(), in_map_(false), last_access_time_(-1)
+  {
+  }
+  ~ObTabletBufferInfo()
+  {
+    reset();
+  }
+
+  void reset();
+  int fill_info(const ObTabletPoolType &pool_type, ObMetaObjBufferNode *node);
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), KP_(tablet_buffer_ptr), KP_(tablet), K_(pool_type), K_(in_map), K_(last_access_time));
+
+public:
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  char *tablet_buffer_ptr_;
+  ObTablet *tablet_;
+  ObTabletPoolType pool_type_;
+  bool in_map_;
+  int64_t last_access_time_;
+};
+
 class ObTenantMetaMemMgr final
 {
 public:
   typedef ObMetaPointerHandle<ObTabletMapKey, ObTablet> ObTabletPointerHandle;
-private:
+  static const int64_t THE_SIZE_OF_HEADERS = sizeof(ObFIFOAllocator::NormalPageHeader) + sizeof(ObMetaObjBufferNode);
+  static const int64_t NORMAL_TABLET_POOL_SIZE = 4 * 1024L - THE_SIZE_OF_HEADERS; // 4KB
+  static const int64_t LARGE_TABLET_POOL_SIZE = 64 * 1024L - THE_SIZE_OF_HEADERS; // 64KB
+
   static const int64_t MIN_MODE_MAX_TABLET_CNT_IN_OBJ_POOL = 10000;
-  static const int64_t MIN_MODE_MAX_SSTABLE_CNT_IN_OBJ_POOL = 5 * MIN_MODE_MAX_TABLET_CNT_IN_OBJ_POOL;
   static const int64_t MIN_MODE_MAX_MEMTABLE_CNT_IN_OBJ_POOL = 2 * MIN_MODE_MAX_TABLET_CNT_IN_OBJ_POOL;
 
   static const int64_t MAX_TABLET_CNT_IN_OBJ_POOL = 50000;
-  static const int64_t MAX_SSTABLE_CNT_IN_OBJ_POOL = 5 * MAX_TABLET_CNT_IN_OBJ_POOL;
   static const int64_t MAX_MEMTABLE_CNT_IN_OBJ_POOL = 2 * MAX_TABLET_CNT_IN_OBJ_POOL;
   static const int64_t MAX_TX_DATA_MEMTABLE_CNT_IN_OBJ_POOL = MAX_MEMSTORE_CNT * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   static const int64_t MAX_TX_CTX_MEMTABLE_CNT_IN_OBJ_POOL = OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   static const int64_t MAX_LOCK_MEMTABLE_CNT_IN_OBJ_POOL = OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   static const int64_t MAX_DDL_KV_IN_OBJ_POOL = 5000;
+  static const int64_t TABLET_TRANSFORM_INTERVAL_US = 2 * 1000 * 1000L; // 2s
 
   static int64_t get_default_tablet_pool_count()
   {
     return lib::is_mini_mode() ? MIN_MODE_MAX_TABLET_CNT_IN_OBJ_POOL : MAX_TABLET_CNT_IN_OBJ_POOL;
   }
-  static int64_t get_default_sstable_pool_count()
+  static int64_t get_default_normal_tablet_pool_count()
   {
-    return lib::is_mini_mode() ? MIN_MODE_MAX_SSTABLE_CNT_IN_OBJ_POOL : MAX_SSTABLE_CNT_IN_OBJ_POOL;
+    return static_cast<int64_t>(get_default_tablet_pool_count() * 0.96);
+  }
+  static int64_t get_default_large_tablet_pool_count()
+  {
+    return get_default_tablet_pool_count() - get_default_normal_tablet_pool_count();
   }
   static int64_t get_default_memtable_pool_count()
   {
     return lib::is_mini_mode() ? MIN_MODE_MAX_MEMTABLE_CNT_IN_OBJ_POOL : MAX_MEMTABLE_CNT_IN_OBJ_POOL;
+  }
+
+  static int get_tablet_pool_type(const int64_t tablet_size, ObTabletPoolType &type)
+  {
+    int ret = OB_SUCCESS;
+    if (tablet_size <= NORMAL_TABLET_POOL_SIZE) {
+      type = ObTabletPoolType::TP_NORMAL;
+    } else if (tablet_size <= LARGE_TABLET_POOL_SIZE) {
+      type = ObTabletPoolType::TP_LARGE;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "tablet size is too large", K(ret), K(tablet_size));
+    }
+    return ret;
   }
 
 private:
@@ -122,18 +178,24 @@ public:
   void wait();
   void destroy();
 
+  int print_old_chain(
+      const ObTabletMapKey &key,
+      const ObTabletPointer &tablet_ptr,
+      const int64_t buf_len,
+      char *buf);
   // TIPS:
   //  - only for tx data table to find min log ts.
-  int get_min_end_scn_for_ls(const share::ObLSID &ls_id, share::SCN &end_scn);
+  int get_min_end_scn_for_ls(
+      const ObTabletMapKey &key,
+      share::SCN &min_end_scn_from_latest,
+      share::SCN &min_end_scn_from_old);
+  int get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::SCN &scn);
 
   // garbage collector for sstable and memtable.
   int push_table_into_gc_queue(ObITable *table, const ObITable::TableType table_type);
   int gc_tables_in_queue(bool &all_table_cleaned);
-  void gc_sstable(blocksstable::ObSSTable *sstable);
-
-  // sstable interface
-  int acquire_sstable(ObTableHandleV2 &handle);
-  int acquire_sstable(ObTableHandleV2 &handle, common::ObIAllocator &allocator);
+  int gc_tablet(ObTablet *tablet); // add tablet into gc queue
+  int gc_tablets_in_queue(bool &all_tablet_cleaned); // trigger to gc tablets
 
   // ddl kv interface
   int acquire_ddl_kv(ObTableHandleV2 &handle);
@@ -144,19 +206,35 @@ public:
   int acquire_tx_ctx_memtable(ObTableHandleV2 &handle);
   int acquire_lock_memtable(ObTableHandleV2 &handle);
 
-  // tablet interfaces
-  int acquire_tablet(
+  // tablet create and acquire interfaces
+  //  - create_xx_tablet() is used for the first time to construct a tablet object and create a
+  //    tablet pointer.
+  //  - acquire_xx_tablet() is used for non-first time, and only constructs a tablet object.
+  int create_msd_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
       ObLSHandle &ls_handle,
-      ObTabletHandle &tablet_handle,
-      const bool only_acquire);
-  int acquire_tablet(
+      ObTabletHandle &tablet_handle);
+  int acquire_msd_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
-      common::ObIAllocator &allocator,
-      ObTabletHandle &tablet_handle,
-      const bool only_acquire);
+      ObTabletHandle &tablet_handle);
+  int create_tmp_tablet(
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      common::ObArenaAllocator &allocator,
+      ObLSHandle &ls_handle,
+      ObTabletHandle &tablet_handle);
+  int acquire_tmp_tablet(
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      common::ObArenaAllocator &allocator,
+      ObTabletHandle &tablet_handle);
+  int acquire_tablet_from_pool(
+      const ObTabletPoolType &type,
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      ObTabletHandle &tablet_handle);
   int get_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
@@ -165,9 +243,10 @@ public:
   int get_tablet_with_allocator(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
-      common::ObIAllocator &allocator,
+      common::ObArenaAllocator &allocator,
       ObTabletHandle &handle,
       const bool force_alloc_new = false);
+  int get_tablet_buffer_infos(const ObTabletPoolType &pool_type, ObIArray<ObTabletBufferInfo> &buffer_infos);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int has_tablet(const ObTabletMapKey &key, bool &is_exist);
   int del_tablet(const ObTabletMapKey &key);
@@ -175,42 +254,34 @@ public:
       ObLSService &ls_service,
       bool &is_released,
       const char *module);
-
   int compare_and_swap_tablet(
-      const ObTabletMapKey &key,
-      const ObMetaDiskAddr &new_addr,
-      const ObTabletHandle &old_handle,
-      ObTabletHandle &new_handle);
-  // TIPS:
-  //  - only compare and swap pure address, but no reset object.
-  //  - only for checkpoint writer.
-  int compare_and_swap_tablet_pure_address_without_object(
       const ObTabletMapKey &key,
       const ObMetaDiskAddr &old_addr,
       const ObMetaDiskAddr &new_addr);
-  int try_wash_tablet();
+  int compare_and_swap_tablet(
+      const ObTabletMapKey &key,
+      const ObTabletHandle &old_handle,
+      ObTabletHandle &new_handle);
+  int update_tablet_buffer_header(ObTablet *old_obj, ObTablet *new_obj);
+  int try_wash_tablet(const std::type_info &type_info, void *&obj);
   int get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const;
 
-  int get_tablet_pointer_tx_data(const ObTabletMapKey &key, ObTabletTxMultiSourceDataUnit &tx_data);
-  int insert_pinned_tablet(const ObTabletMapKey &key);
-  int erase_pinned_tablet(const ObTabletMapKey &key);
+  int get_tablet_pointer_initial_state(const ObTabletMapKey &key, bool &initial_state);
   int get_tablet_ddl_kv_mgr(const ObTabletMapKey &key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
-
-  // TIPS:
-  //  - only for allocating variable meta object in storage meta.
-  OB_INLINE common::ObIAllocator &get_tenant_allocator() { return allocator_; }
-  OB_INLINE bool is_used_obj_pool(common::ObIAllocator *allocator) const
-  {
-    return &allocator_ == allocator;
-  }
+  ObFullTabletCreator &get_mstx_tablet_creator() { return full_tablet_creator_; }
   OB_INLINE int64_t get_total_tablet_cnt() const { return tablet_map_.count(); }
 
-  TO_STRING_KV(K_(tenant_id), K_(is_inited));
+  TO_STRING_KV(K_(tenant_id), K_(is_inited), "tablet count", tablet_map_.count());
 private:
   int64_t cal_adaptive_bucket_num();
-
+  int push_tablet_into_gc_queue(ObTablet *tablet);
+  void push_tablet_list_into_gc_queue(ObTablet *tablet);
+  int get_min_end_scn_from_single_tablet(
+      ObTablet *tablet, const bool is_old, share::SCN &min_end_scn);
+private:
   typedef ObResourceValueStore<ObMetaPointer<ObTablet>> TabletValueStore;
-
+  typedef ObMetaObjBuffer<ObTablet, NORMAL_TABLET_POOL_SIZE> ObNormalTabletBuffer;
+  typedef ObMetaObjBuffer<ObTablet, LARGE_TABLET_POOL_SIZE> ObLargeTabletBuffer;
   struct CandidateTabletInfo final
   {
   public:
@@ -222,21 +293,6 @@ private:
 
     int64_t ls_id_; // to use ObBinaryHeap, the type here must is_trivially_copyable
     uint64_t tablet_id_; // to use ObBinaryHeap, the type here must is_trivially_copyable
-    int64_t wash_score_;
-  };
-  struct InMemoryPinnedTabletInfo final
-  {
-  public:
-    InMemoryPinnedTabletInfo() : key_(), addr_(), wash_score_(INT64_MIN) {}
-    ~InMemoryPinnedTabletInfo() = default;
-    bool operator < (const InMemoryPinnedTabletInfo &info)
-    {
-      return wash_score_ < info.wash_score_;
-    }
-    TO_STRING_KV(K_(key), K_(addr), K_(wash_score));
-  public:
-    ObTabletMapKey key_;
-    ObMetaDiskAddr addr_;
     int64_t wash_score_;
   };
   class HeapCompare final
@@ -260,6 +316,15 @@ private:
     ObITable *table_;
     ObITable::TableType table_type_;
   };
+  class TabletGCTask : public common::ObTimerTask
+  {
+  public:
+    explicit TabletGCTask(ObTenantMetaMemMgr *t3m) : t3m_(t3m) {}
+    virtual ~TabletGCTask() = default;
+    virtual void runTimerTask() override;
+  private:
+    ObTenantMetaMemMgr *t3m_;
+  };
   class TableGCTask : public common::ObTimerTask
   {
   public:
@@ -273,21 +338,21 @@ private:
   private:
     ObTenantMetaMemMgr *t3m_;
   };
-  class MinMinorSSTableGCTask : public common::ObTimerTask
-  {
-  public:
-    explicit MinMinorSSTableGCTask(ObTenantMetaMemMgr *t3m) : t3m_(t3m) {}
-    virtual ~MinMinorSSTableGCTask() = default;
-    virtual void runTimerTask() override;
-  private:
-    ObTenantMetaMemMgr *t3m_;
-  };
   class RefreshConfigTask : public common::ObTimerTask
   {
   public:
     RefreshConfigTask() = default;
     virtual ~RefreshConfigTask() = default;
     virtual void runTimerTask() override;
+  };
+  class TabletPersistTask : public common::ObTimerTask
+  {
+  public:
+    explicit TabletPersistTask(ObTenantMetaMemMgr *t3m) : t3m_(t3m) {}
+    virtual ~TabletPersistTask() = default;
+    virtual void runTimerTask() override;
+  private:
+    ObTenantMetaMemMgr *t3m_;
   };
   class MinMinorSSTableInfo final
   {
@@ -329,51 +394,23 @@ private:
 
 private:
   friend class ObT3mTabletMapIterator;
-  friend class GetWashTabletCandidate;
   friend class TableGCTask;
   friend class ObTabletPointer;
   static const int64_t DEFAULT_BUCKET_NUM = 10243L;
   static const int64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
   static const int64_t TABLE_GC_INTERVAL_US = 20 * 1000L; // 20ms
-  static const int64_t MIN_MINOR_SSTABLE_GC_INTERVAL_US = 1 * 1000 * 1000L; // 1s
   static const int64_t REFRESH_CONFIG_INTERVAL_US = 10 * 1000 * 1000L; // 10s
   static const int64_t ONE_ROUND_RECYCLE_COUNT_THRESHOLD = 20000L;
+  static const int64_t ONE_ROUND_TABLET_GC_COUNT_THRESHOLD = 200L;
   static const int64_t BATCH_MEMTABLE_GC_THRESHOLD = 100L;
   static const int64_t DEFAULT_TABLET_WASH_HEAP_COUNT = 16;
   static const int64_t DEFAULT_MINOR_SSTABLE_SET_COUNT = 49999;
   static const int64_t SSTABLE_GC_MAX_TIME = 500; // 500us
   typedef common::ObBinaryHeap<CandidateTabletInfo, HeapCompare, DEFAULT_TABLET_WASH_HEAP_COUNT> Heap;
+  typedef common::ObDList<ObMetaObjBufferNode> TabletBufferList;
   typedef common::hash::ObHashSet<MinMinorSSTableInfo, common::hash::NoPthreadDefendMode> SSTableSet;
   typedef common::hash::ObHashSet<ObTabletMapKey, hash::NoPthreadDefendMode> PinnedTabletSet;
-
-  class GetWashTabletCandidate final
-  {
-  public:
-    GetWashTabletCandidate(
-        Heap &heap,
-        common::ObIArray<InMemoryPinnedTabletInfo> &mem_addr_tablets_,
-        ObTenantMetaMemMgr &t3m,
-        common::ObIAllocator &allocator);
-    ~GetWashTabletCandidate() = default;
-    int operator()(common::hash::HashMapPair<ObTabletMapKey, TabletValueStore *> &entry);
-
-    TO_STRING_KV(K_(none_addr_tablet_cnt),
-                 K_(mem_addr_tablet_cnt),
-                 K_(in_memory_tablet_cnt),
-                 K_(inner_tablet_cnt),
-                 K_(candidate_tablet_cnt));
-  private:
-    Heap &heap_;
-    common::ObIArray<InMemoryPinnedTabletInfo> &mem_addr_tablets_;
-    ObTenantMetaMemMgr &t3m_;
-    common::ObIAllocator &allocator_;
-    int64_t none_addr_tablet_cnt_; // tablet whose meta disk addr is NONE, should not be washed
-    int64_t mem_addr_tablet_cnt_; // tablet whose meta disk addr is MEM, should not be washed
-    int64_t in_memory_tablet_cnt_; // tablet which exists in memory, may be washing candidate
-    int64_t inner_tablet_cnt_;
-    int64_t candidate_tablet_cnt_;
-  };
 
   class TenantMetaAllocator : public common::ObFIFOAllocator
   {
@@ -389,49 +426,40 @@ private:
   };
 
 private:
+  int acquire_tablet(const ObTabletPoolType type, ObTabletHandle &tablet_handle);
+  int acquire_tablet(ObITenantMetaObjPool *pool, ObTablet *&tablet);
   int acquire_tablet_ddl_kv_mgr(ObDDLKvMgrHandle &handle);
   int acquire_tablet_memtable_mgr(ObMemtableMgrHandle &handle);
   int create_tablet(const ObTabletMapKey &key, ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
-  int gc_min_minor_sstable_in_set();
-  int record_min_minor_sstable(const share::ObLSID &ls_id, const ObTableHandleV2 &table_handle);
-  int try_wash_tablet(const int64_t expect_wash_cnt);
   int do_wash_candidate_tablet(
-      const int64_t expect_wash_cnt,
-      Heap &heap,
-      int64_t &wash_inner_cnt,
-      int64_t &wash_user_cnt);
-  int do_wash_mem_addr_tablet(
-      const int64_t expect_wash_cnt,
-      const common::ObIArray<InMemoryPinnedTabletInfo> &mem_addr_tablet_info,
-      int64_t &wash_inner_cnt,
-      int64_t &wash_user_cnt,
-      int64_t &wash_mem_addr_cnt);
-  int write_slog_and_wash_tablet(
-      const ObTabletMapKey &key,
-      const ObMetaDiskAddr &old_addr,
-      bool &is_wash);
-  int64_t calc_wash_tablet_cnt() const;
+      const CandidateTabletInfo &info,
+      ObTabletHandle &tablet_handle,
+      void *& free_obj);
+  int try_wash_tablet_from_gc_queue(
+      const int64_t buf_len,
+      TabletBufferList &header,
+      void *&free_obj);
   void dump_tablet();
-  void dump_pinned_tablet();
   void dump_ls(ObLSService &ls_service) const;
   void init_pool_arr();
+  void *recycle_tablet(ObTablet *tablet, TabletBufferList *header = nullptr);
   void release_memtable(memtable::ObMemtable *memtable);
-  void release_sstable(blocksstable::ObSSTable *sstable);
-  void release_ddl_kv(ObDDLKV *ddl_kv);
   void release_tablet(ObTablet *tablet);
+  void release_ddl_kv(ObDDLKV *ddl_kv);
   void release_tablet_ddl_kv_mgr(ObTabletDDLKvMgr *ddl_kv_mgr);
   void release_tablet_memtable_mgr(ObTabletMemtableMgr *memtable_mgr);
   void release_tx_data_memtable_(ObTxDataMemtable *memtable);
   void release_tx_ctx_memtable_(ObTxCtxMemtable *memtable);
   void release_lock_memtable_(transaction::tablelock::ObLockMemtable *memtable);
+  void mark_mds_table_deleted_(const ObTabletMapKey &key);
 
   template <typename T>
   int get_obj_pool_info(
       const ObTenantMetaObjPool<T> &obj_pool,
       const char *name,
       common::ObIArray<ObTenantMetaMemStatus> &info) const;
-  int get_allocator_info(common::ObIArray<ObTenantMetaMemStatus> &info) const;
-  int exist_pinned_tablet(const ObTabletMapKey &key);
+  int get_wash_tablet_candidate(const std::type_info &type_info, CandidateTabletInfo &info);
+  void destroy_gc_tablets_queue();
   int push_memtable_into_gc_map_(memtable::ObMemtable *memtable);
   void batch_gc_memtable_();
 
@@ -442,31 +470,34 @@ private:
   TryWashTabletFunc wash_func_;
   const uint64_t tenant_id_;
   ObBucketLock bucket_lock_;
-  TenantMetaAllocator allocator_;
+  ObFullTabletCreator full_tablet_creator_;
   ObMetaPointerMap<ObTabletMapKey, ObTablet> tablet_map_;
   int tg_id_;
+  int persist_tg_id_; // since persist task may cost too much time, we use another thread to exec.
   TableGCTask table_gc_task_;
-  MinMinorSSTableGCTask min_minor_sstable_gc_task_;
   RefreshConfigTask refresh_config_task_;
+  TabletPersistTask tablet_persist_task_;
+  TabletGCTask tablet_gc_task_;
+  ObTablet *gc_head_;
+  int64_t wait_gc_tablets_cnt_;
   common::ObLinkQueue free_tables_queue_;
   common::ObSpinLock gc_queue_lock_;
-  SSTableSet last_min_minor_sstable_set_;
-  common::SpinRWLock sstable_set_lock_;
-  ObBucketLock pin_set_lock_;
-  PinnedTabletSet pinned_tablet_set_; // tablets which are in multi source data transaction procedure
-
   common::hash::ObHashMap<share::ObLSID, memtable::ObMemtableSet*> gc_memtable_map_;
 
   ObTenantMetaObjPool<memtable::ObMemtable> memtable_pool_;
-  ObTenantMetaObjPool<blocksstable::ObSSTable> sstable_pool_;
+  ObTenantMetaObjPool<ObNormalTabletBuffer> tablet_buffer_pool_;
+  ObTenantMetaObjPool<ObLargeTabletBuffer> large_tablet_buffer_pool_;
   ObTenantMetaObjPool<ObDDLKV> ddl_kv_pool_;
-  ObTenantMetaObjPool<ObTablet> tablet_pool_;
   ObTenantMetaObjPool<ObTabletDDLKvMgr> tablet_ddl_kv_mgr_pool_;
   ObTenantMetaObjPool<ObTabletMemtableMgr> tablet_memtable_mgr_pool_;
   ObTenantMetaObjPool<ObTxDataMemtable> tx_data_memtable_pool_;
   ObTenantMetaObjPool<ObTxCtxMemtable> tx_ctx_memtable_pool_;
   ObTenantMetaObjPool<transaction::tablelock::ObLockMemtable> lock_memtable_pool_;
   ObITenantMetaObjPool *pool_arr_[ObITable::TableType::MAX_TABLE_TYPE];
+
+  // for washing
+  TabletBufferList normal_tablet_header_;
+  TabletBufferList large_tablet_header_;
 
   bool is_inited_;
 };
@@ -494,9 +525,9 @@ public:
 
 class ObT3mTabletMapIterator
 {
+  friend class ObTenantMetaMemMgr;
 public:
   explicit ObT3mTabletMapIterator(ObTenantMetaMemMgr &t3m);
-  ObT3mTabletMapIterator(ObTenantMetaMemMgr &t3m, common::ObIAllocator &allocator);
   virtual ~ObT3mTabletMapIterator();
   void reset();
 protected:
@@ -518,10 +549,19 @@ private:
     common::ObIArray<ObTabletMapKey> &items_;
   };
 protected:
+  class GCTabletItemOp final
+  {
+  public:
+    GCTabletItemOp(TabletMap &tablet_map);
+    ~GCTabletItemOp() = default;
+    int operator()(TabletPair &pair);
+  private:
+    TabletMap &tablet_map_;
+  };
+protected:
   static const int64_t DEFAULT_TABLET_ITEM_CNT = 8;
 
   TabletMap &tablet_map_;
-  common::ObIAllocator &allocator_;
   common::ObSEArray<ObTabletMapKey, DEFAULT_TABLET_ITEM_CNT> tablet_items_;
   int64_t idx_;
 private:
@@ -532,13 +572,14 @@ class ObTenantTabletIterator : public ObT3mTabletMapIterator,
                                public ObITenantTabletIterator
 {
 public:
-  explicit ObTenantTabletIterator(ObTenantMetaMemMgr &t3m);
-  ObTenantTabletIterator(ObTenantMetaMemMgr &t3m, common::ObIAllocator &allocator);
+  ObTenantTabletIterator(
+      ObTenantMetaMemMgr &t3m,
+      common::ObArenaAllocator &allocator);
   virtual ~ObTenantTabletIterator() = default;
   virtual int get_next_tablet(ObTabletHandle &handle) override;
 
 private:
-  const bool is_used_obj_pool_;
+  common::ObArenaAllocator *allocator_;
 };
 
 class ObTenantInMemoryTabletIterator : public ObT3mTabletMapIterator,

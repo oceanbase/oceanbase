@@ -24,15 +24,19 @@ namespace storage
 class ObTabletSlogHelper
 {
 public:
-  static int write_create_tablet_slog(
-      const ObTabletHandle &tablet_handle,
+  static int write_update_tablet_slog(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const ObMetaDiskAddr &disk_addr);
+  static int write_empty_shell_tablet_slog(
+      ObTablet *empty_shell_tablet,
       ObMetaDiskAddr &disk_addr);
-  static int write_create_tablet_slog(
-      const common::ObIArray<ObTabletHandle> &tablet_handle_array,
-      common::ObIArray<ObMetaDiskAddr> &disk_addr_array);
   static int write_remove_tablet_slog(
       const share::ObLSID &ls_id,
       const common::ObIArray<common::ObTabletID> &tablet_ids);
+  static int write_remove_tablet_slog(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_ids);
 private:
   static int safe_batch_write_remove_tablet_slog(
       const share::ObLSID &ls_id,

@@ -182,6 +182,7 @@ public:
 
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const;
+  int get_config_version(LogConfigVersion &config_version) const;
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                              int64_t &paxos_replica_num,
                                              GlobalLearnerList &learner_list) const;
@@ -210,15 +211,18 @@ public:
   // @brief, add a member to paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t new_replica_num: replica number of paxos group after adding 'member'
+  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us: add member timeout, us
   // @return
   // - OB_SUCCESS: add member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
   // - OB_TIMEOUT: add member timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - OB_STATE_NOT_MATCH: not the same leader
   // - other: bug
   int add_member(const common::ObMember &member,
                  const int64_t new_replica_num,
+                 const LogConfigVersion &config_version,
                  const int64_t timeout_us);
 
   // @brief, remove a member from paxos group, can be called only in leader
@@ -238,6 +242,7 @@ public:
   // @brief, replace old_member with new_member, can be called only in leader
   // @param[in] const common::ObMember &added_member: member wil be added
   // @param[in] const common::ObMember &removed_member: member will be removed
+  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace member successfully
@@ -247,6 +252,7 @@ public:
   // - other: bug
   int replace_member(const common::ObMember &added_member,
                      const common::ObMember &removed_member,
+                     const LogConfigVersion &config_version,
                      const int64_t timeout_us);
 
   // @brief: add a learner(read only replica) in this clsuter
@@ -275,6 +281,7 @@ public:
   // @param[in] const common::ObMember &learner: learner will be switched to acceptor
   // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
   //            learner to acceptor (similar to add_member)
+  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
@@ -283,6 +290,7 @@ public:
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   int switch_learner_to_acceptor(const common::ObMember &learner,
                                  const int64_t new_replica_num,
+                                 const LogConfigVersion &config_version,
                                  const int64_t timeout_us);
 
   // @brief: switch an acceptor(full replica) to learner(read only replica) in this clsuter
@@ -380,8 +388,34 @@ public:
   int reset_election_priority();
   int stat(PalfStat &palf_stat) const;
 
+  //---------config change lock related--------//
+  //@return
+  // -- OB_NOT_INIT           not_init
+  // -- OB_SUCCESS            successfull lock
+  // -- OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT   failed to lock because of locked by others
+  // -- OB_TIMEOUT              timeout, may lock successfully or not
+  // -- OB_EAGAIN               other config change operation is going on,need retry later
+  // -- OB_NOT_MASTER           this replica is not leader, not refresh location and retry with actual leader
+  // -- OB_STATE_NOT_MATCH        lock_owner is smaller than previous lock_owner
+  int try_lock_config_change(int64_t lock_owner, int64_t timeout_us);
+  //@return
+  // -- OB_NOT_INIT           not_init
+  // -- OB_SUCCESS            successfull unlock
+  // -- OB_TIMEOUT            timeout, may unlock successfully or not
+  // -- OB_EAGAIN             other config change operation is going on,need retry later
+  // -- OB_NOT_MASTER         this replica is not leader, need refresh location and retry with actual leader
+  // -- OB_STATE_NOT_MATCH    lock_owner is smaller than previous lock_owner,or lock_owner is bigger than previous lock_owner
+  int unlock_config_change(int64_t lock_owner, int64_t timeout_us);
+  //@return
+  // -- OB_NOT_INIT           not_init
+  // -- OB_SUCCESS            success
+  // -- OB_NOT_MASTER         this replica is not leader, not refresh location and retry with actual leader
+  // -- OB_EAGAIN             is_locking or unlocking
+  int get_config_change_lock_stat(int64_t &lock_owner, bool &is_locked);
+
 	// @param [out] diagnose info, current diagnose info of palf
   int diagnose(PalfDiagnoseInfo &diagnose_info) const;
+
   TO_STRING_KV(KP(palf_handle_impl_), KP(rc_cb_), KP(fs_cb_));
 private:
   palf::IPalfHandleImpl *palf_handle_impl_;

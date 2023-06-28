@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define UNIITTEST_DEBUG
+#define UNITTEST_DEBUG
 
 #include "lib/future/ob_future.h"
 #include <gtest/gtest.h>

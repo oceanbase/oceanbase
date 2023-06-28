@@ -46,87 +46,46 @@ public:
   {}
   ~ObTableGroupHelp() {}
 
-  int check_partition_option_for_create_table(share::schema::ObSchemaGetterGuard &schema_guard,
-                                              share::schema::ObTableSchema &table_schema);
+  int check_table_partition_in_tablegroup(const share::schema::ObTableSchema *first_table_schema,
+                                          share::schema::ObTableSchema &table_schema,
+                                          share::schema::ObSchemaGetterGuard &schema_guard);
 
   int add_tables_to_tablegroup(common::ObMySQLTransaction &trans,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                const share::schema::ObTablegroupSchema &tablegroup_schema,
                                const obrpc::ObAlterTablegroupArg &arg);
-
-
-  int modify_partition_option(common::ObMySQLTransaction &trans,
-                              share::schema::ObSchemaGetterGuard &schema_guard,
-                              const share::schema::ObTablegroupSchema &tablegroup_schema,
+  int modify_partition_option(ObMySQLTransaction &trans,
+                              ObSchemaGetterGuard &schema_guard,
+                              const ObTablegroupSchema &tablegroup_schema,
                               const obrpc::ObAlterTablegroupArg &arg);
 
   int check_table_alter_tablegroup(
       share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema *first_table_schema,
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObTableSchema &new_table_schema);
 
+  int modify_sharding_type(const obrpc::ObAlterTablegroupArg &arg,
+                           const ObTablegroupSchema &tablegroup_schema,
+                           common::ObMySQLTransaction &trans,
+                           ObSchemaGetterGuard &schema_guard);
+
 private:
+
+  int check_table_partition_option(const ObTableSchema *table_schema,
+                                   const ObTableSchema *first_table_schema,
+                                   ObSchemaGetterGuard &schema_guard,
+                                   bool check_subpart,
+                                   bool &is_matched);
+  int check_all_table_partition_option(const ObTablegroupSchema &tablegroup_schema,
+                                       ObSchemaGetterGuard &schema_guard,
+                                       bool check_subpart,
+                                       bool &is_matched);
+
   int check_partition_option(const share::schema::ObTablegroupSchema &tablegroup,
-                             share::schema::ObTableSchema &table);
-
-  int check_partition_option(
-      const share::schema::ObTablegroupSchema &tablegroup,
-      share::schema::ObTableSchema &table,
-      bool is_subpart,
-      bool &is_matched);
-
-  int check_alter_partition(const share::schema::ObPartitionSchema *&orig_part_schema,
-                            share::schema::ObPartitionSchema *&alter_part_schema,
-                            const obrpc::ObAlterTablegroupArg::ModifiableOptions alter_part_type,
-                            int64_t expr_num,
-                            bool is_tablegroup);
-  int check_add_partition(const share::schema::ObPartitionSchema *&orig_part_schema,
-                          share::schema::ObPartitionSchema *&alter_part_schema,
-                          int64_t expr_num,
-                          bool is_tablegroup);
-  int check_drop_partition(const share::schema::ObPartitionSchema *&orig_part_schema,
-                           const share::schema::ObPartitionSchema *alter_part_schema,
-                           bool is_tablegroup);
-  int check_partarray_expr_name_valid(const share::schema::ObPartitionSchema *&orig_part_schema,
-                                      const share::schema::ObPartitionSchema *alter_part_schema,
-                                      int64_t expr_num,
-                                      const ObString *split_part_name = NULL);
-
-  int batch_modify_table_partitions(
-      common::ObMySQLTransaction &trans,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      share::schema::ObTablegroupSchema &inc_tablegroup_schema,
-      const share::schema::ObTablegroupSchema &orig_tablegroup_schema,
-      const int64_t new_schema_version,
-      const int64_t expr_num,
-      obrpc::ObAlterTablegroupArg::ModifiableOptions alter_part_type);
-
-  int modify_drop_partition(common::ObMySQLTransaction &trans,
-                            share::schema::ObSchemaGetterGuard &schema_guard,
-                            const share::schema::ObTablegroupSchema &orig_tablegroup_schema,
-                            share::schema::ObTablegroupSchema &inc_tablegroup_schema,
-                            const int64_t new_schema_version,
-                            const int64_t expr_num,
-                            const obrpc::ObAlterTablegroupArg &arg);
-  int modify_add_partition(common::ObMySQLTransaction &trans,
-                           share::schema::ObSchemaGetterGuard &schema_guard,
-                           const share::schema::ObTablegroupSchema &orig_tablegroup_schema,
-                           share::schema::ObTablegroupSchema &inc_tablegroup_schema,
-                           const int64_t new_schema_version,
-                           const int64_t expr_num,
-                           const obrpc::ObAlterTablegroupArg &arg);
-  int check_part_expr_num_and_value_type(
-      const bool is_oracle_mode,
-      const share::schema::ObPartition *alter_part,
-      const share::schema::ObPartition *orig_part,
-      const share::schema::ObPartitionFuncType part_func_type,
-      int64_t expr_num);
-
-  int add_table_partition_in_tablegroup(const share::schema::ObTableSchema &orig_table_schema,
-                                        const share::schema::ObTablegroupSchema &inc_tablegroup_schema,
-                                        const int64_t schema_version,
-                                        share::schema::AlterTableSchema &alter_table_schema,
-                                        common::ObMySQLTransaction &client);
+                             const share::schema::ObTableSchema *fist_table_schema,
+                             const share::schema::ObTableSchema &table,
+                             ObSchemaGetterGuard &schema_guard);
 
   DISALLOW_COPY_AND_ASSIGN(ObTableGroupHelp);
 

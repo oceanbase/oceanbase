@@ -655,7 +655,7 @@ public:
 
 
 public:
-  ObSQLSessionInfo();
+  ObSQLSessionInfo(const uint64_t tenant_id=OB_SERVER_TENANT_ID);
   virtual ~ObSQLSessionInfo();
 
   int init(uint32_t sessid, uint64_t proxy_sessid,
@@ -981,7 +981,7 @@ public:
   int clear_context(const common::ObString &context_name,
                     const common::ObString &attribute);
   int64_t get_curr_session_context_size() const { return curr_session_context_size_; }
-  void reuse_context_map() 
+  void reuse_context_map()
   {
     for (auto it = contexts_map_.begin(); it != contexts_map_.end(); ++it) {
       if (OB_NOT_NULL(it->second)) {
@@ -1103,8 +1103,8 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_sql_extension();
   }
-  bool is_ps_prepare_stage() const { return is_ps_prepare_stage_; }
-  void set_is_ps_prepare_stage(bool v) { is_ps_prepare_stage_ = v; }
+  bool is_varparams_sql_prepare() const { return is_varparams_sql_prepare_; }
+  void set_is_varparams_sql_prepare(bool v) { is_varparams_sql_prepare_ = v; }
   int get_tenant_audit_trail_type(ObAuditTrailType &at_type)
   {
     cached_tenant_config_info_.refresh();
@@ -1298,7 +1298,7 @@ private:
   void *piece_cache_;
   bool is_load_data_exec_session_;
   ObSqlString pl_exact_err_msg_;
-  bool is_ps_prepare_stage_;
+  bool is_varparams_sql_prepare_;
   // Record whether this session has got connection resource, which means it increased connections count.
   // It's used for on_user_disconnect.
   // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.

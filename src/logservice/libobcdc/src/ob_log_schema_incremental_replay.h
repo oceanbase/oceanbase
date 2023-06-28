@@ -55,14 +55,17 @@ public:
 private:
   // Replays all the incremental tenant metas information
   int replay_tenant_metas_(
+      const transaction::ObTransID &trans_id,
       const ObIArray<const datadict::ObDictTenantMeta*> &tenant_metas,
       ObDictTenantInfo &tenant_info);
   // Replays all the incremental database metas information
   int replay_database_metas_(
+      const transaction::ObTransID &trans_id,
       const ObIArray<const datadict::ObDictDatabaseMeta*> &database_metas,
       ObDictTenantInfo &tenant_info);
   // Replays all the incremental table metas information
   int replay_table_metas_(
+      const transaction::ObTransID &trans_id,
       const ObIArray<const datadict::ObDictTableMeta*> &table_metas,
       ObDictTenantInfo &tenant_info);
 

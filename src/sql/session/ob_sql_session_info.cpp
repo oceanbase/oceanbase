@@ -109,9 +109,9 @@ void ObTenantCachedSchemaGuardInfo::try_revert_schema_guard()
   }
 }
 
-ObSQLSessionInfo::ObSQLSessionInfo() :
+ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       ObVersionProvider(),
-      ObBasicSessionInfo(),
+      ObBasicSessionInfo(tenant_id),
       is_inited_(false),
       warnings_buf_(),
       show_warnings_buf_(),
@@ -169,7 +169,7 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       piece_cache_(NULL),
       is_load_data_exec_session_(false),
       pl_exact_err_msg_(),
-      is_ps_prepare_stage_(false),
+      is_varparams_sql_prepare_(false),
       got_tenant_conn_res_(false),
       got_user_conn_res_(false),
       conn_res_user_id_(OB_INVALID_ID),
@@ -204,18 +204,15 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
   } else if (FALSE_IT(txn_free_route_ctx_.set_sessid(sessid))) {
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(package_state_map_.create(hash::cal_next_prime(4),
-                                               "PackStateMap",
-                                               "PackStateMap"))) {
+                                               ObMemAttr(orig_tenant_id_, "PackStateMap")))) {
     LOG_WARN("create package state map failed", K(ret));
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(sequence_currval_map_.create(hash::cal_next_prime(32),
-                                                  "SequenceMap",
-                                                  "SequenceMap"))) {
+                                                  ObMemAttr(orig_tenant_id_, "SequenceMap")))) {
     LOG_WARN("create sequence current value map failed", K(ret));
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(contexts_map_.create(hash::cal_next_prime(32),
-                                          "ContextsMap",
-                                          "ContextsMap"))) {
+                                          ObMemAttr(orig_tenant_id_, "ContextsMap")))) {
     LOG_WARN("create contexts map failed", K(ret));
   } else {
     curr_session_context_size_ = 0;

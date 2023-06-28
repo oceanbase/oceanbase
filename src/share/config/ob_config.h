@@ -49,6 +49,14 @@ enum ObConfigItemType{
   OB_CONF_ITEM_TYPE_VERSION = 11,
 };
 
+enum class ObConfigRangeOpts {
+  OB_CONF_RANGE_NONE,
+  OB_CONF_RANGE_GREATER_THAN,
+  OB_CONF_RANGE_GREATER_EQUAL,
+  OB_CONF_RANGE_LESS_THAN,
+  OB_CONF_RANGE_LESS_EQUAL,
+};
+
 extern ObMemAttr g_config_mem_attr;
 class ObConfigItem
 {
@@ -65,7 +73,7 @@ public:
   {
     ck_ = OB_NEW(ObConfigConsChecker, g_config_mem_attr, ck_, new_ck);
   }
-  bool check() const
+  virtual bool check() const
   {
     return NULL == ck_ ? value_valid_ : value_valid_ && ck_->check(*this);
   }
@@ -437,7 +445,12 @@ class ObConfigIntegralItem
   : public ObConfigItem
 {
 public:
-  ObConfigIntegralItem() : value_(0) {}
+  ObConfigIntegralItem()
+    : value_(0), min_value_(0), max_value_(0),
+      left_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE),
+      right_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE)
+  {
+  }
   virtual ~ObConfigIntegralItem() {}
 
   bool operator >(const char *str) const
@@ -465,6 +478,7 @@ public:
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_INTEGRAL;
   }
+  virtual bool check() const override;
 protected:
   //use current value to do input operation
   virtual bool set(const char *str);
@@ -472,6 +486,10 @@ protected:
 
 private:
   int64_t value_;
+  int64_t min_value_;
+  int64_t max_value_;
+  ObConfigRangeOpts left_interval_opt_;
+  ObConfigRangeOpts right_interval_opt_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigIntegralItem);
 };
 inline bool ObConfigIntegralItem::set(const char *str)
@@ -530,6 +548,7 @@ public:
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_DOUBLE;
   }
+  virtual bool check() const override;
 
 protected:
   //use current value to do input operation
@@ -558,6 +577,10 @@ protected:
 
 private:
   double value_;
+  double min_value_;
+  double max_value_;
+  ObConfigRangeOpts left_interval_opt_;
+  ObConfigRangeOpts right_interval_opt_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigDoubleItem);
 };
 inline ObConfigDoubleItem &ObConfigDoubleItem::operator = (double value)

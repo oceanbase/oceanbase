@@ -480,6 +480,187 @@ int ObSchemaUtils::construct_inner_table_schemas(
   return ret;
 }
 
+int ObSchemaUtils::batch_get_latest_table_schemas(
+    common::ObISQLClient &sql_client,
+    common::ObIAllocator &allocator,
+    const uint64_t tenant_id,
+    const common::ObIArray<ObObjectID> &table_ids,
+    common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  table_schemas.reset();
+  ObSchemaService *schema_service = NULL;
+  ObArray<ObTableLatestSchemaVersion> table_schema_versions;
+  ObArray<SchemaKey> need_refresh_table_schema_keys;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || table_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_ids));
+  } else if (OB_ISNULL(GCTX.schema_service_)
+      || OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("multiversion_schema_service or schema_service is null", KR(ret));
+  } else if (OB_FAIL(schema_service->get_table_latest_schema_versions(
+      sql_client,
+      tenant_id,
+      table_ids,
+      table_schema_versions))) {
+    LOG_WARN("get table latest schema versions failed", KR(ret), K(tenant_id), K(table_ids));
+  } else if (OB_FAIL(batch_get_table_schemas_from_cache_(
+      allocator,
+      tenant_id,
+      table_schema_versions,
+      need_refresh_table_schema_keys,
+      table_schemas))) {
+    LOG_WARN("batch get table schemas from cache failed", KR(ret), K(table_schema_versions));
+  } else if (OB_FAIL(batch_get_table_schemas_from_inner_table_(
+      sql_client,
+      allocator,
+      tenant_id,
+      need_refresh_table_schema_keys,
+      table_schemas))) {
+    LOG_WARN("batch get table_schemas from inner table failed", KR(ret), K(need_refresh_table_schema_keys));
+  }
+  // check table schema ptr
+  ARRAY_FOREACH(table_schemas, idx) {
+    const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(idx);
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_schema can't be null", KR(ret), K(idx), K(table_ids), K(table_schemas));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaUtils::get_latest_table_schema(
+    common::ObISQLClient &sql_client,
+    common::ObIAllocator &allocator,
+    const uint64_t tenant_id,
+    const ObObjectID &table_id,
+    ObSimpleTableSchemaV2 *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  table_schema = NULL;
+  ObSEArray<ObObjectID, 1> table_ids;
+  ObSEArray<ObSimpleTableSchemaV2 *, 1> table_schemas;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(table_ids.push_back(table_id))) {
+    LOG_WARN("push back failed", KR(ret), K(table_id), K(table_ids));
+  } else if (OB_FAIL(batch_get_latest_table_schemas(
+      sql_client,
+      allocator,
+      tenant_id,
+      table_ids,
+      table_schemas))) {
+    LOG_WARN("batch get latest table schema failed", KR(ret), K(table_id));
+  } else if (table_schemas.empty()) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist when get latest table schema", KR(ret), K(table_id));
+  } else if (OB_ISNULL(table_schemas.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema can not be null", KR(ret), K(table_id), K(table_schemas));
+  } else {
+    table_schema = table_schemas.at(0);
+  }
+  return ret;
+}
+
+int ObSchemaUtils::batch_get_table_schemas_from_cache_(
+    common::ObIAllocator &allocator,
+    const uint64_t tenant_id,
+    const ObIArray<ObTableLatestSchemaVersion> &table_schema_versions,
+    common::ObIArray<SchemaKey> &need_refresh_table_schema_keys,
+    common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  need_refresh_table_schema_keys.reset();
+  table_schemas.reset();
+  ObSchemaGetterGuard schema_guard;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("multiversion_schema_service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+      tenant_id,
+      schema_guard))) {
+    LOG_WARN("get schema guard failed", KR(ret), K(tenant_id));
+  } else {
+    ARRAY_FOREACH(table_schema_versions, idx) {
+      const ObSimpleTableSchemaV2 *cached_table_schema = NULL;
+      ObSimpleTableSchemaV2 *new_table_schema = NULL;
+      const ObTableLatestSchemaVersion &table_schema_version = table_schema_versions.at(idx);
+      if (table_schema_version.is_deleted()) {
+        // skip
+      } else if (OB_FAIL(schema_guard.get_simple_table_schema(
+          tenant_id,
+          table_schema_version.get_table_id(),
+          cached_table_schema))) {
+        LOG_WARN("get simple table schema failed", KR(ret), K(tenant_id), K(table_schema_version));
+      } else if (OB_ISNULL(cached_table_schema)
+          || (cached_table_schema->get_schema_version() < table_schema_version.get_schema_version())) {
+        // need fetch new table schema
+        SchemaKey table_schema_key;
+        table_schema_key.tenant_id_ = tenant_id;
+        table_schema_key.table_id_ = table_schema_version.get_table_id();
+        if (OB_FAIL(need_refresh_table_schema_keys.push_back(table_schema_key))) {
+          LOG_WARN("push back failed", KR(ret), K(table_schema_version));
+        }
+      } else if (OB_FAIL(alloc_schema(allocator, *cached_table_schema, new_table_schema))) {
+        LOG_WARN("fail to alloc schema", KR(ret), K(tenant_id), KPC(cached_table_schema));
+      } else if (OB_FAIL(table_schemas.push_back(new_table_schema))) {
+        LOG_WARN("push back failed", KR(ret), KP(new_table_schema));
+      }
+    } // end ARRAY_FOREACH
+  }
+  return ret;
+}
+
+int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
+    common::ObISQLClient &sql_client,
+    common::ObIAllocator &allocator,
+    const uint64_t tenant_id,
+    common::ObArray<SchemaKey> &need_refresh_table_schema_keys,
+    common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  // do not reset table_schemas
+  ObSchemaService *schema_service = NULL;
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = tenant_id;
+  int64_t schema_version = INT64_MAX - 1; // get latest schema
+  ObArray<ObSimpleTableSchemaV2> schema_array;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.schema_service_)
+      || OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("multiversion_schema_service or schema_service is null", KR(ret));
+  } else if (need_refresh_table_schema_keys.empty()) {
+    // skip
+  } else if (OB_FAIL(schema_service->get_batch_tables(
+      schema_status,
+      sql_client,
+      schema_version,
+      need_refresh_table_schema_keys,
+      schema_array))) {
+    LOG_WARN("get batch tables failed", KR(ret),
+        K(schema_status), K(schema_version), K(need_refresh_table_schema_keys));
+  }
+  ARRAY_FOREACH(schema_array, idx) {
+    const ObSimpleTableSchemaV2 &table_schema = schema_array.at(idx);
+    ObSimpleTableSchemaV2 *new_table_schema = NULL;
+    if (OB_FAIL(alloc_schema(allocator, table_schema, new_table_schema))) {
+      LOG_WARN("fail to alloc schema", KR(ret), K(table_schema));
+    } else if (OB_FAIL(table_schemas.push_back(new_table_schema))) {
+      LOG_WARN("push back failed", KR(ret), KP(new_table_schema));
+    }
+  }
+  return ret;
+}
 
 } // end schema
 } // end share

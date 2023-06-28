@@ -250,7 +250,7 @@ END_P SET_VAR DELIMITER
         ARBITRATION ASCII AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
         ACTIVATE AVAILABILITY ARCHIVELOG AUDIT
 
-        BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING BINLOG BIT BIT_AND
+        BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
         BREADTH BUCKETS BISON_LIST BACKUPSET BACKED BACKUPPIECE BACKUP_BACKUP_DEST BACKUPROUND
         BADFILE
@@ -502,7 +502,7 @@ END_P SET_VAR DELIMITER
 %type <node> get_diagnostics_stmt get_statement_diagnostics_stmt get_condition_diagnostics_stmt statement_information_item_list condition_information_item_list statement_information_item condition_information_item statement_information_item_name condition_information_item_name condition_arg
 %type <node> method_opt method_list method extension
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
-%type <node> switchover_tenant_stmt switchover_clause
+%type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format external_table_partition_option
 %type <node> dynamic_sampling_hint
@@ -7245,6 +7245,11 @@ TABLEGROUP_ID opt_equal_mark INTNUM
 {
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLEGROUP_BINDING, 1, $3);
+}
+| SHARDING opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLEGROUP_SHARDING, 1, $3);
 }
 | MAX_USED_PART_ID opt_equal_mark INTNUM
 {
@@ -15221,6 +15226,11 @@ ALTER SYSTEM CANCEL BACKUP opt_backup_tenant_list
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 4, type, value, tenant, $5);
 }
 |
+ALTER SYSTEM CANCEL RESTORE relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_RESTORE, 1, $5);
+}
+|
 ALTER SYSTEM SUSPEND BACKUP
 {
   ParseNode *type = NULL;
@@ -16933,10 +16943,10 @@ RELEASE SAVEPOINT var_name
  *===========================================================*/
 
 switchover_tenant_stmt:
-ALTER SYSTEM switchover_clause
+ALTER SYSTEM switchover_clause opt_verify
 {
   (void)($2);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SWITCHOVER, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SWITCHOVER, 2, $3, $4);
 }
 ;
 
@@ -16953,6 +16963,14 @@ ACTIVATE STANDBY opt_tenant_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_SWITCHOVER_TO_STANDBY, 1, $4);
 }
+;
+
+opt_verify:
+VERIFY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VERIFY); }
+| /* EMPTY */
+{ $$ = NULL; }
 ;
 
 recover_tenant_stmt:
@@ -18009,6 +18027,7 @@ ACCOUNT
 |       SET_MASTER_CLUSTER
 |       SET_SLAVE_CLUSTER
 |       SET_TP
+|       SHARDING
 |       SHARE
 |       SHUTDOWN
 |       SIGNED

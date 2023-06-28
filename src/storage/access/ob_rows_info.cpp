@@ -35,7 +35,7 @@ ObRowsInfo::ExistHelper::~ExistHelper()
 
 int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
                                   ObStoreCtx &store_ctx,
-                                  const ObTableReadInfo &full_read_info,
+                                  const ObITableReadInfo &rowkey_read_info,
                                   ObStorageReserveAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -61,8 +61,7 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
       table_iter_param_.table_id_ = table.get_table_id();
       table_iter_param_.tablet_id_ = table.get_tablet_id();
       table_iter_param_.out_cols_project_ = NULL;
-      table_iter_param_.read_info_ = &full_read_info;
-      table_iter_param_.full_read_info_ = &full_read_info;
+      table_iter_param_.read_info_ = &rowkey_read_info;
       is_inited_ = true;
     }
   }
@@ -95,17 +94,17 @@ ObRowsInfo::~ObRowsInfo()
 int ObRowsInfo::init(
     const ObRelativeTable &table,
     ObStoreCtx &store_ctx,
-    const ObTableReadInfo &full_read_info)
+    const ObITableReadInfo &rowkey_read_info)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObRowsinfo init twice", K(ret));
-  } else if (OB_FAIL(exist_helper_.init(table, store_ctx, full_read_info, scan_mem_allocator_))) {
+  } else if (OB_FAIL(exist_helper_.init(table, store_ctx, rowkey_read_info, scan_mem_allocator_))) {
     STORAGE_LOG(WARN, "Failed to init exist helper", K(ret));
   } else {
-    datum_utils_ = &full_read_info.get_datum_utils();
+    datum_utils_ = &rowkey_read_info.get_datum_utils();
     table_id_ = table.get_table_id();
     tablet_id_ = table.get_tablet_id();
     rowkey_column_num_ = table.get_rowkey_column_num();
@@ -139,7 +138,7 @@ int ObRowsInfo::check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRel
     STORAGE_LOG(WARN, "Invalid parameter", K(rows), K(row_count), K(ret));
   } else {
     reuse();
-    table.tablet_iter_.table_iter_.resume();
+    table.tablet_iter_.table_iter()->resume();
     rows_ = rows;
   }
 

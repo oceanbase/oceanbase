@@ -172,7 +172,9 @@ private:
       ObLogTenant &tenant,
       TransCtx &trans_ctx);
   // wait reader/parser module empty
-  int wait_until_parser_done_(volatile bool &stop_flag);
+  int wait_until_parser_done_(
+      const char *caller,
+      volatile bool &stop_flag);
   // wait reader/parser/formatter module empty
   int wait_until_formatter_done_(volatile bool &stop_flag);
   int recycle_resources_after_trans_ready_(TransCtx &trans_ctx, ObLogTenant &tenant);

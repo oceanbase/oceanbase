@@ -380,7 +380,6 @@ int ObBackupCheckFile::generate_format_desc_(const share::ObBackupDest &dest, sh
     LOG_WARN("failed to assign path", K(ret), K(dest));
   } else {
     format_desc.tenant_id_ = tenant_id_;
-  // TODO:  use real incarnation later.
     format_desc.incarnation_ = OB_START_INCARNATION;
     format_desc.cluster_id_ = GCONF.cluster_id;
   }

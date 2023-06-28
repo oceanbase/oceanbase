@@ -40,7 +40,6 @@
 #include "share/ob_schema_status_proxy.h"
 #include "share/ob_ls_id.h"
 #include "share/ls/ob_ls_table_operator.h"
-#include "share/backup/ob_backup_operator.h"
 #include "storage/ob_file_system_router.h"
 #include "share/ls/ob_ls_creator.h"//ObLSCreator
 #include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
@@ -559,14 +558,11 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
     }
   }
   BOOTSTRAP_CHECK_SUCCESS_V2("refresh_schema");
+
   if (FAILEDx(add_servers_in_rs_list(server_zone_op_service))) {
     LOG_WARN("fail to add servers in rs_list_", KR(ret));
   } else if (OB_FAIL(wait_all_rs_in_service())) {
     LOG_WARN("failed to wait all rs in service", KR(ret));
-  } else if (OB_FAIL(init_backup_inner_table())) {
-    LOG_WARN("failed to init backup inner table", KR(ret));
-  } else if (OB_FAIL(init_backup_data())) {
-    LOG_WARN("failed to init backup inner table version", KR(ret));
   } else {
     ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
   }
@@ -1411,46 +1407,6 @@ int ObBootstrap::init_system_data()
   return ret;
 }
 
-int ObBootstrap::init_backup_inner_table()
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", K(ret));
-  } else if (OB_FAIL(ObBackupInfoOperator::set_inner_table_version(
-      ddl_service_.get_sql_proxy(), OB_BACKUP_INNER_TABLE_V3))) {
-    LOG_WARN("failed to init backup inner table version", K(ret));
-  } else if (OB_FAIL(ObBackupInfoOperator::set_max_piece_id(
-      ddl_service_.get_sql_proxy(), 0))) {
-    LOG_WARN("failed to init max piece id", K(ret));
-  } else if (OB_FAIL(ObBackupInfoOperator::set_max_piece_create_date(
-      ddl_service_.get_sql_proxy(), 0))) {
-    LOG_WARN("failed to init set_max_piece_create_date", K(ret));
-  }
-
-  return ret;
-}
-
-int ObBootstrap::init_backup_data()
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", K(ret));
-  } else if (OB_FAIL(ObBackupInfoOperator::set_inner_table_version(
-      ddl_service_.get_sql_proxy(), OB_BACKUP_INNER_TABLE_V3))) {
-    LOG_WARN("failed to init backup inner table version", K(ret));
-  } else if (OB_FAIL(ObBackupInfoOperator::set_backup_leader_epoch(ddl_service_.get_sql_proxy(), 1))) {
-    LOG_WARN("failed to init backup leader epoch", K(ret));
-  // mark
-  } else if (OB_FAIL(ObBackupInfoOperator::set_backup_leader(ddl_service_.get_sql_proxy(), GCTX.self_addr()))) {
-    //
-    LOG_WARN("failed to init backup leader", K(ret));
-  }
-
-  return ret;
-}
-
 int ObBootstrap::init_sys_unit_config(share::ObUnitConfig &unit_config)
 {
   int ret = OB_SUCCESS;
@@ -1506,6 +1462,7 @@ int ObBootstrap::create_sys_resource_pool()
   share::ObResourcePool pool;
   bool is_bootstrap = true;
   const bool if_not_exist = false;
+  common::ObMySQLTransaction trans;
   common::ObArray<uint64_t> new_ug_id_array;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
@@ -1521,18 +1478,25 @@ int ObBootstrap::create_sys_resource_pool()
     LOG_WARN("create_sys_units failed", K(sys_units), K(ret));
   } else if (OB_FAIL(pool_names.push_back(pool.name_))) {
     LOG_WARN("push_back failed", K(ret));
+  } else if (OB_FAIL(trans.start(&unit_mgr_.get_sql_proxy(), OB_SYS_TENANT_ID))) {
+    LOG_WARN("start transaction failed", KR(ret));
   } else if (OB_FAIL(unit_mgr_.grant_pools(
-          ddl_service_.get_sql_proxy(), new_ug_id_array,
+          trans, new_ug_id_array,
           lib::Worker::CompatMode::MYSQL, pool_names,
           OB_SYS_TENANT_ID, is_bootstrap))) {
     LOG_WARN("grant_pools_to_tenant failed", K(pool_names),
         "tenant_id", static_cast<uint64_t>(OB_SYS_TENANT_ID), K(ret));
   } else {
-    const bool grant = true;
-    if (OB_FAIL(unit_mgr_.commit_change_pool_owner(
-            new_ug_id_array, grant, pool_names, OB_SYS_TENANT_ID))) {
-      LOG_WARN("commit_change_pool_owner failed", K(grant), K(pool_names),
-          "tenant_id", static_cast<uint64_t>(OB_SYS_TENANT_ID), K(ret));
+    if (OB_FAIL(unit_mgr_.load())) {
+      LOG_WARN("unit_manager reload failed", K(ret));
+    }
+  }
+  if (trans.is_started()) {
+    const bool commit = (OB_SUCC(ret));
+    int temp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
+      LOG_WARN("trans end failed", K(commit), K(temp_ret));
+      ret = (OB_SUCCESS == ret) ? temp_ret : ret;
     }
   }
   BOOTSTRAP_CHECK_SUCCESS();

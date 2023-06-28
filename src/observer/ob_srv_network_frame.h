@@ -51,6 +51,7 @@ public:
   int batch_rpc_shutdown();
   int unix_rpc_shutdown();
   void sql_nio_stop();
+  void rpc_stop();
   void wait();
   int stop();
 

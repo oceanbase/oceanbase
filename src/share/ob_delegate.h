@@ -22,6 +22,13 @@
     return delegate_obj.func_name(std::forward<Args>(args)...); \
   }
 
+#define CONST_DELEGATE(delegate_obj, func_name)                       \
+  template <typename ...Args>                                   \
+  auto func_name(Args &&...args)                                \
+  ->decltype(delegate_obj.func_name(std::forward<Args>(args)...)) const { \
+    return delegate_obj.func_name(std::forward<Args>(args)...); \
+  }
+
 #define DELEGATE_WITH_RET(delegate_obj, func_name, ret)         \
   template <typename ...Args>                                   \
     ret func_name(Args &&...args) {                             \

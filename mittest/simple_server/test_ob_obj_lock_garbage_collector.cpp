@@ -314,8 +314,8 @@ TEST_F(ObOBJLockGCBeforeRestartTest, obj_lock_gc_with_tablelock_service)
 {
   LOG_INFO("ObOBJLockGCBeforeRestartTest::obj_lock_gc_with_tablelock_service");
   int ret = OB_SUCCESS;
-  ObTableLockOwnerID OWNER_ONE = 1;
-  ObTableLockOwnerID OWNER_TWO = 2;
+  ObTableLockOwnerID OWNER_ONE(1);
+  ObTableLockOwnerID OWNER_TWO(2);
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
   share::ObTenantSwitchGuard tenant_guard;

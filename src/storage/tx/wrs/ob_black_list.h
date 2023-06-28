@@ -31,8 +31,9 @@
 
 // 查询 __all_virtual_ls_info 的语句，设置了2s超时时间
 #define BLACK_LIST_SELECT_LS_INFO_STMT \
-  "select /*+query_timeout(2000000)*/ svr_ip, svr_port, tenant_id, ls_id, ls_state, \
-  weak_read_scn, migrate_status from oceanbase.__all_virtual_ls_info;"
+  "select /*+query_timeout(2000000)*/ a.svr_ip, a.svr_port, a.tenant_id, a.ls_id, b.role, a.weak_read_scn, a.migrate_status \
+   from oceanbase.__all_virtual_ls_info a, oceanbase.__all_virtual_log_stat b \
+   where a.svr_ip = b.svr_ip and a.svr_port = b.svr_port and a.tenant_id = b.tenant_id and a.ls_id = b.ls_id;"
 
 namespace oceanbase
 {

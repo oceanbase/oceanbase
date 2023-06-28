@@ -33,6 +33,7 @@ public:
   ObDatumRowkey(ObStorageDatumBuffer &datum_buffer);
   ~ObDatumRowkey() = default;
   OB_INLINE void reset() { MEMSET(this, 0, sizeof(ObDatumRowkey)); }
+  void destroy(ObIAllocator &allocator);
   OB_INLINE int assign(ObStorageDatum *datums, const int datum_cnt);
   OB_INLINE bool is_valid() const { return nullptr != datums_ && datum_cnt_ > 0; }
   OB_INLINE bool is_memtable_valid() const { return store_rowkey_.is_valid() && is_valid(); }

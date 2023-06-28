@@ -141,6 +141,8 @@ struct ObMultiBlockIOCtx
 class ObIPutSizeStat
 {
 public:
+  ObIPutSizeStat() {}
+  virtual ~ObIPutSizeStat() {}
   virtual int add_put_size(const int64_t put_size) = 0;
 };
 
@@ -150,13 +152,11 @@ class ObIMicroBlockIOCallback : public common::ObIOCallback
 public:
   ObIMicroBlockIOCallback();
   virtual ~ObIMicroBlockIOCallback();
-  virtual int alloc_io_buf(char *&io_buf, int64_t &io_buf_size, int64_t &aligned_offset);
-  VIRTUAL_TO_STRING_KV(KP_(io_buffer));
 protected:
   friend class ObIMicroBlockCache;
   int process_block(
       ObMacroBlockReader *reader,
-      char *buffer,
+      const char *buffer,
       const int64_t offset,
       const int64_t size,
       const ObMicroBlockCacheValue *&micro_block,
@@ -165,7 +165,7 @@ protected:
 private:
   int read_block_and_copy(
       ObMacroBlockReader &reader,
-      char *buffer,
+      const char *buffer,
       const int64_t size,
       ObMicroBlockData &block_data,
       const ObMicroBlockCacheValue *&micro_block,
@@ -177,17 +177,14 @@ protected:
   ObIMicroBlockCache *cache_;
   ObIPutSizeStat *put_size_stat_;
   common::ObIAllocator *allocator_;
-  char *io_buffer_;
-  char *data_buffer_;
-  const ObTableReadInfo *read_info_;
   uint64_t tenant_id_;
   MacroBlockId block_id_;
   int64_t offset_;
-  int64_t size_;
   ObRowStoreType row_store_type_;
   ObMicroBlockDesMeta block_des_meta_;
   bool use_block_cache_;
   bool need_write_extra_buf_;
+  char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
 };
 
 class ObSingleMicroBlockIOCallback : public ObIMicroBlockIOCallback
@@ -196,18 +193,16 @@ public:
   ObSingleMicroBlockIOCallback();
   virtual ~ObSingleMicroBlockIOCallback();
   virtual int64_t size() const;
-  virtual int inner_process(const bool is_success) override;
+  virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual int inner_deep_copy(
       char *buf, const int64_t buf_len,
       ObIOCallback *&callback) const override;
   virtual const char *get_data() override;
-  INHERIT_TO_STRING_KV("ObIMicroBlockIOCallback", ObIMicroBlockIOCallback, KP_(micro_block),
-                       K_(tablet_handle), K_(cache_handle), K_(need_write_extra_buf));
+  TO_STRING_KV(KP_(micro_block), K_(cache_handle), K_(need_write_extra_buf), K_(offset));
 private:
   friend class ObIMicroBlockCache;
   // Notice: lifetime shoule be longer than AIO or deep copy here
   const ObMicroBlockCacheValue *micro_block_;
-  ObTabletHandle tablet_handle_;
   common::ObKVCacheHandle cache_handle_;
 };
 
@@ -217,12 +212,12 @@ public:
   ObMultiDataBlockIOCallback();
   virtual ~ObMultiDataBlockIOCallback();
   virtual int64_t size() const;
-  virtual int inner_process(const bool is_success) override;
+  virtual int inner_process(const char *data_buffer, const int64_t size) override;
   virtual int inner_deep_copy(
       char *buf, const int64_t buf_len,
       ObIOCallback *&callback) const override;
   virtual const char *get_data() override;
-  INHERIT_TO_STRING_KV("ObIMicroBlockIOCallback", ObIMicroBlockIOCallback, K_(io_ctx));
+  TO_STRING_KV(K_(io_ctx), K_(offset));
 private:
   friend class ObDataMicroBlockCache;
   int set_io_ctx(const ObMultiBlockIOParam &io_param);
@@ -230,7 +225,6 @@ private:
   int deep_copy_ctx(const ObMultiBlockIOCtx &io_ctx);
   int alloc_result();
   void free_result();
-  // Notice: lifetime shoule be longer than AIO or deep copy here
   ObMultiBlockIOCtx io_ctx_;
   ObMultiBlockIOResult io_result_;
 };
@@ -239,7 +233,8 @@ class ObIMicroBlockCache : public ObIPutSizeStat
 {
 public:
   typedef common::ObIKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue> BaseBlockCache;
-public:
+  ObIMicroBlockCache() {}
+  virtual ~ObIMicroBlockCache() {}
   int get_cache_block(
       const uint64_t tenant_id,
       const MacroBlockId block_id,
@@ -248,7 +243,6 @@ public:
       ObMicroBlockBufferHandle &handle);
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
-      const ObTableReadInfo &read_info,
       ObKVCacheInstHandle &inst_handle,
       ObKVCacheHandle &cache_handle,
       ObKVCachePair *&kvpair,
@@ -258,13 +252,10 @@ public:
       const MacroBlockId &macro_id,
       const ObMicroIndexInfo& idx_row,
       const common::ObQueryFlag &flag,
-      const ObTableReadInfo &read_info,
-      const ObTabletHandle &tablet_handle,
       ObMacroBlockHandle &macro_handle);
   virtual int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
-      const ObTableReadInfo *read_info,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) = 0;
@@ -273,7 +264,7 @@ public:
   virtual int get_allocator(common::ObIAllocator *&allocator) = 0;
   virtual int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, const int64_t row_count,
                                  const int64_t request_count, int64_t &extra_size, bool &need_decoder) = 0;
-  virtual int write_extra_buf(const ObTableReadInfo &read_info, const char *block_buf, const int64_t block_size,
+  virtual int write_extra_buf(const char *block_buf, const int64_t block_size,
                               const int64_t extra_size, char *extra_buf, ObMicroBlockData &micro_data) = 0;
   virtual ObMicroBlockData::Type get_type() = 0;
   virtual int add_put_size(const int64_t put_size) override;
@@ -311,12 +302,10 @@ public:
       const MacroBlockId &macro_id,
       const ObMultiBlockIOParam &io_param,
       const ObQueryFlag &flag,
-      const ObTableReadInfo &full_read_info,
       ObMacroBlockHandle &macro_handle);
   int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
-      const ObTableReadInfo *read_info,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) override;
@@ -324,7 +313,7 @@ public:
   virtual int get_allocator(common::ObIAllocator *&allocator) override;
   virtual int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, const int64_t row_count,
                                  const int64_t request_count, int64_t &extra_size, bool &need_decoder);
-  virtual int write_extra_buf(const ObTableReadInfo &read_info, const char *block_buf, const int64_t block_size,
+  virtual int write_extra_buf(const char *block_buf, const int64_t block_size,
                               const int64_t extra_size, char *extra_buf, ObMicroBlockData &micro_data);
   virtual ObMicroBlockData::Type get_type() override;
 private:
@@ -341,13 +330,12 @@ public:
   int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
-      const ObTableReadInfo *read_info,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) override;
   virtual int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, const int64_t row_count,
                                  const int64_t request_count, int64_t &extra_size, bool &need_decoder);
-  virtual int write_extra_buf(const ObTableReadInfo &read_info, const char *block_buf, const int64_t block_size,
+  virtual int write_extra_buf(const char *block_buf, const int64_t block_size,
                               const int64_t extra_size, char *extra_buf, ObMicroBlockData &micro_data);
   virtual ObMicroBlockData::Type get_type() override;
 };

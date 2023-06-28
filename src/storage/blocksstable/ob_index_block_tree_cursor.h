@@ -133,7 +133,7 @@ public:
   int init(
       const blocksstable::ObSSTable &sstable,
       ObIAllocator &allocator,
-      const ObTableReadInfo *read_info,
+      const ObITableReadInfo *read_info,
       const TreeType tree_type = TreeType::INDEX_BLOCK);
 
   // Interfaces to move cursor on index block tree
@@ -150,7 +150,7 @@ public:
   int pull_up_to_root();
   int move_forward(const bool is_reverse_scan);
 
-  TO_STRING_KV(K_(cursor_path), KP_(sstable), K_(curr_path_item));
+  TO_STRING_KV(K_(cursor_path), K_(curr_path_item));
 public:
   // Interfaces to get data on index tree via cursor
   int get_idx_parser(const ObIndexBlockRowParser *&parser);
@@ -216,7 +216,6 @@ private:
   ObMicroBlockReaderHelper micro_reader_helper_;
 
   // Micro Block Cache Read/Prefetch
-  const blocksstable::ObSSTable *sstable_;
   int64_t tenant_id_;
   int64_t rowkey_column_cnt_;
 
@@ -224,7 +223,8 @@ private:
 
   ObDatumRow row_;
   ObIndexBlockRowParser idx_row_parser_;
-  const ObTableReadInfo *read_info_;
+  const ObITableReadInfo *read_info_;
+  ObSSTableMetaHandle sstable_meta_handle_;
   bool is_inited_;
 };
 

@@ -60,7 +60,7 @@ public:
 private:
   int get_next_tx_data_table_(ObITable *&tx_data_memtable);
 
-  void prepare_row_data_(ObITable *tx_data_table, RowData &row_data);
+  int prepare_row_data_(ObITable *tx_data_table, RowData &row_data);
 
   virtual bool is_need_process(uint64_t tenant_id) override;
 

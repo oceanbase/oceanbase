@@ -54,6 +54,7 @@ class ObSql;
 namespace transaction
 {
 enum class ObTxDataSourceType : int64_t;
+struct ObRegisterMdsFlag;
 namespace tablelock
 {
 class ObLockRequest;
@@ -160,36 +161,8 @@ public:
                                          const share::ObLSID ls_id,
                                          const transaction::ObTxDataSourceType type,
                                          const char *buf,
-                                         const int64_t buf_len);
-  virtual int lock_table(const uint64_t tenant_id,
-                         const uint64_t table_id,
-                         const transaction::tablelock::ObTableLockMode lock_mode,
-                         const int64_t timeout_us);
-  virtual int lock_table(const uint64_t tenant_id,
-                         const transaction::tablelock::ObLockTableRequest &arg);
-  virtual int unlock_table(const uint64_t tenant_id,
-                           const transaction::tablelock::ObUnLockTableRequest &arg);
-  virtual int lock_partition(const uint64_t tenant_id,
-                             const transaction::tablelock::ObLockPartitionRequest &arg);
-  virtual int unlock_partition(const uint64_t tenant_id,
-                               const transaction::tablelock::ObUnLockPartitionRequest &arg);
-  virtual int lock_subpartition(const uint64_t tenant_id,
-                                const transaction::tablelock::ObLockPartitionRequest &arg);
-  virtual int unlock_subpartition(const uint64_t tenant_id,
-                                  const transaction::tablelock::ObUnLockPartitionRequest &arg);
-  virtual int lock_tablet(const uint64_t tenant_id,
-                          const uint64_t table_id,
-                          const ObTabletID tablet_id,
-                          const transaction::tablelock::ObTableLockMode lock_mode,
-                          const int64_t timeout_us);
-  virtual int lock_tablet(const uint64_t tenant_id,
-                          const transaction::tablelock::ObLockTabletRequest &arg);
-  virtual int unlock_tablet(const uint64_t tenant_id,
-                            const transaction::tablelock::ObUnLockTabletRequest &arg);
-  virtual int lock_obj(const uint64_t tenant_id,
-                       const transaction::tablelock::ObLockObjRequest &arg);
-  virtual int unlock_obj(const uint64_t tenant_id,
-                         const transaction::tablelock::ObUnLockObjRequest &arg);
+                                         const int64_t buf_len,
+                                         const transaction::ObRegisterMdsFlag &register_flag = transaction::ObRegisterMdsFlag());
   virtual sqlclient::ObCommonServerConnectionPool *get_common_server_pool() override;
   virtual int rollback() override;
   virtual int commit() override;
@@ -269,6 +242,11 @@ public:
 
   virtual int execute(const uint64_t tenant_id, sqlclient::ObIExecutor &executor) override;
 
+  int forward_request(const uint64_t tenant_id,
+                      const int64_t op_type,
+                      const ObString &sql,
+                      ObInnerSQLResult &res);
+
 public:
   // nested session and sql execute for foreign key.
   int begin_nested_session(sql::ObSQLSessionInfo::StmtSavedValue &saved_session,
@@ -319,7 +297,8 @@ public:
                                const bool is_ddl);
 
   int64_t get_init_timestamp() const { return init_timestamp_; }
-
+  int switch_tenant(const uint64_t tenant_id);
+  bool is_local_execute(const int64_t cluster_id, const uint64_t tenant_id);
 public:
   static const int64_t LOCK_RETRY_TIME = 1L * 1000 * 1000;
   static const int64_t TOO_MANY_REF_ALERT = 1024;
@@ -354,8 +333,6 @@ private:
             ObVirtualTableIteratorFactory *vt_iter_factory = NULL);
   int do_query(sqlclient::ObIExecutor &executor, ObInnerSQLResult &res);
 
-  int switch_tenant(const uint64_t tenant_id);
-
   // set timeout to session variable
   int set_timeout(int64_t &abs_timeout_us);
 
@@ -366,8 +343,6 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       common::ObAddr &leader);
-
-  bool is_local_execute(const int64_t cluster_id, const uint64_t tenant_id);
 
   int execute_read_inner(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
                          common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
@@ -383,15 +358,6 @@ private:
                        const ObString &sql,
                        ObInnerSQLResult &res);
   int get_session_timeout_for_rpc(int64_t &query_timeout, int64_t &trx_timeout);
-  int request_table_lock_(const uint64_t tenant_id,
-                          const uint64_t table_id,
-                          const ObTabletID tablet_id, //just used when lock_tablet
-                          const transaction::tablelock::ObTableLockMode lock_mode,
-                          const int64_t timeout_us,
-                          const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type);
-  int request_table_lock_(const uint64_t tenant_id,
-                          const transaction::tablelock::ObLockRequest &arg,
-                          const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type);
 private:
   bool inited_;
   observer::ObQueryRetryCtrl retry_ctrl_;

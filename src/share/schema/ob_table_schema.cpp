@@ -90,6 +90,16 @@ OB_SERIALIZE_MEMBER_SIMPLE(ObTableMode,
 
 common::ObString ObMergeSchema::EMPTY_STRING = common::ObString::make_string("");
 
+int ObMergeSchema::get_mulit_version_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_rowkey_column_ids(column_ids))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to add rowkey cols", K(ret));
+  } else if (OB_FAIL(storage::ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(column_ids))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to add extra rowkey cols", K(ret));
+  }
+  return ret;
+}
 ObSimpleTableSchemaV2::ObSimpleTableSchemaV2()
   : ObPartitionSchema()
 {
@@ -753,6 +763,161 @@ int ObSimpleTableSchemaV2::check_is_all_server_readonly_replica(
   return ret;
 }
 
+#define ASSIGN_COMPARE_PARTITION_ERROR(ERROR_STRING, USER_ERROR) { \
+  if (OB_SUCC(ret)) { \
+    if (OB_NOT_NULL(ERROR_STRING)) { \
+      if (OB_FAIL(ERROR_STRING->assign(USER_ERROR))) { \
+        LOG_WARN("fail to assign user error", KR(ret));\
+      }\
+    }\
+  }\
+}\
+// compare two table partition details
+int ObSimpleTableSchemaV2::compare_partition_option(const schema::ObSimpleTableSchemaV2 &t1,
+                                                    const schema::ObSimpleTableSchemaV2 &t2,
+                                                    bool check_subpart,
+                                                    bool &is_matched,
+                                                    ObSqlString *user_error)
+{
+  int ret = OB_SUCCESS;
+  bool t1_oracle_mode = false;
+  bool t2_oracle_mode = false;
+  is_matched = true;
+  if (OB_FAIL(t1.check_if_oracle_compat_mode(t1_oracle_mode))) {
+    LOG_WARN("fail to get tenant mode", KR(ret), K(t1));
+  } else if (OB_FAIL(t2.check_if_oracle_compat_mode(t2_oracle_mode))) {
+    LOG_WARN("fail to get tenant mode", KR(ret), K(t2));
+  } else if (t1_oracle_mode != t2_oracle_mode) {
+    is_matched = false;
+    ASSIGN_COMPARE_PARTITION_ERROR(user_error, "table compatibilty mode not match")
+  } else {
+    const schema::ObPartitionOption &t1_part = t1.get_part_option();
+    const schema::ObPartitionOption &t2_part = t2.get_part_option();
+    schema::ObPartitionFuncType t1_part_func_type = t1_part.get_part_func_type();
+    schema::ObPartitionFuncType t2_part_func_type = t2_part.get_part_func_type();
+
+    //non-partitioned table do not need to compare with partitioned table
+    if ((PARTITION_LEVEL_ZERO == t1.get_part_level() && PARTITION_LEVEL_ZERO != t2.get_part_level())
+        || (PARTITION_LEVEL_ZERO != t1.get_part_level() && PARTITION_LEVEL_ZERO == t2.get_part_level())) {
+      is_matched = false;
+      LOG_WARN("not all tables are non-partitioned or partitioned", K(t1.get_part_level()), K(t2.get_part_level()));
+      ASSIGN_COMPARE_PARTITION_ERROR(user_error, "not all tables are non-partitioned or partitioned");
+    } else if (PARTITION_LEVEL_ZERO == t1.get_part_level()
+              && PARTITION_LEVEL_ZERO == t2.get_part_level()) {
+      //both non-partition table is matched
+    } else if (t1_part_func_type != t2_part_func_type && (!::oceanbase::is_key_part(t1_part_func_type) || !::oceanbase::is_key_part(t2_part_func_type))) {
+      is_matched = false;
+      LOG_WARN("partition func type not matched", K(t1_part), K(t2_part));
+      ASSIGN_COMPARE_PARTITION_ERROR(user_error, "partition func type not matched");
+    } else if (schema::PARTITION_FUNC_TYPE_MAX == t1_part_func_type) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid part_func_type", KR(ret), K(t1_part_func_type), K(t2_part_func_type));
+    } else if (t1.get_partition_num() != t1_part.get_part_num()
+            || t2.get_partition_num() != t2_part.get_part_num()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition num is not equal to part num", KR(ret), K(t1.get_partition_num()), K(t1_part.get_part_num()),
+                                                               K(t2.get_partition_num()), K(t2_part.get_part_num()));
+    } else if (t1.get_partition_num() != t2.get_partition_num()) {
+      is_matched = false;
+      LOG_WARN("partition num is not equal", K(t1.get_partition_num()), K(t2.get_partition_num()));
+      ASSIGN_COMPARE_PARTITION_ERROR(user_error, "partition num not equal");
+    } else if (::oceanbase::is_hash_part(t1_part_func_type)
+              || ::oceanbase::is_key_part(t1_part_func_type)) {
+      //level one is hash and key, just need to compare part num and part type
+      //do nothing
+    } else if (::oceanbase::is_range_part(t1_part_func_type)
+            || ::oceanbase::is_list_part(t1_part_func_type)) {
+      if (OB_ISNULL(t1.get_part_array())
+          || OB_ISNULL(t2.get_part_array())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition_array is null", KR(ret), K(t1), K(t2));
+      } else {
+        int64_t t1_part_num = t1.get_partition_num();
+        for (int64_t i = 0; i < t1_part_num && is_matched && OB_SUCC(ret); i++) {
+          is_matched = false;
+          schema::ObPartition *table_part1 = t1.get_part_array()[i];
+          schema::ObPartition *table_part2 = t2.get_part_array()[i];
+          if (OB_ISNULL(table_part1) || OB_ISNULL(table_part2)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("partition is null", KR(ret), KP(table_part1), KP(table_part2));
+          } else if (OB_FAIL(schema::ObPartitionUtils::check_partition_value(
+                        t1_oracle_mode, *table_part1, *table_part2, t1_part_func_type, is_matched, user_error))) {
+            LOG_WARN("fail to check partition value", KR(ret), KPC(table_part1), KPC(table_part2), K(t1_part_func_type));
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("invalid part func type", KR(ret), K(t1_part), K(t2_part));
+    }
+    if (OB_SUCC(ret) && is_matched && check_subpart) {
+      if (t1.get_part_level() != t2.get_part_level()) {
+        is_matched = false;
+        LOG_WARN("two table part level is not equal");
+        ASSIGN_COMPARE_PARTITION_ERROR(user_error, "part level is not equal");
+      } else if (PARTITION_LEVEL_TWO != t1.get_part_level()) {
+        //don't have sub part, just skip
+      } else {
+        const schema::ObPartitionOption &t1_subpart = t1.get_sub_part_option();
+        const schema::ObPartitionOption &t2_subpart = t2.get_sub_part_option();
+        schema::ObPartitionFuncType t1_subpart_func_type = t1_subpart.get_part_func_type();
+        schema::ObPartitionFuncType t2_subpart_func_type = t2_subpart.get_part_func_type();
+        if (t1_subpart_func_type != t2_subpart_func_type
+          && (!::oceanbase::is_key_part(t1_subpart_func_type) || !::oceanbase::is_key_part(t2_subpart_func_type))) {
+          is_matched = false;
+          LOG_WARN("subpartition func type not matched", K(t1_subpart), K(t2_subpart));
+          ASSIGN_COMPARE_PARTITION_ERROR(user_error, "subpartition func type not matched");
+        } else if (schema::PARTITION_FUNC_TYPE_MAX == t1_subpart_func_type) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid part_func_type", KR(ret), K(t1_subpart_func_type), K(t2_subpart_func_type));
+        } else {
+          const int64_t t1_level_one_part_num = t1.get_partition_num();
+          for (int64_t i = 0; OB_SUCC(ret) && i < t1_level_one_part_num && is_matched; i++) {
+            schema::ObPartition *table_part1 = t1.get_part_array()[i];
+            schema::ObPartition *table_part2 = t2.get_part_array()[i];
+            if (OB_ISNULL(table_part1) || OB_ISNULL(table_part2)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("partition is null", KR(ret), KP(table_part1), KP(table_part2));
+            } else if (table_part1->get_subpartition_num() != table_part1->get_sub_part_num()
+                    || table_part2->get_subpartition_num() != table_part2->get_sub_part_num()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("subpartition num not equal", KR(ret), K(table_part1->get_subpartition_num()), K(table_part1->get_sub_part_num()),
+                                                           K(table_part2->get_subpartition_num()), K(table_part2->get_sub_part_num()));
+            } else if (table_part1->get_subpartition_num() != table_part2->get_subpartition_num()) {
+              is_matched = false;
+              LOG_WARN("subpartition num is not equal", K(table_part1->get_subpartition_num()), K(table_part2->get_subpartition_num()));
+              ASSIGN_COMPARE_PARTITION_ERROR(user_error, "subpartition num not matched");
+            } else if (::oceanbase::is_hash_part(t1_subpart_func_type)
+                     || ::oceanbase::is_key_part(t1_subpart_func_type)) {
+              //level two is hash and key, just need to compare part num and part type
+              //do nothing
+            } else if (::oceanbase::is_range_part(t1_subpart_func_type)
+                    || ::oceanbase::is_list_part(t1_subpart_func_type)) {
+              const int64_t t1_level_two_part_num = table_part1->get_subpartition_num();
+              for (int64_t j = 0; OB_SUCC(ret) && j < t1_level_two_part_num && is_matched; j++) {
+                is_matched = false;
+                schema::ObSubPartition *table_subpart1 = table_part1->get_subpart_array()[j];
+                schema::ObSubPartition *table_subpart2 = table_part2->get_subpart_array()[j];
+                if (OB_ISNULL(table_subpart1) || OB_ISNULL(table_subpart2)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("subpartition is null", KR(ret), KP(table_subpart1), KP(table_subpart2));
+                } else if (OB_FAIL(schema::ObPartitionUtils::check_partition_value(
+                            t1_oracle_mode, *table_subpart1, *table_subpart2, t1_subpart_func_type, is_matched, user_error))) {
+                  LOG_WARN("fail to check subpartition value", KR(ret), KPC(table_subpart1), KPC(table_subpart1), K(t1_subpart_func_type));
+                }
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("invalid subpart func type", KR(ret), K(t1_subpart), K(t2_subpart));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -1215,6 +1380,28 @@ int ObSimpleTableSchemaV2::get_tablet_id_by_object_id(
   if (OB_SUCC(ret) && !tablet_id.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet_id is invalid", KR(ret), K(object_id));
+  }
+  return ret;
+}
+
+int ObSimpleTableSchemaV2::check_if_tablet_exists(const ObTabletID &tablet_id, bool &exists) const
+{
+  int ret = OB_SUCCESS;
+  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+  ObPartitionSchemaIter iter(*this, mode);
+  ObPartitionSchemaIter::Info info;
+  exists = false;
+  while (OB_SUCC(ret) && !exists) {
+    if (OB_FAIL(iter.next_partition_info(info))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("iter partition failed", KR(ret));
+      }
+    } else if (info.tablet_id_ == tablet_id) {
+      exists = true;
+    }
+  }
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -3961,8 +4148,8 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
           } else {
             const int64_t m1 = src_accuracy.get_fixed_number_precision();
             const int64_t d1 = src_accuracy.get_fixed_number_scale();
-            const int64_t m2 = src_accuracy.get_fixed_number_precision();
-            const int64_t d2 = src_accuracy.get_fixed_number_scale();
+            const int64_t m2 = dst_accuracy.get_fixed_number_precision();
+            const int64_t d2 = dst_accuracy.get_fixed_number_scale();
             is_type_reduction = !(d1 <= d2 && m1 - d1 <= m2 - d2);
           }
         } else if (dst_meta.is_number_float()) {
@@ -5104,10 +5291,8 @@ int ObTableSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> &c
   if (!is_valid()) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("The ObTableSchema is invalid", K(ret));
-  } else if (OB_FAIL(get_rowkey_column_ids(column_descs))) { // add rowkey columns
+  } else if (OB_FAIL(get_mulit_version_rowkey_column_ids(column_descs))) { // add rowkey columns
     LOG_WARN("Fail to get rowkey column descs", K(ret));
-  } else if (OB_FAIL(storage::ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(column_descs))) {
-    LOG_WARN("failed to add extra rowkey cols", K(ret));
   } else if (OB_FAIL(get_column_ids_without_rowkey(column_descs, !is_storage_index_table()))) { //add other columns
     LOG_WARN("Fail to get column descs with out rowkey", K(ret));
   }
@@ -6490,90 +6675,6 @@ int ObTableSchema::check_auto_partition_valid()
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("partition key not prefix of rowkey", KR(ret));
     }
-  }
-  return ret;
-}
-
-int ObTableSchema::assign_tablegroup_partition(const ObTablegroupSchema &tablegroup)
-{
-  int ret = OB_SUCCESS;
-  reset_partition_schema();
-  part_level_ = tablegroup.get_part_level();
-  sub_part_template_flags_ = tablegroup.get_sub_part_template_flags();
-
-  if (OB_SUCC(ret)) {
-    part_option_ = tablegroup.get_part_option();
-    if (OB_FAIL(part_option_.get_err_ret())) {
-      LOG_WARN("fail to assign part_option", K(ret),
-               K_(part_option), K(tablegroup.get_part_option()));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    sub_part_option_ = tablegroup.get_sub_part_option();
-    if (OB_FAIL(sub_part_option_.get_err_ret())) {
-      LOG_WARN("fail to assign sub_part_option", K(ret),
-               K_(sub_part_option), K(tablegroup.get_sub_part_option()));
-    }
-  }
-
-  //partitions array
-  if (OB_SUCC(ret)) {
-    int64_t partition_num = tablegroup.get_partition_num();
-    if (partition_num > 0) {
-      partition_array_ = static_cast<ObPartition **>(alloc(sizeof(ObPartition *)
-          * partition_num));
-      if (OB_ISNULL(partition_array_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("Fail to allocate memory for partition_array_", K(ret));
-      } else if (OB_ISNULL(tablegroup.get_part_array())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablegroup.partition_array_ is null", K(ret));
-      } else {
-        partition_array_capacity_ = partition_num;
-      }
-    }
-    ObPartition *partition = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; i++) {
-      partition = tablegroup.get_part_array()[i];
-      if (OB_ISNULL(partition)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the partition is null", K(ret));
-      } else if (OB_FAIL(add_partition(*partition))) {
-        LOG_WARN("Fail to add partition", K(ret));
-      }
-    }
-  }
-  //subpartitions array
-  if (OB_SUCC(ret)) {
-    int64_t def_subpartition_num = tablegroup.get_def_subpartition_num();
-    if (def_subpartition_num > 0) {
-      def_subpartition_array_ = static_cast<ObSubPartition **>(
-          alloc(sizeof(ObSubPartition *) * def_subpartition_num));
-      if (OB_ISNULL(def_subpartition_array_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("Fail to allocate memory for subpartition_array_", K(ret), K(def_subpartition_num));
-      } else if (OB_ISNULL(tablegroup.get_def_subpart_array())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablegroup.def_subpartition_array_ is null", K(ret));
-      } else {
-        def_subpartition_array_capacity_ = def_subpartition_num;
-      }
-    }
-    ObSubPartition *subpartition = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < def_subpartition_num; i++) {
-      subpartition = tablegroup.get_def_subpart_array()[i];
-      if (OB_ISNULL(subpartition)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the partition is null", K(ret));
-      } else if (OB_FAIL(add_def_subpartition(*subpartition))) {
-        LOG_WARN("Fail to add partition", K(ret));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    error_ret_ = ret;
   }
   return ret;
 }

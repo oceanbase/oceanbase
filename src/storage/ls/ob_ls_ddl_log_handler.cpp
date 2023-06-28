@@ -19,6 +19,7 @@
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "storage/ddl/ob_ddl_replay_executor.h"
 #include "logservice/ob_log_base_header.h"
 #include "share/scn.h"
 
@@ -83,7 +84,7 @@ int ObLSDDLLogHandler::online()
     ret = OB_NOT_INIT;
     LOG_WARN("ddl log handler not init", K(ret));
   } else {
-    ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
+    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
     if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
       LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
     } else {
@@ -211,7 +212,7 @@ int ObLSDDLLogHandler::resume_leader()
 int ObLSDDLLogHandler::flush(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
-  ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
+  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
   } else {
@@ -259,7 +260,7 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
 SCN ObLSDDLLogHandler::get_rec_scn()
 {
   int ret = OB_SUCCESS;
-  ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
+  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   SCN rec_scn = SCN::max_scn();
   bool has_ddl_kv = false;
   if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
@@ -333,16 +334,21 @@ int ObLSDDLLogHandler::replay_ddl_tablet_schema_version_change_log_(const char *
 {
   int ret = OB_SUCCESS;
   ObTabletSchemaVersionChangeLog log;
-  ObTabletHandle tablet_handle;
+  ObSchemaChangeReplayExecutor replay_executor;
+
   if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
     LOG_WARN("fail to deserialize source barrier log", K(ret));
-  } else if (OB_FAIL(ls_->get_tablet(log.get_tablet_id(), tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
-    if (OB_TABLET_NOT_EXIST != ret) {
-      LOG_WARN("fail to get tablet", K(ret), "tablet_id", log.get_tablet_id());
+  } else if (OB_FAIL(replay_executor.init(log, log_scn))) {
+    LOG_WARN("failed to init tablet schema version change log replay executor", K(ret));
+  } else if (OB_FAIL(replay_executor.execute(log_scn, ls_->get_ls_id(), log.get_tablet_id()))) {
+    if (OB_NO_NEED_UPDATE == ret) {
+      LOG_WARN("no need replay tablet schema version change log", K(ret), K(log), K(log_scn));
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to replay", K(ret), K(log), K(log_scn));
     }
-  } else if (OB_FAIL(tablet_handle.get_obj()->replay_schema_version_change_log(log.get_schema_version()))) {
-    LOG_WARN("fail to replay schema version change log", K(ret), K(log));
   }
+
   return ret;
 }
 

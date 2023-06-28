@@ -45,7 +45,6 @@ int ObTenantStorageCheckpointReader::iter_read_checkpoint_item(const MacroBlockI
     char *item_buf = nullptr;
     int64_t item_buf_len = 0;
     ObMetaDiskAddr addr;
-    int64_t idx = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(item_reader.get_next_item(item_buf, item_buf_len, addr))) {
         if (OB_ITER_END != ret) {

@@ -290,9 +290,9 @@ WAIT_EVENT_DEF(TENANT_MEM_USAGE_LOCK_WAIT, 15244, "latch: tenant memory usage lo
 WAIT_EVENT_DEF(TX_TABLE_LOCK_WAIT, 15245, "rwlock: tx table lock wait", "address", "number", "tries", CONCURRENCY, "rwlock: tx table lock wait", true)
 WAIT_EVENT_DEF(MEMTABLE_STAT_LOCK_WAIT, 15246, "spinlock: memtable stat lock wait", "address", "number", "tries", CONCURRENCY, "spinlock: memtable stat lock wait", true)
 WAIT_EVENT_DEF(DEADLOCK_DETECT_LOCK_WAIT, 15247, "spinlock: deadlock detect lock wait", "address", "number", "tries", CONCURRENCY, "spinlock: deadlock detect lock wait", true)
-//WAIT_EVENT_DEF(BACKUP_DATA_SERVICE_COND_WAIT, 15248, "backup data service condition wait", "address", "", "", CONCURRENCY, "backup data service condition wait", true) used by backup
-//WAIT_EVENT_DEF(BACKUP_CLEAN_SERVICE_COND_WAIT, 15249, "backup clean service condition wait", "address", "", "", CONCURRENCY, "backup clean service condition wait", true)
-//WAIT_EVENT_DEF(BACKUP_ARCHIVE_SERVICE_COND_WAIT, 15250, "backup archive service condition wait", "address", "", "", CONCURRENCY, "backup archive service condition wait", true)
+WAIT_EVENT_DEF(BACKUP_DATA_SERVICE_COND_WAIT, 15248, "backup data service condition wait", "address", "", "", CONCURRENCY, "backup data service condition wait", true)
+WAIT_EVENT_DEF(BACKUP_CLEAN_SERVICE_COND_WAIT, 15249, "backup clean service condition wait", "address", "", "", CONCURRENCY, "backup clean service condition wait", true)
+WAIT_EVENT_DEF(BACKUP_ARCHIVE_SERVICE_COND_WAIT, 15250, "backup archive service condition wait", "address", "", "", CONCURRENCY, "backup archive service condition wait", true)
 WAIT_EVENT_DEF(SRS_LOCK_WAIT, 15251, "latch: srs lock wait", "address", "number", "tries", CONCURRENCY, "latch: srs lock wait", true)
 WAIT_EVENT_DEF(ARB_SERVER_CONFIG_WAIT, 15252, "arbserver config wait", "address", "number", "tries", CONCURRENCY, "arbserver config wait", true)
 WAIT_EVENT_DEF(CLOG_CKPT_RWLOCK_WAIT, 15253, "rwlock: clog checkpoint rwlock wait", "address", "number", "tries", CONCURRENCY, "rwlock: clog checkpoint rwlock wait", true)
@@ -412,6 +412,7 @@ WAIT_EVENT_DEF(DTL_DESTROY_CHANNEL_SLEEP, 20002, "sleep: dtl destroy channel sle
 WAIT_EVENT_DEF(STORAGE_WRITING_THROTTLE_SLEEP, 20003, "sleep: storage writing throttle sleep", "sleep_interval", "", "", CONCURRENCY, "sleep: storage writing throttle sleep", true)
 WAIT_EVENT_DEF(STORAGE_AUTOINC_FETCH_RETRY_SLEEP, 20004, "sleep: tablet autoinc fetch new range retry wait", "sleep_interval", "", "", CONCURRENCY, "sleep: tablet autoinc fetch new range retry wait", true)
 WAIT_EVENT_DEF(STORAGE_AUTOINC_FETCH_CONFLICT_SLEEP, 20005, "sleep: tablet autoinc fetch new range conflict wait", "sleep_interval", "", "", CONCURRENCY, "sleep: tablet autoinc fetch new range conflict wait", true)
+WAIT_EVENT_DEF(STORAGE_HA_FINISH_TRANSFER, 20006, "sleep: finish transfer sleep wait", "sleep_interval", "", "", CONCURRENCY, "sleep: finish transfer sleep wait", true)
 
 WAIT_EVENT_DEF(WAIT_EVENT_END, 99999, "event end", "", "", "", OTHER, "event end", false)
 #endif

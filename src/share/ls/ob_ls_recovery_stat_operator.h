@@ -15,6 +15,7 @@
 
 #include "share/ob_ls_id.h"//share::ObLSID
 #include "share/ls/ob_ls_i_life_manager.h" //ObLSLifeIAgent
+#include "share/ob_tenant_role.h"//ObTenantRole
 #include "common/ob_zone.h"//ObZone
 #include "lib/container/ob_array.h"//ObArray
 #include "lib/container/ob_iarray.h"//ObIArray
@@ -172,14 +173,30 @@ public:
   /*
    * description: update ls recovery stat, only update sync_ts/readable_ts
    * @param[in] recovery_stat: new_recovery_stat
+   * @param[in] only_update_readable_scn:only update readable_scn and check sync_scn is same
    * @param[in] proxy*/
   int update_ls_recovery_stat(const ObLSRecoveryStat &recovery_stat,
+                              const bool only_update_readable_scn,
                               ObMySQLProxy &proxy);
+
+  /*
+   * description: update SYS LS sync scn
+   * @param[in] tenant_id:  target user tenant id
+   * @param[in] trans:      transaction cient
+   * @param[in] sync_scn:   target scn to be updated*/
+  int update_sys_ls_sync_scn(
+      const uint64_t tenant_id,
+      ObMySQLTransaction &trans,
+      const SCN &sync_scn);
+
    /*
-   * description: update ls recovery stat in trans, only update sync_ts/readable_ts
+   * description: update ls recovery stat in trans, only update sync_ts/readable_ts.
+                  only can update when tenant role is normal switchover status
    * @param[in] recovery_stat
-   * @param[in] client*/
+   * @param[in] only_update_readable_scn:only update readable_scn and check sync_scn is same
+   * @param[in] trans*/
   int update_ls_recovery_stat_in_trans(const ObLSRecoveryStat &recovery_stat,
+                                       const bool only_update_readable_scn,
                                        ObMySQLTransaction &trans);
   /*
    * description: get ls recovery stat

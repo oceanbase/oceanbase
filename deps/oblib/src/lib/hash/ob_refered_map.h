@@ -57,9 +57,9 @@ public:
           common::hash::NoPthreadDefendMode,
           common::hash::NormalPointer, common::ObMalloc> HashTable;
 
-  ObReferedMap() : inited_(false), allocator_(),
+  ObReferedMap(const lib::ObLabel &label = ObModIds::OB_REFERED_MAP) : inited_(false), allocator_(),
     bucket_allocator_(), hash_table_()
-  { allocator_.set_attr(ObMemAttr(common::OB_SERVER_TENANT_ID, common::ObModIds::OB_REBALANCE_TASK_MGR)); }
+  { allocator_.set_attr(ObMemAttr(common::OB_SERVER_TENANT_ID, label)); }
   virtual ~ObReferedMap() {}
 
   int init(const int64_t bucket_num);
@@ -119,7 +119,7 @@ int ObReferedMap<K, V>::init(const int64_t bucket_num)
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid bucket num", K(ret), K(bucket_num));
   } else {
-    bucket_allocator_.set_label(common::ObModIds::OB_REBALANCE_TASK_MGR);
+    bucket_allocator_.set_label(ObModIds::OB_REFERED_MAP);
     if (OB_FAIL(hash_table_.create(common::hash::cal_next_prime(bucket_num),
         &allocator_, &bucket_allocator_))) {
       LIB_LOG(WARN, "create hash table failed", K(bucket_num), K(ret));

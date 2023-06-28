@@ -174,7 +174,6 @@ public:
   ObRestoreMacroBlockIdMgr();
   virtual ~ObRestoreMacroBlockIdMgr();
   int init(
-      const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const ObITable::TableKey &table_key,
       const ObRestoreBaseInfo &restore_base_info,
@@ -191,7 +190,6 @@ public:
 
 private:
   int inner_init_(
-      const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const ObITable::TableKey &table_key,
       const ObRestoreBaseInfo &restore_base_info,

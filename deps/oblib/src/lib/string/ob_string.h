@@ -170,7 +170,7 @@ public:
    * DO NOT USE THIS ANY MORE
    */
 
-  inline void assign(char *bytes, const int64_t length) //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later
+  inline void assign(char *bytes, const int64_t length) //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later 4.3
   {
     if (length > INT32_MAX) {
       LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid length for assign", K(length));
@@ -207,7 +207,7 @@ public:
     }
   }
 
-  inline void assign_ptr(const char *bytes, const int64_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later
+  inline void assign_ptr(const char *bytes, const int64_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later 4.3
   {
     if (length < 0 || length > INT32_MAX) {
       LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid length for assign ptr", K(length));
@@ -215,7 +215,7 @@ public:
     assign_ptr(bytes, static_cast<int32_t>(length));
   }
 
-  inline void assign_ptr(const char *bytes, const uint64_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later
+  inline void assign_ptr(const char *bytes, const uint64_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later 4.3
   {
     if (length < 0 || length > INT32_MAX) {
       LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid length for assign ptr", K(length));
@@ -223,7 +223,7 @@ public:
     assign_ptr(bytes, static_cast<int32_t>(length));
   }
 
-  inline void assign_ptr(const char *bytes, const uint32_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later
+  inline void assign_ptr(const char *bytes, const uint32_t length)  //TODO(yongle.xh): for -Wshorten-64-to-32, delete it later 4.3
   {
     if (length > INT32_MAX) {
       LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid length for assign ptr", K(length));

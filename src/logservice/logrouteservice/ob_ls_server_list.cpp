@@ -233,7 +233,10 @@ bool LSSvrList::need_switch_server(const ObLSRouterKey &key,
       bool is_svr_invalid = false;
       SvrItem &svr_item = svr_items_.at(svr_idx);
 
-      svr_item.check_and_update_serve_info(next_lsn, is_log_served, is_svr_invalid);
+      // Switch the Server scenario and consider that the Server is always serving
+      svr_item.check_and_update_serve_info(true/*is_always_serving*/, next_lsn, is_log_served, is_svr_invalid);
+
+      LOG_TRACE("need_switch_server", K(key), K(next_lsn), K(cur_svr), K(svr_item), K(is_log_served), K(is_svr_invalid));
 
       if (is_log_served && !is_svr_invalid  && !blacklist.exist(svr_item.svr_)) {
         if (cur_svr == svr_item.svr_) {
@@ -326,7 +329,7 @@ int LSSvrList::get_next_server_based_on_blacklist_(const palf::LSN &next_lsn,
       // Automatically modify next_svr_index_ to move to the next server
       int64_t svr_idx = next_svr_index_++ % svr_items_.count();
       SvrItem &svr_item = svr_items_.at(svr_idx);
-      svr_item.check_and_update_serve_info(next_lsn, is_log_served, is_svr_invalid);
+      svr_item.check_and_update_serve_info(false/*is_always_serving*/,next_lsn, is_log_served, is_svr_invalid);
 
       LOG_DEBUG("next_server-debug 2", K(next_lsn), K(svr_items_), K(is_log_served));
 
@@ -365,7 +368,7 @@ int LSSvrList::get_next_server_based_on_blacklist_(const palf::LSN &next_lsn,
 int64_t LSSvrList::LSNRange::to_string(char *buffer, int64_t length) const
 {
   int64_t pos = 0;
-  (void)databuff_printf(buffer, length, pos, "LSN:{%ld, %ld}",
+  (void)databuff_printf(buffer, length, pos, "LSN:{%lu, %lu}",
       start_lsn_.val_, end_lsn_.val_);
 
   return pos;
@@ -414,7 +417,9 @@ void LSSvrList::SvrItem::update(const palf::LSN &start_lsn,
   is_leader_ = is_leader;
 }
 
-void LSSvrList::SvrItem::check_and_update_serve_info(const palf::LSN &lsn,
+void LSSvrList::SvrItem::check_and_update_serve_info(
+    const bool is_always_serving,
+    const palf::LSN &lsn,
     bool &is_log_served,
     bool &is_server_invalid)
 {
@@ -425,6 +430,11 @@ void LSSvrList::SvrItem::check_and_update_serve_info(const palf::LSN &lsn,
 
   if (! is_log_served) {
     is_server_invalid = true;
+  }
+
+  if (is_always_serving) {
+    is_log_served = true;
+    is_server_invalid = false;
   }
 }
 

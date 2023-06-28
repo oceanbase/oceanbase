@@ -542,7 +542,7 @@ int ObFlushDagWarningsExecutor::execute(ObExecContext &ctx, ObFlushDagWarningsSt
     ret = OB_NOT_INIT;
     LOG_WARN("get task exec ctx error", K(ret), KP(task_exec_ctx));
   } else {
-    share::ObDagWarningHistoryManager::get_instance().clear();
+    MTL(ObDagWarningHistoryManager *)->clear();
   }
   return ret;
 }
@@ -1865,6 +1865,8 @@ int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt
 
     // TODO support specify ALL
     if (OB_FAIL(ret)) {
+    } else if (arg.get_is_verify()) {
+      //do nothing
     } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.switch_tenant(arg))) {
       LOG_WARN("failed to switch_tenant", KR(ret), K(arg));
     }
@@ -2416,7 +2418,6 @@ int ObCheckpointSlogExecutor::execute(ObExecContext &ctx, ObCheckpointSlogStmt &
   obrpc::ObSrvRpcProxy *srv_rpc_proxy = NULL;
   const ObAddr server = stmt.server_;
   ObCheckpointSlogArg arg;
-  const int64_t TIMEOUT = 60 * 1000 * 1000; // 60s
   arg.tenant_id_ = stmt.tenant_id_;
 
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
@@ -2425,12 +2426,45 @@ int ObCheckpointSlogExecutor::execute(ObExecContext &ctx, ObCheckpointSlogStmt &
   } else if (OB_ISNULL(srv_rpc_proxy = task_exec_ctx->get_srv_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get srv rpc proxy failed");
-  } else if (OB_FAIL(srv_rpc_proxy->to(server).timeout(TIMEOUT).checkpoint_slog(arg))) {
+  } else if (OB_FAIL(srv_rpc_proxy->to(server).timeout(THIS_WORKER.get_timeout_remain()).checkpoint_slog(arg))) {
     LOG_WARN("rpc proxy checkpoint slog failed", K(ret));
   }
 
   LOG_INFO("checkpoint slog execute finish", K(ret), K(arg.tenant_id_), K(server));
 
+  return ret;
+}
+
+int ObCancelRestoreExecutor::execute(ObExecContext &ctx, ObCancelRestoreStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = nullptr;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = nullptr;
+  ObSchemaGetterGuard guard;
+  const ObTenantSchema *tenant_schema = nullptr;
+  if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("task exec ctx must not be null", K(ret));
+  } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("common rpc proxy must not be null", K(ret));
+  } else if (OB_FAIL(GSCHEMASERVICE.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("failed to get sys tenant schema guard", K(ret));
+  } else if (OB_FAIL(guard.get_tenant_info(stmt.get_drop_tenant_arg().tenant_name_, tenant_schema))) {
+    LOG_WARN("failed to get tenant info", K(ret), K(stmt));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_USER_ERROR(OB_TENANT_NOT_EXIST, stmt.get_drop_tenant_arg().tenant_name_.length(), stmt.get_drop_tenant_arg().tenant_name_.ptr());
+    LOG_WARN("tenant not exist", KR(ret), K(stmt));
+  } else if (!tenant_schema->is_restore()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Cancel tenant not in restore is");
+    LOG_WARN("Cancel tenant not in restore is not allowed", K(ret), K(stmt.get_drop_tenant_arg()));
+  } else if (OB_FAIL(common_rpc_proxy->drop_tenant(stmt.get_drop_tenant_arg()))) {
+    LOG_WARN("rpc proxy drop tenant failed", K(ret));
+  } else {
+    LOG_INFO("[RESTORE]succeed to cancel restore tenant", K(stmt));
+  }
   return ret;
 }
 

@@ -15,7 +15,6 @@
 #include "share/backup/ob_backup_clean_struct.h"
 #include "share/backup/ob_archive_struct.h"
 #include "ob_backup_service.h"
-#include "rootserver/backup/ob_backup_lease_service.h"
 namespace oceanbase
 {
 namespace rootserver
@@ -36,8 +35,7 @@ public:
       common::ObISQLClient &sql_proxy,
       obrpc::ObSrvRpcProxy &rpc_proxy,
       ObBackupTaskScheduler &task_scheduler,
-      ObBackupLeaseService  &lease_service,
-      ObBackupService &backup_service);
+      ObBackupCleanService &backup_service);
   int persist_ls_task();
   int do_ls_task();
   int do_cleanup();
@@ -103,7 +101,7 @@ private:
 
 private:
   bool is_inited_;
-  int64_t tenant_id_;
+  uint64_t tenant_id_;
   share::ObBackupSetFileDesc backup_set_info_;
   share::ObTenantArchivePieceAttr backup_piece_info_;
   share::ObBackupCleanTaskAttr task_attr_;
@@ -111,9 +109,8 @@ private:
   share::ObBackupCleanJobAttr *job_attr_;
   common::ObISQLClient *sql_proxy_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
-  ObBackupLeaseService  *lease_service_;
   ObBackupTaskScheduler *task_scheduler_;
-  ObBackupService *backup_service_;
+  ObBackupCleanService *backup_service_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanTaskMgr); 
 };

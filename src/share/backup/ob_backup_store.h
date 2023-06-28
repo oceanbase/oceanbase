@@ -100,6 +100,23 @@ public:
     K_(tenant_id), K_(incarnation));
 };
 
+class ObExternBackupDataDesc : public share::ObIBackupSerializeProvider
+{
+public:
+  explicit ObExternBackupDataDesc(uint16_t type, uint16_t version)
+    : type_(type), version_(version) {}
+  virtual ~ObExternBackupDataDesc() {}
+
+  uint16_t get_data_type() const override { return type_; }
+  uint16_t get_data_version() const override { return version_; }
+  uint16_t get_compressor_type() const override { return ObCompressorType::NONE_COMPRESSOR; }
+
+  VIRTUAL_TO_STRING_KV(K_(type), K_(version));
+private:
+  uint16_t type_;
+  uint16_t version_;
+};
+
 class ObBackupStore
 {
 public:

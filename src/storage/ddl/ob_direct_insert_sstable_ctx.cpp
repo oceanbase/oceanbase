@@ -269,7 +269,7 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
       }
     }
     if (OB_SUCC(ret)) {
-      const ObColDescIArray &col_descs = data_desc_.col_desc_array_;
+      const ObColDescIArray &col_descs = data_desc_.get_full_stored_col_descs();
       ObTableSchemaParam schema_param(allocator_);
       ObRelativeTable relative_table;
       // Hack to prevent row reshaping from converting empty string to null.
@@ -295,7 +295,7 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
       ls_id_ = slice_param.ls_id_;
       rowkey_column_num_ = table_schema->get_rowkey_column_num();
       is_index_table_ = table_schema->is_index_table();
-      col_descs_ = &data_desc_.col_desc_array_;
+      col_descs_ = &data_desc_.get_full_stored_col_descs();
       snapshot_version_ = slice_param.snapshot_version_;
       sql_mode_for_ddl_reshape_ = sql_mode_for_ddl_reshape;
       store_row_.flag_.set_flag(ObDmlFlag::DF_INSERT);
@@ -700,7 +700,7 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
   } else if (OB_ISNULL(ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret));
-  } else if (OB_FAIL(data_desc.init(table_schema,
+  } else if (OB_FAIL(data_desc.init_as_index(table_schema,
                                     ls_handle_.get_ls()->get_ls_id(),
                                     build_param_.tablet_id_, // TODO(shuangcan): confirm this
                                     build_param_.write_major_ ? storage::MAJOR_MERGE : storage::MINOR_MERGE,
@@ -708,51 +708,27 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
                                     build_param_.data_format_version_))) {
     LOG_WARN("fail to init data desc", K(ret));
   } else {
-    data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;
-    data_desc.col_desc_array_.reset();
-    data_desc.need_prebuild_bloomfilter_ = false;
+    void *builder_buf = nullptr;
     data_desc.is_ddl_ = true;
-    if (OB_FAIL(data_desc.col_desc_array_.init(data_desc.row_column_count_))) {
-      LOG_WARN("failed to reserve column desc array", K(ret));
-    } else if (OB_FAIL(table_schema.get_rowkey_column_ids(data_desc.col_desc_array_))) {
-      LOG_WARN("failed to get rowkey column ids", K(ret));
-    } else if (OB_FAIL(storage::ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(data_desc.col_desc_array_))) {
-      LOG_WARN("failed to add extra rowkey cols", K(ret));
-    } else {
-      ObObjMeta meta;
-      meta.set_varchar();
-      meta.set_collation_type(CS_TYPE_BINARY);
-      share::schema::ObColDesc col;
-      col.col_id_ = static_cast<uint64_t>(data_desc.row_column_count_ + OB_APP_MIN_COLUMN_ID);
-      col.col_type_ = meta;
-      col.col_order_ = DESC;
 
-      void *builder_buf = nullptr;
-      if (OB_FAIL(data_desc.col_desc_array_.push_back(col))) {
-        LOG_WARN("failed to push back last col for index", K(ret), K(col));
-      } else if (OB_UNLIKELY(!data_desc.is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid data store desc", K(ret), K(data_desc));
-      } else if (OB_ISNULL(builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory", K(ret));
-      } else if (OB_ISNULL(index_builder_ = new (builder_buf) ObSSTableIndexBuilder())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to new ObSSTableIndexBuilder", K(ret));
-      } else if (OB_FAIL(index_builder_->init(data_desc,
-                                              nullptr, // macro block flush callback
-                                              ObSSTableIndexBuilder::DISABLE))) {
-        LOG_WARN("failed to init index builder", K(ret), K(data_desc));
+    if (OB_ISNULL(builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory", K(ret));
+    } else if (OB_ISNULL(index_builder_ = new (builder_buf) ObSSTableIndexBuilder())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to new ObSSTableIndexBuilder", K(ret));
+    } else if (OB_FAIL(index_builder_->init(data_desc))) {
+      LOG_WARN("failed to init index builder", K(ret), K(data_desc));
+    }
+
+    if (OB_FAIL(ret)) {
+      if (nullptr != index_builder_) {
+        index_builder_->~ObSSTableIndexBuilder();
+        index_builder_ = nullptr;
       }
-      if (OB_FAIL(ret)) {
-        if (nullptr != index_builder_) {
-          index_builder_->~ObSSTableIndexBuilder();
-          index_builder_ = nullptr;
-        }
-        if (nullptr != builder_buf) {
-          allocator_.free(builder_buf);
-          builder_buf = nullptr;
-        }
+      if (nullptr != builder_buf) {
+        allocator_.free(builder_buf);
+        builder_buf = nullptr;
       }
     }
   }
@@ -831,6 +807,7 @@ public:
   {
     int ret = ret_code_; // for LOG_WARN
     if (OB_LIKELY(OB_SUCCESS == ret_code_) && OB_SUCCESS != (ret_code_ = tablet_ids_.push_back(entry.first))) {
+      ret = ret_code_;
       LOG_WARN("push back tablet id failed", K(ret_code_), K(entry.first));
     }
     return ret_code_;

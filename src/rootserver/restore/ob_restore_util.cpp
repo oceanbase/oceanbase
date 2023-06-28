@@ -23,10 +23,9 @@
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "storage/backup/ob_backup_restore_util.h"
 #include "share/backup/ob_archive_store.h"
-#include "share/backup/ob_backup_data_store.h"
+#include "storage/backup/ob_backup_data_store.h"
 #include "share/restore/ob_restore_persist_helper.h"//ObRestorePersistHelper ObRestoreProgressPersistInfo
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
-#include "storage/backup/ob_backup_extern_info_mgr.h"//ObExternLSMetaMgr
 #include "storage/ls/ob_ls_meta_package.h"//ls_meta
 #include "share/backup/ob_archive_path.h"
 #include "share/ob_upgrade_utils.h"
@@ -344,7 +343,7 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
       SCN min_restore_scn = SCN::min_scn();
       ARRAY_FOREACH_X(tenant_path_array, i, cnt, OB_SUCC(ret)) {
         const ObString &tenant_path = tenant_path_array.at(i);
-        share::ObBackupDataStore store;
+        storage::ObBackupDataStore store;
         share::ObBackupDest backup_dest;
         ObBackupFormatDesc format_desc;
         share::ObBackupSetFileDesc backup_set_file_desc;
@@ -458,7 +457,7 @@ int ObRestoreUtil::check_restore_using_complement_log_(
   } else {
     ARRAY_FOREACH_X(tenant_path_array, i, cnt, OB_SUCC(ret)) {
       const ObString &tenant_path = tenant_path_array.at(i);
-      share::ObBackupDataStore store;
+      storage::ObBackupDataStore store;
       share::ObBackupDest backup_dest;
       ObBackupFormatDesc format_desc;
       if (OB_FAIL(backup_dest.set(tenant_path.ptr()))) {
@@ -491,7 +490,7 @@ int ObRestoreUtil::get_restore_backup_set_array_(
   } else {
     ARRAY_FOREACH_X(tenant_path_array, i, cnt, OB_SUCC(ret)) {
       const ObString &tenant_path = tenant_path_array.at(i);
-      share::ObBackupDataStore store;
+      storage::ObBackupDataStore store;
       share::ObBackupDest backup_dest;
       ObBackupFormatDesc format_desc;
       if (OB_FAIL(backup_dest.set(tenant_path.ptr()))) {
@@ -684,7 +683,7 @@ int ObRestoreUtil::do_fill_backup_info_(
     share::ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
-  share::ObBackupDataStore store;
+  storage::ObBackupDataStore store;
   HEAP_VARS_2((ObExternBackupSetInfoDesc, backup_set_info),
     (ObExternTenantLocalityInfoDesc, locality_info)) {
     if (backup_set_path.is_empty()) {
@@ -710,6 +709,7 @@ int ObRestoreUtil::do_fill_backup_info_(
       job.set_source_cluster_version(backup_set_info.backup_set_file_.cluster_version_);
       job.set_compat_mode(locality_info.compat_mode_);
       job.set_backup_tenant_id(backup_set_info.backup_set_file_.tenant_id_);
+      job.set_consistent_scn(backup_set_info.backup_set_file_.consistent_scn_);
     }
   }
   return ret;
@@ -783,20 +783,23 @@ int ObRestoreUtil::recycle_restore_job(const uint64_t tenant_id,
       } else if (OB_FAIL(history_info.init_with_job_process(
                      job_info, restore_progress))) {
         LOG_WARN("failed to init history", KR(ret), K(job_info), K(restore_progress));
+      } else if (history_info.is_restore_success()) { // restore succeed, no need to record comment
       } else if (OB_FAIL(persist_helper.get_all_ls_restore_progress(trans, ls_restore_progress_infos))) {
         LOG_WARN("failed to get ls restore progress", K(ret));
       } else {
+        int64_t pos = 0;
         ARRAY_FOREACH_X(ls_restore_progress_infos, i, cnt, OB_SUCC(ret)) {
           const ObLSRestoreProgressPersistInfo &ls_restore_info = ls_restore_progress_infos.at(i);
           if (ls_restore_info.status_.is_restore_failed()) {
-            char buf[OB_MAX_SERVER_ADDR_SIZE] = { 0 };
-            if (OB_FAIL(ls_restore_info.key_.addr_.ip_port_to_string(buf, OB_MAX_SERVER_ADDR_SIZE))) {
-              LOG_WARN("fail to addr to string", K(ret));
-            } else if (OB_FAIL(history_info.comment_.append_fmt("ls_id: %ld, addr: %.*s, %.*s;", 
-                ls_restore_info.key_.ls_id_.id(), static_cast<int>(OB_MAX_SERVER_ADDR_SIZE), buf, 
-                static_cast<int>(ls_restore_info.comment_.length()), ls_restore_info.comment_.ptr()))) {
-              LOG_WARN("fail to append fmt", K(ret));
-            } 
+            if (OB_FAIL(databuff_printf(history_info.comment_.ptr(), history_info.comment_.capacity(), pos,
+                                        "%s;", ls_restore_info.comment_.ptr()))) {
+              if (OB_SIZE_OVERFLOW == ret) {
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("failed to databuff printf comment", K(ret));
+              }
+            }
           }
         }
       }
@@ -890,7 +893,7 @@ int ObRestoreUtil::get_restore_ls_palf_base_info(
     palf::PalfBaseInfo &palf_base_info)
 {
   int ret = OB_SUCCESS;
-  share::ObBackupDataStore store;
+  storage::ObBackupDataStore store;
   const common::ObSArray<share::ObBackupSetPath> &backup_set_array = 
     job_info.get_multi_restore_path_list().get_backup_set_path_list();
   const int64_t idx = backup_set_array.count() - 1;

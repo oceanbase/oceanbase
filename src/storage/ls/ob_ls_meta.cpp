@@ -60,7 +60,9 @@ ObLSMeta::ObLSMeta()
     replayable_point_(),
     tablet_change_checkpoint_scn_(SCN::min_scn()),
     all_id_meta_(),
-    saved_info_()
+    saved_info_(),
+    transfer_scn_(SCN::min_scn()),
+    rebuild_info_()
 {
 }
 
@@ -79,7 +81,9 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     restore_status_(ls_meta.restore_status_),
     replayable_point_(ls_meta.replayable_point_),
     tablet_change_checkpoint_scn_(ls_meta.tablet_change_checkpoint_scn_),
-    saved_info_(ls_meta.saved_info_)
+    saved_info_(ls_meta.saved_info_),
+    transfer_scn_(ls_meta.transfer_scn_),
+    rebuild_info_(ls_meta.rebuild_info_)
 {
   all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_);
 }
@@ -115,6 +119,8 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     tablet_change_checkpoint_scn_ = other.tablet_change_checkpoint_scn_;
     all_id_meta_.update_all_id_meta(other.all_id_meta_);
     saved_info_ = other.saved_info_;
+    transfer_scn_ = other.transfer_scn_;
+    rebuild_info_ = other.rebuild_info_;
   }
   return *this;
 }
@@ -135,6 +141,8 @@ void ObLSMeta::reset()
   replayable_point_.reset();
   tablet_change_checkpoint_scn_ = SCN::min_scn();
   saved_info_.reset();
+  transfer_scn_ = SCN::min_scn();
+  rebuild_info_.reset();
 }
 
 LSN &ObLSMeta::get_clog_base_lsn()
@@ -198,10 +206,39 @@ int ObLSMeta::set_tablet_change_checkpoint_scn(const SCN &tablet_change_checkpoi
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
+      LOG_INFO("update tablet change checkpoint scn", K(tenant_id_), K(ls_id_),
+          "old_scn", tablet_change_checkpoint_scn_, "new_scn", tablet_change_checkpoint_scn);
       tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn;
     }
   }
 
+  return ret;
+}
+
+share::SCN ObLSMeta::get_transfer_scn() const
+{
+  ObSpinLockTimeGuard guard(lock_);
+  return transfer_scn_;
+}
+
+int ObLSMeta::inc_update_transfer_scn(const share::SCN &transfer_scn)
+{
+  ObSpinLockTimeGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_can_update_())) {
+    LOG_WARN("ls meta cannot update", K(ret), K(*this));
+  } else if (transfer_scn_ > transfer_scn) {
+    LOG_INFO("transfer scn is small",  K_(tenant_id), K_(ls_id), K(transfer_scn), K_(transfer_scn));
+  } else {
+    ObLSMeta tmp(*this);
+    tmp.transfer_scn_ = transfer_scn;
+
+    if (OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("clog_checkpoint write slog failed", K(ret), K(*this));
+    } else {
+      transfer_scn_ = transfer_scn;
+    }
+  }
   return ret;
 }
 
@@ -424,15 +461,17 @@ int ObLSMeta::update_ls_meta(
     tmp.clog_checkpoint_scn_ = src_ls_meta.clog_checkpoint_scn_;
     tmp.replayable_point_ = src_ls_meta.replayable_point_;
     tmp.tablet_change_checkpoint_scn_ = src_ls_meta.tablet_change_checkpoint_scn_;
+    tmp.transfer_scn_ = src_ls_meta.transfer_scn_;
     tmp.rebuild_seq_++;
     if (update_restore_status) {
       tmp.restore_status_ = ls_restore_status;
     }
     tmp.gc_state_ = src_ls_meta.gc_state_;
+    tmp.offline_scn_ = src_ls_meta.offline_scn_;
     guard.click();
     tmp.all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
     if (tmp.clog_checkpoint_scn_ < clog_checkpoint_scn_) {
-  // TODO: now do not allow clog checkpoint ts rollback, may support it in 4.1
+  // TODO: now do not allow clog checkpoint ts rollback, may support it in 4.3
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("do not allow clog checkpoint ts rollback", K(ret), K(src_ls_meta), KPC(this));
     } else if (OB_FAIL(write_slog_(tmp))) {
@@ -446,6 +485,8 @@ int ObLSMeta::update_ls_meta(
       all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
       rebuild_seq_ = tmp.rebuild_seq_;
       gc_state_ = tmp.gc_state_;
+      offline_scn_ = src_ls_meta.offline_scn_;
+      transfer_scn_ = src_ls_meta.transfer_scn_;
       if (update_restore_status) {
         restore_status_ = ls_restore_status;
       }
@@ -464,6 +505,8 @@ int ObLSMeta::set_ls_rebuild()
   ObSpinLockTimeGuard guard(lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
+  } else if (change_status == migration_status_) {
+    //do nothing
   } else {
     ObLSMeta tmp(*this);
     if (OB_FAIL(ObMigrationStatusHelper::check_can_change_status(tmp.migration_status_, change_status, can_change))) {
@@ -607,6 +650,7 @@ int ObLSMeta::init(
     migration_status_ = migration_status;
     gc_state_ = LSGCState::NORMAL;
     restore_status_ = restore_status;
+    transfer_scn_ = SCN::min_scn();
   }
   return ret;
 }
@@ -684,6 +728,43 @@ int ObLSMeta::get_migration_and_restore_status(
   return ret;
 }
 
+int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockTimeGuard guard(lock_);
+  if (OB_FAIL(check_can_update_())) {
+    LOG_WARN("ls meta cannot update", K(ret), K(*this));
+  } else if (!rebuild_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rebuild info", K(ret), K(rebuild_info_), K(rebuild_info));
+  } else if (rebuild_info_ == rebuild_info) {
+    //do nothing
+  } else {
+    ObLSMeta tmp(*this);
+    tmp.rebuild_info_ = rebuild_info;
+    if (OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("rebuild_info write slog failed", K(ret));
+    } else {
+      rebuild_info_ = rebuild_info;
+    }
+  }
+  return ret;
+}
+
+int ObLSMeta::get_rebuild_info(ObLSRebuildInfo &rebuild_info) const
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockTimeGuard guard(lock_);
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls meta is not valid, cannot get rebuild info", K(ret), K(*this));
+  } else {
+    rebuild_info = rebuild_info_;
+  }
+  return ret;
+}
+
+
 ObLSMeta::ObSpinLockTimeGuard::ObSpinLockTimeGuard(common::ObSpinLock &lock,
                                                    const int64_t warn_threshold)
   : time_guard_("ls_meta", warn_threshold),
@@ -692,6 +773,7 @@ ObLSMeta::ObSpinLockTimeGuard::ObSpinLockTimeGuard(common::ObSpinLock &lock,
   time_guard_.click("after lock");
 }
 
+// add field should also consider ObLSMeta::update_ls_meta function
 OB_SERIALIZE_MEMBER(ObLSMeta,
                     tenant_id_,
                     ls_id_,
@@ -707,7 +789,9 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     replayable_point_,
                     tablet_change_checkpoint_scn_,
                     all_id_meta_,
-                    saved_info_);
+                    saved_info_,
+                    transfer_scn_,
+                    rebuild_info_);
 
 }
 }

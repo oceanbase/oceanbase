@@ -1105,11 +1105,7 @@ int ObLocationSem::acquire(const int64_t abs_timeout_us)
         if (wait_time_ms > INT32_MAX) {
           wait_time_ms = INT32_MAX;
           const bool force_print = true;
-          BACKTRACE(ERROR,
-              force_print,
-              "Invalid wait time, use INT32_MAX. wait_time_ms=%ld abs_timeout_us=%ld",
-              wait_time_ms,
-              abs_timeout_us);
+          LOG_DEBUG("wait time is longer than INT32_MAX", K(wait_time_ms), K(abs_timeout_us));
         }
         has_wait = true;
         cond_.wait(static_cast<int32_t>(wait_time_ms));

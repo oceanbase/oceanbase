@@ -79,13 +79,15 @@ int get_read_store_ctx(const share::SCN snapshot_version,
 int get_write_store_ctx(ObTxDesc &tx,
                         const ObTxReadSnapshot &snapshot,
                         const concurrent_control::ObWriteFlag write_flag,
-                        storage::ObStoreCtx &store_ctx);
+                        storage::ObStoreCtx &store_ctx,
+                        const bool special);
 int revert_store_ctx(storage::ObStoreCtx &store_ctx);
 
 int acquire_tx_ctx(const share::ObLSID &ls_id,
                    const ObTxDesc &tx,
                    ObPartTransCtx *&ctx,
-                   ObLS *ls);
+                   ObLS *ls,
+                   const bool special);
 //handle msg
 int handle_trans_commit_request(ObTxCommitMsg &commit_req, obrpc::ObTransRpcResult &result);
 int handle_trans_commit_response(ObTxCommitRespMsg &commit_resp, obrpc::ObTransRpcResult &result);
@@ -155,6 +157,7 @@ int handle_sub_rollback_request(const ObTxSubRollbackMsg &msg, obrpc::ObTransRpc
 int handle_sub_rollback_response(const ObTxSubRollbackRespMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_sub_rollback_result(const ObTransID &tx_id, const int result);
 int check_scheduler_status(const share::ObLSID &ls_id);
+int gen_trans_id(ObTransID &trans_id);
 
 //for standby
 int check_and_fill_state_info(const ObTransID &tx_id, ObStateInfo &state_info);
@@ -162,6 +165,7 @@ int handle_trans_ask_state(const ObAskStateMsg &msg, obrpc::ObTransRpcResult &re
 int handle_trans_ask_state_response(const ObAskStateRespMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_trans_collect_state(const ObCollectStateMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_trans_collect_state_response(const ObCollectStateRespMsg &msg, obrpc::ObTransRpcResult &result);
+int handle_ls_deleted(const ObTxMsg &msg);
 void build_tx_collect_state_resp_(ObCollectStateRespMsg &resp, const ObCollectStateMsg &msg);
 void build_tx_ask_state_resp_(ObAskStateRespMsg &resp, const ObAskStateMsg &msg);
 int check_for_standby(const share::ObLSID &ls_id,
@@ -170,7 +174,9 @@ int check_for_standby(const share::ObLSID &ls_id,
                       bool &can_read,
                       SCN &trans_version,
                       bool &is_determined_state);
-
+void register_standby_cleanup_task();
+int do_standby_cleanup();
+void handle_defer_abort(ObTxDesc &tx);
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
 private:
@@ -178,6 +184,7 @@ int check_ls_status_(const share::ObLSID &ls_id, bool &leader);
 void init_tx_(ObTxDesc &tx, const uint32_t session_id);
 int start_tx_(ObTxDesc &tx);
 int abort_tx_(ObTxDesc &tx, const int cause, bool cleanup = true);
+void abort_tx__(ObTxDesc &tx, bool cleanup);
 int finalize_tx_(ObTxDesc &tx);
 int find_parts_after_sp_(ObTxDesc &tx,
                          ObTxPartRefList &parts,
@@ -197,8 +204,8 @@ int create_tx_ctx_(const share::ObLSID &ls_id,
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    ObLS *ls,
                    const ObTxDesc &tx,
-                   ObPartTransCtx *&ctx);
-
+                   ObPartTransCtx *&ctx,
+                   const bool special);
 int get_tx_ctx_(const share::ObLSID &ls_id,
                 ObLS *ls,
                 const ObTransID &tx_id,
@@ -245,7 +252,7 @@ int post_tx_abort_part_msg_(const ObTxDesc &tx_desc,
                             const ObTxPart &p);
 bool is_sync_replica_(const share::ObLSID &ls_id);
 
-void handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader);
+int handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader, const bool ls_deleted);
 
 int update_max_read_ts_(const uint64_t tenant_id,
                         const share::ObLSID &lsid,
@@ -357,6 +364,7 @@ int wait_follower_readable_(ObLS &ls,
                             const share::SCN &snapshot,
                             const ObTxReadSnapshot::SRC src);
 MonotonicTs get_req_receive_mts_();
+bool is_ls_dropped_(const share::ObLSID ls_id);
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

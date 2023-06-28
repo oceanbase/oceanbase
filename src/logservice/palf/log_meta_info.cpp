@@ -18,10 +18,10 @@
 
 namespace oceanbase
 {
-namespace palf
-{
 using namespace common;
 using namespace share;
+namespace palf
+{
 
 LogVotedFor::LogVotedFor()
 {
@@ -442,6 +442,8 @@ int LogConfigInfo::generate(const ObMemberList &memberlist,
   if (false == memberlist.is_valid() || false == config_version.is_valid() ||
       0 >= replica_num || OB_MAX_MEMBER_NUMBER < replica_num) {
     ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", KR(ret), K(memberlist), K(replica_num),
+             K(learnerlist), K(config_version));
   } else {
     log_sync_memberlist_ = memberlist;
     log_sync_replica_num_ = replica_num;
@@ -579,6 +581,303 @@ DEFINE_GET_SERIALIZE_SIZE(LogConfigInfo)
   return size;
 }
 
+bool is_valid_config_lock_type(int64_t lock_type)
+{
+  //only support member change so far
+  return (LOCK_NOTHING == lock_type || LOCK_PAXOS_MEMBER_CHANGE == lock_type);
+}
+
+void LogLockMeta::reset()
+{
+  version_ = -1;
+  lock_owner_ = OB_INVALID_CONFIG_CHANGE_LOCK_OWNER;
+  lock_type_ = ConfigChangeLockType::LOCK_NOTHING;
+  lock_time_ = OB_INVALID_TIMESTAMP;
+}
+
+bool LogLockMeta::is_valid() const
+{
+  const bool is_valid_locked_stat =
+      lock_owner_ > 0
+      && LOCK_PAXOS_MEMBER_CHANGE == lock_type_
+      && OB_INVALID_TIMESTAMP != lock_time_;
+
+  const bool is_valid_unlocked_stat = (LOCK_NOTHING == lock_type_)
+      && ((OB_INVALID_CONFIG_CHANGE_LOCK_OWNER == lock_owner_ &&  OB_INVALID_TIMESTAMP == lock_time_)
+          || (OB_INVALID_CONFIG_CHANGE_LOCK_OWNER != lock_owner_ &&  OB_INVALID_TIMESTAMP != lock_time_));
+
+  return ((LOG_LOCK_META_VERSION == version_)
+          && (is_valid_locked_stat || is_valid_unlocked_stat));
+}
+
+int LogLockMeta::generate(const int64_t lock_owner, const int64_t lock_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((LOCK_PAXOS_MEMBER_CHANGE != lock_type) || lock_owner <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(lock_type), K(lock_owner));
+  } else {
+    version_ = LOG_LOCK_META_VERSION;
+    lock_owner_ = lock_owner;
+    lock_type_ = lock_type;
+    lock_time_ = ObTimeUtility::fast_current_time();
+  }
+  return ret;
+}
+
+void LogLockMeta::unlock()
+{
+  lock_type_ = LOCK_NOTHING;
+  lock_time_ = ObTimeUtility::fast_current_time();
+}
+
+void LogLockMeta::reset_as_unlocked()
+{
+  version_ = LOG_LOCK_META_VERSION;
+  lock_owner_ = OB_INVALID_CONFIG_CHANGE_LOCK_OWNER;
+  lock_type_ = LOCK_NOTHING;
+  lock_time_ = OB_INVALID_TIMESTAMP;
+}
+
+bool LogLockMeta::is_locked() const
+{
+  return LOCK_PAXOS_MEMBER_CHANGE == lock_type_;
+}
+
+bool LogLockMeta::is_lock_owner_valid() const
+{
+  return (OB_INVALID_CONFIG_CHANGE_LOCK_OWNER != lock_owner_);
+}
+
+void LogLockMeta::operator=(const LogLockMeta &lock_meta)
+{
+  version_ = lock_meta.version_;
+  lock_owner_ = lock_meta.lock_owner_;
+  lock_type_ = lock_meta.lock_type_;
+  lock_time_ = lock_meta.lock_time_;
+}
+
+bool LogLockMeta::operator==(const LogLockMeta &lock_meta) const
+{
+  return version_ == lock_meta.version_
+      && lock_owner_ == lock_meta.lock_owner_
+      && lock_type_ == lock_meta.lock_type_
+      && lock_time_ == lock_meta.lock_time_;
+}
+
+DEFINE_SERIALIZE(LogLockMeta)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (NULL == buf || 0 >= buf_len) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_len));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, version_))) {
+    PALF_LOG(WARN, "serialize version_ failed", K(ret), K(new_pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, lock_owner_))) {
+    PALF_LOG(WARN, "serialize lock_owner_ failed", K(ret), K(new_pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, lock_type_))) {
+    PALF_LOG(WARN, "serialize log_type failed", K(ret), K(new_pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, lock_time_))) {
+    PALF_LOG(WARN, "serialize lock_ts_ failed", K(ret), K(new_pos));
+  } else {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+DEFINE_DESERIALIZE(LogLockMeta)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (NULL == buf || 0 >= data_len) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), KP(buf), K(data_len));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version_))) {
+    PALF_LOG(WARN, "deserialize failed", K(ret), K(new_pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &lock_owner_))) {
+    PALF_LOG(WARN, "deserialize failed", K(ret), K(new_pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &lock_type_))) {
+    PALF_LOG(WARN, "deserialize failed", K(ret), K(new_pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &lock_time_))) {
+    PALF_LOG(WARN, "deserialize failed", K(ret), K(new_pos));
+  } else {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(LogLockMeta)
+{
+  int64_t size = 0;
+  size += serialization::encoded_length_i64(version_);
+  size += serialization::encoded_length_i64(lock_owner_);
+  size += serialization::encoded_length_i64(lock_type_);
+  size += serialization::encoded_length_i64(lock_time_);
+  return size;
+}
+
+LogConfigInfoV2::LogConfigInfoV2()
+    : version_(-1),
+      config_(),
+      lock_meta_()
+{}
+
+LogConfigInfoV2::~LogConfigInfoV2()
+{
+  reset();
+}
+
+bool LogConfigInfoV2::is_valid() const
+{
+  return (LOG_CONFIG_INFO_VERSION == version_)
+      && config_.is_valid()
+      && lock_meta_.is_valid();
+}
+
+void LogConfigInfoV2::reset()
+{
+  version_ = -1;
+  config_.reset();
+  lock_meta_.reset();
+}
+
+
+int LogConfigInfoV2::generate(const LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!config_version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", KR(ret), K(config_version));
+  } else {
+    version_ = LOG_CONFIG_INFO_VERSION;
+    config_.config_version_ = config_version;
+    lock_meta_.reset_as_unlocked();
+  }
+  return ret;
+}
+
+int LogConfigInfoV2::generate(const LogConfigInfo &config_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!config_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", KR(ret), K(config_info));
+  } else {
+    version_ = LOG_CONFIG_INFO_VERSION;
+    config_ = config_info;
+    lock_meta_.reset_as_unlocked();
+  }
+  return ret;
+}
+
+int LogConfigInfoV2::transform_for_deserialize(const LogConfigInfo &config_info)
+{
+  int ret = OB_SUCCESS;
+  version_ = LOG_CONFIG_INFO_VERSION;
+  config_ = config_info;
+  lock_meta_.reset_as_unlocked();
+  return ret;
+}
+
+// generate paxos memberlist including arbitration replica
+int LogConfigInfoV2::convert_to_complete_config(common::ObMemberList &all_paxos_memberlist,
+                                              int64_t &all_paxos_replica_num,
+                                              GlobalLearnerList &all_learners) const
+{
+   return config_.convert_to_complete_config(all_paxos_memberlist, all_paxos_replica_num, all_learners);
+}
+
+bool LogConfigInfoV2::is_config_change_locked() const
+{
+  return lock_meta_.is_locked();
+}
+
+int LogConfigInfoV2::generate(const ObMemberList &memberlist,
+                            const int64_t replica_num,
+                            const common::GlobalLearnerList &learnerlist,
+                            const LogConfigVersion &config_version)
+{
+  LogLockMeta lock_meta;
+  lock_meta.reset_as_unlocked();
+  return generate(memberlist, replica_num, learnerlist, config_version, lock_meta);
+}
+
+int LogConfigInfoV2::generate(const ObMemberList &memberlist,
+                            const int64_t replica_num,
+                            const common::GlobalLearnerList &learnerlist,
+                            const LogConfigVersion &config_version,
+                            const LogLockMeta &lock_meta)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!lock_meta.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", KR(ret), K(lock_meta));
+  } else if (OB_FAIL(config_.generate(memberlist, replica_num, learnerlist, config_version))) {
+    PALF_LOG(WARN, "failed to generate config", KR(ret));
+  } else {
+    version_ = LOG_CONFIG_INFO_VERSION;
+    lock_meta_ = lock_meta;
+  }
+  return ret;
+}
+
+void LogConfigInfoV2::operator=(const LogConfigInfoV2 &config_info)
+{
+  version_ = config_info.version_;
+  config_ = config_info.config_;
+  lock_meta_ = config_info.lock_meta_;
+  PALF_LOG(TRACE, "LogConfigInfoV2 operator =", KPC(this), K(config_info));
+}
+
+bool LogConfigInfoV2::operator==(const LogConfigInfoV2 &config_info) const
+{
+  return (version_ == config_info.version_)
+      && (config_ == config_info.config_)
+      && (lock_meta_ == config_info.lock_meta_);
+}
+
+DEFINE_SERIALIZE(LogConfigInfoV2)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (NULL == buf || 0 >= buf_len) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, version_))
+             || OB_FAIL(config_.serialize(buf, buf_len, new_pos))
+             || OB_FAIL(lock_meta_.serialize(buf, buf_len, new_pos))) {
+    PALF_LOG(ERROR, "LogConfigInfoV2 serialize failed", K(ret), K(new_pos));
+  } else {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+DEFINE_DESERIALIZE(LogConfigInfoV2)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (NULL == buf || 0 >= data_len) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version_))
+             || OB_FAIL(config_.deserialize(buf, data_len, new_pos))
+             || OB_FAIL(lock_meta_.deserialize(buf, data_len, new_pos))) {
+    PALF_LOG(ERROR, "LogConfigInfoV2 deserialize failed", K(ret), K(new_pos));
+  } else {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(LogConfigInfoV2)
+{
+  int64_t size = 0;
+  size += serialization::encoded_length_i64(version_);
+  size += config_.get_serialize_size();
+  size += lock_meta_.get_serialize_size();
+  return size;
+}
+
 LogConfigMeta::LogConfigMeta()
   : version_(-1),
     proposal_id_(INVALID_PROPOSAL_ID),
@@ -596,8 +895,8 @@ LogConfigMeta::~LogConfigMeta()
 
 int LogConfigMeta::generate_for_default(
     const int64_t proposal_id,
-    const LogConfigInfo &prev_config_info,
-    const LogConfigInfo &curr_config_info)
+    const LogConfigInfoV2 &prev_config_info,
+    const LogConfigInfoV2 &curr_config_info)
 {
   int ret = OB_SUCCESS;
   if (INVALID_PROPOSAL_ID == proposal_id) {
@@ -617,8 +916,8 @@ int LogConfigMeta::generate_for_default(
 
 int LogConfigMeta::generate(
     const int64_t proposal_id,
-    const LogConfigInfo &prev_config_info,
-    const LogConfigInfo &curr_config_info,
+    const LogConfigInfoV2 &prev_config_info,
+    const LogConfigInfoV2 &curr_config_info,
     const int64_t prev_log_proposal_id,
     const LSN &prev_lsn,
     const int64_t prev_mode_pid)
@@ -630,12 +929,18 @@ int LogConfigMeta::generate(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
     PALF_LOG(WARN, "get tenant data version failed", K(ret));
   } else {
-    const bool is_cluster_already_4100 = (tenant_data_version >= DATA_VERSION_4_1_0_0);
-    version_ = (is_cluster_already_4100)? LOG_CONFIG_META_VERSION_INC: LOG_CONFIG_META_VERSION;
+    if (tenant_data_version < DATA_VERSION_4_1_0_0) {
+      version_ = LOG_CONFIG_META_VERSION;
+    } else if (tenant_data_version < DATA_VERSION_4_2_0_0) {
+      version_ = LOG_CONFIG_META_VERSION_INC;
+    } else {
+      version_ = LOG_CONFIG_META_VERSION_42;
+    }
+
     proposal_id_ = proposal_id;
     prev_ = prev_config_info;
     curr_ = curr_config_info;
-    if (is_cluster_already_4100) {
+    if (tenant_data_version >= DATA_VERSION_4_1_0_0) {
       prev_log_proposal_id_ = prev_log_proposal_id;
       prev_lsn_ = prev_lsn;
       prev_mode_pid_ = prev_mode_pid;
@@ -647,12 +952,15 @@ int LogConfigMeta::generate(
 bool LogConfigMeta::is_valid() const
 {
   // NB: prev_config_info is invalid before change config
-  return (LOG_CONFIG_META_VERSION == version_ || LOG_CONFIG_META_VERSION_INC == version_)
-      && proposal_id_ != INVALID_PROPOSAL_ID;
+  return (LOG_CONFIG_META_VERSION == version_
+                || LOG_CONFIG_META_VERSION_INC == version_
+                ||LOG_CONFIG_META_VERSION_42 == version_)
+        && proposal_id_ != INVALID_PROPOSAL_ID;
 }
 
 void LogConfigMeta::reset()
 {
+  version_ = -1;
   proposal_id_ = INVALID_PROPOSAL_ID;
   curr_.reset();
   prev_.reset();
@@ -681,20 +989,41 @@ DEFINE_SERIALIZE(LogConfigMeta)
     ret = OB_INVALID_ARGUMENT;
   } else if (buf_len - new_pos < get_serialize_size()) {
     ret = OB_BUF_NOT_ENOUGH;
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, version_)) ||
-             OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, proposal_id_)) ||
-             OB_FAIL(prev_.serialize(buf, buf_len, new_pos)) || OB_FAIL(curr_.serialize(buf, buf_len, new_pos))) {
-    PALF_LOG(ERROR, "LogConfigMeta serialize failed", K(ret), K(new_pos));
-  } else if (LOG_CONFIG_META_VERSION_INC == version_) {
-    if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, prev_log_proposal_id_)) ||
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, version_))) {
+      PALF_LOG(ERROR, "LogConfigMeta faild to serialize version_", K(ret), K(new_pos), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, proposal_id_))) {
+      PALF_LOG(ERROR, "LogConfigMeta failed to serialize proposal_id_", K(ret), K(new_pos), K(buf_len), K(pos));
+  } else if (LOG_CONFIG_META_VERSION_INC >= version_) {
+    if (OB_FAIL(prev_.config_.serialize(buf, buf_len, new_pos))
+        || OB_FAIL(curr_.config_.serialize(buf, buf_len, new_pos))) {
+      PALF_LOG(ERROR, "LogConfigMeta serialize failed", K(ret), K(new_pos), K(buf_len), K(pos));
+    } else if (LOG_CONFIG_META_VERSION_INC == version_) {
+      if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, prev_log_proposal_id_)) ||
+          OB_FAIL(prev_lsn_.serialize(buf, buf_len, new_pos)) ||
+          OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, prev_mode_pid_))) {
+        PALF_LOG(ERROR, "LogConfigMeta Version 2 serialize failed", K(ret), K(new_pos));
+      } else {
+        PALF_LOG(TRACE, "LogConfigMeta Version 2 serialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
+        pos = new_pos;
+      }
+    }
+  } else if (LOG_CONFIG_META_VERSION_42 == version_) {
+    if (OB_FAIL(prev_.serialize(buf, buf_len, new_pos)) ||
+        OB_FAIL(curr_.serialize(buf, buf_len, new_pos)) ||
+        OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, prev_log_proposal_id_)) ||
         OB_FAIL(prev_lsn_.serialize(buf, buf_len, new_pos)) ||
         OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, prev_mode_pid_))) {
-      PALF_LOG(ERROR, "LogConfigMeta Version 2 serialize failed", K(ret), K(new_pos));
+      PALF_LOG(ERROR, "LogConfigMeta Version 3 serialize failed", K(ret), K(new_pos));
     } else {
-      PALF_LOG(TRACE, "LogConfigMeta Version 2 serialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
+      PALF_LOG(TRACE, "LogConfigMeta Version 3 serialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
       pos = new_pos;
     }
   } else {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "invalid version", K(ret), K(version_));
+  }
+
+  if (OB_SUCC(ret)) {
     PALF_LOG(TRACE, "LogConfigMeta serialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
     pos = new_pos;
   }
@@ -707,23 +1036,47 @@ DEFINE_DESERIALIZE(LogConfigMeta)
   int64_t new_pos = pos;
   if (NULL == buf || 0 >= data_len) {
     ret = OB_INVALID_ARGUMENT;
-    //  TODO: ObAddr's serialized size is variable, replace it later.
-    //  } else if (data_len - new_pos < get_serialize_size()) {
-    //    ret = OB_BUF_NOT_ENOUGH;
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version_)) ||
-             OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &proposal_id_)) ||
-             OB_FAIL(prev_.deserialize(buf, data_len, new_pos)) || OB_FAIL(curr_.deserialize(buf, data_len, new_pos))) {
-    PALF_LOG(ERROR, "LogConfigMeta deserialize failed", K(ret), K(new_pos));
-  } else if (LOG_CONFIG_META_VERSION_INC == version_) {
-    if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &prev_log_proposal_id_)) ||
+    /*  TODO: ObAddr's serialized size is variable, replace it later.
+        } else if (data_len - new_pos < get_serialize_size()) {
+        ret = OB_BUF_NOT_ENOUGH; */
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version_))) {
+    PALF_LOG(ERROR, "failed to deserialize version", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &proposal_id_))) {
+    PALF_LOG(ERROR, "failed to deserialize version", K(ret));
+  } else if (LOG_CONFIG_META_VERSION == version_ || LOG_CONFIG_META_VERSION_INC == version_) {
+    LogConfigInfo old_prev;
+    LogConfigInfo old_curr;
+    if (OB_FAIL(old_prev.deserialize(buf, data_len, new_pos))) {
+      PALF_LOG(ERROR, "LogConfigMeta deserialize failed", K(ret), K(new_pos));
+    } else if (OB_FAIL(old_curr.deserialize(buf, data_len, new_pos))) {
+      PALF_LOG(ERROR, "deserialize failed", K(ret), K(new_pos));
+    } else if (OB_FAIL(prev_.transform_for_deserialize(old_prev))) {
+      PALF_LOG(ERROR, "failed to generate pre_", K(ret));
+    } else if (OB_FAIL(curr_.transform_for_deserialize(old_curr))) {
+      PALF_LOG(ERROR, " failed to generate curr_", K(ret));
+    } else if (LOG_CONFIG_META_VERSION_INC == version_) {
+      if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &prev_log_proposal_id_)) ||
+          OB_FAIL(prev_lsn_.deserialize(buf, data_len, new_pos)) ||
+          OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &prev_mode_pid_))) {
+        PALF_LOG(ERROR, " failed to decode pre_log_info", K(ret));
+      }
+    } else {/*do nothing*/}
+  } else if (LOG_CONFIG_META_VERSION_42 == version_) {
+    if (OB_FAIL(prev_.deserialize(buf, data_len, new_pos))) {
+      PALF_LOG(ERROR, "failed to deserialize prev_", K(ret));
+    } else if (OB_FAIL(curr_.deserialize(buf, data_len, new_pos))) {
+      PALF_LOG(ERROR, "failed to deserialize curr_", K(ret));
+    } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &prev_log_proposal_id_)) ||
         OB_FAIL(prev_lsn_.deserialize(buf, data_len, new_pos)) ||
         OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &prev_mode_pid_))) {
-      PALF_LOG(ERROR, "LogConfigMeta Version 2 deserialize failed", K(ret), K(new_pos));
-    } else {
-      PALF_LOG(TRACE, "LogConfigMeta Version 2 deserialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
-      pos = new_pos;
-    }
+      PALF_LOG(ERROR, "LogConfigMeta Version 3 deserialize failed", K(ret), K(new_pos));
+    } else {/*do nothing*/}
   } else {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "invalid version", K(ret), K(version_));
+  }
+
+  if (OB_SUCC(ret)) {
     PALF_LOG(TRACE, "LogConfigMeta deserialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
     pos = new_pos;
   }
@@ -735,9 +1088,18 @@ DEFINE_GET_SERIALIZE_SIZE(LogConfigMeta)
   int64_t size = 0;
   size += serialization::encoded_length_i64(version_);
   size += serialization::encoded_length_i64(proposal_id_);
-  size += prev_.get_serialize_size();
-  size += curr_.get_serialize_size();
-  if (LOG_CONFIG_META_VERSION_INC == version_) {
+  if (LOG_CONFIG_META_VERSION == version_ ) {
+    size += prev_.config_.get_serialize_size();
+    size += curr_.config_.get_serialize_size();
+  } else  if (LOG_CONFIG_META_VERSION_INC == version_) {
+    size += prev_.config_.get_serialize_size();
+    size += curr_.config_.get_serialize_size();
+    size += serialization::encoded_length_i64(prev_log_proposal_id_);
+    size += prev_lsn_.get_serialize_size();
+    size += serialization::encoded_length_i64(prev_mode_pid_);
+  } else if (LOG_CONFIG_META_VERSION_42 == version_) {
+    size += prev_.get_serialize_size();
+    size += curr_.get_serialize_size();
     size += serialization::encoded_length_i64(prev_log_proposal_id_);
     size += prev_lsn_.get_serialize_size();
     size += serialization::encoded_length_i64(prev_mode_pid_);

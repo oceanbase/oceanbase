@@ -205,7 +205,7 @@ int ObSingleRowGetter::init_dml_access_param(ObRelativeTable &relative_table,
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(access_param_.init_dml_access_param(relative_table,
-                                                    tablet_->get_full_read_info(),
+                                                    tablet_->get_rowkey_read_info(),
                                                     *schema_param,
                                                     &output_projector_))) {
       LOG_WARN("init dml access param failed", K(ret));

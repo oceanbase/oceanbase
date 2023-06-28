@@ -146,7 +146,8 @@ public:
   ObComplementDataParam &get_param() { return param_; }
   ObComplementDataContext &get_context() { return context_; }
   void handle_init_failed_ret_code(int ret) { context_.complement_data_ret_ = ret; }
-  int fill_comment(char *buf, const int64_t buf_len) const override;
+  int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
+
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return param_.compat_mode_; }
@@ -277,8 +278,7 @@ private:
       const share::schema::ObTableSchema &data_table_schema);
   int construct_access_param(
       const share::schema::ObTableSchema &data_table_schema,
-      const ObTabletID &tablet_id,
-      const ObTableReadInfo &full_read_info);
+      const ObTabletID &tablet_id);
   int construct_range_ctx(common::ObQueryFlag &query_flag, const share::ObLSID &ls_id, transaction::ObTxDesc *tx_desc);
   int construct_multiple_scan_merge(ObTablet &tablet, blocksstable::ObDatumRange &range);
   int construct_multiple_scan_merge(

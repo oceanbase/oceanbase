@@ -136,24 +136,19 @@ class TestIOCallback : public ObIOCallback
 {
 public:
   TestIOCallback()
-    : number_(nullptr), allocator_(nullptr), user_offset_(0),
-     user_size_(0), raw_buf_(nullptr), user_buf_(nullptr)
+    : number_(nullptr), allocator_(nullptr), help_buf_(nullptr)
   {}
   virtual ~TestIOCallback();
-  virtual const char *get_data() override { return (char *)user_buf_; }
+  virtual const char *get_data() override { return help_buf_; }
   virtual int64_t size() const override { return sizeof(TestIOCallback); }
   virtual int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&callback) const override;
-  virtual int alloc_io_buf(char *&io_buf, int64_t &io_buf_size, int64_t &aligned_offset) override;
-  virtual int inner_process(const bool is_success) override;
-  TO_STRING_KV(KP(number_), KP(allocator_), K(user_offset_), K(user_size_), KP(raw_buf_), KP(user_buf_));
+  virtual int inner_process(const char *data_buffer, const int64_t size) override;
+  TO_STRING_KV(KP(number_), KP(allocator_), KP(help_buf_));
 
 public:
   int64_t *number_;
   ObIAllocator *allocator_;
-  int64_t user_offset_;
-  int64_t user_size_;
-  void *raw_buf_;
-  void *user_buf_;
+  char *help_buf_;
 };
 
 TEST_F(TestIOStruct, IOFlag)
@@ -789,8 +784,6 @@ TEST_F(TestIOManager, simple)
   TestIOCallback callback;
   callback.number_ = &tmp_number;
   callback.allocator_ = &allocator;
-  callback.user_offset_ = io_info.offset_;
-  callback.user_size_ = io_info.size_;
   io_info.callback_ = &callback;
   ASSERT_SUCC(io_mgr.read(io_info, io_handle, io_timeout_ms));
   ASSERT_NE(nullptr, io_handle.get_buffer());
@@ -1335,15 +1328,12 @@ TestIOCallback::~TestIOCallback()
   if (nullptr != number_) {
     *number_ -= 90;
   }
-  if (nullptr != allocator_ && nullptr != raw_buf_) {
-    allocator_->free(raw_buf_);
-  }
   number_ = nullptr;
   allocator_ = nullptr;
-  user_offset_ = 0;
-  user_size_ = 0;
-  raw_buf_ = nullptr;
-  user_buf_ = nullptr;
+  if (nullptr != help_buf_ && nullptr != allocator_) {
+    allocator_->free(help_buf_);
+    help_buf_ = nullptr;
+  }
 }
 
 
@@ -1361,31 +1351,25 @@ int TestIOCallback::inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallba
     TestIOCallback *tmp_callback = new (buf) TestIOCallback();
     tmp_callback->number_ = number_;
     tmp_callback->allocator_ = allocator_;
-    tmp_callback->user_offset_ = user_offset_;
-    tmp_callback->user_size_ = user_size_;
     callback = tmp_callback;
   }
   return ret;
 }
 
-int TestIOCallback::alloc_io_buf(char *&io_buf, int64_t &io_buf_size, int64_t &aligned_offset)
+int TestIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
-  align_offset_size(user_offset_, user_size_, aligned_offset, io_buf_size);
-  if (OB_ISNULL(raw_buf_ = allocator_->alloc(io_buf_size + DIO_READ_ALIGN_SIZE))) {
+  if (OB_ISNULL(allocator_)) {
+    // for test, ignore
+  } else if (OB_ISNULL(help_buf_ = static_cast<char *>(allocator_->alloc(size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret), K(user_size_));
+    LOG_WARN("Failed to allocate help buf", K(ret), K(size), KP(data_buffer));
   } else {
-    io_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), DIO_READ_ALIGN_SIZE));
-    user_buf_ = io_buf + user_offset_ - aligned_offset;
+    memset(help_buf_, 0, size);
+    MEMCPY(help_buf_, data_buffer, size);
   }
-  return ret;
-}
-
-int TestIOCallback::inner_process(const bool is_success)
-{
   if (nullptr != number_) {
-    is_success ? *number_ += 100 : *number_ -=100;
+    *number_ += 100;
   }
   return OB_SUCCESS;
 }

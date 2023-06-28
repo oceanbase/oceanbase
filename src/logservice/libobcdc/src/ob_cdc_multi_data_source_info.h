@@ -52,8 +52,8 @@ public:
 
   inline bool is_tablet_change_node() const
   {
-    return transaction::ObTxDataSourceType::CREATE_TABLET == tx_buf_node_.get_data_source_type()
-      || transaction::ObTxDataSourceType::REMOVE_TABLET == tx_buf_node_.get_data_source_type();
+    return transaction::ObTxDataSourceType::CREATE_TABLET_NEW_MDS == tx_buf_node_.get_data_source_type()
+           || transaction::ObTxDataSourceType::DELETE_TABLET_NEW_MDS == tx_buf_node_.get_data_source_type();
   }
 
   inline bool is_ddl_trans_node() const
@@ -82,19 +82,29 @@ public:
   ~MultiDataSourceInfo() { reset(); }
   void reset();
 public:
-  bool is_valid() const { return has_ls_table_op_ || has_ddl_trans_op_ || ls_attr_.is_valid(); }
-  void set_has_ls_table_op() { has_ls_table_op_ = true; }
-  bool has_ls_table_op() const { return has_ls_table_op_; }
-  const share::ObLSAttr &get_ls_attr() const { return ls_attr_; }
-  share::ObLSAttr &get_ls_attr() { return ls_attr_; } // used to deserialize ls_attr_;
+  OB_INLINE bool is_valid() const { return has_ls_table_op() || has_tablet_change_op() || has_ddl_trans_op_; }
+  OB_INLINE bool has_ls_table_op() const { return 0 < ls_attr_arr_.count(); }
+  const share::ObLSAttrArray &get_ls_attr_arr() const { return ls_attr_arr_; }
+  int push_back_ls_table_op(const share::ObLSAttr &ls_attr);
   bool has_tablet_change_op() const { return 0 < tablet_change_info_arr_.count(); }
   int push_back_tablet_change_info(const ObCDCTabletChangeInfo &tablet_change_info);
   const CDCTabletChangeInfoArray &get_tablet_change_info_arr() const { return tablet_change_info_arr_; }
-  void set_ddl_trans() { has_ddl_trans_op_ = true; }
-  bool is_ddl_trans() const { return has_ddl_trans_op_; }
+  void set_ddl_trans() { ATOMIC_SET(&has_ddl_trans_op_, true); }
+  bool is_ddl_trans() const { return ATOMIC_LOAD(&has_ddl_trans_op_); }
   DictTenantArray &get_dict_tenant_array() { return dict_tenant_metas_; }
   DictDatabaseArray &get_dict_database_array() { return dict_database_metas_; }
   DictTableArray &get_dict_table_array() { return dict_table_metas_; }
+
+  bool is_empty_dict_info() const
+  {
+    return (0 == dict_tenant_metas_.count())
+      && (0 == dict_database_metas_.count())
+      && (0 == dict_table_metas_.count());
+  }
+  bool is_contains_multiple_table_metas() const
+  {
+    return dict_table_metas_.count() > 1;
+  }
 
   int get_new_tenant_scehma_info(
       const uint64_t tenant_id,
@@ -111,10 +121,9 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
 private:
-  bool has_ls_table_op_;
   // ls change op(create/delete logstream), parse from ObTxBufferNode(LS_TABLE type) in commit_log
-  share::ObLSAttr ls_attr_;
-  // tablet_change_op(create/delete tabelt), parse from MultiDataSourceNode.
+  share::ObLSAttrArray ls_attr_arr_;
+  // tablet_change_op(create/delete tablet), parse from MultiDataSourceNode.
   CDCTabletChangeInfoArray tablet_change_info_arr_;
 
   // ddl_trans_info(incremental schema info)

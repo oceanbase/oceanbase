@@ -22,6 +22,9 @@
 #include "rootserver/ob_root_service.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "share/ob_rpc_struct.h"
+#include "share/ls/ob_ls_status_operator.h"//get max ls id
+#include "share/ob_tenant_info_proxy.h"//update max ls id
+#include "ob_upgrade_utils.h"
 
 namespace oceanbase
 {
@@ -809,6 +812,8 @@ int ObUpgradeFor4100Processor::post_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(recompile_all_views_and_synonyms(tenant_id))) {
     LOG_WARN("fail to init rewrite rule version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(post_upgrade_for_max_ls_id_())) {//TODO for 4200 upgrade
+    LOG_WARN("failed to update max ls id", KR(ret));
   }
   return ret;
 }
@@ -960,8 +965,39 @@ int ObUpgradeFor4100Processor::recompile_all_views_and_synonyms(const uint64_t t
   }
   return ret;
 }
-
 /* =========== 4100 upgrade processor end ============= */
+
+int ObUpgradeFor4100Processor::post_upgrade_for_max_ls_id_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_), K(tenant_id_));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("meta and sys tenant no need to update max ls id", K(tenant_id_));
+  } else {
+    common::ObMySQLTransaction trans;
+    share::ObLSStatusOperator ls_op;
+    ObLSID max_ls_id;
+    const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
+    if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
+      LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id_));
+    } else if (OB_FAIL(ls_op.get_tenant_max_ls_id(tenant_id_, max_ls_id, trans))) {
+      LOG_WARN("failed to get tenant max ls id", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_max_ls_id(tenant_id_, max_ls_id, trans, true))) {
+      LOG_WARN("failed to update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id));
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+    LOG_INFO("update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id));
+  }
+  return ret;
+}
 
 int ObUpgradeFor4200Processor::post_upgrade()
 {
@@ -1088,6 +1124,8 @@ int ObUpgradeFor4200Processor::post_upgrade_for_heartbeat_and_server_zone_op_ser
 }
 
 /* =========== 4200 upgrade processor end ============= */
+
+
 /* =========== special upgrade processor end   ============= */
 } // end share
 } // end oceanbase

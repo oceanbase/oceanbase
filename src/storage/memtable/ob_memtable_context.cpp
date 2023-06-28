@@ -18,6 +18,7 @@
 #include "ob_memtable.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/tx/ob_multi_data_source.h"
 #include "share/ob_tenant_mgr.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
 #include "share/ob_force_print_log.h"
@@ -1205,6 +1206,8 @@ int ObMemtableCtx::register_multi_source_data_if_need_(
     const bool is_replay)
 {
   int ret = OB_SUCCESS;
+  ObRegisterMdsFlag mds_flag;
+  mds_flag.reset();
   if (is_replay) {
     // replay does not need register multi source data, it is dealt
     // by multi source data itself.
@@ -1226,10 +1229,12 @@ int ObMemtableCtx::register_multi_source_data_if_need_(
     } else if (OB_FAIL(lock_op.serialize(buf, serialize_size, pos))) {
       TRANS_LOG(WARN, "serialize lock op failed", K(ret), K(serialize_size), K(pos));
       // TODO: yanyuan.cxf need seqno to do rollback.
+      // THE MULTI SOURCE BUFFER CAN REGISTER AGAIN IF THE RET CODE IS NOT OB_SUCCESS
     } else if (OB_FAIL(part_ctx->register_multi_data_source(type,
                                                             buf,
                                                             serialize_size,
-                                                            true /* try lock */))) {
+                                                            true /* try lock */,
+                                                            mds_flag))) {
       TRANS_LOG(WARN, "register to multi source data failed", K(ret));
     } else {
       // do nothing

@@ -19,7 +19,6 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/string/ob_fixed_length_string.h"
 #include "lib/thread/ob_work_queue.h"
-#include "share/backup/ob_backup_info_mgr.h"
 #include "share/ob_virtual_table_projector.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_schema_status_proxy.h"
@@ -95,14 +94,11 @@ public:
   virtual const char* get_task_name() const { return "tablegroup_checker"; };
 private:
   int inspect_(const uint64_t tenant_id, bool &passed);
-  int check_part_option(const share::schema::ObTableSchema &table,
+  int check_part_option(const share::schema::ObSimpleTableSchemaV2 &table,
                         share::schema::ObSchemaGetterGuard &schema_guard);
-  int check_if_part_option_equal(const share::schema::ObTableSchema &t1, const share::schema::ObTableSchema &t2, bool &is_matched);
-  template<typename SCHEMA>
-  int check_if_part_option_equal_v2(const share::schema::ObTableSchema &table, const SCHEMA &schema, bool &is_matched);
 private:
   static const int TABLEGROUP_BUCKET_NUM = 1024;
-  typedef common::hash::ObHashMap<uint64_t, const share::schema::ObTableSchema*, common::hash::NoPthreadDefendMode> ObTableGroupCheckInfoMap;
+  typedef common::hash::ObHashMap<uint64_t, const share::schema::ObSimpleTableSchemaV2*, common::hash::NoPthreadDefendMode> ObTableGroupCheckInfoMap;
   share::schema::ObMultiVersionSchemaService &schema_service_;
   ObTableGroupCheckInfoMap check_part_option_map_;
   common::hash::ObHashSet<uint64_t> part_option_not_match_set_;

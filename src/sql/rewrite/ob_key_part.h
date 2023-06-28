@@ -195,7 +195,7 @@ struct InParamValsWrapper
   {
     uint64_t hash_code = 0;
     for (int64_t i = 0; i < param_vals_.count(); ++i) {
-      hash_code = common::murmurhash(&param_vals_.at(i), sizeof(param_vals_.at(i)), hash_code);
+      hash_code = param_vals_.at(i).hash(hash_code);
     }
     return hash_code;
   }

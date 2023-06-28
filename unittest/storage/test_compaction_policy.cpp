@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define UNITTEST_DEBUG
 #define USING_LOG_PREFIX STORAGE
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -44,7 +45,24 @@ using namespace memtable;
 using namespace share::schema;
 using namespace share;
 using namespace compaction;
-
+namespace storage
+{
+namespace mds
+{
+void *MdsAllocator::alloc(const int64_t size)
+{
+  void *ptr = ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(lbt()));
+  return ptr;
+}
+void MdsAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  ob_free(ptr);
+}
+}
+}
 namespace memtable
 {
 
@@ -67,6 +85,7 @@ public:
     const int64_t end_scn,
     ObITable::TableKey &table_key);
   static int mock_sstable(
+    common::ObArenaAllocator &allocator,
     const ObITable::TableType &type,
     const int64_t start_scn,
     const int64_t end_scn,
@@ -80,14 +99,17 @@ public:
     ObTablet &tablet,
     ObTableHandleV2 &table_handle);
   static int mock_tablet(
+    common::ObArenaAllocator &allocator,
     const int64_t clog_checkpoint_ts,
     const int64_t snapshot_version,
     ObTabletHandle &tablet_handle);
   static int mock_table_store(
+    common::ObArenaAllocator &allocator,
     ObTabletHandle &tablet_handle,
     common::ObIArray<ObTableHandleV2> &major_tables,
     common::ObIArray<ObTableHandleV2> &minor_tables);
   static int batch_mock_sstables(
+    common::ObArenaAllocator &allocator,
     const char *key_data,
     common::ObIArray<ObTableHandleV2> &major_tables,
     common::ObIArray<ObTableHandleV2> &minor_tables);
@@ -96,6 +118,7 @@ public:
     ObTabletHandle &tablet_handle,
     common::ObIArray<ObTableHandleV2> &memtables);
   static int batch_mock_tables(
+    common::ObArenaAllocator &allocator,
     const char *key_data,
     common::ObIArray<ObTableHandleV2> &major_tables,
     common::ObIArray<ObTableHandleV2> &minor_tables,
@@ -107,9 +130,6 @@ public:
     common::ObIArray<share::ObSnapshotInfo> &snapshots);
 
   void prepare_schema(share::schema::ObTableSchema &table_schema);
-  int prepare_medium_list(
-      const char *snapshot_list,
-      ObTabletHandle &tablet_handle);
   int construct_array(
       const char *snapshot_list,
       ObIArray<int64_t> &array);
@@ -140,7 +160,7 @@ public:
   ObSEArray<ObTableHandleV2, 4> memtables_;
   ObMediumCompactionInfo medium_info_;
   ObSEArray<int64_t, 10> array_;
-  ObArenaAllocator allocator_;
+  common::ObArenaAllocator allocator_;
 };
 
 TestCompactionPolicy::TestCompactionPolicy()
@@ -156,6 +176,7 @@ TestCompactionPolicy::TestCompactionPolicy()
 
 void TestCompactionPolicy::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   t3m->stop();
@@ -254,6 +275,7 @@ void TestCompactionPolicy::generate_table_key(
 }
 
 int TestCompactionPolicy::mock_sstable(
+  common::ObArenaAllocator &allocator,
   const ObITable::TableType &type,
   const int64_t start_scn,
   const int64_t end_scn,
@@ -279,15 +301,26 @@ int TestCompactionPolicy::mock_sstable(
     param.max_merged_trans_version_ = max_merged_trans_version;
   }
 
+  void *buf = nullptr;
   ObSSTable *sstable = nullptr;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, table_handle))) {
-    LOG_WARN("failed to create sstable", K(param));
-  } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
-    LOG_WARN("failed to get sstable", K(ret), K(table_handle));
+  } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSSTable)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate sstable memory", K(ret));
+  } else if (OB_ISNULL(sstable = new (buf)ObSSTable())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get table", K(ret));
+  } else if (OB_FAIL(sstable->init(param, &allocator))) {
+    LOG_WARN("fail to init sstable", K(ret), K(param));
+  } else if (OB_FAIL(table_handle.set_sstable(sstable, &allocator))) {
+    LOG_WARN("failed to set table handle", K(ret), KPC(sstable));
   } else {
-    sstable->meta_.basic_meta_.max_merged_trans_version_ = max_merged_trans_version;
-    sstable->meta_.basic_meta_.upper_trans_version_ = upper_trans_version;
+    sstable->meta_->basic_meta_.max_merged_trans_version_ = max_merged_trans_version;
+    sstable->meta_->basic_meta_.upper_trans_version_ = upper_trans_version;
+    sstable->max_merged_trans_version_ = max_merged_trans_version;
+    sstable->upper_trans_version_ = upper_trans_version;
+    sstable->nested_size_ = 0;
+    sstable->nested_offset_ = 0;
   }
   return ret;
 }
@@ -349,6 +382,7 @@ int TestCompactionPolicy::mock_memtable(
 }
 
 int TestCompactionPolicy::mock_tablet(
+    common::ObArenaAllocator &allocator,
     const int64_t clog_checkpoint_ts,
     const int64_t snapshot_version,
     ObTabletHandle &tablet_handle)
@@ -365,7 +399,6 @@ int TestCompactionPolicy::mock_tablet(
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTablet *tablet = nullptr;
 
-  ObTableHandleV2 table_handle;
   ObLSHandle ls_handle;
   ObLSService *ls_svr = nullptr;
 
@@ -381,11 +414,11 @@ int TestCompactionPolicy::mock_tablet(
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get ls handle", K(ret));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, tablet_handle))) {
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tablet_handle))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else if (OB_FAIL(tablet->init(ls_id, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
-      SCN::min_scn(), snapshot_version, table_schema, compat_mode, table_store_flag, table_handle, ls_handle.get_ls()->get_freezer()))) {
+  } else if (OB_FAIL(tablet->init(allocator, ls_id, tablet_id, tablet_id,
+      SCN::min_scn(), snapshot_version, table_schema, compat_mode, table_store_flag, nullptr, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {
@@ -419,21 +452,6 @@ int TestCompactionPolicy::construct_array(
   return ret;
 }
 
-int TestCompactionPolicy::prepare_medium_list(
-    const char *snapshot_list,
-    ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  ObTablet &tablet = *tablet_handle.get_obj();
-  construct_array(snapshot_list, array_);
-  tablet.medium_info_list_.reset_list();
-  for (int i = 0; OB_SUCC(ret) && i < array_.count(); ++i) {
-    medium_info_.medium_snapshot_ = array_.at(i);
-    ret = tablet.medium_info_list_.add_medium_compaction_info(medium_info_);
-  }
-  return ret;
-}
-
 int TestCompactionPolicy::check_result_tables_handle(
     const char *end_log_ts_list,
     const ObGetMergeTablesResult &result)
@@ -454,6 +472,7 @@ int TestCompactionPolicy::check_result_tables_handle(
 }
 
 int TestCompactionPolicy::mock_table_store(
+    common::ObArenaAllocator &allocator,
     ObTabletHandle &tablet_handle,
     common::ObIArray<ObTableHandleV2> &major_table_handles,
     common::ObIArray<ObTableHandleV2> &minor_table_handles)
@@ -473,16 +492,16 @@ int TestCompactionPolicy::mock_table_store(
     }
   }
 
-  ObTablet &tablet = *tablet_handle.get_obj();
-  ObTabletTableStore &table_store = tablet.table_store_;
+  ObTablet *tablet = tablet_handle.get_obj();
+  ObTabletTableStore &table_store = *tablet->table_store_addr_.get_ptr();
   if (OB_SUCC(ret) && major_tables.count() > 0) {
-    if (OB_FAIL(table_store.major_tables_.init_and_copy(*tablet.allocator_, major_tables))) {
+    if (OB_FAIL(table_store.major_tables_.init(allocator, major_tables))) {
       LOG_WARN("failed to init major tables", K(ret));
     }
   }
 
   if (OB_SUCC(ret) && minor_tables.count() > 0) {
-    if (OB_FAIL(table_store.minor_tables_.init_and_copy(*tablet.allocator_, minor_tables))) {
+    if (OB_FAIL(table_store.minor_tables_.init(allocator, minor_tables))) {
       LOG_WARN("failed to init major tables", K(ret));
     }
   }
@@ -490,6 +509,7 @@ int TestCompactionPolicy::mock_table_store(
 }
 
 int TestCompactionPolicy::batch_mock_sstables(
+  common::ObArenaAllocator &allocator,
   const char *key_data,
   common::ObIArray<ObTableHandleV2> &major_tables,
   common::ObIArray<ObTableHandleV2> &minor_tables)
@@ -507,7 +527,7 @@ int TestCompactionPolicy::batch_mock_sstables(
     ObTableHandleV2 table_handle;
     const int64_t type = cells[0].get_int();
     ObITable::TableType table_type = (type == 10) ? ObITable::MAJOR_SSTABLE : ((type == 11) ? ObITable::MINOR_SSTABLE : ObITable::MINI_SSTABLE);
-    if (OB_FAIL(mock_sstable(table_type, cells[1].get_int(), cells[2].get_int(), cells[3].get_int(), cells[4].get_int(), table_handle))) {
+    if (OB_FAIL(mock_sstable(allocator, table_type, cells[1].get_int(), cells[2].get_int(), cells[3].get_int(), cells[4].get_int(), table_handle))) {
       LOG_WARN("failed to mock sstable", K(ret));
     } else if (ObITable::MAJOR_SSTABLE == table_type) {
       if (OB_FAIL(major_tables.push_back(table_handle))) {
@@ -548,6 +568,7 @@ int TestCompactionPolicy::batch_mock_memtables(
 }
 
 int TestCompactionPolicy::batch_mock_tables(
+  common::ObArenaAllocator &allocator,
   const char *key_data,
   common::ObIArray<ObTableHandleV2> &major_tables,
   common::ObIArray<ObTableHandleV2> &minor_tables,
@@ -574,7 +595,7 @@ int TestCompactionPolicy::batch_mock_tables(
       }
     } else {
       ObITable::TableType table_type = (type == 10) ? ObITable::MAJOR_SSTABLE : ((type == 11) ? ObITable::MINOR_SSTABLE : ObITable::MINI_SSTABLE);
-      if (OB_FAIL(mock_sstable(table_type, cells[1].get_int(), cells[2].get_int(), cells[3].get_int(), cells[4].get_int(), table_handle))) {
+      if (OB_FAIL(mock_sstable(allocator, table_type, cells[1].get_int(), cells[2].get_int(), cells[3].get_int(), cells[4].get_int(), table_handle))) {
         LOG_WARN("failed to mock sstable", K(ret));
       } else if (ObITable::MAJOR_SSTABLE == table_type) {
         if (OB_FAIL(major_tables.push_back(table_handle))) {
@@ -602,12 +623,12 @@ int TestCompactionPolicy::prepare_tablet(
   if (OB_UNLIKELY(clog_checkpoint_ts <= 0 || snapshot_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(snapshot_version));
-  } else if (OB_FAIL(mock_tablet(clog_checkpoint_ts, snapshot_version, tablet_handle_))) {
+  } else if (OB_FAIL(mock_tablet(allocator_, clog_checkpoint_ts, snapshot_version, tablet_handle_))) {
     LOG_WARN("failed to mock tablet", K(ret));
   } else if (OB_ISNULL(key_data)) {
-  } else if (OB_FAIL(batch_mock_tables(key_data, major_tables_, minor_tables_, memtables_, tablet_handle_))) {
+  } else if (OB_FAIL(batch_mock_tables(allocator_, key_data, major_tables_, minor_tables_, memtables_, tablet_handle_))) {
     LOG_WARN("failed to batch mock tables", K(ret));
-  } else if (OB_FAIL(mock_table_store(tablet_handle_, major_tables_, minor_tables_))) {
+  } else if (OB_FAIL(mock_table_store(allocator_, tablet_handle_, major_tables_, minor_tables_))) {
     LOG_WARN("failed to mock table store", K(ret));
   }
   return ret;
@@ -711,15 +732,15 @@ TEST_F(TestCompactionPolicy, basic_create_sstable)
   ASSERT_NE(nullptr, t3m);
 
   ObTableHandleV2 major_table_handle;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MAJOR_SSTABLE, 0, 100, 100, 100, major_table_handle);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 100, 100, 100, major_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTableHandleV2 mini_table_handle;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MINI_SSTABLE, 100, 120, 120, 120, mini_table_handle);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 100, 120, 120, 120, mini_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTableHandleV2 minor_table_handle;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MINOR_SSTABLE, 120, 180, 180, INT64_MAX, minor_table_handle);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINOR_SSTABLE, 120, 180, 180, INT64_MAX, minor_table_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -735,21 +756,21 @@ TEST_F(TestCompactionPolicy, basic_create_tablet)
   ASSERT_NE(nullptr, t3m);
 
   ObTabletHandle tablet_handle;
-  ret = TestCompactionPolicy::mock_tablet(100, 100, tablet_handle);
+  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, tablet_handle.is_valid());
 
-  ObTablet &tablet = *tablet_handle.get_obj();
-  ObTabletTableStore &table_store = tablet.get_table_store();
+  ObTablet *tablet = tablet_handle.get_obj();
+  ObTabletTableStore &table_store = *tablet->table_store_addr_.get_ptr();
   ASSERT_EQ(true, table_store.is_valid());
-  ASSERT_TRUE(nullptr != tablet.memtable_mgr_);
+  ASSERT_TRUE(nullptr != tablet->memtable_mgr_);
 }
 
 TEST_F(TestCompactionPolicy, basic_create_memtable)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
-  ret = TestCompactionPolicy::mock_tablet(100, 100, tablet_handle);
+  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, tablet_handle.is_valid());
 
@@ -776,43 +797,43 @@ TEST_F(TestCompactionPolicy, basic_create_table_store)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
-  ret = TestCompactionPolicy::mock_tablet(100, 100, tablet_handle);
+  ret = TestCompactionPolicy::mock_tablet(allocator_, 100, 100, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObSEArray<ObTableHandleV2, 4> major_tables;
   ObTableHandleV2 major_table_handle_1;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MAJOR_SSTABLE, 0, 1, 1, 1, major_table_handle_1);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 1, 1, 1, major_table_handle_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, major_tables.push_back(major_table_handle_1));
 
   ObTableHandleV2 major_table_handle_2;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MAJOR_SSTABLE, 0, 100, 100, 100, major_table_handle_2);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 100, 100, 100, major_table_handle_2);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, major_tables.push_back(major_table_handle_2));
 
   ObTableHandleV2 major_table_handle_3;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MAJOR_SSTABLE, 0, 150, 150, 150, major_table_handle_3);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MAJOR_SSTABLE, 0, 150, 150, 150, major_table_handle_3);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, major_tables.push_back(major_table_handle_3));
 
 
   ObSEArray<ObTableHandleV2, 4> minor_tables;
   ObTableHandleV2 minor_table_handle_1;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MINI_SSTABLE, 100, 150, 150, 160, minor_table_handle_1);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 100, 150, 150, 160, minor_table_handle_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, minor_tables.push_back(minor_table_handle_1));
 
   ObTableHandleV2 minor_table_handle_2;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MINI_SSTABLE, 150, 200, 190, 200, minor_table_handle_2);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 150, 200, 190, 200, minor_table_handle_2);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, minor_tables.push_back(minor_table_handle_2));
 
   ObTableHandleV2 minor_table_handle_3;
-  ret = TestCompactionPolicy::mock_sstable(ObITable::MINI_SSTABLE, 200, 350, 350, INT64_MAX, minor_table_handle_3);
+  ret = TestCompactionPolicy::mock_sstable(allocator_, ObITable::MINI_SSTABLE, 200, 350, 350, INT64_MAX, minor_table_handle_3);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(OB_SUCCESS, minor_tables.push_back(minor_table_handle_3));
 
-  ret = TestCompactionPolicy::mock_table_store(tablet_handle, major_tables, minor_tables);
+  ret = TestCompactionPolicy::mock_table_store(allocator_, tablet_handle, major_tables, minor_tables);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   LOG_INFO("Print tablet", KPC(tablet_handle.get_obj()));
@@ -830,7 +851,7 @@ TEST_F(TestCompactionPolicy, basic_batch_create_sstable)
 
   ObArray<ObTableHandleV2> major_tables;
   ObArray<ObTableHandleV2> minor_tables;
-  ret = TestCompactionPolicy::batch_mock_sstables(key_data, major_tables, minor_tables);
+  ret = TestCompactionPolicy::batch_mock_sstables(allocator_, key_data, major_tables, minor_tables);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(2, major_tables.count());
   ASSERT_EQ(2, minor_tables.count());
@@ -851,7 +872,7 @@ TEST_F(TestCompactionPolicy, basic_prepare_tablet)
   ret = prepare_tablet(key_data, 150, 150);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObTabletTableStore &table_store = tablet_handle_.get_obj()->table_store_;
+  ObTabletTableStore &table_store = *tablet_handle_.get_obj()->table_store_addr_.get_ptr();
   ASSERT_EQ(2, table_store.major_tables_.count());
   ASSERT_EQ(2, table_store.minor_tables_.count());
 
@@ -1027,52 +1048,51 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
   ASSERT_EQ(OB_NO_NEED_MERGE, ret);
 }
 
-TEST_F(TestCompactionPolicy, test_minor_with_medium)
+TEST_F(TestCompactionPolicy, test_medium_info_serialize)
 {
   int ret = OB_SUCCESS;
-  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
-  ASSERT_TRUE(nullptr != mgr);
+  // prepare parallel_rowkey_list
+  const int64_t concurrent_cnt = 5;
+  ObArenaAllocator allocator;
+  ObDatumRowkey datum_rowkey_list[concurrent_cnt];
+  ObDatumRowkey tmp_datum_rowkey;
+  ObStorageDatum datums[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
+  tmp_datum_rowkey.assign(datums, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER);
 
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  share::SCN scn;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(140, 1, 0)));
+  medium_info_.contain_parallel_range_ = true;
+  medium_info_.parallel_merge_info_.list_size_ = concurrent_cnt;
+  medium_info_.parallel_merge_info_.parallel_datum_rowkey_list_ = datum_rowkey_list;
 
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  for (int64_t idx = 0; idx < concurrent_cnt; ++idx) {
+    tmp_datum_rowkey.datums_[0].set_string("aaaaa");
+    tmp_datum_rowkey.datums_[1].set_int(idx);
+    tmp_datum_rowkey.datum_cnt_ = 2;
+    if (OB_FAIL(tmp_datum_rowkey.deep_copy(
+      medium_info_.parallel_merge_info_.parallel_datum_rowkey_list_[idx] /*dst*/, allocator))) {
+      LOG_WARN("failed to deep copy datum rowkey", KR(ret), K(idx), K(tmp_datum_rowkey));
+    }
+  }
+
+  const int64_t buf_len = ObParallelMergeInfo::MAX_PARALLEL_RANGE_SERIALIZE_LEN;
+  char medium_info_buf[buf_len];
+  int64_t write_pos = 0;
+  ret = medium_info_.serialize(medium_info_buf, buf_len, write_pos);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(medium_info_.get_serialize_size(), write_pos);
 
-  const char *key_data =
-      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
-      "10            0            1          1          1        \n"
-      "11            150          200        200        200      \n"
-      "11            200          250        250        250      \n"
-      "11            250          300        300        300      \n"
-      "11            300          340        340        340      \n";
+  ObMediumCompactionInfo deserialize_medium_info;
+  int64_t pos = 0;
+  ret = deserialize_medium_info.deserialize(allocator, medium_info_buf, write_pos, pos);
+  ASSERT_EQ(pos, write_pos);
 
-  ret = prepare_tablet(key_data, 340, 340);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINOR_MERGE;
-  param.merge_version_ = 0;
-  ObGetMergeTablesResult result;
-  FakeLS ls;
-
-  prepare_medium_list("240", tablet_handle_);
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, check_result_tables_handle("250, 300, 340", result));
-
-  prepare_medium_list("150", tablet_handle_);
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, check_result_tables_handle("200, 250, 300, 340", result));
-
-  prepare_medium_list("300", tablet_handle_);
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
-
+  ASSERT_EQ(deserialize_medium_info.contain_parallel_range_, true);
+  ASSERT_EQ(deserialize_medium_info.parallel_merge_info_.list_size_, concurrent_cnt);
+  for (int64_t idx = 0; idx < concurrent_cnt; ++idx) {
+    ASSERT_TRUE(
+      medium_info_.parallel_merge_info_.parallel_datum_rowkey_list_[idx].datums_[0]
+       == deserialize_medium_info.parallel_merge_info_.parallel_datum_rowkey_list_[idx].datums_[0]);
+    ASSERT_TRUE(idx == deserialize_medium_info.parallel_merge_info_.parallel_datum_rowkey_list_[idx].datums_[1].get_int());
+  }
 }
 
 } //unittest
@@ -1081,7 +1101,7 @@ TEST_F(TestCompactionPolicy, test_minor_with_medium)
 
 int main(int argc, char **argv)
 {
-  system("rm -rf test_compaction_policy.log");
+  system("rm -rf test_compaction_policy.log*");
   OB_LOGGER.set_file_name("test_compaction_policy.log");
   OB_LOGGER.set_log_level("DEBUG");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");

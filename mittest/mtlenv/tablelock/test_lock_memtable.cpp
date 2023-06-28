@@ -67,6 +67,7 @@ public:
   static void TearDownTestCase();
   virtual void SetUp() override
   {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
     // mock sequence no
     ObClockGenerator::init();
     create_memtable();
@@ -127,7 +128,7 @@ TEST_F(TestLockMemtable, lock)
   // 2. OUT TRANS LOCK
   int ret = OB_SUCCESS;
   bool is_try_lock = true;
-  int64_t expired_time = 0;
+  int64_t expired_time = ObClockGenerator::getClock() + 1 * 1000 * 1000;
   ObLockParam param;
   ObMemtableCtx *mem_ctx = NULL;
   bool lock_exist = false;
@@ -285,7 +286,7 @@ TEST_F(TestLockMemtable, replay)
   unsigned char lock_mode_in_same_trans = 0x0;
   int ret = OB_SUCCESS;
   bool is_try_lock = true;
-  int64_t expired_time = 0;
+  int64_t expired_time = ObClockGenerator::getClock() + 1 * 1000 * 1000;
   share::SCN min_commited_scn;
   share::SCN flushed_scn;
   MyTxCtx default_ctx;
@@ -448,7 +449,7 @@ TEST_F(TestLockMemtable, recover)
   LOG_INFO("TestLockMemtable::recover");
   int ret = OB_SUCCESS;
   bool is_try_lock = true;
-  int64_t expired_time = 0;
+  int64_t expired_time = ObClockGenerator::getClock() + 1 * 1000 * 1000;
   share::SCN min_commited_scn;
   share::SCN flushed_scn;
   ObOBJLock *obj_lock = NULL;
@@ -541,7 +542,7 @@ TEST_F(TestLockMemtable, pre_check_lock)
   int ret = OB_SUCCESS;
   bool is_try_lock = true;
   bool lock_exist = false;
-  int64_t expired_time = 0;
+  int64_t expired_time = ObClockGenerator::getClock() + 1 * 1000 * 1000;
   MyTxCtx default_ctx;
   ObStoreCtx store_ctx;
   ObOBJLock *obj_lock = NULL;
@@ -614,7 +615,7 @@ TEST_F(TestLockMemtable, lock_twice_out)
   // 3. LOCK TWICE: LOCK, UNLOCK DOING CONFLICT
   int ret = OB_SUCCESS;
   bool is_try_lock = true;
-  int64_t expired_time = 0;
+  int64_t expired_time = ObClockGenerator::getClock() + 1 * 1000 * 1000;
   bool is_exact = true;
   ObTxIDSet conflict_tx_set;
   int64_t conflict_modes = 0;

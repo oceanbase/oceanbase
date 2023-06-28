@@ -180,7 +180,6 @@ public:
       const ObLSID &ls_id, const ObBackupCleanStats &stats);
 private:
   static int fill_dml_with_ls_task_(const ObBackupCleanLSTaskAttr &ls_attr, ObDMLSqlSplicer &dml);
-  static int fill_select_ls_task_sql_(ObSqlString &sql);
   static int parse_ls_result_(sqlclient::ObMySQLResult &result, ObIArray<ObBackupCleanLSTaskAttr> &ls_attrs);
   static int do_parse_ls_result_(sqlclient::ObMySQLResult &result, ObBackupCleanLSTaskAttr &ls_attr);
 };

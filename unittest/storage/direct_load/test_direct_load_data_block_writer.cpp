@@ -44,9 +44,6 @@ public:
   TestDataBlockWriter() : TestDataFilePrepare(&getter, "TestDataBlockWriter", 8 * 1024 * 1024, 2048){};
   virtual void SetUp();
   virtual void TearDown();
-  static void SetUpTestCase() {}
-  static void TearDownTestCase() {}
-
   void check_row(const ObDatumRow *next_row, const ObDatumRow *curr_row);
   void test_alloc(char *&ptr, const int64_t size);
 
@@ -124,6 +121,7 @@ void TestDataBlockWriter::prepare_schema()
 void TestDataBlockWriter::SetUp()
 {
   int ret = OB_SUCCESS;
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   // init file
   const int64_t bucket_num = 1024;
   const int64_t max_cache_size = 1024 * 1024 * 1024;
@@ -217,7 +215,7 @@ TEST_F(TestDataBlockWriter, test_empty_write_and_scan)
   ObTableReadInfo read_info;
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -312,7 +310,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan)
   ObTableReadInfo read_info;
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -456,7 +454,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_range)
   ObTableReadInfo read_info;
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -568,7 +566,7 @@ TEST_F(TestDataBlockWriter, test_scan_less_range)
   ObTableReadInfo read_info;
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -685,7 +683,7 @@ TEST_F(TestDataBlockWriter, test_scan_range)
 
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -825,7 +823,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_large_low)
   ObTableReadInfo read_info;
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -971,7 +969,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_range_large_low)
   ObTableReadInfo read_info;
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1069,7 +1067,7 @@ TEST_F(TestDataBlockWriter, test_scan_range_large_low)
   ObTableReadInfo read_info;
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1174,7 +1172,7 @@ TEST_F(TestDataBlockWriter, test_write_and_compact)
 
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1386,7 +1384,7 @@ TEST_F(TestDataBlockWriter, test_write_and_compact_large_row)
 
   // init access_param
   ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs);
+                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
   ASSERT_EQ(OB_SUCCESS, ret);

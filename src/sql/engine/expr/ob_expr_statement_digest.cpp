@@ -99,6 +99,7 @@ int calc_digest_text(ObIAllocator &allocator,
         digest_str = queries.at(i);
       }
     }
+    exec_ctx.set_physical_plan_ctx(NULL);
   }
   return ret;
 }

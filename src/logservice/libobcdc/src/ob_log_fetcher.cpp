@@ -127,7 +127,8 @@ int ObLogFetcher::init(
         cfg.blacklist_survival_time_penalty_period_min,
         cfg.blacklist_history_overdue_time_min,
         cfg.blacklist_history_clear_interval_min,
-        is_tenant_mode))) {
+        is_tenant_mode,
+        OB_INVALID_TENANT_ID))) {
       LOG_ERROR("ObLogRouterService init failer", KR(ret), K(prefer_region), K(cluster_id));
     } else if (OB_FAIL(progress_controller_.init(cfg.ls_count_upper_limit))) {
       LOG_ERROR("init progress controller fail", KR(ret));
@@ -546,8 +547,8 @@ void ObLogFetcher::configure(const ObLogConfig &cfg)
         K(blacklist_survival_time_penalty_period_min),
         K(blacklist_history_overdue_time_min),
         K(blacklist_history_clear_interval_min));
-    } else if (OB_FAIL(log_route_service_.update_assign_region(cfg.region.str()))) {
-      LOG_ERROR("update_assign_region failed", KR(ret), "region", cfg.region);
+    } else if (OB_FAIL(log_route_service_.update_preferred_upstream_log_region(cfg.region.str()))) {
+      LOG_ERROR("update_preferred_upsteam_log_region failed", KR(ret), "region", cfg.region);
     } else if (OB_FAIL(log_route_service_.update_cache_update_interval(
         all_server_cache_update_interval_sec,
         all_zone_cache_update_interval_sec))) {

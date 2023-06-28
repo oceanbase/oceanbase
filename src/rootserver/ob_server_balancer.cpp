@@ -24,6 +24,7 @@
 #include "share/ob_all_server_tracer.h"
 #include "share/ob_server_table_operator.h"
 #include "rootserver/ob_heartbeat_service.h"
+#include "share/ob_share_util.h" // ObShareUtil
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -114,7 +115,7 @@ int ObServerBalancer::tenant_group_balance()
     } else if (OB_FAIL(ObRootBalanceHelp::parse_balance_info(
             switch_config_str, balance_controller))) {
       LOG_WARN("fail to parse balance switch", K(ret), "balance switch", switch_config_str);
-    } else if (GCONF.is_rebalance_enabled()
+    } else if (ObShareUtil::is_tenant_enable_rebalance(OB_SYS_TENANT_ID)
             || balance_controller.at(ObRootBalanceHelp::ENABLE_SERVER_BALANCE)) {
       if (OB_FAIL(zone_mgr_->get_zone(ObZoneStatus::ACTIVE, zones))) {
         LOG_WARN("get_zone failed", "status", ObZoneStatus::ACTIVE, K(ret));
@@ -187,7 +188,7 @@ int ObServerBalancer::balance_servers()
       // When the server status changes,
       // try to adjust the unit on the server without configuration item control
       if (GCONF.is_rereplication_enabled()
-          || GCONF.is_rebalance_enabled()
+          || ObShareUtil::is_tenant_enable_rebalance(OB_SYS_TENANT_ID)
           || balance_controller.at(ObRootBalanceHelp::ENABLE_SERVER_BALANCE)) {
         if (OB_FAIL(distribute_for_server_status_change())) {
           LOG_WARN("fail to distribute for server status change", K(ret));

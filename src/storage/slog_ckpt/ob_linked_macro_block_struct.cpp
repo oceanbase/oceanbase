@@ -98,7 +98,7 @@ ObMetaBlockListHandle::~ObMetaBlockListHandle()
   reset();
 }
 
-int ObMetaBlockListHandle::add_macro_blocks(const ObIArray<blocksstable::MacroBlockId> &block_list, const bool need_switch_handle)
+int ObMetaBlockListHandle::add_macro_blocks(const ObIArray<blocksstable::MacroBlockId> &block_list)
 {
   int ret = OB_SUCCESS;
   ObMacroBlocksHandle &new_handle = meta_handles_[1 - cur_handle_pos_];
@@ -108,9 +108,7 @@ int ObMetaBlockListHandle::add_macro_blocks(const ObIArray<blocksstable::MacroBl
     }
   }
   if (OB_SUCC(ret)) {
-    if (need_switch_handle) {
-      switch_handle();
-    }
+    switch_handle();
   } else {
     reset_new_handle();
   }

@@ -43,7 +43,7 @@ ObDataDictMetaInfoItem::~ObDataDictMetaInfoItem()
 
 void ObDataDictMetaInfoItem::reset()
 {
-  snapshot_scn_ = share::OB_INVALID_SCN_VAL;;
+  snapshot_scn_ = share::OB_INVALID_SCN_VAL;
   start_lsn_ = palf::LOG_INVALID_LSN_VAL;
   end_lsn_ = palf::LOG_INVALID_LSN_VAL;
 }

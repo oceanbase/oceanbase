@@ -16,12 +16,13 @@
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #include "storage/ob_super_block_struct.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-
+class ObSharedBlockReaderWriter;
 class ObTenantStorageCheckpointWriter final
 {
 public:
@@ -34,43 +35,48 @@ public:
   void reset();
   int write_checkpoint(ObTenantSuperBlock &super_block);
   int get_ls_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
-  int get_dup_ls_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int get_tablet_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
-
-  int update_tablet_meta_addr();
-
+  int batch_compare_and_swap_tablet(const bool is_replay_old);
+  int rollback();
 
 private:
   struct TabletItemAddrInfo
   {
     ObTabletMapKey tablet_key_;
-    int64_t item_idx_;
     ObMetaDiskAddr old_addr_;
     ObMetaDiskAddr new_addr_;
+    ObTabletPoolType tablet_pool_type_;
+    bool need_rollback_;
 
-    TO_STRING_KV(K_(tablet_key), K_(item_idx), K_(old_addr), K_(new_addr));
+    TabletItemAddrInfo()
+      : tablet_key_(), old_addr_(), new_addr_(),
+        tablet_pool_type_(ObTabletPoolType::TP_MAX),
+        need_rollback_(true)
+    {
+    }
+
+    TO_STRING_KV(K_(tablet_key), K_(old_addr), K_(new_addr), K_(tablet_pool_type), K_(need_rollback));
   };
 
-  int write_ls_checkpoint(blocksstable::MacroBlockId &entry_block);
-  int write_ls_dup_table_checkpoint(blocksstable::MacroBlockId &entry_block);
-  int write_tablet_checkpoint(const common::ObLogCursor &cursor, blocksstable::MacroBlockId &entry_block);
-  int copy_one_tablet_item(ObLinkedMacroBlockItemWriter &tablet_item_writer,
-    const ObMetaDiskAddr &addr, int64_t *item_idx);
-  int read_tablet_from_slog(const ObMetaDiskAddr &addr, char *buf, int64_t &pos);
+  static bool ignore_ret(int ret);
+  int get_tablet_with_addr(
+      const TabletItemAddrInfo &addr_info,
+      ObTabletHandle &tablet_handle);
+  int do_rollback(
+      common::ObArenaAllocator &allocator,
+      const ObMetaDiskAddr &load_addr);
+  int write_ls_checkpoint(blocksstable::MacroBlockId &ls_entry_block);
+  int write_tablet_checkpoint(ObLS &ls, blocksstable::MacroBlockId &tablet_meta_entry);
+  int copy_one_tablet_item(
+      const ObTabletMapKey &tablet_key,
+      const ObMetaDiskAddr &old_addr,
+      char *slog_buf);
 
 private:
   bool is_inited_;
-  common::ObConcurrentFIFOAllocator allocator_;
-
   common::ObArray<TabletItemAddrInfo> tablet_item_addr_info_arr_;
-
-  // record ls ids when make ls checkpoint to filter out unwanted tablets when making tablet checkpoint,
-  // this ensures that the ls of the tablet is replayed before than the tablet
-  common::hash::ObHashSet<share::ObLSID> ls_id_set_;
   ObLinkedMacroBlockItemWriter ls_item_writer_;
-  ObLinkedMacroBlockItemWriter dup_ls_item_writer_;
   ObLinkedMacroBlockItemWriter tablet_item_writer_;
-
 };
 
 }  // end namespace storage

@@ -42,6 +42,9 @@ public:
                K_(collation_type), K_(column_descs), K_(is_inited));
 private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
+  int prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs);
+  int init_cmp_funcs(const common::ObArray<share::schema::ObColDesc> &column_descs,
+                     const bool is_oracle_mode);
 public:
   common::ObArenaAllocator allocator_;
   common::ObString table_name_;
@@ -59,6 +62,7 @@ public:
   common::ObArray<share::schema::ObColDesc> column_descs_;
   common::ObArray<share::schema::ObColDesc> multi_version_column_descs_;
   blocksstable::ObStorageDatumUtils datum_utils_;
+  blocksstable::ObStoreCmpFuncs cmp_funcs_; // for sql statistics
   table::ObTableLoadArray<table::ObTableLoadPartitionId> partition_ids_;
   bool is_inited_;
 };

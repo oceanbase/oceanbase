@@ -87,7 +87,7 @@ int ObCDCTabletChangeInfo::parse_from_multi_data_source_buf(
     LOG_ERROR("invalid buf to deserialize", KR(ret), K(tls_id), K(buf_len));
   } else {
     switch (mds_type) {
-      case transaction::ObTxDataSourceType::CREATE_TABLET:
+      case transaction::ObTxDataSourceType::CREATE_TABLET_NEW_MDS:
       {
         obrpc::ObBatchCreateTabletArg create_tablet_arg;
         if (OB_FAIL(create_tablet_arg.deserialize(buf, buf_len, pos))) {
@@ -99,7 +99,7 @@ int ObCDCTabletChangeInfo::parse_from_multi_data_source_buf(
         }
         break;
       }
-      case transaction::ObTxDataSourceType::REMOVE_TABLET:
+      case transaction::ObTxDataSourceType::DELETE_TABLET_NEW_MDS:
       {
         obrpc::ObBatchRemoveTabletArg remove_tablet_arg;
 

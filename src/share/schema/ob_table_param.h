@@ -168,6 +168,7 @@ public:
   explicit ObColumnParam(common::ObIAllocator &allocator);
   virtual ~ObColumnParam();
   virtual void reset();
+  void destroy(); // free allocated memory
 private:
   ObColumnParam();
   DISALLOW_COPY_AND_ASSIGN(ObColumnParam);

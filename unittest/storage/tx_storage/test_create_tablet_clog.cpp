@@ -55,6 +55,7 @@ public:
 
 void TestCreateTabletClog::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
 }
 
 void TestCreateTabletClog::TearDown()

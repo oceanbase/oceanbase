@@ -15,38 +15,23 @@
 
 #include <stdint.h>
 #include "lib/utility/ob_print_utils.h"
-#include "storage/memtable/ob_memtable.h"
 
 namespace oceanbase
 {
-namespace common
-{
-class ObThreadCond;
-}
-
-namespace transaction
-{
-class ObTransID;
-}
-namespace share
-{
-class SCN;
-}
-
 namespace storage
 {
-class ObTablet;
-class ObTabletTxMultiSourceDataUnit;
-
 class ObTabletStatus
 {
 public:
   enum Status : uint8_t
   {
-    CREATING = 0,
-    NORMAL,
-    DELETING,
-    DELETED,
+    CREATING = 0, // deprecated after 4.1
+    NORMAL   = 1,
+    DELETING = 2, // deprecated after 4.1
+    DELETED  = 3,
+    TRANSFER_OUT = 4,
+    TRANSFER_IN  = 5,
+    TRANSFER_OUT_DELETED = 6,
     MAX,
   };
 public:
@@ -60,6 +45,7 @@ public:
   operator Status() const;
 
   bool is_valid() const;
+  static const char *get_str(const ObTabletStatus &status);
   Status &get_status() { return status_; }
   const Status &get_status() const { return status_; }
 
@@ -100,31 +86,6 @@ inline bool ObTabletStatus::is_valid() const
   return status_ < Status::MAX;
 }
 
-class ObTabletStatusChecker
-{
-public:
-  ObTabletStatusChecker(ObTablet &tablet);
-  ~ObTabletStatusChecker() = default;
-  ObTabletStatusChecker(const ObTabletStatusChecker&) = delete;
-  ObTabletStatusChecker &operator=(const ObTabletStatusChecker&) = delete;
-public:
-  int check(const uint64_t time_us);
-  int wake_up(
-      ObTabletTxMultiSourceDataUnit &tx_data,
-      const share::SCN &memtable_scn,
-      const bool for_replay,
-      const memtable::MemtableRefOp ref_op);
-private:
-  int do_wait(common::ObThreadCond &cond, const uint64_t time_ms);
-  static bool is_final_status(const ObTabletStatus::Status &status);
-private:
-  ObTablet &tablet_;
-};
-
-inline bool ObTabletStatusChecker::is_final_status(const ObTabletStatus::Status &status)
-{
-  return ObTabletStatus::NORMAL == status || ObTabletStatus::DELETED == status;
-}
 } // namespace storage
 } // namespace oceanbase
 

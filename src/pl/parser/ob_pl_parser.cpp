@@ -176,6 +176,7 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
   parse_ctx.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
         (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
   parse_ctx.connection_collation_ = connection_collation_;
+  parse_ctx.scanner_ctx_.sql_mode_ = sql_mode_;
 
   ret = parse_stmt_block(parse_ctx, multi_stmt);
   if (OB_ERR_PARSE_SQL == ret) {
@@ -242,6 +243,7 @@ int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree 
     parse_ctx.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
           (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
     parse_ctx.connection_collation_ = connection_collation_;
+    parse_ctx.scanner_ctx_.sql_mode_ = sql_mode_;
 
     if (OB_FAIL(parse_stmt_block(parse_ctx, routine_stmt))) {
       LOG_WARN("failed to parse stmt block", K(ret));
@@ -275,6 +277,7 @@ int ObPLParser::parse_package(const ObString &package,
   parse_ctx.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
         (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
   parse_ctx.connection_collation_ = connection_collation_;
+  parse_ctx.scanner_ctx_.sql_mode_ = sql_mode_;
 
   if (OB_FAIL(parse_stmt_block(parse_ctx, package_stmt))) {
     LOG_WARN("failed to parse stmt block", K(ret));
@@ -310,6 +313,7 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
       pre_parse_ctx.is_for_trigger_ = parse_ctx.is_for_trigger_;
       pre_parse_ctx.is_for_preprocess_ = true;
       pre_parse_ctx.connection_collation_ = parse_ctx.connection_collation_;
+      pre_parse_ctx.scanner_ctx_.sql_mode_ = parse_ctx.scanner_ctx_.sql_mode_;
       if (0 != obpl_parser_init(&pre_parse_ctx)) {
         ret = OB_ERR_PARSER_INIT;
         LOG_WARN("failed to initialized parser", K(ret));

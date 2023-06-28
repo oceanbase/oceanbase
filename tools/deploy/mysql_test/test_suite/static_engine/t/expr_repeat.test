@@ -41,5 +41,10 @@ drop table t2;
 
 --enable_warnings
 
+create table t2(c1 text, c2 mediumtext, c3 longtext);
+insert into t2 values('a','b','c');
+select repeat(c1, 10),repeat(c2,10),repeat(c3,10) from t2;
+drop table t2;
+
 connection syscon;
 --sleep 2

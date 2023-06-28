@@ -696,7 +696,7 @@ DEF_TO_STRING(ObLockForReadArg)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K(mvcc_acc_ctx_), K(data_trans_id_), K(data_sql_sequence_), K(read_latest_));
+  J_KV(K(mvcc_acc_ctx_), K(data_trans_id_), K(data_sql_sequence_), K(read_latest_), K(scn_));
   J_OBJ_END();
   return pos;
 }
@@ -864,6 +864,7 @@ void ObTxMDSCache::reset()
   unsubmitted_size_ = 0;
   mds_list_.reset();
   submitted_iterator_ = mds_list_.end();//ObTxBufferNodeList::iterator();
+  need_retry_submit_mds_ = false;
 }
 
 void ObTxMDSCache::destroy()
@@ -874,8 +875,9 @@ void ObTxMDSCache::destroy()
   {
     mds_list_.pop_front(tmp_node);
     if (nullptr != tmp_node.data_.ptr()) {
-        share::mtl_free(tmp_node.data_.ptr());
+      share::mtl_free(tmp_node.data_.ptr());
     }
+    tmp_node.get_buffer_ctx_node().destroy_ctx();
   }
 }
 
@@ -904,6 +906,7 @@ int ObTxMDSCache::rollback_last_mds_node()
     TRANS_LOG(WARN, "pop back last node failed", K(ret));
   } else {
     share::mtl_free(buf_node.get_ptr());
+    buf_node.get_buffer_ctx_node().destroy_ctx();
   }
 
   clear_submitted_iterator();
@@ -913,11 +916,18 @@ int ObTxMDSCache::rollback_last_mds_node()
 
 int ObTxMDSCache::fill_mds_log(ObTxMultiDataSourceLog &mds_log,
                                ObTxMDSRange &mds_range,
-                               bool &need_pre_replay_barrier)
+                               logservice::ObReplayBarrierType &barrier_flag,
+                               share::SCN &mds_base_scn)
 {
   int ret = OB_SUCCESS;
 
   mds_range.reset();
+  mds_base_scn.reset();
+  barrier_flag =  logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+
+  share::SCN tmp_base_scn;
+  tmp_base_scn.reset();
+  logservice::ObReplayBarrierType tmp_barrier_type = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
 
   if (OB_FAIL(mds_range.init(&mds_list_))) {
     TRANS_LOG(WARN, "init mds range failed", K(ret));
@@ -935,12 +945,26 @@ int ObTxMDSCache::fill_mds_log(ObTxMultiDataSourceLog &mds_log,
         }
       } else if (OB_FAIL(mds_range.update_range(iter))) {
         TRANS_LOG(WARN, "update mds range failed", K(ret), K(iter));
-      } else if (need_pre_replay_barrier) {
-        //has been pre replay barrier
       } else if (OB_FALSE_IT(
-                     need_pre_replay_barrier = ObTxLogTypeChecker::need_pre_replay_barrier(
+                     tmp_barrier_type = ObTxLogTypeChecker::need_replay_barrier(
                          ObTxLogType::TX_MULTI_DATA_SOURCE_LOG, iter->get_data_source_type()))) {
         // set need_barrier flag
+      } else if (OB_FALSE_IT(tmp_base_scn = iter->get_base_scn())) {
+        // set base scn
+      }
+
+      if (OB_SUCC(ret)) {
+        if (!mds_base_scn.is_valid() && tmp_base_scn.is_valid()) {
+          mds_base_scn = tmp_base_scn;
+        }
+        if (logservice::ObReplayBarrierType::NO_NEED_BARRIER == barrier_flag
+            && logservice::ObReplayBarrierType::NO_NEED_BARRIER != tmp_barrier_type) {
+          barrier_flag = tmp_barrier_type;
+        }
+        if (mds_base_scn != tmp_base_scn || barrier_flag != tmp_barrier_type) {
+          ret = OB_EAGAIN;
+          break;
+        }
       }
     }
   }
@@ -1023,13 +1047,66 @@ void ObTxExecInfo::reset()
 
 void ObTxExecInfo::destroy()
 {
+  if (!mds_buffer_ctx_array_.empty()) {
+    TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "mds_buffer_ctx_array_ is valid when exec_info destroy",
+                        K_(mds_buffer_ctx_array), K(*this));
+    for (int64_t i = 0; i < mds_buffer_ctx_array_.count(); ++i) {
+      mds_buffer_ctx_array_[i].destroy_ctx();
+    }
+  }
   for (int64_t i = 0; i < multi_data_source_.count(); ++i) {
     ObTxBufferNode &node = multi_data_source_.at(i);
     if (nullptr != node.data_.ptr()) {
       share::mtl_free(node.data_.ptr());
+      node.buffer_ctx_node_.destroy_ctx();
     }
   }
   reset();
+}
+
+int ObTxExecInfo::generate_mds_buffer_ctx_array()
+{
+  int ret = OB_SUCCESS;
+  mds_buffer_ctx_array_.reset();
+  for (int64_t idx = 0; idx < multi_data_source_.count() && OB_SUCC(ret); ++idx) {
+    const ObTxBufferNode &buffer_node = multi_data_source_.at(idx);
+    if (OB_FAIL(mds_buffer_ctx_array_.push_back(buffer_node.get_buffer_ctx_node()))) {
+      TRANS_LOG(WARN, "fail to push back", KR(ret), K(*this));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    mds_buffer_ctx_array_.reset();
+  }
+  TRANS_LOG(INFO, "generate mds buffer ctx array", KR(ret), K(multi_data_source_), K(mds_buffer_ctx_array_));
+  return ret;
+}
+
+void ObTxExecInfo::mrege_buffer_ctx_array_to_multi_data_source() const
+{
+  ObTxBufferNodeArray &multi_data_source = const_cast<ObTxBufferNodeArray &>(multi_data_source_);
+  ObTxBufferCtxArray &mds_buffer_ctx_array = const_cast<ObTxBufferCtxArray &>(mds_buffer_ctx_array_);
+  TRANS_LOG_RET(INFO, OB_SUCCESS, "merge deserialized buffer ctx to multi_data_source", K(mds_buffer_ctx_array), K(multi_data_source));
+  if (mds_buffer_ctx_array.count() != multi_data_source.count()) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED,
+                  "mds buffer ctx array size not equal to multi data source array size"
+                  ", destroy deserialized mds_buffer_ctx_array directly",
+                  K(multi_data_source), K(mds_buffer_ctx_array), K(*this));
+    for (int64_t idx = 0; idx < mds_buffer_ctx_array.count(); ++idx) {
+      mds_buffer_ctx_array[idx].destroy_ctx();
+    }
+  } else {
+    for (int64_t idx = 0; idx < multi_data_source.count(); ++idx) {
+      multi_data_source[idx].buffer_ctx_node_ = mds_buffer_ctx_array[idx];
+    }
+  }
+  mds_buffer_ctx_array.reset();
+}
+
+void ObTxExecInfo::clear_buffer_ctx_in_multi_data_source()
+{
+  for (int64_t idx = 0; idx < multi_data_source_.count(); ++idx) {
+    multi_data_source_[idx].buffer_ctx_node_.destroy_ctx();
+  }
 }
 
 OB_SERIALIZE_MEMBER(ObTxExecInfo,
@@ -1057,7 +1134,8 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     prepare_log_info_arr_,
                     xid_,
                     need_checksum_,
-                    is_sub2pc_);
+                    is_sub2pc_,
+                    mds_buffer_ctx_array_);
 
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 
@@ -1095,5 +1173,6 @@ const char *trans_type_to_cstr(const TransType &trans_type)
   }
   return str;
 }
+
 } // transaction
 } // oceanbase

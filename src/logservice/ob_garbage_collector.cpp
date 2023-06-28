@@ -29,6 +29,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/ls/ob_ls_life_manager.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "rootserver/ob_ls_recovery_reportor.h"      // ObLSRecoveryReportor
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/ob_occam_time_guard.h"
 
@@ -593,8 +594,8 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
 {
   int ret = OB_SUCCESS;
   ObArchiveService *archive_service = MTL(ObArchiveService*);
-  bool force_wait = true;
-  bool ignore = true;
+  bool force_wait = false;
+  bool ignore = false;
   SCN scn = SCN::min_scn();
   LSN lsn;
   SCN readable_scn = SCN::min_scn();
@@ -608,6 +609,9 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
     CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state), K(ret));
   } else if (OB_FAIL(get_tenant_readable_scn_(readable_scn))) {
     CLOG_LOG(WARN, "get_tenant_readable_scn_ failed", K(ret), K(ls_id));
+  } else if (!readable_scn.is_valid() || !offline_scn.is_valid()) {
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ offline_scn or readable_scn is invalid",
+        K(readable_scn), K(offline_scn), K(ls_id), K(gc_state));
   } else if (readable_scn < offline_scn) {
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait readable_scn", K(ret), K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
   } else if (OB_FAIL(check_if_tenant_in_archive_(tenant_in_archive))) {
@@ -617,7 +621,7 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
   } else if (OB_FAIL(archive_service->get_ls_archive_progress(ls_id, lsn, scn, force_wait, ignore))){
     CLOG_LOG(WARN, "get_ls_archive_progress failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
   } else if (ignore) {
@@ -626,15 +630,12 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
-  } else if (scn == offline_scn) {
+  } else if (scn >= offline_scn) {
     if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
-  } else if (scn > offline_scn) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "ls_archive_progress larger than offline scn", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   } else {
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait archive", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   }
@@ -1096,6 +1097,7 @@ int ObGarbageCollector::construct_server_ls_map_for_member_list_(ServerLSMap &se
     int tmp_ret = OB_SUCCESS;
     while (OB_SUCC(ret)) {
       common::ObAddr leader;
+      bool allow_gc = false;
       if (OB_FAIL(iter->get_next(ls))) {
         if (OB_ITER_END != ret) {
           CLOG_LOG(WARN, "get next log stream failed", K(ret));
@@ -1120,8 +1122,10 @@ int ObGarbageCollector::construct_server_ls_map_for_member_list_(ServerLSMap &se
         CLOG_LOG(WARN, "get invalid leader from location service", K(tmp_ret), K(ls->get_ls_id()));
       } else if (OB_SUCCESS != (tmp_ret = ls->get_migration_status(migration_status))) {
         CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls->get_ls_id()));
-      } else if (!ObMigrationStatusHelper::check_allow_gc(migration_status)) {
-        CLOG_LOG(INFO, "current ls not allowed to gc", K(ls->get_ls_id()));
+      } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_allow_gc(ls->get_ls_id(), migration_status, allow_gc))) {
+        CLOG_LOG(WARN, "failed to check ls allowed to gc", K(tmp_ret), K(migration_status), "ls_id", ls->get_ls_id());
+      } else if (!allow_gc) {
+        CLOG_LOG(INFO, "The ls is dependent and is not allowed to be GC", "ls_id", ls->get_ls_id(), K(migration_status));
       } else if (OB_SUCCESS != (tmp_ret = construct_server_ls_map_(server_ls_map, leader, ls->get_ls_id()))) {
         CLOG_LOG(WARN, "construct_server_ls_map_ failed", K(tmp_ret), K(ls->get_ls_id()), K(leader));
       }
@@ -1192,7 +1196,7 @@ void ObGarbageCollector::gc_check_ls_status_(ObGCCandidateArray &gc_candidates)
         }
       } else if (OB_ISNULL(ls)) {
         CLOG_LOG(ERROR, "log stream is NULL", K(ls));
-      } else if (OB_SUCCESS != (tmp_ret = gc_check_ls_status_(ls->get_ls_id(), gc_candidates))) {
+      } else if (OB_SUCCESS != (tmp_ret = gc_check_ls_status_(*ls, gc_candidates))) {
         CLOG_LOG(WARN, "get_ls_status_ failed", K(tmp_ret), K(ls->get_ls_id()));
       } else {}
     }
@@ -1217,7 +1221,7 @@ int ObGarbageCollector::check_if_tenant_has_been_dropped_(const uint64_t tenant_
   return ret;
 }
 
-int ObGarbageCollector::gc_check_ls_status_(const ObLSID &id,
+int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
                                             ObGCCandidateArray &gc_candidates)
 {
   int ret = OB_SUCCESS;
@@ -1225,29 +1229,36 @@ int ObGarbageCollector::gc_check_ls_status_(const ObLSID &id,
   const int64_t tenant_id = MTL_ID();
   ObLSStatusOperator ls_op;
   share::ObLSStatus ls_status = OB_LS_NORMAL;
+  share::ObLSID ls_id = ls.get_ls_id();
+  ObMigrationStatus migration_status;
+  bool allow_gc = false;
   GCCandidate candidate;
-  candidate.ls_id_ = id;
+  candidate.ls_id_ = ls_id;
   candidate.ls_status_ = LSStatus::LS_NORMAL;
   candidate.gc_reason_ = GCReason::INVALID_GC_REASON;
-  if (OB_FAIL(get_ls_status_from_table(id, ls_status))) {
-    // 对应行被删除则说明可以gc
-    if (OB_ENTRY_NOT_EXIST == ret) {
+  if (OB_FAIL(get_ls_status_from_table(ls_id, ls_status))) {
+    int tmp_ret = OB_SUCCESS;
+    bool is_tenant_dropped = false;
+    if (OB_SUCCESS != (tmp_ret = check_if_tenant_has_been_dropped_(tenant_id, is_tenant_dropped))) {
+      CLOG_LOG(WARN, "check_if_tenant_has_been_dropped_ failed", K(tmp_ret), K(tenant_id), K(ls_id));
+    } else if (is_tenant_dropped) {
       candidate.ls_status_ = LSStatus::LS_NEED_GC;
       candidate.gc_reason_ = GCReason::LS_STATUS_ENTRY_NOT_EXIST;
       ret = OB_SUCCESS;
-    // 少数派可能在查表时租户已经被删除,需要double check schema明确是否租户真的被删除
-    } else {
-      int tmp_ret = OB_SUCCESS;
-      bool is_tenant_dropped = false;
-      if (OB_SUCCESS != (tmp_ret = check_if_tenant_has_been_dropped_(tenant_id, is_tenant_dropped))) {
-        CLOG_LOG(WARN, "check_if_tenant_has_been_dropped_ failed", K(tmp_ret), K(tenant_id), K(id));
-      } else if (is_tenant_dropped) {
+    } else if (OB_ENTRY_NOT_EXIST == ret) {
+      if (OB_SUCCESS != (tmp_ret = ls.get_migration_status(migration_status))) {
+        CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls_id));
+      } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_allow_gc(ls.get_ls_id(), migration_status, allow_gc))) {
+        CLOG_LOG(WARN, "failed to check ls allowed to gc", K(tmp_ret), K(migration_status), K(ls_id));
+      } else if (!allow_gc) {
+        CLOG_LOG(INFO, "The ls is dependent and is not allowed to be GC", K(ls_id), K(migration_status));
+      } else {
         candidate.ls_status_ = LSStatus::LS_NEED_GC;
         candidate.gc_reason_ = GCReason::LS_STATUS_ENTRY_NOT_EXIST;
         ret = OB_SUCCESS;
-      } else {
-        CLOG_LOG(WARN, "failed to get ls status from table", K(ret), K(tenant_id), K(id));
       }
+    } else {
+      CLOG_LOG(WARN, "failed to get ls status from table", K(ret), K(tenant_id), K(ls_id));
     }
   } else {
     candidate.set_ls_status(ls_status);

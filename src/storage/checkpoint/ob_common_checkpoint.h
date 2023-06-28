@@ -28,19 +28,14 @@ namespace checkpoint
 enum ObCommonCheckpointType
 {
   INVALID_BASE_TYPE = 0,
-
-  TX_CTX_MEMTABLE_TYPE = 1,
-
-  TX_DATA_MEMTABLE_TYPE = 2,
-
-  LOCK_MEMTABLE_TYPE = 3,
-
-  DATA_CHECKPOINT_TYPE = 4,
-
+  TX_CTX_MEMTABLE_TYPE,
+  TX_DATA_MEMTABLE_TYPE,
+  LOCK_MEMTABLE_TYPE,
+  MDS_TABLE_TYPE,
+  DATA_CHECKPOINT_TYPE,
   // for unittest
-  TEST_COMMON_CHECKPOINT = 5,
-
-  MAX_BASE_TYPE = 6,
+  TEST_COMMON_CHECKPOINT,
+  MAX_BASE_TYPE
 };
 
 static inline
@@ -57,6 +52,8 @@ int common_checkpoint_type_to_string(const ObCommonCheckpointType common_checkpo
     strncpy(str ,"TX_DATA_MEMTABLE_TYPE", str_len);
   } else if (common_checkpoint_type == LOCK_MEMTABLE_TYPE) {
     strncpy(str ,"LOCK_MEMTABLE_TYPE", str_len);
+  } else if (common_checkpoint_type == MDS_TABLE_TYPE) {
+    strncpy(str, "MDS_TABLE_TYPE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

@@ -8,16 +8,17 @@ ob_set_subtarget(ob_rootserver ALONE
 
 ob_set_subtarget(ob_rootserver backup
   backup/ob_archive_scheduler_service.cpp
+  backup/ob_backup_base_service.cpp
   backup/ob_backup_clean_ls_task_mgr.cpp
   backup/ob_backup_clean_scheduler.cpp
   backup/ob_backup_clean_task_mgr.cpp
-  backup/ob_backup_lease_service.cpp
   backup/ob_backup_service.cpp
   backup/ob_backup_schedule_task.cpp
   backup/ob_backup_task_scheduler.cpp
   backup/ob_tenant_archive_scheduler.cpp
   backup/ob_backup_data_scheduler.cpp
   backup/ob_backup_data_set_task_mgr.cpp
+  backup/ob_backup_proxy.cpp
   backup/ob_backup_data_ls_task_mgr.cpp
 )
 
@@ -43,6 +44,7 @@ ob_set_subtarget(ob_rootserver common
   ob_locality_util.cpp
   ob_resource_weight_parser.cpp
   ob_root_balancer.cpp
+  ob_partition_balance.cpp
   ob_root_minor_freeze.cpp
   ob_root_utils.cpp
   ob_root_inspection.cpp
@@ -67,13 +69,22 @@ ob_set_subtarget(ob_rootserver common
   ob_vtable_location_getter.cpp
   ob_zone_manager.cpp
   ob_zone_unit_provider.cpp
-  ob_tenant_recovery_reportor.cpp
+  ob_tenant_info_loader.cpp
+  ob_tenant_thread_helper.cpp
+  ob_ls_recovery_reportor.cpp
   ob_standby_schema_refresh_trigger.cpp
   ob_tenant_info_loader.cpp
   ob_create_standby_from_net_actor.cpp
   ob_primary_ls_service.cpp
   ob_recovery_ls_service.cpp
+  ob_balance_ls_primary_zone.cpp
+  ob_common_ls_service.cpp
+  ob_ls_service_helper.cpp
   ob_tenant_role_transition_service.cpp
+  ob_tenant_transfer_service.cpp
+  ob_tenant_balance_service.cpp
+  ob_ls_balance_helper.cpp
+  ob_balance_task_execute_service.cpp
   ob_server_balancer.cpp
   ob_system_admin_util.cpp
   ob_update_rs_list_task.cpp
@@ -83,6 +94,16 @@ ob_set_subtarget(ob_rootserver common
   ob_lob_piece_builder.cpp
   ob_lob_meta_builder.cpp
   ob_ls_recovery_stat_handler.cpp
+  ob_shrink_resource_pool_checker.cpp
+)
+
+ob_set_subtarget(ob_rootserver balance
+  balance/ob_all_balance_group_builder.cpp
+  balance/ob_balance_group_define.cpp
+  balance/ob_balance_group_info.cpp
+  balance/ob_ls_balance_group_info.cpp
+  balance/ob_tenant_ls_balance_group_info.cpp
+  balance/ob_ls_all_part_builder.cpp
 )
 
 ob_set_subtarget(ob_rootserver ddl_task

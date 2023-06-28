@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_backup_clean_mgr.h"
-#include "share/backup/ob_log_archive_backup_info_mgr.h"
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/backup/ob_backup_clean_operator.h"
@@ -21,6 +20,8 @@
 #include "share/backup/ob_backup_clean_util.h"
 #include "share/backup/ob_archive_path.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/location_cache/ob_location_service.h"
+#include "share/scheduler/ob_dag_warning_history_mgr.h"
 
 namespace oceanbase
 {
@@ -32,7 +33,6 @@ int ObLSBackupCleanScheduler::schedule_backup_clean_dag(const obrpc::ObLSBackupC
 {
   int ret = OB_SUCCESS;
   ObLSBackupCleanDagNetInitParam param;
-  ObLSBackupCleanDagNet *clean_dag_net = nullptr;
   MTL_SWITCH(args.tenant_id_) {
     ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
     if (OB_ISNULL(scheduler)) {
@@ -40,7 +40,7 @@ int ObLSBackupCleanScheduler::schedule_backup_clean_dag(const obrpc::ObLSBackupC
       LOG_WARN("unexpected null MTL scheduler", K(ret), K(scheduler));
     } else if (OB_FAIL(param.set(args))) {
       LOG_WARN("failed to set ls backup clean net init param",K(ret), K(args));
-    } else if (OB_FAIL(scheduler->create_and_add_dag_net(&param, clean_dag_net))) {
+    } else if (OB_FAIL(scheduler->create_and_add_dag_net<ObLSBackupCleanDagNet>(&param))) {
       if (OB_TASK_EXIST == ret) {
         ret = OB_SUCCESS;
         LOG_INFO("[BACKUP_CLEAN]alreadly have log stream backup dag net in DagScheduler", K(ret));
@@ -289,20 +289,19 @@ ObLSBackupCleanDag::~ObLSBackupCleanDag()
 {
 }
 
-int ObLSBackupCleanDag::fill_comment(char *buf, const int64_t buf_len) const
+int ObLSBackupCleanDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls backup clean dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "tenant_id=%lu, task_id=%ld, ls_id=%ld, task_type=%s, id=%ld",
-      param_.tenant_id_,
-      param_.task_id_,
-      param_.ls_id_.id(),
-      share::ObBackupCleanTaskType::get_str(param_.task_type_),
-      param_.id_))) {
-    LOG_WARN("failed to fill comment", K(ret), K_(param));
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+                                static_cast<int64_t>(param_.tenant_id_),
+                                static_cast<int64_t>(param_.task_id_),
+                                param_.ls_id_.id(),
+                                static_cast<int64_t>(param_.id_),
+                                "task_type", share::ObBackupCleanTaskType::get_str(param_.task_type_)))) {
+    LOG_WARN("failed to add dag warning info param", K(ret));
   }
   return ret;
 }
@@ -488,7 +487,7 @@ int ObLSBackupCleanTask::process()
 int ObLSBackupCleanTask::post_rpc_result_(const int64_t result)
 {
   int ret = OB_SUCCESS;
-  common::ObAddr rs_addr;
+  common::ObAddr leader_addr;
   obrpc::ObBackupTaskRes clean_ls_res;
   clean_ls_res.job_id_ = job_id_; 
   clean_ls_res.task_id_ = task_id_;
@@ -497,12 +496,15 @@ int ObLSBackupCleanTask::post_rpc_result_(const int64_t result)
   clean_ls_res.ls_id_ = ls_id_;
   clean_ls_res.result_ = result;
   clean_ls_res.trace_id_ = trace_id_;
-  if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+  const int64_t cluster_id = GCONF.cluster_id;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
-  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
-    LOG_WARN("failed to get rootservice address", K(ret));
-  } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).delete_backup_ls_task_res(clean_ls_res))) {
+  } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
+        cluster_id, meta_tenant_id, ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
+    LOG_WARN("failed to get leader address", K(ret));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).report_backup_clean_over(clean_ls_res))) {
     LOG_WARN("failed to post backup ls data res", K(ret), K(clean_ls_res));
   } else {
     LOG_INFO("[BACKUP_CLEAN] success finish task post rpc result", K(clean_ls_res));

@@ -71,8 +71,6 @@ int ObSSTableMacroBlockChecker::check_logical_checksum(
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::OB_MACRO_BLOCK_CHECKER);
   ObSSTableMacroBlockHeader sstable_header;
-  ObSEArray<share::schema::ObColDesc, OB_DEFAULT_SE_ARRAY_COUNT> columns;
-  ObTableReadInfo col_read_info;
   ObMicroBlockBareIterator micro_iter;
   const int64_t *column_checksum_in_header = nullptr;
   int64_t *column_checksum = nullptr;
@@ -81,19 +79,12 @@ int ObSSTableMacroBlockChecker::check_logical_checksum(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(buf), K(buf_size), K(common_header));
   } else if (OB_FAIL(get_sstable_header_and_column_checksum(buf, buf_size, sstable_header,
-      columns, column_checksum_in_header))) {
+      column_checksum_in_header))) {
     STORAGE_LOG(WARN, "fail to get sstable header and column checksum", K(ret), KP(buf),
                 K(buf_size), K(common_header));
   } else if (OB_ISNULL(column_checksum_in_header)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "column checksum in header should not be NULL", K(ret), KP(column_checksum_in_header));
-  } else if (OB_FAIL(col_read_info.init(allocator,
-                                        sstable_header.fixed_header_.column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
-                                        sstable_header.fixed_header_.rowkey_column_count_,
-                                        lib::is_oracle_mode(),
-                                        columns,
-                                        true))) {
-    STORAGE_LOG(WARN, "fail to init column read info", K(ret), K(sstable_header), K(columns));
   } else if (OB_FAIL(micro_iter.open(buf, buf_size))) {
     STORAGE_LOG(WARN, "fail to init micro block iterator", K(ret));
   } else if (OB_FAIL(datum_row.init(allocator, sstable_header.fixed_header_.column_count_))) {
@@ -129,12 +120,10 @@ int ObSSTableMacroBlockChecker::check_logical_checksum(
       } else if (OB_FAIL(micro_reader_helper.get_reader(micro_data.get_store_type(), micro_reader))) {
         STORAGE_LOG(WARN, "fail to get micro reader by store type",
             K(ret), K(micro_data.get_store_type()));
-      } else if (OB_FAIL(micro_reader->init(micro_data, col_read_info))) {
+      } else if (OB_FAIL(micro_reader->init(micro_data, nullptr))) {
         STORAGE_LOG(WARN, "fail to init micro reader", K(ret));
-      } else if (OB_FAIL(calc_micro_column_checksum(column_cnt, columns, *micro_reader, datum_row,
-          column_checksum))) {
-        STORAGE_LOG(WARN, "fail to accumulate micro column checksum", K(ret), K(column_cnt),
-            K(columns));
+      } else if (OB_FAIL(calc_micro_column_checksum(*micro_reader, datum_row, column_checksum))) {
+        STORAGE_LOG(WARN, "fail to accumulate micro column checksum", K(ret), K(datum_row));
       }
     }
     if (OB_ITER_END != ret) {
@@ -154,30 +143,21 @@ int ObSSTableMacroBlockChecker::check_logical_checksum(
 }
 
 int ObSSTableMacroBlockChecker::calc_micro_column_checksum(
-    const int64_t column_cnt,
-    const common::ObIArray<share::schema::ObColDesc> &out_cols,
     ObIMicroBlockReader &reader,
     ObDatumRow &datum_row,
     int64_t *column_checksum)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(column_cnt <= 0) || OB_ISNULL(column_checksum)) {
+  if (OB_ISNULL(column_checksum)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", K(ret), KP(column_checksum), K(column_cnt));
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), KP(column_checksum));
   } else {
-    ObStoreRow row;
     for (int64_t iter = 0; OB_SUCC(ret) && iter != reader.row_count(); ++iter) {
       if (OB_FAIL(reader.get_row(iter, datum_row))) {
         STORAGE_LOG(WARN, "fail to get row", K(ret), K(iter));
-      } else if (OB_FAIL(datum_row.to_store_row(out_cols, row))) {
-        STORAGE_LOG(WARN, "fail to transfer datum row to store row", K(ret), K(datum_row));
-      } else if (row.row_val_.count_ != column_cnt) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "error unexpected, row column count is invalid", K(ret),
-            K(row.row_val_.count_), K(column_cnt));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-          column_checksum[i] += row.row_val_.cells_[i].checksum_v2(0);
+        for (int64_t i = 0; OB_SUCC(ret) && i < datum_row.count_; ++i) {
+          column_checksum[i] += datum_row.storage_datums_[i].checksum(0);
         }
       }
     }
@@ -189,7 +169,6 @@ int ObSSTableMacroBlockChecker::get_sstable_header_and_column_checksum(
     const char *macro_block_buf,
     const int64_t macro_block_buf_size,
     ObSSTableMacroBlockHeader &header,
-    common::ObIArray<share::schema::ObColDesc> &columns,
     const int64_t *&column_checksum)
 {
   int ret = OB_SUCCESS;
@@ -201,19 +180,7 @@ int ObSSTableMacroBlockChecker::get_sstable_header_and_column_checksum(
     STORAGE_LOG(WARN, "fail to deserialize macro block header", K(ret), KP(macro_block_buf),
         K(macro_block_buf_size), K(pos));
   } else {
-    const int64_t column_cnt = header.fixed_header_.column_count_;
-    const ObObjMeta *column_types = header.column_types_;
-    const common::ObOrderType *col_orders = header.column_orders_;
     column_checksum = header.column_checksum_;
-    share::schema::ObColDesc col_desc;
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-      col_desc.col_id_ = 0;
-      col_desc.col_type_ = column_types[i];
-      col_desc.col_order_ = col_orders[i];
-      if (OB_FAIL(columns.push_back(col_desc))) {
-        STORAGE_LOG(WARN, "fail to push col desc to columns", K(ret));
-      }
-    }
   }
   return ret;
 }

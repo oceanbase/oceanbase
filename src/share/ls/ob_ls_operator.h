@@ -37,7 +37,7 @@ class ObMySQLResult;
 }
 namespace share
 {
-static const char* LS_FLAG_ARRAY[] = { ""/*NORMAL*/, "DUPLICATE", "BLOCK_TABLET_IN" };
+class SCN;
 //maybe empty, DUPLICATE, BLOCK_TABLET_IN, DUPLICATE|BLOCK_TABLET_IN
 static const int64_t FLAG_STR_LENGTH = 100;
 typedef common::ObFixedLengthString<FLAG_STR_LENGTH> ObLSFlagStr;
@@ -103,6 +103,7 @@ enum ObLSOperationType
   OB_LS_OP_TENANT_DROP_PRE,
   OB_LS_OP_DROP_END,
   OB_LS_OP_TENANT_DROP,
+  OB_LS_OP_ALTER_LS_GROUP,
 };
 #define IS_LS_OPERATION(OPERATION_TYPE, OPERATION) \
 static bool is_ls_##OPERATION##_op(const ObLSOperationType type) { \
@@ -116,6 +117,7 @@ IS_LS_OPERATION(TENANT_DROP_PRE, tenant_drop_pre)
 IS_LS_OPERATION(DROP_END, drop_end)
 IS_LS_OPERATION(CREATE_ABORT, create_abort)
 IS_LS_OPERATION(TENANT_DROP, tenant_drop)
+IS_LS_OPERATION(ALTER_LS_GROUP, alter_ls_group)
 
 struct ObLSAttr
 {
@@ -151,13 +153,14 @@ struct ObLSAttr
   {
     return ls_is_tenant_dropping_status(status_);
   }
+  bool ls_is_pre_tenant_dropping() const
+  {
+    return ls_is_pre_tenant_dropping_status(status_);
+  }
+
   bool ls_is_normal() const
   {
     return ls_is_normal_status(status_);
-  }
-  ObLSOperationType get_ls_operatin_type() const
-  {
-    return operation_type_;
   }
   ObLSID get_ls_id() const 
   {
@@ -192,7 +195,7 @@ struct ObLSAttr
 private:
   ObLSID id_;
   uint64_t ls_group_id_;
-  ObLSFlagForCompatible flag_compatible_;
+  ObLSFlagForCompatible flag_compatible_;//no use, only for compatiable
   ObLSFlag flag_;
   ObLSStatus status_;
   ObLSOperationType operation_type_;
@@ -243,28 +246,48 @@ public:
    * @return return code
    */
   int get_all_ls_by_order(const bool lock_sys_ls, ObLSAttrIArray &ls_operation_array);
-  int insert_ls(const ObLSAttr &ls_attr, const uint64_t max_ls_group_id,
-                const ObTenantSwitchoverStatus &working_sw_status);
+  int insert_ls(const ObLSAttr &ls_attr,
+                const ObTenantSwitchoverStatus &working_sw_status,
+                ObMySQLTransaction *trans = NULL);
   //prevent the concurrency of create and drop ls
   int delete_ls(const ObLSID &id,
                 const share::ObLSStatus &old_status,
                 const ObTenantSwitchoverStatus &working_sw_status);
   int update_ls_status(const ObLSID &id, const share::ObLSStatus &old_status, const share::ObLSStatus &new_status,
                        const ObTenantSwitchoverStatus &working_sw_status);
+  int update_ls_status_in_trans(const ObLSID &id, const share::ObLSStatus &old_status, const share::ObLSStatus &new_status,
+                       const ObTenantSwitchoverStatus &working_sw_status,
+                       common::ObMySQLTransaction &trans);
   static ObLSOperationType get_ls_operation_by_status(const ObLSStatus &ls_status);
   int get_ls_attr(const ObLSID &id, const bool for_update, common::ObISQLClient &client, ObLSAttr &ls_attr);
   /*
    * description: get all ls with snapshot 
-   * @param[out] read_scn:the snapshot of read_version
+   * @param[in] read_scn:the snapshot of read_version
    * @param[out] ObLSAttrIArray ls_info in __all_ls
    * */
-  int load_all_ls_and_snapshot(share::SCN &read_scn, ObLSAttrIArray &ls_array);
+  int load_all_ls_and_snapshot(const share::SCN &read_scn, ObLSAttrIArray &ls_array);
   static int get_tenant_gts(const uint64_t &tenant_id, SCN &gts_scn);
+  static int get_tenant_gts(const uint64_t &tenant_id, int64_t &gts_ts_ns);
+  int alter_ls_group_in_trans(const ObLSAttr &ls_info,
+                              const uint64_t new_ls_group_id,
+                              common::ObMySQLTransaction &trans);
+  int update_ls_flag_in_trans(const ObLSID &id, const ObLSFlag &old_flag, const ObLSFlag &new_flag,
+                    common::ObMySQLTransaction &trans);
 
+  /*
+   * description: get random user ls in normal status with specific flag which default is normal
+   *
+   * @param[out] ls_id: ls_id of user ls
+   * @param[in] flag:   ls flag (default normal)
+   * */
+  int get_random_normal_user_ls(ObLSID &ls_id, const ObLSFlag &flag = ObLSFlag());
 private:
   int process_sub_trans_(const ObLSAttr &ls_attr, ObMySQLTransaction &trans);
-  int operator_ls_(const ObLSAttr &ls_attr, const common::ObSqlString &sql, const uint64_t max_ls_group_id,
+  int operator_ls_(const ObLSAttr &ls_attr, const common::ObSqlString &sql,
                    const ObTenantSwitchoverStatus &working_sw_status);
+  int operator_ls_in_trans_(const ObLSAttr &ls_attr, const common::ObSqlString &sql,
+                   const ObTenantSwitchoverStatus &working_sw_status,
+                   ObMySQLTransaction &trans);
 private:
   uint64_t tenant_id_;
   common::ObMySQLProxy *proxy_;

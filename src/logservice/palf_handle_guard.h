@@ -169,20 +169,27 @@ public:
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   // - other: bug
   DELEGATE_WITH_RET(palf_handle_, change_replica_num, int);
-  // @brief, add a member to paxos group, can be called only in leader
+
+// @brief, add a member to paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t paxos_replica_num: replica number of paxos group after adding 'member'
   // @param[in] const int64_t timeout_us: add member timeout, ns
+  // @param[in] const palf::LogConfigVersion &config_version: config_version for checking leader's
+  // config_version
   // @return
   // - OB_SUCCESS: add member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
   // - OB_TIMEOUT: add member timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - OB_STATE_NOT_MATCH: leader has switched
   // - other: bug
-  // int add_member(const common::ObMember &member,
-  //                const int64_t paxos_replica_num,
-  //                const int64_t timeout_us)
   DELEGATE_WITH_RET(palf_handle_, add_member, int);
+
+  // @brief, get config_version
+  // @return
+  // - OB_SUCCESS: get_config_version successfully
+  // - OB_NOT_INIT
+  DELEGATE_WITH_RET(palf_handle_, get_config_version, int);
 
   // @brief, remove a member from paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be removed
@@ -220,6 +227,9 @@ public:
   DELEGATE_WITH_RET(palf_handle_, get_access_mode, int);
   DELEGATE_WITH_RET(palf_handle_, flashback, int);
   CONST_DELEGATE_WITH_RET(palf_handle_, stat, int);
+  DELEGATE_WITH_RET(palf_handle_, try_lock_config_change, int);
+  DELEGATE_WITH_RET(palf_handle_, unlock_config_change, int);
+  DELEGATE_WITH_RET(palf_handle_, get_config_change_lock_stat, int);
 private:
   PalfHandle palf_handle_;
   PalfEnv *palf_env_;

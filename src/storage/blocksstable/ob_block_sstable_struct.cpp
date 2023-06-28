@@ -481,8 +481,7 @@ OB_SERIALIZE_MEMBER(ObSSTablePair, data_version_, data_seq_);
 ObSimpleMacroBlockInfo::ObSimpleMacroBlockInfo()
   : macro_id_(),
     last_access_time_(INT64_MAX),
-    mem_ref_cnt_(0),
-    disk_ref_cnt_(0)
+    ref_cnt_(0)
 {
 }
 
@@ -490,8 +489,7 @@ void ObSimpleMacroBlockInfo::reset()
 {
   macro_id_.reset();
   last_access_time_ = INT64_MAX;
-  mem_ref_cnt_ = 0;
-  disk_ref_cnt_ = 0;
+  ref_cnt_ = 0;
 }
 
 ObMacroBlockMarkerStatus::ObMacroBlockMarkerStatus()
@@ -500,6 +498,7 @@ ObMacroBlockMarkerStatus::ObMacroBlockMarkerStatus()
     linked_block_count_(0),
     tmp_file_count_(0),
     data_block_count_(0),
+    shared_data_block_count_(0),
     index_block_count_(0),
     ids_block_count_(0),
     disk_block_count_(0),
@@ -507,10 +506,12 @@ ObMacroBlockMarkerStatus::ObMacroBlockMarkerStatus()
     hold_count_(0),
     pending_free_count_(0),
     free_count_(0),
+    shared_meta_block_count_(0),
     mark_cost_time_(0),
     sweep_cost_time_(0),
     start_time_(0),
     last_end_time_(0),
+    mark_finished_(false),
     hold_info_()
 {
 }
@@ -544,6 +545,7 @@ void ObMacroBlockMarkerStatus::reuse()
   linked_block_count_ = 0;
   tmp_file_count_ = 0;
   data_block_count_ = 0;
+  shared_data_block_count_ = 0;
   index_block_count_ = 0;
   ids_block_count_ = 0;
   disk_block_count_ = 0;
@@ -551,10 +553,12 @@ void ObMacroBlockMarkerStatus::reuse()
   hold_count_ = 0;
   pending_free_count_ = 0;
   free_count_ = 0;
+  shared_meta_block_count_ = 0;
   mark_cost_time_ = 0;
   sweep_cost_time_ = 0;
   start_time_ = 0;
   last_end_time_ = 0;
+  mark_finished_ = false;
   hold_info_.reset();
 }
 

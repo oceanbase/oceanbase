@@ -513,23 +513,6 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
   return ret;
 }
 
-int AlterTableSchema::assign_tablegroup_partition(const ObTablegroupSchema &src_schema)
-{
-  int ret = OB_SUCCESS;
-  reset_partition_schema();
-  ret = ObTableSchema::assign_tablegroup_partition(src_schema);
-  if (OB_FAIL(ret)) {
-    LOG_WARN("failed to assign table schema", K(ret));
-  } else if (OB_FAIL(src_schema.get_split_rowkey().deep_copy(split_high_bound_val_, *get_allocator()))) {
-    LOG_WARN("failed to deep copy rowkey", K(ret), K(src_schema));
-  } else if (OB_FAIL(deep_copy_str(src_schema.get_split_partition_name(), split_partition_name_))) {
-    LOG_WARN("failed to deep copy split partition name", K(ret), K(src_schema));
-  } else if (OB_FAIL(src_schema.get_split_list_row_values().deep_copy(split_list_row_values_, *get_allocator()))) {
-    LOG_WARN("failed to deep copy list row values", K(ret), K(src_schema));
-  }
-  return ret;
-}
-
 int AlterTableSchema::add_alter_column(const AlterColumnSchema &alter_column_schema,
                                        const bool need_allocate)
 {

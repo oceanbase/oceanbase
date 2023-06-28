@@ -7720,7 +7720,8 @@ int cast_to_udt_not_support(const sql::ObExpr &expr, sql::ObEvalCtx &ctx, sql::O
     // other udts
     // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
     // currently other types to udt not supported
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    ret = OB_ERR_INVALID_XML_DATATYPE;
+    LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "ANYDATA", ob_obj_type_str(in_obj_meta.get_type()));
     LOG_WARN_RET(ret, "not expected obj type convert", K(in_obj_meta), K(out_obj_meta),
       K(out_obj_meta.get_subschema_id()), K(expr.extra_));
   }
@@ -7749,6 +7750,17 @@ int cast_udt_to_other_not_support(const sql::ObExpr &expr, sql::ObEvalCtx &ctx, 
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN_RET(ret, "not expected obj type convert", K(in_obj_meta), K(out_obj_meta),
       K(out_obj_meta.get_subschema_id()), K(expr.extra_));
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////
+// str -> udt;
+CAST_FUNC_NAME(string, udt)
+{
+  EVAL_STRING_ARG()
+  {
+  ret = OB_NOT_SUPPORTED;
   }
   return ret;
 }
@@ -8610,7 +8622,8 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
             ret = OB_SUCCESS;
           } else if ((ob_is_clob(src_meta.type_, src_meta.cs_type_)
                       || ob_is_clob_locator(src_meta.type_, src_meta.cs_type_)
-                      || expr.args_[0]->obj_meta_.is_xml_sql_type()) && lib::is_oracle_mode()) {
+                      || expr.args_[0]->obj_meta_.is_xml_sql_type()
+                      || (expr.args_[0]->type_ == T_FUN_SYS_CAST && expr.args_[0]->args_[0]->obj_meta_.is_xml_sql_type())) && lib::is_oracle_mode()) {
             if (ob_is_nchar(expr.datum_meta_.type_)
                 || ob_is_char(expr.datum_meta_.type_, expr.datum_meta_.cs_type_)) {
               ret = OB_OPERATE_OVERFLOW;
@@ -8708,8 +8721,7 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
           } else if (out_acc.get_length() == text_length
                      || (ObCharType != out_type && ObNCharType != out_type)
                      || (lib::is_mysql_mode()
-                         && ob_is_char(out_type, expr.datum_meta_.cs_type_)
-                         && !(SMO_PAD_CHAR_TO_FULL_LENGTH & session->get_sql_mode()))) {
+                         && ob_is_char(out_type, expr.datum_meta_.cs_type_))) {
             // do not padding
             LOG_DEBUG("no need to padding", K(ret), K(out_acc.get_length()),
                                             K(text_length), K(text));
@@ -9818,7 +9830,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_lob,/*lob*/
     string_json,/*json*/
     cast_not_support,/*geometry*/
-    cast_to_udt_not_support,/*udt*/
+    string_udt,/*udt*/
   },
   {
     /*extend -> XXX*/
@@ -10524,7 +10536,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
     cast_not_support,/*geometry*/
-    cast_to_udt_not_support,/*udt*/
+    string_udt,/*udt*/
   },
   {
     /*extend -> XXX*/
@@ -12539,6 +12551,9 @@ int ObDatumCaster::setup_cast_expr(const ObDatumMeta &dst_type,
       }
     }
     // implicit cast donot use these, so we set it all invalid.
+    if (ob_is_user_defined_pl_type(src_expr.obj_meta_.get_type()) && dst_type.type_ == ObUserDefinedSQLType) {
+      cast_expr.obj_meta_.set_sql_udt(ObXMLSqlType);
+    }
     cast_expr.parents_ = NULL;
     cast_expr.parent_cnt_ = 0;
     cast_expr.basic_funcs_ = NULL;

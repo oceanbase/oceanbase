@@ -39,6 +39,7 @@ public:
   bool is_inited() const { return is_inited_; }
   int next(ObTabletInfo &tablet_info);
   ObTabletReplicaFilterHolder &get_filters() { return filters_; }
+  void set_batch_size(int64_t batch_size) {tablet_table_operator_.set_batch_size(batch_size);}
 
 private:
   int prefetch();

@@ -40,6 +40,8 @@ const char *ObLSRestoreStatus::get_restore_status_str(const ObLSRestoreStatus &s
       "WAIT_RESTORE_SYS_TABLETS",
       "RESTORE_TABLETS_META",
       "WAIT_RESTORE_TABLETS_META",
+      "RESTORE_TO_CONSISTENT_SCN",
+      "WAIT_RESTORE_TO_CONSISTENT_SCN",
       "QUICK_RESTORE",
       "WAIT_QUICK_RESTORE",
       "QUICK_RESTORE_FINISH",

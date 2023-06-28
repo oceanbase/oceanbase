@@ -149,7 +149,7 @@ int LogRequestHandler::handle_sync_request<LogConfigChangeCmd, LogConfigChangeCm
     } else {
       palf::PalfHandle *palf_handle = palf_handle_guard.get_palf_handle();
       ConfigChangeCmdHandler cmd_handler(palf_handle);
-      if (OB_FAIL(cmd_handler.handle_config_change_cmd(req))) {
+      if (OB_FAIL(cmd_handler.handle_config_change_cmd(req, resp))) {
         CLOG_LOG(WARN, "handle_config_change_cmd failed", K(ret), K(palf_id), K(server), K(req));
       } else {
         CLOG_LOG(INFO, "handle_config_change_cmd success", K(ret), K(palf_id), K(server), K(req), K(resp));
@@ -242,7 +242,8 @@ int ConfigChangeCmdHandler::get_reporter_(ObLogReporterAdapter *&reporter) const
   return ret;
 }
 
-int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &req) const
+int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &req,
+                                                     LogConfigChangeCmdResp &resp) const
 {
   int ret = OB_SUCCESS;
   ObLogReporterAdapter *reporter;
@@ -262,15 +263,13 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
             req.new_replica_num_, req.timeout_us_);
         break;
       case ADD_MEMBER_CMD:
-        ret = palf_handle_->add_member(req.added_member_, req.new_replica_num_, req.timeout_us_);
-        break;
+        ret = palf_handle_->add_member(req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
         break;
       case REMOVE_MEMBER_CMD:
-        ret = palf_handle_->remove_member(req.removed_member_, req.new_replica_num_,
-            req.timeout_us_);
+        ret = palf_handle_->remove_member(req.removed_member_, req.new_replica_num_, req.timeout_us_);
         break;
       case REPLACE_MEMBER_CMD:
-        ret = palf_handle_->replace_member(req.added_member_, req.removed_member_, req.timeout_us_);
+        ret = palf_handle_->replace_member(req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
         break;
       case ADD_LEARNER_CMD:
         ret = palf_handle_->add_learner(req.added_member_, req.timeout_us_);
@@ -279,15 +278,25 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
         ret = palf_handle_->remove_learner(req.removed_member_, req.timeout_us_);
         break;
       case SWITCH_TO_ACCEPTOR_CMD:
-        ret = palf_handle_->switch_learner_to_acceptor(req.removed_member_, req.new_replica_num_, req.timeout_us_);
+        ret = palf_handle_->switch_learner_to_acceptor(req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
         break;
       case SWITCH_TO_LEARNER_CMD:
         ret = palf_handle_->switch_acceptor_to_learner(req.removed_member_, req.new_replica_num_, req.timeout_us_);
+        break;
+      case TRY_LOCK_CONFIG_CHANGE_CMD:
+        ret = palf_handle_->try_lock_config_change(req.lock_owner_, req.timeout_us_);
+        break;
+      case UNLOCK_CONFIG_CHANGE_CMD:
+        ret = palf_handle_->unlock_config_change(req.lock_owner_, req.timeout_us_);
+        break;
+      case GET_CONFIG_CHANGE_LOCK_STAT_CMD:
+        ret = palf_handle_->get_config_change_lock_stat(resp.lock_owner_, resp.is_locked_);
         break;
       default:
         break;
     }
   }
+  resp.ret_ = ret;
   if (OB_SUCC(ret) && OB_FAIL(reporter->report_replica_info(req.palf_id_))) {
     CLOG_LOG(WARN, "report_replica_info failed", K(ret), K(req.palf_id_), K(req));
   }

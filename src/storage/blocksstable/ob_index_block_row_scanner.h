@@ -38,15 +38,12 @@ struct ObIndexBlockDataHeader
     return row_cnt_ >= 0
         && col_cnt_ > 0
         && nullptr != rowkey_array_
-        && nullptr != col_meta_array_
         && nullptr != datum_array_;
   }
   int get_index_data(const int64_t row_idx, const char *&index_ptr) const;
 
   int64_t row_cnt_;
   int64_t col_cnt_;
-  // Array of column object types
-  const ObObjMeta *col_meta_array_;
   // Array of rowkeys in index block
   const ObDatumRowkey *rowkey_array_;
   // Array of deserialzed Object array
@@ -62,7 +59,6 @@ public:
   ObIndexBlockDataTransformer();
   virtual ~ObIndexBlockDataTransformer();
   int transform(
-      const ObTableReadInfo &read_info,
       const ObMicroBlockData &block_data,
       char *transform_buf,
       int64_t buf_len);
@@ -92,7 +88,7 @@ public:
   int init(
       const ObIArray<int32_t> &agg_projector,
       const ObIArray<share::schema::ObColumnSchemaV2> &agg_column_schema,
-      const storage::ObTableReadInfo *index_read_info,
+      const ObStorageDatumUtils &datum_utils,
       ObIAllocator &allocator,
       const common::ObQueryFlag &query_flag,
       const int64_t nested_offset);
@@ -113,14 +109,11 @@ public:
   int get_index_row_count(int64_t &index_row_count) const;
   int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan);
   OB_INLINE bool is_valid() const { return is_inited_; }
-  OB_INLINE void switch_context(const ObTableReadInfo *index_read_info, const int64_t nested_offset) {
-    index_read_info_ = index_read_info;
-    nested_offset_ = nested_offset;
-  }
+  void switch_context(const ObSSTable &sstable, const ObStorageDatumUtils &datum_utils);
   TO_STRING_KV(K_(current), K_(start), K_(end), K_(step),
                K_(range_idx), K_(is_get), K_(is_reverse_scan),
                K_(is_left_border), K_(is_right_border),
-               K_(is_inited), K_(index_format), K_(macro_id), KPC_(idx_data_header), KPC_(index_read_info));
+               K_(is_inited), K_(index_format), K_(macro_id), KPC_(idx_data_header), KPC_(datum_utils));
 private:
   int init_by_micro_data(const ObMicroBlockData &idx_block_data);
   int locate_key(const ObDatumRowkey &rowkey);
@@ -150,7 +143,7 @@ private:
   ObDatumRow *datum_row_;
   ObDatumRowkey endkey_;
   ObIndexBlockRowParser idx_row_parser_;
-  const ObTableReadInfo *index_read_info_;
+  const ObStorageDatumUtils *datum_utils_;
   int64_t current_;
   int64_t start_;               // inclusive
   int64_t end_;                 // inclusive

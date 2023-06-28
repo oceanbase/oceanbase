@@ -148,4 +148,8 @@ TG_DEF(IO_BENCHMARK, IO_BENCHMARK, THREAD_POOL, 1)
 TG_DEF(TIMEZONE_MGR, TimezoneMgr, TIMER)
 TG_DEF(MASTER_KEY_MGR, MasterKeyMgr, QUEUE_THREAD, 1, 100)
 TG_DEF(SRS_MGR, SrsMgr, TIMER, 128)
+TG_DEF(InfoPoolResize, InfoPoolResize, TIMER)
+TG_DEF(MinorScan, MinorScan, TIMER)
+TG_DEF(MajorScan, MajorScan, TIMER)
+TG_DEF(TenantTransferService, TransferSrv, REENTRANT_THREAD_POOL, ThreadCountPair(4 ,1))
 #endif

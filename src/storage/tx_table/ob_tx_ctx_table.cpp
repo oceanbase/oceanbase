@@ -105,6 +105,7 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
   bool tx_ctx_existed = true;
   common::ObAddr scheduler;
   transaction::ObTxCreateArg arg(true,  /* for_replay */
+                                 false,
                                  MTL_ID(),
                                  ctx_info.tx_id_,
                                  ctx_info.ls_id_,

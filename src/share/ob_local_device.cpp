@@ -715,7 +715,7 @@ int ObLocalDevice::alloc_block(const common::ObIODOpts *opts, ObIOFd &block_id)
     SHARE_LOG(WARN, "The ObLocalDevice is not ready, ", K(ret), K(is_inited_), K(is_marked_));
   } else if (OB_UNLIKELY(free_block_cnt_ <= 0)) {
     ret = OB_SERVER_OUTOF_DISK_SPACE;
-    LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "Fail to alloc block", K(ret), K(free_block_cnt_), K(total_block_cnt_));
+    SHARE_LOG(WARN, "Fail to alloc block", K(ret), K(free_block_cnt_), K(total_block_cnt_));
   } else {
     block_idx = free_block_array_[free_block_pop_pos_];
     if (0 == block_bitmap_[block_idx]) {
@@ -1213,14 +1213,15 @@ int ObLocalDevice::io_getevents(
     SHARE_LOG(WARN, "Invalid io context pointer, ", K(ret), KP(io_context));
   } else {
     int sys_ret = 0;
-    oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT_FOR_IO_EVENT;
-    while ((sys_ret = ::io_getevents(
-        local_io_context->io_context_,
-        min_nr,
-        local_io_events->max_event_cnt_,
-        local_io_events->io_events_,
-        timeout)) < 0 && -EINTR == sys_ret); // ignore EINTR
-    oceanbase::lib::Thread::is_blocking_ = 0;
+    {
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_IO_EVENT);
+      while ((sys_ret = ::io_getevents(
+          local_io_context->io_context_,
+          min_nr,
+          local_io_events->max_event_cnt_,
+          local_io_events->io_events_,
+          timeout)) < 0 && -EINTR == sys_ret); // ignore EINTR
+    }
     if (sys_ret < 0) {
       ret = OB_IO_ERROR;
       SHARE_LOG(WARN, "Fail to get io events, ", K(ret), K(sys_ret), KERRMSG);
@@ -1316,7 +1317,7 @@ int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
     ret = convert_sys_errno();
     SHARE_LOG(WARN, "Failed to get disk space", K(ret), K(sstable_dir_));
   } else {
-    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
+    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize));
     const int64_t max_file_size = block_file_size_ + free_space - reserved_size;
     /* when datafile_maxsize is large than current datafile_size, we should return
        the Maximun left space that can be extend. */

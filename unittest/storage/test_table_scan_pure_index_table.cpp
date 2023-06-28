@@ -29,6 +29,10 @@ public:
 public:
   static void SetUpTestCase();
   static void TearDownTestCase();
+  void SetUp()
+  {
+    ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
+  }
 public:
   void insert_data_to_tablet(MockObAccessService *access_service);
   void table_scan(

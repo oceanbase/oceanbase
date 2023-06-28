@@ -73,7 +73,7 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_sys)
   palf_env_impl.disk_options_wrapper_.set_cur_unrecyclable_log_disk_size(unrecyclable_size);
   PalfThrottleOptions throttle_options;
   palf_env_impl.disk_options_wrapper_.get_throttling_options(throttle_options);
-  LogIOWorker *log_io_worker = leader.palf_handle_impl_->log_engine_.log_io_worker_;;
+  LogIOWorker *log_io_worker = leader.palf_handle_impl_->log_engine_.log_io_worker_;
   LogWritingThrottle *throttle = log_io_worker->throttle_;
   // sys log stream no need throttling
   PalfThrottleOptions invalid_throttle_options;
@@ -134,7 +134,7 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   palf_env_impl.disk_options_wrapper_.set_cur_unrecyclable_log_disk_size(unrecyclable_size);
   PalfThrottleOptions throttle_options;
   palf_env_impl.disk_options_wrapper_.get_throttling_options(throttle_options);
-  LogIOWorker *log_io_worker = leader.palf_handle_impl_->log_engine_.log_io_worker_;;
+  LogIOWorker *log_io_worker = leader.palf_handle_impl_->log_engine_.log_io_worker_;
   LogWritingThrottle *throttle = log_io_worker->throttle_;
   PalfThrottleOptions invalid_throttle_options;
 

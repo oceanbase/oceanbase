@@ -17,6 +17,8 @@
 #include "lib/signal/ob_signal_worker.h"
 #include "lib/net/ob_net_util.h"
 #include "lib/random/ob_mysql_random.h"
+#include "lib/container/ob_iarray.h"
+
 
 #include "share/stat/ob_opt_stat_service.h"
 #include "share/ratelimit/ob_rl_mgr.h"
@@ -176,15 +178,6 @@ public:
     bool is_inited_;
   };
 
-  class ObCollectInfoGCTask : public common::ObTimerTask
-  {
-  public:
-    ObCollectInfoGCTask() = default;
-    virtual ~ObCollectInfoGCTask() = default;
-    virtual void runTimerTask() override;
-    static const int64_t COLLECT_INFO_GC_INTERVAL = 6L * 60 * 60 * 1000 * 1000L; // 6hr
-  };
-
   class ObRefreshTime {
   public:
     explicit ObRefreshTime(ObServer *obs): obs_(obs){}
@@ -298,9 +291,9 @@ private:
   int init_refresh_active_time_task(); //Regularly update the sess_active_time of the temporary table created by the proxy connection sess
   int init_refresh_network_speed_task();
   int init_refresh_cpu_frequency();
-  int init_collect_info_gc_task();
   int set_running_mode();
-  int check_server_can_start_service();
+  void check_user_tenant_schema_refreshed(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
+  void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   int try_create_hidden_sys();
   int parse_mode();
 
@@ -441,7 +434,6 @@ private:
   ObRefreshTimeTask refresh_active_time_task_; // repeat & no retry
   ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry
   ObRefreshCpuFreqTimeTask refresh_cpu_frequency_task_;
-  ObCollectInfoGCTask collect_info_gc_task_;
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
 

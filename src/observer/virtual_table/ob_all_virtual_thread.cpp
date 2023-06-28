@@ -74,7 +74,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
         GET_OTHER_TSI_ADDR(wait_addr, &ObLatch::current_wait);
         GET_OTHER_TSI_ADDR(join_addr, &Thread::thread_joined_);
         GET_OTHER_TSI_ADDR(sleep_us, &Thread::sleep_us_);
-        GET_OTHER_TSI_ADDR(is_blocking, &Thread::is_blocking_);
+        GET_OTHER_TSI_ADDR(blocking_ts, &Thread::blocking_ts_);
         for (int64_t i = 0; i < col_count && OB_SUCC(ret); ++i) {
           const uint64_t col_id = output_column_ids_.at(i);
           ObObj *cells = cur_row_.cells_;
@@ -112,7 +112,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 status_str = "Join";
               } else if (0 != sleep_us) {
                 status_str = "Sleep";
-              } else if (0 != is_blocking) {
+              } else if (0 != blocking_ts) {
                 status_str = "Wait";
               } else {
                 status_str = "Run";
@@ -124,6 +124,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
             }
             case WAIT_EVENT: {
               GET_OTHER_TSI_ADDR(rpc_dest_addr, &Thread::rpc_dest_addr_);
+              GET_OTHER_TSI_ADDR(event, &Thread::wait_event_);
               ObAddr addr;
               struct iovec local_iov = {&addr, sizeof(ObAddr)};
               struct iovec remote_iov = {thread_base + rpc_dest_addr_offset, sizeof(ObAddr)};
@@ -147,14 +148,14 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 if ((ret = snprintf(wait_event_, 64, "rpc to ")) > 0) {
                   IGNORE_RETURN addr.to_string(wait_event_ + ret, 64 - ret);
                 }
-              } else if (0 != (is_blocking & Thread::WAIT_IN_TENANT_QUEUE)) {
+              } else if (0 != blocking_ts && (0 != (Thread::WAIT_IN_TENANT_QUEUE & event))) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "tenant worker requests");
-              } else if (0 != (is_blocking & Thread::WAIT_FOR_IO_EVENT)) {
+              } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_IO_EVENT & event))) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "IO events");
-              } else if (0 != (is_blocking & Thread::WAIT_FOR_TRANS_RETRY)) {
-                IGNORE_RETURN snprintf(wait_event_, 64, "trans retry");
               } else if (0 != sleep_us) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "%ld us", sleep_us);
+              } else if (0 != blocking_ts) {
+                IGNORE_RETURN snprintf(wait_event_, 64, "%ld us", common::ObTimeUtility::fast_current_time() - blocking_ts);
               }
               cells[i].set_varchar(wait_event_);
               cells[i].set_collation_type(

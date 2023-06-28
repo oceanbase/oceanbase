@@ -106,6 +106,7 @@ public:
                                                      int64_t &paxos_replica_num,
                                                      common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
+  virtual int get_leader_config_version(palf::LogConfigVersion &config_version) const = 0;
   //  get leader from election, used only for non_palf_leader rebuilding.
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int change_replica_num(const common::ObMemberList &member_list,
@@ -115,24 +116,30 @@ public:
   virtual int force_set_as_single_replica() = 0;
   virtual int add_member(const common::ObMember &member,
                          const int64_t paxos_replica_num,
+                         const palf::LogConfigVersion &config_version,
                          const int64_t timeout_us) = 0;
   virtual int remove_member(const common::ObMember &member,
                             const int64_t paxos_replica_num,
                             const int64_t timeout_us) = 0;
   virtual int replace_member(const common::ObMember &added_member,
                              const common::ObMember &removed_member,
+                             const palf::LogConfigVersion &config_version,
                              const int64_t timeout_us) = 0;
   virtual int add_learner(const common::ObMember &added_learner, const int64_t timeout_us) = 0;
   virtual int remove_learner(const common::ObMember &removed_learner, const int64_t timeout_us) = 0;
-  virtual int replace_learner(const common::ObMember &added_learner,
-                             const common::ObMember &removed_learner,
-                             const int64_t timeout_us) = 0;
   virtual int switch_learner_to_acceptor(const common::ObMember &learner,
                                          const int64_t paxos_replica_num,
+                                         const palf::LogConfigVersion &config_version,
                                          const int64_t timeout_us) = 0;
   virtual int switch_acceptor_to_learner(const common::ObMember &member,
                                          const int64_t paxos_replica_num,
                                          const int64_t timeout_us) = 0;
+  virtual int replace_learner(const common::ObMember &added_learner,
+                             const common::ObMember &removed_learner,
+                             const int64_t timeout_us) = 0;
+  virtual int try_lock_config_change(const int64_t lock_owner, const int64_t timeout_us) = 0;
+  virtual int unlock_config_change(const int64_t lock_owner, const int64_t timeout_us) = 0;
+  virtual int get_config_change_lock_stat(int64_t &lock_owner, bool &is_locked) = 0;
   virtual int get_palf_base_info(const palf::LSN &base_lsn, palf::PalfBaseInfo &palf_base_info) = 0;
   virtual int is_in_sync(bool &is_log_sync, bool &is_need_rebuild) const = 0;
   virtual int enable_sync() = 0;
@@ -357,6 +364,15 @@ public:
   // @brief, check if log sync is enabled
   bool is_sync_enabled() const override final;
 
+  // @brief: get config_version
+  // @return
+  // - OB_SUCCESS: get config_version successfully
+  // - OB_NOT_INIT: is not inited
+  // - OB_NOT_RUNNING: is in stopped state
+  // - OB_NOT_MASTER: this replica is not master
+  // - other: bug
+  int get_leader_config_version(palf::LogConfigVersion &config_version) const;
+
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check
   // @param[in] const int64_t curr_replica_num: current replica num, for pre-check
@@ -371,6 +387,7 @@ public:
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
                          const int64_t timeout_us) override final;
+
   // @brief: force set self as single replica.
   // @return
   // - OB_SUCCESS: change_replica_num successfully
@@ -380,14 +397,17 @@ public:
   // @brief, add a member to paxos group, can be called in any member
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t paxos_replica_num: replica number of paxos group after adding 'member'
+  // @param[in] const palf::LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us: add member timeout, us
   // @return
   // - OB_SUCCESS: add member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: add member timeout
+  // - OB_NOT_MASTER: not master
+  // - OB_STATE_NOT_MATCH: leader has switched
   // - other: bug
   int add_member(const common::ObMember &member,
                  const int64_t paxos_replica_num,
+                 const palf::LogConfigVersion &config_version,
                  const int64_t timeout_us) override final;
 
   // @brief, remove a member from paxos group, can be called in any member
@@ -406,6 +426,7 @@ public:
   // @brief, replace old_member with new_member, can be called in any member
   // @param[in] const common::ObMember &added_member: member wil be added
   // @param[in] const common::ObMember &removed_member: member will be removed
+  // @param[in] const palf::LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace member successfully
@@ -414,6 +435,7 @@ public:
   // - other: bug
   int replace_member(const common::ObMember &added_member,
                      const common::ObMember &removed_member,
+                     const palf::LogConfigVersion &config_version,
                      const int64_t timeout_us) override final;
 
   // @brief: add a learner(read only replica) in this cluster
@@ -453,6 +475,7 @@ public:
   // @param[in] const common::ObMember &learner: learner will be switched to acceptor
   // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
   //            learner to acceptor (similar to add_member)
+  // @param[in] const palf::LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
@@ -460,6 +483,7 @@ public:
   // - OB_TIMEOUT: switch_learner_to_acceptor timeout
   int switch_learner_to_acceptor(const common::ObMember &learner,
                                  const int64_t new_replica_num,
+                                 const palf::LogConfigVersion &config_version,
                                  const int64_t timeout_us) override final;
 
   // @brief: switch an acceptor(full replica) to learner(read only replica) in this cluster
@@ -475,6 +499,43 @@ public:
                                  const int64_t new_replica_num,
                                  const int64_t timeout_us) override final;
 
+
+  //---------config change lock related--------//
+  //@brief: try lock config change which will forbidden changing on memberlist
+  // @param[in] const int64_ lock_owner: owner of locking_config_change operation
+  // @param[in] const int64_t timeout_us
+  //@return
+  // -- OB_NOT_INIT           not_init
+  // -- OB_SUCCESS            successfull lock
+  // -- OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT   failed to lock because of locked by others
+  // -- OB_TIMEOUT              timeout, may lock successfully or not
+  // -- OB_EAGAIN               other config change operation is going on,need retry later
+  // -- OB_NOT_MASTER           this replica is not leader, not refresh location and retry with actual leader
+  // -- OB_STATE_NOT_MATCH        lock_owner is smaller than previous lock_owner
+  int try_lock_config_change(const int64_t lock_owner, const int64_t timeout_us);
+
+  //@brief: unlock config change which will allow changing on memberlist
+  // @param[in] const int64_ lock_owner: expected owner of config_change
+  // @param[in] const int64_t timeout_us
+  //@return
+  // -- OB_NOT_INIT           not_init
+  // -- OB_SUCCESS            successfull unlock
+  // -- OB_TIMEOUT            timeout, may unlock successfully or not
+  // -- OB_EAGAIN             other config change operation is going on,need retry later
+  // -- OB_NOT_MASTER         this replica is not leader, need refresh location and retry with actual leader
+  // -- OB_STATE_NOT_MATCH    lock_owner is smaller than previous lock_owner,or lock_owner is bigger than previous lock_owner
+  int unlock_config_change(const int64_t lock_owner, const int64_t timeout_us);
+
+  //@brief: get config change lock stat
+  //@return
+  //ret:
+  // -- OB_NOT_INIT           not_init
+  // -- OB_SUCCESS            success
+  // -- OB_NOT_MASTER         this replica is not leader, not refresh location and retry with actual leader
+  // -- OB_EAGAIN             is_locking or unlocking
+  // lock_owner: owner of config_change_lock
+  // is_locked:  whether config_change_lock is locked
+  int get_config_change_lock_stat(int64_t &lock_owner, bool &is_locked);
 
   // @breif, check request server is in self member list
   // @param[in] const common::ObAddr, request server.
@@ -518,6 +579,7 @@ public:
   int unregister_rebuild_cb() override final;
   int diagnose(LogHandlerDiagnoseInfo &diagnose_info) const;
   int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
+
   TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_env_), K(is_in_stop_state_), K(is_inited_));
   int offline() override final;
   int online(const palf::LSN &lsn, const share::SCN &scn) override final;
@@ -526,6 +588,8 @@ private:
   static constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;     // 5s
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
+  int submit_config_change_cmd_(const LogConfigChangeCmd &req,
+                                LogConfigChangeCmdResp &resp);
   int get_leader_max_scn_(share::SCN &max_scn) const;
   DISALLOW_COPY_AND_ASSIGN(ObLogHandler);
 private:

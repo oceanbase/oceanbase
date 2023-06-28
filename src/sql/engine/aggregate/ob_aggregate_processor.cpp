@@ -6626,7 +6626,7 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
             }
 
             if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(json_object.object_add(key_data, json_val))) {
+            } else if (OB_FAIL(json_object.add(key_data, static_cast<ObJsonNode*>(json_val), false, true, false))) {
               LOG_WARN("failed: json object add json value", K(ret));
             } else if (json_object.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
               ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
@@ -6645,6 +6645,8 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
     } else {
       ret = OB_SUCCESS;
       ObString str;
+      json_object.stable_sort();
+      json_object.unique();
       // output res
       if (OB_FAIL(json_object.get_raw_binary(str, &aggr_alloc_))) {
         LOG_WARN("get result binary failed", K(ret));

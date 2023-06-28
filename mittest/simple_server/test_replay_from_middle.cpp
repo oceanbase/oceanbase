@@ -699,7 +699,7 @@ int ObLSService::enable_replay()
   ObInnerLSStatus ls_status;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
-  share::ObLSRestoreStatus restore_status;
+  bool can_replay = true;
   if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
@@ -711,12 +711,10 @@ int ObLSService::enable_replay()
       } else if (nullptr == ls) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("ls is null", K(ret));
-      } else if (ls->is_need_gc()) {
-        // this ls will be gc later, should not enable replay
-      } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
-        LOG_WARN("fail to get ls restore status", K(ret));
-      } else if (!restore_status.can_replay_log()) {
-        // while downtime, if ls's restore status is in [restore_start, wait_restore_tablet_meta], clog can't replay
+      } else if (OB_FAIL(ls->check_can_replay_clog(can_replay))) {
+        LOG_WARN("failed to check ls can replay clog", K(ret), KPC(ls));
+      } else if (!can_replay) {
+        // ls can not enable replay
       } else if (OB_FAIL(ls->enable_replay())) {
         LOG_ERROR("fail to enable replay", K(ret));
       }

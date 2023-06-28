@@ -2644,10 +2644,14 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             OX (retry_ctrl.set_sys_local_schema_version(sys_version));
             OX (spi_result.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard());
 
+            bool old_client_return_rowid = session->is_client_return_rowid();
             bool is_inner_session = session->is_inner();
             ObSQLSessionInfo::SessionType old_session_type = session->get_session_type();
             !is_inner_session ? session->set_inner_session() : (void)NULL;
             session->set_session_type(ObSQLSessionInfo::USER_SESSION);
+            if (NULL != ctx->pl_ctx_) {
+              session->set_client_return_rowid(false);
+            }
             if (OB_SUCC(ret)) {
               WITH_CONTEXT(spi_result.get_memory_ctx()) {
                 if (OB_FAIL(ret)) {
@@ -2696,6 +2700,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             // todo:@hr351303 确认session标记是否还需要
             !is_inner_session ? session->set_user_session() : (void)NULL;
             session->set_session_type(old_session_type);
+            session->set_client_return_rowid(old_client_return_rowid);
             LOG_TRACE("execute dynamic sql", K(ret), K(sql), K(sql_str), K(ps_sql));
 
             int64_t row_count = 0;
@@ -5000,6 +5005,20 @@ int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface
     PL_C_INTERFACE_t fp = GCTX.pl_engine_->get_interface_service().get_entry(name);
     if (nullptr != fp) {
       ret = fp(*ctx, *ctx->params_, *ctx->result_);
+      if (ctx->result_->is_pl_extend() &&
+          pl::PL_REF_CURSOR_TYPE != ctx->result_->get_meta().get_extend_type()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_ISNULL(ctx->exec_ctx_->get_pl_ctx())) {
+          tmp_ret = ctx->exec_ctx_->init_pl_ctx();
+        }
+        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx->exec_ctx_->get_pl_ctx())) {
+          tmp_ret = ctx->exec_ctx_->get_pl_ctx()->add(*ctx->result_);
+        }
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_ERROR("fail to record complex result to ctx", K(tmp_ret));
+        }
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Calling C interface which doesn't exist", K(interface_name), K(name));

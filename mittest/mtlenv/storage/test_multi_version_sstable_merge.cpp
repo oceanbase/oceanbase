@@ -135,12 +135,10 @@ void TestMultiVersionMerge::SetUpTestCase()
   MTL(ObTenantTabletScheduler*)->resume_major_merge();
 
   // create tablet
-  obrpc::ObBatchCreateTabletArg create_tablet_arg;
   share::schema::ObTableSchema table_schema;
-  ASSERT_EQ(OB_SUCCESS, gen_create_tablet_arg(tenant_id_, ls_id, tablet_id, create_tablet_arg, 1, &table_schema));
-
-  ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(*ls_tablet_svr, create_tablet_arg));
+  uint64_t table_id = 12345;
+  ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
 }
 
 void TestMultiVersionMerge::TearDownTestCase()
@@ -195,7 +193,6 @@ void TestMultiVersionMerge::prepare_query_param(const ObVersionRange &version_ra
   iter_param_.table_id_ = table_id_;
   iter_param_.tablet_id_ = tablet_id_;
   iter_param_.read_info_ = &full_read_info_;
-  iter_param_.full_read_info_ = &full_read_info_;
   iter_param_.out_cols_project_ = nullptr;
   iter_param_.is_same_schema_column_ = true;
   iter_param_.has_virtual_columns_ = false;
@@ -256,9 +253,10 @@ void TestMultiVersionMerge::prepare_merge_context(const ObMergeType &merge_type,
   merge_context.sstable_version_range_ = trans_version_range;
   merge_context.param_.report_ = &rs_reporter_;
   merge_context.progressive_merge_num_ = 0;
-  const common::ObIArray<ObITable *> &tables = merge_context.tables_handle_.get_tables();
-  merge_context.scn_range_.start_scn_ = tables.at(0)->get_start_scn();
-  merge_context.scn_range_.end_scn_ = tables.at(tables.count() - 1)->get_end_scn();
+  const int64_t tables_count = merge_context.tables_handle_.get_count();
+  merge_context.scn_range_.start_scn_ = merge_context.tables_handle_.get_table(0)->get_start_scn();
+  merge_context.scn_range_.end_scn_ = merge_context.tables_handle_.get_table(tables_count - 1)->get_end_scn();
+  merge_context.merge_scn_ = merge_context.scn_range_.end_scn_;
 
   ASSERT_EQ(OB_SUCCESS, merge_context.init_merge_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder(index_desc_));
@@ -269,7 +267,7 @@ void TestMultiVersionMerge::build_sstable(
     ObSSTable *&merged_sstable)
 {
   ASSERT_EQ(OB_SUCCESS, ctx.merge_info_.create_sstable(ctx));
-  ASSERT_EQ(OB_SUCCESS, ctx.merged_table_handle_.get_sstable(merged_sstable));
+  merged_sstable = &ctx.merged_sstable_;
 }
 
 TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtered)

@@ -384,8 +384,7 @@ int ObJoinOrder::compute_sharding_info_for_base_path(ObIArray<AccessPath *> &acc
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (table_schema->is_external_table()) {
-    int64_t parallel = opt_ctx->is_use_table_dop() ? table_schema->get_dop() :opt_ctx->get_parallel();
-    if (parallel > 1
+    if (path->parallel_ > 1
         || ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location())) {
       sharding_info = opt_ctx->get_distributed_sharding();
     } else {
@@ -5057,10 +5056,9 @@ int JoinPath::compute_join_path_sharding()
                                               input_shardings,
                                               *parent_->get_allocator(),
                                               reselected_dup_pos,
-                                              strong_sharding_))) {
+                                              strong_sharding_,
+                                              inherit_sharding_index_))) {
         LOG_WARN("failed to compute basic sharding info", K(ret));
-      } else if (OB_FALSE_IT(inherit_sharding_index_ = 0)) {
-        //do nothing
       } else if (reselected_dup_pos.empty()) {
         /*no duplicated table, do nothing*/
       } else if (OB_UNLIKELY(2 != reselected_dup_pos.count())) {

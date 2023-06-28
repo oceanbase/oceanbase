@@ -1016,6 +1016,7 @@ int ObAddLSReplicaTask::check_before_execute(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_EXECUTE_ADD_REPLICA_ERROR);
 int ObAddLSReplicaTask::execute(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     int &ret_code,
@@ -1023,8 +1024,11 @@ int ObAddLSReplicaTask::execute(
 {
   int ret = OB_SUCCESS;
 
+  DEBUG_SYNC(BEFORE_SEND_ADD_REPLICA_DRTASK);
   ObLSAddReplicaArg arg;
-  if (OB_FAIL(arg.init(
+  if (OB_UNLIKELY(ERRSIM_EXECUTE_ADD_REPLICA_ERROR)) {
+    ret = ERRSIM_EXECUTE_ADD_REPLICA_ERROR;
+  } else if (OB_FAIL(arg.init(
           get_task_id(),
           get_tenant_id(),
           get_ls_id(),
@@ -1621,29 +1625,9 @@ int ObLSTypeTransformTask::check_paxos_member(
     ObDRTaskRetComment &ret_comment) const
 {
   int ret = OB_SUCCESS;
-  if (!ObReplicaTypeCheck::is_paxos_replica_V2(dst_replica_.get_replica_type())) {
-    // no need to check non paxos replica
-  } else {
-    const ObZone &dst_zone = dst_replica_.get_zone();
-    FOREACH_CNT_X(r, ls_info.get_replicas(), OB_SUCC(ret)) {
-      if (OB_UNLIKELY(nullptr == r)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid replica", K(ret), K(ls_info));
-      } else if (r->get_server() == dst_replica_.get_server()) {
-        // already check in check online
-      } else if (r->get_zone() == dst_zone
-                 && r->is_in_service()
-                 && ObReplicaTypeCheck::is_paxos_replica_V2(r->get_replica_type())
-                 && r->get_replica_type() == dst_replica_.get_replica_type()) {
-        ret = OB_REBALANCE_TASK_CANT_EXEC;
-        LOG_WARN("only one paxos member allowed in a single zone", K(ret),
-                 "zone", dst_zone, "task", *this);
-      } else {} // no more to do
-    }
-  }
-  if (OB_FAIL(ret)) {
-    ret_comment = ObDRTaskRetComment::CANNOT_EXECUTE_DUE_TO_PAXOS_REPLICA_NUMBER;
-  }
+  // no need to make sure only one F-replica in one zone.
+  // Because shrink unit number may shrink unit with F-replica on it,
+  // thus making another R type transform to F, then 2F in one zone is expected
   return ret;
 }
 

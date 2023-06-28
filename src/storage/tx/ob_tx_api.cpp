@@ -466,7 +466,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
     } else {
       int clean = true;
       ARRAY_FOREACH_X(tx.parts_, i, cnt, clean) {
-        clean = tx.parts_[i].is_clean();
+        clean = tx.parts_[i].is_without_ctx() || tx.parts_[i].is_clean();
       }
       if (clean) {
         // explicit savepoint rollback cause empty valid-part-set
@@ -1367,7 +1367,7 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
         TRANS_LOG(WARN, "rollback savepoint fail", K(ret), K(savepoint), K(p), K(tx));
       }
     } else {
-      if (p.epoch_ <= 0) { p.epoch_ = born_epoch; }
+      if (p.epoch_ <= 0) { tx.update_clean_part(p.id_, born_epoch, self_); }
       TRANS_LOG(TRACE, "succ to rollback on participant", K(p), K(tx), K(savepoint));
     }
   }
@@ -1424,11 +1424,17 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
       int tx_state = ObTxData::RUNNING;
       share::SCN commit_version;
       if (OB_FAIL(get_tx_state_from_tx_table_(ls, tx_id, tx_state, commit_version))) {
-        TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(ls), K(tx_id));
         if (OB_TRANS_CTX_NOT_EXIST == ret) {
           if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
-            TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
+            if ((OB_PARTITION_IS_BLOCKED == ret || OB_PARTITION_IS_STOPPED == ret) && is_ls_dropped_(ls)) {
+              ctx_born_epoch = ObTxPart::EPOCH_DEAD;
+              ret = OB_SUCCESS;
+            } else {
+              TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
+            }
           }
+        } else {
+          TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(ls), K(tx_id));
         }
       } else {
         switch (tx_state) {
@@ -1448,7 +1454,7 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
       TRANS_LOG(WARN, "get transaction context error", K(ret), K(tx_id), K(ls));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(ctx)) {
     if (verify_epoch > 0 && ctx->epoch_ != verify_epoch) {
       ret = OB_TRANS_CTX_NOT_EXIST;
       TRANS_LOG(WARN, "current ctx illegal, born epoch not match", K(ret), K(ls), K(tx_id),
@@ -1591,33 +1597,39 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
         tx.rpc_cond_.reset(); /* reset rpc_cond */
         if (OB_FAIL(batch_post_tx_msg_(msg, remain))) {
           TRANS_LOG(WARN, "batch post tx msg fail", K(msg), K(remain), K(retries));
-        }
-        // wait result
-        int rpc_ret = OB_SUCCESS;
-        if (OB_FAIL(tx.rpc_cond_.wait(waittime, rpc_ret))) {
-          TRANS_LOG(WARN, "tx rpc condition wakeup", K(ret),
-                    K(waittime), K(rpc_ret), K(expire_ts), K(remain), K(remain_cnt), K(retries),
-                    K_(tx.state));
-          // if trans is terminated, rollback savepoint should be terminated
-          // NOTE that this case is only for xa trans
-          // EXAMPLE, tx desc is shared by branch 1 and branch 2
-          // 1. branch 1 starts to rollback savepoint
-          // 2. branch 2 is terminated
-          // 3. branch 1 receives callback of rollback savepoint
-          if (tx.is_terminated()) {
-            ret = OB_TRANS_HAS_DECIDED;
-          } else {
+          if (is_location_service_renew_error(ret)) {
+            // ignore ret
             ret = OB_SUCCESS;
           }
         }
-        if (OB_SUCCESS != rpc_ret) {
-          TRANS_LOG(WARN, "tx rpc fail", K(rpc_ret), K_(tx.tx_id), K(waittime), K(remain), K(remain_cnt), K(retries));
-          if (rpc_ret == OB_TRANS_CTX_NOT_EXIST) {
-            // participant has quit, may be txn is timeout or other failure occured
-            // txn need abort
-            ret = tx.is_tx_timeout() ? OB_TRANS_TIMEOUT : OB_TRANS_KILLED;
-          } else {
-            ret = rpc_ret;
+        if (OB_SUCC(ret)) {
+          // wait result
+          int rpc_ret = OB_SUCCESS;
+          if (OB_FAIL(tx.rpc_cond_.wait(waittime, rpc_ret))) {
+            TRANS_LOG(WARN, "tx rpc condition wakeup", K(ret),
+                      K(waittime), K(rpc_ret), K(expire_ts), K(remain), K(remain_cnt), K(retries),
+                      K_(tx.state));
+            // if trans is terminated, rollback savepoint should be terminated
+            // NOTE that this case is only for xa trans
+            // EXAMPLE, tx desc is shared by branch 1 and branch 2
+            // 1. branch 1 starts to rollback savepoint
+            // 2. branch 2 is terminated
+            // 3. branch 1 receives callback of rollback savepoint
+            if (tx.is_terminated()) {
+              ret = OB_TRANS_HAS_DECIDED;
+            } else {
+              ret = OB_SUCCESS;
+            }
+          }
+          if (OB_SUCCESS != rpc_ret) {
+            TRANS_LOG(WARN, "tx rpc fail", K(rpc_ret), K_(tx.tx_id), K(waittime), K(remain), K(remain_cnt), K(retries));
+            if (rpc_ret == OB_TRANS_CTX_NOT_EXIST) {
+              // participant has quit, may be txn is timeout or other failure occured
+              // txn need abort
+              ret = tx.is_tx_timeout() ? OB_TRANS_TIMEOUT : OB_TRANS_KILLED;
+            } else {
+              ret = rpc_ret;
+            }
           }
         }
       }

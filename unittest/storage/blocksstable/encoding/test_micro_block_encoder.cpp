@@ -56,7 +56,7 @@ protected:
   ObObjType *col_types_;
   ObRowGenerate row_generate_;
   ObMicroBlockEncodingCtx ctx_;
-  ObTableReadInfo read_info_;
+  ObRowkeyReadInfo read_info_;
   ObArenaAllocator allocator_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
   bool is_multi_version_row_;
@@ -65,6 +65,7 @@ protected:
 
 void TestIColumnEncoder::SetUp()
 {
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   const int64_t tid = 200001;
   ObTableSchema table;
   ObColumnSchemaV2 col;
@@ -105,8 +106,7 @@ void TestIColumnEncoder::SetUp()
                                       row_generate_.get_schema().get_column_count(),
                                       row_generate_.get_schema().get_rowkey_column_num(),
                                       lib::is_oracle_mode(),
-                                      col_descs_,
-                                      true));
+                                      col_descs_));
 
   ctx_.micro_block_size_ = 1L << 20; // 1MB, maximum micro block size;
   ctx_.macro_block_size_ = 2L << 20;
@@ -217,7 +217,7 @@ TEST_F(TestDictLargeVarchar, test_dict_large_varchar)
   ObMicroBlockDecoder decoder;
   ObDatumRow read_row;
   ASSERT_EQ(OB_SUCCESS, read_row.init(full_column_cnt_));
-  ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, read_info_));
+  ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, nullptr));
   ASSERT_EQ(OB_SUCCESS, decoder.get_row(0, read_row));
   STORAGE_LOG(DEBUG, "read row", K(read_row));
 
@@ -304,7 +304,7 @@ TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
   ObMicroBlockDecoder decoder;
   ObDatumRow read_row;
   ASSERT_EQ(OB_SUCCESS, read_row.init(column_cnt_));
-  ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, read_info_));
+  ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, nullptr));
 
   int64_t new_checksum = 0;
   for (int64_t i = 0; i < row_cnt; ++i) {
@@ -337,7 +337,7 @@ TEST_F(TestEncodingRowBufHolder, test_encoding_row_buf_holder)
   ASSERT_EQ(OB_SUCCESS, buf_holder.init(OB_DEFAULT_MACRO_BLOCK_SIZE));
   ASSERT_EQ(OB_INVALID_ARGUMENT, buf_holder.try_alloc(4 * OB_DEFAULT_MACRO_BLOCK_SIZE));
   const char *test_mark = "fly me to the moon";
-  
+
   const int test_mark_len = strlen(test_mark);
   const int64_t first_alloc_size = 4096;
   const int64_t snd_alloc_size = static_cast<int64_t>(first_alloc_size * 1.2);
@@ -365,7 +365,7 @@ TEST_F(TestEncodingRowBufHolder, test_encoding_row_buf_holder)
 int main(int argc, char **argv)
 {
   system("rm -f test_micro_block_encoder.log*");
-  OB_LOGGER.set_file_name("test_micro_block_encoder.log", true, false);
+  OB_LOGGER.set_file_name("test_micro_block_encoder.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -73,7 +73,6 @@ int ObMicroBlockDataHandle::get_data_block_data(
     if (OB_FAIL(ObStorageCacheSuite::get_instance().get_block_cache().load_block(
         micro_block_id,
         des_meta_,
-        nullptr,
         &block_reader,
         block_data,
         nullptr))) {
@@ -83,15 +82,10 @@ int ObMicroBlockDataHandle::get_data_block_data(
   return ret;
 }
 
-int ObMicroBlockDataHandle::get_index_block_data(
-    const ObTableReadInfo &read_info,
-    ObMicroBlockData &index_block)
+int ObMicroBlockDataHandle::get_index_block_data(ObMicroBlockData &index_block)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!read_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid columns info", K(ret), K(read_info));
-  } else if (OB_FAIL(get_loaded_block_data(index_block))) {
+  if (OB_FAIL(get_loaded_block_data(index_block))) {
     try_release_loaded_index_block();
     //try sync io
     ObMicroBlockId micro_block_id;
@@ -102,11 +96,10 @@ int ObMicroBlockDataHandle::get_index_block_data(
     if (OB_FAIL(ObStorageCacheSuite::get_instance().get_index_block_cache().load_block(
         micro_block_id,
         des_meta_,
-        &read_info,
         nullptr,
         loaded_index_block_data_,
         allocator_))) {
-      LOG_WARN("Fail to load index micro block", K(ret), K_(macro_block_id), K(read_info), K(micro_block_id));
+      LOG_WARN("Fail to load index micro block", K(ret), K_(macro_block_id), K(micro_block_id));
       try_release_loaded_index_block();
     } else {
       index_block = loaded_index_block_data_;
@@ -115,15 +108,10 @@ int ObMicroBlockDataHandle::get_index_block_data(
   return ret;
 }
 
-int ObMicroBlockDataHandle::get_cached_index_block_data(
-    const ObTableReadInfo &read_info,
-    ObMicroBlockData &index_block)
+int ObMicroBlockDataHandle::get_cached_index_block_data(ObMicroBlockData &index_block)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!read_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid columns info", K(ret), K(read_info));
-  } else if (ObSSTableMicroBlockState::IN_BLOCK_CACHE != block_state_) {
+  if (ObSSTableMicroBlockState::IN_BLOCK_CACHE != block_state_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Fail to get block data, unexpected block state", K(ret), K(block_state_));
   } else {

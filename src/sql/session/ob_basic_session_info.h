@@ -385,7 +385,7 @@ public:
   };
 
 public:
-  ObBasicSessionInfo();
+  ObBasicSessionInfo(const uint64_t tenant_id);
   virtual ~ObBasicSessionInfo();
 
   virtual int init(uint32_t sessid, uint64_t proxy_sessid,
@@ -396,6 +396,11 @@ public:
   virtual void destroy();
   //called before put session to freelist: unlock/set invalid
   virtual void reset(bool skip_sys_var = false);
+  void set_tenant_session_mgr(ObTenantSQLSessionMgr *tenant_session_mgr)
+  {
+    tenant_session_mgr_ = tenant_session_mgr;
+  }
+  ObTenantSQLSessionMgr *get_tenant_session_mgr() { return tenant_session_mgr_; }
   virtual void clean_status();
   //setters
   int reset_timezone();
@@ -1964,10 +1969,13 @@ private:
       };
     };
   };
+protected:
+  const uint64_t orig_tenant_id_;     // which tenant new me
 private:
   static const int64_t CACHED_SYS_VAR_VERSION = 721;// a magic num
   static const int MAX_SESS_BT_BUFF_SIZE = 1024;
 
+  ObTenantSQLSessionMgr *tenant_session_mgr_;
   // data structure related:
   common::ObRecursiveMutex query_mutex_;//互斥同一个session上的多次query请求
   common::ObRecursiveMutex thread_data_mutex_;//互斥多个线程对同一session成员的并发读写, 保护thread_data_的一致性
@@ -2194,6 +2202,7 @@ private:
   // timestamp of processing current query. refresh when retry.
   int64_t process_query_time_;
 };
+
 
 inline const common::ObString ObBasicSessionInfo::get_current_query_string() const
 {

@@ -30,6 +30,7 @@
 #include <linux/futex.h>
 #include <netinet/tcp.h>
 #include "rpc/obrpc/ob_listener.h"
+#include "common/ob_clock_generator.h"
 
 using namespace oceanbase::common;
 

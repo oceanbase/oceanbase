@@ -440,9 +440,11 @@ void ObFIFOAllocator::free_normal(NormalPageHeader *page, int64_t size)
   if (page == current_using_ && 1 == current_using_->ref_count_) {
     current_using_->offset_ = reinterpret_cast<char *>(current_using_) + sizeof(NormalPageHeader);
   } else if (0 == page->ref_count_) {
-    // move this page from page_using_list to page_free_list
+    int64_t normal_total_size = normal_total();
+    int64_t total_size = total();
     using_page_list_.remove(&page->node_);
-    if (normal_total() > idle_size_ || total() > max_size_) {
+    // move this page from page_using_list to page_free_list
+    if (normal_total_size > idle_size_ || total_size > max_size_) {
       allocator_->free(page);
       page = nullptr;
     } else {

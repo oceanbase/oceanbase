@@ -17,6 +17,8 @@
 #include "lib/container/ob_se_array.h"      // ObSEArray
 #include "lib/utility/ob_print_utils.h"     // TO_STRING_KV
 
+#define DEBUG_FOR_MDS
+
 namespace oceanbase
 {
 namespace share
@@ -69,8 +71,10 @@ public:
   // compare operator
   bool operator == (const ObLSID &other) const { return id_ == other.id_; }
   bool operator >  (const ObLSID &other) const { return id_ > other.id_; }
+  bool operator >= (const ObLSID &other) const { return id_ >= other.id_; }
   bool operator != (const ObLSID &other) const { return id_ != other.id_; }
   bool operator <  (const ObLSID &other) const { return id_ < other.id_; }
+  bool operator <= (const ObLSID &other) const { return id_ <= other.id_; }
   int compare(const ObLSID &other) const
   {
     if (id_ == other.id_) {
@@ -86,6 +90,17 @@ public:
   int hash(uint64_t &hash_val) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV(K_(id));
+
+  bool debug_for_mds() const
+  {
+#ifdef DEBUG_FOR_MDS
+    //if (SYS_LS_ID != id_) {
+      return true;
+    //}
+#endif
+    return false;
+  }
+
 private:
   int64_t id_;
 };

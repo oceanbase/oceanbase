@@ -160,10 +160,9 @@ class ObResourceMap
 public:
   ObResourceMap();
   virtual ~ObResourceMap();
-  int init(const int64_t bucket_num, const uint64_t tenant_id, const char *label,
+  int init(const int64_t bucket_num, const ObMemAttr &attr,
       const int64_t total_limit, const int64_t hold_limit, const int64_t page_size);
-  template <typename Callback = ObResourceDefaultCallback<Key,Value>>
-  int get(const Key &key, ObResourceHandle<Value> &handle, Callback callback = ObResourceDefaultCallback<Key, Value>());
+  int get(const Key &key, ObResourceHandle<Value> &handle);
   template <typename Callback = ObResourceDefaultCallback<Key, Value>>
   int set(const Key &key, Value &value, Callback callback = ObResourceDefaultCallback<Key, Value>());
   template <typename Callback = ObResourceDefaultCallback<Key,Value>>
@@ -175,11 +174,9 @@ public:
   common::ObIAllocator &get_allocator() { return allocator_; }
   int inc_handle_ref(ObResourceValueStore<Value> *ptr);
 protected:
-  template <typename Callback = ObResourceDefaultCallback<Key,Value>>
   int get_without_lock(
       const Key &key,
-      ObResourceHandle<Value> &handle,
-      Callback callback = ObResourceDefaultCallback<Key, Value>());
+      ObResourceHandle<Value> &handle);
   void free_resource(ObResourceValueStore<Value> *ptr);
 protected:
   typedef ObResourceValueStore<Value> ValueStore;
@@ -205,14 +202,13 @@ ObResourceMap<Key, Value>::~ObResourceMap()
 template <typename Key, typename Value>
 int ObResourceMap<Key, Value>::init(
     const int64_t bucket_num,
-    const uint64_t tenant_id,
-    const char *label,
+    const ObMemAttr &attr,
     const int64_t total_limit,
     const int64_t hold_limit,
     const int64_t page_size)
 {
   int ret = common::OB_SUCCESS;
-  auto attr = SET_USE_500(ObMemAttr(tenant_id, label));
+  const uint64_t tenant_id = attr.tenant_id_;
   const int64_t bkt_num = common::hash::cal_next_prime(bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
@@ -230,19 +226,18 @@ int ObResourceMap<Key, Value>::init(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "lock buckets isn't equal to map buckets, which could cause concurrency issues", K(ret),
         K(bkt_num), K(map_.bucket_count()));
-  } else if (OB_FAIL(allocator_.init(total_limit, hold_limit, page_size))) {
+  } else if (OB_FAIL(allocator_.init(page_size, "ResourceMap", tenant_id, total_limit))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else {
     allocator_.set_attr(attr);
     is_inited_ = true;
-    STORAGE_LOG(INFO, "init resource map success", K(ret), K(tenant_id), K(bkt_num));
+    STORAGE_LOG(INFO, "init resource map success", K(ret), K(attr), K(bkt_num));
   }
   return ret;
 }
 
 template <typename Key, typename Value>
-template <typename Callback>
-int ObResourceMap<Key, Value>::get(const Key &key, ObResourceHandle<Value> &handle, Callback callback)
+int ObResourceMap<Key, Value>::get(const Key &key, ObResourceHandle<Value> &handle)
 {
   int ret = OB_SUCCESS;
   uint64_t hash_val = 0;
@@ -251,18 +246,16 @@ int ObResourceMap<Key, Value>::get(const Key &key, ObResourceHandle<Value> &hand
   } else {
     common::ObBucketHashRLockGuard guard(bucket_lock_, hash_val);
     handle.reset();
-    ret = get_without_lock(key, handle, callback);
+    ret = get_without_lock(key, handle);
   }
   return ret;
 }
 
 template <typename Key,
           typename Value>
-template <typename Callback>
 int ObResourceMap<Key, Value>::get_without_lock(
     const Key &key,
-    ObResourceHandle<Value> &handle,
-    Callback callback)
+    ObResourceHandle<Value> &handle)
 {
   int ret = common::OB_SUCCESS;
   ValueStore *ptr = NULL;
@@ -275,17 +268,10 @@ int ObResourceMap<Key, Value>::get_without_lock(
     } else {
       ret = common::OB_ENTRY_NOT_EXIST;
     }
+  } else if (OB_FAIL(ptr->inc_ref_cnt())) {
+    STORAGE_LOG(WARN, "fail to increase ref count", K(ret));
   } else {
-    common::hash::HashMapPair<Key, Value *> pair;
-    pair.first = key;
-    pair.second = ptr->get_value_ptr();
-    if (OB_FAIL(callback(pair))) {
-      STORAGE_LOG(WARN, "fail to callback", K(ret));
-    } else if (OB_FAIL(inc_handle_ref(ptr))) {
-      STORAGE_LOG(WARN, "fail to inc handle ref count", K(ret));
-    } else {
-      handle.ptr_ = ptr;
-    }
+    handle.ptr_ = ptr;
   }
   return ret;
 }

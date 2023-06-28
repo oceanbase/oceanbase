@@ -398,6 +398,19 @@ void ObColumnParam::reset()
   is_hidden_ = false;
 }
 
+void ObColumnParam::destroy()
+{
+  if (orig_default_value_.need_deep_copy()) {
+    allocator_.free(orig_default_value_.get_deep_copy_obj_ptr());
+    orig_default_value_.reset();
+  }
+  if (cur_default_value_.need_deep_copy()) {
+    allocator_.free(cur_default_value_.get_deep_copy_obj_ptr());
+    cur_default_value_.reset();
+  }
+  ObColumnParam::reset();
+}
+
 int ObColumnParam::deep_copy_obj(const ObObj &src, ObObj &dest)
 {
   int ret = OB_SUCCESS;
@@ -933,7 +946,6 @@ int ObTableParam::construct_columns_and_projector(
                                      rowkey_count,
                                      force_mysql_mode ? false : lib::is_oracle_mode(),
                                      tmp_access_cols_desc,
-                                     false,
                                      &tmp_access_cols_index,
                                      &tmp_access_cols_param))) {
       LOG_WARN("fail to init main read info", K(ret));
@@ -1015,13 +1027,13 @@ int ObTableParam::convert(const ObTableSchema &table_schema,
   bool is_oracle_mode = false;
   if (OB_FAIL(construct_columns_and_projector(table_schema, access_column_ids, tsc_out_cols, force_mysql_mode))) {
     LOG_WARN("construct failed", K(ret));
-  } else if (OB_FAIL(construct_pad_projector(main_read_info_.get_columns(), output_projector_, pad_col_projector_))) {
+  } else if (OB_FAIL(construct_pad_projector(*main_read_info_.get_columns(), output_projector_, pad_col_projector_))) {
     LOG_WARN("Fail to construct pad projector, ", K(ret));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
   } else if ((enable_lob_locator_v2_ || is_oracle_mode)
              && OB_FAIL(construct_lob_locator_param(table_schema,
-                                                    main_read_info_.get_columns(),
+                                                    *main_read_info_.get_columns(),
                                                     output_projector_,
                                                     use_lob_locator_,
                                                     rowid_version_,

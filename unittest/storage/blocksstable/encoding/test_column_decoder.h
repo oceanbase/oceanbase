@@ -29,6 +29,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "../ob_row_generate.h"
 #include "common/rowkey/ob_rowkey.h"
+#include "unittest/storage/mock_ob_table_read_info.h"
 
 namespace oceanbase
 {
@@ -103,7 +104,7 @@ protected:
   ObMicroBlockEncodingCtx ctx_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
   ObMicroBlockEncoder encoder_;
-  ObTableReadInfo read_info_;
+  MockObTableReadInfo read_info_;
   ObArenaAllocator allocator_;
   bool is_retro_;
   ObColumnHeader::Type column_encoding_type_;
@@ -247,8 +248,7 @@ void TestColumnDecoder::SetUp()
       table.get_column_count(),
       table.get_rowkey_column_num(),
       lib::is_oracle_mode(),
-      col_descs_,
-      true));
+      col_descs_));
 
   ctx_.micro_block_size_ = 64L << 11;
   ctx_.macro_block_size_ = 2L << 20;

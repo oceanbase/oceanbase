@@ -16,7 +16,6 @@
 #include "lib/net/ob_addr.h"
 #include "lib/thread/ob_work_queue.h"
 
-#include "share/backup/ob_backup_info_mgr.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_tenant_id_schema_version.h"
 #include "share/ob_inner_config_root_addr.h"
@@ -46,15 +45,11 @@
 #include "rootserver/ob_upgrade_executor.h"
 #include "rootserver/ob_upgrade_storage_format_version_executor.h"
 #include "rootserver/ob_create_inner_schema_executor.h"
-#include "rootserver/backup/ob_backup_service.h"
-#include "rootserver/backup/ob_backup_task_scheduler.h"
 #include "rootserver/ob_update_rs_list_task.h"
 #include "rootserver/ob_schema_history_recycler.h"
-#include "rootserver/backup/ob_backup_lease_service.h"
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "share/ls/ob_ls_info.h"
 #include "share/ls/ob_ls_table_operator.h"
-#include "rootserver/backup/ob_archive_scheduler_service.h"
 #include "rootserver/ob_disaster_recovery_task_mgr.h"
 #include "rootserver/ob_disaster_recovery_task_executor.h"
 #include "rootserver/ob_empty_server_checker.h"
@@ -403,7 +398,6 @@ public:
   // misc get functions
   share::ObLSTableOperator &get_lst_operator() { return *lst_operator_; }
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }
-  ObBackupTaskScheduler &get_backup_task_scheduler() { return backup_task_scheduler_;}
   ObServerManager &get_server_mgr() { return server_manager_; }
   ObZoneManager &get_zone_mgr() { return zone_manager_; }
   ObUnitManager &get_unit_mgr() { return unit_manager_; }
@@ -441,6 +435,7 @@ public:
   int fetch_location(const obrpc::ObFetchLocationArg &arg,
                      obrpc::ObFetchLocationResult &res);
   int merge_finish(const obrpc::ObMergeFinishArg &arg);
+
   // 4.0 backup
   // balance over
   int receive_backup_over(const obrpc::ObBackupTaskRes &res);
@@ -954,16 +949,11 @@ private:
   ObUpdateAllServerConfigTask update_all_server_config_task_;
   int64_t baseline_schema_version_;
 
-  // backup
-  ObBackupService backup_service_;
-  ObBackupTaskScheduler backup_task_scheduler_;
-  ObArchiveSchedulerService archive_service_;
   int64_t start_service_time_;
   ObRsStatus rs_status_;
 
   int64_t fail_count_;
   ObSchemaHistoryRecycler schema_history_recycler_;
-  ObBackupLeaseService backup_lease_service_;
   // Disaster Recovery related
   ObDRTaskExecutor disaster_recovery_task_executor_;
   ObDRTaskMgr disaster_recovery_task_mgr_;

@@ -337,3 +337,5 @@ para["select"] = {
 }
 print_to_client("select_malloc_sample_info")
 select_malloc_sample_info(para)
+
+enable_system_tenant_memory_limit(true)

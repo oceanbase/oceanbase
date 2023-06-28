@@ -34,7 +34,7 @@ public:
       bool &exist,
       bool &found);
 private:
-  const ObTableReadInfo *read_info_;
+  const ObITableReadInfo *read_info_;
 };
 
 }

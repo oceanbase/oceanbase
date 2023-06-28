@@ -135,11 +135,11 @@ static constexpr const char *usage_str =
 "int = set_log_probe(string)\n"
 "{{row1}, {row2}, ...} = select_mem_leak_checker_info()\n"
 "{{row1}, {row2}, ...} = select_compaction_diagnose_info()\n"
-"{{row1}, {row2}, ...} = select_dag_warning_history()\n"
 "{{row1}, {row2}, ...} = select_server_schema_info()\n"
 "{{row1}, {row2}, ...} = select_schema_slot()\n"
 "{{row1}, {row2}, ...} = dump_thread_info()\n"
 "{{row1}, {row2}, ...} = select_malloc_sample_info()\n"
+"int = enable_system_tenant_memory_limit(boolean)\n"
 ;
 
 class LuaVtableGenerator
@@ -1640,73 +1640,6 @@ int select_compaction_diagnose_info(lua_State *L)
   return 1;
 }
 
-// list{list, list...} = select_dag_warning_history()
-int select_dag_warning_history(lua_State *L)
-{
-  int argc = lua_gettop(L);
-  if (argc > 1) {
-    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call select_dag_warning_history() failed, bad arguments count, should be less than 2.");
-    lua_pushnil(L);
-  } else {
-    int ret = OB_SUCCESS;
-    share::ObDagWarningInfoIterator dag_warning_info_iter;
-    // OB_SYS_TENANT_ID means dump all
-    if (OB_FAIL(dag_warning_info_iter.open(OB_SYS_TENANT_ID))) {
-      OB_LOG(ERROR, "Fail to open merge info iter", K(ret));
-      lua_pushnil(L);
-    } else {
-      std::vector<const char*> columns = {
-        "tenant_id",
-        "task_id",
-        "module",
-        "type",
-        "ret",
-        "status",
-        "gmt_create",
-        "gmt_modified",
-        "retry_cnt",
-        "warning_info"
-      };
-      LuaVtableGenerator gen(L, columns);
-      share::ObDagWarningInfo dag_warning_info;
-      while (OB_SUCC(dag_warning_info_iter.get_next_info(dag_warning_info)) && !gen.is_end()) {
-        gen.next_row();
-        // tenant_id
-        gen.next_column(dag_warning_info.tenant_id_);
-        // task_id
-        {
-          char task_id_buf[common::OB_TRACE_STAT_BUFFER_SIZE];
-          int64_t n = dag_warning_info.task_id_.to_string(task_id_buf, sizeof(task_id_buf));
-          if (n < 0 || n >= sizeof(task_id_buf)) {
-            ret = OB_BUF_NOT_ENOUGH;
-          } else {
-            gen.next_column(task_id_buf);
-          }
-        }
-        // module
-        gen.next_column(share::ObIDag::get_dag_module_str(dag_warning_info.dag_type_));
-        // type
-        gen.next_column(share::ObIDag::get_dag_type_str(dag_warning_info.dag_type_));
-        // ret
-        gen.next_column(common::ob_error_name(dag_warning_info.dag_ret_));
-        // status
-        gen.next_column(ObDagWarningInfo::get_dag_status_str(dag_warning_info.dag_status_));
-        // gmt_create
-        gen.next_column(dag_warning_info.gmt_create_);
-        // gmt_modified
-        gen.next_column(dag_warning_info.gmt_modified_);
-        // retry_cnt
-        gen.next_column(dag_warning_info.retry_cnt_);
-        // warning_info
-        gen.next_column(dag_warning_info.warning_info_);
-
-        gen.row_end();
-      }
-    }
-  }
-  return 1;
-}
-
 // list{list, list...} = select_server_schema_info()
 int select_server_schema_info(lua_State *L)
 {
@@ -1937,7 +1870,7 @@ int dump_thread_info(lua_State *L)
           gen.next_column(trace_id_buf);
         }
         // status
-        GET_OTHER_TSI_ADDR(is_blocking, &Thread::is_blocking_);
+        GET_OTHER_TSI_ADDR(blocking_ts, &Thread::blocking_ts_);
         {
           GET_OTHER_TSI_ADDR(join_addr, &Thread::thread_joined_);
           GET_OTHER_TSI_ADDR(sleep_us, &Thread::sleep_us_);
@@ -1946,7 +1879,7 @@ int dump_thread_info(lua_State *L)
             status_str = "Join";
           } else if (0 != sleep_us) {
             status_str = "Sleep";
-          } else if (0 != is_blocking) {
+          } else if (0 != blocking_ts) {
             status_str = "Wait";
           } else {
             status_str = "Run";
@@ -1959,6 +1892,7 @@ int dump_thread_info(lua_State *L)
           GET_OTHER_TSI_ADDR(join_addr, &Thread::thread_joined_);
           GET_OTHER_TSI_ADDR(sleep_us, &Thread::sleep_us_);
           GET_OTHER_TSI_ADDR(rpc_dest_addr, &Thread::rpc_dest_addr_);
+          GET_OTHER_TSI_ADDR(event, &Thread::wait_event_);
           constexpr int64_t BUF_LEN = 64;
           char wait_event[BUF_LEN];
           ObAddr addr;
@@ -1984,14 +1918,14 @@ int dump_thread_info(lua_State *L)
             if ((ret = snprintf(wait_event, BUF_LEN, "rpc to ")) > 0) {
               IGNORE_RETURN addr.to_string(wait_event + ret, BUF_LEN - ret);
             }
-          } else if (0 != (is_blocking & Thread::WAIT_IN_TENANT_QUEUE)) {
+          } else if (0 != blocking_ts && (0 != (Thread::WAIT_IN_TENANT_QUEUE & event))) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "tenant worker request");
-          } else if (0 != (is_blocking & Thread::WAIT_FOR_IO_EVENT)) {
+          } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_IO_EVENT & event))) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "IO events");
-          } else if (0 != (is_blocking & Thread::WAIT_FOR_TRANS_RETRY)) {
-            IGNORE_RETURN snprintf(wait_event, 64, "trans retry");
           } else if (0 != sleep_us) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%ld us", sleep_us);
+          } else if (0 != blocking_ts) {
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%ld us", common::ObTimeUtility::fast_current_time() - blocking_ts);
           }
           gen.next_column(wait_event);
         }
@@ -2049,6 +1983,28 @@ int select_malloc_sample_info(lua_State *L)
 
       gen.row_end();
     }
+  }
+  return 1;
+}
+
+// int = enable_system_tenant_memory_limit(boolean)
+int enable_system_tenant_memory_limit(lua_State* L)
+{
+  int ret = OB_SUCCESS;
+  int argc = lua_gettop(L);
+  if (1 != argc) {
+    OB_LOG(ERROR, "call enable_system_tenant_memory_limit() failed, bad arguments count, should be 1.");
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    luaL_checktype(L, 1, LUA_TBOOLEAN);
+    int enable = lua_toboolean(L, 1);
+#ifdef ENABLE_500_MEMORY_LIMIT
+    ObMallocAllocator::get_instance()->set_500_tenant_limit(!enable/*unlimited*/);
+#endif
+    lua_pushinteger(L, 1);
+  }
+  if (OB_FAIL(ret)) {
+    lua_pushinteger(L, -1);
   }
   return 1;
 }
@@ -2176,11 +2132,11 @@ void APIRegister::register_api(lua_State* L)
   lua_register(L, "show_log_probe", show_log_probe);
   lua_register(L, "select_mem_leak_checker_info", select_mem_leak_checker_info);
   lua_register(L, "select_compaction_diagnose_info", select_compaction_diagnose_info);
-  lua_register(L, "select_dag_warning_history", select_dag_warning_history);
   lua_register(L, "select_server_schema_info", select_server_schema_info);
   lua_register(L, "select_schema_slot", select_schema_slot);
   lua_register(L, "dump_thread_info", dump_thread_info);
   lua_register(L, "select_malloc_sample_info", select_malloc_sample_info);
+  lua_register(L, "enable_system_tenant_memory_limit", enable_system_tenant_memory_limit);
 }
 
 int APIRegister::flush()

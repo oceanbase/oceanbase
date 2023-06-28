@@ -16,6 +16,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_error_message_table_operator.h"
+#include "storage/ddl/ob_ddl_lock.h"
 #include "share/ob_ddl_common.h"
 #include "rootserver/ob_root_service.h"
 #include "share/scn.h"
@@ -141,7 +142,7 @@ int ObIndexSSTableBuildTask::process()
   }
 
   LOG_INFO("build index sstable finish", K(ret), K(*this));
-  ObDDLTaskKey task_key(dest_table_id_, schema_version_);
+  ObDDLTaskKey task_key(tenant_id_, dest_table_id_, schema_version_);
   ObDDLTaskInfo info;
   int tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(
       unused_tablet_id, task_key, snapshot_version_, execution_id_, ret, info);
@@ -1204,16 +1205,20 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     arg.status_ = new_status;
     arg.exec_tenant_id_ = tenant_id_;
     arg.in_offline_ddl_white_list_ = index_schema.get_table_state_flag() != TABLE_STATE_NORMAL;
+    arg.task_id_ = task_id_;
     int64_t ddl_rpc_timeout = 0;
-    int64_t table_id = index_schema.get_table_id();
+    int64_t tmp_timeout = 0;
 
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
-    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, table_id, ddl_rpc_timeout))) {
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema.get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("get ddl rpc timeout fail", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, index_schema.get_data_table_id(), tmp_timeout))) {
+      LOG_WARN("get ddl rpc timeout fail", K(ret));
+    } else if (OB_FALSE_IT(ddl_rpc_timeout += tmp_timeout)) {
     } else if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
       LOG_WARN("update index status failed", K(ret), K(arg));
     } else {
-      LOG_INFO("notify index status changed finish", K(new_status), K(index_table_id_));
+      LOG_INFO("notify index status changed finish", K(new_status), K(index_table_id_), K(ddl_rpc_timeout));
     }
   }
   return ret;
@@ -1305,6 +1310,7 @@ int ObIndexBuildTask::clean_on_failed()
           }
         }
         if (OB_SUCC(ret)) {
+          int64_t ddl_rpc_timeout = 0;
           obrpc::ObDropIndexArg drop_index_arg;
           obrpc::ObDropIndexRes drop_index_res;
           drop_index_arg.tenant_id_         = tenant_id_;
@@ -1320,7 +1326,10 @@ int ObIndexBuildTask::clean_on_failed()
           drop_index_arg.is_hidden_         = index_schema->is_user_hidden_table();
           drop_index_arg.is_in_recyclebin_  = index_schema->is_in_recyclebin();
           drop_index_arg.is_inner_          = true;
-          if (OB_FAIL(root_service_->get_common_rpc_proxy().drop_index(drop_index_arg, drop_index_res))) {
+          drop_index_arg.task_id_ = task_id_;
+          if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
+            LOG_WARN("get ddl rpc timeout fail", K(ret));
+          } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout).drop_index(drop_index_arg, drop_index_res))) {
             LOG_WARN("drop index failed", K(ret));
           }
           LOG_INFO("drop index when build failed", K(ret), K(drop_index_arg));

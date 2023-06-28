@@ -178,8 +178,12 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_major)
   palf_list[another_f_idx]->palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   palf_list[follower_D_idx]->palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 128 * KB));
+
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
   ret = leader.palf_handle_impl_->replace_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1),
                                                  ObMember(get_cluster()[another_f_idx]->get_addr(), 1),
+                                                 config_version,
                                                  CONFIG_CHANGE_TIMEOUT);
   //timeout because added member can flush new meta when prev log is throttling
   ASSERT_TRUE(OB_TIMEOUT == ret || OB_SUCCESS == ret);
@@ -299,9 +303,14 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_leader)
 
   PALF_LOG(INFO, "[CASE 2.3]: MINOR_LEADER replace_member");
   leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
+
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));
+
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1),
                                                                  ObMember(get_cluster()[another_f_idx]->get_addr(), 1),
+                                                                 config_version,
                                                                  CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128));
 
@@ -428,8 +437,12 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_follower)
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));
   ASSERT_EQ(OB_SUCCESS, get_palf_env(another_f_idx, palf_env));
   palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
+
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1),
                                                                  ObMember(get_cluster()[another_f_idx]->get_addr(), 1),
+                                                                 config_version,
                                                                  CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128));
   ASSERT_EQ(OB_SUCCESS, get_palf_env(follower_D_idx, palf_env));
@@ -485,8 +498,13 @@ TEST_F(TestObSimpleLogThrottleArb, test_4f1a_degrade_upgrade)
   common::ObMember dummy_member;
   std::vector<PalfHandleImplGuard*> palf_list;
 	ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, arb_replica_idx, leader_idx, false, leader));
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
 

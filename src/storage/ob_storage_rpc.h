@@ -28,6 +28,7 @@
 #include "storage/ls/ob_ls_meta_package.h"
 #include "tablet/ob_tablet_meta.h"
 #include "share/restore/ob_ls_restore_status.h"
+#include "share/transfer/ob_transfer_info.h"
 #include "storage/lob/ob_lob_rpc_struct.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 
@@ -265,9 +266,10 @@ public:
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(ls_meta_package), K_(version));
+  TO_STRING_KV(K_(ls_meta_package), K_(has_transfer_table), K_(version));
   storage::ObLSMetaPackage ls_meta_package_;
   uint64_t version_;
+  bool has_transfer_table_;
 };
 
 struct ObFetchLSMemberListArg
@@ -428,18 +430,302 @@ public:
   storage::ObLSMetaPackage ls_meta_package_;
 };
 
+//transfer
+struct ObCheckSrcTransferTabletsArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckSrcTransferTabletsArg();
+  ~ObCheckSrcTransferTabletsArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(tablet_info_array));
+  uint64_t tenant_id_;
+  share::ObLSID src_ls_id_;
+  common::ObSArray<share::ObTransferTabletInfo> tablet_info_array_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCheckSrcTransferTabletsArg);
+};
+
+struct ObGetLSActiveTransCountArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLSActiveTransCountArg();
+  ~ObGetLSActiveTransCountArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id));
+  uint64_t tenant_id_;
+  share::ObLSID src_ls_id_;
+};
+
+struct ObGetLSActiveTransCountRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLSActiveTransCountRes();
+  ~ObGetLSActiveTransCountRes() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(active_trans_count));
+  int64_t active_trans_count_;
+};
+
+struct ObGetTransferStartScnArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetTransferStartScnArg();
+  ~ObGetTransferStartScnArg() {}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(tablet_list));
+  uint64_t tenant_id_;
+  share::ObLSID src_ls_id_;
+  common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
+};
+
+struct ObGetTransferStartScnRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetTransferStartScnRes();
+  ~ObGetTransferStartScnRes() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(start_scn));
+  share::SCN start_scn_;
+};
+
+struct ObTransferTabletInfoArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTransferTabletInfoArg();
+  ~ObTransferTabletInfoArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(tablet_list));
+  uint64_t tenant_id_;
+  share::ObLSID src_ls_id_;
+  share::ObLSID dest_ls_id_;
+  common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoArg);
+};
+
+struct ObFetchLSReplayScnArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchLSReplayScnArg();
+  ~ObFetchLSReplayScnArg() {}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
+struct ObFetchLSReplayScnRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFetchLSReplayScnRes();
+  ~ObFetchLSReplayScnRes() {}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(replay_scn));
+  share::SCN replay_scn_;
+};
+
+struct ObCheckTransferTabletBackfillArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckTransferTabletBackfillArg();
+  ~ObCheckTransferTabletBackfillArg() {}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_list));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCheckTransferTabletBackfillArg);
+};
+
+struct ObCheckTransferTabletBackfillRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckTransferTabletBackfillRes();
+  ~ObCheckTransferTabletBackfillRes() {}
+  void reset();
+  TO_STRING_KV(K_(backfill_finished));
+  bool backfill_finished_;
+};
+
+struct ObStorageReplaceMemberArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageReplaceMemberArg();
+  ~ObStorageReplaceMemberArg() {}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(added_member), K_(removed_member), K_(ls_transfer_scn));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObMember added_member_;
+  common::ObMember removed_member_;
+  share::SCN ls_transfer_scn_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageReplaceMemberArg);
+};
+
+struct ObStorageAddMemberArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageAddMemberArg();
+  ~ObStorageAddMemberArg() {}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(member), K_(new_replica_num), K_(ls_transfer_scn));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObMember member_;
+  int64_t new_replica_num_;
+  share::SCN ls_transfer_scn_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageAddMemberArg);
+};
+
+struct ObStorageSwitchLToFArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageSwitchLToFArg();
+  ~ObStorageSwitchLToFArg() {}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(learner), K_(new_replica_num), K_(ls_transfer_scn));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObMember learner_;
+  int64_t new_replica_num_;
+  share::SCN ls_transfer_scn_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageSwitchLToFArg);
+};
+
+struct ObStorageChangeMemberRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageChangeMemberRes();
+  ~ObStorageChangeMemberRes() {}
+  void reset();
+  TO_STRING_KV(K_(change_succ));
+  bool change_succ_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageChangeMemberRes);
+};
+
+// Fetch ls meta and all tablet metas by stream reader.
+struct ObCopyLSViewArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCopyLSViewArg();
+  ~ObCopyLSViewArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
+struct ObCheckStartTransferTabletsRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckStartTransferTabletsRes();
+  ~ObCheckStartTransferTabletsRes() {}
+  void reset();
+  TO_STRING_KV(K_(change_succ));
+  bool change_succ_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCheckStartTransferTabletsRes);
+};
+
+struct ObStorageBlockTxArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageBlockTxArg();
+  ~ObStorageBlockTxArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(gts));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN gts_;
+};
+
+struct ObStorageKillTxArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageKillTxArg();
+  ~ObStorageKillTxArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(gts));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN gts_;
+};
+
+struct ObStorageUnBlockTxArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageUnBlockTxArg();
+  ~ObStorageUnBlockTxArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(gts));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN gts_;
+};
+
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
 {
 public:
   static const int64_t STREAM_RPC_TIMEOUT = 30 * 1000 * 1000LL; // 30s
   DEFINE_TO(ObStorageRpcProxy);
+  //stream
   RPC_SS(PR5 fetch_macro_block, OB_HA_FETCH_MACRO_BLOCK, (ObCopyMacroBlockRangeArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_tablet_info, OB_HA_FETCH_TABLET_INFO, (ObCopyTabletInfoArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_tablet_sstable_info, OB_HA_FETCH_SSTABLE_INFO, (ObCopyTabletsSSTableInfoArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_sstable_macro_info, OB_HA_FETCH_SSTABLE_MACRO_INFO, (ObCopySSTableMacroRangeInfoArg), common::ObDataBuffer);
-  // lob
   RPC_SS(PR5 lob_query, OB_LOB_QUERY, (ObLobQueryArg), common::ObDataBuffer);
+  RPC_SS(PR5 fetch_transfer_tablet_info, OB_FETCH_TRANSFER_TABLET_INFO, (ObTransferTabletInfoArg), common::ObDataBuffer);
+  RPC_SS(PR5 fetch_ls_view, OB_HA_FETCH_LS_VIEW, (ObCopyLSViewArg), common::ObDataBuffer);
 
   RPC_S(PR5 fetch_ls_member_list, OB_HA_FETCH_LS_MEMBER_LIST, (ObFetchLSMemberListArg), ObFetchLSMemberListInfo);
   RPC_S(PR5 fetch_ls_meta_info, OB_HA_FETCH_LS_META_INFO, (ObFetchLSMetaInfoArg), ObFetchLSMetaInfoResp);
@@ -447,6 +733,17 @@ public:
   RPC_S(PR5 notify_restore_tablets, OB_HA_NOTIFY_RESTORE_TABLETS, (ObNotifyRestoreTabletsArg), ObNotifyRestoreTabletsResp);
   RPC_S(PR5 inquire_restore, OB_HA_NOTIFY_FOLLOWER_RESTORE, (ObInquireRestoreArg), ObInquireRestoreResp);
   RPC_S(PR5 update_ls_meta, OB_HA_UPDATE_LS_META, (ObRestoreUpdateLSMetaArg));
+  RPC_S(PR5 check_start_transfer_tablets, OB_CHECK_START_TRANSFER_TABLETS, (ObTransferTabletInfoArg));
+  RPC_S(PR5 get_ls_active_trans_count, OB_GET_LS_ACTIVE_TRANSACTION_COUNT, (ObGetLSActiveTransCountArg), ObGetLSActiveTransCountRes);
+  RPC_S(PR5 get_transfer_start_scn, OB_GET_TRANSFER_START_SCN, (ObGetTransferStartScnArg), ObGetTransferStartScnRes);
+  RPC_S(PR5 fetch_ls_replay_scn, OB_HA_FETCH_LS_REPLAY_SCN, (ObFetchLSReplayScnArg), ObFetchLSReplayScnRes);
+  RPC_S(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (ObCheckTransferTabletBackfillArg), ObCheckTransferTabletBackfillRes);
+  RPC_S(PR5 replace_member, OB_HA_REPLACE_MEMBER, (ObStorageReplaceMemberArg), ObStorageChangeMemberRes);
+  RPC_S(PR5 add_member, OB_HA_ADD_MEMBER, (ObStorageAddMemberArg), ObStorageChangeMemberRes);
+  RPC_S(PR5 switch_learner_to_acceptor, OB_HA_SWITCH_LEARNER_TO_ACCEPTOR, (ObStorageSwitchLToFArg), ObStorageChangeMemberRes);
+  RPC_S(PR5 block_tx, OB_HA_BLOCK_TX, (ObStorageBlockTxArg));
+  RPC_S(PR5 kill_tx, OB_HA_KILL_TX, (ObStorageKillTxArg));
+  RPC_S(PR5 unblock_tx, OB_HA_UNBLOCK_TX, (ObStorageUnBlockTxArg));
 };
 
 template <ObRpcPacketCode RPC_CODE>
@@ -471,6 +768,7 @@ protected:
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   int64_t last_send_time_;
   common::ObArenaAllocator allocator_;
+  static const int64_t FLUSH_TIME_INTERVAL = ObStorageRpcProxy::STREAM_RPC_TIMEOUT / 2;
 };
 
 class ObHAFetchMacroBlockP: public ObStorageStreamRpcP<OB_HA_FETCH_MACRO_BLOCK>
@@ -527,6 +825,8 @@ public:
   virtual ~ObFetchLSMetaInfoP() { }
 protected:
   int process();
+private:
+  int check_has_transfer_logical_table_(storage::ObLS *ls);
 };
 
 class ObFetchLSMemberListP:
@@ -583,6 +883,101 @@ protected:
   int process();
 };
 
+class ObCheckStartTransferTabletsP : public ObStorageStreamRpcP<OB_CHECK_START_TRANSFER_TABLETS>
+{
+public:
+  explicit ObCheckStartTransferTabletsP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObCheckStartTransferTabletsP() {}
+protected:
+  int process();
+private:
+  int check_start_transfer_out_tablets_();
+  int check_start_transfer_in_tablets_();
+  // Major sstable or ddl sstable needs to exist in src_tablet
+  int check_transfer_out_tablet_sstable_(const ObTablet *tablet);
+};
+
+class ObGetLSActiveTransCountP : public ObStorageStreamRpcP<OB_GET_LS_ACTIVE_TRANSACTION_COUNT>
+{
+public:
+  explicit ObGetLSActiveTransCountP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObGetLSActiveTransCountP() {}
+protected:
+  int process();
+};
+
+class ObGetTransferStartScnP : public ObStorageStreamRpcP<OB_GET_TRANSFER_START_SCN>
+{
+public:
+  explicit ObGetTransferStartScnP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObGetTransferStartScnP() {}
+protected:
+  int process();
+};
+
+class ObFetchTransferTabletsInfoP :
+    public ObStorageStreamRpcP<OB_FETCH_TRANSFER_TABLET_INFO>
+{
+public:
+  explicit ObFetchTransferTabletsInfoP(
+      common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObFetchTransferTabletsInfoP() {}
+protected:
+  int process();
+};
+
+class ObFetchLSReplayScnP:
+    public ObStorageStreamRpcP<OB_HA_FETCH_LS_REPLAY_SCN>
+{
+public:
+  explicit ObFetchLSReplayScnP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObFetchLSReplayScnP() {}
+protected:
+  int process();
+};
+class ObCheckTransferTabletsBackfillP:
+    public ObStorageStreamRpcP<OB_HA_CHECK_TRANSFER_TABLET_BACKFILL>
+{
+public:
+  explicit ObCheckTransferTabletsBackfillP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObCheckTransferTabletsBackfillP() {}
+protected:
+  int process();
+private:
+  int check_has_transfer_table_(const share::ObTransferTabletInfo &tablet_info,
+      storage::ObLS *ls, bool &has_transfer_table);
+};
+
+class ObStorageReplaceMemberP:
+    public ObStorageStreamRpcP<OB_HA_REPLACE_MEMBER>
+{
+public:
+  explicit ObStorageReplaceMemberP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageReplaceMemberP() {}
+protected:
+  int process();
+};
+
+class ObStorageAddMemberP:
+    public ObStorageStreamRpcP<OB_HA_ADD_MEMBER>
+{
+public:
+  explicit ObStorageAddMemberP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageAddMemberP() {}
+protected:
+  int process();
+};
+
+class ObStorageSwitchLearnerToAcceptorP:
+    public ObStorageStreamRpcP<OB_HA_SWITCH_LEARNER_TO_ACCEPTOR>
+{
+public:
+  explicit ObStorageSwitchLearnerToAcceptorP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageSwitchLearnerToAcceptorP() {}
+protected:
+  int process();
+};
+
 class ObLobQueryP : public ObStorageStreamRpcP<OB_LOB_QUERY>
 {
 public:
@@ -593,6 +988,51 @@ protected:
 private:
   int process_read();
   int process_getlength();
+};
+
+
+// Stream get ls meta and all tablet meta
+class ObStorageFetchLSViewP:
+    public ObStorageStreamRpcP<OB_HA_FETCH_LS_VIEW>
+{
+public:
+  explicit ObStorageFetchLSViewP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageFetchLSViewP() {}
+
+protected:
+  int process();
+};
+
+class ObStorageBlockTxP:
+    public ObStorageStreamRpcP<OB_HA_BLOCK_TX>
+{
+public:
+  explicit ObStorageBlockTxP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageBlockTxP() {}
+protected:
+  int process();
+private:
+  int check_before_kill_(storage::ObLS *ls, const share::ObLSID &ls_id, const int64_t timeout);
+};
+
+class ObStorageKillTxP:
+    public ObStorageStreamRpcP<OB_HA_KILL_TX>
+{
+public:
+  explicit ObStorageKillTxP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageKillTxP() {}
+protected:
+  int process();
+};
+
+class ObStorageUnBlockTxP:
+    public ObStorageStreamRpcP<OB_HA_UNBLOCK_TX>
+{
+public:
+  explicit ObStorageUnBlockTxP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageUnBlockTxP() {}
+protected:
+  int process();
 };
 
 } // obrpc
@@ -652,6 +1092,78 @@ public:
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &dest_info,
       const storage::ObLSMetaPackage &ls_meta) = 0;
+
+  virtual int check_start_transfer_tablets(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo>& tablet_array) = 0;
+
+  virtual int get_ls_active_trans_count(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      int64_t &active_trans_count) = 0;
+
+  virtual int get_transfer_start_scn(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo> &tablet_list,
+      share::SCN &transfer_start_scn) = 0;
+
+  virtual int fetch_ls_replay_scn(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      share::SCN &ls_replay_scn) = 0;
+  virtual int check_tablets_logical_table_replaced(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &dest_ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo> &tablet_array,
+      bool &replace_finished) = 0;
+
+  virtual int replace_member(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const common::ObMember &added_member,
+      const common::ObMember &removed_member,
+      const share::SCN &ls_transfer_scn,
+      const int64_t timeout) = 0;
+  virtual int add_member(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const common::ObMember &added_member,
+      const int64_t new_replica_num,
+      const share::SCN &ls_transfer_scn,
+      const int64_t timeout) = 0;
+  virtual int switch_learner_to_acceptor(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const common::ObMember &learner,
+      const int64_t paxos_replica_num,
+      const share::SCN &ls_transfer_scn,
+      const int64_t timeout) = 0;
+  virtual int block_tx(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const share::SCN &gts) = 0;
+  virtual int kill_tx(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const share::SCN &gts) = 0;
+  virtual int unblock_tx(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const share::SCN &gts) = 0;
 };
 
 class ObStorageRpc: public ObIStorageRpc
@@ -703,6 +1215,78 @@ public:
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &dest_info,
       const storage::ObLSMetaPackage &ls_meta);
+
+  virtual int check_start_transfer_tablets(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo>& tablet_array);
+
+  virtual int get_ls_active_trans_count(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      int64_t &active_trans_count);
+
+  virtual int get_transfer_start_scn(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo> &tablet_list,
+      share::SCN &transfer_start_scn);
+
+  virtual int fetch_ls_replay_scn(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      share::SCN &ls_replay_scn);
+  virtual int check_tablets_logical_table_replaced(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &dest_ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo> &tablet_array,
+      bool &replace_finished);
+  virtual int replace_member(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const common::ObMember &added_member,
+      const common::ObMember &removed_member,
+      const share::SCN &ls_transfer_scn,
+      const int64_t timeout);
+  virtual int add_member(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const common::ObMember &added_member,
+      const int64_t new_replica_num,
+      const share::SCN &ls_transfer_scn,
+      const int64_t timeout);
+  virtual int switch_learner_to_acceptor(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const common::ObMember &learner,
+      const int64_t new_replica_num,
+      const share::SCN &ls_transfer_scn,
+      const int64_t timeout);
+  virtual int block_tx(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const share::SCN &gts);
+  virtual int kill_tx(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const share::SCN &gts);
+  virtual int unblock_tx(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const share::SCN &gts);
+
 private:
   bool is_inited_;
   obrpc::ObStorageRpcProxy *rpc_proxy_;

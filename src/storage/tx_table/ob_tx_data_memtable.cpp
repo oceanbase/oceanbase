@@ -22,6 +22,7 @@
 #include "storage/tx_table/ob_tx_data_table.h"
 #include "storage/tx_table/ob_tx_table_iterator.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/blocksstable/ob_storage_cache_suite.h"
 
 namespace oceanbase
 {
@@ -38,6 +39,7 @@ int64_t ObTxDataMemtable::PERIODICAL_SELECT_INTERVAL_NS = 1000LL * 1000LL * 1000
 int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
                            SliceAllocator *slice_allocator,
                            ObTxDataMemtableMgr *memtable_mgr,
+                           storage::ObFreezer *freezer,
                            const int64_t buckets_cnt)
 {
   int ret = OB_SUCCESS;
@@ -55,12 +57,15 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
     STORAGE_LOG(WARN, "init tx data map failed.", KR(ret), K(table_key), KPC(memtable_mgr));
   } else if (OB_FAIL(buf_.reserve(common::OB_MAX_VARCHAR_LENGTH))) {
     STORAGE_LOG(WARN, "reserve space for tx data memtable failed.", KR(ret), K(table_key), KPC(memtable_mgr));
+  } else if (OB_FAIL(set_freezer(freezer))) {
+    STORAGE_LOG(WARN, "fail to set freezer", K(ret), KP(freezer));
   } else {
     for (int i = 0; i < MAX_TX_DATA_TABLE_CONCURRENCY; i++) {
       min_tx_scn_[i] = SCN::max_scn();
       min_start_scn_[i] = SCN::max_scn();
       occupied_size_[i] = 0;
     }
+    ls_id_ = freezer_->get_ls_id();
     construct_list_done_ = false;
     pre_process_done_ = false;
     max_tx_scn_.set_min();
@@ -435,12 +440,10 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
   ObLSTabletService *tablet_svr = get_tx_data_memtable_mgr()->get_ls_tablet_svr();
   // Must copy iter param !
   ObTableIterParam iter_param = get_tx_data_memtable_mgr()->get_tx_data_table()->get_read_schema().iter_param_;
-  ObTabletHandle &tablet_handle = iter_param.tablet_handle_;
+  ObTabletHandle tablet_handle;
+  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
 
-  if (tablet_handle.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "tablet handle should be empty", KR(ret), K(tablet_handle));
-  } else if (OB_ISNULL(tablet_svr)) {
+  if (OB_ISNULL(tablet_svr)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "tablet svr is nullptr", KR(ret), KPC(this));
   } else if (OB_FAIL(tablet_svr->get_tablet(LS_TX_DATA_TABLET, tablet_handle))) {
@@ -448,19 +451,28 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "invalid tablet handle", KR(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(wrapper))) {
+    STORAGE_LOG(WARN, "get table store fail", KR(ret), K(tablet_handle));
   } else {
-    // get the lastest sstable
-    ObITable *table
-      = tablet_handle.get_obj()->get_table_store().get_minor_sstables().get_boundary_table(
-        true /*is_last*/);
-
-    if (OB_NOT_NULL(table)) {
-      ObCommitVersionsGetter getter(iter_param, table);
-      if (OB_FAIL(getter.get_next_row(past_commit_versions))) {
-        STORAGE_LOG(WARN, "get commit versions from tx data sstable failed.", KR(ret));
+    ObSSTable *sstable = static_cast<ObSSTable *>(wrapper.get_member()->get_minor_sstables().get_boundary_table(true));
+    if (OB_NOT_NULL(sstable)) {
+      ObStorageMetaHandle sstable_handle;
+      ObSSTable *tmp_sstable = nullptr;
+      if (sstable->is_loaded()) {
+        tmp_sstable = sstable;
+      } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable_handle))) {
+        STORAGE_LOG(WARN, "fail to load sstable", K(ret), KPC(sstable));
+      } else if (OB_FAIL(sstable_handle.get_sstable(tmp_sstable))) {
+        STORAGE_LOG(WARN, "fail to get sstable", K(ret), K(sstable_handle));
+      }
+      if (OB_SUCC(ret)) {
+        ObCommitVersionsGetter getter(iter_param, tmp_sstable);
+        if (OB_FAIL(getter.get_next_row(past_commit_versions))) {
+          STORAGE_LOG(WARN, "get commit versions from tx data sstable failed.", KR(ret));
+        }
       }
     } else {
-      STORAGE_LOG(DEBUG, "There is no tx data sstable yet", KR(ret), KPC(table));
+      STORAGE_LOG(DEBUG, "There is no tx data sstable yet", KR(ret), KPC(sstable));
     }
   }
 
@@ -1288,65 +1300,6 @@ int ObTxDataMemtable::get(const storage::ObTableIterParam &param,
   UNUSED(row);
   return ret;
 }
-
-int ObTxDataMemtable::set(storage::ObStoreCtx &ctx,
-                          const uint64_t table_id,
-                          const storage::ObTableReadInfo &read_info,
-                          const common::ObIArray<share::schema::ObColDesc> &columns,
-                          const storage::ObStoreRow &row,
-                          const share::ObEncryptMeta *encrypt_meta)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(columns);
-  UNUSED(row);
-  UNUSED(encrypt_meta);
-  return ret;
-}
-
-int ObTxDataMemtable::lock(storage::ObStoreCtx &ctx,
-                           const uint64_t table_id,
-                           const storage::ObTableReadInfo &read_info,
-                           common::ObNewRowIterator &row_iter)
-{
-
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(row_iter);
-  return ret;
-}
-
-int ObTxDataMemtable::lock(storage::ObStoreCtx &ctx,
-                           const uint64_t table_id,
-                           const storage::ObTableReadInfo &read_info,
-                           const common::ObNewRow &row)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(row);
-  return ret;
-}
-
-int ObTxDataMemtable::lock(storage::ObStoreCtx &ctx,
-                           const uint64_t table_id,
-                           const storage::ObTableReadInfo &read_info,
-                           const blocksstable::ObDatumRowkey &rowkey)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(ctx);
-  UNUSED(table_id);
-  UNUSED(read_info);
-  UNUSED(rowkey);
-  return ret;
-}
-
-
 
 
 }  // namespace storage

@@ -18,6 +18,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
+#include "share/backup/ob_backup_path.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -505,7 +506,6 @@ int ObBackupDestMgr::generate_format_desc_(
     LOG_WARN("failed to get backup path", K(ret), K(backup_dest_));
   } else {
     format_desc.tenant_id_ = tenant_id_;
-  // TODO:  use real incarnation later.
     format_desc.incarnation_ = OB_START_INCARNATION;
     format_desc.dest_id_ = dest_id;
     format_desc.dest_type_ = dest_type;

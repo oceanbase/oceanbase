@@ -101,11 +101,11 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && original_size_ >= 0
                && recycle_version_ >= 0)) {
     ret = false;
-    LOG_WARN("invalid basic params", K(schema_version_), K(create_snapshot_version_), K(index_type_),
+    LOG_WARN("invalid basic params", K(schema_version_), K_(sstable_logic_seq), K(create_snapshot_version_), K(index_type_),
              K(root_row_store_type_), K_(latest_row_store_type), K(data_index_tree_height_), K(index_blocks_cnt_),
              K(data_blocks_cnt_), K(micro_block_cnt_), K(use_old_macro_block_count_),
              K(row_count_), K(rowkey_column_cnt_), K(column_cnt_), K(occupy_size_),
-             K(original_size_), K(ddl_scn_), K(filled_tx_scn_), K_(recycle_version));
+             K(ddl_scn_), K(filled_tx_scn_), K(original_size_), K_(recycle_version));
   } else if (ObITable::is_ddl_sstable(table_key_.table_type_)) {
     // ddl sstable can have invalid meta addr, so skip following ifs
     if (!ddl_scn_.is_valid_and_not_min()) {

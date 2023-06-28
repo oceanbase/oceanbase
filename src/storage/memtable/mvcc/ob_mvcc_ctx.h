@@ -163,7 +163,8 @@ public:
       const int64_t data_size,
       const ObRowData *old_row,
       ObMemtable *memtable,
-      const int64_t seq_no);
+      const int64_t seq_no,
+      const int64_t column_cnt);
   int register_row_replay_cb(
       const ObMemtableKey *key,
       ObMvccRow *value,
@@ -171,7 +172,8 @@ public:
       const int64_t data_size,
       ObMemtable *memtable,
       const int64_t seq_no,
-      const share::SCN scn);
+      const share::SCN scn,
+      const int64_t column_cnt);
   int register_table_lock_cb(
       transaction::tablelock::ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op);

@@ -13,10 +13,12 @@
 #ifndef OCEANBASE_STORAGE_TABLELOCK_OB_TABLE_LOCK_COMMON_
 #define OCEANBASE_STORAGE_TABLELOCK_OB_TABLE_LOCK_COMMON_
 #include "common/ob_simple_iterator.h"
+#include "lib/allocator/ob_mod_define.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "share/scn.h"
+#include "share/ob_common_id.h"
 #include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
@@ -219,6 +221,8 @@ enum class ObLockOBJType : char
   OBJ_TYPE_LS = 4,     // for ls
   OBJ_TYPE_TENANT = 5, // for tenant
   OBJ_TYPE_EXTERNAL_TABLE_REFRESH = 6, // for external table
+  OBJ_TYPE_ONLINE_DDL_TABLE = 7, // online ddl table
+  OBJ_TYPE_ONLINE_DDL_TABLET = 8, // online ddl tablets
   OBJ_TYPE_MAX
 };
 
@@ -264,6 +268,12 @@ bool is_lock_obj_type_valid(const ObLockOBJType &type)
           type < ObLockOBJType::OBJ_TYPE_MAX);
 }
 
+static inline
+bool is_tablet_obj_type(const ObLockOBJType &type)
+{
+  return (ObLockOBJType::OBJ_TYPE_TABLET == type);
+}
+
 struct ObLockID final
 {
 public:
@@ -306,6 +316,9 @@ public:
   }
   bool operator<(const ObLockID &other) const { return -1 == compare(other); }
   bool operator!=(const ObLockID &other) const { return !operator==(other); }
+  bool is_tablet_lock() const { return is_tablet_obj_type(obj_type_); }
+  // convert to tablet id, if it is not a valid tablet id, return error code.
+  int convert_to(common::ObTabletID &tablet_id) const;
   int set(const ObLockOBJType &type, const uint64_t obj_id);
   void reset()
   {
@@ -327,7 +340,7 @@ int get_lock_id(const uint64_t table_id,
                 ObLockID &lock_id);
 int get_lock_id(const common::ObTabletID &tablet,
                 ObLockID &lock_id);
-typedef int64_t ObTableLockOwnerID;
+typedef share::ObCommonID ObTableLockOwnerID;
 
 struct ObTableLockOp
 {

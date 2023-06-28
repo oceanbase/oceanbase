@@ -165,7 +165,6 @@ public:
                                common::ObISQLClient &sql_client,
                                common::ObIAllocator &allocator,
                                ObTableSchema *&table_schema);
-
   virtual int get_batch_table_schema(const ObRefreshSchemaStatus &schema_status,
                                      const int64_t schema_version,
                                      common::ObArray<uint64_t> &table_ids,
@@ -616,7 +615,16 @@ public:
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       int64_t &schema_version);
+  static int sort_table_partition_info_v2(ObTableSchema &table_schema);
 
+  // Get latest schema version from inner table for each table_id.
+  // The count of table_schema_versions may be less than the count of table_ids
+  // when table is deleted and the schema history is recycled.
+  virtual int get_table_latest_schema_versions(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      common::ObIArray<ObTableLatestSchemaVersion> &table_schema_versions);
 private:
   bool check_inner_stat();
   int fetch_new_schema_id(const uint64_t tenant_id, const share::ObMaxIdType max_id_type, uint64_t &new_schema_id);
@@ -925,11 +933,10 @@ private:
   int sort_tables_partition_info(const common::ObIArray<SCHEMA *> &table_schema_array);
   template<typename SCHEMA>
   int sort_table_partition_info(SCHEMA &table_schema);
-
   int sort_tablegroup_partition_info(ObTablegroupSchema &tablegroup_schema);
 
-  int sort_partition_array(ObPartitionSchema &partition_schema);
-  int sort_subpartition_array(ObPartitionSchema &partition_schema);
+  static int sort_partition_array(ObPartitionSchema &partition_schema);
+  static int sort_subpartition_array(ObPartitionSchema &partition_schema);
 
   template<typename SCHEMA>
   int try_mock_partition_array(SCHEMA &table_schema);
@@ -975,6 +982,14 @@ private:
   int gen_leader_normal_schema_version(const uint64_t tenant_id,
                                        const int64_t refreshed_schema_version,
                                        int64_t &schema_version);
+
+  int fetch_table_latest_schema_versions_(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      common::ObIArray<ObTableLatestSchemaVersion> &table_schema_versions);
 
   int set_refresh_full_schema_timeout_ctx_(
       ObISQLClient &sql_client,

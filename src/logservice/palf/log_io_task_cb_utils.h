@@ -88,13 +88,30 @@ enum MetaType {
   INVALID_META_TYPE
 };
 
+inline const char *meta_type_2_str(const MetaType type)
+{
+#define EXTRACT_META_TYPE(type_var) ({ case(type_var): return #type_var; })
+  switch(type)
+  {
+    EXTRACT_META_TYPE(PREPARE_META);
+    EXTRACT_META_TYPE(CHANGE_CONFIG_META);
+    EXTRACT_META_TYPE(MODE_META);
+    EXTRACT_META_TYPE(SNAPSHOT_META);
+    EXTRACT_META_TYPE(REPLICA_PROPERTY_META);
+
+    default:
+      return "Invalid Type";
+  }
+#undef EXTRACT_META_TYPE
+}
+
 struct FlushMetaCbCtx {
   FlushMetaCbCtx();
   ~FlushMetaCbCtx();
   bool is_valid() const { return INVALID_META_TYPE != type_; }
   void reset();
   FlushMetaCbCtx &operator=(const FlushMetaCbCtx &flush_meta_cb_ctx);
-  TO_STRING_KV(K_(type), K_(proposal_id), K_(config_version), K_(base_lsn), K_(allow_vote),
+  TO_STRING_KV("type", meta_type_2_str(type_), K_(proposal_id), K_(config_version), K_(base_lsn), K_(allow_vote),
       K_(log_mode_meta));
   MetaType type_;
   int64_t proposal_id_;
@@ -115,7 +132,7 @@ public:
   ~PurgeThrottlingCbCtx() {reset();}
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K(purge_type_));
+  TO_STRING_KV("purge_type", purge_throttling_type_2_str(purge_type_));
 public:
   PurgeThrottlingType purge_type_;
 };

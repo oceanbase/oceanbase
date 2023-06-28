@@ -503,6 +503,30 @@ void ObLogReplayTask::shallow_copy(const ObLogReplayTask &other)
   log_buf_ = other.log_buf_;
 }
 
+int64_t ObLogReplayTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  char log_base_type_str[logservice::OB_LOG_BASE_TYPE_STR_MAX_LEN] = {'\0'};
+  (void) log_base_type_to_string(log_type_, log_base_type_str, logservice::OB_LOG_BASE_TYPE_STR_MAX_LEN);
+  J_OBJ_START();
+  J_KV(K(ls_id_),
+         K_(log_type),
+         "log_type", log_base_type_str,
+         K(lsn_),
+         K(scn_),
+         K(is_pre_barrier_),
+         K(is_post_barrier_),
+         K(log_size_),
+         K(replay_hint_),
+         K(is_raw_write_),
+         K(first_handle_ts_),
+         K(replay_cost_),
+         K(retry_cost_),
+         KP(log_buf_));
+  J_OBJ_END();
+  return pos;
+}
+
 //---------------ObReplayFsCb---------------//
 int ObReplayFsCb::update_end_lsn(int64_t id,
                                  const LSN &end_offset,

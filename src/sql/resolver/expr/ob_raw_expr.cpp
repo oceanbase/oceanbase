@@ -389,7 +389,7 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info)
   ObRawExprDeduceType expr_deducer(session_info);
   expr_deducer.set_expr_factory(expr_factory_);
   if (OB_FAIL(expr_deducer.deduce(*this))) {
-    if (session_info->is_ps_prepare_stage()) {
+    if (session_info->is_varparams_sql_prepare()) {
       ret = OB_SUCCESS;
       LOG_TRACE("ps prepare phase ignores type deduce error");
     } else {

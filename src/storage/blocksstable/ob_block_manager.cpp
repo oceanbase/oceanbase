@@ -31,6 +31,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/ob_super_block_struct.h"
 #include "storage/slog/ob_storage_logger_manager.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -126,7 +127,9 @@ ObBlockManager::ObBlockManager()
     super_block_buf_holder_(),
     default_block_size_(0),
     mark_cost_time_(0),
-    sweep_cost_time_(0), hold_count_(0),
+    sweep_cost_time_(0),
+    reserved_count_(0),
+    hold_count_(0),
     pending_free_count_(0),
     disk_block_count_(0),
     start_time_(0),
@@ -179,6 +182,7 @@ int ObBlockManager::init(
     MEMSET(used_macro_cnt_, 0, sizeof(used_macro_cnt_));
     mark_cost_time_ = 0;
     sweep_cost_time_= 0;
+    reserved_count_ = 0;
     hold_count_ = 0;
     pending_free_count_ = 0;
     disk_block_count_ = 0;
@@ -312,9 +316,9 @@ int ObBlockManager::alloc_block(ObMacroBlockHandle &macro_handle)
   if (ret == OB_SERVER_OUTOF_DISK_SPACE) {
     if (OB_FAIL(extend_file_size_if_need())) { // block to get disk
       ret = OB_SERVER_OUTOF_DISK_SPACE; // reuse last ret code
-      LOG_WARN("Failed to alloc block from io device", K(ret));
+      LOG_ERROR("Failed to alloc block from io device", K(ret));
     } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
-      LOG_WARN("Failed to alloc block from io device", K(ret));
+      LOG_ERROR("Failed to alloc block from io device", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -519,8 +523,8 @@ int ObBlockManager::get_macro_block_info(const MacroBlockId &macro_id,
     //BUG, should not happen
     LOG_ERROR("fatal error, this block should be in block map", K(ret), K(macro_id));
   } else {
-    macro_block_info.is_free_ = !(block_info.mem_ref_cnt_ > 0 || block_info.disk_ref_cnt_ > 0 );
-    macro_block_info.ref_cnt_ = block_info.mem_ref_cnt_ + block_info.disk_ref_cnt_;
+    macro_block_info.is_free_ = 0 == block_info.ref_cnt_;
+    macro_block_info.ref_cnt_ = block_info.ref_cnt_;
     macro_block_info.access_time_ = block_info.last_write_time_;
   }
   return ret;
@@ -546,7 +550,7 @@ int ObBlockManager::check_macro_block_free(const MacroBlockId &macro_id, bool &i
       ret = OB_SUCCESS;
     }
   } else {
-    is_free = !(block_info.mem_ref_cnt_ > 0 || block_info.disk_ref_cnt_ > 0 );
+    is_free = 0 == block_info.ref_cnt_;
   }
   return ret;
 }
@@ -697,7 +701,7 @@ int ObBlockManager::inc_ref(const MacroBlockId &macro_id)
 
     if (OB_SUCC(ret)) {
       block_info.access_time_ = ObTimeUtility::fast_current_time();
-      block_info.mem_ref_cnt_++;
+      block_info.ref_cnt_++;
       if (OB_FAIL(block_map_.insert_or_update(macro_id, block_info))) {
         LOG_ERROR("update block info fail", K(ret), K(macro_id), K(block_info));
       } else {
@@ -723,13 +727,13 @@ int ObBlockManager::dec_ref(const MacroBlockId &macro_id)
     ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
     if (OB_FAIL(block_map_.get(macro_id, block_info))) {
       LOG_ERROR("get block_info fail", K(ret), K(macro_id));
-    } else if (OB_UNLIKELY(0 == block_info.mem_ref_cnt_)) {
+    } else if (OB_UNLIKELY(0 == block_info.ref_cnt_)) {
       //BUG, should not happen
       ret = OB_ERR_SYS;
       LOG_ERROR("fatal error, ref cnt must not less than 0", K(ret), K(macro_id), K(block_info));
     } else {
       block_info.access_time_ = ObTimeUtility::fast_current_time();
-      block_info.mem_ref_cnt_--;
+      block_info.ref_cnt_--;
       if (OB_FAIL(block_map_.insert_or_update(macro_id, block_info))) {
         LOG_ERROR("update block info fail", K(ret), K(macro_id), K(block_info));
       } else {
@@ -740,64 +744,6 @@ int ObBlockManager::dec_ref(const MacroBlockId &macro_id)
   return ret;
 }
 
-int ObBlockManager::inc_disk_ref(const MacroBlockId &macro_id)
-{
-  int ret = OB_SUCCESS;
-  BlockInfo block_info;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("not init", K(ret));
-  } else if (OB_UNLIKELY(!macro_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument,", K(ret), K(macro_id));
-  } else {
-    ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
-    if (OB_FAIL(block_map_.get(macro_id, block_info))) {
-      LOG_ERROR("get block_info fail", K(ret), K(macro_id));
-    } else {
-      block_info.access_time_ = ObTimeUtility::fast_current_time();
-      block_info.disk_ref_cnt_++;
-      if (OB_FAIL(block_map_.insert_or_update(macro_id, block_info))) {
-        LOG_ERROR("update block info fail", K(ret), K(macro_id), K(block_info));
-      } else {
-        LOG_DEBUG("debug ref_cnt: inc_ref on disk", K(ret), K(macro_id), K(block_info), K(lbt()));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObBlockManager::dec_disk_ref(const MacroBlockId &macro_id)
-{
-  int ret = OB_SUCCESS;
-  BlockInfo block_info;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("not init", K(ret));
-  } else if (OB_UNLIKELY(!macro_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", K(ret), K(macro_id));
-  } else {
-    ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
-    if (OB_FAIL(block_map_.get(macro_id, block_info))) {
-      LOG_ERROR("get block_info fail", K(ret), K(macro_id));
-    } else if (OB_UNLIKELY(0 == block_info.disk_ref_cnt_)) { //BUG, should not happen
-      ret = OB_ERR_SYS;
-      LOG_ERROR("fatal error, ref cnt must not less than 0", K(ret), K(macro_id), K(block_info));
-    } else {
-      block_info.access_time_ = ObTimeUtility::fast_current_time();
-      block_info.disk_ref_cnt_--;
-      if (OB_FAIL(block_map_.insert_or_update(macro_id, block_info))) {
-        LOG_ERROR("update block info fail", K(ret), K(macro_id), K(block_info));
-      } else {
-        LOG_DEBUG("debug ref_cnt: dec_ref in disk", K(ret), K(macro_id), K(block_info), K(lbt()));
-      }
-    }
-  }
-  return ret;
-}
 
 int ObBlockManager::update_write_time(const MacroBlockId &macro_id, const bool update_to_max_time)
 {
@@ -837,26 +783,29 @@ int ObBlockManager::get_marker_status(ObMacroBlockMarkerStatus &status)
   return ret ;
 }
 
-void ObBlockManager::update_marker_status()
+void ObBlockManager::update_marker_status(const bool mark_finished)
 {
   SpinWLockGuard guard(marker_lock_);
   marker_status_.total_block_count_ = get_total_macro_block_count();
-  marker_status_.reserved_block_count_ = io_device_->get_reserved_block_count();
+  marker_status_.reserved_block_count_ = io_device_->get_reserved_block_count() + reserved_count_;
   marker_status_.linked_block_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::LinkedBlock];
   marker_status_.index_block_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::SSTableIndex];
   marker_status_.ids_block_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::SSTableMacroID];
   marker_status_.tmp_file_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::TmpFileData];
   marker_status_.data_block_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::SSTableData];
+  marker_status_.shared_data_block_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::SharedSSTableData];
   marker_status_.disk_block_count_ = disk_block_count_;
   marker_status_.bloomfiter_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::BloomFilterData];
   marker_status_.hold_count_ = hold_count_;
   marker_status_.pending_free_count_ = pending_free_count_;
   marker_status_.free_count_ = get_free_macro_block_count();
+  marker_status_.shared_meta_block_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::SharedMetaData];
   marker_status_.mark_cost_time_ = mark_cost_time_;
   marker_status_.sweep_cost_time_ = sweep_cost_time_;
   marker_status_.start_time_ = start_time_;
   marker_status_.last_end_time_ = last_end_time_;
   marker_status_.hold_info_ = hold_info_;
+  marker_status_.mark_finished_ = mark_finished;
 }
 
 bool ObBlockManager::GetOldestHoldBlockFunctor::operator()(
@@ -867,13 +816,13 @@ bool ObBlockManager::GetOldestHoldBlockFunctor::operator()(
     if (OB_HASH_EXIST == ret) {
       ret = OB_SUCCESS;
     } else if (OB_HASH_NOT_EXIST == ret) {
-      if (!(0 == value.mem_ref_cnt_ && 1 == value.disk_ref_cnt_) // not wash tablet block
+      // TODO zhouxinlan.zxl : add new solutions to find leaked macro blocks
+      if (0 != value.ref_cnt_ // not wash tablet block
           && (!oldest_hold_block_info_.macro_id_.is_valid()
               || value.access_time_ < oldest_hold_block_info_.last_access_time_)) {
         oldest_hold_block_info_.macro_id_ = key;
         oldest_hold_block_info_.last_access_time_ = value.access_time_;
-        oldest_hold_block_info_.mem_ref_cnt_ = value.mem_ref_cnt_;
-        oldest_hold_block_info_.disk_ref_cnt_ = value.disk_ref_cnt_;
+        oldest_hold_block_info_.ref_cnt_ = value.ref_cnt_;
       }
       ret = OB_SUCCESS;
     } else {
@@ -888,11 +837,9 @@ bool ObBlockManager::GetPendingFreeBlockFunctor::operator()(const MacroBlockId &
                                                             const BlockInfo &value)
 {
   int ret = OB_SUCCESS;
-  if (value.mem_ref_cnt_ > 0) {
+  if (value.ref_cnt_ > 0) {
     hold_count_++;
-  } else if (value.disk_ref_cnt_ > 0) {
-    disk_block_count_++;
-  } else if (OB_UNLIKELY(value.mem_ref_cnt_ < 0 || value.disk_ref_cnt_ < 0)) {
+  } else if (OB_UNLIKELY(value.ref_cnt_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fatal error, macro block ref cnt less than 0", K(ret), K(key), K(value));
   } else if (OB_FAIL(blk_map_.insert(key, true))) {
@@ -906,7 +853,7 @@ bool ObBlockManager::GetAllMacroBlockIdFunctor::operator()(const MacroBlockId &k
                                                            const BlockInfo &value)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(value.mem_ref_cnt_ < 0 || value.disk_ref_cnt_ < 0)) {
+  if (OB_UNLIKELY(value.ref_cnt_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fatal error, macro block ref cnt less than 0", K(ret), K(key), K(value));
   } else if (OB_FAIL(block_ids_.push_back(key))) {
@@ -963,7 +910,7 @@ int ObBlockManager::do_sweep(MacroBlkIdMap &mark_info)
       io_fd.second_id_ = macro_id.second_id();
       if (OB_FAIL(block_map_.get(macro_id, block_info))) {
         LOG_WARN("fail to get block info from block map", K(ret), K(macro_id));
-      } else if (OB_UNLIKELY(block_info.mem_ref_cnt_ > 0 || block_info.disk_ref_cnt_ > 0)) {
+      } else if (OB_UNLIKELY(block_info.ref_cnt_ > 0)) {
         // skip using block.
         continue;
       } else if (OB_FAIL(block_map_.erase(macro_id))) {
@@ -982,12 +929,17 @@ void ObBlockManager::mark_and_sweep()
   int ret = OB_SUCCESS;
   ObHashSet<MacroBlockId> macro_id_set;
   MacroBlkIdMap mark_info;
+  bool mark_finished = true;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("block manager not init", K(ret));
   } else if (!is_mark_sweep_enabled()) {
     LOG_INFO("mark and sweep is disabled, do not mark and sweep this round");
+  } else if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000 /* 10s */)) {
+      LOG_WARN("slog replay hasn't finished, this task can't start", K(ret));
+    }
   } else {
     set_mark_sweep_doing();
     if (OB_FAIL(mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID))) {
@@ -997,7 +949,16 @@ void ObBlockManager::mark_and_sweep()
     } else {
       ATOMIC_SET(&start_time_, ObTimeUtility::fast_current_time());
       if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set))) {//mark
-        LOG_WARN("fail to mark macro blocks", K(ret));
+        if (OB_EAGAIN == ret) {
+          mark_finished = false;
+          ret = OB_SUCCESS;
+          // skip marking
+        } else {
+          LOG_WARN("fail to mark macro blocks", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
       } else {
         pending_free_count_ += mark_info.count();
         mark_cost_time_ = ObTimeUtility::fast_current_time() - start_time_;
@@ -1008,13 +969,12 @@ void ObBlockManager::mark_and_sweep()
           last_end_time_ = ObTimeUtility::fast_current_time();
           sweep_cost_time_ = last_end_time_ - start_time_ - mark_cost_time_;
 
-          ObMacroBlockMarkerStatus marker_status;
           GetOldestHoldBlockFunctor functor(macro_id_set, hold_info_);
           if (OB_FAIL(block_map_.for_each(functor))) {
             ret = functor.get_ret_code();
             LOG_WARN("fail to get oldest hold block", K(ret));
           } else {
-            update_marker_status();
+            update_marker_status(mark_finished);
             FLOG_INFO("finish once mark and sweep", K(ret), K_(marker_status), "map_cnt", block_map_.count());
           }
         }
@@ -1028,6 +988,7 @@ void ObBlockManager::mark_and_sweep()
 void ObBlockManager::reset_mark_status()
 {
   MEMSET(used_macro_cnt_, 0, sizeof(used_macro_cnt_));
+  reserved_count_ = 0;
   hold_count_ = 0;
   pending_free_count_ = 0;
   disk_block_count_ = 0;
@@ -1063,12 +1024,44 @@ int ObBlockManager::mark_macro_blocks(
     omt->get_mtl_tenant_ids(mtl_tenant_ids);
     for (int64_t i = 0; OB_SUCC(ret) && i < mtl_tenant_ids.count(); i++) {
       const uint64_t tenant_id = mtl_tenant_ids.at(i);
+      MacroBlockId macro_id;
       MTL_SWITCH(tenant_id) {
         if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set))) {
           LOG_WARN("fail to mark tenant blocks", K(ret), K(tenant_id));
+        } else if (OB_FALSE_IT(MTL(ObSharedMacroBlockMgr*)->get_cur_shared_block(macro_id))) {
+        } else if (OB_FAIL(mark_held_shared_block(macro_id, mark_info, macro_id_set))) {
+          LOG_WARN("fail to mark shared block held by shared_macro_block_manager", K(ret), K(macro_id));
+        } else if (OB_FALSE_IT(
+            MTL(ObTenantCheckpointSlogHandler*)->get_shared_block_reader_writer().get_cur_shared_block(macro_id))) {
+        } else if (OB_FAIL(mark_held_shared_block(macro_id, mark_info, macro_id_set))) {
+          LOG_WARN("fail to mark shared block held by shared_reader_writer", K(ret), K(macro_id));
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObBlockManager::mark_held_shared_block(
+    const MacroBlockId &macro_id,
+    MacroBlkIdMap &mark_info,
+    common::hash::ObHashSet<MacroBlockId> &macro_id_set)
+{
+  int ret = OB_SUCCESS;
+
+  if (!macro_id.is_valid()) {
+    // no small sstable, skip the mark
+  } else if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
+    LOG_WARN("fail to update mark info", K(ret), K(macro_id));
+  } else if (OB_FAIL(macro_id_set.set_refactored(macro_id, 0 /*no override*/))) {
+    if (OB_HASH_EXIST != ret) {
+      LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else {
+    hold_count_--;
+    reserved_count_++;
   }
   return ret;
 }
@@ -1083,70 +1076,124 @@ int ObBlockManager::mark_tenant_blocks(
   if (OB_ISNULL(t3m) || OB_ISNULL(ckpt_hdl)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, t3m or ckpt hdl of mtl is nullptr", K(ret), KP(t3m), KP(ckpt_hdl));
-  } else if (OB_FAIL(mark_tenant_meta_blocks(mark_info, macro_id_set, *ckpt_hdl))) {
+  } else if (OB_FAIL(mark_tenant_ckpt_blocks(mark_info, macro_id_set, *ckpt_hdl))) {
     LOG_WARN("fail to mark tenant meta blocks", K(ret));
   } else {
-    ObTenantInMemoryTabletIterator tablet_iter(*t3m);
+    ObArenaAllocator iter_allocator("MarkIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTenantTabletIterator tablet_iter(*t3m, iter_allocator);
     ObTabletHandle handle;
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(tablet_iter.get_next_tablet(handle))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("fail to get next in-memory tablet", K(ret));
+      if (!continue_mark()) {
+        ret = OB_EAGAIN;
+        LOG_INFO("disk usage exceeds threshold, skip marking", K(io_device_->get_free_block_count()),
+          K(super_block_.get_total_macro_block_count()));
+      } else {
+        handle.reset();
+        iter_allocator.reuse();
+        if (OB_FAIL(tablet_iter.get_next_tablet(handle))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next in-memory tablet", K(ret));
+          }
+        } else if (OB_FAIL(mark_tablet_meta_blocks(mark_info, handle, macro_id_set))) {
+          LOG_WARN("fail to mark tablet meta blocks", K(ret));
+        } else if (OB_FAIL(mark_sstable_blocks(mark_info, handle, macro_id_set))) {
+          LOG_WARN("fail to mark tablet blocks", K(ret));
         }
-      } else if (OB_FAIL(mark_tablet_blocks(mark_info, handle, macro_id_set))) {
-        LOG_WARN("fail to mark tablet blocks", K(ret));
       }
     }
   }
   return ret;
 }
 
-int ObBlockManager::mark_tablet_blocks(
+int ObBlockManager::mark_sstable_blocks(
     MacroBlkIdMap &mark_info,
     ObTabletHandle &handle,
     common::hash::ObHashSet<MacroBlockId> &macro_id_set)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> sstables;
+  ObTableStoreIterator table_store_iter(false, false);
+  ObArenaAllocator sstable_allocator("LoadSST", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObSafeArenaAllocator safe_allocator(sstable_allocator);
 
   if (OB_UNLIKELY(!handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(handle));
-  } else if (OB_FAIL(handle.get_obj()->get_all_sstables(sstables))) {
+  } else if (OB_FAIL(handle.get_obj()->get_all_sstables(table_store_iter))) {
     LOG_WARN("fail to get all sstables", K(ret));
   } else {
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < sstables.count(); ++idx) {
-      ObSSTable *sstable = static_cast<ObSSTable *>(sstables.at(idx));
-      if (OB_ISNULL(sstable)) {
+     while (OB_SUCC(ret)) {
+      safe_allocator.reuse();
+      ObITable *table = nullptr;
+      ObSSTableMetaHandle sstable_meta_hdl;
+      ObSSTable *sstable = nullptr;
+      if (OB_FAIL(table_store_iter.get_next(table))) {
+        if (OB_UNLIKELY(OB_ITER_END == ret)) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("fail to get next table from iter", K(ret), K(table_store_iter));
+        }
+      } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
+      } else if (OB_ISNULL(sstable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, sstable is nullptr", K(ret), KP(sstable));
+      } else if (OB_FAIL(mark_sstable_meta_block(*sstable, mark_info, macro_id_set))) {
+        LOG_WARN("fail to mark sstable meta block", K(ret), KPC(sstable));
+      } else if (OB_FAIL(sstable->get_meta(sstable_meta_hdl, &safe_allocator))) {
+        LOG_WARN("fail to get sstable meta", K(ret));
       } else {
-        const ObSSTableMeta &meta = sstable->get_meta();
+        const ObSSTableMeta &meta = sstable_meta_hdl.get_sstable_meta();
         ObMacroBlockCommonHeader::MacroBlockType macro_type;
         macro_type = ObMacroBlockCommonHeader::MacroBlockType::SSTableData;
-        for (int64_t k = 0; OB_SUCC(ret) && k < meta.get_macro_info().get_data_block_ids().count(); ++k) {
-          const MacroBlockId &macro_id = meta.get_macro_info().get_data_block_ids().at(k);
-          if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
-            LOG_WARN("fail to update mark info", K(ret), K(idx), K(macro_id), K(k), KPC(sstable));
+        ObMacroIdIterator iterator;
+        MacroBlockId macro_id;
+        if (OB_FAIL(meta.get_macro_info().get_data_block_iter(iterator))) {
+          LOG_WARN("fail to get data block iterator", K(ret), K(meta));
+        }
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(iterator.get_next_macro_id(macro_id))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next macro id", K(ret), K(iterator));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
+            LOG_WARN("fail to update mark info", K(ret), K(macro_id), KPC(sstable));
           } else if (OB_FAIL(macro_id_set.set_refactored(macro_id, 0 /*no override*/))) {
             if (OB_HASH_EXIST != ret) {
-              LOG_WARN("fail to put macro id into set", K(ret), K(macro_id), K(k));
+              LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
             } else {
               ret = OB_SUCCESS;
             }
           } else {
+            if (sstable->is_small_sstable()) {
+              macro_type = ObMacroBlockCommonHeader::MacroBlockType::SharedSSTableData;
+            }
             used_macro_cnt_[macro_type] ++;
             hold_count_--;
           }
         }
-        macro_type = ObMacroBlockCommonHeader::MacroBlockType::SSTableIndex;
-        for (int64_t j = 0; OB_SUCC(ret) && j < meta.get_macro_info().get_other_block_ids().count(); ++j) {
-          const MacroBlockId &macro_id = meta.get_macro_info().get_other_block_ids().at(j);
-          if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
-            LOG_ERROR("fail to update mark info", K(ret), K(idx), K(j), K(macro_id), KPC(sstable));
+        if (OB_SUCC(ret)) {
+          macro_type = ObMacroBlockCommonHeader::MacroBlockType::SSTableIndex;
+          iterator.reset();
+          if (OB_FAIL(meta.get_macro_info().get_other_block_iter(iterator))) {
+            LOG_WARN("fail to get other block iterator", K(ret), K(meta));
+          }
+        }
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(iterator.get_next_macro_id(macro_id))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next macro id", K(ret), K(iterator));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
+            LOG_ERROR("fail to update mark info", K(ret), K(macro_id), KPC(sstable));
           } else if (OB_FAIL(macro_id_set.set_refactored(macro_id))) {
             LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
           } else {
@@ -1154,11 +1201,23 @@ int ObBlockManager::mark_tablet_blocks(
             hold_count_--;
           }
         }
-        macro_type = ObMacroBlockCommonHeader::MacroBlockType::SSTableMacroID;
-        for (int64_t i = 0; OB_SUCC(ret) && i < meta.get_macro_info().get_linked_block_ids().count(); ++i) {
-          const MacroBlockId &macro_id = meta.get_macro_info().get_linked_block_ids().at(i);
-          if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
-            LOG_ERROR("fail to update mark info", K(ret), K(idx), K(i), K(macro_id), KPC(sstable));
+        if (OB_SUCC(ret)) {
+          macro_type = ObMacroBlockCommonHeader::MacroBlockType::SSTableMacroID;
+          iterator.reset();
+          if (OB_FAIL(meta.get_macro_info().get_linked_block_iter(iterator))) {
+            LOG_WARN("fail to get linked block iterator", K(ret), K(meta));
+          }
+        }
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(iterator.get_next_macro_id(macro_id))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next macro id", K(ret), K(iterator));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
+            LOG_ERROR("fail to update mark info", K(ret), K(macro_id), KPC(sstable));
           } else if (OB_FAIL(macro_id_set.set_refactored(macro_id))) {
             LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
           } else {
@@ -1172,7 +1231,65 @@ int ObBlockManager::mark_tablet_blocks(
   return ret;
 }
 
-int ObBlockManager::mark_tenant_meta_blocks(
+int ObBlockManager::mark_tablet_meta_blocks(
+    MacroBlkIdMap &mark_info,
+    storage::ObTabletHandle &handle,
+    common::hash::ObHashSet<MacroBlockId> &macro_id_set)
+{
+  int ret = OB_SUCCESS;
+  const ObTablet *tablet = handle.get_obj();
+  ObSArray<MacroBlockId> meta_ids;
+  if (OB_FAIL(tablet->get_tablet_meta_ids(meta_ids))) {
+    LOG_WARN("fail to get tablet meta block ids", K(ret), KPC(tablet));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < meta_ids.count(); i++) {
+      const MacroBlockId &macro_id = meta_ids[i];
+      if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
+        LOG_WARN("fail to update mark info", K(ret), K(macro_id));
+      } else if (OB_FAIL(macro_id_set.set_refactored(macro_id, 0 /* not overwrite */))) {
+        if (OB_HASH_EXIST != ret) {
+          LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        used_macro_cnt_[ObMacroBlockCommonHeader::SharedMetaData]++;
+        hold_count_--;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBlockManager::mark_sstable_meta_block(
+    const blocksstable::ObSSTable &sstable,
+    MacroBlkIdMap &mark_info,
+    common::hash::ObHashSet<MacroBlockId> &macro_id_set)
+{
+  int ret = OB_SUCCESS;
+  const ObMetaDiskAddr &addr = sstable.get_addr();
+  MacroBlockId macro_id;
+  if (addr.is_block()) {
+    if (OB_UNLIKELY(!addr.is_valid())) {
+      LOG_WARN("sstable addr is invalid", K(ret), K(addr));
+    } else if (FALSE_IT(macro_id = addr.block_id())) {
+    } else if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
+      LOG_WARN("fail to update mark info", K(ret), K(addr), K(macro_id));
+    } else if (OB_FAIL(macro_id_set.set_refactored(macro_id, 0 /* not overwrite */))) {
+      if (OB_HASH_EXIST != ret) {
+        LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else {
+      used_macro_cnt_[ObMacroBlockCommonHeader::SharedMetaData]++;
+      hold_count_--;
+    }
+  }
+  return ret;
+}
+
+int ObBlockManager::mark_tenant_ckpt_blocks(
     MacroBlkIdMap &mark_info,
     common::hash::ObHashSet<MacroBlockId> &macro_id_set,
     ObTenantCheckpointSlogHandler &hdl)
@@ -1233,6 +1350,12 @@ int ObBlockManager::mark_server_meta_blocks(
   return ret;
 }
 
+bool ObBlockManager::continue_mark()
+{
+  return (double) (io_device_->get_free_block_count())
+      / (double) (super_block_.get_total_macro_block_count()) >= MARK_THRESHOLD;
+}
+
 int ObBlockManager::update_mark_info(
     const ObIArray<MacroBlockId> &macro_block_list,
     common::hash::ObHashSet<MacroBlockId> &macro_id_set,
@@ -1267,7 +1390,7 @@ int ObBlockManager::update_mark_info(const MacroBlockId &macro_id,
     } else {
       LOG_WARN("fail to get from block map", K(ret), K(macro_id));
     }
-  } else if (OB_UNLIKELY(block_info.mem_ref_cnt_ < 0 || block_info.disk_ref_cnt_ < 0)) {
+  } else if (OB_UNLIKELY(block_info.ref_cnt_ < 0)) {
     LOG_ERROR("macro block should is using, ref cnt shouldn't be less than or equal to 0, "
         "fatal error", K(ret), K(macro_id), K(block_info));
   } else if (OB_FAIL(mark_info.get(macro_id, can_free))) {
@@ -1279,7 +1402,7 @@ int ObBlockManager::update_mark_info(const MacroBlockId &macro_id,
   } else if (!can_free) {
     // do nothing.
   } else {
-    if (OB_UNLIKELY(0 == block_info.mem_ref_cnt_)) {
+    if (OB_UNLIKELY(0 == block_info.ref_cnt_)) {
       //BUG, should not happen
       LOG_ERROR("macro block is using, should not mark sweep, fatal error", K(ret), K(macro_id),
           K(block_info));

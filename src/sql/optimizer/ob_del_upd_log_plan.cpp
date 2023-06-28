@@ -263,11 +263,12 @@ int ObDelUpdLogPlan::check_table_rowkey_distinct(
       } else if (OB_FAIL(index_dml_info->get_rowkey_exprs(rowkey_exprs))) {
         LOG_WARN("failed to get rowkey exprs", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(rowkey_exprs,
+                                                          best_plan->get_table_set(),
                                                           best_plan->get_fd_item_set(),
                                                           best_plan->get_output_equal_sets(),
                                                           best_plan->get_output_const_exprs(),
                                                           is_unique))) {
-          LOG_WARN("check dml is order unique failed", K(ret));
+        LOG_WARN("check dml is order unique failed", K(ret));
       } else if (!is_unique) {
         index_dml_info->distinct_algo_ = T_HASH_DISTINCT;
       } else {

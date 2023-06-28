@@ -208,7 +208,7 @@ void build_tsc_timestamp()
                 tsc_obj.use_tsc = 1;
             }
         }
-        printf("build_tsc_timestamp: use_tsc=%d scale=%ld\n", tsc_obj.use_tsc, tsc_obj.scale);
+        // printf("build_tsc_timestamp: use_tsc=%d scale=%ld\n", tsc_obj.use_tsc, tsc_obj.scale);
         tsc_obj.is_inited = 1;
     }
 }

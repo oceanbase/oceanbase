@@ -287,6 +287,17 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
                 K(observer_tenant_hold), K_(system_memory));
     }
   }
+
+#ifdef ENABLE_500_MEMORY_LIMIT
+  if (OB_FAIL(ret)) {
+    // do-nothing
+  } else if (is_arbitration_mode) {
+    // do-nothing
+  } else if (OB_FAIL(ObMallocAllocator::get_instance()->set_500_tenant_limit(
+      !server_config._enable_system_tenant_memory_limit))) {
+    LOG_ERROR("set the limit of tenant 500 failed", KR(ret));
+  }
+#endif
   return ret;
 }
 

@@ -220,6 +220,7 @@ int ObLogRestoreNetDriver::scan_ls(const share::ObLogRestoreSourceType &type)
   }
   delete_fetcher_if_needed_with_lock_();
   update_config_();
+  update_standby_preferred_upstream_log_region_();
   return ret;
 }
 
@@ -459,6 +460,19 @@ int64_t ObLogRestoreNetDriver::get_rpc_timeout_sec_()
     rpc_timeout = tenant_config->standby_db_fetch_log_rpc_timeout / 1000 / 1000L;
   }
   return rpc_timeout;
+}
+
+void ObLogRestoreNetDriver::update_standby_preferred_upstream_log_region_()
+{
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+
+  if (! tenant_config.is_valid()) {
+  } else {
+    if (nullptr != fetcher_) {
+      const char *region_string = tenant_config->standby_db_preferred_upstream_log_region;
+      fetcher_->update_preferred_upstream_log_region(common::ObRegion(region_string));
+    }
+  }
 }
 
 bool ObLogRestoreNetDriver::is_fetcher_stale_(const int64_t cluster_id, const uint64_t tenant_id)

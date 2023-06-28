@@ -274,7 +274,7 @@ int ObAdminDumpCkptExecutor::dump_tablet(
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (OB_FAIL(tablet_meta.deserialize(allocator, buf, buf_len, pos))) {
+  } else if (OB_FAIL(tablet_meta.deserialize(buf, buf_len, pos))) {
     LOG_WARN("fail to deserialize tablet", K(ret));
   } else if (fprintf(stream, "%s\n", to_cstring(tablet_meta)) < 0) {
     ret = OB_ERR_SYS;

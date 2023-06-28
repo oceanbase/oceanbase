@@ -25,7 +25,8 @@ ObMetaDiskAddr::ObMetaDiskAddr()
   : first_id_(0),
     second_id_(0),
     third_id_(0),
-    fourth_id_(0)
+    fourth_id_(0),
+    fifth_id_(0)
 {
   static_assert(DiskType::MAX <= MAX_TYPE, "ObMetaDiskAddr's disk type is overflow");
   type_ = DiskType::MAX;
@@ -37,6 +38,7 @@ void ObMetaDiskAddr::reset()
   second_id_ = 0;
   third_id_ = 0;
   fourth_id_ = 0;
+  fifth_id_ = 0;
   type_ = DiskType::MAX;
 }
 
@@ -137,10 +139,10 @@ int ObMetaDiskAddr::set_mem_addr(const int64_t offset, const int64_t size)
 }
 
 OB_SERIALIZE_MEMBER(ObMetaDiskAddr,
-    first_id_,
-    second_id_,
-    third_id_,
-    fourth_id_);
+                    first_id_,
+                    second_id_,
+                    third_id_,
+                    fourth_id_);
 
 bool ObMetaDiskAddr::is_valid() const
 {
@@ -175,26 +177,30 @@ int64_t ObMetaDiskAddr::to_string(char *buf, const int64_t buf_len) const
   switch (type_) {
   case FILE:
     databuff_printf(buf, buf_len, pos,
-                     "[%lu-%lu-%lu-%lu](file_id=%ld,offset=%lu,size=%lu,type=%lu)",
+                     "[%lu-%lu-%lu-%lu-%lu](file_id=%ld,offset=%lu,size=%lu,type=%lu,seq=%lu)",
                      first_id_,
                      second_id_,
                      third_id_,
                      fourth_id_,
+                     fifth_id_,
                      file_id_,
                      (uint64_t) offset_,
                      (uint64_t) size_,
-                     (uint64_t) type_);
+                     (uint64_t) type_,
+                     (uint64_t) seq_);
     break;
   default:
     databuff_printf(buf, buf_len, pos,
-                    "[%lu-%lu-%lu-%lu](offset=%lu,size=%lu,type=%lu)",
+                    "[%lu-%lu-%lu-%lu-%lu](offset=%lu,size=%lu,type=%lu,seq=%lu)",
                     first_id_,
                     second_id_,
                     third_id_,
                     fourth_id_,
+                    fifth_id_,
                     (uint64_t) offset_,
                     (uint64_t) size_,
-                    (uint64_t) type_);
+                    (uint64_t) type_,
+                    (uint64_t) seq_);
     break;
   };
 
@@ -202,6 +208,11 @@ int64_t ObMetaDiskAddr::to_string(char *buf, const int64_t buf_len) const
 }
 
 bool ObMetaDiskAddr::operator ==(const ObMetaDiskAddr &other) const
+{
+  return is_equal_for_persistence(other) && fifth_id_ == other.fifth_id_;
+}
+
+bool ObMetaDiskAddr::is_equal_for_persistence(const ObMetaDiskAddr &other) const
 {
   return first_id_  == other.first_id_
       && second_id_ == other.second_id_

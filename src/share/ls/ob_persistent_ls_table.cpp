@@ -201,6 +201,7 @@ int ObPersistentLSTable::construct_ls_replica(
   int64_t required_size = 0;
   ObString learner_list;
   GlobalLearnerList learner_list_to_set;
+  int64_t rebuild_flag = 0;
   // TODO: try to fetch coulmn_value by column_name
   // column select order defined in LSTableColNames::LSTableColNames
   // location related
@@ -231,6 +232,7 @@ int ObPersistentLSTable::construct_ls_replica(
   (void)GET_COL_IGNORE_NULL(res.get_int, "data_size", data_size);
   (void)GET_COL_IGNORE_NULL_WITH_DEFAULT_VALUE(res.get_int, "required_size", required_size, 0);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(res, "learner_list", learner_list);
+  EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "rebuild", rebuild_flag, int64_t, true, true, 0);
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObLSReplica::text2member_list(
@@ -275,7 +277,8 @@ int ObPersistentLSTable::construct_ls_replica(
       data_size,
       required_size,
       member_list_to_set,
-      learner_list_to_set))) {
+      learner_list_to_set,
+      0 != rebuild_flag))) {
     LOG_WARN("fail to init a ls replica", KR(ret), K(create_time_us), K(modify_time_us),
               K(tenant_id), K(ls_id), K(server), K(sql_port), K(role),
               K(replica_type), K(proposal_id), K(unit_id), K(zone),
@@ -557,11 +560,14 @@ int ObPersistentLSTable::fill_dml_splicer_(
 {
   int ret = OB_SUCCESS;
   char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
+  uint64_t compat_version = 0;
   ObSqlString member_list;
   ObSqlString learner_list;
   if (!replica.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid replica", KR(ret), K(replica));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(replica.get_tenant_id(), compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(replica));
   } else if (false == replica.get_server().ip_to_string(ip, sizeof(ip))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("convert server ip to string failed", KR(ret), "server", replica.get_server());
@@ -588,6 +594,9 @@ int ObPersistentLSTable::fill_dml_splicer_(
         || OB_FAIL(dml_splicer.add_column("data_size", replica.get_data_size()))
         || OB_FAIL(dml_splicer.add_column("required_size", replica.get_required_size()))){
     LOG_WARN("add column failed", KR(ret), K(replica));
+  } else if (compat_version >= DATA_VERSION_4_2_0_0
+             && OB_FAIL(dml_splicer.add_column("rebuild", replica.get_rebuild()))) {
+    LOG_WARN("add column rebuild failed", KR(ret), K(replica));
   }
 
   uint64_t tenant_to_check_data_version = replica.get_tenant_id();
@@ -807,6 +816,84 @@ int ObPersistentLSTable::remove_residual_ls(
     LOG_WARN("assign sql string failed", KR(ret), K(sql));
   } else if (OB_FAIL(sql_proxy_->write(sql_tenant_id, sql.ptr(), residual_count))) {
     LOG_WARN("execute sql failed", KR(ret), "sql", sql.ptr(), K(sql_tenant_id));
+  }
+  return ret;
+}
+
+int ObPersistentLSTable::batch_get(
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    const common::ObIArray<ObLSID> &ls_ids,
+    common::ObIArray<ObLSInfo> &ls_infos)
+{
+  int ret = OB_SUCCESS;
+  ls_infos.reset();
+  ObSqlString sql;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPersistentLSTable not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || is_virtual_tenant_id(tenant_id)
+      || ls_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(cluster_id), K(tenant_id), K(ls_ids));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT * FROM %s WHERE tenant_id = %lu AND ls_id IN (",
+      OB_ALL_LS_META_TABLE_TNAME,
+      tenant_id))) {
+    LOG_WARN("assign sql string failed", KR(ret), K(sql));
+  }
+  ARRAY_FOREACH(ls_ids, idx) {
+    const ObLSID &ls_id = ls_ids.at(idx);
+    if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid ls_id with tenant", KR(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(sql.append_fmt(
+        "%s%ld",
+        0 == idx ? "" : ",",
+        ls_id.id()))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(ls_id));
+    }
+  }
+  if (FAILEDx(sql.append_fmt(") ORDER BY tenant_id, ls_id, svr_ip, svr_port"))) {
+    LOG_WARN("appent fmt failed", KR(ret), K(tenant_id), K(ls_ids), K(sql));
+  } else {
+    const uint64_t exec_tenant_id = get_private_table_exec_tenant_id(tenant_id);
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      if (OB_FAIL(sql_proxy_->read(result, cluster_id, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(sql));
+      } else if (OB_FAIL(construct_ls_infos_(*result.get_result(), ls_infos))) {
+        LOG_WARN("construct log stream infos failed", KR(ret), K(ls_infos));
+      }
+    }
+    // if ls not found, return empty ls_info
+    if (OB_SUCC(ret) && (ls_ids.count() != ls_infos.count())) {
+      ARRAY_FOREACH(ls_ids, i) {
+        const ObLSID &ls_id = ls_ids.at(i);
+        bool found = false;
+        ARRAY_FOREACH(ls_infos, j) {
+          if (ls_id == ls_infos.at(j).get_ls_id()) {
+            found = true;
+            break;
+          }
+        }
+        if (OB_SUCC(ret) && !found) {
+          ObLSInfo ls_info;
+          if (OB_FAIL(ls_info.init(tenant_id, ls_id))) {
+            LOG_WARN("init ls_info failed", KR(ret), K(tenant_id), K(ls_id));
+          } else if (OB_FAIL(ls_infos.push_back(ls_info))) {
+            LOG_WARN("push back failed", KR(ret), K(ls_info));
+          }
+        }
+      } // end ARRAY_FOREACH ls_ids
+      if (OB_SUCC(ret) && OB_UNLIKELY(ls_ids.count() != ls_infos.count())) {
+        ret = OB_ERR_DUP_ARGUMENT;
+        LOG_WARN("there are duplicate values in ls_ids", KR(ret), K(ls_ids));
+      }
+    }
   }
   return ret;
 }

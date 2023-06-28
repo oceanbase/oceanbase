@@ -38,6 +38,9 @@ int ObIMicroBlockReader::locate_range(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected row count", K(ret), K_(row_count));
   } else if (0 == row_count_) {
+  } else if (OB_ISNULL(datum_utils_)){
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("datum utils is null", K(ret), KP_(datum_utils));
   } else {
     if (!is_left_border || range.get_start_key().is_min_rowkey()) {
       begin_idx = 0;
@@ -62,7 +65,7 @@ int ObIMicroBlockReader::locate_range(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected state", K(ret), K(end_key_begin_idx), K(end_key_end_idx), K(range));
       } else  {
-        const bool is_precise_rowkey = read_info_->get_rowkey_count() == range.get_end_key().get_datum_cnt();
+        const bool is_precise_rowkey = datum_utils_->get_rowkey_count() == range.get_end_key().get_datum_cnt();
         // we should use upper_bound if the range include endkey
         if (OB_FAIL(find_bound(range.get_end_key(),
                                !range.get_border_flag().inclusive_end()/*lower_bound*/,

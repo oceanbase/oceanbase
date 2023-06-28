@@ -158,6 +158,7 @@ ob_ssl_invited_common_names
 ob_startup_mode
 open_cursors
 opt_tab_stat_cache_priority
+partition_balance_schedule_interval
 plan_cache_evict_interval
 plan_cache_high_watermark
 plan_cache_low_watermark
@@ -204,7 +205,9 @@ ssl_client_authentication
 ssl_external_kms_info
 stack_size
 standby_db_fetch_log_rpc_timeout
+standby_db_preferred_upstream_log_region
 standby_fetch_log_bandwidth_limit
+storage_meta_cache_priority
 syslog_io_bandwidth_limit
 syslog_level
 system_memory
@@ -246,6 +249,7 @@ _audit_mode
 _backup_idle_time
 _backup_task_keep_alive_interval
 _backup_task_keep_alive_timeout
+_balance_kill_transaction_threshold
 _bloom_filter_enabled
 _bloom_filter_ratio
 _cache_wash_interval
@@ -256,6 +260,7 @@ _datafile_usage_upper_bound_percentage
 _data_storage_io_timeout
 _enable_adaptive_compaction
 _enable_backtrace_function
+_enable_balance_kill_transaction
 _enable_block_file_punch_hole
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
@@ -280,6 +285,7 @@ _enable_px_fast_reclaim
 _enable_px_ordered_coord
 _enable_reserved_user_dcl_restriction
 _enable_resource_limit_spec
+_enable_system_tenant_memory_limit
 _enable_tenant_sql_net_thread
 _enable_trace_session_leak
 _enable_transaction_internal_routing
@@ -356,6 +362,12 @@ _sqlexec_disable_hash_based_distagg_tiv
 _storage_meta_memory_limit_percentage
 _temporary_file_io_area_size
 _trace_control_info
+_transfer_finish_trans_timeout
+_transfer_process_lock_tx_timeout
+_transfer_service_wakeup_interval
+_transfer_start_retry_count
+_transfer_start_rpc_timeout
+_transfer_start_trans_timeout
 _tx_result_retention
 _upgrade_stage
 _wait_interval_after_truncate

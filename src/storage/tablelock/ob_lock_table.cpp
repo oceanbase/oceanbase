@@ -92,10 +92,9 @@ int ObLockTable::restore_lock_table_(ObITable &sstable)
     LOG_WARN("failed to push back key", K(ret), K(key));
   } else if (OB_FAIL(columns.push_back(value))) {
     LOG_WARN("failed to push back value", K(ret), K(value));
-  } else if (OB_FAIL(read_info.init(allocator, LOCKTABLE_SCHEMA_COLUMN_CNT, LOCKTABLE_SCHEMA_ROEKEY_CNT, lib::is_oracle_mode(), columns))) {
+  } else if (OB_FAIL(read_info.init(allocator, LOCKTABLE_SCHEMA_COLUMN_CNT, LOCKTABLE_SCHEMA_ROEKEY_CNT, lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/))) {
     LOG_WARN("Fail to init read_info", K(ret));
   } else if (FALSE_IT(iter_param.read_info_ = &read_info)) {
-  } else if (FALSE_IT(iter_param.full_read_info_ = &read_info)) {
   } else if (OB_FAIL(sstable.scan(iter_param,
                                     access_context,
                                     whole_range,
@@ -219,60 +218,6 @@ int ObLockTable::get_table_schema_(
   return ret;
 }
 
-int ObLockTable::gen_create_tablet_arg_(
-    const ObTabletID &tablet_id,
-    const uint64_t tenant_id,
-    const ObLSID ls_id,
-    const lib::Worker::CompatMode compat_mode,
-    const ObTableSchema &table_schema,
-    obrpc::ObBatchCreateTabletArg &arg)
-{
-  int ret = OB_SUCCESS;
-  obrpc::ObCreateTabletInfo create_tablet_info;
-  ObArray<ObTabletID> tablet_ids;
-  ObArray<int64_t> tablet_schema_idxs;
-
-  arg.reset();
-  // create ObCreateTabletInfo
-  if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-    LOG_WARN("insert tablet id failed", K(ret), K(tablet_id));
-    // only one tablet, only one schema
-  } else if (OB_FAIL(tablet_schema_idxs.push_back(0))) {
-    LOG_WARN("insert tablet schema idx failed", K(ret));
-  } else if (OB_FAIL(create_tablet_info.init(tablet_ids,
-                                             tablet_id,
-                                             tablet_schema_idxs,
-                                             compat_mode,
-                                             false/*is_create_bind_hidden_tablets*/))) {
-    LOG_WARN("create tablet info init failed", K(ret), K(tablet_ids), K(tablet_id));
-  // create ObBatchCreateTabletArg
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, SCN::base_scn(), false/*need_check_tablet_cnt*/))) {
-    LOG_WARN("ObBatchCreateTabletArg init create tablet failed", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
-    LOG_WARN("add table schema failed", K(ret), K(table_schema));
-  } else if (OB_FAIL(arg.tablets_.push_back(create_tablet_info))) {
-    LOG_WARN("add create tablet info failed", K(ret), K(create_tablet_info));
-  }
-
-  return ret;
-}
-
-int ObLockTable::gen_remove_tablet_arg_(
-    const common::ObTabletID &tablet_id,
-    const uint64_t tenant_id,
-    const share::ObLSID ls_id,
-    obrpc::ObBatchRemoveTabletArg &arg)
-{
-  int ret = OB_SUCCESS;
-  arg.reset();
-  if (OB_FAIL(arg.tablet_ids_.push_back(tablet_id))) {
-    LOG_WARN("insert tablet id failed", K(ret), K(tablet_id));
-  } else {
-    arg.id_ = ls_id;
-  }
-  return ret;
-}
-
 int ObLockTable::init(ObLS *parent)
 {
   int ret = OB_SUCCESS;
@@ -334,6 +279,7 @@ int ObLockTable::online()
   int ret = OB_SUCCESS;
   ObTabletHandle handle;
   ObTablet *tablet;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObLSTabletService *ls_tablet_svr = nullptr;
   LOG_INFO("online lock table", K(parent_->get_ls_id()));
 
@@ -346,12 +292,22 @@ int ObLockTable::online()
   } else if (FALSE_IT(tablet = handle.get_obj())) {
   } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_LOCK_TABLET, 0 /* schema_version */))) {
     LOG_WARN("failed to create memtable", K(ret));
+  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
   } else {
-    ObTabletTableStore &table_store = tablet->get_table_store();
-    ObSSTableArray &sstables = table_store.get_minor_sstables();
-
+    const ObSSTableArray &sstables = table_store_wrapper.get_member()->get_minor_sstables();
     if (!sstables.empty()) {
-      ret = restore_lock_table_(*sstables[0]);
+      ObStorageMetaHandle loaded_sstable_handle;
+      ObSSTable *loaded_sstable = nullptr;
+      if (OB_FAIL(ObTabletTableStore::load_sstable_on_demand(
+          table_store_wrapper.get_meta_handle(),
+          *sstables[0],
+          loaded_sstable_handle,
+          loaded_sstable))) {
+        LOG_WARN("fail to load sstable on demand", K(ret));
+      } else if (OB_FAIL(restore_lock_table_(*loaded_sstable))) {
+        LOG_WARN("fail to restore lock table", K(ret));
+      }
     }
   }
 
@@ -361,32 +317,24 @@ int ObLockTable::online()
 int ObLockTable::create_tablet(const lib::Worker::CompatMode compat_mode, const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = parent_->get_tenant_id();
-  share::ObLSID ls_id = parent_->get_ls_id();
-  obrpc::ObBatchCreateTabletArg arg;
-  const bool no_need_write_clog = true;
+  const uint64_t tenant_id = parent_->get_tenant_id();
+  const share::ObLSID &ls_id = parent_->get_ls_id();
   share::schema::ObTableSchema table_schema;
   ObIMemtableMgr *memtable_mgr = nullptr;
   ObMemtableMgrHandle memtable_mgr_handle;
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockTable not inited", K(ret));
-  } else if (OB_FAIL(get_table_schema_(tenant_id,
-                                       table_schema))) {
+  } else if (OB_FAIL(get_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get lock table schema failed", K(ret));
-  } else if (OB_FAIL(gen_create_tablet_arg_(LS_LOCK_TABLET,
-                                            tenant_id,
-                                            ls_id,
-                                            compat_mode,
-                                            table_schema,
-                                            arg))) {
-    LOG_WARN("gen create tablet arg failed", K(ret), K(LS_LOCK_TABLET), K(tenant_id),
-             K(ls_id), K(table_schema));
-  } else if (OB_FAIL(parent_->batch_create_tablets(arg,
-                                                   create_scn,
-                                                   no_need_write_clog))) {
-    LOG_WARN("create lock tablet failed", K(ret), K(arg), K(create_scn));
+  } else if (OB_FAIL(parent_->create_ls_inner_tablet(ls_id,
+                                                     LS_LOCK_TABLET,
+                                                     ObLS::LS_INNER_TABLET_FROZEN_SCN,
+                                                     table_schema,
+                                                     compat_mode,
+                                                     create_scn))) {
+    LOG_WARN("failed to create lock tablet", K(ret), K(ls_id), K(LS_LOCK_TABLET),
+             K(table_schema), K(compat_mode), K(create_scn));
   } else if (OB_FAIL(parent_->get_tablet_svr()->
                      get_lock_memtable_mgr(memtable_mgr_handle))) {
     LOG_WARN("get_lock_memtable_mgr failed", K(ret));
@@ -402,19 +350,9 @@ int ObLockTable::create_tablet(const lib::Worker::CompatMode compat_mode, const 
 int ObLockTable::remove_tablet()
 {
   int ret = OB_SUCCESS;
-  obrpc::ObBatchRemoveTabletArg arg;
-  const ObTabletID &tablet_id = LS_LOCK_TABLET;
-  const bool no_need_write_clog = true;
-  uint64_t tenant_id = parent_->get_tenant_id();
-  if (OB_FAIL(gen_remove_tablet_arg_(tablet_id,
-                                     tenant_id,
-                                     parent_->get_ls_id(),
-                                     arg))) {
-    LOG_WARN("gen remove tablet arg failed", K(ret), K(tablet_id),
-             K(tenant_id), K(parent_->get_ls_id()));
-  } else if (OB_FAIL(parent_->batch_remove_tablets(arg,
-                                                   no_need_write_clog))) {
-    LOG_WARN("remove tablet failed", K(ret), K(arg));
+  const share::ObLSID &ls_id = parent_->get_ls_id();
+  if (OB_FAIL(parent_->remove_ls_inner_tablet(ls_id, LS_LOCK_TABLET))) {
+    LOG_WARN("failed to remove ls inner tablet", K(ret), K(ls_id), K(LS_LOCK_TABLET));
   }
   return ret;
 }
@@ -424,6 +362,7 @@ int ObLockTable::load_lock()
   int ret = OB_SUCCESS;
   ObTabletHandle handle;
   ObTablet *tablet;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObLSTabletService *ls_tablet_svr = nullptr;
   LOG_INFO("load_lock_table()", K(parent_->get_ls_id()));
 
@@ -436,12 +375,22 @@ int ObLockTable::load_lock()
   } else if (FALSE_IT(tablet = handle.get_obj())) {
   } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_LOCK_TABLET, 0 /* schema_version */))) {
     LOG_WARN("failed to create memtable", K(ret));
+  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
   } else {
-    ObTabletTableStore &table_store = tablet->get_table_store();
-    ObSSTableArray &sstables = table_store.get_minor_sstables();
-
+    const ObSSTableArray &sstables = table_store_wrapper.get_member()->get_minor_sstables();
     if (!sstables.empty()) {
-      ret = restore_lock_table_(*sstables[0]);
+      ObStorageMetaHandle loaded_sstable_handle;
+      ObSSTable *loaded_sstable = nullptr;
+      if (OB_FAIL(ObTabletTableStore::load_sstable_on_demand(
+          table_store_wrapper.get_meta_handle(),
+          *sstables[0],
+          loaded_sstable_handle,
+          loaded_sstable))) {
+        LOG_WARN("fail to load sstable on demand", K(ret));
+      } else if (OB_FAIL(restore_lock_table_(*loaded_sstable))) {
+        LOG_WARN("fail to restore lock table", K(ret));
+      }
     }
   }
 

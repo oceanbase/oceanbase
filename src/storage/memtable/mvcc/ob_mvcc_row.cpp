@@ -897,6 +897,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
         lock_state.lock_dml_flag_ = iter->get_dml_flag();
         lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
         lock_state.mvcc_row_ = this;
+        lock_state.trans_scn_ = iter->get_scn();
       }
     }
   }
@@ -1044,6 +1045,7 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
   ObRowLatchGuard guard(latch_);
 
   auto iter = ATOMIC_LOAD(&list_head_);
+  auto tx_table_guards = ctx.get_tx_table_guards();
   bool need_retry = true;
 
   while (OB_SUCC(ret) && need_retry) {
@@ -1055,8 +1057,12 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
       need_retry = false;
     } else {
       auto data_tx_id = iter->tx_id_;
-      if (!(iter->is_committed() || iter->is_aborted()) && iter->is_delayed_cleanout() &&
-          OB_FAIL(ctx.get_tx_table_guard().cleanout_tx_node(data_tx_id, *this, *iter, false /*need_row_latch*/))) {
+      if (!(iter->is_committed() || iter->is_aborted())
+          && iter->is_delayed_cleanout()
+          && OB_FAIL(tx_table_guards.cleanout_tx_node(data_tx_id,
+                                                *this,
+                                                *iter,
+                                                false  /*need_row_latch*/))) {
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
         // Case 2: the newest node is decided, so node currently is not be locked
@@ -1074,6 +1080,7 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
         lock_state.lock_data_sequence_ = iter->get_seq_no();
         lock_state.lock_dml_flag_ = iter->get_dml_flag();
         lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
+        lock_state.trans_scn_ = iter->get_scn();
         need_retry = false;
       }
     }

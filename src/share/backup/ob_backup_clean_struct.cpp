@@ -428,6 +428,8 @@ bool ObBackupCleanTaskAttr::is_valid() const
     is_valid = false;
   } else if (!status_.is_valid()) {
     is_valid = false;
+  } else if (0 == backup_path_.size()) {
+    is_valid = false;
   } else {
     is_valid = ObBackupCleanTaskType::is_valid(task_type_)
         && job_id_ >= 0

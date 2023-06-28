@@ -22,6 +22,7 @@
 #include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/ls/ob_ls_i_life_manager.h"
 
 
 namespace oceanbase
@@ -37,10 +38,13 @@ enum ObMigrationStatus
   OB_MIGRATION_STATUS_MIGRATE = 3,
   OB_MIGRATION_STATUS_MIGRATE_FAIL = 4,
   OB_MIGRATION_STATUS_REBUILD = 5,
-//  OB_MIGRATION_STATUS_REBUILD_FAIL = 6, not used yet
+  OB_MIGRATION_STATUS_REBUILD_FAIL = 6,
   OB_MIGRATION_STATUS_CHANGE = 7,
   OB_MIGRATION_STATUS_RESTORE_STANDBY = 8,
   OB_MIGRATION_STATUS_HOLD = 9,
+  OB_MIGRATION_STATUS_MIGRATE_WAIT = 10,
+  OB_MIGRATION_STATUS_ADD_WAIT = 11,
+  OB_MIGRATION_STATUS_REBUILD_WAIT = 12,
   OB_MIGRATION_STATUS_MAX,
 };
 
@@ -60,6 +64,7 @@ struct ObMigrationOpType
   static TYPE get_type(const char *type_str);
   static OB_INLINE bool is_valid(const TYPE &type) { return type >= 0 && type < MAX_LS_OP; }
   static bool need_keep_old_tablet(const TYPE &type);
+  static int get_ls_wait_status(const TYPE &type, ObMigrationStatus &wait_status);
 };
 
 struct ObMigrationStatusHelper
@@ -70,13 +75,26 @@ public:
   static int trans_reboot_status(const ObMigrationStatus &cur_status, ObMigrationStatus &reboot_status);
   static bool check_can_election(const ObMigrationStatus &cur_status);
   static bool check_can_restore(const ObMigrationStatus &cur_status);
-  static bool check_allow_gc(const ObMigrationStatus &cur_status);
+  static int check_allow_gc(const share::ObLSID &ls_id, const ObMigrationStatus &cur_status, bool &allow_gc);
+  // Check the migration status. The LS in the XXX_FAIL state is considered to be an abandoned LS, which can be judged to be directly GC when restarting
+  static bool check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status);
   static bool check_can_migrate_out(const ObMigrationStatus &cur_status);
   static int check_can_change_status(
       const ObMigrationStatus &cur_status,
       const ObMigrationStatus &change_status,
       bool &can_change);
   static bool is_valid(const ObMigrationStatus &status);
+  static int trans_rebuild_fail_status(
+      const ObMigrationStatus &cur_status,
+      const bool is_in_member_list,
+      const bool is_ls_deleted,
+      ObMigrationStatus &fail_status);
+  static int check_migration_in_final_state(
+      const ObMigrationStatus &status,
+      bool &in_final_state);
+private:
+  static int check_ls_transfer_tablet_(const share::ObLSID &ls_id, bool &allow_gc);
+  static int check_transfer_dest_ls_status_(const share::ObLSID &transfer_ls_id, bool &allow_gc);
 };
 
 enum ObMigrationOpPriority
@@ -286,6 +304,84 @@ public:
   ObITable::TableKey copy_table_key_;
   common::ObArray<ObCopyMacroRangeInfo> copy_macro_range_array_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeInfo);
+};
+
+class ObLSRebuildStatus final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum STATUS : uint8_t
+  {
+    NONE = 0,
+    INIT = 1,
+    DOING = 2,
+    CLEANUP = 3,
+    MAX
+  };
+public:
+  ObLSRebuildStatus();
+  ~ObLSRebuildStatus() = default;
+  explicit ObLSRebuildStatus(const STATUS &status);
+  ObLSRebuildStatus &operator=(const ObLSRebuildStatus &status);
+  ObLSRebuildStatus &operator=(const STATUS &status);
+  bool operator ==(const ObLSRebuildStatus &other) const { return status_ == other.status_; }
+  bool operator !=(const ObLSRebuildStatus &other) const { return status_ != other.status_; }
+  operator STATUS() const { return status_; }
+  bool is_valid() const;
+  STATUS get_status() const { return status_; }
+  int set_status(int32_t status);
+  void reset();
+  TO_STRING_KV(K_(status));
+
+private:
+  STATUS status_;
+};
+
+class ObLSRebuildType final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum TYPE : uint8_t
+  {
+    NONE = 0,
+    CLOG = 1,
+    TRANSFER = 2,
+    MAX
+  };
+
+public:
+  ObLSRebuildType();
+  ~ObLSRebuildType() = default;
+  explicit ObLSRebuildType(const TYPE &type);
+  ObLSRebuildType &operator=(const ObLSRebuildType &type);
+  ObLSRebuildType &operator=(const TYPE &status);
+  bool operator ==(const ObLSRebuildType &other) const { return type_ == other.type_; }
+  bool operator !=(const ObLSRebuildType &other) const { return type_ != other.type_; }
+  operator TYPE() const { return type_; }
+  bool is_valid() const;
+  TYPE get_type() const { return type_; }
+  int set_type(int32_t type);
+  void reset();
+
+  TO_STRING_KV(K_(type));
+private:
+  TYPE type_;
+};
+
+struct ObLSRebuildInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSRebuildInfo();
+  ~ObLSRebuildInfo() = default;
+  void reset();
+  bool is_valid() const;
+  bool is_in_rebuild() const;
+  bool operator ==(const ObLSRebuildInfo &other) const;
+
+  TO_STRING_KV(K_(status), K_(type));
+  ObLSRebuildStatus status_;
+  ObLSRebuildType type_;
 };
 
 

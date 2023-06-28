@@ -51,7 +51,6 @@ public:
   int init(const ObITable::TableKey &table_key,
            const share::ObLSID &ls_id,
            storage::ObFreezer *freezer);
-
   void reset();
   // =================== LOCK FUNCTIONS =====================
   // try to lock a object.
@@ -149,28 +148,6 @@ public:
                   const blocksstable::ObDatumRowkey &rowkey,
                   blocksstable::ObDatumRow &row) override;
 
-  virtual int set(storage::ObStoreCtx &ctx,
-                  const uint64_t table_id,
-                  const storage::ObTableReadInfo &read_info,
-                  const common::ObIArray<share::schema::ObColDesc> &columns,
-                  const storage::ObStoreRow &row,
-                  const share::ObEncryptMeta *encrypt_meta) override;
-
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   common::ObNewRowIterator &row_iter) override;
-
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   const common::ObNewRow &row) override;
-
-  virtual int lock(storage::ObStoreCtx &ctx,
-                   const uint64_t table_id,
-                   const storage::ObTableReadInfo &read_info,
-                   const blocksstable::ObDatumRowkey &rowkey) override;
-
   virtual int get(const storage::ObTableIterParam &param,
                   storage::ObTableAccessContext &context,
                   const blocksstable::ObDatumRowkey &rowkey,
@@ -225,7 +202,6 @@ private:
 
   bool is_inited_;
 
-  share::ObLSID ls_id_;
   // the lock map store lock data
   ObOBJLockMap obj_lock_map_;
   share::SCN freeze_scn_;

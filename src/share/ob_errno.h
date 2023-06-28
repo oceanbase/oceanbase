@@ -454,6 +454,9 @@ constexpr int OB_ARBITRATION_INFO_QUERY_FAILED = -4758;
 constexpr int OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE = -4759;
 constexpr int OB_LS_OFFLINE = -4760;
 constexpr int OB_LS_IS_DELETED = -4761;
+constexpr int OB_SKIP_CHECKING_LS_STATUS = -4762;
+constexpr int OB_ERR_USE_ROWID_FOR_UPDATE = -4763;
+constexpr int OB_ERR_UNKNOWN_SET_OPTION = -4764;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -1491,6 +1494,8 @@ constexpr int OB_ALREADY_IN_NOARCHIVE_MODE = -9092;
 constexpr int OB_RESTORE_LOG_TO_END = -9093;
 constexpr int OB_LS_RESTORE_FAILED = -9094;
 constexpr int OB_NO_TABLET_NEED_BACKUP = -9095;
+constexpr int OB_ERR_RESTORE_STANDBY_VERSION_LAG = -9096;
+constexpr int OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED = -9097;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
@@ -1742,6 +1747,7 @@ constexpr int OB_ERR_VARIABLE_NOT_IN_SELECT_LIST = -9745;
 constexpr int OB_ERR_MULTI_RECORD = -9746;
 constexpr int OB_ERR_MALFORMED_PS_PACKET = -9747;
 constexpr int OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK = -9748;
+constexpr int OB_ERR_OBJECT_NOT_EXIST = -9749;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2305,6 +2311,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE__USER_ERROR_MSG "An error was ignored when accessing virtual table, actual error code: %d"
 #define OB_LS_OFFLINE__USER_ERROR_MSG "log stream is offline"
 #define OB_LS_IS_DELETED__USER_ERROR_MSG "log stream is deleted"
+#define OB_SKIP_CHECKING_LS_STATUS__USER_ERROR_MSG "This operation has been finished without checking ls status"
+#define OB_ERR_USE_ROWID_FOR_UPDATE__USER_ERROR_MSG "invalid user.table.column, table.column, or column specification"
+#define OB_ERR_UNKNOWN_SET_OPTION__USER_ERROR_MSG "unknown SET option \'%s\'"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3576,6 +3585,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_RESTORE_LOG_TO_END__USER_ERROR_MSG "Restore log to end"
 #define OB_LS_RESTORE_FAILED__USER_ERROR_MSG "Restore log stream failed"
 #define OB_NO_TABLET_NEED_BACKUP__USER_ERROR_MSG "No tablet need backup"
+#define OB_ERR_RESTORE_STANDBY_VERSION_LAG__USER_ERROR_MSG "standby binary version is lower than primary data version, standby need upgrade"
+#define OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED__USER_ERROR_MSG "primary tenant has been dropped"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
@@ -3829,6 +3840,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MULTI_RECORD__USER_ERROR_MSG "coercion into multiple record targets not supported"
 #define OB_ERR_MALFORMED_PS_PACKET__USER_ERROR_MSG "malformed ps packet"
 #define OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK__USER_ERROR_MSG "View's SELECT contains a variable or parameter"
+#define OB_ERR_OBJECT_NOT_EXIST__USER_ERROR_MSG "object does not exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4392,6 +4404,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4759, An error was ignored when accessing virtual table, actual error code: %d"
 #define OB_LS_OFFLINE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4760, log stream is offline"
 #define OB_LS_IS_DELETED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4761, log stream is deleted"
+#define OB_SKIP_CHECKING_LS_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4762, This operation has been finished without checking ls status"
+#define OB_ERR_USE_ROWID_FOR_UPDATE__ORA_USER_ERROR_MSG "ORA-01747: invalid user.table.column, table.column, or column specification"
+#define OB_ERR_UNKNOWN_SET_OPTION__ORA_USER_ERROR_MSG "ORA-00600: unknown SET option \'%s\'"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5663,6 +5678,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_RESTORE_LOG_TO_END__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9093, Restore log to end"
 #define OB_LS_RESTORE_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9094, Restore log stream failed"
 #define OB_NO_TABLET_NEED_BACKUP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9095, No tablet need backup"
+#define OB_ERR_RESTORE_STANDBY_VERSION_LAG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9096, standby binary version is lower than primary data version, standby need upgrade"
+#define OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9097, primary tenant has been dropped"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
@@ -5916,6 +5933,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MULTI_RECORD__ORA_USER_ERROR_MSG "ORA-00494: coercion into multiple record targets not supported"
 #define OB_ERR_MALFORMED_PS_PACKET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9747, malformed ps packet"
 #define OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9748, View's SELECT contains a variable or parameter"
+#define OB_ERR_OBJECT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-06564: object does not exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -5926,7 +5944,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2083];
+extern int g_all_ob_errnos[2089];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

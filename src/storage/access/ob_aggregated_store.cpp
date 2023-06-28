@@ -638,7 +638,7 @@ int ObAggregatedStore::init(const ObTableAccessParam &param)
   } else if (OB_FAIL(check_agg_in_row_mode(param.iter_param_))) {
     LOG_WARN("Failed to check agg in row mode", K(ret));
   } else if (agg_flat_row_mode_ &&
-             OB_FAIL(row_buf_.init(*context_.stmt_allocator_, param.iter_param_.get_full_out_col_cnt()))) {
+             OB_FAIL(row_buf_.init(*context_.stmt_allocator_, param.iter_param_.get_max_out_col_cnt()))) {
     LOG_WARN("Fail to init datum row buf", K(ret));
   }
   if (OB_FAIL(ret)) {
@@ -652,7 +652,7 @@ int ObAggregatedStore::check_agg_in_row_mode(const ObTableIterParam &iter_param)
   int ret = OB_SUCCESS;
   int64_t agg_cnt = 0;
   ObAggCell *cell = nullptr;
-  const ObTableReadInfo *read_info = nullptr;
+  const ObITableReadInfo *read_info = nullptr;
   if (OB_ISNULL(read_info = iter_param.get_read_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null read info", K(ret), K(iter_param));

@@ -42,6 +42,7 @@ public:
   const blocksstable::MacroBlockId &get_entry_block() const;
   ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
   void reset();
+  void reuse_for_next_round();
 
 private:
   bool is_inited_;
@@ -63,12 +64,14 @@ public:
   int write_item(const char *item_buf, const int64_t item_buf_len, int64_t *item_idx = nullptr);
   int close();
   void reset();
+  void reuse_for_next_round();
 
   int get_entry_block(blocksstable::MacroBlockId &entry_block) const;
   common::ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
   int64_t get_item_disk_addr(const int64_t item_idx, ObMetaDiskAddr &addr) const;
 
 private:
+  void inner_reset();
   int write_block();
   int write_item_header(const char *item_buf, const int64_t item_buf_len);
   int write_item_content(const char *item_buf, const int64_t item_buf_len, int64_t &item_pos);

@@ -171,7 +171,6 @@ int ObSSTableRowWholeScanner::inner_open(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), KP(query_range), KP(table));
   } else {
-    const ObTableReadInfo *index_read_info = iter_param.read_info_->get_index_read_info();
     const ObDatumRange *range = reinterpret_cast<const ObDatumRange *>(query_range);
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
@@ -180,16 +179,13 @@ int ObSSTableRowWholeScanner::inner_open(
     cur_macro_cursor_ = 0;
     last_mvcc_row_already_output_ = true;
 
-    if (OB_ISNULL(index_read_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected null index read info", K(ret));
-    } else if (OB_FAIL(init_micro_scanner(range))) {
+    if (OB_FAIL(init_micro_scanner(range))) {
       LOG_WARN("Failed to init micro scanner", K(ret));
     } else if (OB_FAIL(macro_block_iter_.open(
                 *sstable_,
                 query_range_,
-                *index_read_info,
-                *access_ctx.stmt_allocator_))) {
+                *iter_param.read_info_,
+                allocator_))) {
       LOG_WARN("Fail to open macro_block_iter ", K(ret));
     }
 
@@ -421,7 +417,7 @@ int ObSSTableRowWholeScanner::open_macro_block()
                   scan_handle.macro_io_handle_.get_buffer(),
                   scan_handle.macro_io_handle_.get_data_size(),
                   query_range_,
-                  *(iter_param_->read_info_->get_index_read_info()),
+                  *(iter_param_->read_info_),
                   scan_handle.is_left_border_,
                   scan_handle.is_right_border_))) {
         LOG_WARN("failed to open micro block iter", K(ret), K(scan_handle.macro_io_handle_));

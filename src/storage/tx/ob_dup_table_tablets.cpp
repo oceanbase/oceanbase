@@ -758,22 +758,6 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
   unique_id_array.reuse();
 
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(changing_new_set_)) {
-      // do nothing
-    } else if (changing_new_set_->empty()) {
-      // empty change map not need add to need confirm and ser
-      DUP_TABLE_LOG(DEBUG, "changing_new_set_ is empty", K(ret), K(changing_new_set_->empty()));
-    } else if (OB_FAIL(changing_new_set_->get_change_status()->prepare_serialize())) {
-      DUP_TABLE_LOG(WARN, "changing new set prepare serialize failed", K(ret));
-    } else if (false == need_confirm_new_queue_.add_last(changing_new_set_)) {
-      ret = OB_ERR_UNEXPECTED;
-      DUP_TABLE_LOG(WARN, "push back change_new_set_ failed", K(ret));
-    } else if (OB_FALSE_IT(changing_new_set_ = nullptr)) {
-      // do nothing
-    }
-  }
-
-  if (OB_SUCC(ret)) {
     bool can_be_confirmed = true;
     DLIST_FOREACH(cur_map, need_confirm_new_queue_)
     {
@@ -782,10 +766,11 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
         DUP_TABLE_LOG(ERROR, "unexpected tablet set type", K(ret), KPC(cur_map));
       } else if (!cur_map->get_change_status()->need_log()) {
         DUP_TABLE_LOG(INFO, "no need serialize need_confirm_set in log", K(ret), KPC(cur_map));
+      } else if (OB_FAIL(cal_single_set_max_ser_size_(cur_map, max_ser_size, max_log_buf_len,
+                                                      unique_id_array))) {
+        DUP_TABLE_LOG(WARN, "cal new set max ser_size failed", K(ret));
       } else if (OB_FALSE_IT(cur_map->set_logging())) {
         // do nothing
-      } else if (OB_FAIL(cal_single_set_max_ser_size_(cur_map, max_ser_size, unique_id_array))) {
-        DUP_TABLE_LOG(WARN, "cal new set max ser_size failed", K(ret));
       } else {
         int64_t tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(cur_map->get_change_status()->try_set_confirmed(can_be_confirmed))) {
@@ -797,6 +782,31 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
           }
         }
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(changing_new_set_)) {
+      // do nothing
+    } else if (changing_new_set_->empty()) {
+      // empty change map not need add to need confirm and ser
+      DUP_TABLE_LOG(DEBUG, "changing_new_set_ is empty", K(ret), K(changing_new_set_->empty()));
+    } else if (OB_FAIL(cal_single_set_max_ser_size_(changing_new_set_, max_ser_size,
+                                                    max_log_buf_len, unique_id_array))) {
+      DUP_TABLE_LOG(WARN, "cal new set max ser_size failed", K(ret));
+      if (OB_SIZE_OVERFLOW == ret) {
+        ret = OB_LOG_TOO_LARGE;
+      }
+    } else if (OB_FALSE_IT(changing_new_set_->set_logging())) {
+      // do nothing
+
+    } else if (OB_FAIL(changing_new_set_->get_change_status()->prepare_serialize())) {
+      DUP_TABLE_LOG(WARN, "changing new set prepare serialize failed", K(ret));
+    } else if (false == need_confirm_new_queue_.add_last(changing_new_set_)) {
+      ret = OB_ERR_UNEXPECTED;
+      DUP_TABLE_LOG(WARN, "push back change_new_set_ failed", K(ret));
+    } else if (OB_FALSE_IT(changing_new_set_ = nullptr)) {
+      // do nothing
     }
   }
 
@@ -820,11 +830,14 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
       // do nothing
     } else if (!old_tablet_set->get_change_status()->need_log()) {
       DUP_TABLE_LOG(INFO, "no need serialize old tablets in log", K(ret), KPC(old_tablet_set));
-    } else if (OB_FALSE_IT(old_tablet_set->set_logging())) {
-        // do nothing
-    } else if (OB_FAIL(
-                   cal_single_set_max_ser_size_(old_tablet_set, max_ser_size, unique_id_array))) {
+    } else if (OB_FAIL(cal_single_set_max_ser_size_(old_tablet_set, max_ser_size, max_log_buf_len,
+                                                    unique_id_array))) {
       DUP_TABLE_LOG(WARN, "cal old set max ser_size failed", K(ret));
+      if (OB_SIZE_OVERFLOW == ret) {
+        ret = OB_LOG_TOO_LARGE;
+      }
+    } else if (OB_FALSE_IT(old_tablet_set->set_logging())) {
+      // do nothing
     } else if (OB_FAIL(old_tablet_set->get_change_status()->prepare_serialize())) {
       DUP_TABLE_LOG(WARN, "old set prepare serialize failed", K(ret));
     } else {
@@ -843,14 +856,21 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
   if (OB_SUCC(ret)) {
     DLIST_FOREACH(readable_ptr, readable_tablets_list_)
     {
-      readable_ptr->set_logging();
-      if (OB_FAIL(cal_single_set_max_ser_size_(readable_ptr, max_ser_size, unique_id_array))) {
+      if (OB_FAIL(cal_single_set_max_ser_size_(readable_ptr, max_ser_size, max_log_buf_len,
+                                               unique_id_array))) {
         DUP_TABLE_LOG(WARN, "cal readable set max ser_size failed", K(ret));
+        if (OB_SIZE_OVERFLOW == ret) {
+          ret = OB_LOG_TOO_LARGE;
+        }
+      } else {
+        readable_ptr->set_logging();
       }
     }
   }
 
   if (OB_LOG_TOO_LARGE == ret) {
+    DUP_TABLE_LOG(INFO, "Too many dup tablets, we can not submit all", K(ret), K(max_ser_size),
+                  K(max_log_buf_len), K(unique_id_array));
     ret = OB_SUCCESS;
   }
   DUP_TABLE_LOG(DEBUG, "finish prepare ser", K(ret), K(max_ser_size), K(unique_id_array));
@@ -1137,6 +1157,7 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
 
 int ObLSDupTabletsMgr::cal_single_set_max_ser_size_(DupTabletChangeMap *hash_map,
                                                     int64_t &max_ser_size,
+                                                    const int64_t ser_size_limit,
                                                     DupTabletSetIDArray &unique_id_array)
 {
   int ret = OB_SUCCESS;
@@ -1150,6 +1171,10 @@ int ObLSDupTabletsMgr::cal_single_set_max_ser_size_(DupTabletChangeMap *hash_map
 
     if (OB_FAIL(ret)) {
       // do nothing
+    } else if (max_ser_size + tmp_ser_size > ser_size_limit) {
+      ret = OB_SIZE_OVERFLOW;
+      DUP_TABLE_LOG(WARN, "the serialize size of tablet sets is too large", K(ret), K(max_ser_size),
+                    K(tmp_ser_size), K(ser_size_limit), K(unique_id_array), KPC(hash_map));
     } else if (OB_FAIL(unique_id_array.push_back(hash_map->get_common_header()))) {
       DUP_TABLE_LOG(WARN, "push back unique_id array failed", K(ret));
     } else {
@@ -1237,6 +1262,16 @@ int64_t ObLSDupTabletsMgr::get_readable_tablet_set_count()
   return cnt;
 }
 
+int64_t ObLSDupTabletsMgr::get_need_confirm_tablet_set_count()
+{
+  int64_t cnt = 0;
+
+  SpinRLockGuard guard(dup_tablets_lock_);
+  cnt = need_confirm_new_queue_.get_size();
+
+  return cnt;
+}
+
 int64_t ObLSDupTabletsMgr::get_all_tablet_set_count()
 {
   int64_t cnt = 0;
@@ -1254,6 +1289,44 @@ int64_t ObLSDupTabletsMgr::get_all_tablet_set_count()
   }
 
   return cnt;
+}
+
+// check exist tablet or is logging
+bool ObLSDupTabletsMgr::check_removing_tablet_exist()
+{
+  bool bool_ret = false;
+  SpinRLockGuard guard(dup_tablets_lock_);
+
+  if (OB_ISNULL(removing_old_set_)) {
+    bool_ret = false;
+  } else if (removing_old_set_->size() > 0) {
+    bool_ret = true;
+  } else if (removing_old_set_->get_change_status()->is_modifiable()){
+    bool_ret = true;
+  } else {
+    bool_ret = false;
+  }
+
+  return bool_ret;
+}
+
+// check exist tablet or is logging
+bool ObLSDupTabletsMgr::check_changing_new_tablet_exist()
+{
+  bool bool_ret = false;
+  SpinRLockGuard guard(dup_tablets_lock_);
+
+  if (OB_ISNULL(changing_new_set_)) {
+    bool_ret = false;
+  } else if (changing_new_set_->size() > 0) {
+    bool_ret = true;
+  } else if (changing_new_set_->get_change_status()->is_modifiable()) {
+    bool_ret = true;
+  } else {
+    bool_ret = false;
+  }
+
+  return bool_ret;
 }
 
 int ObLSDupTabletsMgr::leader_takeover(const bool is_resume,
@@ -1676,9 +1749,15 @@ int ObLSDupTabletsMgr::discover_dup_tablet_(const common::ObTabletID &tablet_id,
           INFO,
           "Too large confirming tablet set. We will not insert new tablet into changing_new_set_.",
           K(ret), K(ls_id_), K(changing_new_set_->size()), K(confirming_tablet_cnt),
-          K(MAX_CONFIRMING_TABLET_COUNT), K(contain_confirming_special_op));
+          K(MAX_CONFIRMING_TABLET_COUNT), K(contain_confirming_special_op),
+          K(need_confirm_new_queue_.get_size()), KPC(removing_old_set_),
+          K(readable_tablets_list_.get_size()));
     } else if (OB_FAIL(changing_new_map->set_refactored(tablet_id, tmp_status, 1))) {
       DUP_TABLE_LOG(WARN, "insert into changing new tablets failed", K(ret));
+    } else {
+      DUP_TABLE_LOG(INFO, "insert a new dup tablet into set", K(ret), K(tablet_id),
+                    KPC(changing_new_set_), K(need_confirm_new_queue_.get_size()),
+                    KPC(removing_old_set_), K(readable_tablets_list_.get_size()));
     }
   }
 

@@ -178,10 +178,10 @@ ObIOCallback::~ObIOCallback()
 
 }
 
-int ObIOCallback::process(const bool is_success)
+int ObIOCallback::process(const char *data_buffer, const int64_t size)
 {
   lib::set_compat_mode(compat_mode_);
-  return inner_process(is_success);
+  return inner_process(data_buffer, size);
 }
 
 int ObIOCallback::deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&copied_callback) const
@@ -392,10 +392,7 @@ void ObIORequest::destroy()
     control_block_ = nullptr;
   }
   io_info_.reset();
-  if (nullptr != raw_buf_ && nullptr != tenant_io_mgr_.get_ptr()) {
-    tenant_io_mgr_.get_ptr()->io_allocator_.free(raw_buf_);
-    raw_buf_ = nullptr;
-  }
+  free_io_buffer();
   io_buf_ = nullptr;
   io_offset_ = 0;
   io_size_ = 0;
@@ -455,8 +452,22 @@ const char *ObIORequest::get_data()
     buf = io_buf_;
   } else {
     // re-calculate with const parameters, in case of partial return change aligned_buf and so on.
+
+    //todo QILU: buf = get_user_data_buf()，完成no_callback memcpy改造后替换
+    buf = get_io_data_buf();
+  }
+  return buf;
+}
+
+const char *ObIORequest::get_io_data_buf()
+{
+  char *buf = nullptr;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == raw_buf_)) {
+    LOG_ERROR("raw buf is null, maybe has been recycle");
+  } else {
     const int64_t aligned_offset = lower_align(io_info_.offset_, DIO_READ_ALIGN_SIZE);
-    const char *aligned_buf = reinterpret_cast<const char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), DIO_READ_ALIGN_SIZE));
+    char *aligned_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), DIO_READ_ALIGN_SIZE));
     buf = aligned_buf + io_info_.offset_ - aligned_offset;
   }
   return buf;
@@ -499,20 +510,17 @@ int ObIORequest::alloc_aligned_io_buf()
       && OB_UNLIKELY(!is_io_aligned(io_info_.offset_) || !is_io_aligned(io_info_.size_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("write io info not aligned", K(ret), K(io_info_));
-  } else if (nullptr == copied_callback_) {
+  } else {
     align_offset_size(io_info_.offset_, io_info_.size_, io_offset_, io_size_);
+    const int64_t io_buffer_size = io_size_ + DIO_READ_ALIGN_SIZE;
     if (OB_ISNULL(tenant_io_mgr_.get_ptr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant io manager is null", K(ret));
-    } else if (OB_ISNULL(raw_buf_ = tenant_io_mgr_.get_ptr()->io_allocator_.alloc(io_size_ + DIO_READ_ALIGN_SIZE))) {
+    } else if (OB_ISNULL(raw_buf_ = tenant_io_mgr_.get_ptr()->io_allocator_.alloc(io_buffer_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(io_size_));
     } else {
       io_buf_ = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), DIO_READ_ALIGN_SIZE));
-    }
-  } else {
-    if (OB_FAIL(copied_callback_->alloc_io_buf(io_buf_, io_size_, io_offset_))) {
-      LOG_WARN("callback allocate memory failed", K(ret), K(io_info_));
     }
   }
   if (OB_SUCC(ret)) {
@@ -579,6 +587,14 @@ int ObIORequest::prepare()
 bool ObIORequest::can_callback() const
 {
   return nullptr != copied_callback_ && nullptr != io_buf_;
+}
+
+void ObIORequest::free_io_buffer()
+{
+  if (nullptr != raw_buf_ && nullptr != tenant_io_mgr_.get_ptr()) {
+    tenant_io_mgr_.get_ptr()->io_allocator_.free(raw_buf_);
+    raw_buf_ = nullptr;
+  }
 }
 
 void ObIORequest::cancel()

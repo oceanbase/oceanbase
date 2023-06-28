@@ -78,6 +78,7 @@ TestTableLockFlush::TestTableLockFlush()
 
 void TestTableLockFlush::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   tenant_id_ = MTL_ID();
 }
 void TestTableLockFlush::TearDown()
@@ -370,8 +371,8 @@ TEST_F(TestTableLockFlush, restore_tx_ctx)
   mock_store_ctx(ob_store_ctx, ctx1, txDesc, ls);
   ob_store_ctx.ls_ = ls;
   ob_store_ctx.ls_id_ = ls->get_ls_id();
-  ob_store_ctx.mvcc_acc_ctx_.tx_table_guard_.tx_table_ = (ObTxTable*)0x1;
-  ob_store_ctx.mvcc_acc_ctx_.tx_table_guard_.epoch_ = ObTxTable::INVALID_READ_EPOCH;
+  ob_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.tx_table_ = (ObTxTable*)0x1;
+  ob_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.epoch_ = ObTxTable::INVALID_READ_EPOCH;
   ob_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ = 5000;
   ob_store_ctx.mvcc_acc_ctx_.tx_ctx_ = &ctx1;
   ob_store_ctx.mvcc_acc_ctx_.tx_desc_ = &txDesc;

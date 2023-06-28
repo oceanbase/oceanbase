@@ -29,8 +29,7 @@ ObAllVirtualTableMgr::ObAllVirtualTableMgr()
       tablet_allocator_("VTTable"),
       tablet_handle_(),
       ls_id_(share::ObLSID::INVALID_LS_ID),
-      all_tables_(),
-      table_idx_(0),
+      table_store_iter_(),
       iter_buf_(nullptr)
 {
 }
@@ -46,8 +45,7 @@ void ObAllVirtualTableMgr::reset()
   omt::ObMultiTenantOperator::reset();
   addr_.reset();
   ls_id_ = share::ObLSID::INVALID_LS_ID;
-  all_tables_.reset();
-  table_idx_ = 0;
+  table_store_iter_.reset();
 
   if (OB_NOT_NULL(iter_buf_)) {
     allocator_->free(iter_buf_);
@@ -141,50 +139,29 @@ int ObAllVirtualTableMgr::get_next_table(ObITable *&table)
 {
   int ret = OB_SUCCESS;
   table = nullptr;
-  if (table_idx_ < all_tables_.count()) {
-    table = all_tables_.at(table_idx_);
-    ++table_idx_;
-  } else {
-    all_tables_.reuse();
-    ObArray<storage::ObITable *> sst_tables;
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(get_next_tablet())) {
-        if (OB_ITER_END != ret) {
-          SERVER_LOG(WARN, "fail to get next tablet", K(ret));
-        }
-      } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K_(tablet_handle));
-      } else if (OB_FAIL(tablet_handle_.get_obj()->get_memtables(all_tables_, true/*need_active*/))) {
-        SERVER_LOG(WARN, "fail to get mem tables", K(ret), K(tablet_handle_));
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(tablet_handle_.get_obj()->get_all_sstables(sst_tables))) {
-          SERVER_LOG(WARN, "fail to get sstables", K(ret), K(tablet_handle_));
-        } else {
-          for (int i = 0; OB_SUCC(ret) && i < sst_tables.count(); ++i) {
-            if (OB_FAIL(all_tables_.push_back(sst_tables.at(i)))) {
-              SERVER_LOG(WARN, "fail to push back sstables", K(ret), K(tablet_handle_));
-            }
+  if (OB_FAIL(table_store_iter_.get_next(table))) {
+    if (OB_UNLIKELY(ret != OB_ITER_END)) {
+      SERVER_LOG(WARN, "fail to iterate next table", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      while (OB_SUCC(ret)) {
+        table_store_iter_.reset();
+        if (OB_FAIL(get_next_tablet())) {
+          if (OB_ITER_END != ret) {
+            SERVER_LOG(WARN, "fail to get next tablet", K(ret));
           }
+        } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K_(tablet_handle));
+        } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_tables(table_store_iter_))) {
+          SERVER_LOG(WARN, "fail to get all tables", K(ret), K_(tablet_handle), K_(table_store_iter));
+        } else if (0 != table_store_iter_.count()) {
+          break;
         }
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(tablet_handle_.get_obj()->get_ddl_memtables(sst_tables))) {
-          SERVER_LOG(WARN, "fail to get ddl memtables", K(ret), K(tablet_handle_));
-        } else {
-          for (int i = 0; OB_SUCC(ret) && i < sst_tables.count(); ++i) {
-            if (OB_FAIL(all_tables_.push_back(sst_tables.at(i)))) {
-              SERVER_LOG(WARN, "fail to push back sstables", K(ret), K(tablet_handle_));
-            }
-          }
-        }
-      }
-      if (OB_SUCC(ret) && all_tables_.count() > 0) {
-        table_idx_ = 0;
-        table = all_tables_.at(table_idx_);
-        ++table_idx_;
-        break;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(table_store_iter_.get_next(table))) {
+        SERVER_LOG(WARN, "fail to get table after switch tablet", K(ret));
       }
     }
   }
@@ -262,26 +239,45 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           if (table->is_memtable()) {
             size = static_cast<memtable::ObIMemtable *>(table)->get_occupied_size();
           } else if (table->is_sstable()) {
-            size = static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().occupy_size_;
+            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
+            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+            } else {
+              size = sst_meta_hdl.get_sstable_meta().get_occupy_size();
+            }
           }
           cur_row_.cells_[i].set_int(size);
           break;
         }
         case DATA_BLOCK_CNT: {
           const int64_t blk_cnt = table->is_memtable() ? 0
-            : static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().get_data_macro_block_count();
+            : static_cast<ObSSTable *>(table)->get_data_macro_block_count();
           cur_row_.cells_[i].set_int(blk_cnt);
           break;
         }
         case INDEX_BLOCK_CNT: {
-          const int64_t blk_cnt = table->is_memtable() ? 0
-            : static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().get_index_macro_block_count();
+          int64_t blk_cnt = 0;
+          if (table->is_sstable()) {
+            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
+            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+            } else {
+              blk_cnt = sst_meta_hdl.get_sstable_meta().get_index_macro_block_count();
+            }
+          }
           cur_row_.cells_[i].set_int(blk_cnt);
           break;
         }
         case LINKED_BLOCK_CNT: {
-          const int64_t blk_cnt = table->is_memtable() ? 0
-            : static_cast<ObSSTable *>(table)->get_meta().get_macro_info().get_linked_block_ids().count();
+          int64_t blk_cnt = 0;
+          if (table->is_sstable()) {
+            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
+            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+            } else {
+              blk_cnt = sst_meta_hdl.get_sstable_meta().get_linked_macro_block_count();
+            }
+          }
           cur_row_.cells_[i].set_int(blk_cnt);
           break;
         }
@@ -302,7 +298,7 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           if (table->is_memtable()) {
             contain_uncommitted_row = true;
           } else if (table->is_sstable()) {
-            contain_uncommitted_row = static_cast<blocksstable::ObSSTable *>(table)->get_meta().contain_uncommitted_row();
+            contain_uncommitted_row = static_cast<blocksstable::ObSSTable *>(table)->contain_uncommitted_row();
           }
           cur_row_.cells_[i].set_varchar(contain_uncommitted_row ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));

@@ -67,6 +67,7 @@ public:
 
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row);
+  int inner_get_row_header(const ObRowHeader *&row_header);
   int set_reader(const ObRowStoreType store_type);
   int set_base_scan_param(const bool is_left_bound_block,
                           const bool is_right_bound_block);
@@ -99,7 +100,7 @@ protected:
   int64_t step_;
   ObDatumRow row_;
   MacroBlockId macro_id_;
-  const ObTableReadInfo *read_info_;
+  const ObITableReadInfo *read_info_;
   const ObDatumRange *range_;
   const blocksstable::ObSSTable *sstable_;
   ObIMicroBlockReader *reader_;
@@ -110,7 +111,7 @@ protected:
   ObIAllocator &allocator_;
   bool can_ignore_multi_version_;
   storage::ObBlockRowStore *block_row_store_;
-  storage::ObTxTableGuard tx_table_guard_;
+  storage::ObTxTableGuards tx_table_guard_;
 };
 
 // major sstable micro block scanner for query and merge
@@ -131,7 +132,7 @@ public:
       const bool is_left_border,
       const bool is_right_border) override final;
   int estimate_row_count(
-      const ObTableReadInfo &column_info,
+      const ObITableReadInfo &column_info,
       const ObMicroBlockData &block_data,
       const ObDatumRange &range,
       bool consider_multi_version,

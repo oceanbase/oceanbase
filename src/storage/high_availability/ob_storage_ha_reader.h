@@ -16,6 +16,7 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "share/ob_define.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/function/ob_function.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "ob_storage_ha_struct.h"
 #include "storage/blocksstable/ob_block_manager.h"
@@ -25,6 +26,7 @@
 #include "ob_storage_restore_struct.h"
 #include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "storage/backup/ob_backup_data_store.h"
 
 namespace oceanbase
 {
@@ -77,6 +79,7 @@ struct ObCopyMacroBlockReaderInitParam final
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
+  share::SCN backfill_tx_scn_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockReaderInitParam);
@@ -193,7 +196,6 @@ private:
   ObTabletHandle tablet_handle_;
   ObTableHandleV2 sstable_handle_;
   const ObSSTable *sstable_;
-  const ObSSTableMeta *meta_;
   ObDatumRange datum_range_;
   common::ObArenaAllocator allocator_;
   ObSSTableSecMetaIterator second_meta_iterator_;
@@ -267,11 +269,6 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_id_array);
 
   int get_next_tablet_info(obrpc::ObCopyTabletInfo &tablet_info);
-private:
-  int build_deleted_tablet_info_(
-      const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
-      obrpc::ObCopyTabletInfo &tablet_info);
 private:
   bool is_inited_;
   ObArray<common::ObTabletID> tablet_id_array_;
@@ -361,26 +358,22 @@ private:
       common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
   int set_backup_sstable_meta_array_(
       const common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
-  int get_tablet_meta_(
+  int get_backup_tablet_meta_(
       const common::ObTabletID &tablet_id,
-      ObMigrationTabletParam &tablet_meta);
-  int update_tablet_meta_if_restore_major_(
+      obrpc::ObCopyTabletSSTableHeader &copy_header);
+  int fetch_backup_tablet_meta_index_(
       const common::ObTabletID &tablet_id,
-      ObTabletHandle &tablet_handle,
-      ObMigrationTabletParam &tablet_meta);
-  int get_backup_major_tablet_meta_(
-      const common::ObTabletID &tablet_id,
-      backup::ObBackupTabletMeta &tablet_meta);
-  int fetch_backup_major_tablet_meta_index_(
-      const common::ObTabletID &tablet_id,
+      const share::ObBackupDataType &backup_data_type,
       backup::ObBackupMetaIndex &meta_index);
   int get_backup_tablet_meta_backup_path_(
       const share::ObBackupDest &backup_dest,
+      const share::ObBackupDataType &backup_data_type,
       const backup::ObBackupMetaIndex &meta_index,
       share::ObBackupPath &backup_path);
-  int read_backup_major_tablet_meta_(
+  int read_backup_tablet_meta_(
       const share::ObBackupPath &backup_path,
       const share::ObBackupStorageInfo *storage_info,
+      const share::ObBackupDataType &backup_data_type,
       const backup::ObBackupMetaIndex &meta_index,
       backup::ObBackupTabletMeta &tablet_meta);
   int compare_storage_schema_(
@@ -599,6 +592,130 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeObProducer);
 };
 
+class ObCopyTransferTabletInfoObReader
+{
+public:
+  ObCopyTransferTabletInfoObReader();
+  virtual ~ObCopyTransferTabletInfoObReader();
+  int init(
+      const ObStorageHASrcInfo &src_info,
+      const obrpc::ObTransferTabletInfoArg &rpc_arg,
+      obrpc::ObStorageRpcProxy &srv_rpc_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
+  int fetch_tablet_info(obrpc::ObCopyTabletInfo &tablet_info);
+private:
+  bool is_inited_;
+  ObStorageStreamRpcReader<obrpc::OB_FETCH_TRANSFER_TABLET_INFO> rpc_reader_;
+  DISALLOW_COPY_AND_ASSIGN(ObCopyTransferTabletInfoObReader);
+};
+
+class ObCopyTransferTabletInfoObProducer
+{
+public:
+  ObCopyTransferTabletInfoObProducer();
+  virtual ~ObCopyTransferTabletInfoObProducer();
+  int init(
+      const uint64_t tenant_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo> &tablet_list);
+  int get_next_tablet_info(obrpc::ObCopyTabletInfo &tablet_info);
+private:
+  int get_next_tablet_info_(
+      const share::ObTransferTabletInfo &transfer_tablet_info,
+      ObTabletHandle &tablet_handle,
+      obrpc::ObCopyTabletInfo &tablet_info);
+private:
+  bool is_inited_;
+  share::ObLSID src_ls_id_;
+  share::ObLSID dest_ls_id_;
+  ObArray<share::ObTransferTabletInfo> tablet_list_;
+  int64_t tablet_index_;
+  ObLSHandle ls_handle_;
+  DISALLOW_COPY_AND_ASSIGN(ObCopyTransferTabletInfoObProducer);
+};
+
+class ObICopyLSViewInfoReader
+{
+public:
+  enum Type {
+    COPY_LS_ALL_VIEW_OB_READER = 0,
+    COPY_LS_ALL_VIEW_RESTORE_READER = 1,
+    MAX_TYPE
+  };
+  ObICopyLSViewInfoReader() {}
+  virtual ~ObICopyLSViewInfoReader() {}
+  virtual int get_ls_meta(
+      ObLSMetaPackage &ls_meta) = 0;
+  virtual int get_next_tablet_info(
+      obrpc::ObCopyTabletInfo &tablet_info) = 0;
+  virtual Type get_type() const = 0;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObICopyLSViewInfoReader);
+};
+
+
+class ObCopyLSViewInfoObReader final : public ObICopyLSViewInfoReader
+{
+public:
+  ObCopyLSViewInfoObReader();
+  virtual ~ObCopyLSViewInfoObReader() {}
+
+  int init(
+      const ObStorageHASrcInfo &src_info,
+      const obrpc::ObCopyLSViewArg &rpc_arg,
+      obrpc::ObStorageRpcProxy &srv_rpc_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
+
+  Type get_type() const override
+  {
+    return COPY_LS_ALL_VIEW_OB_READER;
+  }
+
+  int get_ls_meta(
+      ObLSMetaPackage &ls_meta) override;
+
+  int get_next_tablet_info(
+      obrpc::ObCopyTabletInfo &tablet_info) override;
+
+private:
+  static const int64_t FETCH_LS_VIEW_INFO_TIMEOUT = 10 * 60 * 1000 * 1000; // 10min  // TODO(chongrong.th) change timeout to 1min later,
+  bool is_inited_;
+  ObLSMetaPackage ls_meta_;
+  ObStorageStreamRpcReader<obrpc::OB_HA_FETCH_LS_VIEW> rpc_reader_;
+  common::ObArenaAllocator allocator_;
+  DISALLOW_COPY_AND_ASSIGN(ObCopyLSViewInfoObReader);
+};
+
+
+class ObCopyLSViewInfoRestoreReader final : public ObICopyLSViewInfoReader
+{
+public:
+  ObCopyLSViewInfoRestoreReader();
+  virtual ~ObCopyLSViewInfoRestoreReader() {}
+  int init(
+      const share::ObLSID &ls_id,
+      const ObRestoreBaseInfo &restore_base_info);
+
+  Type get_type() const override
+  {
+    return COPY_LS_ALL_VIEW_RESTORE_READER;
+  }
+
+  int get_ls_meta(
+      ObLSMetaPackage &ls_meta) override;
+
+  int get_next_tablet_info(
+      obrpc::ObCopyTabletInfo &tablet_info) override;
+
+private:
+  bool is_inited_;
+  share::ObLSID ls_id_;
+  const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObExternTabletMetaReader reader_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObCopyLSViewInfoRestoreReader);
+};
 
 }
 }

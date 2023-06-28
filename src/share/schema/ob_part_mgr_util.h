@@ -138,8 +138,8 @@ public:
    Info()
      : object_id_(common::OB_INVALID_ID),
        tablet_id_(common::ObTabletID::INVALID_TABLET_ID),
-       part_idx_(common::OB_INVALID_ID),
-       subpart_idx_(common::OB_INVALID_ID),
+       part_idx_(common::OB_INVALID_INDEX),
+       subpart_idx_(common::OB_INVALID_INDEX),
        part_(NULL),
        partition_(NULL) {}
    ~Info() {}

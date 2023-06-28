@@ -102,6 +102,7 @@ private:
   typedef common::SpinRLockGuard  RLockGuard;
   typedef common::SpinWLockGuard  WLockGuard;
   RWLock rwlock_;
+  RWLock rwlock_for_update_clog_checkpoint_;
 
   bool update_checkpoint_enabled_;
 };

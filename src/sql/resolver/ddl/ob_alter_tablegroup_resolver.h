@@ -31,11 +31,6 @@ public:
   ObAlterTablegroupStmt *get_alter_tablegroup_stmt() { return static_cast<ObAlterTablegroupStmt*>(stmt_); };
 
 private:
-  int resolve_partition_options(const ParseNode &node);
-  int resolve_add_partition(const ParseNode &node);
-  int resolve_drop_partition(const ParseNode &node);
-  int resolve_reorganize_partition(const ParseNode &node);
-  int resolve_split_partition(const ParseNode &node);
   DISALLOW_COPY_AND_ASSIGN(ObAlterTablegroupResolver);
 };
 

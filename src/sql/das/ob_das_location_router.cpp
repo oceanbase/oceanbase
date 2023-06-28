@@ -808,6 +808,8 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
       } else if (OB_FAIL(remote_replicas.push_back(&tmp_replica_loc))) {
         LOG_WARN("store tmp replica failed", K(ret));
       }
+    } else {
+      LOG_INFO("this replica is in the blacklist, thus filtered it", K(bl_key));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1145,9 +1147,27 @@ void ObDASLocationRouter::refresh_location_cache(bool is_nonblock, int err_no)
       || is_partition_change_error(err_no)
       || is_get_location_timeout_error(err_no)
       || is_server_down_error(err_no)) {
-    FOREACH(tmp_node, all_tablet_list_) {
-      ObTabletID tablet_id = *tmp_node;
-      refresh_location_cache(tablet_id, is_nonblock, err_no);
+    // Refresh tablet ls mapping and ls locations according to err_no.
+    //
+    // The timeout has been set inner the interface when renewing location synchronously.
+    // It will use the timeout of ObTimeoutCtx or THIS_WORKER if it has been set.
+    // Otherwise it uses GCONF.location_cache_refresh_sql_timeout.
+    // Timeout usage priority: ObTimeoutCtx > THIS_WORKER > GCONF
+    //
+    // all_tablet_list_ may contain duplicate tablet_id
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(GCTX.location_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.location_service_ is null", KR(ret));
+    } else if (OB_FAIL(GCTX.location_service_->batch_renew_tablet_locations(
+        MTL_ID(),
+        all_tablet_list_,
+        err_no,
+        is_nonblock))) {
+      LOG_WARN("batch renew tablet locations failed", KR(ret),
+          "tenant_id", MTL_ID(), K(err_no), K(is_nonblock), K_(all_tablet_list));
+    } else {
+      LOG_INFO("LOCATION: refresh tablet location cache succ", K(err_no), K_(all_tablet_list));
     }
     all_tablet_list_.clear();
   }
@@ -1159,19 +1179,22 @@ void ObDASLocationRouter::refresh_location_cache(const ObTabletID &tablet_id,
                                                  int err_no)
 {
   int ret = OB_SUCCESS;
-  //try to refresh all tablet id, and ignore the tmp error
-  //all_tablet_list_ may contain duplicate tablet_id
-  if (is_nonblock) {
-    if (OB_FAIL(GCTX.location_service_->nonblock_renew(MTL_ID(), tablet_id))) {
-      LOG_WARN("LOCATION: fail to nonblock renew location cache", K(ret), K(tablet_id));
-    } else {
-      LOG_INFO("LOCATION: nonblock renew success", K(tablet_id), K(err_no));
-    }
+  // Refresh tablet ls mapping and ls location according to err_no.
+  //
+  // The timeout has been set inner the interface when renewing location synchronously.
+  // Timeout usage priority: ObTimeoutCtx > THIS_WORKER > GCONF.location_cache_refresh_sql_timeout.
+  if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.location_service_ is null", KR(ret));
+  } else if (OB_FAIL(GCTX.location_service_->renew_tablet_location(
+      MTL_ID(),
+      tablet_id,
+      err_no,
+      is_nonblock))) {
+    LOG_WARN("renew tablet location failed", KR(ret),
+        "tenant_id", MTL_ID(), K(tablet_id), K(err_no), K(is_nonblock));
   } else {
-    ObLSLocation dummy_loc;
-    if (OB_FAIL(block_renew_tablet_location(tablet_id, dummy_loc))) {
-      LOG_WARN("fail to renew tablet location", K(ret), K(tablet_id));
-    }
+    LOG_INFO("LOCATION: refresh tablet location cache succ", K(err_no), K(tablet_id));
   }
 }
 

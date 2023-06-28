@@ -105,7 +105,7 @@ public:
       const ObAddr &server,
       const bool inner_table_only) override;
 
-  // remove residual ls in __all_tablet_meta_table for ObServerMetaTableChecker
+  // remove residual ls in __all_ls_meta_table for ObServerMetaTableChecker
   //
   // @param [in] tenant_id, tenant for query
   // @param [in] server, target ObAddr
@@ -114,6 +114,20 @@ public:
       const uint64_t tenant_id,
       const ObAddr &server,
       int64_t &residual_count);
+
+  // batch get ls info from __all_ls_meta_table
+  //
+  // @param [in] cluster_id, target cluster_id
+  // @parma [in] tenant_id,  target tenant_id
+  // @param [in] ls_ids,  target ls_id array
+  // @param [out] ls_infos, information of ls
+  // @return OB_SUCCESS if success
+  //         OB_ERR_DUP_ARGUMENT if ls_ids have duplicate values
+  int batch_get(
+      const int64_t cluster_id,
+      const uint64_t tenant_id,
+      const common::ObIArray<ObLSID> &ls_ids,
+      common::ObIArray<ObLSInfo> &ls_infos);
 
 private:
   // ls table sql operation

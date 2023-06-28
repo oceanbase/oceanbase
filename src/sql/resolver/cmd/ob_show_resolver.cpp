@@ -1138,17 +1138,35 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             ObSqlStrGenerator sql_gen;
             show_resv_ctx.condition_node_ = parse_tree.children_[0];
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_TABLEGROUPS;
-            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLEGROUPS);
-            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLEGROUPS,
-                          REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
-                          REAL_NAME(OB_ALL_TABLEGROUP_TNAME, OB_ALL_VIRTUAL_TABLEGROUP_REAL_AGENT_ORA_TNAME),
-                          REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
-                          REAL_NAME(table_name, OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_TNAME),
-                          is_oracle_mode ? real_tenant_id : sql_tenant_id,
-                          REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
-                          REAL_NAME(OB_ALL_DATABASE_TNAME, OB_ALL_VIRTUAL_DATABASE_REAL_AGENT_ORA_TNAME),
-                          is_oracle_mode ? real_tenant_id : sql_tenant_id,
-                          is_oracle_mode ? real_tenant_id : sql_tenant_id);
+            uint64_t compat_version = OB_INVALID_VERSION;
+
+            if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, compat_version))) {
+              LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
+            } else if (compat_version < DATA_VERSION_4_2_0_0) {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLEGROUPS);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLEGROUPS,
+                            REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                            REAL_NAME(OB_ALL_TABLEGROUP_TNAME, OB_ALL_VIRTUAL_TABLEGROUP_REAL_AGENT_ORA_TNAME),
+                            REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                            REAL_NAME(table_name, OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_TNAME),
+                            is_oracle_mode ? real_tenant_id : sql_tenant_id,
+                            REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                            REAL_NAME(OB_ALL_DATABASE_TNAME, OB_ALL_VIRTUAL_DATABASE_REAL_AGENT_ORA_TNAME),
+                            is_oracle_mode ? real_tenant_id : sql_tenant_id,
+                            is_oracle_mode ? real_tenant_id : sql_tenant_id);
+            } else {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLEGROUPS_V2);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLEGROUPS_V2,
+                            REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                            REAL_NAME(OB_ALL_TABLEGROUP_TNAME, OB_ALL_VIRTUAL_TABLEGROUP_REAL_AGENT_ORA_TNAME),
+                            REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                            REAL_NAME(table_name, OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_TNAME),
+                            is_oracle_mode ? real_tenant_id : sql_tenant_id,
+                            REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                            REAL_NAME(OB_ALL_DATABASE_TNAME, OB_ALL_VIRTUAL_DATABASE_REAL_AGENT_ORA_TNAME),
+                            is_oracle_mode ? real_tenant_id : sql_tenant_id,
+                            is_oracle_mode ? real_tenant_id : sql_tenant_id);
+            }
           }
         }();
         break;
@@ -2689,6 +2707,19 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS,
                         FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu) \
                         LEFT JOIN %s.%s  T3 ON (T2.DATABASE_ID = T3.DATABASE_ID AND T3.TENANT_ID = %lu) \
                         WHERE T1.TENANT_ID = %lu \
+                        ORDER BY T1.TABLEGROUP_NAME, T2.TABLE_NAME",
+                       "Tablegroup_name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V2,
+                       NULL,
+                       "SELECT t1.Tablegroup_name AS Tablegroup_name, t2.Table_name AS Table_name, t3.Database_name AS Database_name, t1.Sharding AS Sharding \
+                        FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu) \
+                        LEFT JOIN %s.%s  t3 ON (t2.database_id = t3.database_id and t3.tenant_id = %lu) \
+                        WHERE t1.tenant_id = %lu AND t2.table_type in (0, 3, 6) \
+                        ORDER BY t1.tablegroup_name, t2.table_name",
+                        "SELECT T1.TABLEGROUP_NAME AS \"TABLEGROUP_NAME\", T2.TABLE_NAME AS \"TABLE_NAME\", T3.DATABASE_NAME AS \"DATABASE_NAME\", t1.SHARDING AS \"SHARDING\" \
+                        FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu) \
+                        LEFT JOIN %s.%s  T3 ON (T2.DATABASE_ID = T3.DATABASE_ID AND T3.TENANT_ID = %lu) \
+                        WHERE T1.TENANT_ID = %lu AND T2.TABLE_TYPE in (0, 3, 6) \
                         ORDER BY T1.TABLEGROUP_NAME, T2.TABLE_NAME",
                        "Tablegroup_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_VARIABLES,

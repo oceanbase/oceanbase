@@ -1447,7 +1447,8 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
     ObString pc_key;
     ParseResult parse_result;
     ObPLParser pl_parser(allocator,
-                      ctx.get_my_session()->get_dtc_params().connection_collation_);
+                      ctx.get_my_session()->get_dtc_params().connection_collation_,
+                      ctx.get_my_session()->get_sql_mode());
     OZ (pl_parser.fast_parse(sql, parse_result));
     if (OB_SUCC(ret)) {
       PlTransformTreeCtx trans_ctx;
@@ -3867,6 +3868,8 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
   OZ (get_size(PL_TYPE_INIT_SIZE, pl_type, init_size, &allocator));
   // 如果原来已经有值，则不重新分配, 直接在此基础上修改
   if (obj.is_ext() && obj.get_ext() != 0) {
+    ObObj out_param = obj;
+    OZ (ObUserDefinedType::destruct_obj(out_param));
     CK (OB_NOT_NULL(ptr = reinterpret_cast<void*>(obj.get_ext())));
   } else { // 如果原来没有值, 重新分配内存, PS协议的情况, 前端发过来的纯OUT参数是NULL
     if (OB_SUCC(ret) && OB_ISNULL(ptr = allocator.alloc(init_size))) {

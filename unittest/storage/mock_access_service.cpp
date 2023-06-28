@@ -59,7 +59,8 @@ int MockObAccessService::insert_rows(
                                           ctx_guard))) {
     LOG_WARN("fail to check query allowed", K(ret), K(ls_id), K(tablet_id));
   } else {
-    ret = tablet_service_->insert_rows(ctx_guard.get_store_ctx(),
+    ret = tablet_service_->insert_rows(ctx_guard.get_tablet_handle(),
+                                       ctx_guard.get_store_ctx(),
                                        dml_param,
                                        column_ids,
                                        row_iter,

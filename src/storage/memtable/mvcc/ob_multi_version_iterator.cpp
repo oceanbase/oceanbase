@@ -264,8 +264,11 @@ int ObMultiVersionValueIterator::get_trans_status(const transaction::ObTransID &
   UNUSED(cluster_version);
   int ret = OB_SUCCESS;
   SCN trans_version = SCN::max_scn();
-
-  if (OB_FAIL(ctx_->get_tx_table_guard().get_tx_state_with_scn(trans_id, merge_scn_, state, trans_version))) {
+  storage::ObTxTableGuards tx_table_guards = ctx_->get_tx_table_guards();
+  if (OB_FAIL(tx_table_guards.get_tx_state_with_scn(trans_id,
+                                                    merge_scn_,
+                                                    state,
+                                                    trans_version))) {
     STORAGE_LOG(WARN, "check_with_tx_data fail.", K(trans_id));
   }
 
@@ -576,8 +579,12 @@ int ObMultiVersionRowIterator::try_cleanout_tx_node_(ObMvccRow *value, ObMvccTra
 {
   int ret = OB_SUCCESS;
   const ObTransID data_tx_id = tnode->tx_id_;
-  if (!(tnode->is_committed() || tnode->is_aborted()) && tnode->is_delayed_cleanout() &&
-      OB_FAIL(ctx_->get_tx_table_guard().cleanout_tx_node(data_tx_id, *value, *tnode, false /*need_row_latch*/))) {
+  if (!(tnode->is_committed() || tnode->is_aborted())
+      && tnode->is_delayed_cleanout()
+      && OB_FAIL(ctx_->get_tx_table_guards().cleanout_tx_node(data_tx_id,
+                                            *value,
+                                            *tnode,
+                                            false     /*need_row_latch*/))) {
     TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*value), K(*tnode));
   } else if (!tnode->is_aborted()) {
     const blocksstable::ObDmlFlag dml_flag = tnode->get_dml_flag();

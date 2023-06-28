@@ -107,6 +107,10 @@ public:
   bool is_none() const { return is_data_status_complete() && is_restore_status_full(); }
   bool is_data_status_complete() const { return ObTabletDataStatus::is_complete(data_status_); }
   bool is_restore_status_full() const { return ObTabletRestoreStatus::is_full(restore_status_); }
+  bool is_restore_status_pending() const { return ObTabletRestoreStatus::is_pending(restore_status_); }
+  bool is_restore_status_undefined() const { return ObTabletRestoreStatus::is_undefined(restore_status_); }
+  bool is_restore_status_empty() const { return ObTabletRestoreStatus::is_empty(restore_status_); }
+  bool is_restore_status_minor_and_major_meta() const { return ObTabletRestoreStatus::is_minor_and_major_meta(restore_status_); }
   bool is_expected_status_normal() const { return ObTabletExpectedStatus::is_normal(expected_status_); }
   bool is_expected_status_deleted() const { return ObTabletExpectedStatus::is_deleted(expected_status_); }
 
@@ -118,7 +122,6 @@ public:
   int get_expected_status(ObTabletExpectedStatus::STATUS &expected_status) const;
   int init_status();
   int init_status_for_ha(const ObTabletHAStatus &ha_status);
-  bool is_restore_status_pending() const { return ObTabletRestoreStatus::is_pending(restore_status_); }
   bool is_valid_for_backup() const { return ObTabletDataStatus::is_complete(data_status_) && ObTabletRestoreStatus::is_full(restore_status_); }
 
   TO_STRING_KV(K_(restore_status), K_(data_status), K_(expected_status), K_(reserved));

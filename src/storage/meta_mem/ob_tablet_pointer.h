@@ -13,15 +13,14 @@
 #ifndef OCEANBASE_STORAGE_OB_TABLET_POINTER
 #define OCEANBASE_STORAGE_OB_TABLET_POINTER
 
-#include "lib/lock/ob_tc_rwlock.h"
-#include "lib/lock/ob_thread_cond.h"
+#include "lib/lock/ob_mutex.h"
 #include "storage/meta_mem/ob_meta_pointer.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/ob_i_memtable_mgr.h"
 #include "storage/tablet/ob_tablet_ddl_info.h"
 #include "storage/tablet/ob_tablet_meta.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "storage/multi_data_source/mds_table_handler.h"
 
 namespace oceanbase
 {
@@ -46,37 +45,48 @@ public:
   virtual void reset() override;
 
   virtual int set_attr_for_obj(ObTablet *tablet) override;
-  virtual int dump_meta_obj(bool &is_washed) override;
+  virtual int dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_obj) override;
 
   virtual int deep_copy(char *buf, const int64_t buf_len, ObMetaPointer<ObTablet> *&value) const override;
   virtual int64_t get_deep_copy_size() const override;
 
+  virtual int acquire_obj(ObTablet *&t) override;
+  virtual int release_obj(ObTablet *&t) override;
+
+  // do not KPC memtable_mgr, may dead lock
   INHERIT_TO_STRING_KV("ObMetaPointer", ObMetaPointer, K_(ls_handle), K_(ddl_kv_mgr_handle),
-      K_(memtable_mgr_handle), K_(ddl_info), K_(redefined_schema_version));
+      KP(memtable_mgr_handle_.get_memtable_mgr()), K_(ddl_info), K_(initial_state), KP_(old_version_chain));
 public:
-  int set_tx_data(const ObTabletTxMultiSourceDataUnit &tx_data);
-  int get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const;
-  int set_redefined_schema_version(const int64_t schema_version);
-  int get_redefined_schema_version(int64_t &schema_version) const;
+  bool get_initial_state() const;
+  void set_initial_state(const bool initial_state);
   int create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   void get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int get_mds_table(mds::MdsTableHandle &handle, bool not_exist_create = false);
+  // interfaces forward to mds_table_handler_
+  void mark_mds_table_deleted();
+  void set_mds_written();
+  bool is_mds_written() const;
+  int try_release_mds_nodes_below(const share::SCN &scn);
+  int try_gc_mds_table();
+  int get_min_mds_ckpt_scn(share::SCN &scn);
 private:
   int wash_obj();
-  virtual int do_post_work_for_load() override;
+  int add_tablet_to_old_version_chain(ObTablet *tablet);
+  int remove_tablet_from_old_version_chain(ObTablet *tablet);
 private:
   ObLSHandle ls_handle_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_;
   ObMemtableMgrHandle memtable_mgr_handle_;
   ObTabletDDLInfo ddl_info_;
-  ObTabletTxMultiSourceDataUnit tx_data_;
-  int64_t redefined_schema_version_;
-  common::ObThreadCond cond_;
-  mutable common::TCRWLock msd_lock_;
-  lib::ObMutex ddl_kv_mgr_lock_;
+  bool initial_state_;
+  mds::ObMdsTableHandler mds_table_handler_;// 48B
+  ObByteLock ddl_kv_mgr_lock_;
+  ObTablet *old_version_chain_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletPointer);
 };
+
 } // namespace storage
 } // namespace oceanbase
 

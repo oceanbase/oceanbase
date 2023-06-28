@@ -1510,6 +1510,7 @@ int ObSchemaRetrieveUtils::fill_tablegroup_schema(
   int ret = common::OB_SUCCESS;
   tg_schema.reset();
   is_deleted  = false;
+  ObString sharding_default(OB_PARTITION_SHARDING_ADAPTIVE);
   tg_schema.set_tenant_id(tenant_id);
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, tablegroup_id, tg_schema, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
@@ -1547,6 +1548,7 @@ int ObSchemaRetrieveUtils::fill_tablegroup_schema(
       tg_schema.get_sub_part_option().set_part_num(0);
       tg_schema.set_def_sub_part_num(0);
     }
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, sharding, tg_schema, true, true, sharding_default);
   }
   SQL_LOG(DEBUG, "fill tablegroup schema", K(ret), K(tg_schema));
   return ret;
@@ -3970,6 +3972,7 @@ int ObSchemaRetrieveUtils::fill_tablegroup_schema(
   tablegroup_schema.reset();
   is_deleted = false;
   tablegroup_schema.set_tenant_id(tenant_id);
+  ObString sharding_default(OB_PARTITION_SHARDING_ADAPTIVE);
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, tablegroup_id, tablegroup_schema, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
   if (!is_deleted) {
@@ -3977,6 +3980,7 @@ int ObSchemaRetrieveUtils::fill_tablegroup_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, tablegroup_name, tablegroup_schema);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, partition_status, tablegroup_schema, ObPartitionStatus, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, partition_schema_version, tablegroup_schema, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, sharding, tablegroup_schema, true, true, sharding_default);
   }
   return ret;
 }
@@ -5318,6 +5322,38 @@ int ObSchemaRetrieveUtils::fill_object_id(const uint64_t tenant_id, T &result,
   int ret = common::OB_SUCCESS;
   EXTRACT_INT_FIELD_MYSQL(result, "object_id", object_id, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  return ret;
+}
+
+template <typename T>
+int ObSchemaRetrieveUtils::retrieve_table_latest_schema_versions(
+    T &result,
+    ObIArray<ObTableLatestSchemaVersion> &table_schema_versions)
+{
+  int ret = common::OB_SUCCESS;
+  ObTableLatestSchemaVersion table_schema_version;
+
+  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
+    table_schema_version.reset();
+    uint64_t table_id = common::OB_INVALID_ID;
+    int64_t schema_version = common::OB_INVALID_VERSION;
+    bool is_deleted = false;
+
+    EXTRACT_INT_FIELD_MYSQL(result, "table_id", table_id, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "schema_version", schema_version, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+
+    if (FAILEDx(table_schema_version.init(table_id, schema_version, is_deleted))) {
+      LOG_WARN("init failed", KR(ret), K(table_id), K(schema_version), K(is_deleted));
+    } else if (OB_FAIL(table_schema_versions.push_back(table_schema_version))) {
+      LOG_WARN("push back failed", KR(ret), K(table_schema_version), K(table_schema_versions));
+    }
+  }
+  if (ret == common::OB_ITER_END) {
+    ret = common::OB_SUCCESS;
+  } else {
+    SHARE_SCHEMA_LOG(WARN, "fail to get all table latest schema version", KR(ret));
+  }
   return ret;
 }
 

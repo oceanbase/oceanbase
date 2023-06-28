@@ -730,7 +730,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
     bool rpc_is_flying = false;
     bool is_stream_valid = true;
     FetchLogARpcResult *result = NULL;
-    KickOutInfo kickout_info(ls_fetch_ctx_->get_tls_id());
+    KickOutInfo kickout_info;
 
     // Whether the log stream is taken over by RPC, default is false
     bool stream_been_taken_over_by_rpc = false;
@@ -1234,14 +1234,14 @@ int FetchStream::handle_fetch_log_error_(
   if (OB_SUCCESS != rcode.rcode_) {
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_RPC;
-    if (OB_NOT_NULL(ls_fetch_ctx_)) {
+    if (OB_NOT_NULL(ls_fetch_ctx_) && OB_IN_STOP_STATE != ret) {
       ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
                                   IObLogErrHandler::ErrType::FETCH_LOG,
                                   trace_id,
                                   ls_fetch_ctx_->get_next_lsn(),
                                   rcode.rcode_,
                                   "%s");
-    LOG_ERROR("fetch log fail on rpc, need_switch_server", K(svr_), K(rcode), "fetch_stream", this);
+      LOG_ERROR("fetch log fail on rpc, need_switch_server", K(svr_), K(rcode), "fetch_stream", this);
     }
   }
   // server return error
@@ -1249,7 +1249,7 @@ int FetchStream::handle_fetch_log_error_(
     // Other errors, switch server directly
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_SERVER;
-    if (OB_NOT_NULL(ls_fetch_ctx_)) {
+    if (OB_NOT_NULL(ls_fetch_ctx_) && OB_IN_STOP_STATE != ret ) {
       ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
                                   IObLogErrHandler::ErrType::FETCH_LOG,
                                   trace_id,
@@ -1260,7 +1260,6 @@ int FetchStream::handle_fetch_log_error_(
                 "svr_err", resp.get_err(), "svr_debug_err", resp.get_debug_err(),
                 K(rcode), K(resp));
     }
-
   } else {
     need_kick_out = false;
   }
@@ -1500,7 +1499,7 @@ int FetchStream::update_fetch_task_state_(KickOutInfo &kick_out_info,
     LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), K(ls_fetch_ctx_));
   } else {
     LSFetchCtx *task = ls_fetch_ctx_;
-    bool need_check_switch_server = check_need_switch_server_();
+    const bool need_check_switch_server = check_need_switch_server_();
 
     // If the task is deleted, it is kicked out directly
     if (OB_UNLIKELY(task->is_discarded())) {
@@ -1522,7 +1521,7 @@ int FetchStream::update_fetch_task_state_(KickOutInfo &kick_out_info,
         task->update_touch_tstamp_if_progress_beyond_upper_limit(upper_limit_);
       }
 
-      // Update each partition's progress to the global
+      // Update each LS's progress to the global
       if (OB_SUCCESS == ret && OB_FAIL(publish_progress_(*task))) {
         LOG_ERROR("update progress fail", KR(ret), K(task), KPC(task));
       }
@@ -1637,10 +1636,13 @@ int FetchStream::check_fetch_timeout_(LSFetchCtx &task, KickOutInfo &kick_out_in
 int FetchStream::check_switch_server_(LSFetchCtx &task, KickOutInfo &kick_out_info)
 {
   int ret = OB_SUCCESS;
+  const char *branch_str = nullptr;
 
   if (exist_(kick_out_info, task.get_tls_id())) {
     // Do not check for LS already located in kick_out_info
+    branch_str = "exist_kick_out_info";
   } else if (task.need_switch_server(svr_)) {
+    branch_str = "need_switch_server";
     LOG_TRACE("exist higher priority server, need switch server", KR(ret), "key", task.get_tls_id(),
              K_(svr));
     // If need to switch the stream, add it to the kick out collection
@@ -1653,8 +1655,10 @@ int FetchStream::check_switch_server_(LSFetchCtx &task, KickOutInfo &kick_out_in
     }
   } else {
     // do nothing
+    branch_str = "no_need_switch_server";
   }
 
+  LOG_TRACE("check_switch_server", "ls_id", ls_fetch_ctx_->get_tls_id(), K(branch_str));
   return ret;
 }
 

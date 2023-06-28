@@ -67,12 +67,17 @@
 #include "storage/backup/ob_backup_handler.h"
 #include "storage/backup/ob_ls_backup_clean_mgr.h"
 #include "storage/ob_file_system_router.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "storage/backup/ob_backup_utils.h"
 #include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
+#include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
+#include "rootserver/backup/ob_backup_schedule_task.h" // ObBackupScheduleTask
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "share/backup/ob_backup_struct.h"
 #include "observer/ob_heartbeat_handler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 
@@ -826,92 +831,6 @@ int ObService::backup_meta(const obrpc::ObBackupMetaArg &arg)
   return ret;
 }
 
-// At backup meta stage, observer will backup tablet id list
-// And RS will compare the observer's tablet id list with the newest tablet id list
-// and will get the diff tablet id list, for each tablet not in observer's
-// backed up list, it will compare using observer's backup scn and tx data's tx log ts
-int ObService::check_not_backup_tablet_create_scn(const obrpc::ObBackupCheckTabletArg &arg)
-{
-  int ret = OB_SUCCESS;
-  LOG_INFO("success received backup check tablet from rs", K(arg));
-  if (!arg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(arg));
-  } else {
-    MTL_SWITCH(arg.tenant_id_) {
-      ObLSService *ls_srv = nullptr;
-      ObLSHandle ls_handle;
-      ObLS *ls = nullptr;
-      ObLSTabletService *ls_tablet_svr = nullptr;
-      const ObSArray<ObTabletID> &tablet_ids = arg.tablet_ids_;
-      if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls service is nullptr", KR(ret));
-      } else if (OB_FAIL(ls_srv->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-        LOG_WARN("fail to get log stream", KR(ret), K(arg.tenant_id_), K(arg.ls_id_));
-      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("log stream should not be NULL", KR(ret), K(arg.tenant_id_), K(arg.ls_id_), KPC(ls));
-      } else {
-        const int64_t rebuild_seq = ls->get_rebuild_seq();
-        ObMigrationStatus migration_status;
-        share::ObLSRestoreStatus restore_status;
-        if (OB_FAIL(ls->is_offline())) {
-          ret = OB_EAGAIN;
-          LOG_WARN("ls is offline, retry later", K(ret), KPC(ls));
-        } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
-          LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-        } else if (storage::ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
-          ret = OB_EAGAIN;
-          LOG_WARN("ls is in migration, retry later", K(ret), KPC(ls));
-        } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
-          LOG_WARN("failed to get restore status", K(ret), KPC(ls));
-        } else if (share::ObLSRestoreStatus::RESTORE_NONE != restore_status) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("restore ls is unexpected", K(ret), KPC(ls));
-        } else {
-          if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ls tablet service should not be NULL", KR(ret), K(arg.tenant_id_), K(arg.ls_id_), KPC(ls));
-          } else {
-            const int64_t timeout_us = ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US;
-            ObTabletHandle tablet_handle;
-            for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-              const ObTabletID &tablet_id = tablet_ids.at(i);
-              tablet_handle.reset();
-              if (OB_FAIL(ls_tablet_svr->get_tablet(tablet_id, tablet_handle, timeout_us))) {
-                if (OB_TABLET_NOT_EXIST == ret) {
-                  LOG_INFO("tablet has been deleted, no need to check", K(tablet_id));
-                  ret = OB_SUCCESS;
-                } else {
-                  LOG_WARN("failed to get tablet", KR(ret), K(tablet_id), K(timeout_us));
-                }
-              } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected error : tablet handle is invalid", KR(ret), K(tablet_handle));
-              } else {
-                const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
-                if (OB_UNLIKELY(tablet_meta.create_scn_ <= arg.backup_scn_)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected error : tablet has't been backup", KR(ret),
-                      K(arg.tenant_id_), K(arg.ls_id_), K(tablet_id),
-                      K(tablet_meta), "backup_scn", arg.backup_scn_);
-                }
-              }
-            }
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (rebuild_seq != ls->get_rebuild_seq()) {
-          ret = OB_EAGAIN;
-          LOG_WARN("ls has rebuild, retry later", K(ret), KPC(ls));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObService::check_backup_task_exist(const ObBackupCheckTaskArg &arg, bool &res)
 {
   int ret = OB_SUCCESS;
@@ -951,7 +870,6 @@ int ObService::delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg)
 
   return ret;
 }
-
 
 int ObService::check_sys_task_exist(
     const share::ObTaskId &arg, bool &res)
@@ -1079,14 +997,18 @@ int ObService::ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, 
       } else if (tablet_id.is_valid()) {
         // tablet freeze
         if (OB_FAIL(freezer->tablet_freeze(ls_id, tablet_id))) {
-          LOG_WARN("fail to freeze tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+          if (OB_EAGAIN == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to freeze tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+          }
         } else {
           LOG_INFO("succeed to freeze tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
         }
       } else {
         // logstream freeze
         if (OB_FAIL(freezer->ls_freeze(ls_id))) {
-          if (OB_ENTRY_EXIST == ret) {
+          if (OB_EAGAIN == ret) {
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("fail to freeze ls", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
@@ -1273,11 +1195,16 @@ int ObService::check_ddl_tablet_merge_status(
         }
         // check and update major status
         if (OB_SUCC(ret)) {
-          ObSSTable *latest_major_sstable = static_cast<ObSSTable *>(
-              tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(true/*last*/));
-          status = nullptr != latest_major_sstable;
-          if (OB_FAIL(result.merge_status_.push_back(status))) {
-            LOG_WARN("fail to push back to array", K(ret), K(status), K(tablet_id));
+          ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+          if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+            LOG_WARN("fail to fetch table store", K(ret));
+          } else {
+            ObSSTable *latest_major_sstable = static_cast<ObSSTable *>(
+              table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/));
+            status = nullptr != latest_major_sstable;
+            if (OB_FAIL(result.merge_status_.push_back(status))) {
+              LOG_WARN("fail to push back to array", K(ret), K(status), K(tablet_id));
+            }
           }
         }
       }
@@ -2327,7 +2254,8 @@ int ObService::inner_fill_tablet_info_(
   } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(
       tablet_id,
       tablet_handle,
-      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+      0,
+      ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("get tablet failed", KR(ret), K(tenant_id), K(tablet_id));
     }
@@ -2475,6 +2403,7 @@ int ObService::fill_ls_replica(
       ObReplicaStatus replica_status = REPLICA_STATUS_NORMAL;
       ObReplicaType replica_type = REPLICA_TYPE_FULL;
       bool is_compatible_with_readonly_replica = false;
+      ObMigrationStatus migration_status = OB_MIGRATION_STATUS_MAX;
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
@@ -2486,6 +2415,8 @@ int ObService::fill_ls_replica(
         LOG_WARN("get member list and learner list from ObLS failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_restore_status(restore_status))) {
         LOG_WARN("get restore status failed", KR(ret));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_migration_status(migration_status))) {
+        LOG_WARN("get migration status failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_replica_status(replica_status))) {
         LOG_WARN("get replica status failed", KR(ret));
       } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
@@ -2527,13 +2458,72 @@ int ObService::fill_ls_replica(
             gctx_.config_->zone.str(), /*zone*/
             paxos_replica_number,                    /*paxos_replica_number*/
             0,                         /*data_size*/
-            0,
+            0,                         /*required_size*/
             member_list,
-            learner_list))) {                     /*required_size*/
+            learner_list,
+            OB_MIGRATION_STATUS_REBUILD == migration_status /*is_rebuild*/))) {
         LOG_WARN("fail to init a ls replica", KR(ret), K(tenant_id), K(ls_id), K(role),
                  K(proposal_id), K(unit_id), K(paxos_replica_number), K(member_list), K(learner_list));
       } else {
         LOG_TRACE("finish fill ls replica", KR(ret), K(tenant_id), K(ls_id), K(replica));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::report_backup_over(const obrpc::ObBackupTaskRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDataLSTask task;
+  ObBackupTaskScheduler *task_scheduler = nullptr;
+  FLOG_INFO("receive backup over", K(res));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    ObHAResultInfo result_info(ObHAResultInfo::BACKUP_DATA,
+                               res.ls_id_,
+                               res.src_server_,
+                               res.dag_id_,
+                               res.result_);
+    MTL_SWITCH(gen_meta_tenant_id(res.tenant_id_)) {
+      if (nullptr == (task_scheduler = MTL(ObBackupTaskScheduler *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("backup task scheduler can't be nullptr", K(ret));
+      } else if (OB_FAIL(task.build_from_res(res, BackupJobType::BACKUP_DATA_JOB))) {
+        LOG_WARN("failed to build task from res rpc", K(ret), K(res));
+      } else if (OB_FAIL(task_scheduler->execute_over(task, result_info))) {
+        LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::report_backup_clean_over(const obrpc::ObBackupTaskRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObBackupCleanLSTask task;
+  ObBackupTaskScheduler *task_scheduler = nullptr;
+  FLOG_INFO("report backup clean over", K(res));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    ObHAResultInfo result_info(ObHAResultInfo::BACKUP_CLEAN,
+                               res.ls_id_,
+                               res.src_server_,
+                               res.dag_id_,
+                               res.result_);
+    MTL_SWITCH(gen_meta_tenant_id(res.tenant_id_)) {
+      if (nullptr == (task_scheduler = MTL(ObBackupTaskScheduler *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("backup task scheduler can't be nullptr", K(ret));
+      } else if (OB_FAIL(task.build_from_res(res, BackupJobType::BACKUP_CLEAN_JOB))) {
+        LOG_WARN("failed to build task from res rpc", K(ret), K(res));
+      } else if (OB_FAIL(task_scheduler->execute_over(task, result_info))) {
+        LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));
       }
     }
   }
@@ -2820,6 +2810,7 @@ int ObService::refresh_tenant_info(
     } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
       LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));
     } else {
+      MTL(transaction::ObTransService *)->register_standby_cleanup_task();
       LOG_INFO("finish refresh_tenant_info", KR(ret), K(arg), K(result));
     }
   }
@@ -2851,6 +2842,48 @@ int ObService::init_tenant_config(
   return OB_SUCCESS;
 }
 
+int ObService::get_ls_replayed_scn(
+    const ObGetLSReplayedScnArg &arg,
+    ObGetLSReplayedScnRes &result)
+{
+  LOG_INFO("start get_ls_replayed_scn", K(arg));
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  share::SCN cur_readable_scn = SCN::min_scn();
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObLSService *ls_svr = MTL(ObLSService*);
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    if (OB_ISNULL(ls_svr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
+    } else if (OB_FAIL(ls_svr->get_ls(arg.get_ls_id(), ls_handle, ObLSGetMod::RS_MOD))) {
+      LOG_WARN("get log stream failed", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream is null", KR(ret), K(arg), K(ls_handle));
+    } else if (OB_FAIL(ls->get_max_decided_scn(cur_readable_scn))) {
+      LOG_WARN("failed to get_max_decided_scn", KR(ret), K(arg), KPC(ls));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(), cur_readable_scn))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn));
+    } else {
+      LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result));
+    }
+  }
+  return ret;
+}
+
 int ObService::handle_heartbeat(
     const share::ObHBRequest &hb_request,
     share::ObHBResponse &hb_response)
@@ -2868,6 +2901,7 @@ int ObService::handle_heartbeat(
   FLOG_INFO("handle_heartbeat", KR(ret), K(hb_request), K(hb_response), K(time_cost));
   return ret;
 }
+
 int ObService::update_tenant_info_cache(
     const ObUpdateTenantInfoCacheArg &arg,
     ObUpdateTenantInfoCacheRes &result)

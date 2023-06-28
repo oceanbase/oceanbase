@@ -238,7 +238,9 @@ TEST_F(TestObSimpleLogClusterAccessMode, add_member)
 
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT));
     sleep(2);
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(ObMember(get_cluster()[3]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+    LogConfigVersion config_version;
+    ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(ObMember(get_cluster()[3]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
     unblock_net(leader_idx, follower2_idx);
     revert_cluster_palf_handle_guard(palf_list);
   }
@@ -276,7 +278,7 @@ TEST_F(TestObSimpleLogClusterAccessMode, prev_log_slide)
   const int64_t leader_epoch = leader.palf_handle_impl_->state_mgr_.get_leader_epoch();
   EXPECT_EQ(OB_ERR_UNEXPECTED, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, leader_epoch, config_version));
   const LogConfigMeta new_config_meta = leader.palf_handle_impl_->config_mgr_.log_ms_meta_;
-  EXPECT_EQ(config_meta.curr_.config_version_, new_config_meta.curr_.config_version_);
+  EXPECT_EQ(config_meta.curr_.config_.config_version_, new_config_meta.curr_.config_.config_version_);
   // wait prepare req reaches majority
   sleep(1);
   // switch to accept state

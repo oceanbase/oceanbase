@@ -43,9 +43,9 @@ public:
   ~ObDirectLoadMergeParam();
   bool is_valid() const;
   TO_STRING_KV(K_(table_id), K_(target_table_id), K_(rowkey_column_num), K_(store_column_count),
-               K_(snapshot_version), K_(table_data_desc), KP_(datum_utils), K_(is_heap_table),
-               K_(is_fast_heap_table), K_(online_opt_stat_gather), KP_(insert_table_ctx),
-               KP_(dml_row_handler));
+               K_(snapshot_version), K_(table_data_desc), KP_(datum_utils), KP_(col_descs),
+               KP_(cmp_funcs), K_(is_heap_table), K_(is_fast_heap_table),
+               K_(online_opt_stat_gather), KP_(insert_table_ctx), KP_(dml_row_handler));
 public:
   uint64_t table_id_;
   uint64_t target_table_id_;
@@ -55,6 +55,7 @@ public:
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
+  const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
   bool is_heap_table_;
   bool is_fast_heap_table_;
   bool online_opt_stat_gather_;

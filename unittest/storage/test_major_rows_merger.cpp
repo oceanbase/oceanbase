@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #define USING_LOG_PREFIX STORAGE
 #include <gtest/gtest.h>
 #define private public
@@ -31,7 +30,15 @@ using namespace compaction;
 using namespace unittest;
 namespace storage
 {
-
+namespace mds
+{
+void *MdsAllocator::alloc(const int64_t size) {
+  return ob_malloc(size, "MDS");
+}
+void MdsAllocator::free(void *ptr) {
+  return ob_free(ptr);
+}
+}
 template<typename T>
 int prepare_partition_merge_iter(ObMergeParameter &merge_param,
                                  common::ObIAllocator &allocator,
@@ -90,13 +97,10 @@ void ObMajorRowsMergerTest::SetUpTestCase()
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
 
-  // create tablet
-  obrpc::ObBatchCreateTabletArg create_tablet_arg;
   share::schema::ObTableSchema table_schema;
-  ASSERT_EQ(OB_SUCCESS, gen_create_tablet_arg(tenant_id_, ls_id, tablet_id, create_tablet_arg, 1, &table_schema));
-
-  ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(*ls_tablet_svr, create_tablet_arg));
+  uint64_t table_id = 12345;
+  ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
 }
 
 void ObMajorRowsMergerTest::TearDownTestCase()
@@ -137,8 +141,6 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
 
   table_merge_schema_.reset();
   OK(table_merge_schema_.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-  merge_context.schema_ctx_.base_schema_version_ = table_schema_.get_schema_version();
-  merge_context.schema_ctx_.schema_version_ = table_schema_.get_schema_version();
   merge_context.schema_ctx_.storage_schema_ = &table_merge_schema_;
 
   merge_context.is_full_merge_ = is_full_merge;
@@ -150,9 +152,10 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
   merge_context.sstable_version_range_ = trans_version_range;
   merge_context.param_.report_ = &rs_reporter_;
   merge_context.progressive_merge_num_ = 0;
-  const common::ObIArray<ObITable *> &tables = merge_context.tables_handle_.get_tables();
-  merge_context.scn_range_.start_scn_ = tables.at(0)->get_start_scn();
-  merge_context.scn_range_.end_scn_ = tables.at(tables.count() - 1)->get_end_scn();
+  const int64_t tables_count = merge_context.tables_handle_.get_count();
+  merge_context.scn_range_.start_scn_ = merge_context.tables_handle_.get_table(0)->get_start_scn();
+  merge_context.scn_range_.end_scn_ = merge_context.tables_handle_.get_table(tables_count - 1)->get_end_scn();
+  merge_context.merge_scn_ = merge_context.scn_range_.end_scn_;
 
   ASSERT_EQ(OB_SUCCESS, merge_context.init_merge_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder(index_desc_));
@@ -234,7 +237,7 @@ TEST_F(ObMajorRowsMergerTest, tset_compare_func)
   OK(iter_0->next());
   OK(iter_1->next());
 
-  const ObTableReadInfo &read_info = iter_0->get_read_info();
+  const ObITableReadInfo &read_info = iter_0->get_read_info();
   int64_t cmp_ret;
   ObPartitionMergeLoserTreeItem item_0, item_1;
   item_0.iter_ = iter_0;
@@ -346,7 +349,7 @@ TEST_F(ObMajorRowsMergerTest, single)
   ObPartitionMergeLoserTreeItem item_0, item_1;
   item_0.iter_ = iter_0; item_0.iter_idx_ = 0;
   item_1.iter_ = iter_1; item_1.iter_idx_ = 1;
-  const ObTableReadInfo &read_info = iter_0->get_read_info();
+  const ObITableReadInfo &read_info = iter_0->get_read_info();
   ObPartitionMergeLoserTreeCmp cmp(read_info.get_datum_utils(), read_info.get_schema_rowkey_count());
 
   ObPartitionMajorRowsMerger merger(cmp);
@@ -455,7 +458,7 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   item_0.iter_idx_ = 0;
   item_1.iter_ = iter_1;
   item_1.iter_idx_ = 1;
-  const ObTableReadInfo &read_info = iter_0->get_read_info();
+  const ObITableReadInfo &read_info = iter_0->get_read_info();
   ObPartitionMergeLoserTreeCmp cmp(read_info.get_datum_utils(), read_info.get_schema_rowkey_count());
   ObPartitionMajorRowsMerger merger(cmp);
 
@@ -496,8 +499,8 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
 int main(int argc, char **argv)
 {
   system("rm -rf test_major_rows_merger.log*");
-  OB_LOGGER.set_file_name("test_major_rows_merger.log");
   OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_file_name("test_major_rows_merger.log", true, false);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

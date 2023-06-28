@@ -443,29 +443,20 @@ int ObDASCtx::add_candi_table_loc(const ObDASTableLocMeta &loc_meta,
   return ret;
 }
 
-bool ObDASCtx::has_same_lsid(ObLSID *lsid)
+int ObDASCtx::get_all_lsid(share::ObLSArray &ls_ids)
 {
-  bool bret = true;
-  ObLSID first_lsid;
-  FOREACH_X(table_node, table_locs_, bret) {
+  int ret = OB_SUCCESS;
+  FOREACH_X(table_node, table_locs_, OB_SUCC(ret)) {
     ObDASTableLoc *table_loc = *table_node;
     for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
-         bret && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
+         OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
       ObDASTabletLoc *tablet_loc = *tablet_node;
-      if (!first_lsid.is_valid()) {
-        first_lsid = tablet_loc->ls_id_;
-      } else if (first_lsid != tablet_loc->ls_id_) {
-        bret = false;
+      if (!is_contain(ls_ids, tablet_loc->ls_id_)) {
+        ret = ls_ids.push_back(tablet_loc->ls_id_);
       }
     }
   }
-  if (!first_lsid.is_valid()) {
-    bret = false;
-  }
-  if (bret && lsid != nullptr) {
-    *lsid = first_lsid;
-  }
-  return bret;
+  return ret;
 }
 
 int64_t ObDASCtx::get_related_tablet_cnt() const

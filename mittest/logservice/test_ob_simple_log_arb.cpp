@@ -185,8 +185,11 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_degrade_upgrade)
   common::ObMember dummy_member;
   std::vector<PalfHandleImplGuard*> palf_list;
 	EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, arb_replica_idx, leader_idx, leader));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
 
   const int64_t another_f1_idx = (leader_idx+3)%5;
@@ -279,8 +282,11 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_reconfirm_degrade_upgrade)
   std::vector<PalfHandleImplGuard*> palf_list;
 
 	EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, arb_replica_idx, leader_idx, leader));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
 
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
 
@@ -346,10 +352,13 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_config_change)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   sleep(2);
 
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
   // replace member
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(
       ObMember(palf_list[3]->palf_handle_impl_->self_, 1),
       ObMember(palf_list[another_f_idx]->palf_handle_impl_->self_, 1),
+      config_version,
       CONFIG_CHANGE_TIMEOUT));
 
   // add learner
@@ -361,10 +370,12 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_config_change)
   EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->switch_learner_to_acceptor(
       ObMember(palf_list[4]->palf_handle_impl_->self_, 1),
       2,
+      config_version,
       CONFIG_CHANGE_TIMEOUT));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(
       ObMember(palf_list[4]->palf_handle_impl_->self_, 1),
       3,
+      config_version,
       CONFIG_CHANGE_TIMEOUT));
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();
@@ -479,7 +490,9 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_defensive)
   const common::ObMember added_member = ObMember(palf_list[added_member_idx]->palf_handle_impl_->self_, 1);
 
   // add a member, do not allow to append logs until config log reaches majority
-  LogConfigChangeArgs args(added_member, 3, ADD_MEMBER);
+  LogConfigVersion cur_config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(cur_config_version));
+  LogConfigChangeArgs args(added_member, 3, cur_config_version, ADD_MEMBER);
   int64_t proposal_id = 0;
   int64_t election_epoch = 0;
   LogConfigVersion config_version;
@@ -673,8 +686,8 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
   EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, election_epoch, config_version));
 
   // leader appended config meta
-  EXPECT_FALSE(palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
-  EXPECT_TRUE(palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.log_sync_memberlist_.contains(b_addr));
+  EXPECT_FALSE(palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
+  EXPECT_TRUE(palf_list[another_f_idx]->get_palf_handle_impl()->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(b_addr));
 
   // block all networks of arb member, and the network from the follower to the leader
   block_net(arb_replica_idx, another_f_idx, true);

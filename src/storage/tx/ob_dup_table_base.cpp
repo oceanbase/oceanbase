@@ -38,6 +38,11 @@ const int64_t DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeInde
     3 * 60 * 1000 * 1000 // 3min , ts_sync_print_interval
 };
 
+
+const int64_t ObDupTableLogOperator::MAX_LOG_BLOCK_SIZE=common::OB_MAX_LOG_ALLOWED_SIZE;
+const int64_t ObDupTableLogOperator::RESERVED_LOG_HEADER_SIZE = 100;
+
+
 /*******************************************************
  *  Dup_Table LS Role State
  *******************************************************/
@@ -736,6 +741,7 @@ int ObDupTableLogOperator::prepare_serialize_log_entry_(int64_t &max_ser_size,
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid block buf", K(ret), K(big_segment_buf_));
   } else {
+
     if (OB_SUCC(ret)) {
       origin_max_ser_size = max_ser_size;
       if (OB_FAIL(lease_mgr_ptr_->prepare_serialize(max_ser_size, logging_lease_addrs_))) {
@@ -745,9 +751,10 @@ int ObDupTableLogOperator::prepare_serialize_log_entry_(int64_t &max_ser_size,
         DUP_TABLE_LOG(WARN, "push back log entry type failed", K(ret));
       }
     }
+
     if (OB_SUCC(ret)) {
       origin_max_ser_size = max_ser_size;
-      int64_t max_log_buf_size = MAX_LOG_BLOCK_SIZE - max_stat_log.get_serialize_size();
+      int64_t max_log_buf_size = MAX_LOG_BLOCK_SIZE - RESERVED_LOG_HEADER_SIZE - max_stat_log.get_serialize_size();
       if (OB_FAIL(tablet_mgr_ptr_->prepare_serialize(max_ser_size, logging_tablet_set_ids_,
                                                      max_log_buf_size))) {
         DUP_TABLE_LOG(WARN, "prepare serialize tablets_mgr failed", K(ret));
@@ -785,10 +792,10 @@ int ObDupTableLogOperator::serialize_log_entry_(const int64_t max_ser_size,
 {
   int ret = OB_SUCCESS;
 
-  if (max_ser_size > MAX_LOG_BLOCK_SIZE) {
+  if (max_ser_size > MAX_LOG_BLOCK_SIZE - RESERVED_LOG_HEADER_SIZE) {
     ret = OB_LOG_TOO_LARGE;
     DUP_TABLE_LOG(WARN, "serialize buf is not enough for a big log", K(ls_id_), K(max_ser_size),
-                  K(type_array));
+                  K(type_array), K(MAX_LOG_BLOCK_SIZE),K(RESERVED_LOG_HEADER_SIZE));
   } else if (OB_FAIL(big_segment_buf_.init_for_serialize(max_ser_size))) {
     DUP_TABLE_LOG(WARN, "init big_segment_buf_ failed", K(ret), K(max_ser_size),
                   K(big_segment_buf_));
@@ -932,7 +939,7 @@ int ObDupTableLogOperator::deserialize_log_entry_()
       }
 
       if (OB_SUCC(ret) && data_pos < after_header_pos + log_entry_size) {
-        DUP_TABLE_LOG(INFO, "try to deserialize a new version log", K(ret), K(data_pos),
+        DUP_TABLE_LOG(INFO, "try to deserialize a new version dup_table log in older observer", K(ret), K(data_pos),
                       K(after_header_pos), K(log_entry_size), K(entry_header));
         data_pos = after_header_pos + log_entry_size;
       }
@@ -982,6 +989,10 @@ int ObDupTableLogOperator::retry_submit_log_block_()
                                                        block_buf_pos, unused))) {
       DUP_TABLE_LOG(WARN, "split one part of segment failed", K(ret), K(big_segment_buf_),
                     K(block_buf_pos));
+    } else if (OB_FAIL(!big_segment_buf_.is_completed())) {
+      ret = OB_LOG_TOO_LARGE;
+      DUP_TABLE_LOG(WARN, "Too large dup table log. We can not submit it", K(ret),
+                    K(big_segment_buf_.is_completed()), KPC(this));
     } else if (OB_FAIL(log_handler_->append(block_buf_, block_buf_pos, share::SCN::min_scn(), false,
                                             this, logging_lsn_, logging_scn_))) {
       DUP_TABLE_LOG(WARN, "append block failed", K(ret), K(ls_id_));

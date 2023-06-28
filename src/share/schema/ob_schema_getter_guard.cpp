@@ -329,16 +329,14 @@ int ObSchemaGetterGuard::check_has_local_unique_index(
   return ret;
 }
 
-int ObSchemaGetterGuard::check_has_global_unique_index(
-    const uint64_t tenant_id,
-    const uint64_t table_id,
-    bool &has_global_unique_index)
+int ObSchemaGetterGuard::get_all_unique_index(const uint64_t tenant_id,
+                                              const uint64_t table_id,
+                                              ObIArray<uint64_t> &unique_index_ids)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = NULL;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const ObSimpleTableSchemaV2 *index_schema = NULL;
-  has_global_unique_index = false;
   if (OB_FAIL(get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
@@ -357,9 +355,10 @@ int ObSchemaGetterGuard::check_has_global_unique_index(
                KR(ret), K(tenant_id), K(index_id));
     } else if (OB_UNLIKELY(index_schema->is_final_invalid_index())) {
       //invalid index status, need ingore
-    } else if (index_schema->is_global_unique_index_table()) {
-      has_global_unique_index = true;
-      break;
+    } else if ((index_schema->is_local_unique_index_table() ||
+               index_schema->is_global_unique_index_table()) &&
+               OB_FAIL(unique_index_ids.push_back(index_id))) {
+      LOG_WARN("failed to push back local unique index", K(ret));
     }
   }
   return ret;
@@ -5356,6 +5355,38 @@ GET_SIMPLE_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DEFINE(database)
 GET_SIMPLE_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DEFINE(tablegroup)
 # undef GET_SIMPLE_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DEFINE
 
+int ObSchemaGetterGuard::get_primary_table_schema_in_tablegroup(
+    const uint64_t tenant_id,
+    const uint64_t tablegroup_id,
+    const ObSimpleTableSchemaV2 *&primary_table_schema)
+{
+  int ret = OB_SUCCESS;
+  primary_table_schema = NULL;
+  const ObSchemaMgr *mgr = NULL;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id
+      || OB_INVALID_ID == tablegroup_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tablegroup_id));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(get_schema_mgr(tenant_id, mgr))) {
+    if (OB_TENANT_NOT_EXIST == ret) {
+      ret = ignore_tenant_not_exist_error(tenant_id) ? OB_SUCCESS : ret;
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to get schema mgr", KR(ret), K(tenant_id));
+    }
+  } else if (OB_ISNULL(mgr)) {
+    ret = OB_SCHEMA_EAGAIN;
+    LOG_WARN("get simple schema in lazy mode not supported", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->get_primary_table_schema_in_tablegroup(tenant_id, tablegroup_id, primary_table_schema))) {
+    LOG_WARN("get primary table schema in tablegroup failed", KR(ret), K(tenant_id), K(tablegroup_id));
+  }
+  return ret;
+}
 
 int ObSchemaGetterGuard::get_simple_tenant_schemas(
     ObIArray<const ObSimpleTenantSchema *> &tenant_schemas) const

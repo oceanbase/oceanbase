@@ -215,6 +215,60 @@ public:
   common::ObTabletID tablet_id_;
 };
 
+struct ObUpdateTabletLog : public ObIBaseStorageLogEntry
+{
+public:
+  ObUpdateTabletLog() = default;
+  ObUpdateTabletLog(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const ObMetaDiskAddr &disk_addr);
+  virtual ~ObUpdateTabletLog() = default;
+  virtual bool is_valid() const override;
+  DECLARE_TO_STRING;
+  OB_UNIS_VERSION_V(1);
+public:
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  ObMetaDiskAddr disk_addr_;
+};
+
+struct ObEmptyShellTabletLog : public ObIBaseStorageLogEntry
+{
+public:
+  const int64_t EMPTY_SHELL_SLOG_VERSION = 1;
+public:
+  ObEmptyShellTabletLog() = default;
+  explicit ObEmptyShellTabletLog(const ObLSID &ls_id_, const ObTabletID &tablet_id, ObTablet *tablet);
+  virtual ~ObEmptyShellTabletLog() {}
+  virtual bool is_valid() const override;
+  virtual int serialize(
+      char* buf,
+      const int64_t buf_len,
+      int64_t& pos) const;
+  virtual int deserialize(
+      const char* buf,
+      const int64_t data_len,
+      int64_t& pos);
+  int deserialize_id(
+      const char* buf,
+      const int64_t data_len,
+      int64_t& pos);
+  int deserialize(
+      ObArenaAllocator &allocator,
+      const char* buf,
+      const int64_t data_len,
+      int64_t& pos);
+  virtual int64_t get_serialize_size() const;
+
+  DECLARE_TO_STRING;
+public:
+  int64_t version_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  ObTablet *tablet_;
+};
+
 }
 }
 

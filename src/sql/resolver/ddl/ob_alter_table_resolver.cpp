@@ -2754,7 +2754,7 @@ int ObAlterTableResolver::check_is_drop_primary_key(const ParseNode &node,
     if (OB_FAIL(ret)) {
     } else if (drop_pk_node_cnt <= 0) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, there is no drop primary key node", 
+      LOG_WARN("error unexpected, there is no drop primary key node",
         K(ret), K(drop_pk_node_cnt), K(add_pk_node_cnt), K(other_action_cnt));
     } else if (drop_pk_node_cnt == 1 && add_pk_node_cnt == 1 && other_action_cnt == 0) {
       // is modify primary key operation.
@@ -2764,7 +2764,7 @@ int ObAlterTableResolver::check_is_drop_primary_key(const ParseNode &node,
       is_drop_primary_key = true;
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("Multiple complex DDLs about primary key in single stmt is not supported now", 
+      LOG_WARN("Multiple complex DDLs about primary key in single stmt is not supported now",
         K(ret), K(drop_pk_node_cnt), K(add_pk_node_cnt), K(other_action_cnt));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Multiple complex DDLs about primary in single stmt");
     }
@@ -4531,7 +4531,7 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
   return ret;
 }
 
-// To check whether modify/change column is allowed, 
+// To check whether modify/change column is allowed,
 // should check it under main table schema and index table schemas.
 int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_schema,
                                                    const ObColumnSchemaV2 &src_col_schema,
@@ -4589,7 +4589,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter part key of global index is");
         } else if (OB_FAIL(check_alter_part_key_allowed(cur_table_schema, *column_schema, dst_col_schema))) {
           LOG_WARN("check alter partition key allowed failed", K(ret));
-        } 
+        }
       }
     }
   }
@@ -4621,7 +4621,7 @@ int ObAlterTableResolver::alter_column_expr_in_part_expr(
 
 int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &table_schema,
                                                       const ObColumnSchemaV2 &src_col_schema,
-                                                      const ObColumnSchemaV2 &dst_col_schema) 
+                                                      const ObColumnSchemaV2 &dst_col_schema)
 {
   int ret = OB_SUCCESS;
   const uint64_t table_id = table_schema.get_table_id();
@@ -4670,7 +4670,7 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
     }
     OZ (part_expr->formalize(session_info_));
     if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type ||
-        PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type || 
+        PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type ||
         is_key_part(part_type)) {
       if (is_key_part(part_type) && part_expr->get_param_count() < 1) {
         ret = OB_ERR_UNEXPECTED;

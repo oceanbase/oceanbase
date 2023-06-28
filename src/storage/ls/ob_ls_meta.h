@@ -79,6 +79,8 @@ public:
   int check_valid_for_backup() const;
   share::SCN get_tablet_change_checkpoint_scn() const;
   int set_tablet_change_checkpoint_scn(const share::SCN &tablet_change_checkpoint_scn);
+  share::SCN get_transfer_scn() const;
+  int inc_update_transfer_scn(const share::SCN &transfer_scn);
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
                      const share::SCN &latest_scn,
@@ -91,6 +93,8 @@ public:
   int get_migration_and_restore_status(
       ObMigrationStatus &migration_status,
       share::ObLSRestoreStatus &ls_restore_status);
+  int set_rebuild_info(const ObLSRebuildInfo &rebuild_info);
+  int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
 
   int init(
       const uint64_t tenant_id,
@@ -116,7 +120,7 @@ public:
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
                K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
-               K_(all_id_meta));
+               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info));
 private:
   int check_can_update_();
 public:
@@ -150,6 +154,8 @@ private:
   share::SCN tablet_change_checkpoint_scn_;
   transaction::ObAllIDMeta all_id_meta_;
   ObLSSavedInfo saved_info_;
+  share::SCN transfer_scn_;
+  ObLSRebuildInfo rebuild_info_;
 };
 
 }  // namespace storage

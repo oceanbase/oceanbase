@@ -70,6 +70,8 @@ RPC_F(obrpc::OB_GET_LEADER_LOCATIONS, obrpc::ObGetLeaderLocationsArg,
 RPC_F(obrpc::OB_DDL_CHECK_TABLET_MERGE_STATUS, obrpc::ObDDLCheckTabletMergeStatusArg,
     obrpc::ObDDLCheckTabletMergeStatusResult, ObCheckTabletMergeStatusProxy);
 RPC_F(obrpc::OB_REFRESH_TENANT_INFO, obrpc::ObRefreshTenantInfoArg, obrpc::ObRefreshTenantInfoRes, ObRefreshTenantInfoProxy);
+RPC_F(obrpc::OB_GET_LS_REPLAYED_SCN, obrpc::ObGetLSReplayedScnArg,
+      obrpc::ObGetLSReplayedScnRes, ObGetLSReplayedScnProxy);
 RPC_F(obrpc::OB_SEND_HEARTBEAT, share::ObHBRequest, share::ObHBResponse, ObSendHeartbeatProxy);
 RPC_F(obrpc::OB_GET_SERVER_RESOURCE_INFO, obrpc::ObGetServerResourceInfoArg, obrpc::ObGetServerResourceInfoResult, ObGetServerResourceInfoProxy);
 RPC_F(obrpc::OB_NOTIFY_SWITCH_LEADER, obrpc::ObNotifySwitchLeaderArg,

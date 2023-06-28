@@ -220,8 +220,9 @@ int ObTableScanIterator::init(ObTableScanParam &scan_param, const ObTabletHandle
     STORAGE_LOG(WARN, "Failed to init table scan range", K(ret), K(scan_param));
   } else {
     scan_param_ = &scan_param;
-    get_table_param_.tablet_iter_.tablet_handle_ = tablet_handle;
-    if (OB_FAIL(prepare_table_param(tablet_handle))) {
+    if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(tablet_handle))) {
+      STORAGE_LOG(WARN, "Fail to set tablet handle to iter", K(ret));
+    } else if (OB_FAIL(prepare_table_param(tablet_handle))) {
       STORAGE_LOG(WARN, "Fail to prepare table param, ", K(ret));
     } else if (OB_FAIL(prepare_table_context())) {
       STORAGE_LOG(WARN, "Fail to prepare table ctx, ", K(ret));
@@ -251,8 +252,9 @@ int ObTableScanIterator::switch_param(ObTableScanParam &scan_param, const ObTabl
     STORAGE_LOG(WARN, "Failed to init table scan range", K(ret), K(scan_param));
   } else {
     scan_param_ = &scan_param;
-    get_table_param_.tablet_iter_.tablet_handle_ = tablet_handle;
-    if (OB_FAIL(prepare_table_param(tablet_handle))) {
+    if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(tablet_handle))) {
+      STORAGE_LOG(WARN, "Fail to set tablet handle to iter", K(ret));
+    } else if (OB_FAIL(prepare_table_param(tablet_handle))) {
       STORAGE_LOG(WARN, "Fail to prepare table param, ", K(ret));
     } else if (OB_FAIL(prepare_table_context())) {
       STORAGE_LOG(WARN, "Fail to prepare table ctx, ", K(ret));
@@ -374,9 +376,8 @@ int ObTableScanIterator::open_iter()
         if (scan_param_->sample_info_.is_block_sample()) {
           if (nullptr == scan_merge_ && OB_FAIL(init_scan_iter(scan_merge_))) {
             STORAGE_LOG(WARN, "Failed to init scanmerge", K(ret));
-          } else if (OB_FAIL(get_table_param_.tablet_iter_.tablet_handle_.get_obj()->get_read_tables(
+          } else if (OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(
                         main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
-                        get_table_param_.tablet_iter_,
                         false /*allow_not_ready*/ ))) {
             STORAGE_LOG(WARN, "Fail to read tables", K(ret));
           } else if (!scan_param_->sample_info_.force_block_ &&
@@ -467,27 +468,36 @@ int ObTableScanIterator::can_retire_to_row_sample(bool &retire)
     int64_t sstable_row_count = 0;
     common::ObSEArray<ObITable*, 4> memtables;
     while (OB_SUCC(ret)) {
+      ObSSTableMetaHandle sst_meta_hdl;
       ObITable *table = nullptr;
-      if (OB_FAIL(get_table_param_.tablet_iter_.table_iter_.get_next(table))) {
+      if (OB_FAIL(get_table_param_.tablet_iter_.table_iter()->get_next(table))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
           ret = OB_SUCCESS;
           break;
         } else {
-          STORAGE_LOG(WARN, "Fail to get next table iter", K(ret), K(get_table_param_.tablet_iter_.table_iter_));
+          STORAGE_LOG(WARN, "Fail to get next table iter", K(ret), K(get_table_param_.tablet_iter_.table_iter()));
         }
       } else if (table->is_memtable()) {
         memtables.push_back(table);
       } else if (table->is_sstable()) {
-        sstable_row_count += static_cast<ObSSTable*>(table)->get_meta().get_basic_meta().row_count_;
+        if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+          LOG_WARN("fail to get sstable meta handle", K(ret));
+        } else {
+          sstable_row_count += sst_meta_hdl.get_sstable_meta().get_row_count();
+        }
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (FALSE_IT(get_table_param_.tablet_iter_.table_iter_.resume())) {
+    } else if (FALSE_IT(get_table_param_.tablet_iter_.table_iter()->resume())) {
     } else if (memtables.count() > 0) {
       ObPartitionEst batch_est;
       ObSEArray<ObEstRowCountRecord, MAX_SSTABLE_CNT_IN_STORAGE> est_records;
-      ObTableEstimateBaseInput base_input(scan_param_->scan_flag_, memtables.at(0)->get_key().tablet_id_.id(),
-                                          transaction::ObTransID(), memtables, get_table_param_.tablet_iter_.tablet_handle_);
+      ObTableEstimateBaseInput base_input(
+          scan_param_->scan_flag_,
+          memtables.at(0)->get_key().tablet_id_.id(),
+          transaction::ObTransID(),
+          memtables,
+          get_table_param_.tablet_iter_.get_tablet_handle());
       if (OB_FAIL(ObTableEstimator::estimate_row_count_for_scan(base_input, table_scan_range_.get_ranges(), batch_est, est_records))) {
         STORAGE_LOG(WARN, "Failed to estimate row count for scan", K(ret), KPC(scan_param_), K(table_scan_range_));
       } else {
@@ -572,7 +582,7 @@ int ObTableScanIterator::check_ls_offline_after_read()
 
   auto &acc_ctx = ctx_guard_.get_store_ctx().mvcc_acc_ctx_;
 
-  if (acc_ctx.tx_table_guard_.check_ls_offline()) {
+  if (acc_ctx.tx_table_guards_.check_ls_offline()) {
     ret = OB_LS_OFFLINE;
     STORAGE_LOG(WARN, "ls offline during the read operation", K(ret), K(acc_ctx.snapshot_));
   }

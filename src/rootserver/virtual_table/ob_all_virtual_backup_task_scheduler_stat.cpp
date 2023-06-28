@@ -1,14 +1,12 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
+// Copyright (c) 2021 OceanBase
+// OceanBase is licensed under Mulan PubL v2.
+// You can use this software according to the terms and conditions of the Mulan PubL v2.
+// You may obtain a copy of Mulan PubL v2 at:
+//         http://license.coscl.org.cn/MulanPubL-2.0
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+// See the Mulan PubL v2 for more details.
 
 #define USING_LOG_PREFIX RS
 #include "ob_all_virtual_backup_task_scheduler_stat.h"
@@ -38,96 +36,66 @@ void ObAllBackupScheduleTaskStat::Display::reset()
   executor_ts_ = 0;
 }
 
-ObAllBackupScheduleTaskStat::ObAllBackupScheduleTaskStat()
-  :inited_(false),
-   schema_service_(nullptr),
-   task_scheduer_(nullptr),
-   arena_allocator_()
-{
-}
-
-ObAllBackupScheduleTaskStat::~ObAllBackupScheduleTaskStat()
-{
-}
-
-int ObAllBackupScheduleTaskStat::init(
-    share::schema::ObMultiVersionSchemaService &schema_service,
-    ObBackupTaskScheduler &task_scheduler)
-{
-  int ret = OB_SUCCESS;
-  if (inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret));
-  } else {
-    schema_service_ = &schema_service;
-    task_scheduer_ = &task_scheduler;
-    inited_ = true;
-  }
-
-  return ret;
-}
-
 int ObAllBackupScheduleTaskStat::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  if (NULL == allocator_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init, allocator is null", K(ret));
-  } else if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-    LOG_WARN("get schema guard error", K(ret));
-  } else if (!start_to_read_) {
-    common::ObArenaAllocator allocator;
-    ObArray<ObBackupScheduleTask *> task_stats;
-    const ObTableSchema *table_schema = NULL;
-    const uint64_t table_id = OB_ALL_VIRTUAL_BACKUP_SCHEDULE_TASK_TID;
-    if (OB_FAIL(schema_guard.get_table_schema(OB_SYS_TENANT_ID, table_id, table_schema))) {
-      LOG_WARN("fail to get table schema", K(table_id), K(ret));
-    } else if (NULL == table_schema) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table_schema is null", KP(table_schema), K(ret));
-    } else if (OB_FAIL(task_scheduer_->get_all_tasks(allocator, task_stats))) {
-      LOG_WARN("fail to get tasks", K(ret));
+  if (!start_to_read_) {
+    auto func_iterate_tenant_task_scheduler = [&]() -> int
+    {
+      int ret = OB_SUCCESS;
+      common::ObArenaAllocator allocator;
+      ObArray<ObBackupScheduleTask *> task_stats;
+      ObBackupTaskScheduler *task_scheduler = MTL(ObBackupTaskScheduler *);
+      if (OB_ISNULL(task_scheduler)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task scheduler can't be null", K(ret));
+      } else if (OB_FAIL(task_scheduler->get_all_tasks(allocator, task_stats))) {
+        LOG_WARN("fail to get tasks", K(ret));
+      } else if (OB_FAIL(generate_all_row_(task_stats))) {
+        LOG_WARN("fail to generate all row", K(ret));
+      }
+      return ret;
+    };
+    if (OB_FAIL(omt_->operate_in_each_tenant(func_iterate_tenant_task_scheduler))) {
+      LOG_WARN("fail to operater in each tenant", K(ret));
     } else {
-      ObArray<Column> columns;
-      for (int64_t j = 0; OB_SUCC(ret) && j < task_stats.count(); ++j) {
-        const ObBackupScheduleTask *task_stat = task_stats.at(j);
-        columns.reuse();
-        if (OB_UNLIKELY(nullptr == task_stat)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("task stat", K(ret));
-        } else if (OB_FAIL(get_full_row_(table_schema, *task_stat, columns))) {
-          LOG_WARN("fail to get full row", "table_schema", *table_schema, "task_stat", *task_stat, K(ret));
-        } else if (OB_FAIL(project_row(columns, cur_row_))) {
-          LOG_WARN("fail to project row", K(columns), K(ret));
-        } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-          LOG_WARN("fail to add row", K(cur_row_), K(ret));
-        }
-      }
-    }
-
-    for (int64_t j = 0; j < task_stats.count(); ++j) {
-      ObBackupScheduleTask *task_stat = task_stats.at(j);
-      if (nullptr != task_stat) {
-        task_stat->~ObBackupScheduleTask();
-        task_stat = nullptr;
-      }
-    }
-    if (OB_SUCC(ret)) {
       scanner_it_ = scanner_.begin();
       start_to_read_ = true;
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && start_to_read_) {
     if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next row", K(ret));
       }
     } else {
       row = &cur_row_;
+    }
+  }
+  return ret;
+}
+
+int ObAllBackupScheduleTaskStat::generate_all_row_(ObIArray<ObBackupScheduleTask *> &task_stats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t j = 0; OB_SUCC(ret) && j < task_stats.count(); ++j) {
+    const ObBackupScheduleTask *task_stat = task_stats.at(j);
+    if (OB_UNLIKELY(nullptr == task_stat)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task stat", K(ret));
+    } else if (OB_FAIL(get_full_row_(*task_stat))) {
+      LOG_WARN("fail to get full row", "task_stat", *task_stat, K(ret));
+    } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
+      LOG_WARN("fail to add row", K(cur_row_), K(ret));
+    }
+  }
+
+  for (int64_t j = 0; j < task_stats.count(); ++j) {
+    ObBackupScheduleTask *task_stat = task_stats.at(j);
+    if (nullptr != task_stat) {
+      task_stat->~ObBackupScheduleTask();
+      task_stat = nullptr;
     }
   }
   return ret;
@@ -153,42 +121,106 @@ int ObAllBackupScheduleTaskStat::generate_task_stat_(
   return ret;
 }
 
-int ObAllBackupScheduleTaskStat::get_full_row_(
-    const share::schema::ObTableSchema *table,
-    const ObBackupScheduleTask &task_stat,
-    common::ObIArray<Column> &columns)
+int ObAllBackupScheduleTaskStat::get_full_row_(const ObBackupScheduleTask &task_stat)
 {
   int ret = OB_SUCCESS;
   Display display;
+  ObAddr self_addr = GCONF.self_addr_;
   char *dst_str = nullptr;
   char *trace_id_str = nullptr;
-  arena_allocator_.reuse();
-  if (nullptr == table) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table is nullptr", K(ret));
-  } else if (OB_ISNULL(dst_str = static_cast<char *>(arena_allocator_.alloc(OB_MAX_SERVER_ADDR_SIZE)))) {
+
+  if (OB_ISNULL(dst_str = static_cast<char *>(allocator_.alloc(OB_MAX_SERVER_ADDR_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc dst ip buf failed", K(ret), "size", OB_MAX_SERVER_ADDR_SIZE);
-  } else if (OB_ISNULL(trace_id_str = static_cast<char *>(arena_allocator_.alloc(OB_MAX_TRACE_ID_BUFFER_SIZE)))) {
+    LOG_WARN("fail to alloc memory", KR(ret), K(dst_str));
+  } else if (OB_FALSE_IT(MEMSET(dst_str, '\0', OB_MAX_SERVER_ADDR_SIZE))) {
+  } else if (OB_ISNULL(trace_id_str = static_cast<char *>(allocator_.alloc(OB_MAX_TRACE_ID_BUFFER_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc trace id buf failed", K(ret), "size", OB_MAX_TRACE_ID_BUFFER_SIZE);
+    LOG_WARN("fail to alloc memory", KR(ret), K(trace_id_str));
+  } else if (OB_FALSE_IT(MEMSET(trace_id_str, '\0', OB_MAX_TRACE_ID_BUFFER_SIZE))) {
   } else if (OB_FAIL(generate_task_stat_(task_stat, display))) {
     LOG_WARN("fail to generate task stat", K(task_stat), K(ret));
   } else if (display.dst_.is_valid() && OB_FAIL(display.dst_.ip_port_to_string(dst_str, OB_MAX_SERVER_ADDR_SIZE))) {
     LOG_WARN("fail to change dst to string", K(ret), K(display));
-  } else if (!display.trace_id_.is_invalid() && OB_FALSE_IT(display.trace_id_.to_string(trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE))) {
-  } else {
-    ADD_COLUMN(set_int, table, "tenant_id", display.tenant_id_, columns);
-    ADD_COLUMN(set_int, table, "job_id", display.job_id_, columns);
-    ADD_COLUMN(set_int, table, "task_id", display.task_id_, columns);
-    ADD_COLUMN(set_int, table, "ls_id", display.key_1_, columns);
-    ADD_COLUMN(set_int, table, "type", static_cast<int64_t>(display.job_type_), columns);
-    ADD_COLUMN(set_varchar, table, "trace_id", trace_id_str, columns);
-    ADD_COLUMN(set_varchar, table, "destination", dst_str, columns);
-    ADD_COLUMN(set_varchar, table, "is_schedule", display.is_schedule ? "True" : "False", columns);
-    ADD_COLUMN(set_int, table, "generate_ts", display.generate_ts_, columns);
-    ADD_COLUMN(set_int, table, "schedule_ts", display.schedule_ts_, columns);
-    ADD_COLUMN(set_int, table, "executor_ts", display.executor_ts_, columns);
+  } else if (!display.trace_id_.is_invalid()) {
+      display.trace_id_.to_string(trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE);
+  }
+
+  const int64_t count = output_column_ids_.count();
+  for (int i = 0; OB_SUCC(ret) && i < count; i++) {
+    uint64_t col_id = output_column_ids_.at(i);
+    switch (col_id) {
+      case Column::TENANT_ID: {
+        cur_row_.cells_[i].set_int(display.tenant_id_);
+        break;
+      }
+      case Column::SVR_IP: {
+        char *addr_buf = nullptr;
+        if (OB_ISNULL(addr_buf = static_cast<char *>(allocator_.alloc(OB_IP_PORT_STR_BUFF)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory", KR(ret), K(dst_str));
+        } else if (OB_FALSE_IT(MEMSET(addr_buf, '\0', OB_IP_PORT_STR_BUFF))) {
+        } else if (!self_addr.ip_to_string(addr_buf, common::OB_IP_PORT_STR_BUFF)) {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "ip_to_string failed", K(ret));
+        } else {
+          cur_row_.cells_[i].set_varchar(ObString::make_string(addr_buf));
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                                ObCharset::get_default_charset()));
+        }
+        break;
+      }
+      case Column::SVR_PORT: {
+        cur_row_.cells_[i].set_int(self_addr.get_port());
+        break;
+      }
+
+      case Column::JOB_ID: {
+        cur_row_.cells_[i].set_int(display.job_id_);
+        break;
+      }
+      case Column::TASK_ID: {
+        cur_row_.cells_[i].set_int(display.task_id_);
+        break;
+      }
+      case Column::LS_ID: {
+        cur_row_.cells_[i].set_int(display.key_1_);
+        break;
+      }
+      case Column::JOB_TYPE: {
+        cur_row_.cells_[i].set_int(static_cast<int64_t>(display.job_type_));
+        break;
+      }
+      case Column::TRACE_ID: {
+        cur_row_.cells_[i].set_varchar(trace_id_str);
+        break;
+      }
+      case Column::DST: {
+        cur_row_.cells_[i].set_varchar(dst_str);
+        break;
+      }
+      case Column::IS_SCHEDULE: {
+        const char *flag = display.is_schedule ? "True" : "False";
+        cur_row_.cells_[i].set_varchar(flag);
+        break;
+      }
+      case Column::GENERATE_TS: {
+        cur_row_.cells_[i].set_int(display.generate_ts_);
+        break;
+      }
+      case Column::SCHEDULE_TS: {
+        cur_row_.cells_[i].set_int(display.schedule_ts_);
+        break;
+      }
+      case Column::EXECUTOR_TS: {
+        cur_row_.cells_[i].set_int(display.executor_ts_);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unkown column", K(ret), K(col_id));
+        break;
+      }
+    }
   }
   return ret;
 }

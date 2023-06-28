@@ -329,8 +329,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
 
  // 列定义添加(__session_id bigint, __session_create_time bigint), 如果用户表定义已经出现__session_id等后面解析时会报错...
  int ObCreateTableResolver::add_new_column_for_oracle_temp_table(ObTableSchema &table_schema,
-                                                                 ObArray<ObColumnResolveStat> &stats,
-                                                                 bool add_to_schema)
+                                                                 ObArray<ObColumnResolveStat> &stats)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 column;
@@ -346,7 +345,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
     column.set_column_id(OB_HIDDEN_SESSION_ID_COLUMN_ID);
     column.set_is_hidden(true);
     stat.column_id_ = column.get_column_id();
-    if (add_to_schema && OB_FAIL(table_schema.add_column(column))) {
+    if (OB_FAIL(table_schema.add_column(column))) {
       SQL_RESV_LOG(WARN, "fail to add column", K(ret));
     } else if (OB_FAIL(stats.push_back(stat))) {
       SQL_RESV_LOG(WARN, "fail to push back stat", K(ret));
@@ -357,7 +356,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
       column.set_column_id(OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID);
       column.set_is_hidden(true);
       stat.column_id_ = column.get_column_id();
-      if (add_to_schema && OB_FAIL(table_schema.add_column(column))) {
+      if (OB_FAIL(table_schema.add_column(column))) {
         SQL_RESV_LOG(WARN, "fail to add column", K(ret));
       } else if (OB_FAIL(stats.push_back(stat))) {
         SQL_RESV_LOG(WARN, "fail to push back stat", K(ret));
@@ -717,17 +716,6 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
           if (OB_FAIL(add_hidden_tablet_seq_col())) {
             SQL_RESV_LOG(WARN, "failed to add hidden primary key tablet seq", K(ret));
-          }
-
-          if (OB_SUCC(ret) && is_oracle_temp_table_) {
-            ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-            ObArray<ObColumnResolveStat> column_stat;
-            int64_t pk_data_length = 0;
-            if (OB_FAIL(add_new_column_for_oracle_temp_table(table_schema, column_stat, false))) {
-              LOG_WARN("fail to add column stat", K(ret));
-            } else if (OB_FAIL(add_pk_key_for_oracle_temp_table(column_stat, pk_data_length))) {
-              LOG_WARN("fail to add pk for oracle temp table", K(ret));
-            }
           }
         }
 
@@ -1707,6 +1695,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
 {
   int ret = OB_SUCCESS;
   ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
+  const ObTableSchema *base_table_schema = NULL;
   ParseNode *sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1];
   ObSelectStmt *select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
@@ -1818,7 +1807,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
         const SelectItem &select_item = select_items.at(i);
-        const ObRawExpr *expr = select_item.expr_;
+        ObRawExpr *expr = select_item.expr_;
+        ObColumnRefRawExpr *new_col_ref = static_cast<ObColumnRefRawExpr *>(expr);
+        TableItem *new_table_item = select_stmt->get_table_item_by_id(new_col_ref->get_table_id());
         if (OB_UNLIKELY(NULL == expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("select item expr is null", K(ret), K(i));
@@ -1828,6 +1819,25 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_column_name(select_item.alias_name_);
           } else {
             column.set_column_name(select_item.expr_name_);
+          }
+          if (OB_SUCC(ret) && is_mysql_mode() &&
+              new_table_item != NULL &&
+              new_table_item->is_basic_table()) {
+            if (base_table_schema == NULL &&
+                OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                          new_table_item->ref_id_, base_table_schema))) {
+              LOG_WARN("get table schema failed", K(ret));
+            } else if (OB_ISNULL(base_table_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("NULL table schema", K(ret));
+            } else {
+             const ObColumnSchemaV2 *org_column = base_table_schema->get_column_schema(select_item.expr_name_);
+             if (NULL != org_column &&
+                !org_column->is_generated_column() &&
+                !org_column->get_cur_default_value().is_null()) {
+                column.set_cur_default_value(org_column->get_cur_default_value());
+              }
+            }
           }
           if (ObResolverUtils::is_restore_user(*session_info_)
               && ObCharset::case_insensitive_equal(column.get_column_name_str(), OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {

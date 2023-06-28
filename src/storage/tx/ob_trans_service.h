@@ -36,6 +36,7 @@
 #include "ob_gts_rpc.h"
 #include "ob_gti_source.h"
 #include "ob_tx_version_mgr.h"
+#include "ob_tx_standby_cleanup.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/container/ob_iarray.h"
 #include "observer/ob_server_struct.h"
@@ -199,12 +200,14 @@ public:
                            const ObTxDataSourceType &type,
                            const char *buf,
                            const int64_t buf_len,
-                           const int64_t request_id = 0);
+                           const int64_t request_id = 0,
+                           const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag());
   int register_mds_into_ctx(ObTxDesc &tx_desc,
-                       const share::ObLSID &ls_id,
-                       const ObTxDataSourceType &type,
-                       const char *buf,
-                       const int64_t buf_len);
+                            const share::ObLSID &ls_id,
+                            const ObTxDataSourceType &type,
+                            const char *buf,
+                            const int64_t buf_len,
+                            const ObRegisterMdsFlag &register_flag);
   ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckMgr *get_defensive_check_mgr() { return defensive_check_mgr_; }

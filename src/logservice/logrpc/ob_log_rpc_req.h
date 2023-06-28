@@ -33,9 +33,12 @@ enum LogConfigChangeCmdType {
   REPLACE_MEMBER_CMD,
   ADD_LEARNER_CMD,
   REMOVE_LEARNER_CMD,
-  SWITCH_TO_ACCEPTOR_CMD,
+  SWITCH_TO_ACCEPTOR_CMD,//discarded
   SWITCH_TO_LEARNER_CMD,
   FORCE_SINGLE_MEMBER_CMD,
+  TRY_LOCK_CONFIG_CHANGE_CMD,
+  UNLOCK_CONFIG_CHANGE_CMD,
+  GET_CONFIG_CHANGE_LOCK_STAT_CMD,
 };
 
 inline const char *log_config_change_cmd2str(const LogConfigChangeCmdType state)
@@ -51,6 +54,9 @@ inline const char *log_config_change_cmd2str(const LogConfigChangeCmdType state)
     CHECK_CMD_TYPE_STR(SWITCH_TO_ACCEPTOR_CMD);
     CHECK_CMD_TYPE_STR(SWITCH_TO_LEARNER_CMD);
     CHECK_CMD_TYPE_STR(CHANGE_REPLICA_NUM_CMD);
+    CHECK_CMD_TYPE_STR(TRY_LOCK_CONFIG_CHANGE_CMD);
+    CHECK_CMD_TYPE_STR(UNLOCK_CONFIG_CHANGE_CMD);
+    CHECK_CMD_TYPE_STR(GET_CONFIG_CHANGE_LOCK_STAT_CMD);
     default:
       return "Invalid";
   }
@@ -75,15 +81,21 @@ public:
                      const int64_t new_replica_num,
                      const LogConfigChangeCmdType cmd_type,
                      const int64_t timeout_us);
+  LogConfigChangeCmd(const common::ObAddr &src,
+                     const int64_t palf_id,
+                     const int64_t lock_owner,
+                     const LogConfigChangeCmdType cmd_type,
+                     const int64_t timeout_us);
   ~LogConfigChangeCmd();
   bool is_valid() const;
   void reset();
   bool is_remove_member_list() const;
   bool is_add_member_list() const;
+  void in_leader(const palf::LogConfigVersion &config_version);
   bool is_set_new_replica_num() const;
   TO_STRING_KV("cmd_type", log_config_change_cmd2str(cmd_type_), K_(src), K_(palf_id), \
   K_(added_member), K_(removed_member), K_(curr_member_list), K_(curr_replica_num),      \
-  K_(new_replica_num), K_(timeout_us));
+  K_(new_replica_num), K_(timeout_us), K_(lock_owner), K_(config_version));
   common::ObAddr src_;
   int64_t palf_id_;
   common::ObMember added_member_;
@@ -93,18 +105,22 @@ public:
   int64_t new_replica_num_;
   LogConfigChangeCmdType cmd_type_;
   int64_t timeout_us_;
+  int64_t lock_owner_;
+  palf::LogConfigVersion config_version_;
 };
 
 struct LogConfigChangeCmdResp {
   OB_UNIS_VERSION(1);
 public:
   LogConfigChangeCmdResp();
-  LogConfigChangeCmdResp(const int ret);
   ~LogConfigChangeCmdResp();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(ret));
+  TO_STRING_KV(K_(ret), K_(lock_owner), K_(is_locked));
+public:
   int ret_;
+  int64_t lock_owner_;
+  bool is_locked_;
 };
 
 struct LogGetLeaderMaxScnReq {

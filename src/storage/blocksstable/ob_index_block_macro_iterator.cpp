@@ -18,7 +18,7 @@ using namespace storage;
 namespace blocksstable {
 
 ObIndexBlockMacroIterator::ObIndexBlockMacroIterator()
-  : sstable_(nullptr), index_read_info_(nullptr), iter_range_(nullptr),
+  : sstable_(nullptr), iter_range_(nullptr),
     tree_cursor_(), allocator_(nullptr),
     cur_idx_(-1), begin_(),end_(), curr_key_(), prev_key_(),
     curr_key_buf_(nullptr), prev_key_buf_(nullptr), micro_index_infos_(),
@@ -32,7 +32,6 @@ ObIndexBlockMacroIterator::~ObIndexBlockMacroIterator()
 
 void ObIndexBlockMacroIterator::reset() {
   sstable_ = nullptr;
-  index_read_info_ = nullptr;
   iter_range_ = nullptr;
   if (need_record_micro_info_ && hold_item_.is_block_allocated_) {
     tree_cursor_.release_held_path_item(hold_item_);
@@ -65,7 +64,7 @@ void ObIndexBlockMacroIterator::reset() {
 int ObIndexBlockMacroIterator::open(
     ObSSTable &sstable,
     const ObDatumRange &range,
-    const ObTableReadInfo &index_read_info,
+    const ObITableReadInfo &rowkey_read_info,
     ObIAllocator &allocator,
     const bool is_reverse,
     const bool need_record_micro_info) {
@@ -81,20 +80,19 @@ int ObIndexBlockMacroIterator::open(
   } else if (OB_UNLIKELY(!sstable.is_valid() || !range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("SSTable is not valid", K(ret), K(sstable), K(range));
-  } else if (sstable.get_meta().is_empty()) {
+  } else if (sstable.is_empty()) {
     is_iter_end_ = true;
-  } else if (OB_FAIL(sstable.get_last_rowkey(index_read_info, allocator, sstable_endkey))) {
+  } else if (OB_FAIL(sstable.get_last_rowkey(allocator, sstable_endkey))) {
     LOG_WARN("Fail to get last rowkey of sstable", K(ret));
   } else if (OB_FAIL(sstable_endkey.compare(
-      range.get_start_key(), index_read_info.get_datum_utils(), cmp_ret))) {
+      range.get_start_key(), rowkey_read_info.get_datum_utils(), cmp_ret))) {
     LOG_WARN("Fail to compare sstable endkey and range start key", K(ret));
   } else if (cmp_ret < 0 || (0 == cmp_ret && !range.get_border_flag().inclusive_start())) {
     is_iter_end_ = true;
-  } else if (OB_FAIL(tree_cursor_.init(sstable, allocator, &index_read_info))) {
+  } else if (OB_FAIL(tree_cursor_.init(sstable, allocator, &rowkey_read_info))) {
     LOG_WARN("Fail to init tree cursor", K(ret), K(sstable));
   } else {
-    const int64_t schema_rowkey_cnt = sstable.get_meta().get_basic_meta().rowkey_column_count_
-        - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    const int64_t schema_rowkey_cnt = rowkey_read_info.get_schema_rowkey_count();
     const bool end_is_multi_version_rowkey = schema_rowkey_cnt < range.get_end_key().get_datum_cnt();
     if (is_reverse) {
       if (OB_FAIL(locate_macro_block(
@@ -153,7 +151,6 @@ int ObIndexBlockMacroIterator::open(
 
   if (OB_SUCC(ret) && !is_iter_end_) {
     sstable_ = &sstable;
-    index_read_info_ = &index_read_info;
     iter_range_ = &range;
     allocator_ = &allocator;
     is_reverse_scan_ = is_reverse;
@@ -337,7 +334,7 @@ void ObDualMacroMetaIterator::reset()
 int ObDualMacroMetaIterator::open(
     ObSSTable &sstable,
     const ObDatumRange &query_range,
-    const ObTableReadInfo &index_read_info,
+    const ObITableReadInfo &rowkey_read_info,
     ObIAllocator &allocator,
     const bool is_reverse_scan,
     const bool need_record_micro_info)
@@ -350,7 +347,7 @@ int ObDualMacroMetaIterator::open(
   } else if (OB_FAIL(macro_iter_.open(
       sstable,
       query_range,
-      index_read_info,
+      rowkey_read_info,
       allocator,
       is_reverse_scan,
       true /* need record micro index info */))) {
@@ -359,7 +356,7 @@ int ObDualMacroMetaIterator::open(
       query_range,
       blocksstable::DATA_BLOCK_META,
       sstable,
-      index_read_info,
+      rowkey_read_info,
       allocator,
       is_reverse_scan))) {
     LOG_WARN("Fail to open secondary meta iterator", K(ret));

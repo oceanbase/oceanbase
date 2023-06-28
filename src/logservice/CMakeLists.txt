@@ -61,6 +61,7 @@ ob_set_subtarget(ob_logservice common_mixed
   replayservice/ob_log_replay_service.cpp
   replayservice/ob_replay_handler.cpp
   replayservice/ob_replay_status.cpp
+  replayservice/ob_tablet_replay_executor.cpp
 )
 
 ob_set_subtarget(ob_logservice leader_coordinator
@@ -75,6 +76,7 @@ ob_set_subtarget(ob_logservice leader_coordinator
 ob_set_subtarget(ob_logservice logrouteservice
   logrouteservice/ob_all_server_info.cpp
   logrouteservice/ob_all_zone_info.cpp
+  logrouteservice/ob_all_units_info.cpp
   logrouteservice/ob_external_server_blacklist.cpp
   logrouteservice/ob_log_all_svr_cache.cpp
   logrouteservice/ob_log_route_key.cpp

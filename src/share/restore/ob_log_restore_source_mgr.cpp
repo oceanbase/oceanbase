@@ -14,7 +14,6 @@
 #include "lib/restore/ob_storage.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "share/backup/ob_backup_struct.h"
-#include "share/ls/ob_ls_i_life_manager.h" // share::is_valid_scn
 #include "ob_log_restore_source_mgr.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"

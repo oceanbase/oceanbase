@@ -150,10 +150,10 @@ static int ob_ssl_config_check(const ssl_config_item_t *ssl_config)
   return ret;
 }
 
-static int ob_ssl_set_verify_mode_and_load_CA(SSL_CTX *ctx, const ssl_config_item_t *ssl_config)
+static int ob_ssl_set_verify_mode_and_load_CA(SSL_CTX *ctx, const ssl_config_item_t *ssl_config, int verify_flag)
 {
   int ret = 0;
-  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, NULL);
+  SSL_CTX_set_verify(ctx, verify_flag, NULL);
   if (ssl_config->is_from_file) {
     STACK_OF(X509_NAME) *list = NULL;
     if (0 == SSL_CTX_load_verify_locations(ctx, ssl_config->ca_cert, NULL)) {
@@ -304,10 +304,19 @@ static int ob_ssl_load_cert_and_pkey(SSL_CTX *ctx, const ssl_config_item_t *ssl_
   return ret;
 }
 
-static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config)
+static const int CLIENT = 0;
+static const int SERVER = 1;
+
+static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config, int type)
 {
   int ret = 0;
   SSL_CTX *ctx = NULL;
+  int verify_flag = 0;
+  if (CLIENT == type) {
+    verify_flag = SSL_VERIFY_NONE;
+  } else {
+    verify_flag = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+  }
 
   if (ssl_config->is_sm) {
   } else {
@@ -322,7 +331,7 @@ static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config)
     ret = EINVAL;
     ussl_log_warn("SSL_CTX_set_cipher_list failed, ret:%d, err:%s", ret,
                   ERR_error_string(ERR_get_error(), NULL));
-  } else if (0 != (ret = ob_ssl_set_verify_mode_and_load_CA(ctx, ssl_config))) {
+  } else if (0 != (ret = ob_ssl_set_verify_mode_and_load_CA(ctx, ssl_config, verify_flag))) {
     ussl_log_warn("ob_ssl_set_verify_mode_and_load_CA failed, ret:%d", ret);
   } else if (0 != (ret = ob_ssl_load_cert_and_pkey(ctx, ssl_config))) {
     ussl_log_warn("ob_ssl_load_cert_and_pkey for client failed, ret:%d", ret);
@@ -397,10 +406,10 @@ int ssl_load_config(int ctx_id, const ssl_config_item_t *ssl_config)
   } else {
     if (0 != (ret = ob_ssl_config_check(ssl_config))) {
       ussl_log_warn("ob_ssl_config_check failed, ret:%d, ctx_id:%d", ret, ctx_id);
-    } else if (NULL == (client_ssl_ctx = ob_ssl_create_ssl_ctx(ssl_config))) {
+    } else if (NULL == (client_ssl_ctx = ob_ssl_create_ssl_ctx(ssl_config, CLIENT))) {
       ret = EINVAL;
       ussl_log_warn("ob_ssl_create_client_ctx failed, ctx_id:%d, ret:%d", ctx_id, ret);
-    } else if (NULL == (server_ssl_ctx = ob_ssl_create_ssl_ctx(ssl_config))) {
+    } else if (NULL == (server_ssl_ctx = ob_ssl_create_ssl_ctx(ssl_config, SERVER))) {
       ret = EINVAL;
       ussl_log_warn("ob_ssl_create_server_ctx failed, ctx_id:%d, ret:%d", ctx_id, ret);
     } else {

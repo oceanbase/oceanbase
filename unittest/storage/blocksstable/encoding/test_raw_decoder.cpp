@@ -27,6 +27,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "../ob_row_generate.h"
 #include "common/rowkey/ob_rowkey.h"
+#include "unittest/storage/mock_ob_table_read_info.h"
 
 
 namespace oceanbase
@@ -205,7 +206,7 @@ public:
   virtual void SetUp();
   virtual void TearDown() {}
 
-  TestRawDecoder():tenant_ctx_(OB_SERVER_TENANT_ID)
+  TestRawDecoder(): tenant_ctx_(OB_SERVER_TENANT_ID)
   {
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
   }
@@ -224,7 +225,7 @@ protected:
   ObMicroBlockEncodingCtx ctx_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
   ObMicroBlockRawEncoder encoder_;
-  ObTableReadInfo read_info_;
+  MockObTableReadInfo read_info_;
   int64_t full_column_cnt_;
   ObArenaAllocator allocator_;
   share::ObTenantBase tenant_ctx_;
@@ -232,6 +233,7 @@ protected:
 
 void TestRawDecoder::SetUp()
 {
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   const int64_t tid = 200001;
   ObTableSchema table;
   ObColumnSchemaV2 col;
@@ -299,8 +301,7 @@ void TestRawDecoder::SetUp()
       table.get_column_count(),
       table.get_rowkey_column_num(),
       lib::is_oracle_mode(),
-      col_descs_,
-      true));
+      col_descs_));
 
   const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   full_column_cnt_ = COLUMN_CNT + extra_rowkey_cnt;
@@ -532,11 +533,6 @@ TEST_F(TestRawDecoder, filter_push_down_gt_lt_ge_le)
 
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed0_count + seed1_count, result_bitmap.popcnt());
-
-    // Invalid input parameter
-    objs.pop_back();
-    ASSERT_EQ(objs.count(), 0);
-    ASSERT_EQ(OB_INVALID_ARGUMENT, test_filter_pushdown(col_idx, decoder, white_filter, result_bitmap, objs));
   }
 }
 

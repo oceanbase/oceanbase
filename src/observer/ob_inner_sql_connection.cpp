@@ -1057,7 +1057,8 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
                                                      const share::ObLSID ls_id,
                                                      const transaction::ObTxDataSourceType type,
                                                      const char *buf,
-                                                     const int64_t buf_len)
+                                                     const int64_t buf_len,
+                                                     const transaction::ObRegisterMdsFlag & register_flag)
 {
   int ret = OB_SUCCESS;
   const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
@@ -1089,11 +1090,12 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
         if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
           // TODO ADD LOG and check get_session
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Invalid tx_desc", K(ls_id), K(type));
+          LOG_WARN("Invalid tx_desc", K(ret), K(ls_id), K(type));
         } else {
-          MTL_SWITCH(tenant_id) {
+          MTL_SWITCH(tenant_id)
+          {
             if (OB_FAIL(MTL(transaction::ObTransService *)
-                                   ->register_mds_into_tx(*tx_desc, ls_id, type, buf, buf_len))) {
+                            ->register_mds_into_tx(*tx_desc, ls_id, type, buf, buf_len, 0, register_flag))) {
               LOG_WARN("regiser multi data source failed", K(ret), K(tenant_id), K(type));
             } else if (OB_FAIL(res.close())) {
               LOG_WARN("close result set failed", K(ret), K(tenant_id));
@@ -1119,19 +1121,18 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
                    || OB_FAIL(get_session().get_tx_timeout(trx_timeout))) {
           LOG_WARN("get conn timeout failed", KR(ret), K(get_session()));
         } else {
-          transaction::ObMDSStr mds_str;
+          transaction::ObMDSInnerSQLStr mds_str;
           char *tmp_str = nullptr;
           int64_t pos = 0;
           ObString sql;
-          if (OB_FAIL(mds_str.set(buf, buf_len, type, ls_id))) {
+          if (OB_FAIL(mds_str.set(buf, buf_len, type, ls_id, register_flag))) {
             LOG_WARN("set multi source data in msd_str error", K(ret), K(type), K(ls_id));
-          } else if (OB_ISNULL(tmp_str =
-                                   static_cast<char *>(ob_malloc(mds_str.get_serialize_size(),"MulTxDataStr")))) {
+          } else if (OB_ISNULL(tmp_str = static_cast<char *>(
+                                   ob_malloc(mds_str.get_serialize_size(), "MulTxDataStr")))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory for sql_str failed", K(ret), K(mds_str.get_serialize_size()));
           } else if (OB_FAIL(mds_str.serialize(tmp_str, mds_str.get_serialize_size(), pos))) {
-            LOG_WARN("serialize mds_str failed", K(ret), K(mds_str),
-                     K(mds_str.get_serialize_size()));
+            LOG_WARN("serialize mds_str failed", K(ret), K(mds_str), K(mds_str.get_serialize_size()));
           } else {
             sql.assign_ptr(tmp_str, mds_str.get_serialize_size());
             ret = forward_request_(tenant_id, ObInnerSQLTransmitArg::OPERATION_TYPE_REGISTER_MDS, sql, res);
@@ -1156,457 +1157,12 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
   return ret;
 }
 
-int ObInnerSQLConnection::lock_table(const uint64_t tenant_id,
-                                     const uint64_t table_id,
-                                     const transaction::tablelock::ObTableLockMode lock_mode,
-                                     const int64_t timeout_us)
+int ObInnerSQLConnection::forward_request(const uint64_t tenant_id,
+                                          const int64_t op_type,
+                                          const ObString &sql,
+                                          ObInnerSQLResult &res)
 {
-  int ret = OB_SUCCESS;
-  ObTabletID no_used;
-  if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_0_0_0) {
-    ObLockTableRequest lock_arg;
-    lock_arg.owner_id_ = 0;
-    lock_arg.lock_mode_ = lock_mode;
-    lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
-    lock_arg.timeout_us_ = timeout_us;
-    lock_arg.table_id_ = table_id;
-
-    ret = request_table_lock_(tenant_id, lock_arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE);
-  } else {
-    ret = request_table_lock_(tenant_id, table_id, no_used, lock_mode, timeout_us, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE);
-  }
-  return ret;
-}
-
-int ObInnerSQLConnection::lock_table(const uint64_t tenant_id,
-                                     const ObLockTableRequest &arg)
-{
-  return request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE);
-}
-
-int ObInnerSQLConnection::unlock_table(const uint64_t tenant_id,
-                                       const ObUnLockTableRequest &arg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ObTableLockOpType::OUT_TRANS_UNLOCK != arg.op_type_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only OUT_TRANS_LOCK should unlock.", K(ret), K(arg));
-  } else {
-    ret = request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_TABLE);
-  }
-  return ret;
-}
-
-int ObInnerSQLConnection::lock_partition(const uint64_t tenant_id,
-                                         const ObLockPartitionRequest &arg)
-{
-  return request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_PART);
-}
-
-int ObInnerSQLConnection::unlock_partition(const uint64_t tenant_id,
-                                           const ObUnLockPartitionRequest &arg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ObTableLockOpType::OUT_TRANS_UNLOCK != arg.op_type_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only OUT_TRANS_LOCK should unlock.", K(ret), K(arg));
-  } else {
-    ret = request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_PART);
-  }
-  return ret;
-}
-
-int ObInnerSQLConnection::lock_subpartition(const uint64_t tenant_id,
-                                            const ObLockPartitionRequest &arg)
-{
-  return request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_SUBPART);
-}
-
-int ObInnerSQLConnection::unlock_subpartition(const uint64_t tenant_id,
-                                              const ObUnLockPartitionRequest &arg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ObTableLockOpType::OUT_TRANS_UNLOCK != arg.op_type_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only OUT_TRANS_LOCK should unlock.", K(ret), K(arg));
-  } else {
-    ret = request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_SUBPART);
-  }
-  return ret;
-}
-
-int ObInnerSQLConnection::lock_tablet(const uint64_t tenant_id,
-                                      const uint64_t table_id,
-                                      const ObTabletID tablet_id,
-                                      const transaction::tablelock::ObTableLockMode lock_mode,
-                                      const int64_t timeout_us)
-{
-  int ret = OB_SUCCESS;
-  if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_0_0_0) {
-    ObLockTabletRequest lock_arg;
-    lock_arg.owner_id_ = 0;
-    lock_arg.lock_mode_ = lock_mode;
-    lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
-    lock_arg.timeout_us_ = timeout_us;
-    lock_arg.table_id_ = table_id;
-    lock_arg.tablet_id_ = tablet_id;
-
-    ret = request_table_lock_(tenant_id, lock_arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLET);
-  } else {
-    // for 4.0
-    ret = request_table_lock_(tenant_id, table_id, tablet_id, lock_mode, timeout_us, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLET);
-  }
-  return ret;
-}
-
-int ObInnerSQLConnection::lock_tablet(const uint64_t tenant_id,
-                                      const ObLockTabletRequest &arg)
-{
-  return request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLET);
-}
-
-int ObInnerSQLConnection::unlock_tablet(const uint64_t tenant_id,
-                                        const ObUnLockTabletRequest &arg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ObTableLockOpType::OUT_TRANS_UNLOCK != arg.op_type_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only OUT_TRANS_LOCK should unlock.", K(ret), K(arg));
-  } else {
-    ret = request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_TABLET);
-  }
-  return ret;
-}
-
-int ObInnerSQLConnection::lock_obj(const uint64_t tenant_id,
-                                   const ObLockObjRequest &arg)
-{
-  return request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_OBJ);
-}
-
-int ObInnerSQLConnection::unlock_obj(const uint64_t tenant_id,
-                                     const ObUnLockObjRequest &arg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ObTableLockOpType::OUT_TRANS_UNLOCK != arg.op_type_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only OUT_TRANS_LOCK should unlock.", K(ret), K(arg));
-  } else {
-    ret = request_table_lock_(tenant_id, arg, ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_OBJ);
-  }
-  return ret;
-}
-
-
-int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
-                                              const ObLockRequest &arg,
-                                              const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type)
-{
-  int ret = OB_SUCCESS;
-  observer::ObReqTimeGuard req_timeinfo_guard;
-
-  const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
-  transaction::ObTxDesc *tx_desc = nullptr;
-
-  SMART_VAR(ObInnerSQLResult, res, get_session())
-  {
-    if (!inited_) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("connection not inited", K(ret));
-    } else if (OB_INVALID_ID == tenant_id) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(tenant_id));
-    } else if (local_execute) {
-      if (OB_FAIL(switch_tenant(tenant_id))) {
-        LOG_WARN("set system tenant id failed", K(ret), K(tenant_id));
-      }
-    } else {
-      LOG_DEBUG("tenant may be not in server", K(ret), K(local_execute), K(tenant_id), K(MYADDR));
-    }
-    if (OB_SUCC(ret)) {
-      if (!is_in_trans()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner conn must be already in trans", K(ret));
-      } else if (OB_FAIL(res.init(local_execute))) {
-        LOG_WARN("init result set", K(ret), K(local_execute));
-      } else if (local_execute) {
-        transaction::ObTxParam tx_param;
-        tx_param.access_mode_ = transaction::ObTxAccessMode::RW;
-        tx_param.isolation_ = get_session().get_tx_isolation();
-        tx_param.cluster_id_ = GCONF.cluster_id;
-        get_session().get_tx_timeout(tx_param.timeout_us_);
-        tx_param.lock_timeout_us_ = get_session().get_trx_lock_timeout();
-
-        if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Invalid tx_desc");
-        } else {
-          MTL_SWITCH(tenant_id) {
-            switch (operation_type) {
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE: {
-              const ObLockTableRequest &lock_arg = static_cast<const ObLockTableRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->lock_table(*tx_desc,
-                                                               tx_param,
-                                                               lock_arg))) {
-                LOG_WARN("lock table failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_TABLE: {
-              const ObUnLockTableRequest &lock_arg = static_cast<const ObUnLockTableRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->unlock_table(*tx_desc,
-                                                                 tx_param,
-                                                                 lock_arg))) {
-                LOG_WARN("unlock table failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLET: {
-              const ObLockTabletRequest &lock_arg = static_cast<const ObLockTabletRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->lock_tablet(*tx_desc,
-                                                                tx_param,
-                                                                lock_arg))) {
-                LOG_WARN("lock tablet failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_TABLET: {
-              const ObUnLockTabletRequest &lock_arg = static_cast<const ObUnLockTabletRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->unlock_tablet(*tx_desc,
-                                                                  tx_param,
-                                                                  lock_arg))) {
-                LOG_WARN("unlock tablet failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_PART: {
-              const ObLockPartitionRequest &lock_arg = static_cast<const ObLockPartitionRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->lock_partition(*tx_desc,
-                                                                   tx_param,
-                                                                   lock_arg))) {
-                LOG_WARN("lock partition failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_PART: {
-              const ObUnLockPartitionRequest &lock_arg = static_cast<const ObUnLockPartitionRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->unlock_partition(*tx_desc,
-                                                                     tx_param,
-                                                                     lock_arg))) {
-                LOG_WARN("unlock partition failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_OBJ: {
-              const ObLockObjRequest &lock_arg = static_cast<const ObLockObjRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->lock_obj(*tx_desc,
-                                                             tx_param,
-                                                             lock_arg))) {
-                LOG_WARN("lock object failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_OBJ: {
-              const ObUnLockObjRequest &lock_arg = static_cast<const ObUnLockObjRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->unlock_obj(*tx_desc,
-                                                               tx_param,
-                                                               lock_arg))) {
-                LOG_WARN("unlock object failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_SUBPART: {
-              const ObLockPartitionRequest &lock_arg = static_cast<const ObLockPartitionRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->lock_subpartition(*tx_desc,
-                                                                      tx_param,
-                                                                      lock_arg))) {
-                LOG_WARN("lock subpartition failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_UNLOCK_SUBPART: {
-              const ObUnLockPartitionRequest &lock_arg = static_cast<const ObUnLockPartitionRequest &>(arg);
-              if (OB_FAIL(MTL(ObTableLockService*)->unlock_subpartition(*tx_desc,
-                                                                        tx_param,
-                                                                        lock_arg))) {
-                LOG_WARN("unlock subpartition failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            default: {
-              LOG_WARN("operation_type is not expected", K(operation_type));
-              ret = OB_ERR_UNEXPECTED;
-            } // default
-            } // switch
-            if (OB_SUCC(ret) && OB_FAIL(res.close())) {
-              LOG_WARN("close result set failed", K(ret), K(tenant_id));
-            }
-          } // MTL_SWITCH
-        } // else
-      } else {
-        char *tmp_str = nullptr;
-        int64_t pos = 0;
-        ObString sql;
-        if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size(), "LockTableReq")))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("alloc memory for sql_str failed", K(ret), K(arg.get_serialize_size()));
-        } else if (OB_FAIL(arg.serialize(tmp_str, arg.get_serialize_size(), pos))) {
-          LOG_WARN("serialize lock table arg failed", K(ret), K(arg));
-        } else {
-          sql.assign_ptr(tmp_str, arg.get_serialize_size());
-          ret = forward_request_(tenant_id, operation_type, sql, res);
-        }
-
-        if (OB_NOT_NULL(tmp_str)) {
-          ob_free(tmp_str);
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-// for version 4.0
-int ObInnerSQLConnection::request_table_lock_(const uint64_t tenant_id,
-                                              const uint64_t table_id, // as obj_id when lock_obj
-                                              const ObTabletID tablet_id, //just used when lock_tablet
-                                              const ObTableLockMode lock_mode,
-                                              const int64_t timeout_us,
-                                              const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type)
-{
-  int ret = OB_SUCCESS;
-  observer::ObReqTimeGuard req_timeinfo_guard;
-
-  const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
-  transaction::ObTxDesc *tx_desc = nullptr;
-
-  SMART_VAR(ObInnerSQLResult, res, get_session())
-  {
-    if (!inited_) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("connection not inited", K(ret));
-    } else if (OB_INVALID_ID == tenant_id) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(tenant_id));
-    } else if (local_execute) {
-      if (OB_FAIL(switch_tenant(tenant_id))) {
-        LOG_WARN("set system tenant id failed", K(ret), K(tenant_id));
-      }
-    } else {
-      LOG_DEBUG("tenant not in server", K(ret), K(tenant_id), K(MYADDR));
-    }
-
-    if (OB_SUCC(ret)) {
-      if (!is_in_trans()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner conn must be already in trans", K(ret));
-      } else if (OB_FAIL(res.init(local_execute))) {
-        LOG_WARN("init result set", K(ret), K(local_execute));
-      } else if (local_execute) {
-        transaction::ObTxParam tx_param;
-        tx_param.access_mode_ = transaction::ObTxAccessMode::RW;
-        tx_param.isolation_ = get_session().get_tx_isolation();
-        tx_param.cluster_id_ = GCONF.cluster_id;
-        get_session().get_tx_timeout(tx_param.timeout_us_);
-        tx_param.lock_timeout_us_ = get_session().get_trx_lock_timeout();
-
-        if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Invalid tx_desc");
-        } else {
-          MTL_SWITCH(tenant_id) {
-            switch (operation_type) {
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE: {
-              ObLockTableRequest lock_arg;
-              lock_arg.owner_id_ = 0;
-              lock_arg.lock_mode_ = lock_mode;
-              lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
-              lock_arg.timeout_us_ = timeout_us;
-              lock_arg.table_id_ = table_id;
-              if (OB_FAIL(MTL(ObTableLockService*)->lock_table(*tx_desc,
-                                                               tx_param,
-                                                               lock_arg))) {
-                LOG_WARN("lock table failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLET: {
-              ObLockTabletRequest lock_arg;
-              lock_arg.owner_id_ = 0;
-              lock_arg.lock_mode_ = lock_mode;
-              lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
-              lock_arg.timeout_us_ = timeout_us;
-              lock_arg.table_id_ = table_id;
-              lock_arg.tablet_id_ = tablet_id;
-              if (OB_FAIL(MTL(ObTableLockService*)->lock_tablet(*tx_desc,
-                                                                tx_param,
-                                                                lock_arg))) {
-                LOG_WARN("lock tablet failed", K(ret), K(tenant_id), K(lock_arg));
-              }
-              break;
-            }
-            default:
-              LOG_WARN("operation_type is not expected", K(operation_type));
-              ret = OB_ERR_UNEXPECTED;
-            }
-            if (OB_SUCC(ret) && OB_FAIL(res.close())) {
-              LOG_WARN("close result set failed", K(ret), K(tenant_id));
-            }
-          }
-        }
-      } else {
-        char *tmp_str = nullptr;
-        int64_t pos = 0;
-        ObString sql;
-        switch (operation_type) {
-        case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLE: {
-          ObInTransLockTableRequest arg;
-          arg.table_id_ = table_id;
-          arg.lock_mode_ = lock_mode;
-          arg.timeout_us_ = timeout_us;
-
-          if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size(), "LockTableReq")))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("alloc memory for sql_str failed", K(ret), K(arg.get_serialize_size()));
-          } else if (OB_FAIL(arg.serialize(tmp_str, arg.get_serialize_size(), pos))) {
-            LOG_WARN("serialize lock table arg failed", K(ret), K(arg));
-          } else {
-            sql.assign_ptr(tmp_str, arg.get_serialize_size());
-          }
-          break;
-        }
-        case ObInnerSQLTransmitArg::OPERATION_TYPE_LOCK_TABLET: {
-          ObInTransLockTabletRequest arg;
-          arg.table_id_ = table_id;
-          arg.tablet_id_ = tablet_id;
-          arg.lock_mode_ = lock_mode;
-          arg.timeout_us_ = timeout_us;
-
-          if (OB_ISNULL(tmp_str = static_cast<char *>(ob_malloc(arg.get_serialize_size(), "LockTableReq")))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("alloc memory for sql_str failed", K(ret), K(arg.get_serialize_size()));
-          } else if (OB_FAIL(arg.serialize(tmp_str, arg.get_serialize_size(), pos))) {
-            LOG_WARN("serialize lock table arg failed", K(ret), K(arg));
-          } else {
-            sql.assign_ptr(tmp_str, arg.get_serialize_size());
-          }
-          break;
-        }
-        default: {
-          LOG_WARN("operation_type is not expected", K(operation_type));
-          ret = OB_ERR_UNEXPECTED;
-        } // default
-        } // switch
-        ret = forward_request_(tenant_id, operation_type, sql, res);
-        if (OB_NOT_NULL(tmp_str)) {
-          ob_free(tmp_str);
-        }
-      }
-    }
-  }
-
-  return ret;
+  return forward_request_(tenant_id, op_type, sql, res);
 }
 
 int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,

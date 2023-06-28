@@ -21,25 +21,6 @@ using namespace common;
 using namespace storage;
 using namespace compaction;
 
-
-template <uint32_t SIZE>
-int ObTabletStream::get_bucket_tablet_stat(
-    const ObTabletStatBucket<SIZE> &bucket,
-    common::ObIArray<ObTabletStat> &tablet_stats) const
-{
-  int ret = OB_SUCCESS;
-  int64_t idx = bucket.head_idx_;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < bucket.count(); ++i) {
-    int64_t curr_idx = bucket.get_idx(idx);
-    if (OB_FAIL(tablet_stats.push_back(bucket.units_[curr_idx]))) {
-      LOG_WARN("failed to add tablet stat", K(ret), K(idx));
-    }
-    ++idx;
-  }
-  return ret;
-}
-
 class TestTenantTabletStatMgr : public ::testing::Test
 {
 public:
@@ -77,6 +58,7 @@ void TestTenantTabletStatMgr::TearDownTestCase()
 
 void TestTenantTabletStatMgr::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
 
   ObTenantEnv::set_tenant(&tenant_base_);
@@ -101,7 +83,8 @@ void TestTenantTabletStatMgr::report(ObTenantTabletStatMgr *mgr, const ObTabletS
 {
   ASSERT_TRUE(NULL != mgr);
   ASSERT_TRUE(stat.is_valid());
-  ASSERT_EQ(OB_SUCCESS, mgr->report_stat(stat));
+  bool report_succ = false;
+  ASSERT_EQ(OB_SUCCESS, mgr->report_stat(stat, report_succ));
 }
 
 void TestTenantTabletStatMgr::batch_report_stat(int64_t report_num)
@@ -112,7 +95,7 @@ void TestTenantTabletStatMgr::batch_report_stat(int64_t report_num)
   for (int64_t i = 0; i < report_num; ++i) {
     ObTabletStat curr_stat;
     curr_stat.ls_id_ = 1;
-    curr_stat.tablet_id_ = 10001 + i;
+    curr_stat.tablet_id_ = 300001 + i;
     curr_stat.query_cnt_ = 100 * (i + 1);
     curr_stat.scan_physical_row_cnt_ = 10000 + i;
 
@@ -142,7 +125,7 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_bucket)
   tablet_stat.scan_physical_row_cnt_ = 100;
 
   {
-    int64_t step = 1;
+    uint32_t step = 1;
     ObTabletStatBucket<8> bucket(step);
     ObTabletStat retired_stat;
     bool has_retired = false;
@@ -159,7 +142,7 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_bucket)
   }
 
   {
-    int64_t step = 16;
+    uint32_t step = 16;
     ObTabletStatBucket<4> bucket(step);
     ObTabletStat retired_stat;
     bool has_retired = false;
@@ -178,7 +161,7 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_bucket)
   }
 
   {
-    int64_t step = 32;
+    uint32_t step = 32;
     ObTabletStatBucket<4> bucket(step);
     ObTabletStat retired_stat;
     bool has_retired = false;
@@ -200,10 +183,10 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stream)
 {
   ObTabletStat tablet_stat;
   tablet_stat.ls_id_ = 1;
-  tablet_stat.tablet_id_ = 1;
+  tablet_stat.tablet_id_ = 200123;
   tablet_stat.query_cnt_ = 100;
-  tablet_stat.scan_logical_row_cnt_ = 100;
-  tablet_stat.scan_physical_row_cnt_ = 100;
+  tablet_stat.scan_logical_row_cnt_ = 1000000;
+  tablet_stat.scan_physical_row_cnt_ = 1000000;
 
   ObTabletStream stream;
   auto &curr_buckets = stream.curr_buckets_;
@@ -379,18 +362,19 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_mgr)
 
   ObTabletStat tablet_stat;
   tablet_stat.ls_id_ = 1;
-  tablet_stat.tablet_id_ = 123;
+  tablet_stat.tablet_id_ = 200123;
   tablet_stat.query_cnt_ = 100;
-  tablet_stat.scan_logical_row_cnt_ = 100;
-  tablet_stat.scan_physical_row_cnt_ = 100;
+  tablet_stat.scan_logical_row_cnt_ = 100000;
+  tablet_stat.scan_physical_row_cnt_ = 1000000;
 
-  ret = stat_mgr_->report_stat(tablet_stat);
+  bool report_succ = false;
+  ret = stat_mgr_->report_stat(tablet_stat, report_succ);
   ASSERT_EQ(OB_SUCCESS, ret);
   stat_mgr_->process_stats();
 
   ObTabletStat res;
   share::ObLSID ls_id(1);
-  common::ObTabletID tablet_id(123);
+  common::ObTabletID tablet_id(200123);
   ret = stat_mgr_->get_latest_tablet_stat(ls_id, tablet_id, res);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(100, res.query_cnt_);

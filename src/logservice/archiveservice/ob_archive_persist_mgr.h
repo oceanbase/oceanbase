@@ -147,6 +147,7 @@ private:
   // 3. 清理本server已经不存在日志流归档进度记录
   int clear_stale_ls_();
 
+  bool state_in_archive_(const share::ObArchiveRoundState &state) const;
   int load_ls_archive_progress_(const ObLSID &id,
       const ArchiveKey &key,
       ObLSArchivePersistInfo &info,

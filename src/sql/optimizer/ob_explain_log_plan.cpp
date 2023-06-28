@@ -122,12 +122,16 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = NULL;
   ObSqlCtx *sql_ctx = NULL;
+  ObSQLSessionInfo *session_info = NULL;
   const ObExplainStmt *explain_stmt = static_cast<const ObExplainStmt*>(get_stmt());
   if (OB_ISNULL(real_plan) || OB_ISNULL(explain_stmt)
       || OB_ISNULL(exec_ctx = get_optimizer_context().get_exec_ctx())
+      || OB_ISNULL(session_info = get_optimizer_context().get_session_info())
       || OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(real_plan), K(explain_stmt), K(exec_ctx), K(sql_ctx));
+    LOG_WARN("get unexpected null", K(ret), K(real_plan), K(explain_stmt), K(session_info), K(exec_ctx), K(sql_ctx));
+  } else if (session_info->is_inner()) {
+    /* do not check explain for inner sql (include query in PL) */
   } else if (sql_ctx->multi_stmt_item_.is_part_of_multi_stmt()
              && sql_ctx->multi_stmt_item_.get_seq_num() > 0) {
     /* generate plan call by ObMPQuery::process_with_tmp_context use tmp context, do not check */

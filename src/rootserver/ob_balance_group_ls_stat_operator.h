@@ -22,6 +22,9 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_ls_id.h"
 #include "share/ls/ob_ls_status_operator.h"
+#include "share/schema/ob_schema_mgr.h"
+
+#include "balance/ob_balance_group_define.h"    // ObBalanceGroupID, ObBalanceGroupName
 
 namespace oceanbase
 {
@@ -32,6 +35,7 @@ class ObISQLClient;
 }
 namespace share
 {
+class ObLSAttr;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -40,33 +44,13 @@ class ObPartition;
 class ObTableSchema;
 }
 }
+namespace observer
+{
+class ObInnerSQLConnection;
+}
 
 namespace rootserver
 {
-typedef common::ObFixedLengthString<
-        common::OB_MAX_BALANCE_GROUP_NAME_LENGTH>
-        ObBalanceGroupName;
-struct ObBalanceGroupID
-{
-public:
-  ObBalanceGroupID() : id_high_(common::OB_INVALID_ID),
-                     id_low_(common::OB_INVALID_ID) {}
-  ObBalanceGroupID(const uint64_t id_high,
-                 const uint64_t id_low)
-    : id_high_(id_high),
-      id_low_(id_low) {}
-public:
-  uint64_t id_high_;
-  uint64_t id_low_;
-
-  TO_STRING_KV(K(id_high_),
-               K(id_low_));
-  bool is_valid() const {
-    return OB_INVALID_ID != id_high_
-           && OB_INVALID_ID != id_low_;
-  }
-};
-
 class ObBalanceGroupLSStat
 {
 public:
@@ -146,6 +130,10 @@ public:
       const uint64_t tenant_id,
       const ObBalanceGroupID &balance_group_id,
       const common::ObIArray<ObBalanceGroupLSStat> &balance_group_ls_stat_array);
+  int delete_balance_group_ls_stat(
+      const int64_t timeout,
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id);
 private:
   int generate_insert_update_sql(
       const ObBalanceGroupLSStat &bg_ls_stat,
@@ -160,20 +148,6 @@ private:
 class ObNewTableTabletAllocator
 {
 public:
-  static int get_non_partitioned_bg_info(
-      const uint64_t tenant_id,
-      ObBalanceGroupName &bg_name,
-      ObBalanceGroupID &bg_id);
-  static int get_one_level_partitioned_bg_info(
-      const share::schema::ObPartitionSchema &entity_schema,
-      ObBalanceGroupName &bg_name,
-      ObBalanceGroupID &bg_id);
-  static int get_two_level_partitioned_bg_info(
-      const share::schema::ObPartitionSchema &entity_schema,
-      const share::schema::ObPartition &partition_schema,
-      ObBalanceGroupName &bg_name,
-      ObBalanceGroupID &bg_id);
-public:
   ObNewTableTabletAllocator(
       const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -182,7 +156,9 @@ public:
 public:
   int init();
   int prepare(
-      const share::schema::ObTableSchema &table_schema);
+      ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema &table_schema,
+      bool is_add_partition = false);
   int prepare_like(
       const share::schema::ObTableSchema &table_schema);
   int get_ls_id_array(
@@ -202,6 +178,13 @@ private:
   int alloc_ls_for_duplicate_table_(
       const share::schema::ObTableSchema &table_schema);
 private:
+  int alloc_tablet_for_tablegroup(
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObSimpleTablegroupSchema &tablegroup_schema);
+  int alloc_tablet_for_tablegroup(
+      const share::schema::ObTableSchema &primary_schema,
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObSimpleTablegroupSchema &tablegroup_schema);
   int wait_ls_elect_leader_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
@@ -221,22 +204,46 @@ private:
   int alloc_tablet_for_two_level_partitioned_balance_group(
       const share::schema::ObTableSchema &table_schema,
       const int64_t part_idx);
-  int get_available_ls(
-      common::ObIArray<share::ObLSStatusInfo> &ls_status_info_array);
-  int get_balance_group_primary_schema(
-      const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObPartitionSchema *&primary_schema);
+  int get_available_ls(common::ObIArray<share::ObLSID> &ls_id_array);
   int alloc_tablet_for_create_balance_group(
       const ObBalanceGroupName &bg_name,
       const ObBalanceGroupID &bg_id,
-      const common::ObIArray<share::ObLSStatusInfo> &ls_status_info_array,
+      const common::ObIArray<share::ObLSID> &ls_id_array,
       const int64_t partition_num);
   int alloc_tablet_for_add_balance_group(
       const common::ObIArray<ObBalanceGroupLSStat> &bg_ls_stat_array,
       const ObBalanceGroupName &bg_name,
       const ObBalanceGroupID &bg_id,
-      const common::ObIArray<share::ObLSStatusInfo> &ls_status_info_array,
+      const common::ObIArray<share::ObLSID> &ls_id_array,
       const int64_t partition_num);
+  int check_and_replace_ls_(common::ObMySQLTransaction &trans, const uint64_t tenant_id);
+  void find_last_user_ls_(
+      const common::ObIArray<share::ObLSID> &ls_id_array,
+      int64_t &index);
+  int lock_and_check_ls_(
+      common::ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const common::ObIArray<share::ObLSID> &locked_ls_id_array,
+      const share::ObLSID &ls_id,
+      share::ObLSAttr &ls_attr);
+  int choose_new_ls_(
+      const uint64_t tenant_id,
+      const share::ObLSAttr &old_ls_attr,
+      const share::ObLSID &prev_ls_id,
+      share::ObLSID &new_ls_id);
+  int generate_ls_array_by_primary_schema(
+      const share::schema::ObTableSchema &primary_schema,
+      common::ObArray<share::ObLSID> &pre_ls_id_array);
+  int extract_one_level_ls_array_by_primary_schema(
+    const share::schema::ObTableSchema &primary_schema,
+    common::ObArray<share::ObLSID> &all_ls_id_array,
+    common::ObArray<share::ObLSID> &pre_ls_id_array);
+  int alloc_tablet_for_add_part_in_tablegroup_sharding_partition(
+    const share::schema::ObTableSchema &table_schema,
+    const share::schema::ObTableSchema &origin_table_schema);
+  int64_t fetch_ls_offset() {
+    return ATOMIC_FAA(&alloc_tablet_ls_offset_, 1);
+  }
 private:
   static const int64_t MAX_TENANT_LS_CNT = 1024;
   static const int64_t WAIT_INTERVAL_US = 1000 * 1000; // 1s
@@ -254,6 +261,8 @@ private:
   MyStatus status_;
   common::ObArray<share::ObLSID> ls_id_array_;
   bool inited_;
+  bool is_add_partition_;
+  static int64_t alloc_tablet_ls_offset_;
 };
 
 }//end namespace rootserver

@@ -16,7 +16,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/lock/ob_spin_rwlock.h"
-#include "lib/allocator//page_arena.h"
+#include "lib/allocator/page_arena.h"
 #include "lib/hash_func/murmur_hash.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/task/ob_timer.h"

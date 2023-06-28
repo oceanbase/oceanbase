@@ -174,6 +174,17 @@ private:
       const int64_t switchover_epoch,
       ObAllTenantInfo &new_tenant_info);
 
+  /**
+   * @description:
+   *    get tenant status from all_tenant
+   * @param[in] tenant_id
+   * @param[out] status tenant status from all_tenant
+   * @return return code
+   */
+  int get_tenant_status_(
+      const uint64_t tenant_id,
+      ObTenantStatus &status);
+
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;
   const static int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;

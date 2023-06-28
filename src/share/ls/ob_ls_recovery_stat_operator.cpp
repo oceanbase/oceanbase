@@ -37,6 +37,7 @@ bool ObLSRecoveryStat::is_valid() const
   return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid()
     && sync_scn_.is_valid()
     && readable_scn_.is_valid()
+    && sync_scn_ >= readable_scn_
     && create_scn_.is_valid()
     && drop_scn_.is_valid();
 }
@@ -57,6 +58,10 @@ int ObLSRecoveryStat::init(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id),
              K(sync_scn), K(readable_scn), K(create_scn), K(drop_scn));
+  } else if (OB_UNLIKELY(sync_scn < readable_scn)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("readable_scn > sync_scn, invalid argument", KR(ret), K(sync_scn), K(readable_scn),
+        K(tenant_id), K(id), K(lbt()));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = id;
@@ -81,6 +86,10 @@ int ObLSRecoveryStat::init_only_recovery_stat(const uint64_t tenant_id, const Ob
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id),
              K(sync_scn), K(readable_scn));
+  } else if (OB_UNLIKELY(sync_scn < readable_scn)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("readable_scn > sync_scn, invalid argument", KR(ret), K(sync_scn), K(readable_scn),
+        K(tenant_id), K(id), K(lbt()));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = id;
@@ -180,6 +189,7 @@ int ObLSRecoveryStatOperator::drop_ls(const uint64_t &tenant_id,
 }
 int ObLSRecoveryStatOperator::update_ls_recovery_stat(
     const ObLSRecoveryStat &ls_recovery,
+    const bool only_update_readable_scn,
     ObMySQLProxy &proxy)
 {
   int ret = OB_SUCCESS;
@@ -191,8 +201,8 @@ int ObLSRecoveryStatOperator::update_ls_recovery_stat(
     const uint64_t exec_tenant_id = get_exec_tenant_id(ls_recovery.get_tenant_id());
     if (OB_FAIL(trans.start(&proxy, exec_tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(ls_recovery));
-    } else if (OB_FAIL(update_ls_recovery_stat_in_trans(ls_recovery, trans))) {
-      LOG_WARN("update ls recovery in trans", KR(ret), K(ls_recovery));
+    } else if (OB_FAIL(update_ls_recovery_stat_in_trans(ls_recovery, only_update_readable_scn, trans))) {
+      LOG_WARN("update ls recovery in trans", KR(ret), K(ls_recovery), K(only_update_readable_scn));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -207,34 +217,32 @@ int ObLSRecoveryStatOperator::update_ls_recovery_stat(
 
 int ObLSRecoveryStatOperator::update_ls_recovery_stat_in_trans(
     const ObLSRecoveryStat &ls_recovery,
+    const bool only_update_readable_scn,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   ObLSRecoveryStat old_ls_recovery;
-  ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!ls_recovery.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid_argument", KR(ret), K(ls_recovery));
   } else if (OB_FAIL(get_ls_recovery_stat(ls_recovery.get_tenant_id(), ls_recovery.get_ls_id(),
         true, old_ls_recovery, trans))) {
     LOG_WARN("failed to get ls current recovery stat", KR(ret), K(ls_recovery));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(ls_recovery.get_tenant_id(), &trans,
-                     true /* for update */, tenant_info))) {
-    LOG_WARN("failed to load tenant info", KR(ret), K(ls_recovery));
-  } else if (OB_UNLIKELY(!tenant_info.is_normal_status())) {
+  } else if (only_update_readable_scn && old_ls_recovery.get_sync_scn() != ls_recovery.get_sync_scn()) {
+    //if only update readable_scn, sync_scn no need change
+    //Possible situations:
+    //1. After the sync_scn is initialized to restore the tenant's SYS_LS, only readable_scn is reported before it iterates to the log.
+    //2. After the flashback is executed, the SYS_LS does not need to report sync_scn.
     ret = OB_NEED_RETRY;
-    LOG_WARN("switchover status is not normal, do not update ls recovery", KR(ret),
-             K(ls_recovery), K(tenant_info));
+    LOG_WARN("only update readabld_scn, sync_scn can not change", KR(ret), K(old_ls_recovery),
+             K(ls_recovery), K(only_update_readable_scn));
   } else {
     const SCN sync_scn = ls_recovery.get_sync_scn() > old_ls_recovery.get_sync_scn() ?
         ls_recovery.get_sync_scn() : old_ls_recovery.get_sync_scn();
     const SCN &readable_scn = ls_recovery.get_readable_scn() > old_ls_recovery.get_readable_scn() ?
         ls_recovery.get_readable_scn() : old_ls_recovery.get_readable_scn();
     common::ObSqlString sql;
-    if (ls_recovery.get_ls_id() == share::SYS_LS && tenant_info.get_recovery_until_scn() < sync_scn) {
-      ret = OB_NEED_RETRY;
-      LOG_WARN("can not recovery bigger than recovery_until_scn", KR(ret), K(sync_scn), K(tenant_info));
-    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET sync_scn = %lu, readable_scn = "
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET sync_scn = %lu, readable_scn = "
                                "%lu where ls_id = %ld and tenant_id = %lu",
                                OB_ALL_LS_RECOVERY_STAT_TNAME, sync_scn.get_val_for_inner_table_field(),
                                readable_scn.get_val_for_inner_table_field(),
@@ -246,6 +254,41 @@ int ObLSRecoveryStatOperator::update_ls_recovery_stat_in_trans(
   }
   return ret;
 }
+
+int ObLSRecoveryStatOperator::update_sys_ls_sync_scn(
+    const uint64_t tenant_id,
+    ObMySQLTransaction &trans,
+    const SCN &sync_scn)
+{
+  int ret = OB_SUCCESS;
+  ObLSRecoveryStat old_ls_recovery;
+  if (OB_UNLIKELY(!sync_scn.is_valid_and_not_min() || !is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(sync_scn), K(tenant_id));
+  } else if (OB_FAIL(get_ls_recovery_stat(tenant_id, SYS_LS, true/*for update*/, old_ls_recovery, trans))) {
+    LOG_WARN("failed to get SYS ls current recovery stat", KR(ret), K(old_ls_recovery));
+  } else if (old_ls_recovery.get_sync_scn() >= sync_scn) {
+    LOG_INFO("update_sys_ls_sync_scn: current sync_scn >= target sync_scn, need not update",
+        "target_sync_scn", sync_scn, "current_sync_scn", old_ls_recovery.get_sync_scn(),
+        K(tenant_id));
+  } else {
+    LOG_INFO("start to update sys ls sync_scn",
+        "target_sync_scn", sync_scn, "current_sync_scn", old_ls_recovery.get_sync_scn(),
+        K(tenant_id), K(old_ls_recovery));
+
+    common::ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET sync_scn = %lu "
+                               "WHERE ls_id = %ld and tenant_id = %lu",
+                               OB_ALL_LS_RECOVERY_STAT_TNAME, sync_scn.get_val_for_inner_table_field(),
+                               ObLSID::SYS_LS_ID, tenant_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(sync_scn), K(tenant_id), K(sql));
+    } else if (OB_FAIL(exec_write(tenant_id, sql, this, trans, true))) {
+      LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(sql), K(sync_scn));
+    }
+  }
+  return ret;
+}
+
 int ObLSRecoveryStatOperator::set_ls_offline(const uint64_t &tenant_id,
                                              const share::ObLSID &ls_id,
                                              const ObLSStatus &ls_status,
@@ -372,11 +415,23 @@ int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
   } else {
     common::ObSqlString sql;
     const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
+    //The sync_scn and readable_scn at the tenant level need to be calculated separately, and the reference LS list is different.
+    //The following statement collects sync_scn and readable_scn at the same time in one SQL.
+    //
+    //The sync_scn calculation refers to all LSs that have not entered the deletion state.
+    //  When drop_scn = SCN::base_scn(), it means that the LS has not entered the deletion state.
+    //  It is guaranteed that once LS enters the delete state, sync_scn will be greater than drop_scn.
+    //
+    //readable_scn indicates the readable site, it will lag behind sync_scn, and need to consider the LS entering the deletion state.
+    //Specifically, two types of LS need to be referred to when calculating readable_scn:
+    //  1) LS that has not entered the deletion state;
+    //  2) LS that has entered the deletion state, but drop_scn > readable_scn, that is, the deletion site of the LS is greater than the readable site scenario
     if (OB_FAIL(sql.assign_fmt(
-            "select min(greatest(create_scn, sync_scn)) as sync_scn, "
-            "min(greatest(create_scn, readable_scn)) as min_wrs from %s where "
-            "(drop_scn = %ld or drop_scn > sync_scn) and tenant_id = %lu ",
-            OB_ALL_LS_RECOVERY_STAT_TNAME, SCN::base_scn().get_val_for_inner_table_field(), tenant_id))) {
+            "select sync_scn, min_wrs from "
+            "(select min(greatest(create_scn, sync_scn)) as sync_scn from %s where drop_scn = %ld) p, "
+            "(select min(greatest(create_scn, readable_scn)) as min_wrs from %s where drop_scn = %ld or drop_scn > readable_scn) q",
+            OB_ALL_LS_RECOVERY_STAT_TNAME, SCN::base_scn().get_val_for_inner_table_field(),
+            OB_ALL_LS_RECOVERY_STAT_TNAME, SCN::base_scn().get_val_for_inner_table_field()))) {
       LOG_WARN("failed to assign sql", KR(ret), K(sql), K(tenant_id));
     } else if (OB_FAIL(get_all_ls_recovery_stat_(tenant_id, sql, client, sync_scn, min_wrs))) {
       LOG_WARN("failed to get tenant stat", KR(ret), K(tenant_id), K(sql));

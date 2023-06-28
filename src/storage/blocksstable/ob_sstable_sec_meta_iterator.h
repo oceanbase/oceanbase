@@ -35,7 +35,7 @@ public:
       const ObDatumRange &query_range,
       const ObMacroBlockMetaType meta_type,
       const ObSSTable &sstable,
-      const ObTableReadInfo &index_read_info,
+      const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
       const bool is_reverse_scan = false,
       const int64_t sample_step = 0);
@@ -43,12 +43,9 @@ public:
   TO_STRING_KV(K_(is_reverse_scan), K_(is_inited), K_(start_bound_micro_block),
       K_(end_bound_micro_block), K_(idx_cursor), K_(curr_handle_idx), K_(prefetch_handle_idx),
       K_(prev_block_row_cnt), K_(curr_block_start_idx), K_(curr_block_end_idx), K_(curr_block_idx),
-      K_(step_cnt), K_(is_prefetch_end), KPC_(query_range), KPC_(index_read_info));
+      K_(step_cnt), K_(is_prefetch_end), KPC_(query_range), KPC_(rowkey_read_info));
 
 private:
-  static bool is_sstable_meta_empty(
-      const ObMacroBlockMetaType meta_type,
-      const ObSSTableMeta &sstable_meta);
   void set_iter_end();
   int adjust_index(const int64_t begin_idx, const int64_t end_idx, const int64_t row_cnt);
   int init_micro_reader(const ObRowStoreType row_store_type, ObIAllocator &allocator);
@@ -70,7 +67,7 @@ private:
       ObMicroBlockId &bound_block,
       bool &is_beyond_range);
   int prefetch_micro_block(int64_t prefetch_depth);
-  int open_next_micro_block();
+  int open_next_micro_block(MacroBlockId &macro_id);
   int open_meta_root_block();
 
   // TODO: opt with prefetch
@@ -81,9 +78,9 @@ private:
 private:
   static const int32_t HANDLE_BUFFER_SIZE = 16;
   static const int32_t MAX_SECONDAY_META_COLUMN_COUNT = OB_MAX_ROWKEY_COLUMN_NUMBER + 3;
-  const ObSSTableMeta *sstable_meta_;
-  const ObTableReadInfo *index_read_info_;
   int64_t tenant_id_;
+  const ObITableReadInfo *rowkey_read_info_;
+  ObSSTableMetaHandle sstable_meta_hdl_;
   common::ObQueryFlag prefetch_flag_;
   ObIndexBlockTreeCursor idx_cursor_;
   ObMacroBlockReader macro_reader_;
@@ -103,6 +100,7 @@ private:
   int64_t curr_block_end_idx_;
   int64_t curr_block_idx_;
   int64_t step_cnt_;
+  ObRowStoreType row_store_type_;
   bool is_reverse_scan_;
   bool is_prefetch_end_;
   bool is_range_end_key_multi_version_;

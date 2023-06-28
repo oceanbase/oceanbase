@@ -335,7 +335,7 @@ int ObTabletCreator::execute()
                 ret = OB_TIMEOUT;
                 LOG_WARN("already timeout", KR(ret), K(ctx));
               } else if (OB_FAIL(conn->register_multi_data_source(tenant_id_, iter->first,
-                                 transaction::ObTxDataSourceType::CREATE_TABLET, buf, buf_len))) {
+                                 transaction::ObTxDataSourceType::CREATE_TABLET_NEW_MDS, buf, buf_len))) {
                 if (need_retry(ret)) {
                   LOG_INFO("fail to register_tx_data, try again", KR(ret), K_(tenant_id), K(batch_arg->arg_));
                   ob_usleep(SLEEP_INTERVAL);

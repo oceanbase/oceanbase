@@ -249,14 +249,13 @@ ObTenantSuperBlock::ObTenantSuperBlock()
 }
 
 ObTenantSuperBlock::ObTenantSuperBlock(const uint64_t tenant_id, const bool is_hidden)
-  : tenant_id_(tenant_id), is_hidden_(is_hidden) 
+  : tenant_id_(tenant_id), is_hidden_(is_hidden), version_(TENANT_SUPER_BLOCK_VERSION)
 {
   replay_start_point_.file_id_ = 1;
   replay_start_point_.log_id_ = 1; // // Due to the design of slog, the log_id_'s initial value must be 1
   replay_start_point_.offset_ = 0;
   tablet_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   ls_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
-  ls_dup_table_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
 }
 
 void ObTenantSuperBlock::reset()
@@ -265,24 +264,114 @@ void ObTenantSuperBlock::reset()
   replay_start_point_.reset();
   ls_meta_entry_.reset();
   tablet_meta_entry_.reset();
-  ls_dup_table_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   is_hidden_= false;
+  version_ = TENANT_SUPER_BLOCK_VERSION;
 }
 
 bool ObTenantSuperBlock::is_valid() const
 {
-  return OB_INVALID_TENANT_ID != tenant_id_ && replay_start_point_.is_valid()
-         && ls_meta_entry_.is_valid() && tablet_meta_entry_.is_valid()
-         && ls_dup_table_entry_.is_valid();
+  bool is_valid = OB_INVALID_TENANT_ID != tenant_id_
+                  && replay_start_point_.is_valid()
+                  && ls_meta_entry_.is_valid()
+                  && tablet_meta_entry_.is_valid()
+                  && version_ > MIN_SUPER_BLOCK_VERSION
+                  && (is_old_version() || IS_EMPTY_BLOCK_LIST(tablet_meta_entry_));
+  return is_valid;
 }
 
-OB_SERIALIZE_MEMBER(ObTenantSuperBlock,
-                    tenant_id_,
-                    replay_start_point_,
-                    ls_meta_entry_,
-                    tablet_meta_entry_,
-                    is_hidden_,
-                    ls_dup_table_entry_);
+int ObTenantSuperBlock::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(UNIS_VERSION);
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+        LOG_WARN("fail to serialize", K(ret), KP(buf), K(buf_len), K(pos));
+      }
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    int64_t expect_size = get_serialize_size_();
+    assert(expect_size >= serial_size);
+    if (OB_SUCC(ret)) {
+      ret = common::serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObTenantSuperBlock::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+      tenant_id_,
+      replay_start_point_,
+      ls_meta_entry_,
+      tablet_meta_entry_,
+      is_hidden_);
+  return ret;
+}
+
+int ObTenantSuperBlock::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  OB_UNIS_DECODEx(version_);
+  OB_UNIS_DECODEx(len);
+  if (OB_SUCC(ret)) {
+    if (UNIS_VERSION < version_) {
+      ret = ::oceanbase::common::OB_NOT_SUPPORTED;
+      LOG_WARN("ObTenantSuperBlock object version mismatch", K(ret), K_(version));
+    } else if (len < 0) {
+      ret = ::oceanbase::common::OB_ERR_UNEXPECTED;
+      LOG_WARN("can't decode object with negative length", K(ret), K(len));
+    } else if (data_len < len + pos) {
+      ret = ::oceanbase::common::OB_DESERIALIZE_ERROR;
+      LOG_WARN("buf length not enough", K(ret), K(len), K(pos), K(data_len));
+    } else {
+      int64_t pos_orig = pos;
+      pos = 0;
+      if (OB_FAIL(deserialize_(buf + pos_orig, len, pos))) {
+        LOG_WARN("fail to de-serialize", K(ret), "len", len, K(pos));
+      }
+      pos = pos_orig + len;
+    }
+  }
+  return ret;
+}
+
+int ObTenantSuperBlock::deserialize_(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+      tenant_id_,
+      replay_start_point_,
+      ls_meta_entry_,
+      tablet_meta_entry_,
+      is_hidden_);
+  return ret;
+}
+
+int64_t ObTenantSuperBlock::get_serialize_size(void) const
+{
+  int64_t len = get_serialize_size_();
+  SERIALIZE_SIZE_HEADER(UNIS_VERSION);
+  return len;
+}
+
+int64_t ObTenantSuperBlock::get_serialize_size_(void) const
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+      tenant_id_,
+      replay_start_point_,
+      ls_meta_entry_,
+      tablet_meta_entry_,
+      is_hidden_);
+  return len;
+}
 
 }  // end namespace storage
 }  // end namespace oceanbase

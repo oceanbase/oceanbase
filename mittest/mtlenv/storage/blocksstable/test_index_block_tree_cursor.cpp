@@ -94,7 +94,7 @@ TEST_F(TestIndexBlockTreeCursor, test_normal)
   STORAGE_LOG(INFO, "normal test start");
   uint64_t tenant_id = table_schema_.get_tenant_id();
   ObIndexBlockTreeCursor tree_cursor;
-  ASSERT_EQ(OB_SUCCESS, tree_cursor.init(sstable_, allocator_, &tablet_handle_.get_obj()->get_index_read_info()));
+  ASSERT_EQ(OB_SUCCESS, tree_cursor.init(sstable_, allocator_, &tablet_handle_.get_obj()->get_rowkey_read_info()));
 
   const int64_t query_row_seed = max_row_seed_ - 5;
   const int64_t large_query_row_seed = max_row_seed_ + 1;
@@ -175,7 +175,7 @@ TEST_F(TestIndexBlockTreeCursor, test_normal)
 TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
 {
   ObMicroBlockData root_block;
-  sstable_.get_index_tree_root(tablet_handle_.get_obj()->get_index_read_info(), root_block);
+  sstable_.get_index_tree_root(root_block);
   ASSERT_TRUE(nullptr != root_block.get_extra_buf());
   ObIndexBlockMacroIterator macro_iter;
   MacroBlockId macro_block_id;
@@ -186,7 +186,7 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
 
   // reverse whole scan
   ASSERT_EQ(OB_SUCCESS, macro_iter.open(
-      sstable_, iter_range, tablet_handle_.get_obj()->get_index_read_info(), allocator_, true, true));
+      sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, true, true));
   while (OB_SUCCESS == tmp_ret) {
     tmp_ret = macro_iter.get_next_macro_block(macro_block_id);
     STORAGE_LOG(DEBUG, "Reverse get next macro block", K(tmp_ret), K(cnt),
@@ -203,7 +203,7 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
   ASSERT_EQ(OB_SUCCESS, macro_iter.open(
       sstable_,
       iter_range,
-      tablet_handle_.get_obj()->get_index_read_info(),
+      tablet_handle_.get_obj()->get_rowkey_read_info(),
       allocator_,
       false,
       true));
@@ -247,7 +247,7 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
   iter_range.border_flag_.set_inclusive_start();
   iter_range.border_flag_.set_inclusive_end();
   ASSERT_EQ(OB_SUCCESS, macro_iter.open(
-      sstable_, iter_range, tablet_handle_.get_obj()->get_index_read_info(), allocator_, false, true));
+      sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false, true));
   ASSERT_EQ(OB_SUCCESS, macro_iter.get_next_macro_block(macro_desc));
   ASSERT_TRUE(macro_desc.is_valid());
   ASSERT_TRUE(macro_desc.range_.get_start_key().is_min_rowkey());
@@ -267,7 +267,7 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
   iter_range.border_flag_.set_inclusive_start();
   iter_range.border_flag_.set_inclusive_end();
   ASSERT_EQ(OB_SUCCESS, macro_iter.open(
-      sstable_, iter_range, tablet_handle_.get_obj()->get_index_read_info(), allocator_, false, true));
+      sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false, true));
   ASSERT_EQ(OB_SUCCESS, macro_iter.get_next_macro_block(macro_desc));
   ASSERT_EQ(OB_ITER_END, macro_iter.get_next_macro_block(macro_desc));
 
@@ -279,7 +279,7 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
   iter_range.border_flag_.unset_inclusive_start();
   iter_range.border_flag_.set_inclusive_end();
   ASSERT_EQ(OB_SUCCESS, macro_iter.open(
-      sstable_, iter_range, tablet_handle_.get_obj()->get_index_read_info(), allocator_, false, true));
+      sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false, true));
   ASSERT_EQ(OB_SUCCESS, macro_iter.get_next_macro_block(macro_desc));
   ASSERT_NE(macro_desc.macro_block_id_, first_macro_id);
 }
@@ -294,7 +294,7 @@ TEST_F(TestIndexBlockTreeCursor, test_bare_micro_block_iterator)
   ASSERT_EQ(OB_SUCCESS, macro_iter.open(
       sstable_,
       iter_range,
-      tablet_handle_.get_obj()->get_index_read_info(),
+      tablet_handle_.get_obj()->get_rowkey_read_info(),
       allocator_,
       false,
       true));

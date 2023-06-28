@@ -216,7 +216,7 @@ void TestSSTableRowMultiGetter::test_border(const bool is_reverse_scan)
   ObSSTableRowMultiGetter getter;
 
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   /*
   // empty rowkey
@@ -275,7 +275,7 @@ void TestSSTableRowMultiGetter::test_normal(const bool is_reverse_scan)
   ObArray<int64_t> seeds;
 
   // prepare query param
-  prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(is_reverse_scan);
 
   // 2 rows exist test
   seeds.reuse();

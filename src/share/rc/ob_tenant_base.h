@@ -41,6 +41,7 @@ namespace obmysql {
 }
 namespace sql {
   namespace dtl { class ObTenantDfc; }
+  class ObTenantSQLSessionMgr;
   class ObTenantSqlMemoryManager;
   class ObPlanMonitorNodeList;
   class ObPlanBaselineMgr;
@@ -55,7 +56,9 @@ namespace blocksstable {
   class ObSharedMacroBlockMgr;
 }
 namespace storage {
-  struct ObTenantStorageInfo;
+namespace mds {
+class ObTenantMdsService;
+}
   class ObLSService;
   class ObAccessService;
   class ObTenantFreezer;
@@ -66,7 +69,6 @@ namespace storage {
   class ObTenantFreezeInfoMgr;
   class ObStorageHAService;
   class ObStorageHAHandlerService;
-  class ObLSRestoreService;
   class ObTenantSSTableMergeInfoMgr;
   class ObTenantTabletStatMgr;
   namespace checkpoint {
@@ -74,8 +76,11 @@ namespace storage {
     class ObTabletGCService;
   }
   class ObLobManager;
+  class ObTransferService;
+  class ObRebuildService;
   class ObTableScanIterator;
-}
+} // namespace storage
+
 namespace transaction {
   class ObTenantWeakReadService; // 租户弱一致性读服务
   class ObTransService;          // 事务服务
@@ -84,6 +89,7 @@ namespace transaction {
   class ObStandbyTimestampService;
   class ObTimestampAccess;
   class ObTransIDService;
+  class ObUniqueIDService;
   class ObTxLoopWorker;
   class ObPartTransCtx;
   namespace tablelock {
@@ -116,6 +122,7 @@ namespace compaction
 {
   class ObTenantCompactionProgressMgr;
   class ObServerCompactionEventHistory;
+  class ObScheduleSuspectInfoMgr;
 }
 namespace memtable
 {
@@ -125,12 +132,20 @@ namespace rootserver
 {
   class ObPrimaryMajorFreezeService;
   class ObRestoreMajorFreezeService;
-  class ObTenantRecoveryReportor;
   class ObTenantInfoLoader;
+  class ObLSRecoveryReportor;
   class ObCreateStandbyFromNetActor;
   class ObPrimaryLSService;
+  class ObCommonLSService;
   class ObRestoreService;
   class ObRecoveryLSService;
+  class ObTenantTransferService;
+  class ObTenantBalanceService;
+  class ObBalanceTaskExecuteService;
+  class ObBackupTaskScheduler;
+  class ObBackupDataService;
+  class ObBackupCleanService;
+  class ObArchiveSchedulerService;
   class ObArbitrationService;
   class ObHeartbeatService;
   class ObStandbySchemaRefreshTrigger;
@@ -163,6 +178,7 @@ class ObTestModule;
 class ObTenantDagScheduler;
 class ObTenantModuleInitCtx;
 class ObGlobalAutoIncService;
+class ObDagWarningHistoryManager;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -184,6 +200,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
       common::ObTenantIOManager*,                    \
+      storage::mds::ObTenantMdsService*,             \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \
       storage::ObTenantMetaMemMgr*,                  \
@@ -204,15 +221,23 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       observer::ObTenantMetaChecker*,                \
       observer::QueueThread *,                       \
       storage::ObStorageHAHandlerService*,           \
-      rootserver::ObTenantRecoveryReportor*,         \
       rootserver::ObTenantInfoLoader*,         \
       rootserver::ObCreateStandbyFromNetActor*,         \
       rootserver::ObStandbySchemaRefreshTrigger*,    \
+      rootserver::ObLSRecoveryReportor*,         \
+      rootserver::ObCommonLSService*,               \
       rootserver::ObPrimaryLSService*,               \
+      rootserver::ObBalanceTaskExecuteService*,               \
       rootserver::ObRecoveryLSService*,              \
       rootserver::ObRestoreService*,                 \
-      storage::ObLSRestoreService*,                  \
+      rootserver::ObTenantBalanceService*,           \
+      rootserver::ObBackupTaskScheduler*,            \
+      rootserver::ObBackupDataService*,              \
+      rootserver::ObBackupCleanService*,             \
+      rootserver::ObArchiveSchedulerService*,        \
       storage::ObTenantSSTableMergeInfoMgr*,         \
+      share::ObDagWarningHistoryManager*,            \
+      compaction::ObScheduleSuspectInfoMgr*,         \
       storage::ObLobManager*,                        \
       share::ObGlobalAutoIncService*,                \
       share::detector::ObDeadLockDetectorMgr*,       \
@@ -221,6 +246,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       transaction::ObStandbyTimestampService*,       \
       transaction::ObTimestampAccess*,               \
       transaction::ObTransIDService*,                \
+      transaction::ObUniqueIDService*,               \
       sql::ObPlanBaselineMgr*,                       \
       sql::ObPsCache*,                               \
       sql::ObPlanCache*,                             \
@@ -229,7 +255,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       lib::Worker::CompatMode,                       \
       obmysql::ObMySQLRequestManager*,               \
       transaction::ObTenantWeakReadService*,         \
-      storage::ObTenantStorageInfo*,                 \
       sql::ObTenantSqlMemoryManager*,                \
       sql::ObPlanMonitorNodeList*,                   \
       sql::ObDataAccessService*,                     \
@@ -245,6 +270,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObTenantFreezeInfoMgr*,               \
       transaction::ObTxLoopWorker *,                 \
       storage::ObAccessService*,                     \
+      storage::ObTransferService*,                   \
+      rootserver::ObTenantTransferService*,          \
+      storage::ObRebuildService*,                    \
       datadict::ObDataDictService*,                  \
       ArbMTLMember                                   \
       observer::ObTableLoadService*,                 \
@@ -254,7 +282,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       ObTestModule*,                                 \
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
       rootserver::ObHeartbeatService*,              \
-      oceanbase::common::ObDetectManager*            \
+      oceanbase::common::ObDetectManager*,          \
+      oceanbase::sql::ObTenantSQLSessionMgr*        \
   )
 
 
@@ -374,8 +403,8 @@ template<class T> struct Identity {};
 
 public:
   // TGHelper need
-  virtual int pre_run(lib::Threads*) override;
-  virtual int end_run(lib::Threads*) override;
+  virtual int pre_run(lib::Thread*) override;
+  virtual int end_run(lib::Thread*) override;
   virtual void tg_create_cb(int tg_id) override;
   virtual void tg_destroy_cb(int tg_id) override;
 
@@ -527,6 +556,11 @@ private:
   bool enable_tenant_ctx_check_;
   int64_t thread_count_;
   bool mini_mode_;
+
+  using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
+  using ThreadList = common::ObDList<ThreadListNode>;
+  ThreadList thread_list_;
+  lib::ObMutex thread_list_lock_;
 };
 
 using ReleaseCbFunc = std::function<int (common::ObLDHandle&)>;

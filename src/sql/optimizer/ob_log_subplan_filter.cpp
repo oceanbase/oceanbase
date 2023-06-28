@@ -377,15 +377,17 @@ int ObLogSubPlanFilter::compute_sharding_info()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(ret));
   } else if (DistAlgo::DIST_BASIC_METHOD == dist_algo_) {
+    ObShardingInfo *sharding = NULL;
     if (OB_FAIL(ObOptimizerUtil::compute_basic_sharding_info(
                                     get_plan()->get_optimizer_context().get_local_server_addr(),
                                     get_child_list(),
                                     get_plan()->get_allocator(),
                                     dup_table_pos_,
-                                    strong_sharding_))) {
+                                    strong_sharding_,
+                                    inherit_sharding_index_))) {
       LOG_WARN("failed to compute basic sharding info", K(ret));
     } else {
-      inherit_sharding_index_ = ObLogicalOperator::first_child;
+      strong_sharding_->set_can_reselect_replica(false);
     }
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();

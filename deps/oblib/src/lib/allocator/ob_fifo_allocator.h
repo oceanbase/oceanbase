@@ -103,6 +103,7 @@ public:
   void set_attr(const ObMemAttr &attr) { attr_ = attr; }
   int set_idle(const int64_t idle_size, const bool sync=false);
   int set_max(const int64_t max_size, const bool sync=false);
+  int64_t get_max() const { return max_size_; }
   bool is_inited() const { return is_inited_; }
 
   inline int64_t normal_used() const

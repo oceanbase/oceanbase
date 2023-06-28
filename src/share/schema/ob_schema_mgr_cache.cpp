@@ -376,6 +376,7 @@ static const char* ref_info_type_strs[] = {
   "SCHEMA_RECORDER",
   "SPI_RESULT_SET",
   "PL_PREPARE_RESULT",
+  "PARTITION_BALANCE",
   "MOD_MAX",
 };
 

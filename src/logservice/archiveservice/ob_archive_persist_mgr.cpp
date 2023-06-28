@@ -145,6 +145,8 @@ int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, SCN
   ObLSArchivePersistInfo info;
   bool is_madatory = false;
   int64_t unused_speed = 0;
+  ignore = false;
+  force = false;
   ObArchiveRoundState state;
   {
     RLockGuard guard(state_rwlock_);
@@ -156,8 +158,8 @@ int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, SCN
   if (OB_UNLIKELY(! id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(id));
-  } else if (! state.is_beginning() && ! state.is_doing()) {
-    // archive not in beginning or doing state, just ignore it
+  } else if (! state_in_archive_(state)) {
+    // archive not in beginning or doing or suspend state, just ignore it
     ignore = true;
   } else if (OB_FAIL(map_.get(id, value))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -193,6 +195,8 @@ int ObArchivePersistMgr::get_ls_archive_speed(const ObLSID &id, int64_t &speed, 
   ObLSArchivePersistInfo info;
   bool is_madatory = false;
   ArchiveKey key;
+  ignore = false;
+  force = false;
   ObArchiveRoundState state;
   {
     RLockGuard guard(state_rwlock_);
@@ -205,8 +209,8 @@ int ObArchivePersistMgr::get_ls_archive_speed(const ObLSID &id, int64_t &speed, 
   if (OB_UNLIKELY(! id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(id));
-  } else if (! state.is_beginning() && ! state.is_doing()) {
-    // archive not in beginning or doing state, just ignore it
+  } else if (! state_in_archive_(state)) {
+    // archive not in beginning or doing or suspend state, just ignore it
     ignore = true;
   } else if (OB_FAIL(map_.get(id, value))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -545,6 +549,11 @@ int ObArchivePersistMgr::clear_stale_ls_()
     ARCHIVE_LOG(TRACE, "clear stale ls succ");
   }
   return ret;
+}
+
+bool ObArchivePersistMgr::state_in_archive_(const share::ObArchiveRoundState &state) const
+{
+  return state.is_beginning() || state.is_doing() || state.is_suspending() || state.is_suspend();
 }
 
 int ObArchivePersistMgr::load_ls_archive_progress_(const ObLSID &id,

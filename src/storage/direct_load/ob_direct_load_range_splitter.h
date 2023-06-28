@@ -18,7 +18,7 @@ class ObSSTable;
 namespace storage
 {
 class ObDirectLoadTableDataDesc;
-class ObTableReadInfo;
+class ObITableReadInfo;
 class ObDirectLoadOriginTable;
 class ObDirectLoadSSTable;
 class ObDirectLoadMultipleSSTable;
@@ -30,7 +30,7 @@ public:
                                    ObIDirectLoadDatumRowkeyIterator *&rowkey_iter);
   static int construct_rowkey_iter(blocksstable::ObSSTable *sstable,
                                    const blocksstable::ObDatumRange &scan_range,
-                                   const ObTableReadInfo &index_read_info,
+                                   const storage::ObITableReadInfo &index_read_info,
                                    common::ObIAllocator &allocator,
                                    ObIDirectLoadDatumRowkeyIterator *&rowkey_iter);
   static int construct_rowkey_iter(ObDirectLoadMultipleSSTable *sstable,

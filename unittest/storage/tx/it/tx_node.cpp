@@ -496,7 +496,7 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
   read_store_ctx.ls_id_ = ls_id_;
   OZ(txs_.get_read_store_ctx(snapshot, false, 5000ll * 1000, read_store_ctx));
   // HACK, refine: mock LS's each member in some way
-  read_store_ctx.mvcc_acc_ctx_.tx_table_guard_.init(&fake_tx_table_);
+  read_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
   read_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ = ObTimeUtility::current_time() + 5000ll * 1000;
   blocksstable::ObDatumRow row;
   {
@@ -504,11 +504,10 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
     ObArenaAllocator allocator;
     ObTableReadInfo read_info;
     const int64_t schema_version = 100;
-    read_info.init(allocator, schema_version, 1, false, columns_);
+    read_info.init(allocator, schema_version, 1, false, columns_, nullptr/*storage_cols_index*/);
     iter_param.table_id_ = 1;
     iter_param.tablet_id_ = 100;
     iter_param.read_info_ = &read_info;
-    iter_param.full_read_info_ = nullptr;
     iter_param.out_cols_project_ = NULL;
     iter_param.agg_cols_project_ = NULL;
     iter_param.is_multi_version_minor_merge_ = false;
@@ -582,12 +581,13 @@ int ObTxNode::write(ObTxDesc &tx,
 {
   TRANS_LOG(INFO, "write", K(key), K(value), K(snapshot), K(tx), KPC(this));
   int ret = OB_SUCCESS;
+  const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
   ObTenantEnv::set_tenant(&tenant_);
   ObStoreCtx write_store_ctx;
   auto iter = new ObTableStoreIterator();
   iter->reset();
   ObITable *mtb = memtable_;
-  iter->add_tables(&mtb, 1);
+  iter->add_table(mtb);
   write_store_ctx.ls_ = &mock_ls_;
   write_store_ctx.ls_id_ = ls_id_;
   write_store_ctx.table_iter_ = iter;
@@ -595,13 +595,10 @@ int ObTxNode::write(ObTxDesc &tx,
   OZ(txs_.get_write_store_ctx(tx,
                               snapshot,
                               write_flag,
-                              write_store_ctx));
-  write_store_ctx.mvcc_acc_ctx_.tx_table_guard_.init(&fake_tx_table_);
+                              write_store_ctx,
+                              false));
+  write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
   ObArenaAllocator allocator;
-  ObTableReadInfo read_info;
-  const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
-  const int64_t schema_version = 100;
-  read_info.init(allocator, schema_version, 1, false, columns_);
   ObStoreRow row;
   ObObj cols[2] = {ObObj(key), ObObj(value)};
   row.capacity_ = 2;
@@ -609,7 +606,29 @@ int ObTxNode::write(ObTxDesc &tx,
   row.row_val_.count_ = 2;
   row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.trans_id_.reset();
-  OZ(memtable_->set(write_store_ctx, 1, read_info, columns_, row, encrypt_meta));
+
+  ObTableIterParam param;
+  ObTableAccessContext context;
+  ObVersionRange trans_version_range;
+  const bool read_latest = true;
+  ObQueryFlag query_flag;
+  ObTableReadInfo read_info;
+
+  const int64_t schema_version = 100;
+  read_info.init(allocator, 2, 1, false, columns_, nullptr/*storage_cols_index*/);
+
+  trans_version_range.base_version_ = 0;
+  trans_version_range.multi_version_start_ = 0;
+  trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+  query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+  query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+  param.table_id_ = 1;
+  param.tablet_id_ = 1;
+  param.read_info_ = &read_info;
+
+  context.init(query_flag, write_store_ctx, allocator, trans_version_range);
+  OZ(memtable_->set(param, context, columns_, row, encrypt_meta));
   OZ(txs_.revert_store_ctx(write_store_ctx));
   delete iter;
   return ret;
@@ -624,14 +643,15 @@ int ObTxNode::write_begin(ObTxDesc &tx,
   auto iter = new ObTableStoreIterator();
   iter->reset();
   ObITable *mtb = memtable_;
-  iter->add_tables(&mtb, 1);
+  iter->add_table(mtb);
   write_store_ctx.ls_id_ = ls_id_;
   write_store_ctx.table_iter_ = iter;
   concurrent_control::ObWriteFlag write_flag;
   OZ(txs_.get_write_store_ctx(tx,
                               snapshot,
                               write_flag,
-                              write_store_ctx));
+                              write_store_ctx,
+                              false));
   return ret;
 }
 
@@ -644,13 +664,33 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
   ObTableReadInfo read_info;
   const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
   const int64_t schema_version = 100;
-  read_info.init(allocator, schema_version, 1, false, columns_);
+  read_info.init(allocator, 2, 1, false, columns_, nullptr/*storage_cols_index*/);
   ObStoreRow row;
   ObObj cols[2] = {ObObj(key), ObObj(value)};
   row.flag_ = blocksstable::ObDmlFlag::DF_INSERT;
   row.row_val_.cells_ = cols;
   row.row_val_.count_ = 2;
-  OZ(memtable_->set(write_store_ctx, 1, read_info, columns_, row, encrypt_meta));
+
+  ObTableIterParam param;
+  ObTableAccessContext context;
+  ObVersionRange trans_version_range;
+  const bool read_latest = true;
+  ObQueryFlag query_flag;
+
+
+  trans_version_range.base_version_ = 0;
+  trans_version_range.multi_version_start_ = 0;
+  trans_version_range.snapshot_version_ = EXIST_READ_SNAPSHOT_VERSION;
+  query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
+  query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
+
+  param.table_id_ = 1;
+  param.tablet_id_ = 1;
+  param.read_info_ = &read_info;
+
+  OZ(context.init(query_flag, write_store_ctx, allocator, trans_version_range));
+
+  OZ(memtable_->set(param, context, columns_, row, encrypt_meta));
 
   return ret;
 }

@@ -42,7 +42,8 @@ void RedoDataNode::set(const ObMemtableKey *key,
                        const int64_t version,
                        const int32_t flag,
                        const int64_t seq_no,
-                       const common::ObTabletID &tablet_id)
+                       const common::ObTabletID &tablet_id,
+                       const int64_t column_cnt)
 {
   key_.encode(*key);
   old_row_ = old_row;
@@ -55,6 +56,7 @@ void RedoDataNode::set(const ObMemtableKey *key,
   seq_no_ = seq_no;
   callback_ = NULL;
   tablet_id_ = tablet_id;
+  column_cnt_ = column_cnt;
 }
 
 void TableLockRedoDataNode::set(
@@ -1190,7 +1192,8 @@ int ObMvccRowCallback::get_redo(RedoDataNode &redo_node)
                   tnode_->version_,
                   0,
                   seq_no_,
-                  this->get_tablet_id());
+                  this->get_tablet_id(),
+                  column_cnt_);
     redo_node.set_callback(this);
   }
   return ret;

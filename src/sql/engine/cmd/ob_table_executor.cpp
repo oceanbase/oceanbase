@@ -95,70 +95,30 @@ int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
   return ret;
 }
 
-//准备查询插入的脚本
-int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
-                                           const ObSQLSessionInfo *my_session,
-                                           ObSchemaGetterGuard *schema_guard,
-                                           const ParamStore *param_store,
-                                           ObSqlString &ins_sql) //out, 最终的查询插入语句
+int ObCreateTableExecutor::ObInsSQLPrinter::inner_print(char *buf, int64_t buf_len, int64_t &res_len)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("CreateTableExec");
-  char *buf = static_cast<char*>(allocator.alloc(OB_MAX_SQL_LENGTH));
-  int64_t buf_len = OB_MAX_SQL_LENGTH;
+  const char sep_char = lib::is_oracle_mode()? '"': '`';
+  const ObSelectStmt *select_stmt = NULL;
   int64_t pos1 = 0;
-  bool is_set_subquery = false;
-  bool is_oracle_mode = lib::is_oracle_mode();
-  bool no_osg_hint = false;
-  bool online_sys_var = false;
-  const ObString &db_name = stmt.get_database_name();
-  const ObString &tab_name = stmt.get_table_name();
-  const char sep_char = is_oracle_mode? '"': '`';
-  ObSelectStmt *select_stmt = stmt.get_sub_select();
-  ObObjPrintParams obj_print_params(select_stmt->get_query_ctx()->get_timezone_info());
-  obj_print_params.print_origin_stmt_ = true;
-  ObSelectStmtPrinter select_stmt_printer(buf, buf_len, &pos1, select_stmt,
-                                          schema_guard,
-                                          obj_print_params,
-                                          param_store,
-                                          true);
-  select_stmt_printer.set_is_first_stmt_for_hint(true);  // need print global hint
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("allocate memory failed");
-  } else if (OB_ISNULL(select_stmt) || OB_ISNULL(select_stmt->get_query_ctx()) || OB_ISNULL(my_session)) {
+  if (OB_ISNULL(stmt_) || OB_ISNULL(select_stmt= stmt_->get_sub_select())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("select stmt should not be null", K(ret));
-  } else {
-    //get hint
-    no_osg_hint = select_stmt->get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint();
-
-    //get system variable
-    ObObj online_sys_var_obj;
-    if (OB_FAIL(OB_FAIL(my_session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, online_sys_var_obj)))) {
-      LOG_WARN("fail to get sys var", K(ret));
-    } else {
-      online_sys_var = online_sys_var_obj.get_bool();
-      LOG_DEBUG("online opt stat gather", K(online_sys_var), K(no_osg_hint));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
+    LOG_WARN("null stmt", K(ret));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
-                                      (!no_osg_hint && online_sys_var)
-                                      ? "insert /*+GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
-                                      : "insert /*+NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
-                                      sep_char,
-                                      db_name.length(),
-                                      db_name.ptr(),
-                                      sep_char,
-                                      sep_char,
-                                      tab_name.length(),
-                                      tab_name.ptr(),
-                                      sep_char))) {
-    LOG_WARN("fail to print insert into string", K(ret), K(db_name), K(tab_name));
+                              do_osg_
+                              ? "insert /*+GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                              : "insert /*+NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
+                              sep_char,
+                              stmt_->get_database_name().length(),
+                              stmt_->get_database_name().ptr(),
+                              sep_char,
+                              sep_char,
+                              stmt_->get_table_name().length(),
+                              stmt_->get_table_name().ptr(),
+                              sep_char))) {
+    LOG_WARN("fail to print insert into string", K(ret));
   } else if (lib::is_oracle_mode()) {
-    ObTableSchema &table_schema = stmt.get_create_table_arg().schema_;
+    const ObTableSchema &table_schema = stmt_->get_create_table_arg().schema_;
     int64_t used_column_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
       const ObColumnSchemaV2 *column_schema = table_schema.get_column_schema_by_idx(i);
@@ -197,11 +157,67 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   }
 
   if (OB_SUCC(ret)) {
+    ObSelectStmtPrinter select_stmt_printer(buf, buf_len, &pos1, select_stmt,
+                                            schema_guard_,
+                                            print_params_,
+                                            param_store_,
+                                            true);
+    select_stmt_printer.set_is_first_stmt_for_hint(true);  // need print global hint
     if (OB_FAIL(databuff_printf(buf, buf_len, pos1, ") "))) {
       LOG_WARN("fail to append ')'", K(ret));
     } else if (OB_FAIL(select_stmt_printer.do_print())) {
       LOG_WARN("fail to print select stmt", K(ret));
-    } else if (OB_FAIL(ins_sql.append(buf, pos1))){
+    } else {
+      res_len = pos1;
+    }
+  }
+  return ret;
+}
+
+//准备查询插入的脚本
+int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
+                                           const ObSQLSessionInfo *my_session,
+                                           ObSchemaGetterGuard *schema_guard,
+                                           const ParamStore *param_store,
+                                           ObSqlString &ins_sql) //out, 最终的查询插入语句
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("CreateTableExec");
+  char *buf = static_cast<char*>(allocator.alloc(OB_MAX_SQL_LENGTH));
+  int64_t buf_len = OB_MAX_SQL_LENGTH;
+  int64_t pos1 = 0;
+  bool is_oracle_mode = lib::is_oracle_mode();
+  bool no_osg_hint = false;
+  bool online_sys_var = false;
+  ObSelectStmt *select_stmt = stmt.get_sub_select();
+  ObObjPrintParams obj_print_params(select_stmt->get_query_ctx()->get_timezone_info());
+  obj_print_params.print_origin_stmt_ = true;
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("allocate memory failed");
+  } else if (OB_ISNULL(select_stmt) || OB_ISNULL(select_stmt->get_query_ctx()) || OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt should not be null", K(ret));
+  } else {
+    //get hint
+    no_osg_hint = select_stmt->get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint();
+
+    //get system variable
+    ObObj online_sys_var_obj;
+    if (OB_FAIL(OB_FAIL(my_session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, online_sys_var_obj)))) {
+      LOG_WARN("fail to get sys var", K(ret));
+    } else {
+      online_sys_var = online_sys_var_obj.get_bool();
+      LOG_DEBUG("online opt stat gather", K(online_sys_var), K(no_osg_hint));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObInsSQLPrinter sql_printer(&stmt, schema_guard, obj_print_params, param_store, !no_osg_hint && online_sys_var);
+    ObString sql;
+    if (OB_FAIL(sql_printer.do_print(allocator, sql))) {
+      LOG_WARN("failed  to print", K(ret));
+    } else if (OB_FAIL(ins_sql.append(sql))){
       LOG_WARN("fail to append insert into string", K(ret));
     }
   }

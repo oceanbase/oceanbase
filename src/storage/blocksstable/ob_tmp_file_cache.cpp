@@ -217,41 +217,18 @@ int ObTmpPageCache::get_cache_page(const ObTmpPageCacheKey &key, ObTmpPageValueH
 }
 
 ObTmpPageCache::ObITmpPageIOCallback::ObITmpPageIOCallback()
-  : cache_(NULL), allocator_(NULL), offset_(0), buf_size_(0), io_buf_(NULL),
-    io_buf_size_(0), data_buf_(NULL)
+  : cache_(NULL), allocator_(NULL), offset_(0), buf_size_(0), data_buf_(NULL)
 {
   static_assert(sizeof(*this) <= CALLBACK_BUF_SIZE, "IOCallback buf size not enough");
 }
 
 ObTmpPageCache::ObITmpPageIOCallback::~ObITmpPageIOCallback()
 {
-  if (NULL != allocator_ && NULL != io_buf_) {
-    allocator_->free(io_buf_);
-    io_buf_ = NULL;
+  if (NULL != allocator_ && NULL != data_buf_) {
+    allocator_->free(data_buf_);
     data_buf_ = NULL;
     allocator_ = NULL;
   }
-}
-
-int ObTmpPageCache::ObITmpPageIOCallback::alloc_io_buf(
-    char *&io_buf, int64_t &io_buf_size, int64_t &aligned_offset)
-{
-  int ret = OB_SUCCESS;
-  io_buf_size = 0;
-  aligned_offset = 0;
-  common::align_offset_size(offset_, buf_size_, aligned_offset, io_buf_size);
-  io_buf_size_ = io_buf_size + DIO_READ_ALIGN_SIZE;
-  if (OB_ISNULL(allocator_)) {
-    ret = OB_INVALID_DATA;
-    STORAGE_LOG(WARN, "Invalid data, the allocator is NULL, ", K(ret));
-  } else if (OB_UNLIKELY(NULL == (io_buf_ = (char*) (allocator_->alloc(io_buf_size_))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(ERROR, "Fail to allocate memory, ", K(ret));
-  } else {
-    io_buf = upper_align_buf(io_buf_, DIO_READ_ALIGN_SIZE);
-    data_buf_ = io_buf + (offset_ - aligned_offset);
-  }
-  return ret;
 }
 
 int ObTmpPageCache::ObITmpPageIOCallback::process_page(
@@ -275,23 +252,30 @@ ObTmpPageCache::ObTmpPageIOCallback::ObTmpPageIOCallback()
 
 ObTmpPageCache::ObTmpPageIOCallback::~ObTmpPageIOCallback()
 {
+
 }
 
-int ObTmpPageCache::ObTmpPageIOCallback::inner_process(const bool is_success)
+int ObTmpPageCache::ObTmpPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(cache_)) {
+  if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Invalid tmp page cache callback, ", KP_(cache), K(ret));
-  } else if (is_success) {
-    ObTmpPageCacheValue value(const_cast<char *>(get_data()));
+    STORAGE_LOG(WARN, "Invalid tmp page cache callback or allocator", KP_(cache), KP_(allocator), K(ret));
+  } else if (OB_UNLIKELY(size <= 0 || data_buffer == nullptr)) {
+    ret = OB_INVALID_DATA;
+    STORAGE_LOG(WARN, "invalid data buffer size", K(ret), K(size), KP(data_buffer));
+  } else if (OB_UNLIKELY(NULL == (data_buf_ = (char*) (allocator_->alloc(size))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret), K(size));
+  } else {
+    MEMCPY(data_buf_, data_buffer, size);
+    ObTmpPageCacheValue value(data_buf_);
     if (OB_FAIL(process_page(key_, value))) {
       STORAGE_LOG(WARN, "fail to process tmp page cache in callback", K(ret));
     }
   }
-  if (OB_FAIL(ret) && NULL != allocator_ && NULL != io_buf_) {
-    allocator_->free(io_buf_);
-    io_buf_ = NULL;
+  if (OB_FAIL(ret) && NULL != allocator_ && NULL != data_buf_) {
+    allocator_->free(data_buf_);
     data_buf_ = NULL;
   }
   return ret;
@@ -337,28 +321,33 @@ ObTmpPageCache::ObTmpMultiPageIOCallback::~ObTmpMultiPageIOCallback()
   page_io_infos_.~ObIArray<ObTmpPageIOInfo>();
 }
 
-int ObTmpPageCache::ObTmpMultiPageIOCallback::inner_process(const bool is_success)
+int ObTmpPageCache::ObTmpMultiPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(cache_)) {
+  if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Invalid tmp page cache callback, ", KP_(cache), K(ret));
-  } else if (is_success) {
-    char *buf = const_cast<char *>(get_data());
+    STORAGE_LOG(WARN, "Invalid tmp page cache callbackor allocator", KP_(cache), KP_(allocator), K(ret));
+  } else if (OB_UNLIKELY(size <= 0 || data_buffer == nullptr)) {
+    ret = OB_INVALID_DATA;
+    STORAGE_LOG(WARN, "invalid data buffer size", K(ret), K(size), KP(data_buffer));
+  } else if (OB_UNLIKELY(NULL == (data_buf_ = (char*) (allocator_->alloc(size))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret), K(size));
+  } else {
+    MEMCPY(data_buf_, data_buffer, size);
     for (int32_t i = 0; OB_SUCC(ret) && i < page_io_infos_.count(); i++) {
-      int64_t offset = page_io_infos_.at(i).key_.get_page_id()
+      int64_t cur_offset = page_io_infos_.at(i).key_.get_page_id()
           * ObTmpMacroBlock::get_default_page_size() - offset_;
-      offset += ObTmpMacroBlock::get_header_padding();
-      ObTmpPageCacheValue value(buf + offset);
+      cur_offset += ObTmpMacroBlock::get_header_padding();
+      ObTmpPageCacheValue value(data_buf_ + cur_offset);
       if (OB_FAIL(process_page(page_io_infos_.at(i).key_, value))) {
         STORAGE_LOG(WARN, "fail to process tmp page cache in callback", K(ret));
       }
     }
     page_io_infos_.reset();
   }
-  if (OB_FAIL(ret) && NULL != allocator_ && NULL != io_buf_) {
-    allocator_->free(io_buf_);
-    io_buf_ = NULL;
+  if (OB_FAIL(ret) && NULL != allocator_ && NULL != data_buf_) {
+    allocator_->free(data_buf_);
     data_buf_ = NULL;
   }
   return ret;
@@ -406,9 +395,10 @@ int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallbac
   read_info.io_desc_ = io_info.io_desc_;
   read_info.macro_block_id_ = io_info.macro_block_id_;
   read_info.io_callback_ = &callback;
-  common::align_offset_size(io_info.offset_, io_info.size_, read_info.offset_, read_info.size_);
+  read_info.offset_ = io_info.offset_;
+  read_info.size_ = io_info.size_;
   if (OB_FAIL(ObBlockManager::async_read_block(read_info, handle))) {
-    STORAGE_LOG(WARN, "fail to async read block", K(ret));
+    STORAGE_LOG(WARN, "fail to async read block", K(ret), K(read_info));
   }
   return ret;
 }

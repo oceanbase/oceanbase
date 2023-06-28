@@ -133,7 +133,10 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_majority)
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 2, id, 512 * KB));
   usleep(500 * 1000);
   PALF_LOG(INFO, "CASE[1.4] test add_member while throttling");
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
 
   PALF_LOG(INFO, "CASE[1.5] test switch_leader while throttling[major]");
@@ -291,7 +294,9 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_minor_leader)
   ASSERT_EQ(OB_TIMEOUT, new_leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_C_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(new_leader, 1, id, 1 * KB));
   usleep(500 * 1000);
-  ASSERT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  ASSERT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(new_leader, 1, id, 1 * KB));
 
   PALF_LOG(INFO, "end test throttling_minor_leader", K(id));
@@ -369,7 +374,9 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_minor_follower)
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
   usleep(500 * 1000);
   PALF_LOG(INFO, "[CASE 3.4] test add_member(3-4)");
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
 
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
@@ -383,7 +390,8 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_minor_follower)
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
   usleep(500 * 1000);
   PALF_LOG(INFO, "[CASE 3.4] test add_member");
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_B_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_B_idx]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
 
   PALF_LOG(INFO, "[CASE 3.5] test switch_leader to C (not throttled replica)");

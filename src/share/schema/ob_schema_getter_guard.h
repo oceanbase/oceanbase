@@ -182,10 +182,9 @@ public:
       const uint64_t tenant_id,
       const uint64_t table_id,
       bool &has_local_unique_index);
-  int check_has_global_unique_index(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      bool &has_global_unique_index);
+  int get_all_unique_index(const uint64_t tenant_id,
+                           const uint64_t table_id,
+                           ObIArray<uint64_t> &unique_index_ids);
 	bool is_tenant_schema_valid(const int64_t tenant_id) const;
 	/*
    interface for simple schema
@@ -268,6 +267,10 @@ public:
   int get_table_schemas_in_tablegroup(const uint64_t tenant_id,
                                       const uint64_t tablegroup_id,
                                       common::ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas);
+  int get_primary_table_schema_in_tablegroup(const uint64_t tenant_id,
+                                             const uint64_t tablegroup_id,
+                                             const ObSimpleTableSchemaV2 *&primary_table_schema);
+
   int get_table_schemas_in_tablespace(const uint64_t tenant_id,
                                       const uint64_t tablespace_id,
                                       common::ObIArray<const ObTableSchema *> &table_schemas);

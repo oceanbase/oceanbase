@@ -48,12 +48,12 @@ namespace logservice
 {
 
 // should not gc a ls create by ob_ls_service.cpp
-int ObGarbageCollector::gc_check_ls_status_(const ObLSID &id,
+int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
                                             ObGCCandidateArray &gc_candidates)
 {
   int ret = OB_SUCCESS;
   GCCandidate candidate;
-  candidate.ls_id_ = id;
+  candidate.ls_id_ = ls.get_ls_id();
   candidate.ls_status_ = LSStatus::LS_NORMAL;
   candidate.gc_reason_ = GCReason::INVALID_GC_REASON;
   if (OB_FAIL(gc_candidates.push_back(candidate))) {

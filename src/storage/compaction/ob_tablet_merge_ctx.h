@@ -84,29 +84,23 @@ private:
 
 struct ObSchemaMergeCtx
 {
-  ObSchemaMergeCtx(ObIAllocator &allocator);
+  ObSchemaMergeCtx(ObArenaAllocator &allocator);
   ~ObSchemaMergeCtx()
   {
     destroy();
   }
   OB_INLINE void destroy()
   {
-    if (allocated_storage_schema_ && nullptr != storage_schema_) {
+    if (nullptr != storage_schema_) {
       storage_schema_->~ObStorageSchema();
-      allocator_.free((void *)storage_schema_);
-      allocated_storage_schema_ = false;
       storage_schema_ = nullptr;
     }
   }
-  int deep_copy(const ObSchemaMergeCtx &input_ctx);
-
-  common::ObIAllocator &allocator_;
-  int64_t base_schema_version_;
+  common::ObArenaAllocator &allocator_;
   int64_t schema_version_;
-  bool allocated_storage_schema_;
   const ObStorageSchema *storage_schema_; // schema for all merge
 
-  TO_STRING_KV(K_(base_schema_version), K_(schema_version), KPC_(storage_schema));
+  TO_STRING_KV(K_(schema_version), KPC_(storage_schema));
 };
 
 class ObCompactionTimeGuard : public common::occam::ObOccamTimeGuard
@@ -155,7 +149,7 @@ private:
 
 struct ObTabletMergeCtx
 {
-  ObTabletMergeCtx(ObTabletMergeDagParam &param, common::ObIAllocator &allocator);
+  ObTabletMergeCtx(ObTabletMergeDagParam &param, common::ObArenaAllocator &allocator);
   virtual ~ObTabletMergeCtx();
   void destroy();
   virtual bool is_valid() const;
@@ -175,19 +169,19 @@ struct ObTabletMergeCtx
     ObMediumCompactionInfo &info);
   int get_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
-  int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle, const bool get_schema_on_memtable = true);
+  int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle);
+  int get_max_data_scn(const ObTablesHandleArray &merge_tables_handle);
+  int try_swap_tablet_handle();
 
-  int try_swap_tablet_handle(const ObTablesHandleArray &tables_handle);
-public:
   int get_medium_compaction_info_to_store();
-
+  static bool need_swap_tablet(const ObTablet &tablet, const int64_t row_count, const int64_t macro_count);
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int cal_minor_merge_param();
   int cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result);
   int init_merge_info();
   int prepare_index_tree();
   int prepare_merge_progress();
-  int generate_participant_table_info(char *buf, const int64_t buf_len) const;
+  int generate_participant_table_info(PartTableInfo &info) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len) const;
   void collect_running_info();
   int update_tablet_directly(const ObGetMergeTablesResult &get_merge_table_result);
@@ -202,13 +196,17 @@ public:
         is_multi_version_merge(param_.merge_type_) ?
             scn_range_.end_scn_.get_val_for_tx() : sstable_version_range_.snapshot_version_;
   }
+  int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result);
+  int check_medium_info_and_last_major(
+    const ObMediumCompactionInfo &medium_info,
+    const ObGetMergeTablesResult &get_merge_table_result) const;
 
   typedef common::ObSEArray<ObGetMergeTablesResult, ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
   // 1. init in dag
   ObTabletMergeDagParam &param_;
-  common::ObIAllocator &allocator_;
+  common::ObArenaAllocator &allocator_;
 
   // 2. filled in ObPartitionStore::get_merge_tables
   ObVersionRange sstable_version_range_;// version range for new sstable
@@ -217,7 +215,7 @@ public:
   int64_t create_snapshot_version_;
 
   storage::ObTablesHandleArray tables_handle_;
-  storage::ObTableHandleV2 merged_table_handle_;
+  blocksstable::ObSSTable merged_sstable_;
 
   // 3. filled in ObTabletMergeCtx::get_schemas_to_merge
   ObSchemaMergeCtx schema_ctx_;
@@ -252,7 +250,6 @@ public:
   ObCompactionTimeGuard time_guard_;
   int64_t rebuild_seq_;
   uint64_t data_version_;
-  ObMediumCompactionInfoList merge_list_;
   ObTransNodeDMLStat tnode_stat_; // collect trans node dml stat on memtable, only worked in mini compaction.
 
   TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version),
@@ -266,7 +263,7 @@ public:
                K_(scn_range), K_(merge_scn), K_(read_base_version),
                K_(ls_handle), K_(tablet_handle),
                KPC_(merge_progress),
-               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(data_version), K_(merge_list));
+               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(data_version));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeCtx);
 };

@@ -38,6 +38,7 @@
 #include "rootserver/ob_ddl_service.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_snapshot_info_manager.h"
+#include "storage/ob_common_id_utils.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "observer/ob_server_struct.h"
 
@@ -55,30 +56,32 @@ using namespace sql;
 namespace rootserver
 {
 ObDDLTaskKey::ObDDLTaskKey()
-  : object_id_(OB_INVALID_ID), schema_version_(0)
+  : tenant_id_(OB_INVALID_TENANT_ID), object_id_(OB_INVALID_ID), schema_version_(0)
 {
 }
 
-ObDDLTaskKey::ObDDLTaskKey(const int64_t object_id, const int64_t schema_version)
-  : object_id_(object_id), schema_version_(schema_version)
+ObDDLTaskKey::ObDDLTaskKey(const uint64_t tenant_id, const int64_t object_id, const int64_t schema_version)
+  : tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version)
 {
 }
 
 uint64_t ObDDLTaskKey::hash() const
 {
-  uint64_t hash_val = murmurhash(&object_id_, sizeof(object_id_), 0);
+  uint64_t hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
+  hash_val = murmurhash(&object_id_, sizeof(object_id_), hash_val);
   hash_val = murmurhash(&schema_version_, sizeof(schema_version_), hash_val);
   return hash_val;
 }
 
 bool ObDDLTaskKey::operator==(const ObDDLTaskKey &other) const
 {
-  return object_id_ == other.object_id_ && schema_version_ == other.schema_version_;
+  return tenant_id_ == other.tenant_id_ && object_id_ == other.object_id_ && schema_version_ == other.schema_version_;
 }
 
 int ObDDLTaskKey::assign(const ObDDLTaskKey &other)
 {
   int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
   object_id_ = other.object_id_;
   schema_version_ = other.schema_version_;
   return ret;
@@ -408,7 +411,7 @@ trace::ObSpanCtx* ObDDLTracing::begin_status_span(const share::ObDDLTaskStatus s
       case ObDDLTaskStatus::PREPARE:
         span = FLT_BEGIN_SPAN(ddl_prepare);
         break;
-      case ObDDLTaskStatus::LOCK_TABLE:
+      case ObDDLTaskStatus::OBTAIN_SNAPSHOT:
         span = FLT_BEGIN_SPAN(ddl_lock_table);
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END:
@@ -502,7 +505,7 @@ trace::ObSpanCtx* ObDDLTracing::restore_status_span()
       case ObDDLTaskStatus::PREPARE:
         span = FLT_RESTORE_DDL_SPAN(ddl_prepare, status_span_id_, status_start_ts_);
         break;
-      case ObDDLTaskStatus::LOCK_TABLE:
+      case ObDDLTaskStatus::OBTAIN_SNAPSHOT:
         span = FLT_RESTORE_DDL_SPAN(ddl_lock_table, status_span_id_, status_start_ts_);
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END:
@@ -789,16 +792,23 @@ int ObDDLTask::deep_copy_table_arg(common::ObIAllocator &allocator, const ObDDLA
   return ret;
 }
 
-int ObDDLTask::fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id)
+int ObDDLTask::fetch_new_task_id(ObMySQLProxy &sql_proxy, const uint64_t tenant_id, int64_t &new_task_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t tmp_task_id = OB_INVALID_ID;
-  ObMaxIdFetcher id_fetcher(sql_proxy);
-  if (OB_FAIL(id_fetcher.fetch_new_max_id(OB_SYS_TENANT_ID,
-          OB_MAX_USED_DDL_TASK_ID_TYPE, tmp_task_id, 1L/*ddl start id*/))) {
-    LOG_WARN("fetch_new_max_id failed", K(ret), "id_type", OB_MAX_USED_DDL_TASK_ID_TYPE);
+  ObCommonID tmp_task_id;
+  UNUSED(sql_proxy);
+  MTL_SWITCH(tenant_id) {
+    if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id, tmp_task_id))) {
+      LOG_WARN("failed to gen unique id", K(ret));
+    } else {
+      new_task_id = tmp_task_id.id();
+    }
   } else {
-    new_task_id = tmp_task_id;
+    if (OB_FAIL(ObCommonIDUtils::gen_unique_id_by_rpc(tenant_id, tmp_task_id))) {
+      LOG_WARN("failed to gen unique id", K(ret));
+    } else {
+      new_task_id = tmp_task_id.id();
+    }
   }
   return ret;
 }
@@ -1344,7 +1354,7 @@ void ObDDLTask::calc_next_schedule_ts(const int ret_code, const int64_t total_ta
   int64_t ddl_rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
   if (OB_TIMEOUT == ret_code) {
     const int64_t SEC = 1000000;
-    const int64_t max_delay = total_task_cnt * ddl_rpc_timeout * 10;
+    const int64_t max_delay = std::min(total_task_cnt * ddl_rpc_timeout * 10, 600 * 1000 * 1000L/*10 min*/);
     delay_schedule_time_ = std::min(delay_schedule_time_ * 6/5 + SEC/10, max_delay);
     const int64_t max_dt = delay_schedule_time_;
     const int64_t min_dt = max_dt / 2;
@@ -2804,6 +2814,42 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::check_has_index_task(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    const uint64_t index_table_id,
+    bool &has_index_task)
+{
+  int ret = OB_SUCCESS;
+  has_index_task = false;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
+    || OB_INVALID_ID == data_table_id
+    || OB_INVALID_ID == index_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(data_table_id));
+  } else {
+    ObSqlString sql_string;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_string.assign_fmt("SELECT EXISTS(SELECT 1 FROM %s WHERE object_id = %lu AND target_object_id = %lu AND ddl_type IN (%d, %d)) as has",
+          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, index_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_DROP_INDEX))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
+        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("result next failed", K(ret), K(tenant_id), K(index_table_id));
+      } else {
+        EXTRACT_BOOL_FIELD_MYSQL(*result, "has", has_index_task);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::get_task_record(const ObSqlString &sql_string,
                                              common::ObMySQLProxy &proxy,
                                              common::ObIAllocator &allocator,
@@ -2901,6 +2947,7 @@ int ObDDLTaskRecordOperator::check_task_id_exist(common::ObMySQLProxy &proxy, co
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
+      // TODO:
       if (OB_FAIL(sql_string.assign_fmt("SELECT count(*) as have FROM %s WHERE task_id=%lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME, task_id))) {
         LOG_WARN("assign sql string failed", K(ret));
       } else if (OB_FAIL(proxy.read(res, sql_string.ptr()))) {

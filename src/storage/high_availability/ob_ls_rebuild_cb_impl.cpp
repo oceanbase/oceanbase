@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_rebuild_cb_impl.h"
-#include "ob_storage_ha_service.h"
+#include "ob_rebuild_service.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "logservice/ob_log_service.h"
@@ -80,12 +80,7 @@ int ObLSRebuildCbImpl::on_rebuild(
   } else if (OB_FAIL(check_ls_in_rebuild_status_(is_ls_in_rebuild))) {
     LOG_WARN("failed to check ls in rebuild status", K(ret), K(ls_id), KPC(ls_));
   } else if (is_ls_in_rebuild) {
-    wakeup_ha_service_();
-  } else if (OB_FAIL(check_need_rebuild_(lsn, need_rebuild))) {
-    LOG_WARN("failed to check need rebuild", K(ret), K(ls_id));
-  } else if (!need_rebuild) {
-    ret = OB_NO_NEED_REBUILD;
-    LOG_WARN("ls no need rebuild", K(ret), K(lsn), KPC(ls_));
+    wakeup_rebuild_service_();
   } else if (OB_FAIL(execute_rebuild_())) {
     LOG_WARN("failed to execute rebuild", K(ret), K(lsn), KPC(ls_));
   } else {
@@ -102,68 +97,19 @@ int ObLSRebuildCbImpl::check_ls_in_rebuild_status_(
 {
   int ret = OB_SUCCESS;
   is_ls_in_rebuild = false;
-  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  ObLSRebuildInfo rebuild_info;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls rebuild cb impl do not init", K(ret));
-  } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
-    LOG_WARN("failed to get ls migration status", K(ret), KPC(ls_));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status) {
+  } else if (OB_FAIL(ls_->get_rebuild_info(rebuild_info))) {
+    LOG_WARN("failed to get rebuild info", K(ret), KPC(ls_));
+  } else if (!rebuild_info.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rebuild info is invalid", K(ret), KPC(ls_));
+  } else if (rebuild_info.is_in_rebuild()) {
     is_ls_in_rebuild = true;
-    LOG_INFO("ls is already in rebuild status", K(ret), K(migration_status), KPC(ls_));
-  }
-  return ret;
-}
-
-int ObLSRebuildCbImpl::check_need_rebuild_(
-    const palf::LSN &lsn,
-    bool &need_rebuild)
-{
-  int ret = OB_SUCCESS;
-  ObLSInfo ls_info;
-  int64_t cluster_id = GCONF.cluster_id;
-  uint64_t tenant_id = MTL_ID();
-  ObAddr leader_addr;
-  need_rebuild = false;
-  share::ObLocationService *location_service = nullptr;
-  ObStorageHASrcInfo src_info;
-  obrpc::ObFetchLSMemberListInfo member_info;
-  const bool force_renew = true;
-  src_info.cluster_id_ = cluster_id;
-  ObRole role;
-  int64_t proposal_id = 0;
-  logservice::ObLogService *log_service = nullptr;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls rebuild cb impl do not init", K(ret));
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
-  } else if (OB_FAIL(log_service->get_palf_role(ls_->get_ls_id(), role, proposal_id))) {
-    LOG_WARN("failed to get role", K(ret), KPC(ls_));
-  } else if (is_strong_leader(role)) {
-    need_rebuild = false;
-    LOG_INFO("replica is leader, can not rebuild", KPC(ls_));
-  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("location service should not be NULL", K(ret), KP(location_service));
-  } else if (OB_FAIL(location_service->get_leader(src_info.cluster_id_, tenant_id, ls_->get_ls_id(), force_renew, src_info.src_addr_))) {
-    LOG_WARN("fail to get ls leader server", K(ret), K(tenant_id), KPC(ls_));
-    //for rebuild without leader exist
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_->get_ls_id(), member_info))) {
-    LOG_WARN("failed to get ls member info", K(ret), KPC(ls_));
-  } else if (!member_info.member_list_.contains(GCONF.self_addr_)) {
-    ret = OB_WORKING_PARTITION_NOT_EXIST;
-    LOG_WARN("can not rebuild, it is not normal ls", K(ret), KPC(ls_));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else {
-    //TODO(muwei.ym) send rpc to check member list lsn
-    need_rebuild = true;
+    LOG_INFO("ls is already in rebuild status", K(ret), K(rebuild_info), KPC(ls_));
   }
   return ret;
 }
@@ -171,28 +117,34 @@ int ObLSRebuildCbImpl::check_need_rebuild_(
 int ObLSRebuildCbImpl::execute_rebuild_()
 {
   int ret = OB_SUCCESS;
+  ObRebuildService *rebuild_service = nullptr;
+  const ObLSRebuildType rebuild_type(ObLSRebuildType::CLOG);
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls rebuild cb impl do not init", K(ret));
-  } else if (OB_FAIL(ls_->set_ls_rebuild())) {
-    LOG_WARN("failed to set ls rebuild", K(ret));
+  } else if (OB_ISNULL(rebuild_service = (MTL(ObRebuildService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rebuild service not be NULL", K(ret), KP(rebuild_service));
+  } else if (OB_FAIL(rebuild_service->add_rebuild_ls(ls_->get_ls_id(), rebuild_type))) {
+    LOG_WARN("failed to add rebuild ls", K(ret), KPC(ls_), K(rebuild_type));
   } else {
     LOG_INFO("succeed execute rebuild", KPC(ls_));
-    wakeup_ha_service_();
+    wakeup_rebuild_service_();
   }
   return ret;
 }
 
-void ObLSRebuildCbImpl::wakeup_ha_service_()
+void ObLSRebuildCbImpl::wakeup_rebuild_service_()
 {
   int ret = OB_SUCCESS;
-  ObStorageHAService *ha_service = nullptr;
+  ObRebuildService *rebuild_service = nullptr;
 
-  if (OB_ISNULL(ha_service = (MTL(ObStorageHAService *)))) {
+  if (OB_ISNULL(rebuild_service = (MTL(ObRebuildService *)))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), KP(ha_service));
+    LOG_WARN("rebuild service not be NULL", K(ret), KP(rebuild_service));
   } else {
-    ha_service->wakeup();
+    rebuild_service->wakeup();
   }
 }
 

@@ -41,12 +41,8 @@ struct ObMicroBlockDataHandle {
   int get_data_block_data(
       blocksstable::ObMacroBlockReader &block_reader,
       blocksstable::ObMicroBlockData &block_data);
-  int get_index_block_data(
-      const ObTableReadInfo &read_info,
-      blocksstable::ObMicroBlockData &index_block);
-  int get_cached_index_block_data(
-      const ObTableReadInfo &read_info,
-      blocksstable::ObMicroBlockData &index_block);
+  int get_index_block_data(blocksstable::ObMicroBlockData &index_block);
+  int get_cached_index_block_data(blocksstable::ObMicroBlockData &index_block);
   TO_STRING_KV(K_(tenant_id), K_(macro_block_id), K_(micro_info),
                K_(block_state), K_(block_index), K_(cache_handle), K_(io_handle));
   uint64_t tenant_id_;

@@ -104,4 +104,18 @@ typename std::enable_if<!std::is_pointer<T>::value>::type mtl_destroy_default(T 
 {
   m.destroy();
 }
+
+template<typename T>
+typename std::enable_if<std::is_pointer<T>::value, bool>::type get_mtl_ptr(T &m, void *&ptr)
+{
+  ptr = reinterpret_cast<void*>(m);
+  return true;
+}
+template<typename T>
+typename std::enable_if<!std::is_pointer<T>::value, bool>::type get_mtl_ptr(T &m, void *&ptr)
+{
+  ptr = reinterpret_cast<void*>(&m);
+  return false;
+}
+
 #endif

@@ -161,7 +161,8 @@ public:
                        const uint32_t acc_checksum,
                        const int64_t version,
                        const int32_t flag,
-                       const int64_t seq_no);
+                       const int64_t seq_no,
+                       const int64_t column_cnt);
   virtual ~ObMemtableMutatorRow();
   void reset();
   int copy(uint64_t &table_id,
@@ -174,7 +175,8 @@ public:
            uint32_t &acc_checksum,
            int64_t &version,
            int32_t &flag,
-           int64_t &seq_no) const;
+           int64_t &seq_no,
+           int64_t &column_cnt) const;
 
   int serialize(char *buf, int64_t &buf_len, int64_t &pos,
                 const transaction::ObTxEncryptMeta *encrypt_meta,
@@ -190,6 +192,7 @@ public:
                           share::ObCLogEncryptStatMap &encrypt_stat_map,
                           const bool is_big_row = false);
   uint32_t get_flag() const { return flag_; };
+  int64_t get_column_cnt() const { return column_cnt_; }
 
   TO_STRING_KV(K_(row_size),
                K_(table_id),
@@ -202,7 +205,8 @@ public:
                K_(acc_checksum),
                K_(version),
                K_(flag),
-               K_(seq_no));
+               K_(seq_no),
+               K_(column_cnt));
 
 public:
   blocksstable::ObDmlFlag dml_flag_;
@@ -213,6 +217,7 @@ public:
   int64_t version_;
   int32_t flag_; // currently, unused
   uint8_t rowid_version_;
+  int64_t column_cnt_;
 };
 
 class ObMutatorTableLock : public ObMutator

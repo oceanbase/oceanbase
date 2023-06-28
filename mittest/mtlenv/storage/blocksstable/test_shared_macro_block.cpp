@@ -95,34 +95,37 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   ObArenaAllocator allocator;
   ObSSTableIndexBuilder *sstable_index_builder = OB_NEW(ObSSTableIndexBuilder, "SSTableIdx");
   ObIndexBlockRebuilder *index_block_rebuilder = OB_NEW(ObIndexBlockRebuilder, "IdxRebuilder");
-  ObTableHandleV2 table_handle;
-  ObSSTable *sstable = nullptr;
+  ObSSTable sstable;
 
   // rebuild sstable
   tablet_handle.get_obj()->tablet_meta_.snapshot_version_ = 12;
-  ASSERT_EQ(OB_SUCCESS, shared_blk_mgr->rebuild_sstable(
-      *(tablet_handle.get_obj()), sstable_, 0, *sstable_index_builder, *index_block_rebuilder, table_handle));
-  ASSERT_EQ(OB_SUCCESS, table_handle.get_sstable(sstable));
-  ASSERT_EQ(true, sstable_.meta_.basic_meta_ == sstable->meta_.basic_meta_);
+  int ret = shared_blk_mgr->rebuild_sstable(allocator,
+      *(tablet_handle.get_obj()), sstable_, 0, *sstable_index_builder, *index_block_rebuilder, sstable);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, sstable_.meta_->basic_meta_ == sstable.meta_->basic_meta_);
 
   // get old and new sstable
   ObMacroBlockHandle old_handle;
   ObMacroBlockReadInfo read_info;
-  read_info.macro_block_id_ = sstable_.meta_.macro_info_.data_block_ids_.at(0);
-  read_info.offset_ = sstable_.meta_.macro_info_.nested_offset_;
-  read_info.size_ = sstable_.meta_.macro_info_.nested_size_;
+  ObMacroIdIterator id_iterator;
+  ASSERT_EQ(OB_SUCCESS, sstable_.meta_->macro_info_.get_data_block_iter(id_iterator));
+  ASSERT_EQ(OB_SUCCESS, id_iterator.get_next_macro_id(read_info.macro_block_id_));
+  read_info.offset_ = sstable_.meta_->macro_info_.nested_offset_;
+  read_info.size_ = sstable_.meta_->macro_info_.nested_size_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::read_block(read_info, old_handle));
 
   ObMacroBlockHandle new_handle;
-  read_info.macro_block_id_ = sstable->meta_.macro_info_.data_block_ids_.at(0);
-  read_info.offset_ = sstable->meta_.macro_info_.nested_offset_;
-  read_info.size_ = sstable->meta_.macro_info_.nested_size_;
+  id_iterator.reset();
+  ASSERT_EQ(OB_SUCCESS, sstable.meta_->macro_info_.get_data_block_iter(id_iterator));
+  ASSERT_EQ(OB_SUCCESS, id_iterator.get_next_macro_id(read_info.macro_block_id_));
+  read_info.offset_ = sstable.meta_->macro_info_.nested_offset_;
+  read_info.size_ = sstable.meta_->macro_info_.nested_size_;
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::read_block(read_info, new_handle));
 
   // compare two sstables
-  ASSERT_EQ(sstable_.meta_.macro_info_.nested_size_, sstable->meta_.macro_info_.nested_size_);
-  ASSERT_EQ(0, MEMCMP(old_handle.get_buffer(), new_handle.get_buffer(), sstable->meta_.macro_info_.nested_size_));
+  ASSERT_EQ(sstable_.meta_->macro_info_.nested_size_, sstable.meta_->macro_info_.nested_size_);
+  ASSERT_EQ(0, MEMCMP(old_handle.get_buffer(), new_handle.get_buffer(), sstable.meta_->macro_info_.nested_size_));
 
   OB_DELETE(ObSSTableIndexBuilder, "SSTableIdx", sstable_index_builder);
   OB_DELETE(ObIndexBlockRebuilder, "IdxRebuilder", index_block_rebuilder);
@@ -170,6 +173,7 @@ int main(int argc, char **argv)
   system("rm -f test_shared_macro_block.log*");
   OB_LOGGER.set_file_name("test_shared_macro_block.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  oceanbase::common::ObClusterVersion::get_instance().init(CLUSTER_VERSION_4_1_0_0);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

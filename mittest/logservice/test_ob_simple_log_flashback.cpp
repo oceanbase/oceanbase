@@ -144,10 +144,15 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_basic_func)
   unittest::PalfHandleImplGuard leader1, leader2;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id1, leader_idx1, leader1));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id2, leader_idx2, leader2));
-  ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, CONFIG_CHANGE_TIMEOUT_US));
-  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT_US));
-  EXPECT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, CONFIG_CHANGE_TIMEOUT_US));
-  EXPECT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT_US));
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
+  ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  ASSERT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  ASSERT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT_US));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader1, 500, leader_idx1));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader2, 500, leader_idx2));
   SCN flashback_scn;
@@ -211,8 +216,11 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_with_reconfirm1)
   if (leader_idx1 != 0) {
     EXPECT_EQ(OB_SUCCESS, switch_leader(id1, 0, leader1));
   }
-  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, CONFIG_CHANGE_TIMEOUT_US));
-  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT_US));
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT_US));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader1, 1000, leader_idx1));
   wait_until_has_committed(leader1, leader1.palf_handle_impl_->get_max_lsn());
   LogEntryHeader header_origin;
@@ -377,8 +385,11 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_after_restart)
   if (leader_idx1 != 0) {
     EXPECT_EQ(OB_SUCCESS, switch_leader(id1, 0, leader1));
   }
-  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, CONFIG_CHANGE_TIMEOUT_US));
-  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT_US));
+  LogConfigVersion config_version;
+  ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT_US));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader1, 1000, leader_idx1));
   wait_until_has_committed(leader1, leader1.palf_handle_impl_->get_max_lsn());
   switch_append_to_raw_write(leader1, mode_version1);

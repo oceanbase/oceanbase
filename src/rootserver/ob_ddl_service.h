@@ -155,6 +155,7 @@ public:
                     obrpc::ObAlterTableRes &res);
 
   int rebuild_index_in_trans(share::schema::ObSchemaGetterGuard &schema_guard,
+                             const share::schema::ObTableSchema &data_table_schema,
                              share::schema::ObTableSchema &table_schema,
                              const ObString *ddl_stmt_str,
                              ObMySQLTransaction *sql_trans);
@@ -395,7 +396,7 @@ public:
                             AlterTableSchema &inc_table_schema,
                             share::schema::ObSchemaGetterGuard &schema_guard,
                             ObArenaAllocator &allocator);
-
+  bool is_add_and_drop_partition(const obrpc::ObAlterTableArg::AlterPartitionType &op_type);
   // execute alter_table_partitions for some tables which are data table and its local indexes
   //
   // @param [in] op_type, modify part ddl op
@@ -409,6 +410,7 @@ public:
                               common::ObIArray<AlterTableSchema*> &inc_table_schemas,
                               common::ObIArray<AlterTableSchema*> &del_table_schemas,
                               ObDDLOperator &ddl_operator,
+                              ObSchemaGetterGuard &schema_guard,
                               ObMySQLTransaction &trans);
   virtual int alter_table_partitions(const obrpc::ObAlterTableArg &alter_table_arg,
                                      const share::schema::ObTableSchema &orig_table_schema,
@@ -416,6 +418,7 @@ public:
                                      share::schema::AlterTableSchema &del_table_schema,
                                      share::schema::ObTableSchema &new_table_schema,
                                      ObDDLOperator &ddl_operator,
+                                     ObSchemaGetterGuard &schema_guard,
                                      ObMySQLTransaction &trans);
   virtual int alter_table_constraints(const obrpc::ObAlterTableArg::AlterConstraintType type,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -494,6 +497,10 @@ public:
       const share::schema::ObTableSchema &hidden_table_schema,
       const uint64_t session_id,
       ObDDLSQLTransaction &trans);
+  int check_hidden_table_constraint_exist(
+      const ObTableSchema *hidden_table_schema,
+      const ObTableSchema *orig_table_schema,
+      ObSchemaGetterGuard &schema_guard);
 
   /**
    * This function is called by the storage layer in the three stage of offline ddl.
@@ -1422,6 +1429,9 @@ private:
                               ObDDLOperator &ddl_operator,
                               common::ObMySQLTransaction &trans,
                               common::ObArenaAllocator &allocator);
+  int check_alter_partition_with_tablegroup(const ObTableSchema *orig_table_schema,
+                                            ObTableSchema &new_table_schema,
+                                            ObSchemaGetterGuard &schema_guard);
   int alter_table_partition_by(obrpc::ObAlterTableArg &alter_table_arg,
                               const share::schema::ObTableSchema &orgin_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
@@ -1798,7 +1808,14 @@ private:
       ObTableSchema &data_table_schema,
       ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
-      common::ObMySQLTransaction &trans);
+      common::ObMySQLTransaction &trans,
+      bool &is_add_lob);
+  int lock_tables_of_database(const share::schema::ObDatabaseSchema &database_schema,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              ObMySQLTransaction &trans);
+  int lock_tables_in_recyclebin(const share::schema::ObDatabaseSchema &database_schema,
+                                share::schema::ObSchemaGetterGuard &schema_guard,
+                                ObMySQLTransaction &trans);
 
 public:
   int construct_zone_region_list(
@@ -1907,6 +1924,7 @@ private:
       const common::ObIArray<share::ObResourcePoolName> &pool_list,
       const bool create_ls_with_palf,
       const palf::PalfBaseInfo &palf_base_info);
+  int create_tenant_user_ls(const uint64_t tenant_id);
   int broadcast_sys_table_schemas(
       const uint64_t tenant_id,
       common::ObIArray<share::schema::ObTableSchema> &tables);
@@ -2017,11 +2035,10 @@ private:
       share::schema::ObSchemaGetterGuard &schema_guard);
   int check_schema_zone_list(
       common::ObArray<common::ObZone> &zone_list);
-  template<typename SCHEMA>
   int check_alter_schema_replica_options(
       const bool alter_primary_zone,
-      SCHEMA &new_schema,
-      const SCHEMA &orig_schema,
+      share::schema::ObTenantSchema &new_schema,
+      const share::schema::ObTenantSchema &orig_schema,
       common::ObArray<common::ObZone> &zone_list,
       share::schema::ObSchemaGetterGuard &schema_guard);
   template<typename SCHEMA>
@@ -2136,7 +2153,7 @@ private:
       common::ObIArray<common::ObRegion> &region_list,
       const common::ObIArray<common::ObZone> &zone_list);
   int modify_and_cal_resource_pool_diff(
-      common::ObISQLClient &client,
+      common::ObMySQLTransaction &trans,
       common::ObIArray<uint64_t> &new_ug_id_array,
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTenantSchema &new_tenant_schema,
@@ -2322,6 +2339,10 @@ private:
                                     const ObIArray<const ObTableSchema*> &orig_table_schemas,
                                     const ObIArray<ObTableSchema*> &new_table_schemas,
                                     ObMySQLTransaction &trans);
+int check_alter_tenant_when_rebalance_is_disabled_(
+    const share::schema::ObTenantSchema &orig_tenant_schema,
+    const share::schema::ObTenantSchema &new_tenant_schema);
+
 private:
   int check_locality_compatible_(ObTenantSchema &schema);
 private:
@@ -2350,7 +2371,8 @@ public:
                       const bool need_end_signal = true,
                       const bool enable_query_stash = false,
                       const bool enable_ddl_parallel = false,
-                      const bool enable_check_ddl_epoch = true)
+                      const bool enable_check_ddl_epoch = true,
+                      const bool enable_check_newest_schema = true)
                       : common::ObMySQLTransaction(enable_query_stash),
                         schema_service_(schema_service),
                         tenant_id_(OB_INVALID_TENANT_ID),
@@ -2360,7 +2382,8 @@ public:
                         trans_start_schema_version_(0),
                         enable_ddl_parallel_(enable_ddl_parallel),
                         enable_check_ddl_epoch_(enable_check_ddl_epoch),
-                        trans_start_ddl_epoch_(OB_INVALID_VERSION)
+                        trans_start_ddl_epoch_(OB_INVALID_VERSION),
+                        enable_check_newest_schema_(enable_check_newest_schema)
                         {}
   virtual ~ObDDLSQLTransaction();
 
@@ -2445,6 +2468,9 @@ private:
   bool enable_check_ddl_epoch_;
   // for compare
   int64_t trans_start_ddl_epoch_;
+
+  // default true to check newest schema; daily major set false not check just use schema from inner table
+  bool enable_check_newest_schema_;
 };
 // Fill in the partition name and the high values of the last partition
 template<typename SCHEMA, typename ALTER_SCHEMA>

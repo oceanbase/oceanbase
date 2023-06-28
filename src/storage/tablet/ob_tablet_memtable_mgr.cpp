@@ -31,17 +31,18 @@ using namespace share;
 using namespace obrpc;
 namespace storage
 {
+using namespace mds;
 
 ObTabletMemtableMgr::ObTabletMemtableMgr()
   : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
-    ls_(NULL),
+    ls_(nullptr),
     lock_def_(common::ObLatchIds::TABLET_MEMTABLE_LOCK),
     retry_times_(0),
     schema_recorder_(),
     medium_info_recorder_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTabletMemtableMgr) <= 480, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletMemtableMgr) <= 2048, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -52,6 +53,7 @@ ObTabletMemtableMgr::~ObTabletMemtableMgr()
 
 void ObTabletMemtableMgr::destroy()
 {
+  STORAGE_LOG(DEBUG, "destroy tablet memtable mgr", KP(this), KPC(this));
   MemMgrWLockGuard lock_guard(lock_);
   // release memtable
   memtable::ObIMemtable *imemtable = nullptr;
@@ -68,6 +70,7 @@ void ObTabletMemtableMgr::destroy()
       memtable->set_frozen();
     }
   }
+
   reset_tables();
   tablet_id_ = 0;
   ls_ = NULL;
@@ -86,6 +89,7 @@ int ObTabletMemtableMgr::init(const common::ObTabletID &tablet_id,
   int ret = OB_SUCCESS;
   ObLSService *ls_service = MTL(storage::ObLSService *);
   ObLSHandle ls_handle;
+  ObMdsTableMgr *mds_table_mgr = nullptr;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -101,7 +105,7 @@ int ObTabletMemtableMgr::init(const common::ObTabletID &tablet_id,
   } else if (OB_FAIL(ls_service->get_ls(ls_id,
                                         ls_handle,
                                         ObLSGetMod::TABLET_MOD))) {
-    TRANS_LOG(WARN, "failed to get ls", K(ret), K(MTL_ID()));
+    LOG_WARN("failed to get ls", K(ret), K(MTL_ID()));
   } else if (OB_ISNULL(ls_ = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "ls should not be NULL", K(ret), KP(ls_));
@@ -112,7 +116,7 @@ int ObTabletMemtableMgr::init(const common::ObTabletID &tablet_id,
     freezer_ = freezer;
     retry_times_ = 0;
     is_inited_ = true;
-    TRANS_LOG(DEBUG, "succeeded to init tablet memtable mgr", K(ret), K(ls_id), K(tablet_id));
+    TRANS_LOG(DEBUG, "succeeded to init tablet memtable mgr", K(ret), K(ls_id), K(tablet_id), KP(this), KPC(this));
   }
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -872,6 +876,8 @@ int64_t ObTabletMemtableMgr::to_string(char *buf, const int64_t buf_len) const
     J_COLON();
     pos += ObIMemtableMgr::to_string(buf + pos, buf_len - pos);
     J_COMMA();
+
+    /************* memtable array **************/
     MemMgrRLockGuard lock_guard(lock_);
     J_OBJ_START();
     J_ARRAY_START();
@@ -884,9 +890,11 @@ int64_t ObTabletMemtableMgr::to_string(char *buf, const int64_t buf_len) const
         J_COMMA();
       }
     }
-    J_KV("schema_recorder", schema_recorder_);
     J_ARRAY_END();
     J_OBJ_END();
+    /************* memtable array **************/
+
+    J_KV(K_(schema_recorder));
     J_OBJ_END();
   }
   return pos;

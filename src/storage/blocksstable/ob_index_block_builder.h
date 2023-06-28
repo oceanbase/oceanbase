@@ -172,16 +172,7 @@ public:
   bool is_valid() const;
   void reset();
   int assign(const ObSSTableMergeRes &src);
-  int fill_column_checksum(
-      const ObStorageSchema *schema,
-      common::ObIArray<int64_t> &column_checksums) const;
-  int fill_column_checksum(
-      const common::ObIArray<int64_t> &column_default_checksum,
-      common::ObIArray<int64_t> &column_checksums) const;
   int prepare_column_checksum_array(const int64_t data_column_cnt);
-  static int fill_column_default_checksum_from_schema(
-      const ObStorageSchema *schema,
-      common::ObIArray<int64_t> &column_default_checksum);
   static int fill_column_checksum_for_empty_major(
       const int64_t column_count,
       common::ObIArray<int64_t> &column_checksums);
@@ -195,7 +186,7 @@ public:
   }
   TO_STRING_KV(K_(root_desc), K_(data_root_desc), K(data_block_ids_.count()), K(other_block_ids_.count()),
       K_(index_blocks_cnt), K_(data_blocks_cnt), K_(micro_block_cnt),
-      K_(data_column_cnt), K_(data_column_checksums), K_(data_default_column_rows_cnt),
+      K_(data_column_cnt), K_(data_column_checksums),
       K_(row_count), K_(max_merged_trans_version), K_(contain_uncommitted_row),
       K_(occupy_size), K_(original_size), K_(data_checksum), K_(use_old_macro_block_count),
       K_(compressor_type), K_(root_row_store_type), K_(nested_offset), K_(nested_size),
@@ -217,7 +208,6 @@ public:
   int64_t data_checksum_;
   int64_t use_old_macro_block_count_;
   common::ObSEArray<int64_t, 1> data_column_checksums_;
-  common::ObSEArray<int64_t, 1> data_default_column_rows_cnt_;
   common::ObCompressorType compressor_type_;
   int64_t encrypt_id_;
   int64_t master_key_id_;
@@ -267,10 +257,12 @@ private:
   int64_t calc_basic_micro_block_data_offset(const uint64_t column_cnt);
 
 protected:
+  static const int64_t ROOT_BLOCK_SIZE_LIMIT = 16 << 10; // 16KB
+
   bool is_inited_;
   bool is_closed_;
   ObDataStoreDesc *index_store_desc_;
-  ObTableReadInfo idx_read_info_;
+  ObRowkeyReadInfo idx_read_info_;
   ObIndexBlockRowBuilder row_builder_;
   ObDatumRowkey last_rowkey_;
   common::ObArenaAllocator rowkey_allocator_;
@@ -395,17 +387,12 @@ private:
       ObDataMacroBlockMeta *&macro_meta,
       int64_t &meta_block_offset,
       int64_t &meta_block_size);
-  static int get_meta_block_and_read_info(
+  static int get_meta_block(
       const char *buf,
       const int64_t buf_size,
       common::ObIAllocator &allocator,
       ObSSTableMacroBlockHeader &header,
-      ObMicroBlockData &meta_block,
-      ObTableReadInfo &read_info);
-  static int build_macro_meta_read_info(
-      const ObSSTableMacroBlockHeader &header,
-      common::ObIAllocator &allocator,
-      ObTableReadInfo &read_info);
+      ObMicroBlockData &meta_block);
 private:
   bool is_inited_;
   lib::ObMutex mutex_;
@@ -447,7 +434,7 @@ public:
       ObIndexMicroBlockDesc *&root_micro_block_desc,
       ObMacroMetasArray *&macro_meta_list);
   int append_root(ObIndexMicroBlockDesc &root_micro_block_desc);
-  int close(const int64_t column_cnt, ObSSTableMergeRes &res);
+  int close(ObSSTableMergeRes &res);
   const ObDataStoreDesc &get_index_store_desc() const { return index_store_desc_; }
   TO_STRING_KV(K(roots_.count()));
 public:

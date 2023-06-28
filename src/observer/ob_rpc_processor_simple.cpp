@@ -44,17 +44,22 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/sequence/ob_sequence_cache.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_log_handler.h"
 #include "share/scn.h"
+#include "storage/ob_common_id_utils.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "observer/ob_req_time_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "rootserver/ob_primary_ls_service.h"//PrimaryLSService
+#include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
+#include "storage/high_availability/ob_transfer_service.h" // ObTransferService
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
@@ -655,18 +660,6 @@ int ObRpcBackupMetaP::process()
   return ret;
 }
 
-int ObRpcBackupCheckTabletP::process()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(gctx_.ob_service_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
-  } else {
-    ret = gctx_.ob_service_->check_not_backup_tablet_create_scn(arg_);
-  }
-  return ret;
-}
-
 int ObRpcCheckBackupTaskExistP::process()
 {
   int ret = OB_SUCCESS;
@@ -799,6 +792,28 @@ int ObRpcSwitchSchemaP::process()
   return ret;
 }
 
+int ObRpcCreateTenantUserLSP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_;
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(tenant_id));
+  } else {
+    MTL_SWITCH(tenant_id) {
+      rootserver::ObPrimaryLSService* primary_ls_service = MTL(rootserver::ObPrimaryLSService*);
+      if (OB_ISNULL(primary_ls_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("primary ls service is null", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(primary_ls_service->create_ls_for_create_tenant())) {
+        LOG_WARN("failed to create ls for create tenant", KR(ret), K(tenant_id));
+      }
+    }
+  }
+  return ret;
+
+}
+
 int ObRpcRefreshMemStatP::process()
 {
   int ret = OB_SUCCESS;
@@ -913,7 +928,7 @@ int ObDumpMemtableP::process()
       } else if (OB_ISNULL(ls->get_tablet_svr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get_tablet_svr is null", KR(ret), K(arg_.tenant_id_), K(arg_.tablet_id_));
-      } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(arg_.tablet_id_, tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+      } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(arg_.tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
         LOG_WARN("get tablet failed", KR(ret), K(arg_.tenant_id_), K(arg_.tablet_id_));
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1434,22 +1449,6 @@ int ObRpcCheckLSCanOfflineP::process()
   return ret;
 }
 
-int ObRpcCreateTabletP::process()
-{
-  int ret = OB_SUCCESS;
-  if (OB_SUCC(ret)) {
-    ObLSService *ls_svr = nullptr;
-    ls_svr = MTL(ObLSService*);
-    if (OB_ISNULL(ls_svr)) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-    } else if (OB_FAIL(ls_svr->create_tablet(arg_, result_))) {
-      COMMON_LOG(WARN, "failed create tablet", KR(ret), K(arg_));
-    }
-  }
-  return ret;
-}
-
 int ObRpcGetLSAccessModeP::process()
 {
   int ret = OB_SUCCESS;
@@ -1491,7 +1490,7 @@ int ObRpcGetLSAccessModeP::process()
       const SCN ref_scn = SCN::min_scn();
       if (OB_FAIL(log_handler->get_access_mode(mode_version, mode))) {
         LOG_WARN("failed to get access mode", KR(ret), K(ls_id));
-      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_scn))) {
+      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_scn, GCTX.self_addr()))) {
         LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), K(mode_version), K(mode));
       } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, second_proposal_id))) {
         COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
@@ -1546,25 +1545,6 @@ int ObRpcChangeLSAccessModeP::process()
         //if ret  not OB_SUCCESS, res can not return
         ret = OB_SUCCESS;
       }
-    }
-  }
-  return ret;
-}
-
-
-
-
-int ObRpcDropTabletP::process()
-{
-  int ret = OB_SUCCESS;
-  ObLSService *ls_svr = nullptr;
-  if (OB_SUCC(ret)) {
-    ls_svr = MTL(ObLSService*);
-    if (OB_ISNULL(ls_svr)) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-    } else if (OB_FAIL(ls_svr->remove_tablet(arg_, result_))) {
-      COMMON_LOG(WARN, "failed create tablet", KR(ret), K(arg_));
     }
   }
   return ret;
@@ -2148,19 +2128,15 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
     } else {
       SCN commit_scn;
+      bool is_remote_write = false;
       if (OB_FAIL(sstable_redo_writer.write_commit_log(tablet_handle,
                                                        ddl_kv_mgr_handle,
                                                        false,
                                                        table_key,
-                                                       arg_.table_id_,
-                                                       arg_.execution_id_,
-                                                       arg_.ddl_task_id_,
-                                                       commit_scn))) {
+                                                       commit_scn,
+                                                       is_remote_write))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(arg_.start_scn_,
-                                                                 commit_scn,
-                                                                 arg_.table_id_,
-                                                                 arg_.ddl_task_id_))) {
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(arg_.start_scn_, commit_scn))) {
         LOG_WARN("failed to do ddl kv commit", K(ret), K(arg_));
       } else {
         result_ = commit_scn.get_val_for_tx();
@@ -2194,7 +2170,7 @@ int ObRegisterTxDataP::process()
     LOG_WARN("unexpected null tx service ptr", KR(ret), K(arg_));
   } else if (OB_FAIL(tx_svc->register_mds_into_tx(*(arg_.tx_desc_), arg_.ls_id_, arg_.type_,
                                                   arg_.buf_.ptr(), arg_.buf_.length(),
-                                                  arg_.request_id_))) {
+                                                  arg_.request_id_, arg_.register_flag_))) {
     LOG_WARN("register into tx failed", KR(ret), K(arg_));
   } else if (OB_FAIL(tx_svc->collect_tx_exec_result(*(arg_.tx_desc_), result_.tx_result_))) {
     LOG_WARN("collect tx result failed", KR(ret), K(result_));
@@ -2288,6 +2264,30 @@ int ObRpcCheckBackupDestConnectivityP::process()
   return ret;
 }
 
+int ObRpcBackupLSDataResP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->report_backup_over(arg_);
+  }
+  return ret;
+}
+
+int ObRpcBackupCleanLSResP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->report_backup_clean_over(arg_);
+  }
+  return ret;
+}
+
 
 int ObEstimateTabletBlockCountP::process()
 {
@@ -2297,6 +2297,32 @@ int ObEstimateTabletBlockCountP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->estimate_tablet_block_count(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcGenUniqueIDP::process()
+{
+  int ret = ObCommonIDUtils::gen_unique_id(arg_, result_);
+  return ret;
+}
+
+int ObRpcStartTransferTaskP::process()
+{
+  int ret = OB_SUCCESS;
+  ObTransferService *transfer_service = nullptr;
+
+  if (OB_UNLIKELY(arg_.get_tenant_id() != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcStartTransferTaskP::process tenant not match", KR(ret), K_(arg));
+  } else if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K_(arg));
+  } else if (OB_ISNULL(transfer_service = MTL(ObTransferService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be null", K(ret), KP(transfer_service));
+  } else {
+    transfer_service->wakeup();
   }
   return ret;
 }
@@ -2345,6 +2371,27 @@ int ObUpdateTenantInfoCacheP::process()
     COMMON_LOG(WARN, "ob_service is null", KR(ret));
   } else if (OB_FAIL(gctx_.ob_service_->update_tenant_info_cache(arg_, result_))) {
     COMMON_LOG(WARN, "failed to update_tenant_info_cache", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObRpcFinishTransferTaskP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("ObRpcFinishTransferTaskP::process", K(MTL_ID()), K_(arg));
+  uint64_t tenant_id = arg_.get_tenant_id();
+  if (OB_UNLIKELY(tenant_id != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcFinishTransferTaskP::process tenant not match", KR(ret), K(tenant_id), K_(arg));
+  } else {
+    rootserver::ObTenantTransferService *tenant_transfer = nullptr;
+    tenant_transfer = MTL(rootserver::ObTenantTransferService*);
+    if (OB_ISNULL(tenant_transfer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("mtl ObTenantTransferService should not be null", KR(ret), K_(arg));
+    } else {
+      tenant_transfer->wakeup();
+    }
   }
   return ret;
 }
@@ -2485,6 +2532,18 @@ int ObBroadcastConsensusVersionP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->broadcast_consensus_version(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcGetLSReplayedScnP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->get_ls_replayed_scn(arg_, result_))) {
+    COMMON_LOG(WARN, "failed to get_ls_replayed_scn", KR(ret), K(arg_));
   }
   return ret;
 }

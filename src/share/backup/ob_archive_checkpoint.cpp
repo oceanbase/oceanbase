@@ -369,12 +369,21 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
 
 
       // fill piece
-      piece.piece_info_.checkpoint_scn_ = MIN(piece.piece_info_.checkpoint_scn_, ls_piece.checkpoint_scn_);
+      bool last_piece = false;
+      if (OB_FAIL(ls_round.check_is_last_piece_for_deleted_ls(piece_id, last_piece))) {
+        LOG_WARN("failed to check is last piece for deleted ls", K(ret));
+      } else if (last_piece) {
+        // If the ls is deleted, and this is the last piece. It should not
+        // affect the checkpoint_scn.
+      } else {
+        piece.piece_info_.checkpoint_scn_ = MIN(piece.piece_info_.checkpoint_scn_, ls_piece.checkpoint_scn_);
+      }
+
       piece.piece_info_.max_scn_ = MAX(piece.piece_info_.max_scn_, ls_piece.checkpoint_scn_);
       piece.piece_info_.input_bytes_ += ls_piece.input_bytes_;
       piece.piece_info_.output_bytes_ += ls_piece.output_bytes_;
 
-      if (OB_FAIL(piece.piece_info_.set_path(new_round_info.path_))) {
+      if (FAILEDx(piece.piece_info_.set_path(new_round_info.path_))) {
         LOG_WARN("failed to set path", K(ret), K(piece), K(gen_ls_piece), K(new_round_info));
       } else if (OB_FAIL(piece.ls_piece_list_.push_back(gen_ls_piece))) {
         LOG_WARN("failed to push backup ls piece", K(ret), K(piece), K(gen_ls_piece));

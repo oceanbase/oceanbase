@@ -17,6 +17,8 @@
 #include "lib/time/ob_time_utility.h"
 #include "sql/ob_sql_context.h"
 #include "sql/session/ob_basic_session_info.h"
+#include "lib/container/ob_tuple.h"
+#include "sql/das/ob_das_retry_ctrl.h"
 namespace oceanbase
 {
 namespace sql
@@ -259,6 +261,7 @@ public:
     return (isolation == transaction::ObTxIsolationLevel::RR
             || isolation == transaction::ObTxIsolationLevel::SERIAL);
   }
+  static int get_das_retry_func(int err, sql::ObDASRetryCtrl::retry_func &retry_func);
 public:
   // schema类型的错误最多在本线程重试5次。
   // 5是拍脑袋决定的，之后还要看统计数据的反馈再修改。TODO qianfu.zpf
@@ -310,10 +313,12 @@ private:
   static void inner_location_error_proc(ObRetryParam &v);
   static void inner_location_error_nothing_readable_proc(ObRetryParam &v);
   static void inner_peer_server_status_uncertain_proc(ObRetryParam &v);
+  void on_close_resultset_fail_(const int err);
 
   /* variables */
   // map_ is used to fast lookup the error code retry processor
-  static common::hash::ObHashMap<int, std::pair<retry_func, retry_func>, common::hash::NoPthreadDefendMode> map_;
+  typedef common::ObTuple<retry_func, retry_func, sql::ObDASRetryCtrl::retry_func> RetryFuncs;
+  static common::hash::ObHashMap<int, RetryFuncs, common::hash::NoPthreadDefendMode> map_;
   int64_t curr_query_tenant_local_schema_version_; // Query开始、Loc刷新前的普通租户shm ver
   int64_t curr_query_tenant_global_schema_version_; // Query开始时的普通租户schema version
   int64_t curr_query_sys_local_schema_version_; // Query开始、Loc刷新前的系统租户shm ver

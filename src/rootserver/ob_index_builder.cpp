@@ -36,6 +36,7 @@
 #include "ob_snapshot_info_manager.h"
 #include "share/ob_thread_mgr.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "storage/ddl/ob_ddl_lock.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx/ob_i_ts_source.h"
 #include "storage/tx/ob_ts_mgr.h"
@@ -178,11 +179,21 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
       ObDDLOperator ddl_operator(ddl_service_.get_schema_service(), ddl_service_.get_sql_proxy());
       ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
       int64_t refreshed_schema_version = 0;
+      ObArenaAllocator allocator(lib::ObLabel("DdlTaskTmp"));
+      ObDDLTaskRecord task_record;
+      bool has_index_task = false;
       SMART_VAR(ObTableSchema, new_index_schema) {
         if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
           LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
         } else if (OB_FAIL(trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
           LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+        } else if (!arg.is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
+              trans, tenant_id, data_table_id, index_table_schema->get_table_id(), has_index_task))) {
+          LOG_WARN("failed to check ddl conflict", K(ret));
+        } else if (has_index_task) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support to drop a building or dropping index", K(ret), K(arg.is_inner_), KPC(index_table_schema));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building or dropping index is");
         } else if (OB_FAIL(ddl_service_.rename_dropping_index_name(
                                                       table_schema->get_table_id(),
                                                       table_schema->get_database_id(),
@@ -192,12 +203,13 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
                                                       trans,
                                                       new_index_schema))) {
           LOG_WARN("renmae index name failed", K(ret));
-        } else if (OB_FAIL(submit_drop_index_task(new_index_schema, arg, res.task_id_))) {
+        } else if (OB_FAIL(submit_drop_index_task(trans, *table_schema, new_index_schema, new_index_schema.get_schema_version(), arg, allocator, task_record))) {
           LOG_WARN("submit drop index task failed", K(ret));
         } else {
           res.tenant_id_ = new_index_schema.get_tenant_id();
           res.index_table_id_ = new_index_schema.get_table_id();
           res.schema_version_ = new_index_schema.get_schema_version();
+          res.task_id_ = task_record.task_id_;
         }
       }
       if (trans.is_started()) {
@@ -208,8 +220,11 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
         }
       }
       if (OB_SUCC(ret)) {
+        int tmp_ret = OB_SUCCESS;
         if (OB_FAIL(ddl_service_.publish_schema(tenant_id))) {
           LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
+        } else if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
+          LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
         }
       }
     } else {
@@ -225,6 +240,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
       drop_table_arg.table_type_ = USER_INDEX;
       drop_table_arg.ddl_stmt_str_ = arg.ddl_stmt_str_;
       drop_table_arg.force_drop_ = arg.is_in_recyclebin_;
+      drop_table_arg.task_id_ = arg.task_id_;
       if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
         LOG_WARN("failed to add table item!", K(table_item), K(ret));
       } else if (OB_FAIL(ddl_service_.drop_table(drop_table_arg, ddl_res))) {
@@ -296,6 +312,7 @@ int ObIndexBuilder::do_create_global_index(
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  new_arg,
                                                  &new_table_schema,
+                                                 nullptr/*del_data_tablet_ids*/,
                                                  &index_schema,
                                                  arg.parallelism_,
                                                  allocator,
@@ -332,6 +349,7 @@ int ObIndexBuilder::submit_build_index_task(
     ObMySQLTransaction &trans,
     const obrpc::ObCreateIndexArg &create_index_arg,
     const ObTableSchema *data_schema,
+    const ObIArray<ObTabletID> *del_data_tablet_ids,
     const ObTableSchema *index_schema,
     const int64_t parallelism,
     common::ObIAllocator &allocator,
@@ -354,13 +372,20 @@ int ObIndexBuilder::submit_build_index_task(
     LOG_WARN("schema is invalid", K(ret), K(data_schema), K(index_schema));
   } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
     LOG_WARN("submit create index ddl task failed", K(ret));
+  } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
+      *data_schema, del_data_tablet_ids, *index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+    LOG_WARN("failed to lock online ddl lock", K(ret));
   }
   return ret;
 }
 
-int ObIndexBuilder::submit_drop_index_task(const ObTableSchema &index_schema,
+int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
+                                           const ObTableSchema &data_schema,
+                                           const ObTableSchema &index_schema,
+                                           const int64_t schema_version,
                                            const obrpc::ObDropIndexArg &arg,
-                                           int64_t &task_id)
+                                           common::ObIAllocator &allocator,
+                                           ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!index_schema.is_valid())) {
@@ -369,24 +394,21 @@ int ObIndexBuilder::submit_drop_index_task(const ObTableSchema &index_schema,
   } else {
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = index_schema.get_tenant_id();
-    ObDDLTaskRecord task_record;
-    ObArenaAllocator allocator(lib::ObLabel("DdlTaskTmp"));
     ObCreateDDLTaskParam param(tenant_id,
                                ObDDLType::DDL_DROP_INDEX,
                                &index_schema,
                                nullptr,
                                0/*object_id*/,
-                               index_schema.get_schema_version(),
+                               schema_version,
                                0/*parallelism*/,
                                arg.consumer_group_id_,
                                &allocator,
                                &arg);
-    if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, ddl_service_.get_sql_proxy(), task_record))) {
+    if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit create index ddl task failed", K(ret));
-    } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
-      LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
-    } else {
-      task_id = task_record.task_id_;
+    } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
+        data_schema, nullptr/*del_data_tablet_ids*/, index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+      LOG_WARN("failed to lock online ddl lock", K(ret));
     }
   }
   return ret;
@@ -470,6 +492,7 @@ int ObIndexBuilder::do_create_local_index(
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  create_index_arg,
                                                  &new_table_schema,
+                                                 nullptr/*del_data_tablet_ids*/,
                                                  &index_schema,
                                                  create_index_arg.parallelism_,
                                                  allocator,

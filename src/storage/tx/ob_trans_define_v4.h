@@ -178,6 +178,7 @@ struct ObTxParam
 
 struct ObTxPart
 {
+  static const int64_t EPOCH_DEAD = -2;
   ObTxPart();
   ~ObTxPart();
   share::ObLSID id_;             // identifier, the logstream
@@ -189,6 +190,7 @@ struct ObTxPart
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
   bool is_clean() const { return first_scn_ > last_scn_; }
+  bool is_without_ctx() const { return EPOCH_DEAD == epoch_; }
   TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts));
   OB_UNIS_VERSION(1);
 };
@@ -399,6 +401,7 @@ protected:
       bool PARTS_INCOMPLETE_: 1;     // participants set incomplete (must abort)
       bool PART_EPOCH_MISMATCH_: 1;  // participant's born epoch mismatched
       bool WITH_TEMP_TABLE_: 1;      // with txn level temporary table
+      bool DEFER_ABORT_: 1;          // need do abort in txn start node
     };
     void switch_to_idle_();
     FLAG update_with(const FLAG &flag);

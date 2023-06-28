@@ -1757,10 +1757,11 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       out_key_part->id_ = id;
       out_key_part->pos_ = *pos;
       out_key_part->null_safe_ = (T_OP_NSEQ == c_type);
-      if (!const_expr->cnt_param_expr()
+      if ((!const_expr->cnt_param_expr()
           || (!const_expr->has_flag(CNT_DYNAMIC_PARAM)
               && T_OP_LIKE == c_type
-              && NULL != query_range_ctx_->params_)) {
+              && NULL != query_range_ctx_->params_))
+          && !const_expr->has_flag(CNT_LAST_INSERT_ID)) {
         val = const_val;
       } else {
         if (OB_FAIL(get_final_expr_val(const_expr, val))) {
@@ -2719,18 +2720,11 @@ int ObQueryRange::pre_extract_single_in_op(const ObOpRawExpr *b_expr,
         out_key_part = find_false;
       }
       query_range_ctx_->cur_expr_is_precise_ = cur_in_is_precise;
-      int64_t max_pos = -1;
-      int64_t cur_pos = out_key_part->pos_.offset_;
-      bool is_strict_equal = true;
-      if (OB_FAIL(is_strict_equal_graph(out_key_part, cur_pos, max_pos, is_strict_equal))) {
-        LOG_WARN("is trict equal graph failed", K(ret));
-      } else if (NULL != out_key_part && !is_strict_equal) {
-        ObKeyPartList key_part_list;
-        if (OB_FAIL(split_or(out_key_part, key_part_list))) {
-          LOG_WARN("split temp_result to or_list failed", K(ret));
-        } else if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
-          LOG_WARN("or range graph failed", K(ret));
-        }
+      ObKeyPartList key_part_list;
+      if (OB_FAIL(split_or(out_key_part, key_part_list))) {
+        LOG_WARN("split temp_result to or_list failed", K(ret));
+      } else if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
+        LOG_WARN("or range graph failed", K(ret));
       }
     }
   }
@@ -4425,6 +4419,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           LOG_WARN("Light copy key part and items failed", K(ret));
         } else if (is_reach_mem_limit_) {
           res_gt = new_l_cur;
+          always_true = true;
         } else if(OB_FAIL(deep_copy_key_part_and_items(r_cur, new_r_cur))) {
           LOG_WARN("Right copy key part and items failed", K(ret));
         } else if (OB_ISNULL(new_l_cur) || OB_ISNULL(new_r_cur)) {
@@ -4432,6 +4427,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           LOG_WARN("get unexpected null", K(ret), K(new_l_cur), K(new_r_cur));
         } else if (is_reach_mem_limit_) {
           res_gt = new_r_cur;
+          always_true = true;
         } else if (new_l_cur->is_like_key()) {
           result = new_r_cur;
         } else if (new_r_cur->is_like_key()) {
@@ -4476,7 +4472,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           }
         }
 
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && !is_reach_mem_limit_) {
           result->link_gt(rest);
           // link to the or_next_ list
           if (NULL != tail) {

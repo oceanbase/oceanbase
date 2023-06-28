@@ -293,7 +293,7 @@ int ObAlterRoutineResolver::parse_routine(
 {
   int ret = OB_SUCCESS;
   ObDataTypeCastParams dtc_params = session_info_->get_dtc_params();
-  pl::ObPLParser parser(*(params_.allocator_), dtc_params.connection_collation_);
+  pl::ObPLParser parser(*(params_.allocator_), dtc_params.connection_collation_, session_info_->get_sql_mode());
   ParseResult parse_result;
   ObString body = source;
   MEMSET(&parse_result, 0, SIZEOF(ParseResult));

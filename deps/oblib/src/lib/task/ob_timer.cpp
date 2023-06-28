@@ -16,6 +16,7 @@
 #include "lib/thread/ob_thread_name.h"
 #include "lib/string/ob_string.h"
 #include "lib/stat/ob_diagnose_info.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {

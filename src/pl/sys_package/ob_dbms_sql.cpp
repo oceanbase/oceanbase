@@ -45,6 +45,9 @@ int ObDbmsInfo::init()
 
 void ObDbmsInfo::reset()
 {
+  for (int64_t i = 0; i < bind_params_.count(); ++i) {
+    (void)ObUserDefinedType::destruct_obj(bind_params_.at(i).param_value_);
+  }
   param_names_.reset();
   into_names_.reset();
   bind_params_.reset();

@@ -109,7 +109,7 @@ enum ObDDLTaskType
 
 enum ObDDLTaskStatus {
   PREPARE = 0,
-  LOCK_TABLE = 1,
+  OBTAIN_SNAPSHOT = 1,
   WAIT_TRANS_END = 2,
   REDEFINITION = 3,
   VALIDATE_CHECKSUM = 4,
@@ -136,8 +136,8 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case share::ObDDLTaskStatus::PREPARE:
       str = "PREPARE";
       break;
-    case share::ObDDLTaskStatus::LOCK_TABLE:
-      str = "LOCK_TABLE";
+    case share::ObDDLTaskStatus::OBTAIN_SNAPSHOT:
+      str = "OBTAIN_SNAPSHOT";
       break;
     case share::ObDDLTaskStatus::WAIT_TRANS_END:
       str = "WAIT_TRANS_END";
@@ -352,7 +352,7 @@ public:
       storage::ObLSHandle &ls_handle,
       const ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle,
-      const int64_t timeout_us = storage::ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
+      const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_READABLE_COMMITED);
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
   

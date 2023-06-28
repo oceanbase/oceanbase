@@ -70,6 +70,9 @@ DEFINE_LOG_SUB_MOD(STANDBY)              // primary and standby cluster
 DEFINE_LOG_SUB_MOD(REASY)                 // libreasy
 DEFINE_LOG_SUB_MOD(COORDINATOR)          // leader coordinator
 DEFINE_LOG_SUB_MOD(FLT)                // trace
+DEFINE_LOG_SUB_MOD(OBTRACE)                // trace
+DEFINE_LOG_SUB_MOD(BALANCE)              // balance module
+DEFINE_LOG_SUB_MOD(MDS)                  // multi data source
 DEFINE_LOG_SUB_MOD(DATA_DICT)            // data_dictionary module
 DEFINE_LOG_SUB_MOD(MVCC)                 // concurrency_control
 LOG_MOD_END(ROOT)
@@ -196,6 +199,11 @@ LOG_MOD_BEGIN(RS)
 DEFINE_LOG_SUB_MOD(LB)                  // load balance
 DEFINE_LOG_SUB_MOD(RESTORE)             // restore related
 LOG_MOD_END(RS)
+
+// Balance submodules
+LOG_MOD_BEGIN(BALANCE)
+DEFINE_LOG_SUB_MOD(TRANSFER)            // transfer service
+LOG_MOD_END(BALANCE)
 
 // liboblog submodules
 LOG_MOD_BEGIN(TLOG)
@@ -449,6 +457,12 @@ LOG_MOD_END(PL)
 #define _COORDINATOR_LOG(level, _fmt_, args...) _OB_MOD_LOG(COORDINATOR, level, _fmt_, ##args)
 #define FLT_LOG(level, info_string, args...) OB_MOD_LOG(FLT, level, info_string, ##args)
 #define _FLT_LOG(level, _fmt_, args...) _OB_MOD_LOG(FLT, level, _fmt_, ##args)
+#define OBTRACE_LOG(level, info_string, args...) OB_MOD_LOG(OBTRACE, level, info_string, ##args)
+#define _OBTRACE_LOG(level, _fmt_, args...) _OB_MOD_LOG(OBTRACE, level, _fmt_, ##args)
+#define BALANCE_LOG(level, info_string, args...) OB_MOD_LOG(BALANCE, level, info_string, ##args)
+#define _BALANCE_LOG(level, _fmt_, args...) _OB_MOD_LOG(BALANCE, level, _fmt_, ##args)
+#define MDS_LOG(level, info_string, args...) OB_MOD_LOG(MDS, level, info_string, ##args)
+#define _MDS_LOG(level, _fmt_, args...) _OB_MOD_LOG(MDS, level, _fmt_, ##args)
 #define DDLOG(level, info_string, args...) OB_MOD_LOG(DATA_DICT, level, info_string, ##args)
 #define _DDLOG(level, _fmt_, args...) _OB_MOD_LOG(DATA_DICT, level, _fmt_, ##args)
 #define MVCC_LOG(level, info_string, args...) OB_MOD_LOG(MVCC, level, info_string, ##args)
@@ -814,6 +828,12 @@ LOG_MOD_END(PL)
 #define _STORAGETEST_LOG(level, info_string, args...) _OB_SUB_MOD_LOG(STORAGETEST, TEST, level,  \
                                                                   info_string, ##args)
 
+// balance submodule definitions
+#define BALANCE_TRANSFER_LOG(level, info_string, args...)     \
+  OB_SUB_MOD_LOG(BALANCE, TRANSFER, level, info_string, ##args)
+#define _BALANCE_TRANSFER_LOG(level, info_string, args...)     \
+  _OB_SUB_MOD_LOG(BALANCE, TRANSFER, level, info_string, ##args)
+
 // liboblog submod definition
 #define OBLOG_FETCHER_LOG(level, fmt, args...) OB_SUB_MOD_LOG(TLOG, FETCHER, level, fmt, ##args)
 #define _OBLOG_FETCHER_LOG(level, fmt, args...) _OB_SUB_MOD_LOG(TLOG, FETCHER, level, fmt, ##args)
@@ -1123,10 +1143,12 @@ LOG_MOD_END(PL)
 #define _OBLOG_DISPATCHER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_DISPATCHER_LOG(level, ##args); }
 #define OBLOG_SORTER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_SORTER_LOG(level, ##args); }
 #define _OBLOG_SORTER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_SORTER_LOG(level, ##args); }
-// END XXX_LOG_RET MACRO DEFINE
-
+#define MDS_LOG_RET(level, errcode, args...) { int ret = errcode; MDS_LOG(level, ##args); }
+#define _MDS_LOG_RET(level, errcode, args...) { int ret = errcode; _MDS_LOG(level, ##args); }
 #define DDLOG_RET(level, errcode, args...){ int ret = errcode; DDLOG(level, ##args); }
+#define _DDLOG_RET(level, errcode, args...){ int ret = errcode; _DDLOG(level, ##args); }
 
+// END XXX_LOG_RET MACRO DEFINE
 
 
 // used for the log return for user;

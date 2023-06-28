@@ -93,9 +93,9 @@ int ObBackupMacroIndexMajorFuser::fuse(MERGE_ITER_ARRAY &iter_array)
   int ret = OB_SUCCESS;
   if (iter_array.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("iter array count unexpected", K(ret));
+    LOG_WARN("iter array count unexpected", K(ret), K(iter_array));
   } else if (OB_FAIL(iter_array.at(0)->get_cur_index(result_))) {
-    LOG_WARN("failed to get cur index", K(ret));
+    LOG_WARN("failed to get cur index", K(ret), K(iter_array));
   }
   return ret;
 }
@@ -537,8 +537,7 @@ ObIBackupIndexMerger::ObIBackupIndexMerger()
       io_fd_(),
       write_ctx_(),
       buffer_node_(),
-      sql_proxy_(NULL),
-      bandwidth_throttle_(NULL)
+      sql_proxy_(NULL)
 {}
 
 ObIBackupIndexMerger::~ObIBackupIndexMerger()
@@ -574,11 +573,10 @@ int ObIBackupIndexMerger::open_file_writer_(const share::ObBackupPath &path, con
   return ret;
 }
 
-int ObIBackupIndexMerger::prepare_file_write_ctx_(
-    common::ObInOutBandwidthThrottle &bandwidth_throttle, ObBackupFileWriteCtx &write_ctx)
+int ObIBackupIndexMerger::prepare_file_write_ctx_(ObBackupFileWriteCtx &write_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(write_ctx.open(OB_MAX_BACKUP_FILE_SIZE, io_fd_, *dev_handle_, bandwidth_throttle))) {
+  if (OB_FAIL(write_ctx.open(OB_MAX_BACKUP_FILE_SIZE, io_fd_, *dev_handle_))) {
     LOG_WARN("failed to open backup file write ctx", K(ret));
   }
   return ret;
@@ -702,8 +700,7 @@ ObBackupMacroBlockIndexMerger::~ObBackupMacroBlockIndexMerger()
   reset();
 }
 
-int ObBackupMacroBlockIndexMerger::init(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
-    common::ObInOutBandwidthThrottle &bandwidth_throttle)
+int ObBackupMacroBlockIndexMerger::init(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   const ObBackupBlockType block_type = BACKUP_BLOCK_MACRO_DATA;
@@ -727,7 +724,6 @@ int ObBackupMacroBlockIndexMerger::init(const ObBackupIndexMergeParam &merge_par
     LOG_WARN("failed to assign param", K(ret), K(merge_param));
   } else {
     sql_proxy_ = &sql_proxy;
-    bandwidth_throttle_ = &bandwidth_throttle;
     is_inited_ = true;
   }
   return ret;
@@ -827,7 +823,7 @@ int ObBackupMacroBlockIndexMerger::prepare_merge_ctx_(
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
   } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to prepare file writer", K(ret), K(backup_path), K(merge_param));
-  } else if (OB_FAIL(prepare_file_write_ctx_(*bandwidth_throttle_, write_ctx_))) {
+  } else if (OB_FAIL(prepare_file_write_ctx_(write_ctx_))) {
     LOG_WARN("failed to prepare file write ctx", K(ret));
   }
   return ret;
@@ -868,10 +864,12 @@ int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
     const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy, ObIMacroBlockIndexIterator *&iter)
 {
   int ret = OB_SUCCESS;
+  share::ObBackupSetFileDesc prev_backup_set_info;
   share::ObBackupSetDesc prev_backup_set_desc;
   ObBackupMacroRangeIndexIterator *tmp_iter = NULL;
   const ObBackupIndexIteratorType type = BACKUP_MACRO_RANGE_INDEX_ITERATOR;
   int64_t prev_tenant_index_retry_id = 0;
+  int64_t prev_tenant_index_turn_id = 0;
   if (!merge_param.backup_set_desc_.backup_type_.is_inc_backup()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no need to prepare if not incremental", K(ret));
@@ -881,10 +879,18 @@ int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
     LOG_WARN("failed to get backup index iterator", K(ret), K(type));
   } else if (OB_FAIL(ObLSBackupOperator::get_prev_backup_set_desc(merge_param.tenant_id_,
                  merge_param.backup_set_desc_.backup_set_id_, merge_param.dest_id_,
-                 prev_backup_set_desc,
+                 prev_backup_set_info,
                  sql_proxy))) {
     LOG_WARN("failed to get prev backup set desc", K(ret), K(merge_param));
-  } else if (OB_FAIL(get_prev_tenant_index_retry_id_(merge_param, prev_backup_set_desc, prev_tenant_index_retry_id))) {
+  } else if (OB_FALSE_IT(prev_backup_set_desc.backup_set_id_ = prev_backup_set_info.backup_set_id_)) {
+  } else if (OB_FALSE_IT(prev_backup_set_desc.backup_type_ = prev_backup_set_info.backup_type_)) {
+  } else if (OB_FALSE_IT(prev_tenant_index_turn_id = merge_param.backup_data_type_.is_major_backup()
+                                                   ? prev_backup_set_info.major_turn_id_
+                                                   : prev_backup_set_info.minor_turn_id_)) {
+  } else if (OB_FAIL(get_prev_tenant_index_retry_id_(merge_param,
+                                                     prev_backup_set_desc,
+                                                     prev_tenant_index_turn_id,
+                                                     prev_tenant_index_retry_id))) {
     LOG_WARN("failed to get prev tenant index retry id", K(ret), K(merge_param), K(prev_backup_set_desc));
   } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
                  merge_param.backup_dest_,
@@ -892,7 +898,7 @@ int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
                  prev_backup_set_desc,
                  merge_param.ls_id_,
                  merge_param.backup_data_type_,
-                 merge_param.turn_id_,
+                 prev_tenant_index_turn_id,
                  prev_tenant_index_retry_id))) {
     LOG_WARN("failed to init backup macro range index iterator", K(ret), K(merge_param), K(prev_backup_set_desc), K(prev_tenant_index_retry_id));
   } else {
@@ -903,7 +909,7 @@ int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
 }
 
 int ObBackupMacroBlockIndexMerger::get_prev_tenant_index_retry_id_(const ObBackupIndexMergeParam &param,
-    const share::ObBackupSetDesc &prev_backup_set_desc, int64_t &retry_id)
+    const share::ObBackupSetDesc &prev_backup_set_desc, const int64_t prev_turn_id, int64_t &retry_id)
 {
   int ret = OB_SUCCESS;
   const bool is_restore = false;
@@ -911,8 +917,8 @@ int ObBackupMacroBlockIndexMerger::get_prev_tenant_index_retry_id_(const ObBacku
   const bool is_sec_meta = false;
   ObBackupTenantIndexRetryIDGetter retry_id_getter;
   if (OB_FAIL(retry_id_getter.init(param.backup_dest_, prev_backup_set_desc,
-      param.backup_data_type_, param.turn_id_, is_restore, is_macro_index, is_sec_meta))) {
-    LOG_WARN("failed to init retry id getter", K(ret), K(param));
+      param.backup_data_type_, prev_turn_id, is_restore, is_macro_index, is_sec_meta))) {
+    LOG_WARN("failed to init retry id getter", K(ret), K(param), K(prev_turn_id));
   } else if (OB_FAIL(retry_id_getter.get_max_retry_id(retry_id))) {
     LOG_WARN("failed to get max retry id", K(ret));
   }
@@ -1192,7 +1198,7 @@ ObBackupMetaIndexMerger::~ObBackupMetaIndexMerger()
 }
 
 int ObBackupMetaIndexMerger::init(const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta,
-    common::ObISQLClient &sql_proxy, common::ObInOutBandwidthThrottle &bandwidth_throttle)
+    common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   const ObBackupBlockType block_type = BACKUP_BLOCK_META_DATA;
@@ -1216,7 +1222,6 @@ int ObBackupMetaIndexMerger::init(const ObBackupIndexMergeParam &merge_param, co
     LOG_WARN("failed to assign param", K(ret), K(merge_param));
   } else {
     sql_proxy_ = &sql_proxy;
-    bandwidth_throttle_ = &bandwidth_throttle;
     is_inited_ = true;
   }
   return ret;
@@ -1307,7 +1312,7 @@ int ObBackupMetaIndexMerger::prepare_merge_ctx_(
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
   } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to prepare file writer", K(ret), K(backup_path), K(merge_param));
-  } else if (OB_FAIL(prepare_file_write_ctx_(*bandwidth_throttle_, write_ctx_))) {
+  } else if (OB_FAIL(prepare_file_write_ctx_(write_ctx_))) {
     LOG_WARN("failed to prepare file write ctx", K(ret));
   }
   return ret;

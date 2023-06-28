@@ -267,7 +267,7 @@ private:
   int advance_piece_();
   virtual int get_piece_meta_info_(const int64_t piece_id);
   int get_ls_inner_piece_info_(const share::ObLSID &id, const int64_t dest_id, const int64_t round_id,
-      const int64_t piece_id, palf::LSN &min_lsn, palf::LSN &max_lsn, bool &exist);
+      const int64_t piece_id, palf::LSN &min_lsn, palf::LSN &max_lsn, bool &exist, bool &gc);
   virtual int get_piece_file_range_();
 
   int forward_piece_();

@@ -52,11 +52,6 @@ public:
   int write_log(ObStorageLogParam &param);
   int write_log(ObIArray<ObStorageLogParam> &param_arr);
   const char *get_dir() { return tnt_slog_dir_; }
-
-  inline int64_t get_pwrite_ts() const
-  {
-    return nullptr == log_writer_ ? 0 : log_writer_->get_pwrite_ts();
-  }
   int get_active_cursor(common::ObLogCursor &log_cursor);
   int remove_useless_log_file(const int64_t end_file_id, const uint64_t tenant_id);
 

@@ -44,6 +44,7 @@ public:
                                               share::SCN &wrs_version,
                                               const int64_t max_stale_time);
   share::SCN get_ls_weak_read_ts() const { return ls_weak_read_ts_; }
+  bool can_skip_ls() const { return !is_enabled_; }
 private:
   int generate_weak_read_timestamp_(oceanbase::storage::ObLS &ls, const int64_t max_stale_time, share::SCN &timestamp);
 

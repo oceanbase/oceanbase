@@ -17,6 +17,7 @@
 #include "ob_all_server_info.h"    // ObAllServerInfo
 #include "ob_all_zone_info.h"      // ObAllZoneInfo, ObAllZoneTypeInfo
 #include "src/logservice/logfetcher/ob_log_fetcher_err_handler.h"
+#include "ob_all_units_info.h"     // ObUnitsRecordInfo
 
 namespace oceanbase
 {
@@ -49,6 +50,11 @@ public:
       const share::ObLSID &ls_id,
       ObLSLogInfo &ls_log_info);
 
+  //  SELECT SVR_IP, SVR_PORT, ZONE, ZONE_TYPE, REGION from GV$OB_UNITS;
+  int get_all_units_info(
+      const uint64_t tenant_id,
+      ObUnitsRecordInfo &units_record_info);
+
   int get_all_server_info(
       const uint64_t tenant_id,
       ObAllServerInfo &all_server_info);
@@ -71,6 +77,12 @@ private:
       RecordsType &records,
       const char *event,
       int64_t &record_count);
+
+  // ObUnitsRecordInfo
+  // @param [in] res, result read from the GV$OB_UNITS table
+  // @param [out] units_record_info, items in the GV$OB_UNITS table
+  int parse_record_from_row_(common::sqlclient::ObMySQLResult &res,
+      ObUnitsRecordInfo &units_record_info);
 
   // ObLSLogInfo
   // @param [in] res, result read from __all_virtual_log_stat table

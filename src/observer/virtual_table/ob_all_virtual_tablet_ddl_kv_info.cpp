@@ -27,7 +27,7 @@ ObAllVirtualTabletDDLKVInfo::ObAllVirtualTabletDDLKVInfo()
       addr_(),
       ls_id_(share::ObLSID::INVALID_LS_ID),
       ls_iter_guard_(),
-      ls_tablet_iter_(),
+      ls_tablet_iter_(ObMDSGetTabletMode::READ_READABLE_COMMITED),
       ddl_kvs_handle_(),
       curr_tablet_id_(),
       ddl_kv_idx_(-1)

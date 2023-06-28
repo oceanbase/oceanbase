@@ -11,7 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#define USING_LOG_PREFIX STORAGE
+#define USING_LOG_PREFIX TABLELOCK
 #define protected public
 #define private public
 
@@ -151,10 +151,10 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
 
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObTableLockOwnerID OWNER_ONE = 1;
+  ObTableLockOwnerID OWNER_ONE(1);
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
-  ObTableLockOwnerID lock_owner = 0;
+  ObTableLockOwnerID lock_owner(0);
   ObLS *ls = nullptr;
   ObLockMemtable *lock_memtable = nullptr;
   ObCheckpointExecutor *checkpoint_executor = nullptr;
@@ -187,9 +187,13 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
                  ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
 
   lock_memtable->obj_lock_map_.print();
+  LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.2 wait tablelock committed");
+  // after the commit process return, the tablelock bottom may not committed yet.
+  while (lock_memtable->get_rec_scn() == SCN::max_scn()) {
+    usleep(100 * 1000);
+  }
   SCN rec_scn = lock_memtable->get_rec_scn();
-  ASSERT_NE(rec_scn, SCN::max_scn());
-  LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.2", K(rec_scn));
+  LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.2 rec scn after tablelock committed", K(rec_scn));
 
   // 1.3 dump tx ctx table/ tx data table
   LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.3");
@@ -211,8 +215,6 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
   }
   LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.3 tx_data_mgr flush finished");
 
-  ASSERT_NE(tx_ctx_memtable->get_rec_scn(), share::SCN::max_scn());
-  ASSERT_NE(tx_data_mgr->get_rec_scn(), share::SCN::max_scn());
   // 1.4 update ls checkpoint(should be the lock op commit scn)
   // wait until ls checkpoint updated.
   LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.4");

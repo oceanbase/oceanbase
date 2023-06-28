@@ -44,6 +44,7 @@ public:
 
 void TestBloomFilterCache::SetUp()
 {
+  ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   ObColDesc col_desc;
   ObSEArray<ObColDesc, 2> col_descs;
   col_desc.col_type_.set_int32();
@@ -100,14 +101,10 @@ TEST_F(TestBloomFilterCache, test_normal)
   ObBloomFilterCacheValue bf_value;
   const uint64_t tenant_id = 1;
   MacroBlockId block_id(0, 3, 0);
-  const int64_t bucket_num = 1024;
-  const int64_t max_cache_size = 1024 * 1024 * 512;
-  const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   uint64_t key_hash;
-  ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
 
   // test ObBloomFilterCache may_contain()
-  ret = bf_cache.init("bf_cache", 1);
+  ret = bf_cache.init("test_normal_bf_cache", 1);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   ret = bf_value.init(2, 1);
@@ -166,7 +163,7 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_invalid)
   int8_t empty_read_prefix=3;
   ObEmptyReadCell *cell;
 
-  ret = bf_cache.init("bf_cache", 1,7);
+  ret = bf_cache.init("test_bf_cache", 1,7);
   EXPECT_NE(OB_SUCCESS, ret);
 
   ObBloomFilterCacheKey bf_key(tenant_id, block_id, empty_read_prefix);
@@ -186,7 +183,7 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_normal)
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
   ObBloomFilterCache bf_cache;
-  ret = bf_cache.init("bf_cache", 1);
+  ret = bf_cache.init("test_bf_cache1", 1);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   ObStoreRowkey rowkey;
@@ -232,7 +229,9 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_normal)
 
 int main(int argc, char** argv)
 {
-  OB_LOGGER.set_log_level("ERROR");
+  system("rm -f test_bloom_fitler_cache.log*");
+  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  OB_LOGGER.set_file_name("test_bloom_filter_cache.log", true);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

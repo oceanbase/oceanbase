@@ -68,6 +68,7 @@ int ObAllVirtualTxDataTable::process_curr_tenant(common::ObNewRow *&row)
   int ret = OB_SUCCESS;
 
   ObITable *tx_data_table = nullptr;
+  RowData row_data;
 
   if (nullptr == allocator_) {
     ret = OB_NOT_INIT;
@@ -83,9 +84,9 @@ int ObAllVirtualTxDataTable::process_curr_tenant(common::ObNewRow *&row)
   } else if (OB_UNLIKELY(nullptr == tx_data_table)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "tx_data_table shouldn't nullptr here", KR(ret), KP(tx_data_table));
+  } else if (OB_FAIL(prepare_row_data_(tx_data_table, row_data))) {
+    SERVER_LOG(WARN, "prepare_row_data_ fail", KR(ret), KP(tx_data_table));
   } else {
-    RowData row_data;
-    prepare_row_data_(tx_data_table, row_data);
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
@@ -161,6 +162,7 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
     sstable_handles_.reset();
     tablet_handle_.reset();
     mgr_handle_.reset();
+    ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
 
     if (OB_FAIL(ls_iter_guard_->get_next(ls))) {
       if (OB_ITER_END != ret) {
@@ -175,7 +177,10 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
     } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(LS_TX_DATA_TABLET, tablet_handle_))) {
       SERVER_LOG(WARN, "fail to get tx data tablet", KR(ret));
     } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
-    } else if (OB_FAIL(tablet->get_table_store().get_minor_sstables().get_all_tables(sstable_handles_))) {
+    } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+      SERVER_LOG(WARN, "fail to fetch table store", K(ret));
+    } else if (OB_FAIL(
+        table_store_wrapper.get_member()->get_minor_sstables().get_all_tables(sstable_handles_))) {
       SERVER_LOG(WARN, "fail to get sstable handles", KR(ret));
     } else {
       // iterate from the newest memtable in memtable handles
@@ -199,8 +204,9 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
   return ret;
 }
 
-void ObAllVirtualTxDataTable::prepare_row_data_(ObITable *tx_data_table, RowData &row_data)
+int ObAllVirtualTxDataTable::prepare_row_data_(ObITable *tx_data_table, RowData &row_data)
 {
+  int ret = OB_SUCCESS;
   if (ObITable::TableType::TX_DATA_MEMTABLE == tx_data_table->get_key().table_type_) {
     ObTxDataMemtable *tx_data_memtable = static_cast<ObTxDataMemtable *>(tx_data_table);
     row_data.state_ = tx_data_memtable->get_state_string();
@@ -209,13 +215,19 @@ void ObAllVirtualTxDataTable::prepare_row_data_(ObITable *tx_data_table, RowData
     row_data.max_tx_scn_ = tx_data_memtable->get_max_tx_scn();
   } else if (tx_data_table->is_multi_version_minor_sstable()) {
     ObSSTable *tx_data_sstable = static_cast<ObSSTable *>(tx_data_table);
-    row_data.state_ = ObITable::get_table_type_name(tx_data_table->get_key().table_type_);
-    row_data.tx_data_count_ = tx_data_sstable->get_meta().get_row_count();
-    row_data.min_tx_scn_ = tx_data_sstable->get_filled_tx_scn();
-    row_data.max_tx_scn_ = tx_data_sstable->get_key().scn_range_.end_scn_;
+    ObSSTableMetaHandle sstable_meta_hdl;
+    if (OB_FAIL(tx_data_sstable->get_meta(sstable_meta_hdl))) {
+      STORAGE_LOG(WARN, "fail to get sstable meta handle", K(ret), KPC(tx_data_sstable));
+    } else {
+      row_data.state_ = ObITable::get_table_type_name(tx_data_table->get_key().table_type_);
+      row_data.tx_data_count_ = sstable_meta_hdl.get_sstable_meta().get_row_count();
+      row_data.min_tx_scn_ = sstable_meta_hdl.get_sstable_meta().get_filled_tx_scn();
+      row_data.max_tx_scn_ = tx_data_sstable->get_key().scn_range_.end_scn_;
+    }
   } else {
     STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Iterate an invalid table while select virtual tx data table.");
   }
+  return ret;
 }
 
 }  // namespace observer

@@ -20,7 +20,8 @@ ObRootServiceUtilChecker::ObRootServiceUtilChecker(volatile bool &stop)
   : inited_(false),
     stop_(stop),
     migrate_unit_finish_checker_(stop),
-    alter_locality_finish_checker_(stop)
+    alter_locality_finish_checker_(stop),
+    shrink_resource_pool_checker_(stop)
 {
 }
 
@@ -57,6 +58,9 @@ int ObRootServiceUtilChecker::init(
           sql_proxy,
           lst_operator))) {
     LOG_WARN("fail to init alter locality finish checker", KR(ret));
+  } else if (OB_FAIL(shrink_resource_pool_checker_.init(&schema_service,
+                 &unit_mgr, lst_operator, sql_proxy))) {
+    LOG_WARN("failed to init shrink resource pool", KR(ret));
   } else {
     inited_ = true;
   }
@@ -78,6 +82,10 @@ int ObRootServiceUtilChecker::rootservice_util_check()
     // alter locality finish checker
     if (OB_SUCCESS != (tmp_ret = alter_locality_finish_checker_.check())) {
       LOG_WARN("fail to check alter locality finish", KR(tmp_ret));
+    }
+
+    if (OB_TMP_FAIL(shrink_resource_pool_checker_.check())) {
+      LOG_WARN("failed to check shrink resource pool", KR(tmp_ret));
     }
   }
   return ret;

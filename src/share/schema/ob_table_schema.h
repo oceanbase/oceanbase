@@ -373,6 +373,7 @@ public:
   virtual inline bool is_primary_aux_vp_table() const { return false; }
   virtual inline bool is_primary_vp_table() const { return false; }
   virtual inline bool is_aux_vp_table() const { return false; }
+  virtual inline bool is_column_info_simplified() const { return false; }
   virtual inline bool is_storage_index_table() const = 0;
   virtual inline int64_t get_block_size() const { return INVAID_RET;}
   virtual inline const common::ObString &get_encrypt_key() const { return EMPTY_STRING; }
@@ -433,6 +434,7 @@ public:
     UNUSED(column_ids);
     return common::OB_NOT_SUPPORTED;
   }
+  int get_mulit_version_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const;
   virtual int get_column_encodings(common::ObIArray<int64_t> &col_encodings) const
   {
     UNUSED(col_encodings);
@@ -663,6 +665,12 @@ public:
   int check_is_all_server_readonly_replica(
       share::schema::ObSchemaGetterGuard &guard,
       bool &is) const;
+  static int compare_partition_option(const schema::ObSimpleTableSchemaV2 &t1,
+                                      const schema::ObSimpleTableSchemaV2 &t2,
+                                      bool check_subpart,
+                                      bool &is_matched,
+                                      ObSqlString *user_error = NULL);
+  int check_if_tablet_exists(const common::ObTabletID &tablet_id, bool &exists) const;
 
   int add_simple_foreign_key_info(const uint64_t tenant_id,
                                   const uint64_t database_id,
@@ -731,7 +739,7 @@ public:
   inline static bool is_aux_lob_meta_table(share::schema::ObTableType table_type)
   { return schema::ObTableType::AUX_LOB_META == table_type; }
   inline bool is_aux_lob_meta_table() const { return share::schema::ObTableType::AUX_LOB_META == table_type_; }
-  inline bool is_aux_lob_table() const { return is_aux_lob_meta_table() || is_aux_lob_piece_table(); }
+  inline bool is_aux_lob_table() const { return schema::is_aux_lob_table(table_type_); }
   inline bool is_aux_table() const { return share::schema::ObTableType::USER_INDEX == table_type_ || share::schema::ObTableType::AUX_VERTIAL_PARTITION_TABLE == table_type_ || share::schema::ObTableType::AUX_LOB_PIECE == table_type_ || share::schema::ObTableType::AUX_LOB_META == table_type_; }
   // Primary partition table judgment: still USER_TABLE, but data_table_id_ is the same as itself,
   // the default data_table_id_ is 0
@@ -810,7 +818,6 @@ public:
   inline bool has_rowid() const { return is_user_table() || is_tmp_table(); }
 
   DECLARE_VIRTUAL_TO_STRING;
-
 protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -1281,8 +1288,6 @@ public:
 
   int get_subpart_ids(const int64_t part_id, common::ObIArray<int64_t> &subpart_ids) const;
 
-  int assign_tablegroup_partition(const ObTablegroupSchema &tablegroup);
-
   virtual int calc_part_func_expr_num(int64_t &part_func_expr_num) const;
   virtual int calc_subpart_func_expr_num(int64_t &subpart_func_expr_num) const;
   int is_partition_key(uint64_t column_id, bool &result) const;
@@ -1628,6 +1633,7 @@ private:
 inline bool ObSimpleTableSchemaV2::is_index_local_storage() const
 {
   return USER_INDEX == table_type_
+        // && schema::is_index_local_storage(index_type_); TODO(wangzhennan.wzn): use is_index_local_storage later
          && (INDEX_TYPE_NORMAL_LOCAL == index_type_
              || INDEX_TYPE_UNIQUE_LOCAL == index_type_
              || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type_

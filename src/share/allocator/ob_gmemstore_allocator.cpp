@@ -63,9 +63,6 @@ int ObGMemstoreAllocator::AllocHandle::init(uint64_t tenant_id)
     ret = OB_ERR_UNEXPECTED;
   } else {
     host->init_handle(*this, tenant_id);
-    if (0 == (last_freeze_timestamp_ = host->get_last_freeze_timestamp())) {
-      COMMON_LOG(ERROR, "unexpected value", K(last_freeze_timestamp_));
-    }
   }
   return ret;
 }
@@ -126,7 +123,7 @@ void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "virtual tenant should not have memstore", K(ret), K(tenant_id));
     } else if (FALSE_IT(freezer = MTL(storage::ObTenantFreezer*))) {
-    } else if (OB_FAIL(freezer->check_tenant_out_of_memstore_limit(is_out_of_mem))) {
+    } else if (OB_FAIL(freezer->check_memstore_full_internal(is_out_of_mem))) {
       COMMON_LOG(ERROR, "fail to check tenant out of mem limit", K(ret), K(tenant_id));
     }
   }

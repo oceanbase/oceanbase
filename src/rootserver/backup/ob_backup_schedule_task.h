@@ -21,6 +21,7 @@
 #include "lib/net/ob_addr.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
+#include "ob_backup_base_job.h"
 
 namespace oceanbase
 {
@@ -29,17 +30,6 @@ namespace rootserver
 {
 class ObBackupTaskScheduler;
 class ObBackupTaskQueue;
-class ObIBackupJobScheduler;
-
-enum class BackupJobType : int64_t
-{
-  BACKUP_DATA_JOB = 0,
-  VALIDATE_JOB = 1,
-  BACKUP_BACKUP_PIECE_JOB = 2,
-  BACKUP_BACKUP_DATA_JOB = 3,
-  BACKUP_CLEAN_JOB = 4,
-  BACKUP_JOB_MAX
-};
 
 class ObBackupServerStatKey final
 {
@@ -217,7 +207,7 @@ public:
   virtual bool can_cross_machine_exec() { return false; };
 private:
   // write inner table to update task dst, trace id and advnace task status to doing
-  virtual int do_update_dst_and_doing_status_(common::ObMySQLProxy &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) = 0;
+  virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) = 0;
 public:
   int build_from_res(const obrpc::ObBackupTaskRes &res, const BackupJobType &type);
   int build(const ObBackupScheduleTaskKey &key, const share::ObTaskId &trace_id, const share::ObBackupTaskStatus &status, const common::ObAddr &dst);
@@ -266,30 +256,27 @@ private:
 };
 
 // backup data task
-class ObBackupDataLSTask : public ObBackupScheduleTask
+
+class ObBackupDataBaseTask : public ObBackupScheduleTask
 {
 public:
-  ObBackupDataLSTask();
-  virtual ~ObBackupDataLSTask();
+  ObBackupDataBaseTask();
+  virtual ~ObBackupDataBaseTask() {}
 public:
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
-  virtual int64_t get_deep_copy_size() const override;
-  virtual bool can_execute_on_any_server() const override;
-  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+  virtual bool can_execute_on_any_server() const final override { return false; }
   virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
-private:
-  virtual int do_update_dst_and_doing_status_(common::ObMySQLProxy &sql_proxy, common::ObAddr &dst, 
-      share::ObTaskId &trace_id) override;
-public:
-  int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr, 
+  virtual int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
       const share::ObBackupLSTaskAttr &ls_attr);
+  int deep_copy(const ObBackupDataBaseTask &that);
   int set_optional_servers_(const ObIArray<common::ObAddr> &black_servers);
-
-  INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id), 
-      K_(backup_type), K_(backup_date), K_(ls_id), K_(turn_id), K_(retry_id), K_(start_scn), K_(backup_path),
-      K_(backup_status));
 private:
+  virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst,
+      share::ObTaskId &trace_id) final override;
   bool check_replica_in_black_server_(const share::ObLSReplica &replica, const ObIArray<common::ObAddr> &black_servers);
+public:
+  INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id),
+      K_(backup_type), K_(backup_date), K_(ls_id), K_(turn_id), K_(retry_id), K_(start_scn),
+      K_(backup_user_ls_scn), K_(end_scn), K_(backup_path), K_(backup_status));
 protected:
   int64_t incarnation_id_;
   int64_t backup_set_id_;
@@ -299,82 +286,65 @@ protected:
   int64_t turn_id_;
   int64_t retry_id_;
   share::SCN start_scn_;
-  share::ObBackupPathString backup_path_;
-  share::ObBackupStatus backup_status_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSTask); 
-};
-
-class ObBackupComplLogTask : public ObBackupScheduleTask
-{
-public:
-  ObBackupComplLogTask();
-  virtual ~ObBackupComplLogTask();
-public:
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
-  virtual int64_t get_deep_copy_size() const override;
-  // interfaces related to execution
-  virtual bool can_execute_on_any_server() const override;
-  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
-  virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
-private:
-  virtual int do_update_dst_and_doing_status_(common::ObMySQLProxy &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) override;
-public:
-  int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr, const share::ObBackupLSTaskAttr &ls_attr);
-
-private:
-  int calc_start_replay_scn_(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
-      const share::ObBackupLSTaskAttr &ls_attr, share::SCN &scn);
-
-  INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id), K_(backup_type), K_(backup_date),
-      K_(ls_id), K_(start_scn), K_(end_scn), K_(backup_path), K_(backup_status));
-private:
-  int64_t incarnation_id_;
-  int64_t backup_set_id_;
-  share::ObBackupType backup_type_;
-  int64_t backup_date_;
-  share::ObLSID ls_id_;
-  share::SCN start_scn_;
+  share::SCN backup_user_ls_scn_;
   share::SCN end_scn_;
   share::ObBackupPathString backup_path_;
   share::ObBackupStatus backup_status_;
 private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDataBaseTask);
+};
+
+class ObBackupDataLSTask : public ObBackupDataBaseTask
+{
+public:
+  ObBackupDataLSTask() {}
+  virtual ~ObBackupDataLSTask() {}
+  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int64_t get_deep_copy_size() const override;
+  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSTask);
+};
+
+class ObBackupComplLogTask final: public ObBackupDataBaseTask
+{
+public:
+  ObBackupComplLogTask() {}
+  virtual ~ObBackupComplLogTask() {}
+  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int64_t get_deep_copy_size() const override;
+  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+  virtual int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
+    const share::ObBackupLSTaskAttr &ls_attr);
+private:
+  int calc_start_replay_scn_(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
+      const share::ObBackupLSTaskAttr &ls_attr, share::SCN &scn);
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupComplLogTask); 
 };
 
-class ObBackupBuildIndexTask : public ObBackupScheduleTask
+class ObBackupBuildIndexTask final : public ObBackupDataBaseTask
 {
 public:
-  ObBackupBuildIndexTask();
-  virtual ~ObBackupBuildIndexTask();
-public:
+  ObBackupBuildIndexTask() {}
+  virtual ~ObBackupBuildIndexTask() {}
   virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
   virtual int64_t get_deep_copy_size() const override;
-  // interfaces related to execution
-  virtual bool can_execute_on_any_server() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
-  virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
-  virtual int do_update_dst_and_doing_status_(common::ObMySQLProxy &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) override;
-  int set_optional_servers_(const ObIArray<common::ObAddr> &black_servers);
-private:
-  bool check_replica_in_black_server_(const share::ObLSReplica &replica, const ObIArray<common::ObAddr> &black_servers);
+  DISALLOW_COPY_AND_ASSIGN(ObBackupBuildIndexTask);
+};
+
+class ObBackupDataLSMetaTask final : public ObBackupDataLSTask
+{
 public:
-  int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr, const share::ObBackupLSTaskAttr &ls_attr);
-  INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id), K_(backup_type), K_(backup_date),
-      K_(turn_id), K_(start_turn_id), K_(backup_path), K_(backup_status));
+  ObBackupDataLSMetaTask() {}
+  virtual ~ObBackupDataLSMetaTask() {}
+  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int64_t get_deep_copy_size() const override;
+  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
-  int64_t incarnation_id_;
-  int64_t backup_set_id_;
-  share::ObBackupType backup_type_;
-  int64_t backup_date_;
-  int64_t turn_id_;
-  int64_t retry_id_;
-  int64_t start_turn_id_;
-  share::ObBackupPathString backup_path_;
-  share::ObBackupStatus backup_status_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObBackupBuildIndexTask); 
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSMetaTask);
 };
 
 class ObBackupCleanLSTask : public ObBackupScheduleTask
@@ -390,7 +360,7 @@ public:
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
   virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
-  virtual int do_update_dst_and_doing_status_(common::ObMySQLProxy &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) override;
+  virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) final override;
   int set_optional_servers_();
 public:
   int build(const share::ObBackupCleanTaskAttr &task_attr, const share::ObBackupCleanLSTaskAttr &ls_attr);
@@ -407,18 +377,6 @@ private:
   share::ObBackupPathString backup_path_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanLSTask); 
-};
-
-class ObBackupDataLSMetaTask : public ObBackupDataLSTask
-{
-public:
-  ObBackupDataLSMetaTask() {}
-  virtual ~ObBackupDataLSMetaTask() {}
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
-  virtual int64_t get_deep_copy_size() const override;
-  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSMetaTask); 
 };
 
 }  // namespace rootserver

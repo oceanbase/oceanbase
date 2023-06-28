@@ -36,6 +36,7 @@
 #include "observer/ob_inner_sql_connection.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "storage/tablelock/ob_lock_inner_connection_util.h"
 namespace oceanbase
 {
 using namespace observer;
@@ -497,7 +498,7 @@ int ObExternalTableFileManager::lock_for_refresh(
     lock_arg.lock_mode_ = EXCLUSIVE;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     lock_arg.timeout_us_ = 1000L * 1000L * 2; //2s
-    while (OB_FAIL(conn->lock_obj(tenant_id, lock_arg)) && !THIS_WORKER.is_timeout()) {
+    while (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn)) && !THIS_WORKER.is_timeout()) {
       LOG_WARN("lock failed try again", K(ret));
     }
   }

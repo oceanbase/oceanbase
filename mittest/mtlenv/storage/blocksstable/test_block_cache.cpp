@@ -71,7 +71,7 @@ void TestObMicroBlockCache::SetUp()
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle_));
 
-  prepare_query_param(false, tablet_handle_.get_obj()->get_full_read_info());
+  prepare_query_param(false);
 }
 
 void TestObMicroBlockCache::TearDown()
@@ -117,11 +117,11 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
   ObArray<int32_t> agg_projector;
   ObArray<ObColumnSchemaV2> agg_column_schema;
   ObArray<ObMicroIndexInfo> micro_idx_infos;
-  sstable_.get_index_tree_root(tablet_handle_.get_obj()->get_index_read_info(), root_block);
+  sstable_.get_index_tree_root(root_block);
   ASSERT_EQ(OB_SUCCESS, idx_row_scanner.init(
       agg_projector,
       agg_column_schema,
-      &tablet_handle_.get_obj()->get_index_read_info(),
+      tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),
       allocator_,
       context_.query_flag_,
       0));
@@ -143,8 +143,6 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       micro_idx_info.get_macro_id(),
       micro_idx_info,
       context_.query_flag_,
-      tablet_handle_.get_obj()->get_index_read_info(),
-      tablet_handle_,
       idx_io_handle));
   ASSERT_EQ(OB_SUCCESS, idx_io_handle.wait(DEFAULT_IO_WAIT_TIME_MS));
   ASSERT_EQ(OB_SUCCESS, index_block_cache_->get_cache_block(
@@ -184,8 +182,6 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       data_idx_info.get_macro_id(),
       data_idx_info,
       context_.query_flag_,
-      tablet_handle_.get_obj()->get_full_read_info(),
-      tablet_handle_,
       data_io_handle));
   ASSERT_EQ(OB_SUCCESS, data_io_handle.wait(DEFAULT_IO_WAIT_TIME_MS));
   ASSERT_EQ(OB_SUCCESS, data_block_cache_->get_cache_block(
@@ -218,7 +214,6 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       data_idx_info.get_macro_id(),
       multi_io_param,
       context_.query_flag_,
-      tablet_handle_.get_obj()->get_full_read_info(),
       multi_io_handle));
   ASSERT_EQ(OB_SUCCESS, multi_io_handle.wait(DEFAULT_IO_WAIT_TIME_MS));
   const ObMultiBlockIOResult *io_result
@@ -250,7 +245,6 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
   ASSERT_EQ(OB_SUCCESS, data_block_cache_->load_block(
       micro_block_id,
       micro_des_meta,
-      nullptr,
       &macro_reader,
       loaded_micro_data,
       nullptr));
@@ -275,7 +269,6 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
   ASSERT_EQ(OB_SUCCESS, index_block_cache_->load_block(
       micro_block_id,
       micro_des_meta,
-      &tablet_handle_.get_obj()->get_index_read_info(),
       nullptr,
       loaded_index_data,
       &allocator_));

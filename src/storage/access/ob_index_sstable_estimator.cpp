@@ -66,7 +66,6 @@ ObIndexBlockScanEstimator::~ObIndexBlockScanEstimator()
     micro_handles_[i].reset();
   }
   index_block_data_.reset();
-  data_read_info_.reset();
   index_block_row_scanner_.reset();
 }
 
@@ -80,17 +79,15 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
   if (OB_UNLIKELY(!context_.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "estimate context is not valid", K(ret), K(context_));
-  } else if (OB_FAIL(construct_rowkey_read_info())) {
-    STORAGE_LOG(WARN, "Failed to init rowkey column info", K(ret));
   } else if (OB_FAIL(index_block_row_scanner_.init(
               agg_projector,
               agg_column_schema,
-              &context_.tablet_handle_.get_obj()->get_index_read_info(),
+              context_.tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),
               allocator_,
               context_.query_flag_,
               context_.sstable_.get_macro_offset()))) {
     STORAGE_LOG(WARN, "Failed to init index block row scanner", K(ret), K(agg_projector), K(agg_column_schema));
-  } else if (OB_FAIL(context_.sstable_.get_index_tree_root(context_.tablet_handle_.get_obj()->get_index_read_info(), root_index_block_))) {
+  } else if (OB_FAIL(context_.sstable_.get_index_tree_root(root_index_block_))) {
     STORAGE_LOG(WARN, "Failed to get index tree root", K(ret));
   } else if (OB_FAIL(cal_total_row_count(result))) {
     STORAGE_LOG(WARN, "Failed to get total_row_count_delta", K(ret), K(root_index_block_));
@@ -273,9 +270,7 @@ int ObIndexBlockScanEstimator::goto_next_level(
   } else {
     index_block_data_.reset();
     index_block_row_scanner_.reuse();
-    if (OB_FAIL(micro_handle.get_index_block_data(
-        context_.tablet_handle_.get_obj()->get_index_read_info(),
-        index_block_data_))) {
+    if (OB_FAIL(micro_handle.get_index_block_data(index_block_data_))) {
       STORAGE_LOG(WARN, "Failed to get index block data", K(ret), K(micro_handle));
     } else if (OB_FAIL(index_block_row_scanner_.open(
         micro_index_info.get_macro_id(), index_block_data_, range, 0, true, true))) {
@@ -300,8 +295,6 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
         micro_index_info.get_macro_id(),
         micro_index_info,
         context_.query_flag_,
-        context_.tablet_handle_.get_obj()->get_full_read_info(),
-        context_.tablet_handle_,
         micro_handle.io_handle_))) {
       STORAGE_LOG(WARN, "Failed to prefetch data micro block", K(ret), K(micro_index_info));
     }
@@ -310,8 +303,6 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
       micro_index_info.get_macro_id(),
       micro_index_info,
       context_.query_flag_,
-      context_.tablet_handle_.get_obj()->get_index_read_info(),
-      context_.tablet_handle_,
       micro_handle.io_handle_))) {
     STORAGE_LOG(WARN, "Failed to prefetch data micro block", K(ret), K(micro_index_info));
   }
@@ -341,44 +332,15 @@ int ObIndexBlockScanEstimator::estimate_data_block_row_count(
   if (OB_FAIL(micro_handle.get_data_block_data(macro_reader_, block_data))) {
     STORAGE_LOG(WARN, "Failed to get block data", K(ret), K(micro_handle));
   } else if (OB_FAIL(block_scanner.estimate_row_count(
-              data_read_info_,
+		      context_.tablet_handle_.get_obj()->get_rowkey_read_info(),
               block_data,
               range,
               consider_multi_version,
               est))) {
     if (OB_BEYOND_THE_RANGE != ret) {
-      STORAGE_LOG(WARN, "Failed to estimate row count", K(ret),
-                  K(data_read_info_), K(block_data), K(range));
+      STORAGE_LOG(WARN, "Failed to estimate row count", K(ret), K(block_data), K(range));
     } else {
       ret = OB_ITER_END;
-    }
-  }
-  return ret;
-}
-
-int ObIndexBlockScanEstimator::construct_rowkey_read_info()
-{
-  int ret = OB_SUCCESS;
-  common::ObSEArray<share::schema::ObColDesc, 4> data_cols;
-  if (OB_UNLIKELY(!context_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected index read info", K(ret), K_(context));
-  } else {
-    const ObTableReadInfo &read_info = context_.tablet_handle_.get_obj()->get_full_read_info();
-    int64_t schema_rowkey_cnt = read_info.get_schema_rowkey_count();
-    const ObColDescIArray &cols = read_info.get_columns_desc();
-    for (int64_t i = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
-      if (OB_FAIL(data_cols.push_back(cols.at(i)))) {
-        STORAGE_LOG(WARN, "Failed to push_back data_cols", K(ret), K(i));
-      }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(data_read_info_.init(
-                allocator_,
-                read_info.get_schema_column_count(),
-                schema_rowkey_cnt,
-                lib::is_oracle_mode(),
-                data_cols))) {
-      STORAGE_LOG(WARN, "Failed to init data_read_info", K(ret));
     }
   }
   return ret;

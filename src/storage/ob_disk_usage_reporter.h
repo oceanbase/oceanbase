@@ -96,11 +96,8 @@ private:
 private:
   bool is_inited_;
   ReportResultMap result_map_;
-  ObTenantTabletIterator *tablet_iter_;
-  void *iter_buf_;
   common::ObMySQLProxy *sql_proxy_;
   share::ObDiskUsageTableOperator disk_usage_table_operator_;
-  common::ObFIFOAllocator allocator_;
 };
 
 } // namespace storage

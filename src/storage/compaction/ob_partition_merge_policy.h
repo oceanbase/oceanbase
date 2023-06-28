@@ -28,8 +28,9 @@ class ObTabletTableStore;
 class ObGetMergeTablesResult;
 class ObTablesHandleArray;
 class ObStorageSchema;
-struct ObTabletStat;
+struct ObTabletStatAnalyzer;
 struct ObTableHandleV2;
+struct ObStorageMetaHandle;
 class ObLS;
 class ObTableStoreIterator;
 }
@@ -87,7 +88,8 @@ public:
       const ObTablet &tablet,
       int64_t &min_snapshot,
       int64_t &max_snapshot,
-      const bool check_table_cnt = true);
+      const bool check_table_cnt,
+      const bool is_multi_version_merge);
 
   static int diagnose_table_count_unsafe(
       const storage::ObMergeType merge_type,
@@ -118,7 +120,7 @@ private:
 
   static int refine_minor_merge_tables(
       const ObTablet &tablet,
-      const common::ObIArray<blocksstable::ObSSTable *> &merge_tables,
+      const ObTablesHandleArray &merge_tables,
       int64_t &left_border,
       int64_t &right_border);
 
@@ -239,18 +241,22 @@ private:
                                              storage::ObITable *&meta_base_table,
                                              int64_t &merge_inc_version);
   static int add_meta_merge_result(storage::ObITable *table,
+      const storage::ObStorageMetaHandle &table_meta_handle,
       storage::ObGetMergeTablesResult &result,
       const bool update_snapshot_flag);
 private:
-  static int check_load_data_situation(const storage::ObTabletStat &tablet_stat,
-                                       const storage::ObTablet &tablet,
-                                       AdaptiveMergeReason &merge_reason);
-  static int check_tombstone_situation(const storage::ObTabletStat &tablet_stat,
-                                       const storage::ObTablet &tablet,
-                                       AdaptiveMergeReason &merge_reason);
-  static int check_ineffecient_read(const storage::ObTabletStat &tablet_stat,
-                                    const storage::ObTablet &tablet,
-                                    AdaptiveMergeReason &merge_reason);
+  static int check_load_data_situation(
+      const storage::ObTabletStatAnalyzer &analyzer,
+      const storage::ObTablet &tablet,
+      AdaptiveMergeReason &merge_reason);
+  static int check_tombstone_situation(
+      const storage::ObTabletStatAnalyzer &analyzer,
+      const storage::ObTablet &tablet,
+      AdaptiveMergeReason &merge_reason);
+  static int check_ineffecient_read(
+      const storage::ObTabletStatAnalyzer &analyzer,
+      const storage::ObTablet &tablet,
+      AdaptiveMergeReason &merge_reason);
   static int check_inc_sstable_row_cnt_percentage(
       const ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
@@ -263,7 +269,7 @@ private:
   static constexpr int64_t LOAD_DATA_SCENE_THRESHOLD = 70;
   static constexpr int64_t TOMBSTONE_SCENE_THRESHOLD = 50;
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
-  static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 1000L; // 1k
+  static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
 };
 
 

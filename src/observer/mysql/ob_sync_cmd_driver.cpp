@@ -315,7 +315,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
     }
 
     if (OB_SUCC(ret)) {
-      MYSQL_PROTOCOL_TYPE protocol_type = result.is_ps_protocol() ? BINARY : TEXT;
+      MYSQL_PROTOCOL_TYPE protocol_type = result.is_ps_protocol() ? MYSQL_PROTOCOL_TYPE::BINARY : MYSQL_PROTOCOL_TYPE::TEXT;
       const ObSQLSessionInfo *tmp_session = result.get_exec_context().get_my_session();
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(tmp_session);
       ObSMRow sm_row(protocol_type,

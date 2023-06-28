@@ -72,6 +72,10 @@ public:
   int offline();
   int online();
 
+  // NB: block_normal and unblcok should pair used !!!
+  // when you finish block_noraml, you should unblock_normal then push to other state
+  int block_normal();
+  int unblock_normal();
 public:
   int init(const share::ObLSID &ls_id,
            transaction::ObLSTxCtxMgr *mgr,
@@ -135,6 +139,8 @@ public:
                                 transaction::ObTransID &block_tx_id);
   // get the obj lock op iterator from tx of this ls.
   int iterate_tx_obj_lock_op(transaction::tablelock::ObLockOpIterator &iter) const;
+  int get_tx_ctx_count(int64_t &tx_ctx_count);
+  int get_active_tx_count(int64_t &active_tx_count);
 public:
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn);
 

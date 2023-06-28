@@ -40,11 +40,8 @@ public:
   void destroy();
 private:
   int check_ls_in_rebuild_status_(bool &is_ls_in_rebuild);
-  int check_need_rebuild_(
-      const palf::LSN &lsn,
-      bool &need_rebuild);
   int execute_rebuild_();
-  void wakeup_ha_service_();
+  void wakeup_rebuild_service_();
 private:
   bool is_inited_;
   ObLS *ls_;

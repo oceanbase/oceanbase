@@ -103,7 +103,8 @@ public:
       common::ObIAllocator &allocator,
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
-      const bool skip_column_info = false);
+      const bool skip_column_info = false,
+      const int64_t compat_version = STORAGE_SCHEMA_VERSION_V2);
   int init(
       common::ObIAllocator &allocator,
       const ObStorageSchema &old_schema,
@@ -132,6 +133,9 @@ public:
       int64_t &pos);
   int64_t get_serialize_size() const;
 
+  // for new mds
+  int assign(common::ObIAllocator &allocator, const ObStorageSchema &other);
+
   //TODO @lixia use compact mode in storage schema to compaction
   inline bool is_oracle_mode() const { return compat_mode_ == static_cast<uint32_t>(lib::Worker::CompatMode::ORACLE); }
   inline lib::Worker::CompatMode get_compat_mode() const { return static_cast<lib::Worker::CompatMode>(compat_mode_);}
@@ -154,14 +158,11 @@ public:
   virtual inline bool is_global_index_table() const override { return share::schema::ObSimpleTableSchemaV2::is_global_index_table(index_type_); }
   virtual inline int64_t get_block_size() const override { return block_size_; }
 
-  virtual int get_store_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids, const bool full_col = false) const override;
   virtual int get_store_column_count(int64_t &column_count, const bool full_col) const override;
   int get_stored_column_count_in_sstable(int64_t &column_count) const;
 
-  virtual int get_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids, bool no_virtual) const override;
   virtual int get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs) const override;
   virtual int get_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
-  virtual int has_lob_column(bool &has_lob, const bool check_large = false) const override;
   virtual int get_encryption_id(int64_t &encrypt_id) const override;
   virtual const common::ObString &get_encryption_str() const override { return encryption_; }
   virtual bool need_encrypt() const override;
@@ -174,10 +175,10 @@ public:
   virtual inline share::schema::ObTableType get_table_type() const override { return table_type_; }
   virtual inline share::schema::ObIndexType get_index_type() const override { return index_type_; }
   virtual inline share::schema::ObIndexStatus get_index_status() const override { return index_status_; }
-  const common::ObIArray<ObStorageColumnSchema> &get_store_column_schemas() const { return column_array_; }
   virtual inline common::ObRowStoreType get_row_store_type() const override { return row_store_type_; }
   virtual inline const char *get_compress_func_name() const override {  return all_compressor_name[compressor_type_]; }
   virtual inline common::ObCompressorType get_compressor_type() const override { return compressor_type_; }
+  virtual inline bool is_column_info_simplified() const override { return column_info_simplified_; }
 
   virtual int init_column_meta_array(
       common::ObIArray<blocksstable::ObSSTableColumnMeta> &meta_array) const override;
@@ -185,12 +186,20 @@ public:
                                           blocksstable::ObDatumRow &default_row) const;
   const ObStorageColumnSchema *get_column_schema(const int64_t column_id) const;
 
-  INHERIT_TO_STRING_KV("ObIMultiSourceDataUnit", ObIMultiSourceDataUnit, KP(this), K_(version),
+  // Use this comparison function to determine which schema has been updated later
+  // true: input_schema is newer
+  // false: current schema is newer
+  bool compare_schema_newer(const ObStorageSchema &input_schema) const
+  {
+    return store_column_cnt_ < input_schema.store_column_cnt_;
+  }
+
+  INHERIT_TO_STRING_KV("ObIMultiSourceDataUnit", ObIMultiSourceDataUnit, KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
       K_(index_status), K_(row_store_type), K_(schema_version),
-      K_(column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
+      K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
-      K_(rowkey_array), K_(column_array));
+      "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), K_(column_array));
 private:
   void copy_from(const share::schema::ObMergeSchema &input_schema);
   int deep_copy_str(const ObString &src, ObString &dest);
@@ -202,6 +211,7 @@ private:
       common::ObIArray<share::schema::ObColDesc> &column_ids,
       bool no_virtual) const;
   void reset_string(ObString &str);
+  int64_t get_store_column_count_by_column_array();
 
   /* serialize related function */
   template <typename T>
@@ -229,6 +239,7 @@ public:
   // thus we add a static variable STORAGE_SCHEMA_VERSION and a class member storage_schema_version_ here.
   // Compatibility code should be added if new variables occur in future
   static const int64_t STORAGE_SCHEMA_VERSION = 1;
+  static const int64_t STORAGE_SCHEMA_VERSION_V2 = 2; // add for store_column_cnt_
 
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
@@ -250,7 +261,7 @@ public:
   share::schema::ObIndexStatus index_status_;
   ObRowStoreType row_store_type_;
   int64_t schema_version_;
-  int64_t column_cnt_;
+  int64_t column_cnt_; // include virtual generated column
   int64_t tablet_size_;
   int64_t pctfree_;
   int64_t block_size_; //KB
@@ -262,6 +273,7 @@ public:
   ObString encrypt_key_; // for encryption
   common::ObFixedArray<ObStorageRowkeyColumnSchema, common::ObIAllocator> rowkey_array_; // rowkey column
   common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> column_array_; // column schema
+  int64_t store_column_cnt_; // NOT include virtual generated column
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);

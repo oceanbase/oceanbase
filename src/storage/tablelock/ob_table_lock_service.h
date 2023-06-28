@@ -72,7 +72,7 @@ private:
                    const int64_t timeout_us);
     ObTableLockCtx(const ObTableLockTaskType task_type,
                    const uint64_t table_id,
-                   const common::ObTabletID &tablet_id,
+                   const share::ObLSID &ls_id,
                    const int64_t origin_timeout_us,
                    const int64_t timeout_us);
     ObTableLockCtx(const ObTableLockTaskType task_type,
@@ -81,6 +81,8 @@ private:
                    const int64_t origin_timeout_us,
                    const int64_t timeout_us);
     ~ObTableLockCtx() {}
+    int set_tablet_id(const common::ObIArray<common::ObTabletID> &tablet_ids);
+    int set_tablet_id(const common::ObTabletID &tablet_id);
     bool is_try_lock() const { return 0 == timeout_us_; }
     bool is_deadlock_avoid_enabled() const;
     bool is_timeout() const;
@@ -96,6 +98,22 @@ private:
     bool is_stmt_savepoint_valid() { return -1 != stmt_savepoint_; }
     void reset_stmt_savepoint() { stmt_savepoint_ = -1; }
     ObTableLockOpType get_lock_op_type() const { return lock_op_type_; }
+    bool is_unlock_task() const
+    {
+      return (UNLOCK_TABLE == task_type_ ||
+              UNLOCK_PARTITION == task_type_ ||
+              UNLOCK_SUBPARTITION == task_type_ ||
+              UNLOCK_TABLET == task_type_ ||
+              UNLOCK_OBJECT == task_type_ ||
+              UNLOCK_ALONE_TABLET == task_type_);
+    }
+    bool is_tablet_lock_task() const
+    {
+      return (LOCK_TABLET == task_type_ ||
+              UNLOCK_TABLET == task_type_ ||
+              LOCK_ALONE_TABLET == task_type_ ||
+              UNLOCK_ALONE_TABLET == task_type_);
+    }
   public:
     ObTableLockTaskType task_type_; // current lock request type
     bool is_in_trans_;
@@ -103,8 +121,8 @@ private:
       // used for table/partition/tablet
       struct {
         uint64_t table_id_;
-        uint64_t partition_id_;        // set when lock or unlock specified partition
-        common::ObTabletID tablet_id_; // set when lock or unlock specified tablet
+        uint64_t partition_id_;          // set when lock or unlock specified partition
+        share::ObLSID ls_id_;            // used for alone tablet lock and unlock
       };
       // used for lock object
       struct {
@@ -135,7 +153,7 @@ private:
     int64_t stmt_savepoint_;
 
     TO_STRING_KV(K(is_in_trans_), K(table_id_), K(partition_id_),
-                 K(tablet_id_), K(obj_type_), K(obj_id_), K(lock_op_type_),
+                 K(tablet_list_), K(obj_type_), K(obj_id_), K(lock_op_type_),
                  K(origin_timeout_us_), K(timeout_us_),
                  K(abs_timeout_ts_), KPC(tx_desc_), K(tx_param_),
                  K(current_savepoint_), K(need_rollback_ls_),
@@ -257,6 +275,14 @@ public:
   int unlock_tablet(ObTxDesc &tx_desc,
                     const ObTxParam &tx_param,
                     const ObUnLockTabletRequest &arg);
+  int lock_tablet(ObTxDesc &tx_desc,
+                  const ObTxParam &tx_param,
+                  const ObLockAloneTabletRequest &arg);
+  // arg.op_type_ should be OUT_TRANS_UNLOCK:
+  // unlock the table level lock and the tablet level lock.
+  int unlock_tablet(ObTxDesc &tx_desc,
+                    const ObTxParam &tx_param,
+                    const ObUnLockAloneTabletRequest &arg);
   int lock_partition_or_subpartition(ObTxDesc &tx_desc,
                                      const ObTxParam &tx_param,
                                      const ObLockPartitionRequest &arg);
@@ -281,9 +307,17 @@ public:
   int garbage_collect_right_now();
   int get_obj_lock_garbage_collector(ObOBJLockGarbageCollector *&obj_lock_garbage_collector);
 private:
+  int check_cluster_version_after_(const uint64_t version);
+  int check_data_version_after_(const uint64_t version);
+  bool need_retry_trans_(const ObTableLockCtx &ctx,
+                         const int64_t ret) const;
   bool need_retry_single_task_(const ObTableLockCtx &ctx,
                                const int64_t ret) const;
+  bool need_retry_rpc_task_(const int64_t ret,
+                            const ObTableLockTaskResult *result) const;
+  bool need_renew_location_(const int64_t ret) const;
   int rewrite_return_code_(const int ret) const;
+  int is_timeout_ret_code_(const int ret) const;
   int process_lock_task_(ObTableLockCtx &ctx,
                          const ObTableLockMode lock_mode,
                          const ObTableLockOwnerID lock_owner);
@@ -293,6 +327,10 @@ private:
   int process_table_lock_task_(ObTableLockCtx &ctx,
                                const ObTableLockMode lock_mode,
                                const ObTableLockOwnerID lock_owner);
+  int process_tablet_lock_task_(ObTableLockCtx &ctx,
+                                const ObTableLockMode lock_mode,
+                                const ObTableLockOwnerID lock_owner,
+                                const ObSimpleTableSchemaV2 *table_schema);
   int start_tx_(ObTableLockCtx &ctx);
   int end_tx_(ObTableLockCtx &ctx, const bool is_rollback);
   int start_sub_tx_(ObTableLockCtx &ctx);
@@ -300,16 +338,27 @@ private:
   int start_stmt_(ObTableLockCtx &ctx);
   int end_stmt_(ObTableLockCtx &ctx, const bool is_rollback);
   int check_op_allowed_(const uint64_t table_id,
-                        const ObTableSchema *table_schema,
+                        const ObSimpleTableSchemaV2 *table_schema,
                         bool &is_allowed);
   int get_process_tablets_(const ObTableLockMode lock_mode,
-                           const ObTableSchema *table_schema,
+                           const ObSimpleTableSchemaV2 *table_schema,
                            ObTableLockCtx &ctx);
   int get_ls_lock_map_(ObTableLockCtx &ctx,
+                       const common::ObTabletIDArray &tablets,
                        LockMap &lock_map,
                        ObLSLockMap &ls_lock_map);
-  int get_tablet_ls_(const ObTabletID &tablet_id,
-                     share::ObLSID &ls_id);
+  int fill_ls_lock_map_(ObTableLockCtx &ctx,
+                        const common::ObTabletIDArray &tablets,
+                        ObLSLockMap &ls_lock_map,
+                        bool force_refresh_location);
+  int fill_ls_lock_map_(ObTableLockCtx &ctx,
+                        const common::ObTabletIDArray &tablets,
+                        LockMap &lock_map,
+                        ObLSLockMap &ls_lock_map);
+  int get_tablet_ls_(const ObTableLockCtx &ctx,
+                     const ObTabletID &tablet_id,
+                     share::ObLSID &ls_id,
+                     bool force_refresh = false);
   int get_ls_leader_(const int64_t cluster_id,
                      const uint64_t tenant_id,
                      const share::ObLSID &ls_id,
@@ -343,11 +392,43 @@ private:
                         const ObTableLockMode lock_mode,
                         const ObTableLockOwnerID lock_owner);
   template<class RpcProxy>
+  int batch_rpc_handle_(RpcProxy &proxy_batch,
+                        ObTableLockCtx &ctx,
+                        const ObLSLockMap &ls_lock_map,
+                        const ObTableLockMode lock_mode,
+                        const ObTableLockOwnerID lock_owner,
+                        bool &can_retry,
+                        ObLSLockMap &retry_ls_lock_map);
+  template<class RpcProxy>
   int handle_parallel_rpc_response_(int rpc_call_ret,
                                     int64_t rpc_count,
                                     RpcProxy &proxy_batch,
                                     ObTableLockCtx &ctx,
-                                    ObArray<share::ObLSID> &ls_array);
+                                    ObArray<share::ObLSID> &ls_array,
+                                    bool &can_retry);
+  template<class RpcProxy>
+  int parallel_batch_rpc_handle_(RpcProxy &proxy_batch,
+                                 ObTableLockCtx &ctx,
+                                 const ObTableLockTaskType lock_task_type,
+                                 const ObLSLockMap &ls_lock_map,
+                                 const ObTableLockMode lock_mode,
+                                 const ObTableLockOwnerID lock_owner);
+  template<class RpcProxy>
+  int parallel_batch_rpc_handle_(RpcProxy &proxy_batch,
+                                 ObTableLockCtx &ctx,
+                                 const ObTableLockTaskType lock_task_type,
+                                 const ObLSLockMap &ls_lock_map,
+                                 const ObTableLockMode lock_mode,
+                                 const ObTableLockOwnerID lock_owner,
+                                 bool &can_retry,
+                                 ObLSLockMap &retry_ls_lock_map);
+  int get_retry_tablet_list_(const ObLockIDArray &lock_ids,
+                             common::ObTabletIDArray &retry_tablets);
+  template<class RpcProxy>
+  int get_retry_tablet_list_(const ObLSLockMap &ls_lock_map,
+                             const RpcProxy &proxy_batch,
+                             const ObArray<share::ObLSID> &ls_array,
+                             common::ObTabletIDArray &retry_tablets);
   int inner_process_obj_lock_(ObTableLockCtx &ctx,
                               const LockMap &lock_map,
                               const ObLSLockMap &ls_lock_map,
@@ -397,7 +478,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLockService);
 private:
   // TODO: yanyuan.cxf use parallel rpc and modify this to 5s.
-  static const int64_t DEFAULT_TIMEOUT_US = 15L * 1000L * 1000L; // 15s
+  static const int64_t DEFAULT_TIMEOUT_US = 1500L * 1000L * 1000L; // 1500s
   static const int64_t DEFAULT_RPC_TIMEOUT_US = 2L * 1000L * 1000L; // 2s
 
   share::ObLocationService *location_service_;

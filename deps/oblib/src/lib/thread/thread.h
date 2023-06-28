@@ -22,20 +22,36 @@
 namespace oceanbase {
 namespace lib {
 
+class Thread;
+class Threads;
+class IRunWrapper
+{
+public:
+  virtual ~IRunWrapper() {}
+  virtual int pre_run(Thread*)
+  {
+    int ret = OB_SUCCESS;
+    return ret;
+  }
+  virtual int end_run(Thread*)
+  {
+    int ret = OB_SUCCESS;
+    return ret;
+  }
+  virtual uint64_t id() const = 0;
+};
+
 /// \class
 /// A wrapper of Linux thread that supports normal thread operations.
 class Thread {
 public:
-  using Runnable = std::function<void()>;
   static constexpr int PATH_SIZE = 128;
-  Thread();
-  Thread(int64_t stack_size);
-  Thread(Runnable runnable, int64_t stack_size=0);
+  Thread(Threads *threads, int64_t idx, int64_t stack_size);
   ~Thread();
 
   int start();
-  int start(Runnable runnable);
   void stop();
+  void run();
   void wait();
   void destroy();
   void dump_pth();
@@ -47,8 +63,11 @@ public:
   static Thread &current();
 
   bool has_set_stop() const;
-  uint64_t get_tenant_id() const { return tenant_id_; }
-  void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_tenant_id() const;
+  using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
+  ThreadListNode *get_thread_list_node() { return &thread_list_node_; }
+  int get_cpu_time_inc(int64_t &cpu_time_inc);
+  int64_t get_tid() { return tid_; }
 
   OB_INLINE static int64_t update_loop_ts(int64_t t)
   {
@@ -63,16 +82,73 @@ public:
     return update_loop_ts(common::ObTimeUtility::fast_current_time());
   }
 public:
+  class BaseWaitGuard
+  {
+  public:
+    OB_INLINE explicit BaseWaitGuard() : last_ts_(blocking_ts_)
+    {
+      blocking_ts_ = common::ObTimeUtility::fast_current_time();
+    }
+    ~BaseWaitGuard()
+    {
+      blocking_ts_ = last_ts_;
+    }
+  private:
+    int64_t last_ts_;
+  };
+  class WaitGuard : public BaseWaitGuard
+  {
+  public:
+    OB_INLINE explicit WaitGuard(uint8_t type) : type_(type)
+    {
+      wait_event_ |= type;
+    }
+    ~WaitGuard()
+    {
+      wait_event_ &= ~type_;
+    }
+  private:
+    uint8_t type_;
+  };
+  class JoinGuard : public BaseWaitGuard
+  {
+  public:
+    OB_INLINE explicit JoinGuard(pthread_t thread)
+    {
+      thread_joined_ = thread;
+    }
+    ~JoinGuard()
+    {
+      thread_joined_ = 0;
+    }
+  };
+  class RpcGuard : public BaseWaitGuard
+  {
+  public:
+    OB_INLINE explicit RpcGuard(const easy_addr_t& addr)
+    {
+      IGNORE_RETURN new (&rpc_dest_addr_) ObAddr(addr);
+    }
+    OB_INLINE explicit RpcGuard(const ObAddr& addr)
+    {
+      IGNORE_RETURN new (&rpc_dest_addr_) ObAddr(addr);
+    }
+    ~RpcGuard()
+    {
+      rpc_dest_addr_.reset();
+    }
+  };
+
   static constexpr uint8_t WAIT                 = (1 << 0);
   static constexpr uint8_t WAIT_IN_TENANT_QUEUE = (1 << 1);
   static constexpr uint8_t WAIT_FOR_IO_EVENT    = (1 << 2);
-  static constexpr uint8_t WAIT_FOR_TRANS_RETRY = (1 << 3);
   // for thread diagnose, maybe replace it with union later.
   static thread_local int64_t loop_ts_;
   static thread_local pthread_t thread_joined_;
   static thread_local int64_t sleep_us_;
-  static thread_local uint8_t is_blocking_;
+  static thread_local int64_t blocking_ts_;
   static thread_local ObAddr rpc_dest_addr_;
+  static thread_local uint8_t wait_event_;
 private:
   static void* __th_start(void *th);
   void destroy_stack();
@@ -82,8 +158,8 @@ private:
   static int64_t total_thread_count_;
 private:
   pthread_t pth_;
-  Runnable runnable_;
-  uint64_t tenant_id_;
+  Threads *threads_;
+  int64_t idx_;
 #ifndef OB_USE_ASAN
   void *stack_addr_;
 #endif
@@ -92,6 +168,9 @@ private:
   int64_t join_concurrency_;
   pid_t pid_before_stop_;
   pid_t tid_before_stop_;
+  int64_t tid_;
+  ThreadListNode thread_list_node_;
+  int64_t cpu_time_;
 };
 
 OB_INLINE bool Thread::has_set_stop() const

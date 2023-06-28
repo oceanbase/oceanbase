@@ -198,18 +198,23 @@ int ObXAService::local_one_phase_xa_commit_(const ObXATransID &xid,
   ObTransID moke_tx_id;
 
   if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(trans_id, alloc, xa_ctx))) {
-    if (OB_FAIL(query_xa_coord_from_tableone(MTL_ID(), xid, coordinator, moke_tx_id, end_flag))) {
-      if (OB_ITER_END == ret) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = query_xa_coord_from_tableone(MTL_ID(), xid, coordinator,
+            moke_tx_id, end_flag))) {
+      if (OB_ITER_END == tmp_ret) {
         ret = OB_TRANS_XA_NOTA;
         TRANS_LOG(WARN, "xid is not valid", K(ret), K(xid));
       } else {
-        TRANS_LOG(WARN, "query xa scheduler failed", K(ret), K(xid));
+        TRANS_LOG(WARN, "query xa scheduler failed", K(tmp_ret), K(xid));
       }
     } else if (coordinator.is_valid()) {
       ret = OB_TRANS_XA_PROTO;
       TRANS_LOG(WARN, "xa has entered the commit phase", K(ret), K(trans_id), K(xid), K(coordinator));
     } else {
       TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(trans_id));
+    }
+    if (OB_SUCCESS == ret) {
+      TRANS_LOG(ERROR, "unexpected return code", K(ret), K(xid), K(trans_id));
     }
   } else if (OB_ISNULL(xa_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -258,7 +263,7 @@ int ObXAService::revert_xa_ctx(ObXACtx *xa_ctx)
   trans_id, coordinator, scheduler_ip, scheduler_port, state, flag) \
   values (%lu, x'%.*s', x'%.*s', %ld, %ld, %ld, '%s', %d, %d, %ld)"
 
-void ObXAService::insert_record_for_standby(const uint64_t tenant_id,
+int ObXAService::insert_record_for_standby(const uint64_t tenant_id,
                                             const ObXATransID &xid,
                                             const ObTransID &trans_id,
                                             const share::ObLSID &coordinator,
@@ -303,10 +308,12 @@ void ObXAService::insert_record_for_standby(const uint64_t tenant_id,
   } else if (OB_FAIL(mysql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute insert record sql failed", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else {
+    ObXAStatistics::get_instance().inc_cleanup_tx_count();
     TRANS_LOG(INFO, "execute insert record sql success", K(exec_tenant_id), K(tenant_id),
               K(sql), K(affected_rows));
   }
   THIS_WORKER.set_timeout_ts(original_timeout_us);
+  return ret;
 }
 
 #define INSERT_XA_LOCK_SQL "\
@@ -1515,25 +1522,50 @@ int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
   } else if (coordinator.is_valid()) {
     ret = OB_TRANS_XA_PROTO;
     TRANS_LOG(WARN, "xa has entered the commit phase", K(ret), K(tx_id), K(xid), K(coordinator));
-  } else if (sche_addr == GCTX.self_addr()) {
-    if (OB_FAIL(local_one_phase_xa_commit_(xid, tx_id, timeout_us, request_id, has_tx_level_temp_table))) {
-      TRANS_LOG(WARN, "local one phase commit failed", K(ret), K(tx_id), K(xid));
-    }
   } else {
-    if (OB_FAIL(remote_one_phase_xa_commit_(xid, tx_id, tenant_id, sche_addr, timeout_us, request_id,
-                                            has_tx_level_temp_table))) {
-      TRANS_LOG(WARN, "remote one phase commit failed", K(ret), K(tx_id), K(xid));
-    }
-  }
-
-  // xa_proto is returned when in tightly couple mode, there are
-  // still multiple branches and one phase commit is triggered.
-  // Under such condition, oracle would not delete inner table record
-  if (OB_TRANS_XA_PROTO != ret) {
-    const bool is_tightly = !ObXAFlag::contain_loosely(end_flag);
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = delete_xa_branch(tenant_id, xid, is_tightly))) {
-      TRANS_LOG(WARN, "delete xa record failed", K(ret), K(xid));
+    bool need_delete = true;
+    if (sche_addr == GCTX.self_addr()) {
+      if (OB_FAIL(local_one_phase_xa_commit_(xid, tx_id, timeout_us, request_id, has_tx_level_temp_table))) {
+        TRANS_LOG(WARN, "local one phase commit failed", K(ret), K(tx_id), K(xid));
+      }
+    } else {
+      if (OB_FAIL(remote_one_phase_xa_commit_(xid, tx_id, tenant_id, sche_addr, timeout_us, request_id,
+                                              has_tx_level_temp_table))) {
+        TRANS_LOG(WARN, "remote one phase commit failed", K(ret), K(tx_id), K(xid));
+      }
+    }
+
+    if (OB_TRANS_XA_PROTO == ret) {
+      need_delete = false;
+    } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      // check xa trans state again
+      if (OB_SUCCESS != (tmp_ret = query_sche_and_coord(tenant_id,
+                                                        xid,
+                                                        sche_addr,
+                                                        coordinator,
+                                                        tx_id,
+                                                        end_flag))) {
+        if (OB_ITER_END == tmp_ret) {
+          ret = OB_TRANS_XA_NOTA;
+          TRANS_LOG(WARN, "xid is not valid", K(ret), K(xid));
+        } else {
+          TRANS_LOG(WARN, "query xa scheduler failed", K(tmp_ret), K(xid));
+        }
+        need_delete = false;
+      } else if (coordinator.is_valid()) {
+        // xa prepare may be completed, do not delete record
+        need_delete = false;
+      }
+    }
+    // xa_proto is returned when in tightly couple mode, there are
+    // still multiple branches and one phase commit is triggered.
+    // Under such condition, oracle would not delete inner table record
+    if (need_delete) {
+      const bool is_tightly = !ObXAFlag::contain_loosely(end_flag);
+      if (OB_SUCCESS != (tmp_ret = delete_xa_branch(tenant_id, xid, is_tightly))) {
+        TRANS_LOG(WARN, "delete xa record failed", K(tmp_ret), K(xid), K(is_tightly));
+      }
     }
   }
 
@@ -2810,7 +2842,7 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
 
 void ObXAService::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
 {
-  const ObTransID &tx_id = tx_desc->tid();
+  const ObTransID tx_id = tx_desc->tid();
   if (OB_UNLIKELY(!is_inited_)) {
     TRANS_LOG_RET(WARN, OB_NOT_INIT, "xa service not inited");
   } else {

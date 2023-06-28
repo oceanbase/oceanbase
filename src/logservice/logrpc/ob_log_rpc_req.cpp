@@ -11,6 +11,7 @@
  */
 
 #include "ob_log_rpc_req.h"
+#include "logservice/palf/log_define.h"
 
 namespace oceanbase
 {
@@ -28,7 +29,9 @@ LogConfigChangeCmd::LogConfigChangeCmd()
     curr_replica_num_(0),
     new_replica_num_(0),
     cmd_type_(INVALID_CONFIG_CHANGE_CMD),
-    timeout_us_(0) { }
+    timeout_us_(0),
+    lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+    config_version_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -46,7 +49,9 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     curr_replica_num_(),
     new_replica_num_(new_replica_num),
     cmd_type_(cmd_type),
-    timeout_us_(timeout_us) { }
+    timeout_us_(timeout_us),
+    lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+    config_version_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -64,11 +69,34 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     curr_replica_num_(curr_replica_num),
     new_replica_num_(new_replica_num),
     cmd_type_(cmd_type),
-    timeout_us_(timeout_us) { }
+    timeout_us_(timeout_us),
+    lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+    config_version_() { }
+
+LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
+                                       const int64_t palf_id,
+                                       const int64_t lock_owner,
+                                       const LogConfigChangeCmdType cmd_type,
+                                       const int64_t timeout_us)
+    : src_(src),
+    palf_id_(palf_id),
+    added_member_(),
+    removed_member_(),
+    curr_member_list_(),
+    curr_replica_num_(0),
+    new_replica_num_(0),
+    cmd_type_(cmd_type),
+    timeout_us_(timeout_us),
+    lock_owner_(lock_owner){}
 
 LogConfigChangeCmd::~LogConfigChangeCmd()
 {
   reset();
+}
+
+void LogConfigChangeCmd::in_leader(const palf::LogConfigVersion &config_version)
+{
+  config_version_ = config_version;
 }
 
 bool LogConfigChangeCmd::is_valid() const
@@ -82,7 +110,9 @@ bool LogConfigChangeCmd::is_valid() const
       SWITCH_TO_ACCEPTOR_CMD == cmd_type_)? removed_member_.is_valid(): true);
   bool_ret = bool_ret && ((is_set_new_replica_num())? is_valid_replica_num(new_replica_num_): true);
   bool_ret = bool_ret && ((CHANGE_REPLICA_NUM_CMD == cmd_type_)? curr_member_list_.is_valid()    \
-      && is_valid_replica_num(curr_replica_num_) && is_valid_replica_num(new_replica_num_): true);
+      && is_valid_replica_num(curr_replica_num_) && is_valid_replica_num(new_replica_num_): true);\
+  bool_ret = bool_ret && ((TRY_LOCK_CONFIG_CHANGE_CMD == cmd_type_ || UNLOCK_CONFIG_CHANGE_CMD == cmd_type_) ? \
+      (palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER != lock_owner_) : true);
   return bool_ret;
 }
 
@@ -119,19 +149,20 @@ void LogConfigChangeCmd::reset()
   new_replica_num_ = 0;
   cmd_type_ = INVALID_CONFIG_CHANGE_CMD;
   timeout_us_ = 0;
+  lock_owner_ = palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER;
+  config_version_.reset();
 }
 
 OB_SERIALIZE_MEMBER(LogConfigChangeCmd, src_, palf_id_, added_member_, removed_member_,
-curr_member_list_, curr_replica_num_, new_replica_num_, cmd_type_, timeout_us_);
+curr_member_list_, curr_replica_num_, new_replica_num_, cmd_type_, timeout_us_, lock_owner_, config_version_);
 // ============= LogConfigChangeCmd end =============
 
 // ============= LogConfigChangeCmdResp begin ===========
 LogConfigChangeCmdResp::LogConfigChangeCmdResp()
-  : ret_(OB_MAX_ERROR_CODE) { }
+{
+  reset();
+}
 
-LogConfigChangeCmdResp::LogConfigChangeCmdResp(
-    const int ret)
-    : ret_(ret) { }
 
 LogConfigChangeCmdResp::~LogConfigChangeCmdResp()
 {
@@ -146,8 +177,11 @@ bool LogConfigChangeCmdResp::is_valid() const
 void LogConfigChangeCmdResp::reset()
 {
   ret_ = OB_MAX_ERROR_CODE;
+  lock_owner_ = palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER;
+  is_locked_ = false;
 }
-OB_SERIALIZE_MEMBER(LogConfigChangeCmdResp, ret_);
+
+OB_SERIALIZE_MEMBER(LogConfigChangeCmdResp, ret_, lock_owner_, is_locked_);
 // ============= LogConfigChangeCmdResp end =============
 
 // ============= LogGetLeaderMaxScnReq begin ===========

@@ -53,10 +53,18 @@ OB_SERIALIZE_MEMBER_INHERIT(ObLockPartitionRequest, ObLockTableRequest,
 OB_SERIALIZE_MEMBER_INHERIT(ObLockTabletRequest, ObLockTableRequest,
                             tablet_id_);
 
+OB_SERIALIZE_MEMBER_INHERIT(ObLockTabletsRequest, ObLockTableRequest,
+                            tablet_ids_);
+
+OB_SERIALIZE_MEMBER_INHERIT(ObLockAloneTabletRequest, ObLockTabletsRequest,
+                            ls_id_);
+
 OB_SERIALIZE_MEMBER(ObTableLockTaskResult,
                     ret_code_,
                     tx_result_ret_code_,
-                    tx_result_);
+                    tx_result_,
+                    can_retry_,
+                    success_pos_);
 
 OB_DEF_SERIALIZE_SIZE(ObTableLockTaskRequest)
 {
@@ -201,7 +209,9 @@ bool ObLockParam::is_valid() const
            (ObLockOBJType::OBJ_TYPE_COMMON_OBJ == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_TENANT == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_LS == lock_id_.obj_type_
-            || ObLockOBJType::OBJ_TYPE_EXTERNAL_TABLE_REFRESH == lock_id_.obj_type_)));
+            || ObLockOBJType::OBJ_TYPE_EXTERNAL_TABLE_REFRESH == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLE == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET == lock_id_.obj_type_)));
 }
 
 void ObLockRequest::reset()
@@ -273,6 +283,42 @@ bool ObLockTabletRequest::is_valid() const
           ObLockRequest::is_valid() &&
           is_valid_id(table_id_) &&
           tablet_id_.is_valid());
+}
+
+void ObLockTabletsRequest::reset()
+{
+  ObLockTableRequest::reset();
+  tablet_ids_.reset();
+}
+
+bool ObLockTabletsRequest::is_valid() const
+{
+  bool is_valid = true;
+  is_valid = (ObLockMsgType::LOCK_TABLET_REQ == type_ &&
+              ObLockRequest::is_valid() &&
+              is_valid_id(table_id_));
+  for (int64_t i = 0; i < tablet_ids_.count() && is_valid; i++) {
+    is_valid = is_valid && tablet_ids_.at(i).is_valid();
+  }
+  return is_valid;
+}
+
+void ObLockAloneTabletRequest::reset()
+{
+  ObLockTabletsRequest::reset();
+  ls_id_.reset();
+}
+
+bool ObLockAloneTabletRequest::is_valid() const
+{
+  bool is_valid = true;
+  is_valid = (ObLockMsgType::LOCK_ALONE_TABLET_REQ == type_ &&
+              ObLockRequest::is_valid() &&
+              ls_id_.is_valid());
+  for (int64_t i = 0; i < tablet_ids_.count() && is_valid; i++) {
+    is_valid = is_valid && tablet_ids_.at(i).is_valid();
+  }
+  return is_valid;
 }
 
 int ObTableLockTaskRequest::set(
@@ -378,6 +424,7 @@ bool ObLockTaskBatchRequest::is_valid() const
         valid = false;
       }
     }
+    valid = valid && tx_desc_->is_valid();
   } else {
     valid = false;
   }

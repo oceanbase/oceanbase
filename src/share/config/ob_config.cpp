@@ -23,7 +23,7 @@ namespace oceanbase
 {
 namespace common
 {
-ObMemAttr g_config_mem_attr = SET_USE_500("ConfigChecker");
+ObMemAttr g_config_mem_attr = SET_USE_UNEXPECTED_500("ConfigChecker");
 
 const char *log_archive_config_keywords[] =
 {
@@ -54,6 +54,38 @@ const char *log_archive_encryption_algorithm_values[] =
   "None",
   "",
 };
+
+template<typename T>
+static bool check_range(const ObConfigRangeOpts left_opt,
+                        const ObConfigRangeOpts right_opt,
+                        T &&value,
+                        T &&min_value,
+                        T &&max_value)
+{
+  bool left_ret = true;
+  bool right_ret = true;
+  if (ObConfigRangeOpts::OB_CONF_RANGE_NONE == left_opt) {
+    // do nothing
+  } else if (ObConfigRangeOpts::OB_CONF_RANGE_GREATER_THAN == left_opt) {
+    left_ret = value > min_value;
+  } else if (ObConfigRangeOpts::OB_CONF_RANGE_GREATER_EQUAL == left_opt) {
+    left_ret = value >= min_value;
+  } else {
+    left_ret = false;
+  }
+  if (left_ret) {
+    if (ObConfigRangeOpts::OB_CONF_RANGE_NONE == right_opt) {
+      // do nothing
+    } else if (ObConfigRangeOpts::OB_CONF_RANGE_LESS_THAN == right_opt) {
+      right_ret = value < max_value;
+    } else if (ObConfigRangeOpts::OB_CONF_RANGE_LESS_EQUAL == right_opt) {
+      right_ret = value <= max_value;
+    } else {
+      right_ret = false;
+    }
+  }
+  return left_ret && right_ret;
+}
 
 // ObConfigItem
 ObConfigItem::ObConfigItem()
@@ -344,29 +376,47 @@ bool ObConfigIntegralItem::parse_range(const char *range)
       *p_middle = '\0';
 
       if ('\0' != p_left[1]) {
-        parse(p_left + 1, valid);
+        int64_t val_left = parse(p_left + 1, valid);
         if (valid) {
           if (*p_left == '(') {
-            add_checker(OB_NEW(ObConfigGreaterThan, g_config_mem_attr, p_left + 1));
+            min_value_ = val_left;
+            left_interval_opt_ = ObConfigRangeOpts::OB_CONF_RANGE_GREATER_THAN;
           } else if (*p_left == '[') {
-            add_checker(OB_NEW(ObConfigGreaterEqual, g_config_mem_attr, p_left + 1));
+            min_value_ = val_left;
+            left_interval_opt_ = ObConfigRangeOpts::OB_CONF_RANGE_GREATER_EQUAL;
           }
         }
       }
 
       if ('\0' != p_middle[1]) {
-        parse(p_middle + 1, valid);
+        int64_t val_right = parse(p_middle + 1, valid);
         if (valid) {
           if (')' == ch_right) {
-            add_checker(OB_NEW(ObConfigLessThan, g_config_mem_attr, p_middle + 1));
+            max_value_ = val_right;
+            right_interval_opt_ = ObConfigRangeOpts::OB_CONF_RANGE_LESS_THAN;
           } else if (']' == ch_right) {
-            add_checker(OB_NEW(ObConfigLessEqual, g_config_mem_attr, p_middle + 1));
+            max_value_ = val_right;
+            right_interval_opt_ = ObConfigRangeOpts::OB_CONF_RANGE_LESS_EQUAL;
           }
         }
       }
 
       bool_ret = true;
     }
+  }
+  return bool_ret;
+}
+
+bool ObConfigIntegralItem::check() const
+{
+  // check order: value_valid_ --> range --> customized checker (for DEF_XXX_WITH_CHECKER)
+  bool bool_ret = false;
+  if (!value_valid_) {
+  } else if (!check_range(left_interval_opt_, right_interval_opt_,
+                          value_, min_value_, max_value_)) {
+  } else if (ck_ && !ck_->check(*this)) {
+  } else {
+    bool_ret = true;
   }
   return bool_ret;
 }
@@ -379,7 +429,9 @@ ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer *container,
                                        const char *range,
                                        const char *info,
                                        const ObParameterAttr attr)
-    : value_(0)
+    : value_(0), min_value_(0), max_value_(0),
+      left_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE),
+      right_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE)
 {
   MEMSET(value_str_, 0, sizeof(value_str_));
   MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
@@ -395,7 +447,9 @@ ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer *container,
                                        const char *def,
                                        const char *info,
                                        const ObParameterAttr attr)
-    : value_(0)
+    : value_(0), min_value_(0), max_value_(0),
+      left_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE),
+      right_interval_opt_(ObConfigRangeOpts::OB_CONF_RANGE_NONE)
 {
   MEMSET(value_str_, 0, sizeof(value_str_));
   MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
@@ -475,25 +529,43 @@ bool ObConfigDoubleItem::parse_range(const char *range)
       *p_right = '\0';
       *p_middle = '\0';
 
-      parse(p_left + 1, valid);
+      double val_left = parse(p_left + 1, valid);
       if (valid) {
         if (*p_left == '(') {
-          add_checker(OB_NEW(ObConfigGreaterThan, g_config_mem_attr, p_left + 1));
+          min_value_ = val_left;
+          left_interval_opt_ = ObConfigRangeOpts::OB_CONF_RANGE_GREATER_THAN;
         } else if (*p_left == '[') {
-          add_checker(OB_NEW(ObConfigGreaterEqual, g_config_mem_attr, p_left + 1));
+          min_value_ = val_left;
+          left_interval_opt_ = ObConfigRangeOpts::OB_CONF_RANGE_GREATER_EQUAL;
         }
       }
 
-      parse(p_middle + 1, valid);
+      double val_right = parse(p_middle + 1, valid);
       if (valid) {
         if (')' == ch_right) {
-          add_checker(OB_NEW(ObConfigLessThan, g_config_mem_attr, p_middle + 1));
+          max_value_ = val_right;
+          right_interval_opt_ = ObConfigRangeOpts::OB_CONF_RANGE_LESS_THAN;
         } else if (']' == ch_right) {
-          add_checker(OB_NEW(ObConfigLessEqual, g_config_mem_attr, p_middle + 1));
+          max_value_ = val_right;
+          right_interval_opt_ = ObConfigRangeOpts::OB_CONF_RANGE_LESS_EQUAL;
         }
       }
       bool_ret = true;
     }
+  }
+  return bool_ret;
+}
+
+bool ObConfigDoubleItem::check() const
+{
+  // check order: value_valid_ --> range --> customized checker (for DEF_XXX_WITH_CHECKER)
+  bool bool_ret = false;
+  if (!value_valid_) {
+  } else if (!check_range(left_interval_opt_, right_interval_opt_,
+                          value_, min_value_, max_value_)) {
+  } else if (ck_ && !ck_->check(*this)) {
+  } else {
+    bool_ret = true;
   }
   return bool_ret;
 }

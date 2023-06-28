@@ -39,7 +39,6 @@ namespace blocksstable
 
 ObMicroBlockBufferHelper::ObMicroBlockBufferHelper()
   :data_store_desc_(nullptr),
-   read_info_(nullptr),
    micro_block_merge_verify_level_(0),
    compressor_(),
    encryption_(),
@@ -50,7 +49,7 @@ ObMicroBlockBufferHelper::ObMicroBlockBufferHelper()
 
 int ObMicroBlockBufferHelper::open(
     ObDataStoreDesc &data_store_desc,
-    ObTableReadInfo &read_info,
+    const ObITableReadInfo &read_info,
     common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -66,7 +65,6 @@ int ObMicroBlockBufferHelper::open(
     STORAGE_LOG(WARN, "Failed to init reader helper", K(ret));
   } else {
     data_store_desc_ = &data_store_desc;
-    read_info_ = &read_info;
     micro_block_merge_verify_level_ = GCONF.micro_block_merge_verify_level;
   }
   return ret;
@@ -75,7 +73,6 @@ int ObMicroBlockBufferHelper::open(
 void ObMicroBlockBufferHelper::reset()
 {
   data_store_desc_ = nullptr;
-  read_info_ = nullptr;
   micro_block_merge_verify_level_ = 0;
   compressor_.reset();
   check_reader_helper_.reset();
@@ -203,9 +200,9 @@ int ObMicroBlockBufferHelper::prepare_micro_block_reader(
   } else if (OB_ISNULL(micro_reader)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected null micro reader", K(ret), KP(micro_reader));
-  } else if (OB_FAIL(micro_reader->init(block_data, *read_info_))) {
+  } else if (OB_FAIL(micro_reader->init(block_data, nullptr))) {
     STORAGE_LOG(WARN, "failed to init micro block reader",
-        K(ret), K(block_data), KPC(header), KPC_(read_info));
+        K(ret), K(block_data), KPC(header));
   }
   return ret;
 }
@@ -217,7 +214,6 @@ void ObMicroBlockBufferHelper::print_micro_block_row(ObIMicroBlockReader *micro_
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get_row failed", K(ret), K(micro_reader));
   } else {
-    ObStoreRow store_row;
     int64_t new_checksum = 0;
     for (int64_t it = 0; OB_SUCC(ret) && it != micro_reader->row_count(); ++it) {
       if (OB_FAIL(micro_reader->get_row(it, check_datum_row_))) {
@@ -225,11 +221,6 @@ void ObMicroBlockBufferHelper::print_micro_block_row(ObIMicroBlockReader *micro_
       } else {
         new_checksum = ObIMicroBlockWriter::cal_row_checksum(check_datum_row_, new_checksum);
         FLOG_WARN("error micro block row", K(it), K_(check_datum_row), K(new_checksum));
-        if (OB_FAIL(check_datum_row_.to_store_row(data_store_desc_->col_desc_array_, store_row))) {
-          STORAGE_LOG(WARN, "Failed to transfer datum row to store row", K(ret), K(check_datum_row_));
-        } else {
-          FLOG_WARN("error micro block store_row", K(it), K(store_row));
-        }
       }
     }
   }
@@ -449,13 +440,7 @@ int ObMacroBlockWriter::open(
                                           micro_writer_,
                                           GCONF.micro_block_merge_verify_level))) {
       STORAGE_LOG(WARN, "fail to build micro writer", K(ret));
-    } else if (OB_FAIL(read_info_.init(
-                       allocator_,
-                       data_store_desc.row_column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
-                       data_store_desc.schema_rowkey_col_cnt_,
-                       lib::is_oracle_mode(),
-                       data_store_desc.col_desc_array_,
-                       true))) {
+    } else if (OB_FAIL(read_info_.init(allocator_, data_store_desc))) {
       STORAGE_LOG(WARN, "failed to init read info", K(data_store_desc), K(ret));
     } else if (OB_FAIL(datum_row_.init(allocator_, read_info_.get_request_count()))) {
       STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(read_info));
@@ -488,7 +473,7 @@ int ObMacroBlockWriter::open(
       if (OB_FAIL(sstable_index_builder->new_index_builder(builder_, data_store_desc, allocator_))) {
         STORAGE_LOG(WARN, "fail to alloc index builder", K(ret));
       } else if (data_store_desc.need_pre_warm_) {
-        data_block_pre_warmer_.init(read_info_);
+        data_block_pre_warmer_.init();
       }
     } else {
       builder_ = nullptr;
@@ -518,9 +503,9 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
   const ObDatumRow *row_to_append = &row;
   bool is_need_set_micro_upper_bound = false;
   int64_t estimate_remain_size = 0;
-  if (NULL == data_store_desc_) {
+  if (nullptr == data_store_desc_) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "The ObMacroBlockWriter has not been opened, ", K(ret));
+    STORAGE_LOG(WARN, "The ObMacroBlockWriter has not been opened, ", K(ret), KP(data_store_desc_));
   } else if (split_size < data_store_desc_->micro_block_size_) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid split_size", K(ret), K(split_size));
@@ -1082,7 +1067,7 @@ int ObMacroBlockWriter::build_micro_block_desc_with_rewrite(
     if (OB_FAIL(macro_reader_.decrypt_and_decompress_data(micro_des_meta, micro_block.data_.get_buf(),
         micro_block.data_.get_buf_size(), decompressed_data.get_buf(), decompressed_data.get_buf_size(), is_compressed))) {
       LOG_WARN("fail to decrypt and decompress data", K(ret));
-    } else if (OB_FAIL(reader->init(decompressed_data, *micro_block.read_info_))) {
+    } else if (OB_FAIL(reader->init(decompressed_data, nullptr))) {
       LOG_WARN("reader init failed", K(micro_block), K(ret));
     } else if (OB_FAIL(save_last_key(micro_block.range_.get_end_key()))) {
       LOG_WARN("Fail to save last key, ", K(ret), K(micro_block.range_.get_end_key()));
@@ -1412,7 +1397,7 @@ int ObMacroBlockWriter::merge_micro_block(const ObMicroBlock &micro_block)
     if (OB_FAIL(macro_reader_.decrypt_and_decompress_data(micro_des_meta, micro_block.data_.get_buf(),
         micro_block.data_.get_buf_size(), decompressed_data.get_buf(), decompressed_data.get_buf_size(), is_compressed))) {
       STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
-    } else if (OB_FAIL(micro_reader->init(decompressed_data, *micro_block.read_info_))) {
+    } else if (OB_FAIL(micro_reader->init(decompressed_data, nullptr))) {
       STORAGE_LOG(WARN, "micro_block_reader init failed", K(micro_block), K(ret));
     } else {
       for (int64_t it = 0; OB_SUCC(ret) && it != micro_reader->row_count(); ++it) {
@@ -1500,7 +1485,7 @@ int ObMacroBlockWriter::build_micro_writer(ObDataStoreDesc *data_store_desc,
     encoding_ctx.micro_block_size_ = data_store_desc->micro_block_size_;
     encoding_ctx.column_cnt_ = data_store_desc->row_column_count_;
     encoding_ctx.rowkey_column_cnt_ = data_store_desc->rowkey_column_count_;
-    encoding_ctx.col_descs_ = &data_store_desc->col_desc_array_;
+    encoding_ctx.col_descs_ = &data_store_desc->get_full_stored_col_descs();
     encoding_ctx.encoder_opt_ = data_store_desc->encoder_opt_;
     encoding_ctx.column_encodings_ = nullptr;
     encoding_ctx.major_working_cluster_version_ = data_store_desc->major_working_cluster_version_;
@@ -1529,7 +1514,7 @@ int ObMacroBlockWriter::build_micro_writer(ObDataStoreDesc *data_store_desc,
         data_store_desc->micro_block_size_limit_,
         data_store_desc->rowkey_column_count_,
         data_store_desc->row_column_count_,
-        &data_store_desc->col_desc_array_,
+        &data_store_desc->get_rowkey_col_descs(),
         need_calc_column_chksum))) {
       STORAGE_LOG(WARN, "Fail to init micro block flat writer, ", K(ret));
     } else {
@@ -1630,7 +1615,8 @@ void ObMacroBlockWriter::dump_macro_block(ObMacroBlock &macro_block)
   if (macro_block.is_dirty()) {
     const int64_t block_cnt = macro_block.get_micro_block_count();
     const int64_t data_offset =
-        ObMacroBlock::calc_basic_micro_block_data_offset(data_store_desc_->row_column_count_);
+        ObMacroBlock::calc_basic_micro_block_data_offset(
+          data_store_desc_->row_column_count_, data_store_desc_->rowkey_column_count_, data_store_desc_->get_fixed_header_version());
     const char *data_buf = macro_block.get_data_buf() + data_offset;
     const int64_t data_size = macro_block.get_data_size() - data_offset;
     int64_t pos = 0;

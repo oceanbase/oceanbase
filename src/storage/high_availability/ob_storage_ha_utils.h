@@ -13,6 +13,7 @@
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
 #include "lib/mysqlclient/ob_isql_client.h"
+#include "ob_storage_ha_struct.h"
 
 namespace oceanbase
 {
@@ -26,10 +27,16 @@ namespace storage
 class ObStorageHAUtils
 {
 public:
+  static int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader_addr);
   static int check_tablet_replica_validity(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObAddr &addr, const common::ObTabletID &tablet_id, common::ObISQLClient &sql_client);
+  static int report_ls_meta_table(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const storage::ObMigrationStatus &migration_status);
   static int get_server_version(uint64_t &server_version);
   static int check_server_version(const uint64_t server_version);
+  static int check_ls_deleted(
+      const share::ObLSID &ls_id,
+      bool &is_deleted);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
@@ -38,6 +45,15 @@ private:
     share::SCN &compaction_scn);
   static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
+};
+
+struct ObTransferUtils
+{
+  static bool is_need_retry_error(const int err);
+  static int block_tx(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  static int kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  static int unblock_tx(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  static int get_gts(const uint64_t tenant_id, share::SCN &gts);
 };
 
 } // end namespace storage

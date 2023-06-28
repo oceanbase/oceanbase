@@ -2554,7 +2554,7 @@ int ObIJsonBase::cmp_to_left_strictly(ObIAllocator* allocator, ObIJsonBase* hit,
             cmp_based_on_node_type(node_type, cmp_res, cmp_result);
           }
         } else {
-          ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;;
+          ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
           LOG_WARN("type incompatibility to compare.", K(ret));
         }
         break;
@@ -2579,7 +2579,7 @@ int ObIJsonBase::cmp_to_left_strictly(ObIAllocator* allocator, ObIJsonBase* hit,
             }
           }
         } else {
-          ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;;
+          ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
           LOG_WARN("type incompatibility to compare.", K(ret));
         }
         break;
@@ -2604,7 +2604,7 @@ int ObIJsonBase::cmp_to_left_strictly(ObIAllocator* allocator, ObIJsonBase* hit,
             }
           }
         } else {
-          ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;;
+          ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
           LOG_WARN("type incompatibility to compare.", K(ret));
         }
         break;

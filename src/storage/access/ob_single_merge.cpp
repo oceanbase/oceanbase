@@ -45,7 +45,7 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
     ret = OB_NOT_INIT;
     LOG_WARN("ObSingleMerge has not been inited", K(ret), K_(get_table_param));
   } else {
-    const ObTabletMeta &tablet_meta = get_table_param_.tablet_iter_.tablet_handle_.get_obj()->get_tablet_meta();
+    const ObTabletMeta &tablet_meta = get_table_param_.tablet_iter_.get_tablet()->get_tablet_meta();
     if (!full_row_.is_valid()) {
       if (OB_FAIL(full_row_.init(*access_ctx_->stmt_allocator_, access_param_->get_max_out_col_cnt()))) {
         STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
@@ -235,7 +235,7 @@ int ObSingleMerge::get_and_fuse_cache_row(const int64_t read_snapshot_version,
 int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  const ObTableReadInfo *read_info = access_param_->iter_param_.get_read_info();
+  const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
   if (OB_ISNULL(read_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null read_info", K(ret), KP(read_info));
@@ -244,7 +244,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     int64_t table_idx = -1;
     ObITable *table = nullptr;
     bool have_uncommited_row = false;
-    const ObTabletMeta &tablet_meta = get_table_param_.tablet_iter_.tablet_handle_.get_obj()->get_tablet_meta();
+    const ObTabletMeta &tablet_meta = get_table_param_.tablet_iter_.get_tablet()->get_tablet_meta();
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
     const bool enable_fuse_row_cache = access_ctx_->use_fuse_row_cache_ &&
                                        access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_) &&
@@ -310,9 +310,10 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
       if (!full_row_.row_flag_.is_exist_without_delete()) {
         ret = OB_ITER_END;
       } else {
-        const common::ObIArray<int32_t> &cols_index = read_info->get_columns_index();
+        const ObColumnIndexArray &cols_index = read_info->get_columns_index();
         row.count_ = read_info->get_request_count();
-        if (OB_FAIL(project_row(full_row_, enable_fuse_row_cache ? &cols_index : nullptr, 0/*range idx delta*/, row))) {
+        const ObIArray<int32_t> *projector = (cols_index.rowkey_mode_ || !enable_fuse_row_cache) ? nullptr : &cols_index.array_;
+        if (OB_FAIL(project_row(full_row_, projector, 0/*range idx delta*/, row))) {
           STORAGE_LOG(WARN, "fail to project row", K(ret), K(full_row_), K(cols_index));
         } else {
           row.row_flag_ = full_row_.row_flag_;

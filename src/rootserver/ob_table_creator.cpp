@@ -378,7 +378,7 @@ int ObTableCreator::generate_create_tablet_arg_(
       tablet_id = part->get_tablet_id();
     }
     share::ObTabletTablePair pair;
-    share::ObTabletToLSInfo tablet_info(tablet_id, ls_id, table_schema_ptr->get_table_id());
+    share::ObTabletToLSInfo tablet_info(tablet_id, ls_id, table_schema_ptr->get_table_id(), 0/*transfer_seq*/);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
       LOG_WARN("failed to assign table schema point", KR(ret));

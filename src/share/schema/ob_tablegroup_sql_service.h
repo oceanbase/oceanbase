@@ -41,22 +41,6 @@ public:
   virtual int update_tablegroup(ObTablegroupSchema &new_schema,
                                 common::ObISQLClient &sql_client,
                                 const common::ObString *ddl_stmt_str = NULL);
-  int add_inc_part_info(common::ObISQLClient &sql_client,
-                        const ObTablegroupSchema &ori_tablegroup,
-                        const ObTablegroupSchema &inc_tablegroup,
-                        const int64_t schema_version);
-
-  int drop_inc_part_info(common::ObISQLClient &sql_client,
-                         const ObTablegroupSchema &ori_tablegroup,
-                         const ObTablegroupSchema &inc_tablegroup,
-                         const int64_t schema_version);
-  int update_tablegroup_schema_version(
-      common::ObISQLClient &sql_client,
-      const ObTablegroupSchema &tablegroup);
-  int update_partition_option(common::ObISQLClient &sql_client,
-                              const ObTablegroupSchema &tablegroup,
-                              const ObSchemaOperationType opt_type,
-                              const common::ObString *ddl_stmt_str = NULL);
 private:
   int add_tablegroup(common::ObISQLClient &sql_client,
                      const share::schema::ObTablegroupSchema &tablegroup,

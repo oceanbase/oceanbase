@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <utility>
 #include "lib/utility/serialization.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -235,9 +236,25 @@ struct has_get_serialize_size_for_all_type<T>
   static constexpr bool value = std::is_class<T>::value ? has_get_serialize_size<T, int64_t()>::value : true;
 };
 
+template <typename ELEMENT_TYPE, typename HEAD, typename ...OTHERS>
+struct ConvertElementTypeToIndex
+{
+  static constexpr int index = ConvertElementTypeToIndex<ELEMENT_TYPE, OTHERS...>::index;
+};
+
+template <typename ELEMENT_TYPE, typename ...OTHERS>
+struct ConvertElementTypeToIndex<ELEMENT_TYPE, ELEMENT_TYPE, OTHERS...>
+{
+  static constexpr int index = sizeof...(OTHERS);
+};
+
 template <typename ...T>
 class ObTupleBaseBase
 {
+public:
+  static constexpr int get_element_size() { return sizeof...(T); }
+  template <typename ELEMENT_TYPE>
+  static constexpr int get_element_index() { return sizeof...(T) - 1 - ConvertElementTypeToIndex<ELEMENT_TYPE, T...>::index; }
 protected:
   std::tuple<T...> tuple_;
   template <int N, typename FUNC>
@@ -247,7 +264,7 @@ protected:
     {
       int ret = OB_SUCCESS;
       if (OB_FAIL(functor(std::get<N>(tuple)))) {
-        OB_LOG(WARN, "apply FUNC on element failed", K(ret), K(N), K(std::get<N>(tuple)));
+        // OB_LOG(WARN, "apply FUNC on element failed", K(ret), K(N), K(std::get<N>(tuple)));
       } else if (OB_SUCCESS != (ret = (ForEachHelper<N+1, FUNC>::iterate(tuple, functor)))) {
       }
       return ret;
@@ -256,30 +273,22 @@ protected:
     {
       int ret = OB_SUCCESS;
       if (OB_FAIL(functor(std::get<N>(tuple)))) {
-        OB_LOG(WARN, "apply FUNC on element failed", K(ret), K(N), K(std::get<N>(tuple)));
+        // OB_LOG(WARN, "apply FUNC on element failed", K(ret), K(N), K(std::get<N>(tuple)));
       } else if (OB_SUCCESS != (ret = (ForEachHelper<N+1, FUNC>::iterate(tuple, functor)))) {
       }
       return ret;
     }
   };
   template <typename FUNC>
-  struct ForEachHelper<sizeof...(T) - 1, FUNC>
+  struct ForEachHelper<sizeof...(T), FUNC>
   {
     static int iterate(std::tuple<T...> &tuple, FUNC &functor)
     {
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(functor(std::get<sizeof...(T) - 1>(tuple)))) {
-        OB_LOG(WARN, "assign element failed", K(ret), K(std::get<sizeof...(T) - 1>(tuple)));
-      }
-      return ret;
+      return OB_SUCCESS;
     }
     static int iterate(const std::tuple<T...> &tuple, FUNC &functor)
     {
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(functor(std::get<sizeof...(T) - 1>(tuple)))) {
-        OB_LOG(WARN, "assign element failed", K(ret), K(std::get<sizeof...(T) - 1>(tuple)));
-      }
-      return ret;
+      return OB_SUCCESS;
     }
   };
 public:
@@ -300,6 +309,10 @@ public:
   auto element() -> decltype(std::get<INDEX>(tuple_)) { return std::get<INDEX>(tuple_); }
   template <int INDEX>
   auto element() const -> const decltype(std::get<INDEX>(tuple_)) { return std::get<INDEX>(tuple_); }
+  template <typename ELEMENT_TYPE>
+  auto element() -> ELEMENT_TYPE& { return std::get<get_element_index<ELEMENT_TYPE>()>(tuple_); }
+  template <typename ELEMENT_TYPE>
+  auto element() const -> ELEMENT_TYPE& { return std::get<get_element_index<ELEMENT_TYPE>()>(tuple_); }
   template <typename V>
   int get_element(size_t idx, V &value)
   {

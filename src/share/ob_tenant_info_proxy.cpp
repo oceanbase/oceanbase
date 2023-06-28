@@ -18,6 +18,11 @@
 #include "share/config/ob_server_config.h"//GCONF
 #include "share/inner_table/ob_inner_table_schema.h"//ALL_TENANT_INFO_TNAME
 #include "share/ls/ob_ls_i_life_manager.h"//TODO SCN VALUE
+#include "share/ls/ob_ls_status_operator.h"//get_tenant max ls id
+#include "lib/string/ob_sql_string.h"//ObSqlString
+#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
+#include "common/ob_timeout_ctx.h"//ObTimeoutCtx
+#include "ob_tenant_info_proxy.h"
 #include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
 #include "lib/string/ob_sql_string.h"//ObSqlString
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
@@ -56,7 +61,6 @@ SCN gen_new_standby_scn(const SCN &cur_standby_scn, const SCN &desired_standby_s
 {
   return MIN(MAX(cur_standby_scn, desired_standby_scn), new_replayable_scn);
 }
-
 ////////////ObAllTenantInfo
 DEFINE_TO_YSON_KV(ObAllTenantInfo,
                   OB_ID(tenant_id), tenant_id_,
@@ -91,7 +95,8 @@ int ObAllTenantInfo::init(
     const SCN &replayable_scn,
     const SCN &standby_scn,
     const SCN &recovery_until_scn,
-    const ObArchiveMode &log_mode)
+    const ObArchiveMode &log_mode,
+    const share::ObLSID &max_ls_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -103,11 +108,12 @@ int ObAllTenantInfo::init(
                   || !standby_scn.is_valid_and_not_min()
                   || !recovery_until_scn.is_valid_and_not_min()
                   || !log_mode.is_valid()
-                  || !is_valid_tenant_scn(sync_scn, replayable_scn, standby_scn, recovery_until_scn))) {
+                  || !is_valid_tenant_scn(sync_scn, replayable_scn, standby_scn, recovery_until_scn)
+                  || !max_ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tenant_role), K(switchover_status),
              K(switchover_epoch), K(sync_scn), K(replayable_scn), K(standby_scn), K(recovery_until_scn),
-             K(log_mode));
+             K(log_mode), K(max_ls_id));
   } else {
     tenant_id_ = tenant_id;
     tenant_role_ = tenant_role;
@@ -118,6 +124,7 @@ int ObAllTenantInfo::init(
     standby_scn_ = standby_scn;
     recovery_until_scn_ = recovery_until_scn;
     log_mode_ = log_mode;
+    max_ls_id_ = max_ls_id;
   }
   return ret;
 }
@@ -135,6 +142,7 @@ void ObAllTenantInfo::assign(const ObAllTenantInfo &other)
     standby_scn_ = other.standby_scn_;
     recovery_until_scn_ = other.recovery_until_scn_;
     log_mode_ = other.log_mode_;
+    max_ls_id_ = other.max_ls_id_;
   }
   return ;
 }
@@ -150,10 +158,13 @@ void ObAllTenantInfo::reset()
   standby_scn_.set_min() ;
   recovery_until_scn_.set_min();
   log_mode_.reset();
+  max_ls_id_.reset();
 }
+
 OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
                     switchover_status_, switchover_epoch_, sync_scn_,
-                    replayable_scn_, standby_scn_, recovery_until_scn_, log_mode_);
+                    replayable_scn_, standby_scn_, recovery_until_scn_, log_mode_,
+                    max_ls_id_);
 
 ObAllTenantInfo& ObAllTenantInfo::operator= (const ObAllTenantInfo &other)
 {
@@ -188,8 +199,8 @@ int ObAllTenantInfoProxy::init_tenant_info(
   } else if (OB_FAIL(sql.assign_fmt(
                  "insert into %s (tenant_id, tenant_role, "
                  "switchover_status, switchover_epoch, "
-                 "sync_scn, replayable_scn, readable_scn, recovery_until_scn, log_mode) "
-                 "values(%lu, '%s', '%s', %ld, %lu, %lu, %lu, %lu, '%s')",
+                 "sync_scn, replayable_scn, readable_scn, recovery_until_scn, log_mode, max_ls_id) "
+                 "values(%lu, '%s', '%s', %ld, %lu, %lu, %lu, %lu, '%s', %ld)",
                  OB_ALL_TENANT_INFO_TNAME, tenant_info.get_tenant_id(),
                  tenant_info.get_tenant_role().to_str(),
                  tenant_info.get_switchover_status().to_str(),
@@ -198,7 +209,8 @@ int ObAllTenantInfoProxy::init_tenant_info(
                  tenant_info.get_replayable_scn().get_val_for_inner_table_field(),
                  tenant_info.get_standby_scn().get_val_for_inner_table_field(),
                  tenant_info.get_recovery_until_scn().get_val_for_inner_table_field(),
-                 tenant_info.get_log_mode().to_str()))) {
+                 tenant_info.get_log_mode().to_str(),
+                 tenant_info.get_max_ls_id().id()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(tenant_info), K(sql));
   } else if (OB_FAIL(proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
@@ -350,6 +362,38 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
       LOG_WARN("failed to init tenant info", KR(ret), K(tenant_id));
     }
   } else {
+    if (OB_FAIL(load_pure_tenant_info_(tenant_id, proxy, for_update, ora_rowscn, tenant_info))) {
+      LOG_WARN("failed to load purge tenant info", KR(ret), K(tenant_id), K(for_update));
+    } else if (DEFAULT_MAX_LS_ID == tenant_info.get_max_ls_id().id()) {
+      //get ls from __all_ls_status
+      share::ObLSStatusOperator ls_op;
+      ObLSID max_ls_id;
+      if (OB_FAIL(ls_op.get_tenant_max_ls_id(tenant_id, max_ls_id, *proxy))) {
+        LOG_WARN("failed to get tenant max ls id", KR(ret), K(tenant_id));
+      } else {
+        tenant_info.set_max_ls_id(max_ls_id);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAllTenantInfoProxy::load_pure_tenant_info_(const uint64_t tenant_id,
+                                           ObISQLClient *proxy,
+                                           const bool for_update,
+                                           int64_t &ora_rowscn,
+                                           ObAllTenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  tenant_info.reset();
+  if (OB_ISNULL(proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("proxy is null", KR(ret), KP(proxy));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
     ObSqlString sql;
     uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
     if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
@@ -378,32 +422,22 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
   return ret;
 }
 
-int ObAllTenantInfoProxy::update_tenant_recovery_status(
-    const uint64_t tenant_id, ObMySQLProxy *proxy,
-    ObTenantSwitchoverStatus status, const SCN &sync_scn,
+int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
+    const uint64_t tenant_id, ObMySQLTransaction &trans,
+    const ObAllTenantInfo &old_tenant_info, const SCN &sync_scn,
     const SCN &replay_scn, const SCN &readable_scn)
 {
   int ret = OB_SUCCESS;
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   ObSqlString sql;
   int64_t affected_rows = 0;
-  common::ObMySQLTransaction trans;
-  ObAllTenantInfo old_tenant_info;
-  ObTimeoutCtx ctx;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id ||
-                  !status.is_valid())) {
+                  !old_tenant_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_id), K(status));
-  } else if (OB_ISNULL(proxy)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("proxy is null", KR(ret), KP(proxy));
+    LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_id), K(old_tenant_info));
   } else if (!is_user_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("meta tenant no need init tenant info", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(trans.start(proxy, exec_tenant_id))) {
-    LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
-  } else if (OB_FAIL(load_tenant_info(tenant_id, &trans, true, old_tenant_info))) {
-    LOG_WARN("failed to load all tenant info", KR(ret), K(tenant_id));
   } else {
     SCN new_sync_scn = gen_new_sync_scn(old_tenant_info.get_sync_scn(), sync_scn, old_tenant_info.get_recovery_until_scn());
     SCN new_replay_scn = gen_new_replayable_scn(old_tenant_info.get_replayable_scn(), replay_scn, new_sync_scn);
@@ -413,19 +447,16 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status(
         && old_tenant_info.get_replayable_scn() == new_replay_scn
         && old_tenant_info.get_standby_scn() == new_scn) {
       LOG_DEBUG("no need update", K(old_tenant_info), K(new_sync_scn), K(new_replay_scn), K(new_scn));
-    } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
-      LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
     } else if (OB_FAIL(sql.assign_fmt(
                  "update %s set sync_scn = %ld, replayable_scn = %ld, "
                  "readable_scn = %ld where tenant_id = %lu "
-                 "and switchover_status = '%s' and readable_scn <= replayable_scn and "
+                 "and readable_scn <= replayable_scn and "
                  "replayable_scn <= sync_scn and sync_scn <= recovery_until_scn", OB_ALL_TENANT_INFO_TNAME,
                  new_sync_scn.get_val_for_inner_table_field(),
                  new_replay_scn.get_val_for_inner_table_field(),
                  new_scn.get_val_for_inner_table_field(),
-                 tenant_id, status.to_str()))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(status),
-               K(sql));
+                 tenant_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
     } else if (!is_single_row(affected_rows)) {
@@ -433,16 +464,9 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status(
       LOG_WARN("expect updating one row", KR(ret), K(affected_rows), K(sql));
     }
 
-    LOG_TRACE("update_tenant_recovery_status", KR(ret), K(tenant_id), K(affected_rows), K(status),
+    LOG_TRACE("update_tenant_recovery_status", KR(ret), K(tenant_id), K(affected_rows),
               K(sql), K(old_tenant_info), K(new_sync_scn), K(new_replay_scn), K(new_scn),
               K(sync_scn), K(replay_scn), K(readable_scn));
-  }
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
   }
   return ret; 
 }
@@ -470,6 +494,7 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     SCN replay_scn;
     SCN sts_scn;
     SCN recovery_until_scn;
+    int64_t ls_id_value = DEFAULT_MAX_LS_ID;
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "tenant_role", tenant_role_str);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "switchover_status", status_str);
     EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", tenant_id, uint64_t);
@@ -477,6 +502,7 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     EXTRACT_UINT_FIELD_MYSQL(*result, "sync_scn", sync_scn_val, uint64_t);
     EXTRACT_UINT_FIELD_MYSQL(*result, "replayable_scn", replay_scn_val, uint64_t);
     EXTRACT_UINT_FIELD_MYSQL(*result, "readable_scn", sts_scn_val, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "max_ls_id", ls_id_value, int64_t, true, true, DEFAULT_MAX_LS_ID);
     EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "recovery_until_scn", recovery_until_scn_val, uint64_t, false /* skip_null_error */, true /* skip_column_error */, OB_MAX_SCN_TS_NS);
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "log_mode", log_mode_str,
                 false /* skip_null_error */, true /* skip_column_error */, log_mode_default_value);
@@ -498,12 +524,54 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     } else if (OB_FAIL(tenant_info.init(
             tenant_id, tmp_tenant_role,
             tmp_tenant_sw_status, switchover_epoch,
-            sync_scn, replay_scn, sts_scn, recovery_until_scn, tmp_log_mode))) {
+            sync_scn, replay_scn, sts_scn, recovery_until_scn, tmp_log_mode, ObLSID(ls_id_value)))) {
       LOG_WARN("failed to init tenant info", KR(ret), K(tenant_id), K(tmp_tenant_role), K(tenant_role_str),
           K(tmp_tenant_sw_status), K(status_str), K(switchover_epoch), K(sync_scn), K(recovery_until_scn),
-          K(log_mode_str), K(tmp_log_mode));
+          K(log_mode_str), K(tmp_log_mode), K(ls_id_value));
     }
   }
+  return ret;
+}
+
+int ObAllTenantInfoProxy::update_tenant_max_ls_id(
+    const uint64_t tenant_id, const share::ObLSID &max_ls_id,
+    ObMySQLTransaction &trans, const bool for_upgrade)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  int64_t ora_rowscn = 0;//no used
+  ObAllTenantInfo all_tenant_info;
+
+  //update switchover epoch while role change
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+    || !max_ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(max_ls_id));
+  } else if (OB_FAIL(load_pure_tenant_info_(tenant_id, &trans, true, ora_rowscn, all_tenant_info))) {
+    LOG_WARN("failed to load all tenant info", KR(ret), K(tenant_id));
+  } else if (DEFAULT_MAX_LS_ID == all_tenant_info.get_max_ls_id().id() && !for_upgrade) {
+    //while max_ls_id is zero, can not update tenant max ls id, except upgrade
+  } else if (max_ls_id.id() <= all_tenant_info.get_max_ls_id().id()) {
+    //nothing, ls create maybe concurrency
+    //upgrade maybe reentry, so max_ls_id maybe already setted
+  } else if (OB_FAIL(sql.assign_fmt(
+          "update %s set max_ls_id = %ld "
+          "where tenant_id = %lu and max_ls_id < %ld",
+          OB_ALL_TENANT_INFO_TNAME,
+          max_ls_id.id(), tenant_id, max_ls_id.id()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(max_ls_id), K(sql));
+  } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
+  } else if (0 == affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("max ls id can not fallback", KR(ret), K(max_ls_id));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect updating one row", KR(ret), K(affected_rows), K(sql));
+  }
+  LOG_INFO("update max ls id", KR(ret), K(tenant_id), K(max_ls_id), K(sql));
   return ret;
 }
 

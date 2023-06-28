@@ -82,7 +82,6 @@ public:
   int get_file_id_range(int64_t &min_file_id, int64_t &max_file_id);
 
   // file handler status
-  int64_t get_pwrite_ts() const { return ATOMIC_LOAD(&pwrite_ts_); };
   static bool is_valid_file_id(int64_t file_id);
 
   static int open(const char *file_path, const int flags, const mode_t mode, ObIOFd &io_fd);
@@ -93,9 +92,7 @@ private:
   int inner_close(const ObIOFd &io_fd);
   int inner_read(const ObIOFd &io_fd, void *buf, const int64_t size, const int64_t offset,
       int64_t &read_size, int64_t retry_cnt = ObLogDefinition::DEFAULT_IO_RETRY_CNT);
- // int inner_write(const ObIOFd &io_fd, void *buf, const int64_t size, const int64_t offset);
- // static int inner_write_impl(const ObIOFd &io_fd, void *buf, const int64_t size,
- //     const int64_t offset, const uint64_t tenant_id);
+
 public:
   // helper function
   static int format_file_path(char *buf, const int64_t buf_size,
@@ -130,7 +127,6 @@ private:
   ObLogFileGroup file_group_;
   int64_t file_size_;
   uint64_t tenant_id_;
-  volatile int64_t pwrite_ts_ CACHE_ALIGNED;
 };
 
 OB_INLINE void ObNormalRetryWriteParam::destroy()

@@ -103,12 +103,11 @@ public:
   ObIOCallback();
   virtual ~ObIOCallback();
 
-  int process(const bool is_success);
+  int process(const char *data_buffer, const int64_t size);
   int deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&copied_callback) const;
   virtual const char *get_data() = 0;
   virtual int64_t size() const = 0;
-  virtual int alloc_io_buf(char *&io_buf, int64_t &io_buf_size, int64_t &aligned_offset) = 0;
-  virtual int inner_process(const bool is_success) = 0;
+  virtual int inner_process(const char *data_buffer, const int64_t size) = 0;
   virtual int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&copied_callback) const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 
@@ -211,13 +210,14 @@ public:
   int64_t get_data_size() const;
   int64_t get_group_id() const;
   uint64_t get_io_usage_index();
-  const char *get_data();
+  const char *get_data(); //get data buf after io_buf recycle
   const ObIOFlag &get_flag() const;
   ObIOMode get_mode() const;
   void cancel();
   int alloc_io_buf();
   int prepare();
   bool can_callback() const;
+  void free_io_buffer();
   void finish(const ObIORetCode &ret_code);
   void inc_ref(const char *msg = nullptr);
   void dec_ref(const char *msg = nullptr);
@@ -228,6 +228,8 @@ public:
       K(time_log_), KP(channel_), K(ref_cnt_), K(out_ref_cnt_),
       K(trace_id_), K(ret_code_), K(retry_count_), K(callback_buf_size_), KP(copied_callback_), K(tenant_io_mgr_));
 private:
+  friend class ObIORunner;
+  const char *get_io_data_buf(); //get data buf for MEMCPY before io_buf recycle
   int alloc_aligned_io_buf();
 public:
   bool is_inited_;
@@ -238,8 +240,8 @@ public:
   int64_t deadline_ts_;
   int64_t sender_index_;
   ObIOCB *control_block_;
-  void *raw_buf_;
-  char *io_buf_;
+  void *raw_buf_;//actual allocated buf
+  char *io_buf_;//the aligned one of raw_buf_, interact with the operating system
   int64_t io_offset_;
   int64_t io_size_;
   int64_t complete_size_;

@@ -64,16 +64,30 @@ int ObLSTabletIdReader::init(const share::ObBackupDest &backup_dest, const uint6
 }
 
 int ObLSTabletIdReader::get_tablet_id_list(
-    const int64_t turn_id, const share::ObLSID &ls_id, common::ObIArray<common::ObTabletID> &tablet_list)
+    share::ObBackupDataType &backup_data_type, const int64_t turn_id,
+    const share::ObLSID &ls_id, common::ObIArray<common::ObTabletID> &tablet_list)
 {
   int ret = OB_SUCCESS;
   if (turn_id < 0 || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(turn_id), K(ls_id));
-  } else if (OB_FAIL(store_.read_tablet_to_ls_info(turn_id, ls_id, tablet_list))) {
-    LOG_WARN("failed to read tablet to ls info", K(ret), K(turn_id), K(ls_id));
-  } else {
-    LOG_INFO("get tablet id list", K(turn_id), K(ls_id), K(tablet_list));
+  } else if (backup_data_type.is_sys_backup()) {
+    ObLS::ObLSInnerTabletIDIter tablet_iter;
+    ObTabletID tablet_id;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(tablet_iter.get_next(tablet_id))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get next tablet id", K(ret));
+        }
+      } else if (OB_FAIL(tablet_list.push_back(tablet_id))) {
+        LOG_WARN("failed to push back tablet id", K(ret));
+      }
+    }
+  } else if (OB_FAIL(store_.read_tablet_list(backup_data_type, turn_id, ls_id, tablet_list))) {
+    LOG_WARN("failed to read minor tablet to ls info", K(ret), K(turn_id), K(ls_id));
   }
   return ret;
 }
@@ -111,7 +125,7 @@ int ObTabletLogicMacroIdReader::init(const common::ObTabletID &tablet_id, const 
   } else if (OB_FAIL(meta_iter_.open(datum_range_,
                  ObMacroBlockMetaType::DATA_BLOCK_META,
                  sstable,
-                 tablet_handle.get_obj()->get_index_read_info(),
+                 tablet_handle.get_obj()->get_rowkey_read_info(),
                  allocator_))) {
     LOG_WARN("failed to open sec meta iterator", K(ret));
   } else {
@@ -537,7 +551,8 @@ int ObTabletMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffer
 
 /* ObSSTableMetaBackupReader */
 
-ObSSTableMetaBackupReader::ObSSTableMetaBackupReader() : ObITabletMetaBackupReader(), sstable_array_(), buffer_writer_("BackupReader")
+ObSSTableMetaBackupReader::ObSSTableMetaBackupReader()
+  : ObITabletMetaBackupReader(), sstable_array_(), buffer_writer_("BackupReader"), table_store_wrapper_()
 {}
 
 ObSSTableMetaBackupReader::~ObSSTableMetaBackupReader()
@@ -558,9 +573,11 @@ int ObSSTableMetaBackupReader::init(const common::ObTabletID &tablet_id,
     backup_data_type_ = backup_data_type;
     tablet_handle_ = &tablet_handle;
     ObTablet &tablet = *tablet_handle_->get_obj();
-    ObTabletTableStore &table_store = tablet.get_table_store();
-    if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_handle, backup_data_type_, table_store, sstable_array_))) {
-      LOG_WARN("failed to get sstables by data type", K(ret), K(tablet_handle), K_(backup_data_type), K(table_store));
+    if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper_))) {
+      LOG_WARN("failed to fetch table store from tablet", K(ret));
+    } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(
+        tablet_handle, backup_data_type_, *table_store_wrapper_.get_member(), sstable_array_))) {
+      LOG_WARN("failed to get sstables by data type", K(ret), K(tablet_handle), K_(backup_data_type));
     } else {
       is_inited_ = true;
     }

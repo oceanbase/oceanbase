@@ -28,7 +28,7 @@ ObUnitStatManager::ObUnitStatManager()
     schema_service_(NULL),
     unit_mgr_(NULL),
     unit_stat_getter_(),
-    unit_stat_map_()
+    unit_stat_map_("UnitStatMgr")
 {
 }
 

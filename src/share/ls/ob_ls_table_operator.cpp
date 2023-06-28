@@ -375,5 +375,35 @@ int ObLSTableOperator::remove_residual_ls(
   return ret;
 }
 
+int ObLSTableOperator::batch_get(
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    const common::ObIArray<ObLSID> &ls_ids,
+    const ObLSTable::Mode mode,
+    common::ObIArray<ObLSInfo> &ls_infos)
+{
+  int ret = OB_SUCCESS;
+  ls_infos.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (is_sys_tenant(tenant_id)) {
+    ObLSInfo ls_info;
+    if (OB_FAIL(get(cluster_id, OB_SYS_TENANT_ID, SYS_LS, mode, ls_info))) {
+      LOG_WARN("fail to get sys_tenant ls", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ls_infos.push_back(ls_info))) {
+      LOG_WARN("fail to assign", KR(ret), K(ls_info));
+    }
+  } else if (is_meta_tenant(tenant_id) || is_user_tenant(tenant_id)) {
+    if (OB_FAIL(persistent_ls_.batch_get(cluster_id, tenant_id, ls_ids, ls_infos))) {
+      LOG_WARN("get all ls info by persistent_ls_ failed", KR(ret), K(tenant_id));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id for ObLSTableOperator", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase
