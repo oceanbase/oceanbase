@@ -95,6 +95,9 @@ bool ObKeyPart::union_key(const ObKeyPart *other)
         } else if (0 == cmp) {
           normal_keypart_->include_start_ =
               (normal_keypart_->include_start_ || other->normal_keypart_->include_start_);
+          if (normal_keypart_->include_start_ && s1.is_null()) {
+            null_safe_ = null_safe_ || other->null_safe_;
+          }
         }
         cmp = e2.compare(e1);
         if (cmp > 0) {
@@ -103,6 +106,9 @@ bool ObKeyPart::union_key(const ObKeyPart *other)
         } else if (0 == cmp) {
           normal_keypart_->include_end_ =
               (normal_keypart_->include_end_ || other->normal_keypart_->include_end_);
+          if (normal_keypart_->include_end_ && e1.is_null()) {
+            null_safe_ = null_safe_ || other->null_safe_;
+          }
         }
       }
     }
@@ -335,7 +341,7 @@ int ObKeyPart::intersect(ObKeyPart *other, bool contain_row)
       ObObj *e2 = &(other->normal_keypart_->end_);
       bool e2_flag = other->normal_keypart_->include_end_;
       int cmp = 0;
-      SQL_REWRITE_LOG(DEBUG, "has intersect");
+      SQL_REWRITE_LOG(DEBUG, "has intersect", KPC(this), KPC(other));
 
       //取大
       cmp = s1->compare(*s2);
@@ -347,6 +353,9 @@ int ObKeyPart::intersect(ObKeyPart *other, bool contain_row)
       } else {
         s1_flag = (s1_flag && s2_flag);
       }
+      if (s1->is_null() && s1_flag) {
+        null_safe_ = null_safe_ && other->null_safe_;
+      }
 
       // 取小
       cmp = e1->compare(*e2);
@@ -357,6 +366,9 @@ int ObKeyPart::intersect(ObKeyPart *other, bool contain_row)
         // do nothing
       } else {
         e1_flag = (e1_flag && e2_flag);
+      }
+      if (e1->is_null() && e1_flag) {
+        null_safe_ = null_safe_ && other->null_safe_;
       }
 
       // we need to set the always_true[false] flag accordingly to the intersection
