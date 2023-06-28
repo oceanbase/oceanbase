@@ -53,6 +53,9 @@ class ObAuditRecordData;
 namespace clog {
 class ObAggreBuffer;
 }
+namespace blocksstable {
+class ObMacroBlockWriter;
+}
 
 namespace memtable {
 class ObIMvccCtx;
@@ -3598,7 +3601,10 @@ public:
   // the same txn
   // return whether the data is readable, and corresponding state and version
   int lock_for_read(
-      const ObLockForReadArg& lock_for_read_arg, bool& can_read, int64_t& trans_version, bool& is_determined_state);
+      const ObLockForReadArg &lock_for_read_arg, bool &can_read, int64_t &trans_version, bool &is_determined_state);
+
+  int iterate_trans_table(const uint64_t end_log_id, blocksstable::ObMacroBlockWriter &writer);
+
   TO_STRING_KV(KP_(partition_trans_ctx_mgr));
 
 private:

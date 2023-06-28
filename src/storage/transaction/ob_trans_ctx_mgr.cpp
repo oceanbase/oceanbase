@@ -5305,6 +5305,21 @@ int ObPartTransCtxMgr::submit_log_for_split(const common::ObPartitionKey& pkey, 
   return ret;
 }
 
+int ObPartTransCtxMgr::iterate_trans_table(
+    const ObPartitionKey &pg_key, const uint64_t end_log_id, blocksstable::ObMacroBlockWriter &writer)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObPartitionTransCtxMgr *trans_ctx_mgr = NULL;
+  ObTransStateTableGuard tx_stat_table_guard;
+
+  if (OB_FAIL(get_partition_trans_ctx_mgr_with_ref(pg_key, tx_stat_table_guard))) {
+    STORAGE_LOG(WARN, "failed to get partition trans ctx mgr", K(ret));
+  } else if (OB_FAIL(tx_stat_table_guard.get_trans_state_table().iterate_trans_table(end_log_id, writer))) {
+    STORAGE_LOG(WARN, "failed to iterate trans table", K(ret), K(pg_key));
+  }
+  return ret;
+}
+
 void ObTransStateTable::release_ref()
 {
   int ret = OB_SUCCESS;
@@ -5482,7 +5497,19 @@ int ObTransStateTable::check_sql_sequence_can_read(
   return ret;
 }
 
-int ObTransStateTableGuard::set_trans_state_table(ObPartitionTransCtxMgr* part_mgr)
+int ObTransStateTable::iterate_trans_table(const uint64_t end_log_id, blocksstable::ObMacroBlockWriter &writer)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(partition_trans_ctx_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "trans table is invalid", KR(ret), K(end_log_id));
+  } else {
+    ret = partition_trans_ctx_mgr_->iterate_trans_table(end_log_id, writer);
+  }
+  return ret;
+}
+
+int ObTransStateTableGuard::set_trans_state_table(ObPartitionTransCtxMgr *part_mgr)
 {
   int ret = OB_SUCCESS;
 

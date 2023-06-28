@@ -8613,16 +8613,14 @@ int ObTransService::iterate_trans_table(
     const ObPartitionKey& pg_key, const uint64_t end_log_id, blocksstable::ObMacroBlockWriter& writer)
 {
   int ret = OB_SUCCESS;
-  transaction::ObPartitionTransCtxMgr* trans_ctx_mgr = NULL;
+
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObTransService not inited");
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(trans_ctx_mgr = part_trans_ctx_mgr_.get_partition_trans_ctx_mgr(pg_key))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "failed to get partition trans ctx mgr", K(ret));
-  } else if (OB_FAIL(trans_ctx_mgr->iterate_trans_table(end_log_id, writer))) {
+  } else if (OB_FAIL(part_trans_ctx_mgr_.iterate_trans_table(pg_key, end_log_id, writer))) {
     STORAGE_LOG(WARN, "failed to iterate trans table", K(ret), K(pg_key));
   }
+
   return ret;
 }
 

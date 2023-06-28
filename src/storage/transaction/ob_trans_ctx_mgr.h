@@ -986,9 +986,11 @@ public:
       const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int submit_log_for_split(const common::ObPartitionKey& pkey, bool& log_finished);
   int copy_trans_table(
-      ObTransService* txs, const common::ObPartitionKey& pkey, const ObIArray<ObPartitionKey>& dest_array);
-  int get_active_read_write_count(const ObPartitionKey& partition, int64_t& count);
-  int init_dup_table_mgr(const ObPartitionKey& partition);
+      ObTransService *txs, const common::ObPartitionKey &pkey, const ObIArray<ObPartitionKey> &dest_array);
+  int get_active_read_write_count(const ObPartitionKey &partition, int64_t &count);
+  int init_dup_table_mgr(const ObPartitionKey &partition);
+  int iterate_trans_table(
+      const ObPartitionKey &pg_key, const uint64_t end_log_id, blocksstable::ObMacroBlockWriter &writer);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartTransCtxMgr);
