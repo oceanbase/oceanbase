@@ -321,6 +321,8 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_(
       || ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT == migration_status
       || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT == migration_status) {
     allow_gc = false;
+  } else {
+    allow_gc = true;
   }
   return ret;
 }
@@ -370,7 +372,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(const share::ObLSID &ls_i
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet is NULL", KR(ret), K(ls_id));
-      } else if (tablet->is_ls_inner_tablet()) {
+      } else if (tablet->is_ls_inner_tablet() || tablet->is_empty_shell()) {
         // do nothing
       } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, unused_committed_flag))) {
         if (OB_EMPTY_RESULT == ret) {
