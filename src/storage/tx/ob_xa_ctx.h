@@ -193,7 +193,6 @@ private:
   // for 4.0
   int process_xa_start_tightly_(const obrpc::ObXAStartRPCRequest &req);
   int process_xa_start_loosely_(const obrpc::ObXAStartRPCRequest &req);
-  int tx_desc_copy_(const ObTxDesc &from_trans_desc, ObTxDesc &to_trans_desc);
   int xa_start_(const ObXATransID &xid,
                 const int64_t flags,
                 const int64_t timeout_seconds,

@@ -61,8 +61,10 @@ public:
   {
     return COMMITTING == state
            || ROLLBACKING == state
+           || PREPARING == state
            || ROLLBACKED == state
-           || COMMITTED == state;
+           || COMMITTED == state
+           || PREPARED == state;
   }
   static bool can_convert(const int32_t src_state, const int32_t dst_state);
   static const char* to_string(int32_t state) {

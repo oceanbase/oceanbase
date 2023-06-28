@@ -143,10 +143,6 @@ public:
                        const ObTransID &trans_id,
                        const common::ObAddr &sche_addr,
                        const int64_t flag);
-  int query_xa_state_and_flag(const uint64_t tenant_id,
-                              const ObXATransID &xid,
-                              int64_t &state,
-                              int64_t &end_flag);
   int delete_xa_record(const uint64_t tenant_id,
                        const ObXATransID &xid);
   int delete_xa_branch(const uint64_t tenant_id,
@@ -157,9 +153,6 @@ public:
                                const ObTransID &trans_id,
                                const share::ObLSID &coordinator,
                                const common::ObAddr &sche_addr);
-  int query_xa_coordinator_with_trans_id(const uint64_t tenant_id,
-                                         const ObTransID &trans_id,
-                                         share::ObLSID &coordinator);
   int delete_xa_pending_record(const uint64_t tenant_id,
                                const ObTransID &tx_id);
   // query coord from tenant table global transaction
@@ -167,7 +160,6 @@ public:
                                    const ObXATransID &xid,
                                    share::ObLSID &coordinator,
                                    ObTransID &trans_id,
-                                   int64_t &state,
                                    int64_t &end_flag);
   int query_xa_coordinator_with_xid(const uint64_t tenant_id,
                                     const ObXATransID &xid,
