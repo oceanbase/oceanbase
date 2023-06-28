@@ -1350,6 +1350,7 @@ int ObPLResolver::resolve_sp_composite_type(const ParseNode *sp_data_type_node,
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.length(),
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.ptr());
       record_error_line(sp_data_type_node, resolve_ctx_.session_info_);
+      ObPL::insert_error_msg(ret);
       ret = OB_SUCCESS;
       OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_,
                                    resolve_ctx_.session_info_,
@@ -2178,6 +2179,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.length(),
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.ptr());
       record_error_line(sp_data_type_node, resolve_ctx_.session_info_);
+      ObPL::insert_error_msg(ret);
       ret = OB_SUCCESS;
       CK (T_SP_ROWTYPE == sp_data_type_node->type_ || T_SP_TYPE == sp_data_type_node->type_);
       OZ (resolve_extern_type_info(T_SP_ROWTYPE == sp_data_type_node->type_,
@@ -6792,11 +6794,15 @@ int ObPLResolver::convert_cursor_actual_params(
     }
   } else if (pl_data_type.get_user_type_id() != convert_expr->get_result_type().get_udt_id()) {
     bool is_compatible = false;
-    CK (OB_NOT_NULL(current_block_));
-    OZ (check_composite_compatible(current_block_->get_namespace(),
-                                   pl_data_type.get_user_type_id(),
-                                   convert_expr->get_result_type().get_udt_id(),
-                                   is_compatible));
+    if (convert_expr->get_result_type().is_null()) {
+      is_compatible = true;
+    } else if (convert_expr->get_result_type().is_ext()) {
+      CK (OB_NOT_NULL(current_block_));
+      OZ (check_composite_compatible(current_block_->get_namespace(),
+                                     pl_data_type.get_user_type_id(),
+                                     convert_expr->get_result_type().get_udt_id(),
+                                     is_compatible));
+    }
     if (OB_SUCC(ret) && !is_compatible) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("PLS-00382: expression is of wrong type",
@@ -10131,17 +10137,25 @@ int ObPLResolver::resolve_udf(ObUDFInfo &udf_info,
         }
         OZ (check_package_accessible(
           current_block_, resolve_ctx_.schema_guard_, *package_routine_info));
+
+        bool is_package_body_udf
+        = OB_NOT_NULL(package_routine_info)
+          && !package_routine_info->is_udt_routine()
+          && package_routine_info->get_pkg_id() == current_block_->get_namespace().get_package_id()
+          && (ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY == current_block_->get_namespace().get_block_type()
+              || ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY == current_block_->get_namespace().get_block_type()
+              || ObPLBlockNS::BlockType::BLOCK_ROUTINE == current_block_->get_namespace().get_block_type());
+
         OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
                                                     package_name.empty() ? pkg_name : package_name,
                                                     package_routine_info->get_id(),
-                                                    current_block_->get_namespace().get_package_id(),
+                                                    package_routine_info->get_pkg_id(),
                                                     package_routine_info->get_subprogram_path(),
                                                     common::OB_INVALID_VERSION, /*udf_schema_version*/
                                                     current_block_->get_namespace().get_package_version(),
                                                     package_routine_info->is_deterministic(),
                                                     package_routine_info->is_parallel_enable(),
-                                                    ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY ==
-                                                      current_block_->get_namespace().get_block_type(),
+                                                    is_package_body_udf,
                                                     false,
                                                     common::OB_INVALID_ID,
                                                     udf_info));
