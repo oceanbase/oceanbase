@@ -690,8 +690,8 @@ void ObTenantIOManager::destroy()
   io_tracer_.destroy();
   io_scheduler_ = nullptr;
   tenant_id_ = 0;
-  io_allocator_.destroy();
   group_id_index_map_.destroy();
+  io_allocator_.destroy();
   is_inited_ = false;
 }
 
