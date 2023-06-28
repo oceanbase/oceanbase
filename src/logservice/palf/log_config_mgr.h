@@ -91,6 +91,7 @@ inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
     CHECK_LOG_CONFIG_TYPE_STR(DEGRADE_ACCEPTOR_TO_LEARNER);
     CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
     CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
+    CHECK_LOG_CONFIG_TYPE_STR(FORCE_SINGLE_MEMBER);
     default:
       return "Invalid";
   }

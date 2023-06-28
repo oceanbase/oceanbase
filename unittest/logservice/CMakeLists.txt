@@ -29,7 +29,7 @@ ob_unittest(test_ob_election_message_compat2)
 ob_unittest(test_ls_election_reference_info)
 ob_unittest(test_ob_tuple)
 #ob_unittest(test_ob_role_change_service)
-#ob_unittest(test_log_config_mgr)TODO(yunlong.cb): fix it
+ob_unittest(test_log_config_mgr)
 ob_unittest(test_clear_up_tmp_files)
 ob_unittest(test_log_dir_match)
 ob_unittest(test_server_log_block_mgr)
