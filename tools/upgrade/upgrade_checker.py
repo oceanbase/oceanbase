@@ -8,7 +8,6 @@ from mysql.connector import errorcode
 import logging
 import getopt
 import time
-import actions
 
 class UpgradeParams:
   log_filename = 'upgrade_checker.log'
