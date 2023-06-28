@@ -14,6 +14,7 @@
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 
 /**
  * DELETE syntax from MySQL 5.7
@@ -235,7 +236,19 @@ int ObDeleteResolver::resolve_table_list(const ParseNode& table_list, bool& is_m
         const ParseNode* table_node = delete_list->children_[i];
         OZ(resolve_table_relation_node(table_node, table_name, db_name, true));
         OZ(find_delete_table_with_mysql_rule(db_name, table_name, table_item));
-        OZ(delete_tables_.push_back(table_item));
+        if (OB_SUCC(ret)) {
+          if (OB_NOT_NULL(table_item)) {
+            if (OB_UNLIKELY(ObOptimizerUtil::find_item(delete_tables_, table_item))) {
+              ret = OB_ERR_NONUNIQ_TABLE;
+              LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_item->table_name_.length(), table_item->table_name_.ptr());
+            } else if (OB_FAIL(add_var_to_array_no_dup(delete_tables_, static_cast<const TableItem *>(table_item)))) {
+              LOG_WARN("failed to push back delete tables", K(ret));
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null table item", K(ret));
+          }
+        }
       }
     }
   }
