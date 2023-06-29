@@ -4213,7 +4213,8 @@ int ObSchemaPrinter::print_simple_trigger_definition(const ObTriggerInfo &trigge
   const ParseNode *trigger_source_node = NULL;
   const ParseNode *trigger_define_node = NULL;
   const ParseNode *trigger_body_node = NULL;
-  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE),
+  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE,
+                  false, false, true),
       trigger_info.get_trigger_body());
   // stmt list node
   OV (OB_NOT_NULL(stmt_list_node = parse_result.result_tree_));
@@ -4304,7 +4305,9 @@ int ObSchemaPrinter::print_compound_instead_trigger_definition(const ObTriggerIn
   ObArenaAllocator alloc;
   sql::ObParser parser(alloc, trigger_info.get_sql_mode());
   ParseResult parse_result;
-  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE), trigger_info.get_trigger_body());
+  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE,
+                  false, false, true),
+      trigger_info.get_trigger_body());
   CK (OB_NOT_NULL(parse_result.result_tree_) && OB_NOT_NULL(parse_result.result_tree_->children_[0]));
   OZ (BUF_PRINTF(" %.*s", (int)(parse_result.result_tree_->children_[0]->str_len_), 
                  parse_result.result_tree_->children_[0]->str_value_));
