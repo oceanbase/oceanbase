@@ -1688,12 +1688,13 @@ int ObPLResolver::build_record_type_by_view_schema(const ObPLResolveCtx &ctx,
   int ret = OB_SUCCESS;
   ObSelectStmt *select_stmt = NULL;
   ObSelectStmt *real_stmt = NULL;
-  ObStmtFactory stmt_factory(ctx.allocator_);
-  ObRawExprFactory expr_factory(ctx.allocator_);
+  ObArenaAllocator alloc;
+  ObStmtFactory stmt_factory(alloc);
+  ObRawExprFactory expr_factory(alloc);
   const ObDatabaseSchema *db_schema = NULL;
   ObSqlString select_sql;
   ParseResult parse_result;
-  ObParser parser(ctx.allocator_, ctx.session_info_.get_sql_mode(),
+  ObParser parser(alloc, ctx.session_info_.get_sql_mode(),
                   ctx.session_info_.get_local_collation_connection());
   ObSchemaChecker schema_checker;
   ObResolverParams resolver_ctx;
@@ -1709,7 +1710,7 @@ int ObPLResolver::build_record_type_by_view_schema(const ObPLResolveCtx &ctx,
   OZ (parser.parse(select_sql.string(), parse_result));
   OZ (schema_checker.init(ctx.schema_guard_));
 
-  OX (resolver_ctx.allocator_ = &(ctx.allocator_));
+  OX (resolver_ctx.allocator_ = &(alloc));
   OX (resolver_ctx.schema_checker_ = &schema_checker);
   OX (resolver_ctx.session_info_ = &(ctx.session_info_));
   OX (resolver_ctx.expr_factory_ = &expr_factory);
