@@ -110,8 +110,6 @@ int ObAllVirtualLSReplicaTaskPlan::inner_get_next_row(ObNewRow *&row)
       }
     }
 
-    task_worker_->reset_task_plans();
-    
     if (OB_SUCC(ret)) {
       scanner_it_ = scanner_.begin();
       start_to_read_ = true;

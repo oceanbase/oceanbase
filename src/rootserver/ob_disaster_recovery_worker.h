@@ -127,7 +127,6 @@ public:
       bool &locality_is_matched);
 
   inline int64_t get_display_task_count_() const { return display_tasks_.count(); }
-  void reset_task_plans() { display_tasks_.reset(); }
   int get_task_plan_display(
       common::ObSArray<ObLSReplicaTaskDisplayInfo> &task_plan);
 
@@ -675,6 +674,7 @@ private:
       bool &has_leader);
 
 private:
+  void reset_task_plans_() { display_tasks_.reset(); }
 
   int check_task_already_exist(
       const ObDRTaskKey &task_key,
@@ -1053,6 +1053,7 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   TaskCountStatistic task_count_statistic_;
   common::ObSArray<ObLSReplicaTaskDisplayInfo> display_tasks_;
+  common::SpinRWLock display_tasks_rwlock_;  // to protect display_tasks_
 };
 } // end namespace rootserver
 } // end namespace oceanbase
