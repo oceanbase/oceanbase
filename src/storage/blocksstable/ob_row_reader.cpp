@@ -161,13 +161,14 @@ int ObClusterColumnReader::read_storage_datum(const int64_t column_idx, ObStorag
 
     if (-1 == idx) {
       datum.set_nop();
-    } else if (idx >= 0) {
+    } else if (idx >= 0 && idx < column_cnt_) {
       if (OB_FAIL(read_datum(idx, datum))) {
         LOG_WARN("read datum fail", K(ret), KP(cluster_buf_), K(cell_end_pos_), K(idx), K(column_idx));
       } else {
         LOG_DEBUG("read_storage_datum", K(idx), K(datum));
       }
     } else {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid idx for read datum", K(ret), K(column_idx), K(idx), K(datum));
     }
   }
@@ -196,11 +197,12 @@ int ObClusterColumnReader::sequence_read_datum(const int64_t column_idx, ObStora
     }
     if (-1 == idx) {
       datum.set_nop();
-    } else if (idx >= 0) {
+    } else if (idx >= 0 && idx < column_cnt_) {
       if (OB_FAIL(read_datum(idx, datum))) {
         LOG_WARN("read datum fail", K(ret), KP(cluster_buf_), K(cell_end_pos_), K(idx), K(column_idx));
       }
     } else {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid idx for sequence read obj", K(column_idx), K(idx), K(datum));
     }
   }
