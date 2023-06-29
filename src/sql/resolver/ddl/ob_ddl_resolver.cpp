@@ -2122,7 +2122,15 @@ int ObDDLResolver::resolve_column_name(ObColumnSchemaV2 &column,
   CK (node->type_ == T_COLUMN_DEFINITION);
   if (OB_SUCC(ret)) {
     column_definition_ref_node = node->children_[0];
-    OZ (resolve_column_definition_ref(column, column_definition_ref_node, false));
+    if (OB_FAIL(resolve_column_definition_ref(column, column_definition_ref_node, false))) {
+      LOG_WARN("resolve def unexpected error", K(ret));
+    } else if (GEN_COLUMN_DEFINITION_NUM_CHILD == node->num_child_) {
+      if (node->children_[4] == NULL) {
+        column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+      } else if (node->children_[4]->type_ == T_STORED_COLUMN) {
+        column.add_column_flag(STORED_GENERATED_COLUMN_FLAG);
+      }
+    }
   }
   return ret;
 }

@@ -4208,10 +4208,15 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       ObString scope_name = "generated column function";
       LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, q_name.col_name_.length(), q_name.col_name_.ptr(),
                      scope_name.length(), scope_name.ptr());
-    } else if (col_schema->is_generated_column()) {
+    } else if (col_schema->is_generated_column() && lib::is_oracle_mode()) {
       ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
       LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
                      "Defining a generated column on generated column(s)");
+    } else if (col_schema->is_generated_column() && lib::is_mysql_mode()
+               && col_schema->get_column_id() >= generated_column.get_column_id()) {
+      ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+      LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
+                     "Generated column can refer only to generated columns defined prior to it");
     } else if (lib::is_oracle_mode() && col_schema->get_meta_type().is_blob()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Define a blob column in generated column def is not supported", K(ret));
@@ -4229,7 +4234,6 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       OZ (real_exprs.push_back(q_name.ref_expr_));
     }
   }
-
   if (OB_SUCC(ret)) {
     if (lib::is_oracle_mode()) {
       bool expr_changed = false;
