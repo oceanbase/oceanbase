@@ -930,7 +930,8 @@ int ObTablet::init_empty_shell(
   } else {
     table_store_addr_.addr_.set_none_addr();
     storage_schema_addr_.addr_.set_none_addr();
-    tablet_meta_.clog_checkpoint_scn_ = user_data.delete_commit_scn_;
+    tablet_meta_.clog_checkpoint_scn_ = user_data.delete_commit_scn_ > tablet_meta_.clog_checkpoint_scn_ ?
+                                        user_data.delete_commit_scn_ : tablet_meta_.clog_checkpoint_scn_;
     tablet_meta_.mds_checkpoint_scn_ = user_data.delete_commit_scn_;
     is_inited_ = true;
     LOG_INFO("init empty shell", K(ret), K(old_tablet), KPC(this));
