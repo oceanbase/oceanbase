@@ -514,7 +514,7 @@ int ObTenantTabletScheduler::check_ls_compaction_finish(const share::ObLSID &ls_
   if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->check_ls_compaction_dag_exist(ls_id, exist))) {
+  } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->check_ls_compaction_dag_exist_with_cancel(ls_id, exist))) {
     LOG_WARN("failed to check ls compaction dag", K(ret), K(ls_id));
   } else if (exist) {
     // the compaction dag exists, need retry later.

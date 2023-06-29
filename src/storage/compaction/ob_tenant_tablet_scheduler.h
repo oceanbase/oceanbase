@@ -292,9 +292,7 @@ private:
       MINOR_MERGE, HISTORY_MINOR_MERGE};
   static const int64_t SSTABLE_GC_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t INFO_POOL_RESIZE_INTERVAL = 30 * 1000 * 1000L; // 30s
-  static const int64_t DEFAULT_HASH_MAP_BUCKET_CNT = 1009;
   static const int64_t DEFAULT_COMPACTION_SCHEDULE_INTERVAL = 30 * 1000 * 1000L; // 30s
-  static const int64_t CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL = 10 * 1000 * 1000L; // 10s
   static const int64_t CHECK_REPORT_SCN_INTERVAL = 5 * 60 * 1000 * 1000L; // 600s
   static const int64_t ADD_LOOP_EVENT_INTERVAL = 120 * 1000 * 1000L; // 120s
   static const int64_t WAIT_MEDIUM_CHECK_THRESHOLD = 10 * 60 * 1000 * 1000L; // 10m

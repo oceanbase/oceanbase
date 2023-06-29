@@ -822,7 +822,10 @@ public:
       compaction::ObDiagnoseTabletCompProgress &progress);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
   int diagnose_dag(const ObIDag *dag, compaction::ObDiagnoseTabletCompProgress &input_progress);
-  int check_ls_compaction_dag_exist(const ObLSID &ls_id, bool &exist);
+
+  // 1. check ls compaction exist
+  // 2. cancel ls compaction waiting dag
+  int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);

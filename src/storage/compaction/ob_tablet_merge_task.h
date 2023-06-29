@@ -76,10 +76,6 @@ struct ObMergeParameter {
   bool is_full_merge_;               // full merge or increment merge, duplicated with merge_level
   compaction::ObCachedTransStateMgr *trans_state_mgr_;
   share::SCN merge_scn_;
-
-  OB_INLINE bool is_major_merge() const { return storage::is_major_merge(merge_type_); }
-  OB_INLINE bool is_mini_merge() const { return storage::is_mini_merge(merge_type_); }
-  OB_INLINE bool need_checksum() const { return storage::is_major_merge(merge_type_); }
   TO_STRING_KV(KPC_(tables_handle), K_(merge_type), K_(merge_level), KP_(merge_schema),
                K_(merge_range), K_(version_range), K_(scn_range), K_(is_full_merge), K_(merge_scn));
 private:
@@ -140,7 +136,6 @@ public:
 private:
   virtual int check_before_init() override;
   virtual int inner_init_ctx(ObTabletMergeCtx &ctx, bool &skip_merge_task_flag) override;
-  int create_sstable_directly();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMajorPrepareTask);
 };
@@ -166,8 +161,6 @@ public:
 
 private:
   int create_sstable_after_merge();
-  int check_data_checksum();
-  int check_empty_merge_valid(ObTabletMergeCtx &ctx);
   int get_merged_sstable(ObTabletMergeCtx &ctx);
   int add_sstable_for_merge(ObTabletMergeCtx &ctx);
   int try_schedule_compaction_after_mini(ObTabletMergeCtx &ctx, storage::ObTabletHandle &tablet_handle);
@@ -214,6 +207,7 @@ public:
   virtual ~ObBasicTabletMergeDag();
   ObTabletMergeCtx &get_ctx() { return *ctx_; }
   ObTabletMergeDagParam &get_param() { return param_; }
+  virtual const share::ObLSID & get_ls_id() const { return param_.ls_id_; }
   virtual bool operator == (const ObIDag &other) const override;
   virtual int64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
@@ -333,8 +327,6 @@ public:
 
   INHERIT_TO_STRING_KV("ObBasicTabletMergeDag", ObBasicTabletMergeDag, K_(merge_scn_range));
 private:
-  int prepare_compaction(const ObGetMergeTablesResult &result);
-  virtual int prepare_compaction_filter() { return OB_SUCCESS; }
   virtual int create_first_task(const ObGetMergeTablesResult &result, const bool need_swap_tablet_flag);
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeExecuteDag);
 

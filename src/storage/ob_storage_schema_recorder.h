@@ -53,14 +53,6 @@ public:
   void destroy();
   void reset();
   bool is_inited() const { return is_inited_; }
-  bool is_valid() const
-  {
-    return is_inited_
-        && ls_id_.is_valid()
-        && tablet_id_.is_valid()
-        && nullptr != log_handler_
-        && max_saved_version_ >= 0;
-  }
 
   // follower
   int replay_schema_log(const share::SCN &scn, const char *buf, const int64_t size, int64_t &pos);

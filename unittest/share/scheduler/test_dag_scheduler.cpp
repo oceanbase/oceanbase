@@ -1511,6 +1511,63 @@ TEST_F(TestDagScheduler, test_emergency_task)
 
   EXPECT_EQ(3, op.value());
 }
+
+class TestCompMidCancelDag : public compaction::ObTabletMergeDag
+{
+public:
+  TestCompMidCancelDag()
+    : compaction::ObTabletMergeDag(ObDagType::DAG_TYPE_MERGE_EXECUTE){}
+  virtual const share::ObLSID & get_ls_id() const override { return ls_id_; }
+  virtual lib::Worker::CompatMode get_compat_mode() const override
+  { return lib::Worker::CompatMode::MYSQL; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(TestCompMidCancelDag);
+};
+
+TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64));
+  EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, 1));
+  EXPECT_EQ(1, scheduler->up_limits_[ObDagPrio::DAG_PRIO_COMPACTION_MID]);
+
+  LoopWaitTask *wait_task = nullptr;
+  const int64_t dag_cnt = 6;
+  // add 6 dag at prio = DAG_PRIO_COMPACTION_MID
+  ObLSID ls_ids[2] = {ObLSID(1), ObLSID(2)};
+  bool finish_flag[2] = {false, false};
+  for (int64_t i = 0; i < dag_cnt; ++i) {
+    const int64_t idx = i % 2;
+    TestCompMidCancelDag *dag = NULL;
+    EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
+    dag->ls_id_ = ls_ids[idx];
+    dag->tablet_id_ = ObTabletID(i);
+    EXPECT_EQ(OB_SUCCESS, alloc_task(*dag, wait_task));
+    EXPECT_EQ(OB_SUCCESS, wait_task->init(1, 2, finish_flag[idx]));
+    EXPECT_EQ(OB_SUCCESS, dag->add_task(*wait_task));
+    EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
+  }
+  EXPECT_EQ(dag_cnt, scheduler->dag_cnts_[ObDagType::DAG_TYPE_MERGE_EXECUTE]);
+  CHECK_EQ_UTIL_TIMEOUT(1, scheduler->running_task_cnts_[ObDagPrio::DAG_PRIO_COMPACTION_MID]);
+
+  // cancel two waiting dag of ls_ids[0]
+  bool exist = false;
+  EXPECT_EQ(OB_SUCCESS, scheduler->check_ls_compaction_dag_exist_with_cancel(ls_ids[0], exist));
+  EXPECT_EQ(exist, true);
+  EXPECT_EQ(4, scheduler->dag_cnts_[ObDagType::DAG_TYPE_MERGE_EXECUTE]);
+
+  EXPECT_EQ(OB_SUCCESS, scheduler->check_ls_compaction_dag_exist_with_cancel(ls_ids[1], exist));
+  EXPECT_EQ(exist, false);
+  EXPECT_EQ(1, scheduler->dag_cnts_[ObDagType::DAG_TYPE_MERGE_EXECUTE]);
+
+  finish_flag[0] = true;
+  wait_scheduler();
+
+  EXPECT_EQ(OB_SUCCESS, scheduler->check_ls_compaction_dag_exist_with_cancel(ls_ids[0], exist));
+  EXPECT_EQ(exist, false);
+}
+
 /*
 TEST_F(TestDagScheduler, test_large_thread_cnt)
 {
