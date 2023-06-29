@@ -170,7 +170,7 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       piece_cache_(NULL),
       is_load_data_exec_session_(false),
       pl_exact_err_msg_(),
-      is_ps_prepare_stage_(false),
+      is_varparams_sql_prepare_(false),
       got_tenant_conn_res_(false),
       got_user_conn_res_(false),
       conn_res_user_id_(OB_INVALID_ID),

@@ -6152,13 +6152,13 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                 || (is_oracle_mode() && left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type()))) {
                 // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
                 // Originally, cases like "select clob from t union all select blob from t" return error
-            if (session_info->is_ps_prepare_stage()) {
+            if (session_info->is_varparams_sql_prepare()) {
               skip_add_cast = true;
               LOG_WARN("ps prepare stage expression has different datatype", K(i), K(left_type), K(right_type));
             } else {
               ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
               LOG_WARN("expression must have same datatype as corresponding expression", K(ret),
-              K(session_info->is_ps_prepare_stage()), K(right_type.is_varchar_or_char()),
+              K(session_info->is_varparams_sql_prepare()), K(right_type.is_varchar_or_char()),
               K(i), K(left_type), K(right_type));
             }
           } else if (left_type.is_character_type()
@@ -6192,7 +6192,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
           LOG_WARN("failed to get collation connection", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0), 2,
                             coll_type, is_oracle_mode(), length_semantics, session_info))) {
-          if (session_info->is_ps_prepare_stage()) {
+          if (session_info->is_varparams_sql_prepare()) {
             skip_add_cast = true;
             res_type = left_type;
             LOG_WARN("failed to deduce type in ps prepare stage", K(types));
