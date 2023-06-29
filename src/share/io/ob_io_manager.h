@@ -48,7 +48,7 @@ public:
 
   int pwrite(ObIOInfo &info, int64_t &write_size);
 
-  int detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms);
+  int detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms, int &sys_io_errno);
 
   // config related, thread safe
   int set_io_config(const ObIOConfig &conf);

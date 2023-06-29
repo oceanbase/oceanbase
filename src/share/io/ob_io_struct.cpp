@@ -2818,7 +2818,6 @@ void ObIOFaultDetector::handle(void *task)
     const int64_t LONG_AIO_TIMEOUT_MS = 30000; // 30s
     RetryTask *retry_task = reinterpret_cast<RetryTask *>(task);
     retry_task->io_info_.flag_.set_unlimited();
-    retry_task->io_info_.flag_.set_detect();
     int64_t timeout_ms = retry_task->timeout_ms_;
     // remain 1s to avoid race condition for retry_black_list_interval
     const int64_t retry_black_list_interval_ms = io_config_.read_failure_black_list_interval_ / 1000L - 1000L;
@@ -2827,6 +2826,7 @@ void ObIOFaultDetector::handle(void *task)
     const int64_t MAX_IO_RETRY_TIMEOUT_MS = min(180L * 1000L/* 180s*/, retry_black_list_interval_ms);
     const int64_t diagnose_begin_ts = ObTimeUtility::fast_current_time();
     bool is_retry_succ = false;
+    int64_t retry_times = 0;
     while (OB_SUCC(ret) && !OB_IO_MANAGER.is_stopped() && !is_retry_succ && !is_device_error_) {
       ObIOHandle handle;
       const int64_t current_retry_ts = ObTimeUtility::fast_current_time();
@@ -2836,14 +2836,18 @@ void ObIOFaultDetector::handle(void *task)
         (warn_ts - current_retry_ts) / 1000 : (error_ts - current_retry_ts) / 1000;
       // timeout of retry io increase exponentially
       timeout_ms = min(left_timeout_ms, min(MAX_IO_RETRY_TIMEOUT_MS, max(timeout_ms * 2, MIN_IO_RETRY_TIMEOUT_MS)));
+      int sys_io_errno = 0;
       if (timeout_ms > 0) {
         // do retry io
-        if (OB_FAIL(OB_IO_MANAGER.detect_read(retry_task->io_info_, handle, timeout_ms))) {
+        if (OB_FAIL(OB_IO_MANAGER.detect_read(retry_task->io_info_, handle, timeout_ms, sys_io_errno))) {
           if (OB_TIMEOUT == ret) {
             LOG_WARN("ObIOManager::read failed", K(ret), K(retry_task->io_info_), K(timeout_ms));
             ret = OB_SUCCESS;
           } else if (OB_EAGAIN == ret) { //maybe channel is busy, wait and retry
             ob_usleep(100 * 1000); // 100ms
+            ret = OB_SUCCESS;
+          } else if (sys_io_errno != 0) {
+            ++ retry_times;
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("ObIOManager::retry read request failed", K(ret), K(retry_task->io_info_));
@@ -2853,11 +2857,19 @@ void ObIOFaultDetector::handle(void *task)
         }
       }
       if (OB_SUCC(ret) && !is_retry_succ) {
-        const int64_t current_ts = ObTimeUtility::fast_current_time();
-        if (current_ts >= error_ts) {
-          set_device_error();
-        } else if (current_ts >= warn_ts) {
+        if (sys_io_errno != 0 && retry_times >= MAX_DETECT_READ_TIMES) {
+          retry_task->io_info_.flag_.set_detect();
           set_device_warning();
+          LOG_WARN("ObIOManager::detect IO retry count reach limit, device warning", K(ret), K(sys_io_errno));
+        } else {
+          const int64_t current_ts = ObTimeUtility::fast_current_time();
+          if (current_ts >= error_ts) {
+            set_device_error();
+            LOG_WARN("ObIOManager::detect IO retry timeout, device error", K(ret), K(current_ts), K(error_ts));
+          } else if (current_ts >= warn_ts) {
+            set_device_warning();
+            LOG_WARN("ObIOManager::detect IO retry timeout, device warning", K(ret), K(sys_io_errno));
+          }
         }
       }
     }
@@ -2911,7 +2923,7 @@ void ObIOFaultDetector::record_failure(const ObIORequest &req)
     ret = OB_NOT_INIT;
     LOG_WARN("io fault detector not init", K(ret), KP(is_inited_));
   } else if (req.get_flag().is_detect()) {
-    //ignore, do not retry
+    //reach max retry time, ignore
   } else if (req.is_finished_ && OB_IO_ERROR != req.ret_code_.io_ret_) {
     // ignore, do nothing here
   } else if (req.get_flag().is_read()) {
@@ -2920,7 +2932,7 @@ void ObIOFaultDetector::record_failure(const ObIORequest &req)
     }
   } else if (req.get_flag().is_write()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("write IORequest failed", K(ret), K(req));
+    LOG_WARN("not supported io write detect", K(ret), K(req));
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported io mode", K(ret), K(req));
@@ -2956,7 +2968,7 @@ void ObIOFaultDetector::set_device_warning()
 {
   last_device_warning_ts_ = ObTimeUtility::fast_current_time();
   is_device_warning_ = true;
-  LOG_WARN_RET(OB_IO_ERROR, "disk maybe too slow");
+  LOG_WARN_RET(OB_IO_ERROR, "disk maybe corrupted");
 }
 
 // set disk error and record error_ts
