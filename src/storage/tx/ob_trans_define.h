@@ -1638,6 +1638,12 @@ public:
   void reset();
   // can not destroy in tx_ctx_table
   void destroy();
+  int assign(const ObTxExecInfo &exec_info);
+
+private:
+  ObTxExecInfo &operator=(const ObTxExecInfo &info);
+
+public:
   TO_STRING_KV(K_(state),
                K_(upstream),
                K_(participants),
