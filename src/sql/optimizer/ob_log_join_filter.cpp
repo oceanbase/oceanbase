@@ -72,6 +72,9 @@ int ObLogJoinFilter::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   int ret = OB_SUCCESS;
   if (OB_FAIL(replace_exprs_action(replacer, join_exprs_))) {
     LOG_WARN("failed to replace join exprs", K(ret));
+  } else if (OB_NOT_NULL(calc_tablet_id_expr_)
+      && OB_FAIL(replace_expr_action(replacer, calc_tablet_id_expr_))) {
+    LOG_WARN("failed to replace calc_tablet_id_expr_", K(ret));
   }
   return ret;
 }
@@ -127,12 +130,18 @@ int ObLogJoinFilter::get_plan_item_info(PlanText &plan_text,
         if (OB_FAIL(BUF_PRINTF(", RF_EXPR["))) {
           LOG_WARN("fail to print rf", K(ret));
         } else {
-          int cnt = join_exprs_.count();
-          for (int i = 0; i < cnt && OB_SUCC(ret); ++i) {
-            if (OB_FAIL(join_exprs_.at(i)->get_name(buf, buf_len, pos, type))) {
+          if (OB_ISNULL(calc_tablet_id_expr_)) {
+            int cnt = join_exprs_.count();
+            for (int i = 0; i < cnt && OB_SUCC(ret); ++i) {
+              if (OB_FAIL(join_exprs_.at(i)->get_name(buf, buf_len, pos, type))) {
+                LOG_WARN("fail to get name", K(ret));
+              } else if (i != cnt - 1 && OB_FAIL(BUF_PRINTF(", "))) {
+                LOG_WARN("fail to print buf", K(ret));
+              }
+            }
+          } else {
+            if (OB_FAIL(calc_tablet_id_expr_->get_name(buf, buf_len, pos, type))) {
               LOG_WARN("fail to get name", K(ret));
-            } else if (i != cnt - 1 && OB_FAIL(BUF_PRINTF(", "))) {
-              LOG_WARN("fail to print buf", K(ret));
             }
           }
           if (OB_FAIL(ret)) {

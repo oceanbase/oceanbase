@@ -309,7 +309,7 @@ Outputs & filters:
   3 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.c2]), other_conds(nil)
   4 - output([b.c1], [b.c2]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[b.c2]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(b.c2)]
   5 - output([b.c2], [b.c1]), filter(nil), rowset=256
       affinitize
   6 - output([b.c2], [b.c1]), filter(nil), rowset=256
