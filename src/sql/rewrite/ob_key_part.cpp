@@ -594,7 +594,7 @@ int ObKeyPart::merge_two_in_keys(ObKeyPart *other, const SameValIdxMap &lr_idx)
       if (OB_SUCC(ret)) {
         new_param->pos_ = cur_param->pos_;
         if (OB_FAIL(new_param->vals_.assign(vals))) {
-          LOG_WARN("failed to assign vals", K(ret));
+          LOG_WARN("failed to assign vals", K(ret), K(vals.count()));
         } else if (OB_FAIL(new_params.push_back(new_param))) {
           LOG_WARN("failed to push back new param", K(ret));
         }

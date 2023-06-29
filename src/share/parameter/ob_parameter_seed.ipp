@@ -1435,3 +1435,6 @@ DEF_TIME(_wait_interval_after_truncate, OB_CLUSTER_PARAMETER, "30s", "[0s,)",
 DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "True",
         "Enable extract query range optimization for in predicate",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(range_optimizer_max_mem_size, OB_TENANT_PARAMETER, "128M", "[16M,1G]",
+        "to limit the memory consumption for the query range optimizer. Range: [16M,1G]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -167,6 +167,7 @@ px_workers_per_cpu_quota
 query_response_time_flush
 query_response_time_range_base
 query_response_time_stats
+range_optimizer_max_mem_size
 rdma_io_thread_count
 recyclebin_object_expire_time
 redundancy_level
