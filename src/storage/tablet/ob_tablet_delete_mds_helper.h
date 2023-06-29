@@ -57,6 +57,10 @@ public:
       const int64_t len,
       const share::SCN &scn,
       mds::BufferCtx &ctx);
+  static int replay_process(
+      obrpc::ObBatchRemoveTabletArg &arg,
+      const share::SCN &scn,
+      mds::BufferCtx &ctx);
 private:
   static int delete_tablets(
       const obrpc::ObBatchRemoveTabletArg &arg,

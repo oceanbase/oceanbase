@@ -153,17 +153,21 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
     mds::MdsCtx mds_ctx;
     mds_ctx.set_binding_type_id(mds::TupleTypeIdx<mds::BufferCtxTupleHelper, mds::MdsCtx>::value);
     mds_ctx.set_writer(mds::MdsWriter(notify_arg.tx_id_));
-    do {
-      if (OB_FAIL(Helper::register_process(arg, mds_ctx))) {
-        TRANS_LOG(ERROR, "fail to register_process, retry", K(ret), K(arg));
-        usleep(100 * 1000);
-      }
-    } while (OB_FAIL(ret) && !notify_arg.for_replay_);
 
-    if (OB_FAIL(ret)) {
-      if (notify_arg.for_replay_) {
+    if (notify_arg.for_replay_) {
+      if (OB_FAIL(Helper::replay_process(arg, notify_arg.scn_, mds_ctx))) {
         ret = OB_EAGAIN;
       }
+    } else {
+      do {
+        if (OB_FAIL(Helper::register_process(arg, mds_ctx))) {
+          TRANS_LOG(ERROR, "fail to register_process, retry", K(ret), K(arg));
+          usleep(100 * 1000);
+        }
+      } while (OB_FAIL(ret));
+    }
+
+    if (OB_FAIL(ret)) {
     } else {
       mds_ctx.single_log_commit(notify_arg.trans_version_, notify_arg.scn_);
       TRANS_LOG(INFO, "replay create commit for old_mds", KR(ret), K(arg));

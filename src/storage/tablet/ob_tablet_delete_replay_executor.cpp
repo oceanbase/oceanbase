@@ -34,7 +34,8 @@ ObTabletDeleteReplayExecutor::ObTabletDeleteReplayExecutor()
 
 int ObTabletDeleteReplayExecutor::init(
     mds::BufferCtx &ctx,
-    const share::SCN &scn)
+    const share::SCN &scn,
+    const bool for_old_mds)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -46,6 +47,7 @@ int ObTabletDeleteReplayExecutor::init(
   } else {
     ctx_ = &ctx;
     scn_ = scn;
+    for_old_mds_ = for_old_mds;
     is_inited_ = true;
   }
   return ret;
@@ -67,7 +69,7 @@ int ObTabletDeleteReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   } else {
     data.tablet_status_ = ObTabletStatus::DELETED;
     data.data_type_ = ObTabletMdsUserDataType::REMOVE_TABLET;
-    if (CLICK_FAIL(replay_to_mds_table_(tablet_handle, data, user_ctx, scn_))) {
+    if (CLICK_FAIL(replay_to_mds_table_(tablet_handle, data, user_ctx, scn_, for_old_mds_))) {
       LOG_WARN("failed to replay to tablet", K(ret));
     }
   }

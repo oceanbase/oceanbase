@@ -72,6 +72,10 @@ public:
   static int register_process(
       const obrpc::ObBatchCreateTabletArg &arg,
       mds::BufferCtx &ctx);
+  static int replay_process(
+      const obrpc::ObBatchCreateTabletArg &arg,
+      const share::SCN &scn,
+      mds::BufferCtx &ctx);
 private:
   static int check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg);
   static int check_create_arg(
@@ -147,7 +151,8 @@ private:
       ObTabletHandle &tablet_handle,
       const bool for_replay,
       const share::SCN &scn,
-      mds::BufferCtx &ctx);
+      mds::BufferCtx &ctx,
+      const bool for_old_mds);
 };
 } // namespace storage
 } // namespace oceanbase

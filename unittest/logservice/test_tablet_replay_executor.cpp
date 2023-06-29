@@ -67,7 +67,8 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     storage::ObTabletHandle &tablet_handle,
     const ObTabletCreateDeleteMdsUserData &mds,
     storage::mds::MdsCtx &ctx,
-    const share::SCN &scn)
+    const share::SCN &scn,
+    const bool for_old_mds)
 {
   int ret = 123;
   UNUSEDx(tablet_handle, mds, ctx, scn);
@@ -78,7 +79,8 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     storage::ObTabletHandle &tablet_handle,
     const ObTabletBindingMdsUserData &mds,
     storage::mds::MdsCtx &ctx,
-    const share::SCN &scn)
+    const share::SCN &scn,
+    const bool for_old_mds)
 {
   int ret = 456;
   UNUSEDx(tablet_handle, mds, ctx, scn);
