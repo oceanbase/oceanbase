@@ -524,7 +524,7 @@ int ObPsStmtInfo::get_convert_size(int64_t &cv_size) const
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("is null", K(ret));
     } else if (OB_FAIL(get_deep_copy_size(param->node_, &raw_params_size))) {
-      LOG_WARN("failed to get deepy copy size", K(ret));
+      LOG_WARN("failed to get deeps copy size", K(ret));
     } else {
       raw_params_size += sizeof(ObPCParam);
     }
