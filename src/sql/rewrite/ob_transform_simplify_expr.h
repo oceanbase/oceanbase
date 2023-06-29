@@ -167,8 +167,7 @@ private:
   int try_remove_ora_decode(ObRawExpr *&expr, ObRawExpr *&new_expr);
 
   int remove_case_when_predicate(ObDMLStmt *stmt, bool &trans_happened);
-  int inner_remove_case_when_predicate(
-                                       ObQueryCtx *query_ctx,
+  int inner_remove_case_when_predicate(ObQueryCtx *query_ctx,
                                        ObRawExpr *&expr,
                                        const ObIArray<ObRawExpr*> &check_exprs,
                                        bool &trans_happened);
@@ -183,11 +182,11 @@ private:
                                        bool &trans_happened);
 
   int do_convert_case_when_predicate(ObDMLStmt *stmt,
-                                    ObRawExpr *&parent_expr,
-                                    ObRawExpr *&case_expr,
-                                    ObRawExpr *&sibling_expr,
-                                    const bool &case_at_left,
-                                    bool &trans_happened);
+                                     ObRawExpr *&parent_expr,
+                                     ObRawExpr *&case_expr,
+                                     ObRawExpr *&sibling_expr,
+                                     const bool &case_at_left,
+                                     bool &trans_happened);
 };
 
 }

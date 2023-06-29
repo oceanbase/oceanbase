@@ -27,7 +27,6 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
   int ret = OB_SUCCESS;
   bool is_happened = false;
   UNUSED(parent_stmts);
-  LOG_TRACE("fhkong before simplify transform", K(*stmt));
   if (OB_FAIL(flatten_stmt_exprs(stmt, is_happened))) {
     LOG_WARN("failed to flatten stmt exprs", K(is_happened));
   } else {
@@ -113,8 +112,6 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
       LOG_TRACE("succeed to remove subquery when filter is false", K(is_happened));
     }
   }
-
-  LOG_TRACE("fhkong before case_when transform", K(*stmt));
   if (OB_SUCC(ret)) {
     if (OB_FAIL(remove_case_when_predicate(stmt, is_happened))) {
       LOG_WARN("failed to remove case when predicate", K(ret));
@@ -133,10 +130,6 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
       LOG_TRACE("succeed to convert case when predicate", K(is_happened));
     }
   }
-  LOG_TRACE("fhkong after case_when transform", K(*stmt));
-
-  LOG_TRACE("fhkong after simplify transform", K(*stmt));
-
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
