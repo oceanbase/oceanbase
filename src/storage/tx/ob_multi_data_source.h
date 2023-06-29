@@ -117,6 +117,8 @@ public:
 
   const share::SCN &get_base_scn() { return mds_base_scn_; }
 
+  bool operator==(const ObTxBufferNode & buffer_node) const;
+
   void log_sync_fail()
   {
     has_submitted_ = false;

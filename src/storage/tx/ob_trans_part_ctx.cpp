@@ -1990,16 +1990,19 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
     if (ObTxLogType::TX_REDO_LOG == log_type) {
       // do nothing
     }  else if (ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type) {
-      tmp_array.reset();
       share::SCN notify_redo_scn =
           log_cb->get_first_part_scn().is_valid() ? log_cb->get_first_part_scn() : log_ts;
-      if (OB_FAIL(log_cb->get_mds_range().copy_to(tmp_array))) {
-        TRANS_LOG(WARN, "copy mds log array failed", K(ret));
-      } else if (OB_FAIL(log_cb->get_mds_range().move_to(exec_info_.multi_data_source_))) {
-        TRANS_LOG(WARN, "move MDS range into exec_info failed", K(ret));
+      if (OB_FAIL(log_cb->get_mds_range().move_from_cache_to_arr(mds_cache_,
+                                                                 exec_info_.multi_data_source_))) {
+        TRANS_LOG(WARN, "move from mds cache to durable arr failed", K(ret));
+        // } else if (OB_FAIL(log_cb->get_mds_range().move_to(exec_info_.multi_data_source_))) {
+        //   TRANS_LOG(WARN, "move MDS range into exec_info failed", K(ret));
       } else if (FALSE_IT(mds_cache_.clear_submitted_iterator())) {
-        //do nothing
-      } else if (OB_FAIL(notify_data_source_(NotifyType::ON_REDO, notify_redo_scn, false, tmp_array))) {
+        // do nothing
+      } else if (OB_FAIL(notify_data_source_(NotifyType::ON_REDO,
+                                             notify_redo_scn,
+                                             false,
+                                             log_cb->get_mds_range().get_range_array()))) {
         TRANS_LOG(WARN, "notify data source for ON_REDO", K(ret));
       } else {
         log_cb->get_mds_range().reset();
@@ -2280,7 +2283,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
     const SCN log_ts = log_cb->get_log_ts();
     // TODO, dingxi
     mt_ctx_.sync_log_fail(log_cb->get_callbacks());
-    log_cb->get_mds_range().range_sync_failed();
+    log_cb->get_mds_range().range_sync_failed(mds_cache_);
     if (log_ts == ctx_tx_data_.get_start_log_ts()) {
       ctx_tx_data_.set_start_log_ts(SCN());
     }
@@ -6075,7 +6078,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
           TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
         }
       } else {
-        ret = mds_cache_.fill_mds_log(log, log_cb->get_mds_range(), barrier_type, mds_base_scn);
+        ret = mds_cache_.fill_mds_log(this, log, log_cb->get_mds_range(), barrier_type, mds_base_scn);
       }
 
       // TRANS_LOG(INFO, "after fill mds log", K(ret), K(trans_id_));
