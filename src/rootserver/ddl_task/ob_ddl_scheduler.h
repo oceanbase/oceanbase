@@ -346,6 +346,7 @@ private:
       const share::schema::ObTableSchema *dest_schema,
       const int64_t parallelism,
       const int64_t consumer_group_id,
+      const int64_t task_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -357,6 +358,7 @@ private:
       const ObTableSchema *dest_schema,
       const int64_t parallelism,
       const int64_t consumer_group_id,
+      const int64_t task_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -368,6 +370,7 @@ private:
       const share::schema::ObTableSchema *dest_schema,
       const int64_t parallelism,
       const int64_t consumer_group_id,
+      const int64_t task_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -378,6 +381,7 @@ private:
       const int64_t table_id,
       const int64_t schema_version,
       const int64_t consumer_group_id,
+      const int64_t task_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);

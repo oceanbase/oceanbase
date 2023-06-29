@@ -881,6 +881,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                    param.dest_table_schema_,
                                                    param.parallelism_,
                                                    param.consumer_group_id_,
+                                                   param.task_id_,
                                                    static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
                                                    *param.allocator_,
                                                    task_record))) {
@@ -895,6 +896,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                  param.dest_table_schema_,
                                                  param.parallelism_,
                                                  param.consumer_group_id_,
+                                                 param.task_id_,
                                                  alter_table_arg,
                                                  *param.allocator_,
                                                  task_record))) {
@@ -926,6 +928,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                     param.dest_table_schema_,
                                                     param.parallelism_,
                                                     param.consumer_group_id_,
+                                                    param.task_id_,
                                                     static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
                                                     *param.allocator_,
                                                     task_record))) {
@@ -938,6 +941,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                param.src_table_schema_->get_table_id(),
                                                param.schema_version_,
                                                param.consumer_group_id_,
+                                               param.task_id_,
                                                static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
                                                *param.allocator_,
                                                task_record))) {
@@ -1430,21 +1434,19 @@ int ObDDLScheduler::create_table_redefinition_task(
     const share::schema::ObTableSchema *dest_schema,
     const int64_t parallelism,
     const int64_t consumer_group_id,
+    const int64_t task_id,
     const obrpc::ObAlterTableArg *alter_table_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  int64_t task_id = 0;
   SMART_VAR(ObTableRedefinitionTask, redefinition_task) {
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("ObDDLScheduler has not been inited", K(ret));
-    } else if (OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
+    } else if (OB_UNLIKELY(0 == task_id) || OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments", K(ret), KP(alter_table_arg), KP(src_schema), KP(dest_schema));
-    } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), src_schema->get_tenant_id(), task_id))) {
-      LOG_WARN("fetch new task id failed", K(ret));
+      LOG_WARN("invalid arguments", K(ret), K(task_id), KP(alter_table_arg), KP(src_schema), KP(dest_schema));
     } else if (OB_FAIL(redefinition_task.init(src_schema->get_tenant_id(),
                                               task_id,
                                               type,
@@ -1472,21 +1474,19 @@ int ObDDLScheduler::create_drop_primary_key_task(
     const ObTableSchema *dest_schema,
     const int64_t parallelism,
     const int64_t consumer_group_id,
+    const int64_t task_id,
     const obrpc::ObAlterTableArg *alter_table_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  int64_t task_id = 0;
   SMART_VAR(ObDropPrimaryKeyTask, drop_pk_task) {
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLScheduler has not been inited", K(ret));
-  } else if (OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
+  } else if (OB_UNLIKELY(0 == task_id) || OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(alter_table_arg), KP(src_schema), KP(dest_schema));
-  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), src_schema->get_tenant_id(), task_id))) {
-    LOG_WARN("fetch new task id failed", K(ret));
+    LOG_WARN("invalid arguments", K(ret), K(task_id), KP(alter_table_arg), KP(src_schema), KP(dest_schema));
   } else if (OB_FAIL(drop_pk_task.init(src_schema->get_tenant_id(),
                                        task_id,
                                        type,
@@ -1514,21 +1514,19 @@ int ObDDLScheduler::create_column_redefinition_task(
     const share::schema::ObTableSchema *dest_schema,
     const int64_t parallelism,
     const int64_t consumer_group_id,
+    const int64_t task_id,
     const obrpc::ObAlterTableArg *alter_table_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  int64_t task_id = 0;
   SMART_VAR(ObColumnRedefinitionTask, redefinition_task) {
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLScheduler has not been inited", K(ret));
-  } else if (OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
+  } else if (OB_UNLIKELY(0 == task_id) || OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(alter_table_arg), KP(src_schema), KP(dest_schema));
-  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), src_schema->get_tenant_id(), task_id))) {
-    LOG_WARN("fetch new task id failed", K(ret));
+    LOG_WARN("invalid arguments", K(ret), K(task_id), KP(alter_table_arg), KP(src_schema), KP(dest_schema));
   } else if (OB_FAIL(redefinition_task.init(src_schema->get_tenant_id(),
                                             task_id,
                                             type,
@@ -1555,22 +1553,20 @@ int ObDDLScheduler::create_modify_autoinc_task(
     const int64_t table_id,
     const int64_t schema_version,
     const int64_t consumer_group_id,
+    const int64_t task_id,
     const obrpc::ObAlterTableArg *arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObModifyAutoincTask, modify_autoinc_task) {
-    int64_t task_id = 0;
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
     } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id
-                          || schema_version <= 0 || nullptr == arg || !arg->is_valid())) {
+                          || schema_version <= 0 || 0 == task_id || nullptr == arg || !arg->is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(schema_version), K(arg));
-    } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), tenant_id, task_id))) {
-      LOG_WARN("fetch new task id failed", K(ret));
+      LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(schema_version), K(task_id), K(arg));
     } else if (OB_FAIL(modify_autoinc_task.init(tenant_id, task_id, table_id, schema_version, consumer_group_id, *arg))) {
       LOG_WARN("init global index task failed", K(ret), K(table_id), K(arg));
     } else if (OB_FAIL(modify_autoinc_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
