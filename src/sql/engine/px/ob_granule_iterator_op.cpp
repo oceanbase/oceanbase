@@ -1159,8 +1159,9 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
             OZ(args.tablet_arrays_.push_back(pruning_remain_tablets));
             OZ(pump_->regenerate_gi_task());
           }
-          args.set_finish_pruning();
         }
+        args.set_pruning_ret(ret);
+        args.set_finish_pruning();
       } else {
         while (OB_SUCC(ret) && !args.is_finish_pruning()) {
           if (OB_FAIL(ctx_.fast_check_status())) {
@@ -1169,7 +1170,8 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
             ob_usleep(100);
           }
         }
-        if (OB_SUCC(ret) && args.sharing_iter_end_) {
+        if (OB_SUCC(ret)
+           && (args.sharing_iter_end_ || OB_UNLIKELY(OB_SUCCESS != args.get_pruning_ret()))) {
           ret = OB_ITER_END;
         }
       }
