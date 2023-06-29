@@ -4880,7 +4880,6 @@ int ObTablet::build_transfer_in_tablet_status_(
     common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-
   ObTabletCreateDeleteMdsUserData new_user_data;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -4888,7 +4887,6 @@ int ObTablet::build_transfer_in_tablet_status_(
   } else if (OB_FAIL(new_user_data.assign(user_data))) {
     LOG_WARN("assign user data failed", K(ret), K_(is_inited));
   } else {
-    mds_data.tablet_status_.committed_kv_.get_ptr()->reset();
     new_user_data.tablet_status_ = ObTabletStatus::TRANSFER_IN;
     new_user_data.transfer_ls_id_ = tablet_meta_.ls_id_;
     new_user_data.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_IN;
@@ -4904,7 +4902,6 @@ int ObTablet::build_transfer_in_tablet_status_(
     } else {
       mds::MdsDumpKV *uncommitted_kv = mds_data.tablet_status_.uncommitted_kv_.ptr_;
       const mds::MdsDumpKV *committed_kv = mds_data.tablet_status_.committed_kv_.ptr_;
-
       if (OB_ISNULL(uncommitted_kv) || OB_ISNULL(committed_kv)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("dump kv is null", K(ret), KP(uncommitted_kv), KP(committed_kv));
@@ -4914,8 +4911,8 @@ int ObTablet::build_transfer_in_tablet_status_(
         mds::MdsDumpNode &node = uncommitted_kv->v_;
         node.allocator_ = &allocator;
         node.user_data_.assign(buffer, length);
+        mds_data.tablet_status_.committed_kv_.get_ptr()->reset();
       }
-
     }
   }
   return ret;

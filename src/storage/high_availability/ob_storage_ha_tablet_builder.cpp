@@ -873,7 +873,7 @@ int ObStorageHATabletsBuilder::get_remote_logical_minor_scn_range_(
   } else if (tablet->get_tablet_meta().has_transfer_table()) {
     //transfer tablet should copy whole sstable from  src;
     scn_range.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
-    scn_range.end_scn_.set_max();
+    scn_range.end_scn_ = tablet->get_clog_checkpoint_scn();
   } else if (minor_sstable_array.count() > 0 && OB_FAIL(minor_sstable_array.get_all_tables(sstables))) {
     LOG_WARN("failed to get all tables", K(ret), K(param_));
   } else {
