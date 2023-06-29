@@ -638,12 +638,23 @@ protected:
       common::ObActiveSessionGuard::get_stat().plan_line_id_ = -1;
     }
   }
+  #ifdef ENABLE_DEBUG_LOG
+  inline int init_dummy_mem_context(uint64_t tenant_id);
+  #endif
   uint64_t cpu_begin_time_; // start of counting cpu time
   uint64_t total_time_; //  total time cost on this op, including io & cpu time
 protected:
   bool batch_reach_end_;
   bool row_reach_end_;
   int64_t output_batches_b4_rescan_;
+  //The following two variables are used to track whether the operator
+  //has been closed && destroyed in test mode. We apply for a small
+  //memory for each operator in open. If there is
+  //no close, mem_context will release it and give an alarm
+  #ifdef ENABLE_DEBUG_LOG
+  lib::MemoryContext dummy_mem_context_;
+  char *dummy_ptr_;
+  #endif
   bool check_stack_overflow_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
@@ -698,6 +709,12 @@ int ObOpSpec::find_target_specs(T &spec, const FILTER &f, common::ObIArray<T *> 
 
 inline void ObOperator::destroy()
 {
+  #ifdef ENABLE_DEBUG_LOG
+   if (OB_LIKELY(nullptr != dummy_mem_context_)) {
+    DESTROY_CONTEXT(dummy_mem_context_);
+    dummy_mem_context_ = nullptr;
+  }
+  #endif
 }
 
 OB_INLINE void ObOperator::clear_evaluated_flag()
