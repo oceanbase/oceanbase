@@ -27,6 +27,7 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
   int ret = OB_SUCCESS;
   bool is_happened = false;
   UNUSED(parent_stmts);
+  LOG_TRACE("fhkong before simplify transform", K(*stmt));
   if (OB_FAIL(flatten_stmt_exprs(stmt, is_happened))) {
     LOG_WARN("failed to flatten stmt exprs", K(is_happened));
   } else {
@@ -113,6 +114,7 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
     }
   }
 
+  LOG_TRACE("fhkong before case_when transform", K(*stmt));
   if (OB_SUCC(ret)) {
     if (OB_FAIL(remove_case_when_predicate(stmt, is_happened))) {
       LOG_WARN("failed to remove case when predicate", K(ret));
@@ -131,6 +133,10 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
       LOG_TRACE("succeed to convert case when predicate", K(is_happened));
     }
   }
+  LOG_TRACE("fhkong after case_when transform", K(*stmt));
+
+  LOG_TRACE("fhkong after simplify transform", K(*stmt));
+
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
@@ -2915,10 +2921,13 @@ int ObTransformSimplifyExpr::do_convert_case_when_predicate(ObDMLStmt *stmt,
                                                               got_result,
                                                               *ctx_->allocator_))) {
           LOG_WARN("failed to calc const or caculable expr", K(ret));
-        } else if (got_result && (result.is_false())) {
+        } else if (got_result && (result.is_false() || result.is_true())) {
           // exp3 ~ exp4 is false, case when exp1 then exp2 else exp3 end exp4
           //    => exp1 and exp2 ~ exp4
+          // exp3 ~ exp4 is true
+          //    => exp1 and exp2 ~ exp4 or lnnvl(exp1)
           ObRawExpr *exp2_cmp_exp4 = NULL;
+          ObRawExpr *exp1_and_exp2_cmp_exp4 = NULL;
           if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
                                                                       case_when_expr,
                                                                       exp2,
@@ -2934,21 +2943,47 @@ int ObTransformSimplifyExpr::do_convert_case_when_predicate(ObDMLStmt *stmt,
 
             LOG_WARN("failed to build cmp expr", K(ret));
           } else {
-            ObExprConstraint expr_cons(exp3_cmp_exp4, PreCalcExprExpectResult::PRE_CALC_RESULT_FALSE);
             ObSEArray<ObRawExpr*, 2> op_params;
-            if (OB_FAIL(ctx_->expr_constraints_.push_back(expr_cons))) {
-              LOG_WARN("failed to push back constraint", K(ret));
-            } else if (OB_FAIL(op_params.push_back(exp1))) {
+            if (OB_FAIL(op_params.push_back(exp1))) {
               LOG_WARN("failed to push back param", K(ret));
             } else if (OB_FAIL(op_params.push_back(exp2_cmp_exp4))) {
               LOG_WARN("failed to push back param", K(ret));
             } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*(ctx_->expr_factory_),
                                                               op_params,
-                                                              parent_expr))) {
+                                                              exp1_and_exp2_cmp_exp4))) {
                                                                 
               LOG_WARN("failed to build and expr", K(ret));
-            } else {
-              trans_happened = true;
+            } else if (result.is_false()) {
+              ObExprConstraint expr_cons(exp3_cmp_exp4, PreCalcExprExpectResult::PRE_CALC_RESULT_FALSE);
+              if (OB_FAIL(ctx_->expr_constraints_.push_back(expr_cons))) {
+                LOG_WARN("failed to push back constraint", K(ret));
+              } else {
+                parent_expr = exp1_and_exp2_cmp_exp4; 
+                trans_happened = true;
+              }
+            } else if (result.is_true()) {
+              ObExprConstraint expr_cons(exp3_cmp_exp4, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE);
+              if (OB_FAIL(ctx_->expr_constraints_.push_back(expr_cons))) {
+                LOG_WARN("failed to push back constraint", K(ret));
+              } else {
+                ObRawExpr *lnnvl_exp1 = NULL;
+                ObSEArray<ObRawExpr*, 2> orop_params;
+                if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*(ctx_->expr_factory_),
+                                                              exp1,
+                                                              lnnvl_exp1))) {
+                  LOG_WARN("failed to build lnnvl expr", K(ret));
+                } else if (OB_FAIL(orop_params.push_back(exp1_and_exp2_cmp_exp4))) {
+                  LOG_WARN("failed to push back param", K(ret));
+                } else if (OB_FAIL(orop_params.push_back(lnnvl_exp1))) {
+                  LOG_WARN("failed to push back param", K(ret));
+                } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*(ctx_->expr_factory_),
+                                                                  orop_params,
+                                                                  parent_expr))) {
+                  LOG_WARN("failed to build or exprs", K(ret));
+                } else {
+                  trans_happened = true;
+                }
+              }
             }
           }
         }
