@@ -1987,9 +1987,10 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
   if (OB_SUCC(ret) && is_trans_end_) {
     if (OB_FAIL(get_snapshot(snapshot_version))) {
       LOG_WARN("get snapshot version failed", K(ret));
+    } else {
+      is_trans_end = is_trans_end_;
     }
   }
-  is_trans_end = is_trans_end_;
   return ret;
 }
 
@@ -2037,9 +2038,8 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
         }
       }
       if (OB_SUCC(ret)) {
-        int tmp_ret = OB_SUCCESS;
         snapshot_version = max(max_snapshot, curr_ts.get_val_for_tx() - INDEX_SNAPSHOT_VERSION_DIFF);
-        if (OB_SUCCESS != (tmp_ret = freeze_info_proxy.get_freeze_info(
+        if (OB_FAIL(freeze_info_proxy.get_freeze_info(
             root_service->get_sql_proxy(), SCN::min_scn(), frozen_status))) {
           LOG_WARN("get freeze info failed", K(ret));
         } else {
