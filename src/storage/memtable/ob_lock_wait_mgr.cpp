@@ -446,7 +446,7 @@ int ObLockWaitMgr::repost(Node* node)
     ret = OB_NOT_INIT;
     TRANS_LOG(ERROR, "lock wait mgr not inited", K(ret));
   } else if (OB_FAIL(OBSERVER.get_net_frame().get_deliver().repost((void*)node))) {
-    TRANS_LOG(WARN, "report error", K(ret), K(*node));
+    TRANS_LOG(WARN, "report error", K(ret), KP(node));
   }
   return ret;
 }
