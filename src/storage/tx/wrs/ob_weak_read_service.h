@@ -50,7 +50,7 @@ public:
   /// get CLUSTER level weak read version
   int get_cluster_version(const uint64_t tenant_id, share::SCN &version);
 
-  void check_server_can_start_service(bool &can_start_service, int64_t &min_wrs) const;
+  int check_tenant_can_start_service(const uint64_t tenant_id, bool &can_start_service, SCN &version) const;
 
   ///////////// RPC process functions /////////////////
   void process_get_cluster_version_rpc(const uint64_t tenant_id,
