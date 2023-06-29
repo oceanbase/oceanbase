@@ -838,6 +838,7 @@ int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
                                    unused_allow_log_sync))) {
       LOG_WARN("enable ls palf failed", K(ret), K(ls_meta));
     } else {
+      ls->disable_to_read();
       LOG_INFO("success replay create ls", K(ret), K(ls_meta));
     }
   }

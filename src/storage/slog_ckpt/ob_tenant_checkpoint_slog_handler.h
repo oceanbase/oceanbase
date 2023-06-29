@@ -100,6 +100,7 @@ public:
   void wait();
   void destroy();
 
+  int enable_ls_read();
   int report_slog(const ObTabletMapKey &tablet_key, const ObMetaDiskAddr &slog_addr);
   int check_slog(const ObTabletMapKey &tablet_key, bool &has_slog);
   int read_tablet_checkpoint_by_addr(
