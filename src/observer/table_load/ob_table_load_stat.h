@@ -13,7 +13,7 @@ namespace oceanbase
 namespace observer
 {
 
-#define ENABLE_TABLE_LOAD_STAT 1
+#define ENABLE_TABLE_LOAD_STAT 0
 
 struct ObTableLoadStat
 {
