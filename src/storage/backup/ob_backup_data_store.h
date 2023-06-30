@@ -312,6 +312,10 @@ public:
   int read_root_key_info(const uint64_t tenant_id);
 
   int read_base_tablet_list(const share::ObLSID &ls_id, ObIArray<common::ObTabletID> &tablet_id_array);
+// 4.1 interface to get tablet to ls
+  int read_tablet_to_ls_info_v_4_1_x(const int64_t turn_id, const ObLSID &ls_id, ObIArray<ObTabletID> &tablet_ids);
+  int read_deleted_tablet_info_v_4_1_x(const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids);
+
   TO_STRING_KV(K_(backup_desc));
 
 public:

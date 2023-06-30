@@ -44,11 +44,13 @@ struct ObRestoreBaseInfo
   VIRTUAL_TO_STRING_KV(
       K_(restore_scn),
       K_(backup_cluster_version),
+      K_(backup_data_version),
       K_(backup_dest),
       K_(backup_set_list));
 
   share::SCN restore_scn_;
-  int64_t backup_cluster_version_;
+  uint64_t backup_cluster_version_;
+  uint64_t backup_data_version_;
   share::ObBackupDest backup_dest_;
   common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
 };

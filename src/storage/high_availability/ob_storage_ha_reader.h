@@ -695,7 +695,8 @@ public:
   virtual ~ObCopyLSViewInfoRestoreReader() {}
   int init(
       const share::ObLSID &ls_id,
-      const ObRestoreBaseInfo &restore_base_info);
+      const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper *meta_index_store);
 
   Type get_type() const override
   {
@@ -707,12 +708,17 @@ public:
 
   int get_next_tablet_info(
       obrpc::ObCopyTabletInfo &tablet_info) override;
+private:
+  int init_for_4_1_x_(const share::ObLSID &ls_id,
+      const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store);
 
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObExternTabletMetaReader reader_;
+  ObCopyTabletInfoRestoreReader reader_41x_; // only used by 4.1
 
   DISALLOW_COPY_AND_ASSIGN(ObCopyLSViewInfoRestoreReader);
 };
