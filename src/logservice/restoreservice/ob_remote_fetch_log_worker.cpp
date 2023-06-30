@@ -317,9 +317,11 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
     } else {
       LOG_TRACE("pre read data is empty and failed", K(ret), KPC(task));
     }
+    if (! is_fatal_error_(ret)) {
+      task->iter_.update_source_cb();
+    }
     // not encounter fatal error or push submit array succ, just try retire task
     int tmp_ret = OB_SUCCESS;
-    task->iter_.update_source_cb();
     if (OB_SUCCESS != (tmp_ret = try_retire_(task))) {
       LOG_WARN("retire task failed", K(tmp_ret), KP(task));
     }
