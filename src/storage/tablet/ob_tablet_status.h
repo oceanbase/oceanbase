@@ -53,8 +53,20 @@ public:
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
   int64_t get_serialize_size() const;
 
-  TO_STRING_KV(K_(status));
+  TO_STRING_KV("val", static_cast<uint8_t>(status_),
+               "str", get_str(*this));
 private:
+  static constexpr const char *status_str_array_[] = {
+    "CREATING",
+    "NORMAL",
+    "DELETING",
+    "DELETED",
+    "TRANSFER_OUT",
+    "TRANSFER_IN",
+    "TRANSFER_OUT_DELETED",
+    "MAX"
+  };
+
   Status status_;
 };
 
