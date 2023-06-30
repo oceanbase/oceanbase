@@ -1242,7 +1242,7 @@ int ObLogHandler::offline()
     is_offline_ = true;
     // NB: must ensure on_role_change not fail.
     if (OB_FAIL(rc_service_->on_role_change(id_))) {
-      CLOG_LOG(ERROR, "on_role_change failed", K(ret), KPC(this));
+      CLOG_LOG(WARN, "on_role_change failed", K(ret), KPC(this));
     } else {
       CLOG_LOG(INFO, "LogHandler offline success", K(ret), KPC(this));
     }
