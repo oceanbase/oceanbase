@@ -33,7 +33,7 @@ public:
   ObTabletMediumClogReplayExecutor(ObMediumCompactionInfo &medium_info);
   int init(const share::SCN &scn);
 protected:
-  bool is_replay_update_user_data_() const override
+  bool is_replay_update_tablet_status_() const override
   {
     return false;
   }

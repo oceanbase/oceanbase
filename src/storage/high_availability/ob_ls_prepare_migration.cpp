@@ -576,7 +576,7 @@ int ObInitialPrepareMigrationTask::generate_migration_dags_()
         LOG_WARN("Fail to add task", K(ret));
         ret = OB_EAGAIN;
       }
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_prepare_dag, initial_prepare_migration_dag))) {
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_prepare_dag, start_prepare_dag))) {
         LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_prepare_migration_dag));
       } else {
         finish_prepare_dag = nullptr;
@@ -588,15 +588,16 @@ int ObInitialPrepareMigrationTask::generate_migration_dags_()
     }
 
     if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_prepare_dag)) {
+        scheduler->free_dag(*finish_prepare_dag, start_prepare_dag);
+        finish_prepare_dag = nullptr;
+      }
+
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_prepare_dag)) {
         scheduler->free_dag(*start_prepare_dag, initial_prepare_migration_dag);
         start_prepare_dag = nullptr;
       }
 
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_prepare_dag)) {
-        scheduler->free_dag(*finish_prepare_dag, initial_prepare_migration_dag);
-        finish_prepare_dag = nullptr;
-      }
       if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
         LOG_WARN("failed to set ls prepare migration result", K(ret), K(tmp_ret), K(*ctx_));
       }
@@ -1032,14 +1033,14 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
     }
 
     if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(finish_backfill_tx_dag)) {
+        scheduler->free_dag(*finish_backfill_tx_dag, tablet_backfill_tx_dag);
+        finish_backfill_tx_dag = nullptr;
+      }
+
       if (OB_NOT_NULL(tablet_backfill_tx_dag)) {
         scheduler->free_dag(*tablet_backfill_tx_dag, start_prepare_migration_dag);
         tablet_backfill_tx_dag = nullptr;
-      }
-
-      if (OB_NOT_NULL(finish_backfill_tx_dag)) {
-        scheduler->free_dag(*finish_backfill_tx_dag, start_prepare_migration_dag);
-        finish_backfill_tx_dag = nullptr;
       }
     }
   }

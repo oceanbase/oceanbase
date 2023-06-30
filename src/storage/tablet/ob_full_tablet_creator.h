@@ -48,6 +48,10 @@ public:
   int push_tablet_to_queue(const ObTabletHandle &tablet_handle);
   int remove_tablet_from_queue(const ObTabletHandle &tablet_handle);
   void free_tablet(ObTablet *tablet);
+  OB_INLINE int64_t total() const { return tiny_allocator_.total() + mstx_allocator_.total(); }
+  TO_STRING_KV(K(mstx_allocator_.used()), K(mstx_allocator_.total()),
+               K(tiny_allocator_.used()), K(tiny_allocator_.total()),
+               "full allocator total", total());
 private:
   int pop_tablet(ObTabletHandle &tablet_handle);
 private:

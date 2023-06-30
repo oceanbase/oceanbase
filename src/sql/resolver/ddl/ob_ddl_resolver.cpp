@@ -5542,9 +5542,14 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
         ObObjType data_type = column.get_data_type();
         ObCollationType collation_type = column.get_collation_type();
         if (lib::is_oracle_mode() && column.is_xmltype()) {
-          // use hidden column type, treat as clob, wil transform to blob in _makexmlbinary
-          data_type = ObLongTextType;
-          collation_type = CS_TYPE_UTF8MB4_BIN;
+          if (ob_is_user_defined_sql_type(data_type)) {
+            // bugfix: 50351856
+            default_value.meta_.set_sql_udt(ObXMLSqlType);
+          } else {
+            // use hidden column type, treat as clob, wil transform to blob in _makexmlbinary
+            data_type = ObLongTextType;
+            collation_type = CS_TYPE_UTF8MB4_BIN;
+          }
         }
         ObObj dest_obj;
         const ObDataTypeCastParams dtc_params(tz_info_wrap.get_time_zone_info(), nls_formats, CS_TYPE_INVALID, CS_TYPE_INVALID, CS_TYPE_UTF8MB4_GENERAL_CI);

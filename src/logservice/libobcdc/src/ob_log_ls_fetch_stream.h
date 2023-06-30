@@ -251,8 +251,8 @@ private:
   // handle if found misslog while read_log_
   //
   // @param [in] log_entry         LogEntry
-  // @param [in] org_missing_info  MissingLogInfo
-  // @param [in] tsi               logfetcher::TransStatInfo
+  // @param [in] missing_info      MissingLogInfo
+  // @param [in] tsi               TransStatInfo
   // @param [out] fail_reason      KickOutReason
   //
   // @retval OB_SUCCESS                   success
@@ -260,7 +260,19 @@ private:
   // @retval other error code             fail
   int handle_log_miss_(
       palf::LogEntry &log_entry,
-      IObCDCPartTransResolver::MissingLogInfo &org_missing_info,
+      IObCDCPartTransResolver::MissingLogInfo &missing_info,
+      logfetcher::TransStatInfo &tsi,
+      volatile bool &stop_flag,
+      KickOutReason &fail_reason);
+  int handle_miss_record_or_state_log_(
+      FetchLogSRpc &fetch_log_srpc,
+      IObCDCPartTransResolver::MissingLogInfo &missing_info,
+      logfetcher::TransStatInfo &tsi,
+      volatile bool &stop_flag,
+      KickOutReason &fail_reason);
+  int handle_miss_redo_log_(
+      FetchLogSRpc &fetch_log_srpc,
+      IObCDCPartTransResolver::MissingLogInfo &missing_info,
       logfetcher::TransStatInfo &tsi,
       volatile bool &stop_flag,
       KickOutReason &fail_reason);
@@ -274,8 +286,7 @@ private:
       const obrpc::ObCdcLSFetchLogResp &resp,
       int64_t &fetched_missing_log_cnt,
       logfetcher::TransStatInfo &tsi,
-      IObCDCPartTransResolver::MissingLogInfo &org_missing_info,
-      IObCDCPartTransResolver::MissingLogInfo &new_generated_miss_info);
+      IObCDCPartTransResolver::MissingLogInfo &missing_info);
   int alloc_fetch_log_srpc_(FetchLogSRpc *&fetch_log_srpc);
   void free_fetch_log_srpc_(FetchLogSRpc *fetch_log_srpc);
   // TODO @bohou handle missing log end

@@ -20,6 +20,7 @@
 
 #include "ob_log_trans_msg_sorter.h"
 #include "ob_log_instance.h"            // IObLogErrHandler
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 #define RETRY_FUNC_ON_ERROR_WITH_USLEEP(err_no, var, func, args...) \
   do {\
@@ -186,6 +187,7 @@ void ObLogTransMsgSorter::mark_stop_flag()
 void ObLogTransMsgSorter::handle(void *data)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   TransCtx *trans = NULL;
 
   if (OB_UNLIKELY(IS_NOT_INIT)) {

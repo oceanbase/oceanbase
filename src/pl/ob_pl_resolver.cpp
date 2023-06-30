@@ -3685,21 +3685,28 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
     need_modify = false;
     if (expr->is_obj_access_expr()) {
       ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr);
+      int64_t collection_index = 0;
+      for (int64_t i = 0; i < obj_access_expr->get_access_idxs().count(); ++i) {
+        if (obj_access_expr->get_access_idxs().at(i).elem_type_.is_collection_type()) {
+          collection_index = i;
+          break;
+        }
+      }
       if (obj_access_expr->get_access_idxs().count() > 1
-          && obj_access_expr->get_access_idxs().at(0).elem_type_.is_collection_type()) {
-        if (obj_access_expr->get_access_idxs().at(1).is_local()) {
-          int64_t var_idx = obj_access_expr->get_access_idxs().at(1).var_index_;
+          && obj_access_expr->get_access_idxs().at(collection_index).elem_type_.is_collection_type()) {
+        if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_local()) {
+          int64_t var_idx = obj_access_expr->get_access_idxs().at(collection_index + 1).var_index_;
           if (var_idx < 0 || var_idx >= obj_access_expr->get_var_indexs().count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("var index is invalid", K(var_idx), K(obj_access_expr->get_var_indexs()), K(ret));
           } else if (obj_access_expr->get_var_indexs().at(var_idx) == idx) {
             need_modify = true;
             if (obj_access_expr->get_var_indexs().count() != 2
-                || !obj_access_expr->get_access_idxs().at(1).elem_type_.is_obj_type()) {
+                || !obj_access_expr->get_access_idxs().at(collection_index + 1).elem_type_.is_obj_type()) {
               can_array_binding = false;
-            } else if (2 == obj_access_expr->get_access_idxs().count()) {
-              // do nothing ...
-            } else if (obj_access_expr->get_access_idxs().at(2).is_const()) {
+            } else if (2 == obj_access_expr->get_access_idxs().count() - collection_index) {
+              can_array_binding = (0 == collection_index);
+            } else if (obj_access_expr->get_access_idxs().at(collection_index + 2).is_const()) {
               can_array_binding = false;
             } else {
               ret = OB_ERR_BULK_IN_BIND;

@@ -1141,8 +1141,8 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
       sqc.set_adjoining_root_dfo(true);
     }
   }
-  ObArray<ObPeerTaskState> peer_states;
-  ObArray<dtl::ObDtlChannel *> dtl_channels;
+  ObSEArray<ObPeerTaskState, 8> peer_states;
+  ObSEArray<dtl::ObDtlChannel *, 8> dtl_channels;
 
   // 分发 sqc 可能需要重试，
   // 分发 sqc 的 rpc 成功，但 sqc 上无法分配最小个数的 worker 线程，`dispatch_sqc`内部进行重试，

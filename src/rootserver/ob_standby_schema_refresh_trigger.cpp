@@ -100,6 +100,7 @@ int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
   int ret = OB_SUCCESS;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
   bool is_standby_normal_status = false;
+  DEBUG_SYNC(BLOCK_STANDBY_REFRESH_SCHEMA);
 
   if (OB_FAIL(check_inner_stat_())) {
     WSTAT("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_));

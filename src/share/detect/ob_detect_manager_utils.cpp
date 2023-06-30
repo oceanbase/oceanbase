@@ -79,8 +79,8 @@ void ObDetectManagerUtils::qc_unregister_detectable_id_from_dm(const ObDetectabl
 }
 
 int ObDetectManagerUtils::qc_register_check_item_into_dm(ObDfo &dfo,
-                                                         const ObArray<ObPeerTaskState> &peer_states,
-                                                         const ObArray<ObDtlChannel *> &dtl_channels)
+                                                         const ObIArray<ObPeerTaskState> &peer_states,
+                                                         const ObIArray<ObDtlChannel *> &dtl_channels)
 {
   int ret = OB_SUCCESS;
   ObDetectableId sqc_detectable_id = dfo.get_px_detectable_ids().sqc_detectable_id_;
@@ -162,7 +162,7 @@ int ObDetectManagerUtils::sqc_register_into_dm(ObPxSqcHandler *sqc_handler, ObPx
   } else {
   // 2.register a check item for detecting qc,
   // can be failed and not return error code, only drop the ability to detect qc
-    ObArray<ObPeerTaskState> peer_states;
+    ObSEArray<ObPeerTaskState, 1> peer_states;
     if (OB_SUCCESS != peer_states.push_back(ObPeerTaskState(sqc.get_qc_addr()))) {
       LIB_LOG(WARN, "[DM] failed to push_back", K(ret), K(sqc_detectable_id), K(qc_detectable_id));
     } else {
@@ -222,7 +222,7 @@ int ObDetectManagerUtils::single_dfo_register_check_item_into_dm(const common::O
   if (register_dm_info.is_valid()) {
     uint64_t node_sequence_id = 0;
     common::ObSingleDfoDetectCB *cb = nullptr;
-    ObArray<ObPeerTaskState> peer_states;
+    ObSEArray<ObPeerTaskState, 1> peer_states;
     if (OB_FAIL(peer_states.push_back(ObPeerTaskState{register_dm_info.addr_}))) {
       LIB_LOG(WARN, "[DM] failed to push_back to peer_states", K(ret), K(register_dm_info), K(key));
     }
@@ -254,7 +254,7 @@ int ObDetectManagerUtils::temp_table_register_check_item_into_dm(const common::O
   int ret = OB_SUCCESS;
   uint64_t node_sequence_id = 0;
   common::ObTempTableDetectCB *cb = nullptr;
-  ObArray<ObPeerTaskState> peer_states;
+  ObSEArray<ObPeerTaskState, 1> peer_states;
   if (OB_FAIL(peer_states.push_back(ObPeerTaskState{qc_addr}))) {
     LIB_LOG(WARN, "[DM] failed to push_back", K(ret), K(qc_detectable_id),
         K(qc_addr), K(dtl_int_key));
@@ -304,7 +304,7 @@ int ObDetectManagerUtils::p2p_datahub_register_check_item_into_dm(const common::
   const common::ObDetectableId &qc_detectable_id = register_dm_info.detectable_id_;
   const common::ObAddr &qc_addr = register_dm_info.addr_;
 
-  ObArray<ObPeerTaskState> peer_states;
+  ObSEArray<ObPeerTaskState, 1> peer_states;
   if (OB_FAIL(peer_states.push_back(ObPeerTaskState{qc_addr}))) {
     LIB_LOG(WARN, "[DM] failed to push_back", K(ret), K(qc_detectable_id),
         K(qc_addr), K(p2p_key));

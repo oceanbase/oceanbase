@@ -118,9 +118,9 @@ int ObTabletBindingHelper::get_tablet_for_new_mds(const ObLS &ls, const ObTablet
   const bool for_replay = replay_scn.is_valid();
   if (for_replay) {
     if (OB_FAIL(ls.replay_get_tablet(tablet_id, replay_scn, handle))) {
-      if (OB_TABLET_NOT_EXIST == ret) {
+      if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
         ret = OB_NO_NEED_UPDATE;
-        LOG_WARN("tablet does not exist", K(ret));
+        LOG_WARN("clog is obsolete, should skip replay", K(ret));
       } else {
         LOG_WARN("failed to get tablet", K(ret));
       }

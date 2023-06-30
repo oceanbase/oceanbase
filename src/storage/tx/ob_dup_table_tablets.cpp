@@ -854,23 +854,28 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
 
   // TODO serialize readable tablets
   if (OB_SUCC(ret)) {
-    DLIST_FOREACH(readable_ptr, readable_tablets_list_)
-    {
-      if (OB_FAIL(cal_single_set_max_ser_size_(readable_ptr, max_ser_size, max_log_buf_len,
-                                               unique_id_array))) {
-        DUP_TABLE_LOG(WARN, "cal readable set max ser_size failed", K(ret));
-        if (OB_SIZE_OVERFLOW == ret) {
-          ret = OB_LOG_TOO_LARGE;
+    if (readable_tablets_list_.get_size() > 200) {
+      ret = OB_LOG_TOO_LARGE;
+    } else {
+      DLIST_FOREACH(readable_ptr, readable_tablets_list_)
+      {
+        if (OB_FAIL(cal_single_set_max_ser_size_(readable_ptr, max_ser_size, max_log_buf_len,
+                                                 unique_id_array))) {
+          DUP_TABLE_LOG(WARN, "cal readable set max ser_size failed", K(ret));
+          if (OB_SIZE_OVERFLOW == ret) {
+            ret = OB_LOG_TOO_LARGE;
+          }
+        } else {
+          readable_ptr->set_logging();
         }
-      } else {
-        readable_ptr->set_logging();
       }
     }
   }
 
   if (OB_LOG_TOO_LARGE == ret) {
     DUP_TABLE_LOG(INFO, "Too many dup tablets, we can not submit all", K(ret), K(max_ser_size),
-                  K(max_log_buf_len), K(unique_id_array));
+                  K(max_log_buf_len), K(unique_id_array), K(unique_id_array.count()),
+                  K(readable_tablets_list_.get_size()));
     ret = OB_SUCCESS;
   }
   DUP_TABLE_LOG(DEBUG, "finish prepare ser", K(ret), K(max_ser_size), K(unique_id_array));
@@ -932,9 +937,12 @@ int ObLSDupTabletsMgr::deserialize_tablet_log(DupTabletSetIDArray &unique_id_arr
 
   int64_t tmp_pos = pos;
 
+  common::ObTimeGuard timeguard("deserialize_tablet_log", 500 * 1000);
   unique_id_array.reset();
 
   SpinWLockGuard guard(dup_tablets_lock_);
+  timeguard.click();
+
   if (OB_ISNULL(buf) || data_len <= 0 || pos <= 0) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid argument", K(ret), KP(buf), K(data_len), K(pos));
@@ -1037,8 +1045,11 @@ int ObLSDupTabletsMgr::tablet_log_submitted(const bool submit_result,
                                             const DupTabletSetIDArray &unique_id_array)
 {
   int ret = OB_SUCCESS;
+
+  common::ObTimeGuard timeguard("tablet_log_submitted", 500 * 1000);
   SpinWLockGuard guard(dup_tablets_lock_);
 
+  timeguard.click();
   UNUSED(for_replay);
 
   for (int i = 0; OB_SUCC(ret) && i < unique_id_array.count(); i++) {
@@ -1072,10 +1083,13 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
 {
   int ret = OB_SUCCESS;
 
+  common::ObTimeGuard timeguard("tablet_log_synced", 500 * 1000);
   bool clean_readable = false;
 
   modify_readable_set = false;
   SpinWLockGuard guard(dup_tablets_lock_);
+
+  timeguard.click();
 
   for (int i = 0; OB_SUCC(ret) && i < unique_id_array.count(); i++) {
     const DupTabletSetCommonHeader logging_common_header = unique_id_array[i];
@@ -1149,7 +1163,7 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
 
   if (unique_id_array.count() > 0) {
     DUP_TABLE_LOG(INFO, "tablet log sync", K(ret), K(sync_result), K(for_replay), K(is_master()),
-                  K(unique_id_array), K(scn), K(modify_readable_set));
+                  K(unique_id_array), K(scn), K(modify_readable_set), K(timeguard));
   }
 
   return ret;

@@ -995,12 +995,12 @@ int ObLogRouteService::query_units_info_and_update_(
     LSSvrList &ls_svr_list = router_value.get_ls_svr_list();
     ObUnitsRecordInfo units_record_info;
 
-    if (OB_FAIL(systable_queryer_.get_all_units_info(source_tenant_id_, units_record_info))) {
+    if (OB_FAIL(systable_queryer_.get_all_units_info(router_key.get_tenant_id(), units_record_info))) {
       if (OB_NEED_RETRY == ret) {
         LOG_WARN("query the GV$OB_UNITS failed, need retry", KR(ret));
         ret = OB_SUCCESS;
       } else {
-        LOG_ERROR("query the GV$OB_UNITS failed", KR(ret));
+        LOG_WARN("query the GV$OB_UNITS failed, will be retried later", KR(ret));
       }
     } else {
       ObUnitsRecordInfo::ObUnitsRecordArray &units_record_array = units_record_info.get_units_record_array();

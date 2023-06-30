@@ -17,6 +17,7 @@
 #include "ob_log_instance.h"            // IObLogErrHandler
 #include "ob_log_part_trans_parser.h"   // IObLogPartTransParser
 #include "ob_log_part_trans_task.h"     // PartTransTask
+#include "ob_log_trace_id.h"
 
 using namespace oceanbase::common;
 
@@ -143,6 +144,7 @@ int ObLogDdlParser::handle(void *data,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   PartTransTask *task = (PartTransTask *)data;
 
   if (OB_UNLIKELY(! inited_) || OB_ISNULL(part_trans_parser_)) {

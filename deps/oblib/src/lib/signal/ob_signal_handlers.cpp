@@ -261,7 +261,7 @@ int minicoredump(int sig, int64_t tid, pid_t& pid)
 
 int faststack()
 {
-  static constexpr int64_t MIN_INTERVAL = 1 * 60 * 1000 * 1000; // 1min
+  static constexpr int64_t MIN_INTERVAL = 30 * 60 * 1000 * 1000; // 30min
   static int64_t last_ts = 0;
   int64_t now = ObTimeUtility::fast_current_time();
   int64_t last = ATOMIC_LOAD(&last_ts);

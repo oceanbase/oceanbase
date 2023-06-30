@@ -69,6 +69,7 @@ ObSSTable::ObSSTable()
     contain_uncommitted_row_(false),
     valid_for_reading_(false),
     is_tmp_sstable_(false),
+    filled_tx_scn_(share::SCN::min_scn()),
     meta_(nullptr)
 {
 #if defined(__x86_64__)
@@ -139,6 +140,7 @@ void ObSSTable::reset()
   meta_ = nullptr;
   valid_for_reading_ = false;
   is_tmp_sstable_ = false;
+  filled_tx_scn_ = share::SCN::min_scn();
   ObITable::reset();
 }
 
@@ -818,6 +820,7 @@ int ObSSTable::deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&v
     pvalue->nested_offset_ = nested_offset_;
     pvalue->contain_uncommitted_row_ = contain_uncommitted_row_;
     pvalue->is_tmp_sstable_ = false;
+    pvalue->filled_tx_scn_ = filled_tx_scn_;
     pvalue->valid_for_reading_ = valid_for_reading_;
     if (is_loaded()) {
       if (OB_FAIL(meta_->deep_copy(buf, buf_len, pos, pvalue->meta_))) {
@@ -935,6 +938,7 @@ int ObSSTable::deserialize(common::ObArenaAllocator &allocator,
         max_merged_trans_version_ = meta_->get_max_merged_trans_version();
         data_macro_block_count_ = meta_->get_data_macro_block_count();
         contain_uncommitted_row_ = meta_->contain_uncommitted_row();
+        filled_tx_scn_ = meta_->get_filled_tx_scn();
         nested_size_ = meta_->get_macro_info().get_nested_size();
         nested_offset_ = meta_->get_macro_info().get_nested_offset();
       }
@@ -987,7 +991,8 @@ int64_t ObSSTable::get_sstable_fix_serialize_payload_size() const
       data_macro_block_count_,
       nested_size_,
       nested_offset_,
-      contain_uncommitted_row_);
+      contain_uncommitted_row_,
+      filled_tx_scn_);
   return len;
 }
 
@@ -1019,7 +1024,8 @@ int ObSSTable::serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t 
         data_macro_block_count_,
         nested_size_,
         nested_offset_,
-        contain_uncommitted_row_);
+        contain_uncommitted_row_,
+        filled_tx_scn_);
   }
   return ret;
 }
@@ -1050,7 +1056,8 @@ int ObSSTable::deserialize_fixed_struct(const char *buf, const int64_t data_len,
           data_macro_block_count_,
           nested_size_,
           nested_offset_,
-          contain_uncommitted_row_);
+          contain_uncommitted_row_,
+          filled_tx_scn_);
       if (OB_SUCC(ret)) {
         valid_for_reading_ = key_.is_valid();
       }
@@ -1556,6 +1563,7 @@ int ObSSTable::init_sstable_meta(
       contain_uncommitted_row_ = meta_->contain_uncommitted_row();
       nested_size_ = meta_->get_macro_info().get_nested_size();
       nested_offset_ = meta_->get_macro_info().get_nested_offset();
+      filled_tx_scn_ = meta_->get_filled_tx_scn();
     }
   }
   return ret;

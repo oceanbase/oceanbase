@@ -24668,7 +24668,6 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
             actual_trans, schema_guard, &arg.ddl_stmt_str_))) {
           LOG_WARN("drop database to recyclebin failed", K(arg), K(ret));
         }
-        (void) actual_trans.disable_serialize_inc_schemas();
       } else {
         if (OB_FAIL(ret)) {
           // FAIL

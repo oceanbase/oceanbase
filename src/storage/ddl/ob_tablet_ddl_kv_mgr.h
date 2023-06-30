@@ -71,7 +71,7 @@ public:
   int rdlock(const int64_t timeout_us, uint32_t &lock_tid);
   int wrlock(const int64_t timeout_us, uint32_t &lock_tid);
   void unlock(const uint32_t lock_tid);
-  int update_tablet(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
+  int update_tablet(const share::SCN &start_scn, const int64_t snapshot_version, const int64_t data_format_version, const int64_t execution_id, const share::SCN &ddl_checkpoint_scn);
   int64_t get_count();
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
@@ -102,19 +102,25 @@ public:
   static const int64_t TRY_LOCK_TIMEOUT = 10 * 1000000; // 10s
 private:
   bool is_inited_;
-  share::SCN success_start_scn_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
+
+  // state_lock_ guarded members
+  share::SCN success_start_scn_;
   ObITable::TableKey table_key_;
   int64_t data_format_version_;
   share::SCN start_scn_;
   share::SCN commit_scn_;
+  int64_t execution_id_;
+  common::ObLatch state_lock_;
+
+  // lock_ guarded members
   share::SCN max_freeze_scn_;
-  int64_t execution_id_; // used for ddl checksum
   ObTableHandleV2 ddl_kv_handles_[MAX_DDL_KV_CNT_IN_STORAGE];
   int64_t head_;
   int64_t tail_;
   common::ObLatch lock_;
+
   volatile int64_t ref_cnt_ CACHE_ALIGNED;
   DISALLOW_COPY_AND_ASSIGN(ObTabletDDLKvMgr);
 };

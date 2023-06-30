@@ -78,7 +78,7 @@ PalfHandleImpl::PalfHandleImpl()
     mode_change_lock_(),
     flashback_lock_(),
     last_dump_info_time_us_(OB_INVALID_TIMESTAMP),
-    is_flashback_done_(false),
+    flashback_state_(LogFlashbackState::FLASHBACK_INIT),
     last_check_sync_time_us_(OB_INVALID_TIMESTAMP),
     last_renew_loc_time_us_(OB_INVALID_TIMESTAMP),
     last_print_in_sync_time_us_(OB_INVALID_TIMESTAMP),
@@ -1060,6 +1060,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     // adding D, and member_list of D if still empty, D cann't vote for any one, therefore no one
     // can be elected to be leader.
     if (is_add_member_list(args.type_)) {
+      RLockGuard guard(lock_);
       (void) config_mgr_.pre_sync_config_log_and_mode_meta(args.server_, proposal_id);
     }
     // step 2: config change remote precheck
@@ -1089,6 +1090,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
             K(ret), K_(palf_id), K_(self), K(args));
       } else {
         if (false == added_member_has_new_version) {
+          RLockGuard guard(lock_);
           (void) config_mgr_.pre_sync_config_log_and_mode_meta(args.server_, proposal_id);
         }
         ret = OB_SUCCESS;
@@ -2458,8 +2460,7 @@ int PalfHandleImpl::receive_mode_meta(const common::ObAddr &server,
     PALF_LOG(WARN, "invalid arguments", K(ret), KPC(this), K(server), K(proposal_id), K(mode_meta));
   } else if (OB_FAIL(try_update_proposal_id_(server, proposal_id))) {
     PALF_LOG(WARN, "try_update_proposal_id_ failed", KR(ret), KPC(this), K(server), K(proposal_id));
-  } else if (false == is_applied_mode_meta && OB_SUCCESS != (lock_ret = lock_.rdlock())) {
-  } else if (true == is_applied_mode_meta && OB_SUCCESS != (lock_ret = lock_.wrlock())) {
+  } else if (OB_SUCCESS != (lock_ret = lock_.wrlock())) {
   } else if (false == mode_mgr_.can_receive_mode_meta(proposal_id, mode_meta, has_accepted)) {
     PALF_LOG(WARN, "can_receive_mode_meta failed", KR(ret), KPC(this), K(proposal_id), K(mode_meta));
   } else if (true == has_accepted) {
@@ -2477,11 +2478,7 @@ int PalfHandleImpl::receive_mode_meta(const common::ObAddr &server,
   PALF_LOG(INFO, "receive_mode_meta finish", KR(ret), KPC(this), K(server), K(proposal_id),
       K(is_applied_mode_meta), K(mode_meta));
   if (OB_SUCCESS == lock_ret) {
-    if (is_applied_mode_meta) {
-      lock_.wrunlock();
-    } else {
-      lock_.rdunlock();
-    }
+    lock_.wrunlock();
   }
   return ret;
 }
@@ -3813,7 +3810,7 @@ int PalfHandleImpl::inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_c
   PALF_LOG(INFO, "inner_after_flush_meta", K(flush_meta_cb_ctx));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (MODE_META == flush_meta_cb_ctx.type_ && true == flush_meta_cb_ctx.is_applied_mode_meta_) {
+  } else if (MODE_META == flush_meta_cb_ctx.type_) {
     WLockGuard guard(lock_);
     ret = after_flush_mode_meta_(flush_meta_cb_ctx.proposal_id_,
                                  flush_meta_cb_ctx.is_applied_mode_meta_,
@@ -3826,11 +3823,6 @@ int PalfHandleImpl::inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_c
         break;
       case CHANGE_CONFIG_META:
         ret = after_flush_config_change_meta_(flush_meta_cb_ctx.proposal_id_, flush_meta_cb_ctx.config_version_);
-        break;
-      case MODE_META:
-        ret = after_flush_mode_meta_(flush_meta_cb_ctx.proposal_id_,
-                                     flush_meta_cb_ctx.is_applied_mode_meta_,
-                                     flush_meta_cb_ctx.log_mode_meta_);
         break;
       case SNAPSHOT_META:
         ret = after_flush_snapshot_meta_(flush_meta_cb_ctx.base_lsn_);
@@ -3859,7 +3851,6 @@ int PalfHandleImpl::inner_after_truncate_prefix_blocks(const TruncatePrefixBlock
 int PalfHandleImpl::inner_after_flashback(const FlashbackCbCtx &flashback_ctx)
 {
   int ret = OB_SUCCESS;
-  is_flashback_done_ = true;
   // do nothing
   return ret;
 }
@@ -4268,7 +4259,7 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
     FlashbackCbCtx flashback_cb_ctx(flashback_scn);
     const LSN max_lsn = get_max_lsn();
     const LSN end_lsn = get_end_lsn();
-    is_flashback_done_ = false;
+    flashback_state_ = LogFlashbackState::FLASHBACK_INIT;
     PALF_EVENT("[BEGIN FLASHBACK]", palf_id_, KPC(this), K(mode_version), K(flashback_scn), K(timeout_us),
         K(end_lsn), K(max_lsn));
     do {
@@ -4279,8 +4270,15 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
     } while (0);
     TimeoutChecker not_timeout(timeout_us);
     while (OB_SUCC(ret) && OB_SUCC(not_timeout())) {
-      if (is_flashback_done_ == true) {
-        RLockGuard guard(lock_);
+      RLockGuard guard(lock_);
+      if (LogFlashbackState::FLASHBACK_FAILED == flashback_state_) {
+        ret = OB_EAGAIN;
+        PALF_LOG(WARN, "flashback failed", K(ret), KPC(this), K(mode_version), K(flashback_scn));
+      } else if (LogFlashbackState::FLASHBACK_RECONFIRM == flashback_state_) {
+        ret = OB_EAGAIN;
+        PALF_LOG(WARN, "can not flashback a reconfirming leader", K(ret), KPC(this),
+            K(mode_version), K(flashback_scn));
+      } else if (LogFlashbackState::FLASHBACK_SUCCESS == flashback_state_) {
         const SCN &curr_end_scn = get_end_scn();
         const SCN &curr_max_scn = get_max_scn();
         if (flashback_scn >= curr_max_scn) {
@@ -4292,9 +4290,6 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
         }
         PALF_EVENT("[END FLASHBACK]", palf_id_, K(ret), KPC(this), K(mode_version),
             K(flashback_scn), K(timeout_us), K(curr_end_scn), K(curr_max_scn), K(time_guard));
-        FLOG_INFO("[END FLASHBACK PALF_DUMP]", K(ret), K_(palf_id), K_(self), "[SlidingWindow]", sw_,
-            "[StateMgr]", state_mgr_, "[ConfigMgr]", config_mgr_, "[ModeMgr]", mode_mgr_,
-            "[LogEngine]", log_engine_, "[Reconfirm]", reconfirm_);
         plugins_.record_flashback_event(palf_id_, mode_version, flashback_scn, curr_end_scn, curr_max_scn);
         break;
       } else {
@@ -4302,6 +4297,9 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
         PALF_LOG(INFO, "flashback not finished", K(ret), KPC(this), K(flashback_scn), K(log_engine_));
       }
     }
+    FLOG_INFO("[END FLASHBACK PALF_DUMP]", K(ret), K_(palf_id), K_(self), "[SlidingWindow]", sw_,
+        "[StateMgr]", state_mgr_, "[ConfigMgr]", config_mgr_, "[ModeMgr]", mode_mgr_,
+        "[LogEngine]", log_engine_, "[Reconfirm]", reconfirm_);
   }
   if (OB_SUCCESS == lock_ret) {
     flashback_lock_.unlock();
@@ -4369,12 +4367,14 @@ int PalfHandleImpl::inner_flashback(const share::SCN &flashback_scn)
     PALF_LOG(ERROR, "PalfHandleImpl not inited", KPC(this));
   } else if (state_mgr_.is_leader_reconfirm()) {
     PALF_LOG(INFO, "can not do flashback in leader reconfirm state", KPC(this), K(flashback_scn));
+    flashback_state_ = LogFlashbackState::FLASHBACK_RECONFIRM;
   } else if (OB_FAIL(get_block_id_by_scn_for_flashback_(flashback_scn, start_block))
              && OB_ENTRY_NOT_EXIST != ret) {
     PALF_LOG(ERROR, "get_block_id_by_scn_for_flashback_ failed", K(ret), KPC(this), K(flashback_scn));
   } else if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
     PALF_LOG(WARN, "there is no log on disk, flashback successfully", K(ret), KPC(this), K(flashback_scn));
+    flashback_state_ = LogFlashbackState::FLASHBACK_SUCCESS;
   } else if (FALSE_IT(start_lsn_of_block.val_ = start_block * PALF_BLOCK_SIZE)) {
   } else if (OB_FAIL(log_engine_.begin_flashback(start_lsn_of_block))) {
     PALF_LOG(ERROR, "LogEngine begin_flashback failed", K(ret), K(start_lsn_of_block));
@@ -4384,8 +4384,10 @@ int PalfHandleImpl::inner_flashback(const share::SCN &flashback_scn)
   } else if (OB_FAIL(log_engine_.end_flashback(start_lsn_of_block))) {
     PALF_LOG(ERROR, "LogEngine end_flashback failed", K(ret), K(start_lsn_of_block), K(flashback_scn));
   } else {
+    flashback_state_ = LogFlashbackState::FLASHBACK_SUCCESS;
     PALF_LOG(INFO, "inner_flashback success", K(ret), KPC(this), K(flashback_scn));
   }
+  flashback_state_ = (OB_FAIL(ret))? LogFlashbackState::FLASHBACK_FAILED: flashback_state_;
   return ret;
 }
 

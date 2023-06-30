@@ -836,7 +836,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
       const int64_t saved_snapshot_version = log.get_table_key().get_snapshot_version();
       start_scn = scn;
       // remove ddl sstable if exists and flush ddl start log ts and snapshot version into tablet meta
-      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->update_tablet(start_scn, saved_snapshot_version, start_scn))) {
+      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->update_tablet(start_scn, saved_snapshot_version, log.get_data_format_version(), log.get_execution_id(), start_scn))) {
         LOG_WARN("clean up ddl sstable failed", K(ret), K(log));
       }
       FLOG_INFO("start ddl kv mgr finished", K(ret), K(start_scn), K(log));

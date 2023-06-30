@@ -625,6 +625,47 @@ int ObTimeConverter::str_to_scn_value(const ObString &str,
   return ret;
 }
 
+int ObTimeConverter::scn_to_str(const uint64_t scn_val,
+                                const ObTimeZoneInfo *sys_tz_info,
+                                char *buf, int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sys_tz_info) || OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KP(sys_tz_info), KP(buf), K(buf_len));
+  } else {
+    const int64_t utc_timestamp = scn_val / 1000;
+    int64_t dt_value = 0;
+    if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(utc_timestamp,
+                                                       sys_tz_info,
+                                                       dt_value))) {
+      LOG_WARN("failed to convert timestamp to datetime", K(ret));
+    } else if (OB_UNLIKELY(dt_value > DATETIME_MAX_VAL || dt_value < DATETIME_MIN_VAL)) {
+      ret = OB_OPERATE_OVERFLOW;
+      LOG_WARN("overflow", K(utc_timestamp), K(dt_value), K(scn_val), K(sys_tz_info));
+    } else {
+      const int32_t value_ns = scn_val % 1000;
+      ObOTimestampData ot_data;
+      ot_data.time_us_ = dt_value;
+      ot_data.time_ctx_.tail_nsec_ = value_ns;
+      const int16_t MAX_NS_SCALE = 9;
+      const ObObjType type = ObTimestampNanoType;
+      ObString otimestamp_format("YYYY-MM-DD HH24:MI:SS.FF9");
+      const ObDataTypeCastParams dtc_params(sys_tz_info/*not used during otimestamp_to_str with ObTimestampNanoType*/,
+                                            DEFAULT_NLS_DATE_FORMAT,
+                                            otimestamp_format,
+                                            DEFAULT_NLS_TIMESTAMP_TZ_FORMAT,
+                                            CS_TYPE_INVALID,
+                                            CS_TYPE_INVALID,
+                                            CS_TYPE_UTF8MB4_GENERAL_CI);
+      if (OB_FAIL(otimestamp_to_str(ot_data, dtc_params, MAX_NS_SCALE, type, buf, buf_len, pos))) {
+        LOG_WARN("fail to cast otimestamp to str", K(utc_timestamp), K(dt_value), K(scn_val), K(sys_tz_info));
+      }
+    }
+  }
+  return ret;
+}
+
 /**
  * @brief calcs tz offset value by time zone name from the input ob_time, fills the result back to ob_time
  * @param in:         cvrt_ctx

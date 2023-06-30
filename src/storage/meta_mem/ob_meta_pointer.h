@@ -39,6 +39,7 @@ public:
   int get_in_memory_obj(ObMetaObjGuard<T> &guard);
   void get_obj(ObMetaObjGuard<T> &guard);
 
+  void set_obj_pool(ObITenantMetaObjPool &obj_pool);
   void set_obj(const ObMetaObjGuard<T> &guard);
   void set_addr_without_reset_obj(const ObMetaDiskAddr &addr);
   void set_addr_with_reset_obj(const ObMetaDiskAddr &addr);
@@ -279,6 +280,12 @@ template <typename T>
 bool ObMetaPointer<T>::is_in_memory() const
 {
   return nullptr != obj_.ptr_;
+}
+
+template <typename T>
+void ObMetaPointer<T>::set_obj_pool(ObITenantMetaObjPool &obj_pool)
+{
+  obj_.pool_ = &obj_pool;
 }
 
 template <typename T>

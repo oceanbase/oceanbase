@@ -217,7 +217,8 @@ void PxWorkerFunctor::operator ()()
        * 当计数器为0的时候会真正释放sqc handler的内存。请保证所有的
        * 内存使用超出次函数。释放的时候必须在租户的space中，所以不能放到外面了。
        */
-      ObPxSqcHandler::release_handler(sqc_handler);
+      int report_ret = OB_SUCCESS;
+      ObPxSqcHandler::release_handler(sqc_handler, report_ret);
       // 环境清理
       ObCurTraceId::reset();
       if (enable_trace_log) {

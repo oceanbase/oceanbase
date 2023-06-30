@@ -443,10 +443,10 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, coordinator::ObFailureDetector::mtl_init, coordinator::ObFailureDetector::mtl_start, coordinator::ObFailureDetector::mtl_stop, coordinator::ObFailureDetector::mtl_wait, mtl_destroy_default);
     MTL_BIND2(ObLobManager::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObStorageHAService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, rootserver::ObBackupTaskScheduler::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, rootserver::ObBackupDataService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, rootserver::ObBackupCleanService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, rootserver::ObArchiveSchedulerService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, rootserver::ObBackupTaskScheduler::mtl_init, nullptr, rootserver::ObBackupTaskScheduler::mtl_stop, rootserver::ObBackupTaskScheduler::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, rootserver::ObBackupDataService::mtl_init, nullptr, rootserver::ObBackupDataService::mtl_stop, rootserver::ObBackupDataService::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, rootserver::ObBackupCleanService::mtl_init, nullptr, rootserver::ObBackupCleanService::mtl_stop, rootserver::ObBackupCleanService::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, rootserver::ObArchiveSchedulerService::mtl_init, nullptr, rootserver::ObArchiveSchedulerService::mtl_stop, rootserver::ObArchiveSchedulerService::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObGlobalAutoIncService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::detector::ObDeadLockDetectorMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantSchemaService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);

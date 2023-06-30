@@ -791,16 +791,9 @@ int ObTxFinishTransfer::lock_ls_member_list_(const uint64_t tenant_id, const sha
     const common::ObMemberList &member_list, const ObTransferLockStatus &status)
 {
   int ret = OB_SUCCESS;
-  storage::ObLS *ls = NULL;
-  storage::ObLSHandle ls_handle;
-  if (OB_FAIL(get_ls_handle_(tenant_id, ls_id, ls_handle))) {
-    LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream not exist", K(ret), K(ls_id));
-  } else if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
-                 tenant_id, ls_id, task_id_.id(), member_list, status, ls, *sql_proxy_))) {
-    LOG_WARN("failed to unlock ls member list", K(ret), K(ls_id), K(member_list), KPC(ls));
+  if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
+      tenant_id, ls_id, task_id_.id(), member_list, status, *sql_proxy_))) {
+    LOG_WARN("failed to unlock ls member list", K(ret), K(ls_id), K(member_list));
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {

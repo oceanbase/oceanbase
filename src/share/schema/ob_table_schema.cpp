@@ -4148,8 +4148,8 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
           } else {
             const int64_t m1 = src_accuracy.get_fixed_number_precision();
             const int64_t d1 = src_accuracy.get_fixed_number_scale();
-            const int64_t m2 = src_accuracy.get_fixed_number_precision();
-            const int64_t d2 = src_accuracy.get_fixed_number_scale();
+            const int64_t m2 = dst_accuracy.get_fixed_number_precision();
+            const int64_t d2 = dst_accuracy.get_fixed_number_scale();
             is_type_reduction = !(d1 <= d2 && m1 - d1 <= m2 - d2);
           }
         } else if (dst_meta.is_number_float()) {

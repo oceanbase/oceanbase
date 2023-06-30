@@ -316,9 +316,9 @@ int ObBlockManager::alloc_block(ObMacroBlockHandle &macro_handle)
   if (ret == OB_SERVER_OUTOF_DISK_SPACE) {
     if (OB_FAIL(extend_file_size_if_need())) { // block to get disk
       ret = OB_SERVER_OUTOF_DISK_SPACE; // reuse last ret code
-      LOG_WARN("Failed to alloc block from io device", K(ret));
+      LOG_ERROR("Failed to alloc block from io device", K(ret));
     } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
-      LOG_WARN("Failed to alloc block from io device", K(ret));
+      LOG_ERROR("Failed to alloc block from io device", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

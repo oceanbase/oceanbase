@@ -851,7 +851,9 @@ void ObReferenceObjTable::reset()
     }
     return ret;
   };
-  if (OB_FAIL(ref_obj_version_table_.foreach_refactored(free_func))) {
+  if (!ref_obj_version_table_.created()) {
+    // do nothing
+  } else if (OB_FAIL(ref_obj_version_table_.foreach_refactored(free_func))) {
     OB_LOG(WARN, "traversal ref obj version map failed", K(ret));
   }
   inited_ = false;

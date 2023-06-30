@@ -593,6 +593,10 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
     replace_logical_dag = nullptr;
   }
 
+  if (OB_NOT_NULL(replace_logical_dag) && OB_NOT_NULL(scheduler)) {
+    scheduler->free_dag(*replace_logical_dag, backfill_tx_dag);
+    replace_logical_dag = nullptr;
+  }
 
   if (OB_NOT_NULL(backfill_tx_dag) && OB_NOT_NULL(scheduler)) {
     if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*backfill_tx_dag))) {
@@ -601,12 +605,6 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
     scheduler->free_dag(*backfill_tx_dag);
     backfill_tx_dag = nullptr;
   }
-
-  if (OB_NOT_NULL(replace_logical_dag) && OB_NOT_NULL(scheduler)) {
-    scheduler->free_dag(*replace_logical_dag);
-    replace_logical_dag = nullptr;
-  }
-
   return ret;
 }
 
@@ -1008,14 +1006,14 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
     }
 
     if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(finish_backfill_tx_dag)) {
+        scheduler->free_dag(*finish_backfill_tx_dag, tablet_backfill_tx_dag);
+        finish_backfill_tx_dag = nullptr;
+      }
+
       if (OB_NOT_NULL(tablet_backfill_tx_dag)) {
         scheduler->free_dag(*tablet_backfill_tx_dag, backfill_tx_dag);
         tablet_backfill_tx_dag = nullptr;
-      }
-
-      if (OB_NOT_NULL(finish_backfill_tx_dag)) {
-        scheduler->free_dag(*finish_backfill_tx_dag, backfill_tx_dag);
-        finish_backfill_tx_dag = nullptr;
       }
     }
   }

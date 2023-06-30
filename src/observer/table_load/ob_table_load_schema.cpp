@@ -190,6 +190,8 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to get store column count", KR(ret));
     } else if (OB_FAIL(table_schema->get_column_ids(column_descs_, false))) {
       LOG_WARN("fail to get column descs", KR(ret));
+    } else if (OB_FAIL(prepare_col_desc(table_schema, column_descs_))) {
+      LOG_WARN("fail to prepare column descs", KR(ret));
     } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
       LOG_WARN("fail to get multi version column descs", KR(ret));
     } else if (OB_FAIL(datum_utils_.init(multi_version_column_descs_, rowkey_column_count_,
@@ -225,6 +227,27 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
           }
         }
       }//end for
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
+      ObColDesc &col_desc = col_descs.at(i);
+      const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid column schema", K(column_schema));
+      } else {
+        col_desc.col_type_.set_scale(column_schema->get_data_scale());
+      }
     }
   }
   return ret;

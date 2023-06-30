@@ -246,9 +246,13 @@ bool ObSharedBlockWriteHandle::is_valid() const
 
 bool ObSharedBlockReadHandle::is_valid() const
 {
-  return macro_handles_.count() > 0 && addrs_.count() == 1;
+  return macro_handle_.is_valid();
 }
 
+bool ObSharedBlockReadHandle::is_empty() const
+{
+  return macro_handle_.is_empty();
+}
 ObSharedBlockReadHandle::ObSharedBlockReadHandle(const ObSharedBlockReadHandle &other)
 {
   *this = other;
@@ -257,18 +261,21 @@ ObSharedBlockReadHandle::ObSharedBlockReadHandle(const ObSharedBlockReadHandle &
 ObSharedBlockReadHandle &ObSharedBlockReadHandle::operator=(const ObSharedBlockReadHandle &other)
 {
   if (&other != this) {
-    addrs_ = other.addrs_;
-    macro_handles_ = other.macro_handles_;
+    macro_handle_ = other.macro_handle_;
   }
   return *this;
 }
 
-int ObSharedBlockReadHandle::wait()
+int ObSharedBlockReadHandle::wait(const int64_t timeout_ms)
 {
-  // TODO(zhuixin.gsy) use timeout_ms to wait
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObSharedBlockBaseHandle::wait())) {
-    LOG_WARN("Fail to wait io finish", K(ret));
+  const int64_t io_timeout_ms = timeout_ms > 0
+      ? timeout_ms : MAX(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+  if (OB_UNLIKELY(!macro_handle_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected read handle", K(ret), K_(macro_handle));
+  } else if (OB_FAIL(macro_handle_.wait(io_timeout_ms))) {
+    LOG_WARN("Failt to wait macro handle finish", K(ret), K(macro_handle_), K(io_timeout_ms));
   }
   return ret;
 }
@@ -276,12 +283,11 @@ int ObSharedBlockReadHandle::wait()
 int ObSharedBlockReadHandle::get_data(ObIAllocator &allocator, char *&buf, int64_t &buf_len)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObSharedBlockBaseHandle::wait())) {
+  if (OB_FAIL(wait())) {
     LOG_WARN("Fail to wait io finish", K(ret));
   } else {
-    ObMacroBlockHandle &macro_handle = macro_handles_.at(0);
-    const char *data_buf = macro_handle.get_buffer();
-    const int64_t data_size = macro_handle.get_data_size();
+    const char *data_buf = macro_handle_.get_buffer();
+    const int64_t data_size = macro_handle_.get_data_size();
     int64_t header_size = 0;
     if (OB_FAIL(verify_checksum(data_buf, data_size, header_size, buf_len))) {
       LOG_WARN("fail to verify checksum", K(ret), KP(data_buf), K(data_size), K(header_size), K(buf_len));
@@ -337,6 +343,18 @@ int ObSharedBlockReadHandle::verify_checksum(
       buf_len = header->data_size_;
     }
     LOG_DEBUG("zhuixin debug read shared block", K(ret), KPC(header));
+  }
+  return ret;
+}
+
+int ObSharedBlockReadHandle::set_macro_handle(const ObMacroBlockHandle &macro_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!macro_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(macro_handle));
+  } else {
+    macro_handle_ = macro_handle;
   }
   return ret;
 }
@@ -455,7 +473,7 @@ int ObSharedBlockLinkIter::get_next(ObIAllocator &allocator, char *&buf, int64_t
     } else if (OB_FAIL(block_handle.get_data(allocator, buf, buf_len))) {
       LOG_WARN("Fail to get data", K(ret), K(block_handle));
     } else {
-      ObMacroBlockHandle &macro_handle = block_handle.macro_handles_.at(0);
+      ObMacroBlockHandle &macro_handle = block_handle.macro_handle_;
       const ObSharedBlockHeader *header =
           reinterpret_cast<const ObSharedBlockHeader *>(macro_handle.get_buffer());
       cur_ = header->prev_addr_;
@@ -720,6 +738,10 @@ int ObSharedBlockReaderWriter::inner_write_block(
   if (OB_SUCC(ret)) {
     macro_handle.reset();
     int64_t pos = 0;
+    const int64_t prev_pos = data_.pos();
+    const int64_t prev_offset = offset_;
+    const int64_t prev_align_offset = align_offset_;
+    const bool prev_hanging = hanging_;
     if (OB_FAIL(header.serialize(data_.current(), header.header_size_, pos))) {
       LOG_WARN("Fail to serialize header", K(ret), K(header));
     } else {
@@ -730,14 +752,14 @@ int ObSharedBlockReaderWriter::inner_write_block(
       macro_info.size_ = align_store_size;
       macro_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       // io_callback
-      if (OB_FAIL(data_.advance(store_size))) {
-        LOG_WARN("Fail to advance size", K(ret), K(store_size));
-      } else if (OB_FAIL(addr.set_block_addr(macro_handle_.get_macro_id(),
-                                             offset_,
-                                             blk_size))) {
+      if (OB_FAIL(addr.set_block_addr(macro_handle_.get_macro_id(),
+                                      offset_,
+                                      blk_size))) {
         LOG_WARN("Fail to set block addr", K(ret));
       } else if (OB_FAIL(block_handle.add_meta_addr(addr))) {
         LOG_WARN("Fail to add meta addr", K(ret), K(addr));
+      } else if (OB_FAIL(data_.advance(store_size))) {
+        LOG_WARN("Fail to advance size", K(ret), K(store_size));
       } else {
         offset_ += store_size;
       }
@@ -757,6 +779,19 @@ int ObSharedBlockReaderWriter::inner_write_block(
       LOG_DEBUG("zhuixin debug inner write block", K(ret), K(header), K(size), K(need_flush),
           K(need_align), K(store_size), K(align_store_size), K(offset_), K(align_offset_),
           K(hanging_), K(addr), K(macro_handle));
+    }
+    // roll back status
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(data_.set_pos(prev_pos))) {
+        LOG_ERROR("fail to roll back data buffer", K(ret), K(tmp_ret), K(prev_pos), K(header));
+        ob_usleep(1000 * 1000);
+        ob_abort();
+      } else {
+        offset_ = prev_offset;
+        align_offset_ = prev_align_offset;
+        hanging_ = prev_hanging;
+      }
     }
   }
   return ret;
@@ -839,10 +874,8 @@ int ObSharedBlockReaderWriter::async_read(
     LOG_WARN("Fail to get block addr", K(ret), K(read_info));
   } else if (OB_FAIL(macro_handle.async_read(macro_read_info))) {
     LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
-  } else if (OB_FAIL(block_handle.add_macro_handle(macro_handle))) {
+  } else if (OB_FAIL(block_handle.set_macro_handle(macro_handle))) {
     LOG_WARN("Fail to add macro handle", K(ret), K(macro_read_info));
-  } else if (OB_FAIL(block_handle.add_meta_addr(read_info.addr_))) {
-    LOG_WARN("Fail to add meta addr", K(ret));
   }
   return ret;
 }

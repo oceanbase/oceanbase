@@ -46,7 +46,7 @@ ObPartitionMergeIter::ObPartitionMergeIter()
     curr_row_(nullptr),
     iter_end_(false),
     allocator_("MergeMacroIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    stmt_allocator_("MergeMacroIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    stmt_allocator_("StmtMergeIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     read_info_(),
     is_inited_(false),
     is_rowkey_first_row_reused_(false),
@@ -125,7 +125,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
                            false,/*index back*/
                            false); /*query_stat*/
     query_flag.multi_version_minor_merge_ = is_multi_version_merge(merge_param.merge_type_);
-    if (OB_FAIL(access_context_.init(query_flag, store_ctx_, allocator_, stmt_allocator_,
+    if (OB_FAIL(access_context_.init(query_flag, store_ctx_, allocator_, allocator_,
                                      merge_param.version_range_))) {
       LOG_WARN("Failed to init table access context", K(ret), K(query_flag));
     } else {
@@ -439,7 +439,7 @@ int ObPartitionMacroMergeIter::inner_init(const ObMergeParameter &merge_param)
   } else if (OB_FAIL(sstable->scan_macro_block(
       merge_range_, *rowkey_read_info_, stmt_allocator_, macro_block_iter_, false, true, true))) {
     LOG_WARN("Fail to scan macro block", K(ret));
-  } else if (OB_ISNULL(buf = stmt_allocator_.alloc(sizeof(ObSSTableRowWholeScanner)))) {
+  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSSTableRowWholeScanner)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc memory for minor merge row scanner", K(ret));
   } else if (FALSE_IT(row_iter_ = new (buf) ObSSTableRowWholeScanner())) {
@@ -576,10 +576,10 @@ int ObPartitionMicroMergeIter::inner_init(const ObMergeParameter &merge_param)
 
   if (OB_FAIL(ObPartitionMacroMergeIter::inner_init(merge_param))) {
     STORAGE_LOG(WARN, "Failed to do macro merge iter init", K(ret));
-  } else if (OB_ISNULL(buf = stmt_allocator_.alloc(sizeof(ObMicroBlockRowScanner)))) {
+  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMicroBlockRowScanner)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc memory for multi version micro block scanner", K(ret));
-  } else if (FALSE_IT(micro_row_scanner_ = new (buf) ObMicroBlockRowScanner(stmt_allocator_))) {
+  } else if (FALSE_IT(micro_row_scanner_ = new (buf) ObMicroBlockRowScanner(allocator_))) {
   } else if (OB_FAIL(micro_row_scanner_->init(access_param_.iter_param_,
                                               access_context_,
                                               reinterpret_cast<ObSSTable *>(table_)))) {
@@ -887,12 +887,12 @@ int ObPartitionMinorRowMergeIter::common_minor_inner_init(const ObMergeParameter
   } else { // read flat row
     void *buf = nullptr;
     for (int i = 0; OB_SUCC(ret) && i < CRI_MAX; ++i) { // init nop pos
-      if (OB_ISNULL(buf = stmt_allocator_.alloc(sizeof(ObNopPos)))) {
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObNopPos)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(ERROR, "Failed to alloc memory for noppos", K(ret));
       } else {
         nop_pos_[i] = new (buf) ObNopPos();
-        if (OB_FAIL(nop_pos_[i]->init(stmt_allocator_, OB_ROW_MAX_COLUMNS_COUNT))) {
+        if (OB_FAIL(nop_pos_[i]->init(allocator_, OB_ROW_MAX_COLUMNS_COUNT))) {
           LOG_WARN("failed to init first row nop pos", K(ret));
         }
       }
@@ -1327,7 +1327,7 @@ int ObPartitionMinorMacroMergeIter::inner_init(const ObMergeParameter &merge_par
     LOG_WARN("Unexpected null index read info", K(ret));
   } else if (OB_FAIL(common_minor_inner_init(merge_param))) {
     LOG_WARN("Failed to do commont minor inner init", K(ret), K(merge_param));
-  } else if (OB_ISNULL(buf = stmt_allocator_.alloc(sizeof(ObSSTableRowWholeScanner)))) {
+  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSSTableRowWholeScanner)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc memory for minor merge row scanner", K(ret));
   } else if (FALSE_IT(row_iter_ = new (buf) ObSSTableRowWholeScanner())) {

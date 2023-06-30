@@ -1982,10 +1982,8 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
       tablet, old_minor_tables, need_add_minor_tables, new_minor_tables))) {
     LOG_WARN("failed to combin ha minor sstables", K(ret), K(old_store), K(param));
   } else if (new_minor_tables.empty()) { // no minor tables
-    if ((tablet.get_tablet_meta().start_scn_ != tablet.get_tablet_meta().clog_checkpoint_scn_
-        && !tablet.get_tablet_meta().has_transfer_table())
-        || (tablet.get_tablet_meta().has_transfer_table()
-            && tablet.get_tablet_meta().transfer_info_.transfer_start_scn_ != tablet.get_tablet_meta().clog_checkpoint_scn_)) {
+    if (tablet.get_tablet_meta().has_transfer_table()
+        && tablet.get_tablet_meta().transfer_info_.transfer_start_scn_ != tablet.get_tablet_meta().clog_checkpoint_scn_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(new_minor_tables), K(param), K(old_store));
     } else {
@@ -2148,6 +2146,8 @@ int ObTabletTableStore::check_minor_table_continue_(
     ObITable *prev_table) const
 {
   int ret = OB_SUCCESS;
+  ObSSTable *curr_sstable = nullptr;
+  ObSSTable *prev_sstable = nullptr;
   if (OB_UNLIKELY(OB_ISNULL(table) || !table->is_multi_version_minor_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table must be multi version minor table", K(ret), KPC(table));
@@ -2157,6 +2157,14 @@ int ObTabletTableStore::check_minor_table_continue_(
       || table->get_end_scn() <= prev_table->get_end_scn()) {
     ret = OB_ERR_SYS;
     LOG_ERROR("table scn range not continuous or overlap", K(ret), KPC(table), KPC(prev_table));
+  } else if (FALSE_IT(curr_sstable = static_cast<ObSSTable *>(table))) {
+  } else if (FALSE_IT(prev_sstable = static_cast<ObSSTable *>(prev_table))) {
+  } else if (table->get_key().tablet_id_.is_ls_inner_tablet() || prev_sstable->get_filled_tx_scn().is_max()) {
+    // do nothing
+  } else if (curr_sstable->get_filled_tx_scn() < prev_sstable->get_filled_tx_scn()) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("sstable's filled_tx_scn is out of order", K(ret), KPC(table), KP(prev_table),
+        "curr_filled_tx_scn", curr_sstable->get_filled_tx_scn(), "prev_filled_tx_scn", prev_sstable->get_filled_tx_scn());
   }
   prev_table = table;
   return ret;

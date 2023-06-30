@@ -410,6 +410,8 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
     TRANS_LOG(WARN, "alloc transaction context error", K(arg));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
+    // pack `epoch(15bit) | ts_ns(48bit)` into int64_t, set most significant bit to zero
+    int64_t epoch_v = ~(1UL << 63) & ((epoch << 48) | (ObTimeUtility::current_time_ns() & ~(0xFFFFUL << 48)));
     CtxLockGuard ctx_lock_guard;
     ObPartTransCtx *tmp = static_cast<ObPartTransCtx *>(tmp_ctx);
     if (OB_FAIL(tmp->init(arg.tenant_id_,
@@ -421,7 +423,7 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
                           arg.cluster_version_,
                           arg.trans_service_,
                           arg.cluster_id_,
-                          epoch,
+                          epoch_v,
                           this,
                           arg.for_replay_))) {
     } else if (FALSE_IT(inc_total_tx_ctx_count())) {

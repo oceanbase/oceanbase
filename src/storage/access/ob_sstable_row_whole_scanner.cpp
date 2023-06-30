@@ -185,7 +185,7 @@ int ObSSTableRowWholeScanner::inner_open(
                 *sstable_,
                 query_range_,
                 *iter_param.read_info_,
-                *access_ctx.stmt_allocator_))) {
+                allocator_))) {
       LOG_WARN("Fail to open macro_block_iter ", K(ret));
     }
 

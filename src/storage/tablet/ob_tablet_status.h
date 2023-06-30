@@ -53,8 +53,6 @@ public:
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
   int64_t get_serialize_size() const;
 
-  static bool is_valid_status(const Status current_status, const Status target_status);
-
   TO_STRING_KV(K_(status));
 private:
   Status status_;
