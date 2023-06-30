@@ -870,14 +870,14 @@ int ObTabletMergeCtx::update_tablet_or_release_memtable(const ObGetMergeTablesRe
     LOG_WARN("storage schema is unexpected null", K(ret), KPC(this));
   } else if (OB_FAIL(old_tablet->load_storage_schema(temp_allocator, schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret), KPC(old_tablet));
-  } else if (OB_UNLIKELY(schema_on_tablet->compare_schema_newer(*schema_ctx_.storage_schema_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema on memtable is newer", K(ret), K(schema_ctx_.storage_schema_), KPC(schema_on_tablet));
   } else if (OB_UNLIKELY(get_merge_table_result.scn_range_.end_scn_ > old_tablet->get_tablet_meta().clog_checkpoint_scn_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can't have larger end_log_ts", K(ret), K(get_merge_table_result), K(old_tablet->get_tablet_meta()));
-  } else if (get_merge_table_result.version_range_.snapshot_version_ > old_tablet->get_snapshot_version()) {
+  } else if (get_merge_table_result.version_range_.snapshot_version_ > old_tablet->get_snapshot_version()
+    || schema_on_tablet->compare_schema_newer(*schema_ctx_.storage_schema_)) {
     // need write slog to update snapshot_version on tablet_meta
+    // if schema on memtable is newer, need update into tablet
+    // (written rows are rolled back on leader, no logging, end_scn won't be updated)
     update_table_store_flag = true;
   }
 

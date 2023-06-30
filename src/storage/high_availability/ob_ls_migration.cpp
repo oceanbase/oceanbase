@@ -35,6 +35,8 @@ using namespace share;
 namespace storage
 {
 
+ERRSIM_POINT_DEF(EN_BUILD_SYS_TABLETS_DAG_FAILED);
+
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
   : ObIHADagNetCtx(),
@@ -301,6 +303,7 @@ int ObMigrationDagNet::start_running()
 int ObMigrationDagNet::start_running_for_migration_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObInitialMigrationDag *initial_migration_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
 
@@ -325,7 +328,18 @@ int ObMigrationDagNet::start_running_for_migration_()
       LOG_WARN("Fail to add task", K(ret));
       ret = OB_EAGAIN;
     }
+  } else {
+    initial_migration_dag = nullptr;
   }
+
+  if (OB_NOT_NULL(initial_migration_dag) && OB_NOT_NULL(scheduler)) {
+    initial_migration_dag->reset_children();
+    if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_migration_dag))) {
+      LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_migration_dag));
+    }
+    scheduler->free_dag(*initial_migration_dag);
+  }
+
   return ret;
 }
 
@@ -718,7 +732,7 @@ int ObInitialMigrationTask::generate_migration_dags_()
     }
   } else if (OB_FAIL(scheduler->add_dag(start_migration_dag))) {
     LOG_WARN("failed to add dag", K(ret), K(*start_migration_dag));
-    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(migration_finish_dag, initial_migration_dag))) {
+    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(migration_finish_dag, start_migration_dag))) {
       LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_migration_dag));
     } else {
       migration_finish_dag = nullptr;
@@ -733,14 +747,13 @@ int ObInitialMigrationTask::generate_migration_dags_()
   }
 
   if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(migration_finish_dag)) {
+      scheduler->free_dag(*migration_finish_dag, start_migration_dag);
+      migration_finish_dag = nullptr;
+    }
     if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_migration_dag)) {
       scheduler->free_dag(*start_migration_dag, initial_migration_dag);
       start_migration_dag = nullptr;
-    }
-
-    if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(migration_finish_dag)) {
-      scheduler->free_dag(*migration_finish_dag, initial_migration_dag);
-      migration_finish_dag = nullptr;
     }
     const bool need_retry = true;
     if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, need_retry,
@@ -1304,6 +1317,18 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
       LOG_WARN("failed to add child dag", K(ret), K(*ctx_));
     } else if (OB_FAIL(data_tablets_migration_dag->create_first_task())) {
       LOG_WARN("failed to create first task", K(ret));
+    }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_BUILD_SYS_TABLETS_DAG_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_BUILD_SYS_TABLETS_DAG_FAILED", K(ret));
+      }
+    }
+#endif
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(scheduler->add_dag(sys_tablets_migration_dag))) {
       LOG_WARN("failed to add sys tablets migration dag", K(ret), K(*sys_tablets_migration_dag));
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
@@ -1349,14 +1374,14 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
   #endif
 
     if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(data_tablets_migration_dag)) {
+        scheduler->free_dag(*data_tablets_migration_dag, sys_tablets_migration_dag);
+        data_tablets_migration_dag = nullptr;
+      }
+
       if (OB_NOT_NULL(sys_tablets_migration_dag)) {
         scheduler->free_dag(*sys_tablets_migration_dag, start_migration_dag);
         sys_tablets_migration_dag = nullptr;
-      }
-
-      if (OB_NOT_NULL(data_tablets_migration_dag)) {
-        scheduler->free_dag(*data_tablets_migration_dag, start_migration_dag);
-        data_tablets_migration_dag = nullptr;
       }
     }
   }

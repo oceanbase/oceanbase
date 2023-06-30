@@ -145,7 +145,7 @@ int ObStorageSchemaRecorder::inner_replay_clog(
   ObTabletHandle tmp_tablet_handle;
 
   if (OB_FAIL(replay_get_tablet_handle(ls_id_, tablet_id_, scn, tmp_tablet_handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
+    if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get tablet handle", K(ret), K_(tablet_id), K(scn));

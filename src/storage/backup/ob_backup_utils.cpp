@@ -1776,7 +1776,7 @@ int ObBackupTabletProvider::check_tx_data_can_explain_user_data_(
   // If tablet has no minor sstable, or has no uncommitted row in sstable, it's also no need to check tx_data.
   // The condition that tx_data can explain user data is that tx_data_table's filled_tx_scn is less than the
   // minimum tablet's minor sstable's filled_tx_scn.
-  // TODO(chongrong.th): But when transfer supports not killing transaction, minor sstable may have uncommitted rows and it's
+  // TODO(chongrong.th): 4.3 But when transfer supports not killing transaction, minor sstable may have uncommitted rows and it's
   // filled_tx_scn may less than tx_data_table's filled_tx_scn, which is a bad case. Fix this in future by handora.qc.
 
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {

@@ -2141,6 +2141,7 @@ PartTransTask::PartTransTask() :
     ref_cnt_(0),
     multi_data_source_node_arr_(),
     multi_data_source_info_(),
+    segment_buf_(),
     checkpoint_seq_(0),
     global_trans_seq_(0),
     global_schema_version_(OB_INVALID_VERSION),
@@ -2275,6 +2276,7 @@ void PartTransTask::reset()
   ref_cnt_ = 0;
   multi_data_source_node_arr_.reset();
   multi_data_source_info_.reset();
+  segment_buf_.reset();
   checkpoint_seq_ = 0;
   global_trans_seq_ = 0;
   global_schema_version_ = OB_INVALID_VERSION;
@@ -2703,8 +2705,16 @@ int PartTransTask::check_for_ddl_trans(
     } else {
       op_type = static_cast<ObSchemaOperationType>(ddl_stmt->get_operation_type());
 
-      if (OB_DDL_CREATE_TABLE == op_type
-          || OB_DDL_TRUNCATE_TABLE == op_type) {
+      // TODO It refer to the create table DDL as a barrer because the Online DDL may cause the incremental
+      // data dictionary information containing two tables (such as: the hidden table and original table),
+      // resulting in incorrect replay of the incremental data dictionary.
+      if (OB_DDL_CREATE_TABLE == op_type) {
+        if (get_multi_data_source_info().is_contains_multiple_table_metas()) {
+          is_not_barrier = false;
+        } else {
+          is_not_barrier = true;
+        }
+      } else if (OB_DDL_TRUNCATE_TABLE == op_type) {
         is_not_barrier = true;
       } else {
         ++other_ddl_count;

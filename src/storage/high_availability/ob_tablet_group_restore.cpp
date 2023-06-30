@@ -824,6 +824,8 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
         ret = OB_ERR_UNEXPECTED;
          LOG_WARN("tablet restore status is invalid", K(ret), K(tablet_id), K(action_restore_status),
              K(tablet_restore_status), K(ctx_->arg_));
+      } else if (ObTabletRestoreStatus::is_undefined(tablet_restore_status)) {
+        LOG_INFO("tablet restore status is undefined, skip restore it", K(ret));
       } else if (OB_FAIL(ObTabletRestoreStatus::check_can_change_status(tablet_restore_status,
           action_restore_status, can_change))) {
         LOG_WARN("failed to check can change status", K(ret), K(tablet_restore_status),
@@ -956,8 +958,8 @@ int ObInitialTabletGroupRestoreTask::generate_tablet_restore_dags_()
       }
     } else if (OB_FAIL(scheduler->add_dag(start_restore_dag))) {
       LOG_WARN("failed to add dag", K(ret), K(*start_restore_dag));
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_restore_dag, initial_tablets_group_restore_dag))) {
-        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_tablets_group_restore_dag));
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_restore_dag, start_restore_dag))) {
+        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_restore_dag));
       } else {
         finish_restore_dag = nullptr;
       }
@@ -970,15 +972,17 @@ int ObInitialTabletGroupRestoreTask::generate_tablet_restore_dags_()
     }
 
     if (OB_FAIL(ret)) {
+
+      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_restore_dag)) {
+        scheduler->free_dag(*finish_restore_dag, start_restore_dag);
+        finish_restore_dag = nullptr;
+      }
+
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_restore_dag)) {
         scheduler->free_dag(*start_restore_dag, initial_tablets_group_restore_dag);
         start_restore_dag = nullptr;
       }
 
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_restore_dag)) {
-        scheduler->free_dag(*finish_restore_dag, initial_tablets_group_restore_dag);
-        finish_restore_dag = nullptr;
-      }
       const bool need_retry = true;
       if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, need_retry, this->get_dag()->get_type()))) {
         LOG_WARN("failed to set restore result", K(ret), K(tmp_ret), K(*ctx_));

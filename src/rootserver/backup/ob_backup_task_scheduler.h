@@ -142,10 +142,8 @@ public:
 public:
   ObBackupTaskScheduler();
   virtual ~ObBackupTaskScheduler() {}
-  static int mtl_init(ObBackupTaskScheduler *&backup_task_scheduler);
-  int init(obrpc::ObSrvRpcProxy *rpc_proxy,
-           common::ObMySQLProxy &sql_proxy,
-           share::schema::ObMultiVersionSchemaService &schema_service);
+  DEFINE_MTL_FUNC(ObBackupTaskScheduler);
+  int init();
 
   virtual void run2() override final;
   virtual void destroy() override final;

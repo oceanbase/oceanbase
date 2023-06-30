@@ -43,7 +43,7 @@ public:
     ret = map_.get_refactored(key, bag);
     if (ret == common::OB_HASH_NOT_EXIST) {
       ret = OB_SUCCESS;
-      bag = OB_NEW(common::ObArray<Value>, "TLD_MM_bag");
+      bag = OB_NEW(common::ObArray<Value>, "TLD_MM_bag", OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("TLD_MM_bagi", MTL_ID()));
       if (OB_FAIL(map_.set_refactored(key, bag))) {
         STORAGE_LOG(WARN, "fail to put bag", KR(ret));
       }

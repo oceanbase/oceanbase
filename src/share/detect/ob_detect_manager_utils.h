@@ -46,8 +46,8 @@ public:
   static void qc_unregister_detectable_id_from_dm(const common::ObDetectableId &detectable_id,
                                                   bool &register_detectable_id);
   static int qc_register_check_item_into_dm(sql::ObDfo &dfo,
-                                            const ObArray<common::ObPeerTaskState> &peer_states,
-                                            const ObArray<sql::dtl::ObDtlChannel *> &dtl_channels);
+                                            const ObIArray<common::ObPeerTaskState> &peer_states,
+                                            const ObIArray<sql::dtl::ObDtlChannel *> &dtl_channels);
   static void qc_unregister_check_item_from_dm(sql::ObDfo *dfo, ObDetectManager* dm=nullptr);
   static void qc_unregister_all_check_items_from_dm(const ObIArray<sql::ObDfo *> &dfos);
 

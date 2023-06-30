@@ -238,7 +238,14 @@ int ObSharedMacroBlockMgr::do_write_block(
     LOG_WARN("fail to async write virtual macro block", K(ret), K(write_macro_handle));
   } else if (OB_FAIL(write_macro_handle.wait(io_timeout_ms))) {
     LOG_WARN("fail to wait previous io", K(ret), K(io_timeout_ms));
-  } else if (!write_macro_handle.is_empty() && MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION_AND_WRITE_COMPLETE ==
+  }
+
+  if (OB_TIMEOUT == ret) {
+    // although ret is timeout, file system may be still writing, so we should skip the offset
+    offset_ += write_info.size_;
+  }
+
+  if (OB_SUCC(ret) && !write_macro_handle.is_empty() && MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION_AND_WRITE_COMPLETE ==
       GCONF.micro_block_merge_verify_level && 0 != offset_) {
     if (OB_FAIL(check_write_complete(write_macro_handle.get_macro_id(), write_info.size_))) {
       LOG_WARN("fail to check write completion", K(ret));

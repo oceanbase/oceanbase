@@ -257,6 +257,63 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_
   PALF_LOG(INFO, "end test switch_leader_during_removing_member3", K(id));
 }
 
+// 1. remove D from member list (ABCD) and match_lsn_map, committed_end_lsn is 100 and last_submit_end_lsn is 200.
+// 2. because committed_end_lsn is smaller than last_submit_end_lsn, the leader will use prev_member_list (ABCD) to generate committed_end_lsn
+// 3. D is not in match_lsn_map, the leader may can not generate committed_end_lsn
+TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_removing_member)
+{
+  int ret = OB_SUCCESS;
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
+  SET_CASE_LOG_FILE(TEST_NAME, "test_committed_end_lsn_after_removing_member");
+  PALF_LOG(INFO, "begin test test_committed_end_lsn_after_removing_member", K(id));
+  {
+    int64_t leader_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_mock_election(id, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+
+    const int64_t b_idx = (leader_idx + 1) % 4;
+    const int64_t c_idx = (leader_idx + 2) % 4;
+    const int64_t d_idx = (leader_idx + 3) % 4;
+    const common::ObAddr b_addr = get_cluster()[b_idx]->get_addr();
+    const common::ObAddr c_addr = get_cluster()[c_idx]->get_addr();
+    const common::ObAddr d_addr = get_cluster()[d_idx]->get_addr();
+    PalfHandleImplGuard *a_handle = palf_list[leader_idx];
+    PalfHandleImplGuard *b_handle = palf_list[b_idx];
+    PalfHandleImplGuard *c_handle = palf_list[c_idx];
+    PalfHandleImplGuard *d_handle = palf_list[d_idx];
+    LogConfigVersion config_version;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(common::ObMember(d_addr, 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
+
+    // 1. leader can not commit logs
+    block_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+    sleep(1);
+    EXPECT_GT(leader.palf_handle_impl_->sw_.last_submit_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
+
+    // 2. remove D
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(common::ObMember(d_addr, 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_GT(leader.palf_handle_impl_->sw_.last_submit_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
+    EXPECT_EQ(leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_end_lsn_, leader.palf_handle_impl_->sw_.last_submit_end_lsn_);
+    EXPECT_GT(leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_end_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
+
+    // 3. leader can commit logs
+    unblock_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+
+    // 4. check if the leader can commit logs after D has been removed from match_lsn_map
+    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.committed_end_lsn_, leader.palf_handle_impl_->sw_.last_submit_end_lsn_);
+
+    leader.reset();
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test test_committed_end_lsn_after_removing_member", K(id));
+}
+
 } // end unittest
 } // end oceanbase
 

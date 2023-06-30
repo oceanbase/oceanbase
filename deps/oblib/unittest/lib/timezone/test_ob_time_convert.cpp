@@ -3200,8 +3200,51 @@ TEST(ObTimeConvertTest, interval)
 
 }
 
+TEST(ObTimeConvertTest, scn_to_str)
+{
+  // timezone with offset only.
+  ObString tz_str;
+  ObTimeZoneInfo tz_info;
+  char tz_buf[50] = {0};
+  tz_str.assign_buffer(tz_buf, 50);
+  strcpy(tz_buf, "+8:00");
+  tz_str.set_length(static_cast<int32_t>(strlen(tz_buf)));
+  tz_info.set_timezone(tz_str);
+
+  const int64_t BUF_LEN = 100;
+  char buf[BUF_LEN] = {0};
+  int64_t pos = 0;
+  uint64_t scn_val = 9223372036854775808UL;
+
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ObTimeConverter::scn_to_str(scn_val, NULL, buf, BUF_LEN, pos));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ObTimeConverter::scn_to_str(scn_val, &tz_info, NULL, BUF_LEN, pos));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ObTimeConverter::scn_to_str(scn_val, &tz_info, buf, 0, pos));
+
+  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::scn_to_str(scn_val, &tz_info, buf, BUF_LEN, pos));
+  OB_LOG(INFO, "YYY +8:00", K(scn_val), K(tz_buf), K(buf));
+
+  pos= 0;
+  scn_val = 1687780338123456789;
+  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::scn_to_str(scn_val, &tz_info, buf, BUF_LEN, pos));
+  OB_LOG(INFO, "YYY +8:00", K(scn_val), K(tz_buf), K(buf));
+  ASSERT_TRUE(0 == strcmp(buf, "2023-06-26 19:52:18.123456789"));
+
+
+  strcpy(tz_buf, "-08:00");
+  tz_str.assign(tz_buf, static_cast<int32_t>(strlen(tz_buf)));
+  tz_info.set_timezone(tz_str);
+
+  pos= 0;
+  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::scn_to_str(scn_val, &tz_info, buf, BUF_LEN, pos));
+  OB_LOG(INFO, "YYY -08:00", K(scn_val), K(tz_buf), K(buf));
+  ASSERT_TRUE(0 == strcmp(buf, "2023-06-26 03:52:18.123456789"));
+
+}
+
 int main(int argc, char **argv)
 {
+  system("rm -f test_time_convert.log");
+  OB_LOGGER.set_file_name("test_time_convert.log", true);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();

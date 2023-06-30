@@ -34,7 +34,7 @@ namespace oceanbase
 
 namespace storage
 {
-class ObBackupLSMetaInfosDesc; //TODO(chongrong): fix namespace circular dependency
+class ObBackupLSMetaInfosDesc;
 }
 namespace share
 {

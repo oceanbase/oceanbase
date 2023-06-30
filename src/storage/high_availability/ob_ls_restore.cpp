@@ -693,8 +693,8 @@ int ObInitialLSRestoreTask::generate_ls_restore_dags_()
         ret = OB_EAGAIN;
       }
 
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_ls_restore_dag, initial_ls_restore_dag))) {
-        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_ls_restore_dag));
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_ls_restore_dag, start_ls_restore_dag))) {
+        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_ls_restore_dag));
       } else {
         finish_ls_restore_dag = nullptr;
       }
@@ -706,7 +706,7 @@ int ObInitialLSRestoreTask::generate_ls_restore_dags_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_ls_restore_dag)) {
-        scheduler->free_dag(*finish_ls_restore_dag, initial_ls_restore_dag);
+        scheduler->free_dag(*finish_ls_restore_dag, start_ls_restore_dag);
         finish_ls_restore_dag = nullptr;
       }
 

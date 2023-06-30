@@ -298,7 +298,13 @@ int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
 
       const ObTabletID tablet_id = tablet_info.tablet_id_;
       if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))) {
-        LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+        if (OB_TABLET_NOT_EXIST) {
+          LOG_INFO("tablet is not exist", K(tablet_id));
+          ret = OB_SUCCESS;
+          continue;
+        } else {
+          LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+        }
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));

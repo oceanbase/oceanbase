@@ -93,7 +93,7 @@ int ObFullTabletCreator::throttle_tablet_creation()
   int ret = OB_SUCCESS;
 
   bool need_wait = false;
-  const int64_t limit_size = get_tenant_memory_limit(MTL_ID()) / 10; // 10%
+  const int64_t limit_size = get_tenant_memory_limit(MTL_ID()) / 20; // 5%
   const int64_t timeout = 5 * 1000L; // 5ms for effective replay
   const int64_t log_timeout = 1 * 1000 * 1000L; // 1s
   const int64_t start_time = ObTimeUtility::fast_current_time();
@@ -203,7 +203,7 @@ int ObFullTabletCreator::persist_tablet()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected not memory tablet addr", K(ret), K(key), K(addr), K(old_handle), K(old_tablet->is_empty_shell()));
     } else if (addr != old_addr) {
-      if (addr.is_block()) {
+      if (addr.is_disked()) {
         LOG_INFO("full tablet has been persisted, skip this", K(ret), K(key), K(old_addr), K(addr));
       } else {
         ret = OB_NOT_THE_OBJECT; // create_memtable may change the addr, push back to queue

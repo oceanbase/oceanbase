@@ -197,10 +197,13 @@ int rollback_savepoint_slowpath_(ObTxDesc &tx,
                                  const ObTxPartRefList &parts,
                                  const int64_t scn,
                                  const int64_t expire_ts);
+void on_sp_rollback_succ_(const ObTxLSEpochPair &part,
+                          ObTxDesc &tx,
+                          const int64_t born_epoch,
+                          const ObAddr &addr);
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    const ObTxDesc &tx,
                    ObPartTransCtx *&ctx);
-
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    ObLS *ls,
                    const ObTxDesc &tx,
@@ -244,7 +247,10 @@ int acquire_global_snapshot__(const int64_t expire_ts,
                               share::SCN &snapshot,
                               int64_t &uncertain_bound,
                               ObFunction<bool()> interrupt_checker);
-int batch_post_tx_msg_(ObTxRollbackSPMsg &msg, const ObIArray<ObTxLSEpochPair> &pl);
+int batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
+                                       ObTxRollbackSPMsg &msg,
+                                       const ObIArray<ObTxLSEpochPair> &list,
+                                       int &post_succ_num);
 int post_tx_commit_msg_(ObTxDesc &tx_desc,
                         ObTxCommitMsg &msg,
                         ObITxCallback *cb);
@@ -364,6 +370,7 @@ int wait_follower_readable_(ObLS &ls,
                             const share::SCN &snapshot,
                             const ObTxReadSnapshot::SRC src);
 MonotonicTs get_req_receive_mts_();
+bool is_ls_dropped_(const share::ObLSID ls_id);
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

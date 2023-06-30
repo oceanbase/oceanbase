@@ -2305,7 +2305,7 @@ int ObMemtable::get_schema_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (get_max_column_cnt() > input_column_cnt) {
+  } else if (get_max_column_cnt() >= input_column_cnt) {
     TRANS_LOG(INFO, "column cnt or schema version is updated by memtable", KPC(this),
       K(max_column_cnt_on_memtable), K(max_schema_version_on_memtable));
     max_column_cnt_on_memtable = MAX(max_column_cnt_on_memtable, get_max_column_cnt());

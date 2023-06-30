@@ -427,7 +427,7 @@ int ObTabletPointer::release_obj(ObTablet *&t)
   } else if (OB_UNLIKELY(nullptr == obj_.pool_ && nullptr == obj_.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "object pool or allocator is nullptr", K(ret), K(obj_));
-  } else if (nullptr != obj_.pool_) {
+  } else if (nullptr == t->get_allocator()) {
     obj_.t3m_->release_tablet(t);
     t = nullptr;
   } else {

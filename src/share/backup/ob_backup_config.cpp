@@ -897,7 +897,7 @@ int ObLogRestoreSourceLocationConfigParser::check_before_update_inner_config(
   }
   //TODO (zbf271370) need supports format check, checks whether the directory exists, and is a log backup
 
-  //TODO (wenjinyu.wjy) need support access permission check
+  //TODO (wenjinyu.wjy) 4.3 need support access permission check
   //
   return ret;
 }

@@ -148,6 +148,7 @@ private:
   // NB: protected by SpinLock
   // log_mode_meta has been submitted to I/O Worker
   LogModeMeta last_submit_mode_meta_;
+  // above LogModeMetas are protected by lock_ in PalfHandleImpl
   // =========access_mode changing state============
   // mode change state
   ModeChangeState state_;

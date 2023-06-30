@@ -127,18 +127,21 @@ protected:
 };
 
 
-class ObSharedBlockReadHandle final : public ObSharedBlockBaseHandle
+class ObSharedBlockReadHandle final
 {
   friend class ObSharedBlockReaderWriter;
+  friend class ObSharedBlockLinkIter;
 public:
   ObSharedBlockReadHandle() = default;
   ~ObSharedBlockReadHandle() = default;
   ObSharedBlockReadHandle(const ObSharedBlockReadHandle &other);
   ObSharedBlockReadHandle &operator=(const ObSharedBlockReadHandle &other);
   bool is_valid() const;
-  int wait();
+  bool is_empty() const;
+  int wait(const int64_t timeout_ms = -1);
   int get_data(ObIAllocator &allocator, char *&buf, int64_t &buf_len);
-
+  void reset() { macro_handle_.reset(); }
+  TO_STRING_KV(K_(macro_handle));
 public:
   static int parse_data(
       const char *data_buf,
@@ -152,6 +155,9 @@ private:
       const int64_t data_size,
       int64_t &header_size,
       int64_t &buf_len);
+  int set_macro_handle(const blocksstable::ObMacroBlockHandle &macro_handle);
+private:
+  blocksstable::ObMacroBlockHandle macro_handle_;
 };
 
 class ObSharedBlockWriteHandle final : public ObSharedBlockBaseHandle

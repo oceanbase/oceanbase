@@ -680,8 +680,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     share::ObLSID first_ls_id;
     bool local_single_ls_plan = false;
     const bool local_single_ls_plan_maybe = plan->is_local_plan() &&
-                                            OB_PHY_PLAN_LOCAL == plan->get_location_type() &&
-                                            !tx_desc.is_can_elr();
+                                            OB_PHY_PLAN_LOCAL == plan->get_location_type();
     if (local_single_ls_plan_maybe) {
       if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id))) {
       } else if (!first_ls_id.is_valid()) {

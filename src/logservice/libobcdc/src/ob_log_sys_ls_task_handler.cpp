@@ -21,6 +21,7 @@
 #include "ob_log_schema_getter.h"       // IObLogSchemaGetter
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
 #include "ob_log_config.h"              // TCONF
+#include "ob_log_trace_id.h"
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
@@ -426,6 +427,7 @@ int ObLogSysLsTaskHandler::dispatch_task_(
 void ObLogSysLsTaskHandler::handle_task_routine()
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
 
   while (! stop_flag_ && OB_SUCCESS == ret) {
     PartTransTask *task = NULL;

@@ -1087,10 +1087,17 @@ void ObTxExecInfo::mrege_buffer_ctx_array_to_multi_data_source() const
   ObTxBufferCtxArray &mds_buffer_ctx_array = const_cast<ObTxBufferCtxArray &>(mds_buffer_ctx_array_);
   TRANS_LOG_RET(INFO, OB_SUCCESS, "merge deserialized buffer ctx to multi_data_source", K(mds_buffer_ctx_array), K(multi_data_source));
   if (mds_buffer_ctx_array.count() != multi_data_source.count()) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED,
-                  "mds buffer ctx array size not equal to multi data source array size"
-                  ", destroy deserialized mds_buffer_ctx_array directly",
-                  K(multi_data_source), K(mds_buffer_ctx_array), K(*this));
+    if (mds_buffer_ctx_array.count() == 0) {// 4.1 -> 4.2 compat case
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED,
+                    "mds buffer ctx array size not equal to multi data source array size"
+                    ", destroy deserialized mds_buffer_ctx_array directly",
+                    K(multi_data_source), K(mds_buffer_ctx_array), K(*this));
+    } else {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED,
+                    "mds buffer ctx array size not equal to multi data source array size"
+                    ", destroy deserialized mds_buffer_ctx_array directly",
+                    K(multi_data_source), K(mds_buffer_ctx_array), K(*this));
+    }
     for (int64_t idx = 0; idx < mds_buffer_ctx_array.count(); ++idx) {
       mds_buffer_ctx_array[idx].destroy_ctx();
     }

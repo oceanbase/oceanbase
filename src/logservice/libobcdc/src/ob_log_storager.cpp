@@ -21,6 +21,7 @@
 #include "ob_log_store_key.h"
 #include "ob_log_store_task.h"
 #include "ob_log_factory.h"                      // ObLogStoreTaskFactory
+#include "ob_log_trace_id.h"                     // ObLogTraceIdGuard
 
 using namespace oceanbase::common;
 
@@ -177,6 +178,7 @@ void ObLogStorager::thread_end()
 int ObLogStorager::handle(void *data, const int64_t thread_index, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   IObLogBatchBufTask *task = static_cast<IObLogBatchBufTask *>(data);
   Block *block = static_cast<Block *>(task);
   LOG_DEBUG("Storager handle succ", "addr", &task, KPC(task), KPC(block));

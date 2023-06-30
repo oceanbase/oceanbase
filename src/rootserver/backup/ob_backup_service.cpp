@@ -30,26 +30,41 @@ namespace rootserver
 *----------------------------- ObBackupService -----------------------------
 */
 
-int ObBackupService::init(
-    common::ObMySQLProxy &sql_proxy, 
-    obrpc::ObSrvRpcProxy &rpc_proxy,
-    schema::ObMultiVersionSchemaService &schema_service, 
-    share::ObLocationService &loacation_service,
-    ObBackupTaskScheduler &task_scheduler)
+int ObBackupService::init()
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  obrpc::ObSrvRpcProxy *rpc_proxy = nullptr;
+  share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
+  ObBackupTaskScheduler *backup_task_scheduler = nullptr;
+  share::ObLocationService *location_service = nullptr;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup mgr already inited", K(ret));
-  } else if (OB_FAIL(task_scheduler.register_backup_srv(*this))) {
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
+  } else if (OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
+  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service should not be NULL", K(ret), KP(schema_service));
+  } else if (OB_ISNULL(backup_task_scheduler = MTL(ObBackupTaskScheduler *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup_task_scheduler should not be NULL", K(ret), KP(backup_task_scheduler));
+  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service should not be NULL", K(ret), KP(backup_task_scheduler));
+  } else if (OB_FAIL(backup_task_scheduler->register_backup_srv(*this))) {
     LOG_WARN("failed to register backup srv", K(ret));
-  } else if (OB_FAIL(sub_init(sql_proxy, rpc_proxy, schema_service, loacation_service, task_scheduler))) {
+  } else if (OB_FAIL(sub_init(*sql_proxy, *rpc_proxy, *schema_service, *location_service, *backup_task_scheduler))) {
     LOG_WARN("failed to do sub init", K(ret));
   } else {
     tenant_id_ = tenant_id;
-    task_scheduler_ = &task_scheduler;
-    schema_service_ = &schema_service;
+    task_scheduler_ = backup_task_scheduler;
+    schema_service_ = schema_service;
     is_inited_ = true;
   }
   return ret;
@@ -69,7 +84,7 @@ void ObBackupService::run2()
       LOG_WARN("fail to get schema guard", KR(ret));
     } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
       LOG_WARN("failed to get schema ", KR(ret), K(tenant_id_));
-    } else if (tenant_schema->is_normal()) {
+    } else if (OB_NOT_NULL(tenant_schema) && tenant_schema->is_normal()) {
       if (can_schedule()) {
         process(last_trigger_ts);
       } else {
@@ -114,35 +129,6 @@ void ObBackupService::destroy()
 /*
 *----------------------------- ObBackupDataService -----------------------------
 */
-
-int ObBackupDataService::mtl_init(ObBackupDataService *&srv)
-{
-  int ret = OB_SUCCESS;
-  common::ObMySQLProxy *sql_proxy = nullptr;
-  obrpc::ObSrvRpcProxy *rpc_proxy = nullptr;
-  share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
-  ObBackupTaskScheduler *backup_task_scheduler = nullptr;
-  share::ObLocationService *location_service = nullptr;
-  if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
-  } else if (OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
-  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service should not be NULL", K(ret), KP(schema_service));
-  } else if (OB_ISNULL(backup_task_scheduler = MTL(ObBackupTaskScheduler *))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup_task_scheduler should not be NULL", K(ret), KP(backup_task_scheduler));
-  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("location_service should not be NULL", K(ret), KP(backup_task_scheduler));
-  } else if (OB_FAIL(srv->init(*sql_proxy, *rpc_proxy, *schema_service, *location_service, *backup_task_scheduler))) {
-    LOG_WARN("fail to ini backup service");
-  }
-  return ret;
-}
 
 int ObBackupDataService::sub_init(
     common::ObMySQLProxy &sql_proxy,
@@ -237,36 +223,6 @@ int ObBackupDataService::handle_backup_database_cancel(const uint64_t tenant_id,
 /*
 *----------------------------- ObBackupCleanService -----------------------------
 */
-
-
-int ObBackupCleanService::mtl_init(ObBackupCleanService *&srv)
-{
-  int ret = OB_SUCCESS;
-  common::ObMySQLProxy *sql_proxy = nullptr;
-  obrpc::ObSrvRpcProxy *rpc_proxy = nullptr;
-  share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
-  ObBackupTaskScheduler *backup_task_scheduler = nullptr;
-  share::ObLocationService *location_service = nullptr;
-  if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
-  } else if (OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
-  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service should not be NULL", K(ret), KP(schema_service));
-  } else if (OB_ISNULL(backup_task_scheduler = MTL(ObBackupTaskScheduler *))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup_task_scheduler should not be NULL", K(ret), KP(backup_task_scheduler));
-  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("location_service should not be NULL", K(ret), KP(backup_task_scheduler));
-  } else if (OB_FAIL(srv->init(*sql_proxy, *rpc_proxy, *schema_service, *location_service, *backup_task_scheduler))) {
-    LOG_WARN("fail to ini backup service");
-  }
-  return ret;
-}
 
 int ObBackupCleanService::sub_init(
     common::ObMySQLProxy &sql_proxy,

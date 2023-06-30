@@ -24,6 +24,7 @@
 #include "share/ob_lob_access_utils.h"
 #include "lib/charset/ob_charset.h"
 
+
 namespace oceanbase
 {
 using namespace common;
@@ -132,7 +133,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
     }
   }
   bool is_packed = result.get_physical_plan() ? result.get_physical_plan()->is_packed() : false;
-  MYSQL_PROTOCOL_TYPE protocol_type = is_ps_protocol ? BINARY : TEXT;
+  MYSQL_PROTOCOL_TYPE protocol_type = is_ps_protocol ? MYSQL_PROTOCOL_TYPE::BINARY : MYSQL_PROTOCOL_TYPE::TEXT;
   const common::ColumnsFieldIArray *fields = NULL;
   if (OB_SUCC(ret)) {
     fields = result.get_field_columns();
@@ -635,32 +636,11 @@ int ObQueryDriver::process_sql_udt_results(common::ObObj& value,
                                            sql::ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  if (!value.is_xml_sql_type()) {
-    ret = OB_NOT_SUPPORTED;
-    OB_LOG(WARN, "not supported udt type", K(ret),
-           K(value.get_type()), K(value.get_udt_subschema_id()));
-  } else {
-    bool is_client_support_binary_xml = false; // client receive xml as json, like json
-    if (value.is_null() || value.is_nop_value()) {
-      // do nothing
-    } else if (is_client_support_binary_xml) {
-      // convert to udt client format
-    } else {
-      ObString data;
-      ObLobLocatorV2 loc(value.get_string(), true);
-      if (loc.is_null()) {
-      } else {
-        ObTextStringIter instr_iter(ObLongTextType, CS_TYPE_BINARY, value.get_string(), true);
-        if (OB_FAIL(instr_iter.init(0, session_info, allocator))) {
-          LOG_WARN("init lob str inter failed", K(ret), K(value));
-        } else if (OB_FAIL(instr_iter.get_full_data(data))) {
-          LOG_WARN("get xml full data failed", K(value));
-        } else {
-          value.set_udt_value(data.ptr(), data.length());
-        }
-      }
-    }
-  }
+  UNUSED(value);
+  UNUSED(allocator);
+  UNUSED(session_info);
+  ret = OB_NOT_SUPPORTED;
+  OB_LOG(WARN, "not supported udt type", K(ret));
   return ret;
 }
 

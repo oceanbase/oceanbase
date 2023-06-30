@@ -71,7 +71,7 @@ protected:
   // 4. TX_START_TRANSFER_OUT
   // 5. TX_FINISH_TRANSFER_OUT
   // 6. TX_FINISH_TRANSFER_IN
-  virtual bool is_replay_update_user_data_() const = 0;  // TODO (wenjinyu.wjy) Modify the function name to is_replay_update_tablet_status_
+  virtual bool is_replay_update_tablet_status_() const = 0;
 
   // replay to the tablet
   // @return OB_SUCCESS, replay successfully, data has written to tablet.

@@ -812,6 +812,8 @@ int ObAggregateProcessor::init()
   end_partial_rollup_idx_ = 0;
   removal_info_.reset();
   set_tenant_id(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id());
+  group_rows_.set_tenant_id(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id());
+  group_rows_.set_ctx_id(ObCtxIds::DEFAULT_CTX_ID);
 
   if (OB_ISNULL(eval_ctx_.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;

@@ -715,7 +715,7 @@ int ObLocalDevice::alloc_block(const common::ObIODOpts *opts, ObIOFd &block_id)
     SHARE_LOG(WARN, "The ObLocalDevice is not ready, ", K(ret), K(is_inited_), K(is_marked_));
   } else if (OB_UNLIKELY(free_block_cnt_ <= 0)) {
     ret = OB_SERVER_OUTOF_DISK_SPACE;
-    LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "Fail to alloc block", K(ret), K(free_block_cnt_), K(total_block_cnt_));
+    SHARE_LOG(WARN, "Fail to alloc block", K(ret), K(free_block_cnt_), K(total_block_cnt_));
   } else {
     block_idx = free_block_array_[free_block_pop_pos_];
     if (0 == block_bitmap_[block_idx]) {
@@ -1317,7 +1317,7 @@ int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
     ret = convert_sys_errno();
     SHARE_LOG(WARN, "Failed to get disk space", K(ret), K(sstable_dir_));
   } else {
-    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
+    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize));
     const int64_t max_file_size = block_file_size_ + free_space - reserved_size;
     /* when datafile_maxsize is large than current datafile_size, we should return
        the Maximun left space that can be extend. */
