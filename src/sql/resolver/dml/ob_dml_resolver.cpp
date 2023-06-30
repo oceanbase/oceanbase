@@ -2240,10 +2240,11 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     CK (OB_NOT_NULL(get_basic_stmt()));
     if (OB_SUCC(ret)) {
       if (lib::is_oracle_mode()
-      && NULL != params_.secondary_namespace_
-      && get_basic_stmt()->is_insert_stmt()
-      && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select()) {
-        //oracle模式insert语句的values子句，标识符优先解释为变量
+          && NULL != params_.secondary_namespace_
+          && ((get_basic_stmt()->is_insert_stmt()
+                && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select())
+              || T_CURRENT_OF_SCOPE == current_scope_)) {
+        //In Oracle Mode, current of ident, insert values(ident), ident should explain to pl/sql variable
         if (!q_name.access_idents_.empty()) { //q_name.access_idents_为NULL肯定是列
           if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
             LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve external symbol failed", K(ret), K(q_name));
@@ -2253,8 +2254,9 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
             LOG_WARN("dml with collection or record construction function is not supported", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
           } else if ((ObExtendType == real_ref_expr->get_result_type().get_type()
-                   || ObMaxType == real_ref_expr->get_result_type().get_type())
-                   && (T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type())) {
+                        || ObMaxType == real_ref_expr->get_result_type().get_type())
+                      && (T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type()
+                          && current_scope_ != T_CURRENT_OF_SCOPE)) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("dml with collection or record construction function is not supported", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
@@ -5318,6 +5320,7 @@ int ObDMLResolver::resolve_current_of(const ParseNode &node,
   int ret = OB_SUCCESS;
   ObRawExpr *cursor_expr = NULL;
   ObRawExpr *equal_expr = NULL;
+  current_scope_ = T_CURRENT_OF_SCOPE;
   if (OB_ISNULL(params_.secondary_namespace_)) {
     // secondary_namespace_ 为空, 说明不是在PL中
     ret = OB_UNIMPLEMENTED_FEATURE;
