@@ -91,8 +91,8 @@ public:
   void set_is_udt_routine(bool v) { is_udt_routine_ = v; }
   bool is_udt_routine() const { return is_udt_routine_; }
 
-  int prepare_expression(const common::ObArray<sql::ObRawExpr*> params);
-  int final_expression(const common::ObArray<sql::ObRawExpr*> params,
+  int prepare_expression(const common::ObIArray<sql::ObRawExpr*> &params);
+  int final_expression(const common::ObIArray<sql::ObRawExpr*> &params,
                        ObSQLSessionInfo *session_info,
                        share::schema::ObSchemaGetterGuard *schema_guard);
 
