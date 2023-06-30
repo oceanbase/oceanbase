@@ -51,7 +51,11 @@ void ObSignalHandle::run1()
     //to check _stop every second
     struct timespec timeout = {1, 0};
     while (!has_set_stop()) {//need not to check ret
-      if ( -1 == (signum = sigtimedwait(&waitset, NULL, &timeout))) {
+      {
+        oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT);
+        signum = sigtimedwait(&waitset, NULL, &timeout);
+      }
+      if (-1 == signum) {
         //do not log error, because timeout will also return -1.
       } else if (OB_FAIL(deal_signals(signum))) {
         LOG_WARN("Deal signal error", K(ret), K(signum));

@@ -11435,7 +11435,32 @@ def_table_schema(
 # 12381: __all_virtual_task_opt_stat_gather_history
 # 12382: __all_virtual_table_opt_stat_gather_history
 # 12383: __all_virtual_opt_stat_gather_monitor
-# 12384: __all_virtual_thread
+
+def_table_schema(
+  owner             = 'fengshuo.fs',
+  table_name        = '__all_virtual_thread',
+  table_id          = '12384',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('tenant_id',           'int'),
+    ('tid',                 'int'),
+    ('tname',               'varchar:16'),
+    ('status',              'varchar:32'),
+    ('wait_event',          'varchar:64'),
+    ('latch_wait',          'varchar:16'),
+    ('latch_hold',          'varchar:256'),
+    ('trace_id',            'varchar:40'),
+    ('loop_ts',             'timestamp')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12385: __all_virtual_arbitration_member_info
 # 12386: __all_virtual_server_storage
 # 12387: __all_virtual_arbitration_service_status
@@ -11732,7 +11757,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15295: __all_table_opt_stat_gather_history
 # 15296: __all_virtual_opt_stat_gather_monitor
 def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__all_virtual_long_ops_status']))
-# 15298: __all_virtual_thread
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298', all_def_keywords['__all_virtual_thread'])))
 # 15299: __all_virtual_wr_active_session_history
 # 15300: __all_virtual_wr_snapshot
 # 15301: __all_virtual_wr_statname

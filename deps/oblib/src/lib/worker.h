@@ -74,10 +74,6 @@ public:
   void set_req_flag(const rpc::ObRequest *cur_request) { cur_request_ = cur_request; }
   bool has_req_flag() { return OB_NOT_NULL(cur_request_); }
   const rpc::ObRequest *get_cur_request() { return cur_request_; }
-
-  OB_INLINE void set_is_blocking(bool v) { is_blocking_ = v; }
-  OB_INLINE bool is_blocking() { return is_blocking_; }
-
   OB_INLINE void set_worker_level(const int32_t level) { worker_level_ = level; }
   OB_INLINE int32_t get_worker_level() const { return worker_level_; }
 
@@ -133,9 +129,6 @@ protected:
   sql::ObSQLSessionInfo *session_;
 private:
   const rpc::ObRequest *cur_request_;
-  // whether worker is in blocking
-  bool is_blocking_;
-
   int32_t worker_level_;
   int32_t curr_request_level_;
   int32_t group_id_;

@@ -5,18 +5,17 @@
 #include "lib/worker.h"
 #include <dlfcn.h>
 
-#define SYS_HOOK(func_name, ...)                                               \
-  ({                                                                           \
-    int ret = 0;                                                               \
-    if (!in_sys_hook++ && OB_NOT_NULL(oceanbase::lib::Worker::self_))  {       \
-      oceanbase::lib::Worker::self_->set_is_blocking(true);                    \
-      ret = real_##func_name(__VA_ARGS__);                                     \
-      oceanbase::lib::Worker::self_->set_is_blocking(false);                   \
-    } else {                                                                   \
-      ret = real_##func_name(__VA_ARGS__);                                     \
-    }                                                                          \
-    in_sys_hook--;                                                             \
-    ret;                                                                       \
+#define SYS_HOOK(func_name, ...)                                             \
+  ({                                                                         \
+    int ret = 0;                                                             \
+    if (!in_sys_hook++)  {                                                   \
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT); \
+      ret = real_##func_name(__VA_ARGS__);                                   \
+    } else {                                                                 \
+      ret = real_##func_name(__VA_ARGS__);                                   \
+    }                                                                        \
+    in_sys_hook--;                                                           \
+    ret;                                                                     \
   })
 
 namespace oceanbase {

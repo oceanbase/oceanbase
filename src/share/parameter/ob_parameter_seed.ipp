@@ -1438,3 +1438,6 @@ DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "True",
 DEF_CAP(range_optimizer_max_mem_size, OB_TENANT_PARAMETER, "128M", "[16M,1G]",
         "to limit the memory consumption for the query range optimizer. Range: [16M,1G]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_worker_long_stall_threshold, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
+         "threshold of dynamic worker works",
+		 ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

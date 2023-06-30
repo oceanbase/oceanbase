@@ -343,6 +343,7 @@ _tx_result_retention
 _upgrade_stage
 _wait_interval_after_truncate
 _with_subquery
+_worker_long_stall_threshold
 _xa_gc_interval
 _xa_gc_timeout
 _xsolapi_generate_with_clause
