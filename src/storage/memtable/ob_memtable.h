@@ -16,6 +16,7 @@
 
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_cluster_version.h"
+#include "lib/literals/ob_literals.h"
 #include "lib/worker.h"
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/memtable/mvcc/ob_query_engine.h"
@@ -459,7 +460,7 @@ public:
   int resolve_right_boundary_for_migration();
   void unset_logging_blocked_for_active_memtable();
   void resolve_left_boundary_for_active_memtable();
-  inline void set_allow_freeze(const bool allow_freeze) { ATOMIC_STORE(&allow_freeze_, allow_freeze); }
+  void set_allow_freeze(const bool allow_freeze);
   inline bool allow_freeze() const { return ATOMIC_LOAD(&allow_freeze_); }
 
   /* multi source data operations */

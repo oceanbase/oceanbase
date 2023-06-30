@@ -104,14 +104,14 @@ void ObTenantStatistic::reset()
 ObTenantInfo::ObTenantInfo()
   :	tenant_id_(INT64_MAX),
     is_loaded_(false),
-    is_freezing_(false),
-    last_freeze_clock_(0),
     frozen_scn_(0),
     freeze_cnt_(0),
     last_halt_ts_(0),
     slow_freeze_(false),
     slow_freeze_timestamp_(0),
-    slow_freeze_min_protect_clock_(INT64_MAX),
+    slow_freeze_mt_retire_clock_(0),
+    freeze_interval_(0),
+    last_freeze_timestamp_(0),
     mem_lower_limit_(0),
     mem_upper_limit_(0),
     mem_memstore_limit_(0)
@@ -122,13 +122,14 @@ void ObTenantInfo::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID; // i64 max as invalid.
   is_loaded_ = false;
-  is_freezing_ = false;
   frozen_scn_ = 0;
   freeze_cnt_ = 0;
   last_halt_ts_ = 0;
   slow_freeze_ = false;
   slow_freeze_timestamp_ = 0;
-  slow_freeze_min_protect_clock_ = INT64_MAX;
+  slow_freeze_mt_retire_clock_ = 0;
+  freeze_interval_ = 0;
+  last_freeze_timestamp_ = 0;
   slow_tablet_.reset();
   mem_memstore_limit_ = 0;
   mem_lower_limit_ = 0;
@@ -189,10 +190,70 @@ void ObTenantInfo::get_freeze_ctx(ObTenantFreezeCtx &ctx) const
   ctx.mem_memstore_limit_ = mem_memstore_limit_;
 }
 
+bool ObTenantInfo::is_freeze_need_slow() const
+{
+  bool need_slow = false;
+  SpinRLockGuard guard(lock_);
+  if (slow_freeze_) {
+    int64_t now = ObTimeUtility::fast_current_time();
+    if (now - last_freeze_timestamp_ >= freeze_interval_) {
+      need_slow = false;
+    } else {
+      // no need minor freeze
+      need_slow = true;
+    }
+  }
+  return need_slow;
+}
+
+void ObTenantInfo::update_slow_freeze_interval()
+{
+  if (!slow_freeze_) {
+  } else {
+    SpinWLockGuard guard(lock_);
+    // if slow freeze, make freeze interval 2 times of now.
+    if (slow_freeze_) {
+      last_freeze_timestamp_ = ObTimeUtility::fast_current_time();
+      freeze_interval_ = MIN(freeze_interval_ * 2, MAX_FREEZE_INTERVAL);
+    }
+  }
+}
+
+void ObTenantInfo::set_slow_freeze(
+    const common::ObTabletID &tablet_id,
+    const int64_t retire_clock,
+    const int64_t default_interval)
+{
+  SpinWLockGuard guard(lock_);
+  if (!slow_freeze_) {
+    slow_freeze_ = true;
+    slow_freeze_timestamp_ = ObTimeUtility::fast_current_time();
+    slow_freeze_mt_retire_clock_ = retire_clock;
+    slow_tablet_ = tablet_id;
+    last_freeze_timestamp_ = ObTimeUtility::fast_current_time();
+    freeze_interval_ = default_interval;
+  }
+}
+
+void ObTenantInfo::unset_slow_freeze(const common::ObTabletID &tablet_id)
+{
+  SpinWLockGuard guard(lock_);
+  if (slow_freeze_ && slow_tablet_ == tablet_id) {
+    slow_freeze_ = false;
+    slow_freeze_timestamp_ = 0;
+    slow_freeze_mt_retire_clock_ = 0;
+    last_freeze_timestamp_ = 0;
+    freeze_interval_ = 0;
+    slow_tablet_.reset();
+  }
+}
+
 ObTenantFreezeGuard::ObTenantFreezeGuard(common::ObMemstoreAllocatorMgr *allocator_mgr,
                                          int &err_code,
+                                         const ObTenantInfo &tenant_info,
                                          const int64_t warn_threshold)
   : allocator_mgr_(nullptr),
+    tenant_info_(tenant_info),
     pre_retire_pos_(0),
     error_code_(err_code),
     time_guard_("FREEZE_CHECKER", warn_threshold)
@@ -237,8 +298,13 @@ ObTenantFreezeGuard::~ObTenantFreezeGuard()
     const bool has_no_active_memtable = (curr_frozen_pos == 0);
     if (!(retired_mem_frozen || has_no_active_memtable)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("[FREEZE_CHECKER]there may be frequent tenant freeze", KR(ret), K(curr_frozen_pos),
-                K_(pre_retire_pos), K(retired_mem_frozen), K(has_no_active_memtable));
+      if (tenant_info_.is_freeze_slowed()) {
+        LOG_WARN("[FREEZE_CHECKER]there may be frequent tenant freeze, but slowed", KR(ret), K(curr_frozen_pos),
+                 K_(pre_retire_pos), K(retired_mem_frozen), K(has_no_active_memtable), K_(tenant_info));
+      } else {
+        LOG_ERROR("[FREEZE_CHECKER]there may be frequent tenant freeze", KR(ret), K(curr_frozen_pos),
+                  K_(pre_retire_pos), K(retired_mem_frozen), K(has_no_active_memtable));
+      }
       char active_mt_info[DEFAULT_BUF_LENGTH];
       tenant_allocator->log_active_memstore_info(active_mt_info,
                                                  sizeof(active_mt_info));
