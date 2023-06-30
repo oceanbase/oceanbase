@@ -1281,11 +1281,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       || max_stale_time_us <= -2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
-  } else if (max_stale_time_us < 0
-      || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
-    // no need check
-    can_read = true;
-  } else if (observer::ObServer::get_instance().get_self() == addr) {
+  } else if (observer::ObServer::get_instance().get_self() == addr && max_stale_time_us > 0) {
     storage::ObLSService *ls_svr =  MTL(storage::ObLSService *);
     storage::ObLSHandle handle;
     ObLS *ls = nullptr;
@@ -1305,7 +1301,18 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       LOG_WARN("log stream unreadable", K(ls_id), K(addr), K(max_stale_time_us));
     }
   } else {
-    LOG_TRACE("log stream is not local", K(ls_id), K(addr));
+    ObBLKey blk;
+    bool in_black_list = false;
+    if (OB_FAIL(blk.init(addr, tenant_id, ls_id))) {
+      LOG_WARN("ObBLKey init error", K(ret), K(addr), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(blk, in_black_list))) {
+      LOG_WARN("check in black list error", K(ret), K(blk));
+    } else {
+      can_read = (in_black_list ? false : true);
+      if (!can_read && REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+        LOG_WARN("log stream unreadable", K(ls_id), K(blk), K(in_black_list));
+      }
+    }
   }
   return ret;
 }

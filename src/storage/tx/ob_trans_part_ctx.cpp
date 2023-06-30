@@ -154,7 +154,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     if (!GCONF.enable_record_trace_log) {
       tlog_ = NULL;
     } else {
-      tlog_ = ObTransTraceLogFactory::alloc();
+      tlog_ = &trace_log_;
     }
 
     is_inited_ = true;
@@ -246,7 +246,6 @@ void ObPartTransCtx::destroy()
 
     if (NULL != tlog_) {
       print_trace_log_if_necessary_();
-      ObTransTraceLogFactory::release(tlog_);
       tlog_ = NULL;
     }
 
@@ -1251,7 +1250,7 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool &is_prepared, SCN &prep
   int ret = OB_SUCCESS;
   ObTxState cur_state = exec_info_.state_;
 
-  if (ObTxState::PREPARE == cur_state) {
+  if (ObTxState::PREPARE == cur_state || ObTxState::PRE_COMMIT == cur_state) {
     is_prepared = true;
     prepare_version = exec_info_.prepare_version_;
   } else if (ObTxState::COMMIT == cur_state || ObTxState::ABORT == cur_state
@@ -1259,7 +1258,7 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool &is_prepared, SCN &prep
     is_prepared = true;
     prepare_version.set_max();
   } else {
-    is_prepared = true;
+    is_prepared = false;
     prepare_version.set_max();
   }
   if (is_prepared && OB_INVALID_SCN_VAL == prepare_version.get_val_for_gts()) {
