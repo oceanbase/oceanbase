@@ -593,15 +593,8 @@ private:
 class ObMallocHookAttrGuard
 {
 public:
-  ObMallocHookAttrGuard(const ObMemAttr& attr)
-   : old_attr_(tl_mem_attr)
-  {
-    tl_mem_attr = attr;
-  }
-  ~ObMallocHookAttrGuard()
-  {
-    tl_mem_attr = old_attr_;
-  }
+  ObMallocHookAttrGuard(const ObMemAttr& attr);
+  ~ObMallocHookAttrGuard();
   static ObMemAttr get_tl_mem_attr()
   {
     return tl_mem_attr;

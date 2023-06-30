@@ -25,6 +25,18 @@ thread_local ObMemAttr ObMallocHookAttrGuard::tl_mem_attr(OB_SERVER_TENANT_ID,
                                                           "glibc_malloc",
                                                           ObCtxIds::GLIBC);
 
+ObMallocHookAttrGuard::ObMallocHookAttrGuard(const ObMemAttr& attr)
+  : old_attr_(tl_mem_attr)
+{
+  tl_mem_attr = attr;
+  tl_mem_attr.ctx_id_ = ObCtxIds::GLIBC;
+}
+
+ObMallocHookAttrGuard::~ObMallocHookAttrGuard()
+{
+  tl_mem_attr = old_attr_;
+}
+
 bool ObLabel::operator==(const ObLabel &other) const
 {
   bool bret = false;
