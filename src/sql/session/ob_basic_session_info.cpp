@@ -965,7 +965,8 @@ ObBasicSysVar *ObBasicSessionInfo::get_sys_var(const int64_t idx)
   return var;
 }
 
-int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const bool is_sys_tenant)
+int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const bool is_sys_tenant,
+                                              bool is_deserialized)
 {
   int ret = OB_SUCCESS;
   ObString name;
@@ -989,7 +990,7 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       // Note: 如果已经初始化过 base value，则下面的流程不会执行
       var_type = ObSysVariables::get_type(i);
       var_flag = ObSysVariables::get_flags(i);
-      value.set_varchar(ObSysVariables::get_value(i));
+      value.set_varchar(is_deserialized ? ObSysVariables::get_base_str_value(i) :ObSysVariables::get_value(i));
       value.set_collation_type(ObCharset::get_system_collation());
       min_val.set_varchar(ObSysVariables::get_min(i));
       min_val.set_collation_type(ObCharset::get_system_collation());
@@ -1091,12 +1092,12 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
   return ret;
 }
 
-int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant)
+int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(sys_var_fac_.create_all_sys_vars())) {
     LOG_WARN("fail create all sys variables", K(ret));
-  } else if (OB_FAIL(init_system_variables(print_info_log, is_sys_tenant))) {
+  } else if (OB_FAIL(init_system_variables(print_info_log, is_sys_tenant, is_deserialized))) {
     LOG_WARN("Init system variables failed !", K(ret));
   }
   return ret;
@@ -3764,10 +3765,10 @@ int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
     if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(ids.at(i), sys_var_idx))) {
       LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_idx), K(ids.at(i)), K(ret));
     } else {
-      if (!ObSysVariables::get_default_value(sys_var_idx).can_compare(
-        sys_vars_[sys_var_idx]->get_value())||ObSysVariables::get_default_value(sys_var_idx) !=
+      if (!ObSysVariables::get_base_value(sys_var_idx).can_compare(
+        sys_vars_[sys_var_idx]->get_value())||ObSysVariables::get_base_value(sys_var_idx) !=
         sys_vars_[sys_var_idx]->get_value() ||
-        ObSysVariables::get_default_value(sys_var_idx).get_scale()
+        ObSysVariables::get_base_value(sys_var_idx).get_scale()
         != sys_vars_[sys_var_idx]->get_value().get_scale()) {
         // need serialize delta vars
         if (is_sync_sys_var(ids.at(i))){
@@ -3778,14 +3779,14 @@ int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
           } else {
             LOG_TRACE("sys var need sync", K(sys_var_idx),
             "val", sys_vars_[sys_var_idx]->get_value(),
-            "def", ObSysVariables::get_default_value(sys_var_idx),
+            "def", ObSysVariables::get_base_value(sys_var_idx),
             K(sessid_), K(proxy_sessid_));
           }
         }
       } else {
          LOG_TRACE("sys var not need sync", K(sys_var_idx),
          "val", sys_vars_[sys_var_idx]->get_value(),
-         "def", ObSysVariables::get_default_value(sys_var_idx),
+         "def", ObSysVariables::get_base_value(sys_var_idx),
          K(sessid_), K(proxy_sessid_));
       }
     }
@@ -3832,7 +3833,7 @@ int ObBasicSessionInfo::serialize_sync_sys_vars(ObIArray<ObSysVarClassType>
         LOG_TRACE("serialize sys vars", K(sys_var_idx),
                   "name", ObSysVariables::get_name(sys_var_idx),
                   "val", sys_vars_[sys_var_idx]->get_value(),
-                  "def", ObSysVariables::get_default_value(sys_var_idx),
+                  "def", ObSysVariables::get_base_value(sys_var_idx),
                   K(sessid_), K(proxy_sessid_));
       }
     }
@@ -3950,7 +3951,7 @@ int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("create sys var is NULL", K(ret));
       } else if (FALSE_IT(sys_vars_[store_idx]->set_value(
-                          ObSysVariables::get_default_value(store_idx)))) {
+                          ObSysVariables::get_base_value(store_idx)))) {
         // do nothing.
       } else if (OB_FAIL(process_session_variable(sys_var_id, sys_vars_[store_idx]->get_value(),
                                                   false))) {
@@ -4616,7 +4617,7 @@ int ObBasicSessionInfo::load_all_sys_vars_default()
 {
   int ret = OB_SUCCESS;
   OZ (clean_all_sys_vars());
-  OZ (load_default_sys_variable(false, false));
+  OZ (load_default_sys_variable(false, false, true));
   return ret;
 }
 
@@ -4667,10 +4668,10 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
       if (sys_vars_[i]->is_influence_plan()) {
         OZ (influence_plan_var_indexs_.push_back(i));
       }
-      if (ObSysVariables::get_default_value(i) != sys_vars_[i]->get_value()) {
+      if (ObSysVariables::get_base_value(i) != sys_vars_[i]->get_value()) {
         OZ (sys_var_inc_info_.add_sys_var_id(sys_var_id));
         LOG_DEBUG("schema and def not identical", K(sys_var_id), "val", sys_vars_[i]->get_value(),
-                  "def", ObSysVariables::get_default_value(i));
+                  "def", ObSysVariables::get_base_value(i));
       }
     }
   }
