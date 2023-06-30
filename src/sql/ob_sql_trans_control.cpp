@@ -160,6 +160,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
   OZ (get_tx_service(session, txs), tenant_id);
 
   if (OB_SUCC(ret) && OB_NOT_NULL(session->get_tx_desc())) {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     auto *tx_desc = session->get_tx_desc();
     if (tx_desc->get_tenant_id() != tenant_id) {
       LOG_ERROR("switch tenant but hold tx_desc", K(tenant_id), KPC(tx_desc));
@@ -175,6 +176,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
   OX (tx_id = session->get_tx_desc()->get_tx_id());
 
   if (OB_FAIL(ret) && cleanup && OB_NOT_NULL(txs) && OB_NOT_NULL(session->get_tx_desc())) {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     txs->release_tx(*session->get_tx_desc());
     session->get_tx_desc() = NULL;
   }
@@ -349,6 +351,7 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
     const ObTransID tx_id = tx_desc->get_tx_id();
     auto tx_free_route_tmp = session->is_txn_free_route_temp();
     MTL_SWITCH(tx_tenant_id) {
+      ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
       if (tx_free_route_tmp) {
         // if XA-txn is on this server, we have acquired its ref, release ref
         // and disassocate with session
@@ -1112,6 +1115,7 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool 
   int ret = OB_SUCCESS;
   LOG_DEBUG("reset session tx state", KPC(session->get_tx_desc()), K(lbt()));
   if (OB_NOT_NULL(session->get_tx_desc())) {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     auto &tx_desc = *session->get_tx_desc();
     auto tx_id = tx_desc.get_tx_id();
     auto effect_tid = session->get_effective_tenant_id();
@@ -1321,6 +1325,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
   int ObSqlTransControl::update_txn_##name##_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos) \
   {                                                                     \
     int ret = OB_SUCCESS;                                               \
+    ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock()); \
     transaction::ObTransService *txs = NULL;                            \
     OZ (get_tx_service(&session, txs));                                 \
     auto &tx_desc = session.get_tx_desc();                              \
