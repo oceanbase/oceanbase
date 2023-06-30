@@ -201,6 +201,7 @@ private:
   int get_gts_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
+  int record_server_event_(const int32_t ret, const int64_t round, const share::ObTransferTaskInfo &task_info) const;
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;
@@ -214,6 +215,7 @@ private:
 
   int64_t retry_count_;
   ObTransferWorkerMgr transfer_worker_mgr_;
+  int64_t round_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 }

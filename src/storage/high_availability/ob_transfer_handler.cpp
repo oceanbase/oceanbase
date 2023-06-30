@@ -57,7 +57,8 @@ ObTransferHandler::ObTransferHandler()
     storage_rpc_(nullptr),
     sql_proxy_(nullptr),
     retry_count_(0),
-    transfer_worker_mgr_()
+    transfer_worker_mgr_(),
+    round_(0)
 {
 }
 
@@ -262,6 +263,7 @@ int ObTransferHandler::do_leader_transfer_()
       LOG_WARN("failed to get transfer task", K(ret), KPC(ls_));
     }
   } else {
+    round_++;
     ObCurTraceId::set(task_info.trace_id_);
 
     switch (task_info.status_) {
@@ -404,6 +406,9 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
     if (OB_FAIL(report_to_meta_table_(task_info))) {
       LOG_WARN("failed to report to meta table", K(ret), K(task_info));
     }
+  }
+  if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, round_, task_info))) {
+    LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(retry_count_), K(task_info));
   }
   wakeup_();
   LOG_INFO("[TRANSFER] finish do with start status", K(ret), K(task_info), "cost_ts", ObTimeUtil::current_time() - start_ts);
@@ -1501,6 +1506,7 @@ int ObTransferHandler::report_to_meta_table_(
 int ObTransferHandler::do_with_doing_status_(const share::ObTransferTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTxFinishTransfer finish_transfer;
   const ObTransferTaskID task_id = task_info.task_id_;
   const uint64_t tenant_id = task_info.tenant_id_;
@@ -1513,7 +1519,7 @@ int ObTransferHandler::do_with_doing_status_(const share::ObTransferTaskInfo &ta
   } else if (OB_FAIL(finish_transfer.init(
       task_id, tenant_id, src_ls_id, dest_ls_id, *sql_proxy_))) {
     LOG_INFO("[TRANSFER] do with doing status", K(task_info));
-  } else if (OB_FAIL(finish_transfer.process())) {
+  } else if (OB_FAIL(finish_transfer.process(round_))) {
     LOG_WARN("failed to process", K(ret));
   }
 
@@ -1535,7 +1541,7 @@ int ObTransferHandler::do_with_aborted_status_(
   const share::ObTransferStatus next_status(ObTransferStatus::FAILED);
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
-
+  const int64_t tmp_round = round_;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
@@ -1563,6 +1569,8 @@ int ObTransferHandler::do_with_aborted_status_(
         if (OB_SUCCESS == ret) {
           ret = tmp_ret;
         }
+      } else if (OB_SUCCESS == ret) {
+        round_ = 0;
       }
     }
   }
@@ -1570,8 +1578,15 @@ int ObTransferHandler::do_with_aborted_status_(
   if (OB_FAIL(ret)) {
     if (can_retry_(task_info, ret)) {
       LOG_INFO("transfer task can retry", K(ret), K(task_info));
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+        if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, tmp_round, task_info))) {
+          LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(retry_count_), K(task_info));
+        }
+      }
       ob_usleep(INTERVAL_US);
     }
+  } else if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, tmp_round, task_info))) {
+    LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(retry_count_), K(task_info));
   }
   return ret;
 }
@@ -1692,6 +1707,28 @@ int ObTransferHandler::unblock_tx_(
   SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_TRANSFER_UNBLOCK_TX");
 #endif
   DEBUG_SYNC(AFTER_TRANSFER_UNBLOCK_TX);
+  return ret;
+}
+
+int ObTransferHandler::record_server_event_(const int32_t result, const int64_t round, const share::ObTransferTaskInfo &task_info) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString extra_info_str;
+  if (!task_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("task info invalid", K(ret), K(task_info));
+  } else if (OB_FAIL(extra_info_str.append_fmt("round:%ld;", round))) {
+    LOG_WARN("fail to printf round", K(ret), K(round));
+  } else {
+    SERVER_EVENT_ADD("storage_ha", "transfer",
+        "tenant_id", task_info.tenant_id_,
+        "trace_id", task_info.trace_id_,
+        "src_ls", task_info.src_ls_id_.id(),
+        "dest_ls", task_info.dest_ls_id_.id(),
+        "status", task_info.status_.str(),
+        "result", result,
+        extra_info_str.ptr());
+  }
   return ret;
 }
 
