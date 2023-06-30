@@ -332,11 +332,8 @@ int ObLSTxCtxMgr::StateHelper::switch_state(const int64_t op)
   if (OB_SUCC(ret)) {
     _TRANS_LOG(INFO, "ObLSTxCtxMgr switch state success(ls_id=%jd, %s ~> %s, op=%s)",
                ls_id_.id(), State::state_str(last_state_), State::state_str(state_), Ops::op_str(op));
-  } else if (Ops::BLOCK_NORMAL == op || Ops::UNBLOCK_NORMAL == op) {
-    _TRANS_LOG(WARN, "ObLSTxCtxMgr switch state failed when try block or unblock normal trans(ret=%d, ls_id=%jd, state=%s, op=%s)",
-               ret, ls_id_.id(), State::state_str(state_), Ops::op_str(op));
   } else {
-    _TRANS_LOG(ERROR, "ObLSTxCtxMgr switch state error(ret=%d, ls_id=%jd, state=%s, op=%s)",
+    _TRANS_LOG(WARN, "ObLSTxCtxMgr switch state failed(ret=%d, ls_id=%jd, state=%s, op=%s)",
                ret, ls_id_.id(), State::state_str(state_), Ops::op_str(op));
   }
   return ret;
@@ -969,7 +966,9 @@ int ObLSTxCtxMgr::block(bool &is_all_tx_cleaned_up)
   StateHelper state_helper(ls_id_, state_);
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
 
-  if (OB_FAIL(state_helper.switch_state(Ops::BLOCK))) {
+  if (is_stopped_()) {
+    TRANS_LOG(WARN, "ls_tx_ctx_mgr is stopped, not need block");
+  } else if (OB_FAIL(state_helper.switch_state(Ops::BLOCK))) {
     TRANS_LOG(WARN, "switch state error", KR(ret), "manager", *this);
   } else {
     is_all_tx_cleaned_up = (get_tx_ctx_count() == 0);
