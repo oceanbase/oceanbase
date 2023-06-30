@@ -2755,8 +2755,12 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool 
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(WARN, "invalid coordinator", K(ret), K(xid), K(coord), K(*this));
           } else if (OB_FAIL(MTL(ObXAService*)->update_coord(tenant_id_, xid, coord, has_tx_level_temp_table_,
-                  affected_rows)) || 0 == affected_rows) {
+                  affected_rows))) {
             TRANS_LOG(WARN, "fail to update xa trans record", K(ret), K(xid), K(coord),
+                K(affected_rows), K(*this));
+          } else if (0 == affected_rows) {
+            ret = OB_TRANS_XA_PROTO;
+            TRANS_LOG(WARN, "no row is affected", K(ret), K(xid), K(coord),
                 K(affected_rows), K(*this));
           } else if (OB_FAIL(MTL(ObXAService*)->insert_xa_pending_record(tenant_id_, xid, trans_id_,
                   coord, original_sche_addr_))) {
