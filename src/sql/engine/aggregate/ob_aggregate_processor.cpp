@@ -6220,15 +6220,15 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
     if (OB_FAIL(extra->get_bool_mark(0, is_bool))) {
       LOG_WARN("get_bool info failed, may not distinguish between bool and int", K(ret));
     }
+
+    // get type
+    ObObj *tmp_obj = NULL;
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
       if (OB_ISNULL(storted_row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(storted_row));
       } else {
-        // get type
-        ObObj *tmp_obj = NULL;
-        if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(
-                                                    sizeof(ObObj) * (storted_row->cnt_))))) {
+        if (OB_ISNULL(tmp_obj) && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(ret), K(tmp_obj));
         } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
