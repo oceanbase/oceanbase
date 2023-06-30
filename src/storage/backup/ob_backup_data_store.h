@@ -140,12 +140,14 @@ public:
       cluster_name_(),
       locality_(),
       primary_zone_(),
-      sys_time_zone_() {}
+      sys_time_zone_(),
+      sys_time_zone_wrap_() {}
   virtual ~ObExternTenantLocalityInfoDesc() {}
-
+  int assign(const ObExternTenantLocalityInfoDesc &that);
   bool is_valid() const override;
   INHERIT_TO_STRING_KV("ObExternBackupDataDesc", ObExternBackupDataDesc, K_(tenant_id), K_(backup_set_id), K_(cluster_id), 
-      K_(compat_mode), K_(tenant_name), K_(cluster_name), K_(locality), K_(primary_zone), K_(sys_time_zone));
+      K_(compat_mode), K_(tenant_name), K_(cluster_name), K_(locality), K_(primary_zone), K_(sys_time_zone),
+      K_(sys_time_zone_wrap));
 public:
   uint64_t tenant_id_;
   int64_t backup_set_id_;
@@ -156,6 +158,7 @@ public:
   Locality locality_;
   PrimaryZone primary_zone_;
   TimeZone sys_time_zone_;
+  ObTimeZoneInfoWrap sys_time_zone_wrap_;
 };
 
 struct ObExternBackupSetInfoDesc final : public ObExternBackupDataDesc

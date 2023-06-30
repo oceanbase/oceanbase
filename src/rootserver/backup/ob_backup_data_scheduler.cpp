@@ -670,22 +670,7 @@ int ObBackupDataScheduler::get_backup_scn(
       if (OB_FAIL(trans.end(true))) {
         LOG_WARN("failed to commit", K(ret));
       } else {
-        if (!is_start) {
-          // The conversion accuracy of SCN to time_stamp is inconsistent under MySQL mode and Oracle mode.
-          // The conversion accuracy in ORALCE mode is nanosecond, but it is microsecond in mysql
-          // for backup and restore, we keep the end scn round up to microseconds that keep the conversion accuracy is consistent.
-          // meanwhile, in order to solve that boundary is not included in the restore, scn + 1;
-          // 1658475549197665190 --> 1658475549197666000
-          int64_t ts = 0;
-          ts = tmp_scn.convert_to_ts();
-          if (OB_FAIL(scn.convert_from_ts(ts))) {
-            LOG_WARN("fail to convert from ts", K(ret), K(ts));
-          } else if (tmp_scn != scn && OB_FAIL(scn.convert_from_ts(ts + 1))) {
-            LOG_WARN("fail to convert from ts", K(ret), K(ts));
-          }
-        } else {
-          scn = tmp_scn;
-        }
+        scn = tmp_scn;
       }
     } else {
       int tmp_ret = OB_SUCCESS;

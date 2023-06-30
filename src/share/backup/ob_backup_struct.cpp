@@ -24,6 +24,7 @@
 #include "storage/tx/ob_i_ts_source.h"
 #include "storage/backup/ob_backup_data_store.h"
 #include "share/backup/ob_archive_struct.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "storage/tx/ob_ts_mgr.h"
 
 
@@ -2198,6 +2199,57 @@ int ObBackupUtils::get_backup_scn(const uint64_t &tenant_id, share::SCN &scn)
     }
   }
   LOG_INFO("get tenant gts", KR(ret), K(tenant_id), K(scn));
+  return ret;
+}
+
+int ObBackupUtils::backup_scn_to_str(const uint64_t tenant_id, const share::SCN &scn, char *buf, int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  ObTimeZoneInfoWrap time_zone_info_wrap;
+  ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> time_zone;
+  int64_t pos = 0;
+  if (OB_FAIL(ObBackupUtils::get_tenant_sys_time_zone_wrap(tenant_id, time_zone, time_zone_info_wrap))) {
+    LOG_WARN("failed to get tenant sys time zone wrap", K(tenant_id));
+  } else if (OB_FAIL(ObTimeConverter::scn_to_str(scn.get_val_for_inner_table_field(),
+                                                 time_zone_info_wrap.is_position_class() ?
+                                                 &time_zone_info_wrap.get_tz_info_pos() : time_zone_info_wrap.get_time_zone_info(),
+                                                 buf,
+                                                 buf_len,
+                                                 pos))) {
+    LOG_WARN("failed to scn to str", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupUtils::get_tenant_sys_time_zone_wrap(
+    const uint64_t tenant_id,
+    ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
+    ObTimeZoneInfoWrap &time_zone_info_wrap)
+{
+  int ret = OB_SUCCESS;
+  ObMultiVersionSchemaService *schema_service = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  ObTZMapWrap tz_map_wrap;
+  const ObSysVarSchema *var_schema = nullptr;
+  ObTimeZoneInfoManager *tz_info_mgr = nullptr;
+  if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service must not be null", K(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get_tenant_schema_guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, share::SYS_VAR_SYSTEM_TIME_ZONE, var_schema))) {
+    LOG_WARN("fail to get tenant system variable", K(ret));
+  } else if (OB_ISNULL(var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("var schema must not be null", K(ret));
+  } else if (OB_FAIL(OTTZ_MGR.get_tenant_timezone(tenant_id, tz_map_wrap, tz_info_mgr))) {
+    LOG_WARN("failed to get tenant timezone", K(ret));
+  } else if (OB_FAIL(time_zone.assign(var_schema->get_value()))) {
+    LOG_WARN("failed to assign timezone", K(ret));
+  } else if (OB_FAIL(time_zone_info_wrap.init_time_zone(var_schema->get_value(), OB_INVALID_VERSION,
+             *(const_cast<ObTZInfoMap *>(tz_map_wrap.get_tz_map()))))) {
+    LOG_WARN("failed to init time zone", K(ret));
+  }
   return ret;
 }
 

@@ -2864,6 +2864,7 @@ all_backup_set_files_def = dict(
     ('consistent_scn', 'uint', 'false', '0'),
     ('minor_turn_id', 'int', 'false', '0'),
     ('major_turn_id', 'int', 'false', '0'),
+    ('min_restore_scn_display', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'false', ''),
   ],
 )
 def_table_schema(**all_backup_set_files_def)
@@ -15847,11 +15848,13 @@ def_table_schema(
       END AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
     CASE
-    WHEN MIN_RESTORE_SCN = 0
-      THEN NULL
-    ELSE
-      SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
-    END AS MIN_RESTORE_SCN_DISPLAY,
+      WHEN MIN_RESTORE_SCN_DISPLAY != ''
+        THEN MIN_RESTORE_SCN_DISPLAY
+      WHEN MIN_RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
+      END AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
     CASE
@@ -22378,11 +22381,13 @@ def_table_schema(
       END AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
     CASE
-    WHEN MIN_RESTORE_SCN = 0
-      THEN NULL
-    ELSE
-      SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
-    END AS MIN_RESTORE_SCN_DISPLAY,
+      WHEN MIN_RESTORE_SCN_DISPLAY != ''
+        THEN MIN_RESTORE_SCN_DISPLAY
+      WHEN MIN_RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
+      END AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
     CASE
@@ -42965,7 +42970,14 @@ def_table_schema(
     START_REPLAY_SCN,
     SCN_TO_TIMESTAMP(START_REPLAY_SCN) AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
-    SCN_TO_TIMESTAMP(MIN_RESTORE_SCN) AS MIN_RESTORE_SCN_DISPLAY,
+    CASE
+      WHEN MIN_RESTORE_SCN_DISPLAY != ''
+        THEN MIN_RESTORE_SCN_DISPLAY
+      WHEN MIN_RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        TO_CHAR(SCN_TO_TIMESTAMP(MIN_RESTORE_SCN),'YYYY-MM-DDHH24:MI:SS.FF9')
+      END AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
     CASE

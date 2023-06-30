@@ -88,8 +88,26 @@ bool ObExternTenantLocalityInfoDesc::is_valid() const
       && !tenant_name_.is_empty()
       && !cluster_name_.is_empty()
       && !locality_.is_empty()
-      && !primary_zone_.is_empty()
-      && !sys_time_zone_.is_empty();
+      && !primary_zone_.is_empty();
+}
+
+int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sys_time_zone_wrap_.deep_copy(that.sys_time_zone_wrap_))) {
+    LOG_WARN("failed to deep copy", K(ret));
+  } else {
+    tenant_id_ = that.tenant_id_;
+    backup_set_id_ = that.backup_set_id_;
+    cluster_id_ = that.cluster_id_;
+    compat_mode_ = that.compat_mode_;
+    tenant_name_ = that.tenant_name_;
+    cluster_name_ = that.cluster_name_;
+    locality_ = that.locality_;
+    primary_zone_ = that.primary_zone_;
+    sys_time_zone_ = that.sys_time_zone_;
+  }
+  return ret;
 }
 
 /*
