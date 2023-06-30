@@ -853,6 +853,85 @@ int64_t ObMemtableArray::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
+int ObDDLKVArray::init(
+    ObArenaAllocator &allocator,
+    common::ObIArray<ObITable *> &ddl_kvs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("initialize twice", K(ret), KPC(this));
+  } else {
+    count_ = 0;
+    ddl_kvs_ = nullptr;
+    if (0 != ddl_kvs.count()) {
+      const int64_t size = sizeof(ObITable *) * ddl_kvs.count();
+      if (OB_ISNULL(ddl_kvs_ = static_cast<ObITable **>(allocator.alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate ddl kv pointer arrays", K(ret), K(size));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ddl_kvs.count(); ++i) {
+          ObITable *table = ddl_kvs.at(i);
+          if (OB_UNLIKELY(nullptr == table || !table->is_ddl_sstable())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table must be ddl kv", K(ret), K(i), KPC(table));
+          } else {
+            ddl_kvs_[count_] = table;
+            ++count_;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
+  }
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObDDLKVArray::deep_copy(
+    char *dst_buf,
+    const int64_t buf_size,
+    int64_t &pos,
+    ObDDLKVArray &dst) const
+{
+  int ret = OB_SUCCESS;
+  dst.reset();
+  const int64_t deep_copy_size = get_deep_copy_size();
+  if (OB_ISNULL(dst_buf) || OB_UNLIKELY(buf_size - pos < deep_copy_size)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("finvalid argument", K(ret), KP(dst_buf), K(buf_size), K(pos), K(deep_copy_size), K(count_));
+  } else {
+    dst.ddl_kvs_ = 0 == count_ ? nullptr : reinterpret_cast<ObITable **>(dst_buf + pos);
+    const int64_t array_size = count_ * sizeof(ObITable *);
+    pos += array_size;
+    for (int64_t i = 0; i < count_; ++i) {
+      dst.ddl_kvs_[i] = ddl_kvs_[i];
+    }
+    dst.count_ = count_;
+    dst.is_inited_ = is_inited_;
+  }
+  return ret;
+}
+
+int64_t ObDDLKVArray::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    // do nothing
+  } else {
+    J_OBJ_START();
+    J_NAME("ObDDLKVArray");
+    J_KV(KP(this),
+        K_(count),
+        "ddl_kv_ptr_array", ObArrayWrap<ObITable *>(ddl_kvs_, count_));
+    J_OBJ_END();
+  }
+  return pos;
+}
 /* ObTableStoreUtil Section */
 bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
      const ObITable *ltable, const ObITable *rtable) const

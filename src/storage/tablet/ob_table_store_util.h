@@ -122,6 +122,45 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableArray);
 };
 
+class ObDDLKVArray final
+{
+public:
+  static const int64_t DDL_KV_ARRAY_SIZE = 64;
+public:
+  ObDDLKVArray() : is_inited_(false), ddl_kvs_(nullptr), count_(0) {}
+  ~ObDDLKVArray() { reset(); }
+
+  OB_INLINE ObITable *operator[](const int64_t pos) const
+  {
+    ObITable *ddl_kv = nullptr;
+    if (OB_UNLIKELY(!is_valid() || pos < 0 || pos >= count_)) {
+      ddl_kv = nullptr;
+    } else {
+      ddl_kv = ddl_kvs_[pos];
+    }
+    return ddl_kv;
+  }
+  OB_INLINE void reset()
+  {
+    is_inited_ = false;
+    ddl_kvs_   = nullptr;
+    count_     = 0;
+  }
+  OB_INLINE bool count() const { return count_; }
+  OB_INLINE bool empty() const { return 0 == count_; }
+  OB_INLINE bool is_valid() const { return 1 == count_ || (is_inited_ && count_ > 1 && nullptr != ddl_kvs_); }
+  OB_INLINE int64_t get_deep_copy_size() const { return count_ * sizeof(ObITable *); }
+  int init(ObArenaAllocator &allocator, common::ObIArray<ObITable *> &ddl_kvs);
+  int deep_copy(char *buf, const int64_t buf_size, int64_t &pos, ObDDLKVArray &dst) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  bool is_inited_;
+  ObITable **ddl_kvs_;
+  int64_t count_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObDDLKVArray);
+};
+
 struct ObTableStoreUtil
 {
   struct ObITableLogTsRangeCompare {
