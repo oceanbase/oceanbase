@@ -4352,11 +4352,6 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           result = new_l_cur;
         } else if (new_r_cur->is_in_key()) {
           result = new_r_cur;
-        } else if (OB_UNLIKELY(!new_l_cur->is_normal_key() || !new_r_cur->is_normal_key()
-                   || new_l_cur->is_always_true() || new_l_cur->is_always_false()
-                   || new_r_cur->is_always_true() || new_r_cur->is_always_false())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("new_l_cur and r_cur are not always true or false.", K(*new_l_cur), K(*new_r_cur));
         } else if (OB_FAIL(do_key_part_node_and(new_l_cur, new_r_cur, result))) {  // do AND of each key part node only
           LOG_WARN("Do key part node intersection failed", K(ret));
         } else if(OB_ISNULL(result)) {
