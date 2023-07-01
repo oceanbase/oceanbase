@@ -497,6 +497,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_minor()
     } else {
       const ObLSID &ls_id = ls->get_ls_id();
       if (OB_TMP_FAIL(schedule_ls_minor_merge(ls_handle, schedule_tablet_cnt))) {
+        LOG_TRACE("meet error when schedule", K(tmp_ret), K(minor_ls_tablet_iter_));
         minor_ls_tablet_iter_.skip_cur_ls();
         if (!schedule_ignore_error(tmp_ret)) {
           LOG_WARN("failed to schedule ls minor merge", K(tmp_ret), K(ls_id));
@@ -958,7 +959,6 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
     int64_t &schedule_tablet_cnt)
 {
   int ret = OB_SUCCESS;
-  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
   bool need_merge = false;
   bool need_fast_freeze = false;
   ObLS &ls = *ls_handle.get_ls();
@@ -1458,6 +1458,7 @@ int ObCompactionScheduleIterator::get_next_ls(ObLSHandle &ls_handle)
     || tablet_idx_ >= tablet_ids_.count()) { // tablet iter end, need get next ls
     ++ls_idx_;
     tablet_ids_.reuse();
+    LOG_TRACE("tablet iter end", K(ret), K(ls_idx_), K(tablet_idx_));
   }
   do {
     if (ls_idx_ >= ls_ids_.count()) {
@@ -1540,7 +1541,7 @@ int64_t ObCompactionScheduleIterator::to_string(char *buf, const int64_t buf_len
   J_KV(K_(ls_idx), K_(ls_ids), K_(tablet_idx), K(tablet_ids_.count()));
   if (is_valid()) {
     J_COMMA();
-    J_KV("cur_ls", ls_ids_.at(ls_idx_));
+    J_KV("cur_ls", ls_ids_.at(ls_idx_), K_(tablet_idx));
     if (!tablet_ids_.empty() && tablet_idx_ < tablet_ids_.count()) {
       J_COMMA();
       J_KV("next_tablet", tablet_ids_.at(tablet_idx_));

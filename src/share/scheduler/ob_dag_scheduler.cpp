@@ -2888,7 +2888,7 @@ int ObTenantDagScheduler::pop_task_from_ready_list(
               COMMON_LOG(WARN, "failed to start sys task", K(tmp_ret));
             }
             if (OB_TMP_FAIL(generate_next_dag_(cur))) {
-              LOG_WARN("failed to generate next dag", K(ret), K(cur));
+              LOG_WARN("failed to generate next dag", K(tmp_ret), K(cur));
             }
           }
           next_dag_status = ObIDag::DAG_STATUS_NODE_RUNNING;

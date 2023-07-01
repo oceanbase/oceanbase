@@ -88,6 +88,7 @@ public:
   void skip_cur_ls()
   {
     ++ls_idx_;
+    tablet_idx_ = -1;
     tablet_ids_.reuse();
   }
   OB_INLINE int64_t to_string(char *buf, const int64_t buf_len) const;
@@ -316,7 +317,7 @@ private:
   int64_t inner_table_merged_scn_;
   ObScheduleStatistics schedule_stats_;
   MergeLoopTask merge_loop_task_;
-MediumLoopTask medium_loop_task_;
+  MediumLoopTask medium_loop_task_;
   SSTableGCTask sstable_gc_task_;
   InfoPoolResizeTask info_pool_resize_task_;
   ObFastFreezeChecker fast_freeze_checker_;
