@@ -1574,7 +1574,11 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       LOG_WARN("failed to erase_tenant_interm_result_info", K(ret), K(tenant_id));
     }
   }
-
+  if (OB_SUCC(ret) && OB_NOT_NULL(GCTX.dblink_proxy_)) {
+    if (OB_FAIL(GCTX.dblink_proxy_->clean_dblink_connection(tenant_id))) {
+      LOG_WARN("failed to clean dblink connection", K(ret), K(tenant_id));
+    }
+  }
   return ret;
 }
 

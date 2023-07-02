@@ -145,7 +145,8 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
     LOG_WARN("failed to get dblink connection from session", K(my_session), K(sessid_), K(ret));
   } else {
     if (NULL == dblink_conn) {
-      if (OB_FAIL(dblink_proxy->acquire_dblink(dblink_id,
+      if (OB_FAIL(dblink_proxy->acquire_dblink(tenant_id_,
+                                              dblink_id,
                                               link_type_,
                                               param_ctx,
                                               dblink_conn_,

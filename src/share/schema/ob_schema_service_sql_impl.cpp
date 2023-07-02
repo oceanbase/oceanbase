@@ -8423,8 +8423,10 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(uint64_t tenant_id,
       } else {
         LOG_DEBUG("succ to read table meta by reverse_link");
       }
-    } else if (OB_FAIL(dblink_proxy_->acquire_dblink(dblink_id, link_type, param_ctx, dblink_conn, session_info->get_sessid(), next_sql_req_level))) {
-      ObDblinkUtils::process_dblink_errno(link_type, ret);
+    } else if (OB_FAIL(dblink_proxy_->acquire_dblink(tenant_id, dblink_id, link_type, param_ctx,
+                                                     dblink_conn,
+                                                     session_info->get_sessid(),
+                                                     next_sql_req_level))) {
       LOG_WARN("failed to acquire dblink", K(ret), K(dblink_id));
     } else if (OB_FAIL(session_info->get_dblink_context().register_dblink_conn_pool(dblink_conn->get_common_server_pool()))) {
       LOG_WARN("failed to register dblink conn pool to current session", K(ret));
