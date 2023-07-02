@@ -1452,6 +1452,7 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
     if (OB_TENANT_NOT_IN_SERVER == ret) {
       LOG_WARN("tenant has been removed", K(tenant_id), K(ret));
       removed_tenant = nullptr;
+      remove_tenant_succ = true;
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("remove tenant failed", K(tenant_id), K(ret));
