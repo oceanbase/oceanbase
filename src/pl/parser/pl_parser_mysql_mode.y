@@ -550,7 +550,7 @@ call_sp_stmt:
 
 opt_sp_cparam_list:
     /* Empty */ { $$ = NULL; }
-  | '(' ')' { $$ =NULL; }
+  | '(' ')' { $$ = NULL; }
   | '(' sp_cparams ')'
     {
       merge_nodes($$, parse_ctx->mem_pool_, T_SP_CPARAM_LIST, $2);
@@ -596,7 +596,7 @@ opt_sp_cparam_with_assign:
 ;
 
 cexpr:
-    {
+    %prec LOWER_PARENS {
       //same as expr in sql rule, and terminate when read ';'
       do_parse_sql_expr_rule($$, parse_ctx, 3, ',', ')', PARAM_ASSIGN_OPERATOR);
       if (NULL == $$) {
