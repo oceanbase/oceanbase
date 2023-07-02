@@ -2157,6 +2157,8 @@ int ObTransformSubqueryCoalesce::adjust_assign_exprs(ObUpdateStmt *upd_stmt,
   int ret = OB_SUCCESS;
   ObQueryRefRawExpr *coalesce_query_expr = NULL;
   ObArray<ObExecParamRawExpr *> all_params;
+  ObSEArray<ObRawExpr*, 4> old_exprs;
+  ObSEArray<ObRawExpr*, 4> new_exprs;
   if (OB_ISNULL(upd_stmt) || OB_ISNULL(helper) || OB_ISNULL(coalesce_query)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
@@ -2194,7 +2196,9 @@ int ObTransformSubqueryCoalesce::adjust_assign_exprs(ObUpdateStmt *upd_stmt,
                                               select_exprs, 
                                               index_map, 
                                               coalesce_query_expr, 
-                                              coalesce_query))) {
+                                              coalesce_query,
+                                              old_exprs,
+                                              new_exprs))) {
             LOG_WARN("failed to extract expr", K(ret));
           }
         } else if (assign.expr_->has_flag(CNT_SUB_QUERY)) {
@@ -2203,8 +2207,34 @@ int ObTransformSubqueryCoalesce::adjust_assign_exprs(ObUpdateStmt *upd_stmt,
                                                 select_exprs, 
                                                 index_map, 
                                                 coalesce_query_expr, 
-                                                coalesce_query))) {
+                                                coalesce_query,
+                                                old_exprs,
+                                                new_exprs))) {
             LOG_WARN("failed to extract expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !old_exprs.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < upd_stmt->get_update_table_info().count(); ++i) {
+      ObUpdateTableInfo* table_info = upd_stmt->get_update_table_info().at(i);
+      if (OB_ISNULL(table_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null table info", K(ret), K(i));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_info->assignments_.count(); ++j) {
+          ObAssignment &assign = table_info->assignments_.at(j);
+          if (OB_ISNULL(assign.expr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect null expr", K(ret));
+          } else if (!assign.expr_->has_flag(CNT_ALIAS) &&
+                    !assign.expr_->has_flag(CNT_SUB_QUERY)) {
+            // do nothing
+          } else if (OB_FAIL(ObTransformUtils::replace_expr(old_exprs,
+                                                            new_exprs,
+                                                            assign.expr_))) {
+            LOG_WARN("failed to replace expr", K(ret));
           }
         }
       }
@@ -2218,12 +2248,12 @@ int ObTransformSubqueryCoalesce::adjust_alias_assign_exprs(ObRawExpr* &assign_ex
                                                     ObIArray<ObRawExpr*> &select_exprs, 
                                                     ObIArray<int64_t> &index_map, 
                                                     ObQueryRefRawExpr *coalesce_query_expr,
-                                                    ObSelectStmt *coalesce_query)
+                                                    ObSelectStmt *coalesce_query,
+                                                    ObIArray<ObRawExpr*> &old_exprs,
+                                                    ObIArray<ObRawExpr*> &new_exprs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAliasRefRawExpr*, 4> alias_exprs;
-  ObSEArray<ObRawExpr*, 4> old_exprs;
-  ObSEArray<ObRawExpr*, 4> new_exprs;
   ObRawExpr *new_expr = NULL;
   if (OB_ISNULL(assign_expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2236,6 +2266,8 @@ int ObTransformSubqueryCoalesce::adjust_alias_assign_exprs(ObRawExpr* &assign_ex
     if (OB_ISNULL(alias_expr) || OB_ISNULL(alias_expr->get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
+    } else if (ObOptimizerUtil::find_item(old_exprs, alias_expr)) {
+      // do noting
     } else if (alias_expr->is_ref_query_output()) {
       ObQueryRefRawExpr *query_ref_expr = static_cast<ObQueryRefRawExpr*>(alias_expr->get_param_expr(0));
       int64_t select_idx = alias_expr->get_project_index();
@@ -2257,13 +2289,6 @@ int ObTransformSubqueryCoalesce::adjust_alias_assign_exprs(ObRawExpr* &assign_ex
       }
     }
   }
-  if (OB_SUCC(ret) && !old_exprs.empty()) {
-    if (OB_FAIL(ObTransformUtils::replace_expr(old_exprs, 
-                                                new_exprs, 
-                                                assign_expr))) {
-      LOG_WARN("failed to replace expr", K(ret));
-    }
-  }
   return ret;
 }
 
@@ -2272,12 +2297,12 @@ int ObTransformSubqueryCoalesce::adjust_query_assign_exprs(ObRawExpr* &assign_ex
                                                     ObIArray<ObRawExpr*> &select_exprs, 
                                                     ObIArray<int64_t> &index_map, 
                                                     ObQueryRefRawExpr *coalesce_query_expr,
-                                                    ObSelectStmt *coalesce_query)
+                                                    ObSelectStmt *coalesce_query,
+                                                    ObIArray<ObRawExpr*> &old_exprs,
+                                                    ObIArray<ObRawExpr*> &new_exprs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObQueryRefRawExpr*, 4> query_ref_exprs;
-  ObSEArray<ObRawExpr*, 4> old_exprs;
-  ObSEArray<ObRawExpr*, 4> new_exprs;
   ObRawExpr *new_expr = NULL;
   if (OB_ISNULL(assign_expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2290,6 +2315,8 @@ int ObTransformSubqueryCoalesce::adjust_query_assign_exprs(ObRawExpr* &assign_ex
     if (OB_ISNULL(query_ref_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null stmt", K(ret));
+    } else if (ObOptimizerUtil::find_item(old_exprs, query_ref_expr)) {
+      // do noting
     } else if (OB_FAIL(inner_adjust_assign_exprs(query_ref_expr->get_ref_stmt(), 
                                                   0, 
                                                   helper, 
@@ -2305,13 +2332,6 @@ int ObTransformSubqueryCoalesce::adjust_query_assign_exprs(ObRawExpr* &assign_ex
       LOG_WARN("failed to push back expr", K(ret));
     } else if (OB_FAIL(new_exprs.push_back(new_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && !old_exprs.empty()) {
-    if (OB_FAIL(ObTransformUtils::replace_expr(old_exprs, 
-                                                new_exprs, 
-                                                assign_expr))) {
-      LOG_WARN("failed to replace expr", K(ret));
     }
   }
   return ret;

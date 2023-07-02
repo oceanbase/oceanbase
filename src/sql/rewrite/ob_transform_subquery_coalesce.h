@@ -190,14 +190,18 @@ private:
                                 ObIArray<ObRawExpr*> &select_exprs, 
                                 ObIArray<int64_t> &index_map, 
                                 ObQueryRefRawExpr *coalesce_query_expr,
-                                ObSelectStmt *coalesce_query);
+                                ObSelectStmt *coalesce_query,
+                                ObIArray<ObRawExpr*> &old_exprs,
+                                ObIArray<ObRawExpr*> &new_exprs);
 
   int adjust_query_assign_exprs(ObRawExpr* &assign_expr,
                                 StmtCompareHelper *helper, 
                                 ObIArray<ObRawExpr*> &select_exprs, 
                                 ObIArray<int64_t> &index_map, 
                                 ObQueryRefRawExpr *coalesce_query_expr,
-                                ObSelectStmt *coalesce_query);
+                                ObSelectStmt *coalesce_query,
+                                ObIArray<ObRawExpr*> &old_exprs,
+                                ObIArray<ObRawExpr*> &new_exprs);
 
   int inner_adjust_assign_exprs(ObSelectStmt *stmt,
                                 const int64_t select_idx,
