@@ -27,6 +27,9 @@ public:
   explicit ObZlibLiteCompressor();
   virtual ~ObZlibLiteCompressor();
 
+  int  init();
+  void deinit();
+  
   int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
       int64_t& dst_data_size) override;
 
@@ -43,8 +46,9 @@ private:
   int zlib_lite_decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size);
 
   //has the same function as the compress and uncompress functions in the zlib source code.
-  int zlib_compress(char *dest, int64_t *destLen, const char *source, int64_t sourceLen);
-  int zlib_decompress(char *dest, int64_t *destLen, const char *source, int64_t sourceLen);
+  // return zlib error code, not oceanbase error code
+  int zlib_compress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
+  int zlib_decompress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
 
   //zlib compress level,default is 1.
   static constexpr int compress_level = 1;

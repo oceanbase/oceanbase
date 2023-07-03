@@ -33,6 +33,8 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/task/ob_timer_monitor.h"
 #include "lib/thread/thread_mgr.h"
+#include "lib/compress/ob_compressor_pool.h"
+#include "lib/compress/zlib_lite/ob_zlib_lite_compressor.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_rpc_extra_payload.h"
 #include "observer/ob_safe_destroy_thread.h"
@@ -304,6 +306,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init network failed", KR(ret));
     } else if (OB_FAIL(init_interrupt())) {
       LOG_ERROR("init interrupt failed", KR(ret));
+    } else if (OB_FAIL(init_zlib_lite_compressor())) {
+      LOG_ERROR("init zlib lite compressor failed", KR(ret));
     } else if (OB_FAIL(rs_mgr_.init(&srv_rpc_proxy_, &config_, &sql_proxy_))) {
       LOG_ERROR("init rs_mgr_ failed", KR(ret));
     } else if (OB_FAIL(server_tracer_.init(rs_rpc_proxy_, sql_proxy_))) {
@@ -684,6 +688,7 @@ void ObServer::destroy()
     ROOTSERVICE_EVENT_INSTANCE.destroy();
     FLOG_INFO("rootservice event history destroyed");
 
+    deinit_zlib_lite_compressor();
 
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
@@ -2052,6 +2057,37 @@ int ObServer::init_interrupt()
     LOG_ERROR("fail init interrupt mgr", KR(ret));
   }
   return ret;
+}
+
+FILE *fp = fopen("1.txt", "w");
+int ObServer::init_zlib_lite_compressor()
+{
+  int ret = OB_SUCCESS;
+  ObCompressor *compressor = nullptr;
+  ZLIB_LITE::ObZlibLiteCompressor *zlib_lite_compressor = nullptr;
+  ret = ObCompressorPool::get_instance().get_compressor(ZLIB_LITE_COMPRESSOR, compressor);
+  if (OB_FAIL(ret) || OB_ISNULL(compressor)) {
+    LOG_ERROR("failed to get zlib lite compressor");
+  } else if (FALSE_IT(zlib_lite_compressor = static_cast<ZLIB_LITE::ObZlibLiteCompressor *>(compressor))) {
+  } else if (OB_FAIL(zlib_lite_compressor->init())){
+    LOG_ERROR("failed to init zlib lite compressor", K(ret));
+  }
+  return ret;
+}
+
+void ObServer::deinit_zlib_lite_compressor()
+{
+  int ret = OB_SUCCESS;
+  ObCompressor *compressor = nullptr;
+  ZLIB_LITE::ObZlibLiteCompressor *zlib_lite_compressor = nullptr;
+  ret = ObCompressorPool::get_instance().get_compressor(ZLIB_LITE_COMPRESSOR, compressor);
+  if (OB_FAIL(ret) || OB_ISNULL(compressor)) {
+    LOG_ERROR("failed to get zlib lite compressor");
+  } else if (FALSE_IT(zlib_lite_compressor = static_cast<ZLIB_LITE::ObZlibLiteCompressor *>(compressor))) {
+  } else {
+    zlib_lite_compressor->deinit();
+  }
+  LOG_INFO("zlib lite compressor deinit done");
 }
 
 int ObServer::init_loaddata_global_stat()
