@@ -561,7 +561,7 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
     if (p.id_ == a.id_) {
       hit = true;
       if (p.epoch_ == ObTxPart::EPOCH_DEAD) {
-        if (a.epoch_ != ObTxPart::EPOCH_DEAD) {
+        if (a.epoch_ > 0) { // unexpected: from dead to alive
           flags_.PART_EPOCH_MISMATCH_ = true;
           ret = OB_TRANS_NEED_ROLLBACK;
           TRANS_LOG(WARN, "epoch missmatch", K(ret), K(a), K(p));
@@ -635,7 +635,7 @@ int ObTxDesc::update_parts(const share::ObLSArray &list)
     auto &it = list[i];
     ObTxPart n;
     n.id_ = it;
-    n.epoch_ = -1;
+    n.epoch_ = ObTxPart::EPOCH_UNKNOWN;
     n.first_scn_ = INT64_MAX;
     n.last_scn_ = INT64_MAX;
     if (OB_TMP_FAIL(update_part_(n))) {

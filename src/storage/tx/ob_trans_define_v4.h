@@ -178,6 +178,7 @@ struct ObTxParam
 
 struct ObTxPart
 {
+  static const int64_t EPOCH_UNKNOWN = -1;
   static const int64_t EPOCH_DEAD = -2;
   ObTxPart();
   ~ObTxPart();
