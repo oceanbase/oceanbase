@@ -103,7 +103,11 @@ public:
     return 0;
   }
 
-  bool is_equal_node(ObIMulModeBase* other) {
+  bool is_equal_node(const ObIMulModeBase* other) {
+    return false;
+  }
+
+  bool is_node_before(const ObIMulModeBase* other) {
     return false;
   }
 
