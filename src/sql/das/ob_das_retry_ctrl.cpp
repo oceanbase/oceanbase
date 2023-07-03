@@ -38,7 +38,7 @@ void ObDASRetryCtrl::tablet_location_retry_proc(ObDASRef &das_ref,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet loc is nullptr", K(ret));
   } else {
-    loc_router.refresh_location_cache(tablet_loc->tablet_id_, true, task_op.get_errcode());
+    loc_router.refresh_location_cache(true, task_op.get_errcode());
     need_retry = true;
     const ObDASTableLocMeta *loc_meta = tablet_loc->loc_meta_;
     LOG_INFO("refresh tablet location cache and retry DAS task",

@@ -210,6 +210,7 @@ int ObDataAccessService::clear_task_exec_env(ObDASRef &das_ref, ObIDASTaskOp &ta
   if (OB_FAIL(task_op.end_das_task())) {
     LOG_WARN("end das task failed", K(ret));
   }
+  DAS_CTX(das_ref.get_exec_ctx()).get_location_router().save_cur_exec_status(OB_SUCCESS);
   return ret;
 }
 
@@ -250,7 +251,8 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
       retry_func(das_ref, task_op, need_retry);
       LOG_INFO("[DAS RETRY] check if need tablet level retry",
                KR(task_op.errcode_), K(need_retry),
-               "retry_cnt", location_router.get_retry_cnt());
+               "retry_cnt", location_router.get_retry_cnt(),
+               KPC(task_op.get_tablet_loc()));
       if (need_retry) {
         task_op.in_part_retry_ = true;
         location_router.set_last_errno(task_op.get_errcode());
@@ -547,6 +549,7 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   ObIDASTaskResult *op_result = nullptr;
   ObDASExtraData *extra_result = nullptr;
   const common::ObSEArray<ObIDASTaskResult*, 2> &op_results = task_resp.get_op_results();
+  ObDASLocationRouter &loc_router = DAS_CTX(das_ref.get_exec_ctx()).get_location_router();
   ObDASUtils::log_user_error_and_warn(task_resp.get_rcode());
   for (int i = 0; i < op_results.count() - 1; i++) {
     // even if error happened durning iteration, we should iter to the end.
@@ -626,6 +629,7 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   } else {
     // if no error happened, all tasks were executed successfully.
     task_op->set_task_status(ObDasTaskStatus::FINISHED);
+    (void)loc_router.save_success_task(task_op->get_tablet_id());
     if (OB_FAIL(task_op->state_advance())) {
       LOG_WARN("failed to advance das task state.",K(ret));
     }
@@ -633,7 +637,7 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
       ret = COVER_SUCC(save_ret);
     }
   }
-  DAS_CTX(das_ref.get_exec_ctx()).get_location_router().save_cur_exec_status(ret);
+  loc_router.save_cur_exec_status(ret);
 
   return ret;
 }
