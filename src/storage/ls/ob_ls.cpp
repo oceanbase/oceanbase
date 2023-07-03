@@ -642,6 +642,7 @@ bool ObLS::safe_to_destroy()
   bool is_data_check_point_safe = false;
   bool is_dup_table_handler_safe = false;
   bool is_log_handler_safe = false;
+  bool is_transfer_handler_safe = false;
 
   if (OB_FAIL(ls_tablet_svr_.safe_to_destroy(is_tablet_service_safe))) {
     LOG_WARN("ls tablet service check safe to destroy failed", K(ret), KPC(this));
@@ -658,6 +659,9 @@ bool ObLS::safe_to_destroy()
   } else if (OB_FAIL(log_handler_.safe_to_destroy(is_log_handler_safe))) {
     LOG_WARN("log_handler_ check safe to destroy failed", K(ret), KPC(this));
   } else if (!is_log_handler_safe) {
+  } else if (OB_FAIL(transfer_handler_.safe_to_destroy(is_transfer_handler_safe))) {
+    LOG_WARN("transfer_handler_ check safe to destroy failed", K(ret), KPC(this));
+  } else if (!is_transfer_handler_safe) {
   } else {
     if (1 == ref_mgr_.get_total_ref_cnt()) { // only has one ref at the safe destroy task
       is_safe = true;
@@ -672,6 +676,7 @@ bool ObLS::safe_to_destroy()
                  K(is_tablet_service_safe), K(is_data_check_point_safe),
                  K(is_dup_table_handler_safe),
                  K(is_ls_restore_handler_safe), K(is_log_handler_safe),
+                 K(is_transfer_handler_safe),
                  "ls_ref", ref_mgr_.get_total_ref_cnt(),
                  K(ret), KP(this), KPC(this));
         ref_mgr_.print();
@@ -876,6 +881,8 @@ int ObLS::offline_()
     LOG_WARN("checkpoint executor offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_restore_handler_.offline())) {
     LOG_WARN("failed to offline ls restore handler", K(ret));
+  } else if (OB_FAIL(transfer_handler_.offline())) {
+    LOG_WARN("transfer_handler  failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(log_handler_.offline())) {
     LOG_WARN("failed to offline log", K(ret));
   // TODO: delete it if apply sequence
@@ -1006,6 +1013,7 @@ int ObLS::online()
     LOG_WARN("weak read handler online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(online_compaction_())) {
     LOG_WARN("compaction online failed", K(ret), K(ls_meta_));
+  } else if (FALSE_IT(transfer_handler_.online())) {
   } else if (OB_FAIL(ls_restore_handler_.online())) {
     LOG_WARN("ls restore handler online failed", K(ret));
   } else if (FALSE_IT(checkpoint_executor_.online())) {

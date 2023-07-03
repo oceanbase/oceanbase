@@ -1732,6 +1732,44 @@ int ObTransferHandler::record_server_event_(const int32_t result, const int64_t 
   return ret;
 }
 
+int ObTransferHandler::safe_to_destroy(bool &is_safe)
+{
+  int ret = OB_SUCCESS;
+  is_safe = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls transfer handler do not init", K(ret));
+  } else {
+    if (OB_FAIL(transfer_worker_mgr_.cancel_dag_net())) {
+      LOG_WARN("failed to cancel dag net", K(ret), KPC(ls_));
+    } else {
+      is_safe = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransferHandler::offline()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls transfer handler do not init", K(ret));
+  } else {
+    int retry_cnt = 0;
+    do {
+      if (OB_FAIL(transfer_worker_mgr_.cancel_dag_net())) {
+        LOG_WARN("failed to cancel dag net", K(ret), KPC(ls_));
+      }
+    } while (retry_cnt ++ < 3/*max retry cnt*/ && OB_EAGAIN == ret);
+  }
+  return ret;
+}
+
+void ObTransferHandler::online()
+{
+  transfer_worker_mgr_.reset_task_id();
+}
 }
 }
 

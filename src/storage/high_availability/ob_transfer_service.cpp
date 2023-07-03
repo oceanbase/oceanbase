@@ -170,6 +170,8 @@ int ObTransferService::get_ls_id_array_()
       } else if (OB_ISNULL(ls)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+      } else if (!(ls->get_log_handler()->is_replay_enabled())) {
+        LOG_INFO("log handler not enable replay, should not schduler transfer hander", "ls_id", ls->get_ls_id());
       } else if (OB_FAIL(ls_id_array_.push_back(ls->get_ls_id()))) {
         LOG_WARN("failed to push ls id into array", K(ret), KPC(ls));
       }

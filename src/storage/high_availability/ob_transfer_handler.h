@@ -65,6 +65,9 @@ public:
                      const share::SCN &scn) override final;
   virtual share::SCN get_rec_scn() override final { return share::SCN::max_scn(); }
   virtual int flush(share::SCN &scn) override final;
+  int safe_to_destroy(bool &is_safe);
+  int offline();
+  void online();
 
 private:
   int get_transfer_task_(share::ObTransferTaskInfo &task_info);
