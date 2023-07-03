@@ -80,36 +80,39 @@ int ObTransformMinMax::check_transform_validity(ObSelectStmt *select_stmt,
                                                 bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  const ObRawExpr *select_expr = NULL;
+  const ObAggFunRawExpr *expr = NULL;
+  aggr_expr = NULL;
   is_valid = false;
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(select_stmt));
   } else if (select_stmt->has_recusive_cte() || select_stmt->has_hierarchical_query()) {
-    //do nothing
     OPT_TRACE("stmt has recusive cte or hierarchical query");
-  } else if (select_stmt->get_from_item_size() != 1
-             || select_stmt->get_from_item(0).is_joined_
-             || select_stmt->get_group_expr_size() > 0
-             || select_stmt->has_rollup()
-             || select_stmt->get_aggr_item_size() != 1) {
-    //do nothing
+  } else if (select_stmt->get_from_item_size() != 1 ||
+             select_stmt->get_from_item(0).is_joined_ ||
+             select_stmt->get_aggr_item_size() != 1 ||
+             !select_stmt->is_scala_group_by()) {
     OPT_TRACE("not a simple query");
-  }  else if (OB_FAIL(is_valid_select_list(*select_stmt, select_expr, is_valid))) {
+  } else if (OB_ISNULL(expr = select_stmt->get_aggr_items().at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), KP(expr));
+  } else if ((T_FUN_MAX != expr->get_expr_type() && T_FUN_MIN != expr->get_expr_type()) ||
+             expr->get_real_param_count() != 1) {
+    OPT_TRACE("aggr expr is not min/max expr");
+  } else if (OB_FAIL(is_valid_index_column(select_stmt, expr->get_param_expr(0), is_valid))) {
+    LOG_WARN("failed to check is valid index column", K(ret));
+  } else if (!is_valid) {
+    OPT_TRACE("aggr expr is not include index column");
+  } else if (OB_FAIL(is_valid_select_list(*select_stmt, expr, is_valid))) {
     LOG_WARN("failed to check is valid select list", K(ret));
   } else if (!is_valid) {
-    //do nothing
-    OPT_TRACE("select expr is not single expr");
-  } else if (OB_FAIL(is_valid_aggr_expr(select_stmt, select_expr, aggr_expr, is_valid))) {
-    LOG_WARN("failed to check is valid expr", K(ret));
-  } else if (!is_valid) {
-    //do nothing
-    OPT_TRACE("select expr is not min/max expr");
-  } else if (OB_FAIL(is_valid_having(select_stmt, aggr_expr, is_valid))) {
+    OPT_TRACE("select list is const or aggr_expr");
+  } else if (OB_FAIL(is_valid_having(select_stmt, expr, is_valid))) {
     LOG_WARN("fail to check is valid having", K(ret));
   } else if (!is_valid) {
     OPT_TRACE("having condition is invalid");
   } else {
+    aggr_expr = select_stmt->get_aggr_items().at(0);
     LOG_TRACE("Succeed to check transform validity", K(is_valid));
   }
   return ret;
@@ -152,78 +155,67 @@ int ObTransformMinMax::do_transform(ObSelectStmt *select_stmt, ObAggFunRawExpr *
 }
 
 int ObTransformMinMax::is_valid_select_list(const ObSelectStmt &stmt,
-                                            const ObRawExpr *&aggr_expr,
+                                            const ObAggFunRawExpr *aggr_expr,
                                             bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  int64_t num_non_const_exprs = 0;
-  aggr_expr = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_select_item_size(); ++i) {
-    const ObRawExpr *expr = stmt.get_select_item(i).expr_;
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr should not be NULL", K(ret));
-    } else if (expr->is_const_expr()) {
-      /*do nothing */
-    } else {
-      aggr_expr = expr;
-      ++num_non_const_exprs;
+  if (OB_ISNULL(aggr_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), KP(aggr_expr));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_select_item_size(); ++i) {
+      const ObRawExpr *expr = stmt.get_select_item(i).expr_;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr should not be NULL", K(ret));
+      } else if (expr->is_const_expr()) {
+        /* do nothing */
+      } else if (OB_FAIL(is_valid_aggr_expr(stmt, expr, aggr_expr, is_valid))) {
+        LOG_WARN("failed to check expr is valid aggr", K(ret));
+      } else if (!is_valid) {
+        break;
+      }
     }
-  }
-  if (OB_SUCC(ret) && num_non_const_exprs == 1) {
-    is_valid = true;
   }
   return ret;
 }
 
-int ObTransformMinMax::is_valid_aggr_expr(const ObSelectStmt *stmt,
+int ObTransformMinMax::is_valid_aggr_expr(const ObSelectStmt &stmt,
                                           const ObRawExpr *expr,
-                                          ObAggFunRawExpr *&column_aggr_expr,
+                                          const ObAggFunRawExpr *aggr_expr,
                                           bool &is_valid)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
   is_valid = false;
-  if (OB_ISNULL(expr) || OB_ISNULL(stmt)) {
+  const ObRawExpr *param = NULL;
+  if (OB_ISNULL(aggr_expr) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(expr), K(stmt));
+    LOG_WARN("expr should not be NULL", K(ret), KP(expr), KP(aggr_expr));
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if ((T_FUN_MAX == expr->get_expr_type()
-              || T_FUN_MIN == expr->get_expr_type())) {
-    const ObAggFunRawExpr *aggr_expr =
-        static_cast<const ObAggFunRawExpr*>(expr);
-    if (1 == aggr_expr->get_real_param_count()) {
-      if (OB_FAIL(is_valid_index_column(stmt, aggr_expr->get_param_expr(0), is_valid))) {
-        LOG_WARN("failed to check is valid index column", K(ret));
-      } else if (is_valid) {
-        column_aggr_expr = const_cast<ObAggFunRawExpr *>(aggr_expr);
-      }
-    }
+  } else if (expr == aggr_expr) {
+    is_valid = true;
   } else if (expr->has_flag(CNT_AGG)) {
-    const ObRawExpr *aggr_param = NULL;
-    const ObRawExpr *param = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_ISNULL(param = expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param is null", K(ret));
       } else if (param->is_const_expr()) {
         /* do nothing */
-      } else if (param->has_flag(CNT_AGG) && OB_ISNULL(aggr_param)) {
-        aggr_param = param;
-      } else { // not valid
-        aggr_param = NULL;
+      } else if (param->has_flag(CNT_AGG)) {
+        if (OB_FAIL(SMART_CALL(is_valid_aggr_expr(stmt, param, aggr_expr, is_valid)))) {
+          LOG_WARN("failed to check is_valid_expr", K(ret));
+        } else if (!is_valid) {
+          break;
+        }
+      } else {
         break;
       }
-    }
-    if (OB_ISNULL(aggr_param)) {
-      // do nothing
-    } else if (OB_FAIL(SMART_CALL(is_valid_aggr_expr(stmt, aggr_param, column_aggr_expr, is_valid)))) {
-      LOG_WARN("failed to check is_valid_expr", K(ret));
     }
   }
   return ret;
