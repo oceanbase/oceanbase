@@ -12486,7 +12486,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
-# 15306: __all_virtual_wr_control
 
 #######################################################################
 # oracle agent table index is defined after the System table Index area
@@ -12591,6 +12590,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 # 15396: __all_mview_refresh_stmt_stats
 
 # 15397: __all_dbms_lock_allocated
+# 15398: __all_virtual_wr_control
 
 ################################################################################
 # System View (20000,30000]
