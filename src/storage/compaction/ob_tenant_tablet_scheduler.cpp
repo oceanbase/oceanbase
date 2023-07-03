@@ -1188,7 +1188,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
             LOG_WARN("failed to check medium finish", K(tmp_ret), K(ls_id), K(tablet_id));
           } else if (FALSE_IT(check_medium_finish = true)) {
           } else if (FALSE_IT(func.get_tablet_handle(new_handle))) {
-          } else if (ObTimeUtility::fast_current_time() * 1000 <
+          } else if (ObTimeUtility::current_time_ns() <
               medium_list->get_wait_check_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
             // need wait 10 mins before schedule meta major
           } else if (enable_adaptive_compaction && OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, new_handle))) {
