@@ -66,7 +66,12 @@ public:
         all_exprs_(false),
         loc_meta_(allocator_),
         assign_ids_(allocator_),
-        agg_cell_proj_(allocator_)
+        agg_cell_proj_(allocator_),
+        auto_inc_column_id_(0),
+        param_(),
+        auto_inc_column_name_(),
+        all_column_ref_exprs_(),
+        is_auto_inc_(false)
   {
     // common
     is_init_ = false;
@@ -138,6 +143,7 @@ public:
   OB_INLINE common::ObTableID get_ref_table_id() const { return ref_table_id_; }
   OB_INLINE common::ObTableID get_index_table_id() const { return index_table_id_; }
   OB_INLINE common::ObTabletID get_tablet_id() const { return tablet_id_; }
+  OB_INLINE common::ObString &get_table_name() { return table_name_; }
   OB_INLINE share::ObLSID& get_ls_id() { return ls_id_; }
   OB_INLINE int64_t get_timeout_ts() const { return timeout_ts_; }
   OB_INLINE const share::schema::ObTableSchema* get_table_schema() const { return table_schema_; }
@@ -221,7 +227,13 @@ public:
   OB_INLINE void set_operation_type(const ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   // for htable
   OB_INLINE void set_batch_operation(const ObTableBatchOperation *batch_op) { batch_op_ = batch_op; }
-
+  // for auto inc
+  OB_INLINE void set_auto_inc_column_id(const uint64_t &auto_inc_column_id) { auto_inc_column_id_ = auto_inc_column_id; }
+  OB_INLINE void set_auto_inc_column_name(const ObString &auto_inc_column_name) { auto_inc_column_name_ = auto_inc_column_name; }
+  OB_INLINE uint64_t get_auto_inc_column_id() { return auto_inc_column_id_; }
+  OB_INLINE ObString get_auto_inc_column_name() { return auto_inc_column_name_; }
+  OB_INLINE ObPhysicalPlanCtx *get_physical_plan_ctx() { return exec_ctx_.get_physical_plan_ctx(); }
+  OB_INLINE bool is_auto_inc() { return is_auto_inc_; }
 public:
   // 初始化common部分(不包括expr_info_, exec_ctx_, all_exprs_)
   int init_common(const ObTableApiCredential &credential,
@@ -256,6 +268,7 @@ public:
                  const transaction::ObTxReadSnapshot &tx_snapshot);
   int init_das_context(ObDASCtx &das_ctx);
   const common::ObIArray<uint64_t> &get_agg_projs() const { return agg_cell_proj_; }
+  common::ObIArray<ObColumnRefRawExpr*> &get_all_column_ref_exprs() { return all_column_ref_exprs_; }
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
@@ -286,6 +299,15 @@ private:
   // @param [in]  column_name   The schema cell column name.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObTableQuery &query);
+  
+  AutoincParam &get_auto_inc_param() { return param_; }
+
+  // Add auto inc param to phy_plan_ctx.
+  //
+  // @param [in]  phy_plan_ctx      The phy_plan_ctx.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int add_auto_inc_param(ObPhysicalPlanCtx *&phy_plan_ctx);
+
 private:
   int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema,
                               sql::ObExprResType &column_type);
@@ -348,6 +370,12 @@ private:
   ObAssignIds assign_ids_;
   // agg cell index in schema
   common::ObFixedArray<uint64_t, common::ObIAllocator> agg_cell_proj_;
+  // for auto inc
+  uint64_t auto_inc_column_id_;
+  AutoincParam param_;
+  ObString auto_inc_column_name_;
+  common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> all_column_ref_exprs_;
+  bool is_auto_inc_;
   // for increment/append
   common::ObSEArray<common::ObString, 8> expr_strs_;
   common::ObArray<sql::ObRawExpr*> delta_exprs_; // for increment/append

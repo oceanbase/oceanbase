@@ -613,6 +613,14 @@ int ObTableApiInsertUpExecutor::get_next_row()
     affected_rows_ += insert_rows_ + insert_up_rtdef_.upd_rtdef_.found_rows_;
   }
 
+  // auto inc 操作中, 同步全局自增值value
+  ObPhysicalPlanCtx *phy_plan_ctx = tb_ctx_.get_physical_plan_ctx();
+  if (OB_FAIL(phy_plan_ctx->sync_last_value_local())) {
+    LOG_WARN("failed to sync last value", K(ret));
+  }
+  if (OB_FAIL(phy_plan_ctx->sync_last_value_global())) {
+    LOG_WARN("failed to sync last value", K(ret));
+  }
   return ret;
 }
 

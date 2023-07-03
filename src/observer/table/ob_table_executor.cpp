@@ -66,15 +66,27 @@ void ObTableApiExecutor::set_child(ObTableApiExecutor *child)
   child_ = child;
 }
 
- void ObTableApiExecutor::clear_evaluated_flag()
-  {
-    if (tb_ctx_.get_table_schema()->has_generated_column() || tb_ctx_.is_inc_or_append()) {
-      ObExprFrameInfo* expr_info = const_cast<ObExprFrameInfo *>(tb_ctx_.get_expr_frame_info());
-      for (int64_t i = 0; i < expr_info->rt_exprs_.count(); i++) {
-        expr_info->rt_exprs_.at(i).clear_evaluated_flag(eval_ctx_);
+void ObTableApiExecutor::clear_evaluated_flag()
+{
+  if (tb_ctx_.get_table_schema()->has_generated_column() || tb_ctx_.is_inc_or_append()) {
+    ObExprFrameInfo* expr_info = const_cast<ObExprFrameInfo *>(tb_ctx_.get_expr_frame_info());
+    for (int64_t i = 0; i < expr_info->rt_exprs_.count(); i++) {
+      if (!tb_ctx_.is_auto_inc()) { // 如果是inc/append场景下进行了自增操作，则不应该清自增列转换的flag，特判
+        expr_info->rt_exprs_.at(i).clear_evaluated_flag(eval_ctx_); 
+      } else {
+        if (expr_info->rt_exprs_.at(i).type_ == T_FUN_COLUMN_CONV) {
+          if (expr_info->rt_exprs_.at(i).args_[4]->type_ == T_FUN_SYS_AUTOINC_NEXTVAL) {
+            // do nothing
+          } else {
+            expr_info->rt_exprs_.at(i).clear_evaluated_flag(eval_ctx_);    
+          }
+        } else {
+          expr_info->rt_exprs_.at(i).clear_evaluated_flag(eval_ctx_); 
+        }          
       }
     }
   }
+}
 
 }  // namespace table
 }  // namespace oceanbase
