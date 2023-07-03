@@ -317,8 +317,8 @@ DEF_INT(_ob_max_thread_num, OB_CLUSTER_PARAMETER, "0", "[0,10000)",
          "ob max thread number "
          "upper limit of observer thread count. Range: [0, 10000), 0 means no limit.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_DBL(cpu_quota_concurrency, OB_TENANT_PARAMETER, "4", "[1,10]",
-        "max allowed concurrency for 1 CPU quota. Range: [1,10]",
+DEF_DBL(cpu_quota_concurrency, OB_TENANT_PARAMETER, "4", "[1,20]",
+        "max allowed concurrency for 1 CPU quota. Range: [1,20]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(token_reserved_percentage, OB_CLUSTER_PARAMETER,
         "30", "[0,100]",
@@ -1575,3 +1575,6 @@ DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allowed to limit the memory of tenant 500",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #endif
+DEF_TIME(_worker_long_stall_threshold, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
+        "threshold of dynamic worker works",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
