@@ -1176,7 +1176,7 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool &is_prepared, SCN &prep
   int ret = OB_SUCCESS;
   ObTxState cur_state = exec_info_.state_;
 
-  if (ObTxState::PREPARE == cur_state) {
+  if (ObTxState::PREPARE == cur_state || ObTxState::PRE_COMMIT == cur_state) {
     is_prepared = true;
     prepare_version = exec_info_.prepare_version_;
   } else if (ObTxState::COMMIT == cur_state || ObTxState::ABORT == cur_state
@@ -1189,6 +1189,8 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool &is_prepared, SCN &prep
   }
   if (is_prepared && OB_INVALID_SCN_VAL == prepare_version.get_val_for_gts()) {
     TRANS_LOG(ERROR, "invalid prepare version", K(cur_state));
+    // try lock
+    print_trace_log();
   }
 
   return ret;
@@ -1370,10 +1372,11 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
     TRANS_LOG(ERROR, "recover_from_table_lock_durable_info failed", K(ret));
   } else if (OB_FAIL(ctx_tx_data_.recover_tx_data(ctx_info.tx_data_guard_))) {
     TRANS_LOG(WARN, "recover tx data failed", K(ret), K(ctx_tx_data_));
+  } else if (OB_FAIL(exec_info_.assign(ctx_info.exec_info_))) {
+    TRANS_LOG(WARN, "exec_info assign error", K(ret), K(ctx_info));
   } else {
     trans_id_ = ctx_info.tx_id_;
     ls_id_ = ctx_info.ls_id_;
-    exec_info_ = ctx_info.exec_info_;
     if (!exec_info_.upstream_.is_valid() &&
         !is_local_tx_() &&
        (ObTxState::REDO_COMPLETE == exec_info_.state_ ||
@@ -5528,10 +5531,11 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
   } else if (OB_FAIL(mt_ctx_.calc_checksum_before_scn(
                  exec_info_.max_applied_log_ts_, exec_info_.checksum_, exec_info_.checksum_scn_))) {
     TRANS_LOG(ERROR, "calc checksum before log ts failed", K(ret), KPC(this));
+  } else if (OB_FAIL(info.exec_info_.assign(exec_info_))) {
+    TRANS_LOG(WARN, "fail to assign exec_info", K(ret), KPC(this));
   } else {
     info.tx_id_ = trans_id_;
     info.ls_id_ = ls_id_;
-    info.exec_info_ = exec_info_;
     info.cluster_id_ = cluster_id_;
     if (OB_FAIL(mt_ctx_.get_table_lock_store_info(info.table_lock_info_))) {
       TRANS_LOG(WARN, "get_table_lock_store_info failed", K(ret), K(info));

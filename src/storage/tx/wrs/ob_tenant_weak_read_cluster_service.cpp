@@ -124,8 +124,19 @@ int ObTenantWeakReadClusterService::check_leader_info_(int64_t &leader_epoch) co
   int ret = OB_SUCCESS;
   ObRole role = INVALID_ROLE;
   int64_t tmp_epoch = OB_INVALID_TIMESTAMP;
+  ObLSService *ls_svr =  MTL(ObLSService *);
+  storage::ObLSHandle handle;
 
-  if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::WRS_LS_ID, role, tmp_epoch))) {
+  if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "log stream service is NULL", K(ret));
+  } else if (OB_FAIL(ls_svr->get_ls(share::WRS_LS_ID, handle, ObLSGetMod::TRANS_MOD))) {
+    if (OB_LS_NOT_EXIST != ret) {
+      TRANS_LOG(WARN, "get id service log stream failed", K(ret));
+    }
+  } else if (OB_ISNULL(handle.get_ls())) {
+    ret = OB_LS_NOT_EXIST;
+  } else if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::WRS_LS_ID, role, tmp_epoch))) {
     TRANS_LOG(WARN, "get ObStandbyTimestampService role fail", KR(ret));
   } else if (LEADER != role) {
     // not Leader
