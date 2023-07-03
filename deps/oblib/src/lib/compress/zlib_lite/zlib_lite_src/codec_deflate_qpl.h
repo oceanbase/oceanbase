@@ -29,14 +29,24 @@ namespace common
 namespace ZLIB_LITE
 {
 
+class QplAllocator
+{
+public:
+  void *(*allocate)(int64_t);
+  void (*deallocate)(void *);
+};
+
 class CodecDeflateQpl final {
 public:
-  explicit CodecDeflateQpl(qpl_path_t path);
+  CodecDeflateQpl();
   ~CodecDeflateQpl();
 
   static CodecDeflateQpl & get_hardware_instance();
   static CodecDeflateQpl & get_software_instance();
 
+  int  init(qpl_path_t path, QplAllocator &allocator);
+  void deinit();
+  
   qpl_job * acquire_job(uint32_t & job_id);
   void release_job(uint32_t job_id);
   const bool & is_job_pool_ready() const { return job_pool_ready_; }
@@ -50,18 +60,24 @@ private:
 private:
   /// qpl excute path
   const char  *qpl_excute_path_;
+
+  QplAllocator allocator_;
+  
   /// Maximum jobs running in parallel 
   static constexpr int MAX_JOB_NUMBER = 1024;
   /// Entire buffer for storing all job objects
   char * jobs_buffer_;
   /// Job pool for storing all job object pointers
-  std::array<qpl_job *, MAX_JOB_NUMBER> job_ptr_pool_;
+  qpl_job ** job_ptr_pool_;
   /// Locks for accessing each job object pointers
-  std::array<std::atomic_bool, MAX_JOB_NUMBER> job_ptr_locks_;
+  std::atomic_bool * job_ptr_locks_;
   bool job_pool_ready_;
   std::mt19937 random_engine_;
   std::uniform_int_distribution<int> distribution_;
 };
+
+int  qpl_init(QplAllocator &allocator);
+void qpl_deinit();
 
 int32_t qpl_compress(const char* source, char* dest, int input_size, int max_output_size);
 int32_t qpl_decompress(const char* source, char* dest, int input_size, int max_output_size);
@@ -70,4 +86,4 @@ int32_t qpl_decompress(const char* source, char* dest, int input_size, int max_o
 } //namespace common
 } //namespace oceanbase
 
-#endif 
+#endif // ENABLE_QPL_COMPRESSION

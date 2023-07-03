@@ -15,6 +15,7 @@
 #include "zlib_lite_src/deflate.h"
 #include "zlib_lite_src/zlib.h"
 #include "lib/ob_errno.h"
+#include "lib/allocator/ob_malloc.h"
 
 namespace oceanbase
 {
@@ -33,8 +34,41 @@ ObZlibLiteCompressor::~ObZlibLiteCompressor()
 {
 }
 
+void *qpl_allocate(int64_t size)
+{
+  return ob_malloc(size, ObModIds::OB_COMPRESSOR);
+}
+
+void qpl_deallocate(void *ptr)
+{
+  return ob_free(ptr);
+}
+
+int ObZlibLiteCompressor::init()
+{
+  int ret = OB_SUCCESS;
+#ifdef ENABLE_QPL_COMPRESSION
+  QplAllocator allocator;
+  allocator.allocate = qpl_allocate;
+  allocator.deallocate = qpl_deallocate;
+  int qpl_ret = qpl_init(allocator);
+  if (0 != qpl_ret) {
+    ret = OB_ERROR;
+  }
+#endif
+  return ret;
+}
+
+void ObZlibLiteCompressor::deinit()
+{
+#ifdef ENABLE_QPL_COMPRESSION
+  qpl_deinit();
+#endif
+}
+
 int ObZlibLiteCompressor::zlib_compress(char *dest, int64_t *dest_len, const char *source, int64_t source_len)
 {
+  int ret = OB_SUCCESS; // just for log
   z_stream stream;
   int err = Z_OK;
 
@@ -57,7 +91,7 @@ int ObZlibLiteCompressor::zlib_compress(char *dest, int64_t *dest_len, const cha
     LIB_LOG(WARN, "deflateInit2_ failed", K(err));
   } else if (Z_STREAM_END != (err = deflate(&stream, Z_FINISH))) {
     deflateEnd(&stream);
-    err == Z_OK ? Z_BUF_ERROR : err;
+    err = (err == Z_OK ? Z_BUF_ERROR : err);
   } else {
     *dest_len = stream.total_out;
     err = deflateEnd(&stream);
@@ -67,6 +101,7 @@ int ObZlibLiteCompressor::zlib_compress(char *dest, int64_t *dest_len, const cha
 
 int ObZlibLiteCompressor::zlib_decompress(char *dest, int64_t *dest_len, const char *source, int64_t source_len)
 {
+  int ret = OB_SUCCESS; // just for log
   z_stream stream;
   int err = Z_OK;
 

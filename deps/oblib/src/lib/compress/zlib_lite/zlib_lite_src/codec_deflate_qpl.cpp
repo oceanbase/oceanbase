@@ -23,47 +23,77 @@ namespace ZLIB_LITE
 
 static constexpr int32_t RET_ERROR = -1;
 
-CodecDeflateQpl::CodecDeflateQpl(qpl_path_t path)
-    : random_engine_(std::random_device()())
-    , distribution_(0, MAX_JOB_NUMBER - 1)
+CodecDeflateQpl::CodecDeflateQpl()
+    : qpl_excute_path_(NULL),
+      jobs_buffer_(NULL),
+      job_ptr_pool_(NULL),
+      job_pool_ready_(false),
+      random_engine_(std::random_device()()),
+      distribution_(0, MAX_JOB_NUMBER - 1)
+{}
+
+CodecDeflateQpl::~CodecDeflateQpl()
+{}
+
+int CodecDeflateQpl::init(qpl_path_t path, QplAllocator &allocator)
 {
+  int ret = 0;
+  if (job_pool_ready_) {
+    return -1;
+  }
+  
   uint32_t job_size = 0;
   const char * qpl_version = qpl_get_library_version();
   qpl_excute_path_ = (path == qpl_path_hardware) ? "Hardware" : "Software";
+  allocator_ = allocator;
+  
   /// Get size required for saving a single qpl job object
   qpl_get_job_size(path, &job_size);
   /// Allocate entire buffer for storing all job objects
-  jobs_buffer_ = new char[job_size * MAX_JOB_NUMBER];
+  jobs_buffer_ = static_cast<char *>(allocator_.allocate(job_size * MAX_JOB_NUMBER));
+  job_ptr_pool_ = static_cast<qpl_job **>(allocator.allocate(sizeof(qpl_job *) * MAX_JOB_NUMBER));
+  job_ptr_locks_ = static_cast<std::atomic_bool *>(allocator.allocate(sizeof(std::atomic_bool) * MAX_JOB_NUMBER));
+  if (nullptr == jobs_buffer_ || nullptr == job_ptr_pool_ || nullptr == job_ptr_locks_) {
+    allocator.deallocate(jobs_buffer_);
+    allocator.deallocate(job_ptr_pool_);
+    allocator.deallocate(job_ptr_locks_);
+    jobs_buffer_ = nullptr;
+    job_ptr_pool_ = nullptr;
+    job_ptr_locks_ = nullptr;
+    return -1;
+  }
+  
   /// Initialize pool for storing all job object pointers
   /// Reallocate buffer by shifting address offset for each job object.
   for (uint32_t index = 0; index < MAX_JOB_NUMBER; ++index) {
     qpl_job * qpl_job_ptr = (qpl_job *)(jobs_buffer_ + index * job_size);
-    auto status = qpl_init_job(path, qpl_job_ptr); 
+    int status = qpl_init_job(path, qpl_job_ptr); 
     if (status != QPL_STS_OK) {
       job_pool_ready_ = false;
-      delete [] jobs_buffer_;
-      jobs_buffer_ = nullptr;
-      if (path == qpl_path_hardware) {
-        LIB_LOG(WARN, "Initialization of IAA hardware failed, will attempt to use software DeflateQpl codec instead of hardware DeflateQpl codec.",
-                K(status), KCSTRING(qpl_version));
-      } else {
-        LIB_LOG(WARN, "Initialization of software DeflateQpl codec failed, QPL compression/decompression cannot be enabled.", K(status));
+      
+      for (uint32_t i = 0; i < index; i++) {
+        qpl_fini_job(job_ptr_pool_[i]);
       }
- 
-      return;
+
+      allocator_.deallocate(jobs_buffer_);
+      jobs_buffer_ = nullptr;
+      allocator_.deallocate(job_ptr_pool_);
+      job_ptr_pool_ = nullptr;
+      allocator_.deallocate(job_ptr_locks_);
+      job_ptr_locks_ = nullptr;
+      return -1;
     }
     job_ptr_pool_[index] = qpl_job_ptr;
     unlock_job(index);
   }
-
-  LIB_LOG(INFO, "assisted DeflateQpl codec is ready!", KCSTRING(qpl_excute_path_), KCSTRING(qpl_version));
     
   job_pool_ready_ = true;
+  return 0;
 }
 
-CodecDeflateQpl::~CodecDeflateQpl()
+void CodecDeflateQpl::deinit()
 {
-  if (is_job_pool_ready()) {
+  if (job_pool_ready_) {
     for (uint32_t i = 0; i < MAX_JOB_NUMBER; ++i) {
       if (job_ptr_pool_[i] != nullptr) {
         while (!try_lock_job(i));
@@ -73,21 +103,24 @@ CodecDeflateQpl::~CodecDeflateQpl()
       }
     }
 
-    delete[] jobs_buffer_;
+    allocator_.deallocate(jobs_buffer_);
     jobs_buffer_ = nullptr;
+    allocator_.deallocate(job_ptr_pool_);
+    job_ptr_pool_ = nullptr;
+    allocator_.deallocate(job_ptr_locks_);
     job_pool_ready_ = false;
   }
 }
 
 CodecDeflateQpl & CodecDeflateQpl::get_hardware_instance()
 {
-  static CodecDeflateQpl hw_codec(qpl_path_hardware);
+  static CodecDeflateQpl hw_codec;
   return hw_codec;
 }
 
 CodecDeflateQpl & CodecDeflateQpl::get_software_instance()
 {
-  static CodecDeflateQpl sw_codec(qpl_path_software);
+  static CodecDeflateQpl sw_codec;
   return sw_codec;
 }
 
@@ -142,7 +175,6 @@ int32_t CodecDeflateQpl::do_compress_data(const char * source, uint32_t source_s
   qpl_job * job_ptr = nullptr;
   uint32_t compressed_size = 0;
   if (!(job_ptr = acquire_job(job_id))) {
-    LIB_LOG(WARN, "DeflateQpl codec failed, doCompressData->acquireJob fail.", KCSTRING(qpl_excute_path_));
     return RET_ERROR;
   }
 
@@ -161,7 +193,6 @@ int32_t CodecDeflateQpl::do_compress_data(const char * source, uint32_t source_s
     release_job(job_id);
     return compressed_size;
   } else {
-    LIB_LOG(WARN, "DeflateQpl codec failed, doCompressData->qpl_execute_job.", KCSTRING(qpl_excute_path_), K(status));
     release_job(job_id);
     return RET_ERROR;
   }
@@ -173,7 +204,6 @@ int32_t CodecDeflateQpl::do_decompress_data(const char * source, uint32_t source
   qpl_job * job_ptr = nullptr;
   uint32_t decompressed_size = 0;
   if (!(job_ptr = acquire_job(job_id))) {
-    LIB_LOG(WARN, "DeflateQpl codec failed, doDecompressData->acquireJob fail: acquire qpl job failed.", KCSTRING(qpl_excute_path_));
     return RET_ERROR;
   }
 
@@ -191,12 +221,32 @@ int32_t CodecDeflateQpl::do_decompress_data(const char * source, uint32_t source
     release_job(job_id);
     return decompressed_size;
   } else {
-    LIB_LOG(WARN, "DeflateQpl codec failed, doDeCompressData->qpl_execute_job", KCSTRING(qpl_excute_path_), K(status));
     release_job(job_id); 
     return RET_ERROR;
   }
 
   return decompressed_size;
+}
+
+int qpl_init(QplAllocator &allocator)
+{
+  int ret = 0;
+  CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
+  ret = hardware_qpl.init(qpl_path_hardware, allocator);
+  if (ret == 0) {
+    CodecDeflateQpl &software_qpl = CodecDeflateQpl::get_software_instance();
+    ret = software_qpl.init(qpl_path_software, allocator);
+  }
+  return ret;
+}
+
+void qpl_deinit()
+{
+  CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
+  hardware_qpl.deinit();
+  
+  CodecDeflateQpl &software_qpl = CodecDeflateQpl::get_software_instance();
+  software_qpl.deinit();
 }
 
 int32_t qpl_compress(const char* source, char* dest, int input_size, int max_output_size)
