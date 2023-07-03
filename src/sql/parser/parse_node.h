@@ -214,6 +214,7 @@ typedef struct _PLParseInfo
   bool is_pl_parse_;//用于标识当前parser逻辑是否为PLParse调用
   bool is_pl_parse_expr_; //用于标识当前parser逻辑是否在解析PLParser的expr
   bool is_forbid_pl_fp_;
+  bool is_inner_parse_;
   int last_pl_symbol_pos_; //上一个pl变量的结束位置
   int plsql_line_;
   /*for mysql pl*/

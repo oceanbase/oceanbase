@@ -1040,6 +1040,8 @@ int ObParser::parse(const ObString &query,
     parse_result.question_mark_ctx_.count_ = def_name_ctx_->count_;
   }
 
+  parse_result.pl_parse_info_.is_inner_parse_ = is_pl_inner_parse;
+
   if (INS_MULTI_VALUES == parse_mode) {
     void *buffer = nullptr;
     if (OB_ISNULL(buffer = allocator_->alloc(sizeof(InsMultiValuesResult)))) {

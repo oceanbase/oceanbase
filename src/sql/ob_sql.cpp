@@ -1236,7 +1236,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
             LOG_WARN("failed to write string", K(ret));
           } else if (OB_FAIL(sess.store_query_string(trimed_stmt))) {
             LOG_WARN("store query string fail", K(ret));
-          } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false))) {
+          } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, true))) {
             LOG_WARN("generate syntax tree failed", K(sql), K(ret));
           } else if (is_mysql_mode() && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
             ret = OB_ER_UNSUPPORTED_PS;
@@ -3857,6 +3857,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                          || OB_ERR_CONSTRUCT_MUST_RETURN_SELF == ret
                          || OB_ERR_ONLY_FUNC_CAN_PIPELINED == ret
                          || OB_ERR_NO_ATTR_FOUND == ret
+                         || OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK == ret
                          || OB_ERR_NON_INT_LITERAL == ret
                          || OB_ERR_PARSER_INIT == ret
                          || OB_NOT_SUPPORTED == ret)) {
