@@ -1343,7 +1343,7 @@ DEF_TIME(_follower_snapshot_read_retry_duration, OB_TENANT_PARAMETER, "0ms", "[0
 DEF_STR_WITH_CHECKER(default_auto_increment_mode, OB_TENANT_PARAMETER, "order",
         common::ObAutoIncrementModeChecker, "specifies default auto-increment mode, default is 'order'",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\n  \"type_t\": {\n    \"level\":1,\n    \"sample_pct\":\"1.00\",\n    \"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"\n  }\n}",
+DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\"type_t\":{\"level\":1,\"sample_pct\":\"0.10\",\"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"}}",
         "persistent control information for full-link trace",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_print_sample_ppm, OB_TENANT_PARAMETER, "0", "[0, 1000000]",
