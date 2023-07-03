@@ -90,7 +90,7 @@ int ObBalanceGroupInfo::create_new_part_group_()
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for partition group fail", KR(ret), K(buf), K(part_group_size));
-  } else if (OB_ISNULL(part_group = new(buf) ObTransferPartGroup())) {
+  } else if (OB_ISNULL(part_group = new(buf) ObTransferPartGroup(alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("construct ObTransferPartGroup fail", KR(ret), K(buf), K(part_group_size));
   } else if (OB_FAIL(part_groups_.push_back(part_group))) {
