@@ -34,12 +34,12 @@ ObBackupBaseService::~ObBackupBaseService()
 void ObBackupBaseService::run1()
 {
   int tmp_ret = OB_SUCCESS;
+  lib::set_thread_name(thread_name_);
   LOG_INFO("ObBackupBaseService thread run", K(thread_name_));
   if (OB_UNLIKELY(!is_created_)) {
     tmp_ret = OB_NOT_INIT;
     LOG_WARN_RET(OB_NOT_INIT, "not init", K(tmp_ret));
   } else {
-    lib::set_thread_name(thread_name_);
     ObRSThreadFlag rs_work;
     run2();
   }
@@ -221,4 +221,26 @@ int ObBackupBaseService::check_leader()
     ret = OB_NOT_MASTER;
   }
   return ret;
+}
+
+void ObBackupBaseService::mtl_thread_stop()
+{
+  LOG_INFO("[BACKUP_SERVICE] thread stop start", K(tg_id_), K(thread_name_));
+  if (-1 != tg_id_) {
+    TG_STOP(tg_id_);
+  }
+  LOG_INFO("[BACKUP_SERVICE] thread stop finish", K(tg_id_), K(thread_name_));
+}
+
+void ObBackupBaseService::mtl_thread_wait()
+{
+  LOG_INFO("[BACKUP_SERVICE] thread wait start", K(tg_id_), K(thread_name_));
+  if (-1 != tg_id_) {
+    {
+      ObThreadCondGuard guard(thread_cond_);
+      thread_cond_.broadcast();
+    }
+    TG_WAIT(tg_id_);
+  }
+  LOG_INFO("[BACKUP_SERVICE] thread wait finish", K(tg_id_), K(thread_name_));
 }

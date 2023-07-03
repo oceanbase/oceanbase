@@ -27,6 +27,8 @@ using namespace table;
 ObDirectLoadTableStoreParam::ObDirectLoadTableStoreParam()
   : snapshot_version_(0),
     datum_utils_(nullptr),
+    col_descs_(nullptr),
+    cmp_funcs_(nullptr),
     file_mgr_(nullptr),
     is_multiple_mode_(false),
     is_fast_heap_table_(false),
@@ -45,7 +47,7 @@ ObDirectLoadTableStoreParam::~ObDirectLoadTableStoreParam()
 bool ObDirectLoadTableStoreParam::is_valid() const
 {
   return snapshot_version_ > 0 && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
-         nullptr != file_mgr_ &&
+         nullptr != col_descs_ && nullptr != cmp_funcs_ && nullptr != file_mgr_ &&
          (!is_fast_heap_table_ ||
           (nullptr != insert_table_ctx_ && nullptr != fast_heap_table_ctx_)) &&
          nullptr != dml_row_handler_;
@@ -103,6 +105,7 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
       fast_heap_table_build_param.table_data_desc_ = param.table_data_desc_;
       fast_heap_table_build_param.datum_utils_ = param.datum_utils_;
       fast_heap_table_build_param.col_descs_ = param.col_descs_;
+      fast_heap_table_build_param.cmp_funcs_ = param.cmp_funcs_;
       fast_heap_table_build_param.insert_table_ctx_ = param.insert_table_ctx_;
       fast_heap_table_build_param.fast_heap_table_ctx_ = param.fast_heap_table_ctx_;
       fast_heap_table_build_param.dml_row_handler_ = param.dml_row_handler_;

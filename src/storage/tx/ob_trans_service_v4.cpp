@@ -637,7 +637,9 @@ int ObTransService::decide_tx_commit_info_(ObTxDesc &tx, ObTxPart *&coord)
   tx.coord_id_.reset();
   tx.commit_parts_.reset();
   ARRAY_FOREACH(parts, i) {
-    if (OB_FAIL(tx.commit_parts_.push_back(parts[i].id_))) {
+    if (parts[i].is_without_ctx()) {
+      // skip participant, without ctx created
+    } else if (OB_FAIL(tx.commit_parts_.push_back(parts[i].id_))) {
       TRANS_LOG(WARN, "part id push fail", K(ret), K(tx));
     } else if (!tx.coord_id_.is_valid() && parts[i].addr_ == self_) {
       tx.coord_id_ = parts[i].id_;
@@ -1550,7 +1552,8 @@ int ObTransService::abort_participants_(const ObTxDesc &tx_desc)
   // ignore ret
   ARRAY_FOREACH_NORET(parts, idx) {
     const ObTxPart &p = parts.at(idx);
-    if (OB_FAIL(post_tx_abort_part_msg_(tx_desc, p))) {
+    if (p.is_without_ctx()) {
+    } else if (OB_FAIL(post_tx_abort_part_msg_(tx_desc, p))) {
       TRANS_LOG(WARN, "post tx abort part msg", K(ret), K(tx_desc), K(p));
     }
   }
@@ -1679,12 +1682,15 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
  *
  ********************************************************************/
 
-int ObTransService::batch_post_tx_msg_(ObTxRollbackSPMsg &msg,
-                                       const ObIArray<ObTxLSEpochPair> &list)
+int ObTransService::batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
+                                                       ObTxRollbackSPMsg &msg,
+                                                       const ObIArray<ObTxLSEpochPair> &list,
+                                                       int &post_succ_num)
 {
   int ret = OB_SUCCESS;
   int last_ret = OB_SUCCESS;
-  const ObTxDesc *tx_ptr = msg.tx_ptr_;
+  post_succ_num = 0;
+  const ObTxDesc *msg_tx_ptr = msg.tx_ptr_;
   ARRAY_FOREACH_NORET(list, idx) {
     auto &p = list.at(idx);
     msg.receiver_ = p.left_;
@@ -1693,10 +1699,17 @@ int ObTransService::batch_post_tx_msg_(ObTxRollbackSPMsg &msg,
       msg.tx_ptr_ = NULL;
     }
     if (OB_FAIL(rpc_->post_msg(p.left_, msg))) {
-      TRANS_LOG(WARN, "post msg falied", K(ret), K(msg), K(p));
-      last_ret = ret;
-    }
-    msg.tx_ptr_ = tx_ptr;
+      if (OB_LS_IS_DELETED == ret) {
+        ObSpinLockGuard lock(tx.lock_);
+        ObAddr fake_addr;
+        on_sp_rollback_succ_(p, tx, ObTxPart::EPOCH_DEAD, fake_addr);
+        ret = OB_SUCCESS;
+      } else {
+        TRANS_LOG(WARN, "post msg falied", K(ret), K(msg), K(p));
+        last_ret = ret;
+      }
+    } else { ++post_succ_num; }
+    msg.tx_ptr_ = msg_tx_ptr;
   }
   return last_ret;
 }
@@ -2044,6 +2057,21 @@ int ObTransService::handle_tx_batch_req(int msg_type,
    || is_location_service_renew_error(ret)      \
    )
 
+void ObTransService::on_sp_rollback_succ_(const ObTxLSEpochPair &part,
+                                          ObTxDesc &tx,
+                                          const int64_t born_epoch,
+                                          const ObAddr &addr)
+{
+  if (tx.brpc_mask_set_.is_mask(part)) {
+    TRANS_LOG(DEBUG, "has marked received", K(part));
+  } else {
+    if (part.right_ <= 0) {
+      tx.update_clean_part(part.left_, born_epoch, addr);
+    }
+    (void)tx.brpc_mask_set_.mask(part);
+  }
+}
+
 int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
                                             const int64_t epoch,
                                             const transaction::ObTransID &tx_id,
@@ -2069,17 +2097,9 @@ int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
                 K(status), K(ls_id), K(tx_id), K(addr));
     } else if (status == OB_SUCCESS) {
       ObTxLSEpochPair pair(ls_id, epoch);
-      if (tx->brpc_mask_set_.is_mask(pair)) {
-        TRANS_LOG(DEBUG, "has marked received", K(pair));
-      } else {
-        if (epoch <= 0) {
-          tx->update_clean_part(ls_id, result.born_epoch_, result.addr_);
-        }
-        (void)tx->brpc_mask_set_.mask(pair);
-        //MEM_BARRIER();
-        if (tx->brpc_mask_set_.is_all_mask()) {
-          tx->rpc_cond_.notify(OB_SUCCESS);
-        }
+      (void)on_sp_rollback_succ_(pair, *tx, result.born_epoch_, result.addr_);
+      if (tx->brpc_mask_set_.is_all_mask()) {
+        tx->rpc_cond_.notify(OB_SUCCESS);
       }
     } else { // other failure
       // notify waiter, cause the savepoint rollback fail
@@ -3473,5 +3493,24 @@ int ObTransService::do_standby_cleanup()
   return ret;
 }
 
+bool ObTransService::is_ls_dropped_(const share::ObLSID ls_id) {
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  ObLSService *ls_svr =  MTL(ObLSService *);
+  storage::ObLSHandle handle;
+  ObLS *ls;
+  if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "log stream service is NULL", K(ret));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
+    TRANS_LOG(WARN, "get id service log stream failed");
+  } else if (OB_ISNULL(ls = handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "id service log stream not exist");
+  } else {
+    bret = ls->is_in_gc();
+  }
+  return bret;
+}
 } // transaction
 } // ocenabase

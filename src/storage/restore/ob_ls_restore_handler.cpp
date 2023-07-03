@@ -227,53 +227,27 @@ int ObLSRestoreHandler::handle_execute_over(
   } else if (result != OB_SUCCESS) {
     share::ObLSRestoreStatus status;
     common::ObRole role;
-    // This function will be called when dag net finish. There is lock problem with offline.
-    // Lock sequence for offline is:
-    // 1. lock ObLSRestoreHandler::mtx_
-    // 2. lock ObTenantDagScheduler::scheduler_sync_, which is called in notify when cancel dag net.
-    //
-    // Lock sequence for finish dag net is:
-    // 1. lock ObTenantDagScheduler::scheduler_sync_
-    // 2. lock ObLSRestoreHandler::mtx_, as following
-    //
-    // To solve the dead lock problem, using trylock instead of lock.
-    int retry_cnt = 0;
-    // if lock failed, retry 3 times.
-    const int64_t MAX_TRY_LOCK_CNT = 3;
-    do {
-      if (OB_FAIL(mtx_.trylock())) {
-        LOG_WARN("lock restore handler failed, retry later", K(ret), KPC_(ls));
-        sleep(1);
-      } else {
-        if (nullptr != state_handler_) {
-          status = state_handler_->get_restore_status();
-          role = state_handler_->get_role();
-        }
+    lib::ObMutexGuard guard(mtx_);
+    if (nullptr != state_handler_) {
+      status = state_handler_->get_restore_status();
+      role = state_handler_->get_role();
+    }
 
-        #ifdef ERRSIM
-          SERVER_EVENT_ADD("storage_ha", "handle_execute_over_errsim", "result", result);
-        #endif
+  #ifdef ERRSIM
+    SERVER_EVENT_ADD("storage_ha", "handle_execute_over_errsim", "result", result);
+  #endif
 
-        if (status.is_restore_sys_tablets()) {
-          state_handler_->set_retry_flag();
-          result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
-          LOG_WARN("restore sys tablets dag failed, need retry", K(ret));
-        } else if (OB_TABLET_NOT_EXIST == result) {
-          LOG_INFO("tablet has been deleted, no need to record err info", K(restore_failed_tablets));
-        } else if (common::ObRole::FOLLOWER == role && result_mgr_.can_retrieable_err(result)) {
-          LOG_INFO("follower met retrieable err, no need to record", K(result), K(task_id));
-        } else {
-          result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
-          LOG_WARN("failed restore dag net task", K(result), K(task_id), K(ls_id), K(restore_succeed_tablets), K(restore_failed_tablets), KPC_(ls));
-        }
-
-        mtx_.unlock();
-      }
-    } while (OB_EAGAIN == ret && MAX_TRY_LOCK_CNT > ++retry_cnt);
-
-    if (MAX_TRY_LOCK_CNT <= retry_cnt) {
-      ret = OB_TRY_LOCK_OBJ_CONFLICT;
-      LOG_WARN("lock restore handler failed", K(ret), K(result), K(task_id), K(ls_id), K(restore_succeed_tablets), K(restore_failed_tablets), K(ls_id));
+    if (status.is_restore_sys_tablets()) {
+      state_handler_->set_retry_flag();
+      result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
+      LOG_WARN("restore sys tablets dag failed, need retry", K(ret));
+    } else if (OB_TABLET_NOT_EXIST == result) {
+      LOG_INFO("tablet has been deleted, no need to record err info", K(restore_failed_tablets));
+    } else if (common::ObRole::FOLLOWER == role && result_mgr_.can_retrieable_err(result)) {
+      LOG_INFO("follower met retrieable err, no need to record", K(result), K(task_id));
+    } else {
+      result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
+      LOG_WARN("failed restore dag net task", K(result), K(task_id), K(ls_id), K(restore_succeed_tablets), K(restore_failed_tablets), KPC_(ls));
     }
   }
   return ret;

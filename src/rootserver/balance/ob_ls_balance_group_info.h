@@ -29,7 +29,10 @@ namespace rootserver
 class ObLSBalanceGroupInfo final
 {
 public:
-  ObLSBalanceGroupInfo() : inited_(false), ls_id_(), alloc_(), bg_map_(), orig_part_group_cnt_map_() {}
+  ObLSBalanceGroupInfo() : inited_(false), ls_id_(),
+  alloc_("LSBGInfo", common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+         MTL_ID()),
+  bg_map_(), orig_part_group_cnt_map_() {}
   ~ObLSBalanceGroupInfo() { destroy(); }
 
   int init(const share::ObLSID &ls_id);

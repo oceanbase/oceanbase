@@ -1124,13 +1124,16 @@ ObBackupTaskScheduler::ObBackupTaskScheduler()
 {
 }
 
-int ObBackupTaskScheduler::mtl_init(ObBackupTaskScheduler *&backup_task_scheduler)
+int ObBackupTaskScheduler::init()
 {
   int ret = OB_SUCCESS;
   common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   obrpc::ObSrvRpcProxy *rpc_proxy = GCTX.srv_rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-  if (OB_ISNULL(sql_proxy)) {
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy should not be NULL", K(ret), KP(sql_proxy));
   } else if (OB_ISNULL(rpc_proxy)) {
@@ -1139,21 +1142,6 @@ int ObBackupTaskScheduler::mtl_init(ObBackupTaskScheduler *&backup_task_schedule
   } else if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scheam service can not be NULL", K(ret), KP(schema_service));
-  } else if (OB_FAIL(backup_task_scheduler->init(rpc_proxy, *sql_proxy, *schema_service))) {
-    LOG_WARN("fail to init backup_task_scheduler", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupTaskScheduler::init(
-    obrpc::ObSrvRpcProxy *rpc_proxy,
-    common::ObMySQLProxy &sql_proxy,
-    share::schema::ObMultiVersionSchemaService &schema_service)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret));
   } else if (OB_UNLIKELY(nullptr == rpc_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(rpc_proxy));
@@ -1162,11 +1150,11 @@ int ObBackupTaskScheduler::init(
   } else {
     tenant_id_ = MTL_ID();
     rpc_proxy_ = rpc_proxy;
-    schema_service_ = &schema_service;
-    if (OB_FAIL(queue_.init(MAX_BACKUP_TASK_QUEUE_LIMIT, rpc_proxy_, this, MAX_BACKUP_TASK_QUEUE_LIMIT, sql_proxy))) {
+    schema_service_ = schema_service;
+    if (OB_FAIL(queue_.init(MAX_BACKUP_TASK_QUEUE_LIMIT, rpc_proxy_, this, MAX_BACKUP_TASK_QUEUE_LIMIT, *sql_proxy))) {
       LOG_WARN("init rebalance task queue failed", K(ret), LITERAL_K(MAX_BACKUP_TASK_QUEUE_LIMIT));
     } else {
-      sql_proxy_ = &sql_proxy;
+      sql_proxy_ = sql_proxy;
       is_inited_ = true;
     }
   }

@@ -714,6 +714,7 @@ private:
   int copy_round_start_file(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
   // piece_start
   int copy_piece_start_file(const BackupPieceFile &piece_file, const share::ObBackupDest &src, const share::ObBackupDest &dest);
+  int get_archive_backup_dest_(const ObBackupPathString &path, share::ObBackupDest &archive_dest);
 
 private:
   bool is_inited_;

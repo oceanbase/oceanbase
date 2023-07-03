@@ -832,6 +832,7 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
           stop_flag))) {
         if (OB_ITEM_NOT_SETTED == ret) {
           // handle missing_log_info
+          missing_info.set_resolving_miss_log();
           const bool need_reconsume = missing_info.need_reconsume_commit_log_entry();
           KickOutReason fail_reason = NONE;
 
@@ -852,7 +853,6 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
             }
           } else if (need_reconsume) {
             IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
-            reconsume_miss_info.set_resolving_miss_log();
             if (missing_info.need_reconsume_commit_log_entry()) {
               reconsume_miss_info.set_need_reconsume_commit_log_entry();
             }
@@ -1466,7 +1466,7 @@ int FetchStream::fetch_miss_log_direct_(
     resp->set_next_miss_lsn(miss_log_array.at(0).miss_lsn_);
     while (OB_SUCC(ret) && !stop_fetch) {
       bool retry_on_err = false;
-      while(OB_SUCC(ret) && fetched_cnt < arr_cnt && !is_timeout) {
+      while (OB_SUCC(ret) && fetched_cnt < arr_cnt && !is_timeout) {
         const int64_t start_fetch_entry_ts = get_timestamp();
         const ObCdcLSFetchMissLogReq::MissLogParam &param = miss_log_array.at(fetched_cnt);
         const LSN &missing_lsn = param.miss_lsn_;
@@ -1602,126 +1602,215 @@ int FetchStream::fetch_miss_log_(
 
 int FetchStream::handle_log_miss_(
     palf::LogEntry &log_entry,
-    IObCDCPartTransResolver::MissingLogInfo &org_missing_info,
+    IObCDCPartTransResolver::MissingLogInfo &missing_info,
     logfetcher::TransStatInfo &tsi,
     volatile bool &stop_flag,
     KickOutReason &fail_reason)
 {
   int ret = OB_SUCCESS;
-  bool misslog_handle_done = false;
 
-  if (OB_UNLIKELY(org_missing_info.is_empty())) {
+  if (OB_UNLIKELY(missing_info.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("empty missing_info", KR(ret), K(org_missing_info), K(log_entry));
-  } else if (OB_FAIL(org_missing_info.sort_and_unique_missing_log_lsn())) {
-    LOG_ERROR("sort_and_unique_missing_log_lsn failed", KR(ret), K(org_missing_info), K_(ls_fetch_ctx));
+    LOG_ERROR("empty missing_info", KR(ret), K(missing_info), K(log_entry));
   } else {
-    IObCDCPartTransResolver::MissingLogInfo handling_misslog_info = org_missing_info;
-    int64_t fetched_missing_log_cnt = 0;
     FetchLogSRpc *fetch_log_srpc = NULL;
-    int64_t rpc_timeout = ATOMIC_LOAD(&g_rpc_timeout);
 
     if (OB_FAIL(alloc_fetch_log_srpc_(fetch_log_srpc))) {
       LOG_ERROR("alloc fetch_log_srpc fail", KR(ret));
     } else if (OB_ISNULL(fetch_log_srpc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid fetch_log_srpc", KR(ret));
+    } else if (OB_FAIL(handle_miss_record_or_state_log_(
+        *fetch_log_srpc,
+        missing_info,
+        tsi,
+        stop_flag,
+        fail_reason))) {
+      LOG_ERROR("handle_miss_record_or_state_log_ failed", KR(ret));
+    } else if (OB_FAIL(handle_miss_redo_log_(
+        *fetch_log_srpc,
+        missing_info,
+        tsi,
+        stop_flag,
+        fail_reason))) {
+      LOG_ERROR("handle_miss_redo_log_ failed", KR(ret), KR(ret));
+    }
+
+    if (stop_flag) {
+      ret = OB_IN_STOP_STATE;
+    } else if (OB_NEED_RETRY == ret) {
+      fail_reason = KickOutReason::MISSING_LOG_FETCH_FAIL;
     } else {
-      // for new generated miss log while handling current misslog
-      IObCDCPartTransResolver::MissingLogInfo new_generated_miss_info;
-      new_generated_miss_info.reset();
-
-      // may found new misslog while resolving misslog, here should handle all found misslog
-      while (OB_SUCC(ret) && !misslog_handle_done) {
-        const int64_t total_misslog_cnt = handling_misslog_info.get_total_misslog_cnt();
-
-        // handle current missing_info(handle by batch)
-        while (OB_SUCC(ret) && fetched_missing_log_cnt < total_misslog_cnt) {
-          ObArrayImpl<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> batched_misslog_lsn_arr;
-
-          if (OB_FAIL(build_batch_misslog_lsn_arr_(
-              fetched_missing_log_cnt,
-              handling_misslog_info,
-              batched_misslog_lsn_arr))) {
-            LOG_ERROR("build_batch_misslog_lsn_arr_ failed", KR(ret),
-                K(handling_misslog_info), K(fetched_missing_log_cnt));
-          } else if (OB_FAIL(fetch_miss_log_(*fetch_log_srpc, *rpc_,
-              *ls_fetch_ctx_, batched_misslog_lsn_arr, svr_,
-              rpc_timeout))) {
-            LOG_ERROR("fetch_miss_log_ failed", KR(ret), K_(ls_fetch_ctx), K_(svr), K(batched_misslog_lsn_arr));
-          } else {
-            const obrpc::ObRpcResultCode &rcode = fetch_log_srpc->get_result_code();
-            const obrpc::ObCdcLSFetchLogResp &resp = fetch_log_srpc->get_resp(); // TODO change to fetch_miss_log RPC
-
-            if (OB_FAIL(rcode.rcode_) || OB_FAIL(resp.get_err())) {
-              ret = OB_NEED_RETRY;
-              LOG_ERROR("fetch log fail on rpc", K(rcode), K(resp), K(batched_misslog_lsn_arr));
-            } else {
-              // check next_miss_lsn
-              bool is_next_miss_lsn_match = false;
-              palf::LSN next_miss_lsn = resp.get_next_miss_lsn();
-              const int64_t batch_cnt = batched_misslog_lsn_arr.count();
-              const int64_t resp_log_cnt = resp.get_log_num();
-
-              if (batch_cnt == resp_log_cnt) {
-                is_next_miss_lsn_match = (batched_misslog_lsn_arr.at(batch_cnt-1).miss_lsn_ == next_miss_lsn);
-              } else if (batch_cnt > resp_log_cnt) {
-                is_next_miss_lsn_match = (batched_misslog_lsn_arr.at(resp_log_cnt).miss_lsn_ == next_miss_lsn);
-              } else {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_ERROR("too many misslog fetched", KR(ret), K(next_miss_lsn), K(batch_cnt),
-                    K(resp_log_cnt),K(resp), K_(ls_fetch_ctx));
-              }
-              if (OB_SUCC(ret)) {
-                if (!is_next_miss_lsn_match) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_ERROR("misslog fetched is not match batched_misslog_lsn_arr requested", KR(ret),
-                      K(next_miss_lsn), K(batch_cnt), K(resp_log_cnt), K(batched_misslog_lsn_arr), K(resp), K_(ls_fetch_ctx));
-                } else if (OB_FAIL(read_batch_misslog_(
-                    resp,
-                    fetched_missing_log_cnt,
-                    tsi,
-                    handling_misslog_info,
-                    new_generated_miss_info))) {
-                  LOG_ERROR("read_batch_misslog_ fail", KR(ret), K_(ls_fetch_ctx),
-                      K(fetched_missing_log_cnt), K(handling_misslog_info), K(new_generated_miss_info));
-                }
-              }
-            }
-          }
-
-          if (OB_NEED_RETRY == ret) {
-            fail_reason = KickOutReason::MISSING_LOG_FETCH_FAIL;
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          // check fetched_missing_log_cnt == total_misslog_cnt
-          if (OB_UNLIKELY(handling_misslog_info.get_total_misslog_cnt() != fetched_missing_log_cnt)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("misslog not all fetched", KR(ret), K(fetched_missing_log_cnt), K(handling_misslog_info));
-          } else if (!new_generated_miss_info.is_empty()) {
-            // continue handle misslog in new_generated_miss_info
-            if (OB_FAIL(new_generated_miss_info.sort_and_unique_missing_log_lsn())) {
-              LOG_ERROR("sort_and_unique_missing_log_lsn failed", KR(ret), K(new_generated_miss_info));
-            } else {
-              fetched_missing_log_cnt = 0;
-              handling_misslog_info = new_generated_miss_info; // copy_assign
-              new_generated_miss_info.reset(); // can safely reset
-            }
-          } else {
-            misslog_handle_done = true;
-          }
-        }
-        LOG_INFO("handle miss_log", KR(ret), K(handling_misslog_info), K(misslog_handle_done), K(new_generated_miss_info));
-      }
+      LOG_INFO("handle miss_log done", KR(ret), "tls_id", ls_fetch_ctx_->get_tls_id(), K(missing_info));
     }
 
     if (OB_NOT_NULL(fetch_log_srpc)) {
       free_fetch_log_srpc_(fetch_log_srpc);
       fetch_log_srpc = NULL;
     }
+  }
 
+  return ret;
+}
+
+int FetchStream::handle_miss_record_or_state_log_(
+    FetchLogSRpc &fetch_log_srpc,
+    IObCDCPartTransResolver::MissingLogInfo &missing_info,
+    logfetcher::TransStatInfo &tsi,
+    volatile bool &stop_flag,
+    KickOutReason &fail_reason)
+{
+  int ret = OB_SUCCESS;
+
+  if (missing_info.has_miss_record_or_state_log()) {
+    int64_t rpc_timeout = ATOMIC_LOAD(&g_rpc_timeout);
+    ObArrayImpl<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> batched_misslog_lsn_arr;
+    palf::LSN misslog_lsn;
+
+    while (OB_SUCC(ret) && ! stop_flag && missing_info.has_miss_record_or_state_log()) {
+      misslog_lsn.reset();
+      batched_misslog_lsn_arr.reset();
+      ObCdcLSFetchMissLogReq::MissLogParam param;
+
+      if (OB_FAIL(missing_info.get_miss_record_or_state_log_lsn(misslog_lsn))) {
+        LOG_ERROR("get_miss_record_or_state_log_lsn failed", K(missing_info), K(misslog_lsn));
+      } else {
+        param.miss_lsn_ = misslog_lsn;
+
+        if (OB_FAIL(batched_misslog_lsn_arr.push_back(param))) {
+          LOG_ERROR("push_back miss_record_or_state_log_lsn into batched_misslog_lsn_arr failed", KR(ret), K(param));
+        } else if (OB_FAIL(fetch_miss_log_(
+            fetch_log_srpc,
+            *rpc_,
+            *ls_fetch_ctx_,
+            batched_misslog_lsn_arr,
+            svr_,
+            rpc_timeout))) {
+          LOG_ERROR("fetch_miss_log_ failed", KR(ret), K_(ls_fetch_ctx), K_(svr), K(batched_misslog_lsn_arr));
+        } else {
+          const obrpc::ObRpcResultCode &rcode = fetch_log_srpc.get_result_code();
+          const obrpc::ObCdcLSFetchLogResp &resp = fetch_log_srpc.get_resp();
+
+          if (OB_FAIL(rcode.rcode_) || OB_FAIL(resp.get_err())) {
+            ret = OB_NEED_RETRY;
+            LOG_ERROR("fetch log fail on rpc", K(rcode), K(resp), K(batched_misslog_lsn_arr));
+          } else if (resp.get_log_num() < 1) {
+            LOG_INFO("fetch_miss_log_rpc doesn't fetch log, retry", K(misslog_lsn), K_(svr));
+          } else if (OB_UNLIKELY(resp.get_log_num() > 1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("expect only one misslog while fetching miss_record_or_state_log", K(resp));
+          } else if (OB_UNLIKELY(resp.get_next_miss_lsn() != misslog_lsn)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("fetched log not match miss_log_lsn", KR(ret), K(misslog_lsn), K(resp));
+          } else {
+            missing_info.reset_miss_record_or_state_log_lsn();
+            palf::LogEntry miss_log_entry;
+            miss_log_entry.reset();
+            const char *buf = resp.get_log_entry_buf();
+            const int64_t len = resp.get_pos();
+            int64_t pos = 0;
+
+            if (OB_FAIL(miss_log_entry.deserialize(buf, len, pos))) {
+              LOG_ERROR("deserialize log_entry of miss_record_or_state_log failed", KR(ret), K(misslog_lsn), KP(buf), K(len), K(pos));
+            } else if (OB_FAIL(ls_fetch_ctx_->read_miss_tx_log(miss_log_entry, misslog_lsn, tsi, missing_info))) {
+              if (OB_ITEM_NOT_SETTED == ret) {
+                ret = OB_SUCCESS;
+                LOG_INFO("found new miss_record_or_state_log while resolving current miss_record_or_state_log",
+                    "tls_id", ls_fetch_ctx_->get_tls_id(), K(misslog_lsn), K(missing_info));
+              } else {
+                LOG_ERROR("read miss_log failed", KR(ret), K(miss_log_entry), K(misslog_lsn), K(missing_info));
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      LOG_INFO("fetch record and state misslog done and collect all miss normal misslog",
+          "tls_id", ls_fetch_ctx_->get_tls_id(), K(missing_info));
+    }
+  }
+
+  return ret;
+}
+
+int FetchStream::handle_miss_redo_log_(
+    FetchLogSRpc &fetch_log_srpc,
+    IObCDCPartTransResolver::MissingLogInfo &missing_info,
+    logfetcher::TransStatInfo &tsi,
+    volatile bool &stop_flag,
+    KickOutReason &fail_reason)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(missing_info.sort_and_unique_missing_log_lsn())) {
+    LOG_ERROR("sort_and_unique_missing_log_lsn failed", KR(ret), K(missing_info), K_(ls_fetch_ctx));
+  } else {
+    const int64_t total_misslog_cnt = missing_info.get_total_misslog_cnt();
+    int64_t fetched_missing_log_cnt = 0;
+    int64_t rpc_timeout = ATOMIC_LOAD(&g_rpc_timeout);
+    ObArrayImpl<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> batched_misslog_lsn_arr;
+
+    while (OB_SUCC(ret) && ! stop_flag && fetched_missing_log_cnt < total_misslog_cnt) {
+      batched_misslog_lsn_arr.reset();
+
+      if (OB_FAIL(build_batch_misslog_lsn_arr_(
+          fetched_missing_log_cnt,
+          missing_info,
+          batched_misslog_lsn_arr))) {
+        LOG_ERROR("build_batch_misslog_lsn_arr_ failed", KR(ret),
+            K(missing_info), K(fetched_missing_log_cnt));
+      } else if (OB_FAIL(fetch_miss_log_(
+          fetch_log_srpc,
+          *rpc_,
+          *ls_fetch_ctx_,
+          batched_misslog_lsn_arr,
+          svr_,
+          rpc_timeout))) {
+        LOG_ERROR("fetch_miss_log_ failed", KR(ret), K_(ls_fetch_ctx), K_(svr), K(batched_misslog_lsn_arr));
+      } else {
+        const obrpc::ObRpcResultCode &rcode = fetch_log_srpc.get_result_code();
+        const obrpc::ObCdcLSFetchLogResp &resp = fetch_log_srpc.get_resp();
+
+        if (OB_FAIL(rcode.rcode_) || OB_FAIL(resp.get_err())) {
+          ret = OB_NEED_RETRY;
+          LOG_ERROR("fetch log fail on rpc", K(rcode), K(resp), K(batched_misslog_lsn_arr));
+        } else {
+          // check next_miss_lsn
+          bool is_next_miss_lsn_match = false;
+          palf::LSN next_miss_lsn = resp.get_next_miss_lsn();
+          const int64_t batch_cnt = batched_misslog_lsn_arr.count();
+          const int64_t resp_log_cnt = resp.get_log_num();
+
+          if (batch_cnt == resp_log_cnt) {
+            is_next_miss_lsn_match = (batched_misslog_lsn_arr.at(batch_cnt - 1).miss_lsn_ == next_miss_lsn);
+          } else if (batch_cnt > resp_log_cnt) {
+            is_next_miss_lsn_match = (batched_misslog_lsn_arr.at(resp_log_cnt).miss_lsn_ == next_miss_lsn);
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("too many misslog fetched", KR(ret), K(next_miss_lsn), K(batch_cnt),
+                K(resp_log_cnt),K(resp), K_(ls_fetch_ctx));
+          }
+
+          if (OB_SUCC(ret)) {
+            if (!is_next_miss_lsn_match) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("misslog fetched is not match batched_misslog_lsn_arr requested", KR(ret),
+                  K(next_miss_lsn), K(batch_cnt), K(resp_log_cnt), K(batched_misslog_lsn_arr), K(resp), K_(ls_fetch_ctx));
+            } else if (OB_FAIL(read_batch_misslog_(
+                resp,
+                fetched_missing_log_cnt,
+                tsi,
+                missing_info))) {
+              // expected no misslog found while resolving normal log.
+              LOG_ERROR("read_batch_misslog failed", KR(ret), K_(ls_fetch_ctx),
+                  K(fetched_missing_log_cnt), K(missing_info));
+            }
+          }
+        }
+      }
+    }
   }
 
   return ret;
@@ -1734,13 +1823,13 @@ int FetchStream::build_batch_misslog_lsn_arr_(
 {
   int ret = OB_SUCCESS;
   int64_t batched_cnt = 0;
-  static int64_t MAX_MISSLOG_CNT_PER_RPC= 100;
+  static int64_t MAX_MISSLOG_CNT_PER_RPC= 1024;
 
   if (OB_UNLIKELY(0 < batched_misslog_lsn_arr.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid batched_misslog_lsn_arr", KR(ret), K(batched_misslog_lsn_arr));
   } else {
-    const ObLogLSNArray &miss_redo_or_state_log_arr = missing_log_info.get_miss_redo_or_state_log_arr();
+    const ObLogLSNArray &miss_redo_or_state_log_arr = missing_log_info.get_miss_redo_lsn_arr();
     int miss_log_cnt = miss_redo_or_state_log_arr.count();
     batched_misslog_lsn_arr.reset();
 
@@ -1759,31 +1848,13 @@ int FetchStream::build_batch_misslog_lsn_arr_(
         batched_cnt++;
       }
     }
-
-    if (OB_SUCC(ret) && (fetched_log_idx + batched_cnt == miss_log_cnt)) {
-      // e.g.: already fetched log cnt is 91, current batch_cnt is 9, and total miss_log_cnt is just 100,
-      // then try to fetch record_log_lsn.
-      palf::LSN miss_record_lsn;
-
-      if (OB_FAIL(missing_log_info.get_miss_record_log_lsn(miss_record_lsn))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_ERROR("get_miss_record_log_lsn from missing_log failed", KR(ret), K(missing_log_info));
-        }
-      } else {
-        ObCdcLSFetchMissLogReq::MissLogParam param;
-        param.miss_lsn_ = miss_record_lsn;
-
-        if (OB_FAIL(batched_misslog_lsn_arr.push_back(param))) {
-          LOG_ERROR("push_back miss_record_log_lsn into batched_misslog_lsn_arr arr failed",
-              KR(ret), K(missing_log_info), K(param));
-        }
-      }
-    }
   }
 
-  LOG_DEBUG("build_batch_misslog_lsn_arr_", KR(ret), K(missing_log_info), K(batched_misslog_lsn_arr), K(fetched_log_idx));
+  LOG_INFO("build_batch_misslog_lsn_arr_", KR(ret),
+        "tls_id", ls_fetch_ctx_->get_tls_id(),
+        K(missing_log_info),
+        "batched_misslog_lsn_count", batched_misslog_lsn_arr.count(),
+        K(fetched_log_idx));
 
   return ret;
 }
@@ -1792,19 +1863,17 @@ int FetchStream::read_batch_misslog_(
     const obrpc::ObCdcLSFetchLogResp &resp,
     int64_t &fetched_missing_log_cnt,
     logfetcher::TransStatInfo &tsi,
-    IObCDCPartTransResolver::MissingLogInfo &org_missing_info,
-    IObCDCPartTransResolver::MissingLogInfo &new_generated_miss_info)
+    IObCDCPartTransResolver::MissingLogInfo &missing_info)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("read_batch_misslog_ begin", K(resp), K(fetched_missing_log_cnt));
+  LOG_INFO("read_batch_misslog_ begin", "tls_id", ls_fetch_ctx_->get_tls_id(), K(resp), K(fetched_missing_log_cnt));
 
-  const int64_t total_misslog_cnt = org_missing_info.get_total_misslog_cnt();
+  const int64_t total_misslog_cnt = missing_info.get_total_misslog_cnt();
   const char *buf = resp.get_log_entry_buf();
   const int64_t len = resp.get_pos();
   int64_t pos = 0;
   const int64_t log_cnt = resp.get_log_num();
-  const ObLogLSNArray &org_misslog_arr = org_missing_info.get_miss_redo_or_state_log_arr();
-  new_generated_miss_info.set_resolving_miss_log();
+  const ObLogLSNArray &org_misslog_arr = missing_info.get_miss_redo_lsn_arr();
   int64_t start_ts = get_timestamp();
 
   if (OB_UNLIKELY(log_cnt <= 0)) {
@@ -1815,21 +1884,23 @@ int FetchStream::read_batch_misslog_(
       if (fetched_missing_log_cnt >= total_misslog_cnt) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("fetched_missing_log_cnt is more than total_misslog_cnt", KR(ret),
-            K(fetched_missing_log_cnt), K(org_missing_info), K(idx), K(resp));
+            K(fetched_missing_log_cnt), K(missing_info), K(idx), K(resp));
       } else {
         palf::LSN misslog_lsn;
         palf::LogEntry miss_log_entry;
         misslog_lsn.reset();
         miss_log_entry.reset();
+        IObCDCPartTransResolver::MissingLogInfo tmp_miss_info;
+        tmp_miss_info.set_resolving_miss_log();
 
         if (org_misslog_arr.count() == fetched_missing_log_cnt) {
           // already consume the all miss_redo_log, but still exist one miss_record_log.
           // lsn record_log is the last miss_log to fetch.
-          if (OB_FAIL(org_missing_info.get_miss_record_log_lsn(misslog_lsn))) {
+          if (OB_FAIL(missing_info.get_miss_record_or_state_log_lsn(misslog_lsn))) {
             if (OB_ENTRY_NOT_EXIST == ret) {
-              LOG_ERROR("expect valid miss-record_log_lsn", KR(ret), K(org_missing_info), K(fetched_missing_log_cnt), K_(ls_fetch_ctx));
+              LOG_ERROR("expect valid miss-record_log_lsn", KR(ret), K(missing_info), K(fetched_missing_log_cnt), K_(ls_fetch_ctx));
             } else {
-              LOG_ERROR("get_miss_record_log_lsn failed", KR(ret), K(org_missing_info), K(fetched_missing_log_cnt), K_(ls_fetch_ctx));
+              LOG_ERROR("get_miss_record_or_state_log_lsn failed", KR(ret), K(missing_info), K(fetched_missing_log_cnt), K_(ls_fetch_ctx));
             }
           }
         } else if (OB_FAIL(org_misslog_arr.at(fetched_missing_log_cnt, misslog_lsn))) {
@@ -1840,9 +1911,9 @@ int FetchStream::read_batch_misslog_(
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(miss_log_entry.deserialize(buf, len, pos))) {
           LOG_ERROR("deserialize miss_log_entry fail", KR(ret), K(len), K(pos));
-        } else if (OB_FAIL(ls_fetch_ctx_->read_miss_tx_log(miss_log_entry, misslog_lsn, tsi, new_generated_miss_info))) {
-          LOG_ERROR("read_miss_log fail", KR(ret), K(miss_log_entry), K(new_generated_miss_info),
-              K(misslog_lsn), K(fetched_missing_log_cnt), K(idx));
+        } else if (OB_FAIL(ls_fetch_ctx_->read_miss_tx_log(miss_log_entry, misslog_lsn, tsi, tmp_miss_info))) {
+          LOG_ERROR("read_miss_log fail", KR(ret), K(miss_log_entry),
+              K(misslog_lsn), K(fetched_missing_log_cnt), K(idx), K(tmp_miss_info));
         } else {
           fetched_missing_log_cnt++;
         }
@@ -1851,7 +1922,7 @@ int FetchStream::read_batch_misslog_(
   }
 
   int64_t read_batch_missing_cost = get_timestamp() - start_ts;
-  LOG_INFO("read_batch_misslog_ end", KR(ret), K(read_batch_missing_cost),
+  LOG_INFO("read_batch_misslog_ end", KR(ret), "tls_id", ls_fetch_ctx_->get_tls_id(), K(read_batch_missing_cost),
       K(fetched_missing_log_cnt), K(resp), K(start_ts));
 
   return ret;

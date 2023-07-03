@@ -183,6 +183,7 @@ TEST_F(ObTestTx, rollback_savepoint_with_msg_lost)
   ASSERT_EQ(OB_SUCCESS, n2->get_tx_ctx(ls_id, tx.tx_id_, part_ctx));
   // release tx, then part_ctx can detect txn was terminated
   ASSERT_EQ(OB_SUCCESS, guard.release());
+  part_ctx->last_ask_scheduler_status_ts_ = 0; // ensure check_scheduler_status will not be skipped
   ASSERT_EQ(OB_SUCCESS, part_ctx->check_scheduler_status());
   int i = 0;
   while(!part_ctx->is_exiting_ && i++ < 100) {

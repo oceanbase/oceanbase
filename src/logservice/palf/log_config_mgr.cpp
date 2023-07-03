@@ -444,15 +444,26 @@ int LogConfigMgr::get_log_sync_member_list_for_generate_committed_lsn(
   int ret = OB_SUCCESS;
   LSN prev_committed_end_lsn;
   sw_->get_committed_end_lsn(prev_committed_end_lsn);
+  const int64_t prev_mode_pid = mode_mgr_->get_last_submit_mode_meta().proposal_id_;
   is_before_barrier = false;
   barrier_lsn = LSN(PALF_INITIAL_LSN_VAL);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
   } else if (OB_UNLIKELY(prev_committed_end_lsn < reconfig_barrier_.prev_end_lsn_ &&
-      reconfig_barrier_.prev_end_lsn_.is_valid())) {
+      reconfig_barrier_.prev_end_lsn_.is_valid() &&
+      prev_mode_pid == reconfig_barrier_.prev_mode_pid_)) {
     is_before_barrier = true;
     barrier_lsn = reconfig_barrier_.prev_end_lsn_;
+    // Scenario: 2F1A
+    // 1. A reconfiguration (upgrade B) has been executed successfully with log_barrier 100
+    // 2. the palf group is flashed back to 50, but reconfig_barrier in LogConfigMgr is still 100
+    // 3. change to APPEND mode
+    // 4. the leader may commit logs in (50, 100) by prev_member_list(A)
+    // Note: to address above issue, we check mode_proposal_id. The previous memberlist will
+    // be used only when the reconfir_barrier_.prev_mode_pid_ is equal to current mode
+    // proposal_id. That means access mode hasn’t been changed (PALF hasn’t been flashed back)
+    // since last reconfiguration.
     if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.config_.log_sync_memberlist_))) {
       PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
     } else {
@@ -1139,10 +1150,18 @@ int LogConfigMgr::check_config_change_args_by_type_(const LogConfigChangeArgs &a
           if (is_in_degraded_learnerlist) {
             PALF_LOG(INFO, "member to be removed is a degraded learner", KR(ret), K_(palf_id), K_(self),
                 K_(log_ms_meta), K(member), K(new_replica_num));
-          } else if (args.type_ == REMOVE_MEMBER_AND_NUM || new_replica_num == curr_replica_num) {
+          } else if (args.type_ == REMOVE_MEMBER_AND_NUM ||
+                     new_replica_num == curr_replica_num ||
+                     (true == has_arb_replica &&
+                     0 == degraded_learnerlist.get_member_number() &&
+                     log_sync_member_list.get_member_number() * 2 == new_replica_num)) {
             // config change has finished successfully, do not need change again
+            // Note: 2F1A, B has been degraded, permanent offline B, i.e. remove(B, 2).
+            // Previous remove(B, 2) has been executed successfully, another remove(B, 2) will
+            // be identified as invalid, because curr_replica_num is 1. For reentrany of the
+            // remove_member interface, we just return OB_SUCCESS;
             is_already_finished = true;
-            PALF_LOG(INFO, "member is already removed, don't need remove_member/replcae_member", KR(ret), K_(palf_id), K_(self),
+            PALF_LOG(INFO, "member is already removed, don't need remove_member", KR(ret), K_(palf_id), K_(self),
                 K_(log_ms_meta), K(member), K(new_replica_num), K_(alive_paxos_replica_num));
           } else {
             ret = OB_INVALID_ARGUMENT;
@@ -1358,9 +1377,9 @@ bool LogConfigMgr::can_memberlist_majority_(const int64_t new_member_list_len, c
   // 2. len(member_list) >= replica_num / 2 + 1
   bool bool_ret = false;
   if (new_member_list_len > new_replica_num) {
-    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "can't change config, replica_num too small", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "replica_num too small", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
   } else if (new_member_list_len < (new_replica_num / 2 + 1)) {
-    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "can't change config, replica_num too large", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "replica_num too large", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
   } else {
     bool_ret = true;
   }
@@ -1611,11 +1630,20 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
     // change replcia num
     int64_t new_log_sync_replica_num = curr_replica_num;
     if (is_may_change_replica_num(cc_type)) {
+      const bool is_remove_degraded_learner = is_remove_log_sync_member_list(args.type_) &&
+          new_config_info.config_.degraded_learnerlist_.contains(member);
       if (is_use_replica_num_args(cc_type)) {
-        new_log_sync_replica_num = args.new_replica_num_;
+        // Note: consider the number of degraded learners when setting replica_num,
+        // and note that current number of degraded learners is not the eventual value
+        // if the request is going to remove a degraded learner.
+        int64_t degraded_cnt = new_config_info.config_.degraded_learnerlist_.get_member_number();
+        degraded_cnt = (is_remove_degraded_learner)? degraded_cnt - 1: degraded_cnt;
+        new_log_sync_replica_num = args.new_replica_num_ - degraded_cnt;
       } else if (is_add_log_sync_member_list(cc_type)) {
         new_log_sync_replica_num = new_config_info.config_.log_sync_replica_num_ + 1;
-      } else if (is_remove_log_sync_member_list(cc_type)) {
+      } else if (is_remove_log_sync_member_list(cc_type) && true == is_remove_degraded_learner) {
+        new_log_sync_replica_num = new_config_info.config_.log_sync_replica_num_;
+      } else if (is_remove_log_sync_member_list(cc_type) && false == is_remove_degraded_learner) {
         new_log_sync_replica_num = new_config_info.config_.log_sync_replica_num_ - 1;
       } else if (is_arb_member_change_type(cc_type)) {
         new_log_sync_replica_num = new_config_info.config_.log_sync_replica_num_;
@@ -1623,9 +1651,16 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
         ret = OB_ERR_UNEXPECTED;
         PALF_LOG(ERROR, "unexpected config change type", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
       }
+      if (OB_SUCC(ret) && is_remove_degraded_learner &&
+          (new_config_info.config_.log_sync_memberlist_.get_member_number() * 2 == new_log_sync_replica_num)) {
+        // Note: 2F1A, B has been degraded, permanent offline B, i.e. remove(B, 2).
+        // Remaining F members (A) in member_list do not reach majority of replica_num(2),
+        // so we just remove it and do not update log_sync_replica_num_.
+        new_log_sync_replica_num = new_config_info.config_.log_sync_replica_num_;
+      }
     }
     // memberlist add, update replica number
-    if (is_add_member_list(cc_type)) {
+    if (OB_SUCC(ret) && is_add_member_list(cc_type)) {
       // update log_sync_member_list or arb_member
       if (is_add_log_sync_member_list(args.type_)) {
         if (OB_FAIL(new_config_info.config_.log_sync_memberlist_.add_member(member))) {
@@ -1647,8 +1682,6 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
           if (OB_FAIL(new_config_info.config_.degraded_learnerlist_.remove_learner(member))) {
             PALF_LOG(WARN, "new_member_list remove member failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
           }
-          // If dst member is already degraded learner, just remove it and no need update log_sync_replica_num_.
-          new_log_sync_replica_num = new_config_info.config_.log_sync_replica_num_;
         } else {
           ret = OB_INVALID_ARGUMENT;
           PALF_LOG(WARN, "member to be removed does not exist", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
@@ -1656,14 +1689,6 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
       } else {
         new_config_info.config_.arbitration_member_.reset();
       }
-    }
-    if (OB_SUCC(ret) && FORCE_SINGLE_MEMBER == cc_type) {
-      // force set single member
-      new_config_info.config_.log_sync_memberlist_.reset();
-      new_config_info.config_.degraded_learnerlist_.reset();
-      new_config_info.config_.arbitration_member_.reset();
-      new_config_info.config_.log_sync_memberlist_.add_member(member);
-      new_config_info.config_.log_sync_replica_num_ = new_log_sync_replica_num;
     }
     // learnerlist add
     if (OB_SUCC(ret) && is_add_learner_list(cc_type)) {
@@ -1705,6 +1730,15 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
     // generate log_sync_replica_num_
     if (OB_SUCC(ret)) {
       new_config_info.config_.log_sync_replica_num_ = new_log_sync_replica_num;
+    }
+    // Note: order is vital
+    if (OB_SUCC(ret) && FORCE_SINGLE_MEMBER == cc_type) {
+      // force set single member
+      new_config_info.config_.log_sync_memberlist_.reset();
+      new_config_info.config_.degraded_learnerlist_.reset();
+      new_config_info.config_.arbitration_member_.reset();
+      new_config_info.config_.log_sync_memberlist_.add_member(member);
+      new_config_info.config_.log_sync_replica_num_ = args.new_replica_num_;
     }
   }
   return ret;

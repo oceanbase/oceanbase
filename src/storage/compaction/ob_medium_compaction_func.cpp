@@ -1060,8 +1060,7 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
           if (OB_FAIL(reader.init(temp_allocator))) {
             LOG_WARN("failed to init medium info reader", K(ret));
           } else {
-            // TODO(@bowen.gbw): remove this debug log later
-            LOG_INFO("schedule tablet medium merge", K(ret), K(schedule_scn), K(major_frozen_snapshot), K(ls_id), K(tablet_id));
+            LOG_DEBUG("schedule tablet medium merge", K(ret), K(schedule_scn), K(major_frozen_snapshot), K(ls_id), K(tablet_id));
             while (OB_SUCC(ret)) {
               if (OB_FAIL(reader.get_next_medium_info(temp_allocator, key, medium_info))) {
                 if (OB_ITER_END == ret) {

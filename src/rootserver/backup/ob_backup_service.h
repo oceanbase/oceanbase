@@ -28,10 +28,7 @@ public:
   ObBackupService(): is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), can_schedule_(false), task_scheduler_(nullptr),
       schema_service_(nullptr) {}
   virtual ~ObBackupService() {};
-  int init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
-           share::schema::ObMultiVersionSchemaService &schema_service,
-           share::ObLocationService &loacation_service,
-           ObBackupTaskScheduler &task_scheduler);
+  int init();
   void run2() override final;
   virtual int process(int64_t &last_schedule_ts) = 0;
   void destroy() override final;
@@ -71,7 +68,7 @@ class ObBackupDataService final : public ObBackupService
 public:
   ObBackupDataService(): ObBackupService(), backup_data_scheduler_() {}
   virtual ~ObBackupDataService() {}
-  static int mtl_init(ObBackupDataService *&srv);
+  DEFINE_MTL_FUNC(ObBackupDataService);
   int process(int64_t &last_schedule_ts) override;
 
   ObIBackupJobScheduler *get_scheduler(const BackupJobType &type);
@@ -95,7 +92,7 @@ public:
   ObBackupCleanService() : ObBackupService(), backup_clean_scheduler_(), backup_auto_obsolete_delete_trigger_(),
     jobs_(), triggers_() {}
   virtual ~ObBackupCleanService() {}
-  static int mtl_init(ObBackupCleanService *&srv);
+  DEFINE_MTL_FUNC(ObBackupCleanService);
   int process(int64_t &last_schedule_ts) override;
 
   ObIBackupJobScheduler *get_scheduler(const BackupJobType &type);

@@ -192,6 +192,12 @@ int ObUnpivotOp::inner_get_next_batch(const int64_t max_row_cnt)
 
   for (int64_t read_piece = 0; OB_SUCC(ret) && read_piece < brs_.size_; ++read_piece) {
     int64_t read_cur_row = (curr_part_idx_ * brs_.size_ + read_piece) / MY_SPEC.max_part_count_;
+    // check row whether is skip in child
+    if (OB_SUCC(ret) && child_brs_->skip_->at(read_cur_row)) {
+      brs_.skip_->set(read_piece);
+      curr_cols_idx_ = (curr_cols_idx_ + 1) % MY_SPEC.max_part_count_;
+      continue;
+    }
     // check for_column whether is all null
     if (OB_SUCC(ret) && !MY_SPEC.unpivot_info_.is_include_null_) {
       int64_t null_count = 0;
@@ -218,23 +224,21 @@ int ObUnpivotOp::inner_get_next_batch(const int64_t max_row_cnt)
         continue;
       }
     }
-    // old_column
     int64_t output_idx = 0;
+    // old_column
     for (; OB_SUCC(ret) && output_idx < MY_SPEC.unpivot_info_.old_column_count_; ++output_idx) {
       ObExpr *father_expr = MY_SPEC.output_[output_idx];
       ObDatum *father_datum = father_expr->locate_batch_datums(eval_ctx_);
-      father_datum[read_piece] = multiplex_[output_idx * brs_.size_ + read_cur_row];
+      int64_t datum_pos = father_expr->is_batch_result() ? read_piece : 0;
+      father_datum[datum_pos] = multiplex_[output_idx * brs_.size_ + read_cur_row];
     }
     // new_column
     if (0 == curr_cols_idx_) {
       for (; OB_SUCC(ret) && output_idx < MY_SPEC.get_output_count(); ++output_idx) {
         ObExpr *father_expr = MY_SPEC.output_[output_idx];
         ObDatum *father_datum = father_expr->locate_batch_datums(eval_ctx_);
-        if (father_expr->is_batch_result()) {
-          father_datum[read_piece] = multiplex_[output_idx * brs_.size_ + read_cur_row];
-        } else {
-          father_datum[0] = multiplex_[output_idx * brs_.size_ + read_cur_row];
-        }
+        int64_t datum_pos = father_expr->is_batch_result() ? read_piece : 0;
+        father_datum[datum_pos] = multiplex_[output_idx * brs_.size_ + read_cur_row];
       }
     } else {
       const int64_t base_idx = curr_cols_idx_ * MY_SPEC.unpivot_info_.get_new_column_count();
@@ -244,13 +248,11 @@ int ObUnpivotOp::inner_get_next_batch(const int64_t max_row_cnt)
         ObExpr *father_expr = MY_SPEC.output_[output_idx];
         ObDatum *child_datum = child_expr->locate_batch_datums(eval_ctx_);
         ObDatum *father_datum = father_expr->locate_batch_datums(eval_ctx_);
-        if (OB_UNLIKELY(!father_expr->is_batch_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("output of unpivot should be batch result", K(ret), KPC(father_expr));
-        } else if (child_expr->is_batch_result()) {
-          father_datum[read_piece] = child_datum[read_cur_row];
+        int64_t datum_pos = father_expr->is_batch_result() ? read_piece : 0;
+        if (child_expr->is_batch_result()) {
+          father_datum[datum_pos] = child_datum[read_cur_row];
         } else {
-          father_datum[read_piece] = *child_datum;
+          father_datum[datum_pos] = *child_datum;
         }
       }
     }

@@ -202,6 +202,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   param.table_data_desc_ = *table_data_desc_;
   param.datum_utils_ = &(trans_ctx_->ctx_->schema_.datum_utils_);
   param.col_descs_ = &(trans_ctx_->ctx_->schema_.column_descs_);
+  param.cmp_funcs_ = &(trans_ctx_->ctx_->schema_.cmp_funcs_);
   param.file_mgr_ = trans_ctx_->ctx_->store_ctx_->tmp_file_mgr_;
   param.is_multiple_mode_ = trans_ctx_->ctx_->store_ctx_->is_multiple_mode_;
   param.is_fast_heap_table_ = trans_ctx_->ctx_->store_ctx_->is_fast_heap_table_;

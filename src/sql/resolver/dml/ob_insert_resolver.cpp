@@ -1071,9 +1071,13 @@ int ObInsertResolver::try_expand_returning_exprs()
     CK(column_convert.count() == table_columns.count());
     for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_returning_exprs().count(); i++) {
       for (int64_t j = 0; OB_SUCC(ret) && j < table_columns.count(); j++) {
-        OZ(ObRawExprUtils::replace_ref_column(insert_stmt->get_returning_exprs().at(i),
+        if (table_columns.at(j)->is_xml_column()) {
+          // do nothing and will rewrite in trnsform stage
+        } else {
+          OZ(ObRawExprUtils::replace_ref_column(insert_stmt->get_returning_exprs().at(i),
                                               table_columns.at(j),
                                               column_convert.at(j)));
+        }
       }
     }
   }

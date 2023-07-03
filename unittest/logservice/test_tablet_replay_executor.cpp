@@ -33,7 +33,7 @@ public:
   virtual void SetUp() override;
   virtual void TearDown() override;
 
-  virtual bool is_replay_update_user_data_() const override;
+  virtual bool is_replay_update_tablet_status_() const override;
   virtual int do_replay_(storage::ObTabletHandle &tablet_handle) override;
   virtual bool is_replay_update_mds_table_() const override;
 };
@@ -46,7 +46,7 @@ void TestTabletReplayexecutor::TearDown()
 {
 }
 
-bool TestTabletReplayexecutor::is_replay_update_user_data_() const
+bool TestTabletReplayexecutor::is_replay_update_tablet_status_() const
 {
   return false;
 }

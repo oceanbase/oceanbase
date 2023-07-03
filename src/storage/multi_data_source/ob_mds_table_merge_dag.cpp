@@ -87,7 +87,7 @@ bool ObMdsTableMergeDag::operator==(const share::ObIDag &other) const
     is_same = false;
   } else {
     const ObMdsTableMergeDag &other_dag = static_cast<const ObMdsTableMergeDag&>(other);
-    is_same = (param_ == other_dag.param_);
+    is_same = (param_.ls_id_ == other_dag.param_.ls_id_ && param_.tablet_id_ == other_dag.param_.tablet_id_);
   }
 
   return is_same;

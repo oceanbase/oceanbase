@@ -54,7 +54,8 @@ void ObInitSqcP::destroy()
    * after process这个流程，那么就应当由自己来做释放。
    */
   if (OB_NOT_NULL(arg_.sqc_handler_)) {
-    ObPxSqcHandler::release_handler(arg_.sqc_handler_);
+    int report_ret = OB_SUCCESS;
+    ObPxSqcHandler::release_handler(arg_.sqc_handler_, report_ret);
   }
   ObActiveSessionGuard::setup_default_ash();
 }
@@ -111,7 +112,8 @@ int ObInitSqcP::process()
       UNSET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_);
       unregister_interrupt_ = false;
     }
-    ObPxSqcHandler::release_handler(sqc_handler);
+    int report_ret = OB_SUCCESS;
+    ObPxSqcHandler::release_handler(sqc_handler, report_ret);
     arg_.sqc_handler_ = nullptr;
   }
 
@@ -247,10 +249,10 @@ int ObInitSqcP::after_process(int error_code)
     if (OB_NOT_NULL(sqc_handler) && OB_SUCCESS == sqc_handler->get_end_ret()) {
       sqc_handler->set_end_ret(ret);
     }
-    ObPxSqcHandler::release_handler(sqc_handler);
+    int report_ret = OB_SUCCESS;
+    ObPxSqcHandler::release_handler(sqc_handler, report_ret);
     arg_.sqc_handler_ = nullptr;
   }
-
   return ret;
 }
 
@@ -372,7 +374,8 @@ void ObInitFastSqcP::destroy()
    * after process这个流程，那么就应当由自己来做释放。
    */
   if (OB_NOT_NULL(arg_.sqc_handler_)) {
-    ObPxSqcHandler::release_handler(arg_.sqc_handler_);
+    int report_ret = OB_SUCCESS;
+    ObPxSqcHandler::release_handler(arg_.sqc_handler_, report_ret);
   }
   ObActiveSessionGuard::setup_default_ash();
 }
@@ -430,7 +433,6 @@ int ObInitFastSqcP::process()
   }
 
   ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
-
   if (OB_NOT_NULL(sqc_handler)) {
     // link channel之前或者link过程可能会失败.
     // 如果sqc和qc没有link, 由response将 ret 通知给px.
@@ -440,7 +442,9 @@ int ObInitFastSqcP::process()
       ret = OB_SUCCESS;
     }
     sqc_handler->reset_reference_count();
-    ObPxSqcHandler::release_handler(sqc_handler);
+    int report_ret = OB_SUCCESS;
+    ObPxSqcHandler::release_handler(sqc_handler, report_ret);
+    ret = OB_SUCCESS == ret ? report_ret : ret;
     arg_.sqc_handler_ = nullptr;
   }
   return ret;

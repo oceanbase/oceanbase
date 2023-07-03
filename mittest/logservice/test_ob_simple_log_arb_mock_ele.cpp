@@ -42,34 +42,6 @@ class TestObSimpleLogClusterArbMockEleService : public ObSimpleLogClusterTestEnv
 public:
   TestObSimpleLogClusterArbMockEleService() :  ObSimpleLogClusterTestEnv()
   {}
-  bool is_degraded(const PalfHandleImplGuard &leader,
-                  const int64_t degraded_server_idx)
-  {
-    bool has_degraded = false;
-    while (!has_degraded) {
-      common::GlobalLearnerList degraded_learner_list;
-      leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-      has_degraded = degraded_learner_list.contains(get_cluster()[degraded_server_idx]->get_addr());
-      sleep(1);
-      PALF_LOG(INFO, "wait degrade");
-    }
-    return has_degraded;
-  }
-
-  bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id)
-  {
-    bool has_upgraded = false;
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, palf_id));
-    while (!has_upgraded) {
-      EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, palf_id));
-      common::GlobalLearnerList degraded_learner_list;
-      leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-      has_upgraded = (0 == degraded_learner_list.get_member_number());
-      sleep(1);
-      PALF_LOG(INFO, "wait upgrade");
-    }
-    return has_upgraded;
-  }
 };
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
@@ -153,10 +125,10 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
 
     TimeoutChecker not_timeout(TIMEOUT_US);
     bool is_already_finished = false;
-    LogConfigInfo new_config_info;
+    LogConfigInfoV2 new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(upgrade_b_args, upgrade_b_pid, upgrade_b_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_b_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_b_args, new_config_info, not_timeout));
 
     const LSN &leader_max_flushed_end_lsn = leader.palf_handle_impl_->sw_.max_flushed_end_lsn_;
     EXPECT_GT(leader.palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
@@ -269,10 +241,10 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_to_other_during_de
 
     TimeoutChecker not_timeout(TIMEOUT_US);
     bool is_already_finished = false;
-    LogConfigInfo new_config_info;
+    LogConfigInfoV2 new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(upgrade_a_args, upgrade_a_pid, upgrade_a_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_a_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(upgrade_a_args, new_config_info, not_timeout));
     EXPECT_GT(leader.palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
     EXPECT_GT(b_handle->palf_handle_impl_->sw_.max_flushed_end_lsn_, leader.palf_handle_impl_->config_mgr_.reconfig_barrier_.prev_lsn_);
 
@@ -419,7 +391,9 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_change_config_fail)
     PalfHandleImplGuard *b_handle = palf_list[b_idx];
     PalfHandleImplGuard *d_handle = palf_list[d_idx];
 
-    LogConfigChangeArgs add_d_arg(common::ObMember(d_addr, 1), 4, ADD_MEMBER);
+    LogConfigVersion config_version;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    LogConfigChangeArgs add_d_arg(common::ObMember(d_addr, 1), 4, config_version, ADD_MEMBER);
     int64_t add_d_pid = 0;
     int64_t add_d_epoch = 0;
     LogConfigVersion add_d_version;
@@ -430,7 +404,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_change_config_fail)
     TimeoutChecker not_timeout(TIMEOUT_US);
     bool is_already_finished = false;
     bool has_new_version = true;
-    LogConfigInfo new_config_info;
+    LogConfigInfoV2 new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(add_d_arg, add_d_pid, add_d_epoch,
       is_already_finished, new_config_info));
     EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.check_follower_sync_status(add_d_arg, new_config_info, has_new_version));
@@ -517,8 +491,11 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_arb_degrade_probe)
     PalfHandleImplGuard leader;
     std::vector<PalfHandleImplGuard*> palf_list;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb_mock_election(id, arb_replica_idx, leader_idx, leader));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+    LogConfigVersion config_version;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
     EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
     dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
@@ -585,8 +562,8 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
   OB_LOGGER.set_log_level("TRACE");
-  SET_CASE_LOG_FILE(TEST_NAME, "test_arb_degrade_probe");
-  PALF_LOG(INFO, "begin test test_arb_degrade_probe", K(id));
+  SET_CASE_LOG_FILE(TEST_NAME, "test_add_remove_lose_logs");
+  PALF_LOG(INFO, "begin test test_add_remove_lose_logs", K(id));
   {
     int64_t leader_idx = 0;
     int64_t arb_replica_idx = 0;
@@ -594,8 +571,11 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
     std::vector<PalfHandleImplGuard*> palf_list;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb_mock_election(id, arb_replica_idx, leader_idx, leader));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
+    LogConfigVersion config_version;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[3]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
     dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->stop();
 
@@ -629,10 +609,10 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
 
     TimeoutChecker not_timeout(CONFIG_CHANGE_TIMEOUT);
     bool is_already_finished = false;
-    LogConfigInfo new_config_info;
+    LogConfigInfoV2 new_config_info;
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->check_args_and_generate_config_(remove_e_args, remove_e_pid, remove_e_ele_epoch,
       is_already_finished, new_config_info));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(remove_e_args, new_config_info, not_timeout));
+    EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->wait_log_barrier_(remove_e_args, new_config_info, not_timeout));
     const LSN &remove_e_barrier = leader.palf_handle_impl_->config_mgr_.checking_barrier_.prev_end_lsn_;
     leader.palf_handle_impl_->state_mgr_.reset_changing_config_with_arb();
 
@@ -656,7 +636,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
     revert_cluster_palf_handle_guard(palf_list);
   }
   delete_paxos_group(id);
-  PALF_LOG(INFO, "end test test_arb_degrade_probe", K(id));
+  PALF_LOG(INFO, "end test test_add_remove_lose_logs", K(id));
 }
 
 } // end unittest

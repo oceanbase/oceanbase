@@ -531,7 +531,7 @@ void ObDetectManager::ObDetectReqGetCall::operator()(hash::HashMapPair<ObDetecta
 
   while (OB_NOT_NULL(cb_node)) {
     if (!cb_node->is_executed()) {
-      ObArray<ObPeerTaskState> &peer_states = cb_node->cb_->get_peer_states();
+      ObIArray<ObPeerTaskState> &peer_states = cb_node->cb_->get_peer_states();
       ARRAY_FOREACH_NORET(peer_states, idx) {
         ObPeerTaskState &peer_state = peer_states.at(idx);
         // only detect running tasks

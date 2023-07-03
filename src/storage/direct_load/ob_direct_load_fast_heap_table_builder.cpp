@@ -29,6 +29,7 @@ ObDirectLoadFastHeapTableBuildParam::ObDirectLoadFastHeapTableBuildParam()
   : snapshot_version_(0),
     datum_utils_(nullptr),
     col_descs_(nullptr),
+    cmp_funcs_(nullptr),
     insert_table_ctx_(nullptr),
     fast_heap_table_ctx_(nullptr),
     dml_row_handler_(nullptr),
@@ -43,8 +44,8 @@ ObDirectLoadFastHeapTableBuildParam::~ObDirectLoadFastHeapTableBuildParam()
 bool ObDirectLoadFastHeapTableBuildParam::is_valid() const
 {
   return tablet_id_.is_valid() && snapshot_version_ > 0 && table_data_desc_.is_valid() &&
-         nullptr != col_descs_ && nullptr != insert_table_ctx_ && nullptr != fast_heap_table_ctx_ &&
-         nullptr != dml_row_handler_ && nullptr != datum_utils_;
+         nullptr != col_descs_ && nullptr != cmp_funcs_ && nullptr != insert_table_ctx_ &&
+         nullptr != fast_heap_table_ctx_ && nullptr != dml_row_handler_ && nullptr != datum_utils_;
 }
 
 /**
@@ -106,9 +107,8 @@ int ObDirectLoadFastHeapTableBuilder::collect_obj(const ObDatumRow &datum_row)
   for (int64_t i = 0; OB_SUCC(ret) && i < param_.table_data_desc_.column_count_; i++) {
     const ObStorageDatum &datum =
       datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
-    const common::ObCmpFunc &cmp_func = param_.datum_utils_->get_cmp_funcs().at(
-                                                i + extra_rowkey_cnt + 1).get_cmp_func();
     const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
+    const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i + 1).get_cmp_func();
     ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
     bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
     if (col_stat != nullptr && is_valid) {

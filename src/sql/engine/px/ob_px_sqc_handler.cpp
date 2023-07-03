@@ -136,14 +136,14 @@ ObPxSqcHandler *ObPxSqcHandler::get_sqc_handler()
   return op_reclaim_alloc(ObPxSqcHandler);
 }
 
-void ObPxSqcHandler::release_handler(ObPxSqcHandler *sqc_handler)
+void ObPxSqcHandler::release_handler(ObPxSqcHandler *sqc_handler, int &report_ret)
 {
   bool all_released = false;
   if (OB_ISNULL(sqc_handler)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "Get null sqc handler", K(sqc_handler));
   } else if (FALSE_IT(sqc_handler->release(all_released))) {
   } else if (all_released) {
-    IGNORE_RETURN sqc_handler->destroy_sqc();
+    IGNORE_RETURN sqc_handler->destroy_sqc(report_ret);
     sqc_handler->reset();
     op_reclaim_free(sqc_handler);
   }
@@ -302,10 +302,11 @@ bool ObPxSqcHandler::all_task_success()
   return bret;
 }
 
-int ObPxSqcHandler::destroy_sqc()
+int ObPxSqcHandler::destroy_sqc(int &report_ret)
 {
   int ret = OB_SUCCESS;
   int end_ret = OB_SUCCESS;
+  report_ret = OB_SUCCESS;
   sub_coord_->destroy_first_buffer_cache();
   // end_ret_记录的错误时SQC end process的时候发生的错误，该时刻语句已经执行完成，收尾工作发生了
   // 问题。相比起事务的错误码，收尾的错误码优先级更低。
@@ -330,7 +331,8 @@ int ObPxSqcHandler::destroy_sqc()
      * 了。有任何一个标记启动的sqc不report，qc都会一直等待直到超时。
      */
     if (OB_FAIL(sub_coord_->report_sqc_finish(end_ret))) {
-      LOG_WARN("fail report sqc to qc", K(ret));
+      LOG_WARN("fail report sqc to qc", K(ret), K(end_ret_));
+      report_ret = ret;
     }
     if (OB_NOT_NULL(des_phy_plan_) && des_phy_plan_->is_enable_px_fast_reclaim()) {
       (void) ObDetectManagerUtils::sqc_unregister_detectable_id_from_dm(

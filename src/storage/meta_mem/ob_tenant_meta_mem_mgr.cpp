@@ -469,13 +469,17 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
     }
     const int64_t recycled_cnt = sstable_cnt + data_memtable_cnt + tx_data_memtable_cnt + tx_ctx_memtable_cnt +
         lock_memtable_cnt;
+    const int64_t tablets_mem = tablet_buffer_pool_.total() + large_tablet_buffer_pool_.total() + full_tablet_creator_.total();
     if (recycled_cnt > 0) {
       FLOG_INFO("Successfully finish table gc", K(sstable_cnt), K(data_memtable_cnt),
-        K(tx_data_memtable_cnt), K(tx_ctx_memtable_cnt), K(lock_memtable_cnt),
-        K(pending_cnt), K(recycled_cnt), K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(ddl_kv_pool_), K(memtable_pool_),
+        K(tx_data_memtable_cnt), K(tx_ctx_memtable_cnt), K(lock_memtable_cnt), K(pending_cnt), K(recycled_cnt),
+        K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem),
+        K(ddl_kv_pool_), K(memtable_pool_),
         "tablet count", tablet_map_.count());
     } else if (REACH_COUNT_INTERVAL(100)) {
-      FLOG_INFO("Recycle 0 table", K(ret), K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(ddl_kv_pool_), K(memtable_pool_),
+      FLOG_INFO("Recycle 0 table", K(ret),
+          K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem),
+          K(ddl_kv_pool_), K(memtable_pool_),
           "tablet count", tablet_map_.count());
     }
   }
@@ -1786,28 +1790,44 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
 int ObTenantMetaMemMgr::compare_and_swap_tablet(
     const ObTabletMapKey &key,
     const ObMetaDiskAddr &old_addr,
-    const ObMetaDiskAddr &new_addr)
+    const ObMetaDiskAddr &new_addr,
+    const ObTabletPoolType &pool_type,
+    const bool set_pool /* whether to set tablet pool */)
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
-  } else if (OB_UNLIKELY(!key.is_valid() || !old_addr.is_valid() || !(new_addr.is_disked() || new_addr.is_memory()))) {
+  } else if (OB_UNLIKELY(!key.is_valid() || !old_addr.is_valid() || !(new_addr.is_disked()
+      || new_addr.is_memory()) || (set_pool && ObTabletPoolType::TP_MAX == pool_type))) {
     ret = OB_INVALID_ARGUMENT;
-    FLOG_WARN("invalid argument", K(ret), K(key), K(old_addr), K(new_addr));
+    FLOG_WARN("invalid argument", K(ret), K(key), K(old_addr), K(new_addr), K(set_pool), K(pool_type));
   } else {
+    ObITenantMetaObjPool *pool = nullptr;
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
     if (OB_FAIL(has_tablet(key, is_exist))) {
       LOG_WARN("fail to check tablet is exist", K(ret), K(key));
     } else if (OB_UNLIKELY(!is_exist)) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("this tablet isn't exist in map", K(ret), K(key), K(is_exist));
+    } else if (set_pool) {
+      if (ObTabletPoolType::TP_NORMAL == pool_type) {
+        pool = &tablet_buffer_pool_;
+      } else if (ObTabletPoolType::TP_LARGE == pool_type) {
+        pool = &large_tablet_buffer_pool_;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_FAIL(tablet_map_.compare_and_swap_address_without_object(key,
                                                                            old_addr,
-                                                                           new_addr))) {
+                                                                           new_addr,
+                                                                           set_pool,
+                                                                           pool))) {
       LOG_WARN("fail to compare and swap tablet address in map", K(ret), K(key), K(old_addr),
-          K(new_addr));
+          K(new_addr), K(set_pool), KP(pool));
     }
   }
   LOG_DEBUG("compare and swap object", K(ret), K(old_addr), K(new_addr), K(lbt()));

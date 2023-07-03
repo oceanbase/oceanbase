@@ -1067,7 +1067,7 @@ int ObTenantDagScheduler::create_and_add_dag_net(const ObIDagInitParam *param)
       }
     } else {
       COMMON_LOG(INFO, "success to create and add dag_net", K(ret), KP(dag_net));
-      notify();
+      // Donot call notify(), may cause dead lock.
     }
   }
   if (OB_FAIL(ret)) {

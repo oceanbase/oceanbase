@@ -18,6 +18,7 @@
 
 #include "storage/tx/ob_trans_define.h" // ObTransID
 
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 #include "ob_log_part_trans_task.h"     // PartTransTask
 #include "ob_log_task_pool.h"           // ObLogTransTaskPool
 #include "ob_log_binlog_record_pool.h"  // ObLogBRPool
@@ -470,6 +471,7 @@ int ObLogResourceCollector::handle(void *data,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   ObLogResourceRecycleTask *recycle_task = NULL;
 
   if (OB_UNLIKELY(! inited_)) {

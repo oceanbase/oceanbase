@@ -181,7 +181,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
     need_seek_archive = true;
   } else {
     if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_handle_guard))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
+      if (OB_LS_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         need_seek_archive = true;
       } else {
@@ -280,7 +280,7 @@ int ObCdcStartLsnLocator::init_palf_handle_guard_(const ObLSID &ls_id,
   logservice::ObLogService *log_service = MTL(logservice::ObLogService *);
 
   if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
+    if (OB_LS_NOT_EXIST != ret) {
       LOG_WARN("ObLogService open_palf fail", KR(ret), K(ls_id));
     }
   }

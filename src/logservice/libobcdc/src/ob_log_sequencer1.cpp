@@ -29,6 +29,7 @@
 #include "ob_log_meta_data_struct.h"    // ObDictTenantInfo
 #include "ob_log_ddl_processor.h"       // ObLogDDLProcessor
 #include "ob_log_meta_data_service.h"   // GLOGMETADATASERVICE
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 #define _STAT(level, tag_str, args...) _OBLOG_SEQUENCER_LOG(level, "[STAT] [SEQ] " tag_str, ##args)
 #define STAT(level, tag_str, args...) OBLOG_SEQUENCER_LOG(level, "[STAT] [SEQ] " tag_str, ##args)
@@ -250,6 +251,7 @@ void ObLogSequencer::get_task_count(SeqStatInfo &stat_info)
 // A thread is responsible for continually rotating the sequence of transactions that need sequence
 void ObLogSequencer::run1()
 {
+  ObLogTraceIdGuard trace_guard;
   const int64_t SLEEP_US = 1000;
   lib::set_thread_name("ObLogSequencerTrans");
   int ret = OB_SUCCESS;
@@ -389,6 +391,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
 int ObLogSequencer::handle(void *data, const int64_t thread_index, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   PartTransTask *part_trans_task = static_cast<PartTransTask *>(data);
   (void)ATOMIC_AAF(&queue_part_trans_task_count_, -1);
 

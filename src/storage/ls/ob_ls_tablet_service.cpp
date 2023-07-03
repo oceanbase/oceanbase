@@ -1819,6 +1819,7 @@ int ObLSTabletService::replay_create_tablet(
     ObTablet *tablet = nullptr;
     int64_t pos = 0;
     ObMetaDiskAddr old_addr;
+    ObTabletPoolType pool_type;
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
     time_guard.click("Lock");
     if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tablet_hdl))) {
@@ -1839,7 +1840,23 @@ int ObLSTabletService::replay_create_tablet(
       LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {
       LOG_WARN("fail to set tablet id set", K(ret), K(tablet_id));
-    } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, old_addr, disk_addr))) {
+    } else {
+      if (tablet->is_empty_shell()) {
+        pool_type = ObTabletPoolType::TP_NORMAL;
+      } else {
+        const int64_t try_cache_size = sizeof(ObTablet)
+                                      + tablet->rowkey_read_info_->get_deep_copy_size();
+        if (try_cache_size > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
+          pool_type = ObTabletPoolType::TP_LARGE;
+        } else {
+          pool_type = ObTabletPoolType::TP_NORMAL;
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, old_addr, disk_addr, pool_type, true /* whether to set tablet pool */))) {
       LOG_WARN("fail to compare and swap tablat in t3m", K(ret), K(key), K(old_addr), K(disk_addr));
     } else if (FALSE_IT(time_guard.click("CASwap"))) {
     } else if (OB_FAIL(tablet->check_and_set_initial_state())) {

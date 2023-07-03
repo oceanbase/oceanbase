@@ -152,7 +152,7 @@ TEST(ObCDCPartTransResolver, test_misslog_info_basic)
 {
   int ret = OB_SUCCESS;
   IObCDCPartTransResolver::MissingLogInfo missing_info;
-  ObLogLSNArray &missing_log_id = missing_info.get_miss_redo_or_state_log_arr();
+  ObLogLSNArray &missing_log_id = missing_info.get_miss_redo_lsn_arr();
 
   // prepare data
   palf::LSN lsn_1(1);
@@ -366,7 +366,7 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq2_miss)
   LOG_DEBUG("read log2", K(lsn), K(lsn2), K(missing_info));
   EXPECT_TRUE(missing_info.need_reconsume_commit_log_entry());
   EXPECT_EQ(1, missing_info.get_total_misslog_cnt());
-  EXPECT_EQ(lsn, missing_info.get_miss_redo_or_state_log_arr().at(0));
+  EXPECT_EQ(lsn, missing_info.get_miss_redo_lsn_arr().at(0));
   missing_info.reset();
   missing_info.set_resolving_miss_log();
   IObCDCPartTransResolver::MissingLogInfo new_miss_log;
@@ -425,7 +425,6 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq3_miss)
   EXPECT_EQ(0, new_miss_log.get_total_misslog_cnt());
   EXPECT_TRUE(missing_info.need_reconsume_commit_log_entry());
   IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
-  reconsume_miss_info.set_resolving_miss_log();
   reconsume_miss_info.set_need_reconsume_commit_log_entry();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry2, lsn2, reconsume_miss_info, tsi, stop_flag));
   EXPECT_EQ(0, reconsume_miss_info.get_total_misslog_cnt());
@@ -478,13 +477,12 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq4_miss_1)
 
   EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry2, lsn2, missing_info, tsi, stop_flag));
   EXPECT_EQ(1, missing_info.get_total_misslog_cnt());
-  EXPECT_EQ(lsn, missing_info.get_miss_redo_or_state_log_arr().at(0));
+  EXPECT_EQ(lsn, missing_info.get_miss_redo_lsn_arr().at(0));
   EXPECT_FALSE(missing_info.need_reconsume_commit_log_entry()); // commit_info entry is not miss_log, need reconsume
   IObCDCPartTransResolver::MissingLogInfo new_miss_log;
   new_miss_log.set_resolving_miss_log();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_miss_tx_log(log_entry, lsn, tsi, new_miss_log));
   IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
-  reconsume_miss_info.set_resolving_miss_log();
   reconsume_miss_info.set_need_reconsume_commit_log_entry();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry2, lsn2, reconsume_miss_info, tsi, stop_flag));
   missing_info.reset();
@@ -513,20 +511,20 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq4_miss_2)
 
   EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry3, lsn3, missing_info, tsi, stop_flag));
   EXPECT_EQ(1, missing_info.get_total_misslog_cnt());
-  EXPECT_EQ(lsn2, missing_info.get_miss_redo_or_state_log_arr().at(0));
+  EXPECT_EQ(lsn2, missing_info.miss_record_or_state_log_lsn_);
   EXPECT_TRUE(missing_info.need_reconsume_commit_log_entry());
   IObCDCPartTransResolver::MissingLogInfo new_miss_log;
   new_miss_log.set_resolving_miss_log();
-  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_miss_tx_log(log_entry2, lsn2, tsi, new_miss_log));
+  EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_miss_tx_log(log_entry2, lsn2, tsi, new_miss_log));
   EXPECT_EQ(1, new_miss_log.get_total_misslog_cnt());
-  EXPECT_EQ(lsn, new_miss_log.get_miss_redo_or_state_log_arr().at(0));
+  EXPECT_EQ(lsn, new_miss_log.get_miss_redo_lsn_arr().at(0));
   EXPECT_FALSE(new_miss_log.need_reconsume_commit_log_entry());
   IObCDCPartTransResolver::MissingLogInfo new_miss_log_2;
   new_miss_log_2.set_resolving_miss_log();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_miss_tx_log(log_entry, lsn, tsi, new_miss_log_2));
 
   IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
-  reconsume_miss_info.set_resolving_miss_log();
+  reconsume_miss_info.set_need_reconsume_commit_log_entry();
 
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry3, lsn3, reconsume_miss_info, tsi, stop_flag));
 
@@ -579,13 +577,12 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq5_miss)
 
   EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry2, lsn2, missing_info, tsi, stop_flag));
   EXPECT_EQ(1, missing_info.get_total_misslog_cnt());
-  EXPECT_EQ(lsn, missing_info.get_miss_redo_or_state_log_arr().at(0));
+  EXPECT_EQ(lsn, missing_info.get_miss_redo_lsn_arr().at(0));
   EXPECT_FALSE(missing_info.need_reconsume_commit_log_entry()); // commit_info entry is not miss_log, need reconsume
   IObCDCPartTransResolver::MissingLogInfo new_miss_log;
   new_miss_log.set_resolving_miss_log();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_miss_tx_log(log_entry, lsn, tsi, new_miss_log));
   IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
-  reconsume_miss_info.set_resolving_miss_log();
   reconsume_miss_info.set_need_reconsume_commit_log_entry();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry2, lsn2, reconsume_miss_info, tsi, stop_flag));
   missing_info.reset();
@@ -644,8 +641,8 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq6_miss)
 
   EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry3, lsn3, missing_info, tsi, stop_flag));
   EXPECT_EQ(2, missing_info.get_total_misslog_cnt());
-  EXPECT_EQ(lsn, missing_info.get_miss_redo_or_state_log_arr().at(0));
-  EXPECT_EQ(lsn2, missing_info.get_miss_redo_or_state_log_arr().at(1));
+  EXPECT_EQ(lsn, missing_info.get_miss_redo_lsn_arr().at(0));
+  EXPECT_EQ(lsn2, missing_info.get_miss_redo_lsn_arr().at(1));
   EXPECT_TRUE(missing_info.need_reconsume_commit_log_entry());
   IObCDCPartTransResolver::MissingLogInfo new_miss_log;
   new_miss_log.set_resolving_miss_log();
@@ -654,7 +651,6 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq6_miss)
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_miss_tx_log(log_entry2, lsn2, tsi, new_miss_log));
 
   IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
-  reconsume_miss_info.set_resolving_miss_log();
   reconsume_miss_info.set_need_reconsume_commit_log_entry();
 
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry3, lsn3, reconsume_miss_info, tsi, stop_flag));
@@ -738,19 +734,18 @@ TEST(ObCDCPartTransResolver, test_sp_tx_dist_miss2)
 
   EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry3, lsn3, missing_info, tsi, stop_flag));
   EXPECT_EQ(1, missing_info.get_total_misslog_cnt());
-  EXPECT_EQ(lsn2, missing_info.get_miss_redo_or_state_log_arr().at(0));
+  EXPECT_EQ(lsn2, missing_info.miss_record_or_state_log_lsn_);
   EXPECT_TRUE(missing_info.need_reconsume_commit_log_entry());
   IObCDCPartTransResolver::MissingLogInfo new_miss_log;
   new_miss_log.set_resolving_miss_log();
-  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_miss_tx_log(log_entry2, lsn2, tsi, new_miss_log));
+  EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_miss_tx_log(log_entry2, lsn2, tsi, new_miss_log));
   EXPECT_EQ(1, new_miss_log.get_total_misslog_cnt());
-  EXPECT_EQ(lsn, new_miss_log.get_miss_redo_or_state_log_arr().at(0));
+  EXPECT_EQ(lsn, new_miss_log.miss_record_or_state_log_lsn_);
   new_miss_log.reset();
   new_miss_log.set_resolving_miss_log();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_miss_tx_log(log_entry, lsn, tsi, new_miss_log));
   EXPECT_EQ(0, new_miss_log.get_total_misslog_cnt());
   missing_info.reset();
-  missing_info.set_resolving_miss_log();
   missing_info.set_need_reconsume_commit_log_entry();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry3, lsn3, missing_info, tsi, stop_flag));
 
@@ -880,14 +875,14 @@ TEST(ObCDCPartTransResolver, test_sp_tx_record_miss)
   log_generator.gen_log_entry(log_entry_rc2, lsn_rc2);
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry1, lsn1, missing_info, tsi, stop_flag));
   EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry_rc1, lsn_rc1, missing_info, tsi, stop_flag));
-  EXPECT_TRUE(missing_info.miss_record_log_lsn_.is_valid());
+  EXPECT_TRUE(missing_info.miss_record_or_state_log_lsn_.is_valid());
   EXPECT_EQ(1, missing_info.get_total_misslog_cnt());
   LOG_INFO("", K(lsn), K(lsn_rc0), K(lsn1), K(lsn_rc1), K(lsn2), K(lsn_rc2), K(missing_info));
 //  EXPECT_EQ(lsn, missing_info.miss_redo_or_state_lsn_arr_.at(0));
   IObCDCPartTransResolver::MissingLogInfo missing_info1;
   missing_info1.set_resolving_miss_log();
   EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry_rc0, lsn_rc0, missing_info1, tsi, stop_flag));
-  EXPECT_EQ(lsn, missing_info1.get_miss_redo_or_state_log_arr().at(0));
+  EXPECT_EQ(lsn, missing_info1.get_miss_redo_lsn_arr().at(0));
   IObCDCPartTransResolver::MissingLogInfo missing_info2;
   missing_info2.set_resolving_miss_log();
   EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry, lsn, missing_info2, tsi, stop_flag));
