@@ -2721,6 +2721,142 @@ int ObSQLSessionInfo::update_sess_sync_info(const SessionSyncInfoType sess_sync_
   return ret;
 }
 
+
+
+int ObErrorSyncSysVarEncoder::serialize(ObSQLSessionInfo &sess, char *buf,
+                                const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSysVarClassType, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_var_delta_ids;
+  if (OB_FAIL(sess.get_error_sync_sys_vars(sys_var_delta_ids))) {
+    LOG_WARN("failed to calc need serialize vars", K(ret));
+  } else if (OB_FAIL(sess.serialize_sync_sys_vars(sys_var_delta_ids, buf, length, pos))) {
+    LOG_WARN("failed to serialize sys var delta", K(ret), K(sys_var_delta_ids.count()),
+                                      KPHEX(buf+pos, length-pos), K(length-pos), K(pos));
+  } else {
+    LOG_TRACE("success serialize sys var delta", K(ret), K(sys_var_delta_ids),
+              "inc sys var ids", sess.sys_var_inc_info_.get_all_sys_var_ids(),
+              K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+  }
+  return ret;
+}
+
+int ObErrorSyncSysVarEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf,
+                                  const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t deserialize_sys_var_count = 0;
+  if (OB_FAIL(sess.deserialize_sync_error_sys_vars(deserialize_sys_var_count, buf, length, pos))) {
+    LOG_WARN("failed to deserialize sys var delta", K(ret), K(deserialize_sys_var_count),
+                                    KPHEX(buf+pos, length-pos), K(length-pos), K(pos));
+  } else {
+    LOG_DEBUG("success deserialize sys var delta", K(ret), K(deserialize_sys_var_count));
+  }
+  return ret;
+}
+
+int64_t ObErrorSyncSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess) const {
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  ObSEArray<ObSysVarClassType, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_var_delta_ids;
+  if (OB_FAIL(sess.get_error_sync_sys_vars(sys_var_delta_ids))) {
+    LOG_WARN("failed to calc need serialize vars", K(ret));
+  } else if (OB_FAIL(sess.get_sync_sys_vars_size(sys_var_delta_ids, len))) {
+    LOG_WARN("failed to serialize size sys var delta", K(ret));
+  } else {
+    LOG_DEBUG("success serialize size sys var delta", K(ret), K(sys_var_delta_ids.count()), K(len));
+  }
+  return len;
+}
+
+int ObErrorSyncSysVarEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t j = 0; OB_SUCC(ret) && j< share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++j) {
+    if (ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_LAST_SCHEMA_VERSION) {
+      //need sync sys var
+      if (OB_FAIL(sess.get_sys_var(j)->serialize(buf, length, pos))) {
+        LOG_WARN("failed to serialize", K(length), K(ret));
+      }
+    } else {
+      // do nothing.
+    }
+  }
+  return ret;
+}
+
+int64_t ObErrorSyncSysVarEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
+{
+  int64_t size = 0;
+  for (int64_t j = 0; j< share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++j) {
+    if (ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_LAST_SCHEMA_VERSION) {
+      // need sync sys var
+      size += sess.get_sys_var(j)->get_serialize_size();
+    } else {
+      // do nothing.
+    }
+  }
+  return size;
+}
+
+int ObErrorSyncSysVarEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                                          const char* last_sess_buf, int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  if (current_sess_length != last_sess_length) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
+      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+  } else if (memcmp(current_sess_buf, last_sess_buf, current_sess_length) == 0) {
+    LOG_TRACE("success to compare session info", K(ret));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to compare buf session info", K(ret),
+      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+  }
+  return ret;
+}
+
+int ObErrorSyncSysVarEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+            int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(current_sess_buf);
+  UNUSED(current_sess_length);
+  int64_t pos = 0;
+  const char *buf = last_sess_buf;
+  int64_t data_len = last_sess_length;
+  common::ObArenaAllocator allocator(common::ObModIds::OB_SQL_SESSION,
+                                                    OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                                    sess.get_effective_tenant_id());
+
+  ObBasicSysVar *last_sess_sys_vars = NULL;
+  for (int64_t j = 0; OB_SUCC(ret) && j< share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++j) {
+    if (ObSysVariables::get_sys_var_id(j) == SYS_VAR_OB_LAST_SCHEMA_VERSION) {
+      if (OB_FAIL(ObSessInfoVerify::create_tmp_sys_var(sess, ObSysVariables::get_sys_var_id(j),
+          last_sess_sys_vars, allocator))) {
+        LOG_WARN("fail to create sys var", K(ret));
+      } else if (OB_FAIL(last_sess_sys_vars->deserialize(buf, data_len, pos))) {
+        LOG_WARN("failed to deserialize", K(ret), K(data_len), K(pos));
+      } else if (!sess.get_sys_var(j)->get_value().can_compare(
+                last_sess_sys_vars->get_value())) {
+        share::ObTaskController::get().allow_next_syslog();
+        LOG_WARN("failed to verify sys vars", K(j), K(ret),
+                "current_sess_sys_vars", sess.get_sys_var(j)->get_value(),
+                "last_sess_sys_vars", last_sess_sys_vars->get_value());
+      } else if (sess.get_sys_var(j)->get_value() != last_sess_sys_vars->get_value()) {
+        share::ObTaskController::get().allow_next_syslog();
+        LOG_WARN("failed to verify sys vars", K(j), K(ret),
+                "current_sess_sys_vars", sess.get_sys_var(j)->get_value(),
+                "last_sess_sys_vars", last_sess_sys_vars->get_value());
+      } else {
+        // do nothing
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSQLSessionInfo::get_mem_ctx_alloc(common::ObIAllocator *&alloc)
 {
   int ret = OB_SUCCESS;
