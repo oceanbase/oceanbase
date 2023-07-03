@@ -737,7 +737,9 @@ int ObTableQueryAndMutateP::execute_one_mutation(ObTableQueryResult &one_result,
   const ObITableEntity &mutate_entity = mutation.entity();
   const int64_t N = rk_names.count();
 
-  if (mutate_entity.get_rowkey_size() > 0) {
+  bool is_check_and_insert = (mutation.type() == ObTableOperationType::INSERT);
+  // 判断是否为check and insert 操作
+  if (mutate_entity.get_rowkey_size() > 0 && !is_check_and_insert) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("do not set mutation rowkey in query_and_mutate, invalid mutation", K(ret), K(mutation));
   } else if (0 >= N) {
@@ -749,7 +751,9 @@ int ObTableQueryAndMutateP::execute_one_mutation(ObTableQueryResult &one_result,
     one_result.rewind();
     while (OB_SUCC(ret) && OB_SUCC(one_result.get_next_entity(query_res_entity))) {
       // 1. construct new entity
-      if (OB_ISNULL(new_entity = default_entity_factory_.alloc())) {
+      if (is_check_and_insert) {
+        end_in_advance_= true; // 若为check and insert, 则无需构造new_entity, 由于只插入一次, 故提前终止
+      } else if (OB_ISNULL(new_entity = default_entity_factory_.alloc())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc entity", K(ret));
       } else if (OB_FAIL(new_entity->deep_copy_properties(allocator_, mutate_entity))) {
@@ -761,7 +765,7 @@ int ObTableQueryAndMutateP::execute_one_mutation(ObTableQueryResult &one_result,
             LOG_WARN("fail to get property value", K(ret), K(rk_names.at(i)));
           } else if (OB_FAIL(new_entity->add_rowkey_value(key))) {
             LOG_WARN("fail to add rowkey value", K(ret));
-          }
+          }            
         }
       }
 
@@ -801,6 +805,14 @@ int ObTableQueryAndMutateP::execute_one_mutation(ObTableQueryResult &one_result,
             }
             break;
           }
+          case ObTableOperationType::INSERT: { // 使用mutation上的entity执行insert
+            if (OB_FAIL(process_dml_op<TABLE_API_EXEC_INSERT>(mutate_entity, tmp_affect_rows))) {
+              LOG_WARN("ail to execute table insert", K(ret));
+            } else {
+              affected_rows += tmp_affect_rows;
+            }
+            break;
+          }
           default: {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not supported mutation type", K(ret), "type", mutation.type());
@@ -830,7 +842,7 @@ int ObTableQueryAndMutateP::execute_table_mutation(ObTableQueryResultIterator *r
   } else {
     stat_event_type_ = ObTableProccessType::TABLE_API_QUERY_AND_MUTATE;
     ObTableQueryResult *one_result = nullptr;
-    while (OB_SUCC(ret)) {
+    while (OB_SUCC(ret) && !end_in_advance_) { // 在check and insert 情境下会有提前终止
       if (ObTimeUtility::current_time() > get_timeout_ts()) {
         ret = OB_TRANS_TIMEOUT;
         LOG_WARN("exceed operatiton timeout", K(ret));
