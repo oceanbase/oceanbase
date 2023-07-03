@@ -33,8 +33,9 @@ MdsCtx::~MdsCtx()
   bool list_empty = false;
   {
     MdsWLockGuard lg(lock_);
-    bool list_empty = write_list_.empty();
+    list_empty = write_list_.empty();
     if (!list_empty) {
+      OB_ASSERT(state_ != TwoPhaseCommitState::ON_COMMIT);// if decided, list is empty
       MDS_LOG_RET(INFO, OB_SUCCESS, "nodes not commit or abort when mds ctx destroyed", K(*this));
     }
   }
