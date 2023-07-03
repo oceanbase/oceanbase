@@ -5040,6 +5040,7 @@ int ObSql::handle_text_execute(const ObStmt *basic_stmt,
         obj_param.set_accuracy(raw_expr->get_accuracy());
         obj_param.set_result_flag(raw_expr->get_result_flag());
         obj_param.set_collation_level(CS_LEVEL_COERCIBLE);
+        obj_param.set_param_meta(obj_param.get_meta());
         if (OB_FAIL(param_store.push_back(obj_param))) {
           LOG_WARN("push back into param_store failed", K(ret));
         }
