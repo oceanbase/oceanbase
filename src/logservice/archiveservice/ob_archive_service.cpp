@@ -201,6 +201,11 @@ void ObArchiveService::process_start_archive()
   cond_.signal();
 }
 
+void ObArchiveService::process_defer_archive()
+{
+  cond_.signal();
+}
+
 void ObArchiveService::process_stop_archive()
 {
   cond_.signal();

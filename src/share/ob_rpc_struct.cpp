@@ -6430,8 +6430,8 @@ OB_SERIALIZE_MEMBER(ObNotifyArchiveArg, tenant_id_, notify_archive_op_);
 
 bool ObNotifyArchiveArg::is_valid() const
 {
-  return tenant_id_ > 0 && tenant_id_ != OB_SYS_TENANT_ID 
-      && notify_archive_op_ > NotifyArchiveOp::INVALID_OP && notify_archive_op_ < NotifyArchiveOp::MAX_OP;
+  return is_user_tenant(tenant_id_)
+      && notify_archive_op_ >= NotifyArchiveOp::START && notify_archive_op_ < NotifyArchiveOp::MAX_OP;
 }
 
 int ObNotifyArchiveArg::assign(const ObNotifyArchiveArg &arg)

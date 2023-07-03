@@ -874,49 +874,49 @@ int ObService::delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg)
 }
 
 int ObService::notify_archive(const obrpc::ObNotifyArchiveArg &arg){
-   int ret = OB_SUCCESS;
-   LOG_INFO("recieve notify archive request", K(arg));
-   if (!inited_) {
-     ret = OB_NOT_INIT;
-     LOG_WARN("ObService not init", K(ret));
-   } else if (!arg.is_valid()) {
-     ret = OB_INVALID_ARGUMENT;
-     LOG_WARN("invalid argument", K(ret), K(arg));
-   } else {
-     MTL_SWITCH(arg.tenant_id_){
-       archive::ObArchiveService *archive_service = MTL(ObArchiveService*);
-       if (OB_ISNULL(archive_service)) {
-         ret = OB_ERR_UNEXPECTED;
-         LOG_WARN("unexpected null MTL scheduler", K(ret), KP(archive_service));
-       } else {
-         switch(arg.notify_archive_op_) {
-           case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::START: {
-             archive_service->process_start_archive();
-             LOG_INFO("success notify start archive service", K(arg));
-           }
-             break;
-           case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::DEFER: {
-             archive_service->process_defer_archive();
-             LOG_INFO("success notify defer archive service", K(arg));
-           }
-             break;
-           case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::STOP: {
-             archive_service->process_stop_archive();
-             LOG_INFO("success notify stop archive service", K(arg));
-           }
-             break;
-           default: {
-             ret = OB_INVALID_ARGUMENT;
-             LOG_WARN("invalid argument", K(ret), K(arg));
-           }
-             break;
-         }
-       }
-     }
-   }
+  int ret = OB_SUCCESS;
+  LOG_INFO("recieve notify archive request", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else {
+    MTL_SWITCH(arg.tenant_id_){
+      archive::ObArchiveService *archive_service = MTL(ObArchiveService*);
+      if (OB_ISNULL(archive_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null MTL scheduler", K(ret), KP(archive_service));
+      } else {
+        switch(arg.notify_archive_op_) {
+          case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::START: {
+            archive_service->process_start_archive();
+            LOG_INFO("success notify start archive service", K(arg));
+          }
+            break;
+          case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::DEFER: {
+            archive_service->process_defer_archive();
+            LOG_INFO("success notify defer archive service", K(arg));
+          }
+            break;
+          case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::STOP: {
+            archive_service->process_stop_archive();
+            LOG_INFO("success notify stop archive service", K(arg));
+          }
+            break;
+          default: {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid argument", K(ret), K(arg));
+          }
+            break;
+        }
+      }
+    }
+  }
 
-   return ret;
- }
+  return ret;
+}
 
 int ObService::check_sys_task_exist(
     const share::ObTaskId &arg, bool &res)

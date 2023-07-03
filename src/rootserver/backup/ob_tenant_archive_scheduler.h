@@ -62,7 +62,7 @@ private:
   int checkpoint_(share::ObTenantArchiveRoundAttr &round_attr);
   int start_archive_(share::ObTenantArchiveRoundAttr &round_attr);
   // notify archive start/end event to each log stream.
-  int notify_(const share::ObTenantArchiveRoundAttr &round_attr);
+  void notify_(const share::ObTenantArchiveRoundAttr &round_attr);
   int do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info);
   int check_archive_dest_validity_(const int64_t dest_no);
   int get_max_checkpoint_scn_(const uint64_t tenant_id, share::SCN &max_checkpoint_scn) const;

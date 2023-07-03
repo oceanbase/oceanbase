@@ -107,6 +107,8 @@ public:
   ///////////// RPC process functions /////////////////
   void process_start_archive();
 
+  void process_defer_archive();
+
   void process_stop_archive();
 
   int iterate_ls(const std::function<int(const ObLSArchiveTask&)> &func);

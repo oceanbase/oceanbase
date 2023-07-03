@@ -60,7 +60,6 @@
 #include "storage/tx/ob_trans_define.h"
 #include "share/unit/ob_unit_info.h" //ObUnit*
 #include "share/backup/ob_backup_clean_struct.h"
-#include "share/backup/ob_archive_struct.h"
 #include "logservice/palf/palf_options.h"//access mode
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "logservice/palf/log_define.h"//INVALID_PROPOSAL_ID
@@ -7790,10 +7789,9 @@ struct ObNotifyArchiveArg
   OB_UNIS_VERSION(1);
 public:
   enum NotifyArchiveOp {
-    INVALID_OP = 0,
-    START = 1,
-    DEFER = 2,
-    STOP = 3,
+    START = 0,
+    DEFER = 1,
+    STOP = 2,
     MAX_OP
   };
 
