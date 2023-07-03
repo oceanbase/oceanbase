@@ -475,8 +475,6 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table is invalid", K(ret), KPC(table));
-      // shouldn't abort after being merged into master !!!
-      ob_abort();
     } else {
       ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
       addr = sstable->get_addr();
@@ -492,7 +490,7 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
         LOG_ERROR("fail to increase ref cnt for sstable meta's macro block", K(ret), K(macro_id));
       } else {
         sstable_cnt++;
-        FLOG_INFO("barry debug inc sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
+        LOG_DEBUG("inc sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
       }
     }
   }
@@ -517,7 +515,7 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
         } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to decrease ref cnt for sstable meta's macro block", K(tmp_ret), K(macro_id));
         } else {
-          FLOG_INFO("barry debug decrease sstable meta's macro ref", K(tmp_ret), K(addr), K(macro_id), KPC(sstable));
+          LOG_DEBUG("decrease sstable meta's macro ref", K(tmp_ret), K(addr), K(macro_id), KPC(sstable));
         }
       }
     }
@@ -527,7 +525,7 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
     inc_success = true;
   }
 
-  FLOG_INFO("barry debug the number of sstables that increase meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
+  LOG_DEBUG("the number of sstables that increase meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
 
   return ret;
 }
@@ -545,8 +543,6 @@ int ObSSTableArray::inc_data_ref_cnt(bool &inc_success) const
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table is invalid", K(ret), KPC(table));
-      // shouldn't abort after being merged into master !!!
-      ob_abort();
     } else {
       ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
       if (OB_FAIL(sstable->inc_macro_ref(inc_data_block_success))) {
@@ -554,7 +550,7 @@ int ObSSTableArray::inc_data_ref_cnt(bool &inc_success) const
       } else {
         sstable_cnt++;
       }
-      LOG_DEBUG("barry debug increase sstable data macro ref", K(ret), KPC(sstable));
+      LOG_DEBUG("increase sstable data macro ref", K(ret), KPC(sstable));
     }
   }
 
@@ -565,12 +561,10 @@ int ObSSTableArray::inc_data_ref_cnt(bool &inc_success) const
       if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
         tmp_ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("table is invalid", K(tmp_ret), KPC(table));
-        // shouldn't abort after being merged into master !!!
-        ob_abort();
       } else {
         ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
         sstable->dec_macro_ref();
-        LOG_DEBUG("barry debug decrease sstable data macro ref", K(tmp_ret), KPC(sstable));
+        LOG_DEBUG("decrease sstable data macro ref", K(tmp_ret), KPC(sstable));
       }
     }
   }
@@ -597,8 +591,6 @@ void ObSSTableArray::dec_meta_ref_cnt() const
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table is invalid", K(ret), KPC(table));
-      // shouldn't abort after being merged into master !!!
-      ob_abort();
     } else {
       ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
       addr = sstable->get_addr();
@@ -612,12 +604,12 @@ void ObSSTableArray::dec_meta_ref_cnt() const
         LOG_ERROR("fail to decrease ref cnt for sstable meta's macro block", K(ret), K(macro_id));
       } else {
         sstable_cnt++;
-        FLOG_INFO("barry debug decrease sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
+        LOG_DEBUG("decrease sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
       }
     }
   }
 
-  FLOG_INFO("barry debug the number of sstables that decrease meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
+  LOG_DEBUG("the number of sstables that decrease meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
 }
 
 void ObSSTableArray::dec_data_ref_cnt() const
@@ -631,13 +623,11 @@ void ObSSTableArray::dec_data_ref_cnt() const
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table is invalid", K(ret), KPC(table));
-      // shouldn't abort after being merged into master !!!
-      ob_abort();
     } else {
       sstable_cnt++;
       ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
       sstable->dec_macro_ref();
-      LOG_DEBUG("barry debug decrease sstable data's macro ref", K(ret), KPC(sstable));
+      LOG_DEBUG("decrease sstable data's macro ref", K(ret), KPC(sstable));
     }
   }
 }
