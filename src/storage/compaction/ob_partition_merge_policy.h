@@ -107,7 +107,7 @@ private:
       const storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
       ObLS &ls,
       const storage::ObTablet &tablet,
-      ObIArray<storage::ObTableHandleV2> &memtable_handles,
+      ObIArray<storage::ObITable *> &memtables,
       storage::ObGetMergeTablesResult &result);
 
   static int find_minor_merge_tables(
