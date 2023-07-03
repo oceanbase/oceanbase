@@ -1791,7 +1791,7 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
       if (OB_FAIL(new_handle.get_obj()->check_and_set_initial_state())) {
         LOG_WARN("failed to check and set initial state", K(ret), K(key));
       }
-    } while (ret == OB_TIMEOUT || ret == OB_ALLOCATE_MEMORY_FAILED);
+    } while (OB_TIMEOUT == ret || OB_ALLOCATE_MEMORY_FAILED == ret || OB_DISK_HUNG == ret);
   }
 
   LOG_DEBUG("compare and swap object", K(ret), KPC(new_handle.get_obj()), K(lbt()));

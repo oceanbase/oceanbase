@@ -5403,6 +5403,7 @@ int ObTablet::check_initial_state(bool &initial_state)
   }
 
   // TODO(@bowen.gbw): optimize, check initial state without IO
+  // TODO(@chenqingxiang.cqx): support using none addr to check initial state.
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObTabletMdsData::load_mds_dump_kv(arena_allocator, uncommitted_tablet_status_addr, uncommitted_kv))) {
     LOG_WARN("failed to load mds dump kv", K(ret), K(uncommitted_tablet_status_addr));
