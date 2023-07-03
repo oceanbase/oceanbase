@@ -43,7 +43,7 @@ namespace storage
 #define TX_DATA_MEM_LEAK_DEBUG_CODE
 #endif
 
-
+int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 30 * 1000 * 1000; // 30 seconds
 
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
@@ -1029,29 +1029,39 @@ void ObTxDataTable::update_calc_upper_info_(const SCN &max_decided_scn)
 {
   int64_t cur_ts = common::ObTimeUtility::fast_current_time();
   SpinWLockGuard lock_guard(calc_upper_info_.lock_);
+
   // recheck update condition and do update calc_upper_info
-  if (cur_ts - calc_upper_info_.update_ts_ > 30_s && max_decided_scn> calc_upper_info_.keep_alive_scn_) {
+  if (cur_ts - calc_upper_info_.update_ts_ > ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL &&
+      max_decided_scn > calc_upper_info_.keep_alive_scn_) {
     SCN min_start_scn = SCN::min_scn();
     SCN keep_alive_scn = SCN::min_scn();
     MinStartScnStatus status;
     ls_->get_min_start_scn(min_start_scn, keep_alive_scn, status);
-    switch (status) {
-      case MinStartScnStatus::UNKOWN:
-        // do nothing
-        break;
-      case MinStartScnStatus::NO_CTX:
-        // use the last keep_alive_scn as min_start_scn
-        calc_upper_info_.min_start_scn_in_ctx_ = calc_upper_info_.keep_alive_scn_;
-        calc_upper_info_.keep_alive_scn_ = keep_alive_scn;
-        calc_upper_info_.update_ts_ = cur_ts;
-        break;
-      case MinStartScnStatus::HAS_CTX:
-        calc_upper_info_.min_start_scn_in_ctx_ = min_start_scn;
-        calc_upper_info_.keep_alive_scn_ = keep_alive_scn;
-        calc_upper_info_.update_ts_ = cur_ts;
-        break;
-      default:
-        break;
+
+    if (MinStartScnStatus::UNKOWN == status) {
+      // do nothing
+    } else {
+      int ret = OB_SUCCESS;
+      CalcUpperInfo tmp_calc_upper_info;
+      tmp_calc_upper_info.keep_alive_scn_ = keep_alive_scn;
+      tmp_calc_upper_info.update_ts_ = cur_ts;
+      if (MinStartScnStatus::NO_CTX == status) {
+        // use the previous keep_alive_scn as min_start_scn
+        tmp_calc_upper_info.min_start_scn_in_ctx_ = calc_upper_info_.keep_alive_scn_;
+      } else if (MinStartScnStatus::HAS_CTX == status) {
+        tmp_calc_upper_info.min_start_scn_in_ctx_ = min_start_scn;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "invalid min start scn status", K(min_start_scn), K(keep_alive_scn), K(status));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (tmp_calc_upper_info.min_start_scn_in_ctx_ < calc_upper_info_.min_start_scn_in_ctx_) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "invalid min start scn", K(tmp_calc_upper_info), K(calc_upper_info_));
+      } else {
+        calc_upper_info_ = tmp_calc_upper_info;
+      }
     }
   }
 }

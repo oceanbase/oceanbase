@@ -91,6 +91,14 @@ public:
       update_ts_ = 0;
     }
 
+    CalcUpperInfo &operator= (const CalcUpperInfo &rhs)
+    {
+      min_start_scn_in_ctx_ = rhs.min_start_scn_in_ctx_;
+      keep_alive_scn_ = rhs.keep_alive_scn_;
+      update_ts_ = rhs.update_ts_;
+      return *this;
+    }
+
     share::SCN min_start_scn_in_ctx_;
     share::SCN keep_alive_scn_;
     int64_t update_ts_;
@@ -100,6 +108,8 @@ public:
   };
 
   using SliceAllocator = ObSliceAlloc;
+
+  static int64_t UPDATE_CALC_UPPER_INFO_INTERVAL;
 
   static const int64_t TX_DATA_MAX_CONCURRENCY = 32;
   // A tx data is 128 bytes, 128 * 262144 = 32MB
