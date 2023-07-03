@@ -3430,7 +3430,9 @@ int ObTableSchema::convert_column_ids_in_info(const ObHashMap<uint64_t, uint64_t
 int ObTableSchema::convert_column_ids_for_ddl(const ObHashMap<uint64_t, uint64_t> &column_id_map)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(convert_basic_column_ids(column_id_map))) {
+  if (OB_FAIL(convert_column_udt_set_ids(column_id_map))) {
+    LOG_WARN("failed to convert column udt set id", K(ret));
+  } else if (OB_FAIL(convert_basic_column_ids(column_id_map))) {
     LOG_WARN("failed to convert column id in column array and id hash array", K(ret));
   } else if (OB_FAIL(convert_column_ids_in_generated_columns(column_id_map))) {
     LOG_WARN("failed to convert column id in generated columns", K(ret));
@@ -7525,6 +7527,73 @@ int ObTableSchema::assign_rls_objects(const ObTableSchema &other)
       LOG_WARN("failed to assign rls group ids", K(ret));
     } else if (OB_FAIL(rls_context_ids_.assign(other.get_rls_context_ids()))) {
       LOG_WARN("failed to assign rls context ids", K(ret));
+    }
+  }
+  return ret;
+}
+
+// convert column_udt_set_id
+int ObTableSchema::convert_column_udt_set_ids(const ObHashMap<uint64_t, uint64_t> &column_id_map)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashMap<uint64_t, uint64_t> column_udt_set_id_map;
+  // generate new column udt id
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; i++) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid column schema", K(ret));
+    } else if (column->get_udt_set_id() > 0 && !column->is_hidden()) {
+      uint64_t new_column_id = 0;
+      if (OB_FAIL(column_id_map.get_refactored(column->get_column_id(), new_column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(new_column_id));
+      } else if (OB_UNLIKELY(new_column_id < OB_APP_MIN_COLUMN_ID)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new column id too small", K(ret), K(new_column_id));
+      } else if (!column_udt_set_id_map.created() &&
+                 OB_FAIL(column_udt_set_id_map.create(OB_MAX_COLUMN_NUMBER / 2, lib::ObLabel("DDLSrvTmp")))) {
+        LOG_WARN("failed to create udt set id map", K(ret), K(new_column_id));
+      } else if (OB_FAIL(column_udt_set_id_map.set_refactored(column->get_udt_set_id(), new_column_id))) {
+        LOG_WARN("failed to set column set id map", K(ret), K(new_column_id));
+      }
+    }
+  }
+  // update new column udt id and hidden_column_name
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; i++) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid column schema", K(ret));
+    } else if (column->get_udt_set_id() > 0) {
+      uint64_t new_column_set_id = 0;
+      if (OB_FAIL(column_udt_set_id_map.get_refactored(column->get_udt_set_id(), new_column_set_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(column->get_udt_set_id()));
+      } else if (OB_UNLIKELY(new_column_set_id <= 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new column id too small", K(ret), K(new_column_set_id));
+      } else {
+        column->set_udt_set_id(new_column_set_id);
+        if (column->is_hidden()) {
+          uint64_t new_column_id = 0;
+          if (OB_FAIL(column_id_map.get_refactored(column->get_column_id(), new_column_id))) {
+            LOG_WARN("failed to get column id", K(ret), K(new_column_id));
+          } else if (OB_UNLIKELY(new_column_id < OB_APP_MIN_COLUMN_ID)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("new column id too small", K(ret), K(new_column_id));
+          } else {
+            // update hidden column name
+            char col_name[OB_MAX_COLUMN_NAME_LENGTH] = {0};
+            databuff_printf(col_name, OB_MAX_COLUMN_NAME_LENGTH, "SYS_NC%05lu$", new_column_id);
+            if (OB_FAIL(remove_col_from_name_hash_array(true, column))) {
+              LOG_WARN("Failed to remove old column name from name_hash_array", K(ret));
+            } else if (OB_FAIL(column->set_column_name(col_name))) {
+              LOG_WARN("failed to change column name", K(ret));
+            } else if (OB_FAIL(add_col_to_name_hash_array(true, column))) {
+              LOG_WARN("Failed to add new column name to name_hash_array", K(ret));
+            }
+          }
+        }
+      }
     }
   }
   return ret;
