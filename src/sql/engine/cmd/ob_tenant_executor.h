@@ -63,10 +63,6 @@ public:
   virtual ~ObCreateStandbyTenantExecutor() {}
   int execute(ObExecContext &ctx, ObCreateTenantStmt &stmt);
 private:
-  int wait_create_standby_tenant_end_(const uint64_t tenant_id);
-  int check_can_create_standby_tenant_(
-      const common::ObString &log_restore_source,
-      ObCompatibilityMode &compat_mode);
   DISALLOW_COPY_AND_ASSIGN(ObCreateStandbyTenantExecutor);
 };
 

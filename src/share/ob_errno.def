@@ -654,6 +654,7 @@ DEFINE_ERROR(OB_LS_IS_DELETED, -4761, -1, "HY000", "log stream is deleted");
 DEFINE_ERROR(OB_SKIP_CHECKING_LS_STATUS, -4762, -1, "HY000", "This operation has been finished without checking ls status");
 DEFINE_ORACLE_ERROR(OB_ERR_USE_ROWID_FOR_UPDATE, -4763, -1, "HY000", "invalid user.table.column, table.column, or column specification", 1747, "invalid user.table.column, table.column, or column specification");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_UNKNOWN_SET_OPTION, -4764, -1, "HY000", "unknown SET option", "unknown SET option \'%s\'", 600, "unknown SET option", "unknown SET option \'%s\'");
+DEFINE_ERROR_EXT_DEP(OB_CREATE_STANDBY_TENANT_FAILED, -4765, -1, "HY000", "create standby tenant may fail", "create standby tenant may fail, %s");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
