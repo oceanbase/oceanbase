@@ -5651,6 +5651,7 @@ int ObBasicSessionInfo::end_nested_session(StmtSavedValue &saved_value)
 int ObBasicSessionInfo::trans_save_session(TransSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
+  LockGuard lock_guard(thread_data_mutex_);
   OZ (base_save_session(saved_value, false));
   /*
    * save transaction context
@@ -5669,6 +5670,7 @@ int ObBasicSessionInfo::trans_save_session(TransSavedValue &saved_value)
 int ObBasicSessionInfo::trans_restore_session(TransSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
+  LockGuard lock_guard(thread_data_mutex_);
   OX (nested_count_ = saved_value.nested_count_);
   OX (trans_flags_ = saved_value.trans_flags_);
   /*
