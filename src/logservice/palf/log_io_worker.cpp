@@ -133,7 +133,7 @@ int LogIOWorker::handle_io_task_(LogIOTask *io_task)
 	do_task_used_ts_ += cost_ts;
 	do_task_count_ ++;
 	if (palf_reach_time_interval(5 * 1000 * 1000, print_log_interval_)) {
-		PALF_EVENT("io statistics", 0, K_(do_task_used_ts), K_(do_task_count),
+		PALF_LOG(INFO, "[PALF STAT IO STAT]", K_(do_task_used_ts), K_(do_task_count),
 				"average_cost_ts", do_task_used_ts_ / do_task_count_,
 				"io_queue_size", queue_.size());
 		do_task_count_ = 0;

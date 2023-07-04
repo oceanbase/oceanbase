@@ -64,11 +64,15 @@ class MockLSAdapter;
   OB_LOGGER.set_log_level("DEBUG"); \
   OB_LOGGER.set_enable_log_limit(false); \
   OB_LOGGER.set_enable_async_log(false); \
+  std::string app_gtest_log_name = std::string(TEST_NAME) + "_gtest.log"; \
+  system(("rm -rf " + app_gtest_log_name + "*").c_str());   \
+  oceanbase::unittest::init_gtest_output(app_gtest_log_name); \
   SERVER_LOG(INFO, "begin unittest"); \
   ::testing::InitGoogleTest(&argc, argv); \
   ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION); \
   return RUN_ALL_TESTS();
 
+void init_gtest_output(std::string &gtest_log_name);
 int generate_data(char *&buf, int buf_len, int &real_data_size, const int wanted_data_size);
 int generate_specifice_size_data(char *&buf, int buf_len, int wanted_data_size);
 int generate_blob_data(char *&buf, int buf_len, int &wanted_data_size);

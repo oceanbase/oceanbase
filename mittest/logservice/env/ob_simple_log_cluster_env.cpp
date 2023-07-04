@@ -45,6 +45,22 @@ using namespace palf;
 namespace unittest
 {
 
+void init_gtest_output(std::string &gtest_log_name)
+{
+  // 判断是否处于Farm中
+  char *mit_network_start_port_env = getenv("mit_network_start_port");
+  char *mit_network_port_num_env = getenv("mit_network_port_num");
+  if (mit_network_start_port_env != nullptr && mit_network_port_num_env != nullptr) {
+    std::string gtest_file_name = gtest_log_name;
+    int fd = open(gtest_file_name.c_str(), O_RDWR|O_CREAT, 0666);
+    if (fd == 0) {
+      ob_abort();
+    }
+    dup2(fd, STDOUT_FILENO);
+    dup2(fd, STDERR_FILENO);
+  }
+}
+
 PalfHandleImplGuard::PalfHandleImplGuard() : palf_id_(),
                                              palf_handle_impl_(NULL),
                                              palf_env_impl_(NULL)

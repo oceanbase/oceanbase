@@ -1090,6 +1090,13 @@ private:
   typedef common::ObSpinLock SpinLock;
   typedef common::ObSpinLockGuard SpinLockGuard;
   typedef common::RWLock::WLockGuardWithTimeout WLockGuardWithTimeout;
+  enum LogFlashbackState
+  {
+    FLASHBACK_INIT = 0,
+    FLASHBACK_SUCCESS = 1,
+    FLASHBACK_FAILED = 2,
+    FLASHBACK_RECONFIRM = 3,
+  };
 private:
   mutable RWLock lock_;
   char log_dir_[common::MAX_PATH_SIZE];
@@ -1143,7 +1150,7 @@ private:
   // a spin lock for single replica mutex
   SpinLock flashback_lock_;
   int64_t last_dump_info_time_us_;
-  bool is_flashback_done_;
+  LogFlashbackState flashback_state_;
   int64_t last_check_sync_time_us_;
   int64_t last_renew_loc_time_us_;
   int64_t last_print_in_sync_time_us_;

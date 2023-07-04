@@ -651,8 +651,7 @@ int LogModeMgr::receive_mode_meta_(const common::ObAddr &server,
 {
   int ret = OB_SUCCESS;
   if (proposal_id == INVALID_PROPOSAL_ID ||
-      false == mode_meta.is_valid() ||
-      proposal_id < mode_meta.proposal_id_) {
+      false == mode_meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid arguments", K(ret), K_(palf_id), K_(self), K(server), K(proposal_id), K(mode_meta));
   } else {

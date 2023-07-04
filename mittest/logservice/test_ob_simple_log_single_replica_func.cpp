@@ -388,6 +388,36 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback)
   EXPECT_EQ(new_log_tail, leader.palf_handle_impl_->get_end_lsn());
   EXPECT_EQ(OB_ITER_END, read_log(leader));
 
+  // flashback reconfirming leader
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx));
+  wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn());
+  SCN flashback_scn = leader.palf_handle_impl_->get_max_scn();
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx));
+  wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn());
+  EXPECT_EQ(OB_ITER_END, read_log(leader));
+  switch_append_to_flashback(leader, mode_version);
+
+  dynamic_cast<palf::PalfEnvImpl*>(get_cluster()[0]->get_palf_env())->log_loop_thread_.stop();
+  dynamic_cast<palf::PalfEnvImpl*>(get_cluster()[0]->get_palf_env())->log_loop_thread_.wait();
+  leader.palf_handle_impl_->state_mgr_.role_ = LEADER;
+  leader.palf_handle_impl_->state_mgr_.state_ = RECONFIRM;
+
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->flashback(mode_version, max_scn, timeout_ts_us));
+  EXPECT_GT(leader.palf_handle_impl_->sw_.get_max_scn(), flashback_scn);
+
+  leader.palf_handle_impl_->state_mgr_.role_ = FOLLOWER;
+  leader.palf_handle_impl_->state_mgr_.state_ = ACTIVE;
+
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->flashback(mode_version, max_scn, timeout_ts_us));
+  EXPECT_LT(leader.palf_handle_impl_->sw_.get_max_scn(), flashback_scn);
+
+  EXPECT_EQ(new_log_tail, leader.palf_handle_impl_->get_end_lsn());
+  EXPECT_EQ(OB_ITER_END, read_log(leader));
+  leader.palf_handle_impl_->state_mgr_.role_ = LEADER;
+  leader.palf_handle_impl_->state_mgr_.state_ = ACTIVE;
+  dynamic_cast<palf::PalfEnvImpl*>(get_cluster()[0]->get_palf_env())->log_loop_thread_.start();
+  switch_flashback_to_append(leader, mode_version);
+
   // 数据全部清空
   wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn());
   switch_append_to_flashback(leader, mode_version);

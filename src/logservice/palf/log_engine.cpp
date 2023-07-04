@@ -494,7 +494,6 @@ int LogEngine::submit_flashback_task(const FlashbackCbCtx &flashback_cb_ctx)
 int LogEngine::append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("append_log", 100);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret), K_(palf_id), K_(is_inited));
@@ -507,7 +506,6 @@ int LogEngine::append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SC
     PALF_LOG(
         TRACE, "LogEngine append_log success", K(ret), K_(palf_id), K_(is_inited), K(lsn), K(write_buf), K(scn));
   }
-  time_guard.click("append_log");
   return ret;
 }
 
