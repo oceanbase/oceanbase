@@ -536,13 +536,13 @@ private:
       int64_t tenant_id = MTL_ID();                                                                     \
       int64_t hash_value = ObScheduleSuspectInfo::gen_hash(tenant_id, dag_hash.inner_hash());          \
       if (OB_TMP_FAIL(MTL(ObScheduleSuspectInfoMgr *)->delete_info(hash_value))) { \
-        if (OB_HASH_NOT_EXIST != ret) {                                                                \
-          STORAGE_LOG(WARN, "failed to add suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));         \
+        if (OB_HASH_NOT_EXIST != tmp_ret) {                                                                \
+          STORAGE_LOG(WARN, "failed to del suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));         \
         } else {                                                                                      \
           tmp_ret = OB_SUCCESS;                                                                           \
         }                                                                                            \
       } else {                                                                                      \
-        STORAGE_LOG(DEBUG, "success to add suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));       \
+        STORAGE_LOG(DEBUG, "success to del suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));       \
       }                                                                                       \
 }
 

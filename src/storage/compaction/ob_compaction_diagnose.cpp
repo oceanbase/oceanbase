@@ -855,8 +855,6 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
     }
 
     ObLSID ls_id;
-    ObLSHandle ls_handle;
-    ObLS *ls = nullptr;
     ObLSCheckStatus ls_check_status;
     bool tenant_major_finish = true;
     bool tablet_major_finish = true;
@@ -875,7 +873,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
           } else if (OB_FAIL(ls_status_map_.set_refactored(ls_id, ls_check_status))) {
             LOG_WARN("failed to set ls check status", K(ret), K(ls_id), K(ls_check_status));
           } else if (!ls_check_status.need_merge_) {
-            (void)abnormal_ls_id.push_back(ls->get_ls_id());
+            (void)abnormal_ls_id.push_back(ls_id);
           }
         } else {
           LOG_WARN("failed to get ls check status from map", K(ret));
