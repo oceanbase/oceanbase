@@ -149,7 +149,7 @@ void RowHolderMapper::set_hash_holder(const ObTabletID &tablet_id,
     uint64_t hash = hash_rowkey(tablet_id, key);
     if (!tx_id.is_valid()) {
       TRANS_LOG(WARN, "trans_id is invalid", KR(ret), K(hash), K(tx_id));
-    } else if (OB_FAIL(map_.insert(ObIntWarp(hash), tx_id))) {
+    } else if (OB_FAIL(map_.insert(ObIntWarp(hash), tx_id)) && OB_ENTRY_EXIST != ret) {
       TRANS_LOG(WARN, "set hash holder error", KR(ret), K(hash), K(tx_id));
     }
   }

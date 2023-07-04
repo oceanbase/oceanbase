@@ -1801,7 +1801,10 @@ int ObPartTransCtx::abort_(int reason)
   if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
     TRANS_LOG(WARN, "do local tx abort failed", K(ret), K(reason));
   }
-  TRANS_LOG(INFO, "tx abort", K(ret), K(reason), KR(reason), KPC(this));
+  // if abort was caused by internal impl reason, don't disturb
+  if (ObTxAbortCause::IMPLICIT_ROLLBACK != reason) {
+    TRANS_LOG(INFO, "tx abort", K(ret), K(reason), "reason_str", ObTxAbortCauseNames::of(reason), KPC(this));
+  }
   return ret;
 }
 

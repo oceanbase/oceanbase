@@ -1768,7 +1768,9 @@ int ObTransService::start_epoch_(ObTxDesc &tx)
     } else if (OB_FAIL(tx.switch_to_idle())) {
       TRANS_LOG(WARN, "switch to idlefail", K(ret), K(tx));
     }
+#ifndef NDEBUG
     TRANS_LOG(INFO, "tx start new epoch", K(ret), K(tx));
+#endif
   }
   ObTransTraceLog &tlog = tx.get_tlog();
   int tlog_truncate_cnt = 0;
