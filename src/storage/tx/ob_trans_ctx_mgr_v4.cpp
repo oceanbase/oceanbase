@@ -217,6 +217,7 @@ void ObLSTxCtxMgr::reset()
   lock_table_ = NULL;
   total_tx_ctx_count_ = 0;
   active_tx_count_ = 0;
+  total_active_readonly_request_count_ = 0;
   leader_takeover_ts_.reset();
   max_replay_commit_version_.reset();
   aggre_rec_scn_.reset();
@@ -233,10 +234,12 @@ void ObLSTxCtxMgr::reset()
 
 int ObLSTxCtxMgr::offline()
 {
+  int ret = OB_SUCCESS;
   aggre_rec_scn_.reset();
   prev_aggre_rec_scn_.reset();
+  TRANS_LOG(INFO, "offline ls", K(ret), "manager", *this);
 
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObLSTxCtxMgr::process_callback_(ObIArray<ObTxCommitCallback> &cb_array) const
@@ -904,7 +907,11 @@ int ObLSTxCtxMgr::stop(const bool graceful)
   ObTimeGuard timeguard("ctxmgr stop");
   {
     WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
-    if (OB_FAIL(ls_log_writer_.stop())) {
+    const int64_t total_active_readonly_request_count = get_total_active_readonly_request_count();
+    if (!graceful && total_active_readonly_request_count > 0) {
+      ret = OB_EAGAIN;
+      TRANS_LOG(WARN, "readonly requests are active", K(ret), K(total_active_readonly_request_count));
+    } else if (OB_FAIL(ls_log_writer_.stop())) {
       TRANS_LOG(WARN, "ls_log_writer_ stop error", KR(ret));
     } else {
       {
@@ -944,6 +951,7 @@ int ObLSTxCtxMgr::kill_all_tx(const bool graceful, bool &is_all_tx_cleaned_up)
   const KillTransArg arg(graceful);
   {
     WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
+    const int64_t total_active_readonly_request_count = get_total_active_readonly_request_count();
     KillTxCtxFunctor fn(arg, cb_array);
     if (OB_FAIL(ls_retain_ctx_mgr_.force_gc_retain_ctx())) {
       TRANS_LOG(WARN, "force gc retain ctx mgr", K(ret));
@@ -973,6 +981,7 @@ int ObLSTxCtxMgr::block(bool &is_all_tx_cleaned_up)
   } else {
     is_all_tx_cleaned_up = (get_tx_ctx_count() == 0);
   }
+  TRANS_LOG(INFO, "block ls", K(ret), "manager", *this);
   return ret;
 }
 
@@ -987,6 +996,7 @@ int ObLSTxCtxMgr::block_normal(bool &is_all_tx_cleaned_up)
   } else {
     is_all_tx_cleaned_up = (get_tx_ctx_count() == 0);
   }
+  TRANS_LOG(INFO, "block ls normally", K(ret), "manager", *this);
   return ret;
 }
 
@@ -1001,6 +1011,7 @@ int ObLSTxCtxMgr::online()
   } else {
     online_ts_ = ObTimeUtility::current_time();
   }
+  TRANS_LOG(INFO, "online ls", K(ret), "manager", *this);
   return ret;
 }
 
@@ -1013,6 +1024,7 @@ int ObLSTxCtxMgr::unblock_normal()
   if (OB_FAIL(state_helper.switch_state(Ops::UNBLOCK_NORMAL))) {
     TRANS_LOG(WARN, "switch state error", KR(ret), "manager", *this);
   }
+  TRANS_LOG(INFO, "unblock ls normally", K(ret), "manager", *this);
   return ret;
 }
 
@@ -1486,6 +1498,30 @@ int ObLSTxCtxMgr::dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd)
     }
   }
   return ret;
+}
+
+int ObLSTxCtxMgr::start_readonly_request()
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(rwlock_);
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObLSTxCtxMgr not inited", K(this));
+    ret = OB_NOT_INIT;
+  } else if (is_blocked_()) {
+    ret = OB_PARTITION_IS_BLOCKED;
+    // readonly read must be blocked, because trx may be killed forcely
+    TRANS_LOG(WARN, "logstream is blocked", K(ret));
+  } else {
+    inc_total_active_readonly_request_count();
+  }
+  return ret;
+}
+
+int ObLSTxCtxMgr::end_readonly_request()
+{
+  dec_total_active_readonly_request_count();
+  return OB_SUCCESS;
 }
 
 int ObTxCtxMgr::remove_all_ls_()

@@ -326,10 +326,10 @@ private:
   void wait_();
   int prepare_for_safe_destroy_();
   int flush_if_need_(const bool need_flush);
-  int offline_();
+  int offline_(const int64_t start_ts);
   int offline_compaction_();
   int online_compaction_();
-  int offline_tx_();
+  int offline_tx_(const int64_t start_ts);
   int online_tx_();
 public:
   // ObLSMeta interface:

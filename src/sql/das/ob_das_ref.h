@@ -55,12 +55,15 @@ struct ObDasAggregatedTasks
   */
   int get_aggregated_tasks(common::ObSEArray<common::ObSEArray<ObIDASTaskOp *, 2>, 2> &task_groups, int64_t count);
   int get_failed_tasks(common::ObSEArray<ObIDASTaskOp *, 2> &tasks);
-  bool has_failed_tasks() const { return failed_tasks_.get_size() > 0; };
-  int failed_tasks_can_retry() const;
+  bool has_failed_tasks() const { return failed_tasks_.get_size() > 0; }
   bool has_unstart_tasks() const;
   bool has_unstart_high_priority_tasks() const;
   int32_t get_unstart_task_size() const;
-  TO_STRING_KV(K_(server), K(high_priority_tasks_.get_size()), K(tasks_.get_size()), K(failed_tasks_.get_size()), K(success_tasks_.get_size()));
+  TO_STRING_KV(K_(server),
+               K(high_priority_tasks_.get_size()),
+               K(tasks_.get_size()),
+               K(failed_tasks_.get_size()),
+               K(success_tasks_.get_size()));
   common::ObAddr server_;
   DasTaskLinkedList high_priority_tasks_;
   DasTaskLinkedList tasks_;
@@ -154,7 +157,7 @@ private:
   int move_local_tasks_to_last();
   int wait_executing_tasks();
   int process_remote_task_resp();
-  bool check_rcode_can_retry(int ret, int64_t ref_table_id);
+  bool check_rcode_can_retry(int ret);
 private:
   typedef common::ObObjNode<ObIDASTaskOp*> DasOpNode;
   //declare das allocator

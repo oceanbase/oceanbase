@@ -69,6 +69,7 @@ public:
   void destroy() {
     reset_();
   }
+  int prepare_offline(const int64_t start_ts);
   int offline();
   int online();
 
