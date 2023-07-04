@@ -67,14 +67,14 @@ private:
 
 struct KeepAliveLsInfo
 {
-  share::SCN scn_;
+  share::SCN loop_job_succ_scn_;
   palf::LSN lsn_;
   share::SCN min_start_scn_;
   MinStartScnStatus min_start_status_;
 
   void reset()
   {
-    scn_.reset();
+    loop_job_succ_scn_.reset();
     lsn_.reset();
     min_start_scn_.reset();
     min_start_status_ = MinStartScnStatus::UNKOWN;
@@ -82,17 +82,18 @@ struct KeepAliveLsInfo
 
   void replace(KeepAliveLsInfo info)
   {
-    scn_ = info.scn_;
-    lsn_ = info.lsn_;
-
-    if (info.min_start_status_ == MinStartScnStatus::NO_CTX
-        || info.min_start_status_ == MinStartScnStatus::HAS_CTX) {
+    /* We only update in the NO_CTX and HAS_CTX states here because most of the KEEP_ALIVE logs are in the UNKNOW state.
+     * If we update this in UNKNOW state, TX_DATA_TABLE will retrieve UNKNOW state in most cases, thus causing a
+     * prolonged inability to calculate the upper_trans_version of TX_DATA_TABLE */
+    if (info.min_start_status_ == MinStartScnStatus::NO_CTX || info.min_start_status_ == MinStartScnStatus::HAS_CTX) {
       min_start_scn_ = info.min_start_scn_;
       min_start_status_ = info.min_start_status_;
+      loop_job_succ_scn_ = info.loop_job_succ_scn_;
+      lsn_ = info.lsn_;
     }
   }
 
-  TO_STRING_KV(K(scn_), K(lsn_), K(min_start_scn_), K(min_start_status_));
+  TO_STRING_KV(K(loop_job_succ_scn_), K(lsn_), K(min_start_scn_), K(min_start_status_));
 };
 
 class ObLSKeepAliveStatInfo
