@@ -1499,6 +1499,12 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       }
     }
 
+    if (OB_SUCC(ret) && OB_NOT_NULL(GCTX.dblink_proxy_)) {
+      if (OB_FAIL(GCTX.dblink_proxy_->clean_dblink_connection(tenant_id))) {
+        LOG_WARN("failed to clean dblink connection", K(ret), K(tenant_id));
+      }
+    }
+
     if (OB_SUCC(ret)) {
       const share::ObUnitInfoGetter::ObTenantConfig &config = removed_tenant->get_unit();
       const int64_t log_disk_size = config.config_.log_disk_size();
@@ -1572,11 +1578,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
   if (OB_SUCC(ret)) {
     if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_tenant_interm_result_info(tenant_id))) {
       LOG_WARN("failed to erase_tenant_interm_result_info", K(ret), K(tenant_id));
-    }
-  }
-  if (OB_SUCC(ret) && OB_NOT_NULL(GCTX.dblink_proxy_)) {
-    if (OB_FAIL(GCTX.dblink_proxy_->clean_dblink_connection(tenant_id))) {
-      LOG_WARN("failed to clean dblink connection", K(ret), K(tenant_id));
     }
   }
   return ret;
