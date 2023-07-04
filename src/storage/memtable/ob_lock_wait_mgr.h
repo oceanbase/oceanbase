@@ -103,7 +103,7 @@ private:
 class LocalDeadLockCollectCallBack {
 public:
   LocalDeadLockCollectCallBack(const ObTransID &self_trans_id,
-                               char *node_key_buffer,
+                               const char *node_key_buffer,
                                const uint32_t sess_id) :
   self_trans_id_(self_trans_id),
   sess_id_(sess_id) {
@@ -348,7 +348,7 @@ private:
   // register to the deadlock detector
   int register_to_deadlock_detector_(const transaction::ObTransID &self_tx_id,
                                      const transaction::ObTransID &blocked_tx_id,
-                                     const uint32_t self_sess_id);
+                                     const Node * const node);
   bool is_deadlocked_session_(DeadlockedSessionArray *sessions,
                               const uint32_t sess_id);
   void fetch_deadlocked_sessions_(DeadlockedSessionArray *&sessions);

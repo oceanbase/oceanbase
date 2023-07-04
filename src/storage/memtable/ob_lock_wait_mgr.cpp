@@ -242,7 +242,7 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
           ObTransID blocked_tx_id(node->holder_tx_id_);
           if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = register_to_deadlock_detector_(self_tx_id,
                                                                                   blocked_tx_id,
-                                                                                  node->sessid_)))) {
+                                                                                  node)))) {
             DETECT_LOG_RET(WARN, tmp_ret, "register to deadlock detector failed", K(tmp_ret), K(*node));
           } else {
             DETECT_LOG(TRACE, "register to deadlock detector success", K(tmp_ret), K(*node));
@@ -270,10 +270,11 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
 
 int ObLockWaitMgr::register_to_deadlock_detector_(const ObTransID &self_tx_id,
                                                   const ObTransID &blocked_tx_id,
-                                                  const uint32_t self_sess_id)
+                                                  const Node * const node)
 {
   int ret = OB_SUCCESS;
   sql::ObSQLSessionInfo *session_info = NULL;
+  const uint32_t self_sess_id = node->sessid_;
   ObSessionGetterGuard guard(*GCTX.session_mgr_, self_sess_id);
   if (OB_ISNULL(GCTX.session_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -285,17 +286,17 @@ int ObLockWaitMgr::register_to_deadlock_detector_(const ObTransID &self_tx_id,
     TRANS_LOG(WARN, "got session_info is NULL", K(ret), K(self_sess_id));
   } else {
     CollectCallBack on_collect_callback((LocalDeadLockCollectCallBack(self_tx_id,
-                                                                      get_thread_node()->key_,
+                                                                      node->key_,
                                                                       self_sess_id)));
-    if (LockHashHelper::is_rowkey_hash(get_thread_node()->hash())) {// waiting for row
-      DeadLockBlockCallBack deadlock_block_call_back(row_holder_mapper_, get_thread_node()->hash());
+    if (LockHashHelper::is_rowkey_hash(node->hash())) {// waiting for row
+      DeadLockBlockCallBack deadlock_block_call_back(row_holder_mapper_, node->hash());
       if (OB_FAIL(ObTransDeadlockDetectorAdapter::register_local_execution_to_deadlock_detector_waiting_for_row(on_collect_callback,
                                                                                                                deadlock_block_call_back,
                                                                                                                self_tx_id,
                                                                                                                self_sess_id))) {
         TRANS_LOG(WARN, "fail to regester to deadlock detector", K(ret), K(self_sess_id));
       } else {
-        TRANS_LOG(INFO, "wait for row", K(get_thread_node()->hash()), K(self_tx_id), K(blocked_tx_id), K(self_sess_id));
+        TRANS_LOG(INFO, "wait for row", K(node->hash()), K(self_tx_id), K(blocked_tx_id), K(self_sess_id));
       }
     } else {// waiting for other trans
       if (OB_FAIL(ObTransDeadlockDetectorAdapter::register_local_execution_to_deadlock_detector_waiting_for_trans(on_collect_callback,
@@ -304,7 +305,7 @@ int ObLockWaitMgr::register_to_deadlock_detector_(const ObTransID &self_tx_id,
                                                                                                                  self_sess_id))) {
         TRANS_LOG(WARN, "fail to regester to deadlock detector", K(ret), K(self_sess_id));
       } else {
-        TRANS_LOG(INFO, "wait for trans", K(get_thread_node()->hash()), K(self_tx_id), K(blocked_tx_id), K(self_sess_id));
+        TRANS_LOG(INFO, "wait for trans", K(node->hash()), K(self_tx_id), K(blocked_tx_id), K(self_sess_id));
       }
     }
   }
