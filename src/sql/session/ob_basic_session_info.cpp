@@ -152,6 +152,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
   CHAR_CARRAY_INIT(tenant_);
   CHAR_CARRAY_INIT(effective_tenant_);
   CHAR_CARRAY_INIT(trace_id_buff_);
+  sql_id_[0] = '\0';
   ssl_cipher_buff_[0] = '\0';
   sess_bt_buff_[0] = '\0';
   inc_sys_var_alloc_[0] = &inc_sys_var_alloc1_;
@@ -362,6 +363,9 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   is_first_gen_ = true;
   is_first_gen_config_ = true;
   CHAR_CARRAY_INIT(trace_id_buff_);
+  CHAR_CARRAY_INIT(sql_id_);
+  char *sql_id = sql_id_;
+  sql_id = NULL;
 //consistency_level_ = INVALID_CONSISTENCY;
   next_tx_read_only_ = -1;
   next_tx_isolation_ = transaction::ObTxIsolationLevel::INVALID;
@@ -2030,14 +2034,16 @@ void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
   if (nullptr == sql_id) {
     sql_id_[0] = '\0';
   } else {
-    MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH + 1);
+    MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH);
+    sql_id_[32] = '\0';
   }
 }
 
 void ObBasicSessionInfo::get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const
 {
   if (common::OB_MAX_SQL_ID_LENGTH + 1 <= sql_id_buf_size) {
-    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
+    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH);
+    sql_id_buf[32] = '\0';
   } else {
     sql_id_buf[0] = '\0';
   }
