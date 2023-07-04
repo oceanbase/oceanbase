@@ -765,7 +765,7 @@ int ObTableQueryAndMutateP::execute_one_mutation(ObTableQueryResult &one_result,
             LOG_WARN("fail to get property value", K(ret), K(rk_names.at(i)));
           } else if (OB_FAIL(new_entity->add_rowkey_value(key))) {
             LOG_WARN("fail to add rowkey value", K(ret));
-          }            
+          }
         }
       }
 

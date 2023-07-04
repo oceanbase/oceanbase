@@ -353,7 +353,6 @@ int ObTableApiReplaceExecutor::get_next_row()
   if (OB_FAIL(phy_plan_ctx->sync_last_value_global())) {
     LOG_WARN("failed to sync last value", K(ret));
   }
-
   return ret;
 }
 
