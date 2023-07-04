@@ -1237,8 +1237,9 @@ int ObLSDupTabletsMgr::validate_replay_dup_tablet_set(
   int ret = OB_SUCCESS;
 
   const DupTabletSetCommonHeader cur_common_header = replay_target_set->get_common_header();
-  const bool need_replace_with_deserialize =
-      !target_common_header.no_specail_op() || cur_common_header.is_free() || cur_common_header.is_old_set();
+  const bool need_replace_with_deserialize = !target_common_header.no_specail_op()
+                                             || cur_common_header.is_free()
+                                             || cur_common_header.is_old_set();
 
   if (OB_ISNULL(replay_target_set)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1267,12 +1268,17 @@ int ObLSDupTabletsMgr::validate_replay_dup_tablet_set(
         ret = OB_EAGAIN;
         DUP_TABLE_LOG(WARN, "remove from readable_tablets_list failed", K(ret),
                       KPC(replay_target_set), K(target_common_header), K(target_change_status));
+      } else {
+        replay_target_set->reuse();
       }
+
     } else if (cur_common_header.is_readable_set()) {
       if (OB_ISNULL(readable_tablets_list_.remove(replay_target_set))) {
         ret = OB_EAGAIN;
         DUP_TABLE_LOG(WARN, "remove from readable_tablets_list failed", K(ret),
                       KPC(replay_target_set), K(target_common_header), K(target_change_status));
+      } else {
+        replay_target_set->reuse();
       }
     }
   }
