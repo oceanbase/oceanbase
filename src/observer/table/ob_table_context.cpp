@@ -1190,7 +1190,7 @@ int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx *&phy_plan_ctx)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is NULL", K(ret));
     } else if (col_schema->is_autoincrement()) {
-      is_auto_inc_ = true;
+      auto_inc_param_.is_auto_inc_ = true;
       AutoincParam &param = get_auto_inc_param();
       param.tenant_id_ = tenant_id_;
       param.autoinc_table_id_ = ref_table_id_;

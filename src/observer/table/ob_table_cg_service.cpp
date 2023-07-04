@@ -179,10 +179,10 @@ int ObTableExprCgService::generate_column_ref_raw_expr(ObTableCtx &ctx,
       LOG_WARN("fail to push back column ref expr to all column exprs", K(ret));  
     }
   }
-  if (col_schema.is_autoincrement() && (ctx.get_opertion_type() != ObTableOperationType::DEL)  // 特判下，若为delete/update/get操作
-                                           && (ctx.get_opertion_type() != ObTableOperationType::UPDATE) // 则走原有的列引用表达式
-                                           && (ctx.get_opertion_type() != ObTableOperationType::GET)
-                                           && (ctx.get_opertion_type() != ObTableOperationType::SCAN)) {
+  if (col_schema.is_autoincrement() && (ctx.get_opertion_type() != ObTableOperationType::DEL)    // 特判下，若为delete/update/get操作
+                                    && (ctx.get_opertion_type() != ObTableOperationType::UPDATE) // 则走原有的列引用表达式
+                                    && (ctx.get_opertion_type() != ObTableOperationType::GET)
+                                    && (ctx.get_opertion_type() != ObTableOperationType::SCAN)) {
     if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(ctx.get_expr_factory(),
                                                        ctx.get_allocator(),
                                                         *col_ref_expr,
@@ -327,6 +327,9 @@ int ObTableExprCgService::generate_full_assign_raw_exprs(ObTableCtx &ctx)
       if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_id))) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get column schema", K(ret), K(column_id));
+      } else if (column_schema->is_autoincrement()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("auto increment column do not support delta", K(ret), K(*column_schema));
       } else if (OB_FAIL(generate_column_ref_raw_expr(ctx, *column_schema, col_ref_expr))) {
         LOG_WARN("fail to generate column ref raw expr", K(ret), K(*column_schema));
       } else if (OB_FAIL(delta_exprs.push_back(col_ref_expr))) {
@@ -924,7 +927,7 @@ int ObTableDmlCgService::replace_exprs_with_dependant(const ObIArray<ObRawExpr *
 
   for (int64_t i = 0; i < src_exprs.count() && OB_SUCC(ret); i++) {
     ObRawExpr *expr = src_exprs.at(i);
-    if (!expr->is_column_ref_expr() && expr->get_expr_type() != T_FUN_COLUMN_CONV) {
+    if (!expr->is_column_ref_expr() && expr->get_expr_type() != T_FUN_COLUMN_CONV) { // 兼容自增场景下的列转换表达式
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid expr type", K(ret), K(*expr));
     } else {
@@ -1004,7 +1007,7 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
     ObColumnRefRawExpr *col_ref_expr = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); i++) {
       ObRawExpr *expr = assign_exprs.at(i);
-      if (expr->get_expr_type() == T_FUN_COLUMN_CONV) {
+      if (expr->get_expr_type() == T_FUN_COLUMN_CONV) { // 兼容自增场景下的列转换表达式
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(full_row.push_back(expr))) {
           LOG_WARN("fail to add assign expr to full row", K(ret), K(i));
@@ -1028,7 +1031,7 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
         } else {
           ObColumnRefRawExpr *old_col_expr = nullptr;
           for (int64_t j = 0; OB_SUCC(ret) && j < old_exprs.count(); j++) {
-            if (!old_exprs.at(i)->is_column_ref_expr() && (old_exprs.at(i)->get_expr_type() != T_FUN_COLUMN_CONV)) {
+            if (!old_exprs.at(i)->is_column_ref_expr() && (old_exprs.at(i)->get_expr_type() != T_FUN_COLUMN_CONV)) { // 兼容自增场景下的列转换表达式
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected expr type", K(ret), K(*old_exprs.at(i)));
             } else if (FALSE_IT(old_col_expr = static_cast<ObColumnRefRawExpr*>(old_exprs.at(j)))) {
@@ -1161,7 +1164,7 @@ int ObTableDmlCgService::generate_updated_column_ids(ObTableCtx &ctx,
     } else {
       ObColumnRefRawExpr *col_expr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); i++) {
-        if (assign_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV) {
+        if (assign_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV) { // 兼容自增场景下的列转换表达式
           if (OB_FAIL(updated_column_ids.push_back(ctx.get_auto_inc_column_id()))) {
             LOG_WARN("fail to add updated column id", K(ret), K(ctx.get_auto_inc_column_id()));
           }
@@ -1198,7 +1201,7 @@ int ObTableDmlCgService::generate_upd_assign_infos(ObTableCtx &ctx,
   for (int64_t i = 0; OB_SUCC(ret) && i < assign_cnt; ++i) {
     ColumnContent column_content;
     int64_t idx = 0;
-    if (assign_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV) {
+    if (assign_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV) { // 兼容自增场景下的列转换表达式
       column_content.auto_filled_timestamp_ = false;
       column_content.is_nullable_ = false;
       column_content.is_predicate_column_ = false;
@@ -1359,7 +1362,7 @@ int ObTableDmlCgService::generate_table_rowkey_info(ObTableCtx &ctx,
 
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
     ObRawExpr *expr = rowkey_exprs.at(i);
-    if (expr->get_expr_type() == T_FUN_COLUMN_CONV) {
+    if (expr->get_expr_type() == T_FUN_COLUMN_CONV) { // 兼容自增场景下的列转换表达式
         if (OB_FAIL(rowkey_column_ids.push_back(ctx.get_auto_inc_column_id()))) {
           LOG_WARN("fail to push base column id", K(ret), K(ctx.get_auto_inc_column_id()));
         } else if (OB_FAIL(rowkey_column_types.push_back(expr->get_result_type()))) {
@@ -1442,7 +1445,7 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to init access_column_ids_ ", K(ret));
   } else {
     ARRAY_FOREACH(access_exprs, i) {
-      if (access_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV) {
+      if (access_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV) { // 兼容自增场景下的列转换表达式
         if (OB_FAIL(tsc_ctdef.access_column_ids_.push_back(ctx.get_auto_inc_column_id()))) {
           LOG_WARN("fail to add column id", K(ret), K(ctx.get_auto_inc_column_id()));
         }  
@@ -1922,7 +1925,7 @@ int ObTableDmlCgService::generate_column_ids(ObTableCtx &ctx,
       LOG_WARN("fail to reserve column ids capacity", K(ret), K(exprs.count()));
     } else {
       ARRAY_FOREACH(exprs, i) {
-        if (exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && (ctx.get_opertion_type() != ObTableOperationType::DEL)  // 特判下，若为delete/update/get/append操作
+        if (exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && (ctx.get_opertion_type() != ObTableOperationType::DEL)    // 特判下，若为delete/update/get/append操作
                                                               && (ctx.get_opertion_type() != ObTableOperationType::UPDATE) // 则走原有的列引用表达式
                                                               && (ctx.get_opertion_type() != ObTableOperationType::GET)
                                                               && (ctx.get_opertion_type() != ObTableOperationType::SCAN)) {
