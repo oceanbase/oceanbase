@@ -33,21 +33,6 @@ enum ThreadCGroup
 };
 
 class Threads;
-class IRunWrapper
-{
-public:
-  virtual ~IRunWrapper() {}
-  virtual int pre_run(Threads*)
-  {
-    int ret = OB_SUCCESS;
-    return ret;
-  }
-  virtual int end_run(Threads*)
-  {
-    int ret = OB_SUCCESS;
-    return ret;
-  }
-};
 
 class Threads
 {
@@ -91,10 +76,15 @@ public:
     run_wrapper_ = run_wrapper;
     cgroup_ = cgroup;
   }
+  IRunWrapper * get_run_wrapper()
+  {
+    return run_wrapper_;
+  }
   virtual int start();
   virtual void stop();
   virtual void wait();
   void destroy();
+  virtual void run(int64_t idx);
 
 public:
   template <class Functor>
@@ -121,12 +111,11 @@ protected:
   void set_thread_idx(int64_t idx) { thread_idx_ = idx; }
 
 private:
-  virtual void run(int64_t idx);
   virtual void run1() {}
 
   int do_thread_recycle();
-  /// \brief Create thread with start entry \c entry.
-  int create_thread(Thread *&thread, std::function<void()> entry);
+  /// \brief Create thread
+  int create_thread(Thread *&thread, int64_t idx);
 
   /// \brief Destroy thread.
   void destroy_thread(Thread *thread);

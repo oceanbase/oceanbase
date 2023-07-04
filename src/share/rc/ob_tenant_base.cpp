@@ -227,6 +227,7 @@ void ObTenantBase::destroy()
   }
   tg_set_.destroy();
   thread_dynamic_factor_map_.destroy();
+  OB_ASSERT(thread_list_.get_size() == 0);
   inited_ = false;
 }
 
@@ -255,35 +256,47 @@ void ObTenantBase::destroy_mtl_module()
   created_ = false;
 }
 
-ObCgroupCtrl *ObTenantBase::get_cgroup(lib::ThreadCGroup cgroup)
+ObCgroupCtrl *ObTenantBase::get_cgroup()
 {
   // TODO
-  UNUSED(cgroup);
   ObCgroupCtrl *cgroup_ctrl = nullptr;
   cgroup_ctrl = cgroups_;
   return cgroup_ctrl;
 }
 
-int ObTenantBase::pre_run(lib::Threads *th)
+int ObTenantBase::pre_run()
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(this);
-  ObCgroupCtrl *cgroup_ctrl = get_cgroup(th->get_cgroup());
+  ObCgroupCtrl *cgroup_ctrl = get_cgroup();
   if (cgroup_ctrl != nullptr) {
     ret = cgroup_ctrl->add_self_to_cgroup(id_);
   }
+  {
+    ThreadListNode *node = lib::Thread::current().get_thread_list_node();
+    lib::ObMutexGuard guard(thread_list_lock_);
+    if (!thread_list_.add_last(node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("add to thread list fail", K(ret));
+    }
+  }
   ATOMIC_INC(&thread_count_);
-  LOG_INFO("tenant thread pre_run", K(MTL_ID()), K(ret), K(thread_count_), KP(th));
+  LOG_INFO("tenant thread pre_run", K(MTL_ID()), K(ret), K(thread_count_));
   return ret;
 }
 
-int ObTenantBase::end_run(lib::Threads *th)
+int ObTenantBase::end_run()
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(nullptr);
-  ObCgroupCtrl *cgroup_ctrl = get_cgroup(th->get_cgroup());
+  ObCgroupCtrl *cgroup_ctrl = get_cgroup();
   if (cgroup_ctrl != nullptr) {
     ret = cgroup_ctrl->remove_self_from_cgroup(id_);
+  }
+  {
+    ThreadListNode *node = lib::Thread::current().get_thread_list_node();
+    lib::ObMutexGuard guard(thread_list_lock_);
+    thread_list_.remove(node);
   }
   ATOMIC_DEC(&thread_count_);
   LOG_INFO("tenant thread end_run", K(id_), K(ret), K(thread_count_));

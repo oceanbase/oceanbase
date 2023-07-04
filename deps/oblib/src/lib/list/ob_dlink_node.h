@@ -139,6 +139,7 @@ template<typename T>
 struct ObDLinkNode: public ObDLinkBase<ObDLinkNode<T> >
 {
   ObDLinkNode():data_() {};
+  ObDLinkNode(T data):data_(data) {};
   ~ObDLinkNode() {};
 
   T &get_data() {return data_;};

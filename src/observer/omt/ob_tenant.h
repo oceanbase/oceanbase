@@ -484,6 +484,8 @@ public:
   OB_INLINE bool user_sched_enabled() const { return !disable_user_sched_; }
   OB_INLINE double get_token_usage() const { return token_usage_; }
   OB_INLINE int64_t get_worker_time() const { return ATOMIC_LOAD(&worker_us_); }
+  OB_INLINE int64_t get_cpu_time() const { return ATOMIC_LOAD(&cpu_time_us_); }
+  int64_t get_rusage_time();
   // sql throttle
   void update_sql_throttle_metrics(const ObSqlThrottleMetrics &metrics)
   { st_metrics_ = metrics; }
@@ -612,6 +614,7 @@ public:
   // idle time between two checkpoints
   int64_t worker_us_ CACHE_ALIGNED;
   int64_t idle_us_ CACHE_ALIGNED;
+  int64_t cpu_time_us_ CACHE_ALIGNED;
 }; // end of class ObTenant
 
 OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const

@@ -67,11 +67,7 @@ int Threads::do_set_thread_count(int64_t n_threads)
         MEMCPY(new_threads, threads_, sizeof (Thread*) * n_threads_);
         for (auto i = n_threads_; i < n_threads; i++) {
           Thread *thread = nullptr;
-          if (this->run_wrapper_ == nullptr) {
-            ret = create_thread(thread, [this, i]() { this->run(i); });
-          } else {
-            ret = create_thread(thread, [this, i]() { this->run_wrapper_->pre_run(this); this->run(i); this->run_wrapper_->end_run(this); });
-          }
+          ret = create_thread(thread, i);
           if (OB_FAIL(ret)) {
             n_threads = i;
             break;
@@ -182,11 +178,7 @@ int Threads::start()
     MEMSET(threads_, 0, sizeof (Thread*) * n_threads_);
     for (int i = 0; i < n_threads_; i++) {
       Thread *thread = nullptr;
-      if (this->run_wrapper_ == nullptr) {
-        ret = create_thread(thread, [this, i]() { this->run(i); });
-      } else {
-        ret = create_thread(thread, [this, i]() { this->run_wrapper_->pre_run(this); this->run(i); this->run_wrapper_->end_run(this); });
-      }
+      ret = create_thread(thread, i);
       if (OB_FAIL(ret)) {
         break;
       } else {
@@ -213,7 +205,7 @@ void Threads::run(int64_t idx)
   run1();
 }
 
-int Threads::create_thread(Thread *&thread, std::function<void()> entry)
+int Threads::create_thread(Thread *&thread, int64_t idx)
 {
   int ret = OB_SUCCESS;
   thread = nullptr;
@@ -221,7 +213,7 @@ int Threads::create_thread(Thread *&thread, std::function<void()> entry)
   if (buf == nullptr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    thread = new (buf) Thread(entry, stack_size_);
+    thread = new (buf) Thread(this, idx, stack_size_);
     if (OB_FAIL(thread->start())) {
       thread->~Thread();
       ob_free(thread);

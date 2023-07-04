@@ -668,17 +668,20 @@ int ObCgroupCtrl::get_cpu_usage(const uint64_t tenant_id, int32_t &cpu_usage)
 int ObCgroupCtrl::get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time)
 {
   int ret = OB_SUCCESS;
-
-  char usage_path[PATH_BUFSIZE];
-  char usage_value[VALUE_BUFSIZE + 1];
-  snprintf(usage_path, PATH_BUFSIZE, "%s/tenant_%lu/cpuacct.usage", root_cgroup_, tenant_id);
-  MEMSET(usage_value, 0, VALUE_BUFSIZE);
-  if(OB_FAIL(get_string_from_file_(usage_path, usage_value))) {
-    LOG_WARN("get cpu usage failed",
-        K(ret), K(usage_path), K(usage_value), K(tenant_id));
+  char tenant_path[PATH_BUFSIZE];
+  if (OB_FAIL(get_group_path(tenant_path, PATH_BUFSIZE, tenant_id))) {
+    LOG_WARN("fail get group path", K(tenant_id), K(ret));
   } else {
-    usage_value[VALUE_BUFSIZE] = '\0';
-    cpu_time = std::stoull(usage_value) / 1000;
+    char usage_path[PATH_BUFSIZE];
+    char usage_value[VALUE_BUFSIZE + 1];
+    snprintf(usage_path, PATH_BUFSIZE, "%s/cpuacct.usage", tenant_path);
+    if(OB_FAIL(get_string_from_file_(usage_path, usage_value))) {
+      LOG_WARN("get cpu usage failed",
+          K(ret), K(usage_path), K(usage_value), K(tenant_id));
+    } else {
+      usage_value[VALUE_BUFSIZE] = '\0';
+      cpu_time = std::stoull(usage_value) / 1000;
+    }
   }
   return ret;
 }

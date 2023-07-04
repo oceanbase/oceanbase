@@ -363,8 +363,8 @@ template<class T> struct Identity {};
 
 public:
   // TGHelper need
-  virtual int pre_run(lib::Threads*) override;
-  virtual int end_run(lib::Threads*) override;
+  virtual int pre_run() override;
+  virtual int end_run() override;
   virtual void tg_create_cb(int tg_id) override;
   virtual void tg_destroy_cb(int tg_id) override;
 
@@ -403,7 +403,7 @@ public:
   int init(ObCgroupCtrl *cgroup = nullptr);
   void destroy();
   virtual inline uint64_t id() const override { return id_; }
-  ObCgroupCtrl *get_cgroup(lib::ThreadCGroup cgroup);
+  ObCgroupCtrl *get_cgroup();
 
   const ObTenantModuleInitCtx *get_mtl_init_ctx() const { return mtl_init_ctx_; }
 
@@ -512,6 +512,11 @@ private:
   int64_t thread_count_;
   int64_t memory_size_;
   bool mini_mode_;
+
+  using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
+  using ThreadList = common::ObDList<ThreadListNode>;
+  ThreadList thread_list_;
+  lib::ObMutex thread_list_lock_;
 };
 
 using ReleaseCbFunc = std::function<int (common::ObLDHandle&)>;

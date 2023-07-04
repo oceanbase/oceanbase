@@ -16,25 +16,42 @@
 #include <functional>
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/list/ob_dlink_node.h"
 
 
 namespace oceanbase {
 namespace lib {
 
+class Thread;
+class Threads;
+class IRunWrapper
+{
+public:
+  virtual ~IRunWrapper() {}
+  virtual int pre_run()
+  {
+    int ret = OB_SUCCESS;
+    return ret;
+  }
+  virtual int end_run()
+  {
+    int ret = OB_SUCCESS;
+    return ret;
+  }
+  virtual uint64_t id() const = 0;
+};
+
 /// \class
 /// A wrapper of Linux thread that supports normal thread operations.
 class Thread {
 public:
-  using Runnable = std::function<void()>;
   static constexpr int PATH_SIZE = 128;
-  Thread();
-  Thread(int64_t stack_size);
-  Thread(Runnable runnable, int64_t stack_size=0);
+  Thread(Threads *threads, int64_t idx, int64_t stack_size);
   ~Thread();
 
   int start();
-  int start(Runnable runnable);
   void stop();
+  void run();
   void wait();
   void destroy();
   void dump_pth();
@@ -46,6 +63,11 @@ public:
   static Thread &current();
 
   bool has_set_stop() const;
+  uint64_t get_tenant_id() const;
+  using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
+  ThreadListNode *get_thread_list_node() { return &thread_list_node_; }
+  int get_cpu_time_inc(int64_t &cpu_time_inc);
+  int64_t get_tid() { return tid_; }
 
   OB_INLINE static int64_t update_loop_ts(int64_t t)
   {
@@ -125,7 +147,8 @@ private:
   static int64_t total_thread_count_;
 private:
   pthread_t pth_;
-  Runnable runnable_;
+  Threads *threads_;
+  int64_t idx_;
 #ifndef OB_USE_ASAN
   void *stack_addr_;
 #endif
@@ -134,6 +157,9 @@ private:
   int64_t join_concurrency_;
   pid_t pid_before_stop_;
   pid_t tid_before_stop_;
+  int64_t tid_;
+  ThreadListNode thread_list_node_;
+  int64_t cpu_time_;
 };
 
 OB_INLINE bool Thread::has_set_stop() const

@@ -604,7 +604,8 @@ ObTenant::ObTenant(const int64_t id,
       st_metrics_(),
       sql_limiter_(),
       worker_us_(0),
-      idle_us_(0)
+      idle_us_(0),
+      cpu_time_us_(0)
 {
   token_usage_check_ts_ = ObTimeUtility::current_time();
   lock_.set_diagnose(true);
@@ -1546,6 +1547,23 @@ void ObTenant::update_token_usage()
     const auto total_us = duration * total_worker_cnt_;
     token_usage_ = (total_us - idle_us) / duration;
     token_usage_ = std::max(.0, token_usage_);
+  }
+
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+    //do nothing
+  } else if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {  // every second
+    int64_t cpu_time_inc = 0;
+    DLIST_FOREACH_REMOVESAFE(thread_list_node_, thread_list_)
+    {
+      Thread *thread = thread_list_node_->get_data();
+      int64_t inc = 0;
+      if (OB_SUCC(thread->get_cpu_time_inc(inc))) {
+        cpu_time_inc += inc;
+      }
+    }
+    thread_list_lock_.unlock();
+    IGNORE_RETURN ATOMIC_FAA(&cpu_time_us_, cpu_time_inc);
   }
 }
 
