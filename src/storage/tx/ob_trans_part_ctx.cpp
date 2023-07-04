@@ -6348,13 +6348,16 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
         ret = mds::MdsFactory::create_buffer_ctx(data_source_type, trans_id_, buffer_ctx);
       }
       if (OB_FAIL(ret)) {
-        TRANS_LOG(WARN, "execute MDS frame code failed, execution interruped", KR(ret), K(data_source_type), K(*this));
-      } else if (OB_FAIL(node.init(data_source_type, data, register_flag.mds_base_scn_, buffer_ctx))) {
+        TRANS_LOG(WARN, "execute MDS frame code failed, execution interruped", KR(ret),
+                  K(data_source_type), K(*this));
+      } else if (OB_FAIL(
+                     node.init(data_source_type, data, register_flag.mds_base_scn_, buffer_ctx))) {
         TRANS_LOG(WARN, "init tx buffer node failed", KR(ret), K(data_source_type), K(*this));
       } else if (OB_FAIL(tmp_array.push_back(node))) {
         TRANS_LOG(WARN, "push back notify node  failed", KR(ret));
 #ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
-      } else if (tmp_array.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE) {
+      } else if (tmp_array.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE
+                 && !node.allow_to_use_mds_big_segment()) {
         ret = OB_LOG_TOO_LARGE;
         TRANS_LOG(WARN, "too large mds buf node", K(ret), K(tmp_array.get_serialize_size()));
 #endif
@@ -6366,10 +6369,9 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       if (OB_FAIL(ret)) {
         mtl_free(ptr);
         if (OB_NOT_NULL(buffer_ctx)) {
-          MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(buffer_ctx);
+          MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(buffer_ctx);
         }
-      } else if (OB_FAIL(notify_data_source_(NotifyType::REGISTER_SUCC, SCN(), false,
-                                             tmp_array))) {
+      } else if (OB_FAIL(notify_data_source_(NotifyType::REGISTER_SUCC, SCN(), false, tmp_array))) {
         if (OB_SUCCESS != (tmp_ret = mds_cache_.rollback_last_mds_node())) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "rollback last mds node failed", K(tmp_ret), K(ret));
@@ -6379,7 +6381,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       } else if (mds_cache_.get_unsubmitted_size() < ObTxMultiDataSourceLog::MAX_PENDING_BUF_SIZE
                  && !register_flag.need_flush_redo_instantly_) {
         // do nothing
-      } else if (OB_SUCCESS != (tmp_ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
+      } else if (OB_SUCCESS
+                 != (tmp_ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
         if (tmp_ret == OB_NOT_MASTER) {
           ret = OB_TRANS_NEED_ROLLBACK;
         } else if (tmp_ret == OB_TX_NOLOGCB) {
@@ -6388,8 +6391,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
             mds_cache_.set_need_retry_submit_mds(true);
           }
         }
-        TRANS_LOG(WARN, "submit mds log failed", K(tmp_ret), K(ret),
-                  K(register_flag), K(data_source_type),KPC(this));
+        TRANS_LOG(WARN, "submit mds log failed", K(tmp_ret), K(ret), K(register_flag),
+                  K(data_source_type), KPC(this));
       } else {
         TRANS_LOG(DEBUG, "submit mds log success", K(tmp_ret));
       }
