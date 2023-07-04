@@ -468,7 +468,8 @@ int ObExprSubstrb::calc_substrb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
             ObString inrow_result;
             if (OB_FAIL(calc(inrow_result, src_block_data, start_int, len_int, cs_type, data_buf))) {
               LOG_WARN("get substr failed", K(ret));
-            } else if (OB_FAIL(output_result.append(inrow_result))) {
+            } else if (FALSE_IT(MEMMOVE(buf, inrow_result.ptr(), inrow_result.length()))) {
+            } else if (OB_FAIL(output_result.lseek(inrow_result.length(), 0))) {
               LOG_WARN("Lob: append result failed", K(ret), K(output_result), K(src_block_data));
             }
           // outrow lobs, only use calc for handle invalid bytes
