@@ -2863,10 +2863,6 @@ int ObTablet::rowkeys_exists(
     LOG_WARN("tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
   } else if (OB_FAIL(allow_to_read_())) {
     LOG_WARN("not allowed to read", K(ret), K(tablet_meta_));
-  } else if (OB_FAIL(auto_get_read_tables(store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
-                                     tables_iter,
-                                     relative_table.allow_not_ready()))) {
-    LOG_WARN("get read iterator fail", K(ret));
   } else {
     {
       ObStorageTableGuard guard(this, store_ctx, false);
@@ -2876,7 +2872,11 @@ int ObTablet::rowkeys_exists(
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(do_rowkeys_exist(tables_iter.table_store_iter_, rows_info, exists))) {
+      if (OB_FAIL(auto_get_read_tables(store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
+                                       tables_iter,
+                                       relative_table.allow_not_ready()))) {
+        LOG_WARN("get read iterator fail", K(ret));
+      } else if (OB_FAIL(do_rowkeys_exist(tables_iter.table_store_iter_, rows_info, exists))) {
         LOG_WARN("fail to check the existence of rows", K(ret), K(rows_info), K(exists));
       }
     }
