@@ -1058,7 +1058,7 @@ void ObTxDataTable::update_calc_upper_info_(const SCN &max_decided_scn)
       if (OB_FAIL(ret)) {
       } else if (tmp_calc_upper_info.min_start_scn_in_ctx_ < calc_upper_info_.min_start_scn_in_ctx_) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(ERROR, "invalid min start scn", K(tmp_calc_upper_info), K(calc_upper_info_));
+        STORAGE_LOG(WARN, "invalid min start scn", K(tmp_calc_upper_info), K(calc_upper_info_));
       } else {
         calc_upper_info_ = tmp_calc_upper_info;
       }
