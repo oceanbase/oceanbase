@@ -679,7 +679,7 @@ public:
       obrpc::ObCopyTabletInfo &tablet_info) override;
 
 private:
-  static const int64_t FETCH_LS_VIEW_INFO_TIMEOUT = 10 * 60 * 1000 * 1000; // 10min  // TODO(chongrong.th) change timeout to 1min later,
+  static const int64_t FETCH_LS_VIEW_INFO_TIMEOUT = 60 * 1000 * 1000; // 1min
   bool is_inited_;
   ObLSMetaPackage ls_meta_;
   ObStorageStreamRpcReader<obrpc::OB_HA_FETCH_LS_VIEW> rpc_reader_;
