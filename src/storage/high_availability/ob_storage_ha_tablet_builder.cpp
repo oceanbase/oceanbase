@@ -266,6 +266,54 @@ int ObStorageHATabletsBuilder::create_all_tablets(
   return ret;
 }
 
+int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
+    CopyTabletSimpleInfoMap &simple_info_map)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  ObICopyTabletInfoReader *reader = nullptr;
+  obrpc::ObCopyTabletInfo tablet_info;
+  const int overwrite = 1;
+  ObCopyTabletSimpleInfo tablet_simple_info;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (OB_ISNULL(ls = param_.ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
+  } else if (OB_FAIL(get_tablet_info_reader_(reader))) {
+    LOG_WARN("failed to get tablet info reader", K(ret), K(param_));
+  } else {
+    while (OB_SUCC(ret)) {
+      tablet_info.reset();
+      if (OB_FAIL(reader->fetch_tablet_info(tablet_info))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to fetch tablet info", K(ret));
+        }
+      } else if (OB_FAIL(modified_tablet_info_(tablet_info))) {
+        LOG_WARN("failed to modified tablet info", K(ret), K(tablet_info));
+      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, ls))) {
+        LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
+      } else {
+        tablet_simple_info.tablet_id_ = tablet_info.tablet_id_;
+        tablet_simple_info.status_ = tablet_info.status_;
+        tablet_simple_info.data_size_ = tablet_info.data_size_;
+        if (OB_FAIL(simple_info_map.set_refactored(tablet_info.tablet_id_, tablet_simple_info, overwrite))) {
+          LOG_WARN("failed to set tablet status info into map", K(ret), K(tablet_simple_info), K(tablet_info));
+        }
+      }
+    }
+  }
+
+  if (OB_NOT_NULL(reader)) {
+    free_tablet_info_reader_(reader);
+  }
+  return ret;
+}
 
 int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
 {
