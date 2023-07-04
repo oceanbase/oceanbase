@@ -996,7 +996,6 @@ int ObStartLSRestoreTask::create_tablet_(
 void ObStartLSRestoreTask::set_tablet_to_restore(ObMigrationTabletParam &tablet_meta)
 {
   tablet_meta.ha_status_.set_restore_status(ObTabletRestoreStatus::PENDING);
-  tablet_meta.ha_status_.set_data_status(ObTabletDataStatus::INCOMPLETE);
 }
 
 int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()

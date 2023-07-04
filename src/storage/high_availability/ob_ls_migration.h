@@ -80,15 +80,15 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObMigrationCtx);
 };
 
-struct ObCopyTabletCtx
+struct ObCopyTabletCtx final: public ObICopyTabletCtx
 {
 public:
   ObCopyTabletCtx();
   virtual ~ObCopyTabletCtx();
   bool is_valid() const;
   void reset();
-  int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status);
-  int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status);
+  int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) override;
+  int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const override;
   VIRTUAL_TO_STRING_KV(K_(tablet_id), K_(status));
 
 public:
@@ -327,6 +327,7 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMigrationDag);
 };
 
+class ObTabletFinishMigrationTask;
 class ObTabletMigrationTask : public share::ObITask
 {
 public:
@@ -357,6 +358,8 @@ private:
       ObTabletCopyFinishTask *tablet_copy_finish_task,
       ObITask *parent_task,
       ObITask *child_task);
+  int generate_tablet_finish_migration_task_(
+      ObTabletFinishMigrationTask *&tablet_finish_migration_task);
   int build_copy_table_key_info_();
   int build_copy_sstable_info_mgr_();
   int generate_tablet_copy_finish_task_(
@@ -381,6 +384,24 @@ private:
   ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTabletMigrationTask);
+};
+
+class ObTabletFinishMigrationTask final : public share::ObITask
+{
+public:
+  ObTabletFinishMigrationTask();
+  virtual ~ObTabletFinishMigrationTask();
+  int init(ObCopyTabletCtx &ctx, ObLS &ls);
+  virtual int process() override;
+  VIRTUAL_TO_STRING_KV(K("ObTabletFinishMigrationTask"), KP(this), KPC(ha_dag_net_ctx_), KPC(copy_tablet_ctx_), KPC(ls_));
+private:
+  int update_data_and_expected_status_();
+private:
+  bool is_inited_;
+  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObCopyTabletCtx *copy_tablet_ctx_;
+  ObLS *ls_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletFinishMigrationTask);
 };
 
 class ObDataTabletsMigrationDag : public ObMigrationDag

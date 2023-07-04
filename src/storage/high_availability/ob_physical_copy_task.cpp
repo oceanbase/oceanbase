@@ -1186,7 +1186,8 @@ ObTabletCopyFinishTask::ObTabletCopyFinishTask()
     major_tables_handle_(),
     restore_action_(ObTabletRestoreAction::MAX),
     src_tablet_meta_(nullptr),
-    status_(ObCopyTabletStatus::MAX_STATUS)
+    copy_tablet_ctx_(nullptr)
+
 
 {
 }
@@ -1200,17 +1201,20 @@ int ObTabletCopyFinishTask::init(
     ObLS *ls,
     observer::ObIMetaReport *reporter,
     const ObTabletRestoreAction::ACTION &restore_action,
-    const ObMigrationTabletParam *src_tablet_meta)
+    const ObMigrationTabletParam *src_tablet_meta,
+    ObICopyTabletCtx *copy_tablet_ctx)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tablet copy finish task init twice", K(ret));
   } else if (!tablet_id.is_valid() || OB_ISNULL(ls) || OB_ISNULL(reporter) || OB_ISNULL(src_tablet_meta)
-      || !ObTabletRestoreAction::is_valid(restore_action)) {
+      || !ObTabletRestoreAction::is_valid(restore_action) || OB_ISNULL(copy_tablet_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init tablet copy finish task get invalid argument", K(ret), K(tablet_id), KP(ls),
         KP(reporter), KP(src_tablet_meta), K(restore_action));
+  } else if (OB_FAIL(copy_tablet_ctx->set_copy_tablet_status(ObCopyTabletStatus::TABLET_EXIST))) {
+    LOG_WARN("failed to set copy tablet status", K(ret));
   } else {
     tablet_id_ = tablet_id;
     ls_ = ls;
@@ -1218,7 +1222,7 @@ int ObTabletCopyFinishTask::init(
     ha_dag_ = static_cast<ObStorageHADag *>(this->get_dag());
     restore_action_ = restore_action;
     src_tablet_meta_ = src_tablet_meta;
-    status_ = ObCopyTabletStatus::TABLET_EXIST;
+    copy_tablet_ctx_ = copy_tablet_ctx;
     is_inited_ = true;
   }
   return ret;
@@ -1249,7 +1253,7 @@ int ObTabletCopyFinishTask::process()
     LOG_WARN("failed to trim tablet", K(ret), K_(tablet_id));
   } else if (OB_FAIL(check_tablet_valid_())) {
     LOG_WARN("failed to check tablet valid", K(ret), KPC(this));
-  } else if (OB_FAIL(update_tablet_data_status_())) {
+  } else if (OB_FAIL(check_finish_copy_tablet_data_valid_())) {
     LOG_WARN("failed to update tablet data status", K(ret), K(tablet_id_));
   }
 
@@ -1383,7 +1387,7 @@ int ObTabletCopyFinishTask::create_new_table_store_with_major_()
   return ret;
 }
 
-int ObTabletCopyFinishTask::update_tablet_data_status_()
+int ObTabletCopyFinishTask::check_finish_copy_tablet_data_valid_()
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -1403,8 +1407,6 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
   } else if (tablet->get_tablet_meta().has_next_tablet_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet here should only has one", K(ret), KPC(tablet));
-  } else if (tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
-    //do nothing
   } else if (OB_FAIL(ObStorageHATabletBuilderUtil::check_remote_logical_sstable_exist(tablet, is_logical_sstable_exist))) {
     LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(tablet));
   } else if (is_logical_sstable_exist && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
@@ -1421,25 +1423,6 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
         && major_sstables.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet should has major sstable, unexpected", K(ret), KPC(tablet), K(major_sstables));
-    }
-
-#ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = OB_E(EventTable::EN_UPDATE_TABLET_HA_STATUS_FAILED) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake EN_UPDATE_TABLET_HA_STATUS_FAILED", K(ret));
-      }
-    }
-#endif
-
-    if (OB_SUCC(ret)) {
-      if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-        LOG_INFO("tablet is in restore status, do not update data stauts is full", K(ret), K(tablet_id_));
-      } else if (OB_FAIL(ls_->update_tablet_ha_data_status(tablet_id_, data_status))) {
-        LOG_WARN("[HA]failed to update tablet ha data status", K(ret), K(tablet_id_), K(data_status));
-      } else {
-        LOG_INFO("update tablet ha data status", K_(tablet_id), K(data_status));
-      }
     }
 
     if (OB_SUCC(ret)) {
@@ -1512,7 +1495,9 @@ int ObTabletCopyFinishTask::set_tablet_status(const ObCopyTabletStatus::STATUS &
     LOG_WARN("set tablet status get invalid argument", K(ret), K(status));
   } else {
     common::SpinWLockGuard guard(lock_);
-    status_ = status;
+    if (OB_FAIL(copy_tablet_ctx_->set_copy_tablet_status(status))) {
+      LOG_WARN("failed to set copy tablet status", K(ret));
+    }
   }
   return ret;
 }
@@ -1546,7 +1531,9 @@ int ObTabletCopyFinishTask::get_tablet_status(ObCopyTabletStatus::STATUS &status
     LOG_WARN("tablet copy finish task do not init", K(ret));
   } else {
     common::SpinRLockGuard guard(lock_);
-    status = status_;
+    if (OB_FAIL(copy_tablet_ctx_->get_copy_tablet_status(status))) {
+      LOG_WARN("failed to get copy tablet status", K(ret));
+    }
   }
   return ret;
 }

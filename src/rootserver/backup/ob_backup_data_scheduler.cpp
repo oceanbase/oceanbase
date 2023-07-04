@@ -1181,10 +1181,13 @@ int ObUserTenantBackupJobMgr::move_to_history_()
   LOG_INFO("start to move backup job to history", KPC(job_attr_));
   ObMySQLTransaction trans;
   ObBackupSetTaskMgr set_task_mgr;
+  ObTimeoutCtx timeout_ctx;
   if (is_sys_tenant(job_attr_->initiator_tenant_id_) && OB_FAIL(report_failed_to_initiator_())) {
     LOG_WARN("fail to report job finish to initiator tenant id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to start trans", K(ret));
+  } else if (OB_FAIL(set_query_timeout_and_trx_timeout_(timeout_ctx))) {
+    LOG_WARN("failed to set query timeout and trx timeout", K(ret));
   } else {
     if (OB_FAIL(set_task_mgr.init(tenant_id_, *job_attr_, *sql_proxy_, 
         *rpc_proxy_, *task_scheduler_, *schema_service_, *backup_service_))) {
@@ -1215,6 +1218,20 @@ int ObUserTenantBackupJobMgr::move_to_history_()
         LOG_WARN("[DATA_BACKUP]failed to roll back status", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObUserTenantBackupJobMgr::set_query_timeout_and_trx_timeout_(ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  const int64_t ob_query_timeout = 600 * 1000 * 1000; // 600s
+  const int64_t ob_trx_timeout = 600 * 1000 * 1000; // 600s
+  const int64_t abs_timeout = ObTimeUtility::current_time() + ob_query_timeout;
+  if (OB_FAIL(timeout_ctx.set_trx_timeout_us(ob_trx_timeout))) {
+    LOG_WARN("failed to set trx timeout us", K(ret), K(ob_trx_timeout));
+  } else if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout))) {
+    LOG_WARN("failed to set abs timeout", K(ret));
   }
   return ret;
 }

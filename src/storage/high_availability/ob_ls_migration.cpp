@@ -172,7 +172,7 @@ int ObCopyTabletCtx::set_copy_tablet_status(const ObCopyTabletStatus::STATUS &st
   return ret;
 }
 
-int ObCopyTabletCtx::get_copy_tablet_status(ObCopyTabletStatus::STATUS &status)
+int ObCopyTabletCtx::get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const
 {
   int ret = OB_SUCCESS;
   status = ObCopyTabletStatus::MAX_STATUS;
@@ -2352,7 +2352,7 @@ int ObTabletMigrationTask::generate_migration_tasks_()
   int ret = OB_SUCCESS;
   ObITask *parent_task = this;
   ObTabletCopyFinishTask *tablet_copy_finish_task = nullptr;
-
+  ObTabletFinishMigrationTask *tablet_finish_migration_task = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_ERROR("not inited", K(ret));
@@ -2367,12 +2367,40 @@ int ObTabletMigrationTask::generate_migration_tasks_()
     LOG_WARN("failed to generate migrate major tasks", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_ddl_copy_tasks_(tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate ddl copy tasks", K(ret), K(*ctx_));
+  } else if (OB_FAIL(generate_tablet_finish_migration_task_(tablet_finish_migration_task))) {
+    LOG_WARN("failed to generate tablet finish migration task", K(ret), K(ctx_->arg_));
+  } else if (OB_FAIL(tablet_copy_finish_task->add_child(*tablet_finish_migration_task))) {
+    LOG_WARN("failed to add child finsih task for parent", K(ret), KPC(tablet_finish_migration_task));
   } else if (OB_FAIL(parent_task->add_child(*tablet_copy_finish_task))) {
     LOG_WARN("failed to add tablet copy finish task as child", K(ret), KPC(ctx_));
   } else if (OB_FAIL(dag_->add_task(*tablet_copy_finish_task))) {
     LOG_WARN("failed to add tablet copy finish task", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(dag_->add_task(*tablet_finish_migration_task))) {
+    LOG_WARN("failed to add tablet finish migration task", K(ret));
   } else {
     LOG_INFO("generate sstable migration tasks", KPC(copy_tablet_ctx_), K(copy_table_key_array_));
+  }
+  return ret;
+}
+
+int ObTabletMigrationTask::generate_tablet_finish_migration_task_(
+    ObTabletFinishMigrationTask *&tablet_finish_migration_task)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMigrationDag *tablet_migration_dag = nullptr;
+  ObLS *ls = nullptr;
+  if (OB_NOT_NULL(tablet_finish_migration_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet finish migration task must not be null", K(ret), KPC(tablet_finish_migration_task));
+  } else if (FALSE_IT(tablet_migration_dag = static_cast<ObTabletMigrationDag *>(dag_))) {
+  } else if (OB_FAIL(dag_->alloc_task(tablet_finish_migration_task))) {
+    LOG_WARN("failed to alloc tablet finish task", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(tablet_migration_dag->get_ls(ls))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(tablet_finish_migration_task->init(*copy_tablet_ctx_, *ls))) {
+    LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
+  } else {
+    LOG_INFO("generate tablet migration finish task", "ls_id", ls->get_ls_id().id(), "tablet_id", copy_tablet_ctx_->tablet_id_);
   }
   return ret;
 }
@@ -2629,7 +2657,8 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_tablet_meta(copy_tablet_ctx_->tablet_id_, src_tablet_meta))) {
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(copy_tablet_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task->init(copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta))) {
+  } else if (OB_FAIL(tablet_copy_finish_task->init(
+      copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta, copy_tablet_ctx_))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else {
     LOG_INFO("generate tablet copy finish task", "ls_id", ls->get_ls_id().id(), "tablet_id", copy_tablet_ctx_->tablet_id_);
@@ -2803,6 +2832,117 @@ int ObTabletMigrationTask::check_tablet_replica_validity_(const common::ObTablet
     } else {
       ctx_->check_tablet_info_cost_time_ += ObTimeUtility::current_time() - start_ts;
       LOG_DEBUG("check tablet replica validity", KPC(ctx_), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
+/******************ObTabletFinishMigrationTask*********************/
+ObTabletFinishMigrationTask::ObTabletFinishMigrationTask()
+  : ObITask(TASK_TYPE_MIGRATE_PREPARE),
+    is_inited_(false),
+    copy_tablet_ctx_(nullptr),
+    ls_(nullptr)
+{
+}
+
+ObTabletFinishMigrationTask::~ObTabletFinishMigrationTask()
+{
+}
+
+int ObTabletFinishMigrationTask::init(ObCopyTabletCtx &ctx, ObLS &ls)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("tablet migration finish task init twice", K(ret));
+  } else if (!ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ctx));
+  } else {
+    ha_dag_net_ctx_ = static_cast<ObStorageHADag *>(this->get_dag())->get_ha_dag_net_ctx();
+    copy_tablet_ctx_ = &ctx;
+    ls_ = &ls;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObTabletFinishMigrationTask::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("start do tablet finish migration task", KPC(copy_tablet_ctx_));
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet finish migration task do not init", K(ret), KPC(copy_tablet_ctx_));
+  } else {
+    bool is_failed = false;
+    if (ha_dag_net_ctx_->is_failed()) {
+      is_failed = true;
+    } else if (OB_FAIL(update_data_and_expected_status_())) {
+      LOG_WARN("failed to update data and expected status", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
+      LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), KPC(copy_tablet_ctx_));
+    }
+  }
+  return ret;
+}
+
+int ObTabletFinishMigrationTask::update_data_and_expected_status_()
+{
+  int ret = OB_SUCCESS;
+  ObCopyTabletStatus::STATUS status;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet copy finish task do not init", K(ret));
+  } else if (OB_FAIL(copy_tablet_ctx_->get_copy_tablet_status(status))) {
+    LOG_WARN("failed to get copy tablet status", KPC(copy_tablet_ctx_));
+  } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
+    const ObTabletExpectedStatus::STATUS expected_status = ObTabletExpectedStatus::DELETED;
+    if (OB_FAIL(ls_->get_tablet_svr()->update_tablet_ha_expected_status(copy_tablet_ctx_->tablet_id_, expected_status))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        LOG_INFO("migration tablet maybe deleted, skip it", K(ret), KPC(copy_tablet_ctx_));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to update tablet ha expected status", K(ret), K(expected_status), KPC(copy_tablet_ctx_));
+      }
+    } else {
+      LOG_INFO("update tablet expected status", KPC(copy_tablet_ctx_), K(expected_status));
+      SERVER_EVENT_ADD("storage_ha", "tablet_finish_migration_task",
+          "tenant_id", MTL_ID(),
+          "ls_id", ls_->get_ls_id().id(),
+          "tablet_id", copy_tablet_ctx_->tablet_id_,
+          "expected_status", expected_status);
+      }
+  } else {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_UPDATE_TABLET_HA_STATUS_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_UPDATE_TABLET_HA_STATUS_FAILED", K(ret));
+      }
+    }
+#endif
+    const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
+    if (OB_FAIL(ls_->update_tablet_ha_data_status(copy_tablet_ctx_->tablet_id_, data_status))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        LOG_INFO("migration tablet maybe deleted, skip it", K(ret), KPC(copy_tablet_ctx_));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("[HA]failed to update tablet ha data status", K(ret), KPC(copy_tablet_ctx_), K(data_status));
+      }
+    } else {
+      LOG_INFO("update tablet ha data status", KPC(copy_tablet_ctx_), K(data_status));
+      SERVER_EVENT_ADD("storage_ha", "tablet_finish_migration_task",
+          "tenant_id", MTL_ID(),
+          "ls_id", ls_->get_ls_id().id(),
+          "tablet_id", copy_tablet_ctx_->tablet_id_,
+          "data_status", data_status);
     }
   }
   return ret;

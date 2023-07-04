@@ -648,7 +648,8 @@ int ObTablet::init(
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else if (param.is_transfer_replace_ && OB_FAIL(tablet_meta_.reset_transfer_table())) {
     LOG_WARN("failed to set finish tansfer replace", K(ret), K(tablet_meta_), K(param));
-  } else if (param.is_transfer_replace_ && OB_FALSE_IT(tablet_meta_.ha_status_ = param.ha_status_)) {
+  } else if (param.is_transfer_replace_ && OB_FAIL(tablet_meta_.ha_status_.set_restore_status(param.restore_status_))) {
+    LOG_WARN("failed to set tablet restore status", K(ret));
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));

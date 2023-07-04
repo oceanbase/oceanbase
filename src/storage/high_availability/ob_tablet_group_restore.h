@@ -79,15 +79,15 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObTabletGroupRestoreCtx);
 };
 
-struct ObTabletRestoreCtx
+struct ObTabletRestoreCtx final: public ObICopyTabletCtx
 {
 public:
   ObTabletRestoreCtx();
   virtual ~ObTabletRestoreCtx();
   bool is_valid() const;
   void reset();
-  int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status);
-  int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status);
+  int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) override;
+  int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const override;
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), KPC_(restore_base_info), K_(is_leader),
       K_(action), KP_(meta_index_store), KP_(second_meta_index_store), K_(replica_type), KP_(ha_table_info_mgr), K_(status));
 
@@ -451,7 +451,6 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletRestoreTask"), KP(this), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
 private:
-  int update_data_status_();
   int update_restore_status_();
   int check_tablet_valid_();
   int record_server_event_();

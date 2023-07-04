@@ -482,8 +482,8 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create or update tablet get invalid argument", K(ret), K(tablet_info), KP(ls));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == tablet_info.status_ && tablet_info.tablet_id_.is_ls_inner_tablet()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sys tablet should exist", K(ret), K(tablet_info));
+    ret = OB_TABLET_NOT_EXIST;
+    LOG_WARN("src ls inner tablet is not exist, src ls is maybe deleted", K(ret), K(tablet_info));
   } else if (OB_FAIL(hold_local_reuse_sstable_(tablet_info.tablet_id_, local_tablet_hdl, major_tables, storage_schema, medium_info_list, allocator))) {
     LOG_WARN("failed to hold local reuse sstable", K(ret), K(tablet_info));
   } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_info.param_, keep_old))) {
@@ -1360,7 +1360,8 @@ int ObStorageHATabletsBuilder::modified_tablet_info_(
       && !tablet_info.param_.ha_status_.is_data_status_complete()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet info ha status is unexpected", K(ret), K(tablet_info));
-  } else if (OB_FAIL(tablet_info.param_.ha_status_.set_data_status(ObTabletDataStatus::INCOMPLETE))) {
+  } else if (ObTabletRestoreAction::is_restore_none(param_.restore_action_)  // restore process doesn't consider data state
+          && OB_FAIL(tablet_info.param_.ha_status_.set_data_status(ObTabletDataStatus::INCOMPLETE))) {
     LOG_WARN("failed to set data status", K(ret), K(tablet_info));
   }
   return ret;

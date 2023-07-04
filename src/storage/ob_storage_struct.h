@@ -361,7 +361,7 @@ struct ObBatchUpdateTableStoreParam final
   int get_max_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn) const;
 
   TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(update_logical_minor_sstable), K_(is_transfer_replace),
-      K_(start_scn), KP_(tablet_meta), K_(update_ddl_sstable), K_(ha_status));
+      K_(start_scn), KP_(tablet_meta), K_(update_ddl_sstable), K_(restore_status));
 
   ObTablesHandleArray tables_handle_;
   int64_t rebuild_seq_;
@@ -370,7 +370,7 @@ struct ObBatchUpdateTableStoreParam final
   share::SCN start_scn_;
   const ObMigrationTabletParam *tablet_meta_;
   bool update_ddl_sstable_;
-  ObTabletHAStatus ha_status_;
+  ObTabletRestoreStatus::STATUS restore_status_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
 };

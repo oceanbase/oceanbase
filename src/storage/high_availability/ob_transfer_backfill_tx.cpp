@@ -1404,7 +1404,7 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
     const common::ObTabletID &tablet_id,
     ObTableStoreIterator &sstable_iter,
     ObTabletHandle &tablet_handle,
-    ObTabletHAStatus &ha_status,
+    ObTabletRestoreStatus::STATUS &restore_status,
     common::ObArenaAllocator &allocator,
     ObTablesHandleArray &tables_handle)
 {
@@ -1463,7 +1463,8 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
       && ObTabletStatus::TRANSFER_OUT_DELETED != src_user_data.tablet_status_) {
     ret = OB_UNEXPECTED_TABLET_STATUS;
     LOG_WARN("tablet status should be TRANSFER_OUT or TRANSFER_OUT_DELETED", K(ret), KPC(tablet), K(src_user_data));
-  } else if (FALSE_IT(ha_status = tablet->get_tablet_meta().ha_status_)) {
+  } else if (OB_FAIL(tablet->get_tablet_meta().ha_status_.get_restore_status(restore_status))) {
+    LOG_WARN("failed to get tablet restore status", K(ret));
   } else if (OB_FAIL(tablet->fetch_table_store(wrapper))) {
     LOG_WARN("fetch table store fail", K(ret), KP(tablet));
   } else if (OB_FAIL(check_src_memtable_is_empty_(tablet, transfer_scn))) {
@@ -1588,7 +1589,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
   } else if (!dest_wrapper.get_member()->get_major_sstables().empty()) {
     ret = OB_INVALID_TABLE_STORE;
     LOG_WARN("tablet should not exist major sstable", K(ret), KPC(tablet));
-  } else if (OB_FAIL(get_source_tablet_tables_(tablet, tablet_id, src_sstable_iter, src_tablet_handle, param.ha_status_, allocator, param.tables_handle_))) {
+  } else if (OB_FAIL(get_source_tablet_tables_(tablet, tablet_id, src_sstable_iter, src_tablet_handle, param.restore_status_, allocator, param.tables_handle_))) {
     LOG_WARN("failed to get source tablet tables", K(ret), K(tablet_id));
   } else if (OB_FAIL(build_migration_param_(tablet, src_tablet_handle, mig_param))) {
     LOG_WARN("failed to build migration param", K(ret), KPC(tablet));

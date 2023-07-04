@@ -208,7 +208,7 @@ private:
       const common::ObTabletID &tablet_id,
       ObTableStoreIterator &sstable_iter,
       ObTabletHandle &tablet_handle,
-      ObTabletHAStatus &ha_status,
+      ObTabletRestoreStatus::STATUS &restore_status,
       common::ObArenaAllocator &allocator,
       ObTablesHandleArray &tables_handle);
   int get_all_sstable_handles_(

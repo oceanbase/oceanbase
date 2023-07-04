@@ -162,6 +162,7 @@ private:
   int check_dest_validity_();
   int cancel_();
   int update_set_task_to_canceling_();
+  int set_query_timeout_and_trx_timeout_(ObTimeoutCtx &timeout_ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUserTenantBackupJobMgr);
 };
