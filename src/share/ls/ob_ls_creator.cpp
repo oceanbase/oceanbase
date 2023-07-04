@@ -389,7 +389,7 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
         K(create_scn));
   } else {
     ObTimeoutCtx ctx;
-    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
       LOG_WARN("fail to set timeout ctx", KR(ret));
     } else {
       obrpc::ObCreateLSArg arg;

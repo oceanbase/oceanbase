@@ -29,7 +29,7 @@ public:
   {
   }
   ~ObMutex() { }
-  inline int lock() { return latch_.lock(latch_id_); }
+  inline int lock(const int64_t abs_timeout_us = INT64_MAX) { return latch_.lock(latch_id_, abs_timeout_us); }
   inline int trylock() { return latch_.try_lock(latch_id_); }
   inline int unlock() { return latch_.unlock(); }
   void enable_record_stat(bool enable) { latch_.enable_record_stat(enable); }
@@ -42,6 +42,7 @@ private:
 };
 
 typedef ObLockGuard<ObMutex> ObMutexGuard;
+typedef ObLockGuardWithTimeout<ObMutex> ObMutexGuardWithTimeout;
 
 } // end of namespace lib
 } // end of namespace oceanbase
