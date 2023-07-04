@@ -62,6 +62,47 @@ inline ObLockGuard<LockT>::~ObLockGuard()
   }
 }
 
+template <typename LockT>
+class ObLockGuardWithTimeout
+{
+public:
+  [[nodiscard]] explicit ObLockGuardWithTimeout(LockT &lock, const int64_t abs_timeout_us = INT64_MAX);
+  ~ObLockGuardWithTimeout();
+  inline int get_ret() const { return ret_; }
+private:
+  // disallow copy
+  ObLockGuardWithTimeout(const ObLockGuardWithTimeout &other);
+  ObLockGuardWithTimeout &operator=(const ObLockGuardWithTimeout &other);
+  // disallow new
+  void *operator new(std::size_t size);
+  void *operator new(std::size_t size, const std::nothrow_t &nothrow_constant) throw();
+  void *operator new(std::size_t size, void *ptr) throw();
+private:
+  // data members
+  LockT &lock_;
+  int ret_;
+};
+
+template <typename LockT>
+inline ObLockGuardWithTimeout<LockT>::ObLockGuardWithTimeout(LockT &lock, const int64_t abs_timeout_us)
+    : lock_(lock),
+      ret_(common::OB_SUCCESS)
+{
+  if (OB_UNLIKELY(common::OB_SUCCESS != (ret_ = lock_.lock(abs_timeout_us)))) {
+    COMMON_LOG_RET(ERROR, ret_, "Fail to lock, ", K_(ret));
+  }
+}
+
+template <typename LockT>
+inline ObLockGuardWithTimeout<LockT>::~ObLockGuardWithTimeout()
+{
+  if (OB_LIKELY(common::OB_SUCCESS == ret_)) {
+    if (OB_UNLIKELY(common::OB_SUCCESS != (ret_ = lock_.unlock()))) {
+      COMMON_LOG_RET(ERROR, ret_, "Fail to unlock, ", K_(ret));
+    }
+  }
+}
+
 } // end of namespace lib
 } // end of namespace oceanbase
 
