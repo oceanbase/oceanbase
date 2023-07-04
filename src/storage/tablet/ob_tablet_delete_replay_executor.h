@@ -44,10 +44,10 @@ class ObTabletDeleteReplayExecutor final : public logservice::ObTabletReplayExec
 public:
   ObTabletDeleteReplayExecutor();
 
-  int init(mds::BufferCtx &ctx, const share::SCN &scn);
+  int init(mds::BufferCtx &ctx, const share::SCN &scn, const bool for_old_mds);
 
 protected:
-  bool is_replay_update_user_data_() const override
+  bool is_replay_update_tablet_status_() const override
   {
     return true;
   }
@@ -63,6 +63,7 @@ private:
   const ObRemoveTabletArg *arg_;
   mds::BufferCtx *ctx_;
   share::SCN scn_;
+  bool for_old_mds_;
 };
 
 

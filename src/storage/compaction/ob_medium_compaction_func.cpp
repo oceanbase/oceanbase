@@ -534,7 +534,37 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
   return ret;
 }
 
-int ObMediumCompactionScheduleFunc::init_parallel_range(
+int ObMediumCompactionScheduleFunc::init_schema_changed(
+  const ObSSTableMeta &sstable_meta,
+  ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t full_stored_col_cnt = 0;
+  const ObSSTableBasicMeta &basic_meta = sstable_meta.get_basic_meta();
+  const ObStorageSchema &schema = medium_info.storage_schema_;
+  if (OB_UNLIKELY(!schema.is_inited())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema is not inited", KR(ret), K(schema));
+  } else if (OB_FAIL(schema.get_stored_column_count_in_sstable(full_stored_col_cnt))) {
+    LOG_WARN("failed to get stored column count in sstable", K(ret), K(schema));
+  } else if (OB_UNLIKELY(sstable_meta.get_column_count() > full_stored_col_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("stored col cnt in curr schema is less than old major sstable", K(ret),
+      "col_cnt_in_sstable", sstable_meta.get_column_count(),
+      "col_cnt_in_schema", full_stored_col_cnt, KPC(this));
+  } else if (sstable_meta.get_column_count() != full_stored_col_cnt
+    || basic_meta.compressor_type_ != schema.get_compressor_type()
+    || (ObRowStoreType::DUMMY_ROW_STORE != basic_meta.latest_row_store_type_
+      && basic_meta.latest_row_store_type_ != schema.row_store_type_)) {
+    medium_info.is_schema_changed_ = true;
+    LOG_INFO("schema changed", K(sstable_meta), K(schema));
+  } else {
+    medium_info.is_schema_changed_ = false;
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
     const ObGetMergeTablesResult &result,
     ObMediumCompactionInfo &medium_info)
 {
@@ -574,6 +604,10 @@ int ObMediumCompactionScheduleFunc::init_parallel_range(
         STORAGE_LOG(WARN, "failed to get concurrent cnt", K(ret), K(tablet_size), K(expected_task_count),
           KPC(first_sstable), K(meta_handle));
       }
+    }
+    // init is_schema_changed
+    if (FAILEDx(init_schema_changed(meta_handle.get_sstable_meta(), medium_info))) {
+      STORAGE_LOG(WARN, "failed to init schema changed", KR(ret), "sstable_meta", meta_handle.get_sstable_meta());
     }
 
     if (OB_FAIL(ret)) {
@@ -713,7 +747,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       }
     }
   }
-  if (FAILEDx(init_parallel_range(result, medium_info))) {
+  if (FAILEDx(init_parallel_range_and_schema_changed(result, medium_info))) {
     LOG_WARN("failed to init parallel range", K(ret), K(medium_info));
   } else if (OB_UNLIKELY(result.handle_.empty())) {
     ret = OB_ERR_UNEXPECTED;

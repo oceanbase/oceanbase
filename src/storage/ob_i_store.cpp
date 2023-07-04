@@ -76,6 +76,7 @@ void ObStoreCtx::reset()
   mvcc_acc_ctx_.reset();
   tablet_stat_.reset();
   replay_log_scn_.set_max();
+  is_read_store_ctx_ = false;
 }
 
 int ObStoreCtx::init_for_read(const ObLSID &ls_id,

@@ -24,6 +24,8 @@ namespace storage
 ObTabletStatus::ObTabletStatus()
   : status_(Status::MAX)
 {
+  static_assert(sizeof(status_str_array_) / sizeof(const char *) == static_cast<uint8_t>(ObTabletStatus::MAX) + 1,
+      "status str array size does not equal to enum value count");
 }
 
 ObTabletStatus::ObTabletStatus(const Status &status)
@@ -31,24 +33,13 @@ ObTabletStatus::ObTabletStatus(const Status &status)
 {
 }
 
-static const char *TABLET_STATUS_STRS[] = {
-    "CREATING",
-    "NORMAL",
-    "DELETING",
-    "DELETED",
-    "TRANSFER_OUT",
-    "TRANSFER_IN",
-    "TRANSFER_OUT_DELETED",
-};
-
 const char *ObTabletStatus::get_str(const ObTabletStatus &status)
 {
-  const char *str = NULL;
-
-  if (status.status_ < 0 || status.status_ >= ObTabletStatus::MAX) {
+  const char *str = nullptr;
+  if (status.status_ > ObTabletStatus::MAX) {
     str = "UNKNOWN";
   } else {
-    str = TABLET_STATUS_STRS[status.status_];
+    str = status_str_array_[status.status_];
   }
   return str;
 }
@@ -95,58 +86,5 @@ int64_t ObTabletStatus::get_serialize_size() const
 {
   return serialization::encoded_length_i8(static_cast<int8_t>(status_));
 }
-
-bool ObTabletStatus::is_valid_status(const Status current_status, const Status target_status)
-{
-  bool b_ret = true;
-
-  switch (current_status) {
-    case CREATING:
-      if (target_status != NORMAL && target_status != DELETED) {
-        b_ret = false;
-      }
-      break;
-    case NORMAL:
-      if (target_status != DELETING && target_status != NORMAL
-          && target_status != TRANSFER_OUT && target_status != TRANSFER_IN) {
-        b_ret = false;
-      }
-      break;
-    case DELETING:
-      if (target_status != NORMAL && target_status != DELETED
-          && target_status != DELETING) {
-        b_ret = false;
-      }
-      break;
-    case DELETED:
-      break;
-    case MAX:
-      if (target_status != CREATING && target_status != DELETED) {
-        b_ret = false;
-      }
-      break;
-    case TRANSFER_OUT:
-      if (target_status != NORMAL && target_status != TRANSFER_OUT_DELETED && target_status != TRANSFER_OUT) {
-        b_ret = false;
-      }
-      break;
-    case TRANSFER_IN:
-      if (target_status != NORMAL && target_status != DELETED && target_status != TRANSFER_IN) {
-        b_ret = false;
-      }
-      break;
-    case TRANSFER_OUT_DELETED:
-      if (target_status != DELETED && target_status != TRANSFER_OUT_DELETED && target_status != TRANSFER_OUT_DELETED) {
-        b_ret = false;
-      }
-      break;
-    default:
-      b_ret = false;
-      break;
-  }
-
-  return b_ret;
-}
-
 } // namespace storage
 } // namespace oceanbase

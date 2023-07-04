@@ -143,6 +143,14 @@ int ObTenantRoleTransitionService::failover_to_primary()
   if (OB_FAIL(ret)) {
   } else {
     (void)broadcast_tenant_info(ObTenantRoleTransitionConstants::SWITCH_TO_PRIMARY_LOG_MOD_STR);
+    ObBroadcastSchemaArg arg;
+    arg.tenant_id_ = tenant_id_;
+    if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("common rpc proxy is null", KR(ret), KP(GCTX.rs_mgr_), KP(GCTX.rs_rpc_proxy_));
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to_rs(*GCTX.rs_mgr_).broadcast_schema(arg))) {
+      LOG_WARN("failed to broadcast schema", KR(ret), K(arg));
+    }
   }
 
   const int64_t cost = ObTimeUtility::current_time() - start_service_time;
@@ -389,7 +397,7 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant switchover status not valid", KR(ret), K(tenant_info),
         K(target_tenant_role), K(switchover_epoch_));
-  } else if (OB_FAIL(get_tenant_ref_scn_(ref_scn))) {
+  } else if (OB_FAIL(get_tenant_ref_scn_(tenant_info.get_sync_scn(), ref_scn))) {
     LOG_WARN("failed to get tenant ref_scn", KR(ret));
     //TODO(yaoying):xianming
   } else if (OB_FAIL(change_ls_access_mode_(access_mode, ref_scn))) {
@@ -430,12 +438,15 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
   return ret;
 }
 
-int ObTenantRoleTransitionService::get_tenant_ref_scn_(share::SCN &ref_scn)
+int ObTenantRoleTransitionService::get_tenant_ref_scn_(const share::SCN &sync_scn, share::SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
-  ref_scn.set_min();
-  if (OB_FAIL(check_inner_stat())) {
+  ref_scn = sync_scn;
+  if (!sync_scn.is_valid_and_not_min()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(sync_scn));
+  } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
     LOG_WARN("failed to set default timeout", KR(ret));

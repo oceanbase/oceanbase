@@ -288,7 +288,7 @@ int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
       if(OB_FAIL(new_config->init(this))) {
         LOG_WARN("new tenant config init failed", K(ret));
       } else if (OB_FAIL(config_map_.set_refactored(ObTenantID(tenant_id),
-                                                               new_config, 1))) {
+                                                               new_config, 0))) {
         LOG_WARN("add new tenant config failed", K(ret));
       }
       if (OB_FAIL(ret)) {

@@ -75,8 +75,6 @@ TEST_F(TestTableSessPool, get_session)
   ASSERT_EQ(false, pool->is_deleted_);
   ASSERT_EQ(tenant_id, pool->tenant_id_);
   ObTableApiSessGuard sess_guard;
-  ASSERT_EQ(OB_HASH_NOT_EXIST, pool->get_sess_info(key, sess_guard));
-  ASSERT_EQ(OB_HASH_NOT_EXIST, pool->get_sess_info(key, sess_guard));
   ObTableApiCredential credential;
   credential.tenant_id_ = tenant_id;
   credential.user_id_ = user_id;
@@ -137,7 +135,7 @@ TEST_F(TestTableSessPool, retire_session)
     for (int64_t j = 0; j < kvs.count(); j++) {
       if (j % 2 == 0) {
         const ObTableApiSessForeachOp::ObTableApiSessKV &kv = kvs.at(j);
-        ASSERT_EQ(OB_SUCCESS, pool->move_retired_sess(kv.key_));
+        ASSERT_EQ(OB_SUCCESS, pool->move_sess_to_retired_list(kv.key_));
       }
     }
   }
@@ -188,7 +186,7 @@ TEST_F(TestTableSessPool, reference_session)
   {
     // get
     ObTableApiSessGuard guard;
-    ASSERT_EQ(OB_SUCCESS, pool->get_sess_info(user_id, guard));
+    ASSERT_EQ(OB_SUCCESS, pool->get_sess_info(credential, guard));
     ASSERT_NE(nullptr, guard.get_sess_node_val());
     // mark retire
     ObTableApiSessForeachOp op;
@@ -211,6 +209,45 @@ TEST_F(TestTableSessPool, reference_session)
   ASSERT_EQ(OB_SUCCESS, mgr.sess_pool_map_.foreach_refactored(op));
   const ObTableApiSessPoolForeachOp::TelantIdArray &arr = op.get_telant_id_array();
   ASSERT_EQ(1, arr.count());
+}
+
+TEST_F(TestTableSessPool, retire_session_then_get_session)
+{
+  uint64_t tenant_id = 1;
+  uint64_t user_id = 0;
+  ObTableApiSessPoolMgr mgr;
+  ASSERT_EQ(OB_SUCCESS, mgr.init());
+  ObTableApiSessPoolGuard pool_guard;
+  ASSERT_EQ(OB_SUCCESS, mgr.extend_sess_pool(tenant_id, pool_guard));
+  ObTableApiCredential credential;
+  credential.tenant_id_ = tenant_id;
+  credential.user_id_ = user_id;
+  ASSERT_EQ(OB_SUCCESS, mgr.update_sess(credential));
+
+  // 塞一个ObTableApiSessNodeVal
+  ObTableApiSessPool *pool = pool_guard.get_sess_pool();
+  ObTableApiSessNode *node = nullptr;
+  ASSERT_EQ(OB_SUCCESS, pool->get_sess_node(user_id, node));
+  void *buf = node->allocator_.alloc(sizeof(ObTableApiSessNodeVal));
+  ASSERT_NE(nullptr, buf);
+  ObTableApiSessNodeVal *val = new (buf) ObTableApiSessNodeVal(tenant_id, node);
+  val->is_inited_ = true;
+  ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(val));
+
+  // 第一次获取了session
+  ObTableApiSessGuard sess_guard;
+  ASSERT_EQ(OB_SUCCESS, mgr.get_sess_info(credential, sess_guard));
+  sess_guard.~ObTableApiSessGuard(); // 模仿访问结束，析构
+
+  // 长时间没有访问ob，session被放到淘汰链表，后台定时回收
+  ASSERT_EQ(OB_SUCCESS, pool->get_sess_node(user_id, node));
+  ASSERT_EQ(OB_SUCCESS, pool->move_sess_to_retired_list(user_id));
+  ASSERT_EQ(1, pool->retired_nodes_.size_);
+  ASSERT_EQ(OB_SUCCESS, mgr.elimination_task_.run_recycle_retired_sess_task());
+  ASSERT_EQ(0, pool->retired_nodes_.size_);
+
+  // 连接隔了很长时间，突然又访问db
+  ASSERT_EQ(OB_HASH_NOT_EXIST, pool->get_sess_node(user_id, node));
 }
 
 int main(int argc, char **argv)

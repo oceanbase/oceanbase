@@ -96,6 +96,7 @@ public:
 private:
   int cancel_task_();
   int check_before_do_restore_(bool &can_do_restore);
+  int check_in_member_or_learner_list_(bool &is_in_member_or_learner_list) const;
   int update_state_handle_();
   int check_meta_tenant_normal_(bool &is_normal);
   int check_restore_job_exist_(bool &is_exist);

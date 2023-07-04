@@ -94,7 +94,8 @@ int ObDatumRowkey::equal(const ObDatumRowkey &rhs, const ObStorageDatumUtils &da
   return ret;
 }
 
-int ObDatumRowkey::compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret) const
+int ObDatumRowkey::compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                           const bool compare_datum_cnt) const
 {
   int ret = OB_SUCCESS;
 
@@ -114,7 +115,7 @@ int ObDatumRowkey::compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &
           STORAGE_LOG(WARN, "Failed to compare datum rowkey", K(ret), K(i), K(*this), K(rhs));
         }
       }
-      if (0 == cmp_ret) {
+      if (0 == cmp_ret && compare_datum_cnt) {
         cmp_ret = datum_cnt_ - rhs.datum_cnt_;
       }
     }

@@ -363,8 +363,6 @@ static ObString bad_func_map[10] = {
   "count(/abc, /e)",
   "last()",
   "/abc/count(/abc)",
-  "count(/abc[1])",
-  "count(position())",
 };
 static int func_errcode[10] = {
   OB_ERR_PARSER_SYNTAX,
@@ -372,8 +370,6 @@ static int func_errcode[10] = {
   OB_ERR_PARSER_SYNTAX,
   OB_OP_NOT_ALLOW,
   OB_INVALID_ARGUMENT,
-  OB_OP_NOT_ALLOW,
-  OB_ERR_PARSER_SYNTAX,
 };
 TEST_F(TestXPath, test_parse_bad_func)
 {
@@ -383,7 +379,7 @@ TEST_F(TestXPath, test_parse_bad_func)
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
   std::cout<<"------begin tag test------"<<std::endl;
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < 5; i++) {
     std::cout<<i<<" input: "<<bad_func_map[i].ptr()<<std::endl;
     ObPathParser test_path(ctx, ObParserType::PARSER_XML_PATH, bad_func_map[i], default_ns, nullptr);
     ret = test_path.parse_path();

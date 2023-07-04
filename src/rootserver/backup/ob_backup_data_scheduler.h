@@ -77,7 +77,7 @@ private:
   int get_all_tenants_(const bool with_backup_dest, ObIArray<uint64_t> &tenants);
 
   int start_tenant_backup_data_(const share::ObBackupJobAttr &job_attr);
-  int update_backup_type_(common::ObISQLClient &trans, const uint64_t tenant_id, const int64_t next_backup_set_id, 
+  int update_backup_type_if_need_(common::ObISQLClient &trans, const uint64_t tenant_id, const int64_t next_backup_set_id,
       const share::ObBackupPathString &backup_path, share::ObBackupType &backup_type);
   int get_need_cancel_tenants_(const uint64_t tenant_id, const common::ObIArray<uint64_t> &backup_tenant_ids, 
       common::ObIArray<uint64_t> &need_cancel_backup_tenants);
@@ -162,6 +162,7 @@ private:
   int check_dest_validity_();
   int cancel_();
   int update_set_task_to_canceling_();
+  int set_query_timeout_and_trx_timeout_(ObTimeoutCtx &timeout_ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUserTenantBackupJobMgr);
 };

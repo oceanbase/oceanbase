@@ -93,7 +93,7 @@ OB_DEF_DESERIALIZE(ObDynamicSamplePieceMsg)
         }
       } else {
         void *tmp_buf = arena_.alloc(sizeof(ObChunkDatumStore));
-        if (OB_ISNULL(buf)) {
+        if (OB_ISNULL(tmp_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret));
         } else {

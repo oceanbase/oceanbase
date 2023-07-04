@@ -27,8 +27,7 @@ namespace sql
 ObOptTabletLoc::ObOptTabletLoc()
     : partition_id_(OB_INVALID_INDEX),
       first_level_part_id_(OB_INVALID_INDEX),
-      replica_locations_("SqlOptimLocaCac", OB_MALLOC_NORMAL_BLOCK_SIZE),
-      renew_time_(0)
+      replica_locations_("SqlOptimLocaCac", OB_MALLOC_NORMAL_BLOCK_SIZE)
 {
 }
 
@@ -43,7 +42,6 @@ void ObOptTabletLoc::reset()
   tablet_id_.reset();
   ls_id_.reset();
   replica_locations_.reset();
-  renew_time_ = 0;
 }
 
 int ObOptTabletLoc::assign(const ObOptTabletLoc &other)
@@ -53,7 +51,6 @@ int ObOptTabletLoc::assign(const ObOptTabletLoc &other)
   ls_id_ = other.ls_id_;
   partition_id_ = other.partition_id_;
   first_level_part_id_ = other.first_level_part_id_;
-  renew_time_ = other.renew_time_;
   if (OB_FAIL(replica_locations_.assign(other.replica_locations_))) {
     LOG_WARN("Failed to assign replica locations", K(ret));
   }
@@ -71,7 +68,6 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
   first_level_part_id_ = first_level_part_id;
   tablet_id_ = tablet_id;
   ls_id_ = ls_location.get_ls_id();
-  renew_time_ = ls_location.get_renew_time();
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_location.get_replica_locations().count(); ++i) {
     const ObLSReplicaLocation &replica_loc = ls_location.get_replica_locations().at(i);
     if (ObReplicaTypeCheck::is_readable_replica(replica_loc.get_replica_type())) {
@@ -103,8 +99,7 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
 bool ObOptTabletLoc::is_valid() const
 {
   //为了兼容性考虑，1.4.x和2.1升级到2.2之后，pg_key可能是无效的，因此此处不检查pg_key_
-  return OB_INVALID_INDEX != partition_id_
-      && renew_time_ >= 0;
+  return OB_INVALID_INDEX != partition_id_;
 }
 
 int ObOptTabletLoc::get_strong_leader(ObLSReplicaLocation &replica_location, int64_t &replica_idx) const
@@ -355,7 +350,6 @@ int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &
 ObCandiTableLoc::ObCandiTableLoc()
   : table_location_key_(OB_INVALID_ID),
     ref_table_id_(OB_INVALID_ID),
-    direction_(UNORDERED),
     candi_tablet_locs_(),
     duplicate_type_(ObDuplicateType::NOT_DUPLICATE)
 {
@@ -369,7 +363,6 @@ void ObCandiTableLoc::reset()
 {
   table_location_key_ = OB_INVALID_ID;
   ref_table_id_ = OB_INVALID_ID;
-  direction_ = UNORDERED;
   candi_tablet_locs_.reset();
   duplicate_type_ = ObDuplicateType::NOT_DUPLICATE;
 }
@@ -379,7 +372,6 @@ int ObCandiTableLoc::assign(const ObCandiTableLoc &other)
   int ret = OB_SUCCESS;
   table_location_key_ = other.table_location_key_;
   ref_table_id_ = other.ref_table_id_;
-  direction_ = other.direction_;
   duplicate_type_ = other.duplicate_type_;
   if (OB_FAIL(candi_tablet_locs_.assign(other.candi_tablet_locs_))) {
     LOG_WARN("Failed to assign phy_part_loc_info_list", K(ret));

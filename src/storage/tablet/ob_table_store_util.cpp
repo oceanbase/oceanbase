@@ -263,6 +263,7 @@ int ObSSTableArray::deserialize(
     const int64_t ptr_array_size = sizeof(ObSSTable *) * cnt_;
     const int64_t obj_array_size = sizeof(ObSSTable) * cnt_;
     char *buff = nullptr;
+    int64_t deserialized_cnt = 0;
     if (OB_ISNULL(buff = static_cast<char *>(allocator.alloc(ptr_array_size + obj_array_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory for sstable array", K(ret), K_(cnt), K(ptr_array_size), K(obj_array_size));
@@ -273,14 +274,23 @@ int ObSSTableArray::deserialize(
         sstable_array_[i] = obj_array + i;
         if (OB_FAIL(sstable_array_[i]->deserialize(allocator, buf, data_len, pos))) {
           LOG_WARN("fail to deserialized sstable address", K(ret));
+        } else {
+          ++deserialized_cnt;
         }
       }
     }
     if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < deserialized_cnt; ++i) {
+        ObSSTable *des_sstable = sstable_array_[i];
+        if (nullptr != des_sstable) {
+          des_sstable->~ObSSTable();
+        }
+      }
       if (nullptr != sstable_array_) {
         allocator.free(sstable_array_);
         sstable_array_ = nullptr;
       }
+      cnt_ = 0;
     } else {
       is_inited_ = true;
     }
@@ -465,8 +475,6 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table is invalid", K(ret), KPC(table));
-      // shouldn't abort after being merged into master !!!
-      ob_abort();
     } else {
       ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
       addr = sstable->get_addr();
@@ -482,7 +490,7 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
         LOG_ERROR("fail to increase ref cnt for sstable meta's macro block", K(ret), K(macro_id));
       } else {
         sstable_cnt++;
-        FLOG_INFO("barry debug inc sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
+        LOG_DEBUG("inc sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
       }
     }
   }
@@ -507,7 +515,7 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
         } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
           LOG_ERROR("fail to decrease ref cnt for sstable meta's macro block", K(tmp_ret), K(macro_id));
         } else {
-          FLOG_INFO("barry debug decrease sstable meta's macro ref", K(tmp_ret), K(addr), K(macro_id), KPC(sstable));
+          LOG_DEBUG("decrease sstable meta's macro ref", K(tmp_ret), K(addr), K(macro_id), KPC(sstable));
         }
       }
     }
@@ -517,7 +525,7 @@ int ObSSTableArray::inc_meta_ref_cnt(bool &inc_success) const
     inc_success = true;
   }
 
-  FLOG_INFO("barry debug the number of sstables that increase meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
+  LOG_DEBUG("the number of sstables that increase meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
 
   return ret;
 }
@@ -535,8 +543,6 @@ int ObSSTableArray::inc_data_ref_cnt(bool &inc_success) const
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table is invalid", K(ret), KPC(table));
-      // shouldn't abort after being merged into master !!!
-      ob_abort();
     } else {
       ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
       if (OB_FAIL(sstable->inc_macro_ref(inc_data_block_success))) {
@@ -544,7 +550,7 @@ int ObSSTableArray::inc_data_ref_cnt(bool &inc_success) const
       } else {
         sstable_cnt++;
       }
-      LOG_DEBUG("barry debug increase sstable data macro ref", K(ret), KPC(sstable));
+      LOG_DEBUG("increase sstable data macro ref", K(ret), KPC(sstable));
     }
   }
 
@@ -555,12 +561,10 @@ int ObSSTableArray::inc_data_ref_cnt(bool &inc_success) const
       if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
         tmp_ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("table is invalid", K(tmp_ret), KPC(table));
-        // shouldn't abort after being merged into master !!!
-        ob_abort();
       } else {
         ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
         sstable->dec_macro_ref();
-        LOG_DEBUG("barry debug decrease sstable data macro ref", K(tmp_ret), KPC(sstable));
+        LOG_DEBUG("decrease sstable data macro ref", K(tmp_ret), KPC(sstable));
       }
     }
   }
@@ -587,8 +591,6 @@ void ObSSTableArray::dec_meta_ref_cnt() const
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table is invalid", K(ret), KPC(table));
-      // shouldn't abort after being merged into master !!!
-      ob_abort();
     } else {
       ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
       addr = sstable->get_addr();
@@ -602,12 +604,12 @@ void ObSSTableArray::dec_meta_ref_cnt() const
         LOG_ERROR("fail to decrease ref cnt for sstable meta's macro block", K(ret), K(macro_id));
       } else {
         sstable_cnt++;
-        FLOG_INFO("barry debug decrease sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
+        LOG_DEBUG("decrease sstable meta's macro ref", K(ret), K(macro_id), KPC(sstable));
       }
     }
   }
 
-  FLOG_INFO("barry debug the number of sstables that decrease meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
+  LOG_DEBUG("the number of sstables that decrease meta ref cnt", K(ret), K(sstable_cnt), K(lbt()));
 }
 
 void ObSSTableArray::dec_data_ref_cnt() const
@@ -621,13 +623,11 @@ void ObSSTableArray::dec_data_ref_cnt() const
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table is invalid", K(ret), KPC(table));
-      // shouldn't abort after being merged into master !!!
-      ob_abort();
     } else {
       sstable_cnt++;
       ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
       sstable->dec_macro_ref();
-      LOG_DEBUG("barry debug decrease sstable data's macro ref", K(ret), KPC(sstable));
+      LOG_DEBUG("decrease sstable data's macro ref", K(ret), KPC(sstable));
     }
   }
 }
@@ -843,6 +843,85 @@ int64_t ObMemtableArray::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
+int ObDDLKVArray::init(
+    ObArenaAllocator &allocator,
+    common::ObIArray<ObITable *> &ddl_kvs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("initialize twice", K(ret), KPC(this));
+  } else {
+    count_ = 0;
+    ddl_kvs_ = nullptr;
+    if (0 != ddl_kvs.count()) {
+      const int64_t size = sizeof(ObITable *) * ddl_kvs.count();
+      if (OB_ISNULL(ddl_kvs_ = static_cast<ObITable **>(allocator.alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate ddl kv pointer arrays", K(ret), K(size));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ddl_kvs.count(); ++i) {
+          ObITable *table = ddl_kvs.at(i);
+          if (OB_UNLIKELY(nullptr == table || !table->is_ddl_sstable())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table must be ddl kv", K(ret), K(i), KPC(table));
+          } else {
+            ddl_kvs_[count_] = table;
+            ++count_;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
+  }
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObDDLKVArray::deep_copy(
+    char *dst_buf,
+    const int64_t buf_size,
+    int64_t &pos,
+    ObDDLKVArray &dst) const
+{
+  int ret = OB_SUCCESS;
+  dst.reset();
+  const int64_t deep_copy_size = get_deep_copy_size();
+  if (OB_ISNULL(dst_buf) || OB_UNLIKELY(buf_size - pos < deep_copy_size)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("finvalid argument", K(ret), KP(dst_buf), K(buf_size), K(pos), K(deep_copy_size), K(count_));
+  } else {
+    dst.ddl_kvs_ = 0 == count_ ? nullptr : reinterpret_cast<ObITable **>(dst_buf + pos);
+    const int64_t array_size = count_ * sizeof(ObITable *);
+    pos += array_size;
+    for (int64_t i = 0; i < count_; ++i) {
+      dst.ddl_kvs_[i] = ddl_kvs_[i];
+    }
+    dst.count_ = count_;
+    dst.is_inited_ = is_inited_;
+  }
+  return ret;
+}
+
+int64_t ObDDLKVArray::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    // do nothing
+  } else {
+    J_OBJ_START();
+    J_NAME("ObDDLKVArray");
+    J_KV(KP(this),
+        K_(count),
+        "ddl_kv_ptr_array", ObArrayWrap<ObITable *>(ddl_kvs_, count_));
+    J_OBJ_END();
+  }
+  return pos;
+}
 /* ObTableStoreUtil Section */
 bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
      const ObITable *ltable, const ObITable *rtable) const

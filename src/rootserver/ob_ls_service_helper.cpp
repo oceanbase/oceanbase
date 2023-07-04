@@ -233,19 +233,31 @@ int ObLSServiceHelper::construct_ls_status_machine(
   share::ObLSStatusInfoArray status_info_array;
   share::ObLSAttrArray ls_array;
   share::ObLSAttrOperator ls_operator(tenant_id, sql_proxy);
+  ObLSStatusMachineParameter status_machine;
+  ObLSStatusOperator status_op;
   if (OB_ISNULL(sql_proxy) || !is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sql proxy is null or tenant id is invalid", KR(ret), KP(sql_proxy), K(tenant_id));
+  } else if (OB_FAIL(status_op.get_all_ls_status_by_order(
+                 tenant_id, status_info_array, *sql_proxy))) {
+    LOG_WARN("failed to get all ls status by order", KR(ret));
+  } else if (1 == status_info_array.count() && status_info_array.at(0).ls_is_tenant_dropping()
+      && status_info_array.at(0).ls_id_.is_sys_ls()) {
+    //Due to SYS_LS being tenant_dropping, it cannot be read,
+    //so it cannot be read during the construction of the state machine of __all_ls,
+    //it needs to be mocked the content of the ls table
+    ObLSAttr ls_info;
+    const share::ObLSStatusInfo &status_info = status_info_array.at(0);
+    if (OB_FAIL(ls_info.init(SYS_LS, status_info.ls_group_id_, status_info.flag_,
+            status_info.status_, OB_LS_OP_TENANT_DROP, SCN::base_scn()))) {
+      LOG_WARN("failed to mock ls info", KR(ret), K(status_info));
+    } else if (OB_FAIL(status_machine.init(SYS_LS, status_info, ls_info))) {
+        LOG_WARN("failed to init status machine", KR(ret), K(ls_id), K(status_info), K(ls_info));
+    } else if (OB_FAIL(status_machine_array.push_back(status_machine))) {
+      LOG_WARN("failed to push back status machine", KR(ret), K(status_machine));
+    }
   } else if (OB_FAIL(ls_operator.get_all_ls_by_order(lock_sys_ls, ls_array))) {
     LOG_WARN("failed to get get all ls", KR(ret), K(lock_sys_ls));
-  } else {
-    ObLSStatusOperator status_op;
-    if (OB_FAIL(status_op.get_all_ls_status_by_order(
-                 tenant_id, status_info_array, *sql_proxy))) {
-      LOG_WARN("failed to get all ls status by order", KR(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(0 == ls_array.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls array can not be empty", KR(ret), K(ls_array), K(status_info_array));
@@ -253,7 +265,6 @@ int ObLSServiceHelper::construct_ls_status_machine(
     // merge by sort
     int64_t status_index = 0;
     int64_t ls_index = 0;
-    ObLSStatusMachineParameter status_machine;
     const int64_t status_count = status_info_array.count();
     const int64_t ls_count = ls_array.count();
     share::ObLSStatusInfo status_info;
@@ -532,8 +543,9 @@ int ObLSServiceHelper::offline_ls(const uint64_t tenant_id,
 
     if (ls_id.is_sys_ls()) {
       // For SYS LS, drop scn can not be generated, as GTS service is down, SYS LS is blocked
-      // drop_scn is meaningless for SYS LS, so set it to base_scn
-      drop_scn.set_base();
+      // drop_scn is meaningless for SYS LS, so set it to min_scn
+      // base_scn is dafault value, if set default, __all_ls_recovery_stat affected_row is zero
+      drop_scn.set_min();
     }
     // For user LS, drop_scn should be GTS.
     else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(tenant_id, drop_scn))) {

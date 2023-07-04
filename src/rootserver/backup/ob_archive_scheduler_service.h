@@ -43,13 +43,8 @@ public:
   const int64_t FAST_IDLE_INTERVAL_US = 10 * 1000 * 1000; // 10s, used during BEGINNING or STOPPING
   //const int64_t MAX_IDLE_INTERVAL_US = 60 * 1000 * 1000; // 60s
   const int64_t MAX_IDLE_INTERVAL_US = 10 * 1000 * 1000; // 60s
-  static int mtl_init(ObArchiveSchedulerService *&archive_service);
-
-  int init(
-    share::schema::ObMultiVersionSchemaService &schema_service,
-    obrpc::ObSrvRpcProxy &rpc_proxy,
-    common::ObMySQLProxy &sql_proxy);
-
+  DEFINE_MTL_FUNC(ObArchiveSchedulerService);
+  int init();
   void run2() override;
   // force cancel archive
   int force_cancel(const uint64_t tenant_id);
@@ -85,12 +80,16 @@ private:
   int open_tenant_archive_mode_(const uint64_t tenant_id);
   int close_tenant_archive_mode_(const common::ObIArray<uint64_t> &tenant_ids_array);
   int close_tenant_archive_mode_(const uint64_t tenant_id);
+  int can_do_schedule_();
+  int switch_to_leader() override;
+  int resume_leader() override;
 
   bool is_inited_;
   uint64_t tenant_id_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
+  int64_t switch_leader_timestamp_;
 
   DISALLOW_COPY_AND_ASSIGN(ObArchiveSchedulerService);
 };

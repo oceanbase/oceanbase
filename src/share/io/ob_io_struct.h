@@ -497,9 +497,6 @@ private:
   bool is_device_error_;
   int64_t begin_device_error_ts_;
   int64_t last_device_error_ts_;
-  // write/append failure detect
-  int64_t write_failure_count_;
-  int64_t write_failure_ts_[WRITE_FAILURE_DETECT_EVENT_COUNT];
 };
 
 class ObIOTracer final

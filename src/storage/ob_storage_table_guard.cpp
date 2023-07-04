@@ -385,7 +385,6 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
         ObLSID curr_ls_id = store_ctx_.ls_->get_ls_id();
         LOG_WARN("table is not data memtable, it does not allow ls_id to be different", K(ret), K(ls_id), K(curr_ls_id), KPC(table));
       } else {
-        // TODO (wenjinyu.wjy) Active memtable is not allowed while ls_id is different
         need_create_memtable = true;
       }
     }

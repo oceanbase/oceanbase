@@ -21,7 +21,7 @@ namespace common {
 
 const int64_t DM_INTERRUPT_MSG_MAX_LENGTH = 128;
 
-ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObArray<ObPeerTaskState> &peer_states)
+ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states)
     : ref_count_(0)
 {
   int ret = OB_SUCCESS;
@@ -173,9 +173,9 @@ int ObDmInterruptQcCall::mock_sqc_finish_msg(sql::ObPxSqcMeta &sqc)
 }
 
 ObQcDetectCB::ObQcDetectCB(uint64_t tenant_id,
-    const ObArray<ObPeerTaskState> &peer_states,
+    const ObIArray<ObPeerTaskState> &peer_states,
     const ObInterruptibleTaskID &tid, sql::ObDfo &dfo,
-    const ObArray<sql::dtl::ObDtlChannel *> &dtl_channels)
+    const ObIArray<sql::dtl::ObDtlChannel *> &dtl_channels)
     : ObIDetectCallback(tenant_id, peer_states), tid_(tid), dfo_(dfo)
 {
   // if ObIDetectCallback constructed succ

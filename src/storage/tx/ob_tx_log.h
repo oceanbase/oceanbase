@@ -28,7 +28,7 @@
 #include "share/scn.h"
 //#include <cstdint>
 
-// #define OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+#define OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
 
 namespace oceanbase
 {
@@ -252,7 +252,7 @@ public:
   //for ob_admin dump self
   int ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
                     share::ObAdminMutatorStringArg &arg,
-                    palf::block_id_t block_id,
+                    const char *block_name,
                     palf::LSN lsn,
                     int64_t tx_id,
                     share::SCN scn,

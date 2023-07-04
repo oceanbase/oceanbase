@@ -322,9 +322,9 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     is_transfer_replace_(false),
     start_scn_(SCN::min_scn()),
     tablet_meta_(nullptr),
-    update_ddl_sstable_(false)
+    update_ddl_sstable_(false),
+    restore_status_(ObTabletRestoreStatus::FULL)
 {
-  ha_status_.init_status();
 }
 
 void ObBatchUpdateTableStoreParam::reset()
@@ -336,7 +336,7 @@ void ObBatchUpdateTableStoreParam::reset()
   start_scn_.set_min();
   tablet_meta_ = nullptr;
   update_ddl_sstable_ = false;
-  ha_status_.init_status();
+  restore_status_ = ObTabletRestoreStatus::FULL;
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
@@ -344,7 +344,7 @@ bool ObBatchUpdateTableStoreParam::is_valid() const
   return rebuild_seq_ > OB_INVALID_VERSION
       && (!update_logical_minor_sstable_
           || (update_logical_minor_sstable_ && start_scn_ > SCN::min_scn() && OB_ISNULL(tablet_meta_)))
-      && ha_status_.is_valid();
+      && ObTabletRestoreStatus::is_valid(restore_status_);
 }
 
 int ObBatchUpdateTableStoreParam::assign(
@@ -363,7 +363,7 @@ int ObBatchUpdateTableStoreParam::assign(
     start_scn_ = param.start_scn_;
     tablet_meta_ = param.tablet_meta_;
     update_ddl_sstable_ = param.update_ddl_sstable_;
-    ha_status_ = param.ha_status_;
+    restore_status_ = param.restore_status_;
   }
   return ret;
 }

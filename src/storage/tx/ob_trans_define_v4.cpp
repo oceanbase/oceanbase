@@ -561,7 +561,7 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
     if (p.id_ == a.id_) {
       hit = true;
       if (p.epoch_ == ObTxPart::EPOCH_DEAD) {
-        if (a.epoch_ != ObTxPart::EPOCH_DEAD) {
+        if (a.epoch_ > 0) { // unexpected: from dead to alive
           flags_.PART_EPOCH_MISMATCH_ = true;
           ret = OB_TRANS_NEED_ROLLBACK;
           TRANS_LOG(WARN, "epoch missmatch", K(ret), K(a), K(p));
@@ -574,7 +574,7 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
         TRANS_LOG(WARN, "tx-part epoch changed", K(ret), K(a), K(p));
       }
       if (OB_SUCC(ret)) {
-        p.addr_ = a.addr_;
+        if (a.addr_.is_valid()) { p.addr_ = a.addr_; }
         p.first_scn_ = std::min(a.first_scn_, p.first_scn_);
         p.last_scn_ = (INT64_MAX == p.last_scn_) ? a.last_scn_ : std::max(a.last_scn_, p.last_scn_);
         p.last_touch_ts_ = exec_info_reap_ts_ + 1;
@@ -635,7 +635,7 @@ int ObTxDesc::update_parts(const share::ObLSArray &list)
     auto &it = list[i];
     ObTxPart n;
     n.id_ = it;
-    n.epoch_ = -1;
+    n.epoch_ = ObTxPart::EPOCH_UNKNOWN;
     n.first_scn_ = INT64_MAX;
     n.last_scn_ = INT64_MAX;
     if (OB_TMP_FAIL(update_part_(n))) {

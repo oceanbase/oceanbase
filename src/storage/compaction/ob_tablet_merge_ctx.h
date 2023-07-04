@@ -162,22 +162,19 @@ struct ObTabletMergeCtx
 
   int inner_init_for_mini(bool &skip_rest_operation);
   int inner_init_for_medium();
-  int init_get_medium_compaction_info(const int64_t medium_snapshot, ObGetMergeTablesResult &result);
-  int get_specified_medium_compaction_info_from_memtable(
-    ObIAllocator &allocator,
+  int init_get_medium_compaction_info(
     const int64_t medium_snapshot,
-    ObMediumCompactionInfo &info);
+    ObGetMergeTablesResult &result,
+    bool &is_schema_changed);
   int get_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
-  int get_storage_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle);
-  int get_max_data_scn(const ObTablesHandleArray &merge_tables_handle);
   int try_swap_tablet_handle();
 
   int get_medium_compaction_info_to_store();
   static bool need_swap_tablet(const ObTablet &tablet, const int64_t row_count, const int64_t macro_count);
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int cal_minor_merge_param();
-  int cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result);
+  int cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result, const bool is_schema_changed);
   int init_merge_info();
   int prepare_index_tree();
   int prepare_merge_progress();

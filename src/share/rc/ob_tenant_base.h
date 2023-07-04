@@ -403,8 +403,8 @@ template<class T> struct Identity {};
 
 public:
   // TGHelper need
-  virtual int pre_run(lib::Thread*) override;
-  virtual int end_run(lib::Thread*) override;
+  virtual int pre_run() override;
+  virtual int end_run() override;
   virtual void tg_create_cb(int tg_id) override;
   virtual void tg_destroy_cb(int tg_id) override;
 

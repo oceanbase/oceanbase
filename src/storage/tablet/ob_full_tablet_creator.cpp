@@ -32,8 +32,6 @@ ObFullTabletCreator::ObFullTabletCreator()
     wait_create_tablets_cnt_(0),
     created_tablets_cnt_(0),
     persist_queue_cnt_(0),
-    persist_tablets_cnt_(0),
-    gc_tablets_cnt_(0),
     mutex_()
 {
 }
@@ -68,8 +66,6 @@ void ObFullTabletCreator::reset()
   transform_tail_.reset();
   persist_queue_cnt_ = 0;
   wait_create_tablets_cnt_ = 0;
-  persist_tablets_cnt_ = 0;
-  gc_tablets_cnt_ = 0;
   created_tablets_cnt_ = 0;
   mstx_allocator_.reset();
   tiny_allocator_.reset();
@@ -83,7 +79,7 @@ void ObFullTabletCreator::free_tablet(ObTablet *tablet)
     tablet->~ObTablet();
     allocator->~ObIAllocator();
     tiny_allocator_.free(allocator);
-    ATOMIC_INC(&gc_tablets_cnt_);
+    ATOMIC_DEC(&created_tablets_cnt_);
   }
   return;
 }
@@ -93,7 +89,7 @@ int ObFullTabletCreator::throttle_tablet_creation()
   int ret = OB_SUCCESS;
 
   bool need_wait = false;
-  const int64_t limit_size = get_tenant_memory_limit(MTL_ID()) / 10; // 10%
+  const int64_t limit_size = get_tenant_memory_limit(MTL_ID()) / 20; // 5%
   const int64_t timeout = 5 * 1000L; // 5ms for effective replay
   const int64_t log_timeout = 1 * 1000 * 1000L; // 1s
   const int64_t start_time = ObTimeUtility::fast_current_time();
@@ -104,7 +100,7 @@ int ObFullTabletCreator::throttle_tablet_creation()
       ob_usleep(10); // sleep 10us, do not get mutex here
     }
     lib::ObMutexGuard guard(mutex_);
-    if (mstx_allocator_.total() + tiny_allocator_.total() < limit_size) {
+    if (total() < limit_size) {
       need_wait = false;
       ATOMIC_DEC(&wait_create_tablets_cnt_);
     } else if (ObTimeUtility::fast_current_time() - start_time >= timeout) {
@@ -114,10 +110,10 @@ int ObFullTabletCreator::throttle_tablet_creation()
     } else {
       need_wait = true;
       if (REACH_TENANT_TIME_INTERVAL(log_timeout)) {
-        const int64_t hanging_tablets_cnt = ATOMIC_LOAD(&created_tablets_cnt_) - ATOMIC_LOAD(&gc_tablets_cnt_);
+        const int64_t hanging_tablets_cnt = ATOMIC_LOAD(&created_tablets_cnt_) - ATOMIC_LOAD(&persist_queue_cnt_);
         const int64_t wait_create_tablets_cnt = ATOMIC_LOAD(&wait_create_tablets_cnt_);
         LOG_WARN("prepare create tablet timeout",
-            K_(persist_queue_cnt), K(wait_create_tablets_cnt), K(hanging_tablets_cnt), K(limit_size),
+            K_(created_tablets_cnt), K_(persist_queue_cnt), K(wait_create_tablets_cnt), K(hanging_tablets_cnt), K(limit_size),
             K(mstx_allocator_.total()), K(mstx_allocator_.used()),
             K(tiny_allocator_.total()), K(tiny_allocator_.used()));
       }
@@ -174,6 +170,7 @@ int ObFullTabletCreator::persist_tablet()
   int ret = OB_SUCCESS;
   int64_t persist_tablets_cnt = 0;
   int64_t error_tablets_cnt = 0;
+  int64_t retry_tablets_cnt = 0;
   ObTabletHandle old_handle;
   const int64_t per_round_time = ObTenantMetaMemMgr::TABLET_TRANSFORM_INTERVAL_US;
   const int64_t start_time = ObTimeUtility::fast_current_time();
@@ -189,6 +186,7 @@ int ObFullTabletCreator::persist_tablet()
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
     ObTabletCreateDeleteMdsUserData mds_data;
     ObTimeGuard single_guard("try persist tablet", 5 * 1000); // 5ms
+    bool tmp_fail = false;
     if (OB_UNLIKELY(!old_tablet->is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected old tablet", K(ret), K(key), K(old_handle), KPC(old_tablet));
@@ -203,15 +201,18 @@ int ObFullTabletCreator::persist_tablet()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected not memory tablet addr", K(ret), K(key), K(addr), K(old_handle), K(old_tablet->is_empty_shell()));
     } else if (addr != old_addr) {
-      if (addr.is_block()) {
+      if (addr.is_disked()) {
         LOG_INFO("full tablet has been persisted, skip this", K(ret), K(key), K(old_addr), K(addr));
       } else {
         ret = OB_NOT_THE_OBJECT; // create_memtable may change the addr, push back to queue
+        tmp_fail = true;
         LOG_INFO("memory addr changed, push back to queue", K(ret), K(key), K(old_addr), K(addr));
       }
     } else if (OB_FAIL(old_tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), mds_data, 0))) {
       if (OB_EMPTY_RESULT != ret && OB_ERR_SHARED_LOCK_CONFLICT != ret) {
         LOG_ERROR("fail to get tablet status", K(ret), K(key), K(addr), K(old_handle), K(old_tablet->is_empty_shell()));
+      } else {
+        tmp_fail = true;
       }
     } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*old_tablet, new_handle))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -232,7 +233,11 @@ int ObFullTabletCreator::persist_tablet()
     }
 
     if (OB_FAIL(ret)) {
-      ++error_tablets_cnt;
+      if (tmp_fail) {
+        ++retry_tablets_cnt;
+      } else {
+        ++error_tablets_cnt;
+      }
       if (OB_FAIL(push_tablet_to_queue(old_handle))) {
         LOG_ERROR("fail to push tablet, wrong tablet may be leaked", K(ret), K(key), K(old_handle), K(old_tablet->is_empty_shell()));
       }
@@ -248,13 +253,12 @@ int ObFullTabletCreator::persist_tablet()
   // persist_tablets_cnt: the cnt of tablets that have been persisted in this round
   // error_tablets_cnt:   the cnt of tablets that couldn't be persisted in this round
   // tablets_cnt:         the cnt of tablets left in queue (including error_tablets_cnt)
-  if (persist_tablets_cnt + error_tablets_cnt > 0) {
+  if (persist_tablets_cnt + error_tablets_cnt + retry_tablets_cnt > 0) {
     lib::ObMutexGuard guard(mutex_);
-    persist_tablets_cnt_ += persist_tablets_cnt;
-    const int64_t hanging_tablets_cnt = ATOMIC_LOAD(&created_tablets_cnt_) - ATOMIC_LOAD(&gc_tablets_cnt_);
+    const int64_t hanging_tablets_cnt = ATOMIC_LOAD(&created_tablets_cnt_) - ATOMIC_LOAD(&persist_queue_cnt_);
     const int64_t wait_create_tablets_cnt = ATOMIC_LOAD(&wait_create_tablets_cnt_);
-    FLOG_INFO("Finish persist task one round", K(persist_tablets_cnt), K(error_tablets_cnt), K_(persist_queue_cnt),
-        K(wait_create_tablets_cnt), K(hanging_tablets_cnt),
+    FLOG_INFO("Finish persist task one round", K(persist_tablets_cnt), K(error_tablets_cnt), K(retry_tablets_cnt),
+        K_(created_tablets_cnt), K_(persist_queue_cnt), K(wait_create_tablets_cnt), K(hanging_tablets_cnt),
         K(mstx_allocator_.total()), K(mstx_allocator_.used()),
         K(tiny_allocator_.total()), K(tiny_allocator_.used()));
   }

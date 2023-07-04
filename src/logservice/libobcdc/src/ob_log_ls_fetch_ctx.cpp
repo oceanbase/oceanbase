@@ -527,11 +527,7 @@ int LSFetchCtx::read_miss_tx_log(
   } else {
 
     if (OB_FAIL(part_trans_resolver_->read(buf, buf_len, pos, lsn, submit_ts, serve_info_, missing, tsi))) {
-      if (OB_ITEM_NOT_SETTED == ret) {
-        // if found new generated miss log while resolving misslog, FetchStream will
-        // found new_generated_missing_info not empty and goon with misslog process
-        ret = OB_SUCCESS;
-      } else {
+      if (OB_ITEM_NOT_SETTED != ret) {
         LOG_ERROR("resolve miss_log fail", KR(ret), K(log_entry), K(log_base_header), K(lsn), K(missing));
       }
     }
@@ -589,25 +585,23 @@ int LSFetchCtx::handle_offline_ls_log_(const palf::LogEntry &log_entry,
   // There are two scenarios in which partitions need to be reclaimed.
   // 1. ls deletion by DDL: this includes deleting tables, deleting partitions, deleting DBs, deleting tenants, etc. This scenario relies on DDL deletion to be sufficient
   // The observer ensures that the ls is not iterated over in the schema after the DDL is deleted
-  if (STATE_NORMAL == state_) {
-    int64_t pending_trans_count = 0;
-    // First ensure that all tasks in the queue are dispatched
-    if (OB_FAIL(dispatch_(stop_flag, pending_trans_count))) {
-      if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("dispatch task fail", KR(ret), K(tls_id_));
-      }
+  int64_t pending_trans_count = 0;
+  // First ensure that all tasks in the queue are dispatched
+  if (OB_FAIL(dispatch_(stop_flag, pending_trans_count))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("dispatch task fail", KR(ret), K(tls_id_));
     }
-    // Check if there are pending transactions to be output
-    else if (OB_UNLIKELY(pending_trans_count > 0)) {
-      ret = OB_INVALID_DATA;
-      LOG_ERROR("there are still pending trans after dispatch when processing offline log, unexcept error",
-          KR(ret), K(pending_trans_count), K(tls_id_), K(state_));
-    } else {
-      // Finally mark the ls as ready for deletion
-      // Note: there is a concurrency situation here, after a successful setup, it may be dropped into the DEAD POOL for recycling by other threads immediately
-      // Since all data is already output here, it doesn't matter if it goes to the DEAD POOL
-      set_discarded();
-    }
+  }
+  // Check if there are pending transactions to be output
+  else if (OB_UNLIKELY(pending_trans_count > 0)) {
+    ret = OB_INVALID_DATA;
+    LOG_ERROR("there are still pending trans after dispatch when processing offline log, unexcept error",
+        KR(ret), K(pending_trans_count), K(tls_id_), K(state_));
+  } else {
+    // Finally mark the ls as ready for deletion
+    // Note: there is a concurrency situation here, after a successful setup, it may be dropped into the DEAD POOL for recycling by other threads immediately
+    // Since all data is already output here, it doesn't matter if it goes to the DEAD POOL
+    set_discarded();
   }
 
   ISTAT("[HANDLE_OFFLINE_LOG] end", KR(ret), K_(tls_id), "state", print_state(state_));

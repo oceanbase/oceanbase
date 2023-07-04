@@ -62,6 +62,9 @@ int ObExprFunDefault::calc_result_typeN(ObExprResType &type,
     type.set_collation_type(types[1].get_collation_type());
     type.set_collation_level(CS_LEVEL_IMPLICIT);
     type.set_accuracy(types[2].get_accuracy());
+    types[ObExprColumnConv::VALUE_EXPR].set_calc_type(type.get_type());
+    types[ObExprColumnConv::VALUE_EXPR].set_calc_collation_type(type.get_collation_type());
+    types[ObExprColumnConv::VALUE_EXPR].set_calc_collation_level(type.get_collation_level());
   }
   return ret;
 }

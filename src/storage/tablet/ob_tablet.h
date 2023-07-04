@@ -487,6 +487,7 @@ public:
       mds::MdsDumpKV *&kv);
 
   int check_new_mds_with_cache(const int64_t snapshot_version, const int64_t timeout);
+  int check_tablet_status_for_read_all_committed();
   int check_schema_version_with_cache(const int64_t schema_version, const int64_t timeout);
   int check_snapshot_readable_with_cache(const int64_t snapshot_version, const int64_t timeout);
   int set_tablet_status(

@@ -63,13 +63,14 @@ public:
 
   inline const share::ObLSID &get_ls_id() const { return ls_id_; }
 
-  inline int64_t get_renew_time() const { return renew_time_; }
-
   inline const common::ObIArray<ObRoutePolicy::CandidateReplica> &get_replica_locations() const { return replica_locations_; }
 
   inline common::ObIArray<ObRoutePolicy::CandidateReplica> &get_replica_locations() { return replica_locations_; }
 
-  TO_STRING_KV(K(partition_id_), K_(replica_locations), K_(renew_time));
+  TO_STRING_KV(K_(partition_id),
+               K_(tablet_id),
+               K_(ls_id),
+               K_(replica_locations));
 
 private:
   int64_t partition_id_;
@@ -78,7 +79,6 @@ private:
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   ObSmartReplicaLocationArray replica_locations_;
-  int64_t renew_time_;
 };
 
 class ObCandiTabletLoc
@@ -174,8 +174,6 @@ private:
   uint64_t table_location_key_;
   /* 用于获取实际的物理表ID */
   uint64_t ref_table_id_;
-  /* location order */
-  ObOrderDirection direction_;
   /* locations */
   ObCandiTabletLocSEArray candi_tablet_locs_;
   //复制表类型, 如果是复制表且未被更改则可以在分配exg算子时挑选更合适的副本

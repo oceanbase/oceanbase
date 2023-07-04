@@ -35,7 +35,8 @@
 #include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 #include "ob_cdc_lob_aux_meta_storager.h"    // ObCDCLobAuxMetaStorager
 #include "ob_cdc_lob_aux_table_parse.h"    // ObCDCLobAuxMetaStorager
-#include "ob_cdc_udt.h"                  // ObCDCUdtValueBuilder
+#include "ob_cdc_udt.h"                 // ObCDCUdtValueBuilder
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -312,6 +313,7 @@ int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool
 {
   int ret = OB_SUCCESS;
   set_cdc_thread_name("Formatter", thread_index);
+  ObLogTraceIdGuard trace_guard;
   bool cur_stmt_need_callback = false;
   IStmtTask *stmt_task = static_cast<IStmtTask *>(data);
   DmlStmtTask *dml_stmt_task = dynamic_cast<DmlStmtTask *>(stmt_task);

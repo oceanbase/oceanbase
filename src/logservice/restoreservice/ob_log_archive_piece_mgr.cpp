@@ -603,7 +603,7 @@ bool ObLogArchivePieceContext::need_backward_round_(const palf::LSN &lsn) const
   if (min_round_id_ > 0
       && round_context_.is_valid()
       && round_context_.round_id_ > min_round_id_
-      && (inner_piece_context_.is_frozen_() || inner_piece_context_.is_empty_())
+      && (inner_piece_context_.is_frozen_() || inner_piece_context_.is_empty_() || inner_piece_context_.is_gc_())
       && round_context_.min_piece_id_ == inner_piece_context_.piece_id_
       && inner_piece_context_.min_lsn_in_piece_ > lsn) {
     bret = true;
@@ -1182,6 +1182,13 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
     if (inner_piece_context_.min_lsn_in_piece_ <= lsn && inner_piece_context_.max_lsn_in_piece_ > lsn) {
       done = true;
     }
+  } else if (inner_piece_context_.is_gc_()) {
+    if (inner_piece_context_.max_lsn_in_piece_ <= lsn) {
+      done = false;
+      ret = OB_ITER_END;
+    } else if (inner_piece_context_.min_lsn_in_piece_ <= lsn && file_id <= inner_piece_context_.max_file_id_) {
+      done = true;
+    }
   } else {
     if (inner_piece_context_.min_lsn_in_piece_ <= lsn && file_id <= inner_piece_context_.max_file_id_) {
       done = true;
@@ -1215,7 +1222,7 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
   }
 
   // 已消费到最大依然没有定位到该LSN, 并且当前piece包含日志范围小于该LSN, 返回OB_ITER_END
-  if (! done) {
+  if (OB_SUCC(ret) && ! done) {
     if (inner_piece_context_.is_valid()
         && inner_piece_context_.round_id_ == max_round_id_
         && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
@@ -1225,7 +1232,7 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
   }
 
   // 该日志流在该piece已GC, 并且最大LSN小于等于需要获取的LSN, 返回OB_ITER_END
-  if (! done) {
+  if (OB_SUCC(ret) && ! done) {
     if (inner_piece_context_.is_valid()
         && inner_piece_context_.is_gc_()
         && inner_piece_context_.max_lsn_in_piece_ <= lsn) {

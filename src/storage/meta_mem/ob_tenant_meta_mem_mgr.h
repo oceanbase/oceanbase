@@ -177,7 +177,6 @@ public:
   void stop();
   void wait();
   void destroy();
-
   int print_old_chain(
       const ObTabletMapKey &key,
       const ObTabletPointer &tablet_ptr,
@@ -254,10 +253,13 @@ public:
       ObLSService &ls_service,
       bool &is_released,
       const char *module);
+  // only used for replay and compat, others mustn't call this func
   int compare_and_swap_tablet(
       const ObTabletMapKey &key,
       const ObMetaDiskAddr &old_addr,
-      const ObMetaDiskAddr &new_addr);
+      const ObMetaDiskAddr &new_addr,
+      const ObTabletPoolType &pool_type = ObTabletPoolType::TP_MAX,
+      const bool set_pool = false /* whether to set tablet pool */);
   int compare_and_swap_tablet(
       const ObTabletMapKey &key,
       const ObTabletHandle &old_handle,
@@ -456,6 +458,10 @@ private:
   template <typename T>
   int get_obj_pool_info(
       const ObTenantMetaObjPool<T> &obj_pool,
+      const char *name,
+      common::ObIArray<ObTenantMetaMemStatus> &info) const;
+  int get_full_tablets_info(
+      const ObFullTabletCreator &creator,
       const char *name,
       common::ObIArray<ObTenantMetaMemStatus> &info) const;
   int get_wash_tablet_candidate(const std::type_info &type_info, CandidateTabletInfo &info);

@@ -168,6 +168,8 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
     WSTAT("tenant info loader should not be NULL", KR(ret), KP(tenant_info_loader));
   } else {
     ISTAT("start to wait whether can finish restore", K_(tenant_id), K(min_user_ls_create_scn));
+    DEBUG_SYNC(BLOCK_CREATE_STANDBY_TENANT_END);
+
     int64_t retry_cnt_after_sync_user_ls = 0;
     // wait 1 minute, sleep 1s and retry 60 times
     for (int64_t retry_cnt = 60; OB_SUCC(ret) && retry_cnt > 0 && !has_set_stop(); --retry_cnt) {

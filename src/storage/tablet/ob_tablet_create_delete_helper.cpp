@@ -114,9 +114,8 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
     if (OB_UNLIKELY(snapshot_version != ObTransVersion::MAX_TRANS_VERSION)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("read all committed mode should only pass max scn", K(ret), K(key), K(mode), K(snapshot_version));
-    } else if (OB_UNLIKELY(tablet->is_empty_shell())) {
-       ret = OB_TABLET_NOT_EXIST;
-       LOG_WARN("tablet is empty shell", K(ret), K(tablet->get_tablet_meta()));
+    } else if (OB_FAIL(tablet->check_tablet_status_for_read_all_committed())) {
+      LOG_WARN("failed to check tablet status", K(ret), K(key));
     }
   } else if (ObMDSGetTabletMode::READ_READABLE_COMMITED == mode) {
     if (OB_FAIL(tablet->check_new_mds_with_cache(snapshot_version, timeout_us))) {
@@ -189,7 +188,11 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
     LOG_WARN("failed to check read snapshot by commit version", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
   }
 
-  if (OB_SUCC(ret) && ObTabletStatus::TRANSFER_OUT != tablet_status && user_data.is_valid()) {
+  if (OB_FAIL(ret)) {
+  } else if (ObTabletStatus::NORMAL == tablet_status
+      && user_data.is_valid()
+      && ObTabletStatus::NORMAL == user_data.tablet_status_) {
+    // we only set tablet status cache when current status NORMAL and create transaction is COMIITTED
     tablet_status_cache.set_value(user_data);
   }
 

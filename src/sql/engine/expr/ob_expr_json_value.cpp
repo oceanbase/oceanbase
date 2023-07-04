@@ -1337,7 +1337,7 @@ int ObExprJsonValue::cast_to_string(common::ObIAllocator *allocator,
             && (ObCharset::charset_type_by_coll(in_cs_type) !=
             ObCharset::charset_type_by_coll(dst_cs_type))) {
           char *buf = NULL;
-          int64_t buf_len = temp_str_val.length() * ObCharset::CharConvertFactorNum;
+          int64_t buf_len = (temp_str_val.length() == 0 ? 1 : temp_str_val.length()) * ObCharset::CharConvertFactorNum;
           uint32_t result_len = 0;
           buf = reinterpret_cast<char*>(allocator->alloc(buf_len));
           if (OB_ISNULL(buf)) {

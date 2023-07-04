@@ -15,6 +15,7 @@
 
 #include "lib/atomic/ob_atomic.h"
 #include "lib/list/ob_list.h"
+#include "lib/literals/ob_literals.h"
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/thread/thread_mgr_interface.h"
@@ -86,21 +87,18 @@ public:
   bool is_replay_pending_log_too_large(const int64_t pending_size);
   // If the tenant's freeze process is slowed, we will only freeze one time every
   // SLOW_FREEZE_INTERVAL.
-  // set the tenant freeze process slowed. used while the tablet's max memtablet
+  // set the tenant freeze process slowed. used while the tablet's max memtable
   // number meet.
   // @param[in] tablet_id, which tablet slow the freeze process.
-  // @param[in] protect_clock, the memtable's min protection clock.
+  // @param[in] retire_clock, the memtable's retire clock.
   int set_tenant_slow_freeze(const common::ObTabletID &tablet_id,
-                             const int64_t protect_clock);
+                             const int64_t retire_clock);
   // uset the slow freeze flag.
   // if the tenant freeze process is slowed by this tablet, then unset it.
   // @param[in] tablet_id, the tablet who want to unset the slow freeze flag.
   //                       unset success if the tablet is the one who slow the tenant.
   //                       else do nothing.
   int unset_tenant_slow_freeze(const common::ObTabletID &tablet_id);
-  // unset the slow freeze flag.
-  // if the tenant is slowed. unset it and reset the slow tablet.
-  int unset_tenant_slow_freeze();
   // set tenant mem limit, both for min and max memory limit.
   // @param[in] lower_limit, the min memory limit will be set.
   // @param[in] upper_limit, the max memory limit will be set.
@@ -181,15 +179,13 @@ private:
   int get_tenant_mem_usage_(ObTenantFreezeCtx &ctx);
   int get_tenant_mem_stat_(ObTenantStatistic &stat);
   static int get_freeze_trigger_(ObTenantFreezeCtx &ctx);
-  static bool need_freeze_(const ObTenantFreezeCtx &ctx);
-  bool is_minor_need_slow_(const ObTenantFreezeCtx &ctx);
+  bool need_freeze_(const ObTenantFreezeCtx &ctx);
   bool is_major_freeze_turn_();
   int do_major_if_need_(const bool need_freeze);
   int do_minor_freeze_(const ObTenantFreezeCtx &ctx);
   int do_major_freeze_(const int64_t try_frozen_scn);
   void log_frozen_memstore_info_if_need_(const ObTenantFreezeCtx &ctx);
   void halt_prewarm_if_need_(const ObTenantFreezeCtx &ctx);
-  int unset_tenant_slow_freeze_();
   int check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx);
   int check_and_freeze_tx_data_();
   int check_and_freeze_mds_table_();

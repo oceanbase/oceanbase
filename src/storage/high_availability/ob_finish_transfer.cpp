@@ -22,6 +22,7 @@
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_transfer_lock_utils.h"
 #include "storage/tablet/ob_tablet.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -78,14 +79,14 @@ int ObTxFinishTransfer::init(const ObTransferTaskID &task_id, const uint64_t ten
   return ret;
 }
 
-int ObTxFinishTransfer::process()
+int ObTxFinishTransfer::process(int64_t &round)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx finish transfer do not init", K(ret));
-  } else if (OB_FAIL(do_tx_transfer_doing_(task_id_, tenant_id_, src_ls_id_, dest_ls_id_))) {
-    LOG_WARN("failed to do tx transfer doing", K(ret), K_(task_id), K_(tenant_id), K_(src_ls_id), K_(dest_ls_id));
+  } else if (OB_FAIL(do_tx_transfer_doing_(task_id_, tenant_id_, src_ls_id_, dest_ls_id_, round))) {
+    LOG_WARN("failed to do tx transfer doing", K(ret), K_(task_id), K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K(round));
   } else {
     LOG_INFO("process tx finish transfer", K_(task_id), K_(tenant_id), K_(src_ls_id), K_(dest_ls_id));
   }
@@ -93,7 +94,7 @@ int ObTxFinishTransfer::process()
 }
 
 int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, const uint64_t tenant_id,
-    const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id)
+    const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id, int64_t &round)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -119,6 +120,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   ObDisplayTabletList table_lock_tablet_list;
   transaction::tablelock::ObTableLockOwnerID lock_owner_id;
   ObTimeoutCtx timeout_ctx;
+  const int64_t tmp_round = round;
   if (!task_id.is_valid() || OB_INVALID_ID == tenant_id || !src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id), K(src_ls_id), K(dest_ls_id));
@@ -302,6 +304,8 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
           if (OB_SUCCESS == ret) {
             ret = tmp_ret;
           }
+        } else if (is_commit) {
+          round = 0;
         }
         // 11. After the dest_ls leader succeeds,
         // it will report the corresponding results to RS.
@@ -311,6 +315,9 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
         }
       }
     }
+  }
+  if (OB_TMP_FAIL(record_server_event_(ret, is_ready, tmp_round))) {
+    LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(is_ready));
   }
   return ret;
 }
@@ -791,16 +798,9 @@ int ObTxFinishTransfer::lock_ls_member_list_(const uint64_t tenant_id, const sha
     const common::ObMemberList &member_list, const ObTransferLockStatus &status)
 {
   int ret = OB_SUCCESS;
-  storage::ObLS *ls = NULL;
-  storage::ObLSHandle ls_handle;
-  if (OB_FAIL(get_ls_handle_(tenant_id, ls_id, ls_handle))) {
-    LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream not exist", K(ret), K(ls_id));
-  } else if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
-                 tenant_id, ls_id, task_id_.id(), member_list, status, ls, *sql_proxy_))) {
-    LOG_WARN("failed to unlock ls member list", K(ret), K(ls_id), K(member_list), KPC(ls));
+  if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
+      tenant_id, ls_id, task_id_.id(), member_list, status, *sql_proxy_))) {
+    LOG_WARN("failed to unlock ls member list", K(ret), K(ls_id), K(member_list));
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -1099,5 +1099,58 @@ int ObTxFinishTransfer::select_transfer_task_for_update_(const ObTransferTaskID 
   return ret;
 }
 
+int ObTxFinishTransfer::record_server_event_(
+    const int32_t result,
+    const bool is_ready,
+    const int64_t round) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString extra_info_str;
+  const share::ObTransferStatus doing_status(ObTransferStatus::DOING);
+  const share::ObTransferStatus finish_status(ObTransferStatus::COMPLETED);
+  if (OB_SUCCESS == result) {
+    if (is_ready) {
+      if (OB_FAIL(extra_info_str.append_fmt("msg:\"transfer doing success\";"))) {
+        LOG_WARN("fail to printf wait info", K(ret));
+      }
+    } else {
+      if (OB_FAIL(extra_info_str.append_fmt("msg:\"wait for ls logical table replaced\";"))) {
+        LOG_WARN("fail to printf wait info", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(extra_info_str.append_fmt("round:%ld;", round))) {
+      LOG_WARN("fail to printf retry time", K(ret));
+    } else {
+      if (OB_SUCCESS == result && is_ready) {
+        if (OB_FAIL(write_server_event_(result, extra_info_str, finish_status))) {
+          LOG_WARN("fail to write server event", K(ret), K(result), K(extra_info_str));
+        }
+      } else {
+        if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+          if (OB_FAIL(write_server_event_(result, extra_info_str, doing_status))) {
+            LOG_WARN("fail to write server event", K(ret), K(result), K(extra_info_str));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTxFinishTransfer::write_server_event_(const int32_t result, const ObSqlString &extra_info, const share::ObTransferStatus &status) const
+{
+  int ret = OB_SUCCESS;
+  SERVER_EVENT_ADD("storage_ha", "transfer",
+      "tenant_id", tenant_id_,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "src_ls", src_ls_id_.id(),
+      "dest_ls", dest_ls_id_.id(),
+      "status", status.str(),
+      "result", result,
+      extra_info.ptr());
+  return ret;
+}
 }  // namespace storage
 }  // namespace oceanbase

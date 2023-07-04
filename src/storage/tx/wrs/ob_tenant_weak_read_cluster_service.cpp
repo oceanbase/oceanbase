@@ -132,7 +132,9 @@ int ObTenantWeakReadClusterService::check_leader_info_(int64_t &leader_epoch) co
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "log stream service is NULL", K(ret));
   } else if (OB_FAIL(ls_svr->get_ls(share::WRS_LS_ID, handle, ObLSGetMod::TRANS_MOD))) {
-    TRANS_LOG(WARN, "get id service log stream failed", K(ret));
+    if (OB_LS_NOT_EXIST != ret) {
+      TRANS_LOG(WARN, "get id service log stream failed", K(ret));
+    }
   } else if (OB_ISNULL(handle.get_ls())) {
     ret = OB_LS_NOT_EXIST;
   } else if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::WRS_LS_ID, role, tmp_epoch))) {

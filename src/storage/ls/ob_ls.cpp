@@ -642,6 +642,7 @@ bool ObLS::safe_to_destroy()
   bool is_data_check_point_safe = false;
   bool is_dup_table_handler_safe = false;
   bool is_log_handler_safe = false;
+  bool is_transfer_handler_safe = false;
 
   if (OB_FAIL(ls_tablet_svr_.safe_to_destroy(is_tablet_service_safe))) {
     LOG_WARN("ls tablet service check safe to destroy failed", K(ret), KPC(this));
@@ -658,6 +659,9 @@ bool ObLS::safe_to_destroy()
   } else if (OB_FAIL(log_handler_.safe_to_destroy(is_log_handler_safe))) {
     LOG_WARN("log_handler_ check safe to destroy failed", K(ret), KPC(this));
   } else if (!is_log_handler_safe) {
+  } else if (OB_FAIL(transfer_handler_.safe_to_destroy(is_transfer_handler_safe))) {
+    LOG_WARN("transfer_handler_ check safe to destroy failed", K(ret), KPC(this));
+  } else if (!is_transfer_handler_safe) {
   } else {
     if (1 == ref_mgr_.get_total_ref_cnt()) { // only has one ref at the safe destroy task
       is_safe = true;
@@ -672,6 +676,7 @@ bool ObLS::safe_to_destroy()
                  K(is_tablet_service_safe), K(is_data_check_point_safe),
                  K(is_dup_table_handler_safe),
                  K(is_ls_restore_handler_safe), K(is_log_handler_safe),
+                 K(is_transfer_handler_safe),
                  "ls_ref", ref_mgr_.get_total_ref_cnt(),
                  K(ret), KP(this), KPC(this));
         ref_mgr_.print();
@@ -689,6 +694,7 @@ void ObLS::destroy()
   // TODO: (yanyuan.cxf) destroy all the sub module.
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
   if (tenant_id_ != OB_INVALID_TENANT_ID) {
     if (tenant_id_ != MTL_ID()) {
       LOG_ERROR("ls destroy happen in wrong tenant ctx", K(tenant_id_), K(MTL_ID()));
@@ -697,7 +703,7 @@ void ObLS::destroy()
   }
   transaction::ObTransService *txs_svr = MTL(transaction::ObTransService *);
   FLOG_INFO("ObLS destroy", K(this), K(*this), K(lbt()));
-  if (OB_TMP_FAIL(offline_())) {
+  if (OB_TMP_FAIL(offline_(start_ts))) {
     LOG_WARN("ls offline failed.", K(tmp_ret), K(ls_meta_.ls_id_));
   } else if (OB_TMP_FAIL(stop_())) {
     LOG_WARN("ls stop failed.", K(tmp_ret), K(ls_meta_.ls_id_));
@@ -839,10 +845,12 @@ void ObLS::destroy()
   startup_transfer_info_.reset();
 }
 
-int ObLS::offline_tx_()
+int ObLS::offline_tx_(const int64_t start_ts)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(tx_table_.prepare_offline())) {
+  if (OB_FAIL(ls_tx_svr_.prepare_offline(start_ts))) {
+    LOG_WARN("prepare offline ls tx service failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(tx_table_.prepare_offline())) {
     LOG_WARN("tx table prepare offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_tx_svr_.offline())) {
     LOG_WARN("offline ls tx service failed", K(ret), K(ls_meta_));
@@ -863,7 +871,7 @@ int ObLS::offline_compaction_()
   return ret;
 }
 
-int ObLS::offline_()
+int ObLS::offline_(const int64_t start_ts)
 {
   int ret = OB_SUCCESS;
   // only follower can do this.
@@ -876,6 +884,8 @@ int ObLS::offline_()
     LOG_WARN("checkpoint executor offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_restore_handler_.offline())) {
     LOG_WARN("failed to offline ls restore handler", K(ret));
+  } else if (OB_FAIL(transfer_handler_.offline())) {
+    LOG_WARN("transfer_handler  failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(log_handler_.offline())) {
     LOG_WARN("failed to offline log", K(ret));
   // TODO: delete it if apply sequence
@@ -888,7 +898,7 @@ int ObLS::offline_()
     LOG_WARN("weak read handler offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_ddl_log_handler_.offline())) {
     LOG_WARN("ddl log handler offline failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(offline_tx_())) {
+  } else if (OB_FAIL(offline_tx_(start_ts))) {
     LOG_WARN("offline tx service failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(dup_table_ls_handler_.offline())) {
     LOG_WARN("offline dup table ls handler failed", K(ret), K(ls_meta_));
@@ -921,7 +931,7 @@ int ObLS::offline()
     {
       ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
       // only follower can do this.
-      if (OB_FAIL(offline_())) {
+      if (OB_FAIL(offline_(start_ts))) {
         LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
       }
     }
@@ -945,7 +955,7 @@ int ObLS::offline_without_lock()
   do {
     retry_times++;
     {
-      if (OB_FAIL(offline_())) {
+      if (OB_FAIL(offline_(start_ts))) {
         LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
       }
     }
@@ -1006,6 +1016,7 @@ int ObLS::online()
     LOG_WARN("weak read handler online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(online_compaction_())) {
     LOG_WARN("compaction online failed", K(ret), K(ls_meta_));
+  } else if (FALSE_IT(transfer_handler_.online())) {
   } else if (OB_FAIL(ls_restore_handler_.online())) {
     LOG_WARN("ls restore handler online failed", K(ret));
   } else if (FALSE_IT(checkpoint_executor_.online())) {
@@ -1386,6 +1397,7 @@ int ObLS::finish_slog_replay()
   ObMigrationStatus new_migration_status;
   int64_t read_lock = 0;
   int64_t write_lock = LSLOCKALL - LSLOCKLOGMETA;
+  const int64_t start_ts = ObTimeUtility::current_time();
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
 
   if (OB_FAIL(get_migration_status(current_migration_status))) {
@@ -1404,11 +1416,11 @@ int ObLS::finish_slog_replay()
   } else if (OB_FAIL(start())) {
     LOG_WARN("ls can not start to work", K(ret));
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == new_migration_status) {
-    if (OB_FAIL(offline_())) {
+    if (OB_FAIL(offline_(start_ts))) {
       LOG_WARN("failed to offline", K(ret), KPC(this));
     }
   } else if (is_enable_for_restore()) {
-    if (OB_FAIL(offline_())) {
+    if (OB_FAIL(offline_(start_ts))) {
       LOG_WARN("failed to offline", K(ret), KPC(this));
     } else if (OB_FAIL(log_handler_.enable_sync())) {
       LOG_WARN("failed to enable sync", K(ret), KPC(this));
@@ -1443,6 +1455,7 @@ int ObLS::replay_get_tablet_no_check(const common::ObTabletID &tablet_id,
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet", K(ret), K(key));
     } else if (scn <= tablet_change_checkpoint_scn) {
+      ret = OB_OBSOLETE_CLOG_NEED_SKIP;
       LOG_WARN("tablet already gc", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
     } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_max_replayed_scn(ls_meta_.ls_id_, max_scn))) {
       LOG_WARN("failed to get_max_replayed_scn", KR(ret), K_(ls_meta), K(scn), K(tablet_id));
@@ -1461,7 +1474,9 @@ int ObLS::replay_get_tablet_no_check(const common::ObTabletID &tablet_id,
         ret = OB_EAGAIN;
         LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
       } else {
-        LOG_INFO("tablet already gc, but scn is more than tablet_change_checkpoint_scn", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
+        ret = OB_OBSOLETE_CLOG_NEED_SKIP;
+        LOG_INFO("tablet already gc, but scn is more than tablet_change_checkpoint_scn", KR(ret),
+            K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
       }
     }
   }
@@ -1479,41 +1494,37 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", KR(ret));
   } else if (OB_FAIL(replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(ls_meta_.ls_id_));
-  } else {
+  } else if (tablet_id.is_ls_inner_tablet()) {
+    // do nothing
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id), K(scn));
+  } else if (tablet->is_empty_shell()) {
     ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
     ObTabletCreateDeleteMdsUserData data;
-    bool is_commited = false;
-    if (tablet_id.is_ls_inner_tablet()) {
-      // do nothing
-    } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(data, is_commited))) {
-      if (OB_EMPTY_RESULT == ret) {
-          LOG_WARN("rewrite errcode to EAGAIN", KR(ret), K(tablet_id), K(ls_meta_.ls_id_));
-        ret = OB_EAGAIN;
-      } else {
-        LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret), K(tablet_id), K(ls_meta_.ls_id_));
-      }
-    } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
-    } else if (ObTabletStatus::NORMAL == tablet_status
-        || ObTabletStatus::TRANSFER_OUT == tablet_status
-        || ObTabletStatus::TRANSFER_IN == tablet_status) {
-      // do nothing
-    } else if (ObTabletStatus::DELETED == tablet_status
-        || ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status) {
-      // tablet shell
-      ret = OB_TABLET_NOT_EXIST;
-      LOG_INFO("tablet is already deleted", KR(ret), K(tablet_id), K(ls_meta_.ls_id_), K(scn));
-    } else {
+    bool is_committed = false;
+    if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
+      LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
+    } else if (!is_committed) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_INFO("invalid status", KR(ret), K(tablet_id), K(ls_meta_.ls_id_), K(tablet_status), K(scn));
+      LOG_WARN("tablet is empty shell but user data is uncommitted, unexpected", K(ret), KPC(tablet));
+    } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
+    } else if (ObTabletStatus::DELETED != tablet_status
+        && ObTabletStatus::TRANSFER_OUT_DELETED != tablet_status) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet is empty shell but user data is unexpected", K(ret), KPC(tablet));
+    } else {
+      ret = OB_OBSOLETE_CLOG_NEED_SKIP;
+      LOG_INFO("tablet is already deleted, need skip", KR(ret), K(tablet_id), K(ls_meta_.ls_id_), K(scn));
     }
   }
-
   if (OB_SUCC(ret)) {
     handle = tablet_handle;
   }

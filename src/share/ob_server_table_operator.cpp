@@ -539,7 +539,6 @@ int ObServerTableOperator::build_server_status(
       ret = OB_INVALID_SERVER_STATUS;
       LOG_WARN("invalid display status", K(svr_status), K(ret));
     } else {
-      LOG_INFO("svr_status", K(svr_status), K(display_status));
       // set server heartbeat status
       if (ObServerStatus::OB_SERVER_ACTIVE == display_status) {
         server_status.admin_status_ = ObServerStatus::OB_SERVER_ADMIN_NORMAL;

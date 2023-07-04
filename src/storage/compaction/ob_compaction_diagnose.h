@@ -22,7 +22,7 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObPGPartition;
+class ObTenantTabletIterator;
 }
 namespace rootserver
 {
@@ -391,10 +391,32 @@ struct ObCompactionDiagnoseInfo
 class ObCompactionDiagnoseMgr
 {
 public:
+struct ObLSCheckStatus
+  {
+  public:
+    ObLSCheckStatus() { reset(); }
+    ObLSCheckStatus(bool weak_read_ts_ready, bool need_merge, bool is_leader)
+      : weak_read_ts_ready_(weak_read_ts_ready),
+        need_merge_(need_merge),
+        is_leader_(is_leader)
+    {}
+    ~ObLSCheckStatus() {}
+    OB_INLINE void reset() {
+      weak_read_ts_ready_ = false;
+      need_merge_ = false;
+      is_leader_ = false;
+    }
+
+    TO_STRING_KV(K_(weak_read_ts_ready), K_(need_merge), K_(is_leader));
+    bool weak_read_ts_ready_;
+    bool need_merge_;
+    bool is_leader_;
+  };
+public:
   ObCompactionDiagnoseMgr();
   ~ObCompactionDiagnoseMgr() { reset(); }
   void reset();
-  int init(ObCompactionDiagnoseInfo *info_array, const int64_t max_cnt);
+  int init(common::ObIAllocator *allocator, ObCompactionDiagnoseInfo *info_array, const int64_t max_cnt);
   int diagnose_all_tablets(const int64_t tenant_id);
   int diagnose_tenant_tablet();
   int diagnose_tenant_major_merge();
@@ -408,6 +430,9 @@ public:
       ObDiagnoseTabletCompProgress &input_progress);
   static int check_system_compaction_config(char *tmp_str, const int64_t buf_len);
 private:
+  int get_next_tablet(ObLSID &ls_id);
+  void release_last_tenant();
+  int gen_ls_check_status(const ObLSID &ls_id, const int64_t compaction_scn, ObLSCheckStatus &ls_status);
   int diagnose_ls_merge(
       const ObMergeType merge_type,
       const ObLSID &ls_id);
@@ -456,11 +481,19 @@ private:
                              bool &need_diagnose) const;
   int do_tenant_major_merge_diagnose(rootserver::ObMajorFreezeService *major_freeze_service);
 
+public:
+  typedef common::hash::ObHashMap<ObLSID, ObLSCheckStatus> LSStatusMap;
 private:
-  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 120L; // 120 seconds
+  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 1000L * 120L; // 120 seconds // ns
   static const int64_t SUSPECT_INFO_WARNING_THRESHOLD = 1000L * 1000L * 60L * 5; // 5 mins
   static const int64_t MAX_LS_TABLET_CNT = 10 * 10000; // TODO(@jingshui): tmp solution
   bool is_inited_;
+  ObIAllocator *allocator_;
+  storage::ObTenantTabletIterator *tablet_iter_;
+  common::ObArenaAllocator tablet_allocator_;
+  ObTabletHandle tablet_handle_;
+  void *iter_buf_;
+  LSStatusMap ls_status_map_;
   ObCompactionDiagnoseInfo *info_array_;
   int64_t max_cnt_;
   int64_t idx_;
@@ -503,13 +536,13 @@ private:
       int64_t tenant_id = MTL_ID();                                                                     \
       int64_t hash_value = ObScheduleSuspectInfo::gen_hash(tenant_id, dag_hash.inner_hash());          \
       if (OB_TMP_FAIL(MTL(ObScheduleSuspectInfoMgr *)->delete_info(hash_value))) { \
-        if (OB_HASH_NOT_EXIST != ret) {                                                                \
-          STORAGE_LOG(WARN, "failed to add suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));         \
+        if (OB_HASH_NOT_EXIST != tmp_ret) {                                                                \
+          STORAGE_LOG(WARN, "failed to del suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));         \
         } else {                                                                                      \
           tmp_ret = OB_SUCCESS;                                                                           \
         }                                                                                            \
       } else {                                                                                      \
-        STORAGE_LOG(DEBUG, "success to add suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));       \
+        STORAGE_LOG(DEBUG, "success to del suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));       \
       }                                                                                       \
 }
 

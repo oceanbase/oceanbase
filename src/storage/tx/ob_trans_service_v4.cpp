@@ -587,7 +587,9 @@ int ObTransService::abort_tx_(ObTxDesc &tx, const int cause, const bool cleanup)
     }
     tx.state_ = ObTxDesc::State::ABORTED;
   }
-  TRANS_LOG(INFO, "abort tx", K(ret), K(*this), K(tx), K(cause));
+  if (ObTxAbortCause::IMPLICIT_ROLLBACK != cause) {
+    TRANS_LOG(INFO, "abort tx", K(ret), K(*this), K(tx), K(cause));
+  }
   return ret;
 }
 
@@ -1682,12 +1684,15 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
  *
  ********************************************************************/
 
-int ObTransService::batch_post_tx_msg_(ObTxRollbackSPMsg &msg,
-                                       const ObIArray<ObTxLSEpochPair> &list)
+int ObTransService::batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
+                                                       ObTxRollbackSPMsg &msg,
+                                                       const ObIArray<ObTxLSEpochPair> &list,
+                                                       int &post_succ_num)
 {
   int ret = OB_SUCCESS;
   int last_ret = OB_SUCCESS;
-  const ObTxDesc *tx_ptr = msg.tx_ptr_;
+  post_succ_num = 0;
+  const ObTxDesc *msg_tx_ptr = msg.tx_ptr_;
   ARRAY_FOREACH_NORET(list, idx) {
     auto &p = list.at(idx);
     msg.receiver_ = p.left_;
@@ -1696,10 +1701,17 @@ int ObTransService::batch_post_tx_msg_(ObTxRollbackSPMsg &msg,
       msg.tx_ptr_ = NULL;
     }
     if (OB_FAIL(rpc_->post_msg(p.left_, msg))) {
-      TRANS_LOG(WARN, "post msg falied", K(ret), K(msg), K(p));
-      last_ret = ret;
-    }
-    msg.tx_ptr_ = tx_ptr;
+      if (OB_LS_IS_DELETED == ret) {
+        ObSpinLockGuard lock(tx.lock_);
+        ObAddr fake_addr;
+        on_sp_rollback_succ_(p, tx, ObTxPart::EPOCH_DEAD, fake_addr);
+        ret = OB_SUCCESS;
+      } else {
+        TRANS_LOG(WARN, "post msg falied", K(ret), K(msg), K(p));
+        last_ret = ret;
+      }
+    } else { ++post_succ_num; }
+    msg.tx_ptr_ = msg_tx_ptr;
   }
   return last_ret;
 }
@@ -1903,7 +1915,9 @@ int ObTransService::handle_trans_abort_request(ObTxAbortMsg &abort_req, ObTransR
   if (OB_NOT_NULL(ctx)) {
     revert_tx_ctx_(ctx);
   }
-  TRANS_LOG(INFO, "handle trans abort request", K(ret), K(abort_req));
+  if (ObTxAbortCause::IMPLICIT_ROLLBACK != abort_req.reason_) {
+    TRANS_LOG(INFO, "handle trans abort request", K(ret), K(abort_req));
+  }
   return ret;
 }
 
@@ -2047,6 +2061,21 @@ int ObTransService::handle_tx_batch_req(int msg_type,
    || is_location_service_renew_error(ret)      \
    )
 
+void ObTransService::on_sp_rollback_succ_(const ObTxLSEpochPair &part,
+                                          ObTxDesc &tx,
+                                          const int64_t born_epoch,
+                                          const ObAddr &addr)
+{
+  if (tx.brpc_mask_set_.is_mask(part)) {
+    TRANS_LOG(DEBUG, "has marked received", K(part));
+  } else {
+    if (part.right_ <= 0) {
+      tx.update_clean_part(part.left_, born_epoch, addr);
+    }
+    (void)tx.brpc_mask_set_.mask(part);
+  }
+}
+
 int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
                                             const int64_t epoch,
                                             const transaction::ObTransID &tx_id,
@@ -2072,17 +2101,9 @@ int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
                 K(status), K(ls_id), K(tx_id), K(addr));
     } else if (status == OB_SUCCESS) {
       ObTxLSEpochPair pair(ls_id, epoch);
-      if (tx->brpc_mask_set_.is_mask(pair)) {
-        TRANS_LOG(DEBUG, "has marked received", K(pair));
-      } else {
-        if (epoch <= 0) {
-          tx->update_clean_part(ls_id, result.born_epoch_, result.addr_);
-        }
-        (void)tx->brpc_mask_set_.mask(pair);
-        //MEM_BARRIER();
-        if (tx->brpc_mask_set_.is_all_mask()) {
-          tx->rpc_cond_.notify(OB_SUCCESS);
-        }
+      (void)on_sp_rollback_succ_(pair, *tx, result.born_epoch_, result.addr_);
+      if (tx->brpc_mask_set_.is_all_mask()) {
+        tx->rpc_cond_.notify(OB_SUCCESS);
       }
     } else { // other failure
       // notify waiter, cause the savepoint rollback fail

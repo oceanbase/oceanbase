@@ -249,7 +249,7 @@ protected:
   int64_t ctx_create_time_;
   ObTransService *trans_service_;
   mutable CtxLock lock_;
-  //ObTransTraceLog trace_log_;
+  ObTransTraceLog trace_log_;
   ObTransTraceLog *tlog_;
   uint64_t cluster_version_;
   ObLSTxCtxMgr *ls_tx_ctx_mgr_;

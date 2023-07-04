@@ -447,7 +447,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         OZ (call_proc_info->get_dependency_table().push_back(obj_version));
       }
     }
-    ObArray<ObRawExpr*> params;
+    ObSEArray<ObRawExpr*, 16> params;
     OZ (resolve_cparams(params_node, proc_info, call_proc_info, params));
 
     if (OB_SUCC(ret)) {

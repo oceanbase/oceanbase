@@ -6677,6 +6677,12 @@ int ObTransformPreProcess::check_skip_child_select_view(const ObIArray<ObParentD
     if (OB_ISNULL(basic_table_item) || OB_ISNULL(view_table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get table item", K(ret));
+    } else if (basic_table_item->is_basic_table() && view_table_item->is_generated_table()) {
+      if (OB_NOT_NULL(view_table_item->ref_query_) &&
+          OB_NOT_NULL(view_table_item->ref_query_->get_table_item(0)) &&
+          basic_table_item->table_id_ == view_table_item->ref_query_->get_table_item(0)->table_id_) {
+        skip_for_view_table = true;
+      }
     } else if (!basic_table_item->is_basic_table() || !view_table_item->is_view_table_) {
       // do nothing
     } else if (OB_ISNULL(view_table_item->view_base_item_)) {

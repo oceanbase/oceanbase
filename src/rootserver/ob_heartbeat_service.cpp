@@ -29,6 +29,8 @@
 #include "rootserver/ob_root_utils.h"            // get_proposal_id_from_sys_ls
 #include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
 #include "rootserver/ob_root_service.h"
+#include "lib/utility/utility.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -185,10 +187,12 @@ void ObHeartbeatService::do_work()
         HBS_LOG_ERROR("unexpected thread_idx", KR(ret), K(thread_idx), K(thread_cnt));
       } else {
         if (0 == thread_idx) {
+          ObCurTraceId::init(GCONF.self_addr_);
           if (OB_FAIL(send_heartbeat_())) {
             LOG_WARN("fail to send heartbeat", KR(ret));
           }
         } else { // 1 == thread_idx
+          ObCurTraceId::init(GCONF.self_addr_);
           if (OB_FAIL(manage_heartbeat_())) {
             LOG_WARN("fail to manage heartbeat", KR(ret));
           }
@@ -229,12 +233,14 @@ int ObHeartbeatService::send_heartbeat_()
     ret = OB_ERR_UNEXPECTED;
     HBS_LOG_ERROR("srv_rpc_proxy_ is null", KR(ret), KP(srv_rpc_proxy_));
   } else {
+    ObTimeGuard time_guard("ObHeartbeatService::send_heartbeat_", 2 * 1000 * 1000);
     // step 1: prepare hb_requests based on the whitelist
     if (OB_FAIL(prepare_hb_requests_(hb_requests, tmp_whitelist_epoch_id))) {
       LOG_WARN("fail to prepare heartbeat requests", KR(ret));
     } else if (hb_requests.count() <= 0) {
       LOG_INFO("no heartbeat request needs to be sent");
     } else {
+      time_guard.click("end prepare_hb_requests");
       ObSendHeartbeatProxy proxy(*srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::handle_heartbeat);
       int64_t timeout = GCONF.rpc_timeout;  // default value is 2s
       int tmp_ret = OB_SUCCESS;
@@ -257,12 +263,15 @@ int ObHeartbeatService::send_heartbeat_()
         LOG_WARN("fail to wait all batch result", KR(ret), KR(tmp_ret));
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
+      time_guard.click("end wait_hb_responses");
       // step 4: save hb_responses
       if (FAILEDx(set_hb_responses_(tmp_whitelist_epoch_id, &proxy))) {
         LOG_WARN("fail to set hb_responses", KR(ret));
       }
+      time_guard.click("end set_hb_responses");
     }
   }
+  FLOG_INFO("send_heartbeat_ has finished one round", KR(ret));
   return ret;
 }
 int ObHeartbeatService::set_hb_responses_(const int64_t whitelist_epoch_id, ObSendHeartbeatProxy *proxy)
@@ -292,7 +301,7 @@ int ObHeartbeatService::set_hb_responses_(const int64_t whitelist_epoch_id, ObSe
       } else if (OB_FAIL(hb_responses_.push_back(*hb_response))) {
         LOG_WARN("fail to push an element into hb_responses_", KR(ret), KPC(hb_response));
       } else {
-        LOG_DEBUG("receive a heartbeat response", KPC(hb_response));
+        LOG_TRACE("receive a heartbeat response", KPC(hb_response));
       }
     }
   }
@@ -374,16 +383,20 @@ int ObHeartbeatService::manage_heartbeat_()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
   } else {
+    ObTimeGuard time_guard("ObHeartbeatService::manage_heartbeat_", 2 * 1000 * 1000);
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(prepare_whitelist_())) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("fail to prepare whitelist", KR(ret), KR(tmp_ret));
     }
+    time_guard.click("end prepare_whitelist");
     if (OB_TMP_FAIL(process_hb_responses_())) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("fail to prepare heartbeat response", KR(ret), KR(tmp_ret));
     }
+    time_guard.click("end process_hb_responses");
   }
+  FLOG_INFO("manage_heartbeat_ has finished one round", KR(ret));
   return ret;
 }
 int ObHeartbeatService::prepare_whitelist_()

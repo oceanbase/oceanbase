@@ -159,15 +159,15 @@ int LogModeMgr::get_ref_scn(int64_t &mode_version, SCN &ref_scn) const
   return ret;
 }
 
+// require rlock of PalfHandleImpl
 LogModeMeta LogModeMgr::get_accepted_mode_meta() const
 {
-  common::ObSpinLockGuard guard(lock_);
   return accepted_mode_meta_;
 }
 
+// require rlock of PalfHandleImpl
 LogModeMeta LogModeMgr::get_last_submit_mode_meta() const
 {
-  common::ObSpinLockGuard guard(lock_);
   return last_submit_mode_meta_;
 }
 
@@ -674,6 +674,7 @@ int LogModeMgr::handle_prepare_response(const common::ObAddr &server,
   return ret;
 }
 
+// require rlock of PalfHandleImpl
 bool LogModeMgr::can_receive_mode_meta(const int64_t proposal_id,
                                        const LogModeMeta &mode_meta,
                                        bool &has_accepted)
@@ -700,6 +701,7 @@ bool LogModeMgr::can_receive_mode_meta(const int64_t proposal_id,
   return bool_ret;
 }
 
+// require wlock of PalfHandleImpl
 int LogModeMgr::receive_mode_meta(const common::ObAddr &server,
                                   const int64_t proposal_id,
                                   const bool is_applied_mode_meta,
@@ -748,7 +750,7 @@ int LogModeMgr::receive_mode_meta_(const common::ObAddr &server,
   return ret;
 }
 
-// is_applied_mode_meta is true, caller should hold Wlock in PalfHandleImpl
+// require wlock of PalfHandleImpl
 int LogModeMgr::after_flush_mode_meta(const bool is_applied_mode_meta, const LogModeMeta &mode_meta)
 {
   int ret = OB_SUCCESS;

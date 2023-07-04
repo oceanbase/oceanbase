@@ -129,6 +129,7 @@ int ObRpcLSMigrateReplicaP::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ObRpcLSMigrateReplicaP::proces tenant not match", K(tenant_id), K(ret));
   }
+  ObCurTraceId::set(arg_.task_id_);
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("storage_ha", "schedule_ls_migration start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
                      "data_src", arg_.data_source_.get_server(), "dest", arg_.dst_.get_server());
@@ -178,6 +179,7 @@ int ObRpcLSAddReplicaP::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ObRpcLSAddReplicaP::process tenant not match", K(tenant_id), K(ret));
   }
+  ObCurTraceId::set(arg_.task_id_);
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("storage_ha", "schedule_ls_add start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
                      "data_src", arg_.data_source_.get_server(), "dest", arg_.dst_.get_server());
@@ -229,6 +231,7 @@ int ObRpcLSTypeTransformP::process()
       LOG_WARN("failed to switch to tenant", K(ret), K(tenant_id));
     }
   }
+  ObCurTraceId::set(arg_.task_id_);
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("storage_ha", "ls_type_transform start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
                      "dest", arg_.src_.get_server());
@@ -267,6 +270,7 @@ int ObRpcLSRemovePaxosReplicaP::process()
   if (tenant_id != MTL_ID()) {
     ret = guard.switch_to(tenant_id);
   }
+  ObCurTraceId::set(arg_.task_id_);
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("storage_ha", "remove_ls_paxos_member start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
                      "dest", arg_.remove_member_.get_server());
@@ -305,6 +309,7 @@ int ObRpcLSRemoveNonPaxosReplicaP::process()
   if (tenant_id != MTL_ID()) {
     ret = guard.switch_to(tenant_id);
   }
+  ObCurTraceId::set(arg_.task_id_);
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("storage_ha", "remove_ls_learner_member start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
                      "dest", arg_.remove_member_.get_server());
@@ -343,6 +348,7 @@ int ObRpcLSModifyPaxosReplicaNumberP::process()
   if (tenant_id != MTL_ID()) {
     ret = guard.switch_to(tenant_id);
   }
+  ObCurTraceId::set(arg_.task_id_);
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("storage_ha", "modify_paxos_replica_number start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
                      "orig_paxos_replica_number", arg_.orig_paxos_replica_number_, "new_paxos_replica_number", arg_.new_paxos_replica_number_,

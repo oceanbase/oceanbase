@@ -22,6 +22,7 @@
 #include "common/ob_queue_thread.h"                 // ObCond
 #include "ob_cdc_tablet_to_table_info.h"            // ObCDCTabletChangeInfo
 #include "storage/tx/ob_trans_define.h"             // ObTransID, ObLSLogInfoArray
+#include "storage/tx/ob_tx_big_segment_buf.h"       // ObTxBigSegmentBuf
 #include "storage/memtable/ob_memtable_mutator.h"   // ObMemtableMutatorRow, ObMemtableMutatorMeta
 #include "storage/blocksstable/ob_datum_row.h"      // ObRowDml
 #include "logservice/data_dictionary/ob_data_dict_storager.h"  // ObDataDictStorage
@@ -1091,6 +1092,7 @@ public:
   {
     return ! sorted_redo_list_.has_dispatched_but_unsorted_redo();
   }
+  transaction::ObTxBigSegmentBuf *get_segment_buf() { return &segment_buf_; }
   int push_multi_data_source_data(
       const palf::LSN &lsn,
       const transaction::ObTxBufferNodeArray &mds_data_arr,
@@ -1276,6 +1278,7 @@ private:
   // For MultiDataSource
   MultiDataSourceNodeArray  multi_data_source_node_arr_;    // array record MultiDataSourceNode
   MultiDataSourceInfo       multi_data_source_info_;        // MultiDataSourceInfo
+  transaction::ObTxBigSegmentBuf segment_buf_;              // ObTxBigSegmentBuf for Big Tx Log
 
   // checkpoint seq number
   //

@@ -175,14 +175,14 @@ private:
 class ObRestoreMetaIndexStore final : public ObBackupMetaIndexStore
 {
 public:
-  ObRestoreMetaIndexStore() {}
+  ObRestoreMetaIndexStore(): ObBackupMetaIndexStore(), data_version_(0) {}
   virtual ~ObRestoreMetaIndexStore() {}
   int init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
     const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc, const bool is_sec_meta,
-    ObBackupIndexKVCache &index_kv_cache);
-
+    const uint64_t data_version, ObBackupIndexKVCache &index_kv_cache);
   virtual int get_backup_file_path(share::ObBackupPath &backup_path) const override;
 private:
+  uint64_t data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObRestoreMetaIndexStore);
 };
 
@@ -214,6 +214,8 @@ public:
 private:
   int get_index_store_(const share::ObBackupDataType &type, ObRestoreMetaIndexStore *&index_store);
   int get_tenant_meta_index_retry_id_(const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t is_sec_meta, int64_t &retry_id);
+  int get_tenant_meta_index_retry_id_v_4_1_x_(const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type,
       const int64_t turn_id, const int64_t is_sec_meta, int64_t &retry_id);
 
 private:
@@ -256,6 +258,7 @@ public:
   int init(const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const bool is_restore,
       const bool is_macro_index, const bool is_sec_meta);
   int get_max_retry_id(int64_t &retry_id);
+  int get_max_retry_id_v_4_1_x(int64_t &retry_id);
 
 private:
   int get_ls_info_data_info_dir_path_(share::ObBackupPath &backup_path);

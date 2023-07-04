@@ -88,7 +88,6 @@ public:
   OB_INLINE const storage::ObSSTableArray &get_major_sstables() const { return major_tables_; }
   OB_INLINE const storage::ObSSTableArray &get_minor_sstables() const { return minor_tables_; }
   OB_INLINE const storage::ObSSTableArray &get_ddl_sstables() const { return ddl_sstables_; }
-  OB_INLINE const storage::ObSSTableArray &get_ddl_memtables() const { return ddl_mem_sstables_; }
   OB_INLINE const storage::ObSSTableArray &get_meta_major_sstables() const { return meta_major_tables_; }
   OB_INLINE blocksstable::ObSSTable *get_meta_major_sstable() const
   {
@@ -323,7 +322,7 @@ private:
   ObSSTableArray ddl_sstables_;
   ObSSTableArray meta_major_tables_;
   ObMemtableArray memtables_;
-  ObSSTableArray ddl_mem_sstables_;
+  ObDDLKVArray ddl_mem_sstables_;
   bool is_ready_for_read_;
   bool is_inited_;
 
@@ -362,11 +361,19 @@ private:
       int64_t &pos,
       bool &is_print) const;
 
+  void print_ddl_mem(
+      const ObDDLKVArray &tables,
+      const char* table_arr,
+      char *buf,
+      const int64_t buf_len,
+      int64_t &pos,
+      bool &is_print) const;
+
 private:
   const ObSSTableArray &major_tables_;
   const ObSSTableArray &minor_tables_;
   const ObMemtableArray &memtables_;
-  const ObSSTableArray &ddl_mem_sstables_;
+  const ObDDLKVArray &ddl_mem_sstables_;
   const ObSSTableArray &ddl_sstables_;
   const ObSSTableArray &meta_major_tables_;
   const bool is_ready_for_read_;

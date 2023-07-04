@@ -74,7 +74,10 @@ typedef SortedLightyList<LogEntryNode> SortedLogEntryArray;
 class SortedLogEntryInfo
 {
 public:
-  SortedLogEntryInfo() : last_fetched_redo_log_entry_(NULL), fetched_log_entry_arr_(true), recorded_lsn_arr_() {}
+  SortedLogEntryInfo() :
+      last_fetched_redo_log_entry_(NULL),
+      fetched_log_entry_arr_(true), /*is_unique*/
+      recorded_lsn_arr_() {}
   ~SortedLogEntryInfo() { reset(); }
   void reset()
   {
@@ -99,7 +102,11 @@ public:
 
   SortedLogEntryArray &get_fetched_log_entry_node_arr() { return fetched_log_entry_arr_; }
 
-  TO_STRING_KV(K_(fetched_log_entry_arr), K_(recorded_lsn_arr));
+  TO_STRING_KV(
+      "fetched_log_entry_count", fetched_log_entry_arr_.count(),
+      "recorded_lsn_count", recorded_lsn_arr_.count(),
+      K_(fetched_log_entry_arr),
+      K_(recorded_lsn_arr));
 private:
   LogEntryNode *last_fetched_redo_log_entry_;
   // hold all fetched log_entry_info.(include lsn of log_entry which contains redo_log and rollback_to log)

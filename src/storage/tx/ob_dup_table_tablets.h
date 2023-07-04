@@ -339,6 +339,11 @@ public:
   {
     return dup_set_attr_.change_status_.need_reserve(scn);
   }
+  share::SCN get_tablet_change_scn() { return dup_set_attr_.change_status_.tablet_change_scn_; }
+  const DupTabletSetChangeStatus &get_RO_change_status() const
+  {
+    return dup_set_attr_.change_status_;
+  }
 
   bool is_logging() const { return dup_set_attr_.change_status_.check_logging(); }
   void set_logging() { dup_set_attr_.change_status_.set_logging(); }
@@ -492,7 +497,7 @@ class ObLSDupTabletsMgr
 {
 public:
   ObLSDupTabletsMgr()
-      : changing_new_set_(nullptr), removing_old_set_(nullptr), tablet_diag_info_log_buf_(nullptr)
+      : changing_new_set_(nullptr), removing_old_set_(nullptr), tablet_set_diag_info_log_buf_(nullptr),tablet_id_diag_info_log_buf_(nullptr)
   {
     reset();
   }
@@ -678,10 +683,10 @@ private:
   int get_target_tablet_set_(const DupTabletSetCommonHeader &target_common_header,
                              DupTabletChangeMap *&target_set,
                              const bool construct_target_set = false,
-                             const bool need_changing_new_set = false);
+                             const bool force_search_target_set = false);
 
-  int check_and_recycle_empty_readable_set(DupTabletChangeMap *need_free_set, bool &need_remove);
-  int return_tablet_set(DupTabletChangeMap *need_free_set);
+  int check_and_recycle_empty_readable_set_(DupTabletChangeMap *need_free_set, bool &need_remove);
+  int return_tablet_set_(DupTabletChangeMap *need_free_set);
 
   int clean_readable_tablets_(const share::SCN &min_reserve_tablet_scn);
   int clean_durable_confirming_tablets_(const share::SCN &min_reserve_tablet_scn);
@@ -702,6 +707,10 @@ private:
                                    DupTabletSetIDArray &id_array);
 
   int merge_into_readable_tablets_(DupTabletChangeMap *change_map_ptr, const bool for_replay);
+
+  int validate_replay_dup_tablet_set(const DupTabletSetCommonHeader &target_common_header,
+                                     const DupTabletSetChangeStatus &target_change_status,
+                                     DupTabletChangeMap *replay_target_set);
 
 private:
   //
@@ -745,7 +754,8 @@ private:
   int64_t last_no_free_set_time_;
   int64_t extra_free_set_alloc_count_;
 
-  char *tablet_diag_info_log_buf_;
+  char *tablet_set_diag_info_log_buf_;
+  char *tablet_id_diag_info_log_buf_;
 };
 
 class ObLSDupTablets

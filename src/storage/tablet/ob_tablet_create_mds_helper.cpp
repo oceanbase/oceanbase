@@ -46,10 +46,11 @@ public:
 
   int init(
       mds::BufferCtx &user_ctx,
-      const share::SCN &scn);
+      const share::SCN &scn,
+      const bool for_old_mds);
 
 protected:
-  bool is_replay_update_user_data_() const override
+  bool is_replay_update_tablet_status_() const override
   {
     return true;
   }
@@ -64,6 +65,7 @@ protected:
 private:
   mds::BufferCtx *user_ctx_;
   share::SCN scn_;
+  bool for_old_mds_;
 };
 
 
@@ -73,7 +75,8 @@ ObTabletCreateReplayExecutor::ObTabletCreateReplayExecutor()
 
 int ObTabletCreateReplayExecutor::init(
     mds::BufferCtx &user_ctx,
-    const share::SCN &scn)
+    const share::SCN &scn,
+    const bool for_old_mds)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -86,6 +89,7 @@ int ObTabletCreateReplayExecutor::init(
     user_ctx_ = &user_ctx;
     scn_ = scn;
     is_inited_ = true;
+    for_old_mds_ = for_old_mds;
   }
   return ret;
 }
@@ -96,7 +100,7 @@ int ObTabletCreateReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(*user_ctx_);
   ObTabletCreateDeleteMdsUserData user_data(ObTabletStatus::NORMAL, ObTabletMdsUserDataType::CREATE_TABLET);
 
-  if (OB_FAIL(replay_to_mds_table_(tablet_handle, user_data, user_ctx, scn_))) {
+  if (OB_FAIL(replay_to_mds_table_(tablet_handle, user_data, user_ctx, scn_, for_old_mds_))) {
     LOG_WARN("failed to replay to tablet", K(ret));
   }
 
@@ -176,33 +180,19 @@ int ObTabletCreateMdsHelper::on_register(
   return ret;
 }
 
-int ObTabletCreateMdsHelper::on_replay(
-    const char* buf,
-    const int64_t len,
+int ObTabletCreateMdsHelper::replay_process(
+    const ObBatchCreateTabletArg &arg,
     const share::SCN &scn,
     mds::BufferCtx &ctx)
 {
   MDS_TG(1_s);
   int ret = OB_SUCCESS;
-  ObBatchCreateTabletArg arg;
-  int64_t pos = 0;
   common::ObSArray<ObTabletID> tablet_id_array;
   const ObLSID &ls_id = arg.id_;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   share::SCN tablet_change_checkpoint_scn;
-
-  if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0) || OB_UNLIKELY(!scn.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), KP(buf), K(len), K(scn));
-  } else if (CLICK_FAIL(arg.deserialize(buf, len, pos))) {
-    LOG_WARN("failed to deserialize", K(ret));
-  } else if (OB_UNLIKELY(!arg.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("arg is invalid", K(ret), K(PRINT_CREATE_ARG(arg)));
-  } else if (arg.is_old_mds_) {
-    LOG_INFO("skip replay create tablet for old mds", K(arg), K(scn));
-  } else if (CLICK_FAIL(tablet_id_array.reserve(arg.get_tablet_count()))) {
+  if (CLICK_FAIL(tablet_id_array.reserve(arg.get_tablet_count()))) {
     LOG_WARN("failed to reserve memory", K(ret), "capacity", arg.get_tablet_count());
   } else if (CLICK_FAIL(get_ls(ls_id, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
@@ -231,6 +221,38 @@ int ObTabletCreateMdsHelper::on_replay(
     }
   }
   LOG_INFO("create tablet replay", KR(ret), K(arg), K(scn));
+  return ret;
+}
+
+int ObTabletCreateMdsHelper::on_replay(
+    const char* buf,
+    const int64_t len,
+    const share::SCN &scn,
+    mds::BufferCtx &ctx)
+{
+  MDS_TG(1_s);
+  int ret = OB_SUCCESS;
+  ObBatchCreateTabletArg arg;
+  int64_t pos = 0;
+  common::ObSArray<ObTabletID> tablet_id_array;
+  const ObLSID &ls_id = arg.id_;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  share::SCN tablet_change_checkpoint_scn;
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0) || OB_UNLIKELY(!scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), KP(buf), K(len), K(scn));
+  } else if (CLICK_FAIL(arg.deserialize(buf, len, pos))) {
+    LOG_WARN("failed to deserialize", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("arg is invalid", K(ret), K(PRINT_CREATE_ARG(arg)));
+  } else if (arg.is_old_mds_) {
+    LOG_INFO("skip replay create tablet for old mds", K(arg), K(scn));
+  } else if (CLICK_FAIL(replay_process(arg, scn, ctx))) {
+    LOG_WARN("fail to replay_process", K(ret), K(PRINT_CREATE_ARG(arg)));
+  }
 
   return ret;
 }
@@ -623,7 +645,7 @@ int ObTabletCreateMdsHelper::build_pure_data_tablet(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (CLICK_FAIL(set_tablet_normal_status(ls->get_tablet_svr(), tablet_handle, for_replay, scn, ctx))) {
+  } else if (CLICK_FAIL(set_tablet_normal_status(ls->get_tablet_svr(), tablet_handle, for_replay, scn, ctx, arg.is_old_mds_))) {
     LOG_WARN("failed to set tablet normal status", K(ret), K(ls_id), K(data_tablet_id));
   }
 
@@ -697,7 +719,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (CLICK_FAIL(set_tablet_normal_status(ls->get_tablet_svr(), tablet_handle, for_replay, scn, ctx))) {
+    } else if (CLICK_FAIL(set_tablet_normal_status(ls->get_tablet_svr(), tablet_handle, for_replay, scn, ctx, arg.is_old_mds_))) {
       LOG_WARN("failed to set tablet normal status", K(ret), K(ls_id), K(tablet_id));
     }
 
@@ -782,7 +804,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (CLICK_FAIL(set_tablet_normal_status(ls->get_tablet_svr(), tablet_handle, for_replay, scn, ctx))) {
+    } else if (CLICK_FAIL(set_tablet_normal_status(ls->get_tablet_svr(), tablet_handle, for_replay, scn, ctx, arg.is_old_mds_))) {
       LOG_WARN("failed to set tablet normal status", K(ret), K(ls_id), K(tablet_id));
     }
   }
@@ -870,7 +892,7 @@ int ObTabletCreateMdsHelper::build_hidden_tablets(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (CLICK_FAIL(set_tablet_normal_status(ls->get_tablet_svr(), tablet_handle, for_replay, scn, ctx))) {
+    } else if (CLICK_FAIL(set_tablet_normal_status(ls->get_tablet_svr(), tablet_handle, for_replay, scn, ctx, arg.is_old_mds_))) {
       LOG_WARN("failed to set tablet normal status", K(ret), K(ls_id), K(tablet_id));
     }
 
@@ -938,7 +960,8 @@ int ObTabletCreateMdsHelper::set_tablet_normal_status(
     ObTabletHandle &tablet_handle,
     const bool for_replay,
     const share::SCN &scn,
-    mds::BufferCtx &ctx)
+    mds::BufferCtx &ctx,
+    const bool for_old_mds)
 {
   MDS_TG(5_ms);
   int ret = OB_SUCCESS;
@@ -959,7 +982,7 @@ int ObTabletCreateMdsHelper::set_tablet_normal_status(
     ObTabletCreateReplayExecutor replay_executor;
     const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
     const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    if (CLICK_FAIL(replay_executor.init(ctx, scn))) {
+    if (CLICK_FAIL(replay_executor.init(ctx, scn, for_old_mds))) {
       LOG_WARN("failed to init replay executor", K(ret));
     } else if (CLICK_FAIL(replay_executor.execute(scn, ls_id, tablet_id))) {
       LOG_WARN("failed to replay mds data", K(ret));

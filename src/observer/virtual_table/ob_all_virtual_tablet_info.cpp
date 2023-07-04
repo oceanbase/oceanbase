@@ -129,6 +129,7 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
   ObTablet *tablet = nullptr;
   ObTabletCreateDeleteMdsUserData latest_user_data;
   bool is_committed = false;
+  bool is_empty_result = false;
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
@@ -146,8 +147,16 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "tablet should not null", K(ret), K(tablet_handle));
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(latest_user_data, is_committed))) {
-    SERVER_LOG(WARN, "failed to get latest tablet status", K(ret), KPC(tablet));
-  } else {
+    if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
+      is_committed = false;
+      is_empty_result = true;
+      ret = OB_SUCCESS;
+    } else {
+      SERVER_LOG(WARN, "failed to get latest tablet status", K(ret), KPC(tablet));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -222,10 +231,15 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
           }
         }
           break;
-        case OB_APP_MIN_COLUMN_ID + 14:
+        case OB_APP_MIN_COLUMN_ID + 14: {
           // tablet_status
-          cur_row_.cells_[i].set_int(static_cast<int64_t>(latest_user_data.get_tablet_status()));
+          if (is_empty_result) {
+            cur_row_.cells_[i].set_int(static_cast<int64_t>(ObTabletStatus::MAX));
+          } else {
+            cur_row_.cells_[i].set_int(static_cast<int64_t>(latest_user_data.get_tablet_status()));
+          }
           break;
+        }
         case OB_APP_MIN_COLUMN_ID + 15:
           // is_committed
           cur_row_.cells_[i].set_int(is_committed ? 1 : 0);

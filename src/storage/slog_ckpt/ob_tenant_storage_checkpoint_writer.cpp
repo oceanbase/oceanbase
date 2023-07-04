@@ -36,7 +36,7 @@ using namespace oceanbase::blocksstable;
 
 ObTenantStorageCheckpointWriter::ObTenantStorageCheckpointWriter()
   : is_inited_(false),
-    tablet_item_addr_info_arr_(),
+    tablet_item_addr_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("TabletCkptArr", MTL_ID())),
     ls_item_writer_(),
     tablet_item_writer_()
 {

@@ -1787,7 +1787,6 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   ctx_ = &ctx;
   load_stmt_ = &load_stmt;
   const ObLoadArgument &load_args = load_stmt_->get_load_arguments();
-  const int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
   int64_t total_line_count = 0;
 
   if (OB_SUCC(ret)) {
@@ -1890,7 +1889,6 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   }
 
   direct_loader_.destroy();
-  THIS_WORKER.set_timeout_ts(original_timeout_us);
 
   return ret;
 }
@@ -1921,7 +1919,7 @@ int ObLoadDataDirectImpl::init_execute_param()
     } else {
       hint_parallel = hint_parallel > 0 ? hint_parallel : DEFAULT_PARALLEL_THREAD_COUNT;
       execute_param_.parallel_ = hint_parallel;
-      execute_param_.thread_count_ = MIN(hint_parallel, (int64_t)tenant->unit_max_cpu());
+      execute_param_.thread_count_ = MIN(hint_parallel, (int64_t)tenant->unit_max_cpu() * 2);
       execute_param_.data_mem_usage_limit_ =
         MIN(execute_param_.thread_count_ * 2, MAX_DATA_MEM_USAGE_LIMIT);
     }

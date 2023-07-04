@@ -22,6 +22,7 @@
 #include "ob_log_instance.h"              // IObLogErrHandler
 #include "ob_log_ls_fetch_mgr.h"          // IObLogLSFetchMgr
 #include "ob_log_fetcher.h"               // IObLogFetcher
+#include "ob_log_trace_id.h"              // ObLogTraceIdGuard
 
 namespace oceanbase
 {
@@ -140,6 +141,7 @@ void ObLogFetcherDeadPool::mark_stop_flag()
 void ObLogFetcherDeadPool::run(const int64_t thread_index)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not inited");

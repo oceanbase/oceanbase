@@ -227,53 +227,27 @@ int ObLSRestoreHandler::handle_execute_over(
   } else if (result != OB_SUCCESS) {
     share::ObLSRestoreStatus status;
     common::ObRole role;
-    // This function will be called when dag net finish. There is lock problem with offline.
-    // Lock sequence for offline is:
-    // 1. lock ObLSRestoreHandler::mtx_
-    // 2. lock ObTenantDagScheduler::scheduler_sync_, which is called in notify when cancel dag net.
-    //
-    // Lock sequence for finish dag net is:
-    // 1. lock ObTenantDagScheduler::scheduler_sync_
-    // 2. lock ObLSRestoreHandler::mtx_, as following
-    //
-    // To solve the dead lock problem, using trylock instead of lock.
-    int retry_cnt = 0;
-    // if lock failed, retry 3 times.
-    const int64_t MAX_TRY_LOCK_CNT = 3;
-    do {
-      if (OB_FAIL(mtx_.trylock())) {
-        LOG_WARN("lock restore handler failed, retry later", K(ret), KPC_(ls));
-        sleep(1);
-      } else {
-        if (nullptr != state_handler_) {
-          status = state_handler_->get_restore_status();
-          role = state_handler_->get_role();
-        }
+    lib::ObMutexGuard guard(mtx_);
+    if (nullptr != state_handler_) {
+      status = state_handler_->get_restore_status();
+      role = state_handler_->get_role();
+    }
 
-        #ifdef ERRSIM
-          SERVER_EVENT_ADD("storage_ha", "handle_execute_over_errsim", "result", result);
-        #endif
+  #ifdef ERRSIM
+    SERVER_EVENT_ADD("storage_ha", "handle_execute_over_errsim", "result", result);
+  #endif
 
-        if (status.is_restore_sys_tablets()) {
-          state_handler_->set_retry_flag();
-          result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
-          LOG_WARN("restore sys tablets dag failed, need retry", K(ret));
-        } else if (OB_TABLET_NOT_EXIST == result) {
-          LOG_INFO("tablet has been deleted, no need to record err info", K(restore_failed_tablets));
-        } else if (common::ObRole::FOLLOWER == role && result_mgr_.can_retrieable_err(result)) {
-          LOG_INFO("follower met retrieable err, no need to record", K(result), K(task_id));
-        } else {
-          result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
-          LOG_WARN("failed restore dag net task", K(result), K(task_id), K(ls_id), K(restore_succeed_tablets), K(restore_failed_tablets), KPC_(ls));
-        }
-
-        mtx_.unlock();
-      }
-    } while (OB_EAGAIN == ret && MAX_TRY_LOCK_CNT > ++retry_cnt);
-
-    if (MAX_TRY_LOCK_CNT <= retry_cnt) {
-      ret = OB_TRY_LOCK_OBJ_CONFLICT;
-      LOG_WARN("lock restore handler failed", K(ret), K(result), K(task_id), K(ls_id), K(restore_succeed_tablets), K(restore_failed_tablets), K(ls_id));
+    if (status.is_restore_sys_tablets()) {
+      state_handler_->set_retry_flag();
+      result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
+      LOG_WARN("restore sys tablets dag failed, need retry", K(ret));
+    } else if (OB_TABLET_NOT_EXIST == result) {
+      LOG_INFO("tablet has been deleted, no need to record err info", K(restore_failed_tablets));
+    } else if (common::ObRole::FOLLOWER == role && result_mgr_.can_retrieable_err(result)) {
+      LOG_INFO("follower met retrieable err, no need to record", K(result), K(task_id));
+    } else {
+      result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
+      LOG_WARN("failed restore dag net task", K(result), K(task_id), K(ls_id), K(restore_succeed_tablets), K(restore_failed_tablets), KPC_(ls));
     }
   }
   return ret;
@@ -342,11 +316,8 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   can_do_restore = false;
   bool is_normal = false;
   bool is_exist = true;
+  bool is_in_member_or_learner_list = false;
   if (is_stop()) { 
-    // when remove ls, set ls restore handler stop
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      LOG_WARN("ls is gc, no need to do restore", KPC(ls_));
-    }
   } else if (OB_FAIL(check_meta_tenant_normal_(is_normal))) {
     LOG_WARN("fail to get meta tenant status", K(ret));
   } else if (!is_normal) {
@@ -360,9 +331,6 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
       state_handler_ = nullptr;
     }
   } else if (restore_status.is_restore_failed()) {
-    if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000)) {
-      LOG_WARN("ls restore failed, tenant restore can't continue", K(result_mgr_));
-    }
   } else if (OB_FAIL(check_restore_job_exist_(is_exist))) {
   } else if (!is_exist) {
     if (OB_FAIL(ls_->set_restore_status(ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_FAILED), get_rebuild_seq()))) {
@@ -373,13 +341,31 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
     }
   } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
     LOG_WARN("fail to get migration status", K(ret));
-  } else if (ObMigrationStatusHelper::check_can_restore(migration_status)) {
-    // Migration and restore require serial execution
-    can_do_restore = true;
-  } else {
+  } else if (!ObMigrationStatusHelper::check_can_restore(migration_status)) {
+  } else if (OB_FAIL(check_in_member_or_learner_list_(is_in_member_or_learner_list))) {
+    LOG_WARN("failed to check in member or learner list", K(ret));
+  } else if (!is_in_member_or_learner_list) {
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      LOG_WARN("ls is in migration, restore wait later", KPC(ls_));
+      LOG_INFO("ls is not in member or learner list", KPC(ls_));
     }
+  } else {
+    can_do_restore = true;
+  }
+  return ret;
+}
+
+int ObLSRestoreHandler::check_in_member_or_learner_list_(bool &is_in_member_or_learner_list) const
+{
+  int ret = OB_SUCCESS;
+  int64_t paxos_replica_num = 0;
+  common::ObMemberList member_list;
+  GlobalLearnerList learner_list;
+  ObAddr self_addr = GCONF.self_addr_;
+  is_in_member_or_learner_list = false;
+  if (OB_FAIL(ls_->get_log_handler()->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
+    LOG_WARN("failed to get paxos_member_list_and_learner_list", K(ret));
+  } else {
+    is_in_member_or_learner_list = member_list.contains(self_addr) || learner_list.contains(self_addr);
   }
   return ret;
 }
@@ -1623,6 +1609,7 @@ int ObLSRestoreHandler::fill_restore_arg_()
         ls_restore_arg_.restore_scn_ = job_info.get_restore_scn();
         ls_restore_arg_.consistent_scn_ = job_info.get_consistent_scn();
         ls_restore_arg_.backup_cluster_version_ = job_info.get_source_cluster_version();
+        ls_restore_arg_.backup_data_version_ = job_info.get_source_data_version();
         ls_restore_arg_.backup_set_list_.reset();
         ls_restore_arg_.backup_piece_list_.reset();
         if (OB_FAIL(ls_restore_arg_.backup_piece_list_.assign(

@@ -160,6 +160,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
   OZ (get_tx_service(session, txs), tenant_id);
 
   if (OB_SUCC(ret) && OB_NOT_NULL(session->get_tx_desc())) {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     auto *tx_desc = session->get_tx_desc();
     if (tx_desc->get_tenant_id() != tenant_id) {
       LOG_ERROR("switch tenant but hold tx_desc", K(tenant_id), KPC(tx_desc));
@@ -175,6 +176,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
   OX (tx_id = session->get_tx_desc()->get_tx_id());
 
   if (OB_FAIL(ret) && cleanup && OB_NOT_NULL(txs) && OB_NOT_NULL(session->get_tx_desc())) {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     txs->release_tx(*session->get_tx_desc());
     session->get_tx_desc() = NULL;
   }
@@ -349,6 +351,7 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
     const ObTransID tx_id = tx_desc->get_tx_id();
     auto tx_free_route_tmp = session->is_txn_free_route_temp();
     MTL_SWITCH(tx_tenant_id) {
+      ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
       if (tx_free_route_tmp) {
         // if XA-txn is on this server, we have acquired its ref, release ref
         // and disassocate with session
@@ -680,8 +683,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     share::ObLSID first_ls_id;
     bool local_single_ls_plan = false;
     const bool local_single_ls_plan_maybe = plan->is_local_plan() &&
-                                            OB_PHY_PLAN_LOCAL == plan->get_location_type() &&
-                                            !tx_desc.is_can_elr();
+                                            OB_PHY_PLAN_LOCAL == plan->get_location_type();
     if (local_single_ls_plan_maybe) {
       if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id))) {
       } else if (!first_ls_id.is_valid()) {
@@ -1113,6 +1115,7 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool 
   int ret = OB_SUCCESS;
   LOG_DEBUG("reset session tx state", KPC(session->get_tx_desc()), K(lbt()));
   if (OB_NOT_NULL(session->get_tx_desc())) {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     auto &tx_desc = *session->get_tx_desc();
     auto tx_id = tx_desc.get_tx_id();
     auto effect_tid = session->get_effective_tenant_id();
@@ -1282,11 +1285,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       || max_stale_time_us <= -2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
-  } else if (max_stale_time_us < 0
-      || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
-    // no need check
-    can_read = true;
-  } else if (observer::ObServer::get_instance().get_self() == addr) {
+  } else if (observer::ObServer::get_instance().get_self() == addr && max_stale_time_us > 0) {
     storage::ObLSService *ls_svr =  MTL(storage::ObLSService *);
     storage::ObLSHandle handle;
     ObLS *ls = nullptr;
@@ -1306,7 +1305,18 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       LOG_WARN("log stream unreadable", K(ls_id), K(addr), K(max_stale_time_us));
     }
   } else {
-    LOG_TRACE("log stream is not local", K(ls_id), K(addr));
+    ObBLKey blk;
+    bool in_black_list = false;
+    if (OB_FAIL(blk.init(addr, tenant_id, ls_id))) {
+      LOG_WARN("ObBLKey init error", K(ret), K(addr), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(blk, in_black_list))) {
+      LOG_WARN("check in black list error", K(ret), K(blk));
+    } else {
+      can_read = (in_black_list ? false : true);
+      if (!can_read && REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+        LOG_WARN("log stream unreadable", K(ls_id), K(blk), K(in_black_list));
+      }
+    }
   }
   return ret;
 }
@@ -1315,6 +1325,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
   int ObSqlTransControl::update_txn_##name##_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos) \
   {                                                                     \
     int ret = OB_SUCCESS;                                               \
+    ObSQLSessionInfo::LockGuard data_lock_guard(session.get_thread_data_lock()); \
     transaction::ObTransService *txs = NULL;                            \
     OZ (get_tx_service(&session, txs));                                 \
     auto &tx_desc = session.get_tx_desc();                              \

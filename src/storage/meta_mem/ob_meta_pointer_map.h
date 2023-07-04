@@ -54,10 +54,13 @@ public:
       ObMetaObjGuard<T> &new_guard);
   // TIPS:
   //  - only compare and swap pure address, but no reset object.
+  // only used for replay and compat, others mustn't call this func
   int compare_and_swap_address_without_object(
       const Key &key,
       const ObMetaDiskAddr &old_addr,
-      const ObMetaDiskAddr &new_addr);
+      const ObMetaDiskAddr &new_addr,
+      const bool set_pool /* whether to set pool */,
+      ObITenantMetaObjPool *pool);
   template <typename Operator> int for_each_value_store(Operator &op);
   int wash_meta_obj(const Key &key, ObMetaObjGuard<ObTablet> &guard, void *&free_obj);
   int64_t count() const { return ResourceMap::map_.size(); }
@@ -807,7 +810,9 @@ template <typename Key, typename T>
 int ObMetaPointerMap<Key, T>::compare_and_swap_address_without_object(
     const Key &key,
     const ObMetaDiskAddr &old_addr,
-    const ObMetaDiskAddr &new_addr)
+    const ObMetaDiskAddr &new_addr,
+    const bool set_pool /* whether to set pool */,
+    ObITenantMetaObjPool *pool)
 {
   int ret = common::OB_SUCCESS;
   uint64_t hash_val = 0;
@@ -816,9 +821,10 @@ int ObMetaPointerMap<Key, T>::compare_and_swap_address_without_object(
   if (OB_UNLIKELY(!key.is_valid()
                || !old_addr.is_valid()
                || !new_addr.is_valid()
-               || new_addr.is_none())) {
+               || new_addr.is_none()
+               || (set_pool && nullptr == pool))) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), K(old_addr), K(new_addr));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), K(old_addr), K(new_addr), K(set_pool), KP(pool));
   } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
     STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
@@ -833,6 +839,9 @@ int ObMetaPointerMap<Key, T>::compare_and_swap_address_without_object(
       STORAGE_LOG(WARN, "old address has changed, need to get again", K(ret), KPC(t_ptr), K(old_addr));
     } else {
       t_ptr->set_addr_with_reset_obj(new_addr);
+      if (set_pool) {
+        t_ptr->set_obj_pool(*pool);
+      }
     }
   }
   return ret;

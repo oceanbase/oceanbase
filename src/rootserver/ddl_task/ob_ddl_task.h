@@ -143,11 +143,12 @@ public:
                        const int64_t consumer_group_id,
                        ObIAllocator *allocator,
                        const obrpc::ObDDLArg *ddl_arg = nullptr,
-                       const int64_t parent_task_id = 0);
+                       const int64_t parent_task_id = 0,
+                       const int64_t task_id = 0);
   ~ObCreateDDLTaskParam() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
-  TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id),
+  TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
                K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg));
 public:
   uint64_t tenant_id_;
@@ -156,6 +157,7 @@ public:
   int64_t parallelism_;
   int64_t consumer_group_id_;
   int64_t parent_task_id_;
+  int64_t task_id_;
   share::ObDDLType type_;
   const ObTableSchema *src_table_schema_;
   const ObTableSchema *dest_table_schema_;

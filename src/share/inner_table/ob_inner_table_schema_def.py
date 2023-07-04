@@ -2864,6 +2864,7 @@ all_backup_set_files_def = dict(
     ('consistent_scn', 'uint', 'false', '0'),
     ('minor_turn_id', 'int', 'false', '0'),
     ('major_turn_id', 'int', 'false', '0'),
+    ('min_restore_scn_display', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'false', ''),
   ],
 )
 def_table_schema(**all_backup_set_files_def)
@@ -5705,6 +5706,8 @@ def_table_schema(
 # 470 : __all_mview_refresh_stmt_stats
 # 471 : __all_dbms_lock_allocated
 # 472 : __wr_control
+# 473 : __all_tenant_event_history
+# 余留位置
 
 ################################################################################
 
@@ -12219,6 +12222,8 @@ def_table_schema(
 # 12412: __all_virtual_mview_refresh_change_stats
 # 12413: __all_virtual_mview_refresh_stmt_stats
 # 12414: __all_virtual_wr_control
+# 12415: __all_virtual_tenant_event_history
+# 12416: __all_virtual_balance_task_helper
 # 余留位置
 #
 
@@ -12485,7 +12490,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
-# 15306: __all_virtual_wr_control
 
 #######################################################################
 # oracle agent table index is defined after the System table Index area
@@ -12590,6 +12594,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 # 15396: __all_mview_refresh_stmt_stats
 
 # 15397: __all_dbms_lock_allocated
+# 15398: __all_virtual_wr_control
+# 15399: __all_virtual_tenant_event_history
+# 15400: __all_virtual_balance_task_helper
+# 余留位置
 
 ################################################################################
 # System View (20000,30000]
@@ -15847,11 +15855,13 @@ def_table_schema(
       END AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
     CASE
-    WHEN MIN_RESTORE_SCN = 0
-      THEN NULL
-    ELSE
-      SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
-    END AS MIN_RESTORE_SCN_DISPLAY,
+      WHEN MIN_RESTORE_SCN_DISPLAY != ''
+        THEN MIN_RESTORE_SCN_DISPLAY
+      WHEN MIN_RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
+      END AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
     CASE
@@ -22378,11 +22388,13 @@ def_table_schema(
       END AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
     CASE
-    WHEN MIN_RESTORE_SCN = 0
-      THEN NULL
-    ELSE
-      SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
-    END AS MIN_RESTORE_SCN_DISPLAY,
+      WHEN MIN_RESTORE_SCN_DISPLAY != ''
+        THEN MIN_RESTORE_SCN_DISPLAY
+      WHEN MIN_RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
+      END AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
     CASE
@@ -27762,6 +27774,11 @@ def_table_schema(
 # 21442: DBA_OB_MVIEW_REFRESH_STMT_STATS
 # 21443: DBA_WR_CONTROL
 # 21444: CDB_WR_CONTROL
+# 21445: DBA_OB_LS_HISTORY
+# 21446: CDB_OB_LS_HISTORY
+# 21447: DBA_OB_TENANT_EVENT_HISTORY
+# 21448: CDB_OB_TENANT_EVENT_HISTORY
+# 余留位置
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -42965,7 +42982,14 @@ def_table_schema(
     START_REPLAY_SCN,
     SCN_TO_TIMESTAMP(START_REPLAY_SCN) AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
-    SCN_TO_TIMESTAMP(MIN_RESTORE_SCN) AS MIN_RESTORE_SCN_DISPLAY,
+    CASE
+      WHEN MIN_RESTORE_SCN_DISPLAY != ''
+        THEN MIN_RESTORE_SCN_DISPLAY
+      WHEN MIN_RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        TO_CHAR(SCN_TO_TIMESTAMP(MIN_RESTORE_SCN),'YYYY-MM-DDHH24:MI:SS.FF9')
+      END AS MIN_RESTORE_SCN_DISPLAY,
     INPUT_BYTES,
     OUTPUT_BYTES,
     CASE
@@ -45573,6 +45597,9 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
 # 25255: DBA_OB_MVIEW_REFRESH_STMT_STATS
 # 25256: DBMS_LOCK_ALLOCATED
 # 25257: DBA_WR_CONTROL
+# 25258: DBA_OB_LS_HISTORY
+# 25259: DBA_OB_TENANT_EVENT_HISTORY
+# 余留位置
 
 #### End Data Dictionary View
 ################################################################################

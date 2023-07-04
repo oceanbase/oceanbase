@@ -414,10 +414,10 @@ int ObIndexBlockRowScanner::check_blockscan(
         LOG_WARN("Fail to get last row of micro block", K(ret), K_(end));
       } else if (OB_FAIL(last_endkey.assign(tmp_datum_row.storage_datums_, datum_utils_->get_rowkey_count()))) {
         LOG_WARN("Fail to assign storage datum to endkey", K(ret), K(tmp_datum_row));
-      } else if (OB_FAIL(last_endkey.compare(rowkey, *datum_utils_, cmp_ret))) {
+      } else if (OB_FAIL(last_endkey.compare(rowkey, *datum_utils_, cmp_ret, false))) {
         LOG_WARN("Fail to compare rowkey", K(ret), K(last_endkey), K(rowkey));
       }
-    } else if (OB_FAIL((idx_data_header_->rowkey_array_ + end_)->compare(rowkey, *datum_utils_, cmp_ret))) {
+    } else if (OB_FAIL((idx_data_header_->rowkey_array_ + end_)->compare(rowkey, *datum_utils_, cmp_ret, false))) {
       LOG_WARN("Fail to compare rowkey", K(ret), K(rowkey));
     }
 

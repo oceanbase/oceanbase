@@ -389,7 +389,7 @@ int ObDASUtils::wait_das_retry(int64_t retry_cnt)
 {
   int ret = OB_SUCCESS;
   uint32_t timeout_factor = static_cast<uint32_t>((retry_cnt > 100) ? 100 : retry_cnt);
-  int64_t sleep_us = 1000L * timeout_factor > THIS_WORKER.get_timeout_remain()
+  int64_t sleep_us = 10000L * timeout_factor > THIS_WORKER.get_timeout_remain()
                                             ? THIS_WORKER.get_timeout_remain()
                                                 : 1000L * timeout_factor;
   if (sleep_us > 0) {

@@ -72,7 +72,6 @@ class ObTabletPersister final
 public:
   ObTabletPersister() = default;
   ~ObTabletPersister() = default;
-
   // Persist the old tablet itself and all internal members, and transform it into a new tablet
   // from object pool. The old tablet can be allocated by allocator or from object pool.
   static int persist_and_transform_tablet(

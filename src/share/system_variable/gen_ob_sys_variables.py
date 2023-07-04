@@ -163,7 +163,8 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("  ObSysVarClassType id_;\n");
   head_file.write("  common::ObString name_;\n");
   head_file.write("  common::ObObjType data_type_;\n");
-  head_file.write("  common::ObString value_;\n");
+  head_file.write("  common::ObString default_value_; // used for init tenant\n");
+  head_file.write("  common::ObString base_value_; // used for session sync\n");
   head_file.write("  common::ObString min_val_;\n");
   head_file.write("  common::ObString max_val_;\n");
   head_file.write("  common::ObString enum_names_;\n");
@@ -178,7 +179,7 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("  common::ObString get_meta_type_func_;\n");
   head_file.write("  common::ObString session_special_update_func_;\n");
   head_file.write("\n");
-  head_file.write("  ObSysVarFromJson():id_(SYS_VAR_INVALID), name_(\"\"), data_type_(common::ObNullType), value_(\"\"), min_val_(\"\"), max_val_(\"\"), enum_names_(\"\"), info_(\"\"), flags_(ObSysVarFlag::NONE), alias_(\"\"), base_class_(\"\"), on_check_and_convert_func_(""), on_update_func_(""), to_select_obj_func_(""), to_show_str_func_(""), get_meta_type_func_(""), session_special_update_func_("") {}\n");
+  head_file.write("  ObSysVarFromJson():id_(SYS_VAR_INVALID), name_(\"\"), data_type_(common::ObNullType), default_value_(\"\"), base_value_(\"\"), min_val_(\"\"), max_val_(\"\"), enum_names_(\"\"), info_(\"\"), flags_(ObSysVarFlag::NONE), alias_(\"\"), base_class_(\"\"), on_check_and_convert_func_(""), on_update_func_(""), to_select_obj_func_(""), to_show_str_func_(""), get_meta_type_func_(""), session_special_update_func_("") {}\n");
   head_file.write("};\n");
   head_file.write("\n");
   head_file.write("class ObSysVariables\n");
@@ -189,6 +190,7 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("  static common::ObString get_name(int64_t i);\n");
   head_file.write("  static common::ObObjType get_type(int64_t i);\n");
   head_file.write("  static common::ObString get_value(int64_t i);\n");
+  head_file.write("  static common::ObString get_base_str_value(int64_t i);\n");
   head_file.write("  static common::ObString get_min(int64_t i);\n");
   head_file.write("  static common::ObString get_max(int64_t i);\n");
   head_file.write("  static common::ObString get_info(int64_t i);\n");
@@ -198,6 +200,7 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("  static bool is_mysql_only(int64_t i);\n");
   head_file.write("  static common::ObString get_alias(int64_t i);\n");
   head_file.write("  static const common::ObObj &get_default_value(int64_t i);\n")
+  head_file.write("  static const common::ObObj &get_base_value(int64_t i);\n")
   head_file.write("  static int64_t get_amount();\n");
   head_file.write("  static int set_value(const char *name, const char * new_value);\n");
   head_file.write("  static int set_value(const common::ObString &name, const common::ObString &new_value);\n");
@@ -251,6 +254,8 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("static ObSysVarFromJson ObSysVars[ObSysVarFactory::ALL_SYS_VARS_COUNT];\n")
   cpp_file.write("static ObObj ObSysVarDefaultValues[ObSysVarFactory::ALL_SYS_VARS_COUNT];\n")
   cpp_file.write("static ObArenaAllocator ObSysVarAllocator(ObModIds::OB_COMMON_SYS_VAR_DEFAULT_VALUE);\n")
+  cpp_file.write("static ObObj ObSysVarBaseValues[ObSysVarFactory::ALL_SYS_VARS_COUNT];\n")
+  cpp_file.write("static ObArenaAllocator ObBaseSysVarAllocator(ObModIds::OB_COMMON_SYS_VAR_DEFAULT_VALUE);\n")
   cpp_file.write("static int64_t ObSysVarsIdToArrayIdx[ObSysVarFactory::OB_MAX_SYS_VAR_ID];\n")
   cpp_file.write("// VarsInit中需要判断当前最大的SysVars对应的id，是否大于OB_MAX_SYS_VAR_ID\n")
   cpp_file.write("// 如果大于OB_MAX_SYS_VAR_ID表示存在无效的SysVarsId\n")
@@ -311,7 +316,8 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}\n")
   cpp_file.write("ObString ObSysVariables::get_name(int64_t i){ return ObSysVars[i].name_;}\n")
   cpp_file.write("ObObjType ObSysVariables::get_type(int64_t i){ return ObSysVars[i].data_type_;}\n")
-  cpp_file.write("ObString ObSysVariables::get_value(int64_t i){ return ObSysVars[i].value_;}\n")
+  cpp_file.write("ObString ObSysVariables::get_value(int64_t i){ return ObSysVars[i].default_value_;}\n")
+  cpp_file.write("ObString ObSysVariables::get_base_str_value(int64_t i){ return ObSysVars[i].base_value_;}\n")
   cpp_file.write("ObString ObSysVariables::get_min(int64_t i){ return ObSysVars[i].min_val_;}\n")
   cpp_file.write("ObString ObSysVariables::get_max(int64_t i){ return ObSysVars[i].max_val_;}\n")
   cpp_file.write("ObString ObSysVariables::get_info(int64_t i){ return ObSysVars[i].info_;}\n")
@@ -321,6 +327,7 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("bool ObSysVariables::is_mysql_only(int64_t i){ return ObSysVars[i].flags_ & ObSysVarFlag::MYSQL_ONLY;}\n")
   cpp_file.write("ObString ObSysVariables::get_alias(int64_t i){ return ObSysVars[i].alias_;}\n")
   cpp_file.write("const ObObj &ObSysVariables::get_default_value(int64_t i){ return ObSysVarDefaultValues[i];}\n")
+  cpp_file.write("const ObObj &ObSysVariables::get_base_value(int64_t i){ return ObSysVarBaseValues[i];}\n")
   cpp_file.write("int64_t ObSysVariables::get_amount(){ return var_amount;}\n")
   cpp_file.write("\n")
   cpp_file.write("int ObSysVariables::set_value(const char *name, const char * new_value)\n")
@@ -335,7 +342,7 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("  bool name_exist = false;\n")
   cpp_file.write("  for (int64_t i = 0; OB_SUCC(ret) && false == name_exist && i < var_amount; ++i){\n")
   cpp_file.write("    if (0 == ObSysVars[i].name_.compare(name)) {\n")
-  cpp_file.write("      ObSysVars[i].value_.assign_ptr(new_value.ptr(), new_value.length());\n")
+  cpp_file.write("      ObSysVars[i].default_value_.assign_ptr(new_value.ptr(), new_value.length());\n")
   cpp_file.write("      name_exist = true;\n")
   cpp_file.write("    }\n")
   cpp_file.write("  }\n")
@@ -353,6 +360,7 @@ int ObSysVariables::init_default_values()
   int64_t sys_var_count = get_amount();
   for (int64_t i = 0; OB_SUCC(ret) && i < sys_var_count; ++i) {
     const ObString &sys_var_val_str = ObSysVariables::get_value(i);
+    const ObString &base_sys_var_val_str = ObSysVariables::get_base_str_value(i);
     const ObObjType sys_var_type = ObSysVariables::get_type(i);
     if (OB_UNLIKELY(sys_var_type == ObTimestampType)) {
       ret = OB_ERR_UNEXPECTED;
@@ -362,6 +370,10 @@ int ObSysVariables::init_default_values()
       ObObj out_obj;
       in_obj.set_varchar(sys_var_val_str);
       in_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      ObObj base_in_obj;
+      ObObj base_out_obj;
+      base_in_obj.set_varchar(base_sys_var_val_str);
+      base_in_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
       //varchar to others. so, no need to get collation from session
       ObCastCtx cast_ctx(&ObSysVarAllocator,
                          NULL,
@@ -369,16 +381,29 @@ int ObSysVariables::init_default_values()
                          CM_NONE,
                          CS_TYPE_INVALID,
                          NULL);
+      ObCastCtx fixed_cast_ctx(&ObBaseSysVarAllocator,
+                    NULL,
+                    0,
+                    CM_NONE,
+                    CS_TYPE_INVALID,
+                    NULL);
       if (OB_FAIL(ObObjCaster::to_type(sys_var_type, cast_ctx, in_obj, out_obj))) {
         ObString sys_var_name = ObSysVariables::get_name(i);
         LOG_WARN("fail to cast object",
                  K(ret), "cell", in_obj, "from_type", ob_obj_type_str(in_obj.get_type()),
                  "to_type", ob_obj_type_str(sys_var_type), K(sys_var_name), K(i));
+      } else if (OB_FAIL(ObObjCaster::to_type(sys_var_type, fixed_cast_ctx, base_in_obj, base_out_obj))) {
+        ObString sys_var_name = ObSysVariables::get_name(i);
+        LOG_WARN("fail to cast object",
+                 K(ret), "cell", base_in_obj, "from_type", ob_obj_type_str(base_in_obj.get_type()),
+                 "to_type", ob_obj_type_str(sys_var_type), K(sys_var_name), K(i));
       } else {
         if (ob_is_string_type(out_obj.get_type())) {
           out_obj.set_collation_level(CS_LEVEL_SYSCONST);
+          base_out_obj.set_collation_level(CS_LEVEL_SYSCONST);
         }
         ObSysVarDefaultValues[i] = out_obj;
+        ObSysVarBaseValues[i] = base_out_obj;
       }
     }
   }
@@ -431,7 +456,7 @@ def write_sys_var_fac_class(wfile, sorted_list):
 class ObSysVarFactory
 {
 public:
-  ObSysVarFactory();
+  ObSysVarFactory(const int64_t tenant_id = OB_SERVER_TENANT_ID);
   virtual ~ObSysVarFactory();
   void destroy();
   int create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var);
@@ -782,8 +807,9 @@ const ObString ObSysVarFactory::get_sys_var_name_by_id(ObSysVarClassType sys_var
   return sys_var_name;
 }
 
-ObSysVarFactory::ObSysVarFactory()
-  : allocator_(ObModIds::OB_COMMON_SYS_VAR_FAC), all_sys_vars_created_(false)
+ObSysVarFactory::ObSysVarFactory(const int64_t tenant_id)
+  : allocator_(ObMemAttr(tenant_id, ObModIds::OB_COMMON_SYS_VAR_FAC)),
+    all_sys_vars_created_(false)
 {
   MEMSET(store_, 0, sizeof(store_));
   MEMSET(store_buf_, 0, sizeof(store_buf_));

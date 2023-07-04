@@ -2541,7 +2541,7 @@ int64_t ObPrintTableStore::to_string(char *buf, const int64_t buf_len) const
       print_arr(major_tables_, "MAJOR", buf, buf_len, pos, is_print);
       print_arr(minor_tables_, "MINOR", buf, buf_len, pos, is_print);
       print_arr(ddl_sstables_, "DDL_DUMP", buf, buf_len, pos, is_print);
-      print_arr(ddl_mem_sstables_, "DDL_MEM", buf, buf_len, pos, is_print);
+      print_ddl_mem(ddl_mem_sstables_, "DDL_MEM", buf, buf_len, pos, is_print);
       print_mem(memtables_, "MEM", buf, buf_len, pos, is_print);
       print_arr(meta_major_tables_, "META_MAJOR", buf, buf_len, pos, is_print);
     } else {
@@ -2555,6 +2555,27 @@ int64_t ObPrintTableStore::to_string(char *buf, const int64_t buf_len) const
 
 void ObPrintTableStore::print_mem(
     const ObMemtableArray &tables,
+    const char* table_arr,
+    char *buf,
+    const int64_t buf_len,
+    int64_t &pos,
+    bool &is_print) const
+{
+  for (int64_t i = 0; i < tables.count(); ++i) {
+    if (is_print && 0 == i) {
+      J_NEWLINE();
+    }
+    table_to_string(tables[i], i == 0 ? table_arr : " ", buf, buf_len, pos);
+    if (i < tables.count() - 1) {
+      J_NEWLINE();
+    }
+  }
+  if (tables.count() > 0) {
+    is_print = true;
+  }
+}
+void ObPrintTableStore::print_ddl_mem(
+    const ObDDLKVArray &tables,
     const char* table_arr,
     char *buf,
     const int64_t buf_len,

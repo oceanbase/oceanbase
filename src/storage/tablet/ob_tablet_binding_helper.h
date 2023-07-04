@@ -84,14 +84,14 @@ public:
 
   // create tablet by new mds
   static int modify_tablet_binding_for_new_mds_create(const obrpc::ObBatchCreateTabletArg &arg, const share::SCN &replay_scn, mds::BufferCtx &ctx);
-  static int bind_hidden_tablet_to_orig_tablet(ObLS &ls, const obrpc::ObCreateTabletInfo &info, const share::SCN &replay_scn, mds::BufferCtx &ctx);
+  static int bind_hidden_tablet_to_orig_tablet(ObLS &ls, const obrpc::ObCreateTabletInfo &info, const share::SCN &replay_scn, mds::BufferCtx &ctx, const bool for_old_mds);
   static int bind_lob_tablet_to_data_tablet(ObLS &ls, const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info, const share::SCN &replay_scn, mds::BufferCtx &ctx);
   // TODO (lihongqin.lhq) delete get_tablet_for_new_mds
   static int get_tablet_for_new_mds(const ObLS &ls, const ObTabletID &tablet_id, const share::SCN &replay_scn, ObTabletHandle &handle);
 
   // common
   template<typename F>
-  static int modify_tablet_binding_new_mds(ObLS &ls, const ObTabletID &tablet_id, const share::SCN &replay_scn, mds::BufferCtx &ctx, F op);
+  static int modify_tablet_binding_new_mds(ObLS &ls, const ObTabletID &tablet_id, const share::SCN &replay_scn, mds::BufferCtx &ctx, const bool for_old_mds, F op);
   static bool has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info);
   static int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
 private:
@@ -107,6 +107,7 @@ public:
   static int on_register(const char* buf, const int64_t len, mds::BufferCtx &ctx);
   static int register_process(ObBatchUnbindTabletArg &arg, mds::BufferCtx &ctx);
   static int on_commit_for_old_mds(const char* buf, const int64_t len, const transaction::ObMulSourceDataNotifyArg &notify_arg);
+  static int replay_process(ObBatchUnbindTabletArg &arg, const share::SCN &scn, mds::BufferCtx &ctx);
   static int on_replay(const char* buf, const int64_t len, const share::SCN &scn, mds::BufferCtx &ctx);
 private:
   static int unbind_hidden_tablets_from_orig_tablets(ObLS &ls, const ObBatchUnbindTabletArg &arg, const share::SCN &replay_scn, mds::BufferCtx &ctx);

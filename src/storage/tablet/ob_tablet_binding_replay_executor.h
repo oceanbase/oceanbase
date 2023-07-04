@@ -31,10 +31,11 @@ public:
   int init(
       mds::BufferCtx &user_ctx,
       ObTabletBindingMdsUserData &user_data,
-      const share::SCN &scn);
+      const share::SCN &scn,
+      const bool for_old_mds);
 
 protected:
-  bool is_replay_update_user_data_() const override
+  bool is_replay_update_tablet_status_() const override
   {
     return false;
   }
@@ -50,6 +51,7 @@ private:
   mds::BufferCtx *user_ctx_;
   ObTabletBindingMdsUserData *user_data_;
   share::SCN scn_;
+  bool for_old_mds_;
 };
 
 

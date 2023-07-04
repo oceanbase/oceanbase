@@ -34,7 +34,7 @@ namespace oceanbase
 
 namespace storage
 {
-class ObBackupLSMetaInfosDesc; //TODO(chongrong): fix namespace circular dependency
+class ObBackupLSMetaInfosDesc;
 }
 namespace share
 {
@@ -412,6 +412,7 @@ const char *const OB_STR_BACKUP_DATA_VERSION = "backup_data_version";
 const char *const OB_STR_CLUSTER_VERSION = "cluster_version";
 const char *const OB_BACKUP_SUFFIX=".obbak";
 const char *const OB_ARCHIVE_SUFFIX=".obarc";
+const char *const OB_STR_MIN_RESTORE_SCN_DISPLAY = "min_restore_scn_display";
 
 enum ObBackupFileType
 {
@@ -1023,6 +1024,10 @@ public:
   static int get_backup_scn(const uint64_t &tenant_id, share::SCN &scn);
   static int check_tenant_data_version_match(const uint64_t tenant_id, const uint64_t data_version);
   static int get_full_replica_num(const uint64_t tenant_id, int64_t &replica_num);
+  static int backup_scn_to_str(const uint64_t tenant_id, const share::SCN &scn, char *buf, int64_t buf_len);
+  static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id,
+                                           ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
+                                           ObTimeZoneInfoWrap &time_zone_info_wrap);
 private:
   static const int64_t  RETRY_INTERVAL = 10 * 1000 * 1000;
   static const int64_t  MAX_RETRY_TIMES = 3;

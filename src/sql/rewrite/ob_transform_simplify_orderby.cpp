@@ -111,6 +111,7 @@ int ObTransformSimplifyOrderby::remove_order_by_for_subquery(ObDMLStmt *stmt, bo
 int ObTransformSimplifyOrderby::remove_order_by_for_view_stmt(ObDMLStmt *stmt, bool &trans_happened, bool &force_serial_set_order)
 {
   int ret = OB_SUCCESS;
+  bool can_remove = false;
   trans_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -122,7 +123,21 @@ int ObTransformSimplifyOrderby::remove_order_by_for_view_stmt(ObDMLStmt *stmt, b
     /*do nothing*/
   } else if (stmt->is_select_stmt() && static_cast<ObSelectStmt*>(stmt)->has_window_function()) {
     /*do nothing*/
+  } else if (stmt->is_select_stmt() && is_oracle_mode()) {
+    common::ObIArray<ObAggFunRawExpr*> &aggr_items = static_cast<ObSelectStmt*>(stmt)->get_aggr_items();
+    can_remove = true;
+    for (int64_t i = 0; OB_SUCC(ret) && can_remove && i < aggr_items.count(); ++i) {
+      if (OB_ISNULL(aggr_items.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(aggr_items));
+      } else if (T_FUN_WM_CONCAT == aggr_items.at(i)->get_expr_type()) {
+        can_remove = false;
+      }
+    }
   } else {
+    can_remove = true;
+  }
+  if (OB_SUCC(ret) && can_remove) {
     ObSelectStmt *view_stmt = NULL;
     ObSelectStmt *select_stmt = NULL;
     bool happened = false;

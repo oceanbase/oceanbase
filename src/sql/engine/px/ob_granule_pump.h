@@ -66,6 +66,7 @@ public :
       cur_tablet_idx_(0), finish_pruning_tablet_idx_(0),
       sharing_iter_end_(false),
       pruning_status_(READY_PRUNING),
+      pruning_ret_(OB_SUCCESS),
       partitions_info_(), parallelism_(0),
       tablet_size_(0), gi_attri_flag_(0) {}
   virtual ~ObGranulePumpArgs() { reset(); };
@@ -78,6 +79,8 @@ public :
   bool need_partition_granule();
   bool is_finish_pruning() { return pruning_status_ == FINISH_PRUNING; }
   void set_finish_pruning() { pruning_status_ = FINISH_PRUNING; }
+  int get_pruning_ret() { return pruning_ret_; }
+  void set_pruning_ret(int v) { pruning_ret_ = v; }
   void reset() {
     op_info_.reset();
     tablet_arrays_.reset();
@@ -95,6 +98,7 @@ public :
   int64_t finish_pruning_tablet_idx_;
   bool sharing_iter_end_;
   PruningStatus pruning_status_;
+  int pruning_ret_;
   //-----end
   common::ObArray<ObPxTabletInfo> partitions_info_;
   common::ObArray<share::ObExternalFileInfo> external_table_files_;

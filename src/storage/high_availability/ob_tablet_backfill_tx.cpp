@@ -638,6 +638,7 @@ int ObTabletBackfillTXTask::get_backfill_tx_minor_sstables_(
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator minor_table_iter;
+  DEBUG_SYNC(STOP_TRANSFER_LS_LOGICAL_TABLE_REPLACED);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx task do not init", K(ret));
@@ -856,7 +857,6 @@ int ObTabletTableBackfillTXTask::prepare_merge_ctx_()
     tablet_merge_ctx_.sstable_version_range_.snapshot_version_ = table_handle_.get_table()->is_memtable() ?
         static_cast<memtable::ObIMemtable*>(table_handle_.get_table())->get_snapshot_version() : tablet_handle_.get_obj()->get_snapshot_version();
     tablet_merge_ctx_.scn_range_ = table_handle_.get_table()->get_key().scn_range_;
-    // TODO(wenjinyu.wjy) waiting to kill transaction
     tablet_merge_ctx_.merge_scn_ = table_handle_.get_table()->is_memtable() ? table_handle_.get_table()->get_key().scn_range_.end_scn_ : backfill_tx_ctx_->log_sync_scn_;
     tablet_merge_ctx_.create_snapshot_version_ = 0;
     tablet_merge_ctx_.schedule_major_ = false;

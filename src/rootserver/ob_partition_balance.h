@@ -37,7 +37,7 @@ class ObPartitionBalance final : public ObAllBalanceGroupBuilder::NewPartitionCa
 {
 public:
   ObPartitionBalance() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), sql_proxy_(nullptr),
-                         allocator_(lib::ObLabel("PART_BALANCE")),
+                         allocator_("PART_BALANCE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
                          bg_builder_(), cur_part_group_(nullptr),
                          ls_desc_array_(), ls_desc_map_(),
                          bg_map_(),

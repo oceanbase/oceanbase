@@ -244,7 +244,7 @@ int ObChunkDatumStore::Block::add_row(const common::ObIArray<ObExpr*> &exprs, Ob
     StoredRow *sr = NULL;
     if (OB_FAIL(StoredRow::build(sr, exprs, ctx, buf->head(), row_size, row_extend_size))) {
       LOG_WARN("build stored row failed", K(ret));
-    } else if (OB_FAIL(buf->advance(row_size))) {
+    } else if (OB_FAIL(buf->advance(sr->row_size_))) {
       LOG_WARN("fill buffer head failed", K(ret), K(buf), K(row_size));
     } else {
       rows_++;
@@ -2186,7 +2186,7 @@ OB_DEF_SERIALIZE(ObChunkDatumStore)
     } else if (ObCtxIds::WORK_AREA == ser_ctx_id) {
       ser_ctx_id = OLD_WORK_AREA_ID;
     } else {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected ctx id", K(ser_ctx_id), K(lbt()));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected ctx id", K(ser_ctx_id), K(lbt()));
     }
   }
   LST_DO_CODE(OB_UNIS_ENCODE,
@@ -2232,15 +2232,13 @@ OB_DEF_DESERIALIZE(ObChunkDatumStore)
               tenant_id_,
               ctx_id_,
               mem_limit_);
-  if (ObCtxIds::MAX_CTX_ID <= OLD_WORK_AREA_ID) {
-    if (ObCtxIds::DEFAULT_CTX_ID == ctx_id_
-        || ObCtxIds::WORK_AREA == ctx_id_) {
-      // do nothing
-    } else if (OLD_WORK_AREA_ID == ctx_id_) {
-      ctx_id_ = ObCtxIds::WORK_AREA;
-    } else {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected ctx id", K(ctx_id_), K(lbt()));
-    }
+  if (ObCtxIds::DEFAULT_CTX_ID == ctx_id_
+      || ObCtxIds::WORK_AREA == ctx_id_) {
+    // do nothing
+  } else if (OLD_WORK_AREA_ID == ctx_id_) {
+    ctx_id_ = ObCtxIds::WORK_AREA;
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected ctx id", K(ctx_id_), K(lbt()));
   }
   if (!is_inited()) {
     if (OB_FAIL(init(mem_limit_, tenant_id_,

@@ -497,6 +497,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_minor()
     } else {
       const ObLSID &ls_id = ls->get_ls_id();
       if (OB_TMP_FAIL(schedule_ls_minor_merge(ls_handle, schedule_tablet_cnt))) {
+        LOG_TRACE("meet error when schedule", K(tmp_ret), K(minor_ls_tablet_iter_));
         minor_ls_tablet_iter_.skip_cur_ls();
         if (!schedule_ignore_error(tmp_ret)) {
           LOG_WARN("failed to schedule ls minor merge", K(tmp_ret), K(ls_id));
@@ -514,7 +515,7 @@ int ObTenantTabletScheduler::check_ls_compaction_finish(const share::ObLSID &ls_
   if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->check_ls_compaction_dag_exist(ls_id, exist))) {
+  } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->check_ls_compaction_dag_exist_with_cancel(ls_id, exist))) {
     LOG_WARN("failed to check ls compaction dag", K(ret), K(ls_id));
   } else if (exist) {
     // the compaction dag exists, need retry later.
@@ -958,7 +959,6 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
     int64_t &schedule_tablet_cnt)
 {
   int ret = OB_SUCCESS;
-  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
   bool need_merge = false;
   bool need_fast_freeze = false;
   ObLS &ls = *ls_handle.get_ls();
@@ -1188,7 +1188,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
             LOG_WARN("failed to check medium finish", K(tmp_ret), K(ls_id), K(tablet_id));
           } else if (FALSE_IT(check_medium_finish = true)) {
           } else if (FALSE_IT(func.get_tablet_handle(new_handle))) {
-          } else if (ObTimeUtility::fast_current_time() * 1000 <
+          } else if (ObTimeUtility::current_time_ns() <
               medium_list->get_wait_check_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
             // need wait 10 mins before schedule meta major
           } else if (enable_adaptive_compaction && OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, new_handle))) {
@@ -1458,6 +1458,7 @@ int ObCompactionScheduleIterator::get_next_ls(ObLSHandle &ls_handle)
     || tablet_idx_ >= tablet_ids_.count()) { // tablet iter end, need get next ls
     ++ls_idx_;
     tablet_ids_.reuse();
+    LOG_TRACE("tablet iter end", K(ret), K(ls_idx_), K(tablet_idx_));
   }
   do {
     if (ls_idx_ >= ls_ids_.count()) {
@@ -1540,7 +1541,7 @@ int64_t ObCompactionScheduleIterator::to_string(char *buf, const int64_t buf_len
   J_KV(K_(ls_idx), K_(ls_ids), K_(tablet_idx), K(tablet_ids_.count()));
   if (is_valid()) {
     J_COMMA();
-    J_KV("cur_ls", ls_ids_.at(ls_idx_));
+    J_KV("cur_ls", ls_ids_.at(ls_idx_), K_(tablet_idx));
     if (!tablet_ids_.empty() && tablet_idx_ < tablet_ids_.count()) {
       J_COMMA();
       J_KV("next_tablet", tablet_ids_.at(tablet_idx_));

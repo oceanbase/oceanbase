@@ -317,8 +317,8 @@ DEF_INT(_ob_max_thread_num, OB_CLUSTER_PARAMETER, "0", "[0,10000)",
          "ob max thread number "
          "upper limit of observer thread count. Range: [0, 10000), 0 means no limit.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_DBL(cpu_quota_concurrency, OB_TENANT_PARAMETER, "4", "[1,10]",
-        "max allowed concurrency for 1 CPU quota. Range: [1,10]",
+DEF_DBL(cpu_quota_concurrency, OB_TENANT_PARAMETER, "4", "[1,20]",
+        "max allowed concurrency for 1 CPU quota. Range: [1,20]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(token_reserved_percentage, OB_CLUSTER_PARAMETER,
         "30", "[0,100]",
@@ -1343,7 +1343,7 @@ DEF_TIME(_follower_snapshot_read_retry_duration, OB_TENANT_PARAMETER, "0ms", "[0
 DEF_STR_WITH_CHECKER(default_auto_increment_mode, OB_TENANT_PARAMETER, "order",
         common::ObAutoIncrementModeChecker, "specifies default auto-increment mode, default is 'order'",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\n  \"type_t\": {\n    \"level\":1,\n    \"sample_pct\":\"1.00\",\n    \"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"\n  }\n}",
+DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\"type_t\":{\"level\":1,\"sample_pct\":\"0.10\",\"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"}}",
         "persistent control information for full-link trace",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_print_sample_ppm, OB_TENANT_PARAMETER, "0", "[0, 1000000]",
@@ -1575,3 +1575,6 @@ DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allowed to limit the memory of tenant 500",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #endif
+DEF_TIME(_worker_long_stall_threshold, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
+        "threshold of dynamic worker works",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

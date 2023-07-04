@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "common/rowkey/ob_store_rowkey.h"
 
 #include "storage/memtable/ob_memtable.h"
@@ -229,18 +231,13 @@ void ObMemtable::destroy()
   ObTimeGuard time_guard("ObMemtable::destroy()", 100 * 1000);
   int ret = OB_SUCCESS;
   if (is_inited_) {
-    const common::ObTabletID tablet_id = key_.tablet_id_;
     const int64_t cost_time = ObTimeUtility::current_time() - mt_stat_.release_time_;
     if (cost_time > 1 * 1000 * 1000) {
-      STORAGE_LOG(WARN, "it costs too much time from release to destroy", K(cost_time), K(tablet_id), KP(this));
+      STORAGE_LOG(WARN, "it costs too much time from release to destroy", K(cost_time), KP(this));
     }
+    set_allow_freeze(true);
     STORAGE_LOG(INFO, "memtable destroyed", K(*this));
     time_guard.click();
-    ObTenantFreezer *freezer = nullptr;
-    freezer = MTL(ObTenantFreezer *);
-    if (OB_SUCCESS != freezer->unset_tenant_slow_freeze(tablet_id)) {
-      TRANS_LOG(WARN, "unset tenant slow freeze failed.", K(*this));
-    }
   }
   ObITable::reset();
   ObFreezeCheckpoint::reset();
@@ -1486,6 +1483,28 @@ void ObMemtable::resolve_left_boundary_for_active_memtable()
   }
 }
 
+void ObMemtable::set_allow_freeze(const bool allow_freeze)
+{
+  int ret = OB_SUCCESS;
+  if (allow_freeze_ != allow_freeze) {
+    const common::ObTabletID tablet_id = key_.tablet_id_;
+    const int64_t retire_clock = local_allocator_.get_retire_clock();
+    ObTenantFreezer *freezer = nullptr;
+    freezer = MTL(ObTenantFreezer *);
+
+    ATOMIC_STORE(&allow_freeze_, allow_freeze);
+    if (allow_freeze) {
+      if (OB_FAIL(freezer->unset_tenant_slow_freeze(tablet_id))) {
+        LOG_WARN("unset tenant slow freeze failed.", KPC(this));
+      }
+    } else {
+      if (OB_FAIL(freezer->set_tenant_slow_freeze(tablet_id, retire_clock))) {
+        LOG_WARN("set tenant slow freeze failed.", KPC(this));
+      }
+    }
+  }
+}
+
 int64_t ObMemtable::inc_write_ref_()
 {
   return ATOMIC_AAF(&write_ref_cnt_, 1);
@@ -2305,7 +2324,7 @@ int ObMemtable::get_schema_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (get_max_column_cnt() > input_column_cnt) {
+  } else if (get_max_column_cnt() >= input_column_cnt) {
     TRANS_LOG(INFO, "column cnt or schema version is updated by memtable", KPC(this),
       K(max_column_cnt_on_memtable), K(max_schema_version_on_memtable));
     max_column_cnt_on_memtable = MAX(max_column_cnt_on_memtable, get_max_column_cnt());

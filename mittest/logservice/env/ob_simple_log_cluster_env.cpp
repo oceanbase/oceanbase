@@ -1364,5 +1364,34 @@ void ObSimpleLogClusterTestEnv::set_disk_options_for_throttling(PalfEnvImpl &pal
   palf_env_impl.disk_options_wrapper_.set_cur_unrecyclable_log_disk_size(unrecyclable_size);
 }
 
+bool ObSimpleLogClusterTestEnv::is_degraded(const PalfHandleImplGuard &leader,
+                                            const int64_t degraded_server_idx)
+{
+  bool has_degraded = false;
+  while (!has_degraded) {
+    common::GlobalLearnerList degraded_learner_list;
+    leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
+    has_degraded = degraded_learner_list.contains(get_cluster()[degraded_server_idx]->get_addr());
+    sleep(1);
+    PALF_LOG(INFO, "wait degrade");
+  }
+  return has_degraded;
+}
+
+bool ObSimpleLogClusterTestEnv::is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id)
+{
+  bool has_upgraded = false;
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, palf_id));
+  while (!has_upgraded) {
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, palf_id));
+    common::GlobalLearnerList degraded_learner_list;
+    leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
+    has_upgraded = (0 == degraded_learner_list.get_member_number());
+    sleep(1);
+    PALF_LOG(INFO, "wait upgrade");
+  }
+  return has_upgraded;
+}
+
 } // end namespace unittest
 } // end namespace oceanbase

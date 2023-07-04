@@ -157,9 +157,9 @@ void Thread::run()
 {
   IRunWrapper *run_wrapper_ = threads_->get_run_wrapper();
   if (OB_NOT_NULL(run_wrapper_)) {
-    run_wrapper_->pre_run(this);
+    run_wrapper_->pre_run();
     threads_->run(idx_);
-    run_wrapper_->end_run(this);
+    run_wrapper_->end_run();
   } else {
     threads_->run(idx_);
   }
