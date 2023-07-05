@@ -115,7 +115,7 @@ public:
   int assign(ObMemtableArray &dst_array) const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
-  int trim_empty_last_memtable();
+  bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
   memtable::ObIMemtable *memtable_array_[MEMTABLE_ARRAY_SIZE];
   int64_t count_;
 private:

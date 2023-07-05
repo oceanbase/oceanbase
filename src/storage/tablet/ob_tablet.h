@@ -730,7 +730,7 @@ private:
       const share::SCN &clog_checkpoint_scn,
       common::ObIArray<ObTableHandleV2> &handle_array);
   int add_memtable(memtable::ObMemtable* const table);
-  int trim_empty_last_memtable();
+  bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
   int assign_memtables(const ObTablet &other_tablet);
   void reset_memtable();
   int pull_ddl_memtables();

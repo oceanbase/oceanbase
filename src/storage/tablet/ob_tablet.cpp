@@ -5103,8 +5103,6 @@ int ObTablet::rebuild_memtable(common::ObIArray<ObTableHandleV2> &handle_array)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObTablet isn't inited", K(ret), KPC(this), K(handle_array));
-  } else if (OB_FAIL(trim_empty_last_memtable())) {
-    LOG_WARN("failed to trim empty last memtable", K(ret));
   } else {
     int last_idx = memtable_count_ > 0 ? memtable_count_ - 1 : 0;
     ObITable *last_memtable = memtables_[last_idx];
@@ -5121,7 +5119,8 @@ int ObTablet::rebuild_memtable(common::ObIArray<ObTableHandleV2> &handle_array)
       } else if (memtable->is_empty()) {
         FLOG_INFO("Empty memtable discarded", KPC(memtable));
       } else if (table->get_end_scn() < end_scn) {
-      } else if (table->get_end_scn() == end_scn && memtable == last_memtable) { //fix issue 41996395
+      } else if (exist_memtable_with_end_scn(table, end_scn)) {
+        FLOG_INFO("duplicated memtable with same end_scn discarded", KPC(table), K(end_scn));
       } else if (OB_FAIL(add_memtable(memtable))) {
         LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
       } else {
@@ -5185,26 +5184,23 @@ int ObTablet::add_memtable(memtable::ObMemtable* const table)
   return ret;
 }
 
-int ObTablet::trim_empty_last_memtable()
+bool ObTablet::exist_memtable_with_end_scn(const ObITable *table, const SCN &end_scn)
 {
-  // trim last memtable if it is empty since right boundary of memtable could be refine asynchronuously
-  int ret = OB_SUCCESS;
-  const int64_t last_memtable_idx = memtable_count_ - 1;
-  if (0 == memtable_count_) {
-    // skip
-  } else if (memtables_[last_memtable_idx]->is_empty()) {
-    LOG_INFO("trim empty last memtable", K(ret), K(memtables_[last_memtable_idx]));
-    const int64_t ref_cnt = memtables_[last_memtable_idx]->dec_ref();
-    if (0 == ref_cnt) {
-      const ObITable::TableType table_type = memtables_[last_memtable_idx]->get_key().table_type_;
-      if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->push_table_into_gc_queue(memtables_[last_memtable_idx], table_type))) {
-        LOG_WARN("Failed to push trimmed empty memtable to gc queue", K(ret), KPC(memtables_[last_memtable_idx]));
+  // when frozen memtable's log was not committed, its right boundary is open (end_scn == MAX)
+  // the right boundary would be refined asynchronuously
+  // we need to make sure duplicate memtable was not added to tablet,
+  // and ensure active memtable could be added to tablet
+  bool is_exist = false;
+  if (table->get_end_scn() == end_scn && memtable_count_ >= 1) {
+    for (int64_t i = memtable_count_ - 1; i >= 0 ; --i) {
+      const ObIMemtable *memtable = memtables_[i];
+      if (memtable == table) {
+        is_exist = true;
+        break;
       }
     }
-    memtables_[last_memtable_idx] = nullptr;
-    memtable_count_--;
   }
-  return ret;
+  return is_exist;
 }
 
 int ObTablet::assign_memtables(const ObTablet &other_tablet)
