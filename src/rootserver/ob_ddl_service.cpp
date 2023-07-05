@@ -6534,8 +6534,8 @@ int ObDDLService::update_generated_column_schema(
       if (OB_FAIL(new_generated_column_schema.get_err_ret())) {
         LOG_WARN("failed to copy new gen column", K(ret));
       } else if (OB_FAIL(modify_generated_column_default_value(new_generated_column_schema,
-                                                               const_cast<ObString&>(orig_column_schema.get_column_name_str()),
-                                                               alter_column_schema.get_column_name_str(),
+                                                               orig_column_schema,
+                                                               alter_column_schema,
                                                                new_table_schema,
                                                                *tz_info_wrap.get_time_zone_info()))) {
         LOG_WARN("modify generated column value failed", K(ret));
@@ -6558,8 +6558,8 @@ int ObDDLService::update_generated_column_schema(
 }
 
 int ObDDLService::modify_generated_column_default_value(ObColumnSchemaV2 &generated_column,
-                                                         common::ObString &column_name,
-                                                         const ObString &new_column_name,
+                                                         const ObColumnSchemaV2 &orig_column_schema,
+                                                         const AlterColumnSchema &alter_column_schema,
                                                          const ObTableSchema &table_schema,
                                                          const ObTimeZoneInfo &tz_info)
 {
@@ -6600,6 +6600,8 @@ int ObDDLService::modify_generated_column_default_value(ObColumnSchemaV2 &genera
         LOG_WARN("failed to get table compat mode", K(ret));
       }
       if (OB_SUCC(ret)) {
+        ObString &column_name = const_cast<ObString&>(orig_column_schema.get_column_name_str());
+        ObString &new_column_name =  const_cast<ObString&>(alter_column_schema.get_column_name_str());
         ObRawExprModifyColumnName modifyColumnName(new_column_name, column_name, compat_mode);
         if (OB_FAIL(modifyColumnName.modifyColumnName(*expr))) {
           LOG_WARN("modifyColumnName modify column name failed", K(ret));
@@ -6618,6 +6620,34 @@ int ObDDLService::modify_generated_column_default_value(ObColumnSchemaV2 &genera
               LOG_WARN("set cur default value failed", K(ret));
             } else if (OB_FAIL(generated_column.set_orig_default_value(default_value))) {
               LOG_WARN("set original default value failed", K(ret));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (orig_column_schema.get_data_type() != alter_column_schema.get_data_type()) {
+          if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
+            LOG_WARN("erase implicit cast failed", K(ret));
+          } else if (OB_FAIL(modify_depend_column_type(expr, alter_column_schema.get_column_name_str(), alter_column_schema))) {
+            LOG_WARN("modify column type failed", K(ret));
+          } else if (OB_FAIL(expr->formalize(&default_session))) {
+            LOG_WARN("expr formalize failed", K(ret));
+          } else {
+            ObRawExpr *expr_with_implicit_cast = NULL;
+            ObExprResType cast_dst_type;
+            ObCastMode cast_mode;
+            cast_dst_type.set_meta(generated_column.get_meta_type());
+            cast_dst_type.set_accuracy(generated_column.get_accuracy());
+            if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, &default_session, cast_mode))) {
+              LOG_WARN("get_default_cast_mode failed", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory, &default_session,
+                                                                *expr, cast_dst_type, cast_mode,
+                                                                expr_with_implicit_cast))) {
+              LOG_WARN("try add cast expr failed", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr_with_implicit_cast, expr_factory.get_allocator()))) {
+              LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), KP(expr_with_implicit_cast));
+            } else {
+              //do nothing
             }
           }
         }
@@ -6653,6 +6683,57 @@ int ObDDLService::validate_update_column_for_materialized_view(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("don't allow update column if it's in materialized view",
             K(ret), K(*mv), K(orig_column_schema));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::modify_depend_column_type(sql::ObRawExpr *expr, const ObString &column_name, const AlterColumnSchema &column_schema) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (expr->has_flag(IS_COLUMN)) {
+    ObColumnRefRawExpr *column_expr = static_cast<ObColumnRefRawExpr *>(expr);
+    if (column_expr->get_column_name() == column_name) {
+      column_expr->set_data_type(column_schema.get_data_type());
+      column_expr->set_lob_column(is_lob_storage(column_schema.get_data_type()));
+      if (ob_is_string_type(column_schema.get_data_type())
+        || ob_is_enumset_tc(column_schema.get_data_type())
+        || ob_is_json_tc(column_schema.get_data_type())
+        || ob_is_geometry_tc(column_schema.get_data_type())) {
+        column_expr->set_collation_type(column_schema.get_collation_type());
+        column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
+      } else {
+        column_expr->set_collation_type(CS_TYPE_BINARY);
+        column_expr->set_collation_level(CS_LEVEL_NUMERIC);
+      }
+      if (OB_SUCC(ret)) {
+        column_expr->set_accuracy(column_schema.get_accuracy());
+        if (OB_FAIL(column_expr->extract_info())) {
+          LOG_WARN("extract column expr info failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && column_schema.is_enum_or_set()) {
+        if (OB_FAIL(column_expr->set_enum_set_values(column_schema.get_extended_type_info()))) {
+          LOG_WARN("failed to set enum set values", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && column_schema.is_xmltype()) {
+      //  column_expr->set_udt_id(column_schema.get_sub_data_type());
+      // }
+      // ToDo : @gehao, need to conver extend type to udt type?
+      //if (OB_SUCC(ret) && column_schema.is_sql_xmltype()) {
+        column_expr->set_data_type(ObUserDefinedSQLType);
+        column_expr->set_subschema_id(ObXMLSqlType);
+        // reset accuracy
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(modify_depend_column_type(expr->get_param_expr(i), column_name, column_schema)))) {
+        LOG_WARN("modify depend column type failed", K(ret));
       }
     }
   }
@@ -8037,8 +8118,7 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                             origin_table_schema,
                                                             update_column_name_set))) {
               RS_LOG(WARN, "failed to pre check orig column schema", K(ret));
-            } else if (OB_DDL_CHANGE_COLUMN == op_type &&
-                      orig_column_schema->has_generated_column_deps()) {
+            } else if (orig_column_schema->has_generated_column_deps()) {
               if (OB_FAIL(update_generated_column_schema(*alter_column_schema,
                                                           *orig_column_schema,
                                                           origin_table_schema,
