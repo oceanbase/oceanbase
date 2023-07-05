@@ -299,24 +299,33 @@ void ObTableLoadStoreCtx::destroy()
   }
 }
 
-int ObTableLoadStoreCtx::advance_status_unlock(ObTableLoadStatusType status)
+int ObTableLoadStoreCtx::advance_status(ObTableLoadStatusType status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(ObTableLoadStatusType::NONE == status || ObTableLoadStatusType::ERROR == status ||
                   ObTableLoadStatusType::ABORT == status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(status));
-  }
-  // normally, the state is advanced step by step
-  else if (OB_UNLIKELY(static_cast<int64_t>(status) != static_cast<int64_t>(status_) + 1)) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("unexpected status", KR(ret), K(status), K(status_));
-  }
-  // advance status
-  else {
-    status_ = status;
-    table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
-    LOG_INFO("LOAD DATA STORE advance status", K(status));
+  } else {
+    obsys::ObWLockGuard guard(status_lock_);
+    if (OB_UNLIKELY(ObTableLoadStatusType::ERROR == status_)) {
+      ret = error_code_;
+      LOG_WARN("store has error", KR(ret));
+    } else if (OB_UNLIKELY(ObTableLoadStatusType::ABORT == status_)) {
+      ret = OB_CANCELED;
+      LOG_WARN("store is abort", KR(ret));
+    }
+    // normally, the state is advanced step by step
+    else if (OB_UNLIKELY(static_cast<int64_t>(status) != static_cast<int64_t>(status_) + 1)) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("unexpected status", KR(ret), K(status), K(status_));
+    }
+    // advance status
+    else {
+      status_ = status;
+      table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
+      LOG_INFO("LOAD DATA STORE advance status", K(status));
+    }
   }
   return ret;
 }
@@ -329,10 +338,8 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
     LOG_WARN("invalid args", KR(ret), K(error_code));
   } else {
     obsys::ObWLockGuard guard(status_lock_);
-    if (status_ == ObTableLoadStatusType::ERROR) {
+    if (static_cast<int64_t>(status_) >= static_cast<int64_t>(ObTableLoadStatusType::ERROR)) {
       // ignore
-    } else if (static_cast<int64_t>(status_) > static_cast<int64_t>(ObTableLoadStatusType::ERROR)) {
-      ret = OB_STATE_NOT_MATCH;
     } else {
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
@@ -357,9 +364,10 @@ int ObTableLoadStoreCtx::set_status_abort()
   return ret;
 }
 
-int ObTableLoadStoreCtx::check_status_unlock(ObTableLoadStatusType status) const
+int ObTableLoadStoreCtx::check_status(ObTableLoadStatusType status) const
 {
   int ret = OB_SUCCESS;
+  obsys::ObRLockGuard guard(status_lock_);
   if (OB_UNLIKELY(status != status_)) {
     if (ObTableLoadStatusType::ERROR == status_) {
       ret = error_code_;
@@ -615,42 +623,39 @@ int ObTableLoadStoreCtx::start_trans(const ObTableLoadTransId &trans_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
+  } else if (OB_FAIL(check_status(ObTableLoadStatusType::LOADING))) {
+    LOG_WARN("fail to check status", KR(ret), K_(status));
   } else {
-    obsys::ObRLockGuard status_guard(status_lock_);
-    if (OB_FAIL(check_status_unlock(ObTableLoadStatusType::LOADING))) {
-      LOG_WARN("fail to check status", KR(ret), K_(status));
-    } else {
-      obsys::ObWLockGuard guard(rwlock_);
-      const ObTableLoadSegmentID &segment_id = trans_id.segment_id_;
-      SegmentCtx *segment_ctx = nullptr;
-      if (OB_FAIL(segment_ctx_map_.get(segment_id, segment_ctx))) {
-        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-          LOG_WARN("fail to get segment ctx", KR(ret));
+    obsys::ObWLockGuard guard(rwlock_);
+    const ObTableLoadSegmentID &segment_id = trans_id.segment_id_;
+    SegmentCtx *segment_ctx = nullptr;
+    if (OB_FAIL(segment_ctx_map_.get(segment_id, segment_ctx))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("fail to get segment ctx", KR(ret));
+      } else {
+        if (OB_FAIL(segment_ctx_map_.create(segment_id, segment_ctx))) {
+          LOG_WARN("fail to create", KR(ret));
         } else {
-          if (OB_FAIL(segment_ctx_map_.create(segment_id, segment_ctx))) {
-            LOG_WARN("fail to create", KR(ret));
-          } else {
-            segment_ctx->segment_id_ = segment_id;
-          }
+          segment_ctx->segment_id_ = segment_id;
         }
       }
-      if (OB_SUCC(ret)) {
-        if (OB_UNLIKELY(nullptr != segment_ctx->current_trans_ ||
-                        nullptr != segment_ctx->committed_trans_store_)) {
-          ret = OB_ENTRY_EXIST;
-          LOG_WARN("trans already exist", KR(ret), KPC(segment_ctx));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(nullptr != segment_ctx->current_trans_ ||
+                      nullptr != segment_ctx->committed_trans_store_)) {
+        ret = OB_ENTRY_EXIST;
+        LOG_WARN("trans already exist", KR(ret), KPC(segment_ctx));
+      } else {
+        if (OB_FAIL(alloc_trans(trans_id, trans))) {
+          LOG_WARN("fail to alloc trans", KR(ret));
         } else {
-          if (OB_FAIL(alloc_trans(trans_id, trans))) {
-            LOG_WARN("fail to alloc trans", KR(ret));
-          } else {
-            segment_ctx->current_trans_ = trans;
-            trans->inc_ref_count();
-          }
+          segment_ctx->current_trans_ = trans;
+          trans->inc_ref_count();
         }
       }
-      if (OB_NOT_NULL(segment_ctx)) {
-        segment_ctx_map_.revert(segment_ctx);
-      }
+    }
+    if (OB_NOT_NULL(segment_ctx)) {
+      segment_ctx_map_.revert(segment_ctx);
     }
   }
   return ret;

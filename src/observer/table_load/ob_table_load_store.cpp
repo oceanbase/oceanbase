@@ -283,8 +283,8 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store commit");
-    obsys::ObWLockGuard guard(store_ctx_->get_status_lock());
-    if (OB_FAIL(store_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
+    ObMutexGuard guard(store_ctx_->get_op_lock());
+    if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
     } else if (OB_FAIL(store_ctx_->insert_table_ctx_->commit())) {
       LOG_WARN("fail to commit insert table", KR(ret));
@@ -293,7 +293,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     } else if (param_.online_opt_stat_gather_ &&
                OB_FAIL(store_ctx_->merger_->collect_sql_statistics(sql_statistics))) {
       LOG_WARN("fail to collect sql stats", KR(ret));
-    } else if (OB_FAIL(store_ctx_->set_status_commit_unlock())) {
+    } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {
       result_info = store_ctx_->result_info_;
@@ -310,8 +310,7 @@ int ObTableLoadStore::get_status(ObTableLoadStatusType &status, int &error_code)
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store get status");
-    status = store_ctx_->get_status();
-    error_code = store_ctx_->get_error_code();
+    store_ctx_->get_status(status, error_code);
   }
   return ret;
 }
@@ -550,8 +549,7 @@ int ObTableLoadStore::get_trans_status(const ObTableLoadTransId &trans_id,
     if (OB_FAIL(store_ctx_->get_trans_ctx(trans_id, trans_ctx))) {
       LOG_WARN("fail to get trans ctx", KR(ret), K(trans_id));
     } else {
-      trans_status = trans_ctx->get_trans_status();
-      error_code = trans_ctx->get_error_code();
+      trans_ctx->get_trans_status(trans_status, error_code);
     }
   }
   return ret;
