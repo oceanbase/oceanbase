@@ -118,7 +118,8 @@ public:
         multi_stmt_rowkey_pos_(alloc_),
         pre_cal_expr_handler_(NULL),
         res_map_rule_id_(common::OB_INVALID_ID),
-        res_map_rule_param_idx_(common::OB_INVALID_INDEX)
+        res_map_rule_param_idx_(common::OB_INVALID_INDEX),
+        is_cli_return_rowid_(false)
   {}
   virtual ~ObPlanSet();
 
@@ -242,6 +243,7 @@ public:
   //variables for resource map rule
   uint64_t res_map_rule_id_;
   int64_t res_map_rule_param_idx_;
+  bool is_cli_return_rowid_;
 };
 
 class ObSqlPlanSet : public ObPlanSet
