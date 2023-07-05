@@ -338,6 +338,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       ObMigrationStatus new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       bool is_ls_deleted = true;
+      bool need_update_status = true;
 
       if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
@@ -356,9 +357,14 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
           bool is_in_member_list = false;
           if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
             if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD != current_migration_status
-                && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != current_migration_status) {
+                && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != current_migration_status
+                && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != current_migration_status) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("migration status is unexpected", K(ret), K(current_migration_status), K(ctx_));
+            } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == current_migration_status) {
+              need_update_status = false;
+              LOG_INFO("current migration status is none, no need update migration status",
+                  K(current_migration_status), K(ctx_));
             } else if (OB_FAIL(ObStorageHADagUtils::check_self_in_member_list(ls->get_ls_id(), is_in_member_list))) {
               LOG_WARN("failed to check self in member list", K(ret), K(ctx_));
             } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls->get_ls_id(), is_ls_deleted))) {
@@ -375,6 +381,8 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         }
 
         if (OB_FAIL(ret)) {
+        } else if (!need_update_status) {
+          is_finish = true;
         } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_ && ObMigrationStatus::OB_MIGRATION_STATUS_NONE == new_migration_status
             && OB_FAIL(ls->clear_saved_info())) {
           LOG_WARN("failed to clear ls saved info", K(ret), KPC(ls));

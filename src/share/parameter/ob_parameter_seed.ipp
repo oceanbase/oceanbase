@@ -1431,7 +1431,7 @@ DEF_TIME(_transfer_start_trans_timeout, OB_CLUSTER_PARAMETER, "10s", "[1ms,600s]
         "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(_transfer_start_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
+DEF_INT(_transfer_start_retry_count, OB_CLUSTER_PARAMETER, "3", "[0,64]",
         "the number of transfer start retry. Range: [0, 64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 

@@ -275,6 +275,7 @@ bool ObTransferUtils::is_need_retry_error(const int err)
   case OB_TRANSFER_MEMBER_LIST_NOT_SAME:
   case OB_PARTITION_NOT_LEADER:
   case OB_TRANS_TIMEOUT:
+  case OB_TIMEOUT:
       bool_ret = true;
       break;
     default:
