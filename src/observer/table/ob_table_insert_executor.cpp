@@ -108,12 +108,8 @@ int ObTableApiInsertExecutor::ins_rows_post_proc()
   } else {
     affected_rows_ = 1;
     // auto inc 操作中, 同步全局自增值value
-    ObPhysicalPlanCtx *phy_plan_ctx = tb_ctx_.get_physical_plan_ctx();
-    if (OB_FAIL(phy_plan_ctx->sync_last_value_local())) {
-      LOG_WARN("failed to sync last value", K(ret));
-    }
-    if (OB_FAIL(phy_plan_ctx->sync_last_value_global())) {
-      LOG_WARN("failed to sync last value", K(ret));
+    if (tb_ctx_.is_auto_inc() && OB_FAIL(tb_ctx_.update_auto_inc_value())) {
+      LOG_WARN("fail to update auto inc value", K(ret));
     }
   }
 

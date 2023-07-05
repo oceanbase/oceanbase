@@ -34,7 +34,8 @@ using namespace oceanbase::sql;
 ObTableQueryAndMutateP::ObTableQueryAndMutateP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-     tb_ctx_(allocator_)
+     tb_ctx_(allocator_),
+     end_in_advance_(false)
 {
 }
 

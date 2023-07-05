@@ -445,8 +445,7 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
       one_result_->reset();
       if (OB_FAIL(one_result_->assign_property_names(get_agg_calculator().get_agg_columns()))) {
         LOG_WARN("fail to assign property names to one result", K(ret));
-      }
-      if (OB_FAIL(one_result_->add_row(agg_calculator_.get_aggregate_results()))) {
+      } else if (OB_FAIL(one_result_->add_row(agg_calculator_.get_aggregate_results()))) {
         LOG_WARN("fail to add aggregation result", K(ret), K(agg_calculator_.get_aggregate_results()));
       } else {
         next_result = one_result_;

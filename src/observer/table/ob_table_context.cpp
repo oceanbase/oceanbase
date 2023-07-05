@@ -1222,5 +1222,18 @@ int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx *&phy_plan_ctx)
   return ret;
 }
 
+int ObTableCtx::update_auto_inc_value()
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
+  if (OB_FAIL(phy_plan_ctx->sync_last_value_local())) {
+    LOG_WARN("failed to sync last value", K(ret));
+  }
+  if (OB_FAIL(phy_plan_ctx->sync_last_value_global())) {
+    LOG_WARN("failed to sync last value", K(ret));
+  }
+  return ret;
+}
+
 }  // namespace table
 }  // namespace oceanbase

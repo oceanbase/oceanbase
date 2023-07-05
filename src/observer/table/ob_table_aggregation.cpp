@@ -22,15 +22,13 @@ int ObTableAggCalculator::init() {
   int ret = OB_SUCCESS;
   if (OB_FAIL(results_.prepare_allocate(size_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate aggregate result", K(ret), K(size_));
-  }
-  if (OB_FAIL(counts_.prepare_allocate(size_))) {
+    LOG_WARN("fail to allocate aggregate result", K(ret), K_(size));
+  } else if (OB_FAIL(counts_.prepare_allocate(size_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory for counts", K(ret), K(counts_));
-  }
-  if (OB_FAIL(sums_.prepare_allocate(size_))) {
+    LOG_WARN("fail to allocate memory for counts", K(ret), K_(counts));
+  } else if (OB_FAIL(sums_.prepare_allocate(size_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory for sums", K(ret), K(sums_));
+    LOG_WARN("fail to allocate memory for sums", K(ret), K_(sums));
   }
   return ret;
 }
@@ -50,7 +48,6 @@ int ObTableAggCalculator::deep_copy_value(int64_t idx, const ObObj &src, ObObj &
   } else { // not enough, free old and alloc new
     // free
     allocator_.free(buf);
-    buf = NULL;
     // alloc
     buf = static_cast<char*>(allocator_.alloc(src_deep_copy_size));
     if (OB_ISNULL(buf)) {

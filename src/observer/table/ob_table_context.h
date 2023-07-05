@@ -289,6 +289,7 @@ public:
   int init_das_context(ObDASCtx &das_ctx);
   const common::ObIArray<uint64_t> &get_agg_projs() const { return agg_cell_proj_; }
   common::ObIArray<ObColumnRefRawExpr*> &get_all_column_ref_exprs() { return auto_inc_param_.all_column_ref_exprs_; }
+  int update_auto_inc_value();
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
