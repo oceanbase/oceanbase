@@ -243,7 +243,7 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
     SCN gts_scn;
     if (OB_FAIL(get_info_from_result_(*result, bl_key, ls_info))) {
       TRANS_LOG(WARN, "get_info_from_result_ fail ", KR(ret), K(result));
-    } else if (LEADER == ls_info.ls_state_) {
+    } else if (ls_info.is_leader()) {
       // cannot add leader into blacklist
     } else if (ls_info.weak_read_scn_ == 0 && ls_info.migrate_status_ == OB_MIGRATE_STATUS_NONE) {
       // log stream is initializing, should't be put into blacklist
@@ -292,7 +292,7 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   int64_t port = 0;
   int64_t tenant_id = 0;
   int64_t id = ObLSID::INVALID_LS_ID;
-  ObString ls_state_str;
+  int64_t ls_role = -1;
   uint64_t weak_read_scn_uint = 0;
   int64_t migrate_status_int = -1;
 
@@ -300,25 +300,22 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   (void)GET_COL_IGNORE_NULL(result.get_int, "svr_port", port);
   (void)GET_COL_IGNORE_NULL(result.get_int, "tenant_id", tenant_id);
   (void)GET_COL_IGNORE_NULL(result.get_int, "ls_id", id);
-  (void)GET_COL_IGNORE_NULL(result.get_varchar, "role", ls_state_str);
+  (void)GET_COL_IGNORE_NULL(result.get_int, "role", ls_role);
   (void)GET_COL_IGNORE_NULL(result.get_uint, "weak_read_scn", weak_read_scn_uint);
   (void)GET_COL_IGNORE_NULL(result.get_int, "migrate_status", migrate_status_int);
 
   ObLSID ls_id(id);
   common::ObAddr server;
-  ObRole ls_state = INVALID_ROLE;
   int64_t weak_read_scn = static_cast<int64_t>(weak_read_scn_uint);
   ObMigrateStatus migrate_status = ObMigrateStatus(migrate_status_int);
 
   if (false == server.set_ip_addr(ip, static_cast<uint32_t>(port))) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid server address", K(ip), K(port));
-  } else if (OB_FAIL(string_to_role(ls_state_str, ls_state))) {
-    TRANS_LOG(WARN, "string_to_role fail", K(ls_state_str));
   } else if (OB_FAIL(bl_key.init(server, tenant_id, ls_id))) {
     TRANS_LOG(WARN, "bl_key init fail", K(server), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ls_info.init(ls_state, weak_read_scn, migrate_status))) {
-    TRANS_LOG(WARN, "ls_info init fail", K(ls_state), K(weak_read_scn), K(migrate_status));
+  } else if (OB_FAIL(ls_info.init(ls_role, weak_read_scn, migrate_status))) {
+    TRANS_LOG(WARN, "ls_info init fail", K(ls_role), K(weak_read_scn), K(migrate_status));
   }
 
   return ret;

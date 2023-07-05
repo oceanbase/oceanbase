@@ -162,7 +162,7 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("init keep_alive_ls_handler failed", K(ret));
     } else if (OB_FAIL(gc_handler_.init(this))) {
       LOG_WARN("init gc handler failed", K(ret));
-    } else if (OB_FAIL(ls_wrs_handler_.init())) {
+    } else if (OB_FAIL(ls_wrs_handler_.init(ls_meta_.ls_id_))) {
       LOG_WARN("ls loop worker init failed", K(ret));
     } else if (OB_FAIL(ls_restore_handler_.init(this))) {
       LOG_WARN("init ls restore handler", K(ret));

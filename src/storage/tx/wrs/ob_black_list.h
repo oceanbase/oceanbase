@@ -31,9 +31,9 @@
 
 // 查询 __all_virtual_ls_info 的语句，设置了2s超时时间
 #define BLACK_LIST_SELECT_LS_INFO_STMT \
-  "select /*+query_timeout(2000000)*/ a.svr_ip, a.svr_port, a.tenant_id, a.ls_id, b.role, a.weak_read_scn, a.migrate_status \
-   from oceanbase.__all_virtual_ls_info a, oceanbase.__all_virtual_log_stat b \
-   where a.svr_ip = b.svr_ip and a.svr_port = b.svr_port and a.tenant_id = b.tenant_id and a.ls_id = b.ls_id;"
+  "select /*+query_timeout(2000000)*/ a.svr_ip, a.svr_port, a.tenant_id, a.ls_id, a.role, nvl(b.weak_read_scn, 1), nvl(b.migrate_status, 0) \
+  from oceanbase.__all_virtual_ls_meta_table a left join oceanbase.__all_virtual_ls_info b \
+  on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port and a.tenant_id = b.tenant_id and a.ls_id = b.ls_id;"
 
 namespace oceanbase
 {
@@ -124,11 +124,11 @@ struct ObLsInfo
 {
 public:
   ObLsInfo()
-    : ls_state_(INVALID_ROLE),
+    : ls_state_(-1),
       weak_read_scn_(0),
       migrate_status_(OB_MIGRATE_STATUS_MAX)
       {}
-  int init(ObRole ls_state, int64_t weak_read_scn, ObMigrateStatus migrate_status)
+  int init(const int64_t ls_state, int64_t weak_read_scn, ObMigrateStatus migrate_status)
   {
     int ret = OB_SUCCESS;
     if (OB_MIGRATE_STATUS_MAX == migrate_status) {
@@ -140,14 +140,15 @@ public:
     }
     return ret;
   }
+  bool is_leader() const { return ls_state_ == 1; }
   bool is_valid() const
   {
     return OB_MIGRATE_STATUS_MAX != migrate_status_;
   }
   TO_STRING_KV(K_(ls_state), K_(weak_read_scn), K_(migrate_status));
 
-  // 日志流状态（角色）：LEADER、FOLLOWER，其他角色对于日志流是没有意义的
-  ObRole ls_state_;
+  // 日志流状态（角色）：LEADER(1)、FOLLOWER(2)，其他角色对于日志流是没有意义的
+  int64_t ls_state_;
   // 弱读时间戳，如果落后超过一定时间就要加入黑名单，单位ns
   int64_t weak_read_scn_;
   // 迁移状态，正在迁移的日志流一定不可读

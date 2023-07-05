@@ -319,6 +319,7 @@ void ObPartTransCtx::default_init_()
   state_info_array_.reset();
   lastest_snapshot_.reset();
   standby_part_collected_.reset();
+  trace_log_.reset();
 }
 
 int ObPartTransCtx::init_log_cbs_(const ObLSID &ls_id, const ObTransID &tx_id)
