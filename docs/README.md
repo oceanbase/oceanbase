@@ -10,8 +10,8 @@
 At present, the guide is composed of the following parts:
 
 1. **Get started**: Setting up the development environment, build and connect to the OceanBase server, the subsections are based on an imagined newbie user journey.
-    1. Install toolchain
-    2. Get the code, build and run
+    1. [Install toolchain](toolchain.md)
+    2. [Get the code, build and run](build-and-run.md)
     3. Set up an IDE
     4. Write and run unit tests
     5. Debug and profile
