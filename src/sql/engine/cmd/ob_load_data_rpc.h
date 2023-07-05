@@ -530,6 +530,7 @@ protected:
   int process();
 private:
   const observer::ObGlobalContext &gctx_;
+  share::schema::ObSchemaGetterGuard schema_guard_;
 };
 
 class ObRpcLoadDataShuffleTaskCallBack
