@@ -2590,8 +2590,8 @@ int ObGetTransferStartScnP::process()
         } else {
           if (i > 0) {
             if (user_data.transfer_scn_ != result_.start_scn_) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("tx data is not same", K(ret), K(tablet_handle), K(user_data), K(result_));
+              ret = OB_EAGAIN;
+              LOG_WARN("tx data is not same, need retry", K(ret), K(tablet_handle), K(user_data), K(result_));
             }
           } else if (user_data.transfer_scn_.is_min()) {
             result_.start_scn_.set_min();
