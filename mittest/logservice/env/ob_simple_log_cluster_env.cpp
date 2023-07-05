@@ -544,6 +544,7 @@ int ObSimpleLogClusterTestEnv::get_leader(const int64_t id, PalfHandleImplGuard 
         leader.palf_id_ = id;
         leader.palf_env_impl_ = dynamic_cast<PalfEnvImpl*>(svr->get_palf_env());
         PALF_LOG(INFO, "get_leader is", K(svr->get_addr()), K(leader_idx), K(epoch));
+        ObTenantEnv::set_tenant(cluster[leader_idx]->get_tenant_base());
         break;
       }
       svr->get_palf_env()->revert_palf_handle_impl(ipalf_handle_impl);

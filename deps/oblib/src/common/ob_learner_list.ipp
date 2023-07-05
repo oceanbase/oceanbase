@@ -120,6 +120,19 @@ bool BaseLearnerList<MAX_SIZE, T>::contains(const common::ObAddr &server) const
 }
 
 template <int64_t MAX_SIZE, typename T>
+int BaseLearnerList<MAX_SIZE, T>::add_server(const common::ObAddr &server)
+{
+  int ret = OB_SUCCESS;
+  const bool is_member = std::is_same<common::ObMember, T>::value;
+  if (false == is_member) {
+    ret = OB_NOT_SUPPORTED;
+  } else {
+    ret = add_learner(common::ObMember(server, OB_INVALID_TIMESTAMP));
+  }
+  return ret;
+}
+
+template <int64_t MAX_SIZE, typename T>
 int BaseLearnerList<MAX_SIZE, T>::add_learner(const T &learner)
 {
   int ret = OB_SUCCESS;

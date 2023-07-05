@@ -510,6 +510,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback_restart)
 		EXPECT_EQ(OB_ITER_END, get_middle_scn(324, leader, new_scn, header_new));
     switch_flashback_to_append(leader, mode_version);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1000, leader_idx, 1000));
+		wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn());
 		EXPECT_EQ(OB_SUCCESS, get_middle_scn(1323, leader, new_scn, header_new));
 		EXPECT_EQ(OB_ITER_END, get_middle_scn(1324, leader, new_scn, header_new));
     EXPECT_EQ(OB_ITER_END, read_log(leader));
