@@ -166,6 +166,7 @@ struct ObDataStoreDesc
       KP_(sstable_index_builder),
       K_(is_ddl),
       K_(col_desc_array),
+      K_(default_col_checksum_array_valid),
       K_(col_default_checksum_array));
 
 private:
