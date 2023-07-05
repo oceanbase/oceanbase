@@ -1112,7 +1112,6 @@ int ObTabletCreateDeleteHelper::commit_remove_tablets(
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_.get_ls_id();
-  ObSArray<ObTabletID> tablet_id_array;
 
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1120,19 +1119,11 @@ int ObTabletCreateDeleteHelper::commit_remove_tablets(
   } else if (OB_UNLIKELY(arg.id_ != ls_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected arg", K(ret), K(arg), K(ls_id));
-  } else if (trans_flags.for_replay_) {
-    if (OB_FAIL(tablet_id_array.reserve(arg.tablet_ids_.count()))) {
-    } else if (OB_FAIL(replay_verify_tablets(arg, trans_flags.scn_, tablet_id_array))) {
-      LOG_WARN("failed to replay verify tablets", K(ret), K(trans_flags));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    const ObIArray<ObTabletID> *tablet_ids = trans_flags.for_replay_ ? &tablet_id_array : &arg.tablet_ids_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids->count(); ++i) {
-      const ObTabletID &tablet_id = tablet_ids->at(i);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablet_ids_.count(); ++i) {
+      const ObTabletID &tablet_id = arg.tablet_ids_.at(i);
       if (OB_FAIL(do_commit_remove_tablet(tablet_id, trans_flags))) {
-        LOG_WARN("failed to do commit remove tablet", K(ret), K(tablet_id), K(trans_flags));
+        LOG_WARN("failed to do commit remove tablet", K(ret), K(ls_id), K(tablet_id), K(trans_flags));
       }
     }
   }
@@ -1145,17 +1136,38 @@ int ObTabletCreateDeleteHelper::commit_remove_tablets(
 }
 
 int ObTabletCreateDeleteHelper::do_commit_remove_tablet(
-    const ObTabletID &tablet_id,
+    const common::ObTabletID &tablet_id,
     const ObMulSourceDataNotifyArg &trans_flags)
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  const ObTabletMapKey key(ls_.get_ls_id(), tablet_id);
+  const share::ObLSID &ls_id = ls_.get_ls_id();
+  const ObTabletMapKey key(ls_id, tablet_id);
   ObTabletHandle tablet_handle;
   ObTabletTxMultiSourceDataUnit tx_data;
+  bool should_skip = false;
 
-  if (OB_FAIL(get_tablet(key, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(key));
+  if (trans_flags.for_replay_) {
+    const share::SCN &scn = trans_flags.scn_;
+    if (OB_FAIL(ls_.replay_get_tablet(tablet_id, scn, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        LOG_INFO("tablet already deleted", K(ret), K(ls_id), K(tablet_id), K(scn));
+        ret = OB_SUCCESS; // tablet already deleted, won't regard it as error
+        should_skip = true;
+      } else if (OB_EAGAIN == ret) {
+        // retry again
+      } else {
+        LOG_WARN("failed to replay get tablet", K(ret), K(ls_id), K(tablet_id), K(scn));
+      }
+    }
+  } else {
+    if (OB_FAIL(get_tablet(key, tablet_handle))) {
+      LOG_WARN("failed to get tablet", K(ret), K(key));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (should_skip) {
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret), K(key));
   } else if (OB_UNLIKELY(!trans_flags.for_replay_ && trans_flags.scn_ <= tx_data.tx_scn_)) {
@@ -1189,7 +1201,6 @@ int ObTabletCreateDeleteHelper::abort_remove_tablets(
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_.get_ls_id();
-  ObSArray<ObTabletID> tablet_id_array;
 
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1197,19 +1208,11 @@ int ObTabletCreateDeleteHelper::abort_remove_tablets(
   } else if (OB_UNLIKELY(arg.id_ != ls_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected arg", K(ret), K(arg), K(ls_id));
-  } else if (trans_flags.for_replay_) {
-    if (OB_FAIL(tablet_id_array.reserve(arg.tablet_ids_.count()))) {
-    } else if (OB_FAIL(replay_verify_tablets(arg, trans_flags.scn_, tablet_id_array))) {
-      LOG_WARN("failed to replay verify tablets", K(ret), K(trans_flags));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    const ObIArray<ObTabletID> *tablet_ids = trans_flags.for_replay_ ? &tablet_id_array : &arg.tablet_ids_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids->count(); ++i) {
-      const ObTabletID &tablet_id = tablet_ids->at(i);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablet_ids_.count(); ++i) {
+      const ObTabletID &tablet_id = arg.tablet_ids_.at(i);
       if (OB_FAIL(do_abort_remove_tablet(tablet_id, trans_flags))) {
-        LOG_WARN("failed to do abort remove tablet", K(ret), K(tablet_id), K(trans_flags));
+        LOG_WARN("failed to do abort remove tablet", K(ret), K(ls_id), K(tablet_id), K(trans_flags));
       }
     }
   }
@@ -1227,31 +1230,52 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  const ObTabletMapKey key(ls_.get_ls_id(), tablet_id);
+  const share::ObLSID &ls_id = ls_.get_ls_id();
+  const ObTabletMapKey key(ls_id, tablet_id);
   ObTabletHandle tablet_handle;
   ObTabletTxMultiSourceDataUnit tx_data;
   MemtableRefOp ref_op = MemtableRefOp::NONE;
   bool is_valid = true;
+  bool should_skip = false;
   SCN tx_scn;
 
-  if (OB_FAIL(get_tablet(key, tablet_handle))) {
-    // leader handle 4013 error(caused by memory not enough in load and dump procedure)
-    if (OB_ALLOCATE_MEMORY_FAILED == ret && !trans_flags.for_replay_) {
-      ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-      ObTabletTxMultiSourceDataUnit tx_data;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(t3m->get_tablet_pointer_tx_data(key, tx_data))) {
-        LOG_WARN("failed to get tablet status", K(tmp_ret), K(key));
-      } else if (ObTabletStatus::NORMAL == tx_data.tablet_status_) {
-        ret = OB_SUCCESS;
-        is_valid = false;
-        LOG_INFO("tablet status is NORMAL, no need to handle", K(ret), K(key));
+  if (trans_flags.for_replay_) {
+    const share::SCN &scn = trans_flags.scn_;
+    if (OB_FAIL(ls_.replay_get_tablet(tablet_id, scn, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        LOG_INFO("tablet already deleted", K(ret), K(ls_id), K(tablet_id), K(scn));
+        ret = OB_SUCCESS; // tablet already deleted, won't regard it as error
+        should_skip = true;
+      } else if (OB_EAGAIN == ret) {
+        // retry again
       } else {
-        LOG_WARN("tablet status is NOT NORMAL", K(ret), K(key), K(tx_data));
+        LOG_WARN("failed to replay get tablet", K(ret), K(ls_id), K(tablet_id), K(scn));
       }
-    } else {
-      LOG_WARN("failed to get tablet", K(ret), K(key));
     }
+  } else {
+    if (OB_FAIL(get_tablet(key, tablet_handle))) {
+      // leader handle 4013 error(caused by memory not enough in load and dump procedure)
+      if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+        ObTabletTxMultiSourceDataUnit tx_data;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(t3m->get_tablet_pointer_tx_data(key, tx_data))) {
+          LOG_WARN("failed to get tablet status", K(tmp_ret), K(key));
+        } else if (ObTabletStatus::NORMAL == tx_data.tablet_status_) {
+          ret = OB_SUCCESS;
+          is_valid = false;
+          LOG_INFO("tablet status is NORMAL, no need to handle", K(ret), K(key));
+        } else {
+          LOG_WARN("tablet status is NOT NORMAL", K(ret), K(key), K(tx_data));
+        }
+      } else {
+        LOG_WARN("failed to get tablet", K(ret), K(key));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (should_skip) {
+  } else if (!is_valid) {
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret), K(key));
   } else if (OB_UNLIKELY(!trans_flags.for_replay_
@@ -1276,6 +1300,7 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (should_skip) {
   } else if (!is_valid) {
     if (trans_flags.for_replay_) {
       // if tablet is NORMAL, and meets abort remove procedure when replaying, we should not consider it illegal

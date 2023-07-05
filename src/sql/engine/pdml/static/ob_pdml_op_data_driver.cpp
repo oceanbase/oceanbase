@@ -93,12 +93,11 @@ int ObPDMLOpDataDriver::destroy()
   return ret;
 }
 
-int ObPDMLOpDataDriver::set_with_barrier(uint64_t op_id,
-                                         const ObPxMultiPartModifyOpInput *modify_input)
+int ObPDMLOpDataDriver::set_dh_barrier_param(uint64_t op_id,
+                                             const ObPxMultiPartModifyOpInput *modify_input)
 {
     int ret = OB_SUCCESS;
     op_id_ = op_id;
-    with_barrier_ = true;
     if (OB_ISNULL(modify_input)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table modify is null", K(ret));
@@ -252,6 +251,8 @@ int ObPDMLOpDataDriver::write_partitions(ObExecContext &ctx)
         // nop
       } else if (OB_FAIL(writer_->write_rows(ctx, tablet_loc, *row_iter))) {
         LOG_WARN("fail write rows", K(tablet_id), K(ret));
+      } else {
+        row_iter->close();
       }
     }
   }
@@ -375,6 +376,9 @@ int ObPDMLOpDataDriver::next_row_from_cache_for_returning(const ObExprPtrIArray 
 int ObPDMLOpDataDriver::switch_row_iter_to_next_partition()
 {
   int ret = OB_SUCCESS;
+  if (returning_ctx_.row_iter_) {
+    returning_ctx_.row_iter_->close();
+  }
   // 当前仅仅cache一行数据
   // next idx仅仅等于0，如果next idx等于1，表示没有数据
   if (OB_SUCC(ret) && returning_ctx_.next_idx_ >= returning_ctx_.tablet_id_array_.count()) {

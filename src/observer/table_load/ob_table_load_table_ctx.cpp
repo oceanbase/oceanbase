@@ -24,7 +24,8 @@ using namespace table;
 using namespace obrpc;
 
 ObTableLoadTableCtx::ObTableLoadTableCtx()
-  : coordinator_ctx_(nullptr),
+  : client_exec_ctx_(nullptr),
+    coordinator_ctx_(nullptr),
     store_ctx_(nullptr),
     job_stat_(nullptr),
     session_info_(nullptr),
@@ -160,7 +161,29 @@ void ObTableLoadTableCtx::unregister_job_stat()
   }
 }
 
-int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<int64_t> &idx_array, uint64_t user_id)
+int ObTableLoadTableCtx::init_client_exec_ctx()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadTableCtx not init", KR(ret));
+  } else if (OB_NOT_NULL(client_exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("client table ctx already exist", KR(ret));
+  } else {
+    if (OB_ISNULL(client_exec_ctx_ = OB_NEWx(ObTableLoadClientExecCtx, &allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObTableLoadClientExecCtx", KR(ret));
+    } else {
+      client_exec_ctx_->allocator_ = &allocator_;
+      client_exec_ctx_->session_info_ = session_info_;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<int64_t> &idx_array, uint64_t user_id,
+                                              ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -174,7 +197,7 @@ int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<int64_t> &idx_array
     if (OB_ISNULL(coordinator_ctx = OB_NEWx(ObTableLoadCoordinatorCtx, (&allocator_), this))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadCoordinatorCtx", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx->init(idx_array, user_id))) {
+    } else if (OB_FAIL(coordinator_ctx->init(idx_array, user_id, exec_ctx))) {
       LOG_WARN("fail to init coordinator ctx", KR(ret));
     } else if (OB_FAIL(coordinator_ctx->set_status_inited())) {
       LOG_WARN("fail to set coordinator status inited", KR(ret));
@@ -240,6 +263,11 @@ void ObTableLoadTableCtx::stop()
 void ObTableLoadTableCtx::destroy()
 {
   abort_unless(0 == get_ref_count());
+  if (nullptr != client_exec_ctx_) {
+    client_exec_ctx_->~ObTableLoadClientExecCtx();
+    allocator_.free(client_exec_ctx_);
+    client_exec_ctx_ = nullptr;
+  }
   if (nullptr != coordinator_ctx_) {
     coordinator_ctx_->~ObTableLoadCoordinatorCtx();
     allocator_.free(coordinator_ctx_);

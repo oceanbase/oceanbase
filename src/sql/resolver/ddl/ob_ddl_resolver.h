@@ -836,6 +836,8 @@ protected:
   int check_and_set_individual_subpartition_names(ObPartitionedStmt *stmt,
                                                   share::schema::ObTableSchema &table_schema);
 
+  int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
+  int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
   void reset();
   int64_t block_size_;
   int64_t consistency_level_;

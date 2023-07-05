@@ -20,6 +20,7 @@
 #include "storage/blocksstable/ob_index_block_row_struct.h"
 #include "storage/access/ob_table_access_param.h"
 #include "storage/access/ob_table_access_context.h"
+#include "storage/lob/ob_lob_manager.h"
 namespace oceanbase
 {
 namespace storage
@@ -30,11 +31,12 @@ ObAggCell::ObAggCell(
     const share::schema::ObColumnParam *col_param,
     sql::ObExpr *expr,
     common::ObIAllocator &allocator)
-    : col_idx_(col_idx), is_lob_col_(false), datum_(), col_param_(col_param), expr_(expr), allocator_(allocator)
+    : col_idx_(col_idx), is_lob_col_(false), datum_(), def_datum_(), col_param_(col_param), expr_(expr), allocator_(allocator)
 {
   if (col_param_ != nullptr) {
     is_lob_col_ = col_param_->get_meta_type().is_lob_storage();
   }
+  def_datum_.set_nop();
 }
 
 ObAggCell::~ObAggCell()
@@ -71,6 +73,33 @@ int ObAggCell::fill_result(sql::ObEvalCtx &ctx,bool need_padding)
   return ret;
 }
 
+int ObAggCell::prepare_def_datum()
+{
+  int ret = OB_SUCCESS;
+  if (def_datum_.is_nop()) {
+    def_datum_.reuse();
+    const ObObj &def_cell = col_param_->get_orig_default_value();
+    if (!def_cell.is_nop_value()) {
+      if (OB_FAIL(def_datum_.from_obj_enhance(def_cell))) {
+        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+      } else if (def_cell.is_lob_storage() && !def_cell.is_null()) {
+        // lob def value must have no lob header when not null, should add lob header for default value
+        ObString data = def_datum_.get_string();
+        ObString out;
+        if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
+          LOG_WARN("failed to fill lob header for column.", K(ret), K(def_cell), K(data));
+        } else {
+          def_datum_.set_string(out);
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected, virtual column is not supported", K(ret), K(col_idx_));
+    }
+  }
+  return ret;
+}
+
 int ObAggCell::fill_default_if_need(blocksstable::ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
@@ -78,15 +107,13 @@ int ObAggCell::fill_default_if_need(blocksstable::ObStorageDatum &datum)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, col param is null", K(ret), K(col_idx_));
   } else if (datum.is_nop()) {
-    datum.reuse();
-    const ObObj &def_cell = col_param_->get_orig_default_value();
-    if (!def_cell.is_nop_value()) {
-      if (OB_FAIL(datum.from_obj_enhance(def_cell))) {
-        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
-      }
+    if (OB_FAIL(prepare_def_datum())) {
+      LOG_WARN("failed to prepare default datum", K(ret));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected, virtual column is not supported", K(ret), K(col_idx_));
+      datum.reuse();
+      if (OB_FAIL(datum.from_storage_datum(def_datum_, expr_->obj_datum_map_))) {
+        LOG_WARN("Failed to from storage datum", K(ret), K(def_datum_), K(datum), K(*this));
+      }
     }
   }
   return ret;

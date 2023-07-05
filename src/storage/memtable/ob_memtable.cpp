@@ -122,6 +122,7 @@ ObMemtable::ObMemtable()
       is_flushed_(false),
       read_barrier_(false),
       write_barrier_(false),
+      allow_freeze_(true),
       write_ref_cnt_(0),
       mode_(lib::Worker::CompatMode::INVALID),
       minor_merged_time_(0),
@@ -198,7 +199,8 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   return ret;
 }
 
-int ObMemtable::remove_unused_callback_for_uncommited_txn_()
+int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
+  const ObLSID ls_id, const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
   // NB: Do not use cache here, because the trans_service may be destroyed under
@@ -207,8 +209,8 @@ int ObMemtable::remove_unused_callback_for_uncommited_txn_()
     MTL_CTX()->get<transaction::ObTransService *>();
 
   if (NULL != txs_svr
-      && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(this))) {
-    TRANS_LOG(WARN, "remove callback for uncommited txn failed", K(ret), K(*this));
+      && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(ls_id, memtable_set))) {
+    TRANS_LOG(WARN, "remove callback for uncommited txn failed", K(ret), KPC(memtable_set));
   }
 
   return ret;
@@ -232,10 +234,6 @@ void ObMemtable::destroy()
     freezer = MTL(ObTenantFreezer *);
     if (OB_SUCCESS != freezer->unset_tenant_slow_freeze(tablet_id)) {
       TRANS_LOG(WARN, "unset tenant slow freeze failed.", K(*this));
-    }
-
-    if (OB_FAIL(remove_unused_callback_for_uncommited_txn_())) {
-      TRANS_LOG(WARN, "failed to remove callback for uncommited txn", K(ret), K(*this));
     }
   }
   ObITable::reset();
@@ -270,6 +268,7 @@ void ObMemtable::destroy()
   is_tablet_freeze_ = false;
   is_force_freeze_ = false;
   is_flushed_ = false;
+  allow_freeze_ = true;
   is_inited_ = false;
   contain_hotspot_row_ = false;
   snapshot_version_.set_max();
@@ -1769,6 +1768,30 @@ int ObMemtable::set_max_end_scn(const SCN scn)
   return ret;
 }
 
+// the difference from set_max_end_scn is not to check memtable range
+int ObMemtable::set_max_end_scn_to_inc_start_scn()
+{
+  int ret = OB_SUCCESS;
+  const share::SCN scn = share::SCN::scn_inc(get_start_scn());
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret));
+  } else {
+    SCN old_max_end_scn;
+    SCN new_max_end_scn = get_max_end_scn();
+    while ((old_max_end_scn = new_max_end_scn) < scn) {
+      if ((new_max_end_scn =
+           max_end_scn_.atomic_vcas(old_max_end_scn, scn))
+          == old_max_end_scn) {
+        new_max_end_scn = scn;
+      }
+    }
+  }
+
+  return ret;
+}
+
 bool ObMemtable::rec_scn_is_stable()
 {
   int ret = OB_SUCCESS;
@@ -2142,7 +2165,13 @@ bool ObMemtable::is_frozen_memtable() const
   //     || ObMemtableState::MINOR_MERGING == state_;
   // Note (yanyuan.cxf) log_frozen_memstore_info() will use this func after local_allocator_ init
   // Now freezer_ and ls_ will not be released before memtable
-  bool bool_ret = OB_NOT_NULL(freezer_) && (freezer_->get_freeze_clock() > freeze_clock_ || is_tablet_freeze_);
+  const uint32_t logstream_freeze_clock = OB_NOT_NULL(freezer_) ? freezer_->get_freeze_clock() : 0;
+  const uint32_t memtable_freeze_clock = get_freeze_clock();
+  if (!allow_freeze() && logstream_freeze_clock > memtable_freeze_clock) {
+    ATOMIC_STORE(&freeze_clock_, logstream_freeze_clock);
+    TRANS_LOG(INFO, "inc freeze_clock because the memtable cannot be freezed", K(memtable_freeze_clock), K(logstream_freeze_clock), KPC(this));
+  }
+  const bool bool_ret = logstream_freeze_clock > get_freeze_clock() || is_tablet_freeze_;
 
   if (bool_ret && 0 == mt_stat_.frozen_time_) {
     mt_stat_.frozen_time_ = ObTimeUtility::current_time();
@@ -2805,9 +2834,8 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
       if (lock_state.is_delayed_cleanout_) {
         auto lock_data_sequence = lock_state.lock_data_sequence_;
         auto &tx_table_guard = acc_ctx.get_tx_table_guard();
-        int64_t read_epoch = tx_table_guard.epoch();
-        if (OB_FAIL(tx_table_guard.get_tx_table()->check_row_locked(
-                tx_id, conflict_tx_id, lock_data_sequence, read_epoch, lock_state))) {
+        if (OB_FAIL(tx_table_guard.check_row_locked(
+                tx_id, conflict_tx_id, lock_data_sequence, lock_state))) {
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));
         }
       } else {

@@ -125,6 +125,7 @@ private:
     } else if (OB_FAIL(iter_.init(start_lsn_, get_file_size, &mem_storage_))) {
       CLOG_LOG(WARN, "MemPalfGroupBufferIterator init failed", K(ret));
     } else {
+      iter_.set_need_print_error(false /*need_print_error*/);
       CLOG_LOG(INFO, "MemPalfGroupBufferIterator init succ", K(start_lsn_), K(end_lsn_));
     }
     return ret;

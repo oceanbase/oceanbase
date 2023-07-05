@@ -1057,17 +1057,19 @@ public:
 class ObRemoveCallbackFunctor
 {
 public:
-  explicit ObRemoveCallbackFunctor(memtable::ObMemtable *mt) : mt_(mt) {}
+  explicit ObRemoveCallbackFunctor(
+    const memtable::ObMemtableSet *memtable_set)
+    : memtable_set_(memtable_set) {}
   ~ObRemoveCallbackFunctor() {}
   OPERATOR_V4(ObRemoveCallbackFunctor)
   {
     bool bool_ret = true;
     int tmp_ret = OB_SUCCESS;
 
-    if (!tx_id.is_valid() || OB_ISNULL(tx_ctx) || OB_ISNULL(mt_)) {
+    if (!tx_id.is_valid() || OB_ISNULL(tx_ctx) || OB_ISNULL(memtable_set_)) {
       tmp_ret = OB_ERR_UNEXPECTED;
       TRANS_LOG_RET(WARN, tmp_ret, "invalid argument", K(tx_id));
-    } else if (OB_TMP_FAIL(tx_ctx->remove_callback_for_uncommited_txn(mt_))) {
+    } else if (OB_TMP_FAIL(tx_ctx->remove_callback_for_uncommited_txn(memtable_set_))) {
       TRANS_LOG_RET(WARN, tmp_ret, "remove callback for unncommitted tx failed",
         K(tmp_ret), K(tx_id), KP(tx_ctx));
     }
@@ -1079,7 +1081,7 @@ public:
     return bool_ret;
   }
 private:
-  memtable::ObMemtable *mt_;
+  const memtable::ObMemtableSet *memtable_set_;
 };
 
 class ObTxSubmitLogFunctor

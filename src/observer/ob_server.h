@@ -17,6 +17,8 @@
 #include "lib/signal/ob_signal_worker.h"
 #include "lib/net/ob_net_util.h"
 #include "lib/random/ob_mysql_random.h"
+#include "lib/container/ob_iarray.h"
+
 
 #include "share/stat/ob_opt_stat_service.h"
 #include "share/ratelimit/ob_rl_mgr.h"
@@ -296,7 +298,8 @@ private:
   int init_refresh_cpu_frequency();
   int init_collect_info_gc_task();
   int set_running_mode();
-  int check_server_can_start_service();
+  void check_user_tenant_schema_refreshed(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
+  void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   int try_create_hidden_sys();
   int parse_mode();
 
@@ -313,7 +316,7 @@ public:
   volatile bool need_ctas_cleanup_; //true: ObCTASCleanUpTask should traverse all table schemas to find the one need be dropped
 private:
   //thread to deal signals
-  char sig_buf_[sizeof(ObSignalWorker) + sizeof(ObSignalHandle)];
+  char sig_buf_[sizeof(ObSignalWorker) + sizeof(ObSignalHandle)] __attribute__((__aligned__(16)));
   ObSignalWorker *sig_worker_;
   ObSignalHandle *signal_handle_;
 

@@ -23,6 +23,7 @@
 #include "share/ob_local_device.h"
 #include "lib/thread/thread_pool.h"
 #include "lib/file/file_directory_utils.h"
+#include "common/ob_clock_generator.h"
 
 #define ASSERT_SUCC(ret) ASSERT_EQ((ret), ::oceanbase::common::OB_SUCCESS)
 #define ASSERT_FAIL(ret) ASSERT_NE((ret), ::oceanbase::common::OB_SUCCESS)
@@ -614,28 +615,11 @@ TEST_F(TestIOStruct, IOFaultDetector)
   ASSERT_SUCC(detector.start());
   ObIOManager::get_instance().is_working_ = true;
 
-  // test write failure detection
+  // test read failure detection
   ObIOInfo io_info = get_random_io_info();
   ObIORequest req;
   req.inc_ref();
   ASSERT_SUCC(req.init(io_info));
-  req.io_info_.flag_.set_mode(ObIOMode::WRITE);
-  req.finish(OB_CANCELED);
-  for (int64_t i = 0; i < 10000L; ++i) {
-    detector.record_failure(req);
-  }
-  ASSERT_SUCC(detector.get_device_health_status(dhs, disk_abnormal_time));
-  ASSERT_TRUE(DEVICE_HEALTH_NORMAL == dhs);
-  ASSERT_TRUE(0 == disk_abnormal_time);
-  req.ret_code_.io_ret_ = OB_IO_ERROR;
-  for (int64_t i = 0; i < 10000L; ++i) {
-    detector.record_failure(req);
-  }
-  ASSERT_SUCC(detector.get_device_health_status(dhs, disk_abnormal_time));
-  ASSERT_TRUE(DEVICE_HEALTH_ERROR == dhs);
-  ASSERT_TRUE(disk_abnormal_time > 0);
-
-  // test read failure detection
   detector.reset_device_health();
   ASSERT_SUCC(detector.get_device_health_status(dhs, disk_abnormal_time));
   ASSERT_TRUE(DEVICE_HEALTH_NORMAL == dhs);
@@ -1754,7 +1738,7 @@ int IOPerfRunner::do_perf_rolling()
   }
   int64_t pos = 0;
   while (!has_set_stop() && OB_SUCC(ret)) {
-    if (TC_REACH_TIME_INTERVAL(1000L * 1000L)) {
+    if (REACH_TIME_INTERVAL(1000L * 1000L)) {
       ATOMIC_FAA(&io_count_, local_io_count);
       ATOMIC_FAA(&total_io_count_, local_io_count);
       local_io_count = 0;

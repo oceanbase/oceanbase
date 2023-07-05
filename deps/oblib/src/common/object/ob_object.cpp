@@ -2205,7 +2205,7 @@ DEF_TO_STRING(ObHexEscapeSqlStr)
   int64_t buf_pos = 0;
   if (buf != NULL && buf_len > 0 && !str_.empty()) {
     const char *end = str_.ptr() + str_.length();
-    if (lib::is_oracle_mode()) {
+    if (do_oracle_mode_escape_) {
       for (const char *cur = str_.ptr(); cur < end && buf_pos < buf_len; ++cur) {
         if ('\'' == *cur) {
           //在oracle模式中,只处理单引号转义
@@ -2285,7 +2285,7 @@ int64_t ObHexEscapeSqlStr::get_extra_length() const
   int64_t ret_length = 0;
   if (!str_.empty()) {
     const char *end = str_.ptr() + str_.length();
-    if (lib::is_oracle_mode()) {
+    if (do_oracle_mode_escape_) {
       for (const char *cur = str_.ptr(); cur < end; ++cur) {
         if ('\'' == *cur) {
           ++ret_length;

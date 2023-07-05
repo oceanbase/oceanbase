@@ -55,7 +55,7 @@ private:
   int try_gc_tablet_checksum();
 
 private:
-  static const int64_t MAJOR_FREEZE_RETRY_LIMIT = 300;
+  static const int64_t MAJOR_FREEZE_RETRY_LIMIT = 120;
   static const int64_t MAJOR_FREEZE_LAUNCHER_THREAD_CNT = 1;
   static const int64_t LAUNCHER_INTERVAL_US = 5 * 1000 * 1000; // 5s
   static const int64_t MAJOR_FREEZE_RETRY_INTERVAL_US = 1000 * 1000; // 1s

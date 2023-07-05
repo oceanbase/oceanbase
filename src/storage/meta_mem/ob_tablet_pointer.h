@@ -52,7 +52,7 @@ public:
   virtual int64_t get_deep_copy_size() const override;
 
   INHERIT_TO_STRING_KV("ObMetaPointer", ObMetaPointer, K_(ls_handle), K_(ddl_kv_mgr_handle),
-      K_(memtable_mgr_handle), K_(ddl_info), K_(redefined_schema_version));
+      KP(memtable_mgr_handle_.get_memtable_mgr()), K_(ddl_info), K_(redefined_schema_version));
 public:
   int set_tx_data(const ObTabletTxMultiSourceDataUnit &tx_data);
   int get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const;

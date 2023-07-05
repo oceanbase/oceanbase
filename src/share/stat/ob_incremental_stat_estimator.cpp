@@ -762,6 +762,7 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
       }
     }
     if (OB_SUCC(ret)) {
+      ObHistogram tmp_histogram;
       if (OB_FAIL(top_k_fre_hist->create_topk_fre_items())) {
         LOG_WARN("failed to adjust frequency sort", K(ret));
       } else if (top_k_fre_hist->get_buckets().count() == 0) {
@@ -773,11 +774,17 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
                                                                       total_row_count,
                                                                       not_null_count,
                                                                       num_distinct,
-                                                                      histogram))) {
+                                                                      tmp_histogram))) {
         LOG_WARN("failed to try build topk histogram", K(ret));
+      } else if (OB_FAIL(histogram.deep_copy(allocator, tmp_histogram))) {
+        LOG_WARN("failed to deep copy", K(ret));
       } else {
         need_gather_hybrid_hist |= histogram.is_hybrid();
       }
+    }
+    if (top_k_fre_hist != NULL) {
+      top_k_fre_hist->~ObTopKFrequencyHistograms();
+      top_k_fre_hist = NULL;
     }
   }
   return ret;

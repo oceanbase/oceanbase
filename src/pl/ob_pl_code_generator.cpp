@@ -1590,6 +1590,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
                                     K(generator_.get_ast().get_cursor_table().get_count()),
                                     K(s.get_stmt_id()),
                                     K(generator_.get_ast().get_name()));
+      OZ (generator_.clean_for_loop_cursor(false));
+
       // close cursor
       for (int64_t i = 0; OB_SUCC(ret) && i < generator_.get_ast().get_cursor_table().get_count(); ++i) {
         const ObPLCursor *cursor = generator_.get_ast().get_cursor_table().get_cursor(i);
@@ -1846,6 +1848,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLTrimStmt &s)
   int ret = OB_SUCCESS;
   if (NULL == generator_.get_current().get_v()) {
     //控制流已断，后面的语句不再处理
+  } else if (OB_FAIL(generator_.get_helper().set_insert_point(generator_.get_current()))) {
+    LOG_WARN("failed to set insert point", K(ret));
+  } else if (OB_FAIL(generator_.generate_goto_label(s))) {
+    LOG_WARN("failed to generate goto label", K(ret));
   } else {
     COLLECTION_STMT_COMM(s.get_trim_expr());
 
@@ -1878,6 +1884,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeleteStmt &s)
   int ret = OB_SUCCESS;
   if (NULL == generator_.get_current().get_v()) {
     //控制流已断，后面的语句不再处理
+  } else if (OB_FAIL(generator_.get_helper().set_insert_point(generator_.get_current()))) {
+    LOG_WARN("failed to set insert point", K(ret));
+  } else if (OB_FAIL(generator_.generate_goto_label(s))) {
+    LOG_WARN("failed to generate goto label", K(ret));
   } else {
     COLLECTION_STMT_COMM(s.get_delete_expr());
 
@@ -3742,6 +3752,14 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(int64_type)); // package id
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_copy_datum"), ft, spi_service_.spi_copy_datum_));
+  }
+
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type)); //函数第一个参数必须是基础环境信息隐藏参数
+    OZ (arg_types.push_back(obj_pointer_type)); //src
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_destruct_obj"), ft, spi_service_.spi_destruct_obj_));
   }
 
   if (OB_SUCC(ret)) {
@@ -6689,6 +6707,34 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
   return ret;
 }
 
+int ObPLCodeGenerator::clean_for_loop_cursor(bool is_from_exception)
+{
+  int ret = OB_SUCCESS;
+  /*
+    * 关闭从当前位置开始到目的exception位置所有For Loop Cursor
+    * 如果 is_from_exception 为true 此时已经在exception过程中，只尝试关闭，不再check_success
+    */
+  int64_t dest_level = is_from_exception && get_current_exception() != NULL ? get_current_exception()->level_ : 0;
+  if (NULL != get_current_loop()
+      && get_current_loop()->level_ >= dest_level) {
+    for (int64_t i = get_loop_count(); OB_SUCC(ret) && i > 0; --i) {
+      if (get_loops()[i - 1].level_ >= dest_level
+          && NULL != get_loops()[i - 1].cursor_) {
+        LOG_INFO("close ForLoop Cursor while raising exception",
+                  K(*get_loops()[i - 1].cursor_->get_cursor()),
+                  K(ret));
+        OZ (generate_close(*get_loops()[i - 1].cursor_,
+                            get_loops()[i - 1].cursor_->get_cursor()->get_package_id(),
+                            get_loops()[i - 1].cursor_->get_cursor()->get_routine_id(),
+                            get_loops()[i - 1].cursor_->get_index(),
+                            false,/*cannot ignoe as must have been opened*/
+                            !is_from_exception/*此时已经在exception里，如果出错不能再抛exception了*/));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
                                        ObLLVMValue &error_code,
                                        ObLLVMValue &sql_state,
@@ -6713,31 +6759,14 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
   OZ (helper_.create_block(ObString("raise_exception"), get_func(), raise_exception));
   OZ (set_current(raise_exception));
   if (OB_SUCC(ret)) {
+    ObLLVMValue ret_value;
+    ObLLVMValue exception_result;
+
     /*
      * 关闭从当前位置开始到目的exception位置所有For Loop Cursor
      * 因为此时已经在exception过程中，只尝试关闭，不再check_success
      */
-    int64_t dest_level = get_current_exception() != NULL ? get_current_exception()->level_ : 0;
-    if (NULL != get_current_loop()
-        && get_current_loop()->level_ >= dest_level) {
-      for (int64_t i = get_loop_count(); OB_SUCC(ret) && i > 0; --i) {
-        if (get_loops()[i - 1].level_ >= dest_level
-            && NULL != get_loops()[i - 1].cursor_) {
-          LOG_INFO("close ForLoop Cursor while raising exception",
-                   K(*get_loops()[i - 1].cursor_->get_cursor()),
-                   K(ret));
-          OZ (generate_close(*get_loops()[i - 1].cursor_,
-                             get_loops()[i - 1].cursor_->get_cursor()->get_package_id(),
-                             get_loops()[i - 1].cursor_->get_cursor()->get_routine_id(),
-                             get_loops()[i - 1].cursor_->get_index(),
-                             false,/*cannot ignoe as must have been opened*/
-                             false/*此时已经在exception里，如果出错不能再抛exception了*/));
-        }
-      }
-    }
-
-    ObLLVMValue ret_value;
-    ObLLVMValue exception_result;
+    OZ (clean_for_loop_cursor(true));
     if (OB_ISNULL(get_current_exception())) {
       OZ (helper_.create_call(ObString("raise_exception"),
                               get_eh_service().eh_raise_exception_,
@@ -7550,6 +7579,7 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   if (stmt.get_is_goto_dst()) {
+
     if (NULL == get_current().get_v()) {
         //控制流已断，后面的语句不再处理
     } else {
@@ -7559,7 +7589,10 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
       if (OB_HASH_NOT_EXIST == tmp_ret) {
         ObLLVMBasicBlock label_block;
         const ObString *lab = stmt.get_label();
-        if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
+        ObLLVMValue stack;
+        if (OB_FAIL(get_helper().stack_save(stack))) {
+          LOG_WARN("failed to save current stack", K(ret));
+        } else if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
                                                 label_block))) {
           LOG_WARN("create goto label failed", K(ret));
         } else if (OB_FAIL(get_helper().create_br(label_block))) {
@@ -7568,6 +7601,8 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
           LOG_WARN("failed to set insert point", K(ret));
         } else if (OB_FAIL(set_current(label_block))) {
           LOG_WARN("failed to set current block", K(ret));
+        } else if (OB_FAIL(get_helper().stack_restore(stack))) {
+          LOG_WARN("failed to restore stack", K(ret));
         } else if (OB_FAIL(pair.init(ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_NONEXIST,
                                                     label_block))) {
           LOG_WARN("init label block pair failed.", K(ret));
@@ -7575,7 +7610,6 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
           LOG_WARN("set label block failed", K(ret));
         } else {}
       } else if (OB_SUCCESS == tmp_ret) {
-        // 这个时候，goto已经cg了，拿到对应的block地址，做为新的block
         if (ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_EXIST == pair.first) {
           ObLLVMBasicBlock &goto_block = pair.second;
           if (OB_FAIL(get_helper().create_br(goto_block))) {
@@ -7648,6 +7682,19 @@ int ObPLCodeGenerator::generate_out_param(
                                   s.get_block()->in_notfound(),
                                   s.get_block()->in_warning(),
                                   OB_INVALID_ID));
+        if (OB_SUCC(ret) && PL_CALL == s.get_type()) {
+          ObSEArray<jit::ObLLVMValue, 2> args;
+          OZ (args.push_back(get_vars()[CTX_IDX]));
+          OZ (args.push_back(src_datum));
+          if (OB_SUCC(ret)) {
+            jit::ObLLVMValue ret_err;
+            if (OB_FAIL(get_helper().create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err))) {
+              LOG_WARN("failed to create call", K(ret));
+            } else if (OB_FAIL(check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
+              LOG_WARN("failed to check success", K(ret));
+            } else { /*do nothing*/ }
+          }
+        }
       }
     } else { //处理基础类型的出参
       ObSEArray<ObLLVMValue, 4> args;

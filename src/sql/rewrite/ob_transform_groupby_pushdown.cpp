@@ -92,7 +92,7 @@ int ObTransformGroupByPushdown::transform_one_stmt(common::ObIArray<ObParentDMLS
   } else if (OB_FAIL(get_tables_from_params(*stmt, params, trans_tables))) {
     LOG_WARN("get tables failed", K(ret));
   } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
-                                      NULL != myhint && myhint->is_enable_hint(),
+                                      NULL != myhint && myhint->is_enable_hint(), false,
                                       trans_happened, &push_down_ctx))) {
     LOG_WARN("failed to accept transform", K(ret));
   } else if (!trans_happened) {
@@ -1722,13 +1722,15 @@ int ObTransformGroupByPushdown::construct_transform_hint(ObDMLStmt &stmt, void *
   return ret;
 }
 
-int ObTransformGroupByPushdown::is_expected_plan(ObLogPlan *plan, void *check_ctx, bool &is_valid)
+int ObTransformGroupByPushdown::is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObCostBasedPushDownCtx *push_down_ctx = static_cast<ObCostBasedPushDownCtx *>(check_ctx);
   if (OB_ISNULL(plan) || OB_ISNULL(push_down_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
+  } else if (!is_trans_plan) {
+    // do nothing
   } else if (OB_FAIL(check_nl_operator(plan->get_plan_root(), push_down_ctx, is_valid))) {
     LOG_WARN("check nl operator failed", K(ret));
   } 

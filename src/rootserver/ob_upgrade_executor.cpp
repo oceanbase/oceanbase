@@ -514,8 +514,8 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
     bool for_update = true;
     if (OB_FAIL(proxy.get_target_data_version(for_update, target_data_version))) {
       if (OB_ERR_NULL_VALUE == ret
-          && GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_1_0_0) {
-        // 4.0 -> 4.1
+          && GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_1_0_1) {
+        // 4.0.0.0 -> 4.1.0.x
         uint64_t current_data_version = 0;
         ret = proxy.get_current_data_version(current_data_version);
         if (OB_ERR_NULL_VALUE != ret) {
@@ -580,6 +580,8 @@ int ObUpgradeExecutor::run_upgrade_system_variable_job_(
       FLOG_INFO("[UPGRADE] start to run upgrade system variable job", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       } else if (OB_TMP_FAIL(ObUpgradeUtils::upgrade_sys_variable(*common_rpc_proxy_, *sql_proxy_, tenant_id))) {
         LOG_WARN("fail to upgrade sys variable", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
@@ -753,6 +755,8 @@ int ObUpgradeExecutor::run_upgrade_virtual_schema_job_(
         LOG_WARN("executor should stopped", KR(ret));
       } else if (OB_FAIL(arg.init(tenant_id, invalid_table_id, upgrade_virtual_schema))) {
         LOG_WARN("fail to init arg", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       } else if (OB_TMP_FAIL(common_rpc_proxy_->timeout(timeout).upgrade_table_schema(arg))) {
         LOG_WARN("fail to upgrade virtual schema", KR(tmp_ret), K(arg));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
@@ -768,8 +772,11 @@ int ObUpgradeExecutor::run_upgrade_virtual_schema_job_(
 int ObUpgradeExecutor::run_upgrade_system_package_job_()
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = OB_SYS_TENANT_ID;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+    LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
   } else if (OB_FAIL(upgrade_mysql_system_package_job_())) {
     LOG_WARN("fail to upgrade mysql system package", KR(ret));
   }
@@ -893,8 +900,12 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
         LOG_WARN("fail to get processor", KR(ret), K(current_data_version), K(i));
       } else if (FALSE_IT(version = processor->get_version())) {
       } else if (FALSE_IT(processor->set_tenant_id(tenant_id))) {
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       } else if (OB_FAIL(processor->post_upgrade())) {
         LOG_WARN("run post upgrade by version failed", KR(ret), K(tenant_id), K(version));
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       } else if (OB_FAIL(proxy.update_current_data_version(version))) {
         LOG_WARN("fail to update current data version", KR(ret), K(tenant_id), K(version));
       }
@@ -920,6 +931,8 @@ int ObUpgradeExecutor::run_upgrade_inspection_job_(
       FLOG_INFO("[UPGRADE] start to run upgrade inspection job", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       } else if (OB_TMP_FAIL(root_inspection_->check_tenant(tenant_id))) {
         LOG_WARN("fail to do upgrade inspection", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
@@ -949,6 +962,8 @@ int ObUpgradeExecutor::run_upgrade_end_action_(
       FLOG_INFO("[UPGRADE] start to run upgrade end action", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       } else if (OB_TMP_FAIL(run_upgrade_end_action_(tenant_id))) {
         LOG_WARN("fail to upgrade end action", KR(ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;

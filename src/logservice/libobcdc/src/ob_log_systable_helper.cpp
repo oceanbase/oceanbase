@@ -1342,7 +1342,7 @@ int ObLogSysTableHelper::do_query_(MySQLQueryBase &query)
       ret = OB_SUCCESS;
     }
 
-    if ((OB_SUCC(ret)) && !done) {
+    if (!done) {
       ret = OB_NEED_RETRY;
     }
   }

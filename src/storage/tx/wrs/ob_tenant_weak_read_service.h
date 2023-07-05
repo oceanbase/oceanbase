@@ -108,6 +108,10 @@ public:
 
   // get weak read info stat
   void get_weak_read_stat(ObTenantWeakReadStat &wrs_stat) const;
+  int check_can_start_service(const SCN &current_gts,
+                              bool &can_start_service,
+                              SCN &min_version,
+                              share::ObLSID &ls_id);
 public:
   // tenant level variables init and destroy function
   static int mtl_init(ObTenantWeakReadService* &twrs);

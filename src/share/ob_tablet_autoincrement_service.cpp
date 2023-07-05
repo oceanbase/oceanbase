@@ -208,38 +208,36 @@ ObTabletAutoincrementService::~ObTabletAutoincrementService()
 {
 }
 
-int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq)
+int ObTabletAutoincrementService::acquire_mgr(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    const int64_t init_cache_size,
+    ObTabletAutoincMgr *&autoinc_mgr)
 {
   int ret = OB_SUCCESS;
-  const int64_t auto_increment_cache_size = 10000; //TODO(shuangcan): fix me
   ObTabletAutoincKey key;
   key.tenant_id_ = tenant_id;
   key.tablet_id_ = tablet_id;
-  ObTabletAutoincParam param;
-  param.tenant_id_ = tenant_id;
-  ObTabletAutoincMgr *autoinc_mgr = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("tablet auto increment service is not inited", K(ret), K(tablet_id));
-  } else if (!tablet_id.is_valid()) {
+    LOG_WARN("tablet auto increment service is not inited", K(ret), K(key));
+  } else if (OB_UNLIKELY(!key.is_valid() || nullptr != autoinc_mgr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tablet_id));
+    LOG_WARN("invalid argument", K(ret), K(key));
   } else if (OB_FAIL(tablet_autoinc_mgr_map_.get(key, autoinc_mgr))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_ERROR("get from map failed", K(ret));
+      LOG_WARN("get from map failed", K(ret));
     } else {
-      lib::ObMutex &mutex = init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM];
+      lib::ObMutex &mutex = init_node_mutexs_[key.tablet_id_.id() % INIT_NODE_MUTEX_NUM];
       lib::ObMutexGuard guard(mutex);
       if (OB_ENTRY_NOT_EXIST == (ret = tablet_autoinc_mgr_map_.get(key, autoinc_mgr))) {
         if (NULL == (autoinc_mgr = op_alloc(ObTabletAutoincMgr))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to alloc table mgr", K(ret));
-        } else if (OB_FAIL(autoinc_mgr->init(tablet_id, auto_increment_cache_size))) {
-          LOG_WARN("fail to init tablet autoinc mgr", K(ret), K(tablet_id));
-        } else {
-          if (OB_FAIL(tablet_autoinc_mgr_map_.insert_and_get(key, autoinc_mgr))) {
-            LOG_WARN("failed to create table node", K(ret));
-          }
+        } else if (OB_FAIL(autoinc_mgr->init(key.tablet_id_, init_cache_size))) {
+          LOG_WARN("fail to init tablet autoinc mgr", K(ret), K(key));
+        } else if (OB_FAIL(tablet_autoinc_mgr_map_.insert_and_get(key, autoinc_mgr))) {
+          LOG_WARN("failed to create table node", K(ret));
         }
         if (OB_FAIL(ret) && autoinc_mgr != nullptr) {
           op_free(autoinc_mgr);
@@ -248,7 +246,28 @@ int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, cons
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  return ret;
+}
+
+void ObTabletAutoincrementService::release_mgr(ObTabletAutoincMgr *autoinc_mgr)
+{
+  tablet_autoinc_mgr_map_.revert(autoinc_mgr);
+  return;
+}
+
+int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq)
+{
+  int ret = OB_SUCCESS;
+  const int64_t auto_increment_cache_size = 10000; //TODO(shuangcan): fix me
+  ObTabletAutoincParam param;
+  param.tenant_id_ = tenant_id;
+  ObTabletAutoincMgr *autoinc_mgr = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet auto increment service is not inited", K(ret));
+  } else if (OB_FAIL(acquire_mgr(tenant_id, tablet_id, auto_increment_cache_size, autoinc_mgr))) {
+    LOG_WARN("failed to acquire mgr", K(ret));
+  } else {
     ObTabletCacheInterval interval(tablet_id, 1/*cache size*/);
     lib::ObMutex &mutex = init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM];
     lib::ObMutexGuard guard(mutex);
@@ -261,6 +280,9 @@ int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, cons
     } else if (OB_FAIL(interval.next_value(autoinc_seq))) {
       LOG_WARN("fail to get next value", K(ret));
     }
+  }
+  if (nullptr != autoinc_mgr) {
+    release_mgr(autoinc_mgr);
   }
   return ret;
 }
@@ -296,47 +318,20 @@ int ObTabletAutoincrementService::get_tablet_cache_interval(const uint64_t tenan
     LOG_WARN("tablet auto increment service is not inited", K(ret));
   } else {
     const int64_t auto_increment_cache_size = MAX(interval.cache_size_, 10000); //TODO(shuangcan): fix me
-    ObTabletAutoincKey key;
-    key.tenant_id_ = tenant_id;
-    key.tablet_id_ = interval.tablet_id_;
     ObTabletAutoincParam param;
     param.tenant_id_ = tenant_id;
     param.auto_increment_cache_size_ = auto_increment_cache_size;
     ObTabletAutoincMgr *autoinc_mgr = nullptr;
-    if (!key.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(key));
-    } else if (OB_FAIL(tablet_autoinc_mgr_map_.get(key, autoinc_mgr))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("get from map failed", K(ret));
-      } else {
-        lib::ObMutex &mutex = init_node_mutexs_[key.tablet_id_.id() % INIT_NODE_MUTEX_NUM];
-        lib::ObMutexGuard guard(mutex);
-        if (OB_ENTRY_NOT_EXIST == (ret = tablet_autoinc_mgr_map_.get(key, autoinc_mgr))) {
-          if (NULL == (autoinc_mgr = op_alloc(ObTabletAutoincMgr))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to alloc table mgr", K(ret));
-          } else if (OB_FAIL(autoinc_mgr->init(key.tablet_id_, auto_increment_cache_size))) {
-            LOG_WARN("fail to init tablet autoinc mgr", K(ret), K(key));
-          } else {
-            if (OB_FAIL(tablet_autoinc_mgr_map_.insert_and_get(key, autoinc_mgr))) {
-              LOG_WARN("failed to create table node", K(ret));
-            }
-          }
-          if (OB_FAIL(ret) && autoinc_mgr != nullptr) {
-            op_free(autoinc_mgr);
-            autoinc_mgr = nullptr;
-          }
-        }
-      }
+    if (OB_FAIL(acquire_mgr(tenant_id, interval.tablet_id_, auto_increment_cache_size, autoinc_mgr))) {
+      LOG_WARN("failed to acquire mgr", K(ret));
+    } else if (OB_ISNULL(autoinc_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("autoinc mgr is unexpected null", K(ret));
+    } else if (OB_FAIL(autoinc_mgr->fetch_interval_without_cache(param, interval))) {
+      LOG_WARN("fail to fetch interval", K(ret), K(param));
     }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(autoinc_mgr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("autoinc mgr is unexpected null", K(ret));
-      } else if (OB_FAIL(autoinc_mgr->fetch_interval_without_cache(param, interval))) {
-        LOG_WARN("fail to fetch interval", K(ret), K(param));
-      }
+    if (nullptr != autoinc_mgr) {
+      release_mgr(autoinc_mgr);
     }
   }
 

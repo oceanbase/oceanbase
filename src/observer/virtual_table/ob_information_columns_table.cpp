@@ -221,6 +221,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       bool is_normal_view = table_schema->is_view_table()&& !table_schema->is_materialized_view();
       //  不显示索引表
       if (table_schema->is_aux_table()
+         || table_schema->is_tmp_table()
          || table_schema->is_in_recyclebin()
          || is_ora_sys_view_table(table_schema->get_table_id())) {
         continue;

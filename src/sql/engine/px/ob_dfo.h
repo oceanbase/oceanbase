@@ -272,9 +272,8 @@ public:
                K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
                K_(thread_inited), K_(thread_finish), K_(px_int_id),
-               K_(is_fulltree), K_(is_rpc_worker), K_(transmit_use_interm_result),
-               K_(recieve_use_interm_result), K(temp_table_ctx_), K_(server_not_alive),
-               K_(adjoining_root_dfo), K_(is_single_tsc_leaf_dfo));
+               K_(transmit_use_interm_result),
+               K_(recieve_use_interm_result), K_(serial_receive_channels));
 private:
   uint64_t execution_id_;
   uint64_t qc_id_;
@@ -578,7 +577,9 @@ public:
                K_(px_bloom_filter_mode),
                K_(px_bf_id),
                K_(pkey_table_loc_id),
-               K_(tsc_op_cnt));
+               K_(tsc_op_cnt),
+               K_(transmit_ch_sets),
+               K_(receive_ch_sets_map));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDfo);
@@ -716,6 +717,47 @@ public:
   ObSqcSerializeCache ser_cache_;
 };
 
+struct ObPxCleanDtlIntermResInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObPxCleanDtlIntermResInfo() : ch_total_info_(), sqc_id_(common::OB_INVALID_ID), task_count_(0) {}
+  ObPxCleanDtlIntermResInfo(dtl::ObDtlChTotalInfo &ch_info, int64_t sqc_id, int64_t task_count) :
+    ch_total_info_(ch_info), sqc_id_(sqc_id), task_count_(task_count)
+  {}
+
+  ~ObPxCleanDtlIntermResInfo() { }
+  void reset()
+  {
+    ch_total_info_.reset();
+    sqc_id_ = common::OB_INVALID_ID;
+    task_count_ = 0;
+  }
+
+  TO_STRING_KV(K_(ch_total_info), K_(sqc_id), K_(task_count));
+public:
+  dtl::ObDtlChTotalInfo ch_total_info_;
+  int64_t sqc_id_;
+  int64_t task_count_;
+};
+
+class ObPxCleanDtlIntermResArgs
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObPxCleanDtlIntermResArgs() : info_(), batch_size_(0) {}
+  ~ObPxCleanDtlIntermResArgs() { }
+  void reset()
+  {
+    info_.reset();
+    batch_size_ = 0;
+  }
+
+  TO_STRING_KV(K_(info), K_(batch_size));
+public:
+  ObSEArray<ObPxCleanDtlIntermResInfo, 8> info_;
+  uint64_t batch_size_;
+};
 
 class ObPxTask
 {

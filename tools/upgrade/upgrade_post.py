@@ -119,6 +119,12 @@
 #  cur.execute(sql)
 #  wait_parameter_sync(cur, False, parameter, value, timeout)
 #
+#def set_tenant_parameter(cur, parameter, value, timeout = 0):
+#  sql = """alter system set {0} = '{1}' tenant = 'all'""".format(parameter, value)
+#  logging.info(sql)
+#  cur.execute(sql)
+#  wait_parameter_sync(cur, True, parameter, value, timeout)
+#
 #def get_ori_enable_ddl(cur, timeout):
 #  ori_value_str = fetch_ori_enable_ddl(cur)
 #  wait_parameter_sync(cur, False, 'enable_ddl', ori_value_str, timeout)
@@ -290,6 +296,17 @@
 #
 #  wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
 #
+#def do_suspend_merge(cur, timeout):
+#    action_sql = "alter system suspend merge tenant = all"
+#    rollback_sql = "alter system resume merge tenant = all"
+#    logging.info(action_sql)
+#    cur.execute(action_sql)
+#
+#def do_resume_merge(cur, timeout):
+#    action_sql = "alter system resume merge tenant = all"
+#    rollback_sql = "alter system suspend merge tenant = all"
+#    logging.info(action_sql)
+#    cur.execute(action_sql)
 #
 #class Cursor:
 #  __cursor = None
@@ -1224,9 +1241,17 @@
 #  # when upgrade across version, disable enable_ddl/major_freeze
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
-#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_rereplication', 'False', timeout)
+#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+#    if current_version != '4.0.0.0':
+#      actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+#      actions.do_suspend_merge(cur, timeout)
+#  else:
+#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+#    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+#    actions.do_suspend_merge(cur, timeout)
+#
 #####========******####======== actions begin ========####******========####
 #  return
 #####========******####========= actions end =========####******========####
@@ -1843,10 +1868,7 @@
 #    min_cluster_version = get_version(results[0][0])
 #
 #    # check data version
-#    if min_cluster_version < get_version("4.1.0.0"):
-#      # last barrier cluster version should be 4.1.0.0
-#      fail_list.append('last barrier cluster version is 4.1.0.0. prohibit cluster upgrade from cluster version less than 4.1.0.0')
-#    else:
+#    if min_cluster_version >= get_version("4.1.0.0"):
 #      data_version_str = ''
 #      data_version = 0
 #      # check compatible is same
@@ -1860,26 +1882,22 @@
 #        data_version_str = results[0][0]
 #        data_version = get_version(results[0][0])
 #
-#        if data_version < get_version("4.1.0.0"):
-#          # last barrier data version should be 4.1.0.0
-#          fail_list.append('last barrier data version is 4.1.0.0. prohibit cluster upgrade from data version less than 4.1.0.0')
+#        # check target_data_version/current_data_version
+#        sql = "select count(*) from oceanbase.__all_tenant"
+#        (desc, results) = query_cur.exec_query(sql)
+#        if len(results) != 1 or len(results[0]) != 1:
+#          fail_list.append('result cnt not match')
 #        else:
-#          # check target_data_version/current_data_version
-#          sql = "select count(*) from oceanbase.__all_tenant"
+#          tenant_count = results[0][0]
+#
+#          sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(data_version)
 #          (desc, results) = query_cur.exec_query(sql)
 #          if len(results) != 1 or len(results[0]) != 1:
 #            fail_list.append('result cnt not match')
+#          elif 2 * tenant_count != results[0][0]:
+#            fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
 #          else:
-#            tenant_count = results[0][0]
-#
-#            sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(data_version)
-#            (desc, results) = query_cur.exec_query(sql)
-#            if len(results) != 1 or len(results[0]) != 1:
-#              fail_list.append('result cnt not match')
-#            elif 2 * tenant_count != results[0][0]:
-#              fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
-#            else:
-#              logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
+#            logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
 #
 ## 2. 检查paxos副本是否同步, paxos副本是否缺失
 #def check_paxos_replica(query_cur):
@@ -1905,32 +1923,52 @@
 ## 4. 检查集群状态
 #def check_cluster_status(query_cur):
 #  # 4.1 检查是否非合并状态
-#  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where STATUS != 'IDLE'""")
+#  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
+#  (desc, results) = query_cur.exec_query("""select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'""")
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif results[0][0] != '4.0.0.0':
+#    (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn != finished_scn and max_received_scn > 0""")
+#    if results[0][0] > 0 :
+#      fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
 #def check_tenant_status(query_cur):
-#
-#  # check tenant schema
-#  (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
-#  if len(results) != 1 or len(results[0]) != 1:
-#    fail_list.append('results len not match')
-#  elif 0 != results[0][0]:
-#    fail_list.append('has abnormal tenant, should stop')
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
 #  else:
-#    logging.info('check tenant status success')
+#    min_cluster_version = get_version(results[0][0])
 #
-#  # check tenant info
-#  # don't support restore tenant upgrade
-#  (desc, results) = query_cur.exec_query("""select count(*) as count from oceanbase.__all_virtual_tenant_info where tenant_role != 'PRIMARY' and tenant_role != 'STANDBY'""")
-#  if len(results) != 1 or len(results[0]) != 1:
-#    fail_list.append('results len not match')
-#  elif 0 != results[0][0]:
-#    fail_list.append('has abnormal tenant info, should stop')
-#  else:
-#    logging.info('check tenant info success')
+#    # check tenant schema
+#    (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
+#    if len(results) != 1 or len(results[0]) != 1:
+#      fail_list.append('results len not match')
+#    elif 0 != results[0][0]:
+#      fail_list.append('has abnormal tenant, should stop')
+#    else:
+#      logging.info('check tenant status success')
+#
+#    # check tenant info
+#    # 1. don't support standby tenant upgrade from 4.0.0.0
+#    # 2. don't support restore tenant upgrade
+#    sub_sql = ''
+#    if min_cluster_version >= get_version("4.1.0.0"):
+#      sub_sql = """ and tenant_role != 'STANDBY'"""
+#    (desc, results) = query_cur.exec_query("""select count(*) as count from oceanbase.__all_virtual_tenant_info where tenant_role != 'PRIMARY' {0}""".format(sub_sql))
+#    if len(results) != 1 or len(results[0]) != 1:
+#      fail_list.append('results len not match')
+#    elif 0 != results[0][0]:
+#      fail_list.append('has abnormal tenant info, should stop')
+#    else:
+#      logging.info('check tenant info success')
 #
 ## 6. 检查无恢复任务
 #def check_restore_job_exist(query_cur):
@@ -2062,6 +2100,28 @@
 #      else:
 #        logging.info('check backup destination success')
 #
+#def check_server_version(query_cur):
+#    sql = """select distinct(substring_index(build_version, '_', 1)) from __all_server""";
+#    (desc, results) = query_cur.exec_query(sql);
+#    if len(results) != 1:
+#      fail_list.append("servers build_version not match")
+#    else:
+#      logging.info("check server version success")
+#
+## 14. 检查server是否可服务
+#def check_observer_status(query_cur):
+#  (desc, results) = query_cur.exec_query("""select count(*) from oceanbase.__all_server where (start_service_time <= 0 or status != "active")""")
+#  if results[0][0] > 0 :
+#    fail_list.append('{0} observer not available , please check'.format(results[0][0]))
+#  logging.info('check observer status success')
+#
+## 15  检查schema是否刷新成功
+#def check_schema_status(query_cur):
+#  (desc, results) = query_cur.exec_query("""select if (a.cnt = b.cnt, 1, 0) as passed from (select count(*) as cnt from oceanbase.__all_virtual_server_schema_info where refreshed_schema_version > 1 and refreshed_schema_version % 8 = 0) as a join (select count(*) as cnt from oceanbase.__all_server join oceanbase.__all_tenant) as b""")
+#  if results[0][0] != 1 :
+#    fail_list.append('{0} schema not available, please check'.format(results[0][0]))
+#  logging.info('check schema status success')
+#
 ## last check of do_check, make sure no function execute after check_fail_list
 #def check_fail_list():
 #  if len(fail_list) != 0 :
@@ -2100,6 +2160,9 @@
 #      check_archive_job_exist(query_cur)
 #      check_archive_dest_exist(query_cur)
 #      check_backup_dest_exist(query_cur)
+#      check_observer_status(query_cur)
+#      check_schema_status(query_cur)
+#      check_server_version(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
@@ -2658,6 +2721,8 @@
 ## 7 打开major freeze
 #def enable_major_freeze(cur, timeout):
 #  actions.set_parameter(cur, 'enable_major_freeze', 'True', timeout)
+#  actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'True', timeout)
+#  actions.do_resume_merge(cur, timeout)
 #
 ## 开始升级后的检查
 #def do_check(conn, cur, query_cur, timeout):

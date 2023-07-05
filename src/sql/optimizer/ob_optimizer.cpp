@@ -622,6 +622,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   int64_t max_table_hint = 1;
   ObDMLStmt *target_stmt = &stmt;
   ObSQLSessionInfo *session = ctx_.get_session_info();
+  bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
   if (OB_ISNULL(target_stmt) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -648,8 +649,11 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("failed to get session parallel info", K(ret));
   } else if (OB_FAIL(calc_link_stmt_count(*target_stmt, link_stmt_count))) {
     LOG_WARN("calc link stmt count failed", K(ret));
+  } else if (OB_FAIL(stmt.check_has_cursor_expression(has_cursor_expr))) {
+    LOG_WARN("fail to check cursor expression info", K(ret));
   } else {
     ctx_.set_has_multiple_link_stmt(link_stmt_count > 1);
+    ctx_.set_has_cursor_expression(has_cursor_expr);
     parallel = ctx_.get_global_hint().get_parallel_hint();
     if (parallel <= 0) {
       parallel = ObGlobalHint::DEFAULT_PARALLEL;
@@ -678,6 +682,12 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     }
     //following above rule, but if stmt contain pl_udf, force das, parallel should be 1
     if (ctx_.get_parallel() > 1 && ctx_.has_pl_udf()) {
+      ctx_.set_parallel_rule(PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE);
+      ctx_.set_parallel(1);
+      ctx_.add_plan_note(PARALLEL_DISABLED_BY_PL_UDF_DAS, 1);
+    }
+    if (ctx_.has_cursor_expression()) {
+      // if stmt contain cursor expression, cannot remote execute, force das, parallel should be 1
       ctx_.set_parallel_rule(PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE);
       ctx_.set_parallel(1);
       ctx_.add_plan_note(PARALLEL_DISABLED_BY_PL_UDF_DAS, 1);

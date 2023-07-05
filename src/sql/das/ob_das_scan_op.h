@@ -200,6 +200,16 @@ protected:
   virtual common::ObNewRowIterator *get_storage_scan_iter();
   virtual common::ObNewRowIterator *get_output_result_iter() { return result_; }
 protected:
+  void init_retry_alloc()
+  {
+    if (nullptr == retry_alloc_) {
+      ObMemAttr attr;
+      attr.tenant_id_ = MTL_ID();
+      attr.label_ = "RetryDASCtx";
+      retry_alloc_ = new(&retry_alloc_buf_) common::ObArenaAllocator();
+      retry_alloc_->set_attr(attr);
+    }
+  }
   //对于DASScanOp，本质上是对PartitionService的table_scan()接口的封装，
   //参数为scan_param,结果为result iterator
   storage::ObTableScanParam scan_param_;
@@ -208,6 +218,11 @@ protected:
   common::ObNewRowIterator *result_;
   //Indicates the number of remaining rows currently that need to be sent through DTL
   int64_t remain_row_cnt_;
+
+  common::ObArenaAllocator *retry_alloc_;
+  union {
+    common::ObArenaAllocator retry_alloc_buf_;
+  };
 };
 
 class ObDASScanResult : public ObIDASTaskResult, public common::ObNewRowIterator

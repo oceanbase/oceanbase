@@ -1221,16 +1221,18 @@ int ObCharset::display_len(ObCollationType collation_type,
         ob_wc_t wc;
         int bytes = cs->cset->mb_wc(cs, &wc, buf + char_pos, buf + buf_size);
 
-        if (OB_UNLIKELY(bytes == OB_CS_ILSEQ)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Failed to call mb_wc", K(ret), "func_ret", bytes);
-        } else if (bytes < 0) { // remain buf is too smalll
+        if (bytes < 0) {
           found = true;
         } else {
-          // get displayed width
-          int w = ObCharset::is_cjk_charset(collation_type) ? mk_wcwidth_cjk(wc) : mk_wcwidth(wc);
+          int w = 0;
+          if (bytes > OB_CS_ILSEQ) {
+            w = ObCharset::is_cjk_charset(collation_type) ? mk_wcwidth_cjk(wc) : mk_wcwidth(wc);
+          }
           if (w <= 0) {
             w = 1;
+          }
+          if (OB_CS_ILSEQ == bytes) {
+            bytes = 1;
           }
           if (char_pos + bytes <= buf_size) {
             width += w;
@@ -1270,16 +1272,18 @@ int ObCharset::max_display_width_charpos(ObCollationType collation_type, const c
         ob_wc_t wc;
         int bytes = cs->cset->mb_wc(cs, &wc, buf + char_pos, buf + mb_size);
 
-        if (OB_UNLIKELY(bytes == OB_CS_ILSEQ)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Failed to call mb_wc", K(ret), "func_ret", bytes);
-        } else if (bytes < 0) { // remain buf is too smalll
+        if (bytes < 0) { // remain buf is too smalll
           found = true;
         } else {
-          // get displayed width
-          int w = ObCharset::is_cjk_charset(collation_type) ? mk_wcwidth_cjk(wc) : mk_wcwidth(wc);
+          int w = 0;
+          if (bytes > OB_CS_ILSEQ) {
+            w = ObCharset::is_cjk_charset(collation_type) ? mk_wcwidth_cjk(wc) : mk_wcwidth(wc);
+          }
           if (w <= 0) {
             w = 1;
+          }
+          if (OB_CS_ILSEQ == bytes) {
+            bytes = 1;
           }
           if (char_pos + bytes <= mb_size && total_width + w <= max_width) {
             total_width += w;

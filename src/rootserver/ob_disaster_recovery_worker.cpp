@@ -1663,7 +1663,8 @@ ObDRWorker::ObDRWorker(volatile bool &stop)
     rpc_proxy_(nullptr),
     sql_proxy_(nullptr),
     task_count_statistic_(),
-    display_tasks_()
+    display_tasks_(),
+    display_tasks_rwlock_(ObLatchIds::DISPLAY_TASKS_LOCK)
 {
 }
 
@@ -4011,6 +4012,7 @@ int ObDRWorker::get_task_plan_display(
     common::ObSArray<ObLSReplicaTaskDisplayInfo> &task_plan)
 {
   int ret = OB_SUCCESS;
+  SpinWLockGuard guard(display_tasks_rwlock_);
   task_plan.reset();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -4018,12 +4020,14 @@ int ObDRWorker::get_task_plan_display(
   } else if (OB_FAIL(task_plan.assign(display_tasks_))) {
     LOG_WARN("fail to get dsplay task stat", KR(ret), K_(display_tasks));
   }
+  reset_task_plans_();
   return ret;
 }
 
 int ObDRWorker::add_display_info(const ObLSReplicaTaskDisplayInfo &display_info)
 {
   int ret = OB_SUCCESS;
+  SpinWLockGuard guard(display_tasks_rwlock_);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));

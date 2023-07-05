@@ -120,12 +120,6 @@ int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const SCN &scn)
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle));
-  } else if (!tablet_handle.get_obj()->get_table_store().get_major_sstables().empty()) {
-    // major sstable already exist, means ddl commit success
-    need_replay = false;
-    if (REACH_TIME_INTERVAL(1000L * 1000L)) {
-      LOG_INFO("no need to replay ddl log, because the major sstable already exist", K(table_key));
-    }
   } else {
     ObMacroBlockWriteInfo write_info;
     ObMacroBlockHandle macro_handle;

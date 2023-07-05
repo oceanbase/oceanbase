@@ -1258,12 +1258,8 @@ int ObMemtableMultiVersionScanIterator::iterate_compacted_row_value_(ObDatumRow 
       if (OB_FAIL(row_reader_.read_memtable_row(mtd->buf_, mtd->buf_len_, *read_info_, row, bitmap_, read_finished))) {
         TRANS_LOG(WARN, "Failed to read row without", K(ret));
       } else if (ObDmlFlag::DF_INSERT == mtd->dml_flag_ || ObDmlFlag::DF_DELETE == mtd->dml_flag_ || read_finished) {
-        row.set_compacted_multi_version_row();
-        // TODO: @dengzhi.ldz remove this
-        if (ObDmlFlag::DF_INSERT == mtd->dml_flag_ && !read_finished) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected not compact insert row", K(ret), K(row), K(bitmap_.get_nop_cnt()),
-                   KPC(reinterpret_cast<const ObRowHeader*>(mtd->buf_)), KPC_(read_info));
+        if (bitmap_.is_empty() || ObDmlFlag::DF_DELETE == mtd->dml_flag_) {
+          row.set_compacted_multi_version_row();
         }
         break;
       }
@@ -1326,14 +1322,8 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
       if (row.row_flag_.is_lock()) {
         row.row_flag_ = mtd->dml_flag_;
       }
-      if (row.row_flag_.is_insert() || row.row_flag_.is_delete() || read_finished) {
+      if (bitmap_.is_empty() || row.row_flag_.is_delete()) {
         row.set_compacted_multi_version_row();
-        // TODO: @dengzhi.ldz remove this
-        if (row.row_flag_.is_insert() && !read_finished) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected not compact insert row", K(ret), K(row), K(bitmap_.get_nop_cnt()),
-                   KPC(reinterpret_cast<const ObRowHeader*>(mtd->buf_)), KPC_(read_info));
-        }
       }
       if (trans_version > version_range.multi_version_start_
           && value_iter_->is_cur_multi_version_row_end()) {

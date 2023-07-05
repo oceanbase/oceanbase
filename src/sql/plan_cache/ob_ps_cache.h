@@ -35,16 +35,19 @@ namespace sql
 class ObPsPrepareStatusGuard final
 {
 public:
-  explicit ObPsPrepareStatusGuard(ObSQLSessionInfo &session_info, bool is_from_pl)
+  explicit ObPsPrepareStatusGuard(ObSQLSessionInfo &session_info)
     : session_info_(session_info)
   {
-    if (!is_from_pl) {
-      session_info_.set_is_ps_prepare_stage(true);
-    }
   }
   ~ObPsPrepareStatusGuard()
   {
-    session_info_.set_is_ps_prepare_stage(false);
+    session_info_.set_is_varparams_sql_prepare(false);
+  }
+  void is_varparams_sql_prepare(bool is_from_pl, bool with_template)
+  {
+    if (!is_from_pl && with_template) {
+      session_info_.set_is_varparams_sql_prepare(true);
+    }
   }
 private:
   ObSQLSessionInfo &session_info_;

@@ -363,10 +363,10 @@ int ObDDLTableMergeTask::process()
     ObTabletDDLParam ddl_param;
     ObTableHandleV2 table_handle;
     bool is_data_complete = false;
-    const ObSSTable *latest_major_sstable = nullptr;
-    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(merge_param_.ls_id_, merge_param_.tablet_id_, latest_major_sstable))) {
+    const ObSSTable *first_major_sstable = nullptr;
+    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(merge_param_.ls_id_, merge_param_.tablet_id_, first_major_sstable))) {
       LOG_WARN("check if major sstable exist failed", K(ret));
-    } else if (nullptr != latest_major_sstable) {
+    } else if (nullptr != first_major_sstable) {
       LOG_INFO("major sstable has been created before", K(merge_param_), K(ddl_param.table_key_));
       sstable = static_cast<ObSSTable *>(tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
     } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
@@ -404,15 +404,6 @@ int ObDDLTableMergeTask::process()
       } else if (OB_ISNULL(sstable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl major sstable is null", K(ret), K(ddl_param));
-      } else if (merge_param_.table_id_ > 0
-          && merge_param_.execution_id_ >= 0
-          && OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(merge_param_.ls_id_,
-                                                          merge_param_.tablet_id_,
-                                                          merge_param_.table_id_,
-                                                          merge_param_.execution_id_,
-                                                          merge_param_.ddl_task_id_,
-                                                          sstable->get_meta().get_col_checksum()))) {
-        LOG_WARN("report ddl column checksum failed", K(ret), K(merge_param_));
       } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(tenant_id, merge_param_.ls_id_, merge_param_.tablet_id_))) {
         LOG_WARN("fail to submit tablet update task", K(ret), K(tenant_id), K(merge_param_));
       }
@@ -610,7 +601,7 @@ int ObTabletDDLUtil::create_ddl_sstable(const ObTabletDDLParam &ddl_param,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(index_block_rebuilder->close())) {
       LOG_WARN("close index block rebuilder failed", K(ret));
-    } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(sstable_index_builder, ddl_param, nullptr/*first_ddl_sstable*/, table_handle))) {
+    } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(sstable_index_builder, ddl_param, first_ddl_sstable, table_handle))) {
       LOG_WARN("create ddl sstable failed", K(ret), K(ddl_param));
     }
   }
@@ -654,8 +645,18 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
     } else {
       const ObStorageSchema &storage_schema = tablet_handle.get_obj()->get_storage_schema();
       int64_t column_count = 0;
+      share::schema::ObTableMode table_mode = storage_schema.get_table_mode_struct();
+      share::schema::ObIndexType index_type = storage_schema.get_index_type();
+      int64_t rowkey_column_cnt = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+      int64_t schema_version = storage_schema.get_schema_version();
+      common::ObRowStoreType row_store_type = storage_schema.get_row_store_type();
       if (nullptr != first_ddl_sstable) {
         column_count = first_ddl_sstable->get_meta().get_basic_meta().column_cnt_;
+        table_mode = first_ddl_sstable->get_meta().get_basic_meta().table_mode_;
+        index_type = static_cast<share::schema::ObIndexType>(first_ddl_sstable->get_meta().get_basic_meta().index_type_);
+        rowkey_column_cnt = first_ddl_sstable->get_meta().get_basic_meta().rowkey_column_count_;
+        schema_version = first_ddl_sstable->get_meta().get_basic_meta().schema_version_;
+        row_store_type = first_ddl_sstable->get_meta().get_basic_meta().latest_row_store_type_;
       } else {
         if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(column_count))) {
           LOG_WARN("fail to get stored column count in sstable", K(ret));
@@ -674,11 +675,11 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
       } else {
         ObTabletCreateSSTableParam param;
         param.table_key_ = ddl_param.table_key_;
-        param.table_mode_ = storage_schema.get_table_mode_struct();
-        param.index_type_ = storage_schema.get_index_type();
-        param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-        param.schema_version_ = storage_schema.get_schema_version();
-        param.latest_row_store_type_ = storage_schema.get_row_store_type();
+        param.table_mode_ = table_mode;
+        param.index_type_ = index_type;
+        param.rowkey_column_cnt_ = rowkey_column_cnt;
+        param.schema_version_ = schema_version;
+        param.latest_row_store_type_ = row_store_type;
         param.create_snapshot_version_ = ddl_param.snapshot_version_;
         param.ddl_scn_ = ddl_param.start_scn_;
         ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
@@ -686,7 +687,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
         ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
             param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
         param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
-        param.root_row_store_type_ = res.root_desc_.row_type_;
+        param.root_row_store_type_ = res.root_row_store_type_;
         param.data_index_tree_height_ = res.root_desc_.height_;
         param.index_blocks_cnt_ = res.index_blocks_cnt_;
         param.data_blocks_cnt_ = res.data_blocks_cnt_;
@@ -971,12 +972,12 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
 
 int ObTabletDDLUtil::check_and_get_major_sstable(const share::ObLSID &ls_id,
                                                  const ObTabletID &tablet_id,
-                                                 const ObSSTable *&latest_major_sstable)
+                                                 const ObSSTable *&first_major_sstable)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
-  latest_major_sstable = nullptr;
+  first_major_sstable = nullptr;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
@@ -991,8 +992,8 @@ int ObTabletDDLUtil::check_and_get_major_sstable(const share::ObLSID &ls_id,
     ret = OB_ERR_SYS;
     LOG_WARN("tablet handle is null", K(ret), K(ls_id), K(tablet_id));
   } else {
-    latest_major_sstable = static_cast<ObSSTable *>(
-        tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(true/*last*/));
+    first_major_sstable = static_cast<ObSSTable *>(
+        tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
   }
   return ret;
 }

@@ -703,6 +703,81 @@ void ObTenantWeakReadService::run1()
   ISTAT("thread end", K_(tenant_id));
 }
 
+int ObTenantWeakReadService::check_can_start_service(const SCN &current_gts,
+                                                     bool &can_start_service,
+                                                     SCN &min_version,
+                                                     share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  storage::ObLSService *ls_svr = MTL(storage::ObLSService*);
+  common::ObSharedGuard<storage::ObLSIterator> iter;
+  ObLSID tmp_ls_id;
+  SCN tmp_min_version;
+  int64_t total_ls_cnt = 0;
+  can_start_service = true;
+  const int64_t MAX_STALE_TIME = 30 * 1000 * 1000;
+
+  if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    FLOG_ERROR("unexpected ls service", K(ret), KP(ls_svr));
+  } else if (OB_FAIL(ls_svr->get_ls_iter(iter, ObLSGetMod::TRANS_MOD))) {
+    if (OB_NOT_RUNNING != ret) {
+      FLOG_WARN("fail to alloc ls iter", KR(ret));
+    }
+  } else {
+    int64_t start_time = ObTimeUtility::current_time();
+    while (OB_SUCCESS == ret) {
+      ObLS *ls = NULL;
+      if (OB_FAIL(iter->get_next(ls))) {
+        if (OB_ITER_END == ret) {
+          // do nothing
+        } else {
+          FLOG_WARN("iterate next ls fail", KR(ret));
+        }
+      } else if (OB_ISNULL(ls)) {
+        ret = OB_PARTITION_NOT_EXIST;
+        FLOG_WARN("iterate ls fail", KP(ls));
+      } else if (ls->get_ls_wrs_handler()->can_skip_ls()) {
+        // do nothing
+      } else {
+        ++total_ls_cnt;
+        if (tmp_min_version.is_valid()) {
+          if (ls->get_ls_wrs_handler()->get_ls_weak_read_ts() < tmp_min_version) {
+            tmp_min_version = ls->get_ls_wrs_handler()->get_ls_weak_read_ts();
+            tmp_ls_id = ls->get_ls_id();
+          }
+        } else {
+          tmp_min_version = ls->get_ls_wrs_handler()->get_ls_weak_read_ts();
+          tmp_ls_id = ls->get_ls_id();
+        }
+      }
+    } // while
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+    if (total_ls_cnt == 0) {
+      can_start_service = true;
+      FLOG_INFO("empty ls, no need to wait replaying log", K(current_gts), K(tmp_min_version), K(ls_id));
+    } else if (OB_SUCC(ret)) {
+      min_version = tmp_min_version;
+      ls_id = tmp_ls_id;
+      can_start_service = (tmp_min_version.is_valid() &&
+                           current_gts.convert_to_ts() - MAX_STALE_TIME < tmp_min_version.convert_to_ts());
+      if (!can_start_service) {
+        FLOG_WARN("current ls can not start service, waiting for replaying log",
+            "target_ts", current_gts.convert_to_ts(),
+            "min_ts", tmp_min_version.convert_to_ts(),
+            "delta_us", (current_gts.convert_to_ts() - tmp_min_version.convert_to_ts()),
+            K(ls_id));
+      }
+    } else {
+      // do nothing
+    }
+  }
+
+  return ret;
+}
 
 void ObTenantWeakReadService::set_cluster_service_master_(const ObAddr &addr)
 {

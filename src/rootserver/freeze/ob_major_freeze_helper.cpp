@@ -97,7 +97,12 @@ int ObMajorFreezeHelper::get_freeze_info(
         LOG_INFO("skip restoring tenant to do major freeze", K(tenant_id));
       } else if (OB_FAIL(share::ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
                                                                 false, tenant_info))) {
-        LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS; // ignore ret, so as to process the next tenant
+          LOG_WARN("tenant may be deleted, skip major freeze for this tenant", K(tenant_id));
+        } else {
+          LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+        }
       }
       // Skip major freeze for standby tenants and thus avoid OB_MAJOR_FREEZE_NOT_ALLOW incurred by
       // standby tenants, only when launching major freeze on more than one tenant.
@@ -143,9 +148,22 @@ int ObMajorFreezeHelper::get_all_tenant_freeze_info(
     LOG_WARN("fail to get tenant ids", KR(ret));
   } else {
     for (int64_t i = 0; (i < tenant_ids.count()) && OB_SUCC(ret); ++i) {
-      obrpc::ObSimpleFreezeInfo info(tenant_ids[i]);
-      if(OB_FAIL(freeze_info_array.push_back(info))) {
-        LOG_WARN("fail to push back", KR(ret), "tenant_id", tenant_ids[i]);
+      // only launch major freeze for tenant whose status is normal, and skip major freeze for
+      // tenant whose status is not normal.
+      const ObSimpleTenantSchema *tenant_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_tenant_info(tenant_ids[i], tenant_schema))) {
+        LOG_WARN("fail to get simple tenant schema", KR(ret), "tenant_id", tenant_ids[i]);
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_INNER_STAT_ERROR;
+        LOG_WARN("tenant schema is null", KR(ret), "tenant_id", tenant_ids[i]);
+      } else if (OB_UNLIKELY(!tenant_schema->is_normal())) {
+        LOG_WARN("tenant status is not normal, skip major freeze for this tenant", "tenant_id",
+                 tenant_ids[i], "status", tenant_schema->get_status());
+      } else { // tenant_schema->is_normal()
+        obrpc::ObSimpleFreezeInfo info(tenant_ids[i]);
+        if(OB_FAIL(freeze_info_array.push_back(info))) {
+          LOG_WARN("fail to push back", KR(ret), "tenant_id", tenant_ids[i]);
+        }
       }
     }
   }

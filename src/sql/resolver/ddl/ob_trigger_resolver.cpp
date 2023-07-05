@@ -481,7 +481,7 @@ int ObTriggerResolver::resolve_timing_point(int16_t before_or_after, int16_t stm
   parse_result.is_for_trigger_ = 1;
   parse_result.mysql_compatible_comment_ = 0;
   parse_result.is_dynamic_sql_ = 0;
-  OZ (pl_parser.parse(trigger_body, trigger_body, parse_result));
+  OZ (pl_parser.parse(trigger_body, trigger_body, parse_result, true));
   CK (OB_NOT_NULL(parse_tree = parse_result.result_tree_));
   CK (T_STMT_LIST == parse_tree->type_);
   CK (1 == parse_tree->num_child_);
@@ -547,10 +547,10 @@ int ObTriggerResolver::resolve_dml_event_option(const ParseNode &parse_node,
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested table cluase");
     }
   }
-  OZ (resolve_dml_event_list(*parse_node.children_[0], trigger_arg));
   OZ (resolve_schema_name(*parse_node.children_[2],
                           trigger_arg.base_object_database_, trigger_arg.base_object_name_));
   OZ (resolve_base_object(trigger_arg, NULL == parse_node.children_[2]->children_[0]));
+  OZ (resolve_dml_event_list(*parse_node.children_[0], trigger_arg));
   return ret;
 }
 
@@ -686,6 +686,23 @@ int ObTriggerResolver::resolve_dml_event_list(const ParseNode &parse_node,
       LOG_WARN("parse_node type is invalid", K(ret), K(event_node->type_));
     }
   }
+  if (OB_SUCC(ret)) {
+    const ObTableSchema *table_schema = NULL;
+    ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    OZ (schema_guard->get_table_schema(trigger_arg.trigger_info_.get_tenant_id(),
+                                       trigger_arg.base_object_database_,
+                                       trigger_arg.base_object_name_,
+                                      false/*is_index*/, table_schema));
+    CK (OB_NOT_NULL(table_schema));
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_array.count(); i++) {
+      const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(col_array.at(i));
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_WARN("column not exist", K(ret), K(col_array.at(i)));
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, col_array.at(i).length(), col_array.at(i).ptr());
+      }
+    }
+  }
   return ret;
 }
 
@@ -773,6 +790,18 @@ int ObTriggerResolver::resolve_compound_trigger_body(const ParseNode &parse_node
   int ret = OB_SUCCESS;
   ObTriggerInfo &trigger_info = trigger_arg.trigger_info_;
   CK (OB_NOT_NULL(session_info_));
+  CK (T_TG_COMPOUND_BODY == parse_node.type_);
+  CK (3 == parse_node.num_child_);
+  if (OB_SUCC(ret) && OB_NOT_NULL(parse_node.children_[2])) {
+    ObString tail_name(parse_node.children_[2]->str_len_, parse_node.children_[2]->str_value_);
+    if (0 != tail_name.case_compare(trigger_arg.trigger_info_.get_trigger_name())) {
+      ret = OB_ERR_END_LABEL_NOT_MATCH;
+      LOG_WARN("END identifier must match START identifier", K(ret), K(tail_name));
+      LOG_USER_ERROR(OB_ERR_END_LABEL_NOT_MATCH, tail_name.length(), tail_name.ptr(),
+                     trigger_arg.trigger_info_.get_trigger_name().length(),
+                     trigger_arg.trigger_info_.get_trigger_name().ptr());
+    }
+  }
   OZ (trigger_info.gen_package_source(trigger_arg.base_object_database_,
                                       trigger_arg.base_object_name_,
                                       parse_node,
@@ -1038,6 +1067,35 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
       ObString source;
       ObPLCompiler compiler(allocator, *session_info, schema_guard, package_guard, *sql_proxy);
       const ObPackageInfo &package_spec_info = trigger_info.get_package_spec_info();
+      if (!trigger_info.get_update_columns().empty()) {
+        ObPLParser parser(allocator, session_info->get_local_collation_connection());
+        ObStmtNodeTree *column_list = NULL;
+        ParseResult parse_result;
+        OZ (parser.parse(trigger_info.get_update_columns(), trigger_info.get_update_columns(), parse_result, true));
+        CK (OB_NOT_NULL(parse_result.result_tree_) && 1 == parse_result.result_tree_->num_child_);
+        CK (OB_NOT_NULL(column_list = parse_result.result_tree_->children_[0]));
+        CK (column_list->type_ == T_TG_COLUMN_LIST);
+        if (OB_SUCC(ret)) {
+          const ObTableSchema *table_schema = NULL;
+          OZ (schema_guard.get_table_schema(trigger_info.get_tenant_id(),
+                                            trigger_info.get_base_object_id(),
+                                            table_schema));
+          CK (OB_NOT_NULL(table_schema));
+          for (int64_t i = 0; OB_SUCC(ret) && i < column_list->num_child_; i++) {
+            const ParseNode *column_node = column_list->children_[i];
+            const ObColumnSchemaV2 *column_schema = NULL;
+            OV (column_node != NULL);
+            OV (column_node->type_ == T_IDENT, OB_ERR_UNEXPECTED, column_node->type_);
+            OV (column_node->str_value_ != NULL && column_node->str_len_ > 0);
+            OX (column_schema = table_schema->get_column_schema(column_node->str_value_));
+            if (OB_SUCC(ret) && OB_ISNULL(column_schema)) {
+              ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+              LOG_WARN("column not exist", K(ret), K(trigger_info.get_update_columns()), K(i));
+              LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, (int32_t)column_node->str_len_, column_node->str_value_);
+            }
+          }
+        }
+      }
       OZ (package_spec_ast.init(db_name,
                                 package_spec_info.get_package_name(),
                                 PL_PACKAGE_SPEC,

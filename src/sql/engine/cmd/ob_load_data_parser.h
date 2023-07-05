@@ -161,7 +161,7 @@ private:
     return (is_escaped && field_end - field_begin == 1 && 'N' == *field_begin)
         || (format_.field_enclosed_char_ != INT64_MAX
             && field_end - field_begin == 4
-            && 0 == strncasecmp(field_begin, "NULL", 4)
+            && 0 == MEMCMP(field_begin, "NULL", 4)
             && !is_escaped);
   }
 

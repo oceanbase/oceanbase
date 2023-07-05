@@ -487,19 +487,18 @@ int ObTableRedefinitionTask::copy_table_indexes()
               }
             }
             if (OB_SUCC(ret) && need_rebuild_index) {
+              TCWLockGuard guard(lock_);
               const uint64_t task_key = index_ids.at(i);
               DependTaskStatus status;
               status.task_id_ = task_record.task_id_;
-              TCWLockGuard guard(lock_);
-              if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status))) {
-                if (OB_HASH_EXIST == ret) {
-                  ret = OB_SUCCESS;
-                } else {
+              if (OB_FAIL(dependent_task_result_map_.get_refactored(task_key, status))) {
+                if (OB_HASH_NOT_EXIST != ret) {
+                  LOG_WARN("get from dependent task map failed", K(ret));
+                } else if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status))) {
                   LOG_WARN("set dependent task map failed", K(ret), K(task_key));
                 }
-              } else {
-                LOG_INFO("add build index task", K(task_key));
               }
+              LOG_INFO("add build index task", K(ret), K(task_key), K(status));
             }
           }
         }
@@ -1053,6 +1052,7 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
     case ObDDLTaskStatus::PREPARE: {
       if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
                                   "STATUS: PREPARE"))) {
         LOG_WARN("failed to print", K(ret));
       }
@@ -1164,6 +1164,7 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
     case ObDDLTaskStatus::FAIL: {
       if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
                                   "STATUS: CLEAN ON FAIL"))) {
         LOG_WARN("failed to print", K(ret));
       }

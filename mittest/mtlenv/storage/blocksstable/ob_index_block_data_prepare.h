@@ -438,7 +438,7 @@ void TestIndexBlockDataPrepare::prepare_data()
   ObIndexTreeRootBlockDesc root_desc;
   root_desc = res.root_desc_;
   ASSERT_TRUE(root_desc.is_valid());
-  ObRowStoreType root_row_store_type = root_desc.row_type_;
+  ObRowStoreType root_row_store_type = res.root_row_store_type_;
 
   char *root_buf = nullptr;
   int64_t root_size = 0;

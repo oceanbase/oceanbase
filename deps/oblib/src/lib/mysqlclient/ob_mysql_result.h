@@ -995,6 +995,12 @@
         res_obj.set_scale(column.get_data_scale());\
         ret = (class_obj).set_##column_name(res_obj); \
       } \
+      else if (column.is_generated_column()) { \
+        res_obj.set_string(data_type, str_value); \
+        res_obj.meta_.set_collation_type(CS_TYPE_UTF8MB4_BIN);  \
+        res_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT); \
+        ret = (class_obj).set_##column_name(res_obj); \
+      } \
       else if (column.is_identity_column() || ob_is_string_type(data_type) || ob_is_geometry(data_type)) \
       { \
         res_obj.set_string(data_type, str_value); \
@@ -1371,8 +1377,8 @@ public:
   virtual int get_type(const int64_t col_idx, ObObjMeta &type) const = 0;
   virtual int get_col_meta(const int64_t col_idx, bool old_max_length,
                            oceanbase::common::ObString &name, ObObjMeta &meta,
-                           int16_t &precision, int16_t &scale, int32_t &length) const = 0;
-  void format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length, 
+                           ObAccuracy &acc) const = 0;
+  int format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
                                      oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType cs_type,
                                      DblinkDriverProto link_type, bool old_max_length) const;
   /// @note return OB_SUCCESS instead of OB_ERR_NULL_VALUE when obj is null

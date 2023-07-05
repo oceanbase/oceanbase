@@ -121,7 +121,7 @@ int ObInsertStmtPrinter::print_into()
     if (OB_ISNULL(table_item = insert_stmt->get_table_item(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid table item", K(stmt_->get_table_size()), K(ret));
-    } else if (OB_FAIL(print_table(table_item, true))) {
+    } else if (OB_FAIL(print_table(table_item, insert_stmt->get_returning_exprs().count() > 0 ? false : true))) {
       LOG_WARN("failed to print table", K(*table_item), K(ret));
     } else {
       DATA_PRINTF("(");

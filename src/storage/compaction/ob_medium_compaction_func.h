@@ -25,10 +25,11 @@ namespace compaction
 class ObMediumCompactionScheduleFunc
 {
 public:
-  ObMediumCompactionScheduleFunc(ObLS &ls, ObTablet &tablet)
+  ObMediumCompactionScheduleFunc(ObLS &ls, ObTablet &tablet, const SCN &weak_read_ts)
     : allocator_("MediumSchedule"),
       ls_(ls),
       tablet_(tablet),
+      weak_read_ts_(weak_read_ts.get_val_for_tx()),
       filters_inited_(false),
       filters_()
   {}
@@ -70,9 +71,12 @@ protected:
       const ObTabletID &tablet_id,
       share::ObTabletCompactionScnInfo &ret_info);
   int prepare_medium_info(const ObGetMergeTablesResult &result, ObMediumCompactionInfo &medium_info);
-  int init_parallel_range(
+  int init_parallel_range_and_schema_changed(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
+  int init_schema_changed(
+    const ObSSTableMeta &sstable_meta,
+    ObMediumCompactionInfo &medium_info);
   static int get_result_for_major(
       ObTablet &tablet,
       const ObMediumCompactionInfo &medium_info,
@@ -112,7 +116,6 @@ protected:
       const int64_t schedule_scn,
       const ObMediumCompactionInfo::ObCompactionType compaction_type);
   int schedule_next_medium_primary_cluster(const int64_t major_snapshot, ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat);
-
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
   static int get_schedule_medium_from_memtable(
     ObTablet &tablet,
@@ -142,6 +145,7 @@ private:
   ObArenaAllocator allocator_;
   ObLS &ls_;
   ObTablet &tablet_;
+  int64_t weak_read_ts_; // should be loaded before get tablet
   bool filters_inited_;
   share::ObTabletReplicaFilterHolder filters_;
 };

@@ -43,6 +43,7 @@ LogConfigMgr::LogConfigMgr()
       self_(),
       prev_log_proposal_id_(INVALID_PROPOSAL_ID),
       prev_lsn_(),
+      prev_end_lsn_(PALF_INITIAL_LSN_VAL),
       prev_mode_pid_(INVALID_PROPOSAL_ID),
       state_(INIT),
       last_submit_config_log_time_us_(OB_INVALID_TIMESTAMP),
@@ -228,7 +229,7 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
   } else if (!member_list.is_valid() ||
              !arb_member.is_valid() ||
-             (member_list.get_member_number() & 1) != 0 ||
+             (replica_num & 1) != 0 ||
              replica_num <= 0 ||
              replica_num > OB_MAX_MEMBER_NUMBER ||
              INVALID_PROPOSAL_ID == proposal_id ||
@@ -269,7 +270,10 @@ int LogConfigMgr::set_initial_config_info_(const LogConfigInfo &config_info,
   } else {
     LogConfigInfo init_config_info = config_info;
     init_config_info.config_version_ = init_config_version;
-    if (false == check_need_update_memberlist_without_lock_(init_config_version)) {
+    if (false == init_config_info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "initial config info is invalid", K_(palf_id), K(config_info), K(proposal_id));
+    } else if (false == check_need_update_memberlist_without_lock_(init_config_version)) {
       PALF_LOG(INFO, "persistent_config_version_ has been greater than or equal to config_version, \
           no need set_initial_config_info_", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), K_(persistent_config_version), K(init_config_version));
     } else if (OB_FAIL(log_ms_meta_.generate(proposal_id, init_config_info, init_config_info,
@@ -732,7 +736,7 @@ int LogConfigMgr::change_config(const LogConfigChangeArgs &args,
   } else {
     ret = change_config_(args, proposal_id, election_epoch, config_version);
     PALF_LOG(INFO, "config_change stat", K_(palf_id), K_(self), K(args), K(proposal_id),
-      K_(prev_log_proposal_id), K_(prev_lsn), K_(prev_mode_pid), K_(state), K(config_version),
+      K_(prev_log_proposal_id), K_(prev_lsn), K_(prev_end_lsn), K_(prev_mode_pid), K_(state), K(config_version),
       K_(persistent_config_version), K_(ms_ack_list), K_(resend_config_version),
       K_(resend_log_list), K_(log_ms_meta), K_(last_submit_config_log_time_us));
   }
@@ -762,8 +766,8 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args,
         "role", state_mgr_->get_role(), "state", state_mgr_->get_state());
   } else if (false == mode_mgr_->can_do_paxos_accept()) {
     // do not allow chagne_config when ModeMgr is in prepare state
-    ret = OB_EAGAIN;
-    PALF_LOG(WARN, "is changing access_mode, try again", KR(ret), K_(palf_id), K_(self),
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "is changing access_mode, try again", KR(ret), K_(palf_id), K_(self),
         "role", state_mgr_->get_role(), "state", state_mgr_->get_state());
   } else if (OB_FAIL(check_config_version_matches_state_(args.type_, config_version))) {
     PALF_LOG(WARN, "config_version does not match with state, try again", KR(ret), K_(palf_id), K_(self),
@@ -910,23 +914,26 @@ int LogConfigMgr::renew_config_change_barrier_()
   int ret = OB_SUCCESS;
   int64_t prev_log_proposal_id = INVALID_PROPOSAL_ID;
   int64_t prev_mode_pid = INVALID_PROPOSAL_ID;
-  LSN prev_log_lsn;
-  if (OB_FAIL(get_log_barrier_(prev_log_lsn, prev_log_proposal_id))) {
+  LSN prev_log_lsn, prev_log_end_lsn;
+  if (OB_FAIL(get_log_barrier_(prev_log_lsn, prev_log_end_lsn, prev_log_proposal_id))) {
     PALF_LOG(WARN, "get_log_barrier_ failed", KR(ret), K_(palf_id), K_(self));
   } else {
     prev_mode_pid_ = mode_mgr_->get_last_submit_mode_meta().proposal_id_;
     prev_log_proposal_id_ = prev_log_proposal_id;
     prev_lsn_ = prev_log_lsn;
+    prev_end_lsn_ = prev_log_end_lsn;
+    PALF_LOG(INFO, "renew_config_change_barrier_ success", KR(ret), K_(palf_id), K_(self),
+        K_(prev_lsn), K_(prev_end_lsn), K_(prev_log_proposal_id), K_(prev_mode_pid));
   }
   return ret;
 }
 
-int LogConfigMgr::get_log_barrier_(LSN &prev_log_lsn, int64_t &prev_log_proposal_id) const
+int LogConfigMgr::get_log_barrier_(LSN &prev_log_lsn, LSN &prev_log_end_lsn, int64_t &prev_log_proposal_id) const
 {
   int ret = OB_SUCCESS;
   int64_t unused_log_id;
   // log barrier must be last_submit_log_info
-  if (OB_FAIL(sw_->get_last_submit_log_info(prev_log_lsn, unused_log_id, prev_log_proposal_id))) {
+  if (OB_FAIL(sw_->get_last_submit_log_info(prev_log_lsn, prev_log_end_lsn, unused_log_id, prev_log_proposal_id))) {
     PALF_LOG(WARN, "get_last_submit_log_info failed", KR(ret), K_(palf_id), K_(self));
   }
   return ret;
@@ -1010,10 +1017,18 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
           if (is_in_degraded_learnerlist) {
             PALF_LOG(INFO, "member to be removed is a degraded learner", KR(ret), K_(palf_id), K_(self),
                 K_(log_ms_meta), K(member), K(new_replica_num));
-          } else if (args.type_ == REMOVE_MEMBER_AND_NUM || new_replica_num == curr_replica_num) {
+          } else if (args.type_ == REMOVE_MEMBER_AND_NUM ||
+                     new_replica_num == curr_replica_num ||
+                     (true == has_arb_replica &&
+                     0 == degraded_learnerlist.get_member_number() &&
+                     log_sync_member_list.get_member_number() * 2 == new_replica_num)) {
             // config change has finished successfully, do not need change again
+            // Note: 2F1A, B has been degraded, permanent offline B, i.e. remove(B, 2).
+            // Previous remove(B, 2) has been executed successfully, another remove(B, 2) will
+            // be identified as invalid, because curr_replica_num is 1. For reentrany of the
+            // remove_member interface, we just return OB_SUCCESS;
             is_already_finished = true;
-            PALF_LOG(INFO, "member is already removed, don't need remove_member/replcae_member", KR(ret), K_(palf_id), K_(self),
+            PALF_LOG(INFO, "member is already removed, don't need remove_member", KR(ret), K_(palf_id), K_(self),
                 K_(log_ms_meta), K(member), K(new_replica_num), K_(alive_paxos_replica_num));
           } else {
             ret = OB_INVALID_ARGUMENT;
@@ -1204,9 +1219,9 @@ bool LogConfigMgr::can_memberlist_majority_(const int64_t new_member_list_len, c
   // 2. len(member_list) >= replica_num / 2 + 1
   bool bool_ret = false;
   if (new_member_list_len > new_replica_num) {
-    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "can't change config, replica_num too small", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "replica_num too small", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
   } else if (new_member_list_len < (new_replica_num / 2 + 1)) {
-    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "can't change config, replica_num too large", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "replica_num too large", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
   } else {
     bool_ret = true;
   }
@@ -1347,9 +1362,8 @@ int LogConfigMgr::append_config_meta_(const int64_t curr_proposal_id,
   } else if (has_arb_member && OB_FAIL(state_mgr_->set_changing_config_with_arb())) {
     PALF_LOG(ERROR, "set_changing_config_with_arb failed", KR(ret), K_(palf_id), K_(self), K(args));
   } else if (has_arb_member &&
-            OB_FAIL(wait_log_barrier_(args, new_config_info.log_sync_memberlist_,
-            new_config_info.log_sync_replica_num_))) {
-    PALF_LOG(WARN, "check_follower_sync_status_ eagain", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
+            OB_FAIL(wait_log_barrier_(args, new_config_info))) {
+    PALF_LOG(WARN, "wait_log_barrier_ eagain", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
     if (OB_LOG_NOT_SYNC == ret) {
       state_mgr_->reset_changing_config_with_arb();
     }
@@ -1501,11 +1515,20 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
     // change replcia num
     int64_t new_log_sync_replica_num = curr_replica_num;
     if (is_may_change_replica_num(cc_type)) {
+      const bool is_remove_degraded_learner = is_remove_log_sync_member_list(args.type_) &&
+          new_config_info.degraded_learnerlist_.contains(member);
       if (is_use_replica_num_args(cc_type)) {
-        new_log_sync_replica_num = args.new_replica_num_;
+        // Note: consider the number of degraded learners when setting replica_num,
+        // and note that current number of degraded learners is not the eventual value
+        // if the request is going to remove a degraded learner.
+        int64_t degraded_cnt = new_config_info.degraded_learnerlist_.get_member_number();
+        degraded_cnt = (is_remove_degraded_learner)? degraded_cnt - 1: degraded_cnt;
+        new_log_sync_replica_num = args.new_replica_num_ - degraded_cnt;
       } else if (is_add_log_sync_member_list(cc_type)) {
         new_log_sync_replica_num = new_config_info.log_sync_replica_num_ + 1;
-      } else if (is_remove_log_sync_member_list(cc_type)) {
+      } else if (is_remove_log_sync_member_list(cc_type) && true == is_remove_degraded_learner) {
+        new_log_sync_replica_num = new_config_info.log_sync_replica_num_;
+      } else if (is_remove_log_sync_member_list(cc_type) && false == is_remove_degraded_learner) {
         new_log_sync_replica_num = new_config_info.log_sync_replica_num_ - 1;
       } else if (is_arb_member_change_type(cc_type)) {
         new_log_sync_replica_num = new_config_info.log_sync_replica_num_;
@@ -1513,9 +1536,16 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
         ret = OB_ERR_UNEXPECTED;
         PALF_LOG(ERROR, "unexpected config change type", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
       }
+      if (OB_SUCC(ret) && is_remove_degraded_learner &&
+          (new_config_info.log_sync_memberlist_.get_member_number() * 2 == new_log_sync_replica_num)) {
+        // Note: 2F1A, B has been degraded, permanent offline B, i.e. remove(B, 2).
+        // Remaining F members (A) in member_list do not reach majority of replica_num(2),
+        // so we just remove it and do not update log_sync_replica_num_.
+        new_log_sync_replica_num = new_config_info.log_sync_replica_num_;
+      }
     }
     // memberlist add, update replica number
-    if (is_add_member_list(cc_type)) {
+    if (OB_SUCC(ret) && is_add_member_list(cc_type)) {
       // update log_sync_member_list or arb_member
       if (is_add_log_sync_member_list(args.type_)) {
         if (OB_FAIL(new_config_info.log_sync_memberlist_.add_member(member))) {
@@ -1537,8 +1567,6 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
           if (OB_FAIL(new_config_info.degraded_learnerlist_.remove_learner(member))) {
             PALF_LOG(WARN, "new_member_list remove member failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
           }
-          // If dst member is already degraded learner, just remove it and no need update log_sync_replica_num_.
-          new_log_sync_replica_num = new_config_info.log_sync_replica_num_;
         } else {
           ret = OB_INVALID_ARGUMENT;
           PALF_LOG(WARN, "member to be removed does not exist", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
@@ -1546,14 +1574,6 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
       } else {
         new_config_info.arbitration_member_.reset();
       }
-    }
-    if (OB_SUCC(ret) && FORCE_SINGLE_MEMBER == cc_type) {
-      // force set single member
-      new_config_info.log_sync_memberlist_.reset();
-      new_config_info.degraded_learnerlist_.reset();
-      new_config_info.arbitration_member_.reset();
-      new_config_info.log_sync_memberlist_.add_member(member);
-      new_config_info.log_sync_replica_num_ = new_log_sync_replica_num;
     }
     // learnerlist add
     if (OB_SUCC(ret) && is_add_learner_list(cc_type)) {
@@ -1582,6 +1602,15 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
     // generate log_sync_replica_num_
     if (OB_SUCC(ret)) {
       new_config_info.log_sync_replica_num_ = new_log_sync_replica_num;
+    }
+    // Note: order is vital
+    if (OB_SUCC(ret) && FORCE_SINGLE_MEMBER == cc_type) {
+      // force set single member
+      new_config_info.log_sync_memberlist_.reset();
+      new_config_info.degraded_learnerlist_.reset();
+      new_config_info.arbitration_member_.reset();
+      new_config_info.log_sync_memberlist_.add_member(member);
+      new_config_info.log_sync_replica_num_ = args.new_replica_num_;
     }
   }
   return ret;
@@ -1902,46 +1931,51 @@ void LogConfigChangeArgs::reset()
 }
 
 int LogConfigMgr::check_follower_sync_status(const LogConfigChangeArgs &args,
-                                             const ObMemberList &new_member_list,
-                                             const int64_t new_replica_num,
+                                             const LogConfigInfo &new_config_info,
                                              bool &added_member_has_new_version) const
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(lock_);
-  return check_follower_sync_status_(args, new_member_list, new_replica_num, added_member_has_new_version);
+  return check_follower_sync_status_(args, new_config_info, added_member_has_new_version);
 }
 
 int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
-                                    const ObMemberList &new_member_list,
-                                    const int64_t new_replica_num) const
+                                    const LogConfigInfo &new_config_info) const
 {
   int ret = OB_SUCCESS;
   LSN first_committed_end_lsn;
   LSN unused_lsn;
   int64_t unused_id = INT64_MAX;
   bool unused_bool = false;
-  LSN prev_log_lsn;
 
+  int64_t curr_ts_us = common::ObTimeUtility::current_time();
   constexpr int64_t conn_timeout_us = 3 * 1000 * 1000L;  // 3s
   constexpr bool need_remote_check = false;
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
-  if (new_member_list.get_member_number() == 0) {
+  LSN prev_log_end_lsn;
+  start_wait_barrier_time_us_ = (OB_INVALID_TIMESTAMP == start_wait_barrier_time_us_)? \
+      curr_ts_us: start_wait_barrier_time_us_;
+  if (new_config_info.log_sync_memberlist_.get_member_number() == 0) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num,
-      need_remote_check, conn_timeout_us, first_committed_end_lsn, unused_bool, unused_lsn, unused_id))) {
-    PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self),
-        K(new_member_list), K(new_replica_num));
+  } else if (curr_ts_us - start_wait_barrier_time_us_ > MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION &&
+      args.type_ != LogConfigChangeType::STARTWORKING) {
+    ret = OB_LOG_NOT_SYNC;
+    PALF_LOG(WARN, "waiting for log barrier timeout, skip", KR(ret), K_(palf_id), K_(self),
+        K_(start_wait_barrier_time_us), K(first_committed_end_lsn), K(prev_log_end_lsn));
+    start_wait_barrier_time_us_ = curr_ts_us;
+  } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_config_info, need_remote_check,
+      conn_timeout_us, first_committed_end_lsn, unused_bool, unused_lsn, unused_id))) {
+    PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_config_info));
   } else if (need_skip_log_barrier) {
     ret = OB_SUCCESS;
     PALF_LOG(INFO, "PALF is in FLASHBACK mode, skip log barrier", K(ret), K_(palf_id), K_(self), \
         "accepted_mode_meta", mode_mgr_->get_accepted_mode_meta());
-    // wait log barrier during log commiting are stopped
-  } else if (OB_FAIL(get_log_barrier_(prev_log_lsn, unused_id))) {
+  } else if (OB_FAIL(get_log_barrier_(unused_lsn, prev_log_end_lsn, unused_id))) {
     PALF_LOG(WARN, "get_log_barrier_ failed", KR(ret), K_(palf_id), K_(self));
-  } else if (FALSE_IT(ret = (first_committed_end_lsn >= prev_log_lsn)? OB_SUCCESS: OB_EAGAIN)) {
+  } else if (FALSE_IT(ret = (first_committed_end_lsn >= prev_log_end_lsn)? OB_SUCCESS: OB_EAGAIN)) {
   } else if (OB_EAGAIN == ret) {
     // committed_end_lsn do not change during 2s, skip the reconfiguration
-    const int64_t curr_ts_us = common::ObTimeUtility::current_time();
+    curr_ts_us = common::ObTimeUtility::current_time();
     if (OB_INVALID_TIMESTAMP == last_wait_barrier_time_us_) {
       last_wait_committed_end_lsn_ = first_committed_end_lsn;
       last_wait_barrier_time_us_ = curr_ts_us;
@@ -1957,24 +1991,14 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
         last_wait_barrier_time_us_ = curr_ts_us;
       }
     }
-    if (OB_INVALID_TIMESTAMP == start_wait_barrier_time_us_) {
-      start_wait_barrier_time_us_ = curr_ts_us;
-    } else if (curr_ts_us - start_wait_barrier_time_us_ > MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION &&
-        args.type_ != LogConfigChangeType::STARTWORKING) {
-      ret = OB_LOG_NOT_SYNC;
-      PALF_LOG(WARN, "waiting for log barrier timeout, skip", KR(ret), K_(palf_id), K_(self),
-          K_(start_wait_barrier_time_us), K(first_committed_end_lsn), K(prev_log_lsn));
-      start_wait_barrier_time_us_ = curr_ts_us;
-    }
   }
-  PALF_LOG(INFO, "waiting for log barrier", K(ret), K_(palf_id), K_(self), K(first_committed_end_lsn),
-      K(prev_log_lsn), K(new_member_list), K(new_replica_num));
+  PALF_LOG(INFO, "waiting for log barrier", K(ret), K_(palf_id), K_(self),
+      K(first_committed_end_lsn), K(prev_log_end_lsn), K(new_config_info));
   return ret;
 }
 
 int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
-                                              const ObMemberList &new_member_list,
-                                              const int64_t new_replica_num,
+                                              const LogConfigInfo &new_config_info,
                                               bool &added_member_has_new_version) const
 {
   int ret = OB_SUCCESS;
@@ -1990,15 +2014,13 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
 
   (void) sw_->get_committed_end_lsn(first_leader_committed_end_lsn);
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
-  if (new_member_list.get_member_number() == 0) {
+  if (new_config_info.log_sync_memberlist_.get_member_number() == 0) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (new_member_list.get_member_number() == 1) {
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num, need_remote_check,
-      conn_timeout_us, first_committed_end_lsn, added_member_has_new_version, added_member_flushed_end_lsn,
-      added_member_last_slide_log_id))) {
-    PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_member_list),
-        K(new_replica_num), K(added_member_has_new_version));
+  } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_config_info,
+      need_remote_check, conn_timeout_us, first_committed_end_lsn, added_member_has_new_version,
+      added_member_flushed_end_lsn, added_member_last_slide_log_id))) {
+    PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_config_info),
+        K(added_member_has_new_version));
   } else if (need_skip_log_barrier) {
     ret = OB_SUCCESS;
     PALF_LOG(INFO, "PALF is in FLASHBACK mode, skip log barrier", K(ret), K_(palf_id), K_(self), \
@@ -2006,11 +2028,11 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
   } else if (first_committed_end_lsn >= first_leader_committed_end_lsn) {
     // if committed lsn of new majority do not retreat, then start config change
     PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change", K(ret), K_(palf_id), K_(self),
-            K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
+            K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_config_info), K(conn_timeout_us));
   // when quorum has been changed (e.g., 1 -> 2), committed_end_lsn of new memberlist may always be behind the committed_end_lsn of
   // leader, so we relax the condition for adding members which has changed quorum
   } else if (is_add_log_sync_member_list(args.type_) &&
-            (new_replica_num / 2) > (config_meta_.curr_.log_sync_replica_num_ / 2) &&
+            (new_config_info.log_sync_replica_num_ / 2) > (config_meta_.curr_.log_sync_replica_num_ / 2) &&
             config_meta_.curr_.arbitration_member_.is_valid()) {
     if (added_member_flushed_end_lsn.is_valid() &&
         first_leader_committed_end_lsn - added_member_flushed_end_lsn < LEADER_DEFAULT_GROUP_BUFFER_SIZE &&
@@ -2018,17 +2040,17 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
         leader_last_slide_log_id - added_member_last_slide_log_id < PALF_SLIDING_WINDOW_SIZE)) {
       ret = OB_SUCCESS;
       PALF_LOG(INFO, "the gap between the leader and added member is smaller than the group_buffer_size",
-          K(ret), K_(palf_id), K_(self), K(args), K(new_replica_num), K(first_leader_committed_end_lsn),
+          K(ret), K_(palf_id), K_(self), K(args), K(new_config_info), K(first_leader_committed_end_lsn),
           K(added_member_flushed_end_lsn), K(leader_last_slide_log_id), K(added_member_last_slide_log_id));
     } else {
       ret = OB_EAGAIN;
       PALF_LOG(INFO, "the gap between the leader and added member is larger than the group_buffer_size, skip",
-          K(ret), K_(palf_id), K_(self), K(args), K(new_replica_num), K(first_leader_committed_end_lsn),
+          K(ret), K_(palf_id), K_(self), K(args), K(new_config_info), K(first_leader_committed_end_lsn),
           K(added_member_flushed_end_lsn), K(leader_last_slide_log_id), K(added_member_last_slide_log_id));
     }
   } else {
     PALF_LOG(INFO, "majority of new_member_list aren't sync with leader", K_(palf_id), K_(self), K(first_committed_end_lsn),
-        K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
+        K(first_leader_committed_end_lsn), K(new_config_info), K(conn_timeout_us));
     // committed_lsn of new majority is behind than old majority's, we want to know if
     // they can catch up with leader during config change timeout. If they can, start config change
     ob_usleep(500 * 1000);
@@ -2036,15 +2058,15 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
     int64_t expected_sync_time_s;
     int64_t sync_speed_gap;
     added_member_has_new_version = is_add_member_list(args.type_)? false: true;
-    if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num,
+    if (OB_FAIL(sync_get_committed_end_lsn_(args, new_config_info,
         need_remote_check, conn_timeout_us, second_committed_end_lsn, added_member_has_new_version,
         added_member_flushed_end_lsn, added_member_last_slide_log_id))) {
-      PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_member_list),
-          K(new_replica_num), K(added_member_has_new_version));
+      PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self),
+          K(new_config_info), K(added_member_has_new_version));
     } else if (second_committed_end_lsn >= second_leader_committed_end_lsn) {
       // if committed lsn of new majority do not retreat, then start config change
       PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change", K_(palf_id), K_(self),
-              K(second_committed_end_lsn), K(second_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
+              K(second_committed_end_lsn), K(second_leader_committed_end_lsn), K(new_config_info), K(conn_timeout_us));
     } else if (FALSE_IT(sync_speed_gap = ((second_committed_end_lsn - first_committed_end_lsn) * 2) - \
         ((second_leader_committed_end_lsn - first_leader_committed_end_lsn) * 2) )) {
     } else if (sync_speed_gap <= 0) {
@@ -2094,8 +2116,8 @@ int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,
     get_from_local = true;
   } else if (OB_FAIL(log_engine_->submit_config_change_pre_check_req(server, config_version,
       conn_timeout_us, resp))) {
-    PALF_LOG(WARN, "submit_config_change_pre_check_req failed", KR(ret), K_(palf_id), K_(self), K(server),
-        K(config_version), K(conn_timeout_us), K(resp));
+    // PALF_LOG(WARN, "submit_config_change_pre_check_req failed", KR(ret), K_(palf_id), K_(self), K(server),
+    //     K(config_version), K(conn_timeout_us), K(resp));
     has_same_version = false;
   } else if (false == resp.is_normal_replica_) {
     has_same_version = false;
@@ -2115,8 +2137,7 @@ int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,
 // 2. check if the config_version of added member are same to current config_version.
 //    if the config change don't add member to list, return true
 int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
-                                              const ObMemberList &new_member_list,
-                                              const int64_t new_replica_num,
+                                              const LogConfigInfo &new_config_info,
                                               const bool need_remote_check,
                                               const int64_t conn_timeout_us,
                                               LSN &committed_end_lsn,
@@ -2125,66 +2146,72 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
                                               int64_t &added_member_last_slide_log_id) const
 {
   int ret = OB_SUCCESS, tmp_ret = OB_SUCCESS;
-  int64_t resp_cnt = 0;
-  const LogConfigVersion config_version = config_meta_.curr_.config_version_;
+  int64_t log_sync_resp_cnt = 0, paxos_resp_cnt = 0;
   LSN lsn_array[OB_MAX_MEMBER_NUMBER];
+  const LogConfigVersion &config_version = config_meta_.curr_.config_version_;
+  const common::ObMemberList new_log_sync_memberlist = new_config_info.log_sync_memberlist_;
+  const int64_t new_log_sync_replica_num = new_config_info.log_sync_replica_num_;
+  common::ObMemberList new_paxos_memberlist;
+  int64_t new_paxos_replica_num = 0;
+  GlobalLearnerList unused_list;
 
   added_member_has_new_version = is_add_member_list(args.type_)? false: true;
   added_member_flushed_end_lsn.reset();
   added_member_last_slide_log_id = 0;
 
-  for (int64_t i = 0; i < new_member_list.get_member_number(); ++i) {
+  if (OB_FAIL(new_config_info.convert_to_complete_config(new_paxos_memberlist, new_paxos_replica_num, unused_list))) {
+    PALF_LOG(WARN, "convert_to_complete_config failed", K(ret), K_(palf_id), K_(self), K(new_config_info));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < new_paxos_memberlist.get_member_number(); ++i) {
     common::ObAddr server;
     bool is_added_member = false;
     bool force_remote_check = false;
     LSN max_flushed_end_lsn;
     bool has_same_version = false;
-    if (OB_SUCCESS != (tmp_ret = new_member_list.get_server_by_index(i, server))) {
-      PALF_LOG(ERROR, "get_server_by_index failed", KR(ret), K_(palf_id), K_(self), K(i),
-          "new_member_list size:", new_member_list.get_member_number());
-    } else if (FALSE_IT(is_added_member = is_add_member_list(args.type_) && (args.server_.get_server() == server))) {
+    bool is_arb_member = false;
+    int64_t last_slide_log_id = 0;
+    if (OB_SUCCESS != (tmp_ret = new_paxos_memberlist.get_server_by_index(i, server))) {
+      PALF_LOG(ERROR, "get_server_by_index failed", KR(ret), K_(palf_id), K_(self), K(i), K(new_paxos_memberlist));
+    } else if (FALSE_IT(is_added_member = (is_add_member_list(args.type_) && (args.server_.get_server() == server)))) {
+    } else if (FALSE_IT(is_arb_member = (server == new_config_info.arbitration_member_.get_server()))) {
     } else if (FALSE_IT(force_remote_check = is_added_member || need_remote_check)) {
     } else if (OB_SUCCESS != (tmp_ret = check_servers_lsn_and_version_(server, config_version,
-        conn_timeout_us, force_remote_check, max_flushed_end_lsn, has_same_version, added_member_last_slide_log_id))) {
+        conn_timeout_us, force_remote_check, max_flushed_end_lsn, has_same_version, last_slide_log_id))) {
       // PALF_LOG(WARN, "check_servers_lsn_and_version_ failed", K(ret), K(tmp_ret), K_(palf_id), K_(self), K(server),
       //     K(config_version), K(conn_timeout_us), K(force_remote_check), K(max_flushed_end_lsn), K(has_same_version));
+    } else if (false == is_arb_member) {
+      lsn_array[log_sync_resp_cnt++] = max_flushed_end_lsn;
+      paxos_resp_cnt++;
     } else {
-      lsn_array[resp_cnt++] = max_flushed_end_lsn;
+      paxos_resp_cnt++;
     }
     added_member_has_new_version = (is_added_member)? has_same_version: added_member_has_new_version;
     added_member_flushed_end_lsn = (is_added_member)? max_flushed_end_lsn: added_member_flushed_end_lsn;
-  }
-
-  // added member isn't in new_member_list, e.g., add arb member
-  if (ADD_ARB_MEMBER == args.type_) {
-    LSN max_flushed_end_lsn;
-    bool has_same_version = false;
-    if (OB_SUCCESS != (tmp_ret = check_servers_lsn_and_version_(args.server_.get_server(),
-        config_version, conn_timeout_us, true, max_flushed_end_lsn, has_same_version, added_member_last_slide_log_id))) {
-      PALF_LOG(WARN, "check_servers_lsn_and_version_ failed", K(ret), K_(palf_id), K_(self), K(args), K(config_version),
-          K(conn_timeout_us), K(max_flushed_end_lsn), K(has_same_version));
-    }
-    added_member_has_new_version = has_same_version;
+    added_member_last_slide_log_id = (is_added_member)? last_slide_log_id: added_member_last_slide_log_id;
   }
 
   if (false == added_member_has_new_version) {
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "added member don't have new version, eagain", K(ret), K_(palf_id),
         K_(self), K(args), K(config_version));
-  } else if (resp_cnt < new_replica_num / 2 + 1) {
+  } else if ((paxos_resp_cnt < new_paxos_replica_num / 2 + 1) ||
+             (log_sync_resp_cnt < new_log_sync_replica_num / 2 + 1)) {
     // do not recv majority resp, can not change member
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "connection timeout with majority of new_member_list, can't change member!",
-        K_(palf_id), K_(self), K(new_member_list), K(new_replica_num), K(resp_cnt), K(conn_timeout_us));
+        K_(palf_id), K_(self), K(new_paxos_replica_num), K(paxos_resp_cnt),
+        K(new_log_sync_replica_num), K(log_sync_resp_cnt), K(conn_timeout_us));
   } else {
-    std::sort(lsn_array, lsn_array + resp_cnt, LSNCompare());
-    committed_end_lsn = lsn_array[new_replica_num / 2];
+    std::sort(lsn_array, lsn_array + log_sync_resp_cnt, LSNCompare());
+    committed_end_lsn = lsn_array[new_log_sync_replica_num / 2];
   }
   PALF_LOG(INFO, "sync_get_committed_end_lsn_ finish", K(ret), K_(palf_id), K_(self), K(args),
-      K(new_member_list), K(new_replica_num), K(need_remote_check),
+      K(new_config_info), K(need_remote_check),
       K(conn_timeout_us), K(committed_end_lsn), K(added_member_has_new_version),
       K(added_member_flushed_end_lsn), K(added_member_last_slide_log_id),
-      "lsn_array:", common::ObArrayWrap<LSN>(lsn_array, resp_cnt));
+      K(paxos_resp_cnt), K(new_paxos_replica_num), K(log_sync_resp_cnt), K(new_log_sync_replica_num),
+      "lsn_array:", common::ObArrayWrap<LSN>(lsn_array, log_sync_resp_cnt));
   return ret;
 }
 

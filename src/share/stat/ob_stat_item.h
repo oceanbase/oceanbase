@@ -115,7 +115,7 @@ public:
                 ObOptColumnStat *stat) :
     col_param_(param), col_stat_(stat)
   {}
-  virtual bool is_needed() const { return col_param_ != NULL && col_param_->need_basic_static_; }
+  virtual bool is_needed() const { return col_param_ != NULL && col_param_->need_basic_stat(); }
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
   virtual const char *get_fmt() const { return NULL; }
 protected:
@@ -201,9 +201,7 @@ public:
                ObOptColumnStat *stat) :
     ObStatColItem(param, stat)
   {}
-
-  // always need to deduce table avg row length
-  virtual bool is_needed() const override { return true; }
+  virtual bool is_needed() const { return col_param_ != NULL && col_param_->need_avg_len(); }
   const char *get_fmt() const
   {
     return lib::is_oracle_mode() ? " AVG(SYS_OP_OPNSIZE(\"%.*s\"))"
@@ -309,7 +307,7 @@ class ObGlobalTableStat
 public:
   ObGlobalTableStat()
     : row_count_(0), row_size_(0), data_size_(0),
-      macro_block_count_(0), micro_block_count_(0), part_cnt_(0)
+      macro_block_count_(0), micro_block_count_(0), part_cnt_(0), last_analyzed_(0)
   {}
 
   void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic);
@@ -319,13 +317,17 @@ public:
   int64_t get_avg_data_size() const;
   int64_t get_macro_block_count() const;
   int64_t get_micro_block_count() const;
+  int64_t get_last_analyzed() const { return last_analyzed_; }
+  void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
+
 
   TO_STRING_KV(K(row_count_),
                K(row_size_),
                K(data_size_),
                K(macro_block_count_),
                K(micro_block_count_),
-               K(part_cnt_));
+               K(part_cnt_),
+               K(last_analyzed_));
 
 private:
   int64_t row_count_;
@@ -334,6 +336,7 @@ private:
   int64_t macro_block_count_;
   int64_t micro_block_count_;
   int64_t part_cnt_;
+  int64_t last_analyzed_;
 };
 
 class ObGlobalNullEval
@@ -433,6 +436,25 @@ public:
   { return global_num_not_null_; }
 private:
   int64_t global_num_not_null_;
+};
+
+struct ObGlobalColumnStat
+{
+  ObGlobalColumnStat() : min_val_(), max_val_(), null_val_(0), avglen_val_(0), ndv_val_(0)
+  {
+    min_val_.set_min_value();
+    max_val_.set_max_value();
+  }
+  TO_STRING_KV(K(min_val_),
+               K(max_val_),
+               K(null_val_),
+               K(avglen_val_),
+               K(ndv_val_));
+  ObObj min_val_;
+  ObObj max_val_;
+  int64_t null_val_;
+  int64_t avglen_val_;
+  int64_t ndv_val_;
 };
 
 template <class T>

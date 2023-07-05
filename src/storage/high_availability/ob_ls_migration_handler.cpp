@@ -18,6 +18,7 @@
 #include "ob_storage_ha_service.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "observer/omt/ob_tenant.h"
 
 namespace oceanbase
 {
@@ -1193,8 +1194,17 @@ void ObLSMigrationHandler::wait(bool &wait_finished)
   int ret = OB_SUCCESS;
   wait_finished = false;
   ObLSMigrationTask task;
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = nullptr;
 
-  if (OB_FAIL(get_ls_migration_task_(task))) {
+  if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
+  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
+  } else if (tenant->has_stopped()) {
+    LOG_INFO("tenant has stop, no need wait ls migration handler task finish");
+    wait_finished = true;
+  } else if (OB_FAIL(get_ls_migration_task_(task))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       wait_finished = true;

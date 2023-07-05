@@ -44,7 +44,6 @@ private:
   mutable lib::ObMutex mutex_;
   ObDirectLoadMergeTaskIterator merge_task_iter_;
   common::ObDList<storage::ObDirectLoadPartitionMergeTask> merging_list_;
-  common::ObArenaAllocator allocator_;
   int64_t running_thread_count_ CACHE_ALIGNED;
   volatile bool has_error_;
   volatile bool is_stop_;

@@ -7,6 +7,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/hash/ob_link_hashmap.h"
+#include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_object_allocator.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/table_load/ob_table_load_partition_location.h"
@@ -33,7 +34,8 @@ class ObTableLoadCoordinatorCtx
 public:
   ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadCoordinatorCtx();
-  int init(const common::ObIArray<int64_t> &idx_array, uint64_t user_id);
+  int init(const common::ObIArray<int64_t> &idx_array, uint64_t user_id,
+           ObTableLoadExecCtx *exec_ctx);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -122,6 +124,7 @@ public:
   ObTableLoadPartitionCalc partition_calc_;
   ObITableLoadTaskScheduler *task_scheduler_;
   common::ObArray<int64_t> idx_array_;
+  ObTableLoadExecCtx *exec_ctx_;
   table::ObTableLoadResultInfo result_info_;
   common::ObString credential_;
   share::schema::ObSequenceSchema sequence_schema_;

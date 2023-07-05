@@ -78,7 +78,7 @@ int ObAllVirtualDumpTenantInfo::inner_get_next_row(common::ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           //token_cnt
-          cells[i].set_int(t.token_cnt_);
+          cells[i].set_int(t.worker_count());
           break;
         case OB_APP_MIN_COLUMN_ID + 9:
           //ass_token_cnt

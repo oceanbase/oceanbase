@@ -3767,15 +3767,21 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
     // varchar2(m byte) to varchar2(m char), the precision you get from ObAccuracy is an invalid value
     // because the length_semantics of byte is 2, the length_semantics of char is 1. this will lead to misjudgment
     // so, if it is a string type, length must be used to compare.
-    if (ob_is_number_tc(src_col_type) &&
-       (ObAccuracy::is_default_number_or_int(src_accuracy)
-       || ObAccuracy::is_default_number_or_int(dst_accuracy))) {
-      if (ObAccuracy::is_default_number_or_int(src_accuracy)
-          && !ObAccuracy::is_default_number_or_int(dst_accuracy)) {
+    if (ob_is_number_tc(src_col_type)) {
+      if (ObAccuracy::is_default_number(src_accuracy) && !ObAccuracy::is_default_number(dst_accuracy)) {
         is_type_reduction = true;
-      } else if (ObAccuracy::is_default_number(src_accuracy)
-          && !ObAccuracy::is_default_number(dst_accuracy)) {
-        is_type_reduction = true;
+      } else if (!ObAccuracy::is_default_number(src_accuracy) && ObAccuracy::is_default_number(dst_accuracy)) {
+        const int64_t m1 = src_accuracy.get_fixed_number_precision();
+        const int64_t d1 = src_accuracy.get_fixed_number_scale();
+        is_type_reduction = (m1 - d1 > OB_MAX_NUMBER_PRECISION);
+      } else if (!ObAccuracy::is_default_number(src_accuracy) && !ObAccuracy::is_default_number(dst_accuracy)) {
+        const int64_t m1 = src_accuracy.get_fixed_number_precision();
+        const int64_t d1 = src_accuracy.get_fixed_number_scale();
+        const int64_t m2 = dst_accuracy.get_fixed_number_precision();
+        const int64_t d2 = dst_accuracy.get_fixed_number_scale();
+        is_type_reduction = !(d1 <= d2 && m1 - d1 <= m2 - d2);
+      } else {
+        // both are default number
       }
     } else if ((!src_column.is_string_type() && !src_meta.is_integer_type() &&
               (src_accuracy.get_precision() > dst_accuracy.get_precision() ||
@@ -3873,14 +3879,40 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
     // because the length_semantics of byte is 2, the length_semantics of char is 1. this will lead to misjudgment
     // so, if it is a string type, length must be used to compare.
     // The number type does not specify precision, which means that it is the largest range and requires special judgment
-    if (ob_is_number_tc(src_col_type) && ob_is_number_tc(dst_col_type)
-        && (src_meta.is_number_float() || dst_meta.is_number_float()
-        || ObAccuracy::is_default_number_or_int(src_accuracy)
-        || ObAccuracy::is_default_number_or_int(dst_accuracy))) {
-      if (src_meta.is_number_float() && !ObAccuracy::is_default_number(dst_accuracy)) {
-        is_type_reduction = true;
-      } else if (dst_meta.is_number_float() && ObAccuracy::is_default_number(src_accuracy)) {
-        is_type_reduction = true;
+    if (ob_is_number_tc(src_col_type) && ob_is_number_tc(dst_col_type)) {
+      is_type_reduction = true;
+      if (src_meta.is_number()) {
+        if (dst_meta.is_unumber()) {
+          // is_type_reduction = true;
+        } else if (dst_meta.is_number_float()) {
+          if (ObAccuracy::is_default_number(src_accuracy)) {
+            // is_type_reduction = true;
+          } else {
+            const int64_t m1 = src_accuracy.get_fixed_number_precision();
+            const int64_t d1 = src_accuracy.get_fixed_number_scale();
+            is_type_reduction = static_cast<int64_t>(std::ceil(dst_accuracy.get_precision() * OB_PRECISION_BINARY_TO_DECIMAL_FACTOR)) < m1 - d1;
+          }
+        }
+      } else if (src_meta.is_unumber()) {
+        if (dst_meta.is_number()) {
+          if (ObAccuracy::is_default_number(src_accuracy)) {
+            // is_type_reduction = true;
+          } else {
+            const int64_t m1 = src_accuracy.get_fixed_number_precision();
+            const int64_t d1 = src_accuracy.get_fixed_number_scale();
+            const int64_t m2 = dst_accuracy.get_fixed_number_precision();
+            const int64_t d2 = dst_accuracy.get_fixed_number_scale();
+            is_type_reduction = !(d1 <= d2 && m1 - d1 <= m2 - d2);
+          }
+        } else if (dst_meta.is_number_float()) {
+          // is_type_reduction = true;
+        }
+      } else if (src_meta.is_number_float()) {
+        if (dst_meta.is_number()) {
+          is_type_reduction = !ObAccuracy::is_default_number(dst_accuracy);
+        } else if (dst_meta.is_unumber()) {
+          // is_type_reduction = true;
+        }
       }
     } else if ((!src_column.is_string_type() &&
         (src_accuracy.get_precision() > dst_accuracy.get_precision() ||

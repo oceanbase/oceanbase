@@ -7582,25 +7582,17 @@ ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
 int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
                                           const share::ObLSID &ls_id,
                                           const storage::ObITable::TableKey &table_key,
-                                          const SCN &start_scn,
-                                          const int64_t table_id,
-                                          const int64_t execution_id,
-                                          const int64_t ddl_task_id)
+                                          const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid_and_not_min()
-                  || table_id <= 0 || execution_id < 0 || ddl_task_id <= 0)) {
+  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_scn),
-                                       K(table_id), K(execution_id), K(ddl_task_id));
+    LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_scn));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     table_key_ = table_key;
     start_scn_ = start_scn;
-    table_id_ = table_id;
-    execution_id_ = execution_id;
-    ddl_task_id_ = ddl_task_id;
   }
   return ret;
 }

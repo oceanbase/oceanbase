@@ -290,6 +290,7 @@ ObTxDesc::ObTxDesc()
     commit_parts_(),
     commit_version_(),
     commit_out_(-1),
+    commit_times_(0),
     abort_cause_(0),
     can_elr_(false),
     lock_(common::ObLatchIds::TX_DESC_LOCK),
@@ -335,6 +336,7 @@ int ObTxDesc::switch_to_idle()
   commit_parts_.reset();
   commit_version_.reset();
   commit_out_ = 0;
+  commit_times_ = 0;
   abort_cause_ = 0;
   can_elr_ = false;
   commit_cb_ = NULL;
@@ -426,6 +428,7 @@ void ObTxDesc::reset()
   commit_parts_.reset();
   commit_version_.reset();
   commit_out_ = -1;
+  commit_times_ = 0;
   abort_cause_ = 0;
   can_elr_ = false;
 
@@ -554,7 +557,13 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
     auto &p = parts_[i];
     if (p.id_ == a.id_) {
       hit = true;
-      if (p.epoch_ <= 0) {
+      if (p.epoch_ == ObTxPart::EPOCH_DEAD) {
+        if (a.epoch_ > 0) { // unexpected: from dead to alive
+          flags_.PART_EPOCH_MISMATCH_ = true;
+          ret = OB_TRANS_NEED_ROLLBACK;
+          TRANS_LOG(WARN, "epoch missmatch", K(ret), K(a), K(p));
+        }
+      } else if (p.epoch_ <= 0) {
         p.epoch_ = a.epoch_;
       } else if (a.epoch_ > 0 && p.epoch_ != a.epoch_) {
         flags_.PART_EPOCH_MISMATCH_ = true;
@@ -562,9 +571,9 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
         TRANS_LOG(WARN, "tx-part epoch changed", K(ret), K(a), K(p));
       }
       if (OB_SUCC(ret)) {
-        p.addr_ = a.addr_;
+        if (a.addr_.is_valid()) { p.addr_ = a.addr_; }
         p.first_scn_ = std::min(a.first_scn_, p.first_scn_);
-        p.last_scn_ = std::max(a.last_scn_, p.last_scn_);
+        p.last_scn_ = (INT64_MAX == p.last_scn_) ? a.last_scn_ : std::max(a.last_scn_, p.last_scn_);
         p.last_touch_ts_ = exec_info_reap_ts_ + 1;
       }
       break;
@@ -596,7 +605,7 @@ int ObTxDesc::update_clean_part(const share::ObLSID &id,
   p.epoch_ = epoch;
   p.addr_ = addr;
   p.first_scn_ = INT64_MAX;
-  p.last_scn_ = INT64_MIN;
+  p.last_scn_ = ObSequence::get_max_seq_no();
   return update_part_(p, false);
 }
 
@@ -623,7 +632,7 @@ int ObTxDesc::update_parts(const share::ObLSArray &list)
     auto &it = list[i];
     ObTxPart n;
     n.id_ = it;
-    n.epoch_ = -1;
+    n.epoch_ = ObTxPart::EPOCH_UNKNOWN;
     n.first_scn_ = INT64_MAX;
     n.last_scn_ = INT64_MAX;
     if (OB_TMP_FAIL(update_part_(n))) {
@@ -698,8 +707,9 @@ int ObTxDesc::get_inc_exec_info(ObTxExecResult &exec_info)
     }
     exec_info_reap_ts_ += 1;
   }
-  (void) exec_info.merge_cflict_txs(cflict_txs_);
-  cflict_txs_.reset();
+  if (OB_SUCC(ret) && OB_SUCC(exec_info.merge_cflict_txs(cflict_txs_))) {
+    cflict_txs_.reset();
+  }
   DETECT_LOG(TRACE, "merge conflict txs to exec result", K(cflict_txs_), K(exec_info));
   return ret;
 }
@@ -1147,19 +1157,31 @@ int ObTxExecResult::add_touched_ls(const ObIArray<share::ObLSID> &ls_list)
   return ret;
 }
 
+template<typename T>
+static int append_dedup(ObIArray<T> &a, const ObIArray<T> &b)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH(b, i) {
+    if (!is_contain(a, b.at(i))) { ret = a.push_back(b.at(i)); }
+  }
+  return ret;
+}
+
 int ObTxExecResult::merge_result(const ObTxExecResult &r)
 {
   int ret = OB_SUCCESS;
   TRANS_LOG(TRACE, "txExecResult.merge with.start", K(r), KPC(this), K(lbt()));
   incomplete_ |= r.incomplete_;
-  if (OB_FAIL(append(parts_, r.parts_))) {
+  if (OB_FAIL(append_dedup(parts_, r.parts_))) {
     incomplete_ = true;
     TRANS_LOG(WARN, "merge fail, set incomplete", K(ret), KPC(this));
-  } else if (OB_FAIL(append(touched_ls_list_, r.touched_ls_list_))) {
+  } else if (OB_FAIL(append_dedup(touched_ls_list_, r.touched_ls_list_))) {
     incomplete_ = true;
     TRANS_LOG(WARN, "merge touched_ls_list fail, set incomplete", K(ret), KPC(this));
   }
-  merge_cflict_txs(r.cflict_txs_);
+  if (OB_SUCC(ret)) {
+    ret = merge_cflict_txs(r.cflict_txs_);
+  }
   if (incomplete_) {
     TRANS_LOG(TRACE, "tx result incomplete:", KP(this));
   }
@@ -1168,16 +1190,13 @@ int ObTxExecResult::merge_result(const ObTxExecResult &r)
   return ret;
 }
 
-void ObTxExecResult::merge_cflict_txs(const common::ObIArray<transaction::ObTransIDAndAddr> &txs)
+int ObTxExecResult::merge_cflict_txs(const common::ObIArray<transaction::ObTransIDAndAddr> &txs)
 {
   int ret = OB_SUCCESS;
-  for (int64_t idx = 0; idx < txs.count() && OB_SUCC(ret); ++idx) {
-    if (!is_contain(cflict_txs_, txs.at(idx))) {
-      if (OB_FAIL(cflict_txs_.push_back(txs.at(idx)))) {
-        DETECT_LOG(WARN, "push fail", KR(ret), KPC(this), K(txs));
-      }
-    }
+  if (OB_FAIL(append_dedup(cflict_txs_, txs))) {
+    DETECT_LOG(WARN, "append fail", KR(ret), KPC(this), K(txs));
   }
+  return ret;
 }
 
 int ObTxExecResult::assign(const ObTxExecResult &r)

@@ -869,6 +869,7 @@ int ObBasicStatsEstimator::check_stat_need_re_estimate(const ObTableStatParam &o
     new_extra.type_ = origin_extra.type_;
     new_extra.start_time_ = origin_extra.start_time_;
     new_extra.nth_part_ = origin_extra.nth_part_;
+    new_extra.need_histogram_ = origin_extra.need_histogram_;
     bool find_it = (new_extra.type_ == TABLE_LEVEL);
     if (new_extra.type_ == PARTITION_LEVEL) {
       for (int64_t i = 0; !find_it && i < new_param.part_infos_.count(); ++i) {

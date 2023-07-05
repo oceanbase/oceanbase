@@ -38,8 +38,8 @@ public:
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
   int ddl_start_nolock(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
   int ddl_start(ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
-  int ddl_commit(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
-  int schedule_ddl_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool is_replay); // try wait build major sstable
+  int ddl_commit(const share::SCN &start_scn, const share::SCN &commit_scn); // schedule build a major sstable
+  int schedule_ddl_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn); // try wait build major sstable
   int wait_ddl_merge_success(const share::SCN &start_scn, const share::SCN &commit_scn);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
   int get_or_create_ddl_kv(const share::SCN &start_scn, const share::SCN &scn, ObTableHandleV2 &kv_handle); // used in active ddl kv guard
@@ -72,6 +72,7 @@ public:
   int wrlock(const int64_t timeout_us, uint32_t &lock_tid);
   void unlock(const uint32_t lock_tid);
   int update_tablet(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
+  int64_t get_count();
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
@@ -79,19 +80,18 @@ public:
   bool can_schedule_major_compaction_nolock(const ObTabletMeta &tablet_meta);
   int get_ddl_major_merge_param(const ObTabletMeta &tablet_meta, ObDDLTableMergeDagParam &merge_param);
   int get_rec_scn(share::SCN &rec_scn);
-  void prepare_info_for_checksum_report(const uint64_t table_id, const int64_t ddl_task_id) { table_id_ = table_id; ddl_task_id_ = ddl_task_id; }
   TO_STRING_KV(K_(is_inited), K_(success_start_scn), K_(ls_id), K_(tablet_id), K_(table_key),
       K_(data_format_version), K_(start_scn), K_(commit_scn), K_(max_freeze_scn),
-      K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
+      K_(execution_id), K_(head), K_(tail), K_(ref_cnt));
 
 private:
   int64_t get_idx(const int64_t pos) const;
-  int64_t get_count() const;
   int alloc_ddl_kv(ObTableHandleV2 &kv_handle);
   void free_ddl_kv(const int64_t idx);
   int get_active_ddl_kv_impl(ObTableHandleV2 &kv_handle);
   void try_get_ddl_kv_unlock(const share::SCN &scn, ObTableHandleV2 &kv_handle);
   int get_ddl_kvs_unlock(const bool frozen_only, ObTablesHandleArray &kv_handle_array);
+  int64_t get_count_nolock() const;
   int update_ddl_major_sstable();
   int create_empty_ddl_sstable(ObTableHandleV2 &table_handle);
   void cleanup_unlock();
@@ -110,9 +110,7 @@ private:
   share::SCN start_scn_;
   share::SCN commit_scn_;
   share::SCN max_freeze_scn_;
-  uint64_t table_id_; // used for ddl checksum
   int64_t execution_id_; // used for ddl checksum
-  int64_t ddl_task_id_; // used for ddl checksum
   ObTableHandleV2 ddl_kv_handles_[MAX_DDL_KV_CNT_IN_STORAGE];
   int64_t head_;
   int64_t tail_;

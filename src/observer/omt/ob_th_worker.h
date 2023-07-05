@@ -55,6 +55,10 @@ public:
   virtual bool can_retry() const override { return can_retry_; }
   // Note: you CAN NOT call set_need_retry when can_retry_ == false
   virtual void set_need_retry() override { need_retry_ = true; }
+  // THIS is _only_ used (for easy impl) in query_retry_ctrl decide to retry
+  // but following process want to invalid the decision.
+  // refer `ObQueryRetryCtrl::on_close_resulet_fail_`
+  virtual void unset_need_retry() override { need_retry_ = false; }
   virtual bool need_retry() const override { return need_retry_; }
   virtual void resume() override;
 
@@ -100,6 +104,7 @@ public:
   OB_INLINE void set_lq_yield(bool v=true) { is_lq_yield_ = v; }
   OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
   OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
+  OB_INLINE int64_t blocking_ts() const { return OB_NOT_NULL(blocking_ts_) ? (*blocking_ts_) : 0; }
 
 private:
   void set_th_worker_thread_name(uint64_t tenant_id);
@@ -134,7 +139,7 @@ private:
   bool has_add_to_cgroup_;
 
   int64_t last_wakeup_ts_;
-
+  int64_t* blocking_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
 }; // end of class ObThWorker

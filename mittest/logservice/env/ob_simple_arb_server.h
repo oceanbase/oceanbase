@@ -111,12 +111,64 @@ public:
   {blacklist_.block_net(src);}
   void unblock_net(const ObAddr &src) override final
   {blacklist_.unblock_net(src);}
+  void block_pcode(const ObRpcPacketCode &pcode) override final
+  {blacklist_.block_pcode(pcode);}
+  void unblock_pcode(const ObRpcPacketCode &pcode) override final
+  {blacklist_.unblock_pcode(pcode);}
   void set_rpc_loss(const ObAddr &src, const int loss_rate) override final
   {blacklist_.set_rpc_loss(src, loss_rate);}
   void reset_rpc_loss(const ObAddr &src) override final
   {blacklist_.reset_rpc_loss(src);}
   bool is_arb_server() const override final {return true;}
   int64_t get_node_id() {return node_id_;}
+  int create_mock_election(const int64_t palf_id, MockElection *&mock_election) override final
+  {
+    int ret = OB_SUCCESS;
+    mock_election = NULL;
+    void *buf = NULL;
+    ObMemAttr attr(1, ObNewModIds::OB_ELECTION);
+    if (OB_ISNULL(buf = ob_malloc(sizeof(MockElection), attr))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(ERROR, "ob_malloc failed", K(palf_id));
+    } else if (FALSE_IT(mock_election = new (buf) MockElection)) {
+    } else if (OB_FAIL(mock_election->init(palf_id, self_))) {
+      SERVER_LOG(WARN, "mock_election->init failed", K(palf_id), K_(self));
+    } else if (OB_FAIL(mock_election_map_.insert_and_get(palf::LSKey(palf_id), mock_election))) {
+      SERVER_LOG(WARN, "create_mock_election failed", K(palf_id));
+    } else {
+      SERVER_LOG(INFO, "create_mock_election success", K(palf_id), K_(self), KP(mock_election));
+    }
+    if (OB_FAIL(ret) && NULL != mock_election) {
+      ob_free(mock_election);
+      mock_election = NULL;
+    }
+    return ret;
+  }
+  int remove_mock_election(const int64_t palf_id) override final
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(mock_election_map_.del(palf::LSKey(palf_id))) && OB_ENTRY_NOT_EXIST != ret) {
+      SERVER_LOG(WARN, "del failed", K(palf_id));
+    } else {
+      ret = OB_SUCCESS;
+      SERVER_LOG(INFO, "remove_mock_election success", K(palf_id), K_(self));
+    }
+    return ret;
+  }
+  int set_leader(const int64_t palf_id, const common::ObAddr &leader, const int64_t new_epoch = 0)
+  {
+    int ret = OB_SUCCESS;
+    MockElection *mock_election= NULL;
+    if (OB_FAIL(mock_election_map_.get(palf::LSKey(palf_id), mock_election))) {
+      SERVER_LOG(WARN, "get failed", K(palf_id));
+    } else if (OB_FAIL(mock_election->set_leader(leader, new_epoch))) {
+      SERVER_LOG(WARN, "set_leader failed", K(palf_id), KP(mock_election), K(leader), K(new_epoch));
+    }
+    if (OB_NOT_NULL(mock_election)) {
+      mock_election_map_.revert(mock_election);
+    }
+    return ret;
+  }
 public:
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,
@@ -143,6 +195,7 @@ private:
   int64_t node_id_;
   ObMittestBlacklist blacklist_;
   ObFunction<bool(const ObAddr &src)> filter_;
+  MockElectionMap mock_election_map_;
   bool is_inited_;
 };
 }

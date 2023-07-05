@@ -272,7 +272,7 @@ public:
     workers_lock_(common::ObLatchIds::TENANT_WORKER_LOCK),
     inited_(false),
     recv_req_cnt_(0),
-    token_cnt_(0),
+    shrink_(false),
     token_change_ts_(0),
     tenant_(tenant),
     cgroup_ctrl_(cgroup_ctrl)
@@ -285,7 +285,6 @@ public:
   uint64_t get_recv_req_cnt() const { return recv_req_cnt_; }
   int64_t min_worker_cnt() const;
   int64_t max_worker_cnt() const;
-  int64_t get_token_cnt() { return token_cnt_; }
 
   ObTenant *get_tenant() { return tenant_; }
   share::ObCgroupCtrl *get_cgroup_ctrl() { return cgroup_ctrl_; }
@@ -305,8 +304,8 @@ protected:
 private:
   bool inited_;                                  // Mark whether the container has threads and queues allocated
   volatile uint64_t recv_req_cnt_ CACHE_ALIGNED; // Statistics requested to enqueue
-  int64_t token_cnt_ CACHE_ALIGNED;              // The current number of target threads
-  int64_t token_change_ts_ CACHE_ALIGNED;        // when there is continus req_queue.count > token_cnt, shrink worker
+  volatile bool shrink_ CACHE_ALIGNED;
+  int64_t token_change_ts_ CACHE_ALIGNED;
 
   ObTenant *tenant_;
   share::ObCgroupCtrl *cgroup_ctrl_;
@@ -335,7 +334,6 @@ public:
        "group_id = %d,"
        "queue_size = %ld,"
        "recv_req_cnt = %lu,"
-       "token_cnt = %ld,"
        "min_worker_cnt = %ld,"
        "max_worker_cnt = %ld,"
        "worker_cnt = %d,"
@@ -343,7 +341,6 @@ public:
        group->group_id_,
        group->req_queue_.size(),
        group->recv_req_cnt_,
-       group->token_cnt_,
        group->min_worker_cnt(),
        group->max_worker_cnt(),
        group->workers_.get_size(),
@@ -454,7 +451,7 @@ public:
 
   TO_STRING_KV(K_(id),
                K_(tenant_meta),
-               K_(unit_min_cpu), K_(unit_max_cpu), K_(token_cnt), K_(total_worker_cnt),
+               K_(unit_min_cpu), K_(unit_max_cpu), K_(total_worker_cnt),
                "min_worker_cnt", min_worker_cnt(),
                "max_worker_cnt", max_worker_cnt(),
                K_(stopped), K_(idle_us),
@@ -553,10 +550,8 @@ protected:
   double unit_max_cpu_;
   double unit_min_cpu_;
 
-  // number of active workers the tenant has owned. Only active
-  // workers can make progress.
-  int64_t token_cnt_ CACHE_ALIGNED;
-  int64_t total_worker_cnt_ CACHE_ALIGNED;
+  volatile bool shrink_ CACHE_ALIGNED;
+  int64_t total_worker_cnt_;
   pthread_t gc_thread_;
   bool stopped_;
   bool wait_mtl_finished_;

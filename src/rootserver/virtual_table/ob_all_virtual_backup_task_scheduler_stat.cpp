@@ -169,9 +169,11 @@ int ObAllBackupScheduleTaskStat::get_full_row_(
   } else if (OB_ISNULL(dst_str = static_cast<char *>(arena_allocator_.alloc(OB_MAX_SERVER_ADDR_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc dst ip buf failed", K(ret), "size", OB_MAX_SERVER_ADDR_SIZE);
+  } else if (OB_FALSE_IT(MEMSET(dst_str, '\0', OB_MAX_SERVER_ADDR_SIZE))) {
   } else if (OB_ISNULL(trace_id_str = static_cast<char *>(arena_allocator_.alloc(OB_MAX_TRACE_ID_BUFFER_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc trace id buf failed", K(ret), "size", OB_MAX_TRACE_ID_BUFFER_SIZE);
+  } else if (OB_FALSE_IT(MEMSET(trace_id_str, '\0', OB_MAX_TRACE_ID_BUFFER_SIZE))) {
   } else if (OB_FAIL(generate_task_stat_(task_stat, display))) {
     LOG_WARN("fail to generate task stat", K(task_stat), K(ret));
   } else if (display.dst_.is_valid() && OB_FAIL(display.dst_.ip_port_to_string(dst_str, OB_MAX_SERVER_ADDR_SIZE))) {

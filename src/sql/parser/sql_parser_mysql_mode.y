@@ -589,9 +589,27 @@ stmt:
   | rotate_master_key_stmt  { $$ = $1; check_question_mark($$, result); }
   | create_index_stmt       { $$ = $1; check_question_mark($$, result); }
   | drop_index_stmt         { $$ = $1; check_question_mark($$, result); }
-  | kill_stmt               { $$ = $1; check_question_mark($$, result); }
+  | kill_stmt               { $$ = $1; question_mark_issue($$, result); }
   | help_stmt               { $$ = $1; check_question_mark($$, result); }
-  | create_view_stmt        { $$ = $1; check_question_mark($$, result); }
+  | create_view_stmt
+  {
+    $$ = $1;
+
+    if (OB_UNLIKELY(NULL == $$ || NULL == result)) {
+      yyerror(NULL, result, "node or result is NULL\n");
+      YYABORT_UNEXPECTED;
+    } else if (OB_UNLIKELY(!result->pl_parse_info_.is_pl_parse_ && 0 != result->question_mark_ctx_.count_)) {
+      if (result->pl_parse_info_.is_inner_parse_) {
+        result->extra_errno_ = OB_PARSER_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK;
+        YYABORT;
+      } else {
+        yyerror(NULL, result, "Unknown column '?'\n");
+        YYABORT_PARSE_SQL_ERROR;
+      }
+    } else {
+      $$->value_ = result->question_mark_ctx_.count_;
+    }
+  }
   | create_tenant_stmt      { $$ = $1; check_question_mark($$, result); }
   | alter_tenant_stmt       { $$ = $1; check_question_mark($$, result); }
   | drop_tenant_stmt        { $$ = $1; check_question_mark($$, result); }
@@ -739,6 +757,14 @@ expr opt_as column_label
     if (0 == $3->str_len_) {
       alias_name_node->str_value_ = NULL;
       alias_name_node->str_len_ = 0;
+    } else if (result->is_not_utf8_connection_) {
+      alias_name_node->str_value_ = parse_str_convert_utf8(result->charset_info_, $3->str_value_,
+                                                           result->malloc_pool_, &(alias_name_node->str_len_),
+                                                           &(result->extra_errno_));
+      if (OB_PARSER_ERR_ILLEGAL_NAME == result->extra_errno_) {
+        yyerror(NULL, result, "alias '%s' is illegal\n", $3->str_value_);
+        YYABORT_UNEXPECTED;
+      }
     } else {
       dup_node_string($3, alias_name_node, result->malloc_pool_);
     }
@@ -917,6 +943,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   merge_nodes(string_list_node, result, T_EXPR_LIST, str_node);
   ParseNode *concat_node = NULL;
   make_name_node(concat_node, result->malloc_pool_, "concat");
+  concat_node->reserved_ = 1; /* mark special concat */
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, concat_node, string_list_node);
 }
 ;
@@ -1328,8 +1355,11 @@ bit_expr '|' bit_expr %prec '|'
 }
 | bit_expr '+' INTERVAL expr date_unit %prec '+'
 {
+  ParseNode *tmp_node = NULL;
+  malloc_terminal_node(tmp_node, result->malloc_pool_, T_DEFAULT_INT);
+  tmp_node->value_ = 1;
   ParseNode *params = NULL;
-  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 3, $1, $4, $5);
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 4, $1, $4, $5, tmp_node);
   make_name_node($$, result->malloc_pool_, "date_add");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
   check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @4.last_column),
@@ -1337,8 +1367,11 @@ bit_expr '|' bit_expr %prec '|'
 }
 | INTERVAL expr date_unit '+' bit_expr
 {
+  ParseNode *tmp_node = NULL;
+  malloc_terminal_node(tmp_node, result->malloc_pool_, T_DEFAULT_INT);
+  tmp_node->value_ = 2;
   ParseNode *params = NULL;
-  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 3, $5, $2, $3);
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 4, $2, $3, $5, tmp_node);
   make_name_node($$, result->malloc_pool_, "date_add");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
   check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @4.last_column),
@@ -2633,6 +2666,7 @@ MOD '(' expr ',' expr ')'
   ParseNode *param_node = NULL;
   malloc_terminal_node(param_node, result->malloc_pool_, T_SFU_DOUBLE);
   int64_t len = strlen("2.718281828459045");
+  param_node->is_hidden_const_ = 1;
   param_node->str_value_ = parse_strndup("2.718281828459045", len, result->malloc_pool_);
   if (OB_UNLIKELY(NULL == param_node->str_value_)) {
     yyerror(NULL, result, "No more space for mallocing string\n");
@@ -2650,6 +2684,7 @@ MOD '(' expr ',' expr ')'
   ParseNode *param_node = NULL;
   malloc_terminal_node(param_node, result->malloc_pool_, T_SFU_DOUBLE);
   int64_t len = strlen("2.718281828459045");
+  param_node->is_hidden_const_ = 1;
   param_node->str_value_ = parse_strndup("2.718281828459045", len, result->malloc_pool_);
   if (OB_UNLIKELY(NULL == param_node->str_value_)) {
     yyerror(NULL, result, "No more space for mallocing string\n");
@@ -4784,7 +4819,7 @@ BINARY opt_string_length_i_v2
   $$->value_ = 0;
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; /* data type */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $2[0];        /* length */
-  $$->param_num_ = $2[1];
+  $$->param_num_ = $2[1] + $4->param_num_;
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
 }
@@ -9471,6 +9506,14 @@ expr %prec LOWER_PARENS
     if (NULL == $3->str_value_) {
       alias_name_node->str_value_ = NULL;
       alias_name_node->str_len_ = 0;
+    } else if (result->is_not_utf8_connection_) {
+      alias_name_node->str_value_ = parse_str_convert_utf8(result->charset_info_, $3->str_value_,
+                                                           result->malloc_pool_, &(alias_name_node->str_len_),
+                                                           &(result->extra_errno_));
+      if (OB_PARSER_ERR_ILLEGAL_NAME == result->extra_errno_) {
+        yyerror(NULL, result, "alias '%s' is illegal\n", $3->str_value_);
+        YYABORT_UNEXPECTED;
+      }
     } else {
       dup_node_string($3, alias_name_node, result->malloc_pool_);
     }

@@ -353,7 +353,8 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
       }
     }
 
-    if (OB_SUCC(ret) && has_rollup_or_groupingsets) {
+    if (OB_SUCC(ret) && stmt->is_select_stmt() &&
+        (has_rollup_or_groupingsets || static_cast<ObSelectStmt*>(stmt)->is_scala_group_by())) {
       if (OB_FAIL(const_ctx.expire_const_infos())) {
         LOG_WARN("failed to expire const infos ", K(ret));
       }

@@ -112,28 +112,4 @@ public:
 } //common
 } //oceanbase
 
-#define TC_REACH_TIME_INTERVAL(i) \
-  ({ \
-    bool bret = false; \
-    static thread_local int64_t last_time = 0; \
-    int64_t cur_time = OB_TSC_TIMESTAMP.current_time(); \
-    if (OB_UNLIKELY((i + last_time) < cur_time)) \
-    { \
-      last_time = cur_time; \
-      bret = true; \
-    } \
-    bret; \
-  })
-
-#define TC_REACH_COUNT_INTERVAL(i) \
-  ({ \
-    bool bret = false; \
-    static thread_local int64_t count = 0; \
-    if (0 == (++count % i)) \
-    { \
-      bret = true; \
-    } \
-    bret; \
-  })
-
 #endif //_OCEANBASE_COMMON_OB_TIME_UTILITY_H_

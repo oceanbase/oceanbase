@@ -427,7 +427,12 @@ int ObTransRpc::post_msg(const ObLSID &ls_id, ObTxMsg &msg)
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(trans_service_->get_location_adapter()->nonblock_get_leader(cluster_id, tenant_id, ls_id, server))) {
     TRANS_LOG(WARN, "get leader failed", KR(ret), K(msg), K(cluster_id), K(ls_id));
-    (void)refresh_location_cache(ls_id);
+    if (OB_LS_IS_DELETED == ret && ObTxMsgTypeChecker::is_2pc_msg_type(msg.get_msg_type())) {
+      int tmp_ret = trans_service_->handle_ls_deleted(msg);
+      if (OB_SUCCESS == tmp_ret) {
+        ret = OB_SUCCESS;
+      }
+    }
   } else if (ObTxMsgTypeChecker::is_2pc_msg_type(msg.get_msg_type())) {
     // 2pc msg optimization
     const int64_t dst_cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;

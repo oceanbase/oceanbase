@@ -173,7 +173,7 @@ void ObDataDictService::runTimerTask()
   if (IS_INIT) {
     refresh_config_();
     bool is_leader = ATOMIC_LOAD(&is_leader_);
-    const int64_t start_time = OB_TSC_TIMESTAMP.current_time();
+    const int64_t start_time = ObClockGenerator::getClock();
     const bool is_reach_time_interval = (start_time >= ATOMIC_LOAD(&last_dump_succ_time_) + ATOMIC_LOAD(&dump_interval_));
     const bool force_need_dump = ATOMIC_LOAD(&force_need_dump_);
 
@@ -192,7 +192,7 @@ void ObDataDictService::runTimerTask()
           DDLOG(WARN, "dump_data_dict_ failed", KR(ret), K_(tenant_id), K(force_need_dump));
         }
       } else {
-        const int64_t end_time = OB_TSC_TIMESTAMP.current_time();
+        const int64_t end_time = ObClockGenerator::getClock();
         ATOMIC_SET(&last_dump_succ_time_, end_time);
 
         if (force_need_dump) {

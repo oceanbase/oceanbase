@@ -6,11 +6,12 @@
 
 #include "lib/list/ob_dlink_node.h"
 #include "lib/utility/ob_print_utils.h"
+#include "observer/table_load/ob_table_load_exec_ctx.h"
+#include "observer/table_load/ob_table_load_object_allocator.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_struct.h"
 #include "share/table/ob_table_load_define.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
-#include "observer/table_load/ob_table_load_object_allocator.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sql_session_mgr.h"
 
@@ -41,7 +42,9 @@ public:
   TO_STRING_KV(K_(param), KP_(coordinator_ctx), KP_(store_ctx), "ref_count", get_ref_count(),
                K_(is_dirty), K_(is_inited));
 public:
-  int init_coordinator_ctx(const common::ObIArray<int64_t> &idx_array, uint64_t user_id);
+  int init_client_exec_ctx();
+  int init_coordinator_ctx(const common::ObIArray<int64_t> &idx_array, uint64_t user_id,
+                           ObTableLoadExecCtx *exec_ctx);
   int init_store_ctx(
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
@@ -57,6 +60,7 @@ public:
   ObTableLoadParam param_;
   ObTableLoadDDLParam ddl_param_;
   ObTableLoadSchema schema_;
+  ObTableLoadClientExecCtx *client_exec_ctx_; // for java client
   ObTableLoadCoordinatorCtx *coordinator_ctx_; // 只在控制节点构造
   ObTableLoadStoreCtx *store_ctx_; // 只在数据节点构造
   sql::ObLoadDataGID gid_;

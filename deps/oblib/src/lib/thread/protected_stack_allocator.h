@@ -52,6 +52,25 @@ class StackMgr
 {
   friend class ObMemoryCutter;
 public:
+  class Guard
+  {
+  public:
+    Guard(StackMgr& mgr) : mgr_(mgr), cur_(nullptr)
+    {
+      mgr_.mutex_.lock();
+      cur_ = mgr_.dummy_.next_;
+    }
+    ~Guard() { mgr_.mutex_.unlock(); }
+    ObStackHeader* operator*() { return (cur_ == &(mgr_.dummy_)) ? nullptr : cur_; }
+    ObStackHeader* next()
+    {
+      cur_ = cur_->next_;
+      return (cur_ == &(mgr_.dummy_)) ? nullptr : cur_;
+    }
+  private:
+    StackMgr& mgr_;
+    ObStackHeader* cur_;
+  };
   StackMgr()
   {
     dummy_.prev_ = dummy_.next_ = &dummy_;

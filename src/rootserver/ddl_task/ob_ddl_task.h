@@ -249,7 +249,7 @@ public:
 
   static int insert_record(
       common::ObISQLClient &proxy,
-      const ObDDLTaskRecord &record);
+      ObDDLTaskRecord &record);
 
   static int to_hex_str(const ObString &src, ObSqlString &dst);
 

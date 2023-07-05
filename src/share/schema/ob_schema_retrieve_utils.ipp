@@ -70,9 +70,11 @@ int ObSchemaRetrieveUtils::retrieve_table_schema(
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_table_id = common::OB_INVALID_ID;
-  ObTableSchema table_schema;
+  ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObTableSchema table_schema(&tmp_allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     table_schema.reset();
+    tmp_allocator.reuse();
     bool is_deleted = false;
     ObTableSchema *allocated_table_schema = NULL;
     if (OB_FAIL(ret)) {
@@ -909,9 +911,11 @@ int ObSchemaRetrieveUtils::retrieve_recycle_object(
     ObIArray<ObRecycleObject> &recycle_objs)
 {
   int ret = common::OB_SUCCESS;
-  ObRecycleObject recycle_obj;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObRecycleObject recycle_obj(&allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     recycle_obj.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_recycle_object(tenant_id, result, recycle_obj))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill recycle object. ", K(ret));
     } else if (OB_FAIL(recycle_objs.push_back(recycle_obj))) {
@@ -2588,10 +2592,11 @@ int ObSchemaRetrieveUtils::retrieve_tenant_schema(
   int ret = common::OB_SUCCESS;
 
   uint64_t prev_tenant_id = common::OB_INVALID_ID;
-  S tenant_schema;
   ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S tenant_schema(&allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     tenant_schema.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_tenant_schema(result, tenant_schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill tenant schema", K(ret));
@@ -2676,12 +2681,14 @@ int ObSchemaRetrieveUtils::retrieve_system_variable(const uint64_t tenant_id, T 
 {
   UNUSED(tenant_id);
   int ret = common::OB_SUCCESS;
-  ObSysVarSchema sysvar_schema;
   ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObSysVarSchema sysvar_schema(&allocator);
   ObString prev_sys_name;
   while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     bool is_deleted = false;
     sysvar_schema.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_sysvar_schema(tenant_id, result, sysvar_schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill sysvar schema", K(ret));
     } else if (ObCharset::case_insensitive_equal(prev_sys_name, sysvar_schema.get_name())) {
@@ -2695,7 +2702,8 @@ int ObSchemaRetrieveUtils::retrieve_system_variable(const uint64_t tenant_id, T 
       } else {
         SHARE_SCHEMA_LOG(WARN, "add sysvar schema failed", K(ret), K(sysvar_schema));
       }
-    } else if (OB_FAIL(ob_write_string(allocator, sysvar_schema.get_name(), prev_sys_name))) {
+    } else if (FALSE_IT(tmp_allocator.reuse())) {
+    } else if (OB_FAIL(ob_write_string(tmp_allocator, sysvar_schema.get_name(), prev_sys_name))) {
       SHARE_SCHEMA_LOG(WARN, "write sysvar name failed", K(ret), K(sysvar_schema));
     } else {
       SHARE_SCHEMA_LOG(INFO, "fetch system variable schema finish", K(sysvar_schema));
@@ -2747,10 +2755,12 @@ int ObSchemaRetrieveUtils::fill_sysvar_schema(const uint64_t tenant_id, T &resul
   {                                                                 \
     int ret = common::OB_SUCCESS;                                           \
     uint64_t prev_id = common::OB_INVALID_ID;                               \
-    S schema;                                                 \
+    ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES); \
+    S schema(&allocator);                                             \
     int64_t count = 0; \
     while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {  \
-      schema.reset();                                                    \
+      schema.reset();                                                   \
+      allocator.reuse();                                                \
       bool is_deleted = false;                                          \
       count++; \
       if (OB_FAIL(fill_##SCHEMA##_schema(tenant_id, result, schema, is_deleted))) { \
@@ -2797,14 +2807,16 @@ int ObSchemaRetrieveUtils::retrieve_routine_schema(
     ObIArray<S> &routine_infos)
 {
   int ret = common::OB_SUCCESS;
-  S routine_info;
-  S pre_routine_info;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S routine_info(&allocator);
+  uint64_t pre_routine_id = OB_INVALID_ID;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
-    routine_info.reset();
     bool is_deleted = false;
+    routine_info.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_routine_schema(tenant_id, result, routine_info, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill routine info ", K(ret));
-    } else if (routine_info.get_routine_id() == pre_routine_info.get_routine_id()) {
+    } else if (routine_info.get_routine_id() == pre_routine_id) {
       // ignore
     } else if (is_deleted) {
       SHARE_SCHEMA_LOG(INFO, "routine info is deleted", K(routine_info));
@@ -2814,7 +2826,7 @@ int ObSchemaRetrieveUtils::retrieve_routine_schema(
       SHARE_SCHEMA_LOG(INFO, "retrieve routine schema succeed", K(routine_info));
     }
     if (OB_SUCC(ret)) {
-      pre_routine_info = routine_info;
+      pre_routine_id = routine_info.get_routine_id();
     }
   }
   if (ret != common::OB_ITER_END) {
@@ -2864,26 +2876,30 @@ int ObSchemaRetrieveUtils::retrieve_routine_param_schema(
     ObIArray<ObRoutineInfo> &routine_infos)
 {
   int ret = common::OB_SUCCESS;
-  ObRoutineParam cur_param;
-  ObRoutineParam last_param;
+  uint64_t pre_routine_id = OB_INVALID_ID;
+  int64_t pre_sequence = OB_INVALID_ID;
   bool is_deleted = false;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObRoutineParam cur_param(&allocator);
   ObRoutineParamSetter routine_param_setter(routine_infos);
   while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     cur_param.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_routine_param_schema(tenant_id, result, cur_param, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fill routine param schema failed", K(ret));
-    } else if (last_param.get_routine_id() == cur_param.get_routine_id()
-               && last_param.get_sequence() == cur_param.get_sequence()) {
+    } else if (cur_param.get_routine_id() == pre_routine_id
+               && cur_param.get_sequence() == pre_sequence) {
       // ignore
     } else if (is_deleted) {
       SHARE_SCHEMA_LOG(INFO, "routine param info is deleted", K(cur_param));
     } else if (OB_FAIL(routine_param_setter.add_routine_param(cur_param))) {
-      SHARE_SCHEMA_LOG(WARN, "add routine param failed", K(last_param), K(cur_param), K(ret));
+      SHARE_SCHEMA_LOG(WARN, "add routine param failed", K(pre_routine_id), K(pre_sequence), K(cur_param), K(ret));
     } else {
       SHARE_SCHEMA_LOG(TRACE, "add routine param success", K(cur_param));
     }
     if (OB_SUCC(ret)) {
-      last_param = cur_param;
+      pre_routine_id = cur_param.get_routine_id();
+      pre_sequence = cur_param.get_sequence();
     }
   }
   if (common::OB_ITER_END == ret) {
@@ -2899,14 +2915,16 @@ int ObSchemaRetrieveUtils::retrieve_udt_schema(
     ObIArray<S> &udt_infos)
 {
   int ret = common::OB_SUCCESS;
-  S udt_info;
-  S pre_udt_info;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S udt_info(&allocator);
+  int64_t pre_type_id = OB_INVALID_ID;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     udt_info.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_udt_schema(tenant_id, result, udt_info, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill udt info ", K(ret));
-    } else if (udt_info.get_type_id() == pre_udt_info.get_type_id()) {
+    } else if (udt_info.get_type_id() == pre_type_id) {
       // ignore
     } else if (is_deleted) {
       SHARE_SCHEMA_LOG(INFO, "udt info is deleted", K(udt_info));
@@ -2916,7 +2934,7 @@ int ObSchemaRetrieveUtils::retrieve_udt_schema(
       SHARE_SCHEMA_LOG(INFO, "retrieve udt schema success", K(udt_info));
     }
     if (OB_SUCC(ret)) {
-      pre_udt_info = udt_info;
+      pre_type_id = udt_info.get_type_id();
     }
   }
   if (ret != common::OB_ITER_END) {
@@ -3041,10 +3059,13 @@ int ObSchemaRetrieveUtils::retrieve_udf_schema(
 {
     int ret = common::OB_SUCCESS;
     common::ObString udf_name;
-    S schema;
+    ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+    ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+    S schema(&allocator);
     while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
-      schema.reset();
       bool is_deleted = false;
+      schema.reset();
+      allocator.reuse();
       if (OB_FAIL(fill_udf_schema(tenant_id, result, schema, is_deleted))) {
         SHARE_SCHEMA_LOG(WARN, "fail to fill udf schema", K(ret));
       } else if (schema.get_udf_name_str() == udf_name) {
@@ -3056,7 +3077,10 @@ int ObSchemaRetrieveUtils::retrieve_udf_schema(
       } else {
         SHARE_SCHEMA_LOG(INFO, "retrieve udf schema succeed", K(schema));
       }
-      udf_name = schema.get_udf_name_str();
+      tmp_allocator.reuse();
+      if (FAILEDx(ob_write_string(tmp_allocator, schema.get_udf_name_str(), udf_name))) {
+        SHARE_SCHEMA_LOG(WARN, "write udf_name failed", KR(ret), K(schema));
+      }
     }
     if (ret != common::OB_ITER_END) {
       SHARE_SCHEMA_LOG(WARN, "fail to get all udf schema. iter quit. ", K(ret));
@@ -3115,11 +3139,13 @@ int ObSchemaRetrieveUtils::retrieve_link_column_schema(
 {
   int ret = common::OB_SUCCESS;
   bool is_deleted = false;
-  ObColumnSchemaV2 column_schema;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObColumnSchemaV2 column_schema(&allocator);
 
   SHARE_SCHEMA_LOG(DEBUG, "retrieve link column schema");
   while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     column_schema.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_link_column_schema(tenant_id, result, column_schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill link column schema. ", K(is_deleted), K(ret));
     } else if (FALSE_IT(column_schema.set_table_id(table_schema.get_table_id()))) {
@@ -3157,14 +3183,17 @@ int ObSchemaRetrieveUtils::retrieve_db_priv_schema(
     ObIArray<S> &db_priv_array)
 {
   int ret = common::OB_SUCCESS;
-  S db_priv;
-  S prev_priv;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+  S db_priv(&allocator);
+  ObOriginalDBKey pre_priv;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
-    db_priv.reset();
     bool is_deleted = false;
+    db_priv.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_db_priv_schema(tenant_id, result, db_priv, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "Fail to fill database privileges", K(ret));
-    } else if (prev_priv.get_original_key() == db_priv.get_original_key()) {
+    } else if (db_priv.get_original_key() == pre_priv) {
       // ignore it
       ret = common::OB_SUCCESS;
     } else if (is_deleted) {
@@ -3173,7 +3202,10 @@ int ObSchemaRetrieveUtils::retrieve_db_priv_schema(
       SHARE_SCHEMA_LOG(WARN, "Failed to push back", K(ret));
     }
     if (OB_SUCC(ret)) {
-      prev_priv = db_priv;
+      tmp_allocator.reuse();
+      if (OB_FAIL(pre_priv.deep_copy(db_priv.get_original_key(), tmp_allocator))) {
+        SHARE_SCHEMA_LOG(WARN, "alloc_table_schema failed", KR(ret));
+      }
     }
   }
   if (ret != common::OB_ITER_END) {
@@ -3249,17 +3281,19 @@ int ObSchemaRetrieveUtils::retrieve_sys_priv_schema_inner(
   int ret = common::OB_SUCCESS;
   ObRawPriv priv_id;
   ObRawPriv prev_priv_id = PRIV_ID_MAX;
-  S prev_priv;
-  S sys_priv;
+  ObSysPrivKey prekey;
   uint64_t option;
   ObPackedPrivArray packed_priv_array;
   bool is_deleted;
-
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S sys_priv(&allocator);
   /* gather sys priv by key <grantee_id, priv_id> */
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    sys_priv.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_sys_priv_schema(tenant_id, result, sys_priv, is_deleted, priv_id, option))) {
       SHARE_SCHEMA_LOG(WARN, "Fail to fill system privileges", K(ret));
-    } else if ((prev_priv.get_key() == sys_priv.get_key() && prev_priv_id == priv_id)) {
+    } else if ((sys_priv.get_key() == prekey && prev_priv_id == priv_id)) {
       // jump over same priv operation before
       ret = common::OB_SUCCESS;
     } else {
@@ -3287,7 +3321,7 @@ int ObSchemaRetrieveUtils::retrieve_sys_priv_schema_inner(
         }
       }
       OX (prev_priv_id = priv_id);
-      OX (prev_priv = sys_priv);
+      OX (prekey = sys_priv.get_key());
     }
   }
   if (ret != common::OB_ITER_END) {
@@ -3370,14 +3404,17 @@ int ObSchemaRetrieveUtils::retrieve_table_priv_schema(
     ObIArray<S> &table_priv_array)
 {
   int ret = common::OB_SUCCESS;
-  S table_priv;
-  S prev_table_priv;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+  S table_priv(&allocator);
+  ObTablePrivSortKey pre_table_sort_key;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     table_priv.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_table_priv_schema(tenant_id, result, table_priv, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "Fail to fill table_priv", K(ret));
-    } else if (table_priv.get_sort_key() == prev_table_priv.get_sort_key()) {
+    } else if (table_priv.get_sort_key() == pre_table_sort_key) {
       // ignore it
       ret = common::OB_SUCCESS;
     } else if (is_deleted) {
@@ -3386,7 +3423,10 @@ int ObSchemaRetrieveUtils::retrieve_table_priv_schema(
       SHARE_SCHEMA_LOG(WARN, "Failed to push back", K(ret));
     }
     if (OB_SUCC(ret)) {
-      prev_table_priv = table_priv;
+      tmp_allocator.reuse();
+      if (OB_FAIL(pre_table_sort_key.deep_copy(table_priv.get_sort_key(), tmp_allocator))) {
+        SHARE_SCHEMA_LOG(WARN, "alloc_table_schema failed", KR(ret));
+      }
     }
   }
   if (ret != common::OB_ITER_END) {
@@ -3479,9 +3519,11 @@ int ObSchemaRetrieveUtils::retrieve_label_se_policy_schema(
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_id = common::OB_INVALID_ID;
-  S schema;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S schema(&allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     schema.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_label_se_policy_schema(tenant_id, result, schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill label_se_policy schema ", K(ret));
@@ -3514,9 +3556,11 @@ int ObSchemaRetrieveUtils::retrieve_label_se_component_schema(
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_id = common::OB_INVALID_ID;
-  S schema;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S schema(&allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     schema.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_label_se_component_schema(tenant_id, result, schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill label_se_component schema ", K(ret));
@@ -3549,9 +3593,11 @@ int ObSchemaRetrieveUtils::retrieve_label_se_label_schema(
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_id = common::OB_INVALID_ID;
-  S schema;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S schema(&allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     schema.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_label_se_label_schema(tenant_id, result, schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill label_se_label schema ", K(ret));
@@ -3584,9 +3630,11 @@ int ObSchemaRetrieveUtils::retrieve_label_se_user_level_schema(
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_id = common::OB_INVALID_ID;
-  S schema;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S schema(&allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     schema.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_label_se_user_level_schema(tenant_id, result, schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill label_se_user_level schema ", K(ret));
@@ -4403,11 +4451,13 @@ int ObSchemaRetrieveUtils::retrieve_foreign_key_info(
     TABLE_SCHEMA &table_schema)
 {
   int ret = OB_SUCCESS;
-  ObForeignKeyInfo foreign_key_info;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObForeignKeyInfo foreign_key_info(&allocator);
   uint64_t prev_foreign_key_id = common::OB_INVALID_ID;
   bool is_deleted = false;
   while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     foreign_key_info.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_foreign_key_info(tenant_id, table_schema.get_table_id(), result, foreign_key_info, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill foreign key info", K(ret));
     } else if (foreign_key_info.foreign_key_id_ == prev_foreign_key_id) {
@@ -4823,9 +4873,11 @@ int ObSchemaRetrieveUtils::retrieve_profile_schema(
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_id = common::OB_INVALID_ID;
-  S schema;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S schema(&allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     schema.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_profile_schema(tenant_id, result, schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill profile schema ", K(ret));
@@ -4888,9 +4940,11 @@ int ObSchemaRetrieveUtils::retrieve_directory_schema(
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_id = common::OB_INVALID_ID;
-  S schema;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S schema(&allocator);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
     schema.reset();
+    allocator.reuse();
     bool is_deleted = false;
     if (OB_FAIL(fill_directory_schema(tenant_id, result, schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill directory schema ", K(ret));
@@ -5016,10 +5070,13 @@ int ObSchemaRetrieveUtils::retrieve_rls_column_schema(
   bool is_deleted = false;
   uint64_t prev_policy_id = common::OB_INVALID_ID;
   uint64_t prev_column_id = common::OB_INVALID_ID;
-  ObRlsSecColumnSchema rls_column_schema;
   ObRlsPolicySchema *rls_policy_schema_ptr = NULL;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObRlsSecColumnSchema rls_column_schema(&allocator);
   while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     is_deleted = false;
+    rls_column_schema.reset();
+    allocator.reuse();
     if (OB_FAIL(fill_rls_column_schema(tenant_id, result, rls_column_schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill rls_column schema", K(ret));
     } else if (rls_column_schema.get_rls_policy_id() == prev_policy_id

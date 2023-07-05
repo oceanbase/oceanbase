@@ -1081,6 +1081,7 @@ int ObIndexBuilderUtil::generate_prefix_column(
         old_column->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
         prefix_column.set_prev_column_id(UINT64_MAX);
         prefix_column.set_next_column_id(UINT64_MAX);
+        prefix_column.set_nullable(true);
         if (OB_INVALID_ID != spec_id) {
           // 只有备份恢复create index才会设置column id --> ObCreateIndexResolver::resolve_index_column_node
           // 该column id指定的是前缀索引生成列的column id

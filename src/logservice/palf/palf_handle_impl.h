@@ -440,6 +440,7 @@ public:
   // - OB_INVALID_ARGUMENT
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
+  // - OB_NEED_RETRY: the block is being flashback, need retry.
   // - others: bug
   virtual int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) = 0;
 
@@ -456,6 +457,7 @@ public:
   // - OB_SUCCESS; locate_by_lsn_coarsely success
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
+  // - OB_NEED_RETRY: the block is being flashback, need retry.
   // - others: bug
   virtual int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) = 0;
   virtual int get_begin_lsn(LSN &lsn) const = 0;
@@ -1002,8 +1004,7 @@ private:
                                       const int64_t proposal_id,
                                       const int64_t election_epoch,
                                       bool &is_already_finished,
-                                      common::ObMemberList &log_sync_memberlist,
-                                      int64_t &log_sync_repclia_num) const;
+                                      LogConfigInfo &new_config_info) const;
   int one_stage_config_change_(const LogConfigChangeArgs &args, const int64_t timeout_us);
   int check_need_rebuild_(const LSN &base_lsn,
                           const LogInfo &base_prev_log_info,

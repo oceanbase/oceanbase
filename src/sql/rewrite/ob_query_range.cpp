@@ -80,7 +80,9 @@ ObQueryRange::ObQueryRange()
       has_exec_param_(false),
       is_equal_and_(false),
       equal_offs_(allocator_),
-      expr_final_infos_(allocator_)
+      expr_final_infos_(allocator_),
+      mem_used_(allocator_.used()),
+      is_reach_mem_limit_(false)
 {
 }
 
@@ -103,7 +105,9 @@ ObQueryRange::ObQueryRange(ObIAllocator &alloc)
       has_exec_param_(false),
       is_equal_and_(false),
       equal_offs_(allocator_),
-      expr_final_infos_(allocator_)
+      expr_final_infos_(allocator_),
+      mem_used_(allocator_.used()),
+      is_reach_mem_limit_(false)
 {
 }
 
@@ -146,6 +150,8 @@ void ObQueryRange::reset()
   equal_offs_.reset();
   expr_final_infos_.reset();
   columnId_map_.destroy();
+  is_reach_mem_limit_ = false;
+  mem_used_ = 0;
 }
 
 int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
@@ -165,10 +171,15 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
   } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObQueryRangeCtx)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc query range context failed", K(ret));
+  } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(exec_ctx));
   } else {
     query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, expr_constraints, params);
     query_range_ctx_->phy_rowid_for_table_loc_ = phy_rowid_for_table_loc;
     query_range_ctx_->ignore_calc_failure_ = ignore_calc_failure;
+    query_range_ctx_->range_optimizer_max_mem_size_ = exec_ctx->get_my_session()->get_range_optimizer_max_mem_size();
+
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_columns.count(); ++i) {
     const ColumnItem &col = range_columns.at(i);
@@ -251,7 +262,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const ObDataTypeCastParams &dtc_params,
                                                   ObExecContext *exec_ctx,
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
-                                                  const ParamsIArray *params /* = NULL */)
+                                                  const ParamsIArray *params /* = NULL */,
+                                                  const bool use_in_optimization /* = true */)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
@@ -268,6 +280,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
       GET_ALWAYS_TRUE_OR_FALSE(true, root);
     } else {
       if (OB_FAIL(preliminary_extract(expr_root, root, dtc_params,
+                                      use_in_optimization,
                                       T_OP_IN == expr_root->get_expr_type()))) {
         LOG_WARN("gen table range failed", K(ret));
       } else if (query_range_ctx_->cur_expr_is_precise_ && root != NULL) {
@@ -305,7 +318,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
     }
     if (OB_SUCC(ret) && NULL != root) {
       ObSqlBitSet<> key_offsets;
-      if (OB_FAIL(refine_large_range_graph(root))) {
+      if (OB_FAIL(refine_large_range_graph(root, use_in_optimization))) {
         LOG_WARN("failed to refine large range graph", K(ret));
       } else if (OB_FAIL(check_graph_type(*root))) {
         LOG_WARN("check graph type failed", K(ret));
@@ -686,7 +699,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
                                                   const ParamsIArray *params /* = NULL */,
                                                   const bool phy_rowid_for_table_loc /* = false*/,
-                                                  const bool ignore_calc_failure /* = true*/)
+                                                  const bool ignore_calc_failure /* = true*/,
+                                                  const bool use_in_optimization /* = true */)
 {
   int ret = OB_SUCCESS;
   ObKeyPartList and_ranges;
@@ -695,7 +709,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
   ObKeyPartList geo_ranges;
   bool has_geo_expr = false;
 
-  SQL_REWRITE_LOG(DEBUG, "preliminary extract", K(range_columns), K(root_exprs));
+  SQL_REWRITE_LOG(DEBUG, "preliminary extract", K(range_columns), K(root_exprs), K(use_in_optimization));
   ObSEArray<ObRawExpr *, 16> candi_exprs;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx,
@@ -719,6 +733,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
       if (OB_ISNULL(cur_expr)) {
         // continue
       } else if (OB_FAIL(preliminary_extract(cur_expr, temp_result, dtc_params,
+                                             use_in_optimization,
                                              T_OP_IN == cur_expr->get_expr_type()))) {
         LOG_WARN("Generate table range failed", K(ret));
       } else if (NULL == temp_result) {
@@ -778,15 +793,14 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(and_range_graph(and_ranges, temp_result))) {
       LOG_WARN("And query range failed", K(ret));
-    } else if (OB_UNLIKELY(NULL == temp_result)) {
-      // no range left
-    } else if (contain_in_ && OB_FAIL(rebuild_in_graph(temp_result))) {
+    } else if (contain_in_ && !query_range_ctx_->need_final_extract_ &&
+               OB_FAIL(rebuild_in_graph(temp_result))) {
       LOG_WARN("failed to rebuild and graph for in key", K(ret));
-    } else if (OB_FAIL(refine_large_range_graph(temp_result))) {
+    } else if (OB_FAIL(refine_large_range_graph(temp_result, use_in_optimization))) {
       LOG_WARN("failed to refine large range graph", K(ret));
     } else if (OB_FAIL(check_graph_type(*temp_result))) {
       LOG_WARN("check graph type failed", K(ret));
-    } else if (OB_FAIL(generate_expr_final_info())) {
+    } else if (!is_reach_mem_limit_ && OB_FAIL(generate_expr_final_info())) {
       LOG_WARN("failed to generate final exprs");
     }
   }
@@ -810,7 +824,7 @@ int ObQueryRange::rebuild_in_graph(ObKeyPart *&out_key_part)
     LOG_WARN("get unexpected null", K(ret));
   } else {
     ObKeyPartList or_list;
-    if (OB_FAIL(split_general_or(out_key_part, or_list))) {
+    if (OB_FAIL(split_or(out_key_part, or_list))) {
       LOG_WARN("failed to split general or", K(ret));
     } else {
       ObKeyPartList res_arr;
@@ -913,7 +927,7 @@ bool ObQueryRange::is_and_next_useless(ObKeyPart *cur_key, ObKeyPart *and_next, 
 }
 
 // if the range size is large then RANGE_MAX_SIZE, remove some ranges according to pos_.offset_
-int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
+int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part, bool use_in_optimization)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObKeyPart*, 8> pre_key_parts;
@@ -923,6 +937,7 @@ int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
   ObSEArray<uint64_t, 8> next_or_count;
   uint64_t cur_range_size = 1;
   bool need_refine = false;
+  int64_t max_range_size = use_in_optimization ? MAX_RANGE_SIZE_NEW : MAX_RANGE_SIZE_OLD;
   if (OB_ISNULL(key_part)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart is null", K(ret), K(key_part));
@@ -936,7 +951,7 @@ int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
     if (OB_FAIL(compute_range_size(key_parts, or_count, next_key_parts, next_or_count,
                                    cur_range_size))) {
       LOG_WARN("failed to compute range size", K(ret));
-    } else if (cur_range_size > MAX_RANGE_SIZE) {
+    } else if (cur_range_size > max_range_size) {
       need_refine = true;
     } else if (OB_FAIL(pre_key_parts.assign(key_parts))) {
       LOG_WARN("failed to assign array", K(ret), K(key_parts));
@@ -946,7 +961,7 @@ int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
       LOG_WARN("failed to assign array", K(ret), K(next_or_count));
     } else { /* do nothing */ }
   }
-  range_size_ = need_refine ? MAX_RANGE_SIZE :
+  range_size_ = need_refine ? max_range_size :
                 cur_range_size < RANGE_BUCKET_SIZE ? RANGE_BUCKET_SIZE : cur_range_size;
   if (OB_SUCC(ret) && need_refine) {
     ObKeyPart *first_keypart = NULL;
@@ -1221,8 +1236,10 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
       if (cur->in_keypart_->is_strict_in_ &&
           cur->in_keypart_->get_min_offset() == (++depth)) {
         depth = cur->in_keypart_->get_max_offset();
-        is_precise_get = (cur->in_keypart_->is_in_precise_get() &&
-                                        cur->item_next_ == NULL);
+        if (is_precise_get) {
+          is_precise_get = (cur->in_keypart_->is_in_precise_get() &&
+                            cur->or_next_ == NULL && cur->item_next_ == NULL);
+        }
       } else {
         is_precise_get = false;
         max_pos = cur->in_keypart_->get_min_offset();
@@ -1997,6 +2014,12 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
             b_flag = true;
           }
         }
+      } else if (tmp_key_part->is_always_true()) {
+        // (c1,c2) < (1,2), if c1 is not key but c2 is, then key_part c2 < 2 is returned
+        // however, (0,3) < (1,2) but not satisfy c2 < 2
+        // hence, extract row key part until we meet always true
+        b_flag = true;
+        row_is_precise = false;
       } else if (OB_FAIL(add_row_item(row_tail, tmp_key_part))) {
         LOG_WARN("Add basic query key part failed", K(ret));
       } else {
@@ -2571,8 +2594,7 @@ int ObQueryRange::pre_extract_single_in_op(const ObOpRawExpr *b_expr,
   } else if (OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("r_expr is null.", K(ret));
-  } else if (r_expr->get_param_count() > 10000) {
-    // do not extract range over MAX_RANGE_SIZE
+  } else if (r_expr->get_param_count() > MAX_RANGE_SIZE_OLD) {
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     query_range_ctx_->cur_expr_is_precise_ = false;
   } else {
@@ -2618,18 +2640,11 @@ int ObQueryRange::pre_extract_single_in_op(const ObOpRawExpr *b_expr,
         out_key_part = find_false;
       }
       query_range_ctx_->cur_expr_is_precise_ = cur_in_is_precise;
-      int64_t max_pos = -1;
-      int64_t cur_pos = out_key_part->pos_.offset_;
-      bool is_strict_equal = true;
-      if (OB_FAIL(is_strict_equal_graph(out_key_part, cur_pos, max_pos, is_strict_equal))) {
-        LOG_WARN("is trict equal graph failed", K(ret));
-      } else if (NULL != out_key_part && !is_strict_equal) {
-        ObKeyPartList key_part_list;
-        if (OB_FAIL(split_or(out_key_part, key_part_list))) {
-          LOG_WARN("split temp_result to or_list failed", K(ret));
-        } else if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
-          LOG_WARN("or range graph failed", K(ret));
-        }
+      ObKeyPartList key_part_list;
+      if (OB_FAIL(split_or(out_key_part, key_part_list))) {
+        LOG_WARN("split temp_result to or_list failed", K(ret));
+      } else if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
+        LOG_WARN("or range graph failed", K(ret));
       }
     }
   }
@@ -2653,7 +2668,7 @@ int ObQueryRange::pre_extract_complex_in_op(const ObOpRawExpr *b_expr,
   } else if (OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("r_expr is null.", K(ret));
-  } else if (r_expr->get_param_count() > 10000) {
+  } else if (r_expr->get_param_count() > MAX_RANGE_SIZE_OLD) {
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     query_range_ctx_->cur_expr_is_precise_ = false;
   } else {
@@ -2875,7 +2890,10 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
       LOG_WARN("failed to adjust in param values", K(ret));
     } else if (OB_FAIL(tmp_key_part->formalize_keypart(contain_row_))) {
       LOG_WARN("failed to formalize in key", K(ret));
-    } else {
+    } else if (tmp_key_part->is_always_true() || tmp_key_part->is_always_false()) {
+      query_range_ctx_->cur_expr_is_precise_ = false;
+    }
+    if (OB_SUCC(ret)) {
       out_key_part = tmp_key_part;
     }
   }
@@ -2896,6 +2914,8 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
   if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(l_expr), K(r_expr));
+  } else if (OB_UNLIKELY(l_expr->get_param_count() > MAX_EXTRACT_IN_COLUMN_NUMBER)) {
+    // do nothiing
   } else if (OB_FAIL(idx_pos_map.create(l_expr->get_param_count(), "IdxKeyMap", "IdxKeyMap"))) {
     LOG_WARN("fail to init hashmap", K(ret));
   } else if (OB_FAIL(idx_param_map.create(l_expr->get_param_count(), "IdxParamMap", "IdxParamMap"))) {
@@ -3384,7 +3404,8 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
 
 int ObQueryRange::pre_extract_and_or_op(const ObOpRawExpr *m_expr,
                                         ObKeyPart *&out_key_part,
-                                        const ObDataTypeCastParams &dtc_params)
+                                        const ObDataTypeCastParams &dtc_params,
+                                        const bool use_in_optimization)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(m_expr) || OB_ISNULL(query_range_ctx_)) {
@@ -3396,7 +3417,7 @@ int ObQueryRange::pre_extract_and_or_op(const ObOpRawExpr *m_expr,
     for (int64_t i = 0; OB_SUCC(ret) && i < m_expr->get_param_count(); ++i) {
       ObKeyPart *tmp = NULL;
       query_range_ctx_->cur_expr_is_precise_ = false;
-      if (OB_FAIL(preliminary_extract(m_expr->get_param_expr(i), tmp, dtc_params))) {
+      if (OB_FAIL(preliminary_extract(m_expr->get_param_expr(i), tmp, dtc_params, use_in_optimization))) {
         LOG_WARN("preliminary_extract failed", K(ret));
       } else if (T_OP_AND == m_expr->get_expr_type()) {
         if (OB_FAIL(add_and_item(key_part_list, tmp))) {
@@ -3623,6 +3644,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
 int ObQueryRange::preliminary_extract(const ObRawExpr *node,
                                       ObKeyPart *&out_key_part,
                                       const ObDataTypeCastParams &dtc_params,
+                                      const bool use_in_optimization,
                                       const bool is_single_in /* = false */)
 {
   int ret = OB_SUCCESS;
@@ -3665,7 +3687,7 @@ int ObQueryRange::preliminary_extract(const ObRawExpr *node,
         LOG_WARN("extract not_btw failed", K(ret));
       }
     } else if (T_OP_IN  == node->get_expr_type()) {
-      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
+      if (use_in_optimization && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
         if (OB_FAIL(pre_extract_in_op(b_expr, out_key_part, dtc_params))) {
           LOG_WARN("extract single in_op failed", K(ret));
         } else if (!out_key_part->is_always_true() && !out_key_part->is_always_false()) {
@@ -3685,7 +3707,7 @@ int ObQueryRange::preliminary_extract(const ObRawExpr *node,
         LOG_WARN("extract in_op failed", K(ret));
       }
     } else if (T_OP_AND == node->get_expr_type() || T_OP_OR == node->get_expr_type()) {
-      if (OB_FAIL(pre_extract_and_or_op(b_expr, out_key_part, dtc_params))) {
+      if (OB_FAIL(pre_extract_and_or_op(b_expr, out_key_part, dtc_params, use_in_optimization))) {
         LOG_WARN("extract and_or failed", K(ret));
       }
     } else if (node->is_spatial_expr()) {
@@ -3725,8 +3747,6 @@ int ObQueryRange::check_null_param_compare_in_row(const ObRawExpr *l_expr,
   } else {/*do nothing*/}
   return ret;
 }
-
-#undef GET_ALWAYS_TRUE_OR_FALSE
 
 void ObQueryRange::print_keypart(const ObKeyPart *keypart, const ObString &prefix) const
 {
@@ -3842,8 +3862,11 @@ int ObQueryRange::split_or(ObKeyPart *graph, ObKeyPartList &or_list)
           ObKeyPart *new_and_next = NULL;
           if (OB_FAIL(deep_copy_range_graph(cur->and_next_, new_and_next))) {
             LOG_WARN("Copy range graph failed", K(ret));
+          } else if (is_reach_mem_limit_) {
+            cur->and_next_ = NULL;
+          } else {
+            cur->and_next_ = new_and_next;
           }
-          cur->and_next_ = new_and_next;
         }
       }
       if (OB_SUCC(ret)) {
@@ -4310,12 +4333,17 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
         ObKeyPart *new_r_cur = NULL;
         if (OB_FAIL(deep_copy_key_part_and_items(l_cur, new_l_cur))) {
           LOG_WARN("Light copy key part and items failed", K(ret));
+        } else if (is_reach_mem_limit_) {
+          res_gt = new_l_cur;
+          always_true = true;
         } else if(OB_FAIL(deep_copy_key_part_and_items(r_cur, new_r_cur))) {
           LOG_WARN("Right copy key part and items failed", K(ret));
-        } else if (OB_ISNULL(new_l_cur) || OB_ISNULL(new_r_cur) ||
-                  (OB_UNLIKELY(new_l_cur->is_like_key() && new_r_cur->is_like_key()))) {
+        } else if (is_reach_mem_limit_) {
+          res_gt = new_r_cur;
+          always_true = true;
+        } else if (OB_ISNULL(new_l_cur) || OB_ISNULL(new_r_cur)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("new_l_cur and r_cur are both like key", K(ret), K(*new_l_cur), K(*new_r_cur));
+          LOG_WARN("get unexpected null", K(ret), K(new_l_cur), K(new_r_cur));
         } else if (new_l_cur->is_like_key()) {
           result = new_r_cur;
         } else if (new_r_cur->is_like_key()) {
@@ -4324,11 +4352,6 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           result = new_l_cur;
         } else if (new_r_cur->is_in_key()) {
           result = new_r_cur;
-        } else if (OB_UNLIKELY(!new_l_cur->is_normal_key() || !new_r_cur->is_normal_key()
-                   || new_l_cur->is_always_true() || new_l_cur->is_always_false()
-                   || new_r_cur->is_always_true() || new_r_cur->is_always_false())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("new_l_cur and r_cur are not always true or false.", K(*new_l_cur), K(*new_r_cur));
         } else if (OB_FAIL(do_key_part_node_and(new_l_cur, new_r_cur, result))) {  // do AND of each key part node only
           LOG_WARN("Do key part node intersection failed", K(ret));
         } else if(OB_ISNULL(result)) {
@@ -4365,7 +4388,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           }
         }
 
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && !is_reach_mem_limit_) {
           result->link_gt(rest);
           // link to the or_next_ list
           if (NULL != tail) {
@@ -4578,9 +4601,13 @@ int ObQueryRange::deep_copy_key_part_and_items(
   int ret = OB_SUCCESS;
   const ObKeyPart *tmp_key_part = src_key_part;
   ObKeyPart *prev_key_part = NULL;
-  while (OB_SUCC(ret) && NULL != tmp_key_part) {
+  while (OB_SUCC(ret) && !is_reach_mem_limit_ && NULL != tmp_key_part) {
     ObKeyPart *new_key_part = NULL;
-    if (OB_ISNULL(new_key_part = create_new_key_part())) {
+    if (query_range_ctx_ != NULL &&
+       (allocator_.used() - mem_used_) >= query_range_ctx_->range_optimizer_max_mem_size_) {
+      is_reach_mem_limit_ = true;
+      LOG_WARN("use too much memory return always true keypart", K(mem_used_), K(allocator_.used()));
+    } else if (OB_ISNULL(new_key_part = create_new_key_part())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc ObKeyPart failed", K(ret));
     } else if (OB_FAIL(new_key_part->deep_node_copy(*tmp_key_part))) {
@@ -4593,6 +4620,14 @@ int ObQueryRange::deep_copy_key_part_and_items(
       }
       prev_key_part = new_key_part;
       tmp_key_part = tmp_key_part->item_next_;
+    }
+  }
+  if (OB_SUCC(ret) && is_reach_mem_limit_) {
+    if (OB_FAIL(alloc_full_key_part(dest_key_part))) {
+      LOG_WARN("alloc_full_key_part failed", K(ret));
+    } else {
+      dest_key_part->id_ = src_key_part->id_;
+      dest_key_part->pos_ = src_key_part->pos_;
     }
   }
   return ret;
@@ -4631,16 +4666,20 @@ int ObQueryRange::do_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart *&res_gt
     ObKeyPart *tail = NULL;
     ObKeyPart *l_cur = NULL;
     ObKeyPart *r_cur = NULL;
-    for (l_cur = l_gt; OB_SUCC(ret) && NULL != l_cur; l_cur = l_cur->or_next_) {
+    for (l_cur = l_gt; OB_SUCC(ret) && !is_reach_mem_limit_ && NULL != l_cur; l_cur = l_cur->or_next_) {
       bool find_true = false;
-      for (r_cur = r_gt; OB_SUCC(ret) && !find_true && NULL != r_cur; r_cur = r_cur->or_next_) {
+      for (r_cur = r_gt; OB_SUCC(ret) && !find_true && !is_reach_mem_limit_ && NULL != r_cur; r_cur = r_cur->or_next_) {
         ObKeyPart *result = NULL;
         ObKeyPart *new_l_cur = NULL;
         ObKeyPart *new_r_cur = NULL;
         if (OB_FAIL(deep_copy_key_part_and_items(l_cur, new_l_cur))) {
           LOG_WARN("Light copy key part and items failed", K(ret));
+        } else if (is_reach_mem_limit_) {
+          res_gt = new_l_cur;
         } else if (OB_FAIL(deep_copy_key_part_and_items(r_cur, new_r_cur))) {
           LOG_WARN("right copy key part and items failed", K(ret));
+        } else if (is_reach_mem_limit_) {
+          res_gt = new_r_cur;
         } else if (OB_FAIL(do_key_part_node_and(new_l_cur, new_r_cur, result))) { // do AND of each key part node only
           LOG_WARN("Do key part node intersection failed", K(ret));
         } else if (OB_ISNULL(result)) {
@@ -4703,23 +4742,29 @@ int ObQueryRange::and_single_gt_head_graphs(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("And operand can not be empty",
              K(ret), K(l_array.get_size()), K(r_array.get_size()));
+  } else if (is_reach_mem_limit_) {
+    // do nothing
   } else {
     res_array.clear();
     ObKeyPart *find_false = NULL;
     bool always_true = false;
     for (ObKeyPart *l = l_array.get_first();
-         OB_SUCC(ret) && !always_true && l != l_array.get_header() && NULL != l;
+         OB_SUCC(ret) && !always_true && l != l_array.get_header() && NULL != l && !is_reach_mem_limit_;
          l = l->get_next()) {
       ObKeyPart *tmp_result = NULL;
       for (ObKeyPart *r = r_array.get_first();
-           OB_SUCC(ret) && r != r_array.get_header() && NULL != r;
+           OB_SUCC(ret) && r != r_array.get_header() && NULL != r && !is_reach_mem_limit_;
            r = r->get_next()) {
         ObKeyPart *l_cur_gt = NULL;
         ObKeyPart *r_cur_gt = NULL;
         if (OB_FAIL(deep_copy_range_graph(l, l_cur_gt))) {
           LOG_WARN("Left deep copy range graph failed", K(ret));
+        } else if (is_reach_mem_limit_) {
+          // do nothing
         } else if (OB_FAIL(deep_copy_range_graph(r, r_cur_gt))) {
           LOG_WARN("Right deep copy range graph failed", K(ret));
+        } else if (is_reach_mem_limit_) {
+          // do nothing
         } else if (OB_ISNULL(l_cur_gt) || OB_ISNULL(r_cur_gt)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("key_part is null.", K(ret), K(l_cur_gt), K(r_cur_gt));
@@ -4841,7 +4886,7 @@ int ObQueryRange::and_single_gt_head_graphs(
                   // do nothing
                 }
                 // 3. AND head and rest
-                if (OB_SUCC(ret)) {
+                if (OB_SUCC(ret) && !is_reach_mem_limit_) {
                   if (NULL != rest_result && rest_result->is_always_false()) {
                     // not contain row, if rest result is false, then whole result is false
                     if (!contain_row_) {
@@ -4859,7 +4904,7 @@ int ObQueryRange::and_single_gt_head_graphs(
         }
 
         // 4. add current result to result array
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && !is_reach_mem_limit_) {
           // and the result to result array
           if (OB_ISNULL(tmp_result)) {
             ret = OB_ERR_UNEXPECTED;
@@ -4888,7 +4933,7 @@ int ObQueryRange::and_single_gt_head_graphs(
         }
       }
     }
-    if (OB_SUCC(ret) && res_array.get_size() <= 0) {
+    if (OB_SUCC(ret) && res_array.get_size() <= 0 && !is_reach_mem_limit_) {
       // all false ranges
       if (OB_ISNULL(find_false)) {
         ret = OB_ERR_UNEXPECTED;
@@ -4998,6 +5043,8 @@ int ObQueryRange::and_range_graph(ObKeyPartList &ranges, ObKeyPart  *&out_key_pa
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("AND array can not be empty",
              K(ret), K(ranges.get_size()));
+  } else if (is_reach_mem_limit_) {
+    // do nothing
   } else if (1 == ranges.get_size()) {
     out_key_part = ranges.get_first();
     ranges.remove(out_key_part);
@@ -5022,32 +5069,24 @@ int ObQueryRange::and_range_graph(ObKeyPartList &ranges, ObKeyPart  *&out_key_pa
     ObKeyPartList res_storage1;
     ObKeyPartList res_storage2;
     ObKeyPart *cur = ranges.get_first();
+    ranges.remove_first();
     if (OB_ISNULL(cur)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cur is null.", K(ret));
-    } else {
-      ObKeyPart *cur_next = cur->get_next();
-      ranges.remove_first();
-      if (OB_ISNULL(cur_next)) {
+    } else if (cur->is_always_true() || cur->is_always_false()) {
+      cur->and_next_ = NULL;
+      cur->or_next_ = NULL;
+      if (!res_storage1.add_last(cur)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cur_next is null.", K(ret));
-      } else if (cur->is_always_true() || cur->is_always_false()) {
-        cur->and_next_ = NULL;
-        cur->or_next_ = NULL;
-        if (!res_storage1.add_last(cur)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("res_storage1 added cur failed.", K(ret));
-        }
-      } else if (OB_FAIL(split_general_or(cur, res_storage1))) {
-        LOG_WARN("split general or key part failed", K(ret));
-      } else {
-        // do nothing
+        LOG_WARN("res_storage1 added cur failed.", K(ret));
       }
+    } else if (OB_FAIL(split_general_or(cur, res_storage1))) {
+      LOG_WARN("split general or key part failed", K(ret));
     }
     ObKeyPartList *l_array = &res_storage1;
     ObKeyPartList *res_array = &res_storage2;
     int i = 0;
-    while (OB_SUCC(ret) && ranges.get_size() > 0) {
+    while (OB_SUCC(ret) && ranges.get_size() > 0 && !is_reach_mem_limit_) {
       ObKeyPart *other = ranges.get_first();
       ranges.remove_first();
       ++i;
@@ -5059,7 +5098,7 @@ int ObQueryRange::and_range_graph(ObKeyPartList &ranges, ObKeyPart  *&out_key_pa
         res_array = &res_storage1;
       }
       ObKeyPartList r_array;
-      if (OB_ISNULL(other) || OB_ISNULL(l_array) || OB_ISNULL(l_array->get_first())) {
+      if (OB_ISNULL(other)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("other is null.", K(ret));
       } else if (other->is_always_true() || other->is_always_false()) {
@@ -5069,24 +5108,26 @@ int ObQueryRange::and_range_graph(ObKeyPartList &ranges, ObKeyPart  *&out_key_pa
         }
       } else if (OB_FAIL(split_general_or(other, r_array))) {
         LOG_WARN("split general or key part failed", K(ret));
-      } else {
-        // do nothing
       }
       if (OB_FAIL(ret)) {
-        LOG_WARN("Split graph failed", K(ret));
       } else if (OB_FAIL(SMART_CALL(and_single_gt_head_graphs(*l_array, r_array, *res_array)))) {
         LOG_WARN("And single general term head graphs failed", K(ret));
-      } else if (OB_ISNULL(res_array) || OB_ISNULL(ranges.get_first())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("res_array or ranges.get_first() is null.", K(ret));
-      } else { }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(link_or_graphs(*res_array, out_key_part))) {
-        LOG_WARN("And single general term head graphs failed",
-                 K(ret), K(res_array->get_size()));
       }
     }
+    if (OB_FAIL(ret) || is_reach_mem_limit_) {
+    } else if (OB_FAIL(link_or_graphs(*res_array, out_key_part))) {
+      LOG_WARN("And single general term head graphs failed",
+                K(ret), K(res_array->get_size()));
+    }
+  }
+  if (OB_SUCC(ret) && is_reach_mem_limit_ && query_range_ctx_ != NULL) {
+    GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    contain_in_ = false;
+    contain_row_ = false;
+    has_exec_param_ = false;
+    query_range_ctx_->precise_range_exprs_.reset();
+    query_range_ctx_->final_exprs_.reset();
+    LOG_WARN("use too much memory", K(is_reach_mem_limit_), K(query_range_ctx_->range_optimizer_max_mem_size_));
   }
   return ret;
 }
@@ -5541,6 +5582,8 @@ int ObQueryRange::union_in_with_in(ObKeyPartList &or_list,
       }
     } else if (OB_FAIL(cur1->in_keypart_->union_in_key(cur2->in_keypart_))) {
       LOG_WARN("failed to union in key", K(ret));
+    } else if (cur1->and_next_ != NULL && cur1->and_next_->equal_to(cur2->and_next_)) {
+      // keep and_next_
     } else {
       cur1->and_next_ = NULL;
     }
@@ -5694,6 +5737,7 @@ int ObQueryRange::union_single_equal_cond(ObKeyPart *cur1,
   ObKeyPart *cur2_and_next = NULL;
   ObKeyPartList or_list;
   ObKeyPart *new_next = NULL;
+  bool need_remove_precise = false;
   if (OB_ISNULL(cur1) || OB_ISNULL(cur2) ||
       OB_ISNULL(cur2_and_next = cur2->and_next_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -5707,6 +5751,9 @@ int ObQueryRange::union_single_equal_cond(ObKeyPart *cur1,
     ObKeyPart *new_cur1 = NULL;
     if (OB_FAIL(deep_copy_range_graph(cur1, new_cur1))) {
       LOG_WARN("failed to deep copy range", K(ret));
+    } else if (is_reach_mem_limit_) {
+      cur2->and_next_ = NULL;
+      need_remove_precise = true;
     } else if (OB_ISNULL(new_cur1) || OB_ISNULL(new_cur1->and_next_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(new_cur1));
@@ -5731,6 +5778,9 @@ int ObQueryRange::union_single_equal_cond(ObKeyPart *cur1,
     ObKeyPart *new_cur1 = NULL;
     if (OB_FAIL(deep_copy_range_graph(cur1, new_cur1))) {
       LOG_WARN("failed to deep copy range", K(ret));
+     } else if (is_reach_mem_limit_) {
+      cur2->and_next_ = NULL;
+      need_remove_precise = true;
     } else if (OB_ISNULL(new_cur1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -5752,12 +5802,7 @@ int ObQueryRange::union_single_equal_cond(ObKeyPart *cur1,
       } else {
         // do nothing
       }
-      // remove precise for correctness
-      if (OB_FAIL(remove_precise_range_expr(cur2->pos_.offset_))) {
-        LOG_WARN("failed to remove precise range expr", K(ret));
-      } else if (query_range_ctx_ != NULL) {
-        query_range_ctx_->cur_expr_is_precise_ = false;
-      }
+      need_remove_precise = true;
     } else {
       // (c1, c2) in ((1,2),(3,4)) or c1 = 1 and c2 > 0 -> (c1, c2) in ((3,4)) or c1 = 1 and c2 > 0
       need_remove_val = true;
@@ -5769,12 +5814,13 @@ int ObQueryRange::union_single_equal_cond(ObKeyPart *cur1,
     // case 3: (c1, c3) in ((1,2),(3,4)) and c2 or c1 = 1 and c2
     need_remove_val = true;
     cur2->and_next_ = NULL;
-    // remove precise for correctness
-    if (OB_FAIL(remove_precise_range_expr(cur2->pos_.offset_))) {
-      LOG_WARN("failed to remove precise range expr", K(ret));
-    } else if (query_range_ctx_ != NULL) {
-      query_range_ctx_->cur_expr_is_precise_ = false;
-    }
+    need_remove_precise = true;
+  }
+  if (OB_FAIL(ret) || !need_remove_precise) {
+  } else if (OB_FAIL(remove_precise_range_expr(cur2->pos_.offset_))) {
+    LOG_WARN("failed to remove precise range expr", K(ret));
+  } else if (query_range_ctx_ != NULL) {
+    query_range_ctx_->cur_expr_is_precise_ = false;
   }
   return ret;
 }
@@ -6938,6 +6984,12 @@ if (OB_SUCC(ret) ) { \
         include_start = true; \
       } else if (cmp > 0) { \
         include_start = false; \
+      } else if (is_oracle_mode() && \
+                 ((column_type.get_type() == ObCharType && start.get_type() == ObVarcharType) || \
+                  (column_type.get_type() == ObNCharType && start.get_type() == ObNVarchar2Type))) { \
+        /* when char compare with varchar, same string may need return due to padding blank. \
+           e.g. c1(char(3)) > '1'(varchar(1)) will return '1  ' */ \
+        include_start = true; \
       } \
       start = *dest_val; \
     } \
@@ -8107,19 +8159,24 @@ int ObQueryRange::deep_copy_range_graph(ObKeyPart *src, ObKeyPart  *&dest)
 {
   int ret = OB_SUCCESS;
   ObKeyPart *prev_gt = NULL;
-  for (ObKeyPart *cur_gt = src; OB_SUCC(ret) && NULL != cur_gt; cur_gt = cur_gt->general_or_next()) {
+  for (ObKeyPart *cur_gt = src; OB_SUCC(ret) && NULL != cur_gt && !is_reach_mem_limit_;
+       cur_gt = cur_gt->general_or_next()) {
     ObKeyPart *and_next = NULL;
     ObKeyPart *new_key_part = NULL;
     ObKeyPart *prev_key_part = NULL;
     ObKeyPart *new_cur_gt_head = NULL;
     if (OB_FAIL(SMART_CALL(deep_copy_range_graph(cur_gt->and_next_, and_next)))) {
       LOG_WARN("Deep copy range graph failed", K(ret));
+    } else if (is_reach_mem_limit_) {
+      // do nothing
     } else {
       for (ObKeyPart *cur_or = cur_gt;
-           OB_SUCC(ret) && NULL != cur_or && cur_or->and_next_ == cur_gt->and_next_;
+           OB_SUCC(ret) && NULL != cur_or && cur_or->and_next_ == cur_gt->and_next_ && !is_reach_mem_limit_;
            cur_or = cur_or->or_next_) {
         if (OB_FAIL(deep_copy_key_part_and_items(cur_or, new_key_part))) {
           LOG_WARN("Deep copy key part and items failed");
+        } else if (is_reach_mem_limit_) {
+          // do nothing
         } else if (cur_or == cur_gt) {
           new_cur_gt_head = new_key_part;
         } else {
@@ -8141,7 +8198,7 @@ int ObQueryRange::deep_copy_range_graph(ObKeyPart *src, ObKeyPart  *&dest)
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !is_reach_mem_limit_) {
       if (NULL != prev_gt) {
         prev_gt->or_next_ = new_cur_gt_head;
       } else {
@@ -8754,6 +8811,8 @@ int ObQueryRange::generate_expr_final_info()
       OB_ISNULL(query_range_ctx_->exec_ctx_->get_sql_ctx())) {
     ret = OB_NOT_INIT;
     LOG_WARN("query range context is null", K(ret), K(query_range_ctx_));
+  } else if (OB_UNLIKELY(query_range_ctx_->final_exprs_.empty())) {
+    // do nothing
   } else if (OB_FAIL(expr_final_infos_.prepare_allocate(query_range_ctx_->final_exprs_.count()))) {
     LOG_WARN("init expr final info failed", K(ret));
   }

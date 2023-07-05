@@ -475,10 +475,12 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
   all_table_from_one_dblink = true;
   bool has_special_expr = false;
   is_reverse_link = false;
+  ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
-  } else if (stmt->has_sequence() || stmt->is_hierarchical_query() || stmt->is_unpivot_select()) {
+  } else if (stmt->has_sequence() || stmt->is_hierarchical_query() || stmt->is_unpivot_select() ||
+             (stmt->is_select_stmt() && sel_stmt->has_select_into())) {
     all_table_from_one_dblink = false;
   } else if (has_invalid_link_expr(*stmt, has_special_expr)) {
     LOG_WARN("failed to check stmt has invalid link expr", K(ret));
@@ -912,7 +914,9 @@ int ObTransformDBlink::split_link_table_info(ObDMLStmt *stmt, ObIArray<LinkTable
   }
   //remove table item which is generate link table
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_helpers.count(); ++i) {
-    if (temp_helpers.at(i).table_items_.count() != 1) {
+    if (!(temp_helpers.at(i).table_items_.count() == 1 &&
+          temp_helpers.at(i).semi_infos_.empty() &&
+          temp_helpers.at(i).conditions_.empty())) {
       if (OB_FAIL(new_helpers.push_back(temp_helpers.at(i)))) {
         LOG_WARN("failed to add helper", K(ret));
       }
@@ -994,6 +998,7 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
         temp.dblink_id_ = helper.dblink_id_;
         temp.is_reverse_link_ = helper.is_reverse_link_;
         temp.parent_table_ = helper.parent_table_;
+        temp.parent_semi_info_ = helper.parent_semi_info_;
         if (OB_FAIL(temp.table_items_.push_back(table))) {
           LOG_WARN("failed to push back table item", K(ret));
         } else if (OB_FAIL(temp_helpers.push_back(temp))) {
@@ -1018,6 +1023,47 @@ int ObTransformDBlink::inner_split_link_table_info(ObDMLStmt *stmt,
           //do nothing
         } else if (OB_FAIL(temp_helpers.at(j).conditions_.push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+    }
+    //redistribute semi infos
+    for (int64_t i = 0; OB_SUCC(ret) && i < helper.semi_infos_.count(); ++i) {
+      SemiInfo *semi_info = helper.semi_infos_.at(i);
+      ObRelIds semi_tables;
+      if (OB_ISNULL(semi_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null semi info", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
+                                                                   semi_info->left_table_ids_,
+                                                                   semi_tables))) {
+      LOG_WARN("failed to get rel ids", K(ret));
+      }
+      bool find = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_helpers.count(); ++j) {
+        table_ids.reuse();
+        if (OB_FAIL(ObTransformUtils::get_rel_ids_from_tables(stmt,
+                                                              temp_helpers.at(j).table_items_,
+                                                              table_ids))) {
+          LOG_WARN("failed to get table ids", K(ret));
+        } else if (!table_ids.is_superset(semi_tables)) {
+          //do nothing
+        } else if (OB_FAIL(temp_helpers.at(j).semi_infos_.push_back(semi_info))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else {
+          find = true;
+        }
+      }
+      if (OB_SUCC(ret) && !find) {
+        TableItem *table = stmt->get_table_item_by_id(semi_info->right_table_id_);
+        LinkTableHelper temp;
+        temp.dblink_id_ = helper.dblink_id_;
+        temp.is_reverse_link_ = helper.is_reverse_link_;
+        temp.parent_table_ = helper.parent_table_;
+        temp.parent_semi_info_ = helper.parent_semi_info_;
+        if (OB_FAIL(temp.table_items_.push_back(table))) {
+          LOG_WARN("failed to push back table item", K(ret));
+        } else if (OB_FAIL(temp_helpers.push_back(temp))) {
+          LOG_WARN("failed to push back helper", K(ret));
         }
       }
     }
@@ -1233,6 +1279,8 @@ int ObTransformDBlink::formalize_link_table(ObDMLStmt *stmt)
     LOG_WARN("failed to formalize table name", K(ret));
   } else if (OB_FAIL(formalize_select_item(stmt))) {
     LOG_WARN("failed to formalize select item", K(ret));
+  } else if (OB_FAIL(formalize_bool_select_expr(stmt))) {
+    LOG_WARN("failed to formalize bool select item", K(ret));
   } else if (OB_FAIL(formalize_column_item(stmt))) {
     LOG_WARN("failed to formalize column item", K(ret));
   }
@@ -1349,16 +1397,27 @@ int ObTransformDBlink::formalize_select_item(ObDMLStmt *stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (stmt->is_select_stmt()) {
-    ObSEArray<ObString, 4> alias_names;
     ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(stmt);
     ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
     uint64_t id = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
       SelectItem &select_item = select_items.at(i);
-      if (!select_item.is_real_alias_  &&
+      bool need_new_alias = false;
+      if (lib::is_oracle_mode() && !select_item.is_real_alias_ &&
           select_item.alias_name_.length() > MAX_COLUMN_NAME_LENGTH_ORACLE_11_g) {
         // for compatibility with Oracle 11 g,
         // rename the overlength expr.
+        need_new_alias = true;
+      }
+      for (int64_t j = 0; !need_new_alias && j < i; j ++) {
+        const ObString &tname = select_items.at(j).alias_name_.empty() ?
+                                select_items.at(j).expr_name_ :
+                                select_items.at(j).alias_name_ ;
+        if (0 == select_item.alias_name_.case_compare(tname)) {
+          need_new_alias = true;
+        }
+      }
+      if (need_new_alias) {
         int64_t pos = 0;
         const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
         const char *ALIAS_NAME = "ALIAS";
@@ -1400,6 +1459,33 @@ int ObTransformDBlink::formalize_select_item(ObDMLStmt *stmt)
   return ret;
 }
 
+int ObTransformDBlink::formalize_bool_select_expr(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (!lib::is_oracle_mode()) {
+    // do nothing
+  } else if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (stmt->is_select_stmt()) {
+    ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(stmt);
+    ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
+      SelectItem &select_item = select_items.at(i);
+      bool is_bool_expr = false;
+      if (OB_ISNULL(select_item.expr_)) {
+        LOG_WARN("unexpected select item", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(select_item.expr_, is_bool_expr))) {
+        LOG_WARN("failed to check is bool expr", K(ret));
+      } else if (is_bool_expr) {
+        // TODO : BOOL SELECT ITEM NOT SUPPORTED IN ORACLE MODE
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("bool select item for oracle dblink not supported", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObTransformDBlink::need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                       const int64_t current_level,

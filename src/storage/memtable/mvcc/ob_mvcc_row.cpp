@@ -801,9 +801,6 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
 
   ObRowLatchGuard guard(latch_);
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
-  ObTxTableGuard *tx_table_guard = ctx.get_tx_table_guard();
-  ObTxTable *tx_table = tx_table_guard->get_tx_table();
-  int64_t read_epoch = tx_table_guard->epoch();
   ObTransID writer_tx_id = ctx.get_tx_id();
   const SCN snapshot_version = snapshot.version_;
   const int64_t reader_seq_no = snapshot.scn_;
@@ -836,13 +833,8 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
       // read operation.(If you are intereted in it, read ObMvccRow::mvcc_write)
       ObTransID data_tx_id = iter->get_tx_id();
 
-      if (iter->is_delayed_cleanout()
-          && !(iter->is_committed() || iter->is_aborted())
-          && OB_FAIL(tx_table->cleanout_tx_node(data_tx_id,
-                                                read_epoch,
-                                                *this,
-                                                *iter,
-                                                false  /*need_row_latch*/))) {
+      if (iter->is_delayed_cleanout() && !(iter->is_committed() || iter->is_aborted()) &&
+          OB_FAIL(ctx.get_tx_table_guard()->cleanout_tx_node(data_tx_id, *this, *iter, false /*need_row_latch*/))) {
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
         // Case 2: the newest node is decided, so we can insert into it
@@ -1035,8 +1027,6 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
   ObRowLatchGuard guard(latch_);
 
   auto iter = ATOMIC_LOAD(&list_head_);
-  auto tx_table = ctx.get_tx_table_guard().get_tx_table();
-  int64_t read_epoch = ctx.get_tx_table_guard().epoch();
   bool need_retry = true;
 
   while (OB_SUCC(ret) && need_retry) {
@@ -1048,13 +1038,8 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
       need_retry = false;
     } else {
       auto data_tx_id = iter->tx_id_;
-      if (!(iter->is_committed() || iter->is_aborted())
-          && iter->is_delayed_cleanout()
-          && OB_FAIL(tx_table->cleanout_tx_node(data_tx_id,
-                                                read_epoch,
-                                                *this,
-                                                *iter,
-                                                false  /*need_row_latch*/))) {
+      if (!(iter->is_committed() || iter->is_aborted()) && iter->is_delayed_cleanout() &&
+          OB_FAIL(ctx.get_tx_table_guard().cleanout_tx_node(data_tx_id, *this, *iter, false /*need_row_latch*/))) {
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
         // Case 2: the newest node is decided, so node currently is not be locked

@@ -173,7 +173,8 @@ public:
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
   int check_scheduler_status();
-  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
+  int remove_callback_for_uncommited_txn(
+    const memtable::ObMemtableSet *memtable_set);
   int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
 
   void update_max_submitted_seq_no(const int64_t seq_no)
@@ -230,6 +231,7 @@ private:
                 K(ctx_tx_data_),
                 K(role_state_),
                 K(start_replay_ts_),
+                K(start_recover_ts_),
                 K(is_incomplete_replay_ctx_),
                 K(mt_ctx_),
                 K(coord_prepare_info_arr_),
@@ -578,7 +580,8 @@ public:
   int handle_tx_2pc_clear_resp(const Ob2pcClearRespMsg &msg);
   static int handle_tx_orphan_2pc_msg(const ObTxMsg &recv_msg,
                                       const common::ObAddr& self_addr,
-                                      ObITransRpc* rpc);
+                                      ObITransRpc* rpc,
+                                      const bool ls_deleted);
   // for xa
   int handle_tx_2pc_prepare_redo_req(const Ob2pcPrepareRedoReqMsg &msg);
   int handle_tx_2pc_prepare_redo_resp(const Ob2pcPrepareRedoRespMsg &msg);
@@ -620,7 +623,8 @@ private:
   static int post_orphan_msg_(const ObTwoPhaseCommitMsgType &msg_type,
                               const ObTxMsg &recv_msg,
                               const common::ObAddr &self_addr,
-                              ObITransRpc* rpc);
+                              ObITransRpc* rpc,
+                              const bool ls_deleted);
   static int get_max_decided_scn_(const share::ObLSID &ls_id, share::SCN &scn);
   int get_2pc_participants_copy(share::ObLSArray &copy_participants);
   // for xa
@@ -810,6 +814,7 @@ private:
   // set true when submitting redo log for freezing and reset after freezing
   bool is_submitting_redo_log_for_freeze_;
   share::SCN start_replay_ts_; // replay debug
+  share::SCN start_recover_ts_; // recover debug
 
   share::SCN start_working_log_ts_;
 

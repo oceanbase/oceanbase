@@ -687,18 +687,21 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
       // For CREATE TABLE statements, the database character set and collation are used as default
       // values for table definitions if the table character set and collation are not specified.
       // To override this, provide explicit CHARACTER SET and COLLATE table options.
-      int64_t coll_cs_db_int64 = -1;
-      int64_t coll_db_int64 = -1;
-      if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, coll_cs_db_int64))) {
-        SQL_RESV_LOG(WARN, "fail to get sys variable character_set_database", K(ret));
-      } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_COLLATION_DATABASE, coll_db_int64))) {
-        SQL_RESV_LOG(WARN, "fail to get sys variable collation_database", K(ret));
-      } else if (!ObCharset::is_valid_collation(coll_cs_db_int64) || !ObCharset::is_valid_collation(coll_db_int64)) {
+      const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+      ObString database_name;
+      uint64_t database_id = OB_INVALID_ID;
+      const ObDatabaseSchema *database_schema = NULL;
+      int tmp_ret = 0;
+      if (OB_SUCCESS != (tmp_ret = schema_checker_->get_database_id(tenant_id, database_name_, database_id)))  {
+        SQL_RESV_LOG(WARN, "fail to get database_id.", K(tmp_ret), K(database_name_), K(tenant_id));
+      } else if (OB_SUCCESS != (tmp_ret = schema_checker_->get_database_schema(tenant_id, database_id, database_schema))) {
+        LOG_WARN("failed to get db schema", K(tmp_ret), K(database_id));
+      } else if (OB_ISNULL(database_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        SQL_RESV_LOG(WARN, "invalid collation type", K(ret), K(coll_cs_db_int64), K(coll_db_int64));
+        LOG_WARN("unexpected error. db schema is null", K(ret), K(database_schema));
       } else {
-        charset_type_ = ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_cs_db_int64));
-        collation_type_ = static_cast<ObCollationType>(coll_db_int64);
+        charset_type_ = database_schema->get_charset_type();
+        collation_type_ = database_schema->get_collation_type();
       }
     } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type_, collation_type_))) {
       SQL_RESV_LOG(WARN, "fail to fill collation info", K(ret));
@@ -2119,7 +2122,15 @@ int ObDDLResolver::resolve_column_name(ObColumnSchemaV2 &column,
   CK (node->type_ == T_COLUMN_DEFINITION);
   if (OB_SUCC(ret)) {
     column_definition_ref_node = node->children_[0];
-    OZ (resolve_column_definition_ref(column, column_definition_ref_node, false));
+    if (OB_FAIL(resolve_column_definition_ref(column, column_definition_ref_node, false))) {
+      LOG_WARN("resolve def unexpected error", K(ret));
+    } else if (GEN_COLUMN_DEFINITION_NUM_CHILD == node->num_child_) {
+      if (node->children_[4] == NULL) {
+        column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+      } else if (node->children_[4]->type_ == T_STORED_COLUMN) {
+        column.add_column_flag(STORED_GENERATED_COLUMN_FLAG);
+      }
+    }
   }
   return ret;
 }
@@ -10386,6 +10397,47 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
       LOG_WARN("calc ddl parallelism failed", K(ret));
     } else {
       stmt.set_parallelism(parallelism);
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::deep_copy_string_in_part_expr(ObPartitionedStmt* stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null stmt");
+  } else if (OB_FAIL(append(exprs, stmt->get_part_fun_exprs()))) {
+    LOG_WARN("failed to append part fun exprs", K(ret));
+  } else if (OB_FAIL(append(exprs, stmt->get_subpart_fun_exprs()))) {
+    LOG_WARN("failed to append subpart fun exprs", K(ret));
+  } else if (exprs.count() > 0 && OB_FAIL(deep_copy_column_expr_name(*allocator_, exprs))) {
+    LOG_WARN("failed to deep copy column expr name");
+  }
+  return ret;
+}
+
+int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
+                                              ObIArray<ObRawExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> column_exprs;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(exprs, column_exprs))) {
+    LOG_WARN("failed to extract column exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+      ObColumnRefRawExpr* column_expr = NULL;
+      if (OB_ISNULL(column_exprs.at(i)) || !column_exprs.at(i)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(i), K(column_exprs));
+      } else if (OB_FALSE_IT(column_expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(i)))) {
+      } else if (OB_FAIL(ob_write_string(allocator, column_expr->get_column_name(), column_expr->get_column_name()))) {
+        LOG_WARN("failed to write string");
+      } else if (OB_FAIL(ob_write_string(allocator, column_expr->get_database_name(), column_expr->get_database_name()))) {
+        LOG_WARN("failed to write string");
+      }
     }
   }
   return ret;

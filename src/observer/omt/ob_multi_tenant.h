@@ -46,22 +46,23 @@ class ObTenantConfig;
 struct ObCtxMemConfig
 {
   ObCtxMemConfig()
-    : ctx_id_(0), idle_size_(0) {}
+    : ctx_id_(0), idle_size_(0), limit_(INT64_MAX) {}
   uint64_t ctx_id_;
   int64_t idle_size_;
-  TO_STRING_KV(K_(ctx_id), K_(idle_size));
+  int64_t limit_;
+  TO_STRING_KV(K_(ctx_id), K_(idle_size), K_(limit));
 };
 
 class ObICtxMemConfigGetter
 {
 public:
-  virtual int get(common::ObIArray<ObCtxMemConfig> &configs) = 0;
+  virtual int get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs) = 0;
 };
 
 class ObCtxMemConfigGetter : public ObICtxMemConfigGetter
 {
 public:
-  virtual int get(common::ObIArray<ObCtxMemConfig> &configs);
+  virtual int get(int64_t tenant_id, int64_t tenant_limit, common::ObIArray<ObCtxMemConfig> &configs);
 };
 
 // Forward declearation
@@ -101,7 +102,7 @@ public:
 
   int get_tenant_unit(const uint64_t tenant_id, share::ObUnitInfoGetter::ObTenantConfig &unit);
   int get_unit_id(const uint64_t tenant_id, uint64_t &unit_id);
-  int get_tenant_units(share::TenantUnits &units);
+  int get_tenant_units(share::TenantUnits &units, bool include_hidden_sys);
   int get_tenant_metas(common::ObIArray<ObTenantMeta> &metas);
   int get_tenant_metas_for_ckpt(common::ObIArray<ObTenantMeta> &metas);
   int get_compat_mode(const uint64_t tenant_id, lib::Worker::CompatMode &compat_mode);

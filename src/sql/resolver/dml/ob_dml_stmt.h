@@ -1122,6 +1122,7 @@ public:
   const common::ObIArray<TableItem *>& get_cte_definitions() const { return cte_definitions_; }
 
   int check_has_subquery_in_function_table(bool &has_subquery_in_function_table) const;
+  int check_has_cursor_expression(bool &has_cursor_expr) const;
 
 protected:
   int create_table_item(TableItem *&table_item);

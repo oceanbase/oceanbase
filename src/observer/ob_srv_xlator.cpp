@@ -182,8 +182,8 @@ typedef struct {
   char buffer_[sizeof (ObMPStmtClose)];
 } CLOSEPBUF;
 
-_RLOCAL(EP_RPCP_BUF, co_ep_rpcp_buf);
-_RLOCAL(CLOSEPBUF, co_closepbuf);
+_RLOCAL(EP_RPCP_BUF, co_ep_rpcp_buf) __attribute__((aligned(64)));
+_RLOCAL(CLOSEPBUF, co_closepbuf)  __attribute__((aligned(64)));
 
 int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
 {

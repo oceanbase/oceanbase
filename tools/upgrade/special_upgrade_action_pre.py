@@ -27,9 +27,17 @@ def do_special_upgrade(conn, cur, timeout, user, passwd):
   # when upgrade across version, disable enable_ddl/major_freeze
   if current_version != target_version:
     actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
-    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
     actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
     actions.set_parameter(cur, 'enable_rereplication', 'False', timeout)
+    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+    if current_version != '4.0.0.0':
+      actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+      actions.do_suspend_merge(cur, timeout)
+  else:
+    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+    actions.do_suspend_merge(cur, timeout)
+
 ####========******####======== actions begin ========####******========####
   return
 ####========******####========= actions end =========####******========####

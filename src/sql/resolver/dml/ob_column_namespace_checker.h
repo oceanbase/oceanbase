@@ -118,6 +118,11 @@ private:
                                              const common::ObString &column_name,
                                              const TableItem &table_item,
                                              bool &exist);
+  int check_rowid_existence_in_joined_table(const ObSQLSessionInfo *session_info,
+                                            const ObString &tbl_name,
+                                            const JoinedTable *joined_table,
+                                            bool &found_it,
+                                            const TableItem *&table_item);
 private:
   ObResolverParams &params_;
   //record the table root reference by query

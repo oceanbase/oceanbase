@@ -32,7 +32,7 @@ using namespace oceanbase::storage;
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
   : is_inited_(false), success_start_scn_(SCN::min_scn()), ls_id_(), tablet_id_(), table_key_(), data_format_version_(0),
     start_scn_(SCN::min_scn()), commit_scn_(SCN::min_scn()), max_freeze_scn_(SCN::min_scn()),
-    table_id_(0), execution_id_(-1), ddl_task_id_(0), head_(0), tail_(0), lock_(), ref_cnt_(0)
+    execution_id_(-1), head_(0), tail_(0), lock_(), ref_cnt_(0)
 {
 }
 
@@ -64,9 +64,7 @@ void ObTabletDDLKvMgr::destroy()
   start_scn_.set_min();
   commit_scn_.set_min();
   max_freeze_scn_.set_min();
-  table_id_ = 0;
   execution_id_ = -1;
-  ddl_task_id_ = 0;
   success_start_scn_.set_min();
   is_inited_ = false;
 }
@@ -177,10 +175,7 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
   return ret;
 }
 
-int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
-                                 const SCN &commit_scn,
-                                 const uint64_t table_id,
-                                 const int64_t ddl_task_id)
+int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn, const SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -206,8 +201,6 @@ int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
         usleep(1000L);
       }
     }
-    table_id_ = table_id;
-    ddl_task_id_ = ddl_task_id;
 
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
@@ -215,34 +208,25 @@ int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
     param.rec_scn_ = commit_scn;
     param.is_commit_ = true;
     param.start_scn_ = start_scn;
-    param.table_id_ = table_id;
-    param.execution_id_ = execution_id_;
-    param.ddl_task_id_ = ddl_task_id_;
     const int64_t start_ts = ObTimeUtility::fast_current_time();
 
-    while (OB_SUCC(ret) && is_started()) {
-      if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
-        if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-          LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
-        } else {
-          ret = OB_SUCCESS;
-          ob_usleep(10L * 1000L);
-          if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-            LOG_INFO("retry schedule ddl commit task",
-                K(start_scn), K(commit_scn), K(table_id), K(ddl_task_id), K(*this),
-                "wait_elpased_s", (ObTimeUtility::fast_current_time() - start_ts) / 1000000L);
-          }
-        }
+    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
       } else {
-        LOG_INFO("schedule ddl commit task success", K(start_scn), K(commit_scn), K(table_id), K(ddl_task_id), K(*this));
-        break;
+        ret = OB_SUCCESS; // the backgroud scheduler will reschedule again
+        LOG_INFO("schedule ddl merge task need retry",
+            K(start_scn), K(commit_scn), K(*this),
+            "wait_elpased_s", (ObTimeUtility::fast_current_time() - start_ts) / 1000000L);
       }
+    } else {
+      LOG_INFO("schedule ddl commit task success", K(start_scn), K(commit_scn), K(*this));
     }
   }
   return ret;
 }
 
-int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &commit_scn, const bool is_replay)
+int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -264,9 +248,6 @@ int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &c
     param.rec_scn_ = commit_scn;
     param.is_commit_ = true;
     param.start_scn_ = start_scn;
-    param.table_id_ = table_id_;
-    param.execution_id_ = execution_id_;
-    param.ddl_task_id_ = ddl_task_id_;
     // retry submit dag in case of the previous dag failed
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       if (OB_SIZE_OVERFLOW == ret || OB_EAGAIN == ret) {
@@ -276,16 +257,6 @@ int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &c
       }
     } else {
       ret = OB_EAGAIN; // until major sstable is ready
-    }
-  }
-  if (OB_FAIL(ret) && is_replay)  {
-    if (OB_TABLET_NOT_EXIST == ret || OB_TASK_EXPIRED == ret) {
-      ret = OB_SUCCESS; // think as succcess for replay
-    } else {
-      if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-        LOG_INFO("replay ddl commit", K(ret), K(start_scn), K(commit_scn), K(*this));
-      }
-      ret = OB_EAGAIN; // retry by replay service
     }
   }
   return ret;
@@ -311,9 +282,9 @@ int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &co
     while (OB_SUCC(ret)) {
       if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(schedule_ddl_merge_task(start_scn, commit_scn, false/*is_replay*/))) {
+      } else if (OB_FAIL(schedule_ddl_merge_task(start_scn, commit_scn))) {
         if (OB_EAGAIN == ret) {
-          ob_usleep(10L * 1000L);
+          ob_usleep(100L); // 100us.
           ret = OB_SUCCESS; // retry
         } else {
           LOG_WARN("commit ddl log failed", K(ret), K(start_scn), K(commit_scn), K(ls_id_), K(tablet_id_));
@@ -340,9 +311,6 @@ int ObTabletDDLKvMgr::get_ddl_major_merge_param(const ObTabletMeta &tablet_meta,
     param.rec_scn_ = get_commit_scn_nolock(tablet_meta);
     param.is_commit_ = true;
     param.start_scn_ = start_scn_;
-    param.table_id_ = table_id_;
-    param.execution_id_ = execution_id_;
-    param.ddl_task_id_ = ddl_task_id_;
   } else {
     ret = OB_EAGAIN;
   }
@@ -546,9 +514,7 @@ void ObTabletDDLKvMgr::cleanup_unlock()
   start_scn_.set_min();
   commit_scn_.set_min();
   max_freeze_scn_.set_min();
-  table_id_ = 0;
   execution_id_ = -1;
-  ddl_task_id_ = 0;
   success_start_scn_.set_min();
 }
 
@@ -598,6 +564,8 @@ int ObTabletDDLKvMgr::online()
                                                     tablet_handle,
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(cleanup())) {
+    LOG_WARN("failed to cleanup ddl kv mgr", K(ret), KPC(tablet_handle.get_obj()));
   } else if (!tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_.is_valid_and_not_min()) {
     LOG_DEBUG("no need to start ddl kv manager", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else {
@@ -880,8 +848,17 @@ int ObTabletDDLKvMgr::get_freezed_ddl_kv(const SCN &freeze_scn, ObTableHandleV2 
   }
   return ret;
 }
+int64_t ObTabletDDLKvMgr::get_count()
+{
+  int64_t ddl_kv_count = 0;
+  {
+    ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+    ddl_kv_count = tail_ - head_;
+  }
+  return ddl_kv_count;
+}
 
-int64_t ObTabletDDLKvMgr::get_count() const
+int64_t ObTabletDDLKvMgr::get_count_nolock() const
 {
   return tail_ - head_;
 }
@@ -895,7 +872,7 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObTableHandleV2 &kv_handle)
 {
   int ret = OB_SUCCESS;
   kv_handle.reset();
-  if (get_count() == 0) {
+  if (get_count_nolock() == 0) {
     ret = OB_ENTRY_NOT_EXIST;
   } else {
     ObTableHandleV2 &tail_kv_handle = ddl_kv_handles_[get_idx(tail_ - 1)];
@@ -963,7 +940,7 @@ void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const SCN &scn, ObTableHandleV2 &kv
 {
   int ret = OB_SUCCESS;
   kv_handle.reset();
-  if (get_count() > 0) {
+  if (get_count_nolock() > 0) {
     for (int64_t i = tail_ - 1; OB_SUCC(ret) && i >= head_ && !kv_handle.is_valid(); --i) {
       ObTableHandleV2 &tmp_kv_handle = ddl_kv_handles_[get_idx(i)];
       ObDDLKV *tmp_kv = static_cast<ObDDLKV *>(tmp_kv_handle.get_table());
@@ -986,7 +963,7 @@ int ObTabletDDLKvMgr::freeze_ddl_kv(const SCN &freeze_scn)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (0 == get_count()) {
+  } else if (0 == get_count_nolock()) {
     // do nothing
   } else if (OB_FAIL(get_active_ddl_kv_impl(kv_handle))) {
     LOG_WARN("fail to get active ddl kv", K(ret));
@@ -1144,7 +1121,7 @@ int ObTabletDDLKvMgr::check_has_effective_ddl_kv(bool &has_ddl_kv)
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
   } else {
-    has_ddl_kv = 0 != get_count();
+    has_ddl_kv = 0 != get_count_nolock();
   }
   return ret;
 }
@@ -1162,7 +1139,7 @@ int ObTabletDDLKvMgr::alloc_ddl_kv(ObTableHandleV2 &kv_handle)
   } else if (OB_UNLIKELY(!is_started())) {
     ret = OB_ERR_SYS;
     LOG_WARN("ddl kv manager not started", K(ret));
-  } else if (get_count() == MAX_DDL_KV_CNT_IN_STORAGE) {
+  } else if (get_count_nolock() == MAX_DDL_KV_CNT_IN_STORAGE) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, too much ddl kv count", K(ret));
   } else if (OB_FAIL(t3m->acquire_ddl_kv(tmp_kv_handle))) {
@@ -1183,7 +1160,7 @@ int ObTabletDDLKvMgr::alloc_ddl_kv(ObTableHandleV2 &kv_handle)
     tail_++;
     ddl_kv_handles_[idx] = tmp_kv_handle;
     kv_handle = tmp_kv_handle;
-    FLOG_INFO("succeed to add ddl kv", K(ls_id_), K(tablet_id_), K(head_), K(tail_), "ddl_kv_cnt", get_count(), KP(kv));
+    FLOG_INFO("succeed to add ddl kv", K(ls_id_), K(tablet_id_), K(head_), K(tail_), "ddl_kv_cnt", get_count_nolock(), KP(kv));
   }
   return ret;
 }

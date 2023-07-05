@@ -950,7 +950,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
         param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
     param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
-    param.root_row_store_type_ = res.root_desc_.row_type_;
+    param.root_row_store_type_ = res.root_row_store_type_;
     param.data_index_tree_height_ = res.root_desc_.height_;
     param.index_blocks_cnt_ = res.index_blocks_cnt_;
     param.data_blocks_cnt_ = res.data_blocks_cnt_;
@@ -1298,9 +1298,6 @@ int ObTabletCopyFinishTask::create_new_table_store_with_major_()
     LOG_WARN("src tablet meta should not be null", K(ret));
   } else if (major_tables_handle_.empty()) {
     // do nothing
-  } else if (ObTabletRestoreAction::is_restore_major(restore_action_) && 1 != major_tables_handle_.get_count() ) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("major tablet should only has one sstable", K(ret), "major_sstable_count", major_tables_handle_.get_count(), K(major_tables_handle_));
   } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(ls_,
       tablet_id_, major_tables_handle_, src_tablet_meta_->storage_schema_, src_tablet_meta_->medium_info_list_))) {
     LOG_WARN("failed to build tablet with major tables", K(ret), K(tablet_id_), K(major_tables_handle_), KPC(src_tablet_meta_));

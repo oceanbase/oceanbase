@@ -117,6 +117,7 @@ public:
   virtual int deep_copy(const ObIMultiSourceDataUnit *src, ObIAllocator *allocator) override;
   virtual void reset() override;
   virtual bool is_valid() const override;
+  bool is_inited() const { return is_inited_; }
   virtual inline int64_t get_data_size() const override { return sizeof(ObStorageSchema); }
   virtual inline memtable::MultiSourceDataUnitType type() const override
   {

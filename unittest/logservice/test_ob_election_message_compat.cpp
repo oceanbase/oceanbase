@@ -101,7 +101,26 @@ protected:
 OB_SERIALIZE_MEMBER_TEMP(inline, ElectionMsgBase, id_, sender_, receiver_,
                          restart_counter_, ballot_number_, msg_type_, debug_ts_);
 
-class ElectionPrepareRequestMsgMiddleOld : public oceanbase::palf::election::ElectionMsgBase
+ElectionMsgBase::ElectionMsgBase() :
+id_(INVALID_VALUE),
+restart_counter_(INVALID_VALUE),
+ballot_number_(INVALID_VALUE),
+msg_type_(static_cast<int64_t>(ElectionMsgType::INVALID_TYPE)) {}
+
+ElectionMsgBase::ElectionMsgBase(const int64_t id,
+                                 const common::ObAddr &self_addr,
+                                 const int64_t restart_counter,
+                                 const int64_t ballot_number,
+                                 const ElectionMsgType msg_type) :
+id_(id),
+sender_(self_addr),
+restart_counter_(restart_counter),
+ballot_number_(ballot_number),
+msg_type_(static_cast<int64_t>(msg_type)) {
+  debug_ts_.src_construct_ts_ = ObClockGenerator::getRealClock();
+}
+
+class ElectionPrepareRequestMsgMiddleOld : public oceanbase::unittest::ElectionMsgBase
 {
   OB_UNIS_VERSION(1);
 public:
@@ -189,13 +208,13 @@ public:
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = ElectionPrepareRequestMsgMiddleOld::deserialize(buf, data_len, pos);
     debug_ts_.dest_deserialize_ts_ = ObClockGenerator::getRealClock();
-    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
+    // print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     return ret;
   }
   int64_t get_serialize_size() const {
     if (debug_ts_.src_serialize_ts_ == 0) {// cause get_serialize_size maybe call more than once
       const_cast<int64_t&>(debug_ts_.src_serialize_ts_) = ObClockGenerator::getRealClock();
-      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
+      // print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     }
     return ElectionPrepareRequestMsgMiddleOld::get_serialize_size();
   }
@@ -206,7 +225,7 @@ TEST_F(TestElectionMsgCompat, old_new_msg_serialize) {
   config_version.generate(1, 1);
   ElectionPrepareRequestMsgOld prepare_msg_old1(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, config_version);
   ElectionPrepareRequestMsg prepare_msg_new1;
-  ElectionPrepareRequestMsg prepare_msg_new2(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, (1 << 10), config_version);
+  ElectionPrepareRequestMsg prepare_msg_new2(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 1), 1, 1, LsBiggestMinClusterVersionEverSeen(CLUSTER_VERSION_4_1_0_0), (1 << 10), config_version);
   ElectionPrepareRequestMsgOld prepare_msg_old2;
   constexpr int64_t buffer_size = 2_KB;
   char buffer[buffer_size];

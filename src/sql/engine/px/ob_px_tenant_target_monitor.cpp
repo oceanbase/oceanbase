@@ -249,10 +249,13 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
           int ret = OB_SUCCESS;
           // 和上次汇报相比，本机又消耗了entry 机器几个资源，把这个数目汇报给 leader，leader 会把这个值加到全局统计中。
           // 为什么是汇报“增量”呢？因为 entry 机器的资源被多台机器使用，任何一个人都拿不到全量数据
-          if (OB_FAIL(args.push_local_target_usage(entry.first, entry.second.get_local_used() - entry.second.get_report_used()))) {
+          int64_t local_used = entry.second.get_local_used();
+          if (local_used == entry.second.get_report_used()) {
+            // do nothing
+          } else if (OB_FAIL(args.push_local_target_usage(entry.first, local_used - entry.second.get_report_used()))) {
             LOG_WARN("push server and target_usage failed", K(ret));
           } else {
-            entry.second.set_report_used(entry.second.get_local_used());
+            entry.second.set_report_used(local_used);
           }
           return ret;
         };
@@ -274,7 +277,7 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
       for (int i = 0; OB_SUCC(ret) && i < result.addr_target_array_.count(); i++) {
         ObAddr &server = result.addr_target_array_.at(i).addr_;
         int64_t peer_used_full = result.addr_target_array_.at(i).target_;
-        if (OB_FAIL(update_peer_target_used(server, peer_used_full))) {
+        if (OB_FAIL(update_peer_target_used(server, peer_used_full, UINT64_MAX))) {
           LOG_WARN("set thread count failed", K(ret), K(server), K(peer_used_full));
         }
       }
@@ -305,7 +308,7 @@ uint64_t ObPxTenantTargetMonitor::get_version()
   return version_;
 }
 
-int ObPxTenantTargetMonitor::update_peer_target_used(const ObAddr &server, int64_t peer_used)
+int ObPxTenantTargetMonitor::update_peer_target_used(const ObAddr &server, int64_t peer_used, uint64_t version)
 {
   int ret = OB_SUCCESS;
   ServerTargetUsage target_usage;
@@ -316,44 +319,30 @@ int ObPxTenantTargetMonitor::update_peer_target_used(const ObAddr &server, int64
     if (is_leader()) {
       entry.second.update_peer_used(peer_used);
       if (OB_UNLIKELY(entry.second.get_peer_used() < 0)) {
-        LOG_ERROR("peer used negative", K(tenant_id_), K(version_), K(server), K(peer_used));
+        LOG_ERROR("peer used negative", K(tenant_id_), K(version_), K(server), K(entry.second), K(peer_used));
       }
     } else {
       entry.second.set_peer_used(peer_used);
     }
   };
-  if (OB_FAIL(global_target_usage_.get_refactored(server, target_usage))) {
+  SpinWLockGuard rlock_guard(spin_lock_);
+  if (OB_UNLIKELY(version != OB_INVALID_ID && version != version_)) {
+    // version mismatch, do nothing.
+  } else if (OB_FAIL(global_target_usage_.get_refactored(server, target_usage))) {
     LOG_WARN("get refactored failed", K(ret), K(tenant_id_), K(server), K(version_));
     if (ret != OB_HASH_NOT_EXIST) {
     } else {
-      ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
-      if (OB_FAIL(global_target_usage_.get_refactored(server, target_usage))) {
-        if (ret != OB_HASH_NOT_EXIST) {
-          LOG_WARN("get refactored failed", K(ret));
-        } else {
-          target_usage.set_peer_used(peer_used);
-          if (OB_FAIL(global_target_usage_.set_refactored(server, target_usage))) {
-            LOG_WARN("set refactored failed", K(ret));
-          }
+      target_usage.set_peer_used(peer_used);
+      if (OB_FAIL(global_target_usage_.set_refactored(server, target_usage))) {
+        LOG_WARN("set refactored failed", K(ret));
+        if (OB_HASH_EXIST == ret
+            && OB_FAIL(global_target_usage_.atomic_refactored(server, update_peer_used))) {
+          LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
         }
-      } else if (OB_FAIL(global_target_usage_.atomic_refactored(server, update_peer_used))) {
-        LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
       }
     }
   } else if (OB_FAIL(global_target_usage_.atomic_refactored(server, update_peer_used))) {
     LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
-  }
-  return ret;
-}
-
-int ObPxTenantTargetMonitor::rollback_local_report_target_used(const ObAddr &server, int64_t local_report)
-{
-  int ret = OB_SUCCESS;
-  auto report_local_report = [=](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> void {
-    entry.second.update_report_used(-local_report);
-  };
-  if (OB_FAIL(global_target_usage_.atomic_refactored(server, report_local_report))) {
-    LOG_WARN("atomic refactored, report_local_report failed", K(ret));
   }
   return ret;
 }
@@ -368,7 +357,7 @@ int ObPxTenantTargetMonitor::get_global_target_usage(const hash::ObHashMap<ObAdd
 int ObPxTenantTargetMonitor::reset_follower_statistics(uint64_t version)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
+  SpinWLockGuard wlock_guard(spin_lock_);
   global_target_usage_.clear();
   if (OB_FAIL(global_target_usage_.set_refactored(server_, ServerTargetUsage()))) {
     LOG_WARN("set refactored failed", K(ret));
@@ -382,7 +371,8 @@ int ObPxTenantTargetMonitor::reset_follower_statistics(uint64_t version)
 int ObPxTenantTargetMonitor::reset_leader_statistics()
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
+  // write lock before reset map and refresh version.
+  SpinWLockGuard wlock_guard(spin_lock_);
   global_target_usage_.clear();
   if (OB_FAIL(global_target_usage_.set_refactored(server_, ServerTargetUsage()))) {
     LOG_WARN("set refactored failed", K(ret));
@@ -402,7 +392,8 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
   admit_version = UINT64_MAX;
   bool need_wait = false;
   if (OB_SUCC(ret)) {
-    ObLockGuard<ObSpinLock> lock_guard(spin_lock_); // Just for avoid multiple SQL applications at the same time
+    // read lock to avoid reset map.
+    SpinRLockGuard rlock_guard(spin_lock_); // Just for avoid multiple SQL applications at the same time
     // for pmas
     int64_t target = session_target != INT64_MAX ? session_target : parallel_servers_target_;
     uint64_t version = version_;
@@ -421,7 +412,12 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
           // but still can use local, so now, rebuild local
           ret = OB_SUCCESS;
           if (OB_FAIL(global_target_usage_.set_refactored(server, target_usage))) {
-            LOG_WARN("set refactored failed", K(ret));
+            if (OB_HASH_EXIST == ret) {
+              // add empty target_usage for server. if hash exist, means others already set just ignore.
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("set refactored failed", K(ret));
+            }
           }
         }
       }
@@ -485,7 +481,7 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
 int ObPxTenantTargetMonitor::release_target(hash::ObHashMap<ObAddr, int64_t> &worker_map, uint64_t version)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
+  SpinRLockGuard rlock_guard(spin_lock_);
   if (version == version_) {
     for (hash::ObHashMap<ObAddr, int64_t>::iterator it = worker_map.begin();
         OB_SUCC(ret) && it != worker_map.end(); it++) {

@@ -746,12 +746,12 @@ struct EstimateCostInfo {
     inline bool is_left_local_order() const
     {
       return NULL != left_path_ && NULL != right_path_ && !left_sort_keys_.empty() &&
-             left_path_->is_local_order_ && !is_fully_paratition_wise();
+             left_path_->is_local_order_ && !is_fully_partition_wise();
     }
     inline bool is_right_local_order() const
     {
       return NULL != right_path_ && NULL != left_path_ && !right_sort_keys_.empty() &&
-             right_path_->is_local_order_ && !is_fully_paratition_wise();
+             right_path_->is_local_order_ && !is_fully_partition_wise();
     }
     inline bool is_left_need_sort() const
     {
@@ -786,7 +786,7 @@ struct EstimateCostInfo {
       return dist_method;
     }
 
-    inline bool is_fully_paratition_wise() const {
+    inline bool is_fully_partition_wise() const {
       return is_partition_wise() && !exchange_allocated_;
     }
     inline bool is_partition_wise() const
@@ -1107,25 +1107,28 @@ struct InnerPathInfo {
 typedef  common::ObSEArray<InnerPathInfo, 8, common::ModulePageAllocator, true> InnerPathInfos;
 
 struct NullAwareAntiJoinInfo {
-  NullAwareAntiJoinInfo() : is_naaj_(false),
+  NullAwareAntiJoinInfo() : is_naaj_(false), is_sna_(false),
                             left_side_not_null_(false), right_side_not_null_(false) {}
   ~NullAwareAntiJoinInfo() {}
-  TO_STRING_KV(K_(is_naaj), K_(left_side_not_null), K_(right_side_not_null));
-  bool get_is_sna(const ObJoinType &join_type, const bool is_reverse_path) const
+  TO_STRING_KV(K_(is_naaj), K_(is_sna), K_(left_side_not_null), K_(right_side_not_null), K_(expr_constraints));
+  void set_is_sna(const ObJoinType &join_type, const bool is_reverse_path)
   {
-    bool is_sna = false;
-    if (is_reverse_path) {
-      is_sna = ((LEFT_ANTI_JOIN == join_type && left_side_not_null_)
-                          || (RIGHT_ANTI_JOIN == join_type && right_side_not_null_));
-    } else {
-      is_sna = ((LEFT_ANTI_JOIN == join_type && right_side_not_null_)
-                          || (RIGHT_ANTI_JOIN == join_type && left_side_not_null_));
+    if (is_naaj_) {
+      if (is_reverse_path) {
+        is_sna_ = ((LEFT_ANTI_JOIN == join_type && left_side_not_null_)
+                            || (RIGHT_ANTI_JOIN == join_type && right_side_not_null_));
+      } else {
+        is_sna_ = ((LEFT_ANTI_JOIN == join_type && right_side_not_null_)
+                            || (RIGHT_ANTI_JOIN == join_type && left_side_not_null_));
+      }
     }
-    return is_sna;
+    return;
   }
   bool is_naaj_;
+  bool is_sna_;
   bool left_side_not_null_;
   bool right_side_not_null_;
+  ObSEArray<ObExprConstraint, 2> expr_constraints_;
 };
 
   class ObJoinOrder
@@ -1709,8 +1712,7 @@ struct NullAwareAntiJoinInfo {
                             const double equal_cond_sel,
                             const double other_cond_sel,
                             const ValidPathInfo &path_info,
-                            const bool is_naaj,
-                            const bool is_sna);
+                            const NullAwareAntiJoinInfo &naaj_info);
 
     int generate_mj_paths(const EqualSets &equal_sets,
                           const ObIArray<ObSEArray<Path*, 16>> &left_paths,
@@ -1786,8 +1788,7 @@ struct NullAwareAntiJoinInfo {
                                  const common::ObIArray<ObRawExpr*> &filters,
                                  const double equal_cond_sel,
                                  const double other_cond_sel,
-                                 const bool is_naaj,
-                                 const bool is_sna);
+                                 const NullAwareAntiJoinInfo &naaj_info);
 
     int generate_join_filter_infos(const Path *left_path,
                                   const Path *right_path,
@@ -2345,13 +2346,18 @@ struct NullAwareAntiJoinInfo {
                                      const ObRelIds &left_tables,
                                      const ObRelIds &right_tables,
                                      ObIArray<ObRawExpr*> &equal_join_conditions,
-                                     ObIArray<ObRawExpr*> &other_join_conditions,
                                      NullAwareAntiJoinInfo &naaj_info);
     bool is_main_table_use_das(const common::ObIArray<AccessPath *> &access_paths);
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from, bool is_persistent);
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from,
                           bool is_persistent, ObExprEqualCheckContext &equal_ctx);
-    friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
+    int check_can_use_global_stat_instead(const uint64_t ref_table_id,
+                                          const ObTableSchema &table_schema,
+                                          ObIArray<int64_t> &all_used_parts,
+                                          ObIArray<ObTabletID> &all_used_tablets,
+                                          bool &can_use,
+                                          ObIArray<int64_t> &global_part_ids,
+                                          double &scale_ratio);
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:
     common::ObIAllocator *allocator_;

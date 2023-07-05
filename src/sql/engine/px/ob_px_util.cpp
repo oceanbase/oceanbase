@@ -37,6 +37,13 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 using namespace oceanbase::share;
 
+#define CASE_IGNORE_ERR_HELPER(ERR_CODE)                        \
+case ERR_CODE: {                                                \
+  should_ignore = true;                                         \
+  LOG_USER_WARN(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, ERR_CODE);  \
+  break;                                                        \
+}                                                               \
+
 OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_);
 
 // 物理分布策略：对于叶子节点，dfo 分布一般直接按照数据分布来
@@ -127,6 +134,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     }
   } else {
     ObDASTableLoc *table_loc = NULL;
+    ObDASTableLoc *dml_full_loc = NULL;
     uint64_t table_location_key = OB_INVALID_INDEX;
     uint64_t ref_table_id = OB_INVALID_ID;
     if (scan_ops.count() > 0) {
@@ -152,6 +160,9 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
                                    table_location_key,
                                    ref_table_id,
                                    table_loc));
+      if (OB_SUCC(ret)) {
+        dml_full_loc = table_loc;
+      }
     } else {
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
@@ -173,7 +184,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
         LOG_WARN("the location array is empty", K(locations.size()), K(ret));
       } else if (OB_FAIL(build_dfo_sqc(ctx, locations, dfo))) {
         LOG_WARN("fail fill dfo with sqc infos", K(dfo), K(ret));
-      } else if (OB_FAIL(set_dfo_accessed_location(ctx, table_location_key, dfo, scan_ops, dml_op))) {
+      } else if (OB_FAIL(set_dfo_accessed_location(ctx, table_location_key, dfo, scan_ops, dml_op, dml_full_loc))) {
         LOG_WARN("fail to set all table partition for tsc", K(ret));
       } else if (OB_NOT_NULL(table_locations) && !table_locations->empty() &&
             OB_FAIL(build_dynamic_partition_table_location(scan_ops, table_locations, dfo))) {
@@ -432,7 +443,7 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
     } else if (scan_ops.empty()) {
     } else if (FALSE_IT(base_table_location_key = scan_ops.at(0)->get_table_loc_id())) {
     } else if (OB_FAIL(set_dfo_accessed_location(exec_ctx,
-          base_table_location_key, child, scan_ops, NULL))) {
+          base_table_location_key, child, scan_ops, NULL, NULL))) {
       LOG_WARN("fail to set all table partition for tsc", K(ret));
     }
   }
@@ -689,7 +700,8 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
                                                   int64_t base_table_location_key,
                                                   ObDfo &dfo,
                                                   ObIArray<const ObTableScanSpec *> &scan_ops,
-                                                  const ObTableModifySpec *dml_op)
+                                                  const ObTableModifySpec *dml_op,
+                                                  ObDASTableLoc *dml_loc)
 {
   int ret = OB_SUCCESS;
 
@@ -705,12 +717,12 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       LOG_WARN("get single table location id failed", K(ret));
     } else {
       if (dml_op->is_table_location_uncertain()) {
-        CK(OB_NOT_NULL(ctx.get_my_session()));
-        OZ(ObTableLocation::get_full_leader_table_loc(ctx.get_allocator(),
-                                     ctx.get_my_session()->get_effective_tenant_id(),
-                                     table_location_key,
-                                     ref_table_id,
-                                     table_loc));
+        if (OB_ISNULL(dml_loc)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected dml loc", K(ret));
+        } else {
+          table_loc = dml_loc;
+        }
       } else {
         // 通过TSC或者DML获得当前的DFO的partition对应的location信息
         // 后续利用location信息构建对应的SQC meta
@@ -1166,15 +1178,21 @@ int ObPXServerAddrUtil::build_tablet_idx_map(
       ObTabletIdxMap &idx_map)
 {
   int ret = OB_SUCCESS;
+  int64_t tablet_idx = 0;
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
   } else if (OB_FAIL(idx_map.create(table_schema->get_all_part_num(), "TabletOrderIdx"))) {
     LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
+  } else if (is_virtual_table(table_schema->get_table_id())) {
+    for (int i = 0; OB_SUCC(ret) && i < table_schema->get_all_part_num(); ++i) {
+      if (OB_FAIL(idx_map.set_refactored(i + 1, tablet_idx++))) {
+        LOG_WARN("fail set value to hashmap", K(ret));
+      }
+    }
   } else {
     ObPartitionSchemaIter iter(*table_schema, CHECK_PARTITION_MODE_NORMAL);
     ObPartitionSchemaIter::Info info;
-    int64_t tablet_idx = 0;
     do {
       if (OB_FAIL(iter.next_partition_info(info))) {
         if (OB_ITER_END != ret) {
@@ -3514,22 +3532,11 @@ bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
 {
   bool should_ignore = false;
   switch (error_code) {
-    case OB_ALLOCATE_MEMORY_FAILED: {
-      should_ignore = true;
-      break;
-    }
-    case OB_RPC_CONNECT_ERROR: {
-      should_ignore = true;
-      break;
-    }
-    case OB_RPC_SEND_ERROR: {
-      should_ignore = true;
-      break;
-    }
-    case OB_TENANT_NOT_IN_SERVER: {
-      should_ignore = true;
-      break;
-    }
+    CASE_IGNORE_ERR_HELPER(OB_ALLOCATE_MEMORY_FAILED)
+    CASE_IGNORE_ERR_HELPER(OB_RPC_CONNECT_ERROR)
+    CASE_IGNORE_ERR_HELPER(OB_RPC_SEND_ERROR)
+    CASE_IGNORE_ERR_HELPER(OB_RPC_POST_ERROR)
+    CASE_IGNORE_ERR_HELPER(OB_TENANT_NOT_IN_SERVER)
     default: {
       break;
     }

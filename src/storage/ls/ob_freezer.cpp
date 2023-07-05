@@ -650,9 +650,9 @@ int ObFreezer::freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> 
     } else if (OB_FAIL(memtable_mgr->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle))) {
       if (ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_SUCCESS;
-        TRANS_LOG(INFO, "[Freezer] no need to freeze since there is no active memtable", K(ret),
+        TRANS_LOG(INFO, "[Freezer] no need to freeze", K(ret),
                   K(ls_id), K(tablet_id));
-        stat_.add_diagnose_info("no need to freeze since there is no active memtable");
+        stat_.add_diagnose_info("no need to freeze");
       } else {
         TRANS_LOG(WARN, "[Freezer] fail to set is_tablet_freeze", K(ret), K(ls_id), K(tablet_id));
         stat_.add_diagnose_info("fail to set is_tablet_freeze");
@@ -887,9 +887,9 @@ int ObFreezer::tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id
     } else if (OB_FAIL(memtable_mgr->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle))) {
       if (ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_SUCCESS;
-        TRANS_LOG(INFO, "[Freezer] no need to freeze since there is no active memtable", K(ret),
+        TRANS_LOG(INFO, "[Freezer] no need to freeze", K(ret),
                   K(ls_id), K(tablet_id));
-        stat_.add_diagnose_info("no need to freeze since there is no active memtable");
+        stat_.add_diagnose_info("no need to freeze");
       } else {
         TRANS_LOG(WARN, "[Freezer] fail to set is_tablet_freeze", K(ret), K(ls_id), K(tablet_id));
         stat_.add_diagnose_info("fail to set is_tablet_freeze");

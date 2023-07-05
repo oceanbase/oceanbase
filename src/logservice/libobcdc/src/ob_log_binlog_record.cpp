@@ -25,8 +25,6 @@ namespace oceanbase
 {
 namespace libobcdc
 {
-const char *ObLogBR::COLUMN_CHANGED_LABEL_PTR = "";
-const char *ObLogBR::COLUMN_UNCHANGED_LABEL_PTR = NULL;
 
 ObLogBR::ObLogBR() : ObLogResourceRecycleTask(ObLogResourceRecycleTask::BINLOG_RECORD_TASK),
                      data_(nullptr),
@@ -241,8 +239,7 @@ int ObLogBR::put_old(IBinlogRecord *br, const bool is_changed)
     // DRC proto
     // mark value of OldCol to empty string, use global unique empty string value
     // value of unchanged OldCol as NULL
-    const char *val = is_changed ? ObLogBR::COLUMN_CHANGED_LABEL_PTR :
-        ObLogBR::COLUMN_UNCHANGED_LABEL_PTR;
+    const char *val = is_changed ? COLUMN_VALUE_IS_EMPTY : COLUMN_VALUE_IS_NULL;
 
     int64_t pos = (NULL == val ? 0 : strlen(val));
 

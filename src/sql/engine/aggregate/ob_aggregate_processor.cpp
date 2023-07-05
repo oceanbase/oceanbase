@@ -586,6 +586,8 @@ int ObAggregateProcessor::init()
   end_partial_rollup_idx_ = 0;
   removal_info_.reset();
   set_tenant_id(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id());
+  group_rows_.set_tenant_id(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id());
+  group_rows_.set_ctx_id(ObCtxIds::DEFAULT_CTX_ID);
 
   if (OB_ISNULL(eval_ctx_.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -6121,7 +6123,7 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
             }
 
             if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(json_object.object_add(key_data, json_val))) {
+            } else if (OB_FAIL(json_object.add(key_data, static_cast<ObJsonNode*>(json_val), false, true, false))) {
               LOG_WARN("failed: json object add json value", K(ret));
             } else if (json_object.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
               ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
@@ -6140,6 +6142,8 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
     } else {
       ret = OB_SUCCESS;
       ObString str;
+      json_object.stable_sort();
+      json_object.unique();
       // output res
       if (OB_FAIL(json_object.get_raw_binary(str, &aggr_alloc_))) {
         LOG_WARN("get result binary failed", K(ret));

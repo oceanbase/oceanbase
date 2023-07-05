@@ -121,9 +121,16 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema version is invalid", K(ret), K(ls_id), K(tablet_id), K(freeze_info));
     } else if (freeze_info.schema_version < last_sstable_schema_version) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("schema version in freeze info is less than last sstable", K(ret), K(ls_id), K(tablet_id),
-        K(freeze_info), K(last_sstable_schema_version));
+      if (tablet.get_storage_schema().is_index_table()) {
+        LOG_INFO("schema version in freeze info is less than last sstable, but is allowed for index table",
+            K(ret), K(ls_id), K(tablet_id), K(freeze_info), K(last_sstable_schema_version));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("schema version in freeze info is less than last sstable", K(ret), K(ls_id), K(tablet_id),
+            K(freeze_info), K(last_sstable_schema_version));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_table_schema_to_merge(
         tablet, freeze_info.schema_version, allocator, medium_info))) {
       if (OB_TABLE_IS_DELETED == ret) {
@@ -343,16 +350,19 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       // chosen medium snapshot is far too old
       LOG_INFO("chosen medium snapshot is invalid for multi_version_start", K(ret), KPC(this),
           K(medium_info), K(max_reserved_snapshot));
-      const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
+      int64_t snapshot_gc_ts = 0;
       if (medium_info.medium_snapshot_ == tablet_.get_snapshot_version() //  no uncommitted sstable
-          && weak_read_ts.get_val_for_tx() <= max_reserved_snapshot
-          && weak_read_ts.get_val_for_tx() + DEFAULT_SCHEDULE_MEDIUM_INTERVAL < ObTimeUtility::current_time_ns()) {
-        const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
-        medium_info.medium_snapshot_ = MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
-        LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
-            K(medium_info), K(max_reserved_snapshot), K(weak_read_ts), K(snapshot_gc_ts));
-      } else {
+          && weak_read_ts_ + DEFAULT_SCHEDULE_MEDIUM_INTERVAL < ObTimeUtility::current_time_ns()) {
+        snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr *)->get_snapshot_gc_ts();
+        // data before weak_read_ts & latest storage schema on memtable is match for schedule medium
+        // schema will be update in prepare_medium_info
+        medium_info.medium_snapshot_ = MIN(weak_read_ts_, snapshot_gc_ts);
+      }
+      if (medium_info.medium_snapshot_ < max_reserved_snapshot) {
         ret = OB_NO_NEED_MERGE;
+      } else {
+        LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
+                K(medium_info), K(max_reserved_snapshot), K_(weak_read_ts), K(snapshot_gc_ts));
       }
     }
     if (OB_SUCC(ret) && !is_major) {
@@ -375,10 +385,10 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
       LOG_INFO("errsim", K(ret), KPC(this));
       if (OB_FAIL(ret)) {
-        const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
         const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
-        medium_info.medium_snapshot_ = MAX(MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
-        if (medium_info.medium_snapshot_ > max_sync_medium_scn) {
+        medium_info.medium_snapshot_ = MIN(weak_read_ts_, snapshot_gc_ts);
+        if (medium_info.medium_snapshot_ > max_sync_medium_scn
+           && medium_info.medium_snapshot_ >= max_reserved_snapshot) {
           FLOG_INFO("set schedule medium with errsim", KPC(this));
           ret = OB_SUCCESS;
         }
@@ -416,7 +426,37 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
   return ret;
 }
 
-int ObMediumCompactionScheduleFunc::init_parallel_range(
+int ObMediumCompactionScheduleFunc::init_schema_changed(
+  const ObSSTableMeta &sstable_meta,
+  ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t full_stored_col_cnt = 0;
+  const ObSSTableBasicMeta &basic_meta = sstable_meta.get_basic_meta();
+  const ObStorageSchema &schema = medium_info.storage_schema_;
+  if (OB_UNLIKELY(!schema.is_inited())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema is not inited", KR(ret), K(schema));
+  } else if (OB_FAIL(schema.get_stored_column_count_in_sstable(full_stored_col_cnt))) {
+    LOG_WARN("failed to get stored column count in sstable", K(ret), K(schema));
+  } else if (OB_UNLIKELY(sstable_meta.get_column_count() > full_stored_col_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("stored col cnt in curr schema is less than old major sstable", K(ret),
+      "col_cnt_in_sstable", sstable_meta.get_column_count(),
+      "col_cnt_in_schema", full_stored_col_cnt, KPC(this));
+  } else if (sstable_meta.get_column_count() != full_stored_col_cnt
+    || basic_meta.compressor_type_ != schema.get_compressor_type()
+    || (ObRowStoreType::DUMMY_ROW_STORE != basic_meta.latest_row_store_type_
+      && basic_meta.latest_row_store_type_ != schema.row_store_type_)) {
+    medium_info.is_schema_changed_ = true;
+    LOG_INFO("schema changed", K(sstable_meta), K(schema));
+  } else {
+    medium_info.is_schema_changed_ = false;
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
     const ObGetMergeTablesResult &result,
     ObMediumCompactionInfo &medium_info)
 {
@@ -429,18 +469,24 @@ int ObMediumCompactionScheduleFunc::init_parallel_range(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable is unexpected null", K(ret), K(tablet_));
   } else {
-    const int64_t macro_block_cnt = first_sstable->get_meta().get_macro_info().get_data_block_ids().count();
+    const ObSSTableMeta &sstable_meta = first_sstable->get_meta();
+    const int64_t macro_block_cnt = sstable_meta.get_macro_info().get_data_block_ids().count();
     int64_t inc_row_cnt = 0;
+
     for (int64_t i = 0; i < result.handle_.get_count(); ++i) {
       inc_row_cnt += static_cast<const ObSSTable*>(result.handle_.get_table(i))->get_meta().get_row_count();
     }
     if ((0 == macro_block_cnt && inc_row_cnt > SCHEDULE_RANGE_ROW_COUNT_THRESHOLD)
-        || (first_sstable->get_meta().get_row_count() >= SCHEDULE_RANGE_ROW_COUNT_THRESHOLD
-            && inc_row_cnt >= first_sstable->get_meta().get_row_count() * SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD)) {
+        || (sstable_meta.get_row_count() >= SCHEDULE_RANGE_ROW_COUNT_THRESHOLD
+            && inc_row_cnt >= sstable_meta.get_row_count() * SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD)) {
       if (OB_FAIL(ObParallelMergeCtx::get_concurrent_cnt(tablet_size, macro_block_cnt, expected_task_count))) {
         STORAGE_LOG(WARN, "failed to get concurrent cnt", K(ret), K(tablet_size), K(expected_task_count),
           KPC(first_sstable));
       }
+    }
+    // init is_schema_changed
+    if (FAILEDx(init_schema_changed(sstable_meta, medium_info))) {
+      STORAGE_LOG(WARN, "failed to init schema changed", KR(ret), K(sstable_meta));
     }
   }
 
@@ -546,8 +592,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       ObSEArray<ObITable*, MAX_MEMSTORE_CNT> memtables;
       if (OB_FAIL(tablet_.get_memtables(memtables, true/*need_active*/))) {
         LOG_WARN("failed to get memtables", K(ret), KPC(this));
-      } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_latest_storage_schema_from_memtable(
-          allocator_, memtables, tmp_storage_schema))) {
+      } else if (OB_FAIL(get_latest_storage_schema_from_memtable(allocator_, memtables, tmp_storage_schema))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS; // clear errno
         } else {
@@ -564,7 +609,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       LOG_WARN("failed to save storage schema", K(ret), K(use_storage_schema_on_tablet), K(tmp_storage_schema));
     }
   }
-  if (FAILEDx(init_parallel_range(result, medium_info))) {
+  if (FAILEDx(init_parallel_range_and_schema_changed(result, medium_info))) {
     LOG_WARN("failed to init parallel range", K(ret), K(medium_info));
   } else {
     LOG_INFO("success to prepare medium info", K(ret), K(medium_info));

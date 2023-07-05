@@ -676,6 +676,8 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
       LOG_WARN("fail to new ObSSTableInsertSliceWriter", KR(ret));
     } else if (OB_FAIL(sstable_slice_writer->init(slice_param, table_schema, ddl_kv_mgr_handle_))) {
       LOG_WARN("fail to init sstable slice writer", KR(ret), K(slice_param));
+    } else {
+      FLOG_INFO("init sstable slice writer finished", K(ret), K(slice_param));
     }
     if (OB_FAIL(ret)) {
       if (nullptr != sstable_slice_writer) {

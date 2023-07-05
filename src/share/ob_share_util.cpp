@@ -68,6 +68,18 @@ int ObShareUtil::get_abs_timeout(const int64_t default_timeout, int64_t &abs_tim
   return ret;
 }
 
+int ObShareUtil::get_ctx_timeout(const int64_t default_timeout, int64_t &timeout)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
+    LOG_WARN("fail to set default timeout ctx", KR(ret), K(default_timeout));
+  } else {
+    timeout = ctx.get_timeout();
+  }
+  return ret;
+}
+
 int ObShareUtil::check_compat_version_for_arbitration_service(
     const uint64_t tenant_id,
     bool &is_compatible)

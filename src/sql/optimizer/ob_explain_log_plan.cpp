@@ -54,6 +54,8 @@ int ObExplainLogPlan::generate_normal_raw_plan()
       LOG_ERROR("failed to create log plan for explain stmt");
     } else if (OB_FAIL(child_plan->generate_plan())) {
       LOG_WARN("failed to generate plan tree for explain", K(ret));
+    } else if (OB_FAIL(check_explain_generate_plan_with_outline(child_plan))) {
+      LOG_WARN("failed to check generate plan with outline for explain", K(ret));
     } else if (OB_FAIL(ObCodeGenerator::detect_batch_size(*child_plan, batch_size))) {
       LOG_WARN("detect batch size failed", K(ret));
     } else if (OB_FAIL(allocate_values_as_top(top))) {
@@ -106,6 +108,108 @@ int ObExplainLogPlan::generate_normal_raw_plan()
       get_optimizer_context().set_plan_type(ObPhyPlanType::OB_PHY_PLAN_LOCAL,
                                             ObPhyPlanType::OB_PHY_PLAN_LOCAL,
                                             false);
+    }
+  }
+  return ret;
+}
+
+int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_plan)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = NULL;
+  ObSqlCtx *sql_ctx = NULL;
+  const ObExplainStmt *explain_stmt = static_cast<const ObExplainStmt*>(get_stmt());
+  if (OB_ISNULL(real_plan) || OB_ISNULL(explain_stmt)
+      || OB_ISNULL(exec_ctx = get_optimizer_context().get_exec_ctx())
+      || OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(real_plan), K(explain_stmt), K(exec_ctx), K(sql_ctx));
+  } else if (sql_ctx->multi_stmt_item_.is_part_of_multi_stmt()
+             && sql_ctx->multi_stmt_item_.get_seq_num() > 0) {
+    /* generate plan call by ObMPQuery::process_with_tmp_context use tmp context, do not check */
+  } else if (EXPLAIN_UNINITIALIZED !=  explain_stmt->get_explain_type()
+             && EXPLAIN_BASIC !=  explain_stmt->get_explain_type()
+             && EXPLAIN_OUTLINE !=  explain_stmt->get_explain_type()
+             && EXPLAIN_EXTENDED_NOADDR !=  explain_stmt->get_explain_type()) {
+    /* generate plan again for explain/explain basic/explain outline/explain extended_noaddr,
+      do not check explain extended */
+  } else if (0 == sql_ctx->first_plan_hash_) {  /* generate plan first time */
+    void *tmp_ptr = NULL;
+    sql_ctx->first_outline_data_.reset();
+    bool has_win_func = false;
+    if (OB_UNLIKELY(0 == real_plan->get_signature()) || 0 < sql_ctx->retry_times_) {
+      /* do nothing */
+    } else if (OB_SUCC(OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS)) {
+      /* do nothing */
+    } else if (OB_FAIL(check_has_win_func(explain_stmt->get_explain_query_stmt(), has_win_func))) {
+      LOG_WARN("failed to check has window function", K(ret));
+    } else if (has_win_func) {
+      /* outline is usually invalid for plan contain window functions, remove this after some hint is added. */
+    } else if (OB_UNLIKELY(NULL == (tmp_ptr = get_optimizer_context().get_allocator().alloc(OB_MAX_SQL_LENGTH)))) {
+      /* allocator in optimizer context is from ObResultSet */
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("fail to alloc memory", K(ret));
+    } else {
+      PlanText plan_text;
+      plan_text.buf_ = static_cast<char *>(tmp_ptr);
+      plan_text.buf_len_ = OB_MAX_SQL_LENGTH;
+      if (OB_FAIL(ObSqlPlan::get_plan_outline_info_one_line(plan_text, real_plan))) {
+        LOG_WARN("failed to get plan outline info", K(ret));
+      } else {
+        sql_ctx->first_outline_data_.assign_ptr(plan_text.buf_, static_cast<ObString::obstr_size_t>(plan_text.pos_));
+        sql_ctx->first_plan_hash_ = real_plan->get_signature();
+        ret = OB_SQL_RETRY_SPM;
+        LOG_WARN("generate plan again for explain use outline", K(ret));
+      }
+    }
+  } else {  /* check generate plan again use outline data */
+    SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
+      PlanText plan_text;
+      plan_text.buf_ = buf;
+      plan_text.buf_len_ = OB_MAX_SQL_LENGTH;
+      if (OB_FAIL(ObSqlPlan::get_plan_outline_info_one_line(plan_text, real_plan))) {
+        LOG_WARN("failed to get plan outline info", K(ret));
+      } else {
+        ObString cur_outline_data;
+        const uint64_t cur_plan_hash = real_plan->get_signature();
+        cur_outline_data.assign_ptr(plan_text.buf_, static_cast<ObString::obstr_size_t>(plan_text.pos_));
+        if (cur_plan_hash != sql_ctx->first_plan_hash_) {
+          ret = OB_OUTLINE_NOT_REPRODUCIBLE;
+          LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_plan_hash_));
+        }
+        if (0 != (cur_outline_data.case_compare(sql_ctx->first_outline_data_))) {
+          ret = OB_OUTLINE_NOT_REPRODUCIBLE;
+          LOG_WARN("failed to generate plan use outline", K(sql_ctx->first_outline_data_));
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to generate plan use outline", K(cur_plan_hash), K(cur_outline_data));
+        }
+      }
+      sql_ctx->first_plan_hash_ = 0;
+      sql_ctx->first_outline_data_.reset();
+    }
+  }
+  return ret;
+}
+
+
+int ObExplainLogPlan::check_has_win_func(const ObDMLStmt *stmt, bool &has_win_func)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (stmt->is_select_stmt() && static_cast<const ObSelectStmt*>(stmt)->has_window_function()) {
+    has_win_func = true;
+  } else {
+    ObSEArray<ObSelectStmt*, 8> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("get child stmt failed", K(ret));
+    }
+    for (int64_t i = 0; !has_win_func && OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_has_win_func(child_stmts.at(i), has_win_func)))) {
+        LOG_WARN("failed to check has window function", K(ret));
+      }
     }
   }
   return ret;

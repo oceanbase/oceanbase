@@ -78,6 +78,7 @@ private:
   void do_thread_task_();
   int handle_single_task_();
   int handle_fetch_log_task_(ObFetchLogTask *task);
+  bool need_fetch_log_(const share::ObLSID &id);
   int submit_entries_(ObFetchLogTask &task);
   int submit_log_(const ObLSID &id, const int64_t proposal_id, const LSN &lsn,
       const share::SCN &scn, const char *buf, const int64_t buf_size);
@@ -94,7 +95,7 @@ private:
 
   bool is_retry_ret_code_(const int ret_code) const;
   bool is_fatal_error_(const int ret_code) const;
-  void report_error_(const ObLSID &id, const int ret_code);
+  void report_error_(const ObLSID &id, const int ret_code, const palf::LSN &lsn);
 private:
   bool inited_;
   uint64_t tenant_id_;

@@ -161,7 +161,7 @@ TEST_F(ObserverExpandShink, test_hidden_sys_tenant)
   EXPECT_EQ(log_disk_size_in_use, GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
 
   share::TenantUnits units;
-  EXPECT_EQ(OB_SUCCESS, omt->get_tenant_units(units));
+  EXPECT_EQ(OB_SUCCESS, omt->get_tenant_units(units, false));
   EXPECT_EQ(false, units.empty());
   bool has_sys_tenant = false;
   int64_t origin_sys_log_disk_size = 0;
@@ -173,7 +173,7 @@ TEST_F(ObserverExpandShink, test_hidden_sys_tenant)
     }
   }
 
-  EXPECT_EQ(OB_SUCCESS, omt->get_tenant_units(units));
+  EXPECT_EQ(OB_SUCCESS, omt->get_tenant_units(units, false));
   EXPECT_EQ(false, units.empty());
   ObUnitInfoGetter::ObTenantConfig sys_unit_config;
   for (int i = 0; i < units.count(); i++) {

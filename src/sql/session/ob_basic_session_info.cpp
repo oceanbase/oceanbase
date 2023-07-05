@@ -71,7 +71,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       sys_var_base_version_(OB_INVALID_VERSION),
       tx_desc_(NULL),
       tx_result_(),
-      unused_read_snapshot_version_(),
+      reserved_read_snapshot_version_(),
       xid_(),
       associated_xa_(false),
       sess_bt_buff_pos_(0),
@@ -143,7 +143,8 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       labels_(),
       thread_id_(0),
       is_password_expired_(false),
-      process_query_time_(0)
+      process_query_time_(0),
+      last_update_tz_time_(0)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -151,6 +152,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
   CHAR_CARRAY_INIT(tenant_);
   CHAR_CARRAY_INIT(effective_tenant_);
   CHAR_CARRAY_INIT(trace_id_buff_);
+  sql_id_[0] = '\0';
   ssl_cipher_buff_[0] = '\0';
   sess_bt_buff_[0] = '\0';
   inc_sys_var_alloc_[0] = &inc_sys_var_alloc1_;
@@ -361,6 +363,9 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   is_first_gen_ = true;
   is_first_gen_config_ = true;
   CHAR_CARRAY_INIT(trace_id_buff_);
+  CHAR_CARRAY_INIT(sql_id_);
+  char *sql_id = sql_id_;
+  sql_id = NULL;
 //consistency_level_ = INVALID_CONSISTENCY;
   next_tx_read_only_ = -1;
   next_tx_isolation_ = transaction::ObTxIsolationLevel::INVALID;
@@ -397,7 +402,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
     sys_var_base_version_ = CACHED_SYS_VAR_VERSION;
   }
   curr_trans_last_stmt_end_time_ = 0;
-  unused_read_snapshot_version_.reset();
+  reserved_read_snapshot_version_.reset();
   check_sys_variable_ = true;
   is_foreign_key_cascade_ = false;
   is_foreign_key_check_exist_ = false;
@@ -410,6 +415,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   thread_id_ = 0;
   is_password_expired_ = false;
   process_query_time_ = 0;
+  last_update_tz_time_ = 0;
   sess_bt_buff_pos_ = 0;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
@@ -524,6 +530,27 @@ int ObBasicSessionInfo::set_tenant(const common::ObString &tenant_name,
   } else {
     ori_tenant_id = tenant_id_;
     tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::switch_tenant_with_name(
+  uint64_t effective_tenant_id, const common::ObString &tenant_name)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(effective_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(effective_tenant_id));
+  } else if (tenant_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant name is empty", K(ret), K(tenant_name));
+  } else if (tenant_name.length() > OB_MAX_TENANT_NAME_LENGTH) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant name too long", K(ret), K(tenant_name));
+  } else if (OB_FAIL(switch_tenant(effective_tenant_id))) {
+    LOG_WARN("fail to switch tenant", K(ret), K(effective_tenant_id));
+  } else if (OB_FAIL(ob_cstrcopy(effective_tenant_, sizeof(effective_tenant_), tenant_name))) {
+    LOG_WARN("tenant name too long", K(ret), K(tenant_name));
   }
   return ret;
 }
@@ -2007,14 +2034,16 @@ void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
   if (nullptr == sql_id) {
     sql_id_[0] = '\0';
   } else {
-    MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH + 1);
+    MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH);
+    sql_id_[32] = '\0';
   }
 }
 
 void ObBasicSessionInfo::get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const
 {
   if (common::OB_MAX_SQL_ID_LENGTH + 1 <= sql_id_buf_size) {
-    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
+    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH);
+    sql_id_buf[32] = '\0';
   } else {
     sql_id_buf[0] = '\0';
   }
@@ -2556,9 +2585,17 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       break;
     }
     case SYS_VAR_OB_MAX_READ_STALE_TIME: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache_.set_ob_max_read_stale_time(int_val));
+      int64_t max_read_stale_time = 0;
+      if (OB_FAIL(val.get_int(max_read_stale_time))) {
+        LOG_WARN("fail to get int value", K(ret), K(val));
+      } else if (max_read_stale_time != ObSysVarFactory::INVALID_MAX_READ_STALE_TIME &&
+                 max_read_stale_time < GCONF.weak_read_version_refresh_interval) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                       "max_read_stale_time is smaller than weak_read_version_refresh_interval");
+      } else {
+        sys_vars_cache_.set_ob_max_read_stale_time(max_read_stale_time);
+      }
       break;
     }
     default: {
@@ -2952,9 +2989,17 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       break;
     }
     case SYS_VAR_OB_MAX_READ_STALE_TIME: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache.set_base_ob_max_read_stale_time(int_val));
+      int64_t max_read_stale_time = 0;
+      if (OB_FAIL(val.get_int(max_read_stale_time))) {
+        LOG_WARN("fail to get int value", K(ret), K(val));
+      } else if (max_read_stale_time != ObSysVarFactory::INVALID_MAX_READ_STALE_TIME &&
+                 max_read_stale_time < GCONF.weak_read_version_refresh_interval) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                       "max_read_stale_time is smaller than weak_read_version_refresh_interval");
+      } else {
+        sys_vars_cache.set_base_ob_max_read_stale_time(max_read_stale_time);
+      }
       break;
     }
     default: {
@@ -3322,9 +3367,10 @@ int ObBasicSessionInfo::is_select_index_enabled(bool &select_index_enabled) cons
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT, select_index_enabled);
 }
 
-void ObBasicSessionInfo::set_autocommit(bool autocommit)
+int ObBasicSessionInfo::set_autocommit(bool autocommit)
 {
   sys_vars_cache_.set_autocommit(autocommit);
+  return sys_var_inc_info_.add_sys_var_id(SYS_VAR_AUTOCOMMIT);
 }
 
 int ObBasicSessionInfo::get_explicit_defaults_for_timestamp(
@@ -3619,6 +3665,7 @@ bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) co
   {
     case SYS_VAR_SERVER_UUID:
     case SYS_VAR_OB_PROXY_PARTITION_HIT:
+    case SYS_VAR_VERSION_COMMENT:
       not_need_serialize = true;
       break;
     default:
@@ -4129,7 +4176,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               nested_count_,
               thread_data_.user_name_,
               next_tx_isolation_,
-              unused_read_snapshot_version_,
+              reserved_read_snapshot_version_,
               check_sys_variable_,
               unused_weak_read_snapshot_source,
               database_id_,
@@ -4324,7 +4371,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
               nested_count_,
               thread_data_.user_name_,
               next_tx_isolation_,
-              unused_read_snapshot_version_,
+              reserved_read_snapshot_version_,
               check_sys_variable_,
               unused_weak_read_snapshot_source,
               database_id_,
@@ -4641,7 +4688,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               nested_count_,
               thread_data_.user_name_,
               next_tx_isolation_,
-              unused_read_snapshot_version_,
+              reserved_read_snapshot_version_,
               check_sys_variable_,
               unused_weak_read_snapshot_source,
               database_id_,
@@ -5778,30 +5825,37 @@ int ObBasicSessionInfo::set_time_zone(const ObString &str_val, const bool is_ora
 int ObBasicSessionInfo::update_timezone_info()
 {
   int ret = OB_SUCCESS;
-  ObTZMapWrap tz_map_wrap;
-  ObTimeZoneInfoManager *tz_info_mgr = NULL;
-  if (OB_FAIL(OTTZ_MGR.get_tenant_timezone(tenant_id_, tz_map_wrap, tz_info_mgr))) {
-    LOG_WARN("get tenant timezone with lock failed", K(ret));
-  } else if (OB_ISNULL(tz_info_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant timezone mgr is null", K(tz_info_mgr));
-  } else if (OB_UNLIKELY(tz_info_wrap_.is_position_class()
-              && tz_info_mgr->get_version() > tz_info_wrap_.get_cur_version())) {
-    ObString tz_name;
-    if (OB_UNLIKELY(!tz_info_wrap_.get_tz_info_pos().is_valid())) {
+  const int64_t UPDATE_PERIOD = 1000 * 1000 * 5; //5s
+  int64_t cur_time = ObTimeUtility::current_time();
+  if (cur_time - last_update_tz_time_ > UPDATE_PERIOD) {
+    ObTZMapWrap tz_map_wrap;
+    ObTimeZoneInfoManager *tz_info_mgr = NULL;
+    if (OB_FAIL(OTTZ_MGR.get_tenant_timezone(tenant_id_, tz_map_wrap, tz_info_mgr))) {
+      LOG_WARN("get tenant timezone with lock failed", K(ret));
+    } else if (OB_ISNULL(tz_info_mgr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("time zone info is invalid", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
-    } else if (OB_FAIL(tz_info_wrap_.get_tz_info_pos().get_tz_name(tz_name))) {
-      LOG_WARN("fal to get time zone name", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
-    } else {//此处需要先更新version，这样可以保证find到的tz_info version >= cur_version
-      int64_t orig_version = tz_info_wrap_.get_cur_version();
-      tz_info_wrap_.set_cur_version(tz_info_mgr->get_version());
-      if (OB_FAIL(tz_info_mgr->find_time_zone_info(tz_name, tz_info_wrap_.get_tz_info_pos()))) {
-        LOG_WARN("fail to find time zone info", K(tz_name), K(ret));
-        tz_info_wrap_.set_cur_version(orig_version);
-      } else {
-        tz_info_wrap_.get_tz_info_pos().set_error_on_overlap_time(tz_info_wrap_.is_error_on_overlap_time());
+      LOG_WARN("tenant timezone mgr is null", K(tz_info_mgr));
+    } else if (OB_UNLIKELY(tz_info_wrap_.is_position_class()
+                && tz_info_mgr->get_version() > tz_info_wrap_.get_cur_version())) {
+      ObString tz_name;
+      if (OB_UNLIKELY(!tz_info_wrap_.get_tz_info_pos().is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("time zone info is invalid", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
+      } else if (OB_FAIL(tz_info_wrap_.get_tz_info_pos().get_tz_name(tz_name))) {
+        LOG_WARN("fal to get time zone name", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
+      } else {//此处需要先更新version，这样可以保证find到的tz_info version >= cur_version
+        int64_t orig_version = tz_info_wrap_.get_cur_version();
+        tz_info_wrap_.set_cur_version(tz_info_mgr->get_version());
+        if (OB_FAIL(tz_info_mgr->find_time_zone_info(tz_name, tz_info_wrap_.get_tz_info_pos()))) {
+          LOG_WARN("fail to find time zone info", K(tz_name), K(ret));
+          tz_info_wrap_.set_cur_version(orig_version);
+        } else {
+          tz_info_wrap_.get_tz_info_pos().set_error_on_overlap_time(tz_info_wrap_.is_error_on_overlap_time());
+        }
       }
+    }
+    if (OB_SUCC(ret)) {
+      last_update_tz_time_ = cur_time;
     }
   }
   return ret;

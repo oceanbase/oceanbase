@@ -119,7 +119,9 @@ TEST_F(TestBigTxData, big_tx_data)
     ObLSHandle handle;
     DO(ls_service->get_ls(ObLSID(1), handle, storage::ObLSGetMod::DEADLOCK_MOD));
     STORAGETEST_LOG(INFO, "start read tx data from sstable", K(TEST_TX_ID));
-    DO(handle.get_ls()->tx_table_.check_with_tx_data(ObTransID(ATOMIC_LOAD(&TEST_TX_ID)), op, 0));
+    ObTxDataMiniCache mini_cache;
+    ObReadTxDataArg read_arg(ObTransID(ATOMIC_LOAD(&TEST_TX_ID)), 0, mini_cache);
+    DO(handle.get_ls()->tx_table_.check_with_tx_data(read_arg, op));
     // 7，检查被测事务的tx data已经经过了deserialize以及从sstable读取过
     ASSERT_EQ(ATOMIC_LOAD(&LOAD_BIG_TX_DATA), true);
     ASSERT_EQ(ATOMIC_LOAD(&READ_TEST_TX_FROM_SSTABLE), true);

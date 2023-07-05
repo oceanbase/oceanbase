@@ -770,15 +770,18 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
           } else {
             // element is composite type
             uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
-            bool is_compatible = false;
-            OZ (ObPLResolver::check_composite_compatible(
-              NULL == resolve_ctx.params_.secondary_namespace_
-                  ? static_cast<const ObPLINS&>(resolve_ctx)
-                  : static_cast<const ObPLINS&>(*resolve_ctx.params_.secondary_namespace_),
-              element_type_id, dst_pl_type.get_user_type_id(), is_compatible));
+            bool is_compatible = element_type_id == coll_type->get_element_type().get_user_type_id();
+            if (!is_compatible) {
+              OZ (ObPLResolver::check_composite_compatible(
+                NULL == resolve_ctx.params_.secondary_namespace_
+                    ? static_cast<const ObPLINS&>(resolve_ctx)
+                    : static_cast<const ObPLINS&>(*resolve_ctx.params_.secondary_namespace_),
+                element_type_id, coll_type->get_element_type().get_user_type_id(), is_compatible));
+            }
             if (OB_SUCC(ret) && !is_compatible) {
               ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("incorrect argument type", K(ret));
+              LOG_WARN("incorrect argument type",
+                        K(ret), K(element_type_id), K(dst_pl_type), KPC(src_coll));
             }
           }
           OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
@@ -976,6 +979,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
     // 如果在相同的位置已经进行过匹配, 说明给定的参数在参数列表中出现了两次
     if (OB_SUCC(ret)
         && (OB_INVALID_ID == position
+            || position >= match_info.match_info_.count()
             || ObMaxType != match_info.match_info_.at(position).dest_type_)) {
       ret = OB_ERR_SP_WRONG_ARG_NUM;
       LOG_WARN("argument count not match",
@@ -4204,10 +4208,15 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       ObString scope_name = "generated column function";
       LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, q_name.col_name_.length(), q_name.col_name_.ptr(),
                      scope_name.length(), scope_name.ptr());
-    } else if (col_schema->is_generated_column()) {
+    } else if (col_schema->is_generated_column() && lib::is_oracle_mode()) {
       ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
       LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
                      "Defining a generated column on generated column(s)");
+    } else if (col_schema->is_generated_column() && lib::is_mysql_mode()
+               && col_schema->get_column_id() >= generated_column.get_column_id()) {
+      ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+      LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
+                     "Generated column can refer only to generated columns defined prior to it");
     } else if (lib::is_oracle_mode() && col_schema->get_meta_type().is_blob()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Define a blob column in generated column def is not supported", K(ret));
@@ -4225,7 +4234,6 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       OZ (real_exprs.push_back(q_name.ref_expr_));
     }
   }
-
   if (OB_SUCC(ret)) {
     if (lib::is_oracle_mode()) {
       bool expr_changed = false;
@@ -4234,8 +4242,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                                   *expr_factory,
                                                                   expr,
                                                                   expr_changed));
-      OZ (expr->formalize(session_info));
     }
+    OZ (expr->formalize(session_info));
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();

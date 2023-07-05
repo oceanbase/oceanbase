@@ -35,7 +35,7 @@ BlockSet::BlockSet()
       total_hold_(0), total_payload_(0), total_used_(0), tallocator_(NULL),
       chunk_free_list_(false/*with_mutex*/), locker_(nullptr)
 {
-  chunk_free_list_.set_max_chunk_cache_cnt(0);
+  chunk_free_list_.set_max_chunk_cache_size(0);
 }
 
 BlockSet::~BlockSet()

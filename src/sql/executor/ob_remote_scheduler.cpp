@@ -262,7 +262,8 @@ int ObRemoteScheduler::execute_with_sql(ObExecContext &ctx, ObPhysicalPlan *phy_
                                                             session,
                                                             has_sent_task,
                                                             has_transfer_err,
-                                                            phy_plan);
+                                                            phy_plan,
+                                                            ctx);
     NG_TRACE_EXT(remote_task_completed, OB_ID(ret), ret,
                  OB_ID(runner_svr), task.get_runner_svr(), OB_ID(task), task);
     // 说明：本函数返回后，最终控制权会进入到ObDirectReceive中,

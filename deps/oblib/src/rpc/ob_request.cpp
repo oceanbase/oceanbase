@@ -42,6 +42,8 @@ int ObRequest::set_trace_point(int trace_point)
     } else {
       snprintf(ez_req_->trace_bt, EASY_REQ_TRACE_BT_SIZE, "%s", lbt());
     }
+  } else {
+    handling_state_ = trace_point;
   }
   return OB_SUCCESS;
 }

@@ -21,6 +21,12 @@ public:
   ObLogLinkScan(ObLogPlan &plan);
   virtual ~ObLogLinkScan() {}
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  const common::ObIArray<ObRawExpr*> &get_select_exprs() const { return select_exprs_; }
+  common::ObIArray<ObRawExpr*> &get_select_exprs() { return select_exprs_; }
+private:
+  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> select_exprs_;
+
 };
 
 } // namespace sql

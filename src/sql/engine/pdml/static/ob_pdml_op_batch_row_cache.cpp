@@ -147,7 +147,6 @@ int ObPDMLOpBatchRowCache::init_row_store(ObChunkDatumStore *&chunk_row_store)
                                                          // 非barrier情况下，不支持dump
       LOG_WARN("failed to init chunk row store in batch row cache", K(ret));
     } else {
-      chunk_row_store->set_allocator(allocator);
       chunk_row_store->set_callback(&sql_mem_processor_);
       chunk_row_store->set_io_event_observer(&io_event_observer_);
       if (with_barrier_) {

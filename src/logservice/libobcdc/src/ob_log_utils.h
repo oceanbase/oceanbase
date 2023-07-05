@@ -17,6 +17,7 @@
 
 #include "ob_cdc_msg_convert.h"
 
+#include <sys/prctl.h>
 #include "lib/allocator/ob_allocator.h"       // ObIAllocator
 #include "lib/allocator/ob_malloc.h"          // ob_malloc
 #include "lib/allocator/ob_mod_define.h"      // ObModIds
@@ -53,6 +54,9 @@ static const int64_t _K_ = (1L << 10);
 static const int64_t _M_ = (1L << 20);
 static const int64_t _G_ = (1L << 30);
 static const int64_t _T_ = (1L << 40);
+
+static const char *COLUMN_VALUE_IS_EMPTY = "";
+static const char *COLUMN_VALUE_IS_NULL = NULL;
 
 /*
  * Time utils.
@@ -292,6 +296,19 @@ private:
 void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &column_schema);
 class ColumnSchemaInfo;
 void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info);
+
+inline void set_cdc_thread_name(const char* name, const int64_t thread_idx = -1)
+{
+  if (OB_NOT_NULL(name)) {
+    char* tname = ob_get_tname();
+    if (thread_idx < 0) {
+      snprintf(tname, OB_THREAD_NAME_BUF_LEN, "%s", name);
+    } else {
+      snprintf(tname, OB_THREAD_NAME_BUF_LEN, "%s_%ld", name, thread_idx);
+    }
+    prctl(PR_SET_NAME, tname);
+  }
+}
 
 /*
  * Runnable.

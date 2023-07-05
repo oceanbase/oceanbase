@@ -63,6 +63,7 @@ public:
   void stop();
   void wait();
   int64_t get_shared_block_cnt();
+  void get_cur_shared_block(MacroBlockId &macro_id);
   int write_block(const char* buf, const int64_t size, ObBlockInfo &block_info, ObMacroBlocksWriteCtx &write_ctx);
   int add_block(const MacroBlockId &block_id, const int64_t block_size);
   int free_block(const MacroBlockId &block_id, const int64_t block_size);

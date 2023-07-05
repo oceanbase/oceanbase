@@ -1063,9 +1063,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
       default: {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);
         LOG_WARN("Statement not supported now", K(ret), K(type_name));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "statement type");
         break;
       }
     }  // end switch

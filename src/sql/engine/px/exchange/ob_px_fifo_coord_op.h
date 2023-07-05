@@ -90,6 +90,10 @@ private:
   int fetch_rows(const int64_t row_cnt);
 
   int setup_loop_proc() override;
+  virtual void clean_dfos_dtl_interm_result() override
+  {
+    msg_proc_.clean_dtl_interm_result(ctx_);
+  }
 private:
   ObPxFifoCoordOpEventListener listener_;
   ObSerialDfoScheduler serial_scheduler_;

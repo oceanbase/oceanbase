@@ -329,30 +329,38 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   common::ObOracleSqlProxy oracle_proxy; // TODO, check the usage, is there any postprocess
   ObCommonSqlProxy *sql_proxy = ctx_.get_sql_proxy();
-  if (OB_ISNULL(sql_proxy) || OB_ISNULL(ctx_.get_my_session()) ||
-      OB_UNLIKELY(dst_opt_stats.empty() || raw_sql.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected empty", K(ret), K(sql_proxy), K(dst_opt_stats.empty()),
-                                     K(ctx_.get_my_session()), K(raw_sql.empty()));
-  } else if (lib::is_oracle_mode()) {
-    if (OB_FAIL(oracle_proxy.init(ctx_.get_sql_proxy()->get_pool()))) {
-      LOG_WARN("failed to init oracle proxy", K(ret));
-    } else {
-      sql_proxy = &oracle_proxy;
+  ObArenaAllocator tmp_alloc("OptStatGather", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  sql::ObSQLSessionInfo::StmtSavedValue *session_value = NULL;
+  void *ptr = NULL;
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  if (OB_ISNULL(ptr = tmp_alloc.alloc(sizeof(sql::ObSQLSessionInfo::StmtSavedValue)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for saved session value", K(ret));
+  } else {
+    session_value = new(ptr)sql::ObSQLSessionInfo::StmtSavedValue();
+    if (OB_ISNULL(sql_proxy) || OB_ISNULL(session) ||
+        OB_UNLIKELY(dst_opt_stats.empty() || raw_sql.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected empty", K(ret), K(sql_proxy), K(dst_opt_stats.empty()),
+                                       K(session), K(raw_sql.empty()));
+    } else if (OB_FAIL(session->save_session(*session_value))) {
+      LOG_WARN("failed to save session", K(ret));
+    } else if (lib::is_oracle_mode()) {
+      if (OB_FAIL(oracle_proxy.init(ctx_.get_sql_proxy()->get_pool()))) {
+        LOG_WARN("failed to init oracle proxy", K(ret));
+      } else {
+        sql_proxy = &oracle_proxy;
+      }
     }
   }
   if (OB_SUCC(ret)) {
     observer::ObInnerSQLConnectionPool *pool =
                             static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
     sqlclient::ObISQLConnection *conn = NULL;
-    bool is_inner = ctx_.get_my_session()->is_inner();
-    ObSQLSessionInfo::SessionType session_type = ctx_.get_my_session()->get_session_type();
-    ctx_.get_my_session()->set_inner_session();
+    session->set_inner_session();
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
-      if (lib::is_oracle_mode() && OB_FAIL(pool->acquire(ctx_.get_my_session(), conn, true))) {
-        LOG_WARN("failed to acquire inner connection", K(ret));
-      } else if (lib::is_mysql_mode() && OB_FAIL(pool->acquire(tenant_id, conn, sql_proxy))) {
+      if (OB_FAIL(pool->acquire(session, conn, lib::is_oracle_mode()))) {
         LOG_WARN("failed to acquire inner connection", K(ret));
       } else if (OB_ISNULL(conn)) {
         ret = OB_ERR_UNEXPECTED;
@@ -401,12 +409,10 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
         ret = COVER_SUCC(tmp_ret);
       }
     }
-    //reset session type
-    if (is_inner) {
-      ctx_.get_my_session()->set_session_type(session_type);
-    } else {
-      ctx_.get_my_session()->set_user_session();
-      ctx_.get_my_session()->set_session_type(session_type);
+    int tmp_ret = OB_SUCCESS;
+    if (session_value != NULL && OB_SUCCESS != (tmp_ret = session->restore_session(*session_value))) {
+      LOG_WARN("failed to restore session", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
     }
   }
   return ret;

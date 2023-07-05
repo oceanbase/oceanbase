@@ -117,6 +117,8 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
   } else if (OB_FAIL(palf_env_mgr_.init(logserver_dir.c_str(), addr,
           srv_network_frame_.get_req_transport()))) {
     CLOG_LOG(WARN, "PalfEnvLiteMgr init failed", K(ret), K(addr), K(clog_dir.c_str()));
+  } else if (OB_FAIL(mock_election_map_.init())) {
+    SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
   } else if (OB_FAIL(timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr_))) {
     CLOG_LOG(WARN, "timer init failed", K(ret), K(addr), K(clog_dir.c_str()));
   } else {

@@ -58,7 +58,7 @@ TEST_F(TestContext, Basic)
   ObPageManager g_pm;
   ObPageManager::set_thread_local_instance(g_pm);
   g_pm.set_tenant_ctx(tenant_id, ctx_id);
-  g_pm.set_max_chunk_cache_cnt(0);
+  g_pm.set_max_chunk_cache_size(0);
   MemoryContext &root = MemoryContext::root();
   ContextParam param;
   param.set_mem_attr(tenant_id, "Context", ctx_id);

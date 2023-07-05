@@ -181,7 +181,7 @@ void ObServerConnectionPool::dump()
            "max_allowed_conn_count_", max_allowed_conn_count_, "server_not_available_", server_not_available_);
 }
 
-int ObServerConnectionPool::init_dblink(uint64_t dblink_id, const ObAddr &server,
+int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, const ObAddr &server,
                                         const ObString &db_tenant, const ObString &db_user,
                                         const ObString &db_pass, const ObString &db_name,
                                         const common::ObString &conn_str,
@@ -204,6 +204,7 @@ int ObServerConnectionPool::init_dblink(uint64_t dblink_id, const ObAddr &server
              K(dblink_id), K(db_tenant), K(db_user), K(db_pass), K(db_name));
   } else {
     dblink_id_ = dblink_id;
+    tenant_id_  = tenant_id;
     if (cluster_str.empty()) {
       (void)snprintf(db_user_, sizeof(db_user_), "%.*s@%.*s", db_user.length(), db_user.ptr(),
                     db_tenant.length(), db_tenant.ptr());

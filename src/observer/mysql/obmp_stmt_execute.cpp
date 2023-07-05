@@ -1590,6 +1590,8 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
                                          session.get_effective_tenant_id()))) {
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
+    } else if (OB_FAIL(session.update_timezone_info())) {
+      LOG_WARN("fail to update time zone info", K(ret));
     } else if (is_arraybinding_) {
       need_response_error = false;
       bool optimization_done = false;
@@ -1983,11 +1985,11 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
   int64_t param_size = 0, param_pos = 0;
   CK (OB_NOT_NULL(type_info));
   OZ (get_pl_type_by_type_info(allocator, type_info, pl_type));
+  CK (OB_NOT_NULL(pl_type));
   OZ (pl_type->init_obj(*(ctx_.schema_guard_), allocator, param, param_size));
   OX (param.set_udt_id(pl_type->get_user_type_id()));
   OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, charset, cs_type, ncs_type,
-        tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size,
-        param_pos));
+        tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size, param_pos));
   OX (param.set_need_to_check_extend_type(true));
   return ret;
 }

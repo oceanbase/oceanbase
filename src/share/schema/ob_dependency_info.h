@@ -156,13 +156,16 @@ public:
   static int cascading_modify_obj_status(common::ObMySQLTransaction &trans,
                                          uint64_t tenant_id,
                                          uint64_t obj_id,
-                                         ObSchemaGetterGuard &schema_guard,
                                          rootserver::ObDDLOperator &ddl_operator,
-                                         share::schema::ObMultiVersionSchemaService &schema_service,
-                                         common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> &obj_id_set);
+                                         share::schema::ObMultiVersionSchemaService &schema_service);
   static int modify_dep_obj_status(common::ObMySQLTransaction &trans,
                                    uint64_t tenant_id,
                                    uint64_t obj_id,
+                                   rootserver::ObDDLOperator &ddl_operator,
+                                   share::schema::ObMultiVersionSchemaService &schema_service);
+  static int modify_all_obj_status(const ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs,
+                                   common::ObMySQLTransaction &trans,
+                                   uint64_t tenant_id,
                                    rootserver::ObDDLOperator &ddl_operator,
                                    share::schema::ObMultiVersionSchemaService &schema_service);
 
@@ -240,6 +243,7 @@ OB_INLINE ret_type get_##name() const { return name##_; }
     DEFINE_SETTER(dep_obj_type, ObObjectType)
 
     int64_t hash() const;
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     ObDependencyObjKey &operator=(const ObDependencyObjKey &other);
     int assign(const ObDependencyObjKey &other);
     bool operator==(const ObDependencyObjKey &other) const;
@@ -279,6 +283,7 @@ OB_INLINE ret_type get_##name() const { return name##_; }
         ref_obj_versions_()
     {
     }
+    ~ObDependencyObjItem() { reset(); }
     DEFINE_GETTER(int, error_ret)
     DEFINE_GETTER(int64_t, max_dependency_version)
     DEFINE_GETTER(int64_t, max_ref_obj_schema_version)
@@ -373,6 +378,8 @@ public:
       ref_obj_version_table_()
   {
   }
+  ~ObReferenceObjTable() { reset(); }
+  void reset();
   int process_reference_obj_table(
     const uint64_t tenant_id,
     const uint64_t dep_obj_id,
@@ -403,7 +410,6 @@ public:
     const ObSchemaRefObjOp ref_obj_op,
     common::ObIAllocator &allocator);
   inline bool is_inited() const { return inited_; }
-  inline void reset() { inited_ = false; ref_obj_version_table_.reuse(); }
   inline int set_need_del_schema_dep_obj(
     const uint64_t dep_obj_id,
     const uint64_t dep_db_id,

@@ -930,6 +930,12 @@ int ObParser::parse_sql(const ObString &stmt,
       LOG_WARN("failed to fast parameterize", K(stmt), K(ret));
     }
   }
+  if (OB_SUCC(ret) &&
+      parse_result.enable_compatible_comment_ &&
+      parse_result.mysql_compatible_comment_) {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("the sql is invalid", K(ret), K(stmt));
+  }
   if (OB_FAIL(ret) && !no_throw_parser_error) {
     auto err_charge_sql_mode = lib::is_oracle_mode();
     LOG_WARN("failed to parse the statement",
@@ -975,7 +981,8 @@ int ObParser::parse(const ObString &query,
                     ParseResult &parse_result,
                     ParseMode parse_mode,
                     const bool is_batched_multi_stmt_split_on,
-                    const bool no_throw_parser_error)
+                    const bool no_throw_parser_error,
+                    const bool is_pl_inner_parse)
 {
   int ret = OB_SUCCESS;
 
@@ -1032,6 +1039,8 @@ int ObParser::parse(const ObString &query,
     parse_result.question_mark_ctx_.name_ = def_name_ctx_->name_;
     parse_result.question_mark_ctx_.count_ = def_name_ctx_->count_;
   }
+
+  parse_result.pl_parse_info_.is_inner_parse_ = is_pl_inner_parse;
 
   if (INS_MULTI_VALUES == parse_mode) {
     void *buffer = nullptr;
@@ -1094,7 +1103,7 @@ int ObParser::parse(const ObString &query,
       }
     } else {
       ObPLParser pl_parser(*(ObIAllocator*)(parse_result.malloc_pool_), connection_collation_);
-      if (OB_FAIL(pl_parser.parse(stmt, stmt, parse_result))) {
+      if (OB_FAIL(pl_parser.parse(stmt, stmt, parse_result, is_pl_inner_parse))) {
         LOG_WARN("failed to parse stmt as pl", K(stmt), K(ret));
         // may create ddl func, try it.
         if ((OB_ERR_PARSE_SQL == ret

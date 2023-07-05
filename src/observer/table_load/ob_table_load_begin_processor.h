@@ -45,7 +45,10 @@ class ObTableLoadPreBeginPeerP : public obrpc::ObRpcProcessor<obrpc::ObTableRpcP
 {
   typedef obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOAD_PRE_BEGIN_PEER> > ParentType;
 public:
-  explicit ObTableLoadPreBeginPeerP(const ObGlobalContext &gctx) : gctx_(gctx) {}
+  explicit ObTableLoadPreBeginPeerP(const ObGlobalContext &gctx) : gctx_(gctx)
+  {
+    allocator_.set_tenant_id(MTL_ID());
+  }
   virtual ~ObTableLoadPreBeginPeerP() = default;
 
 protected:

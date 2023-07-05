@@ -245,7 +245,7 @@ int ObChunkDatumStore::Block::add_row(const common::ObIArray<ObExpr*> &exprs, Ob
     StoredRow *sr = NULL;
     if (OB_FAIL(StoredRow::build(sr, exprs, ctx, buf->head(), row_size, row_extend_size))) {
       LOG_WARN("build stored row failed", K(ret));
-    } else if (OB_FAIL(buf->advance(row_size))) {
+    } else if (OB_FAIL(buf->advance(sr->row_size_))) {
       LOG_WARN("fill buffer head failed", K(ret), K(buf), K(row_size));
     } else {
       rows_++;
@@ -516,8 +516,7 @@ void ObChunkDatumStore::reset()
   blocks_.reset();
   cur_blk_ = NULL;
   cur_blk_buffer_ = nullptr;
-  free_block(tmp_dump_blk_);
-  tmp_dump_blk_ = nullptr;
+  free_tmp_dump_blk(); // just in case, not necessary. tmp block always freed instantly after use
   while (!free_list_.is_empty()) {
     Block *item = free_list_.remove_first();
     mem_hold_ -= item->get_buffer()->mem_size();
@@ -1806,7 +1805,12 @@ void ObChunkDatumStore::ChunkIterator::free_block(Block *blk, const int64_t size
     bool do_phy_free = force_free;
     if (!force_free) {
       try_free_cached_blocks();
-      if (NULL != age_) {
+      if (NULL != blk_holder_ptr_) {
+        // fill iter ptr at pos of age, since we do not use age in shared cache
+        *((int64_t *)((char *)blk + size - sizeof(int64_t))) = reinterpret_cast<int64_t> (this);
+        blk_holder_ptr_->block_list_.add_last(blk);
+        blk->blk_size_ = size;
+      } else if (NULL != age_) {
         STATIC_ASSERT(sizeof(BlockBuffer) >= sizeof(int64_t), "unexpected block buffer size");
         // Save age to the tail of the block, we always allocate one BlockBuffer in tail of block,
         // it's safe to write it here.
@@ -2096,7 +2100,8 @@ ObChunkDatumStore::ChunkIterator::ChunkIterator()
     read_blk_buf_(NULL),
     aio_blk_(NULL),
     aio_blk_buf_(NULL),
-    age_(NULL)
+    age_(NULL),
+    blk_holder_ptr_(NULL)
 {
 }
 
@@ -2151,6 +2156,13 @@ void ObChunkDatumStore::ChunkIterator::reset_cursor(const int64_t file_size)
 
   while (NULL != free_list_.get_first()) {
     free_block(free_list_.remove_first(), default_block_size_, force_free);
+  }
+
+  if (nullptr != blk_holder_ptr_) {
+    if (blk_holder_ptr_->block_list_.get_size() > 0) {
+      blk_holder_ptr_->release();
+      blk_holder_ptr_ = nullptr;
+    }
   }
 
   cur_iter_blk_ = nullptr;
@@ -2551,19 +2563,20 @@ int ObChunkDatumStore::read_file(
     CK (cur_pos >= file_size);
     OX (ret = OB_ITER_END);
   } else {
-    this->set_io(size, static_cast<char *>(buf));
-    io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
+    blocksstable::ObTmpFileIOInfo tmp_io = io_;
+    set_io(size, static_cast<char *>(buf), tmp_io);
+    tmp_io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     if (0 == read_size
-        && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(io_.fd_, tmp_file_size))) {
+        && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_io.fd_, tmp_file_size))) {
       LOG_WARN("failed to get tmp file size", K(ret));
-    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_, offset, timeout_ms, handle))) {
+    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(tmp_io, offset, timeout_ms, handle))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("read form file failed", K(ret), K(io_), K(offset), K(timeout_ms));
+        LOG_WARN("read form file failed", K(ret), K(tmp_io), K(offset), K(timeout_ms));
       }
     } else if (handle.get_data_size() != size) {
       ret = OB_INNER_STAT_ERROR;
       LOG_WARN("read data less than expected",
-          K(ret), K(io_), "read_size", handle.get_data_size());
+          K(ret), K(tmp_io), "read_size", handle.get_data_size());
     }
   }
   return ret;
@@ -2583,11 +2596,12 @@ int ObChunkDatumStore::aio_read_file(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(size), K(offset), KP(buf));
   } else if (size > 0) {
-    this->set_io(size, static_cast<char *>(buf));
-    io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(io_, offset, handle))) {
+    blocksstable::ObTmpFileIOInfo tmp_io = io_;
+    set_io(size, static_cast<char *>(buf), tmp_io);
+    tmp_io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(tmp_io, offset, handle))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("read form file failed", K(ret), K(io_), K(offset));
+        LOG_WARN("read form file failed", K(ret), K(tmp_io), K(offset));
       }
     }
   }
@@ -2839,6 +2853,19 @@ void ObChunkDatumStore::free_tmp_dump_blk()
   if (NULL != tmp_dump_blk_) {
     free_block(tmp_dump_blk_);
     tmp_dump_blk_ = nullptr;
+  }
+}
+
+void ObChunkDatumStore::IteratedBlockHolder::release()
+{
+  while (block_list_.get_size() > 0) {
+    Block *blk = block_list_.remove_first();
+    ChunkIterator *iter = reinterpret_cast<ChunkIterator *> (*((int64_t *)((char *)blk + blk->blk_size_ - sizeof(int64_t))));
+    if (OB_NOT_NULL(blk) && OB_NOT_NULL(iter)) {
+      iter->free_block(blk, blk->blk_size_, true);
+    } else {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "get unexpected block pair", KP(iter), KP(blk));
+    }
   }
 }
 

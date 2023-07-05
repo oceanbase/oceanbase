@@ -67,7 +67,6 @@ public:
       tablet_seq_caches_(),
       curr_tablet_store_iter_(),
       curr_tablet_idx_(-1),
-      ddl_task_id_(-1),
       count_rows_finish_(false),
       curr_part_idx_(0)
   {}
@@ -95,7 +94,6 @@ private:
   ObArray<share::ObTabletCacheInterval> tablet_seq_caches_;
   ObChunkDatumStore::Iterator curr_tablet_store_iter_;
   int64_t curr_tablet_idx_;
-  int64_t ddl_task_id_;
   bool count_rows_finish_;
   int64_t curr_part_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOp);

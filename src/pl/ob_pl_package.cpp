@@ -63,6 +63,19 @@ int ObPLPackageAST::init(const ObString &db_name,
     OZ (condition_table_.init(*parent_condition_table));
   }
 
+  if (OB_SUCC(ret)
+      && parent_package_ast != NULL
+      && !ObTriggerInfo::is_trigger_package_id(package_id)
+      && PL_PACKAGE_BODY == package_type) {
+    ObSchemaObjVersion obj_version;
+    obj_version.object_id_ = parent_package_ast->get_id();
+    obj_version.version_ = parent_package_ast->get_version();
+    obj_version.object_type_ = DEPENDENCY_PACKAGE;
+    if (OB_FAIL(add_dependency_object(obj_version))) {
+      LOG_WARN("add dependency table failed", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     ObSchemaObjVersion obj_version;
     if (ObTriggerInfo::is_trigger_package_id(package_id)) {

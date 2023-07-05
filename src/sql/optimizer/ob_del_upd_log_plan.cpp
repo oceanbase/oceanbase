@@ -238,7 +238,8 @@ int ObDelUpdLogPlan::calculate_insert_table_location_and_sharding(ObTablePartiti
                                                            &dml_table_infos.at(0)->part_ids_,
                                                            insert_sharding,
                                                            insert_table_part))) {
-    if (ret == OB_NO_PARTITION_FOR_GIVEN_VALUE && trigger_exist) {
+    if (ret == OB_NO_PARTITION_FOR_GIVEN_VALUE &&
+        (trigger_exist || (del_upd_stmt->is_insert_stmt() && static_cast<const ObInsertStmt*>(del_upd_stmt)->value_from_select()))) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to calculate table location and sharding", K(ret));

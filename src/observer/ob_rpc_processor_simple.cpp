@@ -2062,19 +2062,15 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
     } else {
       SCN commit_scn;
+      bool is_remote_write = false;
       if (OB_FAIL(sstable_redo_writer.write_commit_log(tablet_handle,
                                                        ddl_kv_mgr_handle,
                                                        false,
                                                        table_key,
-                                                       arg_.table_id_,
-                                                       arg_.execution_id_,
-                                                       arg_.ddl_task_id_,
-                                                       commit_scn))) {
+                                                       commit_scn,
+                                                       is_remote_write))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(arg_.start_scn_,
-                                                                 commit_scn,
-                                                                 arg_.table_id_,
-                                                                 arg_.ddl_task_id_))) {
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(arg_.start_scn_, commit_scn))) {
         LOG_WARN("failed to do ddl kv commit", K(ret), K(arg_));
       } else {
         result_ = commit_scn.get_val_for_tx();

@@ -887,6 +887,9 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     const ObUDTTypeInfo *udt_info = NULL;
     ObArenaAllocator local_allocator;
     const uint64_t tenant_id = get_tenant_id_by_object_id(get_user_type_id());
+    ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);
+    int64_t new_dst_len = 0;
+    int64_t new_dst_pos = 0;
     if (!is_udt_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support other type except udt type", K(ret), K(get_type_from()));
@@ -901,9 +904,14 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user type is null", K(ret), K(user_type));
+    } else if (OB_FAIL(user_type->init_obj(schema_guard, allocator, *obj, new_dst_len))) {
+      LOG_WARN("failed to init obj", K(ret));
     } else if (OB_FAIL(user_type->deserialize(schema_guard, allocator,
-                  charset, cs_type, ncs_type, tz_info, src, dst, dst_len, dst_pos))) {
+                  charset, cs_type, ncs_type, tz_info, src,
+                  reinterpret_cast<char *>(obj->get_ext()), new_dst_len, new_dst_pos))) {
       LOG_WARN("failed to deserialize user type", K(ret));
+    } else {
+      dst_pos += sizeof(ObObj);
     }
   }
   return ret;
@@ -1988,15 +1996,10 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(spi_cursor_)) {
-      OV (OB_NOT_NULL(entity_));
-      if (OB_SUCC(ret)) {
-        ObIAllocator &alloc = entity_->get_arena_allocator();
-        OX (spi_cursor_ = alloc.alloc(sizeof(ObSPIResultSet)));
-        OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
-      }
-    }
+  if (OB_ISNULL(spi_cursor_)) {
+    OV (OB_NOT_NULL(get_allocator()));
+    OX (spi_cursor_ = get_allocator()->alloc(sizeof(ObSPIResultSet)));
+    OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
   }
   OX (spi_result = new (spi_cursor_) ObSPIResultSet());
   OZ (spi_result->init(*ctx->exec_ctx_->get_my_session()));
@@ -2005,7 +2008,8 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
 
 int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
                                         uint64_t tenant_id,
-                                        uint64_t mem_limit)
+                                        uint64_t mem_limit,
+                                        bool is_local_for_update)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *spi_allocator = get_allocator();
@@ -2013,7 +2017,10 @@ int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cursor allocator is null.", K(ret), K(spi_allocator), K(id_));
   } else if (OB_ISNULL(spi_cursor_)) {
-    OX (spi_cursor_ = spi_allocator->alloc(sizeof(ObSPICursor)));
+    int64_t alloc_size = is_local_for_update
+      ? (sizeof(ObSPICursor) > sizeof(ObSPIResultSet) ? sizeof(ObSPICursor) : sizeof(ObSPIResultSet))
+      : sizeof(ObSPICursor);
+    OX (spi_cursor_ = spi_allocator->alloc(alloc_size));
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
   }
   OX (spi_cursor = new (spi_cursor_) ObSPICursor(*spi_allocator));

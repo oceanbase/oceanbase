@@ -94,6 +94,7 @@ private:
         cur_expr_is_precise_(false),
         phy_rowid_for_table_loc_(false),
         ignore_calc_failure_(false),
+        range_optimizer_max_mem_size_(100*1024*1024),
         exec_ctx_(exec_ctx),
         expr_constraints_(expr_constraints),
         params_(params)
@@ -102,21 +103,6 @@ private:
     ~ObQueryRangeCtx()
     {
     }
-    // void clear()
-    // {
-    //   key_part_map_.reset();
-    //   key_part_pos_array_.reset();
-    //   need_final_extract_ = false;
-    // }
-    // void reset()
-    // {
-    //   clear();
-    //   precise_range_exprs_.reset();
-    //   final_exprs_.reset();
-    //   expr_constraints_ = NULL;
-    //   params_ = NULL;
-    //   cur_expr_is_precise_ = false;
-    // }
     //131的原因是最大的rowkey个数是128，距离128最近的素数是131
     common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos*, 131> key_part_map_;
     bool need_final_extract_;
@@ -124,6 +110,7 @@ private:
     bool cur_expr_is_precise_; //当前正在被抽取的表达式是精确的范围，没有被放大
     bool phy_rowid_for_table_loc_;
     bool ignore_calc_failure_;
+    int64_t range_optimizer_max_mem_size_;
     common::ObSEArray<ObRangeExprItem, 4, common::ModulePageAllocator, true> precise_range_exprs_;
     ObExecContext *exec_ctx_;
     ExprConstrantArray *expr_constraints_;
@@ -379,7 +366,8 @@ public:
                                       const common::ObDataTypeCastParams &dtc_params,
                                       ObExecContext *exec_ctx,
                                       ExprConstrantArray *expr_constraints = NULL,
-                                      const ParamsIArray *params = NULL);
+                                      const ParamsIArray *params = NULL,
+                                      const bool use_in_optimization = true);
   /**
    * @brief
    * @param range_columns: columns used to extract range, index column or partition column
@@ -401,7 +389,8 @@ public:
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamsIArray *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,
-                                      const bool ignore_calc_failure = true);
+                                      const bool ignore_calc_failure = true,
+                                      const bool use_in_optimization = true);
 
   //  final_extract_query_range extracts the final query range of its physical plan.
   //  It will get the real-time value of some const which are unknow during physical plan generating.
@@ -598,6 +587,7 @@ private:
   int preliminary_extract(const ObRawExpr *node,
                           ObKeyPart *&out_key_part,
                           const common::ObDataTypeCastParams &dtc_params,
+                          const bool use_in_optimization,
                           const bool is_single_in = false);
   int pre_extract_basic_cmp(const ObRawExpr *node,
                             ObKeyPart *&out_key_part,
@@ -628,7 +618,8 @@ private:
                             const ObDataTypeCastParams &dtc_params);
   int pre_extract_and_or_op(const ObOpRawExpr *m_expr,
                             ObKeyPart *&out_key_part,
-                            const common::ObDataTypeCastParams &dtc_params);
+                            const common::ObDataTypeCastParams &dtc_params,
+                            const bool use_in_optimization);
   int pre_extract_const_op(const ObRawExpr *node,
                            ObKeyPart *&out_key_part);
   int pre_extract_geo_op(const ObOpRawExpr *geo_expr,
@@ -866,7 +857,7 @@ private:
                               const ObObj *&obj_ptr,
                               ObKeyPart &out_key_part,
                               const ObDataTypeCastParams &dtc_params);
-  int refine_large_range_graph(ObKeyPart *&key_part);
+  int refine_large_range_graph(ObKeyPart *&key_part, bool use_in_optimization = true);
   int compute_range_size(const ObIArray<ObKeyPart*> &key_parts,
                          const ObIArray<uint64_t> &or_count,
                          ObIArray<ObKeyPart*> &next_key_parts,
@@ -888,7 +879,8 @@ private:
                                       ObKeyPart *&out_key_part);
 private:
   static const int64_t RANGE_BUCKET_SIZE = 1000;
-  static const int64_t MAX_RANGE_SIZE = 100000;
+  static const int64_t MAX_RANGE_SIZE_OLD = 10000;
+  static const int64_t MAX_RANGE_SIZE_NEW = 100000;
   static const int64_t MAX_NOT_IN_SIZE = 10; //do not extract range for not in row over this size
   typedef common::ObObjStore<ObKeyPart*, common::ObIAllocator&> KeyPartStore;
 private:
@@ -915,6 +907,9 @@ private:
   bool is_equal_and_;
   common::ObFixedArray<ObEqualOff, common::ObIAllocator> equal_offs_;
   common::ObFixedArray<ExprFinalInfo, common::ObIAllocator> expr_final_infos_;
+  // NOTE: following two members are not allowed to be serialize or deep copy
+  int64_t mem_used_;
+  bool is_reach_mem_limit_;
   friend class ObKeyPart;
 };
 } // namespace sql-

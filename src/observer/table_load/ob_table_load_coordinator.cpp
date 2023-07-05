@@ -64,13 +64,13 @@ bool ObTableLoadCoordinator::is_ctx_inited(ObTableLoadTableCtx *ctx)
 }
 
 int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx, const ObIArray<int64_t> &idx_array,
-                                     uint64_t user_id)
+                                     uint64_t user_id, ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret));
-  } else if (OB_FAIL(ctx->init_coordinator_ctx(idx_array, user_id))) {
+  } else if (OB_FAIL(ctx->init_coordinator_ctx(idx_array, user_id, exec_ctx))) {
     LOG_WARN("fail to init coordinator ctx", KR(ret));
   }
   return ret;
@@ -167,7 +167,8 @@ int ObTableLoadCoordinator::abort_redef_table(ObTableLoadTableCtx *ctx)
   ObTableLoadRedefTableAbortArg arg;
   arg.tenant_id_ = ctx->param_.tenant_id_;
   arg.task_id_ = ctx->ddl_param_.task_id_;
-  if (OB_FAIL(ObTableLoadRedefTable::abort(arg, *ctx->session_info_))) {
+  if (OB_FAIL(
+        ObTableLoadRedefTable::abort(arg, *ctx->coordinator_ctx_->exec_ctx_->get_session_info()))) {
     LOG_WARN("fail to abort redef table", KR(ret), K(arg));
   }
   return ret;
@@ -237,26 +238,24 @@ int ObTableLoadCoordinator::pre_begin_peers()
       //目前源表和目标表的分区信息连同每个分区的地址都完全一样
       const ObAddr &addr = leader_info.addr_;
       if (OB_UNLIKELY(leader_info.addr_ != target_leader_info.addr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("addr must be same", K(leader_info.addr_), K(target_leader_info.addr_), KR(ret));
-      } else {
-        request.partition_id_array_ = leader_info.partition_id_array_;
-        request.target_partition_id_array_ = target_leader_info.partition_id_array_;
-        if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
-          if (OB_FAIL(ObTableLoadStore::init_ctx(ctx_, request.partition_id_array_,
-                                                 request.target_partition_id_array_))) {
-            LOG_WARN("fail to store init ctx", KR(ret));
-          } else {
-            ObTableLoadStore store(ctx_);
-            if (OB_FAIL(store.init())) {
-              LOG_WARN("fail to init store", KR(ret));
-            } else if (OB_FAIL(store.pre_begin())) {
-              LOG_WARN("fail to store pre begin", KR(ret));
-            }
+        LOG_INFO("addr must be same", K(leader_info.addr_), K(target_leader_info.addr_));
+      }
+      request.partition_id_array_ = leader_info.partition_id_array_;
+      request.target_partition_id_array_ = target_leader_info.partition_id_array_;
+      if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
+        if (OB_FAIL(ObTableLoadStore::init_ctx(ctx_, request.partition_id_array_,
+                                                request.target_partition_id_array_))) {
+          LOG_WARN("fail to store init ctx", KR(ret));
+        } else {
+          ObTableLoadStore store(ctx_);
+          if (OB_FAIL(store.init())) {
+            LOG_WARN("fail to init store", KR(ret));
+          } else if (OB_FAIL(store.pre_begin())) {
+            LOG_WARN("fail to store pre begin", KR(ret));
           }
-        } else { // 对端, 发送rpc
-          TABLE_LOAD_RPC_CALL(load_pre_begin_peer, addr, request, result);
         }
+      } else { // 对端, 发送rpc
+        TABLE_LOAD_RPC_CALL(load_pre_begin_peer, addr, request, result);
       }
     }
   }
@@ -640,7 +639,8 @@ int ObTableLoadCoordinator::commit_redef_table()
   arg.dest_table_id_ = ctx_->ddl_param_.dest_table_id_;
   arg.task_id_ = ctx_->ddl_param_.task_id_;
   arg.schema_version_ = ctx_->ddl_param_.schema_version_;
-  if (OB_FAIL(ObTableLoadRedefTable::finish(arg, *ctx_->session_info_))) {
+  if (OB_FAIL(
+        ObTableLoadRedefTable::finish(arg, *coordinator_ctx_->exec_ctx_->get_session_info()))) {
     LOG_WARN("fail to finish redef table", KR(ret), K(arg));
   }
   return ret;
@@ -648,8 +648,7 @@ int ObTableLoadCoordinator::commit_redef_table()
 
 // commit() = px_commit_data() + px_commit_ddl()
 // used in non px_mode
-int ObTableLoadCoordinator::commit(ObExecContext *exec_ctx,
-                                   ObTableLoadResultInfo &result_info)
+int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -664,7 +663,8 @@ int ObTableLoadCoordinator::commit(ObExecContext *exec_ctx,
     } else if (OB_FAIL(commit_peers(sql_statistics))) {
       LOG_WARN("fail to commit peers", KR(ret));
     } else if (param_.online_opt_stat_gather_ &&
-               OB_FAIL(drive_sql_stat(*exec_ctx, sql_statistics))) {
+               OB_FAIL(
+                 drive_sql_stat(coordinator_ctx_->exec_ctx_->get_exec_ctx(), sql_statistics))) {
       LOG_WARN("fail to drive sql stat", KR(ret));
     } else if (OB_FAIL(commit_redef_table())) {
       LOG_WARN("fail to commit redef table", KR(ret));
@@ -679,7 +679,7 @@ int ObTableLoadCoordinator::commit(ObExecContext *exec_ctx,
 
 // used in insert /*+ append */ into select clause
 // commit data loaded
-int ObTableLoadCoordinator::px_commit_data(ObExecContext *exec_ctx)
+int ObTableLoadCoordinator::px_commit_data()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -694,7 +694,8 @@ int ObTableLoadCoordinator::px_commit_data(ObExecContext *exec_ctx)
     } else if (OB_FAIL(commit_peers(sql_statistics))) {
       LOG_WARN("fail to commit peers", KR(ret));
     } else if (param_.online_opt_stat_gather_ &&
-               OB_FAIL(drive_sql_stat(*exec_ctx, sql_statistics))) {
+               OB_FAIL(
+                 drive_sql_stat(coordinator_ctx_->exec_ctx_->get_exec_ctx(), sql_statistics))) {
       LOG_WARN("fail to drive sql stat", KR(ret));
     }
   }
@@ -722,7 +723,9 @@ int ObTableLoadCoordinator::px_commit_ddl()
   return ret;
 }
 
-int ObTableLoadCoordinator::drive_sql_stat(ObExecContext &ctx, ObTableLoadSqlStatistics &sql_statistics) {
+int ObTableLoadCoordinator::drive_sql_stat(ObExecContext *ctx,
+                                           ObTableLoadSqlStatistics &sql_statistics)
+{
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
@@ -730,26 +733,26 @@ int ObTableLoadCoordinator::drive_sql_stat(ObExecContext &ctx, ObTableLoadSqlSta
   ObSchemaGetterGuard *tmp_schema_guard = nullptr;
   ObSchemaGetterGuard *tmp_schema_guard2 = nullptr;
   const ObTableSchema *table_schema = nullptr;
-  if (sql_statistics.is_empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql statistics is empty", K(ret));
+  if (OB_UNLIKELY(nullptr == ctx || sql_statistics.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(ctx), K(sql_statistics));
   } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard,
                                                          table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else {
-    tmp_schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
-    tmp_schema_guard2 = ctx.get_das_ctx().get_schema_guard();
-    ctx.get_sql_ctx()->schema_guard_ = &schema_guard;
-    ctx.get_das_ctx().get_schema_guard() = &schema_guard;
+    tmp_schema_guard = ctx->get_virtual_table_ctx().schema_guard_;
+    tmp_schema_guard2 = ctx->get_das_ctx().get_schema_guard();
+    ctx->get_sql_ctx()->schema_guard_ = &schema_guard;
+    ctx->get_das_ctx().get_schema_guard() = &schema_guard;
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObIncrementalStatEstimator::drive_global_stat_by_direct_load(
-                 ctx, sql_statistics.table_stat_array_, sql_statistics.col_stat_array_))) {
+                 *ctx, sql_statistics.table_stat_array_, sql_statistics.col_stat_array_))) {
       LOG_WARN("fail to drive global stat by direct load", KR(ret));
     }
   }
-  ctx.get_sql_ctx()->schema_guard_ = tmp_schema_guard;
-  ctx.get_das_ctx().get_schema_guard() = tmp_schema_guard2;
+  ctx->get_sql_ctx()->schema_guard_ = tmp_schema_guard;
+  ctx->get_das_ctx().get_schema_guard() = tmp_schema_guard2;
   return ret;
 }
 

@@ -350,6 +350,7 @@ protected:
                        ObDMLStmt *&stmt,
                        ObDMLStmt *trans_stmt,
                        bool force_accept,
+                       bool check_original_plan,
                        bool &trans_happened,
                        void *check_ctx = NULL);
 
@@ -423,6 +424,7 @@ private:
 
   virtual int is_expected_plan(ObLogPlan *plan,
                                void *check_ctx,
+                               bool is_trans_plan,
                                bool& is_valid);
 
   bool skip_move_trans_loc() const

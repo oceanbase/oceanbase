@@ -28,6 +28,7 @@ using namespace omt;
 
 ObTableLoadBeginP::ObTableLoadBeginP(const ObGlobalContext &gctx) : gctx_(gctx), table_ctx_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadBeginP::~ObTableLoadBeginP()
@@ -47,6 +48,12 @@ int ObTableLoadBeginP::process()
 
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret), K_(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check tenant", KR(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -105,14 +112,14 @@ int ObTableLoadBeginP::process()
       param.table_id_ = table_id;
       param.batch_size_ = arg_.config_.batch_size_;
       param.parallel_ = arg_.config_.session_count_;
-      param.session_count_ = MIN(arg_.config_.session_count_, (int32_t)tenant->unit_max_cpu());
+      param.session_count_ = MIN(arg_.config_.session_count_, (int32_t)tenant->unit_max_cpu() * 2);
       param.max_error_row_count_ = arg_.config_.max_error_row_count_;
       param.column_count_ = column_names.count();
       param.need_sort_ = arg_.config_.flag_.is_need_sort_;
       param.px_mode_ = false;
       param.online_opt_stat_gather_ = false;
       param.data_type_ = static_cast<ObTableLoadDataType>(arg_.config_.flag_.data_type_);
-      param.dup_action_ = ObLoadDupActionType::LOAD_STOP_ON_DUP;
+      param.dup_action_ = static_cast<ObLoadDupActionType>(arg_.config_.flag_.dup_action_);
       if (OB_FAIL(param.normalize())) {
         LOG_WARN("fail to normalize param", KR(ret));
       }
@@ -221,8 +228,11 @@ int ObTableLoadBeginP::create_table_ctx(const ObTableLoadParam &param,
       LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
     } else if (OB_FAIL(table_ctx->init(param, ddl_param, &session_info))) {
       LOG_WARN("fail to init table ctx", KR(ret));
+    } else if (OB_FAIL(table_ctx->init_client_exec_ctx())) {
+      LOG_WARN("fail to init client exec ctx", KR(ret));
     } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, idx_array_,
-                                                        session_info.get_priv_user_id()))) {
+                                                        session_info.get_priv_user_id(),
+                                                        table_ctx->client_exec_ctx_))) {
       LOG_WARN("fail to coordinator init ctx", KR(ret));
     } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
       LOG_WARN("fail to add ctx", KR(ret));
@@ -264,6 +274,12 @@ int ObTableLoadPreBeginPeerP::process()
 
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret), K_(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check tenant", KR(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -349,6 +365,12 @@ int ObTableLoadConfirmBeginPeerP::process()
 
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret), K_(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check tenant", KR(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {

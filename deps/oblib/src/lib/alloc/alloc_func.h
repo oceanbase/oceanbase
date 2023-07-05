@@ -48,6 +48,7 @@ int64_t ob_get_reserved_urgent_memory();
 // pc_pctg: percentage limitation of tenant memory can be used by Plan Cache
 // wa_pctg: percentage limitation of tenant memory can be used by Work Area
 
+int set_ctx_limit(uint64_t tenant_id, uint64_t ctx_id, const int64_t limit);
 int set_wa_limit(uint64_t tenand_id, int64_t wa_pctg);
 
 // set meta object memory limit for specified tenant.

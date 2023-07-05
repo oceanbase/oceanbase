@@ -77,6 +77,7 @@ public:
     jit::ObLLVMFunction spi_init_collection_;
     jit::ObLLVMFunction spi_reset_collection_;
     jit::ObLLVMFunction spi_copy_datum_;
+    jit::ObLLVMFunction spi_destruct_obj_;
     jit::ObLLVMFunction spi_sub_nestedtable_;
     jit::ObLLVMFunction spi_alloc_complex_var_;
     jit::ObLLVMFunction spi_construct_collection_;
@@ -246,6 +247,7 @@ public:
                          bool in_notfound,
                          bool in_warning,
                          bool signal);
+  int clean_for_loop_cursor(bool is_from_exception);
   int raise_exception(jit::ObLLVMValue &exception,
                       jit::ObLLVMValue &error_code,
                       jit::ObLLVMValue &sql_staten,

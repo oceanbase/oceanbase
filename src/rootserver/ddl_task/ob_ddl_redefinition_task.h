@@ -223,6 +223,7 @@ protected:
       : ret_code_(INT64_MAX), task_id_(0)
     {}
     ~DependTaskStatus() = default;
+    TO_STRING_KV(K_(task_id), K_(ret_code));
   public:
     int64_t ret_code_;
     int64_t task_id_;

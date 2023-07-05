@@ -771,20 +771,47 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
   int ret = OB_SUCCESS;
   table_locations_.reset();
   das_table_locations_.reset();
-  if (OB_FAIL(table_locations_.init(infos.count()))) {
+  table_locations_.set_allocator(&allocator_);
+  das_table_locations_.set_allocator(&allocator_);
+  int64_t das_tbl = 0;
+  int64_t normal_tbl = 0;
+  for (int64_t i = 0; i < infos.count(); ++i) {
+    ObTableLocation &tl = infos.at(i)->get_table_location();
+    if (tl.use_das()) {
+      das_tbl++;
+    } else {
+      normal_tbl++;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(table_locations_.prepare_allocate(normal_tbl, allocator_))) {
     LOG_WARN("fail to init table location count", K(ret));
-  } else if (OB_FAIL(das_table_locations_.init(infos.count()))) {
+  } else if (OB_FAIL(das_table_locations_.prepare_allocate(das_tbl, allocator_))) {
     LOG_WARN("fail to init das table location count", K(ret));
   }
+  das_tbl = 0;
+  normal_tbl = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
     ObTableLocation &tl = infos.at(i)->get_table_location();
     const ObTableSchema *table_schema = nullptr;
     if (tl.use_das()) {
-      if (OB_FAIL(das_table_locations_.push_back(tl))) {
-        LOG_WARN("fail to push das table location", K(ret), K(i));
+      if (OB_FAIL(das_table_locations_.at(das_tbl).assign(tl))) {
+        LOG_WARN("fail to push das table location", K(ret), K(das_tbl));
+      } else {
+        das_tbl++;
       }
-    } else if (OB_FAIL(table_locations_.push_back(tl))) {
-      LOG_WARN("fail to push table location", K(ret), K(i));
+    } else {
+      if (OB_FAIL(table_locations_.at(normal_tbl).assign(tl))) {
+        LOG_WARN("fail to push table location", K(ret), K(normal_tbl));
+      } else {
+        normal_tbl++;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), tl.get_ref_table_id(), table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(tl.get_ref_table_id()));
     } else {

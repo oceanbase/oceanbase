@@ -389,7 +389,12 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info)
   ObRawExprDeduceType expr_deducer(session_info);
   expr_deducer.set_expr_factory(expr_factory_);
   if (OB_FAIL(expr_deducer.deduce(*this))) {
-    LOG_WARN("fail to deduce", K(ret));
+    if (session_info->is_varparams_sql_prepare()) {
+      ret = OB_SUCCESS;
+      LOG_TRACE("ps prepare phase ignores type deduce error");
+    } else {
+      LOG_WARN("fail to deduce", K(ret));
+    }
   }
   //LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
   return ret;
@@ -733,7 +738,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_NORMAL_UDF == type_
       || T_FUN_SYS_REMOVE_CONST == type_
       || T_FUN_SYS_WRAPPER_INNER == type_
-      || T_FUN_SYS_LAST_INSERT_ID == type_
+      || (T_FUN_SYS_LAST_INSERT_ID == type_ && get_param_count() > 0)
       || T_FUN_SYS_TO_BLOB == type_
       || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())
       || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
@@ -1362,7 +1367,8 @@ bool ObQueryRefRawExpr::inner_same_as(
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
       bool_ret = (get_ref_id() == u_expr.get_ref_id() &&
                   ref_stmt_ == u_expr.ref_stmt_ &&
-                  is_multiset_ == is_multiset_);
+                  is_set_ == u_expr.is_set_ &&
+                  is_multiset_ == u_expr.is_multiset_);
     }
   }
   return bool_ret;
@@ -1372,7 +1378,9 @@ bool ObExprEqualCheckContext::compare_query(const ObQueryRefRawExpr &left,
                                             const ObQueryRefRawExpr &right)
 {
   return left.get_ref_id() == right.get_ref_id() &&
-      left.get_ref_stmt() == right.get_ref_stmt();
+      left.get_ref_stmt() == right.get_ref_stmt() &&
+      left.is_set() == right.is_set() &&
+      left.is_multiset() == right.is_multiset();
 }
 
 int ObQueryRefRawExpr::do_visit(ObRawExprVisitor &visitor)
@@ -3278,6 +3286,7 @@ bool ObAggFunRawExpr::inner_same_as(
             if (order_items_.count() == a_expr->order_items_.count()) {
               for (int64_t i = 0; bool_ret && i < order_items_.count(); ++i) {
                 if(OB_ISNULL(order_items_.at(i).expr_) || OB_ISNULL(a_expr->order_items_.at(i).expr_)
+                   || order_items_.at(i).order_type_ != a_expr->order_items_.at(i).order_type_
                    || !order_items_.at(i).expr_->same_as(*(a_expr->order_items_.at(i).expr_), check_context)) {
                   bool_ret = false;
                 }

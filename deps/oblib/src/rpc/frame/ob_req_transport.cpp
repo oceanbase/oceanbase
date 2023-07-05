@@ -124,7 +124,7 @@ int async_cb(easy_request_t *r)
 
       if (cb_cloned) {
         LOG_DEBUG("reset rcode", K(cb_cloned));
-        cb->reset_rcode();
+        cb->~AsyncCB();
       }
     }
   } else {
@@ -439,7 +439,10 @@ ObPacket *ObReqTransport::send_session(easy_session_t *s) const
     }
 
     easy_inet_addr_to_str(&s->addr, buff, OB_SERVER_ADDR_STR_LEN);
-    pkt = reinterpret_cast<ObPacket*>(easy_client_send(eio_, s->addr, s));
+    {
+      lib::Thread::RpcGuard guard;
+      pkt = reinterpret_cast<ObPacket*>(easy_client_send(eio_, s->addr, s));
+    }
     if (NULL == pkt) {
       SERVER_LOG(WARN, "send packet fail", "dst", buff, KP(s));
     } else {

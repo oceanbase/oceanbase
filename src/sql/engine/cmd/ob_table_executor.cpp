@@ -113,7 +113,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
                                           obj_print_params,
                                           param_store,
                                           true);
-  select_stmt_printer.set_is_root(true);  // print hint as root stmt
+  select_stmt_printer.set_is_first_stmt_for_hint(true);  // need print global hint
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed");
@@ -1674,6 +1674,35 @@ ObTruncateTableExecutor::~ObTruncateTableExecutor()
 {
 }
 
+int ObTruncateTableExecutor::check_use_parallel_truncate(const obrpc::ObTruncateTableArg &arg, bool &use_parallel_truncate)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  use_parallel_truncate = false;
+  const ObTableSchema *table_schema = NULL;
+  const uint64_t tenant_id = arg.tenant_id_;
+  const ObString table_name = arg.table_name_;
+  const ObString database_name = arg.database_name_;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("GCTX schema_service not init", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+  } else if (FALSE_IT(schema_guard.set_session_id(arg.session_id_))) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, false, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(database_name), K(table_name));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table is not exist", K(ret), K(database_name), K(table_name));
+  } else {
+    use_parallel_truncate = table_schema->get_autoinc_column_id() == 0 && compat_version >= DATA_VERSION_4_1_0_0;
+  }
+  return ret;
+}
+
 int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -1706,33 +1735,16 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       //impossible
     } else if (!stmt.is_truncate_oracle_temp_table()) {
       int64_t foreign_key_checks = 0;
-      share::schema::ObSchemaGetterGuard schema_guard;
       my_session->get_foreign_key_checks(foreign_key_checks);
       tmp_arg.foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
       tmp_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode()
         ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
       int64_t affected_rows = 0;
-      uint64_t compat_version = 0;
-      const ObTableSchema *table_schema = NULL;
+      bool use_parallel_truncate = false;
       const uint64_t tenant_id = truncate_table_arg.tenant_id_;
-      const ObString table_name = truncate_table_arg.table_name_;
-      const ObString database_name = truncate_table_arg.database_name_;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-        LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
-      } else if (OB_ISNULL(GCTX.schema_service_)) {
-        ret = OB_NOT_INIT;
-        LOG_WARN("GCTX schema_service not init", K(ret));
-      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-        LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
-      } else if (FALSE_IT(schema_guard.set_session_id(truncate_table_arg.session_id_))) {
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, false, table_schema))) {
-        LOG_WARN("fail to get table schema", K(ret), K(database_name), K(table_name));
-      } else if (OB_ISNULL(table_schema)) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("table is not exist", K(ret), K(database_name), K(table_name));
-      // Avoiding the impact of new_truncate_table on mysql auotinc, then we need to execute the old logic
-      } else if (compat_version < DATA_VERSION_4_1_0_0
-                || table_schema->get_autoinc_column_id() != 0) {
+      if (OB_FAIL(check_use_parallel_truncate(truncate_table_arg, use_parallel_truncate))) {
+        LOG_WARN("fail to check use parallel trunate", KR(ret), K(truncate_table_arg));
+      } else if (!use_parallel_truncate) {
         if (OB_FAIL(common_rpc_proxy->truncate_table(truncate_table_arg, res))) {
           LOG_WARN("rpc proxy alter table failed", K(ret));
         } else if (res.is_valid()
@@ -1780,7 +1792,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                           && consensus_schema_version >= res.task_id_) {
                 break;
               } else if (refreshed_schema_version >= res.task_id_
-                          && ObTimeUtility::current_time() - step_time >= 10 * 1000 * 1000) { //10s
+                          && ObTimeUtility::current_time() - step_time >= GCONF._wait_interval_after_truncate) {
                 break;
               } else {
                 ob_usleep(10 * 1000);
@@ -1795,7 +1807,6 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                                                 K(res));
         }
       }
-
     } else {
       ObSqlString sql;
       int64_t affect_rows = 0;

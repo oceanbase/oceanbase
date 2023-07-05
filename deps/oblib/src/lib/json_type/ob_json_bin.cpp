@@ -986,7 +986,7 @@ int ObJsonBin::to_tree(ObJsonNode *&json_tree)
   return ret;
 }
 
-int ObJsonBin::deserialize_json_value(const char *data,
+int ObJsonBin:: deserialize_json_value(const char *data,
                                       uint64_t length,
                                       uint8_t type,
                                       uint64_t value_offset,
@@ -1484,7 +1484,7 @@ int ObJsonBin::deserialize_json_object_v0(const char *data, uint64_t length, ObJ
           ObJsonNode *node = NULL;
           ret = deserialize_json_value(val, length - value_offset, val_type, value_offset, node, type);
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(object->add(key, node))) {
+            if (OB_FAIL(object->add(key, node, false, true, false))) {
               LOG_WARN("failed to add node to obj", K(ret));
             }
           } else {

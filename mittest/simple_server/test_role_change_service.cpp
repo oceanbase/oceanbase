@@ -93,8 +93,48 @@ TEST_F(RoleChangeService, unique_set)
   }
 }
 
+TEST_F(RoleChangeService, basic_func)
+{
+  CLOG_LOG(INFO, "start basic_func");
+  const char *tenant_name = "runlin";
+  EXPECT_EQ(OB_SUCCESS, create_tenant(tenant_name));
+  uint64_t tenant_id = 0;
+  EXPECT_EQ(OB_SUCCESS, get_tenant_id(tenant_id, tenant_name));
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  // 上下文切换为runlin租户
+  ASSERT_EQ(OB_SUCCESS, guard.switch_to(tenant_id));
+  ObLogService *log_service = MTL(ObLogService*);
+  ASSERT_NE(nullptr, log_service);
+  ObRoleChangeService *role_change_service = &log_service->role_change_service_;
+  ASSERT_NE(nullptr, role_change_service);
+  ObLSService *ls_service = MTL(ObLSService*);
+  ASSERT_NE(nullptr, ls_service);
+  {
+    ObLSHandle ls;
+    EXPECT_EQ(OB_SUCCESS, ls_service->get_ls(ObLSID(1001), ls, ObLSGetMod::LOG_MOD));
+    // 停止回放
+    EXPECT_EQ(OB_SUCCESS, ls.get_ls()->disable_replay());
+    ObLogHandler *log_handler = &ls.get_ls()->log_handler_;
+    EXPECT_EQ(LEADER, log_handler->role_);
+    log_handler->role_ = FOLLOWER;
+    RoleChangeEvent event_stack;
+    event_stack.event_type_ = RoleChangeEventType::ROLE_CHANGE_CB_EVENT_TYPE;
+    event_stack.ls_id_ = ObLSID(1001);
+    ObRoleChangeService::RetrySubmitRoleChangeEventCtx retry_ctx;
+    EXPECT_EQ(OB_TIMEOUT, role_change_service->handle_role_change_cb_event_for_log_handler_(palf::AccessMode::APPEND, ls.get_ls(), retry_ctx));
+    EXPECT_EQ(retry_ctx.reason_, ObRoleChangeService::RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT);
+    EXPECT_EQ(retry_ctx.need_retry(), true);
+    EXPECT_EQ(OB_SUCCESS, role_change_service->on_role_change(1001));
+    sleep(10);
+  }
+  EXPECT_EQ(OB_SUCCESS, delete_tenant("runlin"));
+  CLOG_LOG(INFO, "end basic_func");
+}
+
+
 TEST_F(RoleChangeService, test_offline)
 {
+  CLOG_LOG(INFO, "start test_offline");
   EXPECT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy_with_short_wait());
   share::ObTenantSwitchGuard tguard;
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(1));
@@ -153,6 +193,7 @@ TEST_F(RoleChangeService, test_offline)
   EXPECT_EQ(common::FOLLOWER, log_handler->role_);
   EXPECT_EQ(true, log_handler->is_offline_);
   EXPECT_EQ(-1, log_handler->apply_status_->proposal_id_);
+  CLOG_LOG(INFO, "end test_offline");
 }
 
 } // end unittest

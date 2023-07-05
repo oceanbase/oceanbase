@@ -68,8 +68,8 @@ public:
   inline uint64_t get_total_used() const;
 
   void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator);
-  void set_max_chunk_cache_cnt(const int cnt)
-  { chunk_free_list_.set_max_chunk_cache_cnt(cnt); }
+  void set_max_chunk_cache_size(const int64_t max_cache_size)
+  { chunk_free_list_.set_max_chunk_cache_size(max_cache_size); }
   void reset();
   void set_locker(ISetLocker *locker) { locker_ = locker; }
   int64_t sync_wash(int64_t wash_size=INT64_MAX);

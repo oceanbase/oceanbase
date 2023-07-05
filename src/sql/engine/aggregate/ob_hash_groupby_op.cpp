@@ -652,7 +652,7 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
       &ctx_, MY_SPEC.px_est_size_factor_, est_rows, est_rows))) {
     LOG_WARN("failed to get px size", K(ret));
   } else if (OB_FAIL(distinct_sql_mem_processor_.init(
-                  &ctx_.get_allocator(),
+                  &mem_context_->get_allocator(),
                   tenant_id,
                   est_size,
                   PHY_HASH_DISTINCT, // hardcode to distinct

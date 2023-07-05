@@ -129,6 +129,7 @@ protected:
   int add_parent_cte_table_item(TableItem *table_item);
   int resolve_from_clause(const ParseNode *node);
   int resolve_field_list(const ParseNode &node);
+  inline bool is_colum_without_alias(ParseNode *project_node);
   int resolve_star(const ParseNode *node);
   int resolve_group_clause(const ParseNode *node);
   int resolve_groupby_node(const ParseNode *group_node,
@@ -209,7 +210,7 @@ protected:
   int resolve_named_windows_clause(const ParseNode *node);
   int check_nested_aggr_in_having(ObRawExpr* expr);
   int resolve_start_with_clause(const ParseNode *node);
-  int check_connect_by_expr_validity(const ObRawExpr *raw_expr);
+  int check_connect_by_expr_validity(const ObRawExpr *raw_expr, bool is_prior);
   int resolve_connect_by_clause(const ParseNode *node);
   int check_correlated_column_ref(const ObSelectStmt &select_stmt, ObRawExpr *expr, bool &correalted_query);
   virtual int resolve_order_item(const ParseNode &sort_node, OrderItem &order_item);

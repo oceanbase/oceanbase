@@ -201,8 +201,15 @@ int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
              K(resize_block_cnt), "free_block_cnt:", free_size_byte / BLOCK_SIZE);
   } else if (OB_FAIL(
                  do_resize_(old_log_pool_meta, resize_block_cnt, new_log_pool_meta))) {
-    CLOG_LOG(ERROR, "do_resize_ failed", K(ret), KPC(this), K(old_log_pool_meta),
-             K(new_log_pool_meta));
+    if (OB_ALLOCATE_DISK_SPACE_FAILED == ret) {
+      LOG_DBA_ERROR(OB_ALLOCATE_DISK_SPACE_FAILED,
+                    "possible reason",
+                    "may be diskspace is not enough, please check the configuration about log disk",
+                    "expected log disk size(MB)", (new_size_byte+1024*1024-1)/1024/1024);
+    } else {
+      CLOG_LOG(ERROR, "do_resize_ failed", K(ret), KPC(this), K(old_log_pool_meta),
+               K(new_log_pool_meta));
+    }
   } else {
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     CLOG_LOG(INFO, "resize success", K(ret), KPC(this), K(new_size_byte), K(aligned_new_size_byte),

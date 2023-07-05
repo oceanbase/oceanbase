@@ -205,6 +205,13 @@ private:
   bool min_max_inited_;
 };
 
+enum OptTableStatType {
+  DEFAULT_TABLE_STAT = 0,    //default table stat.
+  OPT_TABLE_STAT,            //optimizer gather table stat.
+  OPT_TABLE_GLOBAL_STAT,     //optimizer gather table global stat when no table part stat.
+  DS_TABLE_STAT              //dynamic sampling table stat
+};
+
 class OptTableMeta
 {
 public:
@@ -212,21 +219,25 @@ public:
     table_id_(OB_INVALID_ID),
     ref_table_id_(OB_INVALID_ID),
     rows_(0),
-    stat_type_(0),
+    stat_type_(OptTableStatType::DEFAULT_TABLE_STAT),
     last_analyzed_(0),
     all_used_parts_(),
     pk_ids_(),
-    column_metas_()
+    column_metas_(),
+    all_used_global_parts_(),
+    scale_ratio_(1.0)
   {}
   int assign(const OptTableMeta &other);
 
   int init(const uint64_t table_id,
            const uint64_t ref_table_id,
            const int64_t rows,
-           const int64_t stat_type,
+           const OptTableStatType stat_type,
            ObSqlSchemaGuard &schema_guard,
            common::ObIArray<int64_t> &all_used_part_id,
            common::ObIArray<uint64_t> &column_ids,
+           ObIArray<int64_t> &all_used_global_parts,
+           const double scale_ratio,
            const OptSelectivityCtx &ctx);
 
   // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);
@@ -245,24 +256,42 @@ public:
   common::ObIArray<int64_t> &get_all_used_parts() { return all_used_parts_; }
   const common::ObIArray<uint64_t>& get_pkey_ids() const { return pk_ids_; }
   common::ObIArray<OptColumnMeta>& get_column_metas() { return column_metas_; }
+  const common::ObIArray<int64_t>& get_all_used_global_parts() const { return all_used_global_parts_; }
+  common::ObIArray<int64_t> &get_all_used_global_parts() { return all_used_global_parts_; }
+  double get_scale_ratio() const { return scale_ratio_; }
+  void set_scale_ratio(const double scale_ratio) { scale_ratio_ = scale_ratio; }
 
-  bool use_default_stat() const { return stat_type_ == 0; }
-  bool use_opt_stat() const { return stat_type_ == 1; }
+  bool use_default_stat() const { return stat_type_ == OptTableStatType::DEFAULT_TABLE_STAT; }
+  bool use_opt_stat() const { return stat_type_ == OptTableStatType::OPT_TABLE_STAT ||
+                                     stat_type_ == OptTableStatType::OPT_TABLE_GLOBAL_STAT; }
+  bool use_opt_global_stat() const { return stat_type_ == OptTableStatType::OPT_TABLE_GLOBAL_STAT; }
 
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(rows), K_(stat_type),
-               K_(all_used_parts), K_(pk_ids), K_(column_metas));
+               K_(all_used_parts), K_(pk_ids), K_(column_metas),
+               K_(all_used_global_parts), K_(scale_ratio));
 private:
   uint64_t table_id_;
   uint64_t ref_table_id_;
   double rows_;
-  /// 0 for default stat
-  /// 1 for optimizer-gathered stat
-  int64_t stat_type_;
+  OptTableStatType stat_type_;
   int64_t last_analyzed_;
 
   ObSEArray<int64_t, 64, common::ModulePageAllocator, true> all_used_parts_;
   ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> pk_ids_;
   ObSEArray<OptColumnMeta, 32, common::ModulePageAllocator, true> column_metas_;
+  ObSEArray<int64_t, 64, common::ModulePageAllocator, true> all_used_global_parts_;
+  double scale_ratio_;
+};
+
+struct OptSelectivityDSParam {
+  OptSelectivityDSParam() :
+    table_meta_(NULL),
+    quals_()
+  {}
+  TO_STRING_KV(KPC(table_meta_),
+               K(quals_));
+  const OptTableMeta *table_meta_;
+  ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> quals_;
 };
 
 class OptTableMetas
@@ -277,7 +306,9 @@ public:
                                const int64_t rows,
                                common::ObIArray<int64_t> &all_used_part_id,
                                common::ObIArray<uint64_t> &column_ids,
-                               const int64_t stat_type,
+                               const OptTableStatType stat_type,
+                               ObIArray<int64_t> &all_used_global_parts,
+                               const double scale_ratio,
                                int64_t last_analyzed);
 
   int add_set_child_stmt_meta_info(const ObDMLStmt *parent_stmt,

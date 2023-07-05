@@ -201,7 +201,7 @@ public:
       int64_t itid = get_itid();
       int64_t aid = itid % arena_num_;
       ObPoolArenaHead &arena = arena_[aid];
-      int64_t cur_ts = OB_TSC_TIMESTAMP.current_time();
+      int64_t cur_ts = ObClockGenerator::getClock();
       { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
         ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
         cmeta = static_cast<Meta*>(arena.next);
@@ -250,7 +250,7 @@ public:
       if (aid >= 0) {
         x->reset();
         ObPoolArenaHead &arena = arena_[aid];
-        int64_t cur_ts = OB_TSC_TIMESTAMP.current_time();
+        int64_t cur_ts = ObClockGenerator::getClock();
         { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
           ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
           cmeta->next = static_cast<Meta*>(arena.next);
@@ -264,7 +264,7 @@ public:
         x->~T();
         ob_free(cmeta);
         ObPoolArenaHead &arena = arena_[-(aid + 1)];
-        int64_t cur_ts = OB_TSC_TIMESTAMP.current_time();
+        int64_t cur_ts = ObClockGenerator::getClock();
         { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
           ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
           arena.miss_return_cnt++;

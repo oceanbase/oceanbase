@@ -1285,22 +1285,24 @@ int ObTableScanOp::inner_open()
 int ObTableScanOp::inner_close()
 {
   int ret = OB_SUCCESS;
-
   if (das_ref_.has_task()) {
-    ObTaskExecutorCtx &task_exec_ctx = ctx_.get_task_exec_ctx();
-    if (OB_FAIL(fill_storage_feedback_info())) {
-      LOG_WARN("failed to fill storage feedback info", K(ret));
-    } else if (OB_FAIL(das_ref_.close_all_task())) {
-      LOG_WARN("close all das task failed", K(ret));
+    int tmp_ret = fill_storage_feedback_info();
+    if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+      LOG_WARN("fill storage feedback info failed", KR(tmp_ret));
+    }
+    if (OB_FAIL(das_ref_.close_all_task())) {
+      LOG_WARN("close all das task failed", KR(ret));
     }
   }
-  if (OB_SUCC(ret) && MY_SPEC.is_global_index_back()) {
+  if (MY_SPEC.is_global_index_back()) {
+    int save_ret = ret;
     if (OB_ISNULL(global_index_lookup_op_)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments",K(ret));
+      LOG_WARN("invalid arguments", KR(ret));
     } else if (OB_FAIL(global_index_lookup_op_->close())) {
-      LOG_WARN("failed to get next batch",K(ret));
+      LOG_WARN("close global index lookup op failed", KR(ret));
     }
+    ret = (OB_SUCCESS == save_ret) ? ret : save_ret;
   }
   if (OB_SUCC(ret)) {
     fill_sql_plan_monitor_info();
@@ -1309,7 +1311,6 @@ int ObTableScanOp::inner_close()
     iter_end_ = false;
     need_init_before_get_row_ = true;
   }
-
   return ret;
 }
 
@@ -2489,8 +2490,13 @@ int ObTableScanOp::init_ddl_column_checksum()
         if (OB_FAIL(ret)) {
         } else if (!found) {
           // if not found, the column is virtual generated column, in this scene,
-          // no need reshape, because reshape in opt layer.
+          // if is_fixed_len_char_type() is true, need reshape
+          uint64_t VIRTUAL_GEN_FIX_LEN_TAG = 1ULL << 63;
+          if ((MY_SPEC.ddl_output_cids_.at(i) & VIRTUAL_GEN_FIX_LEN_TAG) >> 63) {
+            need_reshape = true;
+          } else {
             need_reshape = false;
+          }
         }
         if (OB_SUCC(ret) && OB_FAIL(col_need_reshape_.push_back(need_reshape))) {
           LOG_WARN("failed to push back col need reshape", K(ret));
@@ -2644,13 +2650,14 @@ int ObTableScanOp::report_ddl_column_checksum()
     const int64_t curr_scan_task_id = scan_task_id_++;
     const ObTabletID &tablet_id = MY_INPUT.tablet_loc_->tablet_id_;
     const uint64_t table_id = MY_CTDEF.scan_ctdef_.ref_table_id_;
+    uint64_t VIRTUAL_GEN_FIXED_LEN_MASK = ~(1ULL << 63);
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ddl_output_cids_.count(); ++i) {
       ObDDLChecksumItem item;
       item.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
       item.tenant_id_ = MTL_ID();
       item.table_id_ = table_id;
       item.ddl_task_id_ = MY_SPEC.plan_->get_ddl_task_id();
-      item.column_id_ = MY_SPEC.ddl_output_cids_.at(i);
+      item.column_id_ = MY_SPEC.ddl_output_cids_.at(i) & VIRTUAL_GEN_FIXED_LEN_MASK;
       item.task_id_ = ctx_.get_px_sqc_id() << 48 | ctx_.get_px_task_id() << 32 | curr_scan_task_id;
       item.checksum_ = i < column_checksum_.count() ? column_checksum_[i] : 0;
     #ifdef ERRSIM

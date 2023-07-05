@@ -703,6 +703,8 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
                  && !in_black_list) {
         tablet_loc.server_ = tmp_replica_loc.get_server();
         is_found = true;
+      } else {
+        LOG_INFO("this replica in the black list.", KR(ret), K(bl_key));
       }
     }
     if (!is_found && strong_leader.is_valid()) {

@@ -18,6 +18,8 @@
 #include "share/stat/ob_stat_item.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
+#include "share/rc/ob_tenant_base.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 namespace oceanbase {
 namespace common {
 using namespace sql;
@@ -30,6 +32,18 @@ int ObHistBucket::deep_copy(const ObHistBucket &src,
   int ret = OB_SUCCESS;
   if (OB_FAIL(endpoint_value_.deep_copy(src.endpoint_value_, buf, buf_len, pos))) {
     LOG_WARN("deep copy obobj failed", K(ret));
+  } else {
+    endpoint_repeat_count_ = src.endpoint_repeat_count_;
+    endpoint_num_ = src.endpoint_num_;
+  }
+  return ret;
+}
+
+int ObHistBucket::deep_copy(ObIAllocator &alloc, const ObHistBucket &src)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_write_obj(alloc, src.endpoint_value_, endpoint_value_))) {
+    LOG_WARN("failed to write obj");
   } else {
     endpoint_repeat_count_ = src.endpoint_repeat_count_;
     endpoint_num_ = src.endpoint_num_;
@@ -88,6 +102,30 @@ int ObHistogram::deep_copy(const ObHistogram &src, char *buf, const int64_t buf_
     for (int64_t i = 0; OB_SUCC(ret) && i < buckets_.count(); ++i) {
       if (OB_FAIL(buckets_.at(i).deep_copy(src.buckets_.at(i), buf, buf_len, pos))) {
         LOG_WARN("deep copy bucket failed", K(ret), K(buf_len), K(pos));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHistogram::deep_copy(ObIAllocator &allocator, const ObHistogram &src)
+{
+  int ret = OB_SUCCESS;
+  type_ = src.type_;
+  sample_size_ = src.sample_size_;
+  density_ = src.density_;
+  bucket_cnt_ = src.bucket_cnt_;
+  void *ptr = NULL;
+  if (src.buckets_.empty()) {
+  } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObHistBucket) * src.buckets_.count()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory", K(src.buckets_.count()), K(ret));
+  } else {
+    ObHistBucket *new_buckets = new (ptr) ObHistBucket[src.buckets_.count()];
+    buckets_ = ObArrayWrap<ObHistBucket>(new_buckets, src.buckets_.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < buckets_.count(); ++i) {
+      if (OB_FAIL(buckets_.at(i).deep_copy(allocator, src.buckets_.at(i)))) {
+        LOG_WARN("deep copy bucket failed");
       }
     }
   }
@@ -164,6 +202,8 @@ ObOptColumnStat::ObOptColumnStat()
 {
   min_value_.set_null();
   max_value_.set_null();
+  inner_min_allocator_.set_tenant_id(MTL_ID());
+  inner_max_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
@@ -189,6 +229,8 @@ ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
 {
   min_value_.set_null();
   max_value_.set_null();
+  inner_min_allocator_.set_tenant_id(MTL_ID());
+  inner_max_allocator_.set_tenant_id(MTL_ID());
   if (NULL == (llc_bitmap_ = static_cast<char*>(allocator.alloc(ObColumnStat::NUM_LLC_BUCKET)))) {
     COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for llc_bitmap_ failed.");
   } else {
@@ -442,16 +484,37 @@ int ObOptColumnStat::merge_obj(const ObObj &obj)
     num_not_null_++;
     if (!obj.get_meta().is_enum_or_set()) {//disable online gather enum/set max/min value. TODO,jiangxiu.wt
       // max/min
+      const ObObj *tmp_obj = NULL;
       if (min_value_.is_null() || obj < min_value_) {
         inner_min_allocator_.reuse();
-        if (OB_FAIL(ob_write_obj(inner_min_allocator_, obj, min_value_))) {
-          LOG_WARN("fail to deep copy obj", K(ret));
+        if (obj.is_string_type()) {
+          if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&obj, inner_min_allocator_, tmp_obj))) {
+            LOG_WARN("fail to truncate string", K(ret));
+          } else {
+            if (OB_FAIL(ob_write_obj(inner_min_allocator_, *tmp_obj, min_value_))) {
+              LOG_WARN("fail to deep copy obj", K(ret));
+            }
+          }
+        } else {
+          if (OB_FAIL(ob_write_obj(inner_min_allocator_, obj, min_value_))) {
+            LOG_WARN("fail to deep copy obj", K(ret));
+          }
         }
       }
       if (OB_SUCC(ret) && (max_value_.is_null() || obj > max_value_)) {
         inner_max_allocator_.reuse();
-        if (OB_FAIL(ob_write_obj(inner_max_allocator_, obj, max_value_))) {
-          LOG_WARN("fail to deep copy obj", K(ret));
+        if (obj.is_string_type()) {
+          if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&obj, inner_max_allocator_, tmp_obj))) {
+            LOG_WARN("fail to truncate string", K(ret));
+          } else {
+            if (OB_FAIL(ob_write_obj(inner_max_allocator_, *tmp_obj, max_value_))) {
+              LOG_WARN("fail to deep copy obj", K(ret));
+            }
+          }
+        } else {
+          if (OB_FAIL(ob_write_obj(inner_max_allocator_, obj, max_value_))) {
+            LOG_WARN("fail to deep copy obj", K(ret));
+          }
         }
       }
     }

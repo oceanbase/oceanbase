@@ -137,6 +137,9 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
   if (!unit.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(unit));
+  } else if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    ret = OB_SERVER_IS_INIT;
+    LOG_WARN("slog replay not finish", KR(ret),K(unit));
   } else if (is_meta_tenant(unit.tenant_id_)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can not create meta tenant", K(ret), K(unit));
@@ -242,7 +245,7 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
   server_resource.reset();
   TenantUnits tenant_units;
 
-  if (OB_FAIL(omt_->get_tenant_units(tenant_units))) {
+  if (OB_FAIL(omt_->get_tenant_units(tenant_units, false))) {
     LOG_WARN("failed to get tenant units");
   } else {
     for (int64_t i = 0; i < tenant_units.count(); i++) {
@@ -535,7 +538,7 @@ int ObTenantNodeBalancer::refresh_tenant(TenantUnits &units)
   int ret = OB_SUCCESS;
 
   TenantUnits local_units;
-  if (OB_FAIL(omt_->get_tenant_units(local_units))) {
+  if (OB_FAIL(omt_->get_tenant_units(local_units, false))) {
     LOG_WARN("failed to get local tenant units");
   } else if (OB_FAIL(fetch_effective_tenants(local_units, units))) {
     LOG_WARN("failed to fetch effective tenants", K(local_units));

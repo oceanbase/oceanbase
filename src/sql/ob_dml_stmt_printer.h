@@ -139,6 +139,7 @@ public:
   int print_base_table(const TableItem *table_item);
   int print_hint();
   void set_is_root(bool is_root) { is_root_ = is_root; }
+  void set_is_first_stmt_for_hint(bool is_first_stmt) { is_first_stmt_for_hint_ = is_first_stmt; }
   void set_print_params(const ObObjPrintParams& obj_print_params)
   {
     print_params_ = obj_print_params;
@@ -177,6 +178,7 @@ protected:
   int64_t *pos_;
   const ObDMLStmt *stmt_;
   bool is_root_;
+  bool is_first_stmt_for_hint_;
   bool print_cte_;
   ObSchemaGetterGuard *schema_guard_;
   ObObjPrintParams print_params_;

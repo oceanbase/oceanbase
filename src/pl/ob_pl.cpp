@@ -106,6 +106,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_copy_datum));
   jit::ObLLVMHelper::add_symbol(ObString("spi_sub_nestedtable"),
                                 (void*)(sql::ObSPIService::spi_sub_nestedtable));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_obj"),
+                                (void*)(sql::ObSPIService::spi_destruct_obj));
   jit::ObLLVMHelper::add_symbol(ObString("spi_alloc_complex_var"),
                                 (void*)(sql::ObSPIService::spi_alloc_complex_var));
   jit::ObLLVMHelper::add_symbol(ObString("spi_construct_collection"),
@@ -198,6 +200,19 @@ void ObPLCtx::reset_obj()
     }
   }
   objects_.reset();
+}
+
+void ObPLCtx::reset_obj_range_to_end(int64_t index)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (index < objects_.count() && index >= 0) {
+    for (int64_t i = objects_.count() - 1; i >= index; i--) {
+      if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(objects_.at(i)))) {
+        LOG_WARN_RET(tmp_ret, "failed to destruct pl object", K(i), K(tmp_ret));
+      }
+      objects_.pop_back();
+    }
+  }
 }
 
 ObPLCtx::~ObPLCtx()
@@ -520,7 +535,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
       if (session_info.get_local_autocommit()) {
         OX (reset_autocommit_ = true);
-        OX (session_info.set_autocommit(false));
+        OZ (session_info.set_autocommit(false));
       }
     } else { // MySQL Mode
       // PL/SQL in MySQL mode may need to retry on LOCK_ON_CONFLICT error.
@@ -533,7 +548,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
       if (is_function_or_trigger && session_info.get_local_autocommit()) {
         OX (reset_autocommit_ = true);
-        OX (session_info.set_autocommit(false));
+        OZ (session_info.set_autocommit(false));
       }
     }
 
@@ -560,7 +575,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
     if (is_function_or_trigger && session_info.get_local_autocommit()) {
       OX (reset_autocommit_ = true);
-      OX (session_info.set_autocommit(false));
+      OZ (session_info.set_autocommit(false));
     }
   }
 
@@ -630,7 +645,8 @@ void ObPLContext::destory(
   }
 
   if (lib::is_mysql_mode()
-      && OB_NOT_NULL(ctx.get_physical_plan_ctx())) {
+      && OB_NOT_NULL(ctx.get_physical_plan_ctx())
+      && !is_function_or_trigger_) {
     ctx.get_physical_plan_ctx()->set_affected_rows(get_cursor_info().get_rowcount());
   }
 
@@ -735,7 +751,6 @@ void ObPLContext::destory(
         }
       }
 
-
       // 清理serially package
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS !=
@@ -772,7 +787,12 @@ void ObPLContext::destory(
     }
     // 无论如何都还原autocommit值
     if (reset_autocommit_) {
-      session_info.set_autocommit(true);
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = session_info.set_autocommit(true);
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_ERROR("restore autocommit value failed", K(tmp_ret), K(ret));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
 
@@ -783,7 +803,12 @@ void ObPLContext::destory(
   if (is_top_stack_) {
     // 无论如何都还原autocommit值
     if (reset_autocommit_) {
-      session_info.set_autocommit(true);
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = session_info.set_autocommit(true);
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_ERROR("restore autocommit value failed", K(tmp_ret), K(ret));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
 }
@@ -894,7 +919,7 @@ int ObPLContext::check_routine_legal(ObPLFunction &routine, bool in_function, bo
       ret = OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG;
       LOG_WARN("Dynamic SQL is not allowed in stored function", K(ret));
       LOG_USER_ERROR(OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, "Dynamic SQL");
-    } else if (routine.get_multi_results() || in_tg) {
+    } else if (routine.get_multi_results()) {
       ret = OB_ER_SP_NO_RETSET;
       LOG_WARN("Not allowed to return a result set in pl function", K(ret));
       if (in_tg) {
@@ -1584,6 +1609,7 @@ int ObPL::execute(ObExecContext &ctx,
   OZ (get_pl_function(ctx, params, stmt_id, sql, cacheobj_guard));
   OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
   CK (OB_NOT_NULL(routine));
+  OX (routine->set_debug_priv());
   OX (out_args = routine->get_out_args());
   CK (OB_NOT_NULL(ctx.get_package_guard()));
 
@@ -2387,7 +2413,7 @@ int ObPLExecState::final(int ret)
                                           i, cursor, param, loc);
         if (OB_SUCCESS == tmp_ret) {
           if (OB_NOT_NULL(cursor) && (!cursor->is_session_cursor()
-                                   || !cursor->is_ref_by_refcursor())) {
+                                   && !cursor->is_ref_by_refcursor())) {
             tmp_ret = ObSPIService::spi_cursor_close(&ctx_, func_.get_package_id(),
                                                      func_.get_routine_id(), i, true);
           } else {
@@ -2440,30 +2466,61 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   common::ObMySQLProxy *sql_proxy = NULL;
   ObPLPackageGuard *package_guard = NULL;
+  const ObPLDataType *real_pl_type = &pl_type;
   CK (OB_NOT_NULL(session = ctx_.exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
   CK (OB_NOT_NULL(package_guard = ctx_.exec_ctx_->get_package_guard()));
-  if (pl_type.is_ref_cursor_type() || pl_type.is_sys_refcursor_type()) {
+
+  if (OB_FAIL(ret)) {
+  } else if (pl_type.is_generic_type()) {
+    ObPLComposite *composite = NULL;
+    const ObUserDefinedType* user_type = NULL;
+    if (!obj.is_pl_extend()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic paramter has a non composite input value");
+    }
+    CK (OB_NOT_NULL(composite = reinterpret_cast<ObPLComposite*>(obj.get_ext())));
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(session->get_pl_context())
+          && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
+      pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
+      OZ (ns->get_user_type(composite->get_id(), user_type));
+      CK (OB_NOT_NULL(user_type));
+    } else {
+      ObPLResolveCtx ns(allocator,
+                      *session,
+                      *schema_guard,
+                      *package_guard,
+                      *sql_proxy,
+                      false);
+      OZ (ns.get_user_type(composite->get_id(), user_type));
+      CK (OB_NOT_NULL(user_type));
+    }
+    OX (real_pl_type = user_type);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (real_pl_type->is_ref_cursor_type() || real_pl_type->is_sys_refcursor_type()) {
     OX (obj.set_is_ref_cursor_type(true));
-  } else if (pl_type.is_udt_type()) {
+  } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
-    OZ (ns.init_complex_obj(allocator, pl_type, obj, false));
-  } else if (pl_type.is_package_type() || pl_type.is_rowtype_type()) {
+    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
+  } else if (real_pl_type->is_package_type() || real_pl_type->is_rowtype_type()) {
     ObPLResolveCtx ns(allocator,
                       *session,
                       *schema_guard,
                       *package_guard,
                       *sql_proxy,
                       false);
-    OZ (ns.init_complex_obj(allocator, pl_type, obj, false));
+    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
   } else if (OB_NOT_NULL(session->get_pl_context())
       && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
     pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
     CK (OB_NOT_NULL(ns));
-    OZ (ns->init_complex_obj(allocator, pl_type, obj, false));
+    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false));
   }
-  OX (obj.set_udt_id(pl_type.get_user_type_id()));
+  OX (obj.set_udt_id(real_pl_type->get_user_type_id()));
   return ret;
 }
 
@@ -2575,8 +2632,11 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
           } else {
             // element is composite type
             uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
-            bool is_compatible = false;
-            OZ (ObPLResolver::check_composite_compatible(ctx_, element_type_id, dest_type.get_user_type_id(), is_compatible));
+            bool is_compatible = element_type_id == coll_type->get_element_type().get_user_type_id();
+            if (!is_compatible) {
+              OZ (ObPLResolver::check_composite_compatible(
+                ctx_, element_type_id, dest_type.get_user_type_id(), is_compatible));
+            }
             if (OB_SUCC(ret) && !is_compatible) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("incorrect argument type", K(ret));
@@ -3246,7 +3306,7 @@ int ObPLExecState::execute()
   } else if (OB_ISNULL(reinterpret_cast<void*>(func_.get_action()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("action is NULL", K(ret));
-  } else if (OB_ISNULL(ctx_.exec_ctx_)) {
+  } else if (OB_ISNULL(ctx_.exec_ctx_) || OB_ISNULL(ctx_.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("execute context is null", K(ret));
   } else {
@@ -3344,15 +3404,21 @@ int ObPLExecState::execute()
       } else { /*do nothing*/ }
     }
 
+    if (top_call_
+        && ctx_.exec_ctx_->get_my_session()->is_track_session_info()
+        && ctx_.exec_ctx_->get_my_session()->is_package_state_changed()) {
+      LOG_DEBUG("++++++++ add changed package info to session! +++++++++++");
+      int tmp_ret = ctx_.exec_ctx_->get_my_session()->add_changed_package_info(*ctx_.exec_ctx_);
+      if (tmp_ret != OB_SUCCESS) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to add changed package info", K(ret));
+      } else {
+        ctx_.exec_ctx_->get_my_session()->reset_all_package_changed_info();
+      }
+    }
+
     if (OB_SUCC(ret)) {
       ObSQLSessionInfo *session_info = ctx_.exec_ctx_->get_my_session();
-      if (top_call_
-          && session_info->is_track_session_info()
-          && session_info->is_package_state_changed()) {
-        LOG_DEBUG("++++++++ add changed package info to session! +++++++++++");
-        OZ (session_info->add_changed_package_info(*ctx_.exec_ctx_));
-        OX (session_info->reset_all_package_changed_info());
-      }
     } else if (!inner_call_) {
     }
   }

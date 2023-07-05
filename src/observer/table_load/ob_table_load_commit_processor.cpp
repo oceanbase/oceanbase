@@ -26,9 +26,10 @@ int ObTableLoadCommitP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
-    ObExecContext *exec_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
@@ -36,7 +37,7 @@ int ObTableLoadCommitP::process()
       ObTableLoadCoordinator coordinator(table_ctx);
       if (OB_FAIL(coordinator.init())) {
         LOG_WARN("fail to init coordinator", KR(ret));
-      } else if (OB_FAIL(coordinator.commit(exec_ctx, result_.result_info_))) {
+      } else if (OB_FAIL(coordinator.commit(result_.result_info_))) {
         LOG_WARN("fail to coordinator commit", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
         LOG_WARN("fail to remove table ctx", KR(ret), K(key));
@@ -64,6 +65,8 @@ int ObTableLoadCommitPeerP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);

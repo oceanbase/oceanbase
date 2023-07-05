@@ -278,11 +278,13 @@ int ObSelectStmtPrinter::print_set_op_stmt()
                                        print_params_,
                                        /*force_col_alias*/true);
       stmt_printer.set_column_list(column_list_);
+      stmt_printer.set_is_first_stmt_for_hint(is_first_stmt_for_hint_);
       ObString set_op_str = ObString::make_string(
                                 ObSelectStmt::set_operator_str(select_stmt->get_set_op()));
       if (OB_FAIL(stmt_printer.do_print())) {
         LOG_WARN("fail to print left stmt", K(ret), K(*child_stmts.at(0)));
       } else {
+        stmt_printer.set_is_first_stmt_for_hint(false);
         DATA_PRINTF(")");
       }
       for (int64_t i = 1; OB_SUCC(ret) && i < child_stmts.count(); ++i) {

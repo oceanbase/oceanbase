@@ -103,22 +103,23 @@ struct ObRangeSplitInfo
   OB_INLINE bool is_sstable() const { return is_sstable_; }
   OB_INLINE bool empty() const { return OB_NOT_NULL(tables_) && tables_->empty(); }
   TO_STRING_KV(K_(store_range), KPC_(tables), K_(total_size), K_(max_macro_block_count),
-               K_(parallel_target_count), K_(is_sstable));
+               K_(max_estimate_micro_block_cnt), K_(parallel_target_count), K_(is_sstable));
   const common::ObStoreRange *store_range_;
   const ObTableReadInfo *index_read_info_;
   common::ObIArray<ObITable *> *tables_;
   int64_t total_size_;
   int64_t parallel_target_count_;
   int64_t max_macro_block_count_;
+  int64_t max_estimate_micro_block_cnt_;
   ObIAllocator *key_allocator_;
   bool is_sstable_;
 };
 
-class ObMacroEndkeyIterator
+class ObEndkeyIterator
 {
 public:
-  ObMacroEndkeyIterator();
-  ~ObMacroEndkeyIterator() = default;
+  ObEndkeyIterator();
+  virtual ~ObEndkeyIterator() = default;
   OB_INLINE bool is_valid() const
   {
     return is_inited_;
@@ -129,20 +130,58 @@ public:
       const int64_t iter_idx,
       blocksstable::ObSSTable &sstable,
       ObRangeSplitInfo &range_info);
+  bool is_empty() { return endkeys_.empty(); }
   int get_endkey_cnt(int64_t &endkey_cnt) const;
   int get_next_macro_block_endkey(ObMacroEndkey &endkey);
-  TO_STRING_KV(K_(endkeys), K_(cur_idx), K_(iter_idx), K_(is_inited));
-
-  int build_rowkey(
-      const blocksstable::ObDataMacroBlockMeta &macro_meta,
+  int push_rowkey(
+      const int64_t rowkey_col_cnt,
       const common::ObIArray<share::schema::ObColDesc> &col_descs,
-      ObIAllocator &allocator,
-      ObStoreRowkey &new_rowkey);
+      const blocksstable::ObDatumRowkey &end_key,
+      ObIAllocator &allocator);
+  VIRTUAL_TO_STRING_KV(K_(endkeys), K_(cur_idx), K_(iter_idx), K_(is_inited));
+private:
+  virtual int init_endkeys(
+        const int64_t skip_cnt,
+        const ObRangeSplitInfo &range_info,
+        const blocksstable::ObDatumRange &datum_range,
+        blocksstable::ObSSTable &sstable) = 0;
+
+public:
   static const int64_t DEFAULT_ENDKEY_ARRAY_COUNT = 16;
   ObSEArray<ObStoreRowkey, DEFAULT_ENDKEY_ARRAY_COUNT> endkeys_;
   int64_t cur_idx_;
   int64_t iter_idx_;
   bool is_inited_;
+};
+
+class ObMacroEndkeyIterator : public ObEndkeyIterator
+{
+public:
+  ObMacroEndkeyIterator() {}
+  virtual ~ObMacroEndkeyIterator() = default;
+  INHERIT_TO_STRING_KV("ObEndkeyIterator", ObEndkeyIterator, "cur_iter", "ObMacroEndkeyIterator");
+
+private:
+  virtual int init_endkeys(
+        const int64_t skip_cnt,
+        const ObRangeSplitInfo &range_info,
+        const blocksstable::ObDatumRange &datum_range,
+        blocksstable::ObSSTable &sstable) override;
+};
+
+class ObMicroEndkeyIterator : public ObEndkeyIterator
+{
+public:
+  ObMicroEndkeyIterator() {}
+  virtual ~ObMicroEndkeyIterator() = default;
+  INHERIT_TO_STRING_KV("ObEndkeyIterator", ObEndkeyIterator, "cur_iter", "ObMicroEndkeyIterator");
+
+private:
+  virtual int init_endkeys(
+        const int64_t skip_cnt,
+        const ObRangeSplitInfo &range_info,
+        const blocksstable::ObDatumRange &datum_range,
+        blocksstable::ObSSTable &sstable) override;
 };
 
 class ObPartitionParallelRanger
@@ -152,7 +191,7 @@ public:
   ~ObPartitionParallelRanger();
   ObPartitionParallelRanger() = delete;
   void reset();
-  int init(ObRangeSplitInfo &range_info);
+  int init(ObRangeSplitInfo &range_info, const bool for_compaction);
   int split_ranges(const bool for_compaction,
                    common::ObIAllocator &allocator,
                    common::ObIArray<common::ObStoreRange> &range_array);
@@ -162,10 +201,11 @@ public:
                              const common::ObBorderFlag  &border_flag,
                              const bool for_compaction,
                              ObStoreRange &range);
+  void set_col_cnt(int64_t col_cnt) { col_cnt_ = col_cnt; }
   TO_STRING_KV(KPC(store_range_), K_(endkey_iters), KP_(last_macro_endkey), K_(total_endkey_cnt),
                K_(sample_cnt), K_(parallel_target_count), K_(is_inited));
 private:
-  int calc_sample_count(ObRangeSplitInfo &range_info);
+  int calc_sample_count(const bool for_compaction, ObRangeSplitInfo &range_info);
   int init_macro_iters(ObRangeSplitInfo &range_info);
   int build_parallel_range_heap();
   int get_next_macro_endkey(ObStoreRowkey &rowkey);
@@ -173,11 +213,12 @@ private:
                        const bool for_compaction,
                        common::ObIAllocator &allocator,
                        common::ObStoreRowkey &new_rowkey);
+  int build_bound_rowkey(const bool is_max, common::ObIAllocator &allocator, common::ObStoreRowkey &new_rowkey);
   int check_rowkey_equal(const common::ObStoreRowkey &rowkey1, const common::ObStoreRowkey &rowkey2, bool &equal);
   int check_continuous(common::ObIArray<common::ObStoreRange> &range_array);
 private:
   const common::ObStoreRange *store_range_;
-  common::ObSEArray<ObMacroEndkeyIterator *, DEFAULT_STORE_CNT_IN_STORAGE> endkey_iters_;
+  common::ObSEArray<ObEndkeyIterator *, DEFAULT_STORE_CNT_IN_STORAGE> endkey_iters_;
   common::ObArenaAllocator &allocator_;
   ObMacroEndkeyComparor comparor_;
   common::ObBinaryHeap<ObMacroEndkey, ObMacroEndkeyComparor> range_heap_;
@@ -186,6 +227,8 @@ private:
   int64_t total_endkey_cnt_;
   int64_t sample_cnt_;
   int64_t parallel_target_count_;
+  bool is_micro_level_;
+  int64_t col_cnt_;
   bool is_inited_;
 };
 
@@ -213,7 +256,8 @@ private:
                             const ObTableReadInfo &index_read_info,
                             ObITable *table,
                             int64_t &total_size,
-                            int64_t &macro_block_cnt);
+                            int64_t &macro_block_cnt,
+                            int64_t &estimate_micro_block_cnt);
   int split_ranges_memtable(ObRangeSplitInfo &range_info,
                             common::ObIAllocator &allocator,
                             common::ObIArray<ObStoreRange> &range_array);
@@ -239,7 +283,7 @@ public:
       common::ObIAllocator &allocator,
       common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
 private:
-  static const int64_t MIN_SPLIT_TASK_SIZE = 2 << 20;
+  static const int64_t MIN_SPLIT_TASK_SIZE = 16 << 10;
   static const int64_t MIN_SPLIT_TARGET_SSTABLE_SIZE = MIN_SPLIT_TASK_SIZE * 3;
   static const int64_t SPLIT_TASK_SIZE_HIGH_WATER_MARK_FACTOR = 125;
   static const int64_t SPLIT_TASK_SIZE_LOW_WATER_MARK_FACTOR = 75;

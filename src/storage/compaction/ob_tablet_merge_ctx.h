@@ -168,7 +168,10 @@ struct ObTabletMergeCtx
 
   int inner_init_for_mini(bool &skip_rest_operation);
   int inner_init_for_medium();
-  int init_get_medium_compaction_info(const int64_t medium_snapshot, ObGetMergeTablesResult &result);
+  int init_get_medium_compaction_info(
+    const int64_t medium_snapshot,
+    ObGetMergeTablesResult &result,
+    bool &is_schema_changed);
   int get_specified_medium_compaction_info_from_memtable(
     ObIAllocator &allocator,
     const int64_t medium_snapshot,
@@ -183,7 +186,7 @@ public:
   static bool need_swap_tablet(const ObTablet &tablet, const int64_t row_count, const int64_t macro_count);
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int cal_minor_merge_param();
-  int cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result);
+  int cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result, const bool is_schema_changed);
   int init_merge_info();
   int prepare_index_tree();
   int prepare_merge_progress();

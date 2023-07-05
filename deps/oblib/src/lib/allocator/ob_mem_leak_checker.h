@@ -136,6 +136,8 @@ public:
         sscanf(end + 1, "%ld", &tenant_id);
         tenant_id_ = tenant_id;
         *end = '\0';
+      } else {
+        tenant_id_ = UINT64_MAX;
       }
       STRNCPY(label_, cpy, sizeof(label_));
       label_[sizeof(label_) - 1] = '\0';

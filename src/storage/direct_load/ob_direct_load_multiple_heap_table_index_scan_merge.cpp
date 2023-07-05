@@ -14,7 +14,8 @@ namespace storage
 using namespace common;
 
 ObDirectLoadMultipleHeapTableIndexScanMerge::ObDirectLoadMultipleHeapTableIndexScanMerge()
-  : scanners_(nullptr),
+  : allocator_("TLD_ScanMerge"),
+    scanners_(nullptr),
     consumers_(nullptr),
     consumer_cnt_(0),
     simple_merge_(nullptr),
@@ -39,6 +40,7 @@ int ObDirectLoadMultipleHeapTableIndexScanMerge::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(scanners.count()));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     if (scanners.count() > 1) {
       // init consumers
       if (OB_ISNULL(consumers_ = static_cast<int64_t *>(

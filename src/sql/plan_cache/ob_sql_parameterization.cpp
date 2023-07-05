@@ -196,21 +196,30 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
                 "paramlized_questionmask_count", ctx.paramlized_questionmask_count_, K(ret));
     } else if (OB_NOT_NULL(raw_params)
                && OB_NOT_NULL(select_item_param_infos)) {
-      select_item_param_infos->set_capacity(ctx.project_list_.count());
-      for (int64_t i = 0; OB_SUCC(ret) && i < ctx.project_list_.count(); i++) {
-        ParseNode *tmp_root = static_cast<ParseNode *>(ctx.project_list_.at(i));
-        if (OB_ISNULL(tmp_root)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid null child", K(ret), K(i), K(ctx.project_list_.at(i)));
-        } else if (0 == tmp_root->is_val_paramed_item_idx_
-                   && OB_FAIL(get_select_item_param_info(*raw_params,
-                                                         tmp_root,
-                                                         select_item_param_infos))) {
-          SQL_PC_LOG(WARN, "failed to get select item param info", K(ret));
-        } else {
-          // do nothing
-        }
-      } // for end
+      if (sql_info.total_ != raw_params->count()) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_PC_LOG(TRACE, "const number of fast parse and normal parse is different",
+                "fast_parse_const_num", raw_params->count(),
+                "normal_parse_const_num", sql_info.total_,
+                K(session.get_current_query_string()),
+                "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
+      } else {
+        select_item_param_infos->set_capacity(ctx.project_list_.count());
+        for (int64_t i = 0; OB_SUCC(ret) && i < ctx.project_list_.count(); i++) {
+          ParseNode *tmp_root = static_cast<ParseNode *>(ctx.project_list_.at(i));
+          if (OB_ISNULL(tmp_root)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid null child", K(ret), K(i), K(ctx.project_list_.at(i)));
+          } else if (0 == tmp_root->is_val_paramed_item_idx_
+                     && OB_FAIL(get_select_item_param_info(*raw_params,
+                                                           tmp_root,
+                                                           select_item_param_infos))) {
+            SQL_PC_LOG(WARN, "failed to get select item param info", K(ret));
+          } else {
+            // do nothing
+          }
+        } // for end
+      }
     }
     SQL_PC_LOG(DEBUG, "after transform_tree",
                "result_tree_", SJ(ObParserResultPrintWrapper(*tree)));
@@ -246,8 +255,11 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
           || (T_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_CAST_ARGUMENT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_DOUBLE == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
-          || (T_FLOAT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)) {
-        ctx.is_fast_parse_const_ = false;
+          || (T_FLOAT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || (T_IEEE754_INFINITE == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || (T_IEEE754_NAN == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || true == ctx.tree_->is_forbid_parameter_) {
+          ctx.is_fast_parse_const_ = false;
       } else {
         ctx.is_fast_parse_const_ = (IS_DATATYPE_OP(ctx.tree_->type_)
                                     || T_QUESTIONMARK == ctx.tree_->type_
@@ -633,6 +645,12 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
           SQL_PC_LOG(WARN, "fail to add not param flag", K(ret));
         }
       } //if is_fast_parse_const end
+    }
+
+    // sql with charset need not ps parameterize
+    if (OB_SUCC(ret) && T_QUESTIONMARK == ctx.tree_->type_ && OB_NOT_NULL(ctx.tree_->children_)
+        && OB_NOT_NULL(ctx.tree_->children_[0]) && ctx.tree_->children_[0]->type_ == T_CHARSET) {
+      ctx.sql_info_->ps_need_parameterized_ = false;
     }
 
     //判断insert中values()在tree中的哪一层，当某结点value_father_level_处于VALUE_VECTOR_LEVEL时,
@@ -1582,6 +1600,8 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
           SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
+      } else if ((0 == func_name.case_compare("concat")) && 1 == node[0]->reserved_) {
+        sql_info.ps_need_parameterized_ = false;
       }
     }
   } else if (T_OP_LIKE == tree->type_) {
@@ -1919,7 +1939,7 @@ int ObSqlParameterization::resolve_paramed_const(SelectItemTraverseCtx &ctx)
     // there is no need to copy it. paramed_field_name_ should be replaced with '?'
     if (0 == ctx.org_expr_name_.case_compare(ObString(param_node->str_len_, param_node->str_value_))) {
       // do nothing
-    } else if (tmp_len > 0) {
+    } else if (tmp_len > 0 && ctx.org_expr_name_.length() > 0) {
       int32_t len = static_cast<int64_t>(tmp_len);
       MEMCPY(ctx.param_info_.paramed_field_name_ + ctx.param_info_.name_len_, ctx.org_expr_name_.ptr() + ctx.expr_pos_ - ctx.expr_start_pos_, len);
       ctx.param_info_.name_len_ += len;
@@ -1994,6 +2014,7 @@ int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tr
     }
   } else if (T_OP_MUL == tree->children_[1]->type_
              || T_OP_DIV == tree->children_[1]->type_
+             || T_OP_INT_DIV == tree->children_[1]->type_
              || (lib::is_mysql_mode() && T_OP_MOD == tree->children_[1]->type_)) {
     /*  '0 - 2 * 3' should be transformed to '0 + (-2) * 3' */
     /*  '0 - 2 / 3' should be transformed to '0 + (-2) / 3' */
@@ -2072,7 +2093,8 @@ int ObSqlParameterization::find_leftest_const_node(ParseNode &cur_node, ParseNod
     const_node = &cur_node;
   } else if (1 == cur_node.is_assigned_from_child_) {
     // do nothing
-  } else if (T_OP_MUL == cur_node.type_ || T_OP_DIV == cur_node.type_ || T_OP_MOD == cur_node.type_) {
+  } else if (T_OP_MUL == cur_node.type_ || T_OP_DIV == cur_node.type_
+    || T_OP_INT_DIV == cur_node.type_ || T_OP_MOD == cur_node.type_) {
     /*   对于1 - (2-3)/4，语法树为 */
     /*      - */
     /*     / \ */

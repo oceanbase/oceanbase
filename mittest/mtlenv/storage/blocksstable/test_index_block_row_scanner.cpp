@@ -77,16 +77,14 @@ void TestIndexBlockRowScanner::TearDown()
 
 TEST_F(TestIndexBlockRowScanner, transform)
 {
-  ObIndexBlockDataTransformer *index_block_transformer = nullptr;
-  index_block_transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1);
-  ASSERT_NE(nullptr, index_block_transformer);
+  ObIndexBlockDataTransformer index_block_transformer;
   const ObMicroBlockHeader *micro_header
       = reinterpret_cast<const ObMicroBlockHeader *>(root_block_data_buf_.get_buf());
   int64_t extra_size = ObIndexBlockDataTransformer::get_transformed_block_mem_size(
       root_block_data_buf_);
   char * extra_buf = reinterpret_cast<char *>(allocator_.alloc(extra_size));
   ASSERT_NE(nullptr, extra_buf);
-  ASSERT_EQ(OB_SUCCESS, index_block_transformer->transform(
+  ASSERT_EQ(OB_SUCCESS, index_block_transformer.transform(
           tablet_handle_.get_obj()->get_index_read_info(), root_block_data_buf_, extra_buf, extra_size));
   const ObIndexBlockDataHeader *idx_blk_header
       = reinterpret_cast<const ObIndexBlockDataHeader *>(extra_buf);
@@ -108,7 +106,7 @@ TEST_F(TestIndexBlockRowScanner, transform)
   ASSERT_NE(nullptr, new_buf);
   char *new_extra_buf = new_buf + root_block_data_buf_.get_buf_size();
   MEMCPY(new_buf, root_block_data_buf_.get_buf(), root_block_data_buf_.get_buf_size());
-  ASSERT_EQ(OB_SUCCESS, index_block_transformer->update_index_block(
+  ASSERT_EQ(OB_SUCCESS, index_block_transformer.update_index_block(
       *idx_blk_header,
       new_buf,
       root_block_data_buf_.get_buf_size(),
@@ -150,16 +148,14 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   ObArray<ObColumnSchemaV2> agg_column_schema;
   ObQueryFlag query_flag;
   query_flag.set_use_block_cache();
-  ObIndexBlockDataTransformer *transformer = nullptr;
-  transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1);
-  ASSERT_NE(nullptr, transformer);
+  ObIndexBlockDataTransformer transformer;
   const ObMicroBlockHeader *micro_header
       = reinterpret_cast<const ObMicroBlockHeader *>(root_block_data_buf_.get_buf());
   int64_t extra_size = ObIndexBlockDataTransformer::get_transformed_block_mem_size(
       root_block_data_buf_);
   char * extra_buf = reinterpret_cast<char *>(allocator_.alloc(extra_size));
   ASSERT_NE(nullptr, extra_buf);
-  ASSERT_EQ(OB_SUCCESS, transformer->transform(
+  ASSERT_EQ(OB_SUCCESS, transformer.transform(
           tablet_handle_.get_obj()->get_index_read_info(), root_block_data_buf_, extra_buf, extra_size));
   const ObIndexBlockDataHeader *root_blk_header
       = reinterpret_cast<const ObIndexBlockDataHeader *>(extra_buf);

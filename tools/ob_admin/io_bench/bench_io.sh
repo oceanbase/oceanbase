@@ -9,7 +9,7 @@ echo "bench_dir=$bench_dir, file_size=$file_size, output_dir=$output_dir"
 
 # prepare bench file
 bench_file_name=$bench_dir/bench_chunk
-prepare_cmd="fio -filename=$bench_file_name -filesize=$file_size -rw=randread -bs=1M -runtime=1 -name=prepare 2>&1 > /dev/null"
+prepare_cmd="fio -filename=$bench_file_name -filesize=$file_size -rw=randread -bs=1M -runtime=1 -name=prepare --sync=fsync 2>&1 > /dev/null"
 echo "prepare bench file"
 echo "  prepare_cmd: $prepare_cmd"
 echo ""

@@ -2504,6 +2504,7 @@ inline bool is_valid_sys_func(const ObItemType type)
     T_FUN_SYS_CEIL,
     T_FUN_SYS_LEAST,
     T_FUN_SYS_GREATEST,
+    T_FUN_SYS_CAST,
   };
   for (int64_t i = 0; !ret && i < sizeof(WHITE_LIST) / sizeof(ObItemType); ++i) {
     ret = (type == WHITE_LIST[i]);
@@ -4161,6 +4162,33 @@ int ObTransformUtils::add_cast_for_replace(ObRawExprFactory &expr_factory,
       LOG_WARN("failed to create cast expr", K(ret));
     } else {
       to_expr = cast_expr;
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::add_cast_for_replace_if_need(ObRawExprFactory &expr_factory,
+                                                   const ObRawExpr *from_expr,
+                                                   ObRawExpr *&to_expr,
+                                                   ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(from_expr) || OB_ISNULL(to_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KP(from_expr), KP(to_expr), K(ret));
+  } else {
+    const ObExprResType &src_type = from_expr->get_result_type();
+    const ObExprResType &dst_type = to_expr->get_result_type();
+    bool need_cast = (src_type.get_type() != dst_type.get_type()) ||
+                     (src_type.get_length() != dst_type.get_length()) ||
+                     (src_type.get_precision() != dst_type.get_precision()) ||
+                     (src_type.get_scale() != dst_type.get_scale());
+    if (ob_is_string_or_lob_type(src_type.get_type())) {
+      need_cast |= (src_type.get_collation_type() != dst_type.get_collation_type()) ||
+                   (src_type.get_collation_level() != dst_type.get_collation_level());
+    }
+    if (need_cast && OB_FAIL(add_cast_for_replace(expr_factory, from_expr, to_expr, session_info))) {
+      LOG_WARN("failed to add cast for _replace", K(ret));
     }
   }
   return ret;
@@ -9154,20 +9182,19 @@ int ObTransformUtils::extract_shared_expr(ObDMLStmt *upper_stmt,
   return ret;
 }
 
-int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx, 
+int ObTransformUtils::add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
                                                     ObIArray<ObRawExpr *> &not_null_exprs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < not_null_exprs.count(); ++i) {
-    if (OB_FAIL(add_param_not_null_constraint(ctx, not_null_exprs.at(i)))) {
+    if (OB_FAIL(add_param_not_null_constraint(constraints, not_null_exprs.at(i)))) {
       LOG_WARN("failed to add param not null constraint", K(ret));
     }
   }
   return ret;
 }
 
-
-int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx,
+int ObTransformUtils::add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
                                                     ObRawExpr *not_null_expr,
                                                     bool is_true)
 {
@@ -9180,20 +9207,37 @@ int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pre calculable expr is expected here", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx.expr_constraints_.count(); ++i) {
-      if (ctx.expr_constraints_.at(i).expect_result_ == PRE_CALC_RESULT_NOT_NULL &&
-          ctx.expr_constraints_.at(i).pre_calc_expr_ == not_null_expr) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < constraints.count(); ++i) {
+      if (constraints.at(i).expect_result_ == PRE_CALC_RESULT_NOT_NULL &&
+          constraints.at(i).pre_calc_expr_ == not_null_expr) {
         existed = true;
         break;
       }
     }
     if (OB_SUCC(ret) && !existed) {
       ObExprConstraint cons(not_null_expr, PRE_CALC_RESULT_NOT_NULL);
-      if (OB_FAIL(ctx.expr_constraints_.push_back(cons))) {
+      if (OB_FAIL(constraints.push_back(cons))) {
         LOG_WARN("failed to push back pre calc constraints", K(ret));
       }
     }
   }
+  return ret;
+}
+
+int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx,
+                                                    ObIArray<ObRawExpr *> &not_null_exprs)
+{
+  int ret = OB_SUCCESS;
+  ret = add_param_not_null_constraint(ctx.expr_constraints_, not_null_exprs);
+  return ret;
+}
+
+int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx,
+                                                    ObRawExpr *not_null_expr,
+                                                    bool is_true)
+{
+  int ret = OB_SUCCESS;
+  ret = add_param_not_null_constraint(ctx.expr_constraints_, not_null_expr, is_true);
   return ret;
 }
 
@@ -9878,6 +9922,26 @@ int ObTransformUtils::add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
   return ret;
 }
 
+int ObTransformUtils::add_equal_expr_value_constraint(ObTransformerCtx *trans_ctx,
+                                                      ObRawExpr *left,
+                                                      ObRawExpr *right)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *equal_expr = NULL;
+  if (OB_ISNULL(trans_ctx) || OB_ISNULL(left) || (OB_ISNULL(right)) ||
+      OB_ISNULL(trans_ctx->expr_factory_) || OB_ISNULL(trans_ctx->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL ptr", K(ret), KP(trans_ctx), KP(left), KP(right));
+  } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*trans_ctx->expr_factory_, T_OP_EQ,
+                                                                 left, right, equal_expr))) {
+    LOG_WARN("failed to build common binary_op_expr");
+  } else if (OB_FAIL(equal_expr->formalize(trans_ctx->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(trans_ctx, equal_expr, true))) {
+    LOG_WARN("failed to add param bool constraint", K(ret));
+  }
+  return ret;
+}
 int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
                                                 ObRawExpr *bool_expr,
                                                 const bool is_true,
@@ -12207,6 +12271,59 @@ int ObTransformUtils::pack_stmt(ObTransformerCtx *ctx,
     child_stmt->set_select_into(NULL);
     if (NULL != child_stmt_ptr) {
       *child_stmt_ptr = child_stmt;
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_is_index_part_key(ObTransformerCtx &ctx,
+                                             ObDMLStmt &stmt,
+                                             ObRawExpr *check_expr,
+                                             bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  ObSQLSessionInfo *session_info = ctx.session_info_;
+  if (OB_ISNULL(check_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index", K(ret), K(check_expr));
+  } else if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info is null", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(check_expr, check_expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else if (!check_expr->is_column_ref_expr()) {
+    // do nothing
+  } else {
+    ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr *>(check_expr);
+    const share::schema::ObColumnSchemaV2 *column_schema = NULL;
+    TableItem *table = stmt.get_table_item_by_id(col->get_table_id());
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is null", K(ret), K(*col));
+    } else if (!table->is_basic_table()) {
+
+    } else if (OB_FAIL(ctx.schema_checker_->get_column_schema(session_info->get_effective_tenant_id(),
+                                                              table->ref_id_,
+                                                              col->get_column_id(),
+                                                              column_schema,
+                                                              true))) {
+      LOG_WARN("failed to get column schema", K(ret), K(table->ref_id_), K(col->get_column_id()), K(col->get_table_id()), K(table), K(col), K(lbt()));
+    } else if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", K(ret));
+    } else if (column_schema->is_rowkey_column()) {
+      is_valid = true;
+    } else if (OB_FAIL(ctx.schema_checker_->check_column_has_index(column_schema->get_tenant_id(),
+                                                                    table->ref_id_,
+                                                                    col->get_column_id(),
+                                                                    is_valid))) {
+      LOG_WARN("failed to check column is a key", K(ret));
+    } else if (is_valid) {
+      // do nothing
+    } else if (ctx.schema_checker_->check_if_partition_key(session_info->get_effective_tenant_id(),
+                          table->ref_id_, col->get_column_id(), is_valid)) {
+      LOG_WARN("failed to check if partition key", K(ret));
     }
   }
   return ret;

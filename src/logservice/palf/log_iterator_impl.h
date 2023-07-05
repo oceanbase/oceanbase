@@ -14,20 +14,20 @@
 #define OCEANBASE_LOGSERVICE_LOG_ITERATOR_
 
 #include <type_traits>
-#include "lib/ob_errno.h"
 #include "lib/alloc/alloc_assist.h"
 #include "lib/utility/ob_utility.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_print_utils.h" // TO_STRING_KV
-#include "log_define.h"                 // LogItemType
-#include "log_block_header.h"           // LogBlockHeader
-#include "lsn.h"                        // LSN
-#include "log_reader_utils.h"           // ReadBuf
-#include "log_entry.h"                  // LogEntry
-#include "log_group_entry.h"            // LogGroupEntry
-#include "log_meta_entry.h"             // LogMetaEntry
-#include "log_iterator_storage.h"       // LogIteratorStorage
-#include "log_checksum.h"               // LogChecksum
+#include "lib/utility/ob_print_utils.h"     // TO_STRING_KV
+#include "share/ob_errno.h"                 // OB_PARTIAL_LOG
+#include "log_define.h"                     // LogItemType
+#include "log_block_header.h"               // LogBlockHeader
+#include "lsn.h"                            // LSN
+#include "log_reader_utils.h"               // ReadBuf
+#include "log_entry.h"                      // LogEntry
+#include "log_group_entry.h"                // LogGroupEntry
+#include "log_meta_entry.h"                 // LogMetaEntry
+#include "log_iterator_storage.h"           // LogIteratorStorage
+#include "log_checksum.h"                   // LogChecksum
 
 namespace oceanbase
 {
@@ -111,23 +111,36 @@ public:
   //   OB_ERR_OUT_LOWER_BOUND
   //      - block has been recycled
   //   OB_CHECKSUM_ERROR
-  //      - the accumlate checksum calc by accum_checksum_ and the data checksum of LogGroupEntry is not
-  //        same as the accumlate checksum of LogGroupEntry
+  //      - the accumulate checksum calc by accum_checksum_ and the data checksum of LogGroupEntry is not
+  //        same as the accumulate checksum of LogGroupEntry
+  //   OB_PARTIAL_LOG
+  //      - this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
   int next(const share::SCN &replayable_point_scn);
 
   // param[in] replayable point scn, iterator will ensure that no log will return when the log scn is greater than
   //           'replayable_point_scn' and the log is raw write
   // param[out] the min log scn of next log, is's valid only when return value is OB_ITER_END
   // param[out] iterate_end_by_replayable_point, return OB_ITER_END whether caused by replayable_point_scn.
-  // @retval
   //   OB_SUCCESS.
   //   OB_INVALID_DATA.
-  //   OB_ITER_END, has iterated to the end of block.
-  //   OB_NEED_RETRY, the data in cache is not integrity, and the integrity data has been truncate from disk,
-  //                  need read data from storage eagin.(data in cache will not been clean up, therefore,
-  //                  user need used a new iterator to read data again)
-  //   OB_ERR_OUT_LOWER_BOUND, block has been recycled
-  //
+  //   OB_ITER_END
+  //       - has iterated to the end of block.
+  //   OB_NEED_RETRY
+  //      - the data in cache is not integrity, and the integrity data has been truncate from disk,
+  //        need read data from storage again.(data in cache will not been clean up, therefore,
+  //        user need used a new iterator to read data again)
+  //      - if the end_lsn get from get_file_end_lsn is smaller than 'log_tail_' of LogStorage, and it's
+  //        not the exact boundary of LogGroupEntry(for PalfGroupeBufferIterator, or LogEntry for PalfBufferIterator),
+  //        OB_NEED_RETRY may be return.
+  //      - if read_data_from_storage_ is concurrent with the last step of flashback, opening last block on disk may be failed
+  //        due to rename, return OB_NEED_RETRY in this case.(TODO by runlin: retry by myself)
+  //   OB_ERR_OUT_LOWER_BOUND
+  //      - block has been recycled
+  //   OB_CHECKSUM_ERROR
+  //      - the accumulate checksum calc by accum_checksum_ and the data checksum of LogGroupEntry is not
+  //        same as the accumulate checksum of LogGroupEntry
+  //   OB_PARTIAL_LOG
+  //      - this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
   int next(const share::SCN &replayable_point_scn,
            share::SCN &next_min_scn,
            bool &iterate_end_by_replayable_point);
@@ -157,6 +170,8 @@ private:
   //   OB_ITER_END
   //   OB_ERR_OUT_LOWER_BOUND
   //   OB_NEED_RETRY: means the data has been truncate concurrently
+  //   OB_PARTIAL_LOG: this replica has not finished flashback, and iterator start lsn
+  //                   is not the header of LogGroupEntry.
   int get_next_entry_(const SCN &replayable_point_scn,
                       IterateEndInfo &info);
 
@@ -174,6 +189,9 @@ private:
   //      -- means accumlate checksum is not matched.
   //   OB_ITER_END
   //      -- means log entry is iterated end by replayable_point_scn
+  //   OB_PARTIAL_LOG
+    //    -- this replica has not finished flashback, and iterator start lsn is not the header of
+    //       LogGroupEntry.
   int parse_one_entry_(const SCN &replayable_point_scn,
                        IterateEndInfo &info);
 
@@ -207,8 +225,9 @@ private:
         PALF_LOG(TRACE, "iterate end by replayable_point", KPC(this), K(replayable_point_scn), K(info));
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR, "parse LogEntry failed, unexpected error", KPC(this), K(replayable_point_scn), K(info));
+      ret = OB_PARTIAL_LOG;
+      PALF_LOG(WARN, "parse LogEntry failed, may be in flashback mode and this replica has not finished flashback",
+               KPC(this), K(replayable_point_scn), K(info));
     }
     return ret;
   }
@@ -333,6 +352,12 @@ private:
   int verify_accum_checksum_(const LogGroupEntry &entry,
                              int64_t &new_accumlate_checksum);
 
+  bool need_clean_cache_(const int ret) const
+  {
+    // NB: several storage devices cannot guarantee linear consistency reading in scenarios where 4K is overwritten,
+    // therefore, we should clean the cache of IteratorStorage, and re-read data from disk in next time.
+    return OB_INVALID_DATA == ret || OB_CHECKSUM_ERROR == ret;
+  }
 private:
 static constexpr int MAX_READ_TIMES_IN_EACH_NEXT = 2;
   // In each `next_entry` round, need read data from `LogStorage` directlly,
@@ -581,13 +606,14 @@ int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argumetn", K(replayable_point_scn), KPC(this));
   } else if (OB_FAIL(get_next_entry_(replayable_point_scn, info))) {
-    // NB: if the data which has been corrupted, clean cache.
-    // NB: if the accum_checksum_ is not match, return OB_CHECKSUM_ERROR.
-    if (OB_INVALID_DATA == ret) {
-      PALF_LOG(WARN, "read invalid data, need clean cache", K(ret), KPC(this));
+    // NB: if the data which has been corrupted or accum_checksum_ is not match, clean cache.
+    if (need_clean_cache_(ret)) {
+      PALF_LOG(WARN, "read invalid data, need clean cache, maybe storage device cann't guarantee linear consistency reading",
+               K(ret), KPC(this));
+    // NB: several storage devices cannot guarantee linear consistency reading in scenarios where 4K is overwritten,
+    // therefore, we should clean the cache of IteratorStorage, and re-read data from disk in next time.
       log_storage_->reuse(log_storage_->get_lsn(curr_read_pos_));
       curr_read_buf_end_pos_ = curr_read_buf_start_pos_ = curr_read_pos_ = 0;
-      PALF_LOG(WARN, "read invalid data, has clean cache", K(ret), KPC(this));
     }
     if (OB_ITER_END != ret) {
       PALF_LOG(WARN, "get_next_entry_ failed", K(ret), KPC(this));

@@ -216,6 +216,8 @@ DEF_CAP(cache_wash_threshold, OB_CLUSTER_PARAMETER, "4GB", "[0B,]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(memory_chunk_cache_size, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "the maximum size of memory cached by memory chunk cache. Range: [0M,], 0 stands for adaptive",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_memory_large_chunk_cache_size, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "the maximum size of large memory cached by memory chunk cache. Range: [0M,], 0 stands for adaptive",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(autoinc_cache_refresh_interval, OB_CLUSTER_PARAMETER, "3600s", "[100ms,]",
          "auto-increment service cache refresh sync_value in this interval, "
          "with default 3600s. Range: [100ms, +∞)",
@@ -808,6 +810,9 @@ DEF_INT(ha_mid_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
 DEF_INT(ha_low_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of high availability low thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ddl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of ddl thread. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_TENANT_PARAMETER, "2", "[0,16]",
         "minor_compact_trigger, Range: [0,16] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1284,7 +1289,7 @@ DEF_TIME(_follower_snapshot_read_retry_duration, OB_TENANT_PARAMETER, "0ms", "[0
 DEF_STR_WITH_CHECKER(default_auto_increment_mode, OB_TENANT_PARAMETER, "order",
         common::ObAutoIncrementModeChecker, "specifies default auto-increment mode, default is 'order'",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\n  \"type_t\": {\n    \"level\":1,\n    \"sample_pct\":\"1.00\",\n    \"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"\n  }\n}",
+DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\"type_t\":{\"level\":1,\"sample_pct\":\"0.10\",\"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"}}",
         "persistent control information for full-link trace",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_print_sample_ppm, OB_TENANT_PARAMETER, "0", "[0, 1000000]",
@@ -1315,8 +1320,7 @@ DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
     "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(arbitration_timeout, OB_TENANT_PARAMETER, "5s", "[3s,]",
-        "timeout which will trigger automatic degrading when arbitration replica exists"
-        "Range: [3s,+∞]",
+        "The timeout before automatically degrading when arbitration member exists. Range: [3s,+∞]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ignore_system_memory_over_limit_error, OB_CLUSTER_PARAMETER, "False",
          "When the hold of observer tenant is over the system_memory, print ERROR with False, or WARN with True",
@@ -1425,3 +1429,15 @@ DEF_BOOL(_optimizer_group_by_placement, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_backtrace_function, OB_CLUSTER_PARAMETER, "True",
          "Decide whether to let the backtrace function take effect",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_wait_interval_after_truncate, OB_CLUSTER_PARAMETER, "30s", "[0s,)",
+        "time interval for waiting other servers to refresh schema after truncate",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "True",
+        "Enable extract query range optimization for in predicate",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(range_optimizer_max_mem_size, OB_TENANT_PARAMETER, "128M", "[16M,1G]",
+        "to limit the memory consumption for the query range optimizer. Range: [16M,1G]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_worker_long_stall_threshold, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
+         "threshold of dynamic worker works",
+		 ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

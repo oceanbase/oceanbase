@@ -18,6 +18,7 @@
 
 #include "lib/string/ob_string.h"       // ObString
 #include "lib/time/ob_time_utility.h"   // ObTimeUtility
+#include "common/ob_clock_generator.h"
 #include "share/ob_define.h"
 
 namespace oceanbase
@@ -33,7 +34,7 @@ namespace datadict
   ({ \
     bool bret = false; \
     static thread_local volatile int64_t last_time = 0; \
-    int64_t cur_time = OB_TSC_TIMESTAMP.current_time(); \
+    int64_t cur_time = common::ObClockGenerator::getClock(); \
     int64_t old_time = last_time; \
     if (OB_UNLIKELY((i + last_time) < cur_time) \
         && old_time == ATOMIC_CAS(&last_time, old_time, cur_time)) \

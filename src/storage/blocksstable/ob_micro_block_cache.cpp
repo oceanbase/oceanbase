@@ -165,16 +165,8 @@ int ObMicroBlockCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCac
       case ObMicroBlockData::Type::INDEX_BLOCK: {
         const ObIndexBlockDataHeader *src_idx_header
             = reinterpret_cast<const ObIndexBlockDataHeader *>(block_data_.get_extra_buf());
-        ObIndexBlockDataTransformer *transformer = nullptr;
-        ObDecoderAllocator *allocator = nullptr;
-        if (OB_ISNULL(allocator = get_decoder_allocator())) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate decoder allocator", K(ret));
-        } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
-          // There must be get_decoder_allocator before GET_TSI_MULT(ObIndexBlockDataTransformer)
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("Fail to get thread local index block data transformer", K(ret));
-        } else if (OB_FAIL(transformer->update_index_block(
+        ObIndexBlockDataTransformer transformer;
+        if (OB_FAIL(transformer.update_index_block(
             *src_idx_header,
             new_buf,
             block_data_.get_buf_size(),
@@ -324,6 +316,7 @@ ObIMicroBlockIOCallback::ObIMicroBlockIOCallback()
     use_block_cache_(true),
     need_write_extra_buf_(true)
 {
+  MEMSET(encrypt_key_, 0, sizeof(encrypt_key_));
   static_assert(sizeof(*this) <= CALLBACK_BUF_SIZE, "IOCallback buf size not enough");
 }
 
@@ -515,6 +508,9 @@ int ObIMicroBlockIOCallback::assign(const ObIMicroBlockIOCallback &other)
   block_des_meta_ = other.block_des_meta_;
   use_block_cache_ = other.use_block_cache_;
   need_write_extra_buf_ = other.need_write_extra_buf_;
+  // deep copy encrypt_key
+  MEMCPY(encrypt_key_, other.block_des_meta_.encrypt_key_, sizeof(encrypt_key_));
+  block_des_meta_.encrypt_key_ = encrypt_key_;
   return ret;
 }
 
@@ -1263,16 +1259,8 @@ int ObIndexMicroBlockCache::write_extra_buf(const ObTableReadInfo &read_info,
   UNUSEDx(block_buf, block_size);
   int ret = OB_SUCCESS;
 
-  ObIndexBlockDataTransformer *transformer = nullptr;
-  ObDecoderAllocator* allocator = nullptr;
-  if (OB_ISNULL(allocator = get_decoder_allocator())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate decoder allocator", K(ret));
-  } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
-    // There must be get_decoder_allocator before GET_TSI_MULT(ObIndexBlockDataTransformer)
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate ObIndexBlockDataTransformer", K(ret));
-  } else if (OB_FAIL(transformer->transform(read_info, micro_data, extra_buf, extra_size))) {
+  ObIndexBlockDataTransformer transformer;
+  if (OB_FAIL(transformer.transform(read_info, micro_data, extra_buf, extra_size))) {
     LOG_WARN("Fail to transform index block data", K(ret));
   } else {
     micro_data.extra_buf_ = extra_buf;

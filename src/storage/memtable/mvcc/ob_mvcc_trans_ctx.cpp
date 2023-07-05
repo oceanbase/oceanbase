@@ -362,26 +362,30 @@ void ObTransCallbackMgr::reset_pdml_stat()
   force_merge_multi_callback_lists();
 }
 
-int ObTransCallbackMgr::remove_callbacks_for_fast_commit(bool &has_remove)
+int ObTransCallbackMgr::remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
+                                                         bool &meet_generate_cursor)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(callback_list_.remove_callbacks_for_fast_commit(has_remove))) {
+  if (OB_FAIL(callback_list_.remove_callbacks_for_fast_commit(generate_cursor,
+                                                              meet_generate_cursor))) {
     TRANS_LOG(WARN, "remove callbacks for fast commit fail", K(ret));
   }
 
   return ret;
 }
 
-int ObTransCallbackMgr::remove_callback_for_uncommited_txn(ObIMemtable *memtable, const share::SCN max_applied_scn)
+int ObTransCallbackMgr::remove_callback_for_uncommited_txn(
+  const memtable::ObMemtableSet *memtable_set,
+  const share::SCN max_applied_scn)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(memtable)) {
+  if (OB_ISNULL(memtable_set)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "memtable is null", K(ret));
-  } else if (OB_FAIL(callback_list_.remove_callbacks_for_remove_memtable(memtable, max_applied_scn))) {
-    TRANS_LOG(WARN, "fifo remove callback fail", K(ret), K(*memtable));
+  } else if (OB_FAIL(callback_list_.remove_callbacks_for_remove_memtable(memtable_set, max_applied_scn))) {
+    TRANS_LOG(WARN, "fifo remove callback fail", K(ret), KPC(memtable_set));
   }
 
   return ret;

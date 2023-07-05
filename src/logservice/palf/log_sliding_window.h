@@ -202,6 +202,7 @@ public:
   virtual int ack_log(const common::ObAddr &src_server, const LSN &end_lsn);
   virtual int truncate(const TruncateLogInfo &truncate_log_info, const LSN &expected_prev_lsn,
       const int64_t expected_prev_log_pid);
+  virtual bool is_allow_rebuild() const;
   virtual int truncate_for_rebuild(const PalfBaseInfo &palf_base_info);
   virtual bool is_prev_log_pid_match(const int64_t log_id,
                                      const LSN &lsn,
@@ -239,6 +240,8 @@ public:
   virtual int64_t get_last_submit_log_id_() const;
   virtual void get_last_submit_end_lsn_(LSN &end_lsn) const;
   virtual int get_last_submit_log_info(LSN &last_submit_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
+  virtual int get_last_submit_log_info(LSN &last_submit_lsn,
+      LSN &last_submit_end_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
   virtual const share::SCN get_last_slide_scn() const;
   virtual int check_and_switch_freeze_mode();
@@ -403,7 +406,6 @@ private:
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
-  static const int64_t INITIAL_LAST_ACK_TS = 0;      // last_ack_ts默认值为0
   static const int64_t APPEND_CNT_ARRAY_SIZE = 32;   // append次数统计数组的size
   static const uint64_t APPEND_CNT_ARRAY_MASK = APPEND_CNT_ARRAY_SIZE - 1;
   static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 140000;   // 切为PERIOD_FREEZE_MODE的append count下界

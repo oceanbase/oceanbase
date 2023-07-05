@@ -33,7 +33,7 @@ void ObAnalyzeSampleInfo::set_rows(double row_num)
   sample_value_ = row_num;
 }
 
-bool ObColumnStatParam::is_valid_histogram_type(const ObObjType type)
+bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type)
 {
   bool ret = false;
   // currently, we only support the following type to collect histogram
@@ -52,7 +52,22 @@ bool ObColumnStatParam::is_valid_histogram_type(const ObObjType type)
       type_class == ColumnTypeClass::ObOTimestampTC ||
       type_class == ColumnTypeClass::ObBitTC ||
       type_class == ColumnTypeClass::ObEnumSetTC ||
+      type_class == ColumnTypeClass::ObIntervalTC ||
       (lib::is_mysql_mode() && type == ObTinyTextType)) {
+    ret = true;
+  }
+  return ret;
+}
+
+bool ObColumnStatParam::is_valid_avglen_type(const ObObjType type)
+{
+  bool ret = false;
+  // currently, we only support the following type to collect avg len
+  ColumnTypeClass type_class = ob_obj_type_class(type);
+  if (is_valid_opt_col_type(type) ||
+      type_class == ColumnTypeClass::ObTextTC ||
+      type_class == ColumnTypeClass::ObRowIDTC ||
+      type_class == ColumnTypeClass::ObLobTC) {
     ret = true;
   }
   return ret;

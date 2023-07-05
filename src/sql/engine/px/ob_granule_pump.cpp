@@ -849,6 +849,13 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
         LOG_WARN("failed to final extract index skip query range", K(ret));
     } else {
       has_extract_query_range = true;
+      /* Here is an improvement made:
+        1. By default, access to each partition is always in sequential ascending order.
+        Compared to not sorting, this is an enhancement that is not always 100% necessary
+        (some scenarios do not require order), but the logic is acceptable.
+        2. If reverse order is required outside, then the reverse sorting should be done outside on its own.
+      */
+      std::sort(scan_ranges.begin(), scan_ranges.end(), ObNewRangeCmp());
     }
   }
 
@@ -1549,7 +1556,7 @@ int ObGranulePump::regenerate_gi_task()
   no_more_task_from_shared_pool_ = false;
   for (int i = 0; i < pump_args_.count() && OB_SUCC(ret); ++i) {
     ObGranulePumpArgs &arg = pump_args_.at(i);
-    if (add_new_gi_task(arg)) {
+    if (OB_FAIL(add_new_gi_task(arg))) {
       LOG_WARN("failed to add new gi task", K(ret));
     }
   }

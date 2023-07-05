@@ -34,7 +34,8 @@ public:
                                  ObSQLSessionInfo *session,
                                  const bool has_sent_task,
                                  const bool has_transfer_err,
-                                 const ObPhysicalPlan *phy_plan);
+                                 const ObPhysicalPlan *phy_plan,
+                                 ObExecContext &exec_ctx);
 private:
   int build_task(ObExecContext &query_ctx,
                  ObJob &job,

@@ -315,6 +315,12 @@ int64_t ObSharedMacroBlockMgr::get_shared_block_cnt()
   return count;
 }
 
+void ObSharedMacroBlockMgr::get_cur_shared_block(MacroBlockId &macro_id)
+{
+  lib::ObMutexGuard guard(mutex_);
+  macro_id = macro_handle_.get_macro_id();
+}
+
 int ObSharedMacroBlockMgr::add_block(const MacroBlockId &block_id, const int64_t block_size)
 {
   int ret = OB_SUCCESS;
@@ -642,7 +648,7 @@ int ObSharedMacroBlockMgr::create_new_sstable(
       param.root_block_addr_, param.root_block_data_);
   ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
       param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
-  param.root_row_store_type_ = res.root_desc_.row_type_;
+  param.root_row_store_type_ = res.root_row_store_type_;
   param.data_index_tree_height_ = res.root_desc_.height_;
   param.index_blocks_cnt_ = res.index_blocks_cnt_;
   param.data_blocks_cnt_ = res.data_blocks_cnt_;

@@ -175,6 +175,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
   uint32_t memtable_freeze_clock = UINT32_MAX;
   share::ObLSID ls_id;
   SCN new_clog_checkpoint_scn;
+  int64_t memtable_count = get_memtable_count_();
   if (has_memtable && OB_NOT_NULL(active_memtable = get_active_memtable_())) {
     memtable_freeze_clock = active_memtable->get_freeze_clock();
   }
@@ -189,7 +190,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
   } else if (logstream_freeze_clock == memtable_freeze_clock) {
     // new memtable has already existed
     ret = OB_ENTRY_EXIST;
-  } else if (get_memtable_count_() >= MAX_MEMSTORE_CNT) {
+  } else if (memtable_count >= MAX_MEMSTORE_CNT) {
     ret = OB_MINOR_FREEZE_NOT_ALLOW;
     ob_usleep(1 * 1000);
     if ((++retry_times_ % (60 * 1000)) == 0) { // 1 min
@@ -280,6 +281,13 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
 
       time_guard.click("init memtable");
       if (OB_SUCC(ret)) {
+        if (MAX_MEMSTORE_CNT - 1 == memtable_count) {
+          // if the new memtable is last one in memtable_array
+          // not allow it to be freezed
+          // otherwise the number of memtables will be out of limit
+          memtable->set_allow_freeze(false);
+          FLOG_INFO("not allow memtable to be freezed", K(memtable_count), K(MAX_MEMSTORE_CNT), KPC(memtable));
+        }
         if (OB_FAIL(add_memtable_(memtable_handle))) {
           LOG_WARN("failed to add memtable", K(ret), K(ls_id), K(tablet_id_), K(memtable_handle));
         } else if (FALSE_IT(time_guard.click("add memtable"))) {
@@ -497,6 +505,7 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObTableHandleV
 {
   handle.reset();
   memtable::ObIMemtable *active_memtable = nullptr;
+  memtable::ObMemtable *memtable = nullptr;
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -510,11 +519,16 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObTableHandleV
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("active memtable is null", K(ret));
     }
-  } else {
-    static_cast<ObMemtable*>(active_memtable)->set_is_tablet_freeze();
+  } else if (FALSE_IT(memtable = static_cast<ObMemtable*>(active_memtable))) {
+  } else if (memtable->allow_freeze()) {
+    memtable->set_is_tablet_freeze();
     if (is_force_freeze) {
-      static_cast<ObMemtable*>(active_memtable)->set_is_force_freeze();
+      memtable->set_is_force_freeze();
     }
+  } else {
+    handle.reset();
+    ret = OB_ENTRY_NOT_EXIST;
+    TRANS_LOG(INFO, "not set is_tablet_freeze because the memtable cannot be freezed", KPC(memtable));
   }
 
   return ret;
@@ -649,6 +663,11 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
       memtable->set_frozen();
       release_head_memtable();
+      memtable::ObMemtable *active_memtable = get_active_memtable_();
+      if (OB_NOT_NULL(active_memtable) && !active_memtable->allow_freeze()) {
+        active_memtable->set_allow_freeze(true);
+        FLOG_INFO("allow active memtable to be freezed", K(ls_id), KPC(active_memtable));
+      }
       FLOG_INFO("succeed to release head data memtable", K(ret), K(ls_id), K(tablet_id_));
     }
   }

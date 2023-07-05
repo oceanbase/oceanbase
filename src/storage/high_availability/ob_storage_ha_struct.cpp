@@ -653,7 +653,7 @@ ObCopyMacroRangeInfo::ObCopyMacroRangeInfo()
     end_macro_block_id_(),
     macro_block_count_(0),
     is_leader_restore_(false),
-    start_macro_block_end_key_(datums_, OB_MAX_ROWKEY_COLUMN_NUMBER),
+    start_macro_block_end_key_(datums_, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER),
     allocator_("CopyMacroRange")
 {
 }
@@ -679,7 +679,7 @@ void ObCopyMacroRangeInfo::reuse()
   macro_block_count_ = 0;
   is_leader_restore_ = false;
   start_macro_block_end_key_.datums_ = datums_;
-  start_macro_block_end_key_.datum_cnt_ = OB_MAX_ROWKEY_COLUMN_NUMBER;
+  start_macro_block_end_key_.datum_cnt_ = OB_INNER_MAX_ROWKEY_COLUMN_NUMBER;
   start_macro_block_end_key_.reuse();
   allocator_.reuse();
 }

@@ -129,8 +129,11 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
   }
 
   // update weak read timestamp
-  if (OB_SUCC(ret) && ! need_skip) {
-    wrs_version = timestamp;
+  if (OB_SUCC(ret)) {
+    if (!need_skip) {
+      wrs_version = timestamp;
+    }
+    // Update timestamp forcedly no matter how current ls leaves behind or not;
     ls_weak_read_ts_.inc_update(timestamp);
   }
 

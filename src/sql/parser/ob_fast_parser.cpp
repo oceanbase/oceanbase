@@ -1018,9 +1018,17 @@ int ObFastParserBase::process_hex_number(bool is_quote)
     }
   } else {
     // 0X([0-9A-F])+
-    cur_token_type_ = PARAM_TOKEN;
     while (is_hex(next_ch)) {
       next_ch = raw_sql_.scan();
+    }
+    int64_t next_idf_pos = is_first_identifier_flags(raw_sql_.cur_pos_);
+    if (-1 != next_idf_pos) {
+      // it is possible that the next token is a string and needs to fall back to
+      // the position of quote
+      raw_sql_.cur_pos_ = pos;
+      cur_token_type_ = NORMAL_TOKEN;
+    } else {
+      cur_token_type_ = PARAM_TOKEN;
     }
   }
   if (OB_SUCC(ret) && PARAM_TOKEN == cur_token_type_) {
@@ -2344,9 +2352,6 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
         break;
       } else if ('\\' == ch) {
         tmp_buf_[tmp_buf_len_++] = '\\';
-        if (in_q_quote) {
-          tmp_buf_[tmp_buf_len_++] = '\\';
-        }
       } else if ('\'' == ch) {
         if ('\'' == raw_sql_.peek()) { // double quote
           ch = raw_sql_.scan();
@@ -2364,6 +2369,7 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
               tmp_buf_ += byte_len;
               tmp_buf_len_ -= (2 * byte_len);
               is_quote_end = true;
+              break;
             } else if (tmp_buf_len_ >= 2 &&
                 ((tmp_buf_[0] == tmp_buf_[tmp_buf_len_ - 1] && tmp_buf_[0] != '(' &&
                 tmp_buf_[0] != '[' && tmp_buf_[0] != '{' && tmp_buf_[0] != '<' &&

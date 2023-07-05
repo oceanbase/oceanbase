@@ -185,6 +185,7 @@ public:
       CHECK_LOG_CONFIG_TYPE_STR(DEGRADE_ACCEPTOR_TO_LEARNER);
       CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
       CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
+      CHECK_LOG_CONFIG_TYPE_STR(FORCE_SINGLE_MEMBER);
       default:
         return "Invalid";
     }
@@ -321,12 +322,10 @@ public:
   virtual int submit_broadcast_leader_info(const int64_t proposal_id) const;
   virtual void reset_status();
   int check_follower_sync_status(const LogConfigChangeArgs &args,
-                                 const ObMemberList &new_member_list,
-                                 const int64_t new_replica_num,
+                                 const LogConfigInfo &new_config_info,
                                  bool &added_member_has_new_version) const;
   int wait_log_barrier_(const LogConfigChangeArgs &args,
-                        const ObMemberList &new_member_list,
-                        const int64_t new_replica_num) const;
+                        const LogConfigInfo &new_config_info) const;
   int sync_meta_for_arb_election_leader();
   bool need_sync_to_degraded_learners() const;
   // ================ Config Change ==================
@@ -354,9 +353,7 @@ public:
     J_OBJ_START();
     J_KV(K_(palf_id), K_(self), K_(alive_paxos_memberlist), K_(alive_paxos_replica_num),         \
       K_(log_ms_meta), K_(prev_log_proposal_id),                                                 \
-      K_(applied_alive_paxos_memberlist), K_(applied_alive_paxos_replica_num),                   \
-      K_(applied_all_learnerlist),                                                               \
-      K_(prev_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version),                 \
+      K_(prev_lsn), K_(prev_end_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version), \
       K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),                           \
       K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),                 \
       K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),                                \
@@ -423,7 +420,7 @@ private:
   int try_resend_config_log_(const int64_t proposal_id);
   // broadcast leader info to global learners, only called in leader active
   int submit_broadcast_leader_info_(const int64_t proposal_id) const;
-  int get_log_barrier_(LSN &prev_log_lsn, int64_t &prev_log_proposal_id) const;
+  int get_log_barrier_(LSN &prev_log_lsn, LSN &prev_log_end_lsn, int64_t &prev_log_proposal_id) const;
   int check_servers_lsn_and_version_(const common::ObAddr &server,
                                      const LogConfigVersion &config_version,
                                      const int64_t conn_timeout_us,
@@ -432,8 +429,7 @@ private:
                                      bool &has_same_version,
                                      int64_t &last_slide_log_id) const;
   int sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
-                                  const ObMemberList &new_member_list,
-                                  const int64_t new_replica_num,
+                                  const LogConfigInfo &new_config_info,
                                   const bool need_remote_check,
                                   const int64_t conn_timeout_us,
                                   LSN &committed_end_lsn,
@@ -441,8 +437,7 @@ private:
                                   LSN &added_member_flushed_end_lsn,
                                   int64_t &added_member_last_slide_log_id) const;
   int check_follower_sync_status_(const LogConfigChangeArgs &args,
-                                  const ObMemberList &new_member_list,
-                                  const int64_t new_replica_num,
+                                  const LogConfigInfo &new_config_info,
                                   bool &added_member_has_new_version) const;
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                          const int64_t proposal_id,
@@ -504,6 +499,7 @@ private:
   int64_t prev_log_proposal_id_;
   // previous lsn for barrier
   LSN prev_lsn_;
+  LSN prev_end_lsn_;
   // previous mode proposal_id for barrier
   int64_t prev_mode_pid_;
   ConfigChangeState state_;

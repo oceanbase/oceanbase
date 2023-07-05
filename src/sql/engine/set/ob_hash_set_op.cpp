@@ -39,7 +39,8 @@ ObHashSetOp::ObHashSetOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   hp_infras_(),
   hash_values_for_batch_(nullptr),
   need_init_(true),
-  left_brs_(nullptr)
+  left_brs_(nullptr),
+  mem_context_(nullptr)
 {
 }
 
@@ -51,6 +52,8 @@ int ObHashSetOp::inner_open()
     LOG_WARN("unexpected status: left or right is null", K(ret), K(left_), K(right_));
   } else if (OB_FAIL(ObOperator::inner_open())) {
     LOG_WARN("failed to inner open", K(ret));
+  } else if (OB_FAIL(init_mem_context())) {
+    LOG_WARN("failed to init mem context", K(ret));
   }
   return ret;
 }
@@ -90,6 +93,10 @@ void ObHashSetOp::destroy()
 {
   sql_mem_processor_.unregister_profile_if_necessary();
   hp_infras_.~ObHashPartInfrastructure();
+  if (OB_LIKELY(NULL != mem_context_)) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = NULL;
+  }
   ObOperator::destroy();
 }
 
@@ -162,7 +169,7 @@ int ObHashSetOp::build_hash_table(bool from_child)
         hp_infras_.get_cur_part_row_cnt(InputSide::RIGHT)))) {
       LOG_WARN("failed to init hash table", K(ret));
     } else if (OB_FAIL(sql_mem_processor_.init(
-                  &ctx_.get_allocator(),
+                  &mem_context_->get_allocator(),
                   ctx_.get_my_session()->get_effective_tenant_id(),
                   hp_infras_.get_cur_part_file_size(InputSide::RIGHT),
                   spec_.type_,
@@ -215,7 +222,7 @@ int ObHashSetOp::build_hash_table_from_left(bool from_child)
         hp_infras_.get_cur_part_row_cnt(InputSide::LEFT)))) {
       LOG_WARN("failed to init hash table", K(ret));
     } else if (OB_FAIL(sql_mem_processor_.init(
-                  &ctx_.get_allocator(),
+                  &mem_context_->get_allocator(),
                   ctx_.get_my_session()->get_effective_tenant_id(),
                   hp_infras_.get_cur_part_file_size(InputSide::LEFT),
                   spec_.type_,
@@ -267,7 +274,7 @@ int ObHashSetOp::build_hash_table_from_left_batch(bool from_child, const int64_t
         hp_infras_.get_cur_part_row_cnt(InputSide::LEFT)))) {
       LOG_WARN("failed to init hash table", K(ret));
     } else if (OB_FAIL(sql_mem_processor_.init(
-                  &ctx_.get_allocator(),
+                  &mem_context_->get_allocator(),
                   ctx_.get_my_session()->get_effective_tenant_id(),
                   hp_infras_.get_cur_part_file_size(InputSide::LEFT),
                   spec_.type_,
@@ -327,7 +334,7 @@ int ObHashSetOp::init_hash_partition_infras()
       &ctx_, get_spec().px_est_size_factor_, est_rows, est_rows))) {
     LOG_WARN("failed to get px size", K(ret));
   } else if (OB_FAIL(sql_mem_processor_.init(
-                  &ctx_.get_allocator(),
+                  &mem_context_->get_allocator(),
                   ctx_.get_my_session()->get_effective_tenant_id(),
                   est_rows * get_spec().width_,
                   get_spec().type_,
@@ -428,6 +435,21 @@ int ObHashSetOp::init_hash_partition_infras_for_batch()
                         = static_cast<uint64_t *> (ctx_.get_allocator().alloc(batch_size * sizeof(uint64_t))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to init hash values for batch", K(ret), K(batch_size));
+    }
+  }
+  return ret;
+}
+
+int ObHashSetOp::init_mem_context()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == mem_context_) {
+    lib::ContextParam param;
+    param.set_mem_attr(ctx_.get_my_session()->get_effective_tenant_id(),
+        ObModIds::OB_HASH_NODE_UNION_ROWS,
+        ObCtxIds::WORK_AREA);
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
+      LOG_WARN("memory entity create failed", K(ret));
     }
   }
   return ret;

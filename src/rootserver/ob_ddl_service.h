@@ -240,6 +240,9 @@ public:
                          const share::schema::ObTableSchema **table_schema);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
                                       obrpc::ObCreateHiddenTableRes &res);
+  int check_index_on_foreign_key(const ObTableSchema *index_table_schema,
+                                const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos,
+                                bool &have_index);
   virtual int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
 
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
@@ -493,6 +496,10 @@ public:
       const share::schema::ObTableSchema &hidden_table_schema,
       const uint64_t session_id,
       ObDDLSQLTransaction &trans);
+  int check_hidden_table_constraint_exist(
+      const ObTableSchema *hidden_table_schema,
+      const ObTableSchema *orig_table_schema,
+      ObSchemaGetterGuard &schema_guard);
 
   /**
    * This function is called by the storage layer in the three stage of offline ddl.
@@ -921,7 +928,7 @@ public:
   //----End of functions for managing row level security----
 
   // refresh local schema busy wait
-  virtual int refresh_schema(const uint64_t tenant_id);
+  virtual int refresh_schema(const uint64_t tenant_id, int64_t *schema_version = NULL);
   // notify other servers to refresh schema (call switch_schema  rpc)
   virtual int notify_refresh_schema(const common::ObAddrIArray &addrs);
 
@@ -984,6 +991,10 @@ public:
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
 
   virtual int publish_schema(const uint64_t tenant_id);
+
+  virtual int publish_schema_and_get_schema_version(const uint64_t tenant_id,
+                                                    const common::ObAddrIArray &addrs,
+                                                    int64_t *schema_version = NULL);
 
   int force_set_locality(
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -2319,7 +2330,8 @@ public:
                       const bool need_end_signal = true,
                       const bool enable_query_stash = false,
                       const bool enable_ddl_parallel = false,
-                      const bool enable_check_ddl_epoch = true)
+                      const bool enable_check_ddl_epoch = true,
+                      const bool enable_check_newest_schema = true)
                       : common::ObMySQLTransaction(enable_query_stash),
                         schema_service_(schema_service),
                         tenant_id_(OB_INVALID_TENANT_ID),
@@ -2329,7 +2341,8 @@ public:
                         trans_start_schema_version_(0),
                         enable_ddl_parallel_(enable_ddl_parallel),
                         enable_check_ddl_epoch_(enable_check_ddl_epoch),
-                        trans_start_ddl_epoch_(OB_INVALID_VERSION)
+                        trans_start_ddl_epoch_(OB_INVALID_VERSION),
+                        enable_check_newest_schema_(enable_check_newest_schema)
                         {}
   virtual ~ObDDLSQLTransaction();
 
@@ -2414,6 +2427,9 @@ private:
   bool enable_check_ddl_epoch_;
   // for compare
   int64_t trans_start_ddl_epoch_;
+
+  // default true to check newest schema; daily major set false not check just use schema from inner table
+  bool enable_check_newest_schema_;
 };
 // Fill in the partition name and the high values of the last partition
 template<typename SCHEMA, typename ALTER_SCHEMA>

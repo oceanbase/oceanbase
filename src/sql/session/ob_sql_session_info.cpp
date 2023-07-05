@@ -170,7 +170,7 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       piece_cache_(NULL),
       is_load_data_exec_session_(false),
       pl_exact_err_msg_(),
-      is_ps_prepare_stage_(false),
+      is_varparams_sql_prepare_(false),
       got_tenant_conn_res_(false),
       got_user_conn_res_(false),
       conn_res_user_id_(OB_INVALID_ID),
@@ -200,6 +200,7 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
   static const int64_t PS_BUCKET_NUM = 64;
   if (OB_FAIL(ObBasicSessionInfo::init(sessid, proxy_sessid, bucket_allocator, tz_info))) {
     LOG_WARN("fail to init basic session info", K(ret));
+  } else if (FALSE_IT(txn_free_route_ctx_.set_sessid(sessid))) {
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(package_state_map_.create(hash::cal_next_prime(4),
                                                ObModIds::OB_HASH_BUCKET,
@@ -255,6 +256,7 @@ int ObSQLSessionInfo::test_init(uint32_t version, uint32_t sessid, uint64_t prox
   UNUSED(version);
   if (OB_FAIL(ObBasicSessionInfo::test_init(sessid, proxy_sessid, bucket_allocator))) {
     LOG_WARN("fail to init basic session info", K(ret));
+  } else if (FALSE_IT(txn_free_route_ctx_.set_sessid(sessid))) {
   } else {
     is_inited_ = true;
   }
@@ -308,6 +310,9 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     pl_query_sender_ = NULL;
     pl_ps_protocol_ = false;
     if (pl_cursor_cache_.is_inited()) {
+      // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+      // so we need get_thread_data_lock there
+      ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
       pl_cursor_cache_.reset();
     }
     inner_conn_ = NULL;
@@ -421,6 +426,17 @@ int ObSQLSessionInfo::is_groupby_placement_transformation_enabled(bool &transfor
     transformation_enabled = tenant_config->_optimizer_group_by_placement;
   }
   return ret;
+}
+
+bool ObSQLSessionInfo::is_in_range_optimization_enabled() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_in_range_optimization;
+  }
+  return bret;
 }
 
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
@@ -1294,16 +1310,21 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(pl_cursor_cache_.pl_cursor_map_.set_refactored(id, cursor))) {
-      LOG_WARN("fail insert ps id to hash map", K(id), K(*cursor), K(ret));
     } else {
-      cursor->set_id(id);
-      add_cursor_success = true;
-      if (lib::is_diagnose_info_enabled()) {
-        EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
-        EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
+      // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+      // so we need get_thread_data_lock there
+      ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
+      if (OB_FAIL(pl_cursor_cache_.pl_cursor_map_.set_refactored(id, cursor))) {
+        LOG_WARN("fail insert ps id to hash map", K(id), K(*cursor), K(ret));
+      } else {
+        cursor->set_id(id);
+        add_cursor_success = true;
+        if (lib::is_diagnose_info_enabled()) {
+          EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
+          EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
+        }
+        LOG_DEBUG("ps cursor: add cursor", K(ret), K(id), K(get_sessid()));
       }
-      LOG_DEBUG("ps cursor: add cursor", K(ret), K(id), K(get_sessid()));
     }
   }
   if (!add_cursor_success && OB_NOT_NULL(cursor)) {
@@ -1338,6 +1359,9 @@ int ObSQLSessionInfo::close_cursor(int64_t cursor_id)
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   LOG_INFO("ps cursor : remove cursor", K(ret), K(cursor_id), K(get_sessid()));
+  // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+  // so we need get_thread_data_lock there
+  ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
   if (OB_FAIL(pl_cursor_cache_.pl_cursor_map_.erase_refactored(cursor_id, &cursor))) {
     LOG_WARN("cursor info not exist", K(cursor_id));
   } else if (OB_ISNULL(cursor)) {
@@ -1390,6 +1414,9 @@ int ObSQLSessionInfo::init_cursor_cache()
 {
   int ret = OB_SUCCESS;
   if (!pl_cursor_cache_.is_inited()) {
+    // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+    // so we need get_thread_data_lock there
+    ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
     OZ (pl_cursor_cache_.init(get_effective_tenant_id()),
                               get_effective_tenant_id(),
                               get_proxy_sessid(),
@@ -1403,6 +1430,9 @@ int ObSQLSessionInfo::close_dbms_cursor(int64_t cursor_id)
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   LOG_INFO("remove dbms cursor", K(ret), K(cursor_id), K(get_sessid()));
+  // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+  // so we need get_thread_data_lock there
+  ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
   OZ (pl_cursor_cache_.pl_cursor_map_.erase_refactored(cursor_id, &cursor), cursor_id);
   OV (OB_NOT_NULL(cursor), OB_ERR_UNEXPECTED, cursor_id);
   if (OB_SUCC(ret) && lib::is_diagnose_info_enabled()) {
@@ -2363,6 +2393,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       }
       // 4.sort area size
       ATOMIC_STORE(&sort_area_size_, tenant_config->_sort_area_size);
+      ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
         LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,
@@ -2377,8 +2408,6 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }
-    //timezone的更新频率非常低，放到后台驱动
-    (void)session_->update_timezone_info();
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
   }
   UNUSED(tmp_ret);

@@ -546,12 +546,12 @@ int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
     } else {
       LSN max_flushed_end_lsn;
       sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
-      resp.is_normal_replica_ = true;
       resp.max_flushed_end_lsn_ = max_flushed_end_lsn;
       resp.need_update_config_meta_ = false;
       resp.last_slide_log_id_ = sw_.get_last_slide_log_id();
 
     }
+    resp.is_normal_replica_ = true;
 
     // it's a optimization. To add one F members into 1F1A group,
     // leader will not accept appended logs until max_flushed_end_lsn of
@@ -877,21 +877,16 @@ int PalfHandleImpl::check_args_and_generate_config_(const LogConfigChangeArgs &a
                                                     const int64_t proposal_id,
                                                     const int64_t election_epoch,
                                                     bool &is_already_finished,
-                                                    common::ObMemberList &log_sync_memberlist,
-                                                    int64_t &log_sync_repclia_num) const
+                                                    LogConfigInfo &new_config_info) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
-  LogConfigInfo config_info;
   if (OB_FAIL(config_mgr_.check_args_and_generate_config(args, proposal_id,
-      election_epoch, is_already_finished, config_info))) {
+      election_epoch, is_already_finished, new_config_info))) {
     if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
       PALF_LOG(WARN, "check_args_and_generate_config failed", K(ret), KPC(this), K(args));
     }
-  } else {
-    log_sync_memberlist = config_info.log_sync_memberlist_;
-    log_sync_repclia_num = config_info.log_sync_replica_num_;
-  }
+  } else { }
   return ret;
 }
 
@@ -903,9 +898,8 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
   int64_t proposal_id = INVALID_PROPOSAL_ID;
   int64_t election_epoch = INVALID_PROPOSAL_ID;
   bool is_already_finished = false;
-  ObMemberList new_log_sync_memberlist;
-  int64_t new_log_sync_replica_num = 0;
   int get_lock = OB_EAGAIN;
+  LogConfigInfo new_config_info;
   if (DEGRADE_ACCEPTOR_TO_LEARNER == args.type_) {
     // for concurrent DEGRADE
     if (ATOMIC_BCAS(&has_higher_prio_config_change_, false, true)) {
@@ -928,7 +922,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     PALF_LOG(WARN, "start_change_config failed", KR(ret), KPC(this), K(args));
   } else if (FALSE_IT(doing_degrade = (args.type_ == DEGRADE_ACCEPTOR_TO_LEARNER))) {
   } else if (OB_FAIL(check_args_and_generate_config_(args, proposal_id, election_epoch,
-      is_already_finished, new_log_sync_memberlist, new_log_sync_replica_num))) {
+      is_already_finished, new_config_info))) {
     if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
       PALF_LOG(WARN, "check_args_and_generate_config failed", KR(ret), KPC(this), K(args));
     }
@@ -964,13 +958,12 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
         ret = OB_NOT_MASTER;
         PALF_LOG(WARN, "leader has been switched, try to change config again", KR(ret), KPC(this),
             K(proposal_id), K(curr_proposal_id));
-      } else if (OB_SUCC(config_mgr_.check_follower_sync_status(args, new_log_sync_memberlist,
-          new_log_sync_replica_num, added_member_has_new_version))) {
+      } else if (OB_SUCC(config_mgr_.check_follower_sync_status(args, new_config_info,
+          added_member_has_new_version))) {
       // check log synchronization progress of new memberlist majority synchronically
         break;
       } else if (OB_EAGAIN != ret) {
-        PALF_LOG(WARN, "check_follower_sync_status_ fails", K(ret), K_(palf_id),
-            K(new_log_sync_memberlist), K(new_log_sync_replica_num));
+        PALF_LOG(WARN, "check_follower_sync_status_ fails", K(ret), K_(palf_id), K(new_config_info));
       } else if (is_upgrade_or_degrade(args.type_)) {
         ret = OB_EAGAIN;
         PALF_LOG(WARN, "degrade/upgrade eagain, arb_reason: check_follower_sync_status_ return false",
@@ -1035,8 +1028,14 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     PALF_LOG(INFO, "one_stage_config_change finish", KR(ret), KPC(this), K(args), K(config_version),
         K(timeout_us), K(time_guard));
     ret = (OB_LOG_NOT_SYNC == ret)? OB_EAGAIN: ret;
-    if (OB_TIMEOUT == ret && config_version.is_valid()) {
-      config_mgr_.after_config_change_timeout(config_version);
+    if (OB_FAIL(ret)) {
+      if (config_version.is_valid()) {
+        config_mgr_.after_config_change_timeout(config_version);
+      } else {
+        // encounter unexpected error, reset flag
+        WLockGuard guard(lock_);
+        state_mgr_.reset_changing_config_with_arb();
+      }
     }
   }
   if (OB_SUCCESS == get_lock) {
@@ -1391,7 +1390,12 @@ int PalfHandleImpl::advance_base_info(const PalfBaseInfo &palf_base_info, const 
     TruncatePrefixBlocksCbCtx truncate_prefix_cb_ctx(new_base_lsn);
     flush_meta_cb_ctx.type_ = SNAPSHOT_META;
     flush_meta_cb_ctx.base_lsn_ = new_base_lsn;
-    if (OB_FAIL(check_need_advance_base_info_(new_base_lsn, prev_log_info, is_rebuild))) {
+    // Note: can not rebuild while a truncate operation is doing, because group_buffer may be
+    //       truncated by LogCallback again after it has been advanced by rebuild operation.
+    if (false == sw_.is_allow_rebuild()) {
+      ret = OB_EAGAIN;
+      PALF_LOG(WARN, "can not advance_base_info for now, try again failed", K(ret), KPC(this), K(palf_base_info), K(is_rebuild));
+    } else if (OB_FAIL(check_need_advance_base_info_(new_base_lsn, prev_log_info, is_rebuild))) {
       PALF_LOG(WARN, "check_need_advance_base_info failed", K(ret), KPC(this), K(palf_base_info), K(is_rebuild));
     } else if (OB_FAIL(log_snapshot_meta.generate(new_base_lsn, prev_log_info))) {
         PALF_LOG(WARN, "LogSnapshotMeta generate failed", K(ret), KPC(this), K(palf_base_info));
@@ -3656,8 +3660,7 @@ int PalfHandleImpl::construct_palf_base_info_(const LSN &max_committed_lsn,
   int ret = OB_SUCCESS;
   LogInfo prev_log_info;
   const LSN base_lsn = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-  if (false == max_committed_lsn.is_valid()
-      || max_committed_lsn < base_lsn) {
+  if (false == max_committed_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K(max_committed_lsn), K(base_lsn));
     // NB:
@@ -3686,8 +3689,7 @@ int PalfHandleImpl::construct_palf_base_info_for_flashback_(const LSN &start_lsn
   int ret = OB_SUCCESS;
   LogInfo &prev_log_info = palf_base_info.prev_log_info_;
   const LSN base_lsn = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-  if (false == start_lsn.is_valid()
-      || start_lsn < base_lsn) {
+  if (false == start_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K(start_lsn), K(base_lsn));
   } else if (prev_entry_header.is_valid()) {
@@ -4105,6 +4107,13 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
       }
     }
     time_guard.click("while");
+    auto alloc_memory_until_success = [&last_log_buf, &last_log_buf_len]() {
+      while (NULL ==
+          (last_log_buf = static_cast<char*>(mtl_malloc(last_log_buf_len, "PalfHandleImpl")))) {
+        PALF_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "alloc memory for last_log_buf in flashback failed", K(last_log_buf_len));
+        usleep(1000);
+      };
+    };
     // step2. construct new palf base info.
     if (OB_ITER_END == ret) {
       int tmp_ret = OB_SUCCESS;
@@ -4118,10 +4127,7 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
             K(prev_entry_header));
       } else if (FALSE_IT(last_log_buf_len = curr_group_entry.get_group_entry_size())
                  || FALSE_IT(last_log_start_lsn = curr_log_lsn)) {
-      } else if (NULL ==
-          (last_log_buf = static_cast<char*>(ob_malloc(last_log_buf_len, "PalfHandleImpl")))) {
-        tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
-        PALF_LOG(WARN, "alloc memory for last_log_buf in flashback failed", K(ret));
+      } else if (FALSE_IT(alloc_memory_until_success())){
       } else if (OB_TMP_FAIL(curr_group_entry.serialize(last_log_buf, last_log_buf_len, pos))) {
         PALF_LOG(ERROR, "curr_group_entry serialize failed", K(ret));
       } else {

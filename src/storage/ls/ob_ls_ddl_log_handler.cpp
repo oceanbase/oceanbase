@@ -72,28 +72,6 @@ int ObLSDDLLogHandler::offline()
     TCWLockGuard guard(online_lock_);
     is_online_ = false;
   }
-  ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
-    LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
-  } else {
-    while (OB_SUCC(ret)) {
-      ObDDLKvMgrHandle ddl_kv_mgr_handle;
-      if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get ddl kv mgr", K(ret), K(ddl_kv_mgr_handle));
-        }
-      } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid tablet handle", K(ret), K(ddl_kv_mgr_handle));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->cleanup())) {
-        LOG_WARN("ddl kv mgr cleanup failed", K(ret), "ls_meta", ls_->get_ls_meta(), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
-      }
-    }
-  }
   FLOG_INFO("ddl log hanlder offline", K(ret), "ls_meta", ls_->get_ls_meta());
   return OB_SUCCESS;
 }

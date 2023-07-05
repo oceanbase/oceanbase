@@ -197,7 +197,7 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
            "tenant_id", result.get_session().get_effective_tenant_id(),
            "execution_id", result.get_session().get_current_execution_id());
 #endif
-  //NG_TRACE_EXT(parse_begin, OB_ID(stmt), trunc_stmt.string(), OB_ID(stmt_len), stmt.length());
+  NG_TRACE_EXT(parse_begin, OB_ID(stmt), trunc_stmt.string(), OB_ID(stmt_len), stmt.length());
   //1 check inited
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("Failed to do sanity check", K(ret));
@@ -949,7 +949,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   context.is_dynamic_sql_ = !context.is_dynamic_sql_ ? !is_inner_sql : context.is_dynamic_sql_;
 
   bool is_from_pl = (NULL != context.secondary_namespace_ || result.is_simple_ps_protocol());
-  ObPsPrepareStatusGuard ps_status_guard(session, is_from_pl);
+  ObPsPrepareStatusGuard ps_status_guard(session);
   ObPlanCacheCtx pc_ctx(sql, PC_PS_MODE, allocator, context, ectx,
                         session.get_effective_tenant_id());
   ParamStore param_store( (ObWrapperAllocator(&allocator)) );
@@ -973,6 +973,8 @@ int ObSql::do_real_prepare(const ObString &sql,
              && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
     ret = OB_ER_UNSUPPORTED_PS;
     LOG_WARN("This command is not supported in the prepared statement protocol yet", K(ret));
+  } else {
+    ps_status_guard.is_varparams_sql_prepare(is_from_pl, parse_result.question_mark_ctx_.count_ > 0 ? true : false);
   }
 
   OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type));
@@ -1025,11 +1027,18 @@ int ObSql::do_real_prepare(const ObString &sql,
                                                                   param_store,
                                                                   session.get_local_collation_connection()))) {
         LOG_WARN("parameterize syntax tree failed", K(ret));
-      } else if (!pc_ctx.ps_need_parameterized_) {
-        pc_ctx.fixed_param_idx_.reset();
-        pc_ctx.fp_result_.raw_params_.reset();
-      } else {
-        info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+        if (OB_INVALID_ARGUMENT == ret) {
+          pc_ctx.ps_need_parameterized_ = false;
+          ret = OB_SUCCESS;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!pc_ctx.ps_need_parameterized_) {
+          pc_ctx.fixed_param_idx_.reset();
+          pc_ctx.fp_result_.raw_params_.reset();
+        } else {
+          info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+        }
       }
     }
 
@@ -1227,7 +1236,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
             LOG_WARN("failed to write string", K(ret));
           } else if (OB_FAIL(sess.store_query_string(trimed_stmt))) {
             LOG_WARN("store query string fail", K(ret));
-          } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false))) {
+          } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, true))) {
             LOG_WARN("generate syntax tree failed", K(sql), K(ret));
           } else if (is_mysql_mode() && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
             ret = OB_ER_UNSUPPORTED_PS;
@@ -2133,6 +2142,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
     bool use_plan_cache = session->get_local_ob_enable_plan_cache();
     context.self_add_plan_ = false;
     PlanCacheMode mode = remote_sql_info.use_ps_ ? PC_PS_MODE : PC_TEXT_MODE;
+    mode = remote_sql_info.sql_from_pl_ ? PC_PL_MODE : mode;
     context.cur_sql_ = trimed_stmt;
     pc_ctx = new (pc_ctx) ObPlanCacheCtx(trimed_stmt,
                                          mode,
@@ -2214,6 +2224,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
         remote_sql_info.ps_params_->pop_back();
       }
       PlanCacheMode mode = remote_sql_info.use_ps_ ? PC_PS_MODE : PC_TEXT_MODE;
+      mode = remote_sql_info.sql_from_pl_ ? PC_PL_MODE : mode;
       if (OB_FAIL(handle_physical_plan(trimed_stmt, context, tmp_result, *pc_ctx, get_plan_err))) {
         if (OB_ERR_PROXY_REROUTE == ret) {
           LOG_DEBUG("fail to handle physical plan", K(ret));
@@ -3016,6 +3027,23 @@ int ObSql::generate_plan(ParseResult &parse_result,
     } else if (OB_FAIL(prepare_outline_for_phy_plan(logical_plan,
                                                     phy_plan))) {
       LOG_WARN("failed to prepare outline for phy plan", K(ret));
+    } else if (logical_plan->get_optimizer_context().is_online_ddl()) {
+      int tmp_ret = OB_SUCCESS;
+      ObExplainDisplayOpt option;
+      option.with_tree_line_ = false;
+      ObSqlPlan sql_plan(logical_plan->get_allocator());
+      ObSEArray<common::ObString, 64> plan_strs;
+      if (OB_TMP_FAIL(sql_plan.print_sql_plan(logical_plan,
+                                          EXPLAIN_EXTENDED,
+                                          option,
+                                          plan_strs))) {
+        LOG_WARN("failed to store sql plan", K(tmp_ret));
+      } else {
+        LOG_INFO("ddl plan");
+        for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < plan_strs.count(); i++) {
+          _OB_LOG(INFO, "%*s", plan_strs.at(i).length(), plan_strs.at(i).ptr());
+        }
+      }
     }
     END_OPT_TRACE(session_info);
     if (OB_SUCC(ret) && session_info->is_user_session()) {
@@ -3655,6 +3683,8 @@ int ObSql::get_outline_data(ObSqlCtx &context,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null session info", K(ret));
+  } else if (0 != context.first_plan_hash_) {
+    outline_content = context.first_outline_data_;
   } else if (OB_FAIL(get_outline_data(pc_ctx, signature_sql, outline_state, outline_content))) {
     LOG_WARN("failed to get outline data", K(ret));
   }
@@ -3827,7 +3857,10 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                          || OB_ERR_CONSTRUCT_MUST_RETURN_SELF == ret
                          || OB_ERR_ONLY_FUNC_CAN_PIPELINED == ret
                          || OB_ERR_NO_ATTR_FOUND == ret
-                         || OB_ERR_NON_INT_LITERAL == ret)) {
+                         || OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK == ret
+                         || OB_ERR_NON_INT_LITERAL == ret
+                         || OB_ERR_PARSER_INIT == ret
+                         || OB_NOT_SUPPORTED == ret)) {
       // parser返回已知的错误码，不需要断掉与客户端的连接
       exec_ctx.set_need_disconnect(false);
       //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
@@ -4193,6 +4226,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       if (OB_SUCC(ret) && phy_plan->is_remote_plan()
           && !phy_plan->contains_temp_table()
           && !enable_send_plan) {
+        pctx->get_remote_sql_info().sql_from_pl_ = PC_PL_MODE == pc_ctx.mode_;
         //处理远程plan转发SQL的情况
         ParamStore &param_store = pctx->get_param_store_for_update();
         if (OB_NOT_NULL(ps_params)) {
@@ -4788,6 +4822,7 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
     ObSEArray<ObHiddenColumnItem, 4> pre_calc_exprs;
     ObHiddenColumnItem hidden_column_item;
     int64_t idx = -1;
+    const int64_t dummy_count = -1;
     for (int64_t i = PRE_CALC_RESULT_NULL; OB_SUCC(ret) && i <= PRE_CALC_NOT_PRECISE; ++i) {
       PreCalcExprExpectResult expect_result = static_cast<PreCalcExprExpectResult>(i);
       pre_calc_exprs.reuse();
@@ -4795,7 +4830,15 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
         if (expr_constraints.at(j).expect_result_ == expect_result) {
           hidden_column_item.expr_ = expr_constraints.at(j).pre_calc_expr_;
           hidden_column_item.hidden_idx_ = ++idx;
-          if (OB_FAIL(pre_calc_exprs.push_back(hidden_column_item))) {
+          if (OB_ISNULL(hidden_column_item.expr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect null", K(ret), K(j));
+          } else if (OB_FAIL(hidden_column_item.expr_->extract_info())) {
+            LOG_WARN("failed to extract expr info", K(ret));
+          } else if (OB_UNLIKELY(!ObOptEstUtils::is_calculable_expr(*hidden_column_item.expr_, dummy_count))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect calculable expr", K(ret), KPC(hidden_column_item.expr_));
+          } else if (OB_FAIL(pre_calc_exprs.push_back(hidden_column_item))) {
             LOG_WARN("failed to push back to array", K(ret));
           }
         }

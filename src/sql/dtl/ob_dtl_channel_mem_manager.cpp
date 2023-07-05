@@ -16,6 +16,8 @@
 #include "share/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "src/sql/dtl/ob_dtl_tenant_mem_manager.h"
+#include "share/ob_occam_time_guard.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
@@ -23,24 +25,25 @@ using namespace oceanbase::omt;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 
-ObDtlChannelMemManager::ObDtlChannelMemManager(uint64_t tenant_id) :
+ObDtlChannelMemManager::ObDtlChannelMemManager(uint64_t tenant_id, ObDtlTenantMemManager &tenant_mgr) :
   tenant_id_(tenant_id), size_per_buffer_(GCONF.dtl_buffer_size), seqno_(-1), allocator_(tenant_id), pre_alloc_cnt_(0),
-  max_mem_percent_(0), alloc_cnt_(0), free_cnt_(0), queue_len_(0), real_alloc_cnt_(0), real_free_cnt_(0)
+  max_mem_percent_(0), alloc_cnt_(0), free_cnt_(0), real_alloc_cnt_(0), real_free_cnt_(0), tenant_mgr_(tenant_mgr),
+  mem_used_(0), last_update_memory_time_(-1)
 {}
 
 int ObDtlChannelMemManager::init()
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(tenant_id_, ObModIds::OB_SQL_DTL);
+  ObMemAttr attr(tenant_id_, "SqlDtlBuf");
   if (OB_FAIL(allocator_.init(
                 lib::ObMallocAllocator::get_instance(),
                 OB_MALLOC_NORMAL_BLOCK_SIZE,
                 attr))) {
     LOG_WARN("failed to init fifo allocator", K(ret));
-  } else if (OB_FAIL(free_queue_.init(MAX_CAPACITY, ObModIds::OB_SQL_DTL, tenant_id_))) {
+  } else if (OB_FAIL(free_queue_.init(MAX_CAPACITY, "SqlDtlQueue", tenant_id_))) {
     LOG_WARN("failed to init channel memory manager", K(ret));
   } else {
-    allocator_.set_label(ObModIds::OB_SQL_DTL);
+    allocator_.set_label("SqlDtlBuf");
   }
   if (OB_FAIL(ret)) {
     allocator_.reset();
@@ -74,8 +77,8 @@ void ObDtlChannelMemManager::destroy()
       ++ free_cnt;
     }
   }
-  LOG_WARN("pop buffer from free queue to destroy",
-    K(ret), K(seqno_), K(free_cnt_), K(alloc_cnt_), K(queue_len_), K(free_cnt));
+  LOG_INFO("pop buffer from free queue to destroy",
+    K(ret), K(seqno_), K(free_cnt_), K(alloc_cnt_), K(free_queue_.size()), K(free_cnt));
   free_queue_.reset();
   free_queue_.destroy();
   allocator_.reset();
@@ -91,7 +94,6 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
       allocated_buf = new (buf) ObDtlLinkedBuffer(
         static_cast<char *>(buf) + sizeof (ObDtlLinkedBuffer), size_per_buffer_);
       allocated_buf->allocated_chid() = chid;
-      decrease_free_queue_cnt();
     } else {
       if (OB_ENTRY_NOT_EXIST == ret) {
         LOG_TRACE("queue has no element", K(ret), K(seqno_), K(free_queue_.size()));
@@ -148,7 +150,6 @@ int ObDtlChannelMemManager::free(ObDtlLinkedBuffer *buf, bool auto_free)
       if (OB_FAIL(free_queue_.push(buf))) {
         LOG_TRACE("failed to push back buffer", K(ret), K(seqno_), K(free_queue_.size()));
       } else {
-        increase_free_queue_cnt();
         increase_free_cnt();
         buf = NULL;
       }
@@ -204,4 +205,14 @@ int ObDtlChannelMemManager::auto_free_on_time(int64_t cur_max_reserve_count)
   update_max_memory_percent();
   //LOG_INFO("auto free channel buffer", K(max_mem_percent_));
   return ret;
+}
+
+int64_t ObDtlChannelMemManager::get_used_memory_size()
+{
+  int64_t curr_time = ::oceanbase::common::ObTimeUtility::current_time();
+  if (OB_UNLIKELY(curr_time - last_update_memory_time_ >= static_cast<int64_t> (100_ms))) {
+    last_update_memory_time_ = curr_time;
+    mem_used_ = tenant_mgr_.get_used_memory_size();
+  }
+  return mem_used_;
 }

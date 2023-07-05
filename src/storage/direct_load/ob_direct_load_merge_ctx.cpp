@@ -46,8 +46,7 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     is_fast_heap_table_(false),
     online_opt_stat_gather_(false),
     insert_table_ctx_(nullptr),
-    error_row_handler_(nullptr),
-    result_info_(nullptr)
+    dml_row_handler_(nullptr)
 {
 }
 
@@ -59,7 +58,7 @@ bool ObDirectLoadMergeParam::is_valid() const
 {
   return OB_INVALID_ID != table_id_ && 0 < rowkey_column_num_ && 0 < store_column_count_ &&
          snapshot_version_ > 0 && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
-         nullptr != col_descs_ && nullptr != insert_table_ctx_ && nullptr != error_row_handler_;
+         nullptr != col_descs_ && nullptr != insert_table_ctx_ && nullptr != dml_row_handler_;
 }
 
 /**

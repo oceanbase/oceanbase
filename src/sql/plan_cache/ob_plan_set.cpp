@@ -138,6 +138,9 @@ int ObPlanSet::match_params_info(const ParamStore *params,
         LOG_WARN("failed to check privilege constraint", K(ret));
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(pc_ctx.sql_ctx_.session_info_) && is_same) {
+      is_same = (is_cli_return_rowid_ == pc_ctx.sql_ctx_.session_info_->is_client_return_rowid());
+    }
 
     //pre calculate
     if (OB_SUCC(ret) && is_same) {
@@ -571,6 +574,7 @@ void ObPlanSet::reset()
   related_user_var_names_.reset();
   related_user_sess_var_metas_.reset();
 
+  is_cli_return_rowid_ = false;
   all_possible_const_param_constraints_.reset();
   all_plan_const_param_constraints_.reset();
   all_equal_param_constraints_.reset();
@@ -636,6 +640,7 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     fetch_cur_time_ = plan.get_fetch_cur_time();
     stmt_type_ = plan.get_stmt_type();
     is_ignore_stmt_ = plan.is_ignore();
+    is_cli_return_rowid_ = session_info->is_client_return_rowid();
     //add param info
     params_info_.reset();
     // set variables for resource map rule

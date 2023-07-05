@@ -19,7 +19,6 @@
 #include "storage/tx/ob_committer_define.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx_table/ob_tx_data_hash_map.h"
-#include "storage/ob_i_table.h"
 
 namespace oceanbase
 {
@@ -46,22 +45,28 @@ class ObTxDataMemtableMgr;
 // 2. Tx data
 // 3. The linked list pointer for sorting, which points to another tx data
 //
-//
-//                                    A Piece of Memory Slice
+///                                    A Piece of Memory Slice
+//                                            ObTxData
 //  ------------------------------> +-------------------------+      +----->+----------------+
 //                                  |                         |      |      |                |
 //                                  |                         |      |      |                |
+//                                  |      ObTxCommitData     |      |      |                |
 //                                  |                         |      |      |                |
 //                                  |                         |      |      |                |
+//                                  +-------------------------+      |      +----------------+
 //                                  |                         |      |      |                |
-//           TX_DATA_SLICE_SIZE           |         ObTxData        |      |      |                |
-//                                  |                         |      |      |                |
-//                                  |                         |      |      |                |
-//                                  |                         |      |      +----------------|
-//                                  |                         |      |      |                |
-//                                  |    TxDataSortListNode   |      |      |                |
-//                                  |         (*next)         |------+      |                |
-//  ------------------------------> +-------------------------+             +----------------+
+//                                  |       ObTxDataLink      |      |      |                |
+//        TX_DATA_SLICE_SIZE        |     (next_hash_node_)   |------+      |                |
+//                                  |  (next_sort_list_node_) |             |                |
+//                                  |                         |             |                |
+//                                  +-------------------------+             +----------------+
+//                                  |                         |             |                |
+//                                  |     ObUndoStatusList    |             |                |
+//                                  |   (next_undo_status_)   |             |                |
+//                                  |        (node_cnt_)      |             |                |
+//                                  |                         |             |                |
+//  ------------------------------> +-------------------------+             +----------------+/
+//
 //
 // The second kind of slice is an ObUndoStatusNode, which is allocated when the transaction has some
 // undo actions. It is divided into three areas too:
@@ -107,6 +112,15 @@ struct ObUndoStatusNode
   transaction::ObUndoAction undo_actions_[TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE];
   DECLARE_TO_STRING;
   ObUndoStatusNode() : size_(0), next_(nullptr) {}
+
+  const ObUndoStatusNode &assign_value(const ObUndoStatusNode &rhs)
+  {
+    size_ = rhs.size_;
+    for (int i = 0; i < size_; i++) {
+      undo_actions_[i] = rhs.undo_actions_[i];
+    }
+    return *this;
+  }
 };
 
 struct ObTxDataLinkNode
@@ -143,7 +157,8 @@ public:
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObSliceAlloc &slice_allocator);
   int64_t get_serialize_size() const;
 
-  bool is_contain(const int64_t seq_no) const;
+  bool is_contain(const int64_t seq_no, int32_t tx_data_state) const;
+  bool is_contain_(const int64_t seq_no) const;
 
   void reset() 
   { 
@@ -227,6 +242,8 @@ public:
   ObTxData(const ObTxData &rhs);
   ObTxData &operator=(const ObTxData &rhs);
   ObTxData &operator=(const ObTxCommitData &rhs);
+  const ObTxData &assign_without_undo(const ObTxData &rhs);
+
   ~ObTxData() {}
   void reset();
   OB_INLINE bool contain(const transaction::ObTransID &tx_id) { return tx_id_ == tx_id; }
@@ -277,6 +294,7 @@ public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObSliceAlloc &slice_allocator);
   int64_t get_serialize_size() const;
+  int64_t size() const;
 
   void dump_2_text(FILE *fd) const;
   static void print_to_stderr(const ObTxData &tx_data);
@@ -347,33 +365,90 @@ public:
   const ObTxData *tx_data() const { return tx_data_; }
 
   TO_STRING_KV(KPC_(tx_data));
-public:
-  // void TEST_reset()
-  // {
-  //   tx_data_ = nullptr;
-  // }
 
 private:
   ObTxData *tx_data_;
 };
 
-class ObTxDataMemtableWriteGuard
+class ObTxDataMiniCache
 {
+private:
+  static const int32_t TX_DATA_MINI_LRU_ITEM_CNT = 1 << 2; /* 4 */
+  static const int32_t MINI_LRU_CONCURRENCY_MOD_MASK = TX_DATA_MINI_LRU_ITEM_CNT - 1;
+
+  struct CacheItem {
+    ObTxCommitData tx_data_;
+    bool is_valid_;
+    common::SpinRWLock lock_;
+
+    CacheItem() : tx_data_(), is_valid_(false) {}
+
+    void reset()
+    {
+      tx_data_.reset();
+      is_valid_ = false;
+    }
+
+    TO_STRING_KV(K_(tx_data), K_(is_valid));
+  };
+
 public:
-  ObTxDataMemtableWriteGuard() : size_(0)
+  int get(const transaction::ObTransID tx_id, ObTxCommitData &tx_commit_data)
   {
+    int ret = OB_SUCCESS;
+    int64_t thread_idx = get_itid() & MINI_LRU_CONCURRENCY_MOD_MASK;
+    SpinRLockGuard guard(cache_items_[thread_idx].lock_);
+    if (cache_items_[thread_idx].is_valid_) {
+      if (tx_id == cache_items_[thread_idx].tx_data_.tx_id_) {
+        tx_commit_data = cache_items_[thread_idx].tx_data_;
+      } else {
+        ret = OB_TRANS_CTX_NOT_EXIST;
+      }
+    } else {
+      ret = OB_TRANS_CTX_NOT_EXIST;
+    }
+    return ret;
   }
-  ~ObTxDataMemtableWriteGuard() { reset(); }
 
-  void reset();
+  void set(const ObTxCommitData &tx_commit_data)
+  {
+    int64_t thread_idx = get_itid() & MINI_LRU_CONCURRENCY_MOD_MASK;
+    SpinWLockGuard guard(cache_items_[thread_idx].lock_);
+    if (cache_items_[thread_idx].tx_data_.tx_id_ != tx_commit_data.tx_id_) {
+      cache_items_[thread_idx].tx_data_ = tx_commit_data;
+      cache_items_[thread_idx].is_valid_ = true;
+    }
+  }
 
-  TO_STRING_KV(K(size_), K(handles_[0]), K(handles_[1]));
+  void reset() {
+    for (int i = 0; i < TX_DATA_MINI_LRU_ITEM_CNT; i++) {
+      cache_items_[i].reset();
+    }
+  }
 
-public:
-  int64_t size_;
-  ObTableHandleV2 handles_[MAX_TX_DATA_MEMTABLE_CNT];
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    for (int i = 0; i < TX_DATA_MINI_LRU_ITEM_CNT; i++) {
+      J_KV(K(cache_items_[i]));
+    }
+    return pos;
+  }
+
+private:
+  CacheItem cache_items_[TX_DATA_MINI_LRU_ITEM_CNT];
 };
 
+struct ObReadTxDataArg{
+  const transaction::ObTransID tx_id_;
+  const int64_t read_epoch_;
+  ObTxDataMiniCache &tx_data_mini_cache_;
+
+  ObReadTxDataArg(const transaction::ObTransID tx_id, const int64_t read_epoch, ObTxDataMiniCache &mini_cache)
+      : tx_id_(tx_id), read_epoch_(read_epoch), tx_data_mini_cache_(mini_cache) {}
+
+  TO_STRING_KV(K_(tx_id), K_(read_epoch), K_(tx_data_mini_cache));
+};
 
 }  // namespace storage
 

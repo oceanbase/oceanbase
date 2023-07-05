@@ -26,7 +26,6 @@ MULTI_VERSION_EXTRA_ROWKEY_DEF(MAX_EXTRA_ROWKEY, 0, NULL, NULL)
 #include "share/ob_i_tablet_scan.h"
 #include "share/schema/ob_table_param.h"
 #include "storage/tx/ob_trans_define.h"
-#include "storage/tx_table/ob_tx_table_interface.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/ob_table_store_stat_mgr.h"
@@ -165,7 +164,6 @@ public:
     MVRC_VERSION_AFTER_3_0 = 2, // TransVersion | SqlSequence[A]:Use After Version3.0
     MVRC_VERSION_MAX = 3,
   };
-  static const int64_t MAX_EXTRA_ROWKEY_CNT = 2;
   static int64_t get_trans_version_col_store_index(
       const int64_t schema_rowkey_col_cnt,
       const bool is_multi_version)

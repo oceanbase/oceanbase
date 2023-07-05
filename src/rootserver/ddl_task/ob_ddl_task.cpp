@@ -1005,8 +1005,14 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     }
     if (OB_SUCC(ret) && old_status != real_new_status) {
-      ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", K_(tenant_id), K_(task_id), K_(object_id), K_(target_object_id),
+      const char *status_str = ddl_task_status_to_str(real_new_status);
+      if (status_str) {
+        ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", K_(tenant_id), K_(task_id), K_(object_id), K_(target_object_id),
+          "new_state", status_str, K_(snapshot_version), ret_code_);
+      } else {
+        ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", K_(tenant_id), K_(task_id), K_(object_id), K_(target_object_id),
           "new_state", real_new_status, K_(snapshot_version), ret_code_);
+      }
       task_status_ = real_new_status;
     }
 
@@ -2946,7 +2952,7 @@ int ObDDLTaskRecordOperator::to_hex_str(const ObString &src, ObSqlString &dst)
 
 int ObDDLTaskRecordOperator::insert_record(
     common::ObISQLClient &proxy,
-    const ObDDLTaskRecord &record)
+    ObDDLTaskRecord &record)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!record.is_valid())) {
@@ -2967,10 +2973,10 @@ int ObDDLTaskRecordOperator::insert_record(
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         ObSqlString query_string;
         sqlclient::ObMySQLResult *result = NULL;
-        if (OB_FAIL(query_string.assign_fmt(
-            " SELECT * FROM %s WHERE object_id = %lu and target_object_id = %lu",
-            OB_ALL_DDL_TASK_STATUS_TNAME, record.object_id_, record.target_object_id_))) {
-          LOG_WARN("assign query string failed", K(ret), K(record));
+        if (OB_FAIL(query_string.assign_fmt("SELECT task_id FROM %s "
+            "WHERE tenant_id = %lu and object_id = %lu and target_object_id = %lu",
+            OB_ALL_DDL_TASK_STATUS_TNAME, record.tenant_id_, record.object_id_, record.target_object_id_))) {
+          LOG_WARN("assign sql string failed", K(ret), K(record));
         } else if (OB_FAIL(proxy.read(res, record.tenant_id_, query_string.ptr()))) {
           LOG_WARN("read record failed", K(ret), K(query_string));
         } else if (OB_UNLIKELY(nullptr == (result = res.get_result()))) {
@@ -2984,6 +2990,8 @@ int ObDDLTaskRecordOperator::insert_record(
           }
         } else {
           // do not insert duplicated record.
+          // When switch RS at copy_table_dependent_objects phase, we rely on the correct task_id to wait child task finish.
+          EXTRACT_INT_FIELD_MYSQL(*result, "task_id", record.task_id_, int64_t);
           ret = OB_ENTRY_EXIST;
         }
       }
@@ -3220,6 +3228,7 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
           LOG_WARN("assign sql string failed", K(ret));
         }
       }
+      LOG_INFO("kill session sql string", K(sql_string), K(task_id), K(sql_exec_addr));
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql_string.ptr(), &sql_exec_addr))) { // default use OB_SYS_TENANT_ID
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));

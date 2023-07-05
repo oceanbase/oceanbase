@@ -217,8 +217,10 @@ int ObUserDefinedType::generate_new(ObPLCodeGenerator &generator,
   ObLLVMType ptr_type;
   ObLLVMType ir_type;
   ObLLVMType ir_pointer_type;
+  ObLLVMValue stack;
   int64_t init_size = 0;
   // Step 1: 初始化内存
+  OZ (generator.get_helper().stack_save(stack));
   OZ (generator.get_helper().get_llvm_type(ObIntType, ptr_type));
   OZ (generator.get_helper().create_alloca("alloc_composite_addr", ptr_type, extend_ptr));
   OZ (args.push_back(generator.get_vars().at(generator.CTX_IDX)));
@@ -248,6 +250,7 @@ int ObUserDefinedType::generate_new(ObPLCodeGenerator &generator,
   OZ (generator.get_helper().create_int_to_ptr(ObString("ptr_to_user_type"), value, ir_pointer_type,
                                              composite_value));
   OZ (generate_construct(generator, ns, composite_value, s));
+  OZ (generator.get_helper().stack_restore(stack));
   return ret;
 }
 
@@ -1167,8 +1170,8 @@ int ObRecordType::deserialize(
   CK (OB_NOT_NULL(record));
   int64_t count = OB_INVALID_COUNT;
   // when record be delete , type will be PL_INVALID_TYPE
+  OX (record->deserialize(src, src_len, src_pos));
   if (OB_SUCC(ret) && record->get_type() != PL_INVALID_TYPE) {
-    OX (record->deserialize(src, src_len, src_pos));
     OZ (serialization::decode(src, src_len, src_pos, count));
     OX (record->set_count(count));
 
@@ -1231,6 +1234,7 @@ int ObRecordType::init_obj(ObSchemaGetterGuard &schema_guard,
     LOG_WARN("memory allocate failed", K(ret));
   } else {
     MEMSET(data, 0, init_size);
+    new (data) ObPLRecord(get_user_type_id(), get_record_member_count());
     obj.set_extend(reinterpret_cast<int64_t>(data), type_, init_size);
   }
   return ret;
@@ -1317,7 +1321,7 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
     record->set_count(record_members_.count());
     ObObj null_value;
     ObDataType *data_type = record->get_element_type();
-    bool* not_null = record->get_not_null();
+    bool *not_null = record->get_not_null();
     char *new_dst = reinterpret_cast<char*>(record->get_element());
     int64_t new_dst_len = get_member_count() * sizeof(ObObj);
     int64_t new_dst_pos = 0;
@@ -1327,11 +1331,28 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid record element type", K(ret), K(i), K(type), KPC(this));
       } else if (ObSMUtils::update_from_bitmap(null_value, bitmap, i)) {
+        ObObj* value = reinterpret_cast<ObObj*>(new_dst + new_dst_pos);
         if (!type->is_obj_type()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("complex value nerver be null", K(ret), K(*this), K(i), KPC(type));
+          const ObUserDefinedType *user_type = NULL;
+          ObPLUDTNS ns(schema_guard);
+          ObArenaAllocator local_allocator;
+          int64_t ptr = 0;
+          ObPLComposite *composite = NULL;
+          if (OB_FAIL(ns.get_user_type(type->get_user_type_id(), user_type, &local_allocator))) {
+            LOG_WARN("failed to get user type", K(ret), KPC(type));
+          } else if (OB_ISNULL(user_type)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get element type", K(ret), KPC(type));
+          } else if (OB_FAIL(user_type->newx(allocator, &ns, ptr))) {
+            LOG_WARN("failed to newx", K(ret), KPC(type));
+          } else if (OB_ISNULL(composite = reinterpret_cast<ObPLComposite*>(ptr))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error, got null composite value", K(ret));
+          } else {
+            composite->set_null();
+            value->set_extend(ptr, type->get_type());
+          }
         } else {
-          ObObj* value = reinterpret_cast<ObObj*>(new_dst + new_dst_pos);
           value->set_null();
           new_dst_pos += sizeof(ObObj);
         }
@@ -1437,7 +1458,8 @@ int ObPLComposite::copy_element(const ObObj &src,
 {
   int ret = OB_SUCCESS;
   if (src.is_ext()) {
-      ObPLComposite *dest_composite = reinterpret_cast<ObPLComposite*>(dest.get_ext());
+      ObPLComposite *dest_composite
+        = (dest.get_ext() == src.get_ext()) ? NULL : reinterpret_cast<ObPLComposite*>(dest.get_ext());
       ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src.get_ext());
       CK (OB_NOT_NULL(src_composite));
       OZ (ObPLComposite::deep_copy(*src_composite,
@@ -1447,6 +1469,19 @@ int ObPLComposite::copy_element(const ObObj &src,
                                    session,
                                    need_new_allocator));
       CK (OB_NOT_NULL(dest_composite));
+      if (src.get_ext() == dest.get_ext()) {
+        OZ (ObPLComposite::deep_copy(*dest_composite,
+                                     src_composite,
+                                     allocator,
+                                     ns,
+                                     session,
+                                     need_new_allocator));
+        OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
+                            src.get_meta().get_extend_type(),
+                            src.get_val_len()));
+        OZ (ObUserDefinedType::destruct_obj(dest, session));
+        OX (dest_composite = src_composite);
+      }
       OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
                           src.get_meta().get_extend_type(),
                           src.get_val_len()));

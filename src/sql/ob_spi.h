@@ -542,6 +542,9 @@ public:
 
   static int spi_get_package_allocator(pl::ObPLExecCtx *ctx, uint64_t package_id, ObIAllocator *&allocator);
 
+  static int spi_destruct_obj(pl::ObPLExecCtx *ctx,
+                              ObObj *obj);
+
   static int spi_copy_datum(pl::ObPLExecCtx *ctx,
                             ObIAllocator *allocator,
                             ObObj *src,

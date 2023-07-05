@@ -120,7 +120,6 @@ int ObOptimizerStatsGatheringOp::inner_rescan()
   }
   table_stats_map_.reuse();
   column_stats_map_.reuse();
-  part_map_.reuse();
   arena_.reset();
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to rescan");
@@ -239,7 +238,7 @@ int ObOptimizerStatsGatheringOp::inner_get_next_batch(const int64_t max_row_cnt)
       } else {
         batch_info_guard.set_batch_idx(i);
         if (OB_FAIL(calc_stats())) {
-          LOG_WARN("fail to calc stats", K(ret));
+          LOG_WARN("fail to calc stats", K(ret), K(i), K(child_brs->size_));
         }
       }
     }
@@ -398,7 +397,7 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
     LOG_WARN("get unexpected null pointer", K(ret));
   } else if (OB_FAIL(get_col_stats_by_partinfo(part_ids, column_id, all_stats))) {
     LOG_WARN("fail to get column stat", K(ret));
-  } else if (!ObColumnStatParam::is_valid_histogram_type(expr->obj_meta_.get_type())) {
+  } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type())) {
     // do nothing yet, shoul use the plain stats.
   } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
     LOG_WARN("eval expr failed", K(ret));
@@ -484,13 +483,6 @@ int ObOptimizerStatsGatheringOp::get_col_stats_by_partinfo(PartIds &part_ids, ui
 int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj, int64_t col_len)
 {
   int ret = OB_SUCCESS;
-  const ObObj *tmp_obj;
-  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&obj, arena_, tmp_obj))) {
-    LOG_WARN("fail to truncate string", K(ret));
-  } else {
-    obj = *tmp_obj;
-  }
-
   all_stats.global_col_stat_->set_stat_level(StatLevel::TABLE_LEVEL);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(all_stats.global_col_stat_->merge_obj(obj))) {

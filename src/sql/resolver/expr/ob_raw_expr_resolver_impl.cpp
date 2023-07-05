@@ -372,6 +372,32 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
                     c_expr->set_udt_id(udt_id);
                   }
                 }
+
+                if (OB_SUCC(ret) && NULL != ctx_.stmt_) {
+                  ObStmt *stmt = ctx_.stmt_;
+                  uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+                  const ObUDTTypeInfo *udt_info = NULL;
+                  if (OB_FAIL(ctx_.schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
+                    LOG_WARN("failed to get udt info", K(ret));
+                  } else if (OB_ISNULL(udt_info)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("get null udt info", K(ret));
+                  } else if (udt_info->get_schema_version() != common::OB_INVALID_VERSION) {
+                    ObSchemaObjVersion udt_schema_version;
+                    udt_schema_version.object_id_ = udt_id;
+                    udt_schema_version.object_type_ = share::schema::DEPENDENCY_TYPE;
+                    udt_schema_version.version_ = udt_info->get_schema_version();
+                    uint64_t dep_obj_id = ctx_.view_ref_id_;
+                    if (OB_FAIL(stmt->add_global_dependency_table(udt_schema_version))) {
+                      LOG_WARN("failed to add global dependency", K(ret));
+                    } else if (stmt->add_ref_obj_version(dep_obj_id, db_id,
+                                                         ObObjectType::VIEW,
+                                                         udt_schema_version,
+                                                         ctx_.expr_factory_.get_allocator())) {
+                      LOG_WARN("failed to add ref obj version", K(ret));
+                    }
+                  }
+                }
               }
             }
           }
@@ -1875,7 +1901,8 @@ do { \
               LOG_WARN("unexpected, object type defined inside package", K(ret), K(udt_var_name), K(db_name));
               // pkg.object_type.routine
               // impossible, because a object type cann't be defined inside a package
-            } else if (FALSE_IT(secondary_namespace->try_resolve_udt_name(udt_var_name, udt_name, udt_id, pl::ObPLExternalNS::ExternalType::PKG_VAR, pkg_id))) {
+            } else if (FALSE_IT(secondary_namespace->try_resolve_udt_name(
+              udt_var_name, udt_name, udt_id, false, pl::ObPLExternalNS::ExternalType::PKG_VAR, pkg_id))) {
             } else if (OB_FAIL(schema_checker->get_udt_id(session_info->get_effective_tenant_id(),
                                               session_info->get_database_id(),
                                               OB_INVALID_ID, udt_name, udt_id))) {
@@ -2019,6 +2046,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
               ParseNode *udt_udf_self_param_node = NULL;
               ObRawExpr *self_param = NULL;
               access_ident.udf_info_.is_new_keyword_used_ = is_new_key_word_used;
+              ObRawExpr *self_expr = NULL;
               if (OB_FAIL(ObResolverUtils::transform_func_sys_to_udf(&ctx_.expr_factory_.get_allocator(),
                                                                      &func_node,
                                                                      q_name.database_name_,
@@ -2026,7 +2054,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
                                                                      udf_node))) {
                 LOG_WARN("transform fun sys to udf node failed", K(ret));
               } else if (OB_FAIL(resolve_udf_info(udf_node, false, access_ident.udf_info_,
-                                                  udt_udf_self_param_node, self_param))) {
+                                                  self_expr, self_param))) {
                 LOG_WARN("process udf node failed", K(ret));
               } else if (OB_ISNULL(udf_expr = access_ident.udf_info_.ref_expr_)) {
                 ret = OB_ERR_UNEXPECTED;
@@ -2467,28 +2495,10 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());
           if (param.is_ext()) {
-/*            CK (OB_NOT_NULL(ctx_.session_info_), OB_NOT_NULL(ctx_.schema_checker_));
-            if (OB_SUCC(ret)) {
-              const share::schema::ObUDTTypeInfo *udt_info = NULL;
-              OZ (ctx_.schema_checker_->get_udt_info(param.get_udt_id(), udt_info), K(param.get_udt_id()));
-              CK (OB_NOT_NULL(udt_info));
-              if (OB_SUCC(ret)) {
-                if (udt_info->is_collection()) {
-*/
-            //TODO: @ryan.ly 这里缺省认为一定是collection
-                  if (OB_SUCC(ret)) {
-                      c_expr->set_meta_type(param.get_meta());
-                      c_expr->set_expr_obj_meta(param.get_param_meta());
-                      c_expr->set_udt_id(param.get_udt_id());
-                      c_expr->set_param(param);
-                  }
-/*                } else {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("Record not support in sql yet", K(*udt_info), K(ret));
-                }
-              }
-            }
-*/
+              c_expr->set_meta_type(param.get_meta());
+              c_expr->set_expr_obj_meta(param.get_param_meta());
+              c_expr->set_udt_id(param.get_udt_id());
+              c_expr->set_param(param);
           } else {
             c_expr->set_meta_type(ObSQLUtils::is_oracle_empty_string(param)
                                   ? param.get_param_meta() : param.get_meta());
@@ -3440,7 +3450,7 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
           LOG_WARN("invalid escape char length, expect 1, get 0", K(ret));
         }
       } else if (escape_node->value_ < 0 || escape_node->value_ >= ctx_.param_list_->count()) {
-        if (OB_NOT_NULL(ctx_.session_info_) && ctx_.session_info_->is_ps_prepare_stage()) {
+        if (OB_NOT_NULL(ctx_.session_info_) && ctx_.session_info_->is_varparams_sql_prepare()) {
           // skip check question mark about escape node in prepare statement
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -5811,24 +5821,9 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
           }
         }
 
-        const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_name);
-        if (OB_SUCC(ret) && T_FUN_SYS_NAME_CONST == expr_type && current_columns_count != ctx_.columns_->count()) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_NAME_CONST);
-          LOG_WARN("params of name_const contain column references", K(ret));
-        } else if ((T_FUN_SYS_UUID2BIN == expr_type ||
-                    T_FUN_SYS_BIN2UUID == expr_type) &&
-                    func_expr->get_param_count() == 2) {
-          //add bool expr for the second param
-          ObRawExpr *param_expr = func_expr->get_param_expr(1);
-          ObRawExpr *new_param_expr = NULL;
-          if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_expr, new_param_expr, ctx_.expr_factory_))) {
-            LOG_WARN("create_bool_expr failed", K(ret));
-          } else if (OB_ISNULL(new_param_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("new param_expr is NULL", K(ret));
-          } else {
-            func_expr->replace_param_expr(1, new_param_expr);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(process_sys_func_params(*func_expr, current_columns_count))) {
+            LOG_WARN("fail process sys func params", K(ret));
           }
         }
       }
@@ -5877,11 +5872,90 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
   return ret;
 }
 
+int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count)
+{
+  int ret = OB_SUCCESS;
+  const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_expr.get_func_name());
+  switch (expr_type)
+  {
+    case T_FUN_SYS_NAME_CONST:
+      if (current_columns_count != ctx_.columns_->count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_NAME_CONST);
+        LOG_WARN("params of name_const contain column references", K(ret));
+      }
+      break;
+    case T_FUN_SYS_UUID2BIN:
+    case T_FUN_SYS_BIN2UUID:
+      if (2 == func_expr.get_param_count()) {
+        //add bool expr for the second param
+        ObRawExpr *param_expr = func_expr.get_param_expr(1);
+        ObRawExpr *new_param_expr = NULL;
+        if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_expr, new_param_expr, ctx_.expr_factory_))) {
+          LOG_WARN("create_bool_expr failed", K(ret));
+        } else if (OB_ISNULL(new_param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("new param_expr is NULL", K(ret));
+        } else {
+          func_expr.replace_param_expr(1, new_param_expr);
+        }
+      }
+      break;
+    case T_FUN_SYS_DATE_ADD:
+        // Added a fourth parameter to distinguish between “date + interval” and “interval + date”
+        // So you should use it to distinguish these two cases
+        if(4 == func_expr.get_param_count()) {
+          ObRawExpr *expr3 = func_expr.get_param_expr(3);
+          if(OB_LIKELY(NULL != expr3 && expr3->is_const_raw_expr())) {
+            ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr3);
+            int64_t expr3_val = OB_INVALID_ID;
+            if(T_INT == const_expr->get_expr_type()) {
+              if (OB_FAIL(const_expr->get_value().get_int(expr3_val))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get fourth para value from date_add func failed", K(ret));
+              } else if (2 == expr3_val) {
+                ObRawExpr *expr0 = func_expr.get_param_expr(0);
+                ObRawExpr *expr1 = func_expr.get_param_expr(1);
+                if (OB_FAIL(func_expr.remove_param_expr(3))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("the func expr param3 is invalid", K(ret));
+                } else if (OB_FAIL(func_expr.remove_param_expr(0))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("the func expr param0 is invalid", K(ret));
+                } else if (OB_FAIL(func_expr.remove_param_expr(0))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("the func expr param0 is invalid", K(ret));
+                } else if (OB_FAIL(func_expr.add_param_expr(expr0))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("the func expr param0 is invalid", K(ret));
+                } else if (OB_FAIL(func_expr.add_param_expr(expr1))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("the func expr param0 is invalid", K(ret));
+                }
+              } else if (1 == expr3_val) {
+                if (OB_FAIL(func_expr.remove_param_expr(3))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("the func expr param3 is invalid", K(ret));
+                }
+              }
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr3 is null or not const expr", K(ret));
+          }
+        }
+      break;
+    default:
+      break;
+  }
+  return ret;
+}
+
 int ObRawExprResolverImpl::resolve_udf_info(const ParseNode *node,
                                             bool record_udf_info,
                                             ObUDFInfo &udf_info,
-                                            ParseNode *extra_param,
-                                            ObRawExpr *extra_expr)
+                                            ObRawExpr *member_self_expr,
+                                            ObRawExpr *static_self_expr)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr *func_expr = NULL;
@@ -5910,21 +5984,21 @@ int ObRawExprResolverImpl::resolve_udf_info(const ParseNode *node,
       LOG_WARN("invalid paramters node", K(ret), K(node->children_[1]));
     } else {
       // 先处理udt member function的self参数，self参数是第一个参数
-      if (OB_SUCC(ret) && OB_NOT_NULL(extra_param)) {
-        ObRawExpr *param_expr = NULL;
+      if (OB_SUCC(ret) && OB_NOT_NULL(member_self_expr)) {
+        /* ObRawExpr *param_expr = NULL;
         if (OB_FAIL(recursive_resolve(extra_param, param_expr))) {
           LOG_WARN("fail to recursive resolve udf parameters", K(ret), K(extra_param));
-        } else if (OB_FAIL(func_expr->add_param_expr(param_expr))) {
-          LOG_WARN("fail to add param expr", K(ret), K(param_expr));
-        } else if (OB_FAIL(param_expr->add_flag(IS_UDT_UDF_SELF_PARAM))) {
+        } else */ if (OB_FAIL(func_expr->add_param_expr(member_self_expr))) {
+          LOG_WARN("fail to add param expr", K(ret), K(member_self_expr));
+        } else if (OB_FAIL(member_self_expr->add_flag(IS_UDT_UDF_SELF_PARAM))) {
           LOG_WARN("fail to add flag", K(ret));
         } else {
           udf_info.udf_param_num_++;
           udf_info.is_contain_self_param_ = true;
         }
       }
-      if (OB_SUCC(ret) && OB_ISNULL(extra_param) && OB_NOT_NULL(extra_expr)) {
-        OZ (func_expr->add_param_expr(extra_expr));
+      if (OB_SUCC(ret) && OB_ISNULL(member_self_expr) && OB_NOT_NULL(static_self_expr)) {
+        OZ (func_expr->add_param_expr(static_self_expr));
         udf_info.udf_param_num_++;
         udf_info.is_contain_self_param_ = true;
       }
@@ -5974,21 +6048,21 @@ int ObRawExprResolverImpl::resolve_udf_info(const ParseNode *node,
     }
   } else {
     // if param is null, such as routine(), we also have to mock a param
-    if (OB_SUCC(ret) && OB_NOT_NULL(extra_param)) {
-      ObRawExpr *param_expr = NULL;
+    if (OB_SUCC(ret) && OB_NOT_NULL(member_self_expr)) {
+      /* ObRawExpr *param_expr = NULL;
       if (OB_FAIL(recursive_resolve(extra_param, param_expr))) {
         LOG_WARN("fail to recursive resolve udf parameters", K(ret), K(extra_param));
-      } else if (OB_FAIL(func_expr->add_param_expr(param_expr))) {
-        LOG_WARN("fail to add param expr", K(ret), K(param_expr));
-      } else if (OB_FAIL(param_expr->add_flag(IS_UDT_UDF_SELF_PARAM))) {
+      } else */if (OB_FAIL(func_expr->add_param_expr(member_self_expr))) {
+        LOG_WARN("fail to add param expr", K(ret), K(member_self_expr));
+      } else if (OB_FAIL(member_self_expr->add_flag(IS_UDT_UDF_SELF_PARAM))) {
         LOG_WARN("fail to add flag", K(ret));
       } else {
         udf_info.udf_param_num_++;
         udf_info.is_contain_self_param_ = true;
       }
     }
-    if (OB_SUCC(ret) && OB_ISNULL(extra_param) && OB_NOT_NULL(extra_expr)) {
-      OZ (func_expr->add_param_expr(extra_expr));
+    if (OB_SUCC(ret) && OB_ISNULL(member_self_expr) && OB_NOT_NULL(static_self_expr)) {
+      OZ (func_expr->add_param_expr(static_self_expr));
       udf_info.udf_param_num_++;
       udf_info.is_contain_self_param_ = true;
     }

@@ -14,7 +14,7 @@
 #define OCEANBASE_STORAGE_MEMTABLE_MVCC_OB_TX_CALLBACK_LIST
 
 #include "storage/memtable/mvcc/ob_tx_callback_functor.h"
-// #include "storage/tx/ob_trans_part_ctx.h"
+#include "storage/memtable/ob_memtable_util.h"
 
 namespace oceanbase
 {
@@ -53,18 +53,20 @@ public:
   // parameter _fast_commit_callback_count. It will only remove callbacks
   // without removing data by calling checkpoint_callback. So user need
   // implement lazy callback for the correctness. What's more, it will calculate
-  // checksum when removing. Finally it returns has_remove if you really remove
-  // the callbacks.
-  int remove_callbacks_for_fast_commit(bool &has_remove);
+  // checksum when removing. Finally it returns meet_generate_cursor if you remove
+  // the callbacks that generate_cursor is pointing to.
+  int remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
+                                       bool &meet_generate_cursor);
 
   // remove_callbacks_for_remove_memtable will remove all callbacks that is
-  // belonged to the specified memtable. It will only remove callbacks without
-  // removing data by calling checkpoint_callback. So user need implement lazy
-  // callback for the correctness. And user need guarantee all callbacks
-  // belonged to the memtable must be synced before removing. What's more, it
-  // will calculate checksum when removing.
-  int remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove,
-                                           const share::SCN max_applied_scn);
+  // belonged to the specified memtable sets. It will only remove callbacks
+  // without removing data by calling checkpoint_callback. So user need to
+  // implement lazy callback for the correctness. And user need guarantee all
+  // callbacks belonged to the memtable sets must be synced before removing.
+  // What's more, it will calculate checksum when removing.
+  int remove_callbacks_for_remove_memtable(
+    const memtable::ObMemtableSet *memtable_set,
+    const share::SCN max_applied_scn);
 
   // remove_callbacks_for_rollback_to will remove callbacks from back to front
   // until callbacks smaller or equal than the seq_no. It will remove both

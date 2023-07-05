@@ -627,9 +627,9 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
   ObQueryRangeArray &ss_ranges = range_info.get_ss_ranges();
   ObIArray<ColumnItem> &range_columns = range_info.get_range_columns();
   bool is_geo_index = false;
-  ColumnIdInfoMap geo_columnInfo_map;
   ObWrapperAllocator wrap_allocator(*allocator_);
   ColumnIdInfoMapAllocer map_alloc(OB_MALLOC_NORMAL_BLOCK_SIZE, wrap_allocator);
+  ColumnIdInfoMap geo_columnInfo_map;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard()) ||
@@ -1246,6 +1246,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                     get_plan()->get_optimizer_context().has_pl_udf() ||
                     get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
+                    get_plan()->get_optimizer_context().has_cursor_expression() ||
                     is_batch_update_table;
     //this sql force to use DAS TSC:
     //batch update table(multi queries or arraybinding)
@@ -2897,10 +2898,12 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
   const ParamStore *params = NULL;
+  ObSQLSessionInfo *session_info = NULL;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(allocator_) ||
-      OB_ISNULL(params = opt_ctx->get_params())) {
+      OB_ISNULL(params = opt_ctx->get_params()) ||
+      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
         K(allocator_), K(params), K(ret));
@@ -2913,11 +2916,13 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
     } else {
       tmp_qr = new(tmp_ptr)ObQueryRange(*allocator_);
       const ObDataTypeCastParams dtc_params =
-            ObBasicSessionInfo::create_dtc_params(opt_ctx->get_session_info());
+            ObBasicSessionInfo::create_dtc_params(session_info);
+      bool is_in_range_optimization_enabled = session_info->is_in_range_optimization_enabled();
       if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
                                                           dtc_params, opt_ctx->get_exec_ctx(),
                                                           &expr_constraints,
-                                                          params))) {
+                                                          params, false, true,
+                                                          is_in_range_optimization_enabled))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }
@@ -3405,7 +3410,7 @@ int ObJoinOrder::generate_const_predicates_from_view(const ObDMLStmt *stmt,
     if (OB_ISNULL(sel_expr = child_stmt->get_select_item(idx).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected expr", K(ret), K(idx), K(sel_expr));
-    } else if (!sel_expr->is_const_expr()) {
+    } else if (!sel_expr->is_const_expr() || sel_expr->get_result_type().is_lob()) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
                                                           sel_expr,
@@ -4708,8 +4713,8 @@ int JoinPath::compute_join_path_ordering()
         } else if (OB_FAIL(parent_->check_join_interesting_order(this))) {
           LOG_WARN("failed to update join interesting order info", K(ret));
         } else {
-          is_range_order_ = is_fully_paratition_wise() && left_path_->is_range_order_;
-          is_local_order_ = is_fully_paratition_wise() && !left_path_->is_range_order_;
+          is_range_order_ = is_fully_partition_wise() && left_path_->is_range_order_;
+          is_local_order_ = is_fully_partition_wise() && !left_path_->is_range_order_;
         }
       } else {
         int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
@@ -4721,7 +4726,7 @@ int JoinPath::compute_join_path_ordering()
           LOG_WARN("failed to check all interesting order", K(ret));
         } else {
           add_interesting_order_flag(interesting_order_info);
-          is_local_order_ = is_fully_paratition_wise();
+          is_local_order_ = is_fully_partition_wise();
         }
       }
     } else { /*do nothing*/ }
@@ -4901,33 +4906,34 @@ int JoinPath::compute_join_path_parallel_and_server_info()
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
+    } else if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(opt_ctx,
+                                                                left_path_->parallel_,
+                                                                right_path_->parallel_,
+                                                                join_dist_algo_,
+                                                                parallel_))) {
+      LOG_WARN("failed to get parallel", K(ret));
     } else if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_) {
-      parallel_ = 1;
       server_cnt_ = 1;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
-      parallel_ = 1;
       server_cnt_ = 1;
       if (OB_FAIL(server_list_.push_back(opt_ctx.get_local_server_addr()))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo_) {
-      parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_) {
       if (OB_NOT_NULL(left_path_->strong_sharding_) && OB_NOT_NULL(right_path_->strong_sharding_)) {
-        parallel_ = opt_ctx.get_parallel();
         int64_t part_cnt = left_path_->strong_sharding_->get_part_cnt();
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
         server_cnt_ = left_path_->server_cnt_;
@@ -4937,7 +4943,6 @@ int JoinPath::compute_join_path_parallel_and_server_info()
       }
     } else if (DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo_) {
       if (OB_NOT_NULL(left_path_->strong_sharding_) && OB_NOT_NULL(right_path_->strong_sharding_)) {
-        parallel_ = opt_ctx.get_parallel();
         server_cnt_ = left_path_->server_cnt_;
         if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
           LOG_WARN("failed to assign server list", K(ret));
@@ -4945,19 +4950,16 @@ int JoinPath::compute_join_path_parallel_and_server_info()
       }
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
                DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
-      parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       common::ObAddr all_server_list;
       // a special ALL server list indicating hash-hash data distribution
@@ -4966,7 +4968,6 @@ int JoinPath::compute_join_path_parallel_and_server_info()
         LOG_WARN("failed to assign all server list", K(ret));
       }
     } else if (DistAlgo::DIST_PARTITION_NONE == join_dist_algo_) {
-      parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
@@ -4975,13 +4976,11 @@ int JoinPath::compute_join_path_parallel_and_server_info()
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
       }
     } else if (DistAlgo::DIST_HASH_NONE == join_dist_algo_) {
-      parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_NONE_PARTITION == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
@@ -4990,7 +4989,6 @@ int JoinPath::compute_join_path_parallel_and_server_info()
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
       }
     } else if (DistAlgo::DIST_NONE_HASH == join_dist_algo_) {
-      parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
       if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
@@ -7028,6 +7026,7 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
         other_cond_sel,
         get_plan()->get_predicate_selectivities()))) {
       LOG_WARN("failed to calculate selectivity", K(ret), K(hash_join_filters));
+    } else if (FALSE_IT(naaj_info.set_is_sna(path_info.join_type_, false))) {
     } else if ((HASH_JOIN & path_info.local_methods_) &&
                OB_FAIL(generate_hash_paths(equal_sets,
                                            left_paths,
@@ -7041,9 +7040,9 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
                                            equal_cond_sel,
                                            other_cond_sel,
                                            path_info,
-                                           naaj_info.is_naaj_,
-                                           naaj_info.get_is_sna(path_info.join_type_, false)))) {
+                                           naaj_info))) {
       LOG_WARN("failed to generate hash join paths", K(ret));
+    } else if (FALSE_IT(naaj_info.set_is_sna(reverse_path_info.join_type_, true))) {
     } else if ((HASH_JOIN & reverse_path_info.local_methods_) &&
                OB_FAIL(generate_hash_paths(equal_sets,
                                            right_paths,
@@ -7057,8 +7056,7 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
                                            equal_cond_sel,
                                            other_cond_sel,
                                            reverse_path_info,
-                                           naaj_info.is_naaj_,
-                                           naaj_info.get_is_sna(reverse_path_info.join_type_, true)))) {
+                                           naaj_info))) {
       LOG_WARN("failed to generate hash join paths", K(ret));
     } else {
       int64_t hash_join_path_num = interesting_paths_.count() - path_number;
@@ -7212,8 +7210,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                      const double equal_cond_sel,
                                      const double other_cond_sel,
                                      const ValidPathInfo &path_info,
-                                     const bool is_naaj,
-                                     const bool is_sna)
+                                     const NullAwareAntiJoinInfo &naaj_info)
 {
   int ret = OB_SUCCESS;
   ObSEArray<Path*, 8> left_best_paths;
@@ -7245,7 +7242,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                                          path_info,
                                                          HASH_JOIN,
                                                          false,
-                                                         is_naaj,
+                                                         naaj_info.is_naaj_,
                                                          dist_method))) {
             LOG_WARN("failed to get distributed join method", K(ret));
           } else {
@@ -7267,8 +7264,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                                      join_quals,
                                                      equal_cond_sel,
                                                      other_cond_sel,
-                                                     is_naaj,
-                                                     is_sna))) {
+                                                     naaj_info))) {
                   LOG_WARN("failed to create and add hash path", K(ret));
                 } else { /*do nothing*/ }
               }
@@ -7981,6 +7977,52 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       }
     }
   }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_BROADCAST)) {
+    OPT_TRACE("check none broadcast method");
+    int64_t join_parallel = 1;
+    if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(get_plan()->get_optimizer_context(),
+                                                         left_path.parallel_,
+                                                         right_path.parallel_,
+                                                         DIST_NONE_BROADCAST,
+                                                         join_parallel))) {
+      LOG_WARN("failed to get parallel", K(ret));
+    } else if (1 >= join_parallel) {
+      distributed_methods &= ~DIST_NONE_BROADCAST;
+      OPT_TRACE("parallel=1, plan will not use none broadcast");
+    }
+  }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_BROADCAST_NONE)) {
+    OPT_TRACE("check broadcast none method");
+    int64_t join_parallel = 1;
+    if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(get_plan()->get_optimizer_context(),
+                                                         left_path.parallel_,
+                                                         right_path.parallel_,
+                                                         DIST_BROADCAST_NONE,
+                                                         join_parallel))) {
+      LOG_WARN("failed to get parallel", K(ret));
+    } else if (1 >= join_parallel) {
+      distributed_methods &= ~DIST_BROADCAST_NONE;
+      OPT_TRACE("parallel=1, plan will not use broadcast none");
+    }
+  }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_HASH)) {
+    OPT_TRACE("check hash hash method");
+    int64_t join_parallel = 1;
+    if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(get_plan()->get_optimizer_context(),
+                                                         left_path.parallel_,
+                                                         right_path.parallel_,
+                                                         DIST_HASH_HASH,
+                                                         join_parallel))) {
+      LOG_WARN("failed to get parallel", K(ret));
+    } else if (1 >= join_parallel) {
+      distributed_methods &= ~DIST_HASH_HASH;
+      OPT_TRACE("parallel=1, plan will not use hash hash");
+    }
+  }
+
   /*
    * if we have other parallel join methods, avoid pull to local execution,
    * we may change this strategy in future
@@ -8489,8 +8531,7 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
                                           const ObIArray<ObRawExpr*> &filters,
                                           const double equal_cond_sel,
                                           const double other_cond_sel,
-                                          const bool is_naaj,
-                                          const bool is_sna)
+                                          const NullAwareAntiJoinInfo &naaj_info)
 {
   int ret = OB_SUCCESS;
   JoinPath *join_path = NULL;
@@ -8516,9 +8557,9 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
                                        join_type);
     join_path->equal_cond_sel_ = equal_cond_sel;
     join_path->other_cond_sel_ = other_cond_sel;
-    join_path->is_naaj_ = is_naaj;
-    join_path->is_sna_ = is_sna;
-    join_path->is_slave_mapping_ &= (!is_naaj);
+    join_path->is_naaj_ = naaj_info.is_naaj_;
+    join_path->is_sna_ = naaj_info.is_sna_;
+    join_path->is_slave_mapping_ &= (!naaj_info.is_naaj_);
     OPT_TRACE("create new Hash Join path:", join_path);
     if (OB_FAIL(append(join_path->equal_join_conditions_, equal_join_conditions))) {
       LOG_WARN("failed to append join conditions", K(ret));
@@ -8526,13 +8567,15 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to append join filters", K(ret));
     } else if (OB_FAIL(append(join_path->filter_, normal_filters))) {
       LOG_WARN("failed to append join quals", K(ret));
+    } else if (OB_FAIL(append(join_path->expr_constraints_, naaj_info.expr_constraints_))) {
+      LOG_WARN("failed to append constraints", K(ret));
     } else if (DistAlgo::DIST_PULL_TO_LOCAL != join_dist_algo &&
                OB_FAIL(generate_join_filter_infos(left_path,
                                                   right_path,
                                                   join_type,
                                                   join_dist_algo,
                                                   equal_join_conditions,
-                                                  is_naaj,
+                                                  naaj_info.is_naaj_,
                                                   join_path->join_filter_infos_))) {
       LOG_WARN("failed to generate join filter info", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
@@ -8562,6 +8605,7 @@ int ObJoinOrder::generate_join_filter_infos(const Path *left_path,
   bool right_is_scan = false;
   bool can_use_join_filter = false;
   ObLogicalOperator *right_child = NULL;
+  int64_t join_parallel = 1;;
   /*
   *  1. 检查并行度是否大于1, 检查是否使用新引擎.
   *  2. 检查Join类型.
@@ -8574,7 +8618,13 @@ int ObJoinOrder::generate_join_filter_infos(const Path *left_path,
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(ret), K(left_path), K(right_path), K(get_plan()));
-  } else if (get_plan()->get_optimizer_context().get_parallel() <= 1) {
+  } else if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(get_plan()->get_optimizer_context(),
+                                                              left_path->parallel_,
+                                                              right_path->parallel_,
+                                                              join_dist_algo,
+                                                              join_parallel))) {
+    LOG_WARN("failed to get parallel", K(ret));
+  } else if (1 >= join_parallel) {
     OPT_TRACE("parallel <= 1, plan will not use join filter");
   } else if (RIGHT_OUTER_JOIN == join_type ||
             FULL_OUTER_JOIN == join_type ||
@@ -8761,6 +8811,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
     }
   } else if (((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) || is_current_dfo) && right_path.is_join_path()) {
     const JoinPath &join_path = static_cast<const JoinPath&>(right_path);
+    is_fully_partition_wise |= join_path.is_fully_partition_wise();
     if (!is_current_dfo && join_path.is_left_need_exchange()) {
       // Stop recursive join_path.left_path_ if GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0 and
       // is_current_dfo is false and join_path.is_left_need_exchange().
@@ -8776,7 +8827,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                           right_tables,
                                                           config_disable,
                                                           !join_path.is_left_need_exchange() && is_current_dfo,
-                                                          join_path.is_fully_paratition_wise(),
+                                                          is_fully_partition_wise,
                                                           left_join_conditions,
                                                           right_join_conditions,
                                                           join_filter_infos)))) {
@@ -8798,7 +8849,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                         right_tables,
                                                         config_disable,
                                                         !join_path.is_right_need_exchange() && is_current_dfo,
-                                                        join_path.is_fully_paratition_wise(),
+                                                        is_fully_partition_wise,
                                                         left_join_conditions,
                                                         right_join_conditions,
                                                         join_filter_infos)))) {
@@ -9301,8 +9352,7 @@ int ObJoinOrder::extract_hashjoin_conditions(const ObIArray<ObRawExpr*> &join_qu
       LOG_WARN("failed to get sys var naaj enabled", K(ret));
     } else if (naaj_enabled) {
       if (OB_FAIL(extract_naaj_join_conditions(join_quals, left_tables, right_tables,
-                                               equal_join_conditions, other_join_conditions,
-                                               naaj_info))) {
+                                               equal_join_conditions, naaj_info))) {
         LOG_WARN("failed to extract naaj join conditions", K(ret));
       }
     }
@@ -10675,17 +10725,13 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
     LOG_TRACE("init_est_sel_info_for_access_path", K(all_used_part_id), K(all_used_tablet_id), K(ref_table_id));
     if (OB_SUCC(ret)) {
       // 1. try with statistics
-      int64_t table_row_count = 0;
-      int64_t part_size = 0;
-      int64_t avg_row_size = 0;
-      int64_t micro_block_count = 0;
       bool has_opt_stat = false;
-      int64_t stat_type = 0;
+      OptTableStatType stat_type = OptTableStatType::DEFAULT_TABLE_STAT;
       int64_t last_analyzed = 0;
-
-      const int64_t total_part_cnt = 0;
       const int64_t origin_part_cnt = all_used_part_id.count();
       bool use_global = false;
+      ObSEArray<int64_t, 1> global_part_ids;
+      double scale_ratio = 1.0;
       if (OPT_CTX.use_default_stat()) {
         // do nothing
       } else if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
@@ -10699,39 +10745,47 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
         LOG_WARN("failed to check use global stat", K(ret));
       } else if (use_global) {
         has_opt_stat = true;
-        stat_type = 1;
-      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(*schema_guard,
-                                                                            session_info->get_effective_tenant_id(),
-                                                                            ref_table_id,
-                                                                            all_used_part_id,
-                                                                            total_part_cnt,
-                                                                            has_opt_stat))) {
+        stat_type = OptTableStatType::OPT_TABLE_STAT;
+      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
+                                                                                 session_info->get_effective_tenant_id(),
+                                                                                 ref_table_id,
+                                                                                 all_used_part_id,
+                                                                                 has_opt_stat))) {
         LOG_WARN("failed to check has opt stat", K(ret));
       } else if (has_opt_stat) {
-        stat_type = 1;
+        stat_type = OptTableStatType::OPT_TABLE_STAT;
+      } else if (OB_FAIL(check_can_use_global_stat_instead(ref_table_id,
+                                                           table_schema,
+                                                           all_used_part_id,
+                                                           all_used_tablet_id,
+                                                           has_opt_stat,
+                                                           global_part_ids,
+                                                           scale_ratio))) {
+        LOG_WARN("failed to check can use global stat instead", K(ret));
+      } else if (has_opt_stat) {
+        stat_type = OptTableStatType::OPT_TABLE_GLOBAL_STAT;
       }
-      LOG_TRACE("statistics (0: default, 1: user-gathered)",
+      LOG_TRACE("statistics (0: default, 1: user-gathered, 2: user_gathered_global_stat)",
                 K(stat_type), K(ref_table_id), K(all_used_part_id));
 
       // TODO, consider move the following codes into access_path_estimation
       if (OB_SUCC(ret) && has_opt_stat) {
+        ObGlobalTableStat stat;
         if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->get_table_stat(session_info->get_effective_tenant_id(),
                                                                    ref_table_id,
                                                                    all_used_part_id,
-                                                                   total_part_cnt,
-                                                                   &table_row_count,
-                                                                   &avg_row_size,
-                                                                   &part_size,
-                                                                   &micro_block_count,
-                                                                   &last_analyzed))) {
+                                                                   global_part_ids,
+                                                                   scale_ratio,
+                                                                   stat))) {
           LOG_WARN("failed to get table stats", K(ret));
         } else {
-          table_meta_info_.table_row_count_ = table_row_count;
-          table_meta_info_.part_size_ = !use_global ? static_cast<double>(part_size) :
-                                                      static_cast<double>(part_size * all_used_part_id.count())
+          last_analyzed = stat.get_last_analyzed();
+          table_meta_info_.table_row_count_ = stat.get_row_count();
+          table_meta_info_.part_size_ = !use_global ? static_cast<double>(stat.get_avg_data_size()) :
+                                                      static_cast<double>(stat.get_avg_data_size() * all_used_part_id.count())
                                                       / origin_part_cnt;
-          table_meta_info_.average_row_size_ = static_cast<double>(avg_row_size);
-          table_meta_info_.micro_block_count_ = micro_block_count;
+          table_meta_info_.average_row_size_ = static_cast<double>(stat.get_avg_row_size());
+          table_meta_info_.micro_block_count_ = stat.get_micro_block_count();
           table_meta_info_.has_opt_stat_ = has_opt_stat;
           table_meta_info_.cost_est_type_ = OB_CURRENT_STAT_EST;
           LOG_INFO("total rowcount, use statistics", K(table_meta_info_.table_row_count_),
@@ -10778,6 +10832,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
                       all_used_part_id,
                       column_ids,
                       stat_type,
+                      global_part_ids,
+                      scale_ratio,
                       last_analyzed))) {
           LOG_WARN("failed to add base table meta info", K(ret));
         }
@@ -10817,15 +10873,11 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
       }
     }
     if (OB_SUCC(ret)) {
-      int64_t table_row_count = 0;
-      int64_t part_size = 0;
-      int64_t avg_row_size = 0;
-      int64_t micro_block_count = 0;
-      int64_t stat_type = 0;
-
-      const int64_t total_part_cnt = 0;
+      OptTableStatType stat_type = OptTableStatType::DEFAULT_TABLE_STAT;
       const int64_t origin_part_cnt = all_used_part_id.count();
       bool use_global = false;
+      ObSEArray<int64_t, 1> global_part_ids;
+      double scale_ratio = 1.0;
       if (OPT_CTX.use_default_stat()) {
         // do nothing
       } else if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
@@ -10839,36 +10891,44 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
         LOG_WARN("failed to check use global stat", K(ret));
       } else if (use_global) {
         has_opt_stat = true;
-        stat_type = 1;
-      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(*schema_guard,
-                                                                            session_info->get_effective_tenant_id(),
-                                                                            index_id,
-                                                                            all_used_part_id,
-                                                                            total_part_cnt,
-                                                                            has_opt_stat))) {
+        stat_type = OptTableStatType::OPT_TABLE_STAT;
+      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
+                                                                                 session_info->get_effective_tenant_id(),
+                                                                                 index_id,
+                                                                                 all_used_part_id,
+                                                                                 has_opt_stat))) {
         LOG_WARN("failed to check has opt stat", K(ret));
       } else if (has_opt_stat) {
-        stat_type = 1;
+        stat_type = OptTableStatType::OPT_TABLE_STAT;
+      } else if (OB_FAIL(check_can_use_global_stat_instead(index_id,
+                                                           index_schema,
+                                                           all_used_part_id,
+                                                           all_used_tablet_id,
+                                                           has_opt_stat,
+                                                           global_part_ids,
+                                                           scale_ratio))) {
+        LOG_WARN("failed to check can use global stat instead", K(ret));
+      } else if (has_opt_stat) {
+        stat_type = OptTableStatType::OPT_TABLE_GLOBAL_STAT;
       }
-      LOG_TRACE("statistics (0: default, 1: merge-gathered, 2: user-gathered)",
+      LOG_TRACE("statistics (0: default, 1: user-gathered, 2: user_gathered_global_stat)",
                 K(stat_type), K(index_id), K(all_used_part_id));
 
       if (OB_SUCC(ret) && has_opt_stat) {
+        ObGlobalTableStat stat;
         if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->get_table_stat(session_info->get_effective_tenant_id(),
                                                                   index_id,
                                                                   all_used_part_id,
-                                                                  total_part_cnt,
-                                                                  &table_row_count,
-                                                                  &avg_row_size,
-                                                                  &part_size,
-                                                                  &micro_block_count))) {
+                                                                  global_part_ids,
+                                                                  scale_ratio,
+                                                                  stat))) {
           LOG_WARN("failed to get table stats", K(ret));
         } else {
-          index_meta_info.index_part_size_ = !use_global ? static_cast<double>(part_size) :
-                                                      static_cast<double>(part_size * all_used_part_id.count())
+          index_meta_info.index_part_size_ = !use_global ? static_cast<double>(stat.get_avg_data_size()) :
+                                                      static_cast<double>(stat.get_avg_data_size() * all_used_part_id.count())
                                                       / origin_part_cnt;
-          index_meta_info.index_micro_block_count_ = micro_block_count;
-          LOG_INFO("total rowcount, use statistics", K(index_meta_info));
+          index_meta_info.index_micro_block_count_ = stat.get_micro_block_count();
+          LOG_TRACE("index table, use statistics", K(index_meta_info), K(stat));
         }
       }
     }
@@ -10883,7 +10943,7 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
                                        bool &can_use)
 {
   int ret = OB_SUCCESS;
-  int64_t last_analyzed = 0;
+  bool is_opt_stat_valid = false;
   int64_t global_part_id = -1;
   ObArray<int64_t> part_ids;
   can_use = false;
@@ -10898,17 +10958,16 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
     // at most one partition are used
     // directly use the partition
   } else if (all_used_parts.count() == schema.get_all_part_num()) {
-    last_analyzed = 0;
     if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
-    } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(*schema_guard,
-                                                                          session_info->get_effective_tenant_id(),
-                                                                          ref_table_id,
-                                                                          global_part_id,
-                                                                          last_analyzed))) {
+    } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
+                                                                               session_info->get_effective_tenant_id(),
+                                                                               ref_table_id,
+                                                                               global_part_id,
+                                                                               is_opt_stat_valid))) {
       LOG_WARN("failed to check stat version", K(ret));
-    } else if (last_analyzed <= 0) {
+    } else if (!is_opt_stat_valid) {
       // do nothing
     } else if (OB_FAIL(part_ids.push_back(global_part_id))) {
       LOG_WARN("failed to push back global partition id", K(ret));
@@ -10927,14 +10986,14 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
         } else if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
-        } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(*schema_guard,
-                                                                              session_info->get_effective_tenant_id(),
-                                                                              ref_table_id,
-                                                                              part_id,
-                                                                              last_analyzed))) {
+        } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
+                                                                                   session_info->get_effective_tenant_id(),
+                                                                                   ref_table_id,
+                                                                                   part_id,
+                                                                                   is_opt_stat_valid))) {
           LOG_WARN("failed to get stat version", K(ret));
-        } else if (last_analyzed <= 0) {
-          // the partition level stat is found
+        } else if (!is_opt_stat_valid) {
+          // the partition level stat isn't stat
           break;
         } else if (OB_FAIL(schema.get_subpart_ids(part_id, subpart_ids))) {
           LOG_WARN("failed to get subpart ids", K(ret));
@@ -10943,7 +11002,7 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
         }
       }
     }
-    if (OB_SUCC(ret) && !(total_subpart_cnt == all_used_parts.count() && last_analyzed > 0)) {
+    if (OB_SUCC(ret) && !(total_subpart_cnt == all_used_parts.count() && is_opt_stat_valid)) {
       part_ids.reset();
     }
   }
@@ -13171,7 +13230,6 @@ int ObJoinOrder::extract_naaj_join_conditions(const ObIArray<ObRawExpr*> &join_q
                                               const ObRelIds &left_tables,
                                               const ObRelIds &right_tables,
                                               ObIArray<ObRawExpr*> &equal_join_conditions,
-                                              ObIArray<ObRawExpr*> &other_join_conditions,
                                               NullAwareAntiJoinInfo &naaj_info)
 {
   int ret = OB_SUCCESS;
@@ -13186,17 +13244,18 @@ int ObJoinOrder::extract_naaj_join_conditions(const ObIArray<ObRawExpr*> &join_q
   } else if (T_OP_OR == join_quals.at(0)->get_expr_type()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < join_quals.at(0)->get_param_count(); ++i) {
       bool is_equal_cond = false;
-      bool skip_left = false;
-      bool skip_right = false;
       cur_expr = join_quals.at(0)->get_param_expr(i);
       if (OB_FAIL(check_is_join_equal_conditions(cur_expr, left_tables,
                                                  right_tables, is_equal_cond))) {
         LOG_WARN("failed to check equal cond", K(cur_expr), K(ret));
       } else if (is_equal_cond) {
-        OZ (join_quals_naaj.push_back(cur_expr));
+        if (OB_FAIL(join_quals_naaj.push_back(cur_expr))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       } else {
-        if (cur_expr->get_relation_ids().is_subset(get_tables())) {
-          OZ (join_other_naaj.push_back(cur_expr));
+        if (cur_expr->get_relation_ids().is_subset(get_tables()) &&
+            OB_FAIL(join_other_naaj.push_back(cur_expr))) {
+          LOG_WARN("failed to push back", K(ret));
         }
       }
     }
@@ -13207,33 +13266,156 @@ int ObJoinOrder::extract_naaj_join_conditions(const ObIArray<ObRawExpr*> &join_q
         left_join_key = join_quals_naaj.at(0)->get_param_expr(1);
         right_join_key = join_quals_naaj.at(0)->get_param_expr(0);
       }
-      bool left_is_null_eliminate = true;
-      bool right_is_null_eliminate = true;
-      for (int64_t i = 0; OB_SUCC(ret) && i < join_other_naaj.count(); ++i) {
+      bool left_has_is_null = false;
+      bool right_has_is_null = false;
+      bool is_valid = true;
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < join_other_naaj.count(); ++i) {
         //eliminate join_key is null
         cur_expr = join_other_naaj.at(i);
         if (T_OP_IS == cur_expr->get_expr_type()
             && ObNullType == cur_expr->get_param_expr(1)->get_result_type().get_type()) {
           if (left_join_key == cur_expr->get_param_expr(0)) {
-            left_is_null_eliminate = false;
+            left_has_is_null = true;
           } else if (right_join_key == cur_expr->get_param_expr(0)) {
-            right_is_null_eliminate = false;
+            right_has_is_null = true;
           } else {
-            OZ (other_join_conditions.push_back(join_other_naaj.at(i)));
+            is_valid = false;
+          }
+        } else {
+          is_valid = false;
+        }
+      }
+
+      if (OB_FAIL(ret) || !is_valid) {
+        // do nothing
+      } else if (left_has_is_null && right_has_is_null) {
+        // Both "is null" was eliminated
+        // anti join na
+        // e.g. (a = b) or (a is null) or (b is null)
+        naaj_info.is_naaj_ = true;
+        if (OB_FAIL(equal_join_conditions.push_back(join_quals_naaj.at(0)))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      } else if (left_has_is_null || right_has_is_null) {
+        // Only one "is null" was eliminated,
+        // Other side should be not null
+        // e.g.   ((a = b) or (a is null)) and (b is not null)
+        //    <=> ((a = b) or (a is null) or (b is null)) and (b is not null)
+        ObNotNullContext not_null_ctx(get_plan()->get_optimizer_context().get_exec_ctx(),
+                                      &get_plan()->get_allocator(),
+                                      get_plan()->get_stmt());
+        ObArray<ObRawExpr *> constraints;
+        if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_WHERE))) {
+          LOG_WARN("failed to generate stmt context", K(ret));
+        } else if (OB_FAIL(not_null_ctx.remove_filter(join_quals.at(0)))){
+          LOG_WARN("failed to remove filter", K(ret));
+        } else if (!left_has_is_null &&
+                   OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, left_join_key,
+                                                              naaj_info.left_side_not_null_, &constraints))) {
+          LOG_WARN("failed to check is expr not null");
+        } else if (!right_has_is_null &&
+                   OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, right_join_key,
+                                                              naaj_info.right_side_not_null_, &constraints))) {
+          LOG_WARN("failed to check is expr not null");
+        } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(naaj_info.expr_constraints_, constraints))) {
+          LOG_WARN("append expr constraints failed", K(ret));
+        } else if (naaj_info.left_side_not_null_ || naaj_info.right_side_not_null_) {
+          naaj_info.is_naaj_ = true;
+          if (OB_FAIL(equal_join_conditions.push_back(join_quals_naaj.at(0)))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
-      // at least 1 isnull cond to choose naaj
-      if (!left_is_null_eliminate || !right_is_null_eliminate) {
-        naaj_info.is_naaj_ = true;
-        naaj_info.left_side_not_null_ = left_is_null_eliminate;
-        naaj_info.right_side_not_null_ = right_is_null_eliminate;
-        OZ (equal_join_conditions.push_back(join_quals_naaj.at(0)));
+    }
+    LOG_TRACE("extract naaj info", K(naaj_info), K(equal_join_conditions));
+  }
+  return ret;
+}
+
+
+int ObJoinOrder::check_can_use_global_stat_instead(const uint64_t ref_table_id,
+                                                   const ObTableSchema &table_schema,
+                                                   ObIArray<int64_t> &all_used_parts,
+                                                   ObIArray<ObTabletID> &all_used_tablets,
+                                                   bool &can_use,
+                                                   ObIArray<int64_t> &global_part_ids,
+                                                   double &scale_ratio)
+{
+  int ret = OB_SUCCESS;
+  bool is_global_stat_valid = false;
+  int64_t global_part_id = -1;
+  can_use = false;
+  scale_ratio = 1.0;
+  ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
+      OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
+      OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!table_schema.is_partitioned_table()) {
+    //do nothing
+  } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
+                                                                             session_info->get_effective_tenant_id(),
+                                                                             ref_table_id,
+                                                                             global_part_id,
+                                                                             is_global_stat_valid))) {
+    LOG_WARN("failed to check stat version", K(ret));
+  } else if (PARTITION_LEVEL_ONE == table_schema.get_part_level()) {
+    if (!is_global_stat_valid) {
+      //do nothing
+    } else if (OB_FAIL(global_part_ids.push_back(global_part_id))) {
+       LOG_WARN("failed to push back global partition id", K(ret));
+    } else {
+      can_use = true;
+      scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / table_schema.get_all_part_num());
+    }
+  } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
+    int64_t total_subpart_cnt = 0;
+    bool is_opt_stat_valid = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_opt_stat_valid && i < all_used_tablets.count(); ++i) {
+      int64_t part_id = OB_INVALID_ID;
+      int64_t subpart_id = OB_INVALID_ID;
+      ObArray<int64_t> subpart_ids;
+      if (OB_FAIL(table_schema.get_part_id_by_tablet(all_used_tablets.at(i), part_id, subpart_id))) {
+        LOG_WARN("failed to get part id by tablet", K(ret), K(all_used_tablets.at(i)));
+      } else if (!ObOptimizerUtil::find_item(global_part_ids, part_id)) {
+        if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_opt_stat_validity(*(OPT_CTX.get_exec_ctx()),
+                                                                            session_info->get_effective_tenant_id(),
+                                                                            ref_table_id,
+                                                                            part_id,
+                                                                            is_opt_stat_valid))) {
+          LOG_WARN("failed to get stat version", K(ret));
+        } else if (!is_opt_stat_valid) {
+          //do nothing
+        } else if (OB_FAIL(global_part_ids.push_back(part_id))) {
+          LOG_WARN("failed to push back part id", K(ret));
+        } else if (OB_FAIL(table_schema.get_subpart_ids(part_id, subpart_ids))) {
+          LOG_WARN("failed to get subpart ids", K(ret));
+        } else {
+          total_subpart_cnt += subpart_ids.count();
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!is_opt_stat_valid ||
+          (total_subpart_cnt == table_schema.get_all_part_num() && is_global_stat_valid)) {
+        global_part_ids.reset();
+        if (!is_global_stat_valid) {
+          //do nothing
+        } else if (OB_FAIL(global_part_ids.push_back(global_part_id))) {
+          LOG_WARN("failed to push back global partition id", K(ret));
+        } else {
+          can_use = true;
+          scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / table_schema.get_all_part_num());
+        }
       } else {
-        //rollback for other_join_conditions
-        other_join_conditions.reset();
+        can_use = true;
+        scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / total_subpart_cnt);
       }
     }
   }
+  LOG_TRACE("succeed to check can use global stat instead", K(all_used_parts), K(all_used_tablets),
+                                                    K(can_use), K(global_part_ids), K(scale_ratio));
   return ret;
 }

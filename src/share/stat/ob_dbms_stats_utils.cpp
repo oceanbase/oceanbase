@@ -262,6 +262,8 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TRIGGER_TID ||
          table_id == share::OB_TENANT_VIRTUAL_ALL_TABLE_AGENT_TID ||
          table_id == share::OB_ALL_VIRTUAL_INFORMATION_COLUMNS_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SESSION_EVENT_TID ||
+         table_id == share::OB_ALL_VIRTUAL_PROXY_ROUTINE_TID ||
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_ORA_TID ||

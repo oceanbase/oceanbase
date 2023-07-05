@@ -653,6 +653,11 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         SQL_RESV_LOG(WARN, "uk and pk is duplicate", K(ret));
       }
     }
+    if (OB_SUCC(ret)){
+      if (OB_FAIL(deep_copy_string_in_part_expr(create_table_stmt))) {
+        LOG_WARN("failed to deep copy string in part expr");
+      }
+    }
   }
   return ret;
 }

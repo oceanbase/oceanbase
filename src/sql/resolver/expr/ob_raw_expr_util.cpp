@@ -1750,8 +1750,19 @@ int ObRawExprUtils::build_seq_nextval_expr(ObRawExpr *&expr,
                                           uint64_t seq_id,
                                           ObDMLStmt *stmt)
 {
-  return build_seq_nextval_expr(expr, session_info, expr_factory, q_name.database_name_,
-                                q_name.tbl_name_, q_name.col_name_, seq_id, stmt);
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret));
+  } else {
+    const ObString &database_name = q_name.database_name_.empty() ?
+                                    session_info->get_database_name() : q_name.database_name_;
+    if (OB_FAIL(build_seq_nextval_expr(expr, session_info, expr_factory, database_name,
+                                q_name.tbl_name_, q_name.col_name_, seq_id, stmt))) {
+      LOG_WARN("build seq nextval expr failed", K(ret));
+    }
+  }
+  return ret;
 }
 
 // build oracle sequence_object.currval, sequence_object.nextval expr
@@ -1770,7 +1781,7 @@ int ObRawExprUtils::build_seq_nextval_expr(ObRawExpr *&expr,
   ObConstRawExpr *col_id_expr = NULL;
   if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is NULL", K(session_info), K(expr_factory));
+    LOG_WARN("session info is NULL", K(ret), K(session_info), K(expr_factory));
   } else if (NULL != stmt && OB_FAIL(stmt->get_sequence_expr(exists_seq_expr,
                                                    tbl_name,
                                                    col_name,
@@ -6180,6 +6191,35 @@ int ObRawExprUtils::build_const_bool_expr(ObRawExprFactory *expr_factory, ObRawE
     val.set_bool(b_value);
     bool_expr->set_value(val);
     expr = bool_expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_ora_decode_expr(ObRawExprFactory *expr_factory,
+                                          const ObSQLSessionInfo &session_info,
+                                          ObRawExpr *&expr,
+                                          ObIArray<ObRawExpr *> &params_exprs)
+{
+  int ret = OB_SUCCESS;
+  expr = NULL;
+  ObSysFunRawExpr *ora_decode = NULL;
+  if (OB_ISNULL(expr_factory) || params_exprs.count() < 3) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), KP(expr_factory), K(params_exprs.count()));
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SYS_ORA_DECODE, ora_decode))) {
+    LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_ISNULL(ora_decode)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new expr is NULL", K(ret), KP(ora_decode));
+  } else if (OB_FAIL(append(ora_decode->get_param_exprs(), params_exprs))) {
+    LOG_WARN("failed to append into ora_decode param exprs", K(ret));
+  } else {
+    ora_decode->set_func_name(ObString::make_string(N_ORA_DECODE));
+    if (OB_FAIL(ora_decode->formalize(&session_info))) {
+      LOG_WARN("failed to formalize ora_decode", K(ret));
+    } else {
+      expr = ora_decode;
+    }
   }
   return ret;
 }

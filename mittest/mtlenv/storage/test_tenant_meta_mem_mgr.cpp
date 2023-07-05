@@ -32,6 +32,25 @@
 namespace oceanbase
 {
 using namespace share;
+
+namespace memtable
+{
+int ObMemtable::get_ls_id(share::ObLSID &ls_id)
+{
+  ls_id = share::ObLSID(1001);
+  return OB_SUCCESS;
+}
+
+int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
+  const ObLSID , const memtable::ObMemtableSet *)
+{
+  int ret = OB_SUCCESS;
+
+  return ret;
+}
+
+}
+
 namespace storage
 {
 int ObTenantCheckpointSlogHandler::read_from_ckpt(const ObMetaDiskAddr &phy_addr,

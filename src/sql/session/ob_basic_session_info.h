@@ -407,6 +407,7 @@ public:
                  const uint64_t length,
                  uint64_t &ori_tenant_id);
   int switch_tenant(uint64_t effective_tenant_id);
+  int switch_tenant_with_name(uint64_t effective_tenant_id, const common::ObString &tenant_name);
   int set_default_database(const common::ObString &database_name,
                            common::ObCollationType coll_type = common::CS_TYPE_INVALID);
   int reset_default_database() { return set_default_database(""); }
@@ -479,7 +480,7 @@ public:
   uint64_t get_login_tenant_id() const { return tenant_id_; }
   void set_login_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   bool is_tenant_changed() const { return tenant_id_ != effective_tenant_id_; }
-  void set_autocommit(bool autocommit);
+  int set_autocommit(bool autocommit);
   int get_autocommit(bool &autocommit) const
   {
     autocommit = sys_vars_cache_.get_autocommit();
@@ -1158,9 +1159,10 @@ public:
       curr_trace_id_ = *trace_id;
     }
   }
+  // forbid use jit
   int get_jit_enabled_mode(ObJITEnableMode &jit_mode) const
   {
-    jit_mode = sys_vars_cache_.get_ob_enable_jit();
+    jit_mode = ObJITEnableMode::OFF;
     return common::OB_SUCCESS;
   }
 
@@ -1223,6 +1225,9 @@ public:
   void set_is_in_user_scope(bool value) { sql_scope_flags_.set_is_in_user_scope(value); }
   bool is_in_user_scope() const { return sql_scope_flags_.is_in_user_scope(); }
   SqlScopeFlags &get_sql_scope_flags() { return sql_scope_flags_; }
+  share::SCN get_reserved_snapshot_version() const { return reserved_read_snapshot_version_; }
+  void set_reserved_snapshot_version(const share::SCN snapshot_version) { reserved_read_snapshot_version_ = snapshot_version; }
+  void reset_reserved_snapshot_version() { reserved_read_snapshot_version_.reset(); }
 
   bool get_check_sys_variable() { return check_sys_variable_; }
   void set_check_sys_variable(bool check_sys_variable) { check_sys_variable_ = check_sys_variable; }
@@ -1906,7 +1911,12 @@ private:
 protected:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxExecResult tx_result_; // TODO: move to QueryCtx/ExecCtx
-  share::SCN unused_read_snapshot_version_;//serialize compatibility preserved
+  // reserved read snapshot version for current or previous stmt in the txn. And
+  // it is used for multi-version garbage colloector to collect ative snapshot.
+  // While it may be empty for the txn with ac = 1 and remote execution whose
+  // snapshot version is generated from remote server(called by start_stmt). So
+  // use it only query is active and version is valid.
+  share::SCN reserved_read_snapshot_version_;
   transaction::ObXATransID xid_;
   bool associated_xa_; // session joined distr-xa-trans by xa-start
 public:
@@ -2090,6 +2100,7 @@ private:
   bool is_password_expired_;
   // timestamp of processing current query. refresh when retry.
   int64_t process_query_time_;
+  int64_t last_update_tz_time_; //timestamp of last attempt to update timezone info
 };
 
 inline const common::ObString ObBasicSessionInfo::get_current_query_string() const

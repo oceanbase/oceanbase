@@ -35,8 +35,8 @@ using lib::ObTenantCtxAllocator;
 class ObPageManager : public lib::IBlockMgr
 {
 public:
-  constexpr static int DEFAULT_CHUNK_CACHE_CNT = 2;
-  constexpr static int MINI_MODE_CHUNK_CACHE_CNT = 0;
+  constexpr static int DEFAULT_CHUNK_CACHE_SIZE = lib::INTACT_ACHUNK_SIZE * 2;
+  constexpr static int MINI_MODE_CHUNK_CACHE_SIZE = 0;
   RBNODE(ObPageManager, rblink);
   int compare(const ObPageManager *node) const
   {
@@ -64,8 +64,8 @@ public:
       (tenant_id_ == tenant_id && id_ < id);
   }
   int set_tenant_ctx(const int64_t tenant_id, const int64_t ctx_id);
-  void set_max_chunk_cache_cnt(const int cnt)
-  { bs_.set_max_chunk_cache_cnt(cnt); }
+  void set_max_chunk_cache_size(const int64_t max_cache_size)
+  { bs_.set_max_chunk_cache_size(max_cache_size); }
   void reset();
   int64_t get_hold() const;
   int64_t get_tid() const { return tid_; }

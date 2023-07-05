@@ -4074,13 +4074,22 @@ int ObSelectLogPlan::allocate_link_scan_as_top(ObLogicalOperator *&old_top)
 {
   int ret = OB_SUCCESS;
   ObLogLinkScan *link_scan = NULL;
+  const ObSelectStmt *stmt = get_stmt();
+  ObSEArray<ObRawExpr*, 4> select_exprs;
   if (NULL != old_top) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("old_top should be null", K(ret), K(get_stmt()));
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret), K(stmt));
   } else if (OB_ISNULL(link_scan = static_cast<ObLogLinkScan *>(get_log_op_factory().
                                   allocate(*this, LOG_LINK_SCAN)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate link dml operator", K(ret));
+  } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(link_scan->get_select_exprs().assign(select_exprs))) {
+    LOG_WARN("failed to assign select exprs", K(ret));
   } else if (OB_FAIL(link_scan->compute_property())) {
     LOG_WARN("failed to compute property", K(ret));
   } else {
@@ -5691,6 +5700,7 @@ int ObSelectLogPlan::adjust_window_functions(const ObLogicalOperator *top,
       if (OB_FAIL(ObOptimizerUtil::get_non_const_expr_size(winfunc_exprs.at(i)->get_partition_exprs(),
                                                            equal_sets,
                                                            top->get_output_const_exprs(),
+                                                           get_onetime_query_refs(),
                                                            non_const_exprs))) {
         LOG_WARN("failed to get non const expr size", K(ret));
       } else if (OB_FAIL(expr_entries.push_back(std::pair<int64_t, int64_t>(-non_const_exprs, i)))) {
@@ -6133,7 +6143,8 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
   ObSqlSchemaGuard *schema_guard = NULL;
   ObSEArray<uint64_t, 8> rowkey_ids;
   if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(join) ||
-      OB_ISNULL(index_scan) || OB_ISNULL(table_scan)) {
+      OB_ISNULL(index_scan) || OB_ISNULL(table_scan) ||
+      OB_ISNULL(optimizer_context_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(join), K(index_scan), K(table_scan), K(ret));
   } else if (OB_UNLIKELY(log_op_def::LOG_JOIN != join->get_type())) {
@@ -6199,6 +6210,7 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params =
             ObBasicSessionInfo::create_dtc_params(optimizer_context_.get_session_info());
+      bool is_in_range_optimization_enabled = optimizer_context_.get_session_info()->is_in_range_optimization_enabled();
       ObQueryRange *query_range = static_cast<ObQueryRange*>(get_allocator().alloc(sizeof(ObQueryRange)));
       const ParamStore *params = get_optimizer_context().get_params();
       if (OB_ISNULL(query_range)) {
@@ -6214,7 +6226,10 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
                                                                  dtc_params,
                                                                  optimizer_context_.get_exec_ctx(),
                                                                  NULL,
-                                                                 params))) {
+                                                                 params,
+                                                                 false,
+                                                                 true,
+                                                                 is_in_range_optimization_enabled))) {
           LOG_WARN("failed to preliminary extract query range", K(ret));
         } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
           LOG_WARN("failed to set range columns", K(ret));

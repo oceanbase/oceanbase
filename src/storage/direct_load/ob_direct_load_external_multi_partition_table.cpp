@@ -14,7 +14,6 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
-using namespace observer;
 
 /**
  * ObDirectLoadExternalMultiPartitionTableBuildParam

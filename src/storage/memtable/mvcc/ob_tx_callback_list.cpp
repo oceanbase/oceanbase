@@ -172,13 +172,15 @@ int64_t ObTxCallbackList::calc_need_remove_count_for_fast_commit_()
   return need_remove_count;
 }
 
-int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
+int ObTxCallbackList::remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
+                                                       bool &meet_generate_cursor)
 {
   int ret = OB_SUCCESS;
-  has_remove = false;
+  meet_generate_cursor = false;
   SpinLockGuard guard(latch_);
 
-  ObRemoveCallbacksForFastCommitFunctor functor(calc_need_remove_count_for_fast_commit_());
+  ObRemoveCallbacksForFastCommitFunctor functor(generate_cursor,
+                                                calc_need_remove_count_for_fast_commit_());
   functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
@@ -186,25 +188,39 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   } else {
     callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
     ensure_checksum_(functor.get_checksum_last_scn());
-    has_remove = SCN::min_scn() != functor.get_checksum_last_scn();
+    meet_generate_cursor = functor.meet_generate_cursor();
   }
 
   return ret;
 }
 
-int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove, const share::SCN max_applied_scn)
+int ObTxCallbackList::remove_callbacks_for_remove_memtable(
+  const memtable::ObMemtableSet *memtable_set,
+  const share::SCN max_applied_scn)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(latch_);
 
   ObRemoveSyncCallbacksWCondFunctor functor(
     // condition for remove
-    [memtable_for_remove](ObITransCallback *callback) -> bool {
-      if (callback->get_memtable() == memtable_for_remove) {
-        return true;
-      } else {
-        return false;
+    [memtable_set](ObITransCallback *callback) -> bool {
+      bool ok = false;
+      int ret = OB_SUCCESS;
+      int bool_ret = true;
+      while (!ok) {
+        if (OB_HASH_EXIST == (ret = memtable_set->exist_refactored((uint64_t)callback->get_memtable()))) {
+          bool_ret = true;
+          ok = true;
+        } else if (OB_HASH_NOT_EXIST == ret) {
+          bool_ret = false;
+          ok = true;
+        } else {
+          // We have no idea to handle the error
+          TRANS_LOG(ERROR, "hashset fetch encounter unexpected error", K(ret));
+          ok = false;
+        }
       }
+      return bool_ret;
     }, // condition for stop
     [max_applied_scn](ObITransCallback *callback) -> bool {
       if (callback->get_scn() > max_applied_scn) {
@@ -222,7 +238,7 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable
     callback_mgr_.add_release_memtable_callback_remove_cnt(functor.get_remove_cnt());
     ensure_checksum_(functor.get_checksum_last_scn());
     if (functor.get_remove_cnt() > 0) {
-      TRANS_LOG(INFO, "remove callbacks for remove memtable", KP(memtable_for_remove),
+      TRANS_LOG(INFO, "remove callbacks for remove memtable", KP(memtable_set),
                 K(functor), K(*this));
     }
   }

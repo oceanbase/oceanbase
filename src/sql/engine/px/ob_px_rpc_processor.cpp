@@ -620,7 +620,7 @@ int ObPxTenantTargetMonitorP::process()
       for (int i = 0; OB_SUCC(ret) && i < arg_.addr_target_array_.count(); i++) {
         ObAddr &server = arg_.addr_target_array_.at(i).addr_;
         int64_t peer_used_inc = arg_.addr_target_array_.at(i).target_;
-        if (OB_FAIL(OB_PX_TARGET_MGR.update_peer_target_used(tenant_id, server, peer_used_inc))) {
+        if (OB_FAIL(OB_PX_TARGET_MGR.update_peer_target_used(tenant_id, server, peer_used_inc, leader_version))) {
           LOG_WARN("set thread count failed", K(ret), K(tenant_id), K(server), K(peer_used_inc));
         }
       }
@@ -637,6 +637,43 @@ int ObPxTenantTargetMonitorP::process()
         ObPxGlobalResGather gather(result_);
         if (OB_FAIL(OB_PX_TARGET_MGR.gather_global_target_usage(tenant_id, gather))) {
           LOG_WARN("get global thread count failed", K(ret), K(tenant_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxCleanDtlIntermResP::process()
+{
+  int ret = OB_SUCCESS;
+  dtl::ObDTLIntermResultKey key;
+  int64_t batch_size = 0 == arg_.batch_size_ ? 1 : arg_.batch_size_;
+  for (int64_t i = 0; i < arg_.info_.count(); i++) {
+    ObPxCleanDtlIntermResInfo &info = arg_.info_.at(i);
+    for (int64_t task_id = 0; task_id < info.task_count_; task_id++) {
+      ObPxTaskChSet ch_set;
+      if (OB_FAIL(ObDtlChannelUtil::get_receive_dtl_channel_set(info.sqc_id_, task_id,
+            info.ch_total_info_, ch_set))) {
+        LOG_WARN("get receive dtl channel set failed", K(ret));
+      } else {
+        LOG_TRACE("ObPxCleanDtlIntermResP process", K(i), K(arg_.batch_size_), K(info), K(task_id), K(ch_set));
+        for (int64_t ch_idx = 0; ch_idx < ch_set.count(); ch_idx++) {
+          key.channel_id_ = ch_set.get_ch_info_set().at(ch_idx).chid_;
+          for (int64_t batch_id = 0; batch_id < batch_size && OB_SUCC(ret); batch_id++) {
+            key.batch_id_= batch_id;
+            if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                // interm result is written from batch_id = 0 to batch_size,
+                // if some errors happen when batch_id = i, no interm result of batch_id > i will be written.
+                // so if erase failed, just break and continue to erase interm result of next channel.
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("fail to release recieve internal result", K(ret), K(ret));
+              }
+            }
+          }
         }
       }
     }

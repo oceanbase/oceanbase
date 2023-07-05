@@ -597,17 +597,18 @@ void ObConnectByOpPump::ConnectByHashTable::reverse_bucket_cells()
   }
 }
 
-int ObConnectByOpPump::calc_hash_value(const ObArray<ObExpr *> &hash_exprs, uint64_t &hash_value)
+int ObConnectByOpPump::calc_hash_value(const ExprFixedArray &exprs, uint64_t &hash_value)
 {
   int ret = OB_SUCCESS;
   ObDatum *datum = NULL;
   hash_value = 0;
-  if (OB_ISNULL(eval_ctx_)) {
+  const ObIArray<ObExpr*> *hash_exprs = &exprs;
+  if (OB_ISNULL(hash_exprs) || OB_ISNULL(eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("eval ctx is null", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < hash_exprs.count(); i++) {
-    ObExpr *hash_expr = hash_exprs.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < hash_exprs->count(); i++) {
+    ObExpr *hash_expr = hash_exprs->at(i);
     if (OB_ISNULL(hash_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("hash probe expr is null", K(ret));
@@ -644,7 +645,7 @@ int ObConnectByOpPump::build_hash_table(ObIAllocator &alloc)
     hash_table_.all_cells_->reuse();
   }
   HashTableCell **bucket_end_cell = NULL;
-  const ObArray<ObExpr *> &hash_key_exprs =
+  const ExprFixedArray &hash_key_exprs =
     (static_cast<const ObNLConnectBySpec &>(connect_by_->get_spec())).hash_key_exprs_;
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(0 == hash_key_exprs.count()) || OB_ISNULL(eval_ctx_)) {
@@ -725,7 +726,7 @@ int ObConnectByOpPump::build_hash_table(ObIAllocator &alloc)
 }
 
 int ObConnectByOpPump::RowFetcher::init(ObConnectByOpPump &connect_by_pump,
-                                        const ObArray<ObExpr *> &hash_probe_exprs)
+                                        const ExprFixedArray &hash_probe_exprs)
 {
   int ret = OB_SUCCESS;
   use_hash_ = false;

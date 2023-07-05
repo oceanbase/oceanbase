@@ -305,7 +305,7 @@ int ObPxReceiveOp::link_ch_sets(ObPxTaskChSet &ch_set,
   } else if (OB_FAIL(dfc->reserve(ch_set.count()))) {
     LOG_WARN("fail reserve dfc channels", K(ret), K(ch_set.count()));
   } else if (ch_set.count() > 0) {
-    void *buf = oceanbase::common::ob_malloc(DTL_CHANNEL_SIZE * ch_set.count(), ObModIds::OB_SQL_DTL);
+    void *buf = oceanbase::common::ob_malloc(DTL_CHANNEL_SIZE * ch_set.count(), "SqlDtlRecvChan");
     if (nullptr == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("malloc channel buf failed", K(ret));
@@ -545,10 +545,19 @@ int ObPxReceiveOp::erase_dtl_interm_result()
       LOG_WARN("fail get channel info", K(ret));
     } else {
       key.channel_id_ = ci.chid_;
-      key.batch_id_ = ctx_.get_px_batch_id();
-      if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
-        LOG_TRACE("fail to release recieve internal result", K(ret));
+      for (int64_t batch_id = ctx_.get_px_batch_id();
+           batch_id < PX_RESCAN_BATCH_ROW_COUNT && OB_SUCC(ret); batch_id++) {
+        key.batch_id_ = batch_id;
+        if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to release recieve internal result", K(ret), K(key));
+          }
+        }
       }
+      LOG_TRACE("receive erase dtl interm res", K(i), K(get_spec().get_id()), K(ci), K(ctx_.get_px_batch_id()));
     }
   }
   return ret;

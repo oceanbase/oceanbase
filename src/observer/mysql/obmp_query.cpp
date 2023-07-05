@@ -534,6 +534,8 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                          session.get_effective_tenant_id(),
                                          &session))) {
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
+    } else if (OB_FAIL(session.update_timezone_info())) {
+      LOG_WARN("fail to update time zone info", K(ret));
     } else {
       need_response_error = false;
       //每次执行不同sql都需要更新
@@ -574,9 +576,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
       //otherwise there is a risk of coredump
       //@TODO: need to determine a mechanism to ensure the safety of memory access here
     }
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::clear();
-    }
+    ObThreadLogLevelUtils::clear();
     const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
     if (debug_sync_timeout > 0) {
       // ignore thread local debug sync actions to session actions failed
@@ -634,6 +634,7 @@ OB_NOINLINE int ObMPQuery::process_with_tmp_context(ObSQLSessionInfo &session,
                      force_sync_resp,
                      async_resp_used,
                      need_disconnect);
+    ctx_.first_outline_data_.reset();
     ctx_.clear();
   }
   return ret;

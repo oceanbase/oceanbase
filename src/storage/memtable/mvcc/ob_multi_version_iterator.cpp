@@ -257,24 +257,15 @@ int ObMultiVersionValueIterator::get_state_of_curr_trans_node(
   return ret;
 }
 
-int ObMultiVersionValueIterator::get_trans_status(
-    const transaction::ObTransID &trans_id,
-    int64_t &state,
-    uint64_t &cluster_version)
+int ObMultiVersionValueIterator::get_trans_status(const transaction::ObTransID &trans_id,
+                                                  int64_t &state,
+                                                  uint64_t &cluster_version)
 {
   UNUSED(cluster_version);
   int ret = OB_SUCCESS;
   SCN trans_version = SCN::max_scn();
-  ObTxTable *tx_table = ctx_->get_tx_table_guard().get_tx_table();
-  int64_t read_epoch = ctx_->get_tx_table_guard().epoch();
-  if (OB_ISNULL(tx_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "tx_table_ is null", K(ret), KPC_(ctx), K(merge_scn_), K(trans_id));
-  } else if (OB_FAIL(tx_table->get_tx_state_with_scn(trans_id,
-                                                        merge_scn_,
-                                                        read_epoch,
-                                                        state,
-                                                        trans_version))) {
+
+  if (OB_FAIL(ctx_->get_tx_table_guard().get_tx_state_with_scn(trans_id, merge_scn_, state, trans_version))) {
     STORAGE_LOG(WARN, "check_with_tx_data fail.", K(trans_id));
   }
 
@@ -581,20 +572,12 @@ int ObMultiVersionRowIterator::try_cleanout_mvcc_row_(ObMvccRow *value)
   return ret;
 }
 
-int ObMultiVersionRowIterator::try_cleanout_tx_node_(ObMvccRow *value,
-                                                     ObMvccTransNode *tnode)
+int ObMultiVersionRowIterator::try_cleanout_tx_node_(ObMvccRow *value, ObMvccTransNode *tnode)
 {
   int ret = OB_SUCCESS;
-  ObTxTable *tx_table = ctx_->get_tx_table_guard().get_tx_table();
-  int64_t read_epoch = ctx_->get_tx_table_guard().epoch();
   const ObTransID data_tx_id = tnode->tx_id_;
-  if (!(tnode->is_committed() || tnode->is_aborted())
-      && tnode->is_delayed_cleanout()
-      && OB_FAIL(tx_table->cleanout_tx_node(data_tx_id,
-                                            read_epoch,
-                                            *value,
-                                            *tnode,
-                                            false     /*need_row_latch*/))) {
+  if (!(tnode->is_committed() || tnode->is_aborted()) && tnode->is_delayed_cleanout() &&
+      OB_FAIL(ctx_->get_tx_table_guard().cleanout_tx_node(data_tx_id, *value, *tnode, false /*need_row_latch*/))) {
     TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*value), K(*tnode));
   } else if (!tnode->is_aborted()) {
     const blocksstable::ObDmlFlag dml_flag = tnode->get_dml_flag();
@@ -607,7 +590,6 @@ int ObMultiVersionRowIterator::try_cleanout_tx_node_(ObMvccRow *value,
       ++delete_row_count_;
     }
   }
-
   return ret;
 }
 

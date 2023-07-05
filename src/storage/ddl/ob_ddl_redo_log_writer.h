@@ -57,8 +57,10 @@ public:
   int refresh();
   int limit_and_sleep(const int64_t bytes,
                       const int64_t task_id,
+                      ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                       int64_t &real_sleep_us);
-
+  int check_need_stop_write(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                            bool &is_need_stop_write);
   // for ref_cnt_
   void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1); }
@@ -70,6 +72,7 @@ private:
   int cal_limit(const int64_t bytes, int64_t &next_available_ts);
   int do_sleep(const int64_t next_available_ts,
                const int64_t task_id,
+               ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                int64_t &real_sleep_us);
 private:
   static const int64_t MIN_WRITE_SPEED = 50L;
@@ -93,6 +96,7 @@ public:
                       const share::ObLSID &ls_id,
                       const int64_t bytes,
                       const int64_t task_id,
+                      ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                       int64_t &real_sleep_us);
 
 private:
@@ -251,7 +255,7 @@ class ObDDLMacroBlockRedoWriter final
 public:
   static int write_macro_redo(ObTabletHandle &tablet_handle,
                               ObDDLKvMgrHandle &ddl_kv_mgr_handle,
-                              const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+                              const ObDDLMacroBlockRedoInfo &redo_info,
                               const share::ObLSID &ls_id,
                               const int64_t task_id,
                               logservice::ObLogHandler *log_handler,
@@ -265,6 +269,8 @@ public:
 private:
   ObDDLMacroBlockRedoWriter() = default;
   ~ObDDLMacroBlockRedoWriter() = default;
+private:
+  static const int64_t SLEEP_INTERVAL = 1 * 1000; // 1ms
 };
 
 // This class should be the entrance to write redo log and commit log
@@ -295,10 +301,8 @@ public:
                        ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                        const bool allow_remote_write,
                        const ObITable::TableKey &table_key,
-                       const int64_t table_id,
-                       const int64_t execution_id,
-                       const int64_t ddl_task_id,
-                       share::SCN &commit_scn);
+                       share::SCN &commit_scn,
+                       bool &is_remote_write);
   OB_INLINE void set_start_scn(const share::SCN &start_scn) { start_scn_.atomic_set(start_scn); }
   OB_INLINE share::SCN get_start_scn() const { return start_scn_.atomic_get(); }
 private:

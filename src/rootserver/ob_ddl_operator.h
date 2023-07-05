@@ -514,6 +514,7 @@ public:
   virtual int rename_table(const share::schema::ObTableSchema &table_schema,
                            const common::ObString &new_table_name,
                            const uint64_t new_db_id,
+                           const bool need_reset_object_status,
                            common::ObMySQLTransaction &trans,
                            const common::ObString *ddl_stmt_str);
   virtual int update_index_status(

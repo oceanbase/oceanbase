@@ -6,6 +6,7 @@
 #define OB_TABLE_LOAD_HANDLE_H_
 
 #include "lib/allocator/ob_malloc.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -38,8 +39,9 @@ public:
 
   static ObTableLoadHandle make_handle(Args... args)
   {
+    ObMemAttr attr(MTL_ID(), "TLD_Handle");
     ObTableLoadHandle handle;
-    handle.ptr_ = OB_NEW(Object, "TLD_handle", args...);
+    handle.ptr_ = OB_NEW(Object, attr, args...);
     handle.ptr_->ref_count_ = 1;
     return handle;
   }

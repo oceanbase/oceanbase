@@ -653,7 +653,7 @@ int ObExprBaseLRpad::calc_mysql_inner(const LRpadType pad_type,
     result_size = ObCharset::charpos(cs_type, str_text.ptr(), str_text.length(), int_len);
     res.set_string(ObString(result_size, str_text.ptr()));
   } else if (str_pad.length() == 0) {
-    res.set_null();
+    res.set_string(ObString::make_empty_string());
   } else if (OB_FAIL(get_padding_info_mysql(cs_type, str_text, int_len, str_pad,
               max_result_size, repeat_count, prefix_size, result_size))) {
     LOG_WARN("Failed to get padding info", K(ret), K(str_text), K(int_len),

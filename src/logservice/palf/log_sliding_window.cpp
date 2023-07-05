@@ -1406,6 +1406,18 @@ int LogSlidingWindow::get_last_submit_log_info(LSN &last_submit_lsn,
   return ret;
 }
 
+int LogSlidingWindow::get_last_submit_log_info(LSN &last_submit_lsn,
+    LSN &last_submit_end_lsn, int64_t &log_id, int64_t &log_proposal_id) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    get_last_submit_log_info_(last_submit_lsn, last_submit_end_lsn, log_id, log_proposal_id);
+  }
+  return ret;
+}
+
 int64_t LogSlidingWindow::get_last_submit_log_id_() const
 {
   ObSpinLockGuard guard(last_submit_info_lock_);
@@ -2652,6 +2664,16 @@ int LogSlidingWindow::get_majority_lsn_(const ObMemberList &member_list,
   return ret;
 }
 
+bool LogSlidingWindow::is_allow_rebuild() const
+{
+  // Caller holds palf_handle_impl's rlock.
+  bool bool_ret = false;
+  if (IS_INIT) {
+    bool_ret = !is_truncating_;
+  }
+  return bool_ret;
+}
+
 int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
 {
   int ret = OB_SUCCESS;
@@ -3708,6 +3730,7 @@ int LogSlidingWindow::reset_match_lsn_map_()
   int64_t replica_num = 0;
   LSN max_flushed_end_lsn;
   LSN committed_end_lsn;
+  const int64_t now_us = ObTimeUtility::current_time();
   ObSpinLockGuard guard(match_lsn_map_lock_);
   if (OB_FAIL(mm_->get_log_sync_member_list(member_list, replica_num))) {
     PALF_LOG(WARN, "get_log_sync_member_list failed", K(ret), K_(palf_id), K_(self));
@@ -3726,7 +3749,7 @@ int LogSlidingWindow::reset_match_lsn_map_()
         // Leader update match_lsn for each paxos member.
         // Setting match_lsn to max_flushed_end_lsn for itself and committed_end_lsn for others.
         tmp_match_lsn = (self_ == tmp_server) ? max_flushed_end_lsn : committed_end_lsn;
-        if (OB_FAIL(match_lsn_map_.insert(tmp_server, LsnTsInfo(tmp_match_lsn, INITIAL_LAST_ACK_TS)))) {
+        if (OB_FAIL(match_lsn_map_.insert(tmp_server, LsnTsInfo(tmp_match_lsn, now_us)))) {
           PALF_LOG(WARN, "match_lsn_map_.insert failed", K(ret), KPC(this));
         }
       }
@@ -3749,6 +3772,7 @@ int LogSlidingWindow::config_change_update_match_lsn_map(
     ret = OB_NOT_INIT;
   } else {
     LSN init_lsn(PALF_INITIAL_LSN_VAL);
+    const int64_t now_us = ObTimeUtility::current_time();
     ObSpinLockGuard guard(match_lsn_map_lock_);
     int tmp_ret = OB_SUCCESS;
     ObAddr tmp_server;
@@ -3756,7 +3780,7 @@ int LogSlidingWindow::config_change_update_match_lsn_map(
       tmp_server.reset();
       if (OB_SUCCESS != (tmp_ret = added_memberlist.get_server_by_index(i, tmp_server))) {
         PALF_LOG(WARN, "get_server_by_index failed", K(tmp_ret), K_(palf_id), K_(self));
-      } else if (OB_SUCCESS != (tmp_ret = match_lsn_map_.insert(tmp_server, LsnTsInfo(init_lsn, INITIAL_LAST_ACK_TS))) &&
+      } else if (OB_SUCCESS != (tmp_ret = match_lsn_map_.insert(tmp_server, LsnTsInfo(init_lsn, now_us))) &&
           OB_ENTRY_EXIST != tmp_ret) {
         PALF_LOG(WARN, "match_lsn_map_.insert failed", K(tmp_ret), K(tmp_server), K_(palf_id), K_(self));
       } else {
@@ -3811,7 +3835,7 @@ int LogSlidingWindow::try_update_match_lsn_map_(const common::ObAddr &server, co
     ObSpinLockGuard guard(match_lsn_map_lock_);
     if (OB_SUCCESS != (tmp_ret = match_lsn_map_.get(server, tmp_val))) {
       if (OB_ENTRY_NOT_EXIST == tmp_ret) {
-        if (OB_FAIL(match_lsn_map_.insert(server, LsnTsInfo(end_lsn, INITIAL_LAST_ACK_TS)))) {
+        if (OB_FAIL(match_lsn_map_.insert(server, LsnTsInfo(end_lsn, now_us)))) {
           PALF_LOG(WARN, "match_lsn_map_.insert failed", K(ret), KPC(this), K(server));
         } else {
           PALF_LOG(INFO, "match_lsn_map_.insert success", K(ret), K_(palf_id), K_(self), K(server), K(end_lsn));

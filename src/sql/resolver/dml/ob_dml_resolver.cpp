@@ -1398,6 +1398,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_for_pivot_ = !need_analyze_aggr;
     ctx.is_for_dynamic_sql_ = params_.is_dynamic_sql_;
     ctx.is_for_dbms_sql_ = params_.is_dbms_sql_;
+    ctx.view_ref_id_ = view_ref_id_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -2239,10 +2240,11 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     CK (OB_NOT_NULL(get_basic_stmt()));
     if (OB_SUCC(ret)) {
       if (lib::is_oracle_mode()
-      && NULL != params_.secondary_namespace_
-      && get_basic_stmt()->is_insert_stmt()
-      && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select()) {
-        //oracle模式insert语句的values子句，标识符优先解释为变量
+          && NULL != params_.secondary_namespace_
+          && ((get_basic_stmt()->is_insert_stmt()
+                && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select())
+              || T_CURRENT_OF_SCOPE == current_scope_)) {
+        //In Oracle Mode, current of ident, insert values(ident), ident should explain to pl/sql variable
         if (!q_name.access_idents_.empty()) { //q_name.access_idents_为NULL肯定是列
           if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
             LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve external symbol failed", K(ret), K(q_name));
@@ -2252,8 +2254,9 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
             LOG_WARN("dml with collection or record construction function is not supported", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
           } else if ((ObExtendType == real_ref_expr->get_result_type().get_type()
-                   || ObMaxType == real_ref_expr->get_result_type().get_type())
-                   && (T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type())) {
+                        || ObMaxType == real_ref_expr->get_result_type().get_type())
+                      && (T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type()
+                          && current_scope_ != T_CURRENT_OF_SCOPE)) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("dml with collection or record construction function is not supported", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
@@ -4272,7 +4275,6 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
               if (!synonym_name.empty()) {
                 // bug: 31827906
                 item->alias_name_ = synonym_name;
-                item->database_name_ = synonym_db_name;
               } else {
                 item->alias_name_ = tbl_name;
               }
@@ -4336,7 +4338,6 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
             if (!synonym_name.empty()) {
               // bug: 31827906
               item->alias_name_ = synonym_name;
-              item->database_name_ = synonym_db_name;
             } else {
               item->alias_name_ = tbl_name;
             }
@@ -5319,6 +5320,7 @@ int ObDMLResolver::resolve_current_of(const ParseNode &node,
   int ret = OB_SUCCESS;
   ObRawExpr *cursor_expr = NULL;
   ObRawExpr *equal_expr = NULL;
+  current_scope_ = T_CURRENT_OF_SCOPE;
   if (OB_ISNULL(params_.secondary_namespace_)) {
     // secondary_namespace_ 为空, 说明不是在PL中
     ret = OB_UNIMPLEMENTED_FEATURE;
@@ -5734,8 +5736,8 @@ int ObDMLResolver::resolve_limit_clause(const ParseNode *node)
       }
     } else {
       if (limit_node != NULL) {
-        if (limit_node->type_ != T_QUESTIONMARK && limit_node->type_ != T_INT
-            && limit_node->type_ != T_COLUMN_REF) {
+        if (limit_node->type_ != T_INT && limit_node->type_ != T_UINT64
+            && limit_node->type_ != T_QUESTIONMARK && limit_node->type_ != T_COLUMN_REF) {
           ret = OB_ERR_RESOLVE_SQL;
           LOG_WARN("Wrong type of limit value");
         } else {
@@ -6179,19 +6181,7 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
   } else if (ObCharType == column_schema->get_data_type()
              || ObNCharType == column_schema->get_data_type()) {
     if (is_pad_char_to_full_length(session->get_sql_mode())) {
-      // in ddl scene, T_INSERT && is_fixed_len_char_type,
-      // create index will trim virtual generated column in engine layer.
-      // Since we expanded the generated column into a dependent expression,
-      // we need to add trim on its dependent expression in this layer.
-      if (const_cast<ObSQLSessionInfo *>(session)->get_ddl_info().is_ddl() &&
-          stmt::T_INSERT == session->get_stmt_type() && column_schema->is_virtual_generated_column()) {
-        if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema,
-                                                    *params_.expr_factory_,
-                                                    session_info_,
-                                                    expr))) {
-          LOG_WARN("fail to build trime expr for char", K(ret));
-        }
-      } else if (OB_FAIL(ObRawExprUtils::build_pad_expr(*params_.expr_factory_,
+      if (OB_FAIL(ObRawExprUtils::build_pad_expr(*params_.expr_factory_,
                                                  true,
                                                  column_schema,
                                                  expr,
@@ -9982,17 +9972,21 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(params_.session_info_), K(params_.allocator_));
   } else {
+    bool is_temp_table_clean = params_.session_info_->is_inner() && OB_NOT_NULL(table_schema)
+            && table_schema->is_oracle_tmp_table();
     for (ObTableSchema::const_constraint_iterator iter = table_schema->constraint_begin(); OB_SUCC(ret) &&
          iter != table_schema->constraint_end(); iter ++) {
       ObRawExpr *check_constraint_expr = NULL;
       ObConstraint tmp_constraint;
       ObSEArray<ObQualifiedName, 1> columns;
+      ObString constraint_str;
+      bool has_default = false;
       if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_CHECK
           && (*iter)->get_constraint_type() != CONSTRAINT_TYPE_NOT_NULL) {
         continue;
       } else if (!(*iter)->get_enable_flag() &&
                  (*iter)->is_validated() &&
-                 !resolve_check_for_optimizer) {
+                 !resolve_check_for_optimizer && !is_temp_table_clean) {
         const ObSimpleDatabaseSchema *database_schema = NULL;
         if (OB_ISNULL(params_.schema_checker_->get_schema_guard())) {
           ret = OB_ERR_UNEXPECTED;
@@ -10022,12 +10016,19 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
                  (*iter)->is_no_validate() &&
                  (!resolve_check_for_optimizer || !(*iter)->get_rely_flag())) {
         continue;
+      } else if (ob_write_string(*params_.allocator_, (*iter)->get_check_expr_str(), constraint_str)) {
+        LOG_WARN("failed to write string", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
+                 *params_.allocator_, params_.session_info_->get_dtc_params(), constraint_str))) {
+        LOG_WARN("failed to convert sql text", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
-                 (*iter)->get_check_expr_str(), *(params_.allocator_), node))) {
+                 constraint_str, *(params_.allocator_), node))) {
         LOG_WARN("parse expr node from string failed", K(ret));
       } else if (OB_FAIL(ObResolverUtils::resolve_check_constraint_expr(
                  params_, node, *table_schema, tmp_constraint, check_constraint_expr, NULL, &columns))) {
         LOG_WARN("resolve check constraint expr failed", K(ret));
+      } else if (OB_FAIL(resolve_special_expr_static(table_schema, *params_.session_info_, *params_.expr_factory_, check_constraint_expr, has_default, ObResolverUtils::PureFunctionCheckStatus::DISABLE_CHECK))) {
+        LOG_WARN("fail to resolve special exprs", K(ret));
       } else if (table_item->is_basic_table() &&
                  OB_FAIL(resolve_columns_for_partition_expr(check_constraint_expr,
                                                             columns,
@@ -10139,6 +10140,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         OZ (stmt->add_global_dependency_table(coll_schema_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, object_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
       }
+      stmt_->get_query_ctx()->has_pl_udf_ = true;
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
       ObDMLStmt *stmt = get_stmt();
       ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
@@ -10151,6 +10153,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         OZ (stmt->add_global_dependency_table(coll_schema_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, coll_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
       }
+      stmt_->get_query_ctx()->has_pl_udf_ = true;
     }
   }
   if (OB_ERR_SP_UNDECLARED_VAR == ret) {

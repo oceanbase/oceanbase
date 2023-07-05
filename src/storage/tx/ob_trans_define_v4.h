@@ -178,6 +178,8 @@ struct ObTxParam
 
 struct ObTxPart
 {
+  static const int64_t EPOCH_UNKNOWN = -1;
+  static const int64_t EPOCH_DEAD = -2;
   ObTxPart();
   ~ObTxPart();
   share::ObLSID id_;             // identifier, the logstream
@@ -189,6 +191,7 @@ struct ObTxPart
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
   bool is_clean() const { return first_scn_ > last_scn_; }
+  bool is_without_ctx() const { return EPOCH_DEAD == epoch_; }
   TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts));
   OB_UNIS_VERSION(1);
 };
@@ -312,8 +315,8 @@ public:
     TRANS_LOG(TRACE, "tx result incomplete:", KP(this));
     incomplete_ = true;
   }
-  void merge_cflict_txs(const common::ObIArray<ObTransIDAndAddr> &txs);
-  inline bool is_incomplete() const { return incomplete_; }
+  int merge_cflict_txs(const common::ObIArray<ObTransIDAndAddr> &txs);
+  bool is_incomplete() const { return incomplete_; }
   int add_touched_ls(const share::ObLSID ls);
   int add_touched_ls(const ObIArray<share::ObLSID> &ls_list);
   const share::ObLSArray &get_touched_ls() const { return touched_ls_list_; }
@@ -397,6 +400,7 @@ protected:
       bool PARTS_INCOMPLETE_: 1;     // participants set incomplete (must abort)
       bool PART_EPOCH_MISMATCH_: 1;  // participant's born epoch mismatched
       bool WITH_TEMP_TABLE_: 1;      // with txn level temporary table
+      bool DEFER_ABORT_: 1;          // need do abort in txn start node
     };
     void switch_to_idle_();
     FLAG update_with(const FLAG &flag);
@@ -437,8 +441,9 @@ protected:
   share::ObLSID coord_id_;           // coordinator ID
   int64_t commit_expire_ts_;         // commit operation deadline
   share::ObLSArray commit_parts_;    // participants to do commit
-  share::SCN commit_version_;         // Tx commit version
+  share::SCN commit_version_;        // Tx commit version
   int commit_out_;                   // the commit result
+  int commit_times_;                 // times of sent commit request
   /* internal abort cause */
   int16_t abort_cause_;              // Tx Aborted cause
   bool can_elr_;                     // can early lock release
@@ -529,6 +534,7 @@ public:
                K_(parts),
                K_(exec_info_reap_ts),
                K_(commit_version),
+               K_(commit_times),
                KP_(commit_cb),
                K_(cluster_id),
                K_(cluster_version),

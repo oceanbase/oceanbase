@@ -88,6 +88,7 @@ private:
   int inner_remove_dummy_nvl(ObDMLStmt *stmt,
                              ObRawExpr *&expr,
                              ObNotNullContext &not_null_ctx,
+                             ObIArray<ObRawExpr *> &ignore_exprs,
                              bool &trans_happened);
   int do_remove_dummy_nvl(ObDMLStmt *stmt,
                           ObRawExpr *&expr,
@@ -97,6 +98,7 @@ private:
   int convert_nvl_predicate(ObDMLStmt *stmt, bool &trans_happened);
   int inner_convert_nvl_predicate(ObDMLStmt *stmt,
                                   ObRawExpr *&expr,
+                                  ObIArray<ObRawExpr *> &ignore_exprs,
                                   bool &trans_happened);
   int do_convert_nvl_predicate(ObDMLStmt *stmt,
                                ObRawExpr *&parent_expr,
@@ -157,6 +159,12 @@ private:
   int remove_false_true(common::ObIArray<ObRawExpr*> &exprs, bool &trans_happened);
   int is_valid_remove_false_true(ObRawExpr *expr, bool &is_valid);
   int remove_false_true(ObRawExpr *expr, ObRawExpr *&ret_expr, bool &trans_happened);
+  int remove_ora_decode(ObDMLStmt *stmt, bool &trans_happened);
+  int inner_remove_ora_decode(ObRawExpr *&expr,
+                              ObIArray<ObRawExpr *> &old_exprs,
+                              ObIArray<ObRawExpr *> &new_exprs);
+  int check_remove_ora_decode_valid(ObRawExpr *&expr, int64_t &result_idx, bool &is_valid);
+  int try_remove_ora_decode(ObRawExpr *&expr, ObRawExpr *&new_expr);
 };
 
 }

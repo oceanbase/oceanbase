@@ -219,7 +219,7 @@ int ObDataAccessService::refresh_partition_location(ObDASRef &das_ref, ObIDASTas
   if (OB_SUCC(DAS_CTX(exec_ctx).refresh_tablet_loc(*tablet_loc))) {
     task_op.set_ls_id(tablet_loc->ls_id_);
   }
-  LOG_INFO("LOCATION: refresh tablet cache", K(ret), KPC(tablet_loc), KPC(tablet_loc));
+  LOG_INFO("LOCATION: refresh tablet cache", K(ret), KPC(table_loc), KPC(tablet_loc));
   return ret;
 }
 
@@ -594,7 +594,9 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   }
   // task_resp's error code indicate the last valid op result.
   if (OB_FAIL(task_resp.get_err_code())) {
-    LOG_WARN("error occurring in remote das task", K(ret));
+    LOG_WARN("error occurring in remote das task, "
+             "please use the current TRACE_ID to grep the original error message on the remote_addr.",
+             K(ret), "remote_addr", task_resp.get_runner_svr());
     OB_ASSERT(op_results.count() <= task_ops.count());
   } else {
     // decode last op result

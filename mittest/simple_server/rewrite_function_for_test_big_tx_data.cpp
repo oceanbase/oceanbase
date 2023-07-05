@@ -181,16 +181,19 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
   return ret;
 }
 
-int ObTxDataTable::check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunctor &fn)
+int ObTxDataTable::check_with_tx_data(const ObTransID tx_id,
+                                      ObITxDataCheckFunctor &fn,
+                                      ObTxDataGuard &tx_data_guard,
+                                      SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tx data table is not init.", KR(ret), KP(this), K(tx_id));
-  } else if (OB_SUCC(check_tx_data_in_memtable_(tx_id, fn))) {
+  } else if (OB_SUCC(check_tx_data_in_memtable_(tx_id, fn, tx_data_guard))) {
     // successfully do check function in memtable, check done
     STORAGE_LOG(DEBUG, "tx data table check with tx memtable data succeed", K(tx_id), K(fn));
-  } else if (OB_TRANS_CTX_NOT_EXIST == ret && OB_SUCC(check_tx_data_in_sstable_(tx_id, fn))) {
+  } else if (OB_TRANS_CTX_NOT_EXIST == ret && OB_SUCC(check_tx_data_in_sstable_(tx_id, fn, tx_data_guard, recycled_scn))) {
 /**************************************************************************************************/
     if (tx_id.get_id() == ATOMIC_LOAD(&TEST_TX_ID)) {
       ATOMIC_STORE(&READ_TEST_TX_FROM_SSTABLE, true);

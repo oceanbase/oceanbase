@@ -56,7 +56,8 @@ struct ObRemoteSqlInfo
     is_original_ps_mode_(false),
     ps_param_cnt_(0),
     remote_sql_(),
-    ps_params_(nullptr)
+    ps_params_(nullptr),
+    sql_from_pl_(false)
   {
   }
 
@@ -68,6 +69,7 @@ struct ObRemoteSqlInfo
   int32_t ps_param_cnt_;
   common::ObString remote_sql_;
   ParamStore *ps_params_;
+  bool sql_from_pl_;
 };
 
 class ObPhysicalPlanCtx

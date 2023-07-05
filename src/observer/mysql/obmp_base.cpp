@@ -296,6 +296,7 @@ int ObMPBase::free_session()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session manager is null", K(ret));
   } else {
+    bool is_need_clear = false;
     ObFreeSessionCtx ctx;
     ctx.tenant_id_ = conn->tenant_id_;
     ctx.sessid_ = conn->sessid_;
@@ -306,6 +307,15 @@ int ObMPBase::free_session()
     } else {
       LOG_INFO("free session successfully", K(ctx));
       conn->is_sess_free_ = true;
+      if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(conn, is_need_clear)))) {
+        LOG_ERROR("fail to jugde need clear", K(ret), "sessid", conn->sessid_, "server_id", GCTX.server_id_);
+      } else if (is_need_clear) {
+        if (OB_FAIL(GCTX.session_mgr_->mark_sessid_unused(conn->sessid_))) {
+          LOG_WARN("mark session id unused failed", K(ret), "sessid", conn->sessid_);
+        } else {
+          LOG_INFO("mark session id unused", "sessid", conn->sessid_);
+        }
+      }
     }
   }
   return ret;

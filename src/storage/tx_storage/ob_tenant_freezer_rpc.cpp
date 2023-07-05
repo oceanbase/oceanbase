@@ -99,7 +99,7 @@ int ObTenantFreezerP::do_tx_data_table_freeze_()
         LOG_WARN("ls is unexpected nullptr", KR(ret), K(arg_));
       } else if (OB_FAIL(ls->get_tx_table_guard(tx_table_guard))) {
         LOG_WARN("get tx table guard failed.", KR(ret), K(arg_));
-      } else if (OB_FAIL(tx_table_guard.get_tx_table()->get_tx_data_table()->self_freeze_task())) {
+      } else if (OB_FAIL(tx_table_guard.self_freeze_task())) {
         LOG_WARN("freeze tx data table failed.", KR(ret), K(arg_));
       }
       ++ls_cnt;

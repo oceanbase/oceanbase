@@ -13,6 +13,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "observer/table_load/ob_table_load_time_convert.h"
 #include "observer/table_load/ob_table_load_struct.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -37,11 +38,8 @@ struct ObTableLoadPartitionCalcContext
 class ObTableLoadPartitionCalc
 {
 public:
-  static int init_session();
-  static oceanbase::sql::ObSQLSessionInfo &get_session();
-public:
   ObTableLoadPartitionCalc();
-  int init(uint64_t tenant_id, uint64_t table_id);
+  int init(uint64_t tenant_id, uint64_t table_id, sql::ObSQLSessionInfo *session_info);
   int calc(ObTableLoadPartitionCalcContext &ctx);
 private:
   int init_part_key_index(const share::schema::ObTableSchema *table_schema,
@@ -60,7 +58,7 @@ public:
   };
 public:
   table::ObTableLoadArray<IndexAndType> part_key_obj_index_;
-  common::ObTimeZoneInfo tz_info_;
+  sql::ObSQLSessionInfo *session_info_;
   ObTableLoadTimeConverter time_cvrt_;
   bool is_partition_with_autoinc_;
   int64_t partition_with_autoinc_idx_;

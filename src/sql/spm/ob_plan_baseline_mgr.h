@@ -70,6 +70,8 @@ public:
     trl_(nullptr) {}
   ~ObPlanBaselineMgr();
   static int mtl_init(ObPlanBaselineMgr* &node_list);
+  static void mtl_stop(ObPlanBaselineMgr* &node_list);
+  static void mtl_wait(ObPlanBaselineMgr* &node_list);
   void destroy();
   int create_list();
   void destroy_list(task_result_list*& list);

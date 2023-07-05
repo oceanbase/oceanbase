@@ -163,6 +163,10 @@ int ObObjectDevice::open_for_reader(const char *pathname, void*& ctx)
       ctx = (void*)reader;
     }
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(reader)) {
+    reader_ctx_pool_.free(reader);
+    reader = nullptr;
+  }
   return ret;
 }
 
@@ -181,7 +185,11 @@ int ObObjectDevice::open_for_overwriter(const char *pathname, void*& ctx)
     } else {
       ctx = (void*)overwriter;
     }
-  }  
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(overwriter)) {
+    overwriter_ctx_pool_.free(overwriter);
+    overwriter = nullptr;
+  }
   return ret;
 }
 
@@ -247,7 +255,11 @@ int ObObjectDevice::open_for_appender(const char *pathname, ObIODOpts *opts, voi
     } else {
       ctx = appender;
     }
-  }  
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(appender)) {
+    appender_ctx_pool_.free(appender);
+    appender = nullptr;
+  }
   return ret;
 }
 

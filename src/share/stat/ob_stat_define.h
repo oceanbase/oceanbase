@@ -105,6 +105,15 @@ enum ColumnAttrFlag
   IS_NOT_NULL_COL   = 1 << 3
 };
 
+enum ColumnGatherFlag
+{
+  NO_NEED_STAT          = 0,
+  VALID_OPT_COL         = 1,
+  NEED_BASIC_STAT       = 1 << 1,
+  NEED_AVG_LEN          = 1 << 2,
+  NEED_TRUNCATE_STR     = 1 << 3
+};
+
 enum ObGranularityType
 {
   GRANULARITY_INVALID = 0,
@@ -289,7 +298,6 @@ struct ObAnalyzeSampleInfo
   double sample_value_;
 };
 
-
 struct ObColumnStatParam {
   inline void set_size_manual() { size_mode_ = 1; }
   inline void set_size_auto() { size_mode_ = 2; }
@@ -307,6 +315,14 @@ struct ObColumnStatParam {
   inline bool is_hidden_column() const { return column_attribute_ & ColumnAttrFlag::IS_HIDDEN_COL; }
   inline bool is_unique_column() const { return column_attribute_ & ColumnAttrFlag::IS_UNIQUE_COL; }
   inline bool is_not_null_column() const { return column_attribute_ & ColumnAttrFlag::IS_NOT_NULL_COL; }
+  inline void set_valid_opt_col() { gather_flag_ |= ColumnGatherFlag::VALID_OPT_COL; }
+  inline void set_need_basic_stat() { gather_flag_ |= ColumnGatherFlag::NEED_BASIC_STAT; }
+  inline void set_need_avg_len() { gather_flag_ |= ColumnGatherFlag::NEED_AVG_LEN; }
+  inline void set_need_truncate_str() { gather_flag_ |= ColumnGatherFlag::NEED_TRUNCATE_STR; }
+  inline bool is_valid_opt_col() const { return gather_flag_ & ColumnGatherFlag::VALID_OPT_COL; }
+  inline bool need_basic_stat() const { return gather_flag_ & ColumnGatherFlag::NEED_BASIC_STAT; }
+  inline bool need_avg_len() const { return gather_flag_ & ColumnGatherFlag::NEED_AVG_LEN; }
+  inline bool need_truncate_str() const { return gather_flag_ & ColumnGatherFlag::NEED_TRUNCATE_STR; }
 
   ObString column_name_;
   uint64_t column_id_;
@@ -315,12 +331,11 @@ struct ObColumnStatParam {
   int64_t size_mode_;
   int64_t bucket_num_;
   int64_t column_attribute_;
-  bool is_valid_hist_type_;
-  bool need_basic_static_;
   int64_t column_usage_flag_;
-  bool need_truncate_str_;
+  int64_t gather_flag_;
 
-  static bool is_valid_histogram_type(const ObObjType type);
+  static bool is_valid_opt_col_type(const ObObjType type);
+  static bool is_valid_avglen_type(const ObObjType type);
   static const int64_t DEFAULT_HISTOGRAM_BUCKET_NUM;
 
   TO_STRING_KV(K_(column_name),
@@ -329,10 +344,8 @@ struct ObColumnStatParam {
                K_(size_mode),
                K_(bucket_num),
                K_(column_attribute),
-               K_(is_valid_hist_type),
-               K_(need_basic_static),
                K_(column_usage_flag),
-               K_(need_truncate_str));
+               K_(gather_flag));
 };
 
 struct ObTableStatParam {

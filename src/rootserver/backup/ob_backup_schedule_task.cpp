@@ -1047,7 +1047,7 @@ int ObBackupCleanLSTask::build(const ObBackupCleanTaskAttr &task_attr, const ObB
   int ret = OB_SUCCESS;
   ObBackupScheduleTaskKey key;
   if (!task_attr.is_valid() || !ls_attr.is_valid()) {
-    ret = OB_SUCCESS;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_attr), K(ls_attr));
   } else if (OB_FAIL(key.init(ls_attr.tenant_id_, ls_attr.job_id_, ls_attr.task_id_, ls_attr.ls_id_.id(), BackupJobType::BACKUP_CLEAN_JOB))) {
     LOG_WARN("failed to init backup schedule task key", K(ret), K(task_attr), K(ls_attr));

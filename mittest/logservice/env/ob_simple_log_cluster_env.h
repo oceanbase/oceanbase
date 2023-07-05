@@ -73,6 +73,17 @@ int generate_data(char *&buf, int buf_len, int &real_data_size, const int wanted
 int generate_specifice_size_data(char *&buf, int buf_len, int wanted_data_size);
 int generate_blob_data(char *&buf, int buf_len, int &wanted_data_size);
 
+#define EXPECT_UNTIL_EQ(x, y) while(!(x == y))        \
+        { usleep(500);                                \
+          SERVER_LOG(INFO, "EXPECT_UNTIL_EQ WAIT",    \
+          "file", oceanbase::common::occam::get_file_name_without_dir(__FILE__), \
+          "line", __LINE__); }
+#define EXPECT_UNTIL_NE(x, y) while(x == y)           \
+        { usleep(500);                                \
+          SERVER_LOG(INFO, "EXPECT_UNTIL_NE WAIT",    \
+          "file", oceanbase::common::occam::get_file_name_without_dir(__FILE__), \
+          "line", __LINE__); }
+
 struct PalfHandleImplGuard
 {
   PalfHandleImplGuard();
@@ -137,8 +148,25 @@ public:
   int create_paxos_group(const int64_t id, const share::SCN &create_scn, int64_t &leader_idx, PalfHandleImplGuard &leader);
   int create_paxos_group(const int64_t id, const LSN &lsn, int64_t &leader_idx, PalfHandleImplGuard &leader);
   int create_paxos_group(const int64_t id, const PalfBaseInfo &info, int64_t &leader_idx, PalfHandleImplGuard &leader);
-  int create_paxos_group(const int64_t id, const PalfBaseInfo &info, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group(const int64_t id,
+                         const PalfBaseInfo &info,
+                         palf::PalfLocationCacheCb *loc_cb,
+                         int64_t &leader_idx,
+                         const bool with_mock_election,
+                         PalfHandleImplGuard &leader);
   int create_paxos_group_with_arb(const int64_t id, int64_t &arb_replica_idx, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group_with_arb(const int64_t id,
+                                  int64_t &arb_replica_idx,
+                                  int64_t &leader_idx,
+                                  const bool with_mock_election,
+                                  PalfHandleImplGuard &leader);
+  int create_paxos_group_with_mock_election(const int64_t id,
+                                            int64_t &leader_idx,
+                                            PalfHandleImplGuard &leader);
+  int create_paxos_group_with_arb_mock_election(const int64_t id,
+                                                int64_t &arb_replica_idx,
+                                                int64_t &leader_idx,
+                                                PalfHandleImplGuard &leader);
   virtual int delete_paxos_group(const int64_t id);
   virtual int update_disk_options(const int64_t server_id, const int64_t log_block_number);
   virtual int restart_paxos_groups();
@@ -158,6 +186,8 @@ public:
   virtual void unblock_all_net(const int64_t id);
   virtual void block_net(const int64_t id1, const int64_t id2, const bool is_single_direction = false);
   virtual void unblock_net(const int64_t id1, const int64_t id2);
+  virtual void block_pcode(const int64_t id1, const ObRpcPacketCode &pcode);
+  virtual void unblock_pcode(const int64_t id1, const ObRpcPacketCode &pcode);
   virtual void set_rpc_loss(const int64_t id1, const int64_t id2, const int loss_rate);
   virtual void reset_rpc_loss(const int64_t id1, const int64_t id2);
   virtual int submit_log(PalfHandleImplGuard &leader, int count, int id);
@@ -210,5 +240,59 @@ private:
   int64_t prev_leader_idx_;
 };
 
+class IOTaskCond : public LogIOTask {
+public:
+	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
+  {
+    PALF_LOG(INFO, "before cond_wait");
+    cond_.wait();
+    PALF_LOG(INFO, "after cond_wait");
+    return OB_SUCCESS;
+  };
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
+  {
+    return OB_SUCCESS;
+  }
+  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
+  int init(int64_t palf_id)
+  {
+    palf_id_ = palf_id;
+    return OB_SUCCESS;
+  };
+  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  ObCond cond_;
+};
+
+class IOTaskConsumeCond : public LogIOTask {
+public:
+	IOTaskConsumeCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
+  {
+    int ret = OB_SUCCESS;
+    PALF_LOG(INFO, "do_task_ success");
+    if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
+      PALF_LOG(WARN, "push_task_into_cb_thread_pool failed", K(ret), K(tg_id), KP(this));
+    }
+    return ret;
+  };
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
+  {
+    PALF_LOG(INFO, "before cond_wait");
+    cond_.wait();
+    PALF_LOG(INFO, "after cond_wait");
+    return OB_SUCCESS;
+  }
+  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
+  int init(int64_t palf_id)
+  {
+    palf_id_ = palf_id;
+    return OB_SUCCESS;
+  };
+  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  virtual int64_t get_io_size_() const {return 0;}
+  bool need_purge_throttling_() const {return true;}
+  ObCond cond_;
+};
 } // end namespace unittest
 } // end namespace oceanbase

@@ -359,7 +359,14 @@ outer_stmt:
   | package_body_block { $$ = $1; }
   | create_trigger_stmt { $$ = $1; }
   | drop_trigger_stmt { $$ = $1; }
-  | plsql_trigger_source { $$ = $1; }
+  | plsql_trigger_source
+    {
+      if (!parse_ctx->is_inner_parse_) {
+        obpl_mysql_yyerror(&@1, parse_ctx, "Syntax Error\n");
+        YYERROR;
+      }
+      $$ = $1;
+    }
 ;
 
 /*****************************************************************************
@@ -543,7 +550,7 @@ call_sp_stmt:
 
 opt_sp_cparam_list:
     /* Empty */ { $$ = NULL; }
-  | '(' ')' { $$ =NULL; }
+  | '(' ')' { $$ = NULL; }
   | '(' sp_cparams ')'
     {
       merge_nodes($$, parse_ctx->mem_pool_, T_SP_CPARAM_LIST, $2);
@@ -589,7 +596,7 @@ opt_sp_cparam_with_assign:
 ;
 
 cexpr:
-    {
+    %prec LOWER_PARENS {
       //same as expr in sql rule, and terminate when read ';'
       do_parse_sql_expr_rule($$, parse_ctx, 3, ',', ')', PARAM_ASSIGN_OPERATOR);
       if (NULL == $$) {
@@ -1983,7 +1990,12 @@ scalar_data_type:
   }
   | pl_obj_access_ref '%' ROWTYPE
   {
-    malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ROWTYPE, 1, $1);
+    if (parse_ctx->is_for_trigger_ && parse_ctx->is_inner_parse_) {
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ROWTYPE, 1, $1);
+    } else {
+      obpl_mysql_yyerror(&@3, parse_ctx, "Syntax Error\n");
+      YYERROR;
+    }
   }
 ;
 

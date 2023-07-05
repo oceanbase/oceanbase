@@ -402,10 +402,18 @@ int TriggerHandle::calc_trigger_routine(
   ObArray<int64_t> path;
   ObArray<int64_t> nocopy_params;
   trigger_id = ObTriggerInfo::get_trigger_spec_package_id(trigger_id);
+  bool old_flag = false;
+  CK (OB_NOT_NULL(exec_ctx.get_my_session()));
+  OX (old_flag = exec_ctx.get_my_session()->is_for_trigger_package());
+  OX (exec_ctx.get_my_session()->set_for_trigger_package(true));
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
   OZ (exec_ctx.get_pl_engine()->execute(
     exec_ctx, exec_ctx.get_allocator(), trigger_id, routine_id, path, params, nocopy_params, result),
       trigger_id, routine_id, params);
+  if (exec_ctx.get_my_session()->is_for_trigger_package()) {
+    // whether `ret == OB_SUCCESS`, need to restore flag
+    exec_ctx.get_my_session()->set_for_trigger_package(old_flag);
+  }
   return ret;
 }
 

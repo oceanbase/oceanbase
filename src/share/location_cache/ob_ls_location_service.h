@@ -181,38 +181,41 @@ public:
 private:
   int check_inner_stat_() const;
 
-  int get_from_cache(
+  int get_from_cache_(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       ObLSLocation &location);
-  int renew_location(
+  int renew_location_(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       ObLSLocation &location);
-  int fill_location(const int64_t cluster_id, const ObLSInfo &ls_info, ObLSLocation &location);
-  int update_cache(
+  int fill_location_(const int64_t cluster_id, const ObLSInfo &ls_info, ObLSLocation &location);
+  int update_cache_(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       const bool can_erase,
       ObLSLocation &location);
-  int erase_location(
+  int erase_location_safely_(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id);
-  int build_tenant_ls_info_hash(ObTenantLsInfoHashMap &hash);
+  int build_tenant_ls_info_hash_(ObTenantLsInfoHashMap &hash);
 
   int construct_rpc_dests_(common::ObIArray<common::ObAddr> &addrs);
   int detect_ls_leaders_(
       const common::ObIArray<common::ObAddr> &dests,
       common::ObArray<share::ObLSLeaderLocation> &leaders);
+  int try_clear_dropped_tenant_caches_(
+      const common::ObIArray<uint64_t> &tenant_ids_in_schema);
 private:
   static const int64_t OB_LOCATION_CACHE_BUCKET_NUM = 512;
   static const int64_t RENEW_LS_LOCATION_INTERVAL_US = 1000 * 1000L; // 1s
   static const int64_t RENEW_LS_LOCATION_BY_RPC_INTERVAL_US = 1000 * 1000L; // 1s
   static const int64_t DUMP_CACHE_INTERVAL_US = 10 * 1000 * 1000L; // 10s
+  static const int64_t CLEAR_CACHE_INTERVAL = 10 * 1000 * 1000L; // 10s
 
   bool inited_;
   bool stopped_;

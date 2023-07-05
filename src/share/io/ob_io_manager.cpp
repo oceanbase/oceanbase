@@ -280,7 +280,7 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
   return ret;
 }
 
-int ObIOManager::detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms)
+int ObIOManager::detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms, int &sys_io_errno)
 {
   int ret = OB_SUCCESS;
   ObRefHolder<ObTenantIOManager> tenant_holder;
@@ -299,6 +299,10 @@ int ObIOManager::detect_read(const ObIOInfo &info, ObIOHandle &handle, const uin
     LOG_WARN("tenant io manager do aio failed", K(ret), K(info), KPC(tenant_holder.get_ptr()));
   } else if (OB_FAIL(handle.wait(timeout_ms))) {
     LOG_WARN("io handle wait failed", K(ret), K(info), K(timeout_ms));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = handle.get_fs_errno(sys_io_errno))) {
+      LOG_WARN("fail to get io errno, ", K(sys_io_errno), K(tmp_ret));
+    }
   }
   return ret;
 }
@@ -686,8 +690,8 @@ void ObTenantIOManager::destroy()
   io_tracer_.destroy();
   io_scheduler_ = nullptr;
   tenant_id_ = 0;
-  io_allocator_.destroy();
   group_id_index_map_.destroy();
+  io_allocator_.destroy();
   is_inited_ = false;
 }
 

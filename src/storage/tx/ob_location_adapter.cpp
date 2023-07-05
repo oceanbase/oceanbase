@@ -12,6 +12,7 @@
 
 #include "ob_location_adapter.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {
@@ -144,6 +145,19 @@ int ObLocationAdapter::get_leader_(const int64_t cluster_id,
       }
     }
   }
+  if (OB_LS_LOCATION_NOT_EXIST == ret) {
+    int tmp_ret = OB_SUCCESS;
+    share::ObLSStatusOperator::ObLSExistState state;
+    if (OB_SUCCESS != (tmp_ret = ObLSStatusOperator::check_ls_exist(tenant_id, ls_id, state))) {
+      TRANS_LOG(WARN, "check if ls exist failed", K(tmp_ret), K(ls_id));
+    } else if (state.is_deleted()) {
+      // rewrite ret
+      ret = OB_LS_IS_DELETED;
+      TRANS_LOG(INFO, "ls is deleted", K(ret), K(ls_id));
+    } else {
+      // do nothing
+    }
+  }
   if (OB_SUCC(ret)) {
     if (!leader.is_valid()) {
       TRANS_LOG(WARN, "invalid server", K(ls_id), K(leader));
@@ -210,6 +224,19 @@ int ObLocationAdapter::nonblock_get(const int64_t cluster_id,
     TRANS_LOG(WARN, "nonblock get failed", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
   } else {
     // do nothing
+  }
+  if (OB_LS_LOCATION_NOT_EXIST == ret) {
+    int tmp_ret = OB_SUCCESS;
+    share::ObLSStatusOperator::ObLSExistState state;
+    if (OB_SUCCESS != (tmp_ret = ObLSStatusOperator::check_ls_exist(tenant_id, ls_id, state))) {
+      TRANS_LOG(WARN, "check if ls exist failed", K(tmp_ret), K(ls_id));
+    } else if (state.is_deleted()) {
+      // rewrite ret
+      ret = OB_LS_IS_DELETED;
+      TRANS_LOG(INFO, "ls is deleted", K(ret), K(ls_id));
+    } else {
+      // do nothing
+    }
   }
   return ret;
 }

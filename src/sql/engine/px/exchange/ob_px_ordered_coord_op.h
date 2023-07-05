@@ -128,6 +128,10 @@ private:
   int setup_readers();
   void destroy_readers();
   int next_row(ObReceiveRowReader &reader, bool &wait_next_msg);
+  virtual void clean_dfos_dtl_interm_result() override
+  {
+    msg_proc_.clean_dtl_interm_result(ctx_);
+  }
 private:
   ObPxOrderedCoordOpEventListener listener_;
   ObSerialDfoScheduler serial_scheduler_;

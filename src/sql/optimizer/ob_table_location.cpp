@@ -1270,7 +1270,8 @@ int ObTableLocation::init(
     if (OB_FAIL(record_in_dml_partition_info(stmt, exec_ctx, filter_exprs, is_in_hit_, table_schema))) { //这是一个特殊路径，针对in filter条件
       LOG_WARN("fail to record_in_dml_partition_info", K(ret));
     } else if (!is_in_hit_) {
-      if (OB_FAIL(record_not_insert_dml_partition_info(stmt, exec_ctx, table_schema, filter_exprs, dtc_params))) {
+      if (OB_FAIL(record_not_insert_dml_partition_info(stmt, exec_ctx, table_schema, filter_exprs, dtc_params,
+                                                       session_info->is_in_range_optimization_enabled()))) {
           LOG_WARN("Fail to record select or update partition info", K(stmt_type_), K(ret));
       } else if (OB_FAIL(get_not_insert_dml_part_sort_expr(stmt, sort_exprs))) {
         LOG_WARN("Failed to get not insert dml sort key with parts", K(ret));
@@ -1318,7 +1319,8 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected null", K(ret), K(session), K(sql_ctx));
   } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
-             dml_stmt.get_query_ctx()->is_contain_select_for_update_) {
+             dml_stmt.get_query_ctx()->is_contain_select_for_update_ ||
+             dml_stmt.get_query_ctx()->is_contain_inner_table_) {
     is_weak_read = false;
   } else {
     ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;
@@ -1927,7 +1929,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             ObPartLocCalcNode *&calc_node,
                                             ObPartLocCalcNode *&gen_col_node,
                                             bool &get_all,
-                                            bool &is_range_get)
+                                            bool &is_range_get,
+                                            const bool is_in_range_optimization_enabled)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ColumnItem, 5> part_columns;
@@ -1956,7 +1959,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             get_all,
                                             is_range_get,
                                             dtc_params,
-                                            exec_ctx))) {
+                                            exec_ctx,
+                                            is_in_range_optimization_enabled))) {
     LOG_WARN("Failed to get location calc node", K(ret));
   } else if (gen_cols.count() > 0) {
     //analyze information with dependented column of generated column
@@ -1967,7 +1971,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                      always_true,
                                      gen_col_node,
                                      dtc_params,
-                                     exec_ctx))) {
+                                     exec_ctx,
+                                     is_in_range_optimization_enabled))) {
       LOG_WARN("Get query range node error", K(ret));
     } else if (always_true) {
       gen_col_node = NULL;
@@ -2231,7 +2236,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
     ObExecContext *exec_ctx,
     const ObTableSchema *table_schema,
     const ObIArray<ObRawExpr*> &filter_exprs,
-    const ObDataTypeCastParams &dtc_params)
+    const ObDataTypeCastParams &dtc_params,
+    const bool is_in_range_optimization_enabled)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(set_location_calc_node(stmt,
@@ -2245,7 +2251,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                      calc_node_,
                                      gen_col_node_,
                                      part_get_all_,
-                                     is_part_range_get_))) {
+                                     is_part_range_get_,
+                                     is_in_range_optimization_enabled))) {
     LOG_WARN("failed to set location calc node for first-level partition", K(ret));
   } else if (PARTITION_LEVEL_TWO == part_level_
              && OB_FAIL(set_location_calc_node(stmt,
@@ -2259,7 +2266,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                                subcalc_node_,
                                                sub_gen_col_node_,
                                                subpart_get_all_,
-                                               is_subpart_range_get_))) {
+                                               is_subpart_range_get_,
+                                               is_in_range_optimization_enabled))) {
     LOG_WARN("failed to set location calc node for second-level partition", K(ret));
   }
 
@@ -2342,7 +2350,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                             bool &get_all,
                                             bool &is_range_get,
                                             const ObDataTypeCastParams &dtc_params,
-                                            ObExecContext *exec_ctx)
+                                            ObExecContext *exec_ctx,
+                                            const bool is_in_range_optimization_enabled)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_INVALID_ID;
@@ -2370,7 +2379,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                      always_true,
                                      calc_node,
                                      dtc_params,
-                                     exec_ctx))) {
+                                     exec_ctx,
+                                     is_in_range_optimization_enabled))) {
       LOG_WARN("Get query range node error", K(ret));
     } else if (always_true) {
       get_all = true;
@@ -2412,7 +2422,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       ObPartLocCalcNode *column_node = NULL;
       if (normal_filters.count() > 0) {
         if (OB_FAIL(get_query_range_node(part_level, partition_columns, filter_exprs, column_always_true,
-                                         column_node, dtc_params, exec_ctx))) {
+                                         column_node, dtc_params, exec_ctx, is_in_range_optimization_enabled))) {
           LOG_WARN("Failed to get query range node", K(ret));
         }
       }
@@ -2439,7 +2449,8 @@ int ObTableLocation::get_query_range_node(const ObPartitionLevel part_level,
                                           bool &always_true,
                                           ObPartLocCalcNode *&calc_node,
                                           const ObDataTypeCastParams &dtc_params,
-                                          ObExecContext *exec_ctx)
+                                          ObExecContext *exec_ctx,
+                                          const bool is_in_range_optimization_enabled)
 {
   int ret = OB_SUCCESS;
   bool phy_rowid_for_table_loc = (part_level == part_level_);
@@ -2458,7 +2469,8 @@ int ObTableLocation::get_query_range_node(const ObPartitionLevel part_level,
                                                                        NULL,
                                                                        NULL,
                                                                        phy_rowid_for_table_loc,
-                                                                       false))) {
+                                                                       false,
+                                                                       is_in_range_optimization_enabled))) {
       LOG_WARN("Failed to pre extract query range", K(ret));
     } else if (node->pre_query_range_.is_precise_whole_range()) {
       //pre query range is whole range, indicate that there are no partition condition in filters,

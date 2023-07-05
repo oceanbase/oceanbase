@@ -1246,6 +1246,8 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
         LOG_WARN("get unexpected null", K(session), K(ret));
       } else if (is_plan_root() && OB_FAIL(adjust_plan_root_output_exprs())) {
         LOG_WARN("failed to set plan root output", K(ret));
+      } else if (is_plan_root() && OB_FAIL(collecte_inseparable_exprs(*alloc_expr_context))) {
+        LOG_WARN("failed to set plan root output", K(ret));
       } else if (OB_FAIL(allocate_expr_pre(*alloc_expr_context))) {
         LOG_WARN("failed to do allocate expr pre", K(ret));
       } else {
@@ -1527,6 +1529,22 @@ int ObLogicalOperator::mark_expr_produced(ObRawExpr *expr,
       expr_producer->producer_id_ = producer_id;
       LOG_TRACE("expr is marked as produced.", K(expr_producer->expr_), K(branch_id),
           K(expr_producer->consumer_id_), K(producer_id));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::collecte_inseparable_exprs(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(stmt), K(ret));
+  } else if (stmt->is_dblink_stmt() && stmt->is_select_stmt()) {
+    const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(stmt);
+    if (OB_FAIL(sel_stmt->get_select_exprs(ctx.inseparable_exprs_))) {
+      LOG_WARN("failed to get select exprs", K(ret));
     }
   }
   return ret;
@@ -1869,11 +1887,13 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
     LOG_WARN("failed to add var to array", K(ret));
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
-    ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
-                                           ctx,
-                                           ref_cnt,
-                                           shard_exprs));
+  if (!ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
+      ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
+                                            ctx,
+                                            ref_cnt,
+                                            shard_exprs));
+    }
   }
   return ret;
 }
@@ -3305,6 +3325,8 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
       || OB_ISNULL(stmt = get_plan()->get_stmt())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("NULL pointer error", K(get_plan()), K(opt_ctx), K(schema_guard), K(ret));
+  } else if (partitions.count() == 0) {
+    // do nothing
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("fail to get index schema", K(ret), K(ref_table_id), K(table_id));
   }
@@ -3560,8 +3582,8 @@ int ObLogicalOperator::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
     if (OB_SUCC(ret)) {
       if (LOG_SET == get_type() && !got_in_exch) {
         ObLogSet *set_op = static_cast<ObLogSet *>(this);
-        bool is_union_all = ObSelectStmt::UNION == set_op->get_set_op() && !set_op->is_set_distinct();
-        if (is_union_all && max_dfo_child_idx > 0) {
+        bool is_union = ObSelectStmt::UNION == set_op->get_set_op();
+        if (is_union && max_dfo_child_idx > 0) {
           got_in_exch = true;
         }
       }
@@ -3821,7 +3843,7 @@ int ObLogicalOperator::allocate_gi_recursively(AllocGIContext &ctx)
     if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
       LOG_WARN("allocate gi above table scan failed", K(ret));
     }
-  } else if (is_fully_paratition_wise() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
+  } else if (is_fully_partition_wise() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
     ctx.alloc_gi_ = true;
     if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
       LOG_WARN("allocate gi above table scan failed", K(ret));
@@ -3895,7 +3917,7 @@ int ObLogicalOperator::pw_allocate_granule_post(AllocGIContext &ctx)
     // so that won't work in the plan found in this bug.
     // Now we support GI rescan in partition_wise_state so we just push up the GI here in such case
     //
-    if (ctx.is_in_partition_wise_state() && is_fully_paratition_wise()) {
+    if (ctx.is_in_partition_wise_state() && is_fully_partition_wise()) {
       ctx.alloc_gi_ = true;
       if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
         LOG_WARN("allocate gi above table scan failed", K(ret));

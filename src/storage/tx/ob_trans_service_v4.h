@@ -162,6 +162,7 @@ int handle_trans_ask_state(const ObAskStateMsg &msg, obrpc::ObTransRpcResult &re
 int handle_trans_ask_state_response(const ObAskStateRespMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_trans_collect_state(const ObCollectStateMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_trans_collect_state_response(const ObCollectStateRespMsg &msg, obrpc::ObTransRpcResult &result);
+int handle_ls_deleted(const ObTxMsg &msg);
 void build_tx_collect_state_resp_(ObCollectStateRespMsg &resp, const ObCollectStateMsg &msg);
 void build_tx_ask_state_resp_(ObAskStateRespMsg &resp, const ObAskStateMsg &msg);
 int check_for_standby(const share::ObLSID &ls_id,
@@ -170,7 +171,7 @@ int check_for_standby(const share::ObLSID &ls_id,
                       bool &can_read,
                       SCN &trans_version,
                       bool &is_determined_state);
-
+void handle_defer_abort(ObTxDesc &tx);
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
 private:
@@ -178,6 +179,7 @@ int check_ls_status_(const share::ObLSID &ls_id, bool &leader);
 void init_tx_(ObTxDesc &tx, const uint32_t session_id);
 int start_tx_(ObTxDesc &tx);
 int abort_tx_(ObTxDesc &tx, const int cause, bool cleanup = true);
+void abort_tx__(ObTxDesc &tx, bool cleanup);
 int finalize_tx_(ObTxDesc &tx);
 int find_parts_after_sp_(ObTxDesc &tx,
                          ObTxPartRefList &parts,
@@ -190,10 +192,13 @@ int rollback_savepoint_slowpath_(ObTxDesc &tx,
                                  const ObTxPartRefList &parts,
                                  const int64_t scn,
                                  const int64_t expire_ts);
+void on_sp_rollback_succ_(const ObTxLSEpochPair &part,
+                          ObTxDesc &tx,
+                          const int64_t born_epoch,
+                          const ObAddr &addr);
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    const ObTxDesc &tx,
                    ObPartTransCtx *&ctx);
-
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    ObLS *ls,
                    const ObTxDesc &tx,
@@ -236,7 +241,10 @@ int acquire_global_snapshot__(const int64_t expire_ts,
                               share::SCN &snapshot,
                               int64_t &uncertain_bound,
                               ObFunction<bool()> interrupt_checker);
-int batch_post_tx_msg_(ObTxRollbackSPMsg &msg, const ObIArray<ObTxLSEpochPair> &pl);
+int batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
+                                       ObTxRollbackSPMsg &msg,
+                                       const ObIArray<ObTxLSEpochPair> &list,
+                                       int &post_succ_num);
 int post_tx_commit_msg_(ObTxDesc &tx_desc,
                         ObTxCommitMsg &msg,
                         ObITxCallback *cb);
@@ -244,7 +252,7 @@ int post_tx_abort_part_msg_(const ObTxDesc &tx_desc,
                             const ObTxPart &p);
 bool is_sync_replica_(const share::ObLSID &ls_id);
 
-void handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader);
+int handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader, const bool ls_deleted);
 
 int update_max_read_ts_(const uint64_t tenant_id,
                         const share::ObLSID &lsid,
@@ -253,7 +261,7 @@ int do_commit_tx_(ObTxDesc &tx,
                   const int64_t expire_ts,
                   ObITxCallback &cb,
                   share::SCN &commit_version);
-int do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts);
+int do_commit_tx_slowpath_(ObTxDesc &tx);
 int register_commit_retry_task_(ObTxDesc &tx, int64_t max_delay = INT64_MAX);
 int unregister_commit_retry_task_(ObTxDesc &tx);
 int handle_tx_commit_result_(ObTxDesc &tx,
@@ -271,8 +279,17 @@ int local_ls_commit_tx_(const ObTransID &tx_id,
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
                                 int &state,
-                                share::SCN &commit_version);
-int gen_trans_id_(ObTransID &trans_id);
+                                share::SCN &commit_version)
+{
+  share::SCN recycle_scn;
+  return get_tx_state_from_tx_table_(lsid, tx_id, state, commit_version, recycle_scn);
+}
+int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
+                                const ObTransID &tx_id,
+                                int &state,
+                                share::SCN &commit_version,
+                                share::SCN &recycle_scn);
+OB_NOINLINE int gen_trans_id_(ObTransID &trans_id);
 bool commit_need_retry_(const int ret);
 // for xa
 int build_tx_sub_prepare_msg_(const ObTxDesc &tx, ObTxSubPrepareMsg &msg);
@@ -346,6 +363,7 @@ int wait_follower_readable_(ObLS &ls,
                             const share::SCN &snapshot,
                             const ObTxReadSnapshot::SRC src);
 MonotonicTs get_req_receive_mts_();
+bool is_ls_dropped_(const share::ObLSID ls_id);
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

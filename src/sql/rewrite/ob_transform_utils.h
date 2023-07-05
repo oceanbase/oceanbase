@@ -882,6 +882,11 @@ public:
                                   ObRawExpr *&to_expr,
                                   ObSQLSessionInfo *session_info);
 
+  static int add_cast_for_replace_if_need(ObRawExprFactory &expr_factory,
+                                          const ObRawExpr *from_expr,
+                                          ObRawExpr *&to_expr,
+                                          ObSQLSessionInfo *session_info);
+
   static int extract_table_exprs(const ObDMLStmt &stmt,
                                  const ObIArray<ObRawExpr *> &source_exprs,
                                  const TableItem &target,
@@ -1389,8 +1394,11 @@ public:
 
   static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2);
   static int add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
-                                     ObRawExpr *expr,
-                                     bool is_negative = false);
+                                       ObRawExpr *expr,
+                                       bool is_negative = false);
+  static int add_equal_expr_value_constraint(ObTransformerCtx *trans_ctx,
+                                             ObRawExpr *left,
+                                             ObRawExpr *right);
   static bool check_objparam_negative(const ObObjParam &obj1);
   static int add_param_bool_constraint(ObTransformerCtx *ctx,
                                        ObRawExpr *bool_expr,
@@ -1401,7 +1409,13 @@ public:
                                         bool need_query_compare,
                                         ObTransformerCtx *tran_ctx,
                                         bool in_add_expr);
-  static int add_constraint_for_groupby_expr(ObTransformerCtx *trans_ctx, ObSelectStmt *select_stmt, ObRawExpr* groupby_expr, ObRawExpr* old_expr);
+
+  static int add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
+                                           ObIArray<ObRawExpr *> &not_null_exprs);
+
+  static int add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
+                                           ObRawExpr *not_null_expr,
+                                           bool is_true = true);
 
   static int add_param_not_null_constraint(ObTransformerCtx &ctx, 
                                            ObIArray<ObRawExpr *> &not_null_exprs);
@@ -1710,6 +1724,7 @@ public:
   static int extract_shared_exprs(ObDMLStmt *parent,
                                   ObIArray<ObRawExpr *> &relation_exprs,
                                   ObIArray<ObRawExpr *> &common_exprs);
+  static int check_is_index_part_key(ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *check_expr, bool &is_valid);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

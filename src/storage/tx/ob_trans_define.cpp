@@ -1032,6 +1032,49 @@ void ObTxExecInfo::destroy()
   reset();
 }
 
+int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (this == &exec_info) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "no need to assign the same object", KR(ret), K(exec_info));
+  } else if (OB_FAIL(participants_.assign(exec_info.participants_))) {
+    TRANS_LOG(WARN, "participants assign error", KR(ret), K(exec_info));
+  } else if (OB_FAIL(incremental_participants_.assign(exec_info.incremental_participants_))) {
+    TRANS_LOG(WARN, "incremental participants assign error", KR(ret), K(exec_info));
+  } else if (OB_FAIL(redo_lsns_.assign(exec_info.redo_lsns_))) {
+    TRANS_LOG(WARN, "redo_lsns assign error", KR(ret), K(exec_info));
+  } else if (OB_FAIL(multi_data_source_.assign(exec_info.multi_data_source_))) {
+    TRANS_LOG(WARN, "multi_data_source assign error", KR(ret), K(exec_info));
+  } else if (OB_FAIL(prepare_log_info_arr_.assign(exec_info.prepare_log_info_arr_))) {
+    TRANS_LOG(WARN, "prepare log info array assign error", KR(ret), K(exec_info));
+  } else {
+    // Prepare version should be initialized before state_
+    // for ObTransPartCtx::get_prepare_version_if_preapred();
+    prepare_version_.atomic_store(exec_info.prepare_version_);
+    state_ = exec_info.state_;
+    upstream_ = exec_info.upstream_;
+    prev_record_lsn_ = exec_info.prev_record_lsn_;
+    scheduler_ = exec_info.scheduler_;
+    trans_type_ = exec_info.trans_type_;
+    next_log_entry_no_ = exec_info.next_log_entry_no_;
+    max_applied_log_ts_ = exec_info.max_applied_log_ts_;
+    max_applying_log_ts_ = exec_info.max_applying_log_ts_;
+    max_applying_part_log_no_ = exec_info.max_applying_part_log_no_;
+    max_submitted_seq_no_ = exec_info.max_submitted_seq_no_;
+    checksum_ = exec_info.checksum_;
+    checksum_scn_ = exec_info.checksum_scn_;
+    max_durable_lsn_ = exec_info.max_durable_lsn_;
+    data_complete_ = exec_info.data_complete_;
+    is_dup_tx_ = exec_info.is_dup_tx_;
+    xid_ = exec_info.xid_;
+    need_checksum_ = exec_info.need_checksum_;
+    is_sub2pc_ = exec_info.is_sub2pc_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     state_,
                     upstream_,

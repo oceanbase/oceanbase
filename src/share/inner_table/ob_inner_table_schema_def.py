@@ -11164,7 +11164,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'ws306254',
+  owner = 'handora.qc',
   table_name     = '__all_virtual_minor_freeze_info',
   table_id       = '12338',
   table_type = 'VIRTUAL_TABLE',
@@ -11435,7 +11435,32 @@ def_table_schema(
 # 12381: __all_virtual_task_opt_stat_gather_history
 # 12382: __all_virtual_table_opt_stat_gather_history
 # 12383: __all_virtual_opt_stat_gather_monitor
-# 12384: __all_virtual_thread
+
+def_table_schema(
+  owner             = 'fengshuo.fs',
+  table_name        = '__all_virtual_thread',
+  table_id          = '12384',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('tenant_id',           'int'),
+    ('tid',                 'int'),
+    ('tname',               'varchar:16'),
+    ('status',              'varchar:32'),
+    ('wait_event',          'varchar:64'),
+    ('latch_wait',          'varchar:16'),
+    ('latch_hold',          'varchar:256'),
+    ('trace_id',            'varchar:40'),
+    ('loop_ts',             'timestamp')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12385: __all_virtual_arbitration_member_info
 # 12386: __all_virtual_server_storage
 # 12387: __all_virtual_arbitration_service_status
@@ -11732,7 +11757,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15295: __all_table_opt_stat_gather_history
 # 15296: __all_virtual_opt_stat_gather_monitor
 def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__all_virtual_long_ops_status']))
-# 15298: __all_virtual_thread
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298', all_def_keywords['__all_virtual_thread'])))
 # 15299: __all_virtual_wr_active_session_history
 # 15300: __all_virtual_wr_snapshot
 # 15301: __all_virtual_wr_statname
@@ -12137,11 +12162,11 @@ def_table_schema(
                     left join (
                       select tenant_id,
                              table_id,
-                             sum(row_cnt) as row_cnt,
-                             sum(row_cnt * avg_row_len) / sum(row_cnt) as avg_row_len,
-                             sum(row_cnt * avg_row_len) as data_size
+                             row_cnt,
+                             avg_row_len,
+                             row_cnt * avg_row_len as data_size
                       from oceanbase.__all_table_stat
-                      group by tenant_id, table_id) ts
+                      where partition_id = -1 or partition_id = table_id) ts
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
                     where a.tenant_id = 0
@@ -12486,7 +12511,10 @@ def_table_schema(
                       CAST(mp.collation_database AS CHAR(32)) as DATABASE_COLLATION
                     from
                       mysql.proc as mp
+                      join oceanbase.__all_database a
+                      on mp.DB = a.DATABASE_NAME
                       join oceanbase.__all_routine as r on mp.specific_name = r.routine_name
+                      and r.DATABASE_ID = a.DATABASE_ID
                       left join oceanbase.__all_routine_param as rp on rp.subprogram_id = r.subprogram_id
                       and rp.tenant_id = r.tenant_id
                       and rp.routine_id = r.routine_id
@@ -13812,10 +13840,10 @@ def_table_schema(
            CAST(TARGET AS CHAR(64)) AS TARGET,
            CAST(SVR_IP AS CHAR(46)) AS SVR_IP,
            CAST(SVR_PORT AS SIGNED) AS SVR_PORT,
-           CAST(USEC_TO_TIME(START_TIME) AS DATE) AS START_TIME,
+           CAST(USEC_TO_TIME(START_TIME) AS DATETIME) AS START_TIME,
            CAST(ELAPSED_TIME/1000000 AS SIGNED) AS ELAPSED_SECONDS,
            CAST(REMAINING_TIME AS SIGNED) AS TIME_REMAINING,
-           CAST(USEC_TO_TIME(LAST_UPDATE_TIME) AS DATE) AS LAST_UPDATE_TIME,
+           CAST(USEC_TO_TIME(LAST_UPDATE_TIME) AS DATETIME) AS LAST_UPDATE_TIME,
            CAST(MESSAGE AS CHAR(512)) AS MESSAGE
     FROM oceanbase.__all_virtual_virtual_long_ops_status_mysql_sys_agent
 """.replace("\n", " ")
@@ -25151,7 +25179,7 @@ def_table_schema(
            CAST(f.table_name AS CHAR(256)) AS TABLE_NAME,
            CAST('FOREIGN KEY' AS CHAR(11)) AS CONSTRAINT_TYPE,
            CAST('YES' AS CHAR(3)) AS ENFORCED
-    FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS f
+    FROM information_schema.REFERENTIAL_CONSTRAINTS f
 
   """.replace("\n", " "),
 )
@@ -29565,12 +29593,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -29738,12 +29766,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -29908,12 +29936,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -30953,9 +30981,9 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               SUM(ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
-        GROUP BY TENANT_ID, TABLE_ID) TS
+        WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
       AND T.TENANT_ID = TS.TENANT_ID
       WHERE T.PART_LEVEL = 0
@@ -31110,9 +31138,9 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               SUM(ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
-        GROUP BY TENANT_ID, TABLE_ID) TS
+        WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
       AND T.TENANT_ID = TS.TENANT_ID
       WHERE T.PART_LEVEL = 0
@@ -35420,14 +35448,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 
@@ -35563,14 +35589,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 
@@ -35702,14 +35726,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 
@@ -47143,7 +47165,7 @@ def_table_schema(
 SELECT
   SVR_IP, SVR_PORT, SQL_PORT,
   ID,
-  USER,
+  "USER",
   HOST,
   DB,
   TENANT,

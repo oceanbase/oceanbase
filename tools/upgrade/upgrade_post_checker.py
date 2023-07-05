@@ -105,6 +105,8 @@ def enable_rereplication(cur, timeout):
 # 7 打开major freeze
 def enable_major_freeze(cur, timeout):
   actions.set_parameter(cur, 'enable_major_freeze', 'True', timeout)
+  actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'True', timeout)
+  actions.do_resume_merge(cur, timeout)
 
 # 开始升级后的检查
 def do_check(conn, cur, query_cur, timeout):

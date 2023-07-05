@@ -281,22 +281,24 @@ int ObFreezeInfoManager::set_freeze_info()
 
   ObRecursiveMutexGuard guard(lock_);
 
-  int64_t tenant_schema_version = -1;
+  // not to check newest schema_version
+  int64_t fake_schema_version = 1000;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_refreshed_schema_version(tenant_id_, tenant_schema_version))) {
-    LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K_(tenant_id));
   } else {
     ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
     // freeze get_schema_version need interactive with ddl trans but don't use gen_new_schema_version so no need check_in_rs
-    ObDDLSQLTransaction trans(GCTX.schema_service_, false/*need_end_signal*/, false/*stash*/, false/*parallel*/, false/*check_in_rs*/);
+    // freeze disable check_newest_schema so not to use schema_guard
+    ObDDLSQLTransaction trans(GCTX.schema_service_, false/*need_end_signal*/, false/*stash*/, false/*parallel*/, false/*check_in_rs*/, false/*check_newest_schema*/);
 
     // In 'ddl_sql_transaction.start()', it implements the semantics of 'lock_all_ddl_operation'.
-    if (OB_FAIL(trans.start(sql_proxy_, tenant_id_, tenant_schema_version))) {
-      LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(tenant_schema_version));
+    if (OB_FAIL(trans.start(sql_proxy_, tenant_id_, fake_schema_version))) {
+      if ((OB_TRANS_TIMEOUT == ret) || (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret)) {
+        ret = OB_EAGAIN; // in order to try launch major freeze again, set ret = OB_EAGAIN here
+        LOG_WARN("ddl conflict, will try to launch major freeze again", KR(ret), K_(tenant_id));
+      } else {
+        LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(fake_schema_version));
+      }
     // 1. lock snapshot_gc_ts in __all_global_stat
     } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
               trans, tenant_id_, remote_snapshot_gc_scn))) {

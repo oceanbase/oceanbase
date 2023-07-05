@@ -1298,6 +1298,11 @@ int ObMPConnect::get_tenant_id(uint64_t &tenant_id)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't login meta tenant", KR(ret), K_(tenant_name), K(tenant_id));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "login meta tenant");
+      } else if (!gctx_.schema_service_->is_tenant_refreshed(tenant_id)) {
+        ret = OB_SERVER_IS_INIT;
+        LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
+      } else {
+        // do nothing
       }
     }
   }
@@ -1486,6 +1491,7 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
       server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_SESSION_VAR_SYNC = 0;
     }
 
+    server_proxy_cap_flag.cap_flags_.OB_CAP_SERVER_DUP_SESS_INFO_SYNC = 1;
     conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);//if old java client, set it 0
 
     LOG_DEBUG("Negotiated capability",

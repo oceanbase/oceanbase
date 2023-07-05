@@ -350,6 +350,7 @@ int ObTenantFreezeInfoMgr::inner_get_neighbour_major_freeze(
     }
   }
   if (OB_SUCC(ret) && !found) {
+    // TODO(lixia.yq) use more accurate next_freeze_info in minor schedule
     info.next.freeze_version = INT64_MAX;
     info.prev = info_list.at(info_list.count() - 1);
   }

@@ -161,18 +161,16 @@ int ObTabletBindingHelper::lock_tablet_binding_for_create(
         }
       }
       if (OB_SUCC(ret)) {
+        ctx.last_idx_ = i;
         if (OB_FAIL(helper.lock_tablet_binding(info.data_tablet_id_))) {
           LOG_WARN("failed to lock orig tablet binding", K(ret));
-        } else {
-          ctx.last_idx_ = i;
         }
       }
     } else if (ObTabletCreateDeleteHelper::is_pure_aux_tablets(info)) {
       if (has_lob_tablets(arg, info)) {
+        ctx.last_idx_ = i;
         if (OB_FAIL(helper.lock_tablet_binding(info.data_tablet_id_))) {
           LOG_WARN("failed to lock tablet binding", K(ret));
-        } else {
-          ctx.last_idx_ = i;
         }
       }
     }
@@ -374,18 +372,16 @@ int ObTabletBindingHelper::lock_tablet_binding_for_unbind(const ObBatchUnbindTab
     int64_t last_orig_idx = -1;
     int64_t last_hidden_idx = -1;
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_arg.orig_tablet_ids_.count(); i++) {
+      last_orig_idx = i;
       if (OB_FAIL(helper.lock_tablet_binding(batch_arg.orig_tablet_ids_[i]))) {
         LOG_WARN("failed to lock tablet binding", K(ret));
-      } else {
-        last_orig_idx = i;
       }
     }
     if (batch_arg.is_redefined()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < batch_arg.hidden_tablet_ids_.count(); i++) {
+        last_hidden_idx = i;
         if (OB_FAIL(helper.lock_tablet_binding(batch_arg.hidden_tablet_ids_[i]))) {
           LOG_WARN("failed to lock tablet binding", K(ret));
-        } else {
-          last_hidden_idx = i;
         }
       }
     }

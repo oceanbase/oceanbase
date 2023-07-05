@@ -435,9 +435,7 @@ int ObExprNaNvl::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 int ObExprNaNvl::eval_nanvl_util(const ObExpr &expr, ObDatum &expr_datum, ObDatum *param1, ObDatum *param2, bool &ret_bool)
 {
   int ret = OB_SUCCESS;
-  if (param1->is_null() || param2->is_null()) {
-    expr_datum.set_null();
-  } else if (expr.args_[0]->datum_meta_.type_ != ObFloatType
+  if (expr.args_[0]->datum_meta_.type_ != ObFloatType
              && expr.args_[0]->datum_meta_.type_ != ObDoubleType) {
     expr_datum.set_datum(*param1);
   } else {
@@ -467,7 +465,7 @@ int ObExprNaNvl::eval_nanvl(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
     expr_datum.set_null();
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, param2))) {
     LOG_WARN("eval second param failed", K(ret));
-  } else if (param1->is_null() || param2->is_null()) {
+  } else if (param1->is_null() || (param2->is_null() && ObDoubleType != expr.args_[1]->datum_meta_.get_type())) {
     expr_datum.set_null();
   } else {
     if (OB_FAIL(eval_nanvl_util(expr, expr_datum, param1, param2, ret_bool))){
@@ -517,7 +515,9 @@ int ObExprNaNvl::eval_nanvl_batch(const ObExpr &expr,
         param1 = &expr.args_[0]->locate_expr_datum(ctx, i);
         param2 = &expr.args_[1]->locate_expr_datum(ctx, i);
         eval_flags.set(i);
-        if (OB_FAIL(eval_nanvl_util(expr, results[i], param1, param2, ret_bool))){
+        if (param1->is_null() || (param2->is_null() && ObDoubleType != expr.args_[1]->datum_meta_.get_type())) {
+          results[i].set_null();
+        } else if (OB_FAIL(eval_nanvl_util(expr, results[i], param1, param2, ret_bool))){
           LOG_WARN("eval_nanvl unexpect error", K(ret));
         } else {
           // do nothing

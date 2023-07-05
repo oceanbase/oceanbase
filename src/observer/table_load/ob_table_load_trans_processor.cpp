@@ -24,6 +24,8 @@ int ObTableLoadStartTransP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
@@ -62,6 +64,8 @@ int ObTableLoadPreStartTransPeerP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
@@ -97,6 +101,8 @@ int ObTableLoadConfirmStartTransPeerP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
@@ -134,6 +140,8 @@ int ObTableLoadFinishTransP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
@@ -169,6 +177,8 @@ int ObTableLoadPreFinishTransPeerP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
@@ -204,6 +214,8 @@ int ObTableLoadConfirmFinishTransPeerP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
@@ -313,6 +325,8 @@ int ObTableLoadGetTransStatusP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
@@ -350,6 +364,8 @@ int ObTableLoadGetTransStatusPeerP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_user_access(arg_.credential_))) {
     LOG_WARN("fail to check_user_access", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
   } else {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);

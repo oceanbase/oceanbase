@@ -296,7 +296,7 @@ static struct VarsInit{
       ObSysVars[16].base_class_ = "ObTimeZoneSysVar" ;
       ObSysVars[16].name_ = "time_zone" ;
       ObSysVars[16].data_type_ = ObVarcharType ;
-      ObSysVars[16].value_ = "+8:00" ;
+      ObSysVars[16].value_ = "+08:00" ;
       ObSysVars[16].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[16].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_time_zone" ;
       ObSysVars[16].id_ = SYS_VAR_TIME_ZONE ;
@@ -2882,7 +2882,7 @@ static struct VarsInit{
       ObSysVars[219].info_ = "max stale time(us) for weak read query " ;
       ObSysVars[219].name_ = "ob_max_read_stale_time" ;
       ObSysVars[219].data_type_ = ObIntType ;
-      ObSysVars[219].value_ = "5000000" ;
+      ObSysVars[219].value_ = "-1" ;
       ObSysVars[219].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[219].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
       ObSysVars[219].id_ = SYS_VAR_OB_MAX_READ_STALE_TIME ;

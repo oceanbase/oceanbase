@@ -29,6 +29,7 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/ob_super_block_struct.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -1040,11 +1041,38 @@ int ObBlockManager::mark_macro_blocks(
     for (int64_t i = 0; OB_SUCC(ret) && i < mtl_tenant_ids.count(); i++) {
       const uint64_t tenant_id = mtl_tenant_ids.at(i);
       MTL_SWITCH(tenant_id) {
-        if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set))) {
+        if (OB_FAIL(mark_held_shared_block(mark_info, macro_id_set))) {
+          LOG_WARN("fail to mark shared block held by shared_macro_block_manager", K(ret));
+        } else if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set))) {
           LOG_WARN("fail to mark tenant blocks", K(ret), K(tenant_id));
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObBlockManager::mark_held_shared_block(
+    MacroBlkIdMap &mark_info,
+    common::hash::ObHashSet<MacroBlockId> &macro_id_set)
+{
+  int ret = OB_SUCCESS;
+  MacroBlockId macro_id;
+  MTL(ObSharedMacroBlockMgr*)->get_cur_shared_block(macro_id);
+
+  if (!macro_id.is_valid()) {
+    // no small sstable, skip the mark
+  } else if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
+    LOG_WARN("fail to update mark info", K(ret), K(macro_id));
+  } else if (OB_FAIL(macro_id_set.set_refactored(macro_id, 0 /*no override*/))) {
+    if (OB_HASH_EXIST != ret) {
+      LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else {
+    hold_count_--;
+    used_macro_cnt_[ObMacroBlockCommonHeader::MacroBlockType::SSTableData]++;
   }
   return ret;
 }

@@ -146,7 +146,9 @@ int ObTransformViewMerge::check_hint_allowed_merge(ObDMLStmt &stmt,
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (query_hint->has_outline_data()) {
     // outline data allowed merge
-    if (query_hint->is_valid_outline_transform(ctx_->trans_list_loc_, myhint)) {
+    if (myhint != NULL &&
+        query_hint->is_valid_outline_transform(ctx_->trans_list_loc_, myhint) &&
+        myhint->enable_view_merge(ctx_->src_qb_name_)) {
       force_merge = true;
     } else {
       force_no_merge = true;

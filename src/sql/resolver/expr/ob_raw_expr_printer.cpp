@@ -102,7 +102,8 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       && scope_ != T_FIELD_LIST_SCOPE
       && scope_ != T_GROUP_SCOPE
       && scope_ != T_WHERE_SCOPE
-      && scope_ != T_NONE_SCOPE) {
+      && scope_ != T_NONE_SCOPE
+      && scope_ != T_ORDER_SCOPE) {
     //expr is a alias column ref
     //alias column target list
     PRINT_QUOT;
@@ -3987,8 +3988,18 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
       case T_NUMBER: {
         int16_t precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
         int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
-	      if (print_params_.for_dblink_) {
-          DATA_PRINTF("number");
+	      if (print_params_.for_dblink_ && lib::is_oracle_mode()) {
+          // The numeric precision range of ob and oracle are different,
+          // -1 and -85 are not supported for oracle
+          if (PRECISION_UNKNOWN_YET == precision &&
+              ORA_NUMBER_SCALE_UNKNOWN_YET == scale) {
+            DATA_PRINTF("number");
+          } else if (PRECISION_UNKNOWN_YET == precision &&
+                     0 == scale) {
+            DATA_PRINTF("int");
+          } else {
+            DATA_PRINTF("number(%d,%d)", precision, scale);
+          }
         } else {
           DATA_PRINTF("number(%d,%d)", precision, scale);
         }

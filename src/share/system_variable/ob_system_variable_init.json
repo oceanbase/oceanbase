@@ -257,7 +257,7 @@
   "time_zone": {
     "id": 16,
     "name": "time_zone",
-    "value": "+8:00",
+    "value": "+08:00",
     "data_type": "varchar",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -2911,7 +2911,7 @@
   "ob_max_read_stale_time": {
     "id": 10137,
     "name": "ob_max_read_stale_time",
-    "value": "5000000",
+    "value": "-1",
     "data_type": "int",
     "info": "max stale time(us) for weak read query ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",

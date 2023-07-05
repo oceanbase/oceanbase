@@ -228,7 +228,7 @@ int ObRawExprDeduceType::calc_result_type_with_const_arg(
         break;
       }  // end switch
     }
-    if (OB_FAIL(ret) && my_session_->is_ps_prepare_stage()) {
+    if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
       // the ps prepare stage does not do type deduction, and directly gives a default type.
       result_type.set_null();
       ret = OB_SUCCESS;
@@ -446,22 +446,9 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
         LOG_WARN("fail to calc result type with const arguments", K(ret));
       }
     }
-    if (OB_FAIL(ret) && my_session_->is_ps_prepare_stage()) {
+    if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
       // the ps prepare stage does not do type deduction, and directly gives a default type.
-      result_type.set_varchar();
-      result_type.set_default_collation_type();
-      result_type.set_collation_level(CS_LEVEL_IMPLICIT);
-      result_type.set_calc_type_default_varchar();
-      result_type.set_calc_collation_level(CS_LEVEL_IMPLICIT);
-      for (int64_t i = 0; i < types.count(); i++) {
-        types.at(i).set_varchar();
-        types.at(i).set_default_collation_type();
-        types.at(i).set_collation_level(CS_LEVEL_IMPLICIT);
-        types.at(i).set_calc_type_default_varchar();
-        types.at(i).set_calc_collation_level(CS_LEVEL_IMPLICIT);
-      }
-      expr.set_result_type(result_type);
-      expr.set_input_types(types);
+      result_type.set_null();
       ret = OB_SUCCESS;
     }
     // check parameters can cast to expected type
@@ -481,11 +468,12 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
         }
         if (OB_FAIL(ret)) {
         } else if (from != to && !cast_supported(from, from_cs_type, to, to_cs_type)
-          && !my_session_->is_ps_prepare_stage()) {
+          && !my_session_->is_varparams_sql_prepare()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("cast parameter to expected type not supported", K(ret), K(i), K(from), K(to));
         } else if (is_oracle_mode && (ob_is_lob_locator(from) || ob_is_text_tc(from))) {
-          if (OB_FAIL(check_lob_param_allowed(from, from_cs_type, to,
+          if (!my_session_->is_varparams_sql_prepare()
+            && OB_FAIL(check_lob_param_allowed(from, from_cs_type, to,
                                               to_cs_type, expr.get_expr_type()))) {
             LOG_WARN("lob parameter not allowed", K(ret));
           }
@@ -1412,7 +1400,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
                                       : ObNumberType);
           if (from_type != to_type && !cast_supported(from_type, from_cs_type,
                                                       to_type, CS_TYPE_BINARY)
-              && !my_session_->is_ps_prepare_stage()) {
+              && !my_session_->is_varparams_sql_prepare()) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("cast to expected type not supported", K(ret), K(from_type), K(to_type));
           } else {
@@ -1562,7 +1550,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
                                           ? from_cs_type : CS_TYPE_BINARY);
             if (from_type != to_type && !cast_supported(from_type, from_cs_type,
                                                         to_type, to_cs_type)
-                && !my_session_->is_ps_prepare_stage()) {
+                && !my_session_->is_varparams_sql_prepare()) {
               ret = OB_ERR_INVALID_TYPE_FOR_OP;
               LOG_WARN("cast to expected type not supported", K(ret), K(from_type), K(to_type));
             } else {
@@ -1636,12 +1624,12 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           }
           if (from_type1 != to_type && !cast_supported(from_type1, from_cs_type1,
                                                       to_type, to_cs_type)
-              && !my_session_->is_ps_prepare_stage()) {
+              && !my_session_->is_varparams_sql_prepare()) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("cast to expected type not supported", K(ret), K(from_type1), K(to_type));
           } else if (from_type2 != to_type && !cast_supported(from_type2, from_cs_type2,
                                                               to_type, to_cs_type)
-            && !my_session_->is_ps_prepare_stage()) {
+            && !my_session_->is_varparams_sql_prepare()) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("cast to expected type not supported", K(ret), K(from_type2), K(to_type));
           } else {
@@ -2151,6 +2139,15 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
   } else {
     ObExprResTypes types;
     ObCastMode expr_cast_mode = CM_NONE;
+    bool is_default_col = false;
+    if (T_FUN_SYS_DEFAULT == expr.get_expr_type()) {
+      if (OB_ISNULL(expr.get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(expr));
+      } else {
+        is_default_col = expr.get_param_expr(0)->is_column_ref_expr();
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
       const ObRawExpr *param_expr = expr.get_param_expr(i);
       if (OB_ISNULL(param_expr)) {
@@ -2163,7 +2160,7 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
         ret = OB_ERR_INVALID_COLUMN_NUM;
         LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
       } else if (T_FUN_COLUMN_CONV == expr.get_expr_type()
-                 || T_FUN_SYS_DEFAULT == expr.get_expr_type()) {
+                || (T_FUN_SYS_DEFAULT == expr.get_expr_type() && !is_default_col)) {
         //column_conv(type, collation_type, accuracy_expr, nullable, value)
         //前面四个参数都要特殊处理
         if (OB_FAIL(deduce_type_visit_for_special_func(i, *param_expr, types))) {
@@ -3198,7 +3195,7 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
         LOG_WARN("cast to lob type not allowed", K(ret));
       }
       OZ(parent.replace_param_expr(child_idx, new_expr));
-      if (OB_FAIL(ret) && my_session_->is_ps_prepare_stage()) {
+      if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
         ret = OB_SUCCESS;
         LOG_DEBUG("ps prepare phase ignores type deduce error");
       }
