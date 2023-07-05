@@ -31,10 +31,10 @@ public:
   void deinit();
   
   int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
-      int64_t& dst_data_size) override;
+        int64_t& dst_data_size) override;
 
   int decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
-      int64_t& dst_data_size) override;
+        int64_t& dst_data_size) override;
 
   const char* get_compressor_name() const override;
 
@@ -50,6 +50,11 @@ private:
   int zlib_compress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
   int zlib_decompress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
 
+private:
+  // If compiled with qpl but it is disabled, or there is no usdm_drv kernel module,
+  // the qpl cannot work
+  bool qpl_runtime_enabled_;
+  
   //zlib compress level,default is 1.
   static constexpr int compress_level = 1;
 
