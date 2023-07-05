@@ -889,7 +889,7 @@ int ObTenantFreezer::get_tenant_memstore_cond(
       memstore_limit = ctx.mem_memstore_limit_;
       active_memstore_used = ctx.active_memstore_used_;
       total_memstore_used = ctx.total_memstore_used_;
-      memstore_freeze_trigger = ctx.memstore_freeze_trigger_;
+      memstore_freeze_trigger = ctx.memstore_freeze_trigger_ + ctx.max_cached_memstore_size_;
       freeze_cnt = tenant_info_.freeze_cnt_;
 
       // cache the result

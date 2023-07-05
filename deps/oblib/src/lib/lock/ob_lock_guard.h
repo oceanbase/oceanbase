@@ -88,7 +88,7 @@ inline ObLockGuardWithTimeout<LockT>::ObLockGuardWithTimeout(LockT &lock, const 
     : lock_(lock),
       ret_(common::OB_SUCCESS)
 {
-  if (OB_UNLIKELY(common::OB_SUCCESS != (ret_ = lock_.lock(abs_timeout_us)))) {
+  if (OB_UNLIKELY(common::OB_SUCCESS != (ret_ = lock_.lock(abs_timeout_us)) && OB_TIMEOUT != ret_)) {
     COMMON_LOG_RET(ERROR, ret_, "Fail to lock, ", K_(ret));
   }
 }
