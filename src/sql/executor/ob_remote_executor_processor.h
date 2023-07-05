@@ -30,6 +30,7 @@ public:
   ObRemoteBaseExecuteP(const observer::ObGlobalContext &gctx, bool is_execute_remote_plan = false)
     : obrpc::ObRpcProcessor<T>(),
       gctx_(gctx),
+      rt_guard_(),
       guard_(MAX_HANDLE),
       exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
       vt_iter_factory_(*gctx_.vt_iter_creator_),
@@ -78,6 +79,8 @@ protected:
 
 protected:
   const observer::ObGlobalContext &gctx_;
+  // request time info guard
+  observer::ObReqTimeGuard rt_guard_;
   sql::ObCacheObjGuard guard_;
   sql::ObDesExecContext exec_ctx_;
   observer::ObVirtualTableIteratorFactory vt_iter_factory_;

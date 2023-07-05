@@ -647,7 +647,6 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
 
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
-    ObReqTimeGuard req_timeinfo_guard;
     ObSessionStatEstGuard stat_est_guard(session->get_effective_tenant_id(), session->get_sessid());
     // 初始化ObTask的执行环节
     //
