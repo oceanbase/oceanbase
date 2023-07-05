@@ -332,6 +332,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
         OZ (destruct_obj(record->get_element()[i], session));
       }
+      OX (src.set_null());
     }
       break;
     default: {
@@ -1461,15 +1462,20 @@ int ObPLComposite::copy_element(const ObObj &src,
       ObPLComposite *dest_composite
         = (dest.get_ext() == src.get_ext()) ? NULL : reinterpret_cast<ObPLComposite*>(dest.get_ext());
       ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src.get_ext());
+      ObArenaAllocator tmp_allocator;
       CK (OB_NOT_NULL(src_composite));
       OZ (ObPLComposite::deep_copy(*src_composite,
                                    dest_composite,
-                                   allocator,
+                                   dest.get_ext() == src.get_ext() ? tmp_allocator : allocator,
                                    ns,
                                    session,
                                    need_new_allocator));
       CK (OB_NOT_NULL(dest_composite));
       if (src.get_ext() == dest.get_ext()) {
+        OX (dest.set_extend(reinterpret_cast<int64_t>(src_composite),
+                            src.get_meta().get_extend_type(),
+                            src.get_val_len()));
+        OZ (ObUserDefinedType::destruct_obj(dest, session));
         OZ (ObPLComposite::deep_copy(*dest_composite,
                                      src_composite,
                                      allocator,
