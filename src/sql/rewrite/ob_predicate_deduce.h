@@ -245,6 +245,7 @@ private:
 
   int check_cmp_metas_for_general_preds(ObRawExpr *left_pexr, ObRawExpr *pred,  bool &type_safe);
 
+  bool has_raw_const_equal_condition(int64_t param_idx);
 private:
   ObObjMeta cmp_type_; // the compare meta used by all exprs in the graph
 
