@@ -251,8 +251,10 @@ int ObPDMLOpDataDriver::write_partitions(ObExecContext &ctx)
         // nop
       } else if (OB_FAIL(writer_->write_rows(ctx, tablet_loc, *row_iter))) {
         LOG_WARN("fail write rows", K(tablet_id), K(ret));
-      } else {
+      }
+      if (NULL != row_iter) {
         row_iter->close();
+        row_iter = NULL;
       }
     }
   }
