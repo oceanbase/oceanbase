@@ -706,8 +706,9 @@ int ObSSTableIndexBuilder::accumulate_macro_column_checksum(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(meta), K_(res.data_column_cnt), K_(index_store_desc));
   } else if (OB_UNLIKELY((index_store_desc_.is_major_merge() || index_store_desc_.is_meta_major_merge())
-        && index_store_desc_.default_col_checksum_array_valid_
+        && !index_store_desc_.default_col_checksum_array_valid_
         && res.data_column_cnt_ > meta.get_meta_val().column_count_)) {
+    // when default_col_checksum_array is invalid, need to make sure col_cnt in macro equal to col_cnt of result sstable
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "index store desc is invalid", K(ret), K_(index_store_desc), K(meta.get_meta_val().column_count_),
       K(res.data_column_cnt_));
