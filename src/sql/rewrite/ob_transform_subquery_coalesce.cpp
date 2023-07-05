@@ -439,6 +439,8 @@ int ObTransformSubqueryCoalesce::coalesce_same_any_all_exprs(ObDMLStmt *stmt,
                                                                   second_query_ref->get_ref_stmt(),
                                                                   map_info, relation))) {
           LOG_WARN("failed to check stmt containment", K(ret));
+        } else if (!map_info.is_select_item_equal_) {
+          OPT_TRACE("stmts have different select items, can not coalesce");
         } else if (relation == QUERY_LEFT_SUBSET || relation == QUERY_EQUAL) {
           remove_index = (type == T_ANY ? j : i);
           OPT_TRACE("right query contain left query, will coalesce suqbeury");
