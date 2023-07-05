@@ -137,7 +137,7 @@ int OMPKHandshakeResponse::decode()
                   uint64_t value_len = 0;
                   ret = ObMySQLUtil::get_length(pos, value_len, value_inc_len);
                   //OB_ASSERT(OB_SUCC(ret) && all_attrs_len > value_inc_len);
-                  if (OB_SUCC(ret) && all_attrs_len > value_inc_len && pos < end) {
+                  if (OB_SUCC(ret) && all_attrs_len >= value_inc_len && pos <= end) {
                     all_attrs_len -= value_inc_len;
                     str_kv.value_.assign_ptr(pos, static_cast<int32_t>(value_len));
                     //OB_ASSERT(all_attrs_len >= value_len);
