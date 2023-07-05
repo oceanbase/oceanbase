@@ -9598,10 +9598,14 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
 {
   int ret = OB_SUCCESS;
   uint64_t type_id = OB_INVALID_ID;
+  bool is_sys_type = false;
   OX (type_id = user_type->get_user_type_id());
+  OX (is_sys_type = (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(type_id)));
   if (OB_SUCC(ret)) {
     ObUDFInfo &uinfo = const_cast<ObUDFInfo &>(udf_info);
-    if (uinfo.udf_package_.empty()) {
+    if (is_sys_type) {
+      // do nothing
+    } else if (uinfo.udf_package_.empty()) {
       // object type name should same as constructor name
       uinfo.udf_package_ = uinfo.udf_name_;
     } else if (0 != uinfo.udf_package_.case_compare(uinfo.udf_name_)) {
@@ -9615,7 +9619,7 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
     } else {
       // do nothing
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && (!is_sys_type || user_type->is_opaque_type())) {
       SMART_VAR(ObPLFunctionAST, dummy_ast, resolve_ctx_.allocator_) {
         ObArray<ObString> access_name;
         OZ (access_name.push_back(ObString("SELF")));
@@ -9629,9 +9633,10 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
     // actually, here we need to use the default construtor, that is: reolsve record construct
     // on the other side: object(a number, constructor(a number) constructor object(a varchar));
     // resolve_udf will pick the right one, we dont need to resolve record_construct.
-    bool use_buildin_default_constructor = false;
+    bool use_buildin_default_constructor = is_sys_type ? (user_type->is_opaque_type() ? false : true) : false;
     if (OB_SUCC(ret)
         && !uinfo.is_udt_overload_default_cons()
+        && !is_sys_type
         && !user_type->is_opaque_type()) { // opaque type has no member, do not check
       const ObRecordType *object_type = NULL;
       CK (OB_NOT_NULL(object_type = dynamic_cast<const ObRecordType *>(user_type)));
