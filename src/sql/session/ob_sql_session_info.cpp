@@ -2667,6 +2667,54 @@ int ObSQLSessionInfo::update_sess_sync_info(const SessionSyncInfoType sess_sync_
   return ret;
 }
 
+
+
+int ObErrorSyncSysVarEncoder::serialize(ObSQLSessionInfo &sess, char *buf,
+                                const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSysVarClassType, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_var_delta_ids;
+  if (OB_FAIL(sess.get_error_sync_sys_vars(sys_var_delta_ids))) {
+    LOG_WARN("failed to calc need serialize vars", K(ret));
+  } else if (OB_FAIL(sess.serialize_sync_sys_vars(sys_var_delta_ids, buf, length, pos))) {
+    LOG_WARN("failed to serialize sys var delta", K(ret), K(sys_var_delta_ids.count()),
+                                      KPHEX(buf+pos, length-pos), K(length-pos), K(pos));
+  } else {
+    LOG_TRACE("success serialize sys var delta", K(ret), K(sys_var_delta_ids),
+              "inc sys var ids", sess.sys_var_inc_info_.get_all_sys_var_ids(),
+              K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+  }
+  return ret;
+}
+
+int ObErrorSyncSysVarEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf,
+                                  const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t deserialize_sys_var_count = 0;
+  if (OB_FAIL(sess.deserialize_sync_error_sys_vars(deserialize_sys_var_count, buf, length, pos))) {
+    LOG_WARN("failed to deserialize sys var delta", K(ret), K(deserialize_sys_var_count),
+                                    KPHEX(buf+pos, length-pos), K(length-pos), K(pos));
+  } else {
+    LOG_DEBUG("success deserialize sys var delta", K(ret), K(deserialize_sys_var_count));
+  }
+  return ret;
+}
+
+int64_t ObErrorSyncSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess) const {
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  ObSEArray<ObSysVarClassType, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_var_delta_ids;
+  if (OB_FAIL(sess.get_error_sync_sys_vars(sys_var_delta_ids))) {
+    LOG_WARN("failed to calc need serialize vars", K(ret));
+  } else if (OB_FAIL(sess.get_sync_sys_vars_size(sys_var_delta_ids, len))) {
+    LOG_WARN("failed to serialize size sys var delta", K(ret));
+  } else {
+    LOG_DEBUG("success serialize size sys var delta", K(ret), K(sys_var_delta_ids.count()), K(len));
+  }
+  return len;
+}
+
 int ObSQLSessionInfo::get_mem_ctx_alloc(common::ObIAllocator *&alloc)
 {
   int ret = OB_SUCCESS;
@@ -2936,6 +2984,27 @@ OB_DEF_SERIALIZE_SIZE(ObContextUnit)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               attribute_,
               value_);
+  return len;
+}
+
+int ObSequenceCurrvalEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  // TO DO
+  return ret;
+}
+
+int ObSequenceCurrvalEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  // TO DO
+  return ret;
+}
+
+int64_t ObSequenceCurrvalEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
+{
+  int64_t len = 0;
+  // TO Do
   return len;
 }
 

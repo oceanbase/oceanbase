@@ -3674,6 +3674,31 @@ bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) co
   return not_need_serialize;
 }
 
+bool ObBasicSessionInfo::is_exist_error_sync_var(share::ObSysVarClassType sys_var_id) const
+{
+  bool is_exist = false;
+  switch (sys_var_id)
+  {
+    case SYS_VAR_OB_LAST_SCHEMA_VERSION:
+      is_exist = true;
+      break;
+    default:
+      break;
+  }
+  return is_exist;
+}
+
+int ObBasicSessionInfo::get_error_sync_sys_vars(ObIArray<share::ObSysVarClassType>
+                                                &sys_var_delta_ids) const
+{
+  int ret = OB_SUCCESS;
+  sys_var_delta_ids.reset();
+  if (OB_FAIL(sys_var_delta_ids.push_back(SYS_VAR_OB_LAST_SCHEMA_VERSION))) {
+    LOG_WARN("fail to push_back id", K(ret));
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
                                                 &sys_var_delta_ids) const
 {
@@ -3708,15 +3733,15 @@ int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
          K(sessid_), K(proxy_sessid_));
       }
     }
-    if (sys_var_delta_ids.count() == 0) {
-      if (OB_FAIL(sys_var_delta_ids.push_back(ids.at(0)))) {
-        LOG_WARN("fail to push_back id", K(ret));
-      } else {
-        LOG_TRACE("success to get default sync sys vars", K(ret), K(sys_var_delta_ids),
-         K(sessid_), K(proxy_sessid_));
-      }
-    }
 
+  }
+  if (sys_var_delta_ids.count() == 0) {
+    if (OB_FAIL(sys_var_delta_ids.push_back(ids.at(0)))) {
+      LOG_WARN("fail to push_back id", K(ret));
+    } else {
+      LOG_TRACE("success to get default sync sys vars", K(ret), K(sys_var_delta_ids),
+        K(sessid_), K(proxy_sessid_));
+    }
   }
   return ret;
 }
@@ -3759,8 +3784,22 @@ int ObBasicSessionInfo::serialize_sync_sys_vars(ObIArray<ObSysVarClassType>
   return ret;
 }
 
-int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count,
+int ObBasicSessionInfo::deserialize_sync_error_sys_vars(int64_t &deserialize_sys_var_count,
                               const char *buf, const int64_t &data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  // add is_error_sync for Distinguish between system variable synchronization and
+  // error scenarios that also require synchronization of system variables
+  bool is_error_sync = true;
+  if (OB_FAIL(deserialize_sync_sys_vars(deserialize_sys_var_count, buf, data_len, pos, is_error_sync))) {
+    LOG_WARN("failed to deserialize sys var delta", K(ret), K(deserialize_sys_var_count),
+                                    KPHEX(buf+pos, data_len-pos), K(data_len-pos), K(pos));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count,
+                              const char *buf, const int64_t &data_len, int64_t &pos, bool is_error_sync)
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("before deserialize sync sys vars", "inc var ids", sys_var_inc_info_.get_all_sys_var_ids(),
@@ -3798,7 +3837,7 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         }
       } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
         LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
-      } else if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id) &&
+      } else if (!is_error_sync && !sys_var_inc_info_.all_has_sys_var_id(sys_var_id) &&
                 OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
         LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       } else if (OB_ISNULL(sys_var)) {
@@ -3819,11 +3858,11 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
                    K(sessid_), K(proxy_sessid_));
       }
       // add all deserialize sys_var id.
-      if (OB_SUCC(ret) && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
+      if (OB_SUCC(ret) && !is_error_sync && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
         LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !is_error_sync) {
       if (OB_FAIL(sync_default_sys_vars(sys_var_inc_info_, tmp_sys_var_inc_info,
                                         is_influence_plan_cache_sys_var))) {
         LOG_WARN("fail to sync default sys vars",K(ret));

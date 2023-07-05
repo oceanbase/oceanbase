@@ -208,6 +208,8 @@ enum SessionSyncInfoType {
   SESSION_SYNC_TXN_DYNAMIC_INFO = 6,      // 6: txn dynamic info
   SESSION_SYNC_TXN_PARTICIPANTS_INFO = 7, // 7: txn dynamic info
   SESSION_SYNC_TXN_EXTRA_INFO = 8,        // 8: txn dynamic info
+  SESSION_SYNC_SEQUENCE_CURRVAL = 9, // for sequence currval
+  SESSION_SYNC_ERROR_SYS_VAR = 10, // for error scene need sync sysvar info
   SESSION_SYNC_MAX_TYPE,
 };
 
@@ -289,6 +291,15 @@ public:
   virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
 };
 
+class ObSequenceCurrvalEncoder : public ObSessInfoEncoder {
+public:
+  ObSequenceCurrvalEncoder() : ObSessInfoEncoder() {}
+  virtual ~ObSequenceCurrvalEncoder() {}
+  virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
+  virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
+  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+};
+
 class ObControlInfoEncoder : public ObSessInfoEncoder {
 public:
   ObControlInfoEncoder() : ObSessInfoEncoder() {}
@@ -297,6 +308,18 @@ public:
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
   virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
   static const int16_t CONINFO_BY_SESS = 0xC078;
+};
+
+// The current system variable synchronization will not trigger synchronization in
+// the error reporting scenario. A new type is added here for variables that still
+// need to be synchronized in the error reporting scenario
+class ObErrorSyncSysVarEncoder : public ObSessInfoEncoder {
+public:
+  ObErrorSyncSysVarEncoder() : ObSessInfoEncoder() {}
+  virtual ~ObErrorSyncSysVarEncoder() {}
+  virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
+  virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
+  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
 };
 
 #define DEF_SESSION_TXN_ENCODER(CLS)                                    \
@@ -914,6 +937,8 @@ public:
   ObAppCtxInfoEncoder &get_app_ctx_encoder() { return app_ctx_info_encoder_; }
   ObClientIdInfoEncoder &get_client_info_encoder() { return client_id_info_encoder_;}
   ObControlInfoEncoder &get_control_info_encoder() { return control_info_encoder_;}
+  ObErrorSyncSysVarEncoder &get_error_sync_sys_var_encoder() { return error_sync_sys_var_encoder_;}
+  ObSequenceCurrvalEncoder &get_sequence_currval_encoder() { return sequence_currval_encoder_; }
   ObContextsMap &get_contexts_map() { return contexts_map_; }
   int get_mem_ctx_alloc(common::ObIAllocator *&alloc);
   int update_sess_sync_info(const SessionSyncInfoType sess_sync_info_type,
@@ -1207,7 +1232,9 @@ private:
                             &txn_static_info_encoder_,
                             &txn_dynamic_info_encoder_,
                             &txn_participants_info_encoder_,
-                            &txn_extra_info_encoder_
+                            &txn_extra_info_encoder_,
+                            &sequence_currval_encoder_,
+                            &error_sync_sys_var_encoder_
                             };
   ObSysVarEncoder sys_var_encoder_;
   //ObUserVarEncoder usr_var_encoder_;
@@ -1219,6 +1246,8 @@ private:
   ObTxnDynamicInfoEncoder txn_dynamic_info_encoder_;
   ObTxnParticipantsInfoEncoder txn_participants_info_encoder_;
   ObTxnExtraInfoEncoder txn_extra_info_encoder_;
+  ObSequenceCurrvalEncoder sequence_currval_encoder_;
+  ObErrorSyncSysVarEncoder error_sync_sys_var_encoder_;
 public:
   void post_sync_session_info();
   void prep_txn_free_route_baseline(bool reset_audit = true);
