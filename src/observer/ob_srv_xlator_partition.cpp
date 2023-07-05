@@ -153,9 +153,7 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObFetchTransferTabletsInfoP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObFetchLSReplayScnP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObCheckTransferTabletsBackfillP, gctx_.bandwidth_throttle_);
-  RPC_PROCESSOR(ObStorageReplaceMemberP, gctx_.bandwidth_throttle_);
-  RPC_PROCESSOR(ObStorageAddMemberP, gctx_.bandwidth_throttle_);
-  RPC_PROCESSOR(ObStorageSwitchLearnerToAcceptorP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageGetConfigVersionAndTransferScnP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObStorageBlockTxP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObStorageKillTxP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObStorageUnBlockTxP, gctx_.bandwidth_throttle_);

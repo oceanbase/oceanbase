@@ -929,105 +929,39 @@ void ObCheckTransferTabletBackfillRes::reset()
 }
 OB_SERIALIZE_MEMBER(ObCheckTransferTabletBackfillRes, backfill_finished_);
 
-ObStorageReplaceMemberArg::ObStorageReplaceMemberArg()
+ObStorageChangeMemberArg::ObStorageChangeMemberArg()
   : tenant_id_(OB_INVALID_ID),
-    ls_id_(),
-    added_member_(),
-    removed_member_(),
-    ls_transfer_scn_()
+    ls_id_()
 {
 }
 
-bool ObStorageReplaceMemberArg::is_valid() const
+bool ObStorageChangeMemberArg::is_valid() const
 {
   return OB_INVALID_ID == tenant_id_
-      && ls_id_.is_valid()
-      && added_member_.is_valid()
-      && removed_member_.is_valid()
-      && ls_transfer_scn_.is_valid();
+      && ls_id_.is_valid();
 }
 
-void ObStorageReplaceMemberArg::reset()
+void ObStorageChangeMemberArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
-  added_member_.reset();
-  removed_member_.reset();
-  ls_transfer_scn_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObStorageReplaceMemberArg, tenant_id_, ls_id_, added_member_, removed_member_, ls_transfer_scn_);
-
-ObStorageAddMemberArg::ObStorageAddMemberArg()
-  : tenant_id_(OB_INVALID_ID),
-    ls_id_(),
-    member_(),
-    new_replica_num_(),
-    ls_transfer_scn_()
-{
-}
-
-bool ObStorageAddMemberArg::is_valid() const
-{
-  return OB_INVALID_ID == tenant_id_
-      && ls_id_.is_valid()
-      && member_.is_valid()
-      && new_replica_num_ > 0
-      && ls_transfer_scn_.is_valid();
-}
-
-void ObStorageAddMemberArg::reset()
-{
-  tenant_id_ = OB_INVALID_ID;
-  ls_id_.reset();
-  member_.reset();
-  new_replica_num_ = 0;
-  ls_transfer_scn_.reset();
-}
-
-OB_SERIALIZE_MEMBER(ObStorageAddMemberArg, tenant_id_, ls_id_, member_, new_replica_num_, ls_transfer_scn_);
-
-ObStorageSwitchLToFArg::ObStorageSwitchLToFArg()
-  : tenant_id_(OB_INVALID_ID),
-    ls_id_(),
-    learner_(),
-    new_replica_num_(),
-    ls_transfer_scn_()
-{
-}
-
-bool ObStorageSwitchLToFArg::is_valid() const
-{
-  return OB_INVALID_ID == tenant_id_
-      && ls_id_.is_valid()
-      && learner_.is_valid()
-      && new_replica_num_ > 0
-      && ls_transfer_scn_.is_valid();
-}
-
-void ObStorageSwitchLToFArg::reset()
-{
-  tenant_id_ = OB_INVALID_ID;
-  ls_id_.reset();
-  learner_.reset();
-  new_replica_num_ = 0;
-  ls_transfer_scn_.reset();
-}
-
-OB_SERIALIZE_MEMBER(ObStorageSwitchLToFArg, tenant_id_, ls_id_, learner_, new_replica_num_, ls_transfer_scn_);
+OB_SERIALIZE_MEMBER(ObStorageChangeMemberArg, tenant_id_, ls_id_);
 
 ObStorageChangeMemberRes::ObStorageChangeMemberRes()
-  : change_succ_(false)
+  : config_version_(),
+    transfer_scn_()
 {
 }
 
 void ObStorageChangeMemberRes::reset()
 {
-  change_succ_ = false;
+  config_version_.reset();
+  transfer_scn_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObStorageChangeMemberRes, change_succ_);
-
+OB_SERIALIZE_MEMBER(ObStorageChangeMemberRes, config_version_, transfer_scn_);
 
 ObCopyLSViewArg::ObCopyLSViewArg()
   : tenant_id_(OB_INVALID_ID),
@@ -2786,57 +2720,17 @@ int ObCheckTransferTabletsBackfillP::check_has_transfer_table_(
   return ret;
 }
 
-ObStorageReplaceMemberP::ObStorageReplaceMemberP(
+ObStorageGetConfigVersionAndTransferScnP::ObStorageGetConfigVersionAndTransferScnP(
     common::ObInOutBandwidthThrottle *bandwidth_throttle)
     : ObStorageStreamRpcP(bandwidth_throttle)
 {
 }
 
-int ObStorageReplaceMemberP::process()
+int ObStorageGetConfigVersionAndTransferScnP::process()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg_.tenant_id_;
   const share::ObLSID &ls_id = arg_.ls_id_;
-  const share::SCN &transfer_scn = arg_.ls_transfer_scn_;
-  const common::ObMember &added_member = arg_.added_member_;
-  const common::ObMember &removed_member = arg_.removed_member_;
-  const int64_t change_member_timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
-  MTL_SWITCH(tenant_id) {
-    ObLSHandle ls_handle;
-    ObLSService *ls_service = NULL;
-    ObLS *ls = NULL;
-    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
-    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
-    } else if (OB_FAIL(ls->replace_member(added_member, removed_member, transfer_scn, change_member_timeout))) {
-      LOG_WARN("fail to add member", KR(ret), K(arg_));
-    } else {
-      LOG_INFO("replace member success", K(arg_));
-    }
-  }
-  return ret;
-}
-
-ObStorageAddMemberP::ObStorageAddMemberP(
-    common::ObInOutBandwidthThrottle *bandwidth_throttle)
-    : ObStorageStreamRpcP(bandwidth_throttle)
-{
-}
-
-int ObStorageAddMemberP::process()
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = arg_.tenant_id_;
-  const share::ObLSID &ls_id = arg_.ls_id_;
-  const share::SCN transfer_scn = arg_.ls_transfer_scn_;
-  const common::ObMember &member = arg_.member_;
-  const int64_t paxos_replica_num = arg_.new_replica_num_;
-  const int64_t add_member_timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
@@ -2850,48 +2744,11 @@ int ObStorageAddMemberP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
-    } else if (OB_FAIL(ls->add_member(member, paxos_replica_num, transfer_scn, add_member_timeout))) {
-        LOG_WARN("fail to add member", KR(ret), K(arg_));
+    } else if (OB_FAIL(ls->get_config_version_and_transfer_scn(result_.config_version_,
+                                                               result_.transfer_scn_))) {
+      LOG_WARN("failed to get config version and transfer scn", K(ret), K(tenant_id), K(ls_id));
     } else {
-      LOG_INFO("add member success", K(arg_));
-    }
-  }
-
-  return ret;
-}
-
-ObStorageSwitchLearnerToAcceptorP::ObStorageSwitchLearnerToAcceptorP(
-    common::ObInOutBandwidthThrottle *bandwidth_throttle)
-    : ObStorageStreamRpcP(bandwidth_throttle)
-{
-}
-
-int ObStorageSwitchLearnerToAcceptorP::process()
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = arg_.tenant_id_;
-  const share::ObLSID &ls_id = arg_.ls_id_;
-  const share::SCN transfer_scn = arg_.ls_transfer_scn_;
-  const common::ObMember &learner = arg_.learner_;
-  const int64_t paxos_replica_num = arg_.new_replica_num_;
-  const int64_t add_member_timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
-  MTL_SWITCH(tenant_id) {
-    ObLSHandle ls_handle;
-    ObLSService *ls_service = NULL;
-    ObLS *ls = NULL;
-    int64_t local_transfer_scn = 0;
-    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
-    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
-    } else if (OB_FAIL(ls->switch_learner_to_acceptor(learner, paxos_replica_num, transfer_scn, add_member_timeout))) {
-        LOG_WARN("fail to switch learner to acceptor", KR(ret), K(arg_));
-    } else {
-      LOG_INFO("switch learner to acceptor success", K(arg_));
+      LOG_INFO("get config version and transfer scn succ", K(tenant_id), K(ls_id), K(result_));
     }
   }
   return ret;
@@ -3623,16 +3480,16 @@ int ObStorageRpc::check_tablets_logical_table_replaced(
   return ret;
 }
 
-int ObStorageRpc::replace_member(
+int ObStorageRpc::get_config_version_and_transfer_scn(
     const uint64_t tenant_id,
     const ObStorageHASrcInfo &src_info,
     const share::ObLSID &ls_id,
-    const common::ObMember &added_member,
-    const common::ObMember &removed_member,
-    const share::SCN &ls_transfer_scn,
-    const int64_t timeout)
+    palf::LogConfigVersion &config_version,
+    share::SCN &transfer_scn)
 {
   int ret = OB_SUCCESS;
+  config_version.reset();
+  transfer_scn.reset();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
@@ -3640,91 +3497,19 @@ int ObStorageRpc::replace_member(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
   } else {
-    ObStorageReplaceMemberArg arg;
+    ObStorageChangeMemberArg arg;
     ObStorageChangeMemberRes res;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
-    arg.added_member_ = added_member;
-    arg.removed_member_ = removed_member;
-    arg.ls_transfer_scn_ = ls_transfer_scn;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
-                           .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
-                           .replace_member(arg, res))) {
-      LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
+                           .get_config_version_and_transfer_scn(arg, res))) {
+      LOG_WARN("failed to get config version and transfer scn", K(ret), K(src_info), K(arg));
     } else {
-      FLOG_INFO("replace member", K(tenant_id), K(src_info), K(ls_id), K(ls_transfer_scn));
-    }
-  }
-  return ret;
-}
-
-int ObStorageRpc::add_member(
-    const uint64_t tenant_id,
-    const ObStorageHASrcInfo &src_info,
-    const share::ObLSID &ls_id,
-    const common::ObMember &added_member,
-    const int64_t new_replica_num,
-    const share::SCN &ls_transfer_scn,
-    const int64_t timeout)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
-  } else {
-    ObStorageAddMemberArg arg;
-    ObStorageChangeMemberRes res;
-    arg.tenant_id_ = tenant_id;
-    arg.ls_id_ = ls_id;
-    arg.member_ = added_member;
-    arg.new_replica_num_ = new_replica_num;
-    arg.ls_transfer_scn_ = ls_transfer_scn;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
-                           .by(tenant_id)
-                           .timeout(timeout)
-                           .dst_cluster_id(src_info.cluster_id_)
-                           .add_member(arg, res))) {
-      LOG_WARN("failed to add member", K(ret), K(src_info), K(arg));
-    }
-  }
-  return ret;
-}
-
-int ObStorageRpc::switch_learner_to_acceptor(
-    const uint64_t tenant_id,
-    const ObStorageHASrcInfo &src_info,
-    const share::ObLSID &ls_id,
-    const common::ObMember &learner,
-    const int64_t new_replica_num,
-    const share::SCN &ls_transfer_scn,
-    const int64_t timeout)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
-  } else {
-    ObStorageSwitchLToFArg arg;
-    ObStorageChangeMemberRes res;
-    arg.tenant_id_ = tenant_id;
-    arg.ls_id_ = ls_id;
-    arg.learner_ = learner;
-    arg.new_replica_num_ = new_replica_num;
-    arg.ls_transfer_scn_ = ls_transfer_scn;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
-                           .by(tenant_id)
-                           .timeout(timeout)
-                           .dst_cluster_id(src_info.cluster_id_)
-                           .switch_learner_to_acceptor(arg, res))) {
-      LOG_WARN("failed to switch learner to acceptor", K(ret), K(src_info), K(arg));
+      config_version = res.config_version_;
+      transfer_scn = res.transfer_scn_;
+      FLOG_INFO("get config version and transfer scn succ", K(tenant_id), K(src_info), K(ls_id));
     }
   }
   return ret;
