@@ -90,6 +90,7 @@ ObLS::ObLS()
     tenant_id_(OB_INVALID_TENANT_ID),
     is_stopped_(false),
     is_offlined_(false),
+    is_remove_(false),
     ls_meta_(),
     rs_reporter_(nullptr),
     startup_transfer_info_()
@@ -1809,6 +1810,9 @@ int ObLS::enable_replay()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
+  } else if (is_remove()) {
+    ret = OB_LS_IS_DELETED;
+    LOG_WARN("ls status is WAIT_GC when enable replay", K(get_ls_id()));
   } else if (OB_FAIL(log_handler_.enable_replay(ls_meta_.get_clog_base_lsn(),
                                                 ls_meta_.get_clog_checkpoint_scn()))) {
     LOG_WARN("failed to enable replay", K(ret));

@@ -739,7 +739,12 @@ int ObLSService::enable_replay()
       } else if (!can_replay) {
         // ls can not enable replay
       } else if (OB_FAIL(ls->enable_replay())) {
-        LOG_ERROR("fail to enable replay", K(ret));
+        if (OB_LS_IS_DELETED == ret) {
+          ret = OB_SUCCESS;
+          LOG_WARN("ls status is WAIT_GC, skip it", K(ls->get_ls_id()));
+        } else {
+          LOG_ERROR("fail to enable replay", K(ret));
+        }
       }
     }
     if (OB_ITER_END == ret) {
@@ -918,6 +923,7 @@ int ObLSService::remove_ls(
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("log stream is null, unexpected error", K(ls_id));
+    } else if (FALSE_IT(ls->set_is_remove())) {
     // ls leader gc must has block tx start, gracefully kill tx and write offline log before here.
     } else if (OB_FAIL(ls->offline())) {
       LOG_WARN("ls offline failed", K(ret), K(ls_id), KP(ls));
