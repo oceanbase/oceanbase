@@ -179,7 +179,7 @@ public:
   virtual void set_one_result(ObTableQueryResult *result) override {one_result_ = result;}
   virtual table::ObTableQueryResult *get_one_result() override { return one_result_; }
   ObTableAggCalculator &get_agg_calculator() { return agg_calculator_; }
-  int init_aggregation(int64_t size);
+  int init_aggregation();
   int get_aggregate_result(table::ObTableQueryResult *&next_result);
   int get_normal_result(table::ObTableQueryResult *&next_result);
   bool is_aggregate_query() { return agg_calculator_.is_exist(); }
@@ -220,7 +220,7 @@ public:
   void set_scan_result(table::ObTableApiScanRowIterator *scan_result) { scan_result_ = scan_result; }
   int parse_filter_string(common::ObIAllocator* allocator);
   ObTableAggCalculator &get_agg_calculator() { return agg_calculator_; }
-  int init_aggregation(int64_t size);
+  int init_aggregation();
   int get_aggregate_result(table::ObTableQueryResult *&next_result);
   int get_normal_result(table::ObTableQueryResult *&next_result);
   bool is_aggregate_query() { return agg_calculator_.is_exist(); }

@@ -104,7 +104,7 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
         LOG_WARN("fail to parse table filter string", K(ret));
       } else {
         if (query.is_aggregate_query()) {
-          table_result_iter->init_aggregation(query.get_aggregations().count());
+          table_result_iter->init_aggregation();
           table_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
         }
         tmp_result_iter = table_result_iter;
@@ -120,7 +120,7 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       LOG_WARN("fail to alloc normal query result iterator", K(ret));
     } else {
       if (query.is_aggregate_query()) {
-        normal_result_iter->init_aggregation(query.get_aggregations().count());
+        normal_result_iter->init_aggregation();
         normal_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
       }      
       tmp_result_iter = normal_result_iter;

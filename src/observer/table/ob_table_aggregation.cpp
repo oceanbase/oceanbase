@@ -77,19 +77,19 @@ int ObTableAggCalculator::assign_value(int64_t idx, const ObObj &src, ObObj &dst
 int ObTableAggCalculator::aggregate_max(uint64_t idx, const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  const ObObj &value = row.get_cell(projs_->at(idx));
-  ObObj &agg_result = results_.at(idx);
-  if (!agg_result.is_null() && !value.is_null()) {
+  const ObObj &cur_value = row.get_cell(projs_->at(idx));
+  ObObj &max_val = results_.at(idx);
+  if (!max_val.is_null() && !cur_value.is_null()) {
     int cmp_ret = 0;
-    if (OB_FAIL(agg_result.compare(value, cmp_ret))) {
-      LOG_WARN("fail to compare", K(ret), K(agg_result), K(value));
+    if (OB_FAIL(max_val.compare(cur_value, cmp_ret))) {
+      LOG_WARN("fail to compare", K(ret), K(max_val), K(cur_value));
     } else if (cmp_ret == ObObjCmpFuncs::CR_LT) {
-      if (OB_FAIL(assign_value(idx, value, agg_result))) {
-        LOG_WARN("fail to assign value", K(ret), K(agg_result), K(value)); 
+      if (OB_FAIL(assign_value(idx, cur_value, max_val))) {
+        LOG_WARN("fail to assign value", K(ret), K(max_val), K(cur_value)); 
       }
     }
-  } else if (!value.is_null() && OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
-    LOG_WARN("fail to assign value", K(ret), K(agg_result), K(value));
+  } else if (!cur_value.is_null() && OB_FAIL(assign_value(idx, cur_value, max_val))) {
+    LOG_WARN("fail to assign value", K(ret), K(max_val), K(cur_value));
   }
   return ret;
 }
@@ -97,39 +97,39 @@ int ObTableAggCalculator::aggregate_max(uint64_t idx, const ObNewRow &row)
 int ObTableAggCalculator::aggregate_min(uint64_t idx, const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  const ObObj &value = row.get_cell(projs_->at(idx));
-  ObObj &agg_result = results_.at(idx);
-  if (!agg_result.is_null() && !value.is_null()) {
+  const ObObj &cur_value = row.get_cell(projs_->at(idx));
+  ObObj &min_val = results_.at(idx);
+  if (!min_val.is_null() && !cur_value.is_null()) {
     int cmp_ret = 0;
-    if (OB_FAIL(agg_result.compare(value, cmp_ret))) {
-      LOG_WARN("fail to compare", K(ret), K(agg_result), K(value));
+    if (OB_FAIL(min_val.compare(cur_value, cmp_ret))) {
+      LOG_WARN("fail to compare", K(ret), K(min_val), K(cur_value));
     } else if (cmp_ret == ObObjCmpFuncs::CR_GT) {
-      if (OB_FAIL(assign_value(idx, value, agg_result))) {
-        LOG_WARN("fail to assign value", K(ret), K(agg_result), K(value)); 
+      if (OB_FAIL(assign_value(idx, cur_value, min_val))) {
+        LOG_WARN("fail to assign value", K(ret), K(min_val), K(cur_value)); 
       }
     }
-  } else if (!value.is_null() && OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
-    LOG_WARN("fail to assign value", K(ret), K(agg_result), K(value));
+  } else if (!cur_value.is_null() && OB_FAIL(assign_value(idx, cur_value, min_val))) {
+    LOG_WARN("fail to assign value", K(ret), K(min_val), K(cur_value));
   }
   return ret;
 }
 
 void ObTableAggCalculator::aggregate_count(uint64_t idx, const ObNewRow &row, const ObString &key_word)
 {
-  const ObObj &value = row.get_cell(projs_->at(idx));
-  ObObj &agg_result = results_.at(idx);
+  const ObObj &cur_value = row.get_cell(projs_->at(idx));
+  ObObj &count_val = results_.at(idx);
   if (key_word.empty() || key_word == "*") {
-    if (!agg_result.is_null()) {
-      agg_result.set_int(agg_result.get_int() + 1); 
+    if (!count_val .is_null()) {
+      count_val.set_int(count_val .get_int() + 1); 
     } else {
-      agg_result.set_int(1); 
+      count_val.set_int(1); 
     }
   } else {
-    if (!value.is_null()) {
-      if (!agg_result.is_null()) {
-        agg_result.set_int(agg_result.get_int() + 1); 
+    if (!cur_value.is_null()) {
+      if (!count_val .is_null()) {
+        count_val.set_int(count_val.get_int() + 1); 
       } else {
-        agg_result.set_int(1); 
+        count_val.set_int(1); 
       }
     }
   }
@@ -138,81 +138,60 @@ void ObTableAggCalculator::aggregate_count(uint64_t idx, const ObNewRow &row, co
 int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  const ObObj &value = row.get_cell(projs_->at(idx));
-  ObObj &agg_result = results_.at(idx);
-  const ObObjType &sum_type = value.get_type();
-  if (!value.is_null()) {
-    if (!agg_result.is_null()) {
-      switch(sum_type) {
-        //signed int
-        case ObTinyIntType:
-        case ObSmallIntType:
-        case ObMediumIntType:
-        case ObInt32Type:
-        case ObIntType: {
-          agg_result.set_int(agg_result.get_int() + value.get_int());
-          break;
+  const ObObj &cur_value = row.get_cell(projs_->at(idx));
+  ObObj &sum_val = results_.at(idx);
+  const ObObjType &sum_type = cur_value.get_type();
+  if (!cur_value.is_null()) {
+    switch(sum_type) {
+      //signed int
+      case ObTinyIntType:
+      case ObSmallIntType:
+      case ObMediumIntType:
+      case ObInt32Type:
+      case ObIntType: {
+        if (sum_val.is_null()) {
+          sum_val.set_int(cur_value.get_int());
+        } else {
+          sum_val.set_int(sum_val.get_int() + cur_value.get_int());
         }
-        //unsigned int
-        case ObUTinyIntType:
-        case ObUSmallIntType:
-        case ObUMediumIntType:
-        case ObUInt32Type:
-        case ObUInt64Type: {
-          agg_result.set_uint64(agg_result.get_uint64() + value.get_uint64());
-          break;
-        }
-        //float and ufloat
-        case ObFloatType:
-        case ObUFloatType: {
-          agg_result.set_double(agg_result.get_double() + value.get_float());
-          break;
-        }
-        //double and udouble
-        case ObDoubleType:
-        case ObUDoubleType: {
-          agg_result.set_double(agg_result.get_double() + value.get_double());
-          break;
-        }
-        default: {
-          LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));  
-        }
+        break;
       }
-    } else {
-      switch(sum_type) {
-        //signed int
-        case ObTinyIntType:
-        case ObSmallIntType:
-        case ObMediumIntType:
-        case ObInt32Type:
-        case ObIntType: {
-          agg_result.set_int(value.get_int());
-          break;
+      //unsigned int
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUMediumIntType:
+      case ObUInt32Type:
+      case ObUInt64Type: {
+        if (sum_val.is_null()) {
+          sum_val.set_uint64(cur_value.get_uint64());
+        } else {
+          sum_val.set_uint64(sum_val.get_uint64() + cur_value.get_uint64());
         }
-        //unsigned int
-        case ObUTinyIntType:
-        case ObUSmallIntType:
-        case ObUMediumIntType:
-        case ObUInt32Type:
-        case ObUInt64Type: {
-          agg_result.set_uint64(value.get_uint64());
-          break;
+        break;
+      }
+      //float and ufloat
+      case ObFloatType:
+      case ObUFloatType: {
+        if (sum_val.is_null()) {
+          sum_val.set_double(cur_value.get_float());
+        } else {
+          sum_val.set_double(sum_val.get_double() + cur_value.get_float());
         }
-        //float and ufloat
-        case ObFloatType:
-        case ObUFloatType: {
-          agg_result.set_double(value.get_float());
-          break;
+        break;
+      }
+      //double and udouble
+      case ObDoubleType:
+      case ObUDoubleType: {
+        if (sum_val.is_null()) {
+          sum_val.set_double(cur_value.get_double());
+        } else {
+          sum_val.set_double(sum_val.get_double() + cur_value.get_double());
         }
-        //double and udouble
-        case ObDoubleType:
-        case ObUDoubleType: {
-          agg_result.set_double(value.get_double());
-          break;
-        }
-        default: {
-          LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));  
-        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));  
       }
     }
   }
@@ -222,11 +201,11 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
 int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  const ObObj &value = row.get_cell(projs_->at(idx));
-  const ObObjType &avg_type = value.get_type();
+  const ObObj &cur_value = row.get_cell(projs_->at(idx));
+  const ObObjType &avg_type = cur_value.get_type();
   int64_t &count = counts_[idx];
-  double &count_double = sums_[idx];
-  if (!value.is_null()) {
+  double &sum = sums_[idx];
+  if (!cur_value.is_null()) {
     count++;
     switch(avg_type) {
       //signed int
@@ -235,7 +214,7 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
       case ObMediumIntType:
       case ObInt32Type:
       case ObIntType: {
-        count_double += value.get_int();
+        sum += cur_value.get_int();
         break;
       }
       //unsigned int
@@ -244,22 +223,23 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
       case ObUMediumIntType:
       case ObUInt32Type:
       case ObUInt64Type: {
-        count_double += value.get_uint64();
+        sum += cur_value.get_uint64();
         break;
       }
       //float and ufloat
       case ObFloatType:
       case ObUFloatType: {
-        count_double += value.get_float();
+        sum += cur_value.get_float();
         break;
       }
       //double and udouble
       case ObDoubleType:
       case ObUDoubleType: {
-        count_double += value.get_double();
+        sum += cur_value.get_double();
         break;
       }
       default: {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("this data type does not support aggregate avg operation", K(ret), K(avg_type));  
       }
     }
@@ -321,15 +301,17 @@ int ObTableAggCalculator::aggregate(const ObNewRow &row) {
 void ObTableAggCalculator::final_aggregate()
 {
   for (int64_t i = 0; i < size_; i++) {
-    if (query_aggs_.at(i).get_type() == ObTableAggregationType::AVG) {
+    const ObTableAggregationType &type = query_aggs_.at(i).get_type();
+    if (type == ObTableAggregationType::AVG) {
       const int64_t &count = counts_[i];
-      ObObj &agg_result = results_.at(i);
+      ObObj &avg = results_.at(i);
       if (count != 0) {
-        agg_result.set_double(sums_[i] / count);
+        avg.set_double(sums_[i] / count);
       }
-    } else if (query_aggs_.at(i).get_type() == ObTableAggregationType::COUNT) {
-      if (results_.at(i).is_null()) {   // if count result is null, should be zero
-        results_.at(i).set_int(0);
+    } else if (type == ObTableAggregationType::COUNT) {
+      ObObj &count = results_.at(i);
+      if (count.is_null()) {   // if count result is null, should be zero
+        count.set_int(0);
       }
     }
   }

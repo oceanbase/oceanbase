@@ -236,11 +236,10 @@ bool ObNormalTableQueryResultIterator::has_more_result() const
   return has_more_rows_;
 }
 
-int ObNormalTableQueryResultIterator::init_aggregation(int64_t size)
+int ObNormalTableQueryResultIterator::init_aggregation()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_agg_calculator().init())) {
-    ret = OB_NOT_INIT;
     LOG_WARN("failed to init agg_calculator", K(ret));
   }
   return ret;
@@ -269,8 +268,6 @@ int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryRe
       one_result_->reset();
       if (OB_FAIL(one_result_->assign_property_names(get_agg_calculator().get_agg_columns()))) {
         LOG_WARN("fail to assign property names to one result", K(ret));
-      }
-      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(one_result_->add_row(agg_calculator_.get_aggregate_results()))) {
         LOG_WARN("fail to add aggregation result", K(ret), K(agg_calculator_.get_aggregate_results()));
       } else {
@@ -379,11 +376,10 @@ int ObTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
   return ret;
 }
 
-int ObTableFilterOperator::init_aggregation(int64_t size)
+int ObTableFilterOperator::init_aggregation()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_agg_calculator().init())) {
-    ret = OB_NOT_INIT;
     LOG_WARN("failed to init agg_calculator", K(ret));
   }
   return ret;

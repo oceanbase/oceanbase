@@ -523,9 +523,6 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   const bool select_all_columns = select_columns.empty() || query.is_aggregate_query(); // select all when query column is empty.
   const ObColumnSchemaV2 *column_schema = nullptr;
   operation_type_ = ObTableOperationType::Type::SCAN;
-  if (query.is_aggregate_query()) {
-    init_agg_cell_proj(query.get_aggregations().count());
-  }
   // init is_weak_read_,scan_order_
   is_weak_read_ = is_wead_read;
   scan_order_ = query.get_scan_order();
@@ -558,6 +555,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
     // init key_ranges_
     if (OB_FAIL(generate_key_range(query.get_scan_ranges()))) {
       LOG_WARN("fail to generate key ranges", K(ret));
+    } else if (query.is_aggregate_query() && OB_FAIL(init_agg_cell_proj(query.get_aggregations().count()))) {
+      LOG_WARN("fail to init agg cell proj", K(ret));
     } else {
       // select_col_ids用schema序
       int64_t cell_idx = 0;
@@ -576,10 +575,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
             LOG_WARN("fail to push back column id", K(ret), K(column_schema->get_column_id()));
           } else if (OB_FAIL(query_col_names_.push_back(column_name))) {
             LOG_WARN("fail to push back column name", K(ret), K(column_name));
-          } else if (query.is_aggregate_query()) {
-            if (OB_FAIL(add_aggregate_proj(cell_idx, column_name, query))) {
-              LOG_WARN("failed to add aggregate projector", K(ret), K(cell_idx), K(column_name));  
-            }
+          } else if (query.is_aggregate_query() && OB_FAIL(add_aggregate_proj(cell_idx, column_name, query.get_aggregations()))) {
+            LOG_WARN("failed to add aggregate projector", K(ret), K(cell_idx), K(column_name));  
           } else if (is_index_scan_ && !is_index_back_ &&
               OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
             is_index_back_ = true; // 判断是否需要回表,查询的列不在索引表上即需要回表
@@ -630,7 +627,7 @@ int ObTableCtx::init_insert()
     phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
     phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
     exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-    if (OB_FAIL(add_auto_inc_param(phy_plan_ctx))) {
+    if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
       LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
     }
   }
@@ -764,7 +761,7 @@ int ObTableCtx::init_replace()
       phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
       phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
       exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-      if (OB_FAIL(add_auto_inc_param(phy_plan_ctx))) {
+      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
         LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
       }
     }
@@ -790,7 +787,7 @@ int ObTableCtx::init_insert_up()
       phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
       phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
       exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-      if (OB_FAIL(add_auto_inc_param(phy_plan_ctx))) {
+      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
         LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
       }        
     }
@@ -1156,10 +1153,9 @@ int ObTableCtx::init_agg_cell_proj(int64_t size)
   return ret;
 }
 
-int ObTableCtx::add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObTableQuery &query)
+int ObTableCtx::add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObIArray<ObTableAggregation> &aggregations)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObTableAggregation> &aggregations = query.get_aggregations();
   if (aggregations.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null aggregations", K(ret));
@@ -1173,10 +1169,10 @@ int ObTableCtx::add_aggregate_proj(int64_t cell_idx, const common::ObString &col
   return ret;
 }
 
-int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx *&phy_plan_ctx)
+int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx &phy_plan_ctx)
 {
   int ret = OB_SUCCESS;
-  ObIArray<share::AutoincParam> &auto_params = phy_plan_ctx->get_autoinc_params();
+  ObIArray<share::AutoincParam> &auto_params = phy_plan_ctx.get_autoinc_params();
   int64_t auto_increment_cache_size = -1;
   if (OB_FAIL(get_session_info().get_auto_increment_cache_size(auto_increment_cache_size))) {
     LOG_WARN("fail to get increment factor", K(ret));
@@ -1189,8 +1185,8 @@ int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx *&phy_plan_ctx)
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is NULL", K(ret));
-    } else if (col_schema->is_autoincrement()) {
-      auto_inc_param_.is_auto_inc_ = true;
+    } else if (col_schema->is_autoincrement() && !has_auto_inc_) {
+      has_auto_inc_ = true;
       AutoincParam &param = get_auto_inc_param();
       param.tenant_id_ = tenant_id_;
       param.autoinc_table_id_ = ref_table_id_;

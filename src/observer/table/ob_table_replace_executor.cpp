@@ -251,7 +251,7 @@ int ObTableApiReplaceExecutor::do_insert()
   if (OB_FAIL(refresh_exprs_frame(entity))) {
     LOG_WARN("fail to refresh expr frame", K(ret));
   }
-  if (tb_ctx_.is_auto_inc()) {
+  if (tb_ctx_.has_auto_inc()) {
     for (int64_t i = 0; i < ctdef.ins_ctdef_.new_row_.count(); i++) {       // 在自增的场景下，由于自增列的列引用表达式被用户输入的值覆盖
       if (ctdef.ins_ctdef_.new_row_.at(i)->type_ == T_FUN_COLUMN_CONV) {    // 故需要手动清空eval的flag
         ctdef.ins_ctdef_.new_row_.at(i)->get_eval_info(eval_ctx_).evaluated_ = false;
@@ -342,7 +342,7 @@ int ObTableApiReplaceExecutor::get_next_row()
   }
 
   // auto inc 操作中, 同步全局自增值value
-  if (tb_ctx_.is_auto_inc() && OB_FAIL(tb_ctx_.update_auto_inc_value())) {
+  if (tb_ctx_.has_auto_inc() && OB_FAIL(tb_ctx_.update_auto_inc_value())) {
     LOG_WARN("fail to update auto inc value", K(ret));
   }
 

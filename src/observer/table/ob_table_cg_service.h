@@ -110,7 +110,7 @@ private:
   static int generate_column_ref_raw_expr(ObTableCtx &ctx,
                                           const ObColumnSchemaV2 &col_schema,
                                           sql::ObRawExpr *&expr);
-  // 构建列引用表达式
+  // 构建列自增表达式
   static int generate_autoinc_nextval_expr(ObTableCtx &ctx,
                                            ObRawExpr *&expr,
                                            const ObColumnSchemaV2 &col_schema);
