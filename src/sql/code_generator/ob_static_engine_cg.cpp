@@ -6522,6 +6522,9 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
             if (table_schema->is_oracle_sess_tmp_table()) {
               phy_plan.set_contain_oracle_session_level_temporary_table();
             }
+            if (table_schema->is_mysql_tmp_table()) {
+              phy_plan.set_session_id(table_schema->get_session_id());
+            }
             LOG_DEBUG("plan contain temporary table",
                       "trx level", table_schema->is_oracle_trx_tmp_table(),
                       "session level", table_schema->is_oracle_sess_tmp_table());
