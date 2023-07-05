@@ -679,7 +679,7 @@ int ObTableExprCgService::refresh_exprs_frame(ObTableCtx &ctx,
 }
 
 // exprs必须是按照schema序的完整行
-	int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
+int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
                                                      const ObIArray<ObExpr *> &exprs,
                                                      const ObIArray<ObObj> &rowkey)
 {
@@ -687,10 +687,10 @@ int ObTableExprCgService::refresh_exprs_frame(ObTableCtx &ctx,
   // 原定是用户在自增场景下主键可不传数据，而目前的实现是主键传0为自增，暂时保留校验修改
   ObObj null_obj;
   null_obj.set_null();
-  int64_t rowkey_cnt = ctx.get_table_schema()->get_rowkey_column_num();
+  int64_t schema_rowkey_cnt = ctx.get_table_schema()->get_rowkey_column_num();
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
-  bool is_full_filled = rowkey_cnt == rowkey.count();
-  for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; i++) {
+  bool is_full_filled = schema_rowkey_cnt == rowkey.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
     const ObExpr *expr = exprs.at(i);
     if (ctx.has_auto_inc() && !is_full_filled && expr->type_ == T_FUN_COLUMN_CONV) {
       const ObObj *obj = NULL; // 若不填, 只有自增的列不填, 则写入null值

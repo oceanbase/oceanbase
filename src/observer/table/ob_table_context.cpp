@@ -1180,12 +1180,12 @@ int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx &phy_plan_ctx)
     LOG_WARN("fail to init auto params", K(ret));
   }
   for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
-    OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter) {
+    OB_SUCC(ret) && iter != table_schema_->column_end() && !has_auto_inc_; ++iter) {
     const ObColumnSchemaV2 *col_schema = *iter;
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is NULL", K(ret));
-    } else if (col_schema->is_autoincrement() && !has_auto_inc_) {
+    } else if (col_schema->is_autoincrement()) {
       has_auto_inc_ = true;
       AutoincParam &param = get_auto_inc_param();
       param.tenant_id_ = tenant_id_;
