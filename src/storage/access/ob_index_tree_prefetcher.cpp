@@ -1192,7 +1192,7 @@ public:
     } else if (OB_UNLIKELY(!index_info.is_valid() || !rowkey.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Invalid MicroIndexInfo", K(ret), K(index_info), K(rowkey));
-    } else if (OB_FAIL(index_info.endkey_->compare(rowkey, datum_utils_, cmp_ret))) {
+    } else if (OB_FAIL(index_info.endkey_->compare(rowkey, datum_utils_, cmp_ret, false))) {
       LOG_WARN("fail to compare rowkey", K(ret), KPC(index_info.endkey_), K(rowkey));
     }
     return cmp_ret;
@@ -1256,7 +1256,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
     int64_t start_idx = start_pos % max_micro_handle_cnt_;
     int64_t end_idx = end_pos % max_micro_handle_cnt_;
     if (!is_reverse) {
-      if (OB_FAIL(micro_data_infos_[end_idx].endkey_->compare(border_rowkey, datum_utils, cmp_ret))) {
+      if (OB_FAIL(micro_data_infos_[end_idx].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
         LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[start_idx].endkey_));
       } else if (cmp_ret < 0) {
         for (int64_t pos = start_pos; pos < end_pos; pos++) {
@@ -1274,7 +1274,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
           } else {
             cmp_ret = 0;
             // split to [start_idx, max_micro_handle_cnt_ - 1], [0, end_idx - 1]
-            if (OB_FAIL(micro_data_infos_[max_micro_handle_cnt_ - 1].endkey_->compare(border_rowkey, datum_utils, cmp_ret))) {
+            if (OB_FAIL(micro_data_infos_[max_micro_handle_cnt_ - 1].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
               LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[max_micro_handle_cnt_ - 1]));
             } else if (cmp_ret < 0) {
               for (int64_t idx = start_idx; idx < max_micro_handle_cnt_; idx++) {
@@ -1303,7 +1303,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
         } else {
           cmp_ret = 0;
           // split to [start_idx, max_micro_handle_cnt_ - 1], [0, end_idx]
-          if (OB_FAIL(micro_data_infos_[0].endkey_->compare(border_rowkey, datum_utils, cmp_ret))) {
+          if (OB_FAIL(micro_data_infos_[0].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
             LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[0]));
           } else if (cmp_ret > 0) {
             for (int64_t idx = start_idx; idx < max_micro_handle_cnt_; idx++) {
