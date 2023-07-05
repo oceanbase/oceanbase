@@ -170,6 +170,18 @@ OB_DEF_DESERIALIZE(ObLockTaskBatchRequest)
   return ret;
 }
 
+void ObLockParam::reset()
+{
+  lock_id_.reset();
+  lock_mode_ = NO_LOCK;
+  owner_id_.reset();
+  op_type_ = UNKNOWN_TYPE;
+  is_deadlock_avoid_enabled_ = false;
+  is_try_lock_ = true;
+  expired_time_ = 0;
+  schema_version_ = -1;
+}
+
 int ObLockParam::set(
     const ObLockID &lock_id,
     const ObTableLockMode lock_mode,
@@ -355,6 +367,11 @@ int ObTableLockTaskRequest::assign(const ObTableLockTaskRequest &arg)
 
 ObTableLockTaskRequest::~ObTableLockTaskRequest()
 {
+  reset();
+}
+
+void ObTableLockTaskRequest::reset()
+{
   auto txs = MTL(transaction::ObTransService*);
   if (OB_NOT_NULL(tx_desc_)) {
     if (need_release_tx_) {
@@ -364,6 +381,7 @@ ObTableLockTaskRequest::~ObTableLockTaskRequest()
   }
   task_type_ = INVALID_LOCK_TASK_TYPE;
   lsid_.reset();
+  param_.reset();
   tx_desc_ = nullptr;
   need_release_tx_ = false;
 }
