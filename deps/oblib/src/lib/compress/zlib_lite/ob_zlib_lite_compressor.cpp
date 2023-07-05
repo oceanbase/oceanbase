@@ -26,7 +26,7 @@ namespace ZLIB_LITE
 /*zlib_lite supports two algorithms. On the platform that supports qpl, the qpl compression algorithm will be used, 
 otherwise the zlib algorithm will be used.*/
 
-ObZlibLiteCompressor::ObZlibLiteCompressor()
+ObZlibLiteCompressor::ObZlibLiteCompressor() : qpl_runtime_enabled_(false)
 {
 }
 
@@ -47,13 +47,18 @@ void qpl_deallocate(void *ptr)
 int ObZlibLiteCompressor::init()
 {
   int ret = OB_SUCCESS;
+  qpl_runtime_enabled_ = false;
 #ifdef ENABLE_QPL_COMPRESSION
-  QplAllocator allocator;
-  allocator.allocate = qpl_allocate;
-  allocator.deallocate = qpl_deallocate;
-  int qpl_ret = qpl_init(allocator);
-  if (0 != qpl_ret) {
-    ret = OB_ERROR;
+  if (0 == access("/dev/usdm_drv", F_OK)) {
+    qpl_runtime_enabled_ = true;
+    
+    QplAllocator allocator;
+    allocator.allocate = qpl_allocate;
+    allocator.deallocate = qpl_deallocate;
+    int qpl_ret = qpl_init(allocator);
+    if (0 != qpl_ret) {
+      ret = OB_ERROR;
+    }
   }
 #endif
   return ret;
@@ -62,7 +67,9 @@ int ObZlibLiteCompressor::init()
 void ObZlibLiteCompressor::deinit()
 {
 #ifdef ENABLE_QPL_COMPRESSION
-  qpl_deinit();
+  if (qpl_runtime_enabled_) {
+    qpl_deinit();
+  }
 #endif
 }
 
@@ -139,15 +146,16 @@ int ObZlibLiteCompressor::zlib_lite_compress(const char* src_buffer,
                                              const int64_t dst_buffer_size)
 {
 #ifdef ENABLE_QPL_COMPRESSION
-  return qpl_compress(src_buffer, dst_buffer, static_cast<int>(src_data_size), static_cast<int>(dst_buffer_size));
-#else
+  if (qpl_runtime_enabled_) {
+    return qpl_compress(src_buffer, dst_buffer, static_cast<int>(src_data_size),
+                        static_cast<int>(dst_buffer_size));
+  }
+#endif // ENABLE_QPL_COMPRESSION
+  
   int ret = OB_SUCCESS;
   int zlib_errno = Z_OK;
   int64_t compress_ret_size = dst_buffer_size;
-  zlib_errno = zlib_compress(reinterpret_cast<Bytef*>(dst_buffer),
-                             reinterpret_cast<uLongf*>(&compress_ret_size),
-                             reinterpret_cast<const Bytef*>(src_buffer),
-                             static_cast<uLong>(src_data_size));
+  zlib_errno = zlib_compress(dst_buffer, &compress_ret_size, src_buffer, src_data_size);
   if (OB_UNLIKELY(Z_OK != zlib_errno)) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
     LIB_LOG(WARN, "Compress data by zlib in zlib_lite algorithm faild, ", K(ret), K(zlib_errno));
@@ -155,7 +163,6 @@ int ObZlibLiteCompressor::zlib_lite_compress(const char* src_buffer,
   } 
     
   return compress_ret_size;
-#endif
 }
 
 int ObZlibLiteCompressor::zlib_lite_decompress(const char* src_buffer,
@@ -164,22 +171,23 @@ int ObZlibLiteCompressor::zlib_lite_decompress(const char* src_buffer,
                                                const int64_t dst_buffer_size)
 {
 #ifdef ENABLE_QPL_COMPRESSION
-  return qpl_decompress(src_buffer, dst_buffer, static_cast<int>(src_data_size), static_cast<int>(dst_buffer_size));
-#else
+  if (qpl_runtime_enabled_) {
+    return qpl_decompress(src_buffer, dst_buffer,
+                          static_cast<int>(src_data_size),
+                          static_cast<int>(dst_buffer_size));
+  }
+#endif
+  
   int ret = OB_SUCCESS;
   int64_t decompress_ret_size = dst_buffer_size;
   int zlib_errno = Z_OK;
-  zlib_errno = zlib_decompress(reinterpret_cast<Bytef*>(dst_buffer),
-                          reinterpret_cast<uLongf*>(&decompress_ret_size),
-                          reinterpret_cast<const Byte*>(src_buffer),
-                          static_cast<uLong>(src_data_size));
+  zlib_errno = zlib_decompress(dst_buffer, &decompress_ret_size, src_buffer, src_data_size);
   if (OB_UNLIKELY(Z_OK != zlib_errno)) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
     LIB_LOG(WARN, "Decompress data by zlib in zlib_lite algorithm faild, ",K(ret), K(zlib_errno));
     return -1;
   }
   return decompress_ret_size;
-#endif
 }
 
 int ObZlibLiteCompressor::compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer,
@@ -205,12 +213,12 @@ int ObZlibLiteCompressor::compress(const char* src_buffer, const int64_t src_dat
                        src_buffer, src_data_size, dst_buffer, dst_buffer_size))) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
     LIB_LOG(WARN,
-           "fail to compress data by zlib_lite_compress, ",
-           K(ret),
-           KP(src_buffer),
-           K(src_data_size),
-           K(dst_buffer_size),
-           K(dst_data_size));
+            "fail to compress data by zlib_lite_compress, ",
+            K(ret),
+            KP(src_buffer),
+            K(src_data_size),
+            K(dst_buffer_size),
+            K(dst_data_size));
   }
 
   return ret;
