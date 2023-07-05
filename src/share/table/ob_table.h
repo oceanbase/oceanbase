@@ -637,10 +637,9 @@ class ObTableAggregation
   OB_UNIS_VERSION(1);
 public:
   ObTableAggregation()
-    :type_(ObTableAggregationType::INVAILD),
-    column_()
-  {};
-  ~ObTableAggregation() {};
+      : type_(ObTableAggregationType::INVAILD),
+        column_()
+  {}
   ObTableAggregationType get_type() const { return type_; }
   const common::ObString &get_column() const { return column_; }
   TO_STRING_KV(K_(type), K_(column));
