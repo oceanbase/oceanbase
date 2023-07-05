@@ -123,19 +123,23 @@ int ObTransService::remove_ls(const share::ObLSID &ls_id, const bool graceful)
   return ret;
 }
 
-#ifdef TX_PARTS_CONTAIN_
-#error "redefine TX_PARTS_CONTAIN_"
+#ifdef CHECK_TX_PARTS_CONTAIN_
+#error "redefine CHECK_TX_PARTS_CONTAIN_"
 #else
-#define TX_PARTS_CONTAIN_(parts, id_, ls_id, hit)       \
-  do {                                                  \
-    hit = false;                                        \
-    ARRAY_FOREACH_NORET(parts, idx) {                   \
-      if (parts.at(idx).id_ == ls_id) {                 \
-        hit = true;                                     \
-        break;                                          \
-      }                                                 \
-    }                                                   \
-  } while(0)
+#define CHECK_TX_PARTS_CONTAIN_(parts, id, epoch, ls_id, exist)     \
+  if (OB_SUCC(ret)) {                                               \
+    exist = false;                                                  \
+    ARRAY_FOREACH_NORET(parts, idx) {                               \
+      if (parts.at(idx).id == ls_id) {                              \
+        if (ObTxPart::is_without_ctx(parts.at(idx).epoch)) {        \
+          /* target LS was dropped */                               \
+          /* can not accept access any more */                      \
+          ret = OB_PARTITION_IS_BLOCKED;                            \
+        } else { exist = true; }                                    \
+        break;                                                      \
+      }                                                             \
+    }                                                               \
+  }
 #endif
 
 int ObTransService::acquire_tx(const char* buf,
@@ -974,8 +978,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   if (OB_SUCC(ret) && snap_tx_id.is_valid()) {
     // inner tx read, we verify txCtx's status
     bool exist = false;
-    TX_PARTS_CONTAIN_(snapshot.parts_, left_, ls_id, exist);
-    if (exist || read_latest) {
+    CHECK_TX_PARTS_CONTAIN_(snapshot.parts_, left_, right_, ls_id, exist);
+    if (OB_SUCC(ret) && (exist || read_latest)) {
       if (OB_FAIL(get_tx_ctx_(ls_id, store_ctx.ls_, snap_tx_id, tx_ctx))) {
         if (OB_TRANS_CTX_NOT_EXIST == ret && !exist) {
           ret = OB_SUCCESS;
@@ -1148,8 +1152,9 @@ int ObTransService::acquire_tx_ctx(const share::ObLSID &ls_id, const ObTxDesc &t
 {
   int ret = OB_SUCCESS;
   bool exist = false;
-  TX_PARTS_CONTAIN_(tx.parts_, id_, ls_id, exist);
-  if (exist) {
+  CHECK_TX_PARTS_CONTAIN_(tx.parts_, id_, epoch_, ls_id, exist);
+  if (OB_FAIL(ret)) {
+  } else if (exist) {
     if (OB_FAIL(get_tx_ctx_(ls_id, ls, tx.tx_id_, ctx))) {
       TRANS_LOG(WARN, "get tx ctx fail", K(ret), K(ls_id), K(tx));
       if (ret == OB_TRANS_CTX_NOT_EXIST) {
@@ -2055,6 +2060,7 @@ int ObTransService::handle_tx_batch_req(int msg_type,
   (OB_NOT_MASTER == ret                         \
    || OB_EAGAIN == ret                          \
    || OB_NEED_RETRY == ret                      \
+   || OB_PARTITION_IS_BLOCKED == ret            \
    || OB_LS_NOT_EXIST == ret                    \
    || OB_PARTITION_NOT_EXIST == ret             \
    || OB_TENANT_NOT_EXIST == ret                \
