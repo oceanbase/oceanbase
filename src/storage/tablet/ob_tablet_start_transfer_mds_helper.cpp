@@ -695,7 +695,7 @@ int ObTabletStartTransferInHelper::on_register_success_(
     LOG_WARN("on register success get invalid argument", K(ret), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(check_transfer_dest_tablets_(tx_start_transfer_in_info, for_replay))) {
     LOG_WARN("failed to check transfer dest tablets", K(ret), K(tx_start_transfer_in_info));
-  } else if (CLICK_FAIL(check_transfer_src_tablets_(false /* for replay */, tx_start_transfer_in_info))) {
+  } else if (CLICK_FAIL(check_transfer_src_tablets_(scn, for_replay, tx_start_transfer_in_info))) {
     LOG_WARN("failed to check transfer src tablets", K(ret), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(create_transfer_in_tablets_(scn, for_replay, tx_start_transfer_in_info, ctx))) {
     LOG_WARN("failed to create transfer in tablets", K(ret), K(tx_start_transfer_in_info));
@@ -873,6 +873,7 @@ int ObTabletStartTransferInHelper::check_can_skip_replay_(
 }
 
 int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
+    const share::SCN &scn,
     const bool for_replay,
     const ObTXStartTransferInInfo &tx_start_transfer_in_info)
 {
@@ -883,20 +884,21 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
   ObLS *src_ls = NULL;
   ObLSService* ls_srv = nullptr;
   SCN max_decided_scn;
-
-  if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
+  if ((!scn.is_valid() && for_replay) || !tx_start_transfer_in_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(scn), K(for_replay), K(tx_start_transfer_in_info));
+  } else if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls srv should not be NULL", K(ret), KP(ls_srv));
   } else if (CLICK_FAIL(ls_srv->get_ls(tx_start_transfer_in_info.src_ls_id_, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("ls_srv->get_ls() fail", KR(ret), "src ls id", tx_start_transfer_in_info.src_ls_id_);
     if (OB_LS_NOT_EXIST == ret) {
-      bool is_ls_deleted = false;
-      if (OB_SUCCESS != (tmp_ret = ObStorageHAUtils::check_ls_deleted(tx_start_transfer_in_info.src_ls_id_, is_ls_deleted))) {
-        LOG_WARN("failed to get ls status from inner table", K(tmp_ret), K(tx_start_transfer_in_info));
-      } else if (!is_ls_deleted) {
-        //do nothing
-      } else if (!for_replay) {
-      } else if (OB_SUCCESS != (tmp_ret = set_dest_ls_rebuild_(tx_start_transfer_in_info.dest_ls_id_))) {
+      bool need_rebuild = false;
+      if (!for_replay) {
+        // do nothing
+      } else if (OB_SUCCESS != (tmp_ret = OB_FAIL(ObStorageHAUtils::check_transfer_ls_can_rebuild(scn, need_rebuild)))) {
+        LOG_WARN("failed to check transfer ls can rebuild", K(tmp_ret), K(scn), K(tx_start_transfer_in_info));
+      } else if (need_rebuild && OB_SUCCESS != (tmp_ret = set_dest_ls_rebuild_(tx_start_transfer_in_info.dest_ls_id_))) {
         LOG_WARN("failed to set dest ls rebuild", K(tmp_ret), K(tx_start_transfer_in_info));
       }
     }
@@ -1540,7 +1542,7 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
   } else {
     if (OB_FAIL(check_can_skip_check_transfer_src_tablet_(scn, tx_start_transfer_in_info, can_skip_check_src))) {
       LOG_WARN("failed to check can skip check transfer src tablet", K(ret), K(tx_start_transfer_in_info));
-    } else if (!can_skip_check_src && OB_FAIL(check_transfer_src_tablets_(true /* for replay */, tx_start_transfer_in_info))) {
+    } else if (!can_skip_check_src && OB_FAIL(check_transfer_src_tablets_(scn, true /* for replay */, tx_start_transfer_in_info))) {
       LOG_WARN("failed to check transfer src tablets", K(ret), K(tx_start_transfer_in_info));
     }
     if (OB_FAIL(ret)) {

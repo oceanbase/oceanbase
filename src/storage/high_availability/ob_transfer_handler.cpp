@@ -300,16 +300,13 @@ int ObTransferHandler::check_self_is_leader_(bool &is_leader)
   logservice::ObLogService *log_service = nullptr;
   ObRole role = ObRole::INVALID_ROLE;
   int64_t proposal_id = 0;
-  share::ObAllTenantInfo tenant_info;
   const uint64_t tenant_id = MTL_ID();
   is_leader = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, false/*for update*/, tenant_info))) {
-    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (!tenant_info.is_primary()) {
+  } else if (!MTL_IS_PRIMARY_TENANT()) {
     is_leader = false;
   } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
     ret = OB_ERR_UNEXPECTED;
