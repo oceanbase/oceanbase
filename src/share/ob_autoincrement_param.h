@@ -101,7 +101,7 @@ struct AutoincParam
       part_level_(schema::PARTITION_LEVEL_ZERO),
       auto_increment_cache_size_(DEFAULT_INCREMENT_CACHE_SIZE),
       autoinc_mode_is_order_(true),
-      autoinc_version_(0),
+      autoinc_version_(OB_INVALID_VERSION),
       autoinc_auto_increment_(1)
   {}
 
@@ -168,6 +168,28 @@ struct AutoincParam
   uint64_t          autoinc_auto_increment_; // auto increment value of table schema
   OB_UNIS_VERSION(1);
 };
+
+// Because 4.1 TableNode and AutoincParam's initial value are incorrect,
+// it will effect upgrade, so we need to modify the value
+// Background:
+// 1.autoinc_version's role is to recognize the old cache
+// 2. In load data(ob_table_load_coordinator_ctx) situation, AutoincParam's autoinc_version_ didn't set, so it will be set by default value 0, but it should be -1.
+// When AutoincParam'autoinc_version is bigger than TableNode.autinc_version_ it will reset cache, and this will cause read inner table(__all_autoincrement).
+// When using AutoincParam'autoinc_version to read from inner table, AutoincParam'autoinc_version is zero, inner table' truncate version is -1, this will raise schema error ret.
+// If getting schema error ret, it will retry again and again, so we cannot let this happen
+
+// Strategy to resolve:
+// we will use get_modify_autoinc_version methold to modify autoinc_version
+// 1.When Reading and Writing cache, we will modify AutoincParam'autoinc_version from 0 to -1
+//  global_autoinc service's reques(like ObGAISNextAutoIncValReq) autoinc_version's default value is -1,
+//  so we use get_modify_autoinc_version when we send request to order service
+// 2.When Comparing AutoincParam's autoinc_version_ and TableNode's autoinc_version_ to recognize old cache,
+//  we will modify AutoincParam'autoinc_version from 0 to -1
+// 3.When reading from inner table, we will modify AutoincParam'autoinc_version from 0 to -1
+OB_INLINE int64_t get_modify_autoinc_version(const int64_t &autoinc_version)
+{
+  return 0 == autoinc_version ? OB_INVALID_VERSION : autoinc_version;
+}
 
 }//end namespace share
 }//end namespace oceanbase

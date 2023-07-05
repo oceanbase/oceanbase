@@ -40,10 +40,11 @@ struct ObGAISPushAutoIncValReq;
 
 struct ObAutoIncCacheNode
 {
-  ObAutoIncCacheNode() : sequence_value_(0), last_available_value_(0), sync_value_(0) {}
+  ObAutoIncCacheNode() : sequence_value_(0), last_available_value_(0), sync_value_(0), autoinc_version_(OB_INVALID_VERSION) {}
   int init(const uint64_t sequence_value,
            const uint64_t last_available_value,
-           const uint64_t sync_value);
+           const uint64_t sync_value,
+           const int64_t autoinc_version);
   bool is_valid() const {
     return sequence_value_ > 0 && last_available_value_ >= sequence_value_ &&
              sync_value_ <= sequence_value_;
@@ -70,12 +71,14 @@ struct ObAutoIncCacheNode
     sequence_value_ = 0;
     last_available_value_ = 0;
     sync_value_ = 0;
+    autoinc_version_ = OB_INVALID_VERSION;
   }
-  TO_STRING_KV(K_(sequence_value), K_(last_available_value), K_(sync_value));
+  TO_STRING_KV(K_(sequence_value), K_(last_available_value), K_(sync_value), K_(autoinc_version));
 
   uint64_t sequence_value_; // next auto_increment value can be used
   uint64_t last_available_value_; // last available value in the cache
   uint64_t sync_value_;
+  int64_t autoinc_version_;
 };
 
 class ObGlobalAutoIncService : public logservice::ObIReplaySubHandler,
@@ -175,6 +178,7 @@ private:
   int check_leader_(const uint64_t tenant_id, bool &is_leader);
   int fetch_next_node_(const ObGAISNextAutoIncValReq &request, ObAutoIncCacheNode &node);
   int read_value_from_inner_table_(const share::AutoincKey &key,
+                                   const int64_t &inner_autoinc_version,
                                    uint64_t &sequence_val,
                                    uint64_t &sync_val);
   int sync_value_to_inner_table_(const ObGAISPushAutoIncValReq &request,

@@ -40,17 +40,20 @@ public:
                 const uint64_t table_auto_increment,
                 const uint64_t desired_count,
                 const uint64_t cache_size,
+                const int64_t &autoinc_version,
                 uint64_t &sync_value,
                 uint64_t &start_inclusive,
                 uint64_t &end_inclusive);
-  int get_sequence_value(const AutoincKey &key, uint64_t &sequence_value);
+  int get_sequence_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &sequence_value);
   int get_auto_increment_values(const common::ObIArray<AutoincKey> &autoinc_keys,
+                                const common::ObIArray<int64_t> &autoinc_versions,
                                 common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values);
   int local_push_to_global_value(const AutoincKey &key,
                                  const uint64_t max_value,
                                  const uint64_t local_sync_value,
+                                 const int64_t &autoinc_version,
                                  uint64_t &global_sync_value);
-  int local_sync_with_global_value(const AutoincKey &key, uint64_t &global_sync_value);
+  int local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &global_sync_value);
   int clear_global_autoinc_cache(const AutoincKey &key);
 
 private:

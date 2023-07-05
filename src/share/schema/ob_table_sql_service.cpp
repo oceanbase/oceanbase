@@ -925,7 +925,8 @@ int ObTableSqlService::insert_single_column(
       if (OB_FAIL(add_sequence(new_table_schema.get_tenant_id(),
                                new_table_schema.get_table_id(),
                                new_column_schema.get_column_id(),
-                               new_table_schema.get_auto_increment()))) {
+                               new_table_schema.get_auto_increment(),
+                               new_table_schema.get_truncate_version()))) {
         SHARE_SCHEMA_LOG(WARN, "insert sequence record failed",
                          K(ret), K(new_column_schema));
       }
@@ -985,7 +986,8 @@ int ObTableSqlService::update_single_column(
         if (OB_FAIL(add_sequence(tenant_id,
                                  new_table_schema.get_table_id(),
                                  new_column_schema.get_column_id(),
-                                 new_table_schema.get_auto_increment()))) {
+                                 new_table_schema.get_auto_increment(),
+                                 new_table_schema.get_truncate_version()))) {
           LOG_WARN("insert sequence record failed", K(ret), K(new_table_schema));
         }
       } else if (new_table_schema.get_autoinc_column_id() == new_column_schema.get_column_id()) {
@@ -2317,7 +2319,8 @@ int ObTableSqlService::create_table(ObTableSchema &table,
   }
   if (OB_SUCCESS == ret && 0 != table.get_autoinc_column_id()) {
     if (OB_FAIL(add_sequence(tenant_id, table.get_table_id(),
-                             table.get_autoinc_column_id(), table.get_auto_increment()))) {
+                             table.get_autoinc_column_id(), table.get_auto_increment(),
+                             table.get_truncate_version()))) {
       LOG_WARN("insert sequence record faild", K(ret), K(table));
     }
     end_usec = ObTimeUtility::current_time();
@@ -3567,7 +3570,8 @@ int ObTableSqlService::update_data_table_schema_version(
 int ObTableSqlService::add_sequence(const uint64_t tenant_id,
                                     const uint64_t table_id,
                                     const uint64_t column_id,
-                                    const uint64_t auto_increment)
+                                    const uint64_t auto_increment,
+                                    const int64_t truncate_version)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -3588,6 +3592,7 @@ int ObTableSqlService::add_sequence(const uint64_t tenant_id,
       SQL_COL_APPEND_VALUE(sql, values, column_id, "column_id", "%lu");
       SQL_COL_APPEND_VALUE(sql, values, 0 == auto_increment ? 1 : auto_increment, "sequence_value", "%lu");
       SQL_COL_APPEND_VALUE(sql, values, 0 == auto_increment ? 0 : auto_increment - 1, "sync_value", "%lu");
+      SQL_COL_APPEND_VALUE(sql, values, truncate_version, "truncate_version", "%ld");
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(sql.append_fmt(", gmt_modified) VALUES (%.*s, now(6))",

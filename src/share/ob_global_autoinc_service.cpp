@@ -25,6 +25,9 @@
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "share/schema/ob_schema_struct.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 
 namespace oceanbase
 {
@@ -36,16 +39,18 @@ namespace share
 
 int ObAutoIncCacheNode::init(const uint64_t sequence_value,
                              const uint64_t last_available_value,
-                             const uint64_t sync_value)
+                             const uint64_t sync_value,
+                             const int64_t autoinc_version)
 {
   int ret = OB_SUCCESS;
-  if (sequence_value <= 0 || last_available_value < sequence_value || sync_value > sequence_value) {
+  if (sequence_value <= 0 || last_available_value < sequence_value || sync_value > sequence_value || autoinc_version < OB_INVALID_VERSION) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(sequence_value), K(last_available_value), K(sync_value));
   } else {
     sequence_value_ = sequence_value;
     last_available_value_ = last_available_value;
     sync_value_ = sync_value;
+    autoinc_version_ = autoinc_version;
   }
   return ret;
 }
@@ -189,14 +194,26 @@ int ObGlobalAutoIncService::handle_next_autoinc_request(
   } else {
     ObAutoIncCacheNode cache_node;
     int err = autoinc_map_.get_refactored(key, cache_node);
+    const int64_t tenant_id = key.tenant_id_;
+    const int64_t request_version = request.autoinc_version_;
     LOG_TRACE("begin handle req autoinc request", K(request), K(cache_node));
     if (OB_UNLIKELY(OB_SUCCESS != err && OB_HASH_NOT_EXIST != err)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get seq value", K(ret), K(key));
-    } else if (OB_UNLIKELY(!cache_node.is_valid() ||
-                             cache_node.need_fetch_next_node(
-                               request.base_value_, desired_count, request.max_value_))) {
+    } else if (OB_UNLIKELY(!cache_node.is_valid()
+                          || (request_version == cache_node.autoinc_version_
+                            && cache_node.need_fetch_next_node(
+                              request.base_value_, desired_count, request.max_value_)))) {
       OZ(fetch_next_node_(request, cache_node));
+    } else if (OB_UNLIKELY(request_version > cache_node.autoinc_version_)) {
+      LOG_INFO("start to reset old global table node", K(tenant_id), K(table_id),
+                                                       K(request_version), K(cache_node.autoinc_version_));
+      cache_node.reset();
+      OZ(fetch_next_node_(request, cache_node));
+    } else if (OB_UNLIKELY(request_version < cache_node.autoinc_version_)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("request autoinc_version is less than autoinc_version_ in table_node, it should retry", KR(ret), K(tenant_id), K(table_id),
+                                                                                                       K(request_version), K(cache_node.autoinc_version_));
     }
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(!cache_node.is_valid())) {
@@ -263,22 +280,28 @@ int ObGlobalAutoIncService::handle_curr_autoinc_request(const ObGAISAutoIncKeyAr
     LOG_WARN("fail to get lock", K(ret));
   } else {
     ObAutoIncCacheNode cache_node;
+    const int64_t tenant_id = key.tenant_id_;
     int err = autoinc_map_.get_refactored(key, cache_node);
+    const int64_t request_version = request.autoinc_version_;
     LOG_TRACE("start handle get autoinc request", K(request), K(cache_node));
     if (OB_UNLIKELY(OB_SUCCESS != err && OB_HASH_NOT_EXIST != err)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get seq value", K(ret), K(key));
-    } else if (is_leader && OB_LIKELY(cache_node.is_valid())) {
+    } else if (is_leader
+              && OB_LIKELY(cache_node.is_valid())
+              && request_version == cache_node.autoinc_version_) {
       // get autoinc values from cache
       sequence_value = cache_node.sequence_value_;
       sync_value = cache_node.sync_value_;
       // hash not exist, cache node is non-valid or service is not leader,
       // read value from inner table
-    } else if (OB_FAIL(read_value_from_inner_table_(key, sequence_value, sync_value))) {
-      LOG_WARN("fail to read value from inner table", K(ret));
+    } else if (OB_FAIL(read_value_from_inner_table_(key, request_version, sequence_value, sync_value))) {
+      LOG_WARN("fail to read value from inner table", KR(ret), K(tenant_id), K_(key.table_id));
     }
-    if (OB_SUCC(ret) && OB_FAIL(result.init(sequence_value, sync_value))) {
-      LOG_WARN("failed to init result", K(ret), K(key), K(cache_node));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(result.init(sequence_value, sync_value))) {
+        LOG_WARN("failed to init result", KR(ret), K(tenant_id), K_(key.table_id), K(request_version), K(cache_node));
+      }
     }
     mutex.unlock();
   }
@@ -308,18 +331,37 @@ int ObGlobalAutoIncService::handle_push_autoinc_request(
     LOG_WARN("fail to get lock", K(ret));
   } else {
     ObAutoIncCacheNode cache_node;
+    const int64_t tenant_id = key.tenant_id_;
     int err = autoinc_map_.get_refactored(key, cache_node);
+    const int64_t request_version = request.autoinc_version_;
     LOG_TRACE("start handle push global autoinc request", K(request), K(cache_node));
     if (OB_UNLIKELY(OB_SUCCESS != err && OB_HASH_NOT_EXIST != err)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get seq value", K(ret), K(key));
-    } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST == err || cache_node.need_sync(request.base_value_))) {
+    } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST == err
+                        || (request_version == cache_node.autoinc_version_
+                            && cache_node.need_sync(request.base_value_)))) {
       if (OB_FAIL(sync_value_to_inner_table_(request, cache_node, sync_value))) {
         LOG_WARN("sync to inner table failed", K(ret));
       } else if (OB_FAIL(autoinc_map_.set_refactored(key, cache_node, 1))) {
         LOG_WARN("set autoinc_map_ failed", K(ret));
       }
-    } else {
+    // cache node is expired
+    } else if (OB_UNLIKELY(request_version > cache_node.autoinc_version_)) {
+      uint64_t sequence_value = 0;
+      if (OB_FAIL(autoinc_map_.erase_refactored(key))) {
+        LOG_WARN("fail to erase autoinc cache map key", K(ret));
+      } else {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("request autoinc_version is bigger than cache_node autoinc_version, erase key", KR(ret), K(tenant_id), K_(key.table_id),
+                                                                                                 K(request_version), K(cache_node.autoinc_version_));
+      }
+    // old request just ignore
+    } else if (OB_UNLIKELY(request_version < cache_node.autoinc_version_)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("request autoinc_version is less than cache_node autoinc_version", KR(ret), K(tenant_id), K_(key.table_id),
+                                                                                  K(request_version), K(cache_node.autoinc_version_));
+    } else if (OB_LIKELY(request_version == cache_node.autoinc_version_)) {
       sync_value = cache_node.sync_value_;
     }
     mutex.unlock();
@@ -394,20 +436,21 @@ int ObGlobalAutoIncService::fetch_next_node_(const ObGAISNextAutoIncValReq &requ
   uint64_t start_inclusive = 0;
   uint64_t end_inclusive = 0;
   uint64_t sync_value = 0;
+  const int64_t autoinc_version =  request.autoinc_version_;
   if (OB_FAIL(inner_table_proxy_.next_autoinc_value(request.autoinc_key_,
                                                     request.offset_,
                                                     request.increment_,
                                                     request.base_value_,
                                                     request.max_value_,
                                                     desired_count,
-                                                    false, /*for_update*/
+                                                    autoinc_version,
                                                     start_inclusive,
                                                     end_inclusive,
                                                     sync_value))) {
     LOG_WARN("fail to require autoinc value from inner table", K(ret));
   } else if (OB_LIKELY(node.is_valid()) && OB_FAIL(node.update_available_value(end_inclusive))) {
     LOG_WARN("fail to update available value", K(ret), K(node), K(end_inclusive));
-  } else if (OB_FAIL(node.init(start_inclusive, end_inclusive, sync_value))){
+  } else if (OB_FAIL(node.init(start_inclusive, end_inclusive, sync_value, autoinc_version))){
     LOG_WARN("fail to init node", K(ret), K(start_inclusive), K(end_inclusive), K(sync_value));
   } else {
     LOG_TRACE("fetch next node done", K(request), K(node));
@@ -416,10 +459,11 @@ int ObGlobalAutoIncService::fetch_next_node_(const ObGAISNextAutoIncValReq &requ
 }
 
 int ObGlobalAutoIncService::read_value_from_inner_table_(const share::AutoincKey &key,
+                                                         const int64_t &autoinc_version,
                                                          uint64_t &sequence_val,
                                                          uint64_t &sync_val)
 {
-  return inner_table_proxy_.get_autoinc_value(key, sequence_val, sync_val);
+  return inner_table_proxy_.get_autoinc_value(key, autoinc_version, sequence_val, sync_val);
 }
 
 int ObGlobalAutoIncService::sync_value_to_inner_table_(
@@ -430,10 +474,11 @@ int ObGlobalAutoIncService::sync_value_to_inner_table_(
   int ret = OB_SUCCESS;
   const uint64_t insert_value = request.base_value_;
   uint64_t seq_value = node.is_valid() ? node.sequence_value_ : 0;
+  const int64_t autoinc_version = request.autoinc_version_;
   if (OB_FAIL(inner_table_proxy_.sync_autoinc_value(request.autoinc_key_,
                                                     insert_value,
                                                     request.max_value_,
-                                                    false, /*for_update*/
+                                                    autoinc_version,
                                                     seq_value,
                                                     sync_value))) {
     LOG_WARN("fail to sync autoinc value to inner table", K(ret));
@@ -446,7 +491,7 @@ int ObGlobalAutoIncService::sync_value_to_inner_table_(
       if (node.last_available_value_ != request.max_value_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret), K(node), K(request.max_value_));
-      } else if (OB_FAIL(node.init(request.max_value_, request.max_value_, request.max_value_))) {
+      } else if (OB_FAIL(node.init(request.max_value_, request.max_value_, request.max_value_, autoinc_version))) {
         LOG_WARN("fail to init node", K(ret), K(request.max_value_));
       }
     } else if (OB_FAIL(node.update_sequence_value(seq_value))) {

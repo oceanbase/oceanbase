@@ -61,6 +61,7 @@ int ObGAISClient::get_value(const AutoincKey &key,
                             const uint64_t table_auto_increment,
                             const uint64_t desired_count,
                             const uint64_t cache_size,
+                            const int64_t &autoinc_version,
                             uint64_t &sync_value,
                             uint64_t &start_inclusive,
                             uint64_t &end_inclusive)
@@ -78,7 +79,7 @@ int ObGAISClient::get_value(const AutoincKey &key,
       LOG_WARN("get leader fail", K(ret));
       (void)refresh_location_(tenant_id);
     } else if (OB_FAIL(msg.init(key, offset, increment, table_auto_increment, max_value,
-                                desired_count, cache_size, self_))) {
+                                desired_count, cache_size, self_, autoinc_version))) {
       LOG_WARN("fail to init request msg", K(ret));
     } else if (OB_UNLIKELY(!msg.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
@@ -99,7 +100,7 @@ int ObGAISClient::get_value(const AutoincKey &key,
   return ret;
 }
 
-int ObGAISClient::get_sequence_value(const AutoincKey &key, uint64_t &sequence_value)
+int ObGAISClient::get_sequence_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &sequence_value)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = key.tenant_id_;
@@ -113,8 +114,8 @@ int ObGAISClient::get_sequence_value(const AutoincKey &key, uint64_t &sequence_v
     if (OB_FAIL(get_leader_(tenant_id, leader))) {
       LOG_WARN("get leader fail", K(ret));
       (void)refresh_location_(tenant_id);
-    } else if (OB_FAIL(msg.init(key, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
+    } else if (OB_FAIL(msg.init(key, self_, autoinc_version))) {
+      LOG_WARN("fail to init request msg", KR(ret), K(key), K(autoinc_version));
     } else if (OB_UNLIKELY(!msg.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(msg));
@@ -132,6 +133,7 @@ int ObGAISClient::get_sequence_value(const AutoincKey &key, uint64_t &sequence_v
 
 int ObGAISClient::get_auto_increment_values(
     const common::ObIArray<AutoincKey> &autoinc_keys,
+    const common::ObIArray<int64_t> &autoinc_versions,
     common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values)
 {
   int ret = OB_SUCCESS;
@@ -154,8 +156,9 @@ int ObGAISClient::get_auto_increment_values(
         for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_keys.count(); ++i) {
           rpc_result.reset();
           AutoincKey key = autoinc_keys.at(i);
-          if (OB_FAIL(msg.init(key, self_))) {
-            LOG_WARN("fail to init request msg", K(ret));
+          int64_t autoinc_version = autoinc_versions.at(i);
+          if (OB_FAIL(msg.init(key, self_, autoinc_version))) {
+            LOG_WARN("fail to init request msg", KR(ret), K(key), K(autoinc_version));
           } else if (OB_UNLIKELY(!msg.is_valid())) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid argument", K(ret), K(msg));
@@ -178,6 +181,7 @@ int ObGAISClient::get_auto_increment_values(
 int ObGAISClient::local_push_to_global_value(const AutoincKey &key,
                                              const uint64_t max_value,
                                              const uint64_t local_sync_value,
+                                             const int64_t &autoinc_version,
                                              uint64_t &global_sync_value)
 {
   int ret = OB_SUCCESS;
@@ -192,8 +196,8 @@ int ObGAISClient::local_push_to_global_value(const AutoincKey &key,
     if (OB_FAIL(get_leader_(tenant_id, leader))) {
       LOG_WARN("get leader fail", K(ret));
       (void)refresh_location_(tenant_id);
-    } else if (OB_FAIL(msg.init(key, local_sync_value, max_value, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
+    } else if (OB_FAIL(msg.init(key, local_sync_value, max_value, self_, autoinc_version))) {
+      LOG_WARN("fail to init request msg", KR(ret), K(key), K(autoinc_version));
     } else if (OB_UNLIKELY(!msg.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(msg));
@@ -208,7 +212,7 @@ int ObGAISClient::local_push_to_global_value(const AutoincKey &key,
   return ret;
 }
 
-int ObGAISClient::local_sync_with_global_value(const AutoincKey &key, uint64_t &global_sync_value)
+int ObGAISClient::local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &global_sync_value)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = key.tenant_id_;
@@ -222,8 +226,8 @@ int ObGAISClient::local_sync_with_global_value(const AutoincKey &key, uint64_t &
     if (OB_FAIL(get_leader_(tenant_id, leader))) {
       LOG_WARN("get leader fail", K(ret));
       (void)refresh_location_(key.tenant_id_);
-    } else if (OB_FAIL(msg.init(key, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
+    } else if (OB_FAIL(msg.init(key, self_, autoinc_version))) {
+      LOG_WARN("fail to init request msg", KR(ret), K(key), K(autoinc_version));
     } else if (OB_UNLIKELY(!msg.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(msg));
@@ -254,8 +258,8 @@ int ObGAISClient::clear_global_autoinc_cache(const AutoincKey &key)
     if (OB_FAIL(get_leader_(tenant_id, leader))) {
       LOG_WARN("get leader fail", K(ret));
       (void)refresh_location_(key.tenant_id_);
-    } else if (OB_FAIL(msg.init(key, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
+    } else if (OB_FAIL(msg.init(key, self_, OB_INVALID_VERSION))) {
+      LOG_WARN("fail to init request msg", KR(ret), K(key));
     } else if (OB_UNLIKELY(!msg.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(msg));
@@ -307,4 +311,3 @@ int ObGAISClient::refresh_location_(const uint64_t tenant_id)
 
 } // share
 } // oceanbase
-

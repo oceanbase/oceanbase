@@ -182,6 +182,9 @@ int ObTenantAllTables::get_sequence_value()
   int ret = OB_SUCCESS;
   ObArray<AutoincKey> order_autokeys;
   ObArray<AutoincKey> noorder_autokeys;
+  ObArray<int64_t> order_autoinc_versions;
+  ObArray<int64_t> noorder_autoinc_versions;
+  int64_t autoinc_version = OB_INVALID_VERSION;
   AutoincKey key;
   for(int64_t i = 0; OB_SUCC(ret) && i < table_schemas_.count(); ++i) {
     const ObTableSchema *table_schema = table_schemas_.at(i);
@@ -193,17 +196,33 @@ int ObTenantAllTables::get_sequence_value()
       key.tenant_id_ = table_schema->get_tenant_id();//always same as tenant_id_
       key.table_id_  = table_schema->get_table_id();
       key.column_id_ = table_schema->get_autoinc_column_id();
-      if (table_schema->is_order_auto_increment_mode() && OB_FAIL(order_autokeys.push_back(key))) {
-        SERVER_LOG(WARN, "failed to push back AutoincKey", K(ret));
-      } else if (!table_schema->is_order_auto_increment_mode() &&
-                    OB_FAIL(noorder_autokeys.push_back(key))) {
-        SERVER_LOG(WARN, "failed to push back AutoincKey is order", K(ret));
+      autoinc_version = table_schema->get_truncate_version();
+      if (table_schema->is_order_auto_increment_mode()) {
+        if (OB_FAIL(order_autokeys.push_back(key))) {
+          SERVER_LOG(WARN, "failed to push back AutoincKey", K(ret));
+        } else if (OB_FAIL(order_autoinc_versions.push_back(autoinc_version))) {
+          SERVER_LOG(WARN, "failed to push back autoinc_version", KR(ret), K(key));
+        }
+      } else if (!table_schema->is_order_auto_increment_mode()) {
+        if (OB_FAIL(noorder_autokeys.push_back(key))) {
+          SERVER_LOG(WARN, "failed to push back AutoincKey is order", K(ret));
+        } else if (OB_FAIL(noorder_autoinc_versions.push_back(autoinc_version))) {
+          SERVER_LOG(WARN, "failed to push back autoinc_version", KR(ret), K(key));
+        }
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(share::ObAutoincrementService::get_instance().get_sequence_values(
-              tenant_id_, order_autokeys, noorder_autokeys, seq_values_))) {
-    SERVER_LOG(WARN, "failed to get sequence value", K(ret));
+  if (OB_SUCC(ret)) {
+    if (order_autokeys.count() != order_autoinc_versions.count()
+        || noorder_autokeys.count() != noorder_autoinc_versions.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "autokeys count is not equal to truncate versions count", KR(ret), K(order_autokeys.count()), K(order_autoinc_versions.count()),
+                                                                                 K(noorder_autokeys.count()), K(noorder_autoinc_versions.count()));
+    } else if (OB_FAIL(share::ObAutoincrementService::get_instance().get_sequence_values(
+              tenant_id_, order_autokeys, noorder_autokeys,
+              order_autoinc_versions, noorder_autoinc_versions, seq_values_))) {
+      SERVER_LOG(WARN, "failed to get sequence value", K(ret));
+    }
   }
   return ret;
 }

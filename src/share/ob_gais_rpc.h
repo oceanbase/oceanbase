@@ -57,7 +57,7 @@ struct ObGAISCurrValRpcResult
   int init(const uint64_t sequence_value, const uint64_t sync_value);
   bool is_valid() const
   {
-    return sequence_value_ > 0 && sequence_value_ >= sync_value_; 
+    return sequence_value_ > 0 && sequence_value_ >= sync_value_;
   }
   void reset()
   {
@@ -154,7 +154,7 @@ public:
                        obrpc::ObGAISCurrValRpcResult &rpc_result);
   /*
    * Push local sync value to global auto-increment service. This function may
-   * change global sync value and current auto-increment value, and return 
+   * change global sync value and current auto-increment value, and return
    * updated latest sync value.
    */
   int push_autoinc_val(const common::ObAddr &server,
