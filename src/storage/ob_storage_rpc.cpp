@@ -2007,7 +2007,7 @@ int ObCheckStartTransferTabletsP::check_transfer_out_tablet_sstable_(const ObTab
     // do nothing
   } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
     ret = OB_INVALID_TABLE_STORE;
-    LOG_ERROR("neither major sstable nor ddl sstable exists", K(ret), K(ddl_iter));
+    LOG_WARN("neither major sstable nor ddl sstable exists", K(ret), K(ddl_iter));
   }
   return ret;
 }

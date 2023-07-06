@@ -1278,7 +1278,8 @@ int ObTransferReplaceTableTask::check_source_minor_end_scn_(
     } else if (last_minor_mini_sstable->get_end_scn() > dest_tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
       // After adding transfer_freeze_flag_, it can ensure that start is less than transfer_start_scn's sstable,
       // and end_scn will not be greater than transfer_start_scn
-      LOG_ERROR("last sstable end scn is bigger than transfer start scn", K(OB_TRANSFER_SYS_ERROR), KPC(last_minor_mini_sstable),
+      ret = OB_TRANSFER_SYS_ERROR;
+      LOG_ERROR("last sstable end scn is bigger than transfer start scn", K(ret), KPC(last_minor_mini_sstable),
             "transfer info", dest_tablet->get_tablet_meta().transfer_info_);
     }
   }
