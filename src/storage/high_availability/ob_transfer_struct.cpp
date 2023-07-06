@@ -537,6 +537,23 @@ bool ObTransferTaskLockInfo::is_valid() const
   return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && task_id_ >= 0 && status_.is_valid()
       && lock_owner_ > 0;
 }
+
+int ObTransferTaskLockInfo::assign(const ObTransferTaskLockInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    task_id_ = other.task_id_;
+    status_ = other.status_;
+    lock_owner_ = other.lock_owner_;
+  }
+  return ret;
+}
+
 int ObTransferTaskLockInfo::set(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
     const ObTransferLockStatus &status, const int64_t lock_owner, const common::ObString &comment)
 {

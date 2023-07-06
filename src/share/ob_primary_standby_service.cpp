@@ -29,6 +29,7 @@
 #include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
 #include "storage/tx/ob_trans_service.h" //ObTransService
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
+#include "storage/high_availability/ob_transfer_lock_utils.h" // ObMemberListLockUtils
 
 namespace oceanbase
 {
@@ -37,6 +38,7 @@ using namespace common;
 using namespace obrpc;
 using namespace share;
 using namespace rootserver;
+using namespace storage;
 
 namespace standby
 {
@@ -484,6 +486,8 @@ int ObPrimaryStandbyService::switch_to_standby(
           (void)role_transition_service.set_switchover_epoch(tenant_info.get_switchover_epoch());
           if (OB_FAIL(role_transition_service.do_switch_access_mode_to_raw_rw(tenant_info))) {
             LOG_WARN("failed to do_switch_access_mode", KR(ret), K(tenant_id), K(tenant_info));
+          } else if (OB_FAIL(ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(tenant_id, *sql_proxy_))) {
+            LOG_WARN("failed to unlock member list when switch to standby", K(ret), K(tenant_id));
           } else if (OB_FAIL(role_transition_service.switchover_update_tenant_status(tenant_id,
                                                      false /* switch_to_standby */,
                                                      share::STANDBY_TENANT_ROLE,

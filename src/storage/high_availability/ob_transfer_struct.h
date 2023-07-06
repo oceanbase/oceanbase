@@ -204,6 +204,7 @@ public:
   ~ObTransferTaskLockInfo() = default;
   void reset();
   bool is_valid() const;
+  int assign(const ObTransferTaskLockInfo &other);
   int set(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id, const ObTransferLockStatus &status,
       const int64_t lock_owner, const common::ObString &comment);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(task_id), K_(status), K_(lock_owner), K_(comment));
