@@ -104,6 +104,7 @@ private:
                           common::ObMySQLTransaction &trans);
  int create_new_ls_(const share::ObLSAttr &ls_attr,
                     const share::SCN &syn_scn,
+                    const ObTenantSwitchoverStatus &switchover_status,
                     common::ObMySQLTransaction &trans);
  int construct_sys_ls_recovery_stat_based_on_sync_scn_(
      const share::SCN &syn_scn,

@@ -1180,7 +1180,7 @@ int ObRestoreService::finish_create_ls_(
             //no need to update
           } else if (ls_info == status_info.status_) {
             //no need update
-          } else if (OB_FAIL(status_op.update_ls_status(
+          } else if (OB_FAIL(status_op.update_ls_status_in_trans(
                   tenant_id, status_info.ls_id_, status_info.status_,
                   ls_info, share::NORMAL_SWITCHOVER_STATUS, trans))) {
             LOG_WARN("failed to update status", KR(ret), K(tenant_id), K(status_info), K(ls_info));
