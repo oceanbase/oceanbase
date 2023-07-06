@@ -107,6 +107,33 @@ void ObTransferHandler::wakeup_()
   }
 }
 
+int ObTransferHandler::wakeup_dest_ls_leader_(const share::ObTransferTaskInfo &task_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = task_info.tenant_id_;
+  const share::ObLSID &dest_ls_id = task_info.dest_ls_id_;
+  ObLSService *ls_svr = NULL;
+  common::ObAddr leader_addr;
+  ObStorageHASrcInfo src_info;
+  ObStorageRpc *storage_rpc = NULL;
+  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
+  } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, dest_ls_id, leader_addr))) {
+    LOG_WARN("failed to get ls leader", K(ret), K(tenant_id));
+  } else {
+    src_info.src_addr_ = leader_addr;
+    src_info.cluster_id_ = GCONF.cluster_id;
+    if (OB_FAIL(storage_rpc->wakeup_transfer_service(tenant_id, src_info))) {
+      LOG_WARN("failed to wakeup dest ls leader", K(ret), K(task_info), K(src_info));
+    }
+  }
+  return ret;
+}
+
 int ObTransferHandler::get_transfer_task_(ObTransferTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
@@ -114,7 +141,7 @@ int ObTransferHandler::get_transfer_task_(ObTransferTaskInfo &task_info)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (OB_FAIL(get_transfer_task_from_inner_table_(task_info))) {
+  } else if (OB_FAIL(fetch_transfer_task_from_inner_table_(task_info))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get transfer task from inner table", K(ret), KPC(ls_));
     }
@@ -148,24 +175,84 @@ int ObTransferHandler::get_transfer_task_from_inner_table_(
   return ret;
 }
 
-int ObTransferHandler::get_transfer_task_from_inner_table_(
+int ObTransferHandler::fetch_transfer_task_from_inner_table_(
     share::ObTransferTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
+  // currently START stage is executed on src ls leader
+  // and DOING stage is executed on dest ls leader
+  // so here try to fetch task by src ls first, then dest ls later
+  // either one succeeded will return the task
+  bool src_exist = false;
+  bool dst_exist = false;
+  share::ObTransferTaskInfo src_task_info;
+  share::ObTransferTaskInfo dst_task_info;
+  if (OB_FAIL(fetch_transfer_task_from_inner_table_by_src_ls_(src_task_info, src_exist))) {
+    LOG_WARN("failed to fetch transfer task from inner table by src ls", K(ret));
+  } else if (OB_FAIL(fetch_transfer_task_from_inner_table_by_dest_ls_(dst_task_info, dst_exist))) {
+    LOG_WARN("failed to fetch transfer task from inner table by dst ls", K(ret));
+  } else if (src_exist && dst_exist) {
+    ret = OB_SCHEDULER_TASK_CNT_MISTACH;
+    LOG_WARN("src task info and dst task info transfer ls overlap", K(ret), K(src_task_info), K(dst_task_info));
+  } else if (src_exist && OB_FAIL(task_info.assign(src_task_info))) {
+    LOG_WARN("failed to assign task info", K(ret), K(src_task_info));
+  } else if (dst_exist && OB_FAIL(task_info.assign(dst_task_info))) {
+    LOG_WARN("failed to assign task info", K(ret), K(dst_task_info));
+  }
+  return ret;
+}
+
+int ObTransferHandler::fetch_transfer_task_from_inner_table_by_src_ls_(
+    share::ObTransferTaskInfo &task_info,
+    bool &task_exist)
+{
+  int ret = OB_SUCCESS;
+  task_exist = false;
   task_info.reset();
   const uint64_t tenant_id = MTL_ID();
-  const bool for_update = false;
+  const ObLSID &src_ls_id = ls_->get_ls_id();
   ObTransferTask task;
-  const ObLSID &dest_ls_id = ls_->get_ls_id();
-
-  if (OB_FAIL(ObTransferTaskOperator::get_by_dest_ls(*sql_proxy_, tenant_id, dest_ls_id, task))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(dest_ls_id));
-    }
+  if (OB_FAIL(ObTransferTaskOperator::get_by_src_ls(
+      *sql_proxy_, tenant_id, src_ls_id, task))) {
+    LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(src_ls_id));
   } else if (OB_FAIL(task_info.convert_from(tenant_id, task))) {
     LOG_WARN("failed to convert from transfer task", K(ret), K(task));
+  } else if (!task_info.status_.is_start_status()
+      && !task_info.status_.is_aborted_status()) {
+    // task not exist
   } else {
-    LOG_INFO("get transfer task from inner table", K(task_info));
+    task_exist = true;
+  }
+  if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
+    task_exist = false;
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObTransferHandler::fetch_transfer_task_from_inner_table_by_dest_ls_(
+    share::ObTransferTaskInfo &task_info,
+    bool &task_exist)
+{
+  int ret = OB_SUCCESS;
+  task_exist = false;
+  task_info.reset();
+  const uint64_t tenant_id = MTL_ID();
+  const ObLSID &dest_ls_id = ls_->get_ls_id();
+  ObTransferTask task;
+  if (OB_FAIL(ObTransferTaskOperator::get_by_dest_ls(
+      *sql_proxy_, tenant_id, dest_ls_id, task))) {
+    LOG_WARN("failed to get transfer task by dest ls", K(ret), K(tenant_id), K(dest_ls_id));
+  } else if (OB_FAIL(task_info.convert_from(tenant_id, task))) {
+    LOG_WARN("failed to convert from transfer task", K(ret), K(task));
+  } else if (!task_info.status_.is_doing_status()) {
+    // task not exist
+  } else {
+    task_exist = true;
+  }
+  if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
+    task_exist = false;
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -407,7 +494,15 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, round_, task_info))) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(retry_count_), K(task_info));
   }
-  wakeup_();
+  // if START stage execution failed, just wakeup self
+  // if START stage execution succeeded, try to wakeup dest ls leader to go to DOING stage
+  if (OB_FAIL(ret)) {
+    wakeup_(); // wakeup self
+  } else {
+    if (OB_TMP_FAIL(wakeup_dest_ls_leader_(task_info))) {
+      LOG_WARN("failed to wakeup dest ls leader", K(tmp_ret), K(task_info));
+    }
+  }
   LOG_INFO("[TRANSFER] finish do with start status", K(ret), K(task_info), "cost_ts", ObTimeUtil::current_time() - start_ts);
   return ret;
 }
@@ -1509,6 +1604,14 @@ int ObTransferHandler::do_with_doing_status_(const share::ObTransferTaskInfo &ta
   const uint64_t tenant_id = task_info.tenant_id_;
   const share::ObLSID &src_ls_id = task_info.src_ls_id_;
   const share::ObLSID &dest_ls_id = task_info.dest_ls_id_;
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("transfer_errsim", "before_transfer_doing",
+                      "task_id", task_id,
+                      "tenant_id", tenant_id,
+                      "src_ls_id", src_ls_id,
+                      "dest_ls_id", dest_ls_id);
+  DEBUG_SYNC(BEFORE_TRANSFER_DOING);
+#endif
 
   if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

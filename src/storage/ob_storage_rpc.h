@@ -715,6 +715,19 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageConfigChangeOpRes);
 };
 
+struct ObStorageWakeupTransferServiceArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageWakeupTransferServiceArg();
+  ~ObStorageWakeupTransferServiceArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t tenant_id_;
+};
+
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
 {
@@ -748,6 +761,7 @@ public:
   RPC_S(PR5 lock_config_change, OB_HA_LOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 unlock_config_change, OB_HA_UNLOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
+  RPC_S(PR5 wakeup_transfer_service, OB_HA_WAKEUP_TRANSFER_SERVICE, (ObStorageWakeupTransferServiceArg));
 };
 
 template <ObRpcPacketCode RPC_CODE>
@@ -1049,6 +1063,16 @@ protected:
   int process();
 };
 
+class ObStorageWakeupTransferServiceP:
+    public ObStorageStreamRpcP<OB_HA_WAKEUP_TRANSFER_SERVICE>
+{
+public:
+  explicit ObStorageWakeupTransferServiceP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageWakeupTransferServiceP() {}
+protected:
+  int process();
+};
+
 } // obrpc
 
 
@@ -1177,6 +1201,9 @@ public:
       const share::ObLSID &ls_id,
       int64_t &palf_lock_owner,
       bool &is_locked) = 0;
+  virtual int wakeup_transfer_service(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info) = 0;
 };
 
 class ObStorageRpc: public ObIStorageRpc
@@ -1299,6 +1326,9 @@ public:
       const share::ObLSID &ls_id,
       int64_t &palf_lock_owner,
       bool &is_locked);
+  virtual int wakeup_transfer_service(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info);
 
 private:
   bool is_inited_;

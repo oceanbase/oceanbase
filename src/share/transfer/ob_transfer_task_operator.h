@@ -117,6 +117,25 @@ public:
       common::ObIArray<ObTransferTask::TaskStatus> &task_status);
 
   /*
+   * get transfer task by src ls (there is no more than 1 transfer task on a ls)
+   *
+   * @param [in] sql_proxy:  sql client
+   * @param [in] tenant_id:  target tenant_id
+   * @param [in] src_ls:    src ls_id
+   * @param [out] task:      transfer task
+   * @return
+   * - OB_ENTRY_NOT_EXIST:   not found
+   * - OB_ERR_UNEXPECTED:    more than 1 transfer task on a ls
+   * - OB_SUCCESS:           successful
+   * - other:                failed
+   */
+  static int get_by_src_ls(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const ObLSID &src_ls,
+      ObTransferTask &task);
+
+  /*
    * get transfer task by dest ls (there is no more than 1 transfer task on a ls)
    *
    * @param [in] sql_proxy:  sql client
@@ -375,6 +394,12 @@ public:
       const ObTransferTaskComment &comment);
 
 private:
+  static int get_by_ls_id_(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const ObLSID &ls_id,
+      const bool is_src_ls,
+      ObTransferTask &task);
   static int construct_transfer_tasks_(
       common::sqlclient::ObMySQLResult &res,
       common::ObIArray<ObTransferTask> &tasks);

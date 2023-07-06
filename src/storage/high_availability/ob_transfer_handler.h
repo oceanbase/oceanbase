@@ -76,9 +76,16 @@ private:
       const bool for_update,
       common::ObISQLClient &trans,
       share::ObTransferTaskInfo &task_info);
-  int get_transfer_task_from_inner_table_(
+  int fetch_transfer_task_from_inner_table_(
       share::ObTransferTaskInfo &task_info);
+  int fetch_transfer_task_from_inner_table_by_src_ls_(
+      share::ObTransferTaskInfo &task_info,
+      bool &task_exist);
+  int fetch_transfer_task_from_inner_table_by_dest_ls_(
+      share::ObTransferTaskInfo &task_info,
+      bool &task_exist);
   void wakeup_();
+  int wakeup_dest_ls_leader_(const share::ObTransferTaskInfo &task_info);
 
   int do_leader_transfer_();
   int do_worker_transfer_();

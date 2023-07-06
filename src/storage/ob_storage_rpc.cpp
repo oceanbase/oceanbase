@@ -1053,6 +1053,23 @@ void ObStorageUnBlockTxArg::reset()
 
 OB_SERIALIZE_MEMBER(ObStorageUnBlockTxArg, tenant_id_, ls_id_, gts_);
 
+ObStorageWakeupTransferServiceArg::ObStorageWakeupTransferServiceArg()
+  : tenant_id_(OB_INVALID_ID)
+{
+}
+
+bool ObStorageWakeupTransferServiceArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_;
+}
+
+void ObStorageWakeupTransferServiceArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+}
+
+OB_SERIALIZE_MEMBER(ObStorageWakeupTransferServiceArg, tenant_id_);
+
 
 ObStorageConfigChangeOpArg::ObStorageConfigChangeOpArg()
   : tenant_id_(OB_INVALID_ID),
@@ -3077,6 +3094,29 @@ int ObStorageGetLogConfigStatP::process()
   return ret;
 }
 
+ObStorageWakeupTransferServiceP::ObStorageWakeupTransferServiceP(
+      common::ObInOutBandwidthThrottle *bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObStorageWakeupTransferServiceP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  MTL_SWITCH(tenant_id) {
+    ObTransferService *transfer_service = MTL(ObTransferService*);
+    if (OB_ISNULL(transfer_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("transfer service should not be NULL", K(ret), KP(transfer_service));
+    } else {
+      transfer_service->wakeup();
+    }
+  }
+  return ret;
+}
+
+
 } //namespace obrpc
 
 namespace storage
@@ -3695,6 +3735,31 @@ int ObStorageRpc::get_config_change_lock_stat(
     } else {
       palf_lock_owner = res.palf_lock_owner_;
       is_locked = res.is_locked_;
+    }
+  }
+  return ret;
+}
+
+
+int ObStorageRpc::wakeup_transfer_service(
+    const uint64_t tenant_id,
+    const ObStorageHASrcInfo &src_info)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+  } else {
+    ObStorageWakeupTransferServiceArg arg;
+    arg.tenant_id_ = tenant_id;
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
+                           .dst_cluster_id(src_info.cluster_id_)
+                           .wakeup_transfer_service(arg))) {
+      LOG_WARN("failed to wakeup transfer service", K(ret), K(src_info), K(arg));
     }
   }
   return ret;

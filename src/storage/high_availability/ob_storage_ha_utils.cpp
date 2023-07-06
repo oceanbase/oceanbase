@@ -273,6 +273,7 @@ bool ObTransferUtils::is_need_retry_error(const int err)
   switch (err) {
   //Has active trans need retry
   case OB_TRANSFER_MEMBER_LIST_NOT_SAME:
+  case OB_LS_LOCATION_LEADER_NOT_EXIST:
   case OB_PARTITION_NOT_LEADER:
   case OB_TRANS_TIMEOUT:
   case OB_TIMEOUT:
