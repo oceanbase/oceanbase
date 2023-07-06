@@ -465,6 +465,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
               // index is already built
               need_rebuild_index = false;
             } else {
+              create_index_arg.index_type_ = index_schema->get_index_type();
               ObCreateDDLTaskParam param(tenant_id_,
                                          ObDDLType::DDL_CREATE_INDEX,
                                          table_schema,
