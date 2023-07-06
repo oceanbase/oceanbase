@@ -638,6 +638,7 @@ int ObTabletBackfillTXTask::get_backfill_tx_minor_sstables_(
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator minor_table_iter;
+  DEBUG_SYNC(STOP_TRANSFER_LS_LOGICAL_TABLE_REPLACED);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx task do not init", K(ret));

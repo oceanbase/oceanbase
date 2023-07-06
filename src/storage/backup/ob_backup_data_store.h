@@ -140,12 +140,14 @@ public:
       cluster_name_(),
       locality_(),
       primary_zone_(),
-      sys_time_zone_() {}
+      sys_time_zone_(),
+      sys_time_zone_wrap_() {}
   virtual ~ObExternTenantLocalityInfoDesc() {}
-
+  int assign(const ObExternTenantLocalityInfoDesc &that);
   bool is_valid() const override;
   INHERIT_TO_STRING_KV("ObExternBackupDataDesc", ObExternBackupDataDesc, K_(tenant_id), K_(backup_set_id), K_(cluster_id), 
-      K_(compat_mode), K_(tenant_name), K_(cluster_name), K_(locality), K_(primary_zone), K_(sys_time_zone));
+      K_(compat_mode), K_(tenant_name), K_(cluster_name), K_(locality), K_(primary_zone), K_(sys_time_zone),
+      K_(sys_time_zone_wrap));
 public:
   uint64_t tenant_id_;
   int64_t backup_set_id_;
@@ -156,6 +158,7 @@ public:
   Locality locality_;
   PrimaryZone primary_zone_;
   TimeZone sys_time_zone_;
+  ObTimeZoneInfoWrap sys_time_zone_wrap_;
 };
 
 struct ObExternBackupSetInfoDesc final : public ObExternBackupDataDesc
@@ -309,6 +312,10 @@ public:
   int read_root_key_info(const uint64_t tenant_id);
 
   int read_base_tablet_list(const share::ObLSID &ls_id, ObIArray<common::ObTabletID> &tablet_id_array);
+// 4.1 interface to get tablet to ls
+  int read_tablet_to_ls_info_v_4_1_x(const int64_t turn_id, const ObLSID &ls_id, ObIArray<ObTabletID> &tablet_ids);
+  int read_deleted_tablet_info_v_4_1_x(const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids);
+
   TO_STRING_KV(K_(backup_desc));
 
 public:

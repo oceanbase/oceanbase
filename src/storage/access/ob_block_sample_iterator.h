@@ -41,8 +41,8 @@ public:
   OB_INLINE int64_t get_macro_count() const { return macro_count_; }
   OB_INLINE int64_t get_micro_count() const { return micro_count_; }
   OB_INLINE bool is_reach_end() const { return is_iter_end_; }
-  TO_STRING_KV(K_(is_inited), K_(is_iter_end), K_(is_reverse_scan), K_(curr_key), K_(curr_block_id), K_(macro_count),
-      K_(start_bound_micro_block), K_(end_bound_micro_block), K_(sample_level), K_(tree_cursor));
+  TO_STRING_KV(K_(is_inited), K_(is_iter_end), K_(is_reverse_scan), K_(curr_block_id), K_(macro_count),
+               K_(start_bound_micro_block), K_(end_bound_micro_block), K_(sample_level), K_(tree_cursor));
 
 private:
   int locate_bound(const blocksstable::ObDatumRange &range);

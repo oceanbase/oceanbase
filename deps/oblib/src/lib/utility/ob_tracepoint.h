@@ -230,6 +230,7 @@ struct EventItem
   int call()
   {
     int ret = 0;
+    int64_t trigger_freq = trigger_freq_;
     if (occur_ > 0) {
       do {
         int64_t occur = occur_;
@@ -243,11 +244,11 @@ struct EventItem
           break;
         }
       } while (true);
-    } else if (OB_LIKELY(trigger_freq_ == 0)) {
+    } else if (OB_LIKELY(trigger_freq == 0)) {
       ret = 0;
     } else if (get_tp_switch()) { // true means skip errsim
       ret = 0;
-    } else if (trigger_freq_ == 1) {
+    } else if (trigger_freq == 1) {
       ret = static_cast<int>(error_code_);
 #ifdef NDEBUG
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000))
@@ -256,9 +257,9 @@ struct EventItem
         COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret));
       }
     } else {
-      if (rand() % trigger_freq_ == 0) {
+      if (rand() % trigger_freq == 0) {
         ret = static_cast<int>(error_code_);
-        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret), K_(error_code), K_(trigger_freq), KCSTRING(lbt()));
+        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret), K_(error_code), K(trigger_freq), KCSTRING(lbt()));
       } else {
         ret = 0;
       }

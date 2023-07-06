@@ -162,7 +162,7 @@ public:
   int acquire_ctx_ref() { return acquire_ctx_ref_(); }
 
   ObITransRpc *get_trans_rpc() const { return rpc_; }
-  void test_lock();
+  void test_lock(ObTxLogCb *log_cb);
 public:
   virtual bool is_inited() const = 0;
   virtual int handle_timeout(const int64_t delay) = 0;
@@ -249,7 +249,7 @@ protected:
   int64_t ctx_create_time_;
   ObTransService *trans_service_;
   mutable CtxLock lock_;
-  //ObTransTraceLog trace_log_;
+  ObTransTraceLog trace_log_;
   ObTransTraceLog *tlog_;
   uint64_t cluster_version_;
   ObLSTxCtxMgr *ls_tx_ctx_mgr_;

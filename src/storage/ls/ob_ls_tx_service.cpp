@@ -127,12 +127,18 @@ int ObLSTxService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                                       ObStoreCtx &store_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(trans_service_)) {
+  if (OB_ISNULL(trans_service_) || OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not init", K(ret));
+    TRANS_LOG(WARN, "not init", K(ret), KP(trans_service_), KP(mgr_));
+  } else if (OB_FAIL(mgr_->start_readonly_request())) {
+    TRANS_LOG(WARN, "start readonly request failed", K(ret));
   } else {
     store_ctx.ls_id_ = ls_id_;
+    store_ctx.is_read_store_ctx_ = true;
     ret = trans_service_->get_read_store_ctx(snapshot, read_latest, lock_timeout, store_ctx);
+    if (OB_FAIL(ret)) {
+      mgr_->end_readonly_request();
+    }
   }
   return ret;
 }
@@ -142,12 +148,18 @@ int ObLSTxService::get_read_store_ctx(const SCN &snapshot,
                                       ObStoreCtx &store_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(trans_service_)) {
+  if (OB_ISNULL(trans_service_) || OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not init", K(ret));
+    TRANS_LOG(WARN, "not init", K(ret), KP(trans_service_), KP(mgr_));
+  } else if (OB_FAIL(mgr_->start_readonly_request())) {
+    TRANS_LOG(WARN, "start readonly request failed", K(ret));
   } else {
     store_ctx.ls_id_ = ls_id_;
+    store_ctx.is_read_store_ctx_ = true;
     ret = trans_service_->get_read_store_ctx(snapshot, lock_timeout, store_ctx);
+    if (OB_FAIL(ret)) {
+      mgr_->end_readonly_request();
+    }
   }
   return ret;
 }
@@ -175,6 +187,15 @@ int ObLSTxService::revert_store_ctx(storage::ObStoreCtx &store_ctx) const
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
     ret = trans_service_->revert_store_ctx(store_ctx);
+  }
+  // ignore ret
+  if (store_ctx.is_read_store_ctx()) {
+    if (OB_ISNULL(mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "mgr is null", K(ret), KP(this));
+    } else {
+      (void)mgr_->end_readonly_request();
+    }
   }
   return ret;
 }
@@ -593,13 +614,37 @@ ObTxRetainCtxMgr *ObLSTxService::get_retain_ctx_mgr()
   return retain_ptr;
 }
 
+int ObLSTxService::prepare_offline(const int64_t start_ts)
+{
+  int ret = OB_SUCCESS;
+  const int64_t PRINT_LOG_INTERVAL = 1000 * 1000; // 1s
+  const int64_t WAIT_READONLY_REQUEST_US = 60 * 1000 * 1000;
+  bool unused_is_all_tx_clean_up = false;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(mgr_->block(unused_is_all_tx_clean_up))) {
+    TRANS_LOG(WARN, "block tx failed", K_(ls_id));
+  } else if (ObTimeUtility::current_time() > start_ts + WAIT_READONLY_REQUEST_US) {
+    // dont care readonly request
+  } else {
+    const int64_t readonly_request_cnt = mgr_->get_total_active_readonly_request_count();
+    if (readonly_request_cnt > 0) {
+      ret = OB_EAGAIN;
+      if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+        TRANS_LOG(WARN, "readonly requests are active", K(ret), KP(mgr_), K_(ls_id), K(readonly_request_cnt));
+      }
+    }
+  }
+  TRANS_LOG(INFO, "prepare offline ls", K(ret), K(start_ts), KP(mgr_), K_(ls_id));
+  return ret;
+}
+
 int ObLSTxService::offline()
 {
   int ret = OB_SUCCESS;
   const int64_t PRINT_LOG_INTERVAL = 1000 * 1000; // 1s
-  const int64_t SLEEP_US = 20000; //20ms
   const bool graceful = false;
-  const bool verbose = true;
   bool unused_is_all_tx_clean_up = false;
   if (OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
@@ -611,7 +656,7 @@ int ObLSTxService::offline()
   } else if (mgr_->get_tx_ctx_count() > 0) {
     ret = OB_EAGAIN;
     if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
-      TRANS_LOG(WARN, "transaction not empty, try again", KP(mgr_), K_(ls_id), K(mgr_->get_tx_ctx_count()));
+      TRANS_LOG(WARN, "transaction not empty, try again", K(ret), KP(mgr_), K_(ls_id), K(mgr_->get_tx_ctx_count()));
     }
   }
   return ret;

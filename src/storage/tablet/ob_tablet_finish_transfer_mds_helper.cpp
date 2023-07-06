@@ -262,7 +262,6 @@ int ObTabletFinishTransferOutReplayExecutor::check_src_transfer_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet tx data is unexpected",
         K(ret),
-        K(ObTabletStatus::get_str(user_data.tablet_status_)),
         K(transfer_seq),
         K(user_data),
         KPC(tablet));
@@ -384,7 +383,6 @@ int ObTabletFinishTransferOutHelper::inner_check_transfer_out_tablet_validity_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet tx data is unexpected",
         K(ret),
-        K(ObTabletStatus::get_str(user_data.tablet_status_)),
         K(transfer_seq),
         K(user_data),
         KPC(tablet));
@@ -711,10 +709,7 @@ int ObTabletFinishTransferInReplayExecutor::check_dest_transfer_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet tx data is unexpected",
         K(ret),
-        K(user_data),
         K(scn_),
-        K(tablet->get_tablet_meta()),
-        K(ObTabletStatus::get_str(user_data.tablet_status_)),
         K(transfer_seq),
         K(user_data),
         KPC(tablet));
@@ -997,7 +992,6 @@ int ObTabletFinishTransferInHelper::inner_check_transfer_in_tablet_validity_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet tx data is unexpected",
         K(ret),
-        K(ObTabletStatus::get_str(data.tablet_status_)),
         K(transfer_seq),
         K(data),
         KPC(tablet));

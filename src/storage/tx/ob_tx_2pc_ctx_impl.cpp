@@ -75,11 +75,6 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
   int ret = OB_SUCCESS;
   no_need_submit_log = false;
 
-  // common operation
-  if (OB_FAIL(search_unsubmitted_dup_table_redo_())) {
-    TRANS_LOG(WARN, "search unsubmitted dup table redo", K(ret), KPC(this));
-  }
-
   if (OB_SUCC(ret)) {
     if (sub_state_.is_force_abort()) {
       if (OB_FAIL(compensate_abort_log_())) {
@@ -88,6 +83,12 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
       } else {
         ret = OB_TRANS_KILLED;
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(search_unsubmitted_dup_table_redo_())) {
+      TRANS_LOG(WARN, "search unsubmitted dup table redo", K(ret), KPC(this));
     }
   }
 

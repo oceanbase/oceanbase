@@ -61,12 +61,14 @@ public:
   OB_INLINE int32_t get_col_idx() const { return col_idx_; }
   TO_STRING_KV(K_(col_idx), K_(is_lob_col), K_(datum), KPC(col_param_), K_(expr));
 protected:
+  int prepare_def_datum();
   int fill_default_if_need(blocksstable::ObStorageDatum &datum);
   int pad_column_if_need(blocksstable::ObStorageDatum &datum);
 protected:
   int32_t col_idx_;
   bool is_lob_col_;
   blocksstable::ObStorageDatum datum_;
+  blocksstable::ObStorageDatum def_datum_;
   const share::schema::ObColumnParam *col_param_;
   sql::ObExpr *expr_;
   common::ObIAllocator &allocator_;

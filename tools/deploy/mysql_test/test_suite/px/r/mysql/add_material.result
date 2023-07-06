@@ -33,7 +33,7 @@ Outputs & filters:
   2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   3 - output([t1.c1]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[t1.c1]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t1.c1)]
   4 - output([t1.c1]), filter(nil), rowset=256
       affinitize
   5 - output([t1.c1]), filter(nil), rowset=256
@@ -99,7 +99,7 @@ Outputs & filters:
   6 - output([a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   7 - output([b.c1]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[b.c1]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(b.c1)]
   8 - output([b.c1]), filter(nil), rowset=256
   9 - output([b.c1]), filter(nil), rowset=256
       (#keys=1, [b.c1]), dop=3

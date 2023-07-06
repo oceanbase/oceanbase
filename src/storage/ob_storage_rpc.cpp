@@ -1466,7 +1466,9 @@ int ObFetchTabletInfoP::process()
     LOG_INFO("start to fetch tablet info", K(arg_));
 
     last_send_time_ = ObTimeUtility::current_time();
-
+    const int64_t cost_time = 10 * 1000 * 1000;
+    common::ObTimeGuard timeguard("ObFetchTabletInfoP", cost_time);
+    timeguard.click();
     if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
@@ -1511,6 +1513,7 @@ int ObFetchTabletInfoP::process()
             STORAGE_LOG(WARN, "failed to get next tablet meta info", K(ret));
           }
         } else if (tablet_count >= MAX_TABLET_NUM) {
+          timeguard.click();
           if (this->result_.get_position() > 0 && OB_FAIL(flush_and_wait())) {
             LOG_WARN("failed to flush and wait", K(ret), K(tablet_info));
           } else {
@@ -1525,6 +1528,7 @@ int ObFetchTabletInfoP::process()
           tablet_count++;
         }
       }
+      timeguard.click();
       if (OB_SUCC(ret)) {
         if (arg_.need_check_seq_) {
           if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
@@ -2586,8 +2590,8 @@ int ObGetTransferStartScnP::process()
         } else {
           if (i > 0) {
             if (user_data.transfer_scn_ != result_.start_scn_) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("tx data is not same", K(ret), K(tablet_handle), K(user_data), K(result_));
+              ret = OB_EAGAIN;
+              LOG_WARN("tx data is not same, need retry", K(ret), K(tablet_handle), K(user_data), K(result_));
             }
           } else if (user_data.transfer_scn_.is_min()) {
             result_.start_scn_.set_min();

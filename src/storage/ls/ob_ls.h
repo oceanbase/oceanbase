@@ -185,6 +185,8 @@ public:
   int offline_without_lock();
   int enable_for_restore();
   bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
+  bool is_remove() const { return ATOMIC_LOAD(&is_remove_); }
+  void set_is_remove() { return ATOMIC_STORE(&is_remove_, true); }
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }
@@ -326,10 +328,10 @@ private:
   void wait_();
   int prepare_for_safe_destroy_();
   int flush_if_need_(const bool need_flush);
-  int offline_();
+  int offline_(const int64_t start_ts);
   int offline_compaction_();
   int online_compaction_();
-  int offline_tx_();
+  int offline_tx_(const int64_t start_ts);
   int online_tx_();
 public:
   // ObLSMeta interface:
@@ -863,6 +865,7 @@ private:
   uint64_t tenant_id_;
   bool is_stopped_;
   bool is_offlined_;
+  bool is_remove_;
   ObLSMeta ls_meta_;
   observer::ObIMetaReport *rs_reporter_;
   ObLSLock lock_;

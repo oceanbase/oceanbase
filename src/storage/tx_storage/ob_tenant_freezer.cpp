@@ -320,7 +320,7 @@ int ObTenantFreezer::tenant_freeze_()
   ObLSService *ls_srv = MTL(ObLSService *);
   FLOG_INFO("[TenantFreezer] tenant_freeze start", KR(ret));
 
-  ObTenantFreezeGuard freeze_guard(allocator_mgr_, ret);
+  ObTenantFreezeGuard freeze_guard(allocator_mgr_, ret,  tenant_info_);
   if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
   } else {
@@ -549,9 +549,6 @@ int ObTenantFreezer::check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx)
       LOG_WARN("[TenantFreezer] fail to get mem usage", KR(ret));
     } else {
       need_freeze = need_freeze_(ctx);
-      if (need_freeze && !is_minor_need_slow_(ctx)) {
-        unset_tenant_slow_freeze_();
-      }
       log_frozen_memstore_info_if_need_(ctx);
       halt_prewarm_if_need_(ctx);
     }
@@ -715,58 +712,14 @@ int ObTenantFreezer::unset_tenant_freezing_(const bool rollback_freeze_cnt)
 
 int ObTenantFreezer::set_tenant_slow_freeze(
     const common::ObTabletID &tablet_id,
-    const int64_t protect_clock)
+    const int64_t retire_clock)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
   } else {
-    const uint64_t tenant_id = tenant_info_.tenant_id_;
-    if (!tenant_info_.slow_freeze_) {
-      bool success = ATOMIC_BCAS(&tenant_info_.slow_freeze_, false, true);
-      if (success) {
-        tenant_info_.slow_freeze_timestamp_ = ObTimeUtility::fast_current_time();
-        tenant_info_.slow_freeze_min_protect_clock_ = protect_clock;
-        tenant_info_.slow_tablet_ = tablet_id;
-      }
-    } else if (tenant_info_.slow_freeze_ &&
-               tenant_info_.slow_freeze_min_protect_clock_ > protect_clock) {
-      tenant_info_.slow_freeze_timestamp_ = ObTimeUtility::fast_current_time();
-      tenant_info_.slow_freeze_min_protect_clock_ = protect_clock;
-      tenant_info_.slow_tablet_ = tablet_id;
-    }
-  }
-  return ret;
-}
-
-int ObTenantFreezer::unset_tenant_slow_freeze_()
-{
-  // NOTE: yuanyuan.cxf do not lock to prevent deadlock.
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = tenant_info_.tenant_id_;
-  if (tenant_info_.slow_freeze_) {
-    bool success = ATOMIC_BCAS(&tenant_info_.slow_freeze_, true, false);
-    if (success) {
-      tenant_info_.slow_freeze_timestamp_ = 0;
-      tenant_info_.slow_freeze_min_protect_clock_ = INT64_MAX;
-      tenant_info_.slow_tablet_.reset();
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("[TenantFreezer] Unexpected error", K(tenant_id), KR(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTenantFreezer::unset_tenant_slow_freeze()
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
-  } else {
-    ret = unset_tenant_slow_freeze_();
+    tenant_info_.set_slow_freeze(tablet_id, retire_clock, FREEZE_TRIGGER_INTERVAL);
   }
   return ret;
 }
@@ -778,18 +731,7 @@ int ObTenantFreezer::unset_tenant_slow_freeze(const common::ObTabletID &tablet_i
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
   } else {
-    const uint64_t tenant_id = tenant_info_.tenant_id_;
-    if (tenant_info_.slow_freeze_ && tenant_info_.slow_tablet_ == tablet_id) {
-      bool success = ATOMIC_BCAS(&tenant_info_.slow_freeze_, true, false);
-      if (success) {
-        tenant_info_.slow_freeze_timestamp_ = 0;
-        tenant_info_.slow_freeze_min_protect_clock_ = INT64_MAX;
-        tenant_info_.slow_tablet_.reset();
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("[TenantFreezer] Unexpected error", K(tenant_id), K(tablet_id), KR(ret));
-      }
-    }
+    tenant_info_.unset_slow_freeze(tablet_id);
   }
   return ret;
 }
@@ -1416,6 +1358,16 @@ bool ObTenantFreezer::need_freeze_(const ObTenantFreezeCtx &ctx)
   // 1. trigger by active memstore used.
   if (ctx.freezable_active_memstore_used_ > ctx.memstore_freeze_trigger_) {
     need_freeze = true;
+  }
+  // 2. may be slowed
+  if (need_freeze && tenant_info_.is_freeze_need_slow()) {
+    need_freeze = false;
+    LOG_INFO("[TenantFreezer] A minor freeze is needed but slowed.",
+             K_(tenant_info),
+             K(ctx.active_memstore_used_),
+             K(ctx.memstore_freeze_trigger_), K(ctx.max_cached_memstore_size_));
+  }
+  if (need_freeze) {
     LOG_INFO("[TenantFreezer] A minor freeze is needed by active memstore used.",
              K(ctx.freezable_active_memstore_used_), K(ctx.memstore_freeze_trigger_), K(ctx.max_cached_memstore_size_));
   }
@@ -1431,24 +1383,6 @@ bool ObTenantFreezer::is_major_freeze_turn_()
     major_compact_trigger = tenant_config->major_compact_trigger;
   }
   return (major_compact_trigger != 0 && freeze_cnt >= major_compact_trigger);
-}
-
-bool ObTenantFreezer::is_minor_need_slow_(const ObTenantFreezeCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  bool need_slow = false;
-  if (tenant_info_.slow_freeze_) {
-    need_slow = true;
-    int64_t now = ObTimeUtility::fast_current_time();
-    if (ctx.total_memstore_hold_ <= ctx.memstore_freeze_trigger_) {
-      // no need minor freeze
-    } else if (now - tenant_info_.slow_freeze_timestamp_ >= SLOW_FREEZE_INTERVAL) {
-      need_slow = false;
-    } else {
-      // no need minor freeze
-    }
-  }
-  return need_slow;
 }
 
 int ObTenantFreezer::do_minor_freeze_(const ObTenantFreezeCtx &ctx)
@@ -1474,6 +1408,7 @@ int ObTenantFreezer::do_minor_freeze_(const ObTenantFreezeCtx &ctx)
       rollback_freeze_cnt = true;
       LOG_WARN("fail to minor freeze", K(ret));
     } else {
+      tenant_info_.update_slow_freeze_interval();
       LOG_INFO("finish tenant minor freeze", K(ret));
     }
     // clear freezing mark for tenant

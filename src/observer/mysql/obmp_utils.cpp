@@ -56,6 +56,8 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
         encoder->is_changed_ = true;
       }
     }
+    // record sys var need sync in error scene.
+    bool is_exist_error_sync_var = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < sys_var.count(); ++i) {
       sql::ObBasicSessionInfo::ChangedVar change_var = sys_var.at(i);
       ObObj new_val;
@@ -73,15 +75,29 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
           LOG_WARN("failed to get sys vairable new value string", K(ret), K(new_val));
         } else if (OB_FAIL(ok_pkt.add_system_var(str_kv))) {
           LOG_WARN("failed to add system variable", K(str_kv), K(ret));
+        } else if (session.is_exist_error_sync_var(change_var.id_) && FALSE_IT(is_exist_error_sync_var = true)) {
+          // do nothing.
         } else {
+          if (is_exist_error_sync_var) {
+            ObSessInfoEncoder* encoder = NULL;
+            if (OB_FAIL(session.get_sess_encoder(SESSION_SYNC_ERROR_SYS_VAR, encoder))) {
+              LOG_WARN("failed to get session encoder", K(ret));
+            } else {
+              encoder->is_changed_ = true;
+              is_exist_error_sync_var = false;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else {
 #ifndef NDEBUG
-          LOG_TRACE("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
+            LOG_TRACE("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
                K(session.get_sessid()), K(session.get_proxy_sessid()));
 #else
-          // for autocommit change record.
-          LOG_INFO("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
+            // for autocommit change record.
+            LOG_INFO("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
                K(session.get_sessid()), K(session.get_proxy_sessid()), K(change_var.id_));
 #endif
+          }
         }
       } else {
         LOG_TRACE("sys var not actully changed", K(changed), K(change_var), K(new_val),

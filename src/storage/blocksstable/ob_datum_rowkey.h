@@ -73,7 +73,8 @@ public:
   #undef DEF_ROWKEY_TYPE_FUNCS
 
   int equal(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, bool &is_equal) const;
-  int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret) const;
+  int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+              const bool compare_datum_cnt = true) const;
   int from_rowkey(const ObRowkey &rowkey, common::ObIAllocator &allocator);
   int from_rowkey(const ObRowkey &rowkey, ObStorageDatumBuffer &datum_buffer);
   int to_store_rowkey(const common::ObIArray<share::schema::ObColDesc> &col_descs,

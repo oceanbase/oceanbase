@@ -322,6 +322,13 @@ def check_schema_status(query_cur, timeout):
   sql = """select if (a.cnt = b.cnt, 1, 0) as passed from (select count(*) as cnt from oceanbase.__all_virtual_server_schema_info where refreshed_schema_version > 1 and refreshed_schema_version % 8 = 0) as a join (select count(*) as cnt from oceanbase.__all_server join oceanbase.__all_tenant) as b"""
   check_until_timeout(query_cur, sql, 1, timeout)
 
+# 4. check major finish
+def check_major_merge(query_cur, timeout):
+  sql = """select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')"""
+  check_until_timeout(query_cur, sql, 0, timeout)
+  sql2 = """select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn != finished_scn and max_received_scn > 0"""
+  check_until_timeout(query_cur, sql2, 0, timeout)
+
 def check_until_timeout(query_cur, sql, value, timeout):
   times = timeout / 10
   while times >= 0:
@@ -360,6 +367,7 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, zone
       check_paxos_replica(query_cur, timeout)
       check_schema_status(query_cur, timeout)
       check_server_version_by_zone(query_cur, zone)
+      check_major_merge(query_cur, timeout)
     except Exception, e:
       logging.exception('run error')
       raise e

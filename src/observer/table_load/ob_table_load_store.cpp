@@ -284,9 +284,9 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store commit");
+    ObMutexGuard guard(store_ctx_->get_op_lock());
     ObTableLoadDmlStat dml_stats;
-    obsys::ObWLockGuard guard(store_ctx_->get_status_lock());
-    if (OB_FAIL(store_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
+    if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
     } else if (OB_FAIL(store_ctx_->insert_table_ctx_->commit())) {
       LOG_WARN("fail to commit insert table", KR(ret));
@@ -299,7 +299,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
       LOG_WARN("fail to build dml stat", KR(ret));
     } else if (OB_FAIL(ObOptStatMonitorManager::get_instance().update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
       LOG_WARN("fail to update dml stat info", KR(ret));
-    } else if (OB_FAIL(store_ctx_->set_status_commit_unlock())) {
+    } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {
       result_info = store_ctx_->result_info_;
@@ -316,8 +316,7 @@ int ObTableLoadStore::get_status(ObTableLoadStatusType &status, int &error_code)
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store get status");
-    status = store_ctx_->get_status();
-    error_code = store_ctx_->get_error_code();
+    store_ctx_->get_status(status, error_code);
   }
   return ret;
 }
@@ -556,8 +555,7 @@ int ObTableLoadStore::get_trans_status(const ObTableLoadTransId &trans_id,
     if (OB_FAIL(store_ctx_->get_trans_ctx(trans_id, trans_ctx))) {
       LOG_WARN("fail to get trans ctx", KR(ret), K(trans_id));
     } else {
-      trans_status = trans_ctx->get_trans_status();
-      error_code = trans_ctx->get_error_code();
+      trans_ctx->get_trans_status(trans_status, error_code);
     }
   }
   return ret;

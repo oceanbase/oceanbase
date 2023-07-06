@@ -125,6 +125,7 @@ void ObLSRecoveryReportor::run2()
     ObThreadCondGuard guard(get_cond());
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     while (!stop_) {
+      ObCurTraceId::init(GCONF.self_addr_);
       if (OB_ISNULL(GCTX.schema_service_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema service is empty", KR(ret));

@@ -27,7 +27,8 @@ ObTabletBindingReplayExecutor::ObTabletBindingReplayExecutor()
 int ObTabletBindingReplayExecutor::init(
     mds::BufferCtx &user_ctx,
     ObTabletBindingMdsUserData &user_data,
-    const share::SCN &scn)
+    const share::SCN &scn,
+    const bool for_old_mds)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -40,6 +41,7 @@ int ObTabletBindingReplayExecutor::init(
     user_ctx_ = &user_ctx;
     user_data_ = &user_data;
     scn_ = scn;
+    for_old_mds_ = for_old_mds;
     is_inited_ = true;
   }
   return ret;
@@ -51,7 +53,7 @@ int ObTabletBindingReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   int ret = OB_SUCCESS;
   mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(*user_ctx_);
 
-  if (OB_FAIL(replay_to_mds_table_(tablet_handle, *user_data_, user_ctx, scn_))) {
+  if (OB_FAIL(replay_to_mds_table_(tablet_handle, *user_data_, user_ctx, scn_, for_old_mds_))) {
     LOG_WARN("failed to replay to tablet", K(ret));
   }
 

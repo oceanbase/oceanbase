@@ -54,9 +54,6 @@ int ObTransferWorkerMgr::init(ObLS *dest_ls)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls is nullptr", K(ret));
   } else {
-    share::ObTaskId task_id;
-    task_id.init(GCONF.self_addr_);
-    task_id_ = task_id;
     tenant_id_ = MTL_ID();
     dest_ls_ = dest_ls;
     is_inited_ = true;
@@ -64,9 +61,14 @@ int ObTransferWorkerMgr::init(ObLS *dest_ls)
   return ret;
 }
 
-void ObTransferWorkerMgr::update_task_id_()
+void ObTransferWorkerMgr::reset_task_id()
 {
   task_id_.reset();
+}
+
+void ObTransferWorkerMgr::update_task_id_()
+{
+  reset_task_id();
   task_id_.init(GCONF.self_addr_);
 }
 int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam &param)
@@ -260,6 +262,8 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(ls_id), K(tablet_id));
+  } else if (tablet->is_empty_shell()) {
+    LOG_INFO("[TRANSFER_BACKFILL]source tablet is empty shell", K(ls_id), K(tablet_id));
   } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
     LOG_WARN("failed to get tablet status", K(ret), K(ls_id), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
@@ -295,7 +299,7 @@ int ObTransferWorkerMgr::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer work not init", K(ret));
-  } else if (OB_FAIL(check_task_exist_(task_id_, is_exist))) {
+  } else if (task_id_.is_valid() && OB_FAIL(check_task_exist_(task_id_, is_exist))) {
     LOG_WARN("failed to check task exist", K(ret), "ls_id", dest_ls_->get_ls_id(), K(*this));
   } else if (is_exist) {
     // only one transfer backfill tx task is allowed to execute at a time
@@ -342,6 +346,42 @@ int ObTransferWorkerMgr::check_task_exist_(
     }
 #endif
 
+  }
+  return ret;
+}
+
+int ObTransferWorkerMgr::cancel_dag_net()
+{
+  int ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler = nullptr;
+  bool is_exist = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer worker do not init", K(ret));
+  } else if (task_id_.is_invalid()) {
+    // do nothing
+  } else if (OB_FAIL(check_task_exist_(task_id_, is_exist))) {
+    LOG_WARN("fail to check task exist", K(ret), K_(task_id));
+  } else if (is_exist) {
+    if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to get ObTenantDagScheduler from MTL", K(ret), KPC(this));
+    } else if (OB_FAIL(scheduler->cancel_dag_net(task_id_))) {
+      LOG_WARN("failed to cancel dag net", K(ret), K(this));
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      int64_t start_ts = ObTimeUtil::current_time();
+      do {
+        if (OB_FAIL(check_task_exist_(task_id_, is_exist))) {
+          LOG_WARN("fail to check task exist", K(ret), K_(task_id));
+        } else if (is_exist && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+          ret = OB_EAGAIN;
+          LOG_WARN("cancel dag task cost too much time", K(ret), K_(task_id),
+              "cost_time", ObTimeUtil::current_time() - start_ts);
+        }
+      } while (is_exist && OB_SUCC(ret));
+    }
   }
   return ret;
 }
@@ -688,6 +728,21 @@ int ObTransferBackfillTXDagNet::clear_dag_net_ctx()
     LOG_WARN("transfer service should not be NULL", K(ret), KP(transfer_service));
   } else {
     transfer_service->wakeup();
+  }
+  return ret;
+}
+
+int ObTransferBackfillTXDagNet::deal_with_cancel()
+{
+  int ret = OB_SUCCESS;
+  const int32_t result = OB_CANCELED;
+  const bool need_retry = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer backfill tx dag net do not init", K(ret));
+  } else if (OB_FAIL(ctx_.set_result(result, need_retry))) {
+    LOG_WARN("failed to set result", K(ret), KPC(this));
   }
   return ret;
 }
@@ -1351,7 +1406,7 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
     const common::ObTabletID &tablet_id,
     ObTableStoreIterator &sstable_iter,
     ObTabletHandle &tablet_handle,
-    ObTabletHAStatus &ha_status,
+    ObTabletRestoreStatus::STATUS &restore_status,
     common::ObArenaAllocator &allocator,
     ObTablesHandleArray &tables_handle)
 {
@@ -1390,8 +1445,8 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet));
   } else if (tablet->is_empty_shell()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("transfer src tablet should not be empty shell", K(ret), KPC(tablet), "ls_id", ctx_->src_ls_id_);
+    ret = OB_EAGAIN;
+    LOG_WARN("transfer src tablet should not be empty shell, task need to retry", K(ret), KPC(tablet), "ls_id", ctx_->src_ls_id_);
   } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet_handle, src_user_data))) {
     LOG_WARN("failed to get src user data", K(ret), K(tablet_handle), KPC(tablet));
   } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, dest_tablet, dest_user_data))) {
@@ -1410,7 +1465,8 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
       && ObTabletStatus::TRANSFER_OUT_DELETED != src_user_data.tablet_status_) {
     ret = OB_UNEXPECTED_TABLET_STATUS;
     LOG_WARN("tablet status should be TRANSFER_OUT or TRANSFER_OUT_DELETED", K(ret), KPC(tablet), K(src_user_data));
-  } else if (FALSE_IT(ha_status = tablet->get_tablet_meta().ha_status_)) {
+  } else if (OB_FAIL(tablet->get_tablet_meta().ha_status_.get_restore_status(restore_status))) {
+    LOG_WARN("failed to get tablet restore status", K(ret));
   } else if (OB_FAIL(tablet->fetch_table_store(wrapper))) {
     LOG_WARN("fetch table store fail", K(ret), KP(tablet));
   } else if (OB_FAIL(check_src_memtable_is_empty_(tablet, transfer_scn))) {
@@ -1535,7 +1591,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
   } else if (!dest_wrapper.get_member()->get_major_sstables().empty()) {
     ret = OB_INVALID_TABLE_STORE;
     LOG_WARN("tablet should not exist major sstable", K(ret), KPC(tablet));
-  } else if (OB_FAIL(get_source_tablet_tables_(tablet, tablet_id, src_sstable_iter, src_tablet_handle, param.ha_status_, allocator, param.tables_handle_))) {
+  } else if (OB_FAIL(get_source_tablet_tables_(tablet, tablet_id, src_sstable_iter, src_tablet_handle, param.restore_status_, allocator, param.tables_handle_))) {
     LOG_WARN("failed to get source tablet tables", K(ret), K(tablet_id));
   } else if (OB_FAIL(build_migration_param_(tablet, src_tablet_handle, mig_param))) {
     LOG_WARN("failed to build migration param", K(ret), KPC(tablet));

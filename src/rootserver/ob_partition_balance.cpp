@@ -245,7 +245,7 @@ int ObPartitionBalance::on_new_partition(
       if (OB_ISNULL(part_group = reinterpret_cast<ObTransferPartGroup*>(allocator_.alloc(sizeof(ObTransferPartGroup))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc mem fail", KR(ret));
-      } else if (FALSE_IT(cur_part_group_ = new(part_group) ObTransferPartGroup())) {
+      } else if (FALSE_IT(cur_part_group_ = new(part_group) ObTransferPartGroup(allocator_))) {
       } else if (OB_FAIL(add_part_to_bg_map_(src_ls_id, *cur_part_group_, bg))) {
         LOG_WARN("add partition to balance group fail", KR(ret), K(src_ls_id), K(bg),
             K(cur_part_group_));

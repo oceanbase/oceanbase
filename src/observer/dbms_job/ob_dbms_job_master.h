@@ -161,7 +161,12 @@ public:
       schema_service_(NULL),
       job_rpc_proxy_(NULL),
       self_addr_(),
+      ready_queue_(),
+      scheduler_task_(),
+      scheduler_thread_(),
+      job_utils_(),
       lock_(common::ObLatchIds::DBMS_JOB_MASTER_LOCK),
+      allocator_("DBMSJobMaster"),
       alive_jobs_() {}
 
   virtual ~ObDBMSJobMaster() { alive_jobs_.destroy(); };

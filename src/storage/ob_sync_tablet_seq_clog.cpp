@@ -131,8 +131,8 @@ int ObSyncTabletSeqMdsLogCb::on_success()
 {
   int ret = OB_SUCCESS;
   ret_code_ = ret;
-  state_ = STATE_SUCCESS;
   mds_ctx_.single_log_commit(__get_scn(), __get_scn());
+  state_ = STATE_SUCCESS;
   try_release();
   return ret;
 }

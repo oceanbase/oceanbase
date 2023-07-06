@@ -587,6 +587,7 @@ int ObLogRestoreNetDriver::refresh_error_context_(const share::ObLSID &ls_id)
 
 int ObLogRestoreNetDriver::set_restore_log_upper_limit()
 {
+  RLockGuard guard(lock_);
   int ret = OB_SUCCESS;
   share::SCN upper_limit_scn;
   if (NULL == fetcher_) {
@@ -601,6 +602,7 @@ int ObLogRestoreNetDriver::set_restore_log_upper_limit()
 
 int ObLogRestoreNetDriver::set_compressor_type(const common::ObCompressorType &compressor_type)
 {
+  RLockGuard guard(lock_);
   int ret = OB_SUCCESS;
 
   if (NULL == fetcher_) {

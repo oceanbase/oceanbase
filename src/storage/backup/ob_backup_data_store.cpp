@@ -88,8 +88,26 @@ bool ObExternTenantLocalityInfoDesc::is_valid() const
       && !tenant_name_.is_empty()
       && !cluster_name_.is_empty()
       && !locality_.is_empty()
-      && !primary_zone_.is_empty()
-      && !sys_time_zone_.is_empty();
+      && !primary_zone_.is_empty();
+}
+
+int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sys_time_zone_wrap_.deep_copy(that.sys_time_zone_wrap_))) {
+    LOG_WARN("failed to deep copy", K(ret));
+  } else {
+    tenant_id_ = that.tenant_id_;
+    backup_set_id_ = that.backup_set_id_;
+    cluster_id_ = that.cluster_id_;
+    compat_mode_ = that.compat_mode_;
+    tenant_name_ = that.tenant_name_;
+    cluster_name_ = that.cluster_name_;
+    locality_ = that.locality_;
+    primary_zone_ = that.primary_zone_;
+    sys_time_zone_ = that.sys_time_zone_;
+  }
+  return ret;
 }
 
 /*
@@ -1046,6 +1064,83 @@ int ObBackupDataStore::read_base_tablet_list(const share::ObLSID &ls_id, ObIArra
         }
       } else if (OB_FAIL(tablet_id_array.push_back(tablet_meta.tablet_id_))) {
         LOG_WARN("failed to push backup tablet id", K(ret), K(tablet_meta));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_tablet_to_ls_info_v_4_1_x(
+    const int64_t turn_id, const ObLSID &ls_id, ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  ObBackupDataTabletToLSDesc tablet_to_ls_info;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtilV_4_1::get_backup_data_tablet_ls_info_path(backup_set_dest_, turn_id, path))) {
+    LOG_WARN("fail to get tenant ls attr info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, tablet_to_ls_info))) {
+    LOG_WARN("failed to read single file", K(ret), K(full_path));
+  } else if (!tablet_to_ls_info.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet to ls info", K(ret), K(tablet_to_ls_info));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < tablet_to_ls_info.tablet_to_ls_.count(); ++i) {
+    const ObBackupDataTabletToLSInfo &info = tablet_to_ls_info.tablet_to_ls_.at(i);
+    if (!info.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid info", K(ret), K(info));
+    } else if (info.ls_id_ == ls_id) {
+      if (OB_FAIL(append(tablet_ids, info.tablet_id_list_))) {
+        LOG_WARN("failed to append tablet ids", K(ret), K(info));
+      } else {
+        break;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (tablet_ids.empty()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("read no tablet", K(ret), K(turn_id), K(ls_id), K(full_path));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_deleted_tablet_info_v_4_1_x(
+    const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  deleted_tablet_ids.reset();
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  ObBackupDeletedTabletToLSDesc deleted_tablet_info;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_deleted_tablet_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get tenant ls attr info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, deleted_tablet_info))) {
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("backup deleted file not exist", K(ret));
+    } else {
+      LOG_WARN("failed to read single file", K(ret), K(full_path));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < deleted_tablet_info.deleted_tablet_to_ls_.count(); ++i) {
+      const ObBackupDataTabletToLSInfo &info = deleted_tablet_info.deleted_tablet_to_ls_.at(i);
+      if (info.ls_id_ == ls_id) {
+        if (OB_FAIL(deleted_tablet_ids.assign(info.tablet_id_list_))) {
+          LOG_WARN("failed to assign", K(ret), K(info));
+        }
+        break;
       }
     }
   }

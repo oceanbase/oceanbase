@@ -28,7 +28,8 @@ ObSqlSockSession::ObSqlSockSession(ObISMConnectionCallback& conn_cb, ObSqlNio* n
     sql_req_(ObRequest::OB_MYSQL, 1),
     last_pkt_sz_(0),
     pending_write_buf_(NULL),
-    pending_write_sz_(0)
+    pending_write_sz_(0),
+    sql_session_id_(0)
 {
   sql_req_.set_server_handle_context(this);
   is_inited_ = true;

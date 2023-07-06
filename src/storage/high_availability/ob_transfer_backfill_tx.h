@@ -45,6 +45,8 @@ public:
   ~ObTransferWorkerMgr();
   int init(ObLS *dest_ls);
   int process();
+  int cancel_dag_net();
+  void reset_task_id();
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(task_id), KP_(dest_ls));
 private:
   int check_task_exist_(const share::ObTaskId &task_id, bool &is_exist);
@@ -108,6 +110,7 @@ public:
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx();
+  virtual int deal_with_cancel() override;
 
   ObTransferBackfillTXCtx *get_ctx() { return &ctx_; }
   const share::ObLSID &get_ls_id() const { return ctx_.src_ls_id_; }
@@ -205,7 +208,7 @@ private:
       const common::ObTabletID &tablet_id,
       ObTableStoreIterator &sstable_iter,
       ObTabletHandle &tablet_handle,
-      ObTabletHAStatus &ha_status,
+      ObTabletRestoreStatus::STATUS &restore_status,
       common::ObArenaAllocator &allocator,
       ObTablesHandleArray &tables_handle);
   int get_all_sstable_handles_(

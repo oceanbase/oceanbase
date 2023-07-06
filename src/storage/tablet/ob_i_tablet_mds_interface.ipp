@@ -490,7 +490,11 @@ int ObITabletMdsInterface::get_latest(OP &&read_op, bool &is_committed, const in
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_GET(WARN, "mds cannot be NULL");
   } else if (CLICK_FAIL(handle.get_latest<T>(read_op, is_committed, read_seq))) {
-    MDS_LOG_GET(WARN, "failed to get_latest");
+    if (OB_SNAPSHOT_DISCARDED != ret) {
+      MDS_LOG_GET(WARN, "failed to get mds data");
+    } else {
+      MDS_LOG_GET(TRACE, "failed to get mds data");
+    }
   }
   if (CLICK_FAIL(ret)) {
     if (OB_ENTRY_NOT_EXIST == ret || OB_SNAPSHOT_DISCARDED == ret) {
@@ -528,7 +532,9 @@ int ObITabletMdsInterface::get_snapshot(OP &&read_op,
     MDS_LOG_GET(WARN, "mds cannot be NULL");
   } else if (CLICK_FAIL(handle.get_snapshot<T>(read_op, snapshot, read_seq, timeout_us))) {
     if (OB_SNAPSHOT_DISCARDED != ret) {
-      MDS_LOG_GET(WARN, "failed to get_snapshot");
+      MDS_LOG_GET(WARN, "failed to get mds data");
+    } else {
+      MDS_LOG_GET(TRACE, "failed to get mds data");
     }
   }
   if (CLICK_FAIL(ret)) {
@@ -566,7 +572,11 @@ int ObITabletMdsInterface::get_snapshot(const Key &key,
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_GET(WARN, "mds cannot be NULL");
   } else if (CLICK() && OB_SUCCESS != (ret = handle.get_snapshot<Key, Value>(key, read_op, snapshot, read_seq, timeout_us))) {
-    MDS_LOG_GET(WARN, "failed to get_snapshot");
+    if (OB_SNAPSHOT_DISCARDED != ret) {
+      MDS_LOG_GET(WARN, "failed to get mds data");
+    } else {
+      MDS_LOG_GET(TRACE, "failed to get mds data");
+    }
   }
   if (CLICK_FAIL(ret)) {
     if (OB_ENTRY_NOT_EXIST == ret || OB_SNAPSHOT_DISCARDED == ret) {

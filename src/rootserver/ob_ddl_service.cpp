@@ -11213,12 +11213,20 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
     } else {
       ObDDLSQLTransaction trans(schema_service_);
       ObDDLTaskRecord task_record;
+      int64_t task_id = 0;
       int64_t refreshed_schema_version = 0;
       bool with_primary_key_operation = false;
       if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
         LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
         LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+      } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
+        LOG_WARN("fetch new task id failed", K(ret));
+      } else if (OB_FAIL(ObDDLLock::lock_for_offline_ddl(*orig_table_schema,
+                                                         nullptr,
+                                                         ObTableLockOwnerID(task_id),
+                                                         trans))) {
+        LOG_WARN("failed to lock ddl lock", K(ret));
       }
       // TODO yiren, refactor it, create user hidden table after alter index/column/part/cst...
       if (OB_FAIL(ret)) {
@@ -11369,7 +11377,9 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    alter_table_arg.parallelism_,
                                    alter_table_arg.consumer_group_id_,
                                    &alter_table_arg.allocator_,
-                                   &alter_table_arg);
+                                   &alter_table_arg,
+                                   0/*parent_task_id*/,
+                                   task_id);
         if (orig_table_schema->is_tmp_table() || orig_table_schema->is_external_table()) {
           ret = OB_OP_NOT_ALLOW;
           char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
@@ -11383,11 +11393,6 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           LOG_WARN("failed to alter table that has conflict ddl", K(ret), K(orig_table_schema->get_table_id()));
         } else if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
           LOG_WARN("submit ddl task failed", K(ret));
-        } else if (OB_FAIL(ObDDLLock::lock_for_offline_ddl(*orig_table_schema,
-                                                           bind_tablets ? &new_table_schema : nullptr,
-                                                           ObTableLockOwnerID(task_record.task_id_),
-                                                           trans))) {
-          LOG_WARN("failed to lock ddl lock", K(ret));
         } else {
           res.task_id_ = task_record.task_id_;
         }
@@ -11401,14 +11406,11 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    alter_table_arg.parallelism_,
                                    alter_table_arg.consumer_group_id_,
                                    &alter_table_arg.allocator_,
-                                   &alter_table_arg);
+                                   &alter_table_arg,
+                                   0/*parent_task_id*/,
+                                   task_id);
         if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
             LOG_WARN("submit ddl task failed", K(ret));
-        } else if (OB_FAIL(ObDDLLock::lock_for_offline_ddl(new_table_schema,
-                                                           nullptr,
-                                                           ObTableLockOwnerID(task_record.task_id_),
-                                                           trans))) {
-          LOG_WARN("failed to lock ddl lock", K(ret));
         } else {
           res.task_id_ = task_record.task_id_;
         }
@@ -11480,6 +11482,7 @@ int ObDDLService::create_hidden_table(
         ObDDLSQLTransaction trans(schema_service_);
         common::ObArenaAllocator allocator;
         ObDDLTaskRecord task_record;
+        int64_t task_id = 0;
         int64_t refreshed_schema_version = 0;
         new_table_schema.set_tenant_id(dest_tenant_id);
         new_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
@@ -11487,6 +11490,13 @@ int ObDDLService::create_hidden_table(
           LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
         } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
           LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+        } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
+          LOG_WARN("fetch new task id failed", K(ret));
+        } else if (OB_FAIL(ObDDLLock::lock_for_offline_ddl(*orig_table_schema,
+                                                           nullptr,
+                                                           ObTableLockOwnerID(task_id),
+                                                           trans))) {
+          LOG_WARN("failed to lock ddl lock", K(ret));
         } else if (OB_FAIL(create_user_hidden_table(
                   *orig_table_schema,
                   new_table_schema,
@@ -11527,14 +11537,11 @@ int ObDDLService::create_hidden_table(
                                         create_hidden_table_arg.parallelism_,
                                         create_hidden_table_arg.consumer_group_id_,
                                         &allocator_for_redef,
-                                        &alter_table_arg);
+                                        &alter_table_arg,
+                                        0,
+                                        task_id);
               if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
                 LOG_WARN("submit ddl task failed", K(ret));
-              } else if (OB_FAIL(ObDDLLock::lock_for_offline_ddl(*orig_table_schema,
-                                                                 bind_tablets ? &new_table_schema : nullptr,
-                                                                 ObTableLockOwnerID(task_record.task_id_),
-                                                                 trans))) {
-                LOG_WARN("failed to lock ddl lock", K(ret));
               } else if (orig_table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_OFFLINE_DDL) {
                 ret = OB_OP_NOT_ALLOW;
                 LOG_WARN("offline ddl is being executed, other ddl operations are not allowed, create hidden table fail", K(ret), K(create_hidden_table_arg));

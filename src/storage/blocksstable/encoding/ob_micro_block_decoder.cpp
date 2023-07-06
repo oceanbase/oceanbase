@@ -1153,11 +1153,20 @@ int ObMicroBlockDecoder::init_decoders()
     if (OB_ISNULL(read_info_) || typeid(ObRowkeyReadInfo) == typeid(*read_info_)) {
       ObObjMeta col_type;
       const int64_t col_cnt = MIN(request_cnt_, header_->column_count_);
-      for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+      int64_t i = 0;
+      for ( ; OB_SUCC(ret) && i < col_cnt; ++i) {
         col_type.set_type(static_cast<ObObjType>(col_header_[i].obj_type_));
         if (OB_FAIL(add_decoder(i, col_type, decoders_[i]))) {
           LOG_WARN("add_decoder failed", K(ret), K(i), K(col_type));
         }
+      }
+      if (OB_SUCC(ret) && i < request_cnt_ && OB_ISNULL(read_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("for empty read info, request cnt is invalid", KR(ret), KP(read_info_), KPC(header_), K(request_cnt_));
+      }
+      for ( ; OB_SUCC(ret) && i < request_cnt_; ++i) { // add nop decoder for not-exist col
+        decoders_[i].decoder_ = &none_exist_column_decoder_;
+        decoders_[i].ctx_ = &none_exist_column_decoder_ctx_;
       }
     } else {
       const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
@@ -1442,7 +1451,7 @@ OB_INLINE int ObMicroBlockDecoder::get_row_impl(int64_t index, ObDatumRow &row)
     } else if (row.get_capacity() < request_cnt_) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_WARN("obj buf is not enough", K(ret), "expect_obj_count", request_cnt_, K(row));
-    } else if (OB_FAIL(decode_cells(index, row_len, row_data, 0, MIN(request_cnt_, header_->column_count_), row.storage_datums_))) {
+    } else if (OB_FAIL(decode_cells(index, row_len, row_data, 0, request_cnt_, row.storage_datums_))) {
       LOG_WARN("decode cells failed", K(ret), K(index), K_(request_cnt));
     } else {
       row.row_flag_.reset();

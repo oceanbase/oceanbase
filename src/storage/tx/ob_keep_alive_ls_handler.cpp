@@ -128,7 +128,7 @@ int ObKeepAliveLSHandler::try_submit_log(const SCN &min_start_scn, MinStartScnSt
       TRANS_LOG(WARN, "[Keep Alive] submit keep alive log failed", K(ret), K(ls_id_));
     } else {
       stat_info_.submit_succ_cnt += 1;
-      tmp_keep_alive_info_.scn_ = scn;
+      tmp_keep_alive_info_.loop_job_succ_scn_ = scn;
       tmp_keep_alive_info_.lsn_ = lsn;
       tmp_keep_alive_info_.min_start_status_ = min_start_status;
       tmp_keep_alive_info_.min_start_scn_ = min_start_scn;
@@ -143,7 +143,6 @@ int ObKeepAliveLSHandler::try_submit_log(const SCN &min_start_scn, MinStartScnSt
 int ObKeepAliveLSHandler::on_success()
 {
   int ret = OB_SUCCESS;
-
   SpinWLockGuard guard(lock_);
 
   durable_keep_alive_info_.replace(tmp_keep_alive_info_);
@@ -180,7 +179,7 @@ int ObKeepAliveLSHandler::replay(const void *buffer,
     TRANS_LOG(WARN, "[Keep Alive] deserialize log body error", K(ret), K(nbytes), K(pos));
   } else {
     SpinWLockGuard guard(lock_);
-    tmp_keep_alive_info_.scn_ = scn;
+    tmp_keep_alive_info_.loop_job_succ_scn_ = scn;
     tmp_keep_alive_info_.lsn_ = lsn;
     tmp_keep_alive_info_.min_start_scn_ = log_body.get_min_start_scn();
     tmp_keep_alive_info_.min_start_status_ = log_body.get_min_start_status();
@@ -205,7 +204,7 @@ void ObKeepAliveLSHandler::print_stat_info()
                                                           "Near_To_GTS_Cnt",    stat_info_.near_to_gts_cnt,
                                                           "Other_Error_Cnt",    stat_info_.other_error_cnt,
                                                           "Submit_Succ_Cnt",    stat_info_.submit_succ_cnt,
-                                                          "last_scn",           to_cstring(stat_info_.stat_keepalive_info_.scn_),
+                                                          "last_scn",           to_cstring(stat_info_.stat_keepalive_info_.loop_job_succ_scn_),
                                                           "last_lsn",           stat_info_.stat_keepalive_info_.lsn_,
                                                           "last_gts",           last_gts_,
                                                           "min_start_scn",      to_cstring(stat_info_.stat_keepalive_info_.min_start_scn_),
@@ -220,7 +219,7 @@ void ObKeepAliveLSHandler::get_min_start_scn(SCN &min_start_scn,
   SpinRLockGuard guard(lock_);
 
   min_start_scn = durable_keep_alive_info_.min_start_scn_;
-  keep_alive_scn = durable_keep_alive_info_.scn_;
+  keep_alive_scn = durable_keep_alive_info_.loop_job_succ_scn_;
   status = durable_keep_alive_info_.min_start_status_;
 }
 

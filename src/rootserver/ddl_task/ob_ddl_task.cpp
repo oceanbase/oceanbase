@@ -157,7 +157,7 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
                     is_abort_);
 
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
-  : tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0), consumer_group_id_(0), parent_task_id_(0),
+  : tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0), consumer_group_id_(0), parent_task_id_(0), task_id_(0),
     type_(DDL_INVALID), src_table_schema_(nullptr), dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr)
 {
 }
@@ -172,9 +172,10 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
                                            const int64_t consumer_group_id,
                                            ObIAllocator *allocator,
                                            const obrpc::ObDDLArg *ddl_arg,
-                                           const int64_t parent_task_id)
+                                           const int64_t parent_task_id,
+                                           const int64_t task_id)
   : tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version), parallelism_(parallelism), consumer_group_id_(consumer_group_id),
-    parent_task_id_(parent_task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
+    parent_task_id_(parent_task_id), task_id_(task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
     ddl_arg_(ddl_arg), allocator_(allocator)
 {
 }
@@ -1987,9 +1988,10 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
   if (OB_SUCC(ret) && is_trans_end_) {
     if (OB_FAIL(get_snapshot(snapshot_version))) {
       LOG_WARN("get snapshot version failed", K(ret));
+    } else {
+      is_trans_end = is_trans_end_;
     }
   }
-  is_trans_end = is_trans_end_;
   return ret;
 }
 
@@ -2037,9 +2039,8 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
         }
       }
       if (OB_SUCC(ret)) {
-        int tmp_ret = OB_SUCCESS;
         snapshot_version = max(max_snapshot, curr_ts.get_val_for_tx() - INDEX_SNAPSHOT_VERSION_DIFF);
-        if (OB_SUCCESS != (tmp_ret = freeze_info_proxy.get_freeze_info(
+        if (OB_FAIL(freeze_info_proxy.get_freeze_info(
             root_service->get_sql_proxy(), SCN::min_scn(), frozen_status))) {
           LOG_WARN("get freeze info failed", K(ret));
         } else {

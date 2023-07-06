@@ -59,16 +59,17 @@ public:
       OB_EASY_REQUEST_TABLE_API_END_TRANS     = 15,
       OB_EASY_REQUEST_TABLE_API_ACOM_TRANS    = 16,
       OB_EASY_REQUEST_WAKEUP                  = 255,
+      OB_FINISH_SQL_REQUEST                   = 256,
   };
 public:
   explicit ObRequest(Type type, int nio_protocol=0)
-      : ez_req_(NULL), nio_protocol_(nio_protocol), type_(type), handle_ctx_(NULL), group_id_(0), sql_req_level_(0), pkt_(NULL),
+      : ez_req_(NULL), handling_state_(-1), nio_protocol_(nio_protocol), type_(type), handle_ctx_(NULL), group_id_(0), sql_req_level_(0), pkt_(NULL),
         connection_phase_(ConnectionPhaseEnum::CPE_CONNECTED),
         recv_timestamp_(0), enqueue_timestamp_(0),
         request_arrival_time_(0), recv_mts_(), arrival_push_diff_(0),
         push_pop_diff_(0), pop_process_start_diff_(0),
         process_start_end_diff_(0), process_end_response_diff_(0),
-        trace_id_(),discard_flag_(false),large_retry_flag_(false),retry_times_(0)
+        trace_id_(), discard_flag_(false), large_retry_flag_(false), retry_times_(0)
   {
   }
   virtual ~ObRequest() {}
@@ -135,6 +136,7 @@ public:
   mutable ObReusableMem reusable_mem_;
 public:
   easy_request_t *ez_req_; // set in ObRequest new
+  int32_t handling_state_; //for sql nio or other frame work
 protected:
   int nio_protocol_;
   Type type_;
@@ -158,7 +160,6 @@ protected:
   bool discard_flag_;
   bool large_retry_flag_;
   int32_t retry_times_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRequest);
 }; // end of class ObRequest

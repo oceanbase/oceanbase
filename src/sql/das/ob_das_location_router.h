@@ -320,6 +320,8 @@ public:
       cur_errno_ = err_no;
     }
   }
+  int save_success_task(const common::ObTabletID &succ_id)
+  { return succ_tablet_list_.push_back(succ_id); }
 private:
   int get_vt_svr_pair(uint64_t vt_id, const VirtualSvrPair *&vt_svr_pair);
   int get_vt_tablet_loc(uint64_t table_id,
@@ -336,6 +338,7 @@ private:
   int cur_errno_;
   int64_t retry_cnt_;
   ObList<common::ObTabletID, common::ObIAllocator> all_tablet_list_;
+  ObList<common::ObTabletID, common::ObIAllocator> succ_tablet_list_;
   VirtualSvrList virtual_server_list_;
   common::ObIAllocator &allocator_;
 private:

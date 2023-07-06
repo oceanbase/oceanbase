@@ -62,7 +62,7 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.table_id_ = table_id;
         param.batch_size_ = 100;
         param.parallel_ = parallel;
-        param.session_count_ = MIN(parallel, (int64_t)tenant->unit_max_cpu());
+        param.session_count_ = MIN(parallel, (int64_t)tenant->unit_max_cpu() * 2);
         param.px_mode_ = true;
         param.online_opt_stat_gather_ = false;
         param.need_sort_ = true;

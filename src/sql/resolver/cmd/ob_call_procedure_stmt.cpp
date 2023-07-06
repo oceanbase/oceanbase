@@ -63,10 +63,10 @@ int ObCallProcedureInfo::add_out_param(
   return ret;
 }
 
-int ObCallProcedureInfo::prepare_expression(const common::ObArray<sql::ObRawExpr*> params)
+int ObCallProcedureInfo::prepare_expression(const common::ObIArray<sql::ObRawExpr*> &params)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObSqlExpression*> array;
+  ObSEArray<ObSqlExpression*, 16> array;
   for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
     ObSqlExpression *expr = NULL;
     if (OB_FAIL(sql_expression_factory_.alloc(expr))) {
@@ -84,7 +84,7 @@ int ObCallProcedureInfo::prepare_expression(const common::ObArray<sql::ObRawExpr
   return ret;
 }
 
-int ObCallProcedureInfo::final_expression(const common::ObArray<sql::ObRawExpr*> params,
+int ObCallProcedureInfo::final_expression(const common::ObIArray<sql::ObRawExpr*> &params,
                                           ObSQLSessionInfo *session_info,
                                           share::schema::ObSchemaGetterGuard *schema_guard)
 {

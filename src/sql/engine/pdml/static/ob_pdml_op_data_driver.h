@@ -90,6 +90,9 @@ private:
     ~ReturningCtx() = default;
     void reset()
     {
+      if (row_iter_) {
+        row_iter_->close();
+      }
       tablet_id_array_.reset();
       next_idx_ = 0;
       row_iter_ = NULL;

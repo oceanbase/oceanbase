@@ -584,7 +584,7 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
         LOG_WARN("[DATA_BACKUP]failed to get next job id", K(ret));
       } else if (OB_FAIL(get_next_backup_set_id(trans, new_job_attr.tenant_id_, new_job_attr.backup_set_id_))) {
         LOG_WARN("[DATA_BACKUP]failed to get next backup set id", K(ret));
-      } else if (OB_FAIL(update_backup_type_(trans, new_job_attr.tenant_id_, new_job_attr.backup_set_id_, 
+      } else if (OB_FAIL(update_backup_type_if_need_(trans, new_job_attr.tenant_id_, new_job_attr.backup_set_id_,
           new_job_attr.backup_path_, new_job_attr.backup_type_))) {
         LOG_WARN("[DATA_BACKUP]failed to update backup type", K(ret), K(new_job_attr));
       } else if (OB_FAIL(new_job_attr.executor_tenant_id_.push_back(new_job_attr.tenant_id_))) {
@@ -670,22 +670,7 @@ int ObBackupDataScheduler::get_backup_scn(
       if (OB_FAIL(trans.end(true))) {
         LOG_WARN("failed to commit", K(ret));
       } else {
-        if (!is_start) {
-          // The conversion accuracy of SCN to time_stamp is inconsistent under MySQL mode and Oracle mode.
-          // The conversion accuracy in ORALCE mode is nanosecond, but it is microsecond in mysql
-          // for backup and restore, we keep the end scn round up to microseconds that keep the conversion accuracy is consistent.
-          // meanwhile, in order to solve that boundary is not included in the restore, scn + 1;
-          // 1658475549197665190 --> 1658475549197666000
-          int64_t ts = 0;
-          ts = tmp_scn.convert_to_ts();
-          if (OB_FAIL(scn.convert_from_ts(ts))) {
-            LOG_WARN("fail to convert from ts", K(ret), K(ts));
-          } else if (tmp_scn != scn && OB_FAIL(scn.convert_from_ts(ts + 1))) {
-            LOG_WARN("fail to convert from ts", K(ret), K(ts));
-          }
-        } else {
-          scn = tmp_scn;
-        }
+        scn = tmp_scn;
       }
     } else {
       int tmp_ret = OB_SUCCESS;
@@ -778,7 +763,7 @@ int ObBackupDataScheduler::get_next_backup_set_id(common::ObISQLClient &trans, c
   return ret;
 }
 
-int ObBackupDataScheduler::update_backup_type_(common::ObISQLClient &trans, const uint64_t tenant_id, 
+int ObBackupDataScheduler::update_backup_type_if_need_(common::ObISQLClient &trans, const uint64_t tenant_id,
     const int64_t backup_set_id, const share::ObBackupPathString &backup_path, share::ObBackupType &backup_type)
 {
   // if backup type is inc backup but no prev backup set id.
@@ -786,6 +771,8 @@ int ObBackupDataScheduler::update_backup_type_(common::ObISQLClient &trans, cons
   int ret = OB_SUCCESS;
   int64_t prev_full_backup_set_id = -1;
   int64_t pre_inc_backup_set_id = -1;
+  ObBackupSetFileDesc pre_backup_set_desc;
+  uint64_t data_version = 0;
   if (OB_FAIL(ObBackupSetFileOperator::get_prev_backup_set_id(
       trans, tenant_id, backup_set_id, backup_type, backup_path, prev_full_backup_set_id, pre_inc_backup_set_id))) {
     if (OB_ENTRY_NOT_EXIST == ret && backup_type.is_inc_backup()) {
@@ -794,6 +781,32 @@ int ObBackupDataScheduler::update_backup_type_(common::ObISQLClient &trans, cons
     } else {
       LOG_WARN("fail to get prev backup set id", K(ret), K(tenant_id), K(backup_set_id));
     }
+  } else if (backup_type.is_full_backup()) {// full backup no need to check prev backup set's compatible
+  } else if (OB_FAIL(ObBackupSetFileOperator::get_one_backup_set_file(trans, false, pre_inc_backup_set_id, 1, tenant_id, pre_backup_set_desc))) {
+    LOG_WARN("failed to get one backup set file", K(ret), K(pre_inc_backup_set_id), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(trans, tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret), K(tenant_id));
+  } else if (data_version != pre_backup_set_desc.tenant_compatible_) {
+    ret = OB_BACKUP_CAN_NOT_START;
+    int tmp_ret = OB_SUCCESS;
+    const int64_t USER_ERROR_MSG_LEN = 128;
+    char pre_compatible_buf[OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH] = "";
+    char cur_compatible_buf[OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH] = "";
+    char user_error_msg_buf[USER_ERROR_MSG_LEN] = "";
+    int64_t pos = ObClusterVersion::get_instance().print_version_str(
+        pre_compatible_buf, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, pre_backup_set_desc.tenant_compatible_);
+    pos = ObClusterVersion::get_instance().print_version_str(
+        cur_compatible_buf, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, data_version);
+    if (OB_TMP_FAIL(databuff_printf(user_error_msg_buf, USER_ERROR_MSG_LEN,
+        "cross compatible incremental backup is not supported, "
+        "previous backup set compatible is %.*s, current compatible is %.*s",
+        static_cast<int>(OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH), pre_compatible_buf,
+        static_cast<int>(OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH), cur_compatible_buf))) {
+      LOG_WARN("failed to databuff printf", K(ret), K(tmp_ret));
+    }
+    LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, user_error_msg_buf);
+    LOG_WARN("pre backup set's tenant compatible does not match, backup can't start",
+        K(ret), K(tenant_id), K(data_version), K(pre_backup_set_desc));
   } 
   return ret;
 }
@@ -1168,10 +1181,13 @@ int ObUserTenantBackupJobMgr::move_to_history_()
   LOG_INFO("start to move backup job to history", KPC(job_attr_));
   ObMySQLTransaction trans;
   ObBackupSetTaskMgr set_task_mgr;
+  ObTimeoutCtx timeout_ctx;
   if (is_sys_tenant(job_attr_->initiator_tenant_id_) && OB_FAIL(report_failed_to_initiator_())) {
     LOG_WARN("fail to report job finish to initiator tenant id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to start trans", K(ret));
+  } else if (OB_FAIL(set_query_timeout_and_trx_timeout_(timeout_ctx))) {
+    LOG_WARN("failed to set query timeout and trx timeout", K(ret));
   } else {
     if (OB_FAIL(set_task_mgr.init(tenant_id_, *job_attr_, *sql_proxy_, 
         *rpc_proxy_, *task_scheduler_, *schema_service_, *backup_service_))) {
@@ -1202,6 +1218,20 @@ int ObUserTenantBackupJobMgr::move_to_history_()
         LOG_WARN("[DATA_BACKUP]failed to roll back status", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObUserTenantBackupJobMgr::set_query_timeout_and_trx_timeout_(ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  const int64_t ob_query_timeout = 600 * 1000 * 1000; // 600s
+  const int64_t ob_trx_timeout = 600 * 1000 * 1000; // 600s
+  const int64_t abs_timeout = ObTimeUtility::current_time() + ob_query_timeout;
+  if (OB_FAIL(timeout_ctx.set_trx_timeout_us(ob_trx_timeout))) {
+    LOG_WARN("failed to set trx timeout us", K(ret), K(ob_trx_timeout));
+  } else if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout))) {
+    LOG_WARN("failed to set abs timeout", K(ret));
   }
   return ret;
 }

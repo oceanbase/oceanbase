@@ -35,11 +35,11 @@ public:
   virtual ~ObTxFinishTransfer();
   int init(const share::ObTransferTaskID &task_id, const uint64_t tenant_id, const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls_id, common::ObMySQLProxy &sql_proxy);
-  int process();
+  int process(int64_t &round);
 
 private:
   int do_tx_transfer_doing_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
-      const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id);
+      const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id, int64_t &round);
 
   // unlock both src and dest ls member list
   // @param[in]: tenant_id
@@ -276,6 +276,15 @@ private:
   // @param[in]: task_id
   // @param[in]: trans
   int select_transfer_task_for_update_(const share::ObTransferTaskID &task_id, ObMySQLTransaction &trans);
+
+  int record_server_event_(
+      const int32_t result,
+      const bool is_ready,
+      const int64_t round) const;
+  int write_server_event_(
+      const int32_t result,
+      const ObSqlString &extra_info,
+      const share::ObTransferStatus &status) const;
 
 private:
   static const int64_t DEFAULT_WAIT_INTERVAL_US = 10 * 1000;        // 10ms

@@ -317,6 +317,8 @@ int ObGroupJoinBufffer::get_next_left_iter()
         int64_t param_idx = rescan_param.param_idx_;
         ObExpr *dst = rescan_param.dst_;
         ObDatum &param_datum = dst->locate_datum_for_write(*eval_ctx_);
+        dst->get_eval_info(*eval_ctx_).clear_evaluated_flag();
+        ObDynamicParamSetter::clear_parent_evaluated_flag(*eval_ctx_, *dst);
         if (OB_FAIL(param_datum.from_obj(array_obj->data_[above_group_idx_for_expand_], dst->obj_datum_map_))) {
           LOG_WARN("cast datum failed", KR(ret));
         } else {

@@ -122,7 +122,7 @@ int ObSSTable::init(const ObTabletCreateSSTableParam &param, common::ObArenaAllo
 
 void ObSSTable::reset()
 {
-  FLOG_INFO("reset sstable.", KP(this), K(key_), K(is_tmp_sstable_));
+  LOG_DEBUG("reset sstable.", KP(this), K(key_), K(is_tmp_sstable_));
   // dec ref first, then reset sstable meta
   if (is_tmp_sstable_) {
     ObSSTable::dec_macro_ref();
@@ -948,7 +948,7 @@ int ObSSTable::deserialize(common::ObArenaAllocator &allocator,
   }
 
   if (OB_SUCC(ret)) {
-    FLOG_INFO("succeed to deserialize sstable", K(status.pack_), KPC(this));
+    LOG_DEBUG("succeed to deserialize sstable", K(status.pack_), KPC(this));
   } else {
     pos = orig_pos;
     LOG_WARN("fail to deserialize sstable", K(ret), K(status.pack_), KPC(this));

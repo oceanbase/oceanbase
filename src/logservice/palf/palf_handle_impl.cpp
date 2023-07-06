@@ -3204,6 +3204,9 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
   LSN committed_end_lsn;
   bool is_limitted_by_end_lsn = true;
   AccessMode access_mode = AccessMode::INVALID_ACCESS_MODE;
+  common::ObMemberList member_list;
+  int64_t replica_num = 0;
+  GlobalLearnerList learner_list;
   // Assign values for max_flushed_end_lsn/committed_end_lsn/is_limitted_by_end_lsn with rdlock
   // to avoid concurrent update with switch_state/truncate (with wrlock).
   do {
@@ -3224,6 +3227,8 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
     }
     int64_t unused_mode_version;
     (void) mode_mgr_.get_access_mode(unused_mode_version, access_mode);
+    (void) config_mgr_.get_curr_member_list(member_list, replica_num);
+    (void) config_mgr_.get_global_learner_list(learner_list);
   } while(0);
 
   // max_flushed_end_lsn may be truncated by concurrent truncate, so itreator need handle this
@@ -3232,10 +3237,7 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
   LogInfo prev_log_info;
   const bool no_need_fetch_log = (prev_lsn >= max_flushed_end_lsn) ||
       (AccessMode::FLASHBACK == access_mode);
-  common::ObMemberList member_list;
-  int64_t replica_num = 0;
-  (void) config_mgr_.get_curr_member_list(member_list, replica_num);
-  const bool is_dest_in_memberlist = (member_list.contains(server));
+  const bool is_dest_in_memberlist = (member_list.contains(server) || learner_list.contains(server));
   // Rpc delay increases enormously when it's size exceeds 2M.
   const int64_t MAX_BATCH_LOG_SIZE_EACH_ROUND = 2 * 1024 * 1024 - 1024;
   char *batch_log_buf = NULL;

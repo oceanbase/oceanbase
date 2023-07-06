@@ -50,11 +50,10 @@ public:
   int release_ddl_kvs(const share::SCN &rec_scn); // release persistent ddl kv, used in ddl merge task for free ddl kv
   int check_has_effective_ddl_kv(bool &has_ddl_kv); // used in ddl log handler for checkpoint
   int get_ddl_kv_min_scn(share::SCN &min_scn); // for calculate rec_scn of ls
-  share::SCN get_start_scn() const { return start_scn_; }
+  share::SCN get_start_scn() const { return start_scn_.atomic_load(); }
   bool is_started() const { return share::SCN::min_scn() != start_scn_; }
   void set_commit_scn_nolock(const share::SCN &scn) { commit_scn_ = scn; }
   int set_commit_scn(const share::SCN &scn);
-  share::SCN get_commit_scn_nolock(const ObTabletMeta &tablet_meta);
   share::SCN get_commit_scn(const ObTabletMeta &tablet_meta);
   int set_commit_success(const share::SCN &start_scn);
   bool is_commit_success();
@@ -64,8 +63,6 @@ public:
   int cleanup();
   int online();
   bool is_execution_id_older(const int64_t execution_id);
-  int set_execution_id_nolock(const int64_t execution_id);
-  int set_execution_id(const int64_t execution_id);
   int register_to_tablet(const share::SCN &ddl_start_scn, ObDDLKvMgrHandle &kv_mgr_handle);
   int unregister_from_tablet(const share::SCN &ddl_start_scn, ObDDLKvMgrHandle &kv_mgr_handle);
   int rdlock(const int64_t timeout_us, uint32_t &lock_tid);
@@ -96,7 +93,6 @@ private:
   int create_empty_ddl_sstable(common::ObArenaAllocator &allocator, blocksstable::ObSSTable &sstable);
   void cleanup_unlock();
   void destroy();
-  bool is_commit_success_unlock() const;
 public:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 16;
   static const int64_t TRY_LOCK_TIMEOUT = 10 * 1000000; // 10s

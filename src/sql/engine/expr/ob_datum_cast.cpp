@@ -7739,10 +7739,23 @@ int cast_udt_to_other_not_support(const sql::ObExpr &expr, sql::ObEvalCtx &ctx, 
   const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
   const ObObjMeta &out_obj_meta = expr.obj_meta_;
   if (in_obj_meta.is_xml_sql_type()) {
-    // only allow cast basic types to invalid CAST to a type that is not a nested table or VARRAY
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_WARN_RET(ret, "inconsistent datatypes", K(in_obj_meta), K(out_obj_meta),
-      K(out_obj_meta.get_subschema_id()), K(expr.extra_));
+    if (out_obj_meta.is_xml_sql_type()) {
+      ObDatum *child_res = NULL;
+      if (OB_FAIL(expr.args_[0]->eval(ctx, child_res))) {
+        LOG_WARN("eval arg failed", K(ret), K(ctx));
+      } else if (child_res->is_null() ||
+                (lib::is_oracle_mode() && 0 == child_res->len_
+                  && ObLongTextType != expr.args_[0]->datum_meta_.type_)) {
+        res_datum.set_null();
+      } else {
+        res_datum.set_datum(*child_res);
+      }
+    } else {
+      // only allow cast basic types to invalid CAST to a type that is not a nested table or VARRAY
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN_RET(ret, "inconsistent datatypes", K(in_obj_meta), K(out_obj_meta),
+        K(out_obj_meta.get_subschema_id()), K(expr.extra_));
+    }
   } else {
     // other udts
     // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER

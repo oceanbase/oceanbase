@@ -34,6 +34,13 @@ namespace oceanbase
 namespace storage
 {
 
+struct ObICopyTabletCtx
+{
+public:
+  virtual int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status) = 0;
+  virtual int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status) const = 0;
+};
+
 struct ObPhysicalCopyCtx
 {
   ObPhysicalCopyCtx();
@@ -218,7 +225,8 @@ public:
       ObLS *ls,
       observer::ObIMetaReport *reporter,
       const ObTabletRestoreAction::ACTION &restore_action,
-      const ObMigrationTabletParam *src_tablet_meta);
+      const ObMigrationTabletParam *src_tablet_meta,
+      ObICopyTabletCtx *copy_tablet_ctx);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletCopyFinishTask"), KP(this));
   int add_sstable(ObTableHandleV2 &table_handle);
@@ -235,7 +243,7 @@ private:
   int create_new_table_store_with_minor_();
   int trim_tablet_();
 
-  int update_tablet_data_status_();
+  int check_finish_copy_tablet_data_valid_();
   int get_tables_handle_ptr_(
       const ObITable::TableKey &table_key,
       ObTablesHandleArray *&table_handle_ptr);
@@ -254,10 +262,9 @@ private:
   ObTablesHandleArray major_tables_handle_;
   ObTabletRestoreAction::ACTION restore_action_;
   const ObMigrationTabletParam *src_tablet_meta_;
-  storage::ObCopyTabletStatus::STATUS status_;
+  ObICopyTabletCtx *copy_tablet_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);
 };
-
 
 }
 }

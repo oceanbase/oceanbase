@@ -391,6 +391,14 @@ public:
                                       const common::ObTabletID &scan_tablet_id,
                                       const common::ObArrayWrap<share::schema::ObColDesc> &rowkey_descs,
                                       common::ObNewRange &new_range);
+
+  OB_INLINE bool can_partition_retry()
+  {
+    return (
+         ctx_.get_my_session()->is_user_session() &&
+         ! ObStmt::is_dml_write_stmt(ctx_.get_physical_plan_ctx()->get_phy_plan()->get_stmt_type())
+        );
+  }
 protected:
   // Get GI task then update location_idx and $cur_access_tablet_
   // NOTE: set $iter_end_ if no task found.

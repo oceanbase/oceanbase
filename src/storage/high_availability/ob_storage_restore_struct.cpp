@@ -23,6 +23,7 @@ namespace storage
 ObRestoreBaseInfo::ObRestoreBaseInfo()
   : restore_scn_(),
     backup_cluster_version_(0),
+    backup_data_version_(0),
     backup_dest_(),
     backup_set_list_()
 {
@@ -32,6 +33,7 @@ void ObRestoreBaseInfo::reset()
 {
   restore_scn_.reset();
   backup_cluster_version_ = 0;
+  backup_data_version_ = 0;
   backup_dest_.reset();
   backup_set_list_.reset();
 }
@@ -40,6 +42,7 @@ bool ObRestoreBaseInfo::is_valid() const
 {
   return restore_scn_.is_valid()
       && backup_cluster_version_ > 0
+      && backup_data_version_ > 0
       && backup_dest_.is_valid()
       && !backup_set_list_.empty();
   //backup piece list can be empty
@@ -55,6 +58,7 @@ int ObRestoreBaseInfo::assign(const ObRestoreBaseInfo &restore_base_info)
   } else {
     restore_scn_ = restore_base_info.restore_scn_;
     backup_cluster_version_ = restore_base_info.backup_cluster_version_;
+    backup_data_version_ = restore_base_info.backup_data_version_;
     if (OB_FAIL(backup_dest_.deep_copy(restore_base_info.backup_dest_))) {
       LOG_WARN("failed to set backup dest", K(ret), K(restore_base_info));
     } else if (OB_FAIL(backup_set_list_.assign(restore_base_info.backup_set_list_))) {
@@ -75,6 +79,7 @@ int ObRestoreBaseInfo::copy_from(const ObTenantRestoreCtx &restore_arg)
     idx = restore_arg.get_backup_set_list().count() - 1;
     restore_scn_ = restore_arg.get_restore_scn();
     backup_cluster_version_ = restore_arg.get_backup_cluster_version();
+    backup_data_version_ = restore_arg.get_backup_data_version();
     backup_dest_.reset();
     backup_set_list_.reset();
     if (OB_FAIL(backup_dest_.set(restore_arg.get_backup_set_list().at(idx).backup_set_path_))) {

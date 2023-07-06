@@ -460,6 +460,10 @@ private:
       const ObTenantMetaObjPool<T> &obj_pool,
       const char *name,
       common::ObIArray<ObTenantMetaMemStatus> &info) const;
+  int get_full_tablets_info(
+      const ObFullTabletCreator &creator,
+      const char *name,
+      common::ObIArray<ObTenantMetaMemStatus> &info) const;
   int get_wash_tablet_candidate(const std::type_info &type_info, CandidateTabletInfo &info);
   void destroy_gc_tablets_queue();
   int push_memtable_into_gc_map_(memtable::ObMemtable *memtable);

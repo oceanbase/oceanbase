@@ -470,15 +470,24 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
     const int64_t recycled_cnt = sstable_cnt + data_memtable_cnt + tx_data_memtable_cnt + tx_ctx_memtable_cnt +
         lock_memtable_cnt;
     const int64_t tablets_mem = tablet_buffer_pool_.total() + large_tablet_buffer_pool_.total() + full_tablet_creator_.total();
+    int64_t tablets_mem_limit = 0;
+    ObMallocAllocator *alloc = ObMallocAllocator::get_instance();
+    if (OB_NOT_NULL(alloc)) {
+      auto ta = alloc->get_tenant_ctx_allocator(MTL_ID(), ObCtxIds::META_OBJ_CTX_ID);
+      if (OB_NOT_NULL(ta)) {
+        tablets_mem_limit = ta->get_limit();
+      }
+    }
+
     if (recycled_cnt > 0) {
       FLOG_INFO("Successfully finish table gc", K(sstable_cnt), K(data_memtable_cnt),
         K(tx_data_memtable_cnt), K(tx_ctx_memtable_cnt), K(lock_memtable_cnt), K(pending_cnt), K(recycled_cnt),
-        K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem),
+        K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem), K(tablets_mem_limit),
         K(ddl_kv_pool_), K(memtable_pool_),
         "tablet count", tablet_map_.count());
     } else if (REACH_COUNT_INTERVAL(100)) {
       FLOG_INFO("Recycle 0 table", K(ret),
-          K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem),
+          K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem), K(tablets_mem_limit),
           K(ddl_kv_pool_), K(memtable_pool_),
           "tablet count", tablet_map_.count());
     }
@@ -1684,6 +1693,8 @@ int ObTenantMetaMemMgr::get_meta_mem_status(common::ObIArray<ObTenantMetaMemStat
     LOG_WARN("fail to get tx ctx memtable pool's info", K(ret), K(info));
   } else if (OB_FAIL(get_obj_pool_info(lock_memtable_pool_, "LOCK MEMTABLE POOL", info))) {
     LOG_WARN("fail to get lock memtable pool's info", K(ret), K(info));
+  } else if (OB_FAIL(get_full_tablets_info(full_tablet_creator_, "MSTX TABLET ALLOCATOR", info))) {
+    LOG_WARN("fail to get mstx tablet allocator", K(ret), K(info));
   }
   return ret;
 }
@@ -1780,7 +1791,7 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
       if (OB_FAIL(new_handle.get_obj()->check_and_set_initial_state())) {
         LOG_WARN("failed to check and set initial state", K(ret), K(key));
       }
-    } while (ret == OB_TIMEOUT || ret == OB_ALLOCATE_MEMORY_FAILED);
+    } while (OB_TIMEOUT == ret || OB_ALLOCATE_MEMORY_FAILED == ret || OB_DISK_HUNG == ret);
   }
 
   LOG_DEBUG("compare and swap object", K(ret), KPC(new_handle.get_obj()), K(lbt()));
@@ -1880,25 +1891,26 @@ int ObTenantMetaMemMgr::check_all_meta_mem_released(ObLSService &ls_service, boo
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
   } else {
-    int64_t memtable_cnt = memtable_pool_.get_used_obj_cnt();
-    int64_t ddl_kv_cnt = ddl_kv_pool_.get_used_obj_cnt();
-    int64_t tablet_cnt = tablet_buffer_pool_.get_used_obj_cnt();
-    int64_t large_tablet_cnt = large_tablet_buffer_pool_.get_used_obj_cnt();
-    int64_t ddl_kv_mgr_cnt = tablet_ddl_kv_mgr_pool_.get_used_obj_cnt();
-    int64_t tablet_memtable_mgr_cnt = tablet_memtable_mgr_pool_.get_used_obj_cnt();
-    int64_t tx_data_memtable_cnt_ = tx_data_memtable_pool_.get_used_obj_cnt();
-    int64_t tx_ctx_memtable_cnt_ = tx_ctx_memtable_pool_.get_used_obj_cnt();
-    int64_t lock_memtable_cnt_ = lock_memtable_pool_.get_used_obj_cnt();
+    const int64_t memtable_cnt = memtable_pool_.get_used_obj_cnt();
+    const int64_t ddl_kv_cnt = ddl_kv_pool_.get_used_obj_cnt();
+    const int64_t tablet_cnt = tablet_buffer_pool_.get_used_obj_cnt();
+    const int64_t large_tablet_cnt = large_tablet_buffer_pool_.get_used_obj_cnt();
+    const int64_t ddl_kv_mgr_cnt = tablet_ddl_kv_mgr_pool_.get_used_obj_cnt();
+    const int64_t tablet_memtable_mgr_cnt = tablet_memtable_mgr_pool_.get_used_obj_cnt();
+    const int64_t tx_data_memtable_cnt_ = tx_data_memtable_pool_.get_used_obj_cnt();
+    const int64_t tx_ctx_memtable_cnt_ = tx_ctx_memtable_pool_.get_used_obj_cnt();
+    const int64_t lock_memtable_cnt_ = lock_memtable_pool_.get_used_obj_cnt();
+    const int64_t full_tablet_cnt = full_tablet_creator_.get_used_obj_cnt();
     if (memtable_cnt != 0 || ddl_kv_cnt != 0 || tablet_cnt != 0 || 0 != large_tablet_cnt || ddl_kv_mgr_cnt != 0
         || tablet_memtable_mgr_cnt != 0 || tx_data_memtable_cnt_ != 0 || tx_ctx_memtable_cnt_ != 0
-        || lock_memtable_cnt_ != 0) {
+        || lock_memtable_cnt_ != 0 || full_tablet_cnt != 0) {
       is_released = false;
     } else {
       is_released = true;
     }
     LOG_INFO("check all meta mem in t3m", K(module), K(is_released), K(memtable_cnt), K(ddl_kv_cnt),
         K(tablet_cnt), K(large_tablet_cnt), K(ddl_kv_mgr_cnt), K(tablet_memtable_mgr_cnt), K(tx_data_memtable_cnt_),
-        K(tx_ctx_memtable_cnt_), K(lock_memtable_cnt_));
+        K(tx_ctx_memtable_cnt_), K(lock_memtable_cnt_), K(full_tablet_cnt));
     const uint64_t interval = 180 * 1000 * 1000; // 180s
     if (!is_released && REACH_TIME_INTERVAL(interval)) {
       dump_tablet();
@@ -2390,6 +2402,34 @@ int ObTenantInMemoryTabletIterator::get_next_tablet(ObTabletHandle &handle)
       }
     } while (OB_SUCC(ret) && !success);
   }
+  return ret;
+}
+
+int ObTenantMetaMemMgr::get_full_tablets_info(
+    const ObFullTabletCreator &creator,
+    const char *name,
+    common::ObIArray<ObTenantMetaMemStatus> &info) const
+{
+  int ret = OB_SUCCESS;
+  ObTenantMetaMemStatus mem_status;
+  if (OB_ISNULL(name)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(name));
+  } else if (OB_UNLIKELY(STRLEN(name) >= ObTenantMetaMemStatus::STRING_LEN)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    STORAGE_LOG(WARN, "string length exceeds max buffer length", K(ret), K(name));
+  } else {
+    STRNCPY(mem_status.name_, name, mem_status.STRING_LEN);
+    mem_status.each_obj_size_ = -1; // the size of full tablet varies
+    mem_status.free_obj_cnt_ = -1;
+    mem_status.used_obj_cnt_ = creator.get_used_obj_cnt();
+    mem_status.total_size_ = creator.total();
+    mem_status.used_size_ = creator.used();
+    if (OB_FAIL(info.push_back(mem_status))) {
+      STORAGE_LOG(WARN, "fail to push mem status to info array", K(ret), K(mem_status));
+    }
+  }
+
   return ret;
 }
 

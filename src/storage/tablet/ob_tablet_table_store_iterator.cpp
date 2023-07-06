@@ -292,7 +292,10 @@ int ObTableStoreIterator::get_ith_table(const int64_t pos, ObITable *&table)
   } else {
     const int64_t hdl_idx = table_ptr_array_.at(pos).hdl_idx_;
     ObSSTable *sstable = nullptr;
-    if (OB_FAIL(sstable_handle_array_.at(hdl_idx).get_sstable(sstable))) {
+    if (OB_UNLIKELY(hdl_idx < 0 || hdl_idx >= sstable_handle_array_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected handle idx for loaded sstable", K(ret), K(hdl_idx), KPC(tmp_table), KPC(this));
+    } else if (OB_FAIL(sstable_handle_array_.at(hdl_idx).get_sstable(sstable))) {
       LOG_WARN("fail to get sstable value", K(ret), K(hdl_idx), K(sstable_handle_array_));
     } else {
       table = sstable;

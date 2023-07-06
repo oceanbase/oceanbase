@@ -30,13 +30,22 @@ state_(TwoPhaseCommitState::STATE_INIT) {}
 
 MdsCtx::~MdsCtx()
 {
-  if (!write_list_.empty()) {
-    MDS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "nodes not commit or abort when mds ctx destroyed", K(*this));
+  bool list_empty = false;
+  {
+    MdsWLockGuard lg(lock_);
+    list_empty = write_list_.empty();
+    if (!list_empty) {
+      OB_ASSERT(state_ != TwoPhaseCommitState::ON_COMMIT);// if decided, list is empty
+      MDS_LOG_RET(INFO, OB_SUCCESS, "nodes not commit or abort when mds ctx destroyed", K(*this));
+    }
+  }
+  if (!list_empty) {
     on_abort(share::SCN::max_scn());
   }
 }
 
 int MdsCtx::assign(const MdsCtx &rhs) {
+  MdsWLockGuard lg(lock_);
   writer_ = rhs.writer_;
   state_ = rhs.state_;
   return OB_SUCCESS;
@@ -46,6 +55,7 @@ const MdsWriter MdsCtx::get_writer() const { return writer_; }
 
 void MdsCtx::set_writer(const MdsWriter &writer)
 {
+  MdsWLockGuard lg(lock_);
   if (state_ != TwoPhaseCommitState::STATE_INIT) {
     MDS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "not allow set writer in non-init state", K(*this), K(writer));
   } else {
@@ -56,6 +66,7 @@ void MdsCtx::set_writer(const MdsWriter &writer)
 
 bool MdsCtx::can_write() const
 {
+  MdsRLockGuard lg(lock_);
   return state_ == TwoPhaseCommitState::STATE_INIT &&
           writer_.is_valid();
 }

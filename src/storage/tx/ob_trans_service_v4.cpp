@@ -587,7 +587,9 @@ int ObTransService::abort_tx_(ObTxDesc &tx, const int cause, const bool cleanup)
     }
     tx.state_ = ObTxDesc::State::ABORTED;
   }
-  TRANS_LOG(INFO, "abort tx", K(ret), K(*this), K(tx), K(cause));
+  if (ObTxAbortCause::IMPLICIT_ROLLBACK != cause) {
+    TRANS_LOG(INFO, "abort tx", K(ret), K(*this), K(tx), K(cause));
+  }
   return ret;
 }
 
@@ -1913,7 +1915,9 @@ int ObTransService::handle_trans_abort_request(ObTxAbortMsg &abort_req, ObTransR
   if (OB_NOT_NULL(ctx)) {
     revert_tx_ctx_(ctx);
   }
-  TRANS_LOG(INFO, "handle trans abort request", K(ret), K(abort_req));
+  if (ObTxAbortCause::IMPLICIT_ROLLBACK != abort_req.reason_) {
+    TRANS_LOG(INFO, "handle trans abort request", K(ret), K(abort_req));
+  }
   return ret;
 }
 

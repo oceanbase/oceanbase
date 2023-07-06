@@ -151,10 +151,13 @@ public:
       is_filter_ = false;
     }
     int assign(CandidateReplica &other);
-
+    //to_string only outputs the key information that SQL execution is concerned with,
+    //and other information can be obtained through the corresponding virtual tables.
+    TO_STRING_KV(K_(server),
+                 K_(role),
+                 K_(sql_port),
+                 K_(is_filter));
   public:
-    INHERIT_TO_STRING_KV("ls_replica_location", ObLSReplicaLocation,
-                         K(attr_), K(is_filter_), K(replica_idx_));
     ReplicaAttribute attr_;
     bool is_filter_;
     int64_t replica_idx_;//invalid

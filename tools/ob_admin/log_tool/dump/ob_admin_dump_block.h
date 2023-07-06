@@ -22,8 +22,29 @@ namespace oceanbase
 namespace tools
 {
 
-int mmap_log_file_(char *&buf_out, const int64_t buf_len, const char *path, int &fd);
-void unmap_log_file(char *buf_in, const int64_t buf_len, const int64_t fd);
+class ObAdminDumpBlockHelper {
+public:
+  int mmap_log_file(char *&buf_out,
+                    const int64_t buf_len,
+                    const char *path,
+                    const int64_t header_size,
+                    int &fd_out);
+  void unmap_log_file(char *buf_in,
+                      const int64_t buf_len,
+                      const int64_t fd);
+
+  int get_file_meta(const char *path,
+                    palf::LSN &start_lsn,
+                    int64_t &header_size,
+                    int64_t &body_size);
+private:
+  int parse_archive_header_(const char *buf_in,
+                            const int64_t buf_len,
+                            palf::LSN &start_lsn);
+  int parse_palf_header_(const char *buf_in,
+                         const int64_t buf_len,
+                         palf::LSN &start_lsn);
+};
 
 class ObAdminDumpBlock
 {
@@ -36,12 +57,12 @@ private:
   typedef palf::MemPalfGroupBufferIterator ObAdminDumpIterator;
 
 private:
-  int do_dump_(ObAdminDumpIterator &iter, palf::block_id_t block_id);
+  int do_dump_(ObAdminDumpIterator &iter, const char *block_namt);
   int parse_single_group_entry_(const palf::LogGroupEntry &entry,
-                                palf::block_id_t block_id,
+                                const char *block_name,
                                 palf::LSN lsn);
   int parse_single_log_entry_(const palf::LogEntry &entry,
-                              palf::block_id_t block_id,
+                              const char *block_name,
                               palf::LSN lsn);
 
 private:
@@ -58,7 +79,7 @@ private:
   typedef palf::MemPalfMetaBufferIterator ObAdminDumpIterator;
 private:
   int do_dump_(ObAdminDumpIterator &iter,
-               palf::block_id_t block_id);
+               const char *block_name);
 private:
   const char *block_path_;
   share::ObAdminMutatorStringArg str_arg_;

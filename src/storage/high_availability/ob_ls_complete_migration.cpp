@@ -1215,6 +1215,8 @@ int ObStartCompleteMigrationTask::change_member_list_()
   const int64_t start_ts = ObTimeUtility::current_time();
   common::ObAddr leader_addr;
   share::SCN ls_transfer_scn;
+  uint64_t cluster_version = 0;
+  palf::LogConfigVersion fake_config_version;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1225,14 +1227,22 @@ int ObStartCompleteMigrationTask::change_member_list_()
   } else if (ObMigrationOpType::ADD_LS_OP != ctx_->arg_.type_
       && ObMigrationOpType::MIGRATE_LS_OP != ctx_->arg_.type_) {
     //do nothing
+  } else if (FALSE_IT(cluster_version = GET_MIN_CLUSTER_VERSION())) {
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(ctx_->tenant_id_, ctx_->arg_.ls_id_, leader_addr))) {
     LOG_WARN("failed to get ls leader", K(ret), KPC(ctx_));
   } else if (OB_FAIL(OB_FAIL(get_ls_transfer_scn_(ls, ls_transfer_scn)))) {
     LOG_WARN("failed to get ls transfer scn", K(ret), KP(ls));
+  } else if (OB_FAIL(fake_config_version.generate(0, 0))) {
+    LOG_WARN("failed to generate config version", K(ret));
   } else {
     if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_) {
       const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
-      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
+      if (cluster_version < CLUSTER_VERSION_4_2_0_0) {
+        if (OB_FAIL(ls->get_log_handler()->add_member(ctx_->arg_.dst_, ctx_->arg_.paxos_replica_number_,
+            fake_config_version, change_member_list_timeout_us))) {
+          LOG_WARN("failed to add member", K(ret), KPC(ctx_));
+        }
+      } else if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
         if (OB_FAIL(add_member_(leader_addr, ls_transfer_scn))) {
           LOG_WARN("failed to add member", K(ret), K(leader_addr), K(ls_transfer_scn));
         }
@@ -1244,7 +1254,12 @@ int ObStartCompleteMigrationTask::change_member_list_()
       }
     } else if (ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_) {
       const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
-      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
+      if (cluster_version < CLUSTER_VERSION_4_2_0_0) {
+        if (OB_FAIL(ls->get_log_handler()->replace_member(ctx_->arg_.dst_, ctx_->arg_.src_,
+            fake_config_version, change_member_list_timeout_us))) {
+          LOG_WARN("failed to repalce member", K(ret), KPC(ctx_));
+        }
+      } else if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
         if (OB_FAIL(replace_member_(leader_addr, ls_transfer_scn))) {
           LOG_WARN("failed to replace member", K(ret), K(leader_addr), K(ls_transfer_scn));
         }

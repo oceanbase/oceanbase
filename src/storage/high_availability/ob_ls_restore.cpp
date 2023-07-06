@@ -904,12 +904,23 @@ int ObStartLSRestoreTask::alloc_copy_ls_view_reader_(ObICopyLSViewInfoReader *&r
 
   if (ctx_->arg_.is_leader_) {
     ObCopyLSViewInfoRestoreReader *restore_reader = nullptr;
-    if (FALSE_IT(buf = mtl_malloc(sizeof(ObCopyLSViewInfoRestoreReader), "CpLSViewRestore"))) {
+    ObIDagNet *dag_net = nullptr;
+    ObLSRestoreDagNet *ls_restore_dag_net = nullptr;
+
+    if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
+    } else if (OB_ISNULL(dag_net)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
+    } else if (ObDagNetType::DAG_NET_TYPE_RESTORE != dag_net->get_type()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
+    } else if (FALSE_IT(ls_restore_dag_net = static_cast<ObLSRestoreDagNet*>(dag_net))) {
+    } else if (FALSE_IT(buf = mtl_malloc(sizeof(ObCopyLSViewInfoRestoreReader), "CpLSViewRestore"))) {
     } else if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
     } else if (FALSE_IT(restore_reader = new (buf) ObCopyLSViewInfoRestoreReader())) {
-    } else if (OB_FAIL(restore_reader->init(ctx_->arg_.ls_id_, ctx_->arg_.restore_base_info_))) {
+    } else if (OB_FAIL(restore_reader->init(ctx_->arg_.ls_id_, ctx_->arg_.restore_base_info_, ls_restore_dag_net->get_meta_index_store()))) {
       LOG_WARN("failed to init tablet restore reader", K(ret), KPC(ctx_));
     } else {
       reader = restore_reader;
@@ -985,7 +996,6 @@ int ObStartLSRestoreTask::create_tablet_(
 void ObStartLSRestoreTask::set_tablet_to_restore(ObMigrationTabletParam &tablet_meta)
 {
   tablet_meta.ha_status_.set_restore_status(ObTabletRestoreStatus::PENDING);
-  tablet_meta.ha_status_.set_data_status(ObTabletDataStatus::INCOMPLETE);
 }
 
 int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()

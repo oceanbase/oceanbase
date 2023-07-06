@@ -20,10 +20,13 @@
 #include "storage/tx/ob_trans_service.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/das/ob_das_rpc_processor.h"
+#include "sql/das/ob_das_retry_ctrl.h"
+#include "observer/mysql/ob_query_retry_ctrl.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace observer;
 namespace sql
 {
 bool DasRefKey::operator==(const DasRefKey &other) const
@@ -269,23 +272,14 @@ int ObDASRef::execute_all_task()
           }
         }
       }
-      if (OB_FAIL(ret)) {
-        if (check_rcode_can_retry(ret, batched_tasks_.get_last_node()->get_obj()->get_ref_table_id())) {
-          ret = OB_SUCCESS;  // we ignore current error code, since all error code should be checked whether can be retried.
-        } else {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(wait_executing_tasks())) {
-            LOG_WARN("failed to wait all tasks", K(ret));
-          }
-          break;
-        }
-      }
       // wait all existing tasks to be finished
-      if (OB_SUCC(ret) && OB_FAIL(wait_executing_tasks())) {
-        LOG_WARN("failed to process all async remote tasks", K(ret));
-        if (check_rcode_can_retry(ret, batched_tasks_.get_last_node()->get_obj()->get_ref_table_id())) {
-          ret = OB_SUCCESS;
-        }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(wait_executing_tasks())) {
+        LOG_WARN("failed to process all async remote tasks", KR(ret));
+      }
+      ret = COVER_SUCC(tmp_ret);
+      if (check_rcode_can_retry(ret)) {
+        ret = OB_SUCCESS;
       }
       if (OB_SUCC(ret)) {
         // check das task status.
@@ -293,23 +287,21 @@ int ObDASRef::execute_all_task()
           ObDasAggregatedTasks* aggregated_task = curr->get_obj();
           if (aggregated_task->has_unstart_tasks()) {
             if (aggregated_task->has_failed_tasks()) {
-              if (OB_FAIL(aggregated_task->failed_tasks_can_retry())) {
-                LOG_WARN("failed das aggreagted task cannot retry.", K(ret));
+              // retry all failed tasks.
+              common::ObSEArray<ObIDASTaskOp *, 2> failed_tasks;
+              int tmp_ret = OB_SUCCESS;
+              if (OB_TMP_FAIL(aggregated_task->get_failed_tasks(failed_tasks))) {
+                LOG_WARN("failed to get failed tasks", K(ret));
+              } else if (failed_tasks.count() == 0) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get failed tasks");
               } else {
-                // retry all failed tasks.
-                common::ObSEArray<ObIDASTaskOp *, 2> failed_tasks;
-                int tmp_ret = OB_SUCCESS;
-                if (OB_TMP_FAIL(aggregated_task->get_failed_tasks(failed_tasks))) {
-                  LOG_WARN("failed to get failed tasks", K(ret));
-                } else if (failed_tasks.count() == 0) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("failed to get failed tasks");
-                } else {
-                  for (int i = 0; OB_SUCC(ret) && i < failed_tasks.count(); i++) {
-                    if (OB_FAIL(MTL(ObDataAccessService *)->retry_das_task(*this, *failed_tasks.at(i)))) {
-                      LOG_WARN("Failed to retry das task", K(ret));
-                      break;
-                    }
+                for (int i = 0; OB_SUCC(ret) && i < failed_tasks.count(); i++) {
+                  ObIDASTaskOp *failed_task = failed_tasks.at(i);
+                  if (!GCONF._enable_partition_level_retry || !failed_task->can_part_retry()) {
+                    ret = failed_task->errcode_;
+                  } else if (OB_FAIL(MTL(ObDataAccessService *)->retry_das_task(*this, *failed_tasks.at(i)))) {
+                    LOG_WARN("Failed to retry das task", K(ret));
                   }
                 }
               }
@@ -337,15 +329,16 @@ int ObDASRef::execute_all_task()
   return ret;
 }
 
-bool ObDASRef::check_rcode_can_retry(int ret, int64_t ref_table_id)
+bool ObDASRef::check_rcode_can_retry(int ret)
 {
   bool bret = false;
-  if ((is_master_changed_error(ret) ||
-      is_partition_change_error(ret) ||
-      OB_REPLICA_NOT_READABLE == ret) &&
-      GCONF._enable_partition_level_retry &&
-      !is_virtual_table(ref_table_id)) {
-    bret = true;  // we ignore current error code, since all error code should be checked whether can be retried.
+  ObDASRetryCtrl::retry_func retry_func = nullptr;
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(ObQueryRetryCtrl::get_das_retry_func(ret, retry_func))) {
+    LOG_WARN("get das retry func failed", KR(tmp_ret), KR(ret));
+  } else if (retry_func != nullptr) {
+    bret = true;
   }
   return bret;
 }
@@ -863,33 +856,6 @@ int ObDasAggregatedTasks::get_failed_tasks(common::ObSEArray<ObIDASTaskOp *, 2> 
   }
   return ret;
 }
-
-int ObDasAggregatedTasks::failed_tasks_can_retry() const
-{
-  int ret = OB_SUCCESS;
-  bool can_retry = true;
-  if (!GCONF._enable_partition_level_retry) {
-    can_retry = false;
-  }
-  ObIDASTaskOp *cur_task = nullptr;
-  DLIST_FOREACH_X(curr, failed_tasks_, can_retry) {
-    cur_task = curr->get_data();
-    ret = cur_task->get_errcode();
-    if ((is_master_changed_error(ret) ||
-        is_partition_change_error(ret) ||
-        OB_REPLICA_NOT_READABLE == ret) &&
-        cur_task->can_part_retry()) {
-    } else {
-      can_retry = false;
-    }
-  }
-#if !defined(NDEBUG)
-  if (can_retry) {
-    OB_ASSERT(OB_SUCCESS != ret);;
-  }
-#endif
-  return can_retry ? OB_SUCCESS : ret;  // return the error code that can't be retried.
-};
 
 bool ObDasAggregatedTasks::has_unstart_tasks() const
 {

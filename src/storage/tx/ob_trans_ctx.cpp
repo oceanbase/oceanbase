@@ -221,9 +221,19 @@ int ObTransCtx::defer_callback_scheduler_(const int retcode, const SCN &commit_v
   return ret;
 }
 
-void ObTransCtx::test_lock()
+void ObTransCtx::test_lock(ObTxLogCb *log_cb)
 {
+  const int64_t before_lock_time = ObClockGenerator::getRealClock();
   CtxLockGuard guard(lock_);
+  const int64_t after_lock_time = ObClockGenerator::getRealClock();
+  const int64_t log_sync_used_time = before_lock_time - log_cb->get_submit_ts();
+  const int64_t ctx_lock_wait_time = after_lock_time - before_lock_time;
+
+  if (log_sync_used_time + ctx_lock_wait_time
+      >= ObServerConfig::get_instance().clog_sync_time_warn_threshold) {
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "transaction log sync use too much time", KPC(log_cb),
+                  K(log_sync_used_time), K(ctx_lock_wait_time));
+  }
 }
 
 void ObTransCtx::generate_request_id_()

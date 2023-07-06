@@ -651,6 +651,7 @@ int ObTabletMergeCtx::inner_init_for_medium()
   int ret = OB_SUCCESS;
   const ObMediumCompactionInfo *medium_info = nullptr;
   ObGetMergeTablesResult get_merge_table_result;
+  bool is_schema_changed = false;
   if (OB_FAIL(get_merge_tables(get_merge_table_result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to get merge tables", K(ret), KPC(this), K(get_merge_table_result));
@@ -663,11 +664,12 @@ int ObTabletMergeCtx::inner_init_for_medium()
     ret = OB_EAGAIN;
     LOG_INFO("tx table is not ready. waiting for max_decided_log_ts ...",
              KR(ret), "merge_scn", get_merge_table_result.scn_range_.end_scn_);
-  } else if (OB_FAIL(init_get_medium_compaction_info(param_.merge_version_, get_merge_table_result))) { // have checked medium info inside
+  } else if (OB_FAIL(init_get_medium_compaction_info(param_.merge_version_, get_merge_table_result, is_schema_changed))) {
+    // have checked medium info inside
     LOG_WARN("failed to get medium compaction info", K(ret), KPC(this));
   } else if (OB_FAIL(get_basic_info_from_result(get_merge_table_result))) {
     LOG_WARN("failed to set basic info to ctx", K(ret), K(get_merge_table_result), KPC(this));
-  } else if (OB_FAIL(cal_major_merge_param(get_merge_table_result))) {
+  } else if (OB_FAIL(cal_major_merge_param(get_merge_table_result, is_schema_changed))) {
     LOG_WARN("fail to cal major merge param", K(ret), KPC(this));
   }
   return ret;
@@ -693,7 +695,8 @@ int ObTabletMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_table_r
 
 int ObTabletMergeCtx::init_get_medium_compaction_info(
     const int64_t medium_snapshot,
-    ObGetMergeTablesResult &get_merge_table_result)
+    ObGetMergeTablesResult &get_merge_table_result,
+    bool &is_schema_changed)
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = tablet_handle_.get_obj();
@@ -997,11 +1000,12 @@ int ObTabletMergeCtx::cal_minor_merge_param()
   return ret;
 }
 
-int ObTabletMergeCtx::cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result)
+int ObTabletMergeCtx::cal_major_merge_param(
+  const ObGetMergeTablesResult &get_merge_table_result,
+  const bool is_schema_changed)
 {
   int ret = OB_SUCCESS;
   ObSSTable *base_table = nullptr;
-  bool is_schema_changed = false;
   int64_t full_stored_col_cnt = 0;
   ObSSTableMetaHandle sstable_meta_hdl;
 
@@ -1029,14 +1033,7 @@ int ObTabletMergeCtx::cal_major_merge_param(const ObGetMergeTablesResult &get_me
     } else {
       is_full_merge_ = false;
     }
-
     const ObSSTableBasicMeta &base_meta = sstable_meta_hdl.get_sstable_meta().get_basic_meta();
-    if (sstable_meta_hdl.get_sstable_meta().get_column_count() != full_stored_col_cnt
-        || base_meta.compressor_type_ != get_schema()->get_compressor_type()
-        || (ObRowStoreType::DUMMY_ROW_STORE != base_meta.latest_row_store_type_
-          && base_meta.latest_row_store_type_ != get_schema()->row_store_type_)) {
-      is_schema_changed = true; // used to change merge_level, merge_round is from schema
-    }
 
     const int64_t meta_progressive_merge_round = base_meta.progressive_merge_round_;
     const int64_t schema_progressive_merge_round = get_schema()->get_progressive_merge_round();

@@ -23,10 +23,12 @@ public:
     obsys::ObRLockGuard guard(rwlock_);
     return trans_status_;
   }
-  OB_INLINE int get_error_code() const
+  OB_INLINE void get_trans_status(table::ObTableLoadTransStatusType &trans_status,
+                                  int &error_code) const
   {
     obsys::ObRLockGuard guard(rwlock_);
-    return error_code_;
+    trans_status = trans_status_;
+    error_code = error_code_;
   }
   int advance_trans_status(table::ObTableLoadTransStatusType trans_status);
   int set_trans_status_error(int error_code);

@@ -6556,6 +6556,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
               OZ (pl::ObUserDefinedType::deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
             }
           }
+        } else if (var_type.is_obj_type() && var_type.get_data_type() != NULL && var_type.get_data_type()->get_meta_type().is_null()) {
+          OZ (pl::ObUserDefinedType::deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
         } else {
           OZ (deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
         }

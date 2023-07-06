@@ -679,7 +679,7 @@ public:
       obrpc::ObCopyTabletInfo &tablet_info) override;
 
 private:
-  static const int64_t FETCH_LS_VIEW_INFO_TIMEOUT = 10 * 60 * 1000 * 1000; // 10min  // TODO(chongrong.th) change timeout to 1min later,
+  static const int64_t FETCH_LS_VIEW_INFO_TIMEOUT = 60 * 1000 * 1000; // 1min
   bool is_inited_;
   ObLSMetaPackage ls_meta_;
   ObStorageStreamRpcReader<obrpc::OB_HA_FETCH_LS_VIEW> rpc_reader_;
@@ -695,7 +695,8 @@ public:
   virtual ~ObCopyLSViewInfoRestoreReader() {}
   int init(
       const share::ObLSID &ls_id,
-      const ObRestoreBaseInfo &restore_base_info);
+      const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper *meta_index_store);
 
   Type get_type() const override
   {
@@ -707,12 +708,17 @@ public:
 
   int get_next_tablet_info(
       obrpc::ObCopyTabletInfo &tablet_info) override;
+private:
+  int init_for_4_1_x_(const share::ObLSID &ls_id,
+      const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store);
 
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObExternTabletMetaReader reader_;
+  ObCopyTabletInfoRestoreReader reader_41x_; // only used by 4.1
 
   DISALLOW_COPY_AND_ASSIGN(ObCopyLSViewInfoRestoreReader);
 };

@@ -352,6 +352,7 @@ ObMediumCompactionInfo::ObMediumCompactionInfo()
     compaction_type_(COMPACTION_TYPE_MAX),
     contain_parallel_range_(false),
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
+    is_schema_changed_(false),
     reserved_(0),
     cluster_id_(0),
     data_version_(0),
@@ -412,6 +413,9 @@ void ObMediumCompactionInfo::reset()
   info_ = 0;
   medium_compat_version_ = 0;
   compaction_type_ = COMPACTION_TYPE_MAX;
+  contain_parallel_range_ = false;
+  medium_merge_reason_ = ObAdaptiveMergePolicy::NONE;
+  is_schema_changed_ = false;
   cluster_id_ = 0;
   medium_snapshot_ = 0;
   last_medium_snapshot_ = 0;
@@ -540,8 +544,8 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
     J_OBJ_START();
     J_KV(K_(cluster_id), K_(medium_compat_version), K_(data_version),
       "compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_), K_(cluster_id),
-      K_(medium_snapshot), K_(last_medium_snapshot), K_(storage_schema),
+      "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
+      K_(is_schema_changed), K_(cluster_id), K_(medium_snapshot), K_(last_medium_snapshot), K_(storage_schema),
       K_(contain_parallel_range), K_(parallel_merge_info));
     J_OBJ_END();
   }

@@ -364,6 +364,20 @@ int ObBackupPath::join_data_info_turn(const share::ObBackupDataType &type, const
   return ret;
 }
 
+int ObBackupPath::join_data_info_turn_v_4_1_x(const int64_t turn_id)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%s_%ld", OB_STR_DATA_INTO_TURN, turn_id))) {
+    LOG_WARN("failed to join macro block data file", K(ret), K(turn_id), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
 int ObBackupPath::join_meta_info_turn_and_retry(const int64_t turn_id, const int64_t retry_id)
 {
   int ret = OB_SUCCESS;
@@ -1290,6 +1304,46 @@ int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackup
     LOG_WARN("fail to get storage info", K(ret));
   } else if (OB_FAIL(backup_set_dest.set(path.get_ptr(), storage_info_buf))) {
     LOG_WARN("fail to set backup set dest", K(ret), K(path), K(storage_info_buf));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/xxx_xxx_turn_1_retry_0/meta_index.obbak
+int ObBackupPathUtilV_4_1::get_tenant_meta_index_backup_path(const share::ObBackupDest &backup_set_dest,
+    const ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
+    const bool is_sec_meta, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_data_info_dir_path(backup_set_dest, turn_id, path))) {
+    LOG_WARN("failed to get ls info dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_tenant_meta_index_file(backup_data_type, retry_id, is_sec_meta))) {
+    LOG_WARN("failed to join tenant macro range index file", K(ret), K(backup_data_type));
+  }
+  return ret;
+}
+// file:///obbackup/backup_set_1_full/infos/data_info_turn_1/
+int ObBackupPathUtilV_4_1::get_ls_info_data_info_dir_path(const share::ObBackupDest &backup_set_dest,
+    const int64_t turn_id, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBackupPathUtil::get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(ObString::make_string("infos"), ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join data", K(ret));
+  } else if (OB_FAIL(backup_path.join_data_info_turn_v_4_1_x(turn_id))) {
+    LOG_WARN("failed to join info turn", K(ret));
+  }
+  return ret;
+}
+// file:///obbackup/backup_set_1_full/infos/data_info_turn_1/tablet_to_ls_info.obbak
+int ObBackupPathUtilV_4_1::get_backup_data_tablet_ls_info_path(const share::ObBackupDest &backup_set_dest,
+    const uint64_t turn_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_data_info_dir_path(backup_set_dest, turn_id, path))) {
+    LOG_WARN("failed to get ls info data info dir path", K(ret));
+  } else if (OB_FAIL(path.join(OB_STR_TABLET_LOG_STREAM_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join tablet_log_stream_info", K(ret));
   }
   return ret;
 }
