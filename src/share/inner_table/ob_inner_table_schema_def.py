@@ -5706,7 +5706,48 @@ def_table_schema(
 # 470 : __all_mview_refresh_stmt_stats
 # 471 : __all_dbms_lock_allocated
 # 472 : __wr_control
-# 473 : __all_tenant_event_history
+
+def_table_schema(
+  owner = 'wanhong.wwh',
+  table_name = '__all_tenant_event_history',
+  table_id = '473',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+    ('tenant_id', 'int', 'false', 'OB_INVALID_TENANT_ID'),
+    ('gmt_create', 'timestamp:6', 'false')
+  ],
+
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('module', 'varchar:MAX_TENANT_EVENT_NAME_LENGTH', 'false', ''),
+    ('event', 'varchar:MAX_TENANT_EVENT_NAME_LENGTH', 'false', ''),
+    ('name1', 'varchar:MAX_TENANT_EVENT_NAME_LENGTH', 'true'),
+    ('value1', 'longtext', 'true'),
+    ('name2', 'varchar:MAX_TENANT_EVENT_NAME_LENGTH', 'true'),
+    ('value2', 'longtext', 'true'),
+    ('name3', 'varchar:MAX_TENANT_EVENT_NAME_LENGTH', 'true'),
+    ('value3', 'longtext', 'true'),
+    ('name4', 'varchar:MAX_TENANT_EVENT_NAME_LENGTH', 'true'),
+    ('value4', 'longtext', 'true'),
+    ('name5', 'varchar:MAX_TENANT_EVENT_NAME_LENGTH', 'true'),
+    ('value5', 'longtext', 'true'),
+    ('name6', 'varchar:MAX_TENANT_EVENT_NAME_LENGTH', 'true'),
+    ('value6', 'longtext', 'true'),
+    ('extra_info', 'longtext', 'true'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('svr_port', 'int', 'true'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('cost_time', 'int', 'true'),
+    ('ret_code', 'int', 'true'),
+    ('error_msg', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
+  ],
+)
+
+#
 # 余留位置
 
 ################################################################################
@@ -12222,7 +12263,14 @@ def_table_schema(
 # 12412: __all_virtual_mview_refresh_change_stats
 # 12413: __all_virtual_mview_refresh_stmt_stats
 # 12414: __all_virtual_wr_control
-# 12415: __all_virtual_tenant_event_history
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12415',
+  table_name = '__all_virtual_tenant_event_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_tenant_event_history']))
+
+#
 # 12416: __all_virtual_balance_task_helper
 # 余留位置
 #
@@ -12592,10 +12640,11 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 # 15394: __all_mview_refresh_stats
 # 15395: __all_mview_refresh_change_stats
 # 15396: __all_mview_refresh_stmt_stats
-
 # 15397: __all_dbms_lock_allocated
 # 15398: __all_virtual_wr_control
-# 15399: __all_virtual_tenant_event_history
+
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keywords['__all_virtual_tenant_event_history']))
+
 # 15400: __all_virtual_balance_task_helper
 # 余留位置
 
@@ -27776,8 +27825,73 @@ def_table_schema(
 # 21444: CDB_WR_CONTROL
 # 21445: DBA_OB_LS_HISTORY
 # 21446: CDB_OB_LS_HISTORY
-# 21447: DBA_OB_TENANT_EVENT_HISTORY
-# 21448: CDB_OB_TENANT_EVENT_HISTORY
+
+def_table_schema(
+  owner           = 'wanhong.wwh',
+  table_name      = 'DBA_OB_TENANT_EVENT_HISTORY',
+  table_id        = '21447',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    gmt_create AS `TIMESTAMP`,
+    MODULE,
+    EVENT,
+    NAME1, VALUE1,
+    NAME2, VALUE2,
+    NAME3, VALUE3,
+    NAME4, VALUE4,
+    NAME5, VALUE5,
+    NAME6, VALUE6,
+    EXTRA_INFO,
+    SVR_IP,
+    SVR_PORT,
+    TRACE_ID,
+    COST_TIME,
+    RET_CODE,
+    ERROR_MSG
+  FROM OCEANBASE.__ALL_VIRTUAL_TENANT_EVENT_HISTORY
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'wanhong.wwh',
+  table_name      = 'CDB_OB_TENANT_EVENT_HISTORY',
+  table_id        = '21448',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+    TENANT_ID,
+    gmt_create AS `TIMESTAMP`,
+    MODULE,
+    EVENT,
+    NAME1, VALUE1,
+    NAME2, VALUE2,
+    NAME3, VALUE3,
+    NAME4, VALUE4,
+    NAME5, VALUE5,
+    NAME6, VALUE6,
+    EXTRA_INFO,
+    SVR_IP,
+    SVR_PORT,
+    TRACE_ID,
+    COST_TIME,
+    RET_CODE,
+    ERROR_MSG
+  FROM OCEANBASE.__ALL_VIRTUAL_TENANT_EVENT_HISTORY
+  """.replace("\n", " ")
+)
+
+#
 # 余留位置
 
 ################################################################################
@@ -45598,7 +45712,43 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
 # 25256: DBMS_LOCK_ALLOCATED
 # 25257: DBA_WR_CONTROL
 # 25258: DBA_OB_LS_HISTORY
-# 25259: DBA_OB_TENANT_EVENT_HISTORY
+
+def_table_schema(
+  owner           = 'wanhong.wwh',
+  table_name      = 'DBA_OB_TENANT_EVENT_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25259',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    gmt_create AS "TIMESTAMP",
+    MODULE,
+    EVENT,
+    NAME1, VALUE1,
+    NAME2, VALUE2,
+    NAME3, VALUE3,
+    NAME4, VALUE4,
+    NAME5, VALUE5,
+    NAME6, VALUE6,
+    EXTRA_INFO,
+    SVR_IP,
+    SVR_PORT,
+    TRACE_ID,
+    COST_TIME,
+    RET_CODE,
+    ERROR_MSG
+  FROM SYS.ALL_VIRTUAL_TENANT_EVENT_HISTORY
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+
+#
 # 余留位置
 
 #### End Data Dictionary View
