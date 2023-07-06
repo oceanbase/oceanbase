@@ -1,39 +1,65 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #ifndef OCEANBASE_COMMON_COMPRESS_ZLIB_LITE_COMPRESSOR_H_
 #define OCEANBASE_COMMON_COMPRESS_ZLIB_LITE_COMPRESSOR_H_
 
 #include "lib/compress/ob_compressor.h"
-#include "zlib_lite_src/zconf.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common 
+{
 namespace ZLIB_LITE
 {
 #define OB_PUBLIC_API __attribute__((visibility("default")))
 
 class OB_PUBLIC_API ObZlibLiteCompressor : public ObCompressor {
 public:
-  int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
-      int64_t& dst_data_size);
-
-  int decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
-      int64_t& dst_data_size);
-
-  const char* get_compressor_name() const;
-
-  int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const;
-  virtual ObCompressorType get_compressor_type() const;
   explicit ObZlibLiteCompressor();
   virtual ~ObZlibLiteCompressor();
+
+  int  init();
+  void deinit();
+  
+  int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
+        int64_t& dst_data_size) override;
+
+  int decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
+        int64_t& dst_data_size) override;
+
+  const char* get_compressor_name() const override;
+
+  int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const override;
+  virtual ObCompressorType get_compressor_type() const override;
+
 private:
-  static const char* compressor_name;
   int zlib_lite_compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size);
   int zlib_lite_decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size);
+
   //has the same function as the compress and uncompress functions in the zlib source code.
-  int zlib_compress(Bytef *dest, uLongf *destLen, const Bytef *source, uLong sourceLen);
-  int zlib_decompress(Bytef *dest, uLongf *destLen, const Bytef *source, uLong sourceLen);
+  // return zlib error code, not oceanbase error code
+  int zlib_compress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
+  int zlib_decompress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
+
+private:
+  // If compiled with qpl but it is disabled, or there is no usdm_drv kernel module,
+  // the qpl cannot work
+  bool qpl_runtime_enabled_;
+  
   //zlib compress level,default is 1.
-  static constexpr auto compress_level = 1;
+  static constexpr int compress_level = 1;
+
   //zlib window bits,in order to compress and decompress each other with the qpl algorithm, this parameter can only be -12.
-  static constexpr auto window_bits = -12;
+  static constexpr int window_bits = -12;
 };
 }
 #undef OB_PUBLIC_API
