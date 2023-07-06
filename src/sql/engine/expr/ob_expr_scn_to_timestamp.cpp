@@ -79,8 +79,8 @@ int calc_scn_to_timestamp_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_
         LOG_WARN("tz_info_wrap init_time_zone fail", KR(ret), K(sys_time_zone));
   } else {
     uint64_t in_value = 0;
+    cur_tz_info = tz_info_wrap.get_time_zone_info();
     if (lib::is_oracle_mode()) {
-      cur_tz_info = tz_info_wrap.get_time_zone_info();
       const number::ObNumber scn_nmb(usec_datum->get_number());
       if (OB_FAIL(scn_nmb.extract_valid_uint64_with_trunc(in_value))) {
         LOG_WARN("extract_valid_uint64_with_trunc failed", K(ret), K(scn_nmb));
