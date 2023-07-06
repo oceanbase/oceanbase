@@ -100,7 +100,7 @@ int ObBlockSampleSSTableEndkeyIterator::open(
     if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
-
+    STORAGE_LOG(TRACE, "open iter", K(ret), K(macro_count_), K(micro_count_), K(sstable));
   }
 
   return ret;
@@ -372,7 +372,11 @@ int ObBlockSampleRangeIterator::get_next_range(const ObDatumRange *&range)
     STORAGE_LOG(WARN, "Fail to deep copy to current key", K(ret), KPC(min_iter));
   } else if (FALSE_IT(generate_cur_range(curr_key_.key_))) {
   } else if (OB_FAIL(move_endkey_iter(*min_iter))) {
-    STORAGE_LOG(WARN, "Fail to move forward endkey iterator", K(ret), K(*min_iter));
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      STORAGE_LOG(WARN, "Fail to move forward endkey iterator", K(ret), K(*min_iter));
+    }
   }
   if (OB_SUCC(ret)) {
     range = &curr_range_;
@@ -451,18 +455,23 @@ int ObBlockSampleRangeIterator::calculate_level_and_batch_size(const double perc
     micro_count += endkey_iters_[i]->get_micro_count();
   }
   if (macro_count > macro_threshold) {
-    // macro level
+    // switch to macro level, reset previous info
+    curr_key_.reset();
+    endkey_heap_.reset();
     batch_size_ = macro_count * percent / 100 / EXPECTED_OPEN_RANGE_NUM;
     for (int64_t i = 0 ; OB_SUCC(ret) && i < endkey_iters_.count() ; ++i) {
-      if (OB_FAIL(endkey_iters_[i]->upgrade_to_macro(*sample_range_))) {
+      ObBlockSampleSSTableEndkeyIterator *iter = endkey_iters_[i];
+      if (OB_FAIL(iter->upgrade_to_macro(*sample_range_))) {
         STORAGE_LOG(WARN, "Fail to upgrade to macro level", K(ret));
+      } else if (!iter->is_reach_end() && OB_FAIL(endkey_heap_.push(iter))) {
+        STORAGE_LOG(WARN, "Fail to push endkey heap", K(ret), K(iter), K(endkey_heap_));
       }
     }
   } else {
     // micro level
    batch_size_ = micro_count * percent / 100 / EXPECTED_OPEN_RANGE_NUM;
   }
-
+  STORAGE_LOG(TRACE, "calculate", K(ret), K(macro_count), K(micro_count), K(macro_threshold), K(batch_size_));
   return ret;
 }
 
@@ -550,7 +559,9 @@ int ObBlockSampleRangeIterator::move_endkey_iter(ObBlockSampleSSTableEndkeyItera
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObBlockSampleRangeIterator is not inited", K(ret), KP(allocator_));
   } else if (OB_FAIL(iter.move_forward())) {
-    STORAGE_LOG(WARN, "Fail to move forward endkey iter", K(ret), K(iter));
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      STORAGE_LOG(WARN, "Fail to move forward endkey iter", K(ret), K(iter));
+    }
   } else if (!iter.is_reach_end() && OB_FAIL(endkey_heap_.push(&iter))) {
     STORAGE_LOG(WARN, "Fail to push endkey heap", K(ret), K(iter), K(endkey_heap_));
   }
