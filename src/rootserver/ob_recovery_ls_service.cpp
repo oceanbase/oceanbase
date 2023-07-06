@@ -66,6 +66,10 @@ ERRSIM_POINT_DEF(ERRSIM_END_TRANS_ERROR);
       ret_code = OB_PASSWORD_WRONG;                                            \
     case -ER_CONNECT_FAILED:                                                   \
       ret_code = OB_CONNECT_ERROR;                                             \
+    case OB_IN_STOP_STATE:                                                     \
+      ret_code = OB_IN_STOP_STATE;                                             \
+    default:                                                                   \
+      ret_code = ret;                                                          \
   }                                                                            \
   ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",              \
     "tenant_id", tenant_id_, K(ret),                                           \
