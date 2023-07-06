@@ -810,7 +810,8 @@ public:
                                      common::ObObj &val);
   const share::ObBasicSysVar *get_sys_var(const int64_t idx) const;
   int64_t get_sys_var_count() const { return share::ObSysVarFactory::ALL_SYS_VARS_COUNT; }
-  int load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant);
+  // deserialized scene need use base_value as baseline.
+  int load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
   int load_default_configs_in_pc();
   int update_query_sensitive_system_variable(share::schema::ObSchemaGetterGuard &schema_guard);
   int process_variable_for_tenant(const common::ObString &var, common::ObObj &val);
@@ -1348,8 +1349,8 @@ private:
                              common::ObObj *dest_val_ptr);
   inline int store_query_string_(const ObString &stmt);
   inline int set_session_state_(ObSQLSessionState state);
-  //写入系统变量的默认值
-  int init_system_variables(const bool print_info_log, const bool is_sys_tenant);
+  //写入系统变量的默认值, deserialized scene need use base_value as baseline.
+  int init_system_variables(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
 protected:
   //============注意：下面的成员变量使用时，需要考虑并发控制================================
   struct MultiThreadData

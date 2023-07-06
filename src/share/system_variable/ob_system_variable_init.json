@@ -2,7 +2,8 @@
   "auto_increment_increment": {
     "id": 0,
     "name": "auto_increment_increment",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "uint",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -16,7 +17,8 @@
   "auto_increment_offset": {
     "id": 1,
     "name": "auto_increment_offset",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "uint",
     "info": " ",
     "flags": "GLOBAL | SESSION",
@@ -30,7 +32,8 @@
   "autocommit": {
     "id": 2,
     "name": "autocommit",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -42,7 +45,8 @@
   "character_set_client": {
     "id": 3,
     "name": "character_set_client",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The character set in which statements are sent by the client",
     "flags": "GLOBAL | SESSION | NULL | NEED_SERIALIZE",
@@ -59,7 +63,8 @@
   "character_set_connection": {
     "id": 4,
     "name": "character_set_connection",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The character set which should be translated to after receiving the statement",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE | NULL",
@@ -76,7 +81,8 @@
   "character_set_database": {
     "id": 5,
     "name": "character_set_database",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The character set of the default database",
     "flags": "GLOBAL | SESSION | NULL | MYSQL_ONLY",
@@ -93,7 +99,8 @@
   "character_set_results": {
     "id": 6,
     "name": "character_set_results",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The character set which server should translate to before shipping result sets or error message back to the client",
     "flags": "GLOBAL | SESSION | NULL | INFLUENCE_PLAN",
@@ -110,7 +117,8 @@
   "character_set_server": {
     "id": 7,
     "name": "character_set_server",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The server character set",
     "flags": "GLOBAL | SESSION | NULL | MYSQL_ONLY",
@@ -127,7 +135,8 @@
   "character_set_system": {
     "id": 8,
     "name": "character_set_system",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The character set used by the server for storing identifiers.",
     "flags": "GLOBAL | SESSION | READONLY",
@@ -143,7 +152,8 @@
   "collation_connection": {
     "id": 9,
     "name": "collation_connection",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The collation which the server should translate to after receiving the statement",
     "flags": "GLOBAL | SESSION | NULL | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -160,7 +170,8 @@
   "collation_database": {
     "id": 10,
     "name": "collation_database",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The collation of the default database",
     "flags": "GLOBAL | SESSION | NULL | NEED_SERIALIZE | MYSQL_ONLY",
@@ -177,7 +188,8 @@
   "collation_server": {
     "id": 11,
     "name": "collation_server",
-    "value": "45",
+    "default_value": "45",
+    "base_value": "45",
     "data_type": "int",
     "info": "The server collation",
     "flags": "GLOBAL | SESSION | NULL | NEED_SERIALIZE | MYSQL_ONLY",
@@ -194,7 +206,8 @@
   "interactive_timeout": {
     "id": 12,
     "name": "interactive_timeout",
-    "value": "28800",
+    "default_value": "28800",
+    "base_value": "28800",
     "data_type": "int",
     "info": "The number of seconds the server waits for activity on an interactive connection before closing it.",
     "flags": "GLOBAL | SESSION",
@@ -208,7 +221,8 @@
   "last_insert_id": {
     "id": 13,
     "name": "last_insert_id",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": " ",
     "flags": "SESSION",
@@ -224,7 +238,8 @@
   "max_allowed_packet": {
     "id": 14,
     "name": "max_allowed_packet",
-    "value": "4194304",
+    "default_value": "4194304",
+    "base_value": "4194304",
     "data_type": "int",
     "info": "Max packet length to send to or receive from the server",
     "flags": "GLOBAL | SESSION | SESSION_READONLY | NEED_SERIALIZE",
@@ -239,7 +254,8 @@
   "sql_mode": {
     "id": 15,
     "name": "sql_mode",
-    "value": "12582912",
+    "default_value": "12582912",
+    "base_value": "12582912",
     "data_type": "uint",
     "on_update_func": "ObSysVarOnUpdateFuncs::update_sql_mode",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_sql_mode",
@@ -257,7 +273,8 @@
   "time_zone": {
     "id": 16,
     "name": "time_zone",
-    "value": "+08:00",
+    "default_value": "+08:00",
+    "base_value": "+08:00",
     "data_type": "varchar",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -271,7 +288,8 @@
   "tx_isolation": {
     "id": 17,
     "name": "tx_isolation",
-    "value": "READ-COMMITTED",
+    "default_value": "READ-COMMITTED",
+    "base_value": "READ-COMMITTED",
     "data_type": "varchar",
     "on_update_func": "ObSysVarOnUpdateFuncs::update_tx_isolation",
     "session_special_update_func": "ObSysVarSessionSpecialUpdateFuncs::update_tx_isolation",
@@ -287,7 +305,8 @@
   "version_comment": {
     "id": 18,
     "name": "version_comment",
-    "value": "OceanBase 1.0.0",
+    "default_value": "OceanBase 1.0.0",
+    "base_value": "OceanBase 1.0.0",
     "data_type": "varchar",
     "info": " ",
     "flags": "READONLY | GLOBAL",
@@ -299,7 +318,8 @@
   "wait_timeout": {
     "id": 19,
     "name": "wait_timeout",
-    "value": "28800",
+    "default_value": "28800",
+    "base_value": "28800",
     "data_type": "int",
     "info": "The number of seconds the server waits for activity on a noninteractive connection before closing it.",
     "flags": "GLOBAL | SESSION",
@@ -313,7 +333,8 @@
   "binlog_row_image": {
     "id": 20,
     "name": "binlog_row_image",
-    "value": "2",
+    "default_value": "2",
+    "base_value": "2",
     "data_type": "enum",
     "info": "control row cells to logged",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -330,7 +351,8 @@
   "character_set_filesystem": {
     "id": 21,
     "name": "character_set_filesystem",
-    "value": "63",
+    "default_value": "63",
+    "base_value": "63",
     "data_type": "int",
     "info": " ",
     "flags": "GLOBAL | SESSION | NULL",
@@ -347,7 +369,8 @@
   "connect_timeout": {
     "id": 22,
     "name": "connect_timeout",
-    "value": "10",
+    "default_value": "10",
+    "base_value": "10",
     "data_type": "int",
     "info": " ",
     "flags": "GLOBAL",
@@ -361,7 +384,8 @@
   "datadir": {
     "id": 23,
     "name": "datadir",
-    "value": "/usr/local/mysql/data/",
+    "default_value": "/usr/local/mysql/data/",
+    "base_value": "/usr/local/mysql/data/",
     "data_type": "varchar",
     "info": " ",
     "flags": "READONLY | GLOBAL",
@@ -373,7 +397,8 @@
   "debug_sync": {
     "id": 24,
     "name": "debug_sync",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "Debug sync facility",
     "flags": "SESSION | INVISIBLE",
@@ -385,7 +410,8 @@
   "div_precision_increment": {
     "id": 25,
     "name": "div_precision_increment",
-    "value": "4",
+    "default_value": "4",
+    "base_value": "4",
     "data_type": "int",
     "info": " ",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -399,7 +425,8 @@
   "explicit_defaults_for_timestamp": {
     "id": 26,
     "name": "explicit_defaults_for_timestamp",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "whether use traditional mode for timestamp",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -411,7 +438,8 @@
   "group_concat_max_len": {
     "id": 27,
     "name": "group_concat_max_len",
-    "value": "1024",
+    "default_value": "1024",
+    "base_value": "1024",
     "data_type": "uint",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -425,7 +453,8 @@
   "identity": {
     "id": 28,
     "name": "identity",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "This variable is a synonym for the last_insert_id variable. It exists for compatibility with other database systems.",
     "flags": "SESSION",
@@ -441,7 +470,8 @@
   "lower_case_table_names": {
     "id": 29,
     "name": "lower_case_table_names",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "int",
     "info": "how table database names are stored and compared, 0 means stored using the lettercase in the CREATE_TABLE or CREATE_DATABASE statement. Name comparisons are case sensitive; 1 means that table and database names are stored in lowercase abd name comparisons are not case sensitive.",
     "flags": "GLOBAL | READONLY | NEED_SERIALIZE",
@@ -455,7 +485,8 @@
   "net_read_timeout": {
     "id": 30,
     "name": "net_read_timeout",
-    "value": "30",
+    "default_value": "30",
+    "base_value": "30",
     "data_type": "int",
     "info": " ",
     "flags": "GLOBAL | SESSION",
@@ -469,7 +500,8 @@
   "net_write_timeout": {
     "id": 31,
     "name": "net_write_timeout",
-    "value": "60",
+    "default_value": "60",
+    "base_value": "60",
     "data_type": "int",
     "info": " ",
     "flags": "GLOBAL | SESSION",
@@ -483,7 +515,8 @@
   "read_only": {
     "id": 32,
     "name": "read_only",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": " ",
     "flags": "GLOBAL | INFLUENCE_PLAN",
@@ -495,7 +528,8 @@
   "sql_auto_is_null": {
     "id": 33,
     "name": "sql_auto_is_null",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": " ",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -507,7 +541,8 @@
   "sql_select_limit": {
     "id": 34,
     "name": "sql_select_limit",
-    "value": "9223372036854775807",
+    "default_value": "9223372036854775807",
+    "base_value": "9223372036854775807",
     "data_type": "int",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -521,7 +556,8 @@
   "timestamp": {
     "id": 35,
     "name": "timestamp",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "numeric",
     "info": " ",
     "flags": "SESSION",
@@ -535,7 +571,8 @@
   "tx_read_only": {
     "id": 36,
     "name": "tx_read_only",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": " ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -551,7 +588,8 @@
   "version": {
     "id": 37,
     "name": "version",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": " ",
     "flags": "GLOBAL",
@@ -563,7 +601,8 @@
   "sql_warnings": {
     "id": 38,
     "name": "sql_warnings",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": " ",
     "flags": "GLOBAL | SESSION",
@@ -575,7 +614,8 @@
   "max_user_connections": {
     "id": 39,
     "name": "max_user_connections",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": " ",
     "flags": "GLOBAL | SESSION | SESSION_READONLY",
@@ -590,7 +630,8 @@
   "init_connect": {
     "id": 40,
     "name": "init_connect",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": " ",
     "flags": "GLOBAL",
@@ -602,7 +643,8 @@
   "license": {
     "id": 41,
     "name": "license",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": " ",
     "flags": "READONLY | GLOBAL",
@@ -614,7 +656,8 @@
   "net_buffer_length": {
     "id": 42,
     "name": "net_buffer_length",
-    "value": "16384",
+    "default_value": "16384",
+    "base_value": "16384",
     "data_type": "int",
     "info": "Buffer length for TCP/IP and socket communication",
     "flags": "GLOBAL | SESSION | SESSION_READONLY",
@@ -629,7 +672,8 @@
   "system_time_zone": {
     "id": 43,
     "name": "system_time_zone",
-    "value": "CST",
+    "default_value": "CST",
+    "base_value": "CST",
     "data_type": "varchar",
     "info": "The server system time zone",
     "flags": "READONLY | GLOBAL | NEED_SERIALIZE",
@@ -641,7 +685,8 @@
   "query_cache_size": {
     "id": 44,
     "name": "query_cache_size",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "The memory allocated to store results from old queries(not used yet)",
     "flags": "GLOBAL | MYSQL_ONLY",
@@ -655,7 +700,8 @@
   "query_cache_type": {
     "id": 45,
     "name": "query_cache_type",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "OFF = Do not cache or retrieve results. ON = Cache all results except SELECT SQL_NO_CACHE ... queries. DEMAND = Cache only SELECT SQL_CACHE ... queries(not used yet)",
     "flags": "GLOBAL | MYSQL_ONLY | READONLY",
@@ -672,7 +718,8 @@
   "sql_quote_show_create": {
     "id": 46,
     "name": "sql_quote_show_create",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": " ",
     "flags": "GLOBAL | SESSION",
@@ -684,7 +731,8 @@
   "max_sp_recursion_depth": {
     "id": 47,
     "name": "max_sp_recursion_depth",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "int",
     "info": "The number of times that any given stored procedure may be called recursively.",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -698,7 +746,8 @@
   "sql_safe_updates": {
     "id": 48,
     "name": "sql_safe_updates",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "enable mysql sql safe updates",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE | MYSQL_ONLY",
@@ -710,7 +759,8 @@
   "concurrent_insert": {
     "id": 49,
     "name": "concurrent_insert",
-    "value": "AUTO",
+    "default_value": "AUTO",
+    "base_value": "AUTO",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -722,7 +772,8 @@
   "default_authentication_plugin": {
     "id": 50,
     "name": "default_authentication_plugin",
-    "value": "mysql_native_password",
+    "default_value": "mysql_native_password",
+    "base_value": "mysql_native_password",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -734,7 +785,8 @@
   "disabled_storage_engines": {
     "id": 51,
     "name": "disabled_storage_engines",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -746,7 +798,8 @@
   "error_count": {
     "id": 52,
     "name": "error_count",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "",
     "flags": "SESSION | MYSQL_ONLY",
@@ -758,7 +811,8 @@
   "general_log": {
     "id": 53,
     "name": "general_log",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -770,7 +824,8 @@
   "have_openssl": {
     "id": 54,
     "name": "have_openssl",
-    "value": "YES",
+    "default_value": "YES",
+    "base_value": "YES",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -782,7 +837,8 @@
   "have_profiling": {
     "id": 55,
     "name": "have_profiling",
-    "value": "YES",
+    "default_value": "YES",
+    "base_value": "YES",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -794,7 +850,8 @@
   "have_ssl": {
     "id": 56,
     "name": "have_ssl",
-    "value": "YES",
+    "default_value": "YES",
+    "base_value": "YES",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -806,7 +863,8 @@
   "hostname": {
     "id": 57,
     "name": "hostname",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -818,7 +876,8 @@
   "lc_messages": {
     "id": 58,
     "name": "lc_messages",
-    "value": "en_US",
+    "default_value": "en_US",
+    "base_value": "en_US",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -830,7 +889,8 @@
   "local_infile": {
     "id": 59,
     "name": "local_infile",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -842,7 +902,8 @@
   "lock_wait_timeout": {
     "id": 60,
     "name": "lock_wait_timeout",
-    "value": "31536000",
+    "default_value": "31536000",
+    "base_value": "31536000",
     "data_type": "int",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -856,7 +917,8 @@
   "long_query_time": {
     "id": 61,
     "name": "long_query_time",
-    "value": "10",
+    "default_value": "10",
+    "base_value": "10",
     "data_type": "numeric",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -869,7 +931,8 @@
   "max_connections": {
     "id": 62,
     "name": "max_connections",
-    "value": "2147483647",
+    "default_value": "2147483647",
+    "base_value": "2147483647",
     "data_type": "uint",
     "info": "",
     "flags": "GLOBAL | MYSQL_ONLY",
@@ -883,7 +946,8 @@
   "max_execution_time": {
     "id": 63,
     "name": "max_execution_time",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "int",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -895,7 +959,8 @@
   "protocol_version": {
     "id": 64,
     "name": "protocol_version",
-    "value": "10",
+    "default_value": "10",
+    "base_value": "10",
     "data_type": "int",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -907,7 +972,8 @@
   "server_id": {
     "id": 65,
     "name": "server_id",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "int",
     "info": "This variable specifies the server ID(not used yet, only sys var compatible)",
     "flags": "GLOBAL | MYSQL_ONLY",
@@ -921,7 +987,8 @@
   "ssl_ca": {
     "id": 66,
     "name": "ssl_ca",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -933,7 +1000,8 @@
   "ssl_capath": {
     "id": 67,
     "name": "ssl_capath",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -945,7 +1013,8 @@
   "ssl_cert": {
     "id": 68,
     "name": "ssl_cert",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -957,7 +1026,8 @@
   "ssl_cipher": {
     "id": 69,
     "name": "ssl_cipher",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -969,7 +1039,8 @@
   "ssl_crl": {
     "id": 70,
     "name": "ssl_crl",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -981,7 +1052,8 @@
   "ssl_crlpath": {
     "id": 71,
     "name": "ssl_crlpath",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -993,7 +1065,8 @@
   "ssl_key": {
     "id": 72,
     "name": "ssl_key",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1005,7 +1078,8 @@
   "time_format": {
     "id": 73,
     "name": "time_format",
-    "value": "%H:%i:%s",
+    "default_value": "%H:%i:%s",
+    "base_value": "%H:%i:%s",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1017,7 +1091,8 @@
   "tls_version": {
     "id": 74,
     "name": "tls_version",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "TLSv1,TLSv1.1,TLSv1.2",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1029,7 +1104,8 @@
   "tmp_table_size": {
     "id": 75,
     "name": "tmp_table_size",
-    "value": "16777216",
+    "default_value": "16777216",
+    "base_value": "16777216",
     "data_type": "uint",
     "info": "",
     "flags": "GLOBAL | SESSION",
@@ -1043,7 +1119,8 @@
   "tmpdir": {
     "id": 76,
     "name": "tmpdir",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1055,7 +1132,8 @@
   "unique_checks": {
     "id": 77,
     "name": "unique_checks",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1067,7 +1145,8 @@
   "version_compile_machine": {
     "id": 78,
     "name": "version_compile_machine",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1079,7 +1158,8 @@
   "version_compile_os": {
     "id": 79,
     "name": "version_compile_os",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1091,7 +1171,8 @@
   "warning_count": {
     "id": 80,
     "name": "warning_count",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "",
     "flags": "SESSION | MYSQL_ONLY",
@@ -1103,7 +1184,8 @@
   "session_track_schema": {
     "id": 81,
     "name": "session_track_schema",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "specifies whether return schema change info in ok packet",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1115,7 +1197,8 @@
   "session_track_system_variables": {
     "id": 82,
     "name": "session_track_system_variables",
-    "value": "time_zone, autocommit, character_set_client, character_set_results, character_set_connection",
+    "default_value": "time_zone, autocommit, character_set_client, character_set_results, character_set_connection",
+    "base_value": "time_zone, autocommit, character_set_client, character_set_results, character_set_connection",
     "data_type": "varchar",
     "info": "specifies whether return system variables change info in ok packet",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1127,7 +1210,8 @@
   "session_track_state_change": {
     "id": 83,
     "name": "session_track_state_change",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "specifies whether return session state change info in ok packet",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1139,7 +1223,8 @@
   "have_query_cache": {
     "id": 84,
     "name": "have_query_cache",
-    "value": "NO",
+    "default_value": "NO",
+    "base_value": "NO",
     "data_type": "varchar",
     "info": "Whether to have query cache or not(not used yet, only compatible)",
     "flags": "GLOBAL | MYSQL_ONLY | READONLY",
@@ -1151,7 +1236,8 @@
   "query_cache_limit": {
     "id": 85,
     "name": "query_cache_limit",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "The maximum query result set that can be cached by the query cache(not used yet, only sys var compatible)",
     "flags": "GLOBAL | MYSQL_ONLY",
@@ -1165,7 +1251,8 @@
   "query_cache_min_res_unit": {
     "id": 86,
     "name": "query_cache_min_res_unit",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "The smallest unit of memory allocated by the query cache(not used yet, only sys var compatible)",
     "flags": "GLOBAL | MYSQL_ONLY",
@@ -1179,7 +1266,8 @@
   "query_cache_wlock_invalidate": {
     "id": 87,
     "name": "query_cache_wlock_invalidate",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "query cache wirte lock for MyISAM engine (not used yet, only sys var compatible)",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1191,7 +1279,8 @@
   "binlog_format": {
     "id": 88,
     "name": "binlog_format",
-    "value": "2",
+    "default_value": "2",
+    "base_value": "2",
     "data_type": "enum",
     "info": "set the binary logging format(not used yet, only sys var compatible)",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY | READONLY",
@@ -1208,7 +1297,8 @@
   "binlog_checksum": {
     "id": 89,
     "name": "binlog_checksum",
-    "value": "CRC32",
+    "default_value": "CRC32",
+    "base_value": "CRC32",
     "data_type": "varchar",
     "info": "this variable causes the source to write a checksum for each event in the binary log(not used yet, only sys var compatible)",
     "flags": "GLOBAL | MYSQL_ONLY | READONLY",
@@ -1220,7 +1310,8 @@
   "binlog_rows_query_log_events": {
     "id": 90,
     "name": "binlog_rows_query_log_events",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "This system variable affects row-based logging only(not used yet, only sys var compatible)",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY | READONLY",
@@ -1232,7 +1323,8 @@
   "log_bin": {
     "id": 91,
     "name": "log_bin",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "This variable reports only on the status of binary logging(not used yet, only sys var compatible)",
     "flags": "GLOBAL | MYSQL_ONLY | READONLY",
@@ -1244,7 +1336,8 @@
   "server_uuid": {
     "id": 92,
     "name": "server_uuid",
-    "value": "ObExprUuid::gen_server_uuid",
+    "default_value": "ObExprUuid::gen_server_uuid",
+    "base_value": "ObExprUuid::gen_server_uuid",
     "data_type": "varchar",
     "info": "server uuid",
     "flags": "GLOBAL | MYSQL_ONLY | READONLY",
@@ -1256,7 +1349,8 @@
   "default_storage_engine": {
     "id": 93,
     "name": "default_storage_engine",
-    "value": "OceanBase",
+    "default_value": "OceanBase",
+    "base_value": "OceanBase",
     "data_type": "varchar",
     "info": "The default storage engine of OceanBase",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1268,7 +1362,8 @@
   "cte_max_recursion_depth": {
     "id": 94,
     "name": "cte_max_recursion_depth",
-    "value": "1000",
+    "default_value": "1000",
+    "base_value": "1000",
     "data_type": "uint",
     "info": "Abort a recursive common table expression if it does more than this number of iterations.",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
@@ -1282,7 +1377,8 @@
   "regexp_stack_limit": {
     "id": 95,
     "name": "regexp_stack_limit",
-    "value": "8000000",
+    "default_value": "8000000",
+    "base_value": "8000000",
     "data_type": "int",
     "info": "The maximum available memory in bytes for the internal stack used for regular expression matching operations",
     "flags": "GLOBAL",
@@ -1296,7 +1392,8 @@
   "regexp_time_limit": {
     "id": 96,
     "name": "regexp_time_limit",
-    "value": "32",
+    "default_value": "32",
+    "base_value": "32",
     "data_type": "int",
     "info": "The time limit for regular expression matching operations, default unit is milliseconds",
     "flags": "GLOBAL",
@@ -1310,7 +1407,8 @@
   "ob_interm_result_mem_limit": {
     "id": 10001,
     "name": "ob_interm_result_mem_limit",
-    "value": "2147483648",
+    "default_value": "2147483648",
+    "base_value": "2147483648",
     "data_type": "int",
     "info": "Indicate how many bytes the interm result manager can alloc most for this tenant",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1322,7 +1420,8 @@
   "ob_proxy_partition_hit": {
     "id": 10002,
     "name": "ob_proxy_partition_hit",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "Indicate whether sql stmt hit right partition, readonly to user, modify by ob",
     "flags": "READONLY | SESSION | INVISIBLE",
@@ -1334,7 +1433,8 @@
   "ob_log_level": {
     "id": 10003,
     "name": "ob_log_level",
-    "value": "disabled",
+    "default_value": "disabled",
+    "base_value": "disabled",
     "data_type": "varchar",
     "info": "log level in session",
     "flags": "GLOBAL | SESSION",
@@ -1346,7 +1446,8 @@
   "ob_query_timeout": {
     "id": 10005,
     "name": "ob_query_timeout",
-    "value": "10000000",
+    "default_value": "10000000",
+    "base_value": "10000000",
     "data_type": "int",
     "info": "Query timeout in microsecond(us)",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1359,7 +1460,8 @@
   "ob_read_consistency": {
     "id": 10006,
     "name": "ob_read_consistency",
-    "value": "3",
+    "default_value": "3",
+    "base_value": "3",
     "data_type": "enum",
     "info": "read consistency level: 3=STRONG, 2=WEAK, 1=FROZEN",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE | INFLUENCE_PLAN",
@@ -1377,7 +1479,8 @@
   "ob_enable_transformation": {
     "id": 10007,
     "name": "ob_enable_transformation",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "whether use transform in session",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -1389,7 +1492,8 @@
   "ob_trx_timeout": {
     "id": 10008,
     "name": "ob_trx_timeout",
-    "value": "86400000000",
+    "default_value": "86400000000",
+    "base_value": "86400000000",
     "data_type": "int",
     "info": "The max duration of one transaction",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1402,7 +1506,8 @@
   "ob_enable_plan_cache": {
     "id": 10009,
     "name": "ob_enable_plan_cache",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "whether use plan cache in session",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1414,7 +1519,8 @@
   "ob_enable_index_direct_select": {
     "id": 10010,
     "name": "ob_enable_index_direct_select",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "whether can select from index table",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -1426,7 +1532,8 @@
   "ob_proxy_set_trx_executed": {
     "id": 10011,
     "name": "ob_proxy_set_trx_executed",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully",
     "flags": "READONLY | SESSION | INVISIBLE",
@@ -1438,7 +1545,8 @@
   "ob_enable_aggregation_pushdown": {
     "id": 10012,
     "name": "ob_enable_aggregation_pushdown",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "enable aggregation function to be push-downed through exchange nodes",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -1450,7 +1558,8 @@
   "ob_last_schema_version": {
     "id": 10013,
     "name": "ob_last_schema_version",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "int",
     "info": " ",
     "flags": "SESSION",
@@ -1462,7 +1571,8 @@
   "ob_global_debug_sync": {
     "id": 10014,
     "name": "ob_global_debug_sync",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "Global debug sync facility",
     "flags": "SESSION | INVISIBLE",
@@ -1474,7 +1584,8 @@
   "ob_proxy_global_variables_version": {
     "id": 10015,
     "name": "ob_proxy_global_variables_version",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "int",
     "info": "this value is global variables last modified time when server session create, used for proxy to judge whether global vars has changed between two server session",
     "flags": "READONLY | SESSION | INVISIBLE",
@@ -1486,7 +1597,8 @@
   "ob_enable_show_trace": {
     "id": 10016,
     "name": "ob_enable_show_trace",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "control whether use show trace",
     "flags": "SESSION | NEED_SERIALIZE",
@@ -1498,7 +1610,8 @@
   "ob_bnl_join_cache_size": {
     "id": 10019,
     "name": "ob_bnl_join_cache_size",
-    "value": "10485760",
+    "default_value": "10485760",
+    "base_value": "10485760",
     "data_type": "int",
     "info": "",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -1512,7 +1625,8 @@
   "ob_proxy_user_privilege": {
     "id": 10020,
     "name": "ob_proxy_user_privilege",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "int",
     "info": "Indicate current client session user privilege, readonly after modified by first observer",
     "flags": "READONLY | SESSION | INVISIBLE",
@@ -1526,7 +1640,8 @@
   "ob_org_cluster_id": {
     "id": 10021,
     "name": "ob_org_cluster_id",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "int",
     "info": "When the DRC system copies data into the target cluster, it needs to be set to the CLUSTER_ID that should be written into commit log of OceanBase, in order to avoid loop replication of data. Normally, it does not need to be set, and OceanBase will use the default value, which is the CLUSTER_ID of current cluster of OceanBase. 0 indicates it is not set, please do not set it to 0",
     "flags": "SESSION | NEED_SERIALIZE",
@@ -1542,7 +1657,8 @@
   "ob_plan_cache_percentage": {
     "id": 10022,
     "name": "ob_plan_cache_percentage",
-    "value": "5",
+    "default_value": "5",
+    "base_value": "5",
     "data_type": "int",
     "info": "percentage of tenant memory resources that can be used by plan cache",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -1556,7 +1672,8 @@
   "ob_plan_cache_evict_high_percentage": {
     "id": 10023,
     "name": "ob_plan_cache_evict_high_percentage",
-    "value": "90",
+    "default_value": "90",
+    "base_value": "90",
     "data_type": "int",
     "info": "memory usage percentage of plan_cache_limit at which plan cache eviction will be trigger",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -1570,7 +1687,8 @@
   "ob_plan_cache_evict_low_percentage": {
     "id": 10024,
     "name": "ob_plan_cache_evict_low_percentage",
-    "value": "50",
+    "default_value": "50",
+    "base_value": "50",
     "data_type": "int",
     "info": "memory usage percentage  of plan_cache_limit at which plan cache eviction will be stopped",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -1584,7 +1702,8 @@
   "recyclebin": {
     "id": 10025,
     "name": "recyclebin",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "When the recycle bin is enabled, dropped tables and their dependent objects are placed in the recycle bin. When the recycle bin is disabled, dropped tables and their dependent objects are not placed in the recycle bin; they are just dropped.",
     "flags": "GLOBAL | SESSION",
@@ -1596,7 +1715,8 @@
   "ob_capability_flag": {
     "id": 10026,
     "name": "ob_capability_flag",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "Indicate features that observer supports, readonly after modified by first observer",
     "flags": "READONLY | SESSION | INVISIBLE",
@@ -1610,7 +1730,8 @@
   "is_result_accurate": {
     "id": 10028,
     "name": "is_result_accurate",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "when query is with topk hint, is_result_accurate indicates whether the result is acuurate or not ",
     "flags": "SESSION | NEED_SERIALIZE",
@@ -1622,7 +1743,8 @@
   "error_on_overlap_time": {
     "id": 10029,
     "name": "error_on_overlap_time",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "The variable determines how OceanBase should handle an ambiguous boundary datetime value a case in which it is not clear whether the datetime is in standard or daylight saving time",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1634,7 +1756,8 @@
   "ob_compatibility_mode": {
     "id": 10030,
     "name": "ob_compatibility_mode",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "What DBMS is OceanBase compatible with? MYSQL means it behaves like MySQL while ORACLE means it behaves like Oracle.",
     "flags": "GLOBAL | SESSION | READONLY | WITH_UPGRADE | NEED_SERIALIZE",
@@ -1650,7 +1773,8 @@
   "ob_sql_work_area_percentage": {
     "id": 10032,
     "name": "ob_sql_work_area_percentage",
-    "value": "5",
+    "default_value": "5",
+    "base_value": "5",
     "data_type": "int",
     "flags": "GLOBAL",
     "info": "The percentage limitation of tenant memory for SQL execution.",
@@ -1664,7 +1788,8 @@
   "ob_safe_weak_read_snapshot": {
     "id": 10033,
     "name": "ob_safe_weak_read_snapshot",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "int",
     "info": "The safe weak read snapshot version in one server",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE",
@@ -1679,7 +1804,8 @@
   "ob_route_policy": {
     "id": 10034,
     "name": "ob_route_policy",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "enum",
     "info": "the routing policy of obproxy/java client and observer internal retry, 1=READONLY_ZONE_FIRST, 2=ONLY_READONLY_ZONE, 3=UNMERGE_ZONE_FIRST, 4=UNMERGE_FOLLOWER_FIRST",
     "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE",
@@ -1698,7 +1824,8 @@
   "ob_enable_transmission_checksum": {
     "id": 10035,
     "name": "ob_enable_transmission_checksum",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "whether do the checksum of the packet between the client and the server",
     "flags": "GLOBAL | SESSION | QUERY_SENSITIVE | NEED_SERIALIZE",
@@ -1710,7 +1837,8 @@
   "foreign_key_checks": {
     "id": 10036,
     "name": "foreign_key_checks",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "set to 1 (the default by MySQL), foreign key constraints are checked. If set to 0, foreign key constraints are ignored",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1722,7 +1850,8 @@
   "ob_statement_trace_id": {
     "id": 10037,
     "name": "ob_statement_trace_id",
-    "value": "Y0-0",
+    "default_value": "Y0-0",
+    "base_value": "Y0-0",
     "data_type": "varchar",
     "info": "the trace id of current executing statement",
     "flags": "SESSION | READONLY | INVISIBLE",
@@ -1734,7 +1863,8 @@
   "ob_enable_truncate_flashback": {
     "id": 10038,
     "name": "ob_enable_truncate_flashback",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "Enable the flashback of table truncation.",
     "flags": "GLOBAL | SESSION",
@@ -1746,7 +1876,8 @@
   "ob_tcp_invited_nodes": {
     "id": 10039,
     "name": "ob_tcp_invited_nodes",
-    "value": "127.0.0.1,::1",
+    "default_value": "127.0.0.1,::1",
+    "base_value": "127.0.0.1,::1",
     "data_type": "varchar",
     "info": "ip white list for tenant, support % and _ and multi ip(separated by commas), support ip match and wild match",
     "flags": "GLOBAL",
@@ -1758,7 +1889,8 @@
   "sql_throttle_current_priority": {
     "id": 10040,
     "name": "sql_throttle_current_priority",
-    "value": "100",
+    "default_value": "100",
+    "base_value": "100",
     "data_type": "int",
     "info": "current priority used for SQL throttling",
     "flags": "GLOBAL | SESSION",
@@ -1770,7 +1902,8 @@
   "sql_throttle_priority": {
     "id": 10041,
     "name": "sql_throttle_priority",
-    "value": "-1",
+    "default_value": "-1",
+    "base_value": "-1",
     "data_type": "int",
     "info": "sql throttle priority, query may not be allowed to execute if its priority isnt greater than this value.",
     "flags": "GLOBAL",
@@ -1782,7 +1915,8 @@
   "sql_throttle_rt": {
     "id": 10042,
     "name": "sql_throttle_rt",
-    "value": "-1",
+    "default_value": "-1",
+    "base_value": "-1",
     "data_type": "numeric",
     "info": "query may not be allowed to execute if its rt isnt less than this value.",
     "flags": "GLOBAL",
@@ -1794,7 +1928,8 @@
   "sql_throttle_cpu": {
     "id": 10043,
     "name": "sql_throttle_cpu",
-    "value": "-1",
+    "default_value": "-1",
+    "base_value": "-1",
     "data_type": "numeric",
     "info": "query may not be allowed to execute if its CPU usage isnt less than this value.",
     "flags": "GLOBAL",
@@ -1806,7 +1941,8 @@
   "sql_throttle_io": {
     "id": 10044,
     "name": "sql_throttle_io",
-    "value": "-1",
+    "default_value": "-1",
+    "base_value": "-1",
     "data_type": "int",
     "info": "query may not be allowed to execute if its number of IOs isnt less than this value.",
     "flags": "GLOBAL",
@@ -1818,7 +1954,8 @@
   "sql_throttle_network": {
     "id": 10045,
     "name": "sql_throttle_network",
-    "value": "-1",
+    "default_value": "-1",
+    "base_value": "-1",
     "data_type": "numeric",
     "info": "query may not be allowed to execute if its network usage isnt less than this value.",
     "flags": "GLOBAL",
@@ -1831,7 +1968,8 @@
   "sql_throttle_logical_reads": {
     "id": 10046,
     "name": "sql_throttle_logical_reads",
-    "value": "-1",
+    "default_value": "-1",
+    "base_value": "-1",
     "data_type": "int",
     "info": "query may not be allowed to execute if its number of logical reads isnt less than this value.",
     "flags": "GLOBAL",
@@ -1843,7 +1981,8 @@
   "auto_increment_cache_size": {
     "id": 10047,
     "name": "auto_increment_cache_size",
-    "value": "1000000",
+    "default_value": "1000000",
+    "base_value": "1000000",
     "data_type": "int",
     "info": "auto_increment service cache size",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -1857,7 +1996,8 @@
   "ob_enable_jit": {
     "id": 10048,
     "name": "ob_enable_jit",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "JIT execution engine mode, default is AUTO",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE | INFLUENCE_PLAN",
@@ -1874,7 +2014,8 @@
   "ob_temp_tablespace_size_percentage": {
     "id": 10049,
     "name": "ob_temp_tablespace_size_percentage",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "int",
     "info": "the percentage limitation of some temp tablespace size in tenant disk.",
     "flags": "GLOBAL | SESSION",
@@ -1886,7 +2027,8 @@
   "plugin_dir": {
     "id": 10052,
     "name": "plugin_dir",
-    "value": "./plugin_dir/",
+    "default_value": "./plugin_dir/",
+    "base_value": "./plugin_dir/",
     "data_type": "varchar",
     "info": "the dir to place plugin dll",
     "flags": "GLOBAL | READONLY",
@@ -1898,7 +2040,8 @@
   "ob_sql_audit_percentage": {
     "id": 10055,
     "name": "ob_sql_audit_percentage",
-    "value": "3",
+    "default_value": "3",
+    "base_value": "3",
     "data_type": "int",
     "info": "The limited percentage of tenant memory for sql audit",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -1912,7 +2055,8 @@
   "ob_enable_sql_audit": {
     "id": 10056,
     "name": "ob_enable_sql_audit",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "wether use sql audit in session",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -1924,7 +2068,8 @@
   "optimizer_use_sql_plan_baselines": {
     "id": 10057,
     "name": "optimizer_use_sql_plan_baselines",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "Enable use sql plan baseline",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1936,7 +2081,8 @@
   "optimizer_capture_sql_plan_baselines": {
     "id": 10058,
     "name": "optimizer_capture_sql_plan_baselines",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "optimizer_capture_sql_plan_baselines enables or disables automitic capture plan baseline.",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1948,7 +2094,8 @@
   "parallel_servers_target": {
     "id": 10060,
     "name": "parallel_servers_target",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "int",
     "flags": "GLOBAL",
     "info": "number of threads allowed to run parallel statements before statement queuing will be used.",
@@ -1962,7 +2109,8 @@
   "ob_early_lock_release": {
     "id": 10061,
     "name": "ob_early_lock_release",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "If set true, transaction open the elr optimization.",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -1974,7 +2122,8 @@
   "ob_trx_idle_timeout": {
     "id": 10062,
     "name": "ob_trx_idle_timeout",
-    "value": "86400000000",
+    "default_value": "86400000000",
+    "base_value": "86400000000",
     "data_type": "int",
     "info": "The stmt interval timeout of transaction(us)",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1986,7 +2135,8 @@
   "block_encryption_mode": {
     "id": 10063,
     "name": "block_encryption_mode",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "specifies the encryption algorithm used in the functions aes_encrypt and aes_decrypt",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
@@ -2018,7 +2168,8 @@
   "nls_date_format": {
     "id": 10064,
     "name": "nls_date_format",
-    "value": "DD-MON-RR",
+    "default_value": "DD-MON-RR",
+    "base_value": "DD-MON-RR",
     "data_type": "varchar",
     "info": "specifies the default date format to use with the TO_CHAR and TO_DATE functions, (YYYY-MM-DD HH24:MI:SS) is Common value",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2030,7 +2181,8 @@
   "nls_timestamp_format": {
     "id": 10065,
     "name": "nls_timestamp_format",
-    "value": "DD-MON-RR HH.MI.SSXFF AM",
+    "default_value": "DD-MON-RR HH.MI.SSXFF AM",
+    "base_value": "DD-MON-RR HH.MI.SSXFF AM",
     "data_type": "varchar",
     "info": "specifies the default date format to use with the TO_CHAR and TO_TIMESTAMP functions, (YYYY-MM-DD HH24:MI:SS.FF) is Common value",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2042,7 +2194,8 @@
   "nls_timestamp_tz_format": {
     "id": 10066,
     "name": "nls_timestamp_tz_format",
-    "value": "DD-MON-RR HH.MI.SSXFF AM TZR",
+    "default_value": "DD-MON-RR HH.MI.SSXFF AM TZR",
+    "base_value": "DD-MON-RR HH.MI.SSXFF AM TZR",
     "data_type": "varchar",
     "info": "specifies the default timestamp with time zone format to use with the TO_CHAR and TO_TIMESTAMP_TZ functions, (YYYY-MM-DD HH24:MI:SS.FF TZR TZD) is common value",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2054,7 +2207,8 @@
   "ob_reserved_meta_memory_percentage": {
     "id": 10067,
     "name": "ob_reserved_meta_memory_percentage",
-    "value": "10",
+    "default_value": "10",
+    "base_value": "10",
     "data_type": "int",
     "info": "percentage of tenant memory resources that can be used by tenant meta data",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -2068,7 +2222,8 @@
   "ob_check_sys_variable": {
     "id": 10068,
     "name": "ob_check_sys_variable",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "If set true, sql will update sys variable while schema version changed.",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -2080,7 +2235,8 @@
   "nls_language": {
     "id": 10069,
     "name": "nls_language",
-    "value": "AMERICAN",
+    "default_value": "AMERICAN",
+    "base_value": "AMERICAN",
     "data_type": "varchar",
     "info": "specifies the default language of the database, used for messages, day and month names, the default sorting mechanism, the default values of NLS_DATE_LANGUAGE and NLS_SORT.",
     "flags": "SESSION | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2092,7 +2248,8 @@
   "nls_territory": {
     "id": 10070,
     "name": "nls_territory",
-    "value": "AMERICA",
+    "default_value": "AMERICA",
+    "base_value": "AMERICA",
     "data_type": "varchar",
     "info": "specifies the name of the territory whose conventions are to be followed for day and week numbering, establishes the default date format, the default decimal character and group separator, and the default ISO and local currency symbols.",
     "flags": "SESSION | GLOBAL| NEED_SERIALIZE | ORACLE_ONLY",
@@ -2104,7 +2261,8 @@
   "nls_sort": {
     "id": 10071,
     "name": "nls_sort",
-    "value": "BINARY",
+    "default_value": "BINARY",
+    "base_value": "BINARY",
     "data_type": "varchar",
     "info": "specifies the collating sequence for character value comparison in various SQL operators and clauses.",
     "flags": "SESSION | GLOBAL| NEED_SERIALIZE | ORACLE_ONLY | INFLUENCE_PLAN",
@@ -2116,7 +2274,8 @@
   "nls_comp": {
     "id": 10072,
     "name": "nls_comp",
-    "value": "BINARY",
+    "default_value": "BINARY",
+    "base_value": "BINARY",
     "data_type": "varchar",
     "info": "specifies the collation behavior of the database session. value can be BINARY | LINGUISTIC | ANSI",
     "flags": "SESSION | GLOBAL| NEED_SERIALIZE | ORACLE_ONLY | INFLUENCE_PLAN",
@@ -2128,7 +2287,8 @@
   "nls_characterset": {
     "id": 10073,
     "name": "nls_characterset",
-    "value": "AL32UTF8",
+    "default_value": "AL32UTF8",
+    "base_value": "AL32UTF8",
     "data_type": "varchar",
     "info": "specifies the default characterset of the database, This parameter defines the encoding of the data in the CHAR, VARCHAR2, LONG and CLOB columns of a table.",
     "flags": "GLOBAL | NEED_SERIALIZE | ORACLE_ONLY | INFLUENCE_PLAN | WITH_CREATE | READONLY",
@@ -2140,7 +2300,8 @@
   "nls_nchar_characterset": {
     "id": 10074,
     "name": "nls_nchar_characterset",
-    "value": "AL16UTF16",
+    "default_value": "AL16UTF16",
+    "base_value": "AL16UTF16",
     "data_type": "varchar",
     "info": "specifies the default characterset of the database, This parameter defines the encoding of the data in the NCHAR, NVARCHAR2 and NCLOB columns of a table.",
     "flags": "GLOBAL | NEED_SERIALIZE | ORACLE_ONLY | INFLUENCE_PLAN",
@@ -2152,7 +2313,8 @@
   "nls_date_language": {
     "id": 10075,
     "name": "nls_date_language",
-    "value": "AMERICAN",
+    "default_value": "AMERICAN",
+    "base_value": "AMERICAN",
     "data_type": "varchar",
     "info": "specifies the language to use for the spelling of day and month names and date abbreviations (a.m., p.m., AD, BC) returned by the TO_DATE and TO_CHAR functions.",
     "flags": "SESSION | GLOBAL| NEED_SERIALIZE | ORACLE_ONLY",
@@ -2164,7 +2326,8 @@
   "nls_length_semantics": {
     "id": 10076,
     "name": "nls_length_semantics",
-    "value": "BYTE",
+    "default_value": "BYTE",
+    "base_value": "BYTE",
     "data_type": "varchar",
     "info": "specifies the default length semantics to use for VARCHAR2 and CHAR table columns, user-defined object attributes, and PL/SQL variables in database objects created in the session. SYS user use BYTE intead of NLS_LENGTH_SEMANTICS.",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_nls_length_semantics_is_valid",
@@ -2177,7 +2340,8 @@
   "nls_nchar_conv_excp": {
     "id": 10077,
     "name": "nls_nchar_conv_excp",
-    "value": "FALSE",
+    "default_value": "FALSE",
+    "base_value": "FALSE",
     "data_type": "varchar",
     "info": "determines whether an error is reported when there is data loss during an implicit or explicit character type conversion between NCHAR/NVARCHAR2 and CHAR/VARCHAR2.",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY | INFLUENCE_PLAN",
@@ -2189,7 +2353,8 @@
   "nls_calendar": {
     "id": 10078,
     "name": "nls_calendar",
-    "value": "GREGORIAN",
+    "default_value": "GREGORIAN",
+    "base_value": "GREGORIAN",
     "data_type": "varchar",
     "info": "specifies which calendar system Oracle uses.",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2201,7 +2366,8 @@
   "nls_numeric_characters": {
     "id": 10079,
     "name": "nls_numeric_characters",
-    "value": ".,",
+    "default_value": ".,",
+    "base_value": ".,",
     "data_type": "varchar",
     "info": "specifies the characters to use as the decimal character and group separator, overrides those characters defined implicitly by NLS_TERRITORY.",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2213,7 +2379,8 @@
   "_nlj_batching_enabled": {
     "id": 10080,
     "name": "_nlj_batching_enabled",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "enable batching of the RHS IO in NLJ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
@@ -2225,7 +2392,8 @@
   "tracefile_identifier": {
     "id": 10081,
     "name": "tracefile_identifier",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "The name of tracefile.",
     "flags": "SESSION | NEED_SERIALIZE",
@@ -2237,7 +2405,8 @@
   "_groupby_nopushdown_cut_ratio": {
     "id": 10082,
     "name": "_groupby_nopushdown_cut_ratio",
-    "value": "3",
+    "default_value": "3",
+    "base_value": "3",
     "data_type": "uint",
     "info": "ratio used to decide whether push down should be done in distribtued query optimization.",
     "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
@@ -2249,7 +2418,8 @@
   "_px_broadcast_fudge_factor": {
     "id": 10083,
     "name": "_px_broadcast_fudge_factor",
-    "value": "100",
+    "default_value": "100",
+    "base_value": "100",
     "data_type": "int",
     "info": "set the tq broadcasting fudge factor percentage.",
     "flags": "SESSION | INVISIBLE | INFLUENCE_PLAN",
@@ -2263,7 +2433,8 @@
   "transaction_isolation": {
     "id": 10085,
     "name": "transaction_isolation",
-    "value": "READ-COMMITTED",
+    "default_value": "READ-COMMITTED",
+    "base_value": "READ-COMMITTED",
     "data_type": "varchar",
     "on_update_func": "ObSysVarOnUpdateFuncs::update_tx_isolation",
     "session_special_update_func": "ObSysVarSessionSpecialUpdateFuncs::update_tx_isolation",
@@ -2279,7 +2450,8 @@
   "ob_trx_lock_timeout": {
     "id": 10086,
     "name": "ob_trx_lock_timeout",
-    "value": "-1",
+    "default_value": "-1",
+    "base_value": "-1",
     "data_type": "int",
     "info": "the max duration of waiting on row lock of one transaction",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -2291,7 +2463,8 @@
   "validate_password_check_user_name": {
     "id": 10087,
     "name": "validate_password_check_user_name",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -2307,7 +2480,8 @@
   "validate_password_length": {
     "id": 10088,
     "name": "validate_password_length",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -2321,7 +2495,8 @@
   "validate_password_mixed_case_count": {
     "id": 10089,
     "name": "validate_password_mixed_case_count",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -2335,7 +2510,8 @@
   "validate_password_number_count": {
     "id": 10090,
     "name": "validate_password_number_count",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -2349,7 +2525,8 @@
   "validate_password_policy": {
     "id": 10091,
     "name": "validate_password_policy",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -2365,7 +2542,8 @@
   "validate_password_special_char_count": {
     "id": 10092,
     "name": "validate_password_special_char_count",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -2379,7 +2557,8 @@
   "default_password_lifetime": {
     "id": 10093,
     "name": "default_password_lifetime",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "",
     "flags": "GLOBAL | NEED_SERIALIZE",
@@ -2393,7 +2572,8 @@
   "_ob_ols_policy_session_labels": {
     "id": 10094,
     "name": "_ob_ols_policy_session_labels",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "store all session labels for all label security policy.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE",
@@ -2405,7 +2585,8 @@
   "ob_trace_info": {
     "id": 10095,
     "name": "ob_trace_info",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "store trace info",
     "flags": "SESSION",
@@ -2417,7 +2598,8 @@
   "_px_partition_scan_threshold": {
     "id": 10097,
     "name": "_px_partition_scan_threshold",
-    "value": "64",
+    "default_value": "64",
+    "base_value": "64",
     "data_type": "int",
     "info": "least number of partitions per slave to start partition-based scan",
     "flags": "SESSION | INVISIBLE | INFLUENCE_PLAN",
@@ -2431,7 +2613,8 @@
   "_ob_px_bcast_optimization": {
     "id": 10098,
     "name": "_ob_px_bcast_optimization",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "enum",
     "info": "broadcast optimization.",
     "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
@@ -2447,7 +2630,8 @@
   "_ob_px_slave_mapping_threshold": {
     "id": 10099,
     "name": "_ob_px_slave_mapping_threshold",
-    "value": "200",
+    "default_value": "200",
+    "base_value": "200",
     "data_type": "int",
     "info": "percentage threshold to use slave mapping plan",
     "flags": "SESSION | INVISIBLE | INFLUENCE_PLAN | GLOBAL ",
@@ -2461,7 +2645,8 @@
   "_enable_parallel_dml": {
     "id": 10100,
     "name": "_enable_parallel_dml",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "A DML statement can be parallelized only if you have explicitly enabled parallel DML in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
@@ -2473,7 +2658,8 @@
   "_px_min_granules_per_slave": {
     "id": 10101,
     "name": "_px_min_granules_per_slave",
-    "value": "13",
+    "default_value": "13",
+    "base_value": "13",
     "data_type": "int",
     "info": "minimum number of rowid range granules to generate per slave.",
     "flags": "SESSION | INVISIBLE | INFLUENCE_PLAN",
@@ -2487,7 +2673,8 @@
   "secure_file_priv": {
     "id": 10102,
     "name": "secure_file_priv",
-    "value": "NULL",
+    "default_value": "NULL",
+    "base_value": "NULL",
     "data_type": "varchar",
     "info": "limit the effect of data import and export operations",
     "flags": "GLOBAL | INFLUENCE_PLAN | NULL",
@@ -2499,7 +2686,8 @@
   "plsql_warnings": {
     "id": 10103,
     "name": "plsql_warnings",
-    "value": "ENABLE:ALL",
+    "default_value": "ENABLE:ALL",
+    "base_value": "ENABLE:ALL",
     "data_type": "varchar",
     "info": "enables or disables the reporting of warning messages by the PL/SQL compiler, and specifies which warning messages to show as errors.",
     "flags": "SESSION | GLOBAL| NEED_SERIALIZE | ORACLE_ONLY",
@@ -2512,7 +2700,8 @@
   "_enable_parallel_query": {
     "id": 10104,
     "name": "_enable_parallel_query",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
@@ -2524,7 +2713,8 @@
   "_force_parallel_query_dop": {
     "id": 10105,
     "name": "_force_parallel_query_dop",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "uint",
     "info": "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
@@ -2536,7 +2726,8 @@
   "_force_parallel_dml_dop": {
     "id": 10106,
     "name": "_force_parallel_dml_dop",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "uint",
     "info": "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
@@ -2548,7 +2739,8 @@
   "ob_pl_block_timeout": {
     "id": 10107,
     "name": "ob_pl_block_timeout",
-    "value": "3216672000000000",
+    "default_value": "3216672000000000",
+    "base_value": "3216672000000000",
     "data_type": "int",
     "min_val": "0",
     "max_val": "9223372036854775807",
@@ -2563,7 +2755,8 @@
   "transaction_read_only": {
     "id": 10108,
     "name": "transaction_read_only",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "on_update_func": "ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope",
     "session_special_update_func": "ObSysVarSessionSpecialUpdateFuncs::update_tx_read_only",
@@ -2579,7 +2772,8 @@
   "resource_manager_plan": {
     "id": 10109,
     "name": "resource_manager_plan",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_update_resource_manager_plan",
     "info": "specifies tenant resource plan.",
@@ -2592,7 +2786,8 @@
   "performance_schema": {
     "id": 10110,
     "name": "performance_schema",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "indicate whether the Performance Schema is enabled",
     "flags": "GLOBAL",
@@ -2604,7 +2799,8 @@
   "nls_currency": {
     "id": 10111,
     "name": "nls_currency",
-    "value": "$",
+    "default_value": "$",
+    "base_value": "$",
     "data_type": "varchar",
     "info": "specifies the string to use as the local currency symbol for the L number format element. The default value of this parameter is determined by NLS_TERRITORY.",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2617,7 +2813,8 @@
   "nls_iso_currency": {
     "id": 10112,
     "name": "nls_iso_currency",
-    "value": "AMERICA",
+    "default_value": "AMERICA",
+    "base_value": "AMERICA",
     "data_type": "varchar",
     "info": "specifies the string to use as the international currency symbol for the C number format element. The default value of this parameter is determined by NLS_TERRITORY",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2630,7 +2827,8 @@
   "nls_dual_currency": {
     "id": 10113,
     "name": "nls_dual_currency",
-    "value": "$",
+    "default_value": "$",
+    "base_value": "$",
     "data_type": "varchar",
     "info": "specifies the dual currency symbol for the territory. The default is the dual currency symbol defined in the territory of your current language environment.",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
@@ -2643,7 +2841,8 @@
   "plsql_ccflags" : {
     "id": 10115,
     "name": "plsql_ccflags",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "Lets you control conditional compilation of each PL/SQL unit independently.",
     "flags": "NEED_SERIALIZE | GLOBAL | SESSION | ORACLE_ONLY",
@@ -2656,7 +2855,8 @@
   "_ob_proxy_session_temporary_table_used": {
     "id": 10116,
     "name": "_ob_proxy_session_temporary_table_used",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully",
     "flags": "READONLY | SESSION | INVISIBLE",
@@ -2668,7 +2868,8 @@
   "_enable_parallel_ddl": {
     "id": 10117,
     "name": "_enable_parallel_ddl",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
@@ -2680,7 +2881,8 @@
   "_force_parallel_ddl_dop": {
     "id": 10118,
     "name": "_force_parallel_ddl_dop",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "uint",
     "info": "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement.",
     "flags": "SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
@@ -2692,7 +2894,8 @@
   "cursor_sharing": {
     "id": 10119,
     "name": "cursor_sharing",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "whether needs to do parameterization? EXACT - query will not do parameterization; FORCE - query will do parameterization.",
     "flags": "GLOBAL | SESSION",
@@ -2708,7 +2911,8 @@
   "_optimizer_null_aware_antijoin": {
     "id": 10120,
     "name": "_optimizer_null_aware_antijoin",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "specifies whether null aware anti join plan allow generated",
     "flags": "GLOBAL | SESSION",
@@ -2720,7 +2924,8 @@
   "_px_partial_rollup_pushdown": {
     "id": 10121,
     "name": "_px_partial_rollup_pushdown",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "enum",
     "info": "enable partial rollup push down optimization.",
     "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
@@ -2736,7 +2941,8 @@
   "_px_dist_agg_partial_rollup_pushdown": {
     "id": 10122,
     "name": "_px_dist_agg_partial_rollup_pushdown",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "enum",
     "info": "enable distinct aggregate function to partial rollup push down optimization.",
     "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
@@ -2752,7 +2958,8 @@
   "_create_audit_purge_job": {
     "id": 10123,
     "name": "_create_audit_purge_job",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type":"varchar",
     "info": "control audit log trail job in mysql mode",
     "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
@@ -2764,7 +2971,8 @@
   "_drop_audit_purge_job": {
     "id": 10124,
     "name": "_drop_audit_purge_job",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type":"varchar",
     "info": "drop audit log trail job in mysql mode",
     "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
@@ -2776,7 +2984,8 @@
   "_set_purge_job_interval": {
     "id": 10125,
     "name": "_set_purge_job_interval",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type":"varchar",
     "info": "set purge job interval in mysql mode, range in 1-999 days",
     "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
@@ -2788,7 +2997,8 @@
   "_set_purge_job_status": {
     "id": 10126,
     "name": "_set_purge_job_status",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type":"varchar",
     "info": "set purge job status in mysql mode, range: true/false",
     "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
@@ -2800,7 +3010,8 @@
   "_set_last_archive_timestamp": {
     "id": 10127,
     "name": "_set_last_archive_timestamp",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type":"varchar",
     "info": "set last archive timestamp in mysql mode, must utc time in usec from 1970",
     "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
@@ -2812,7 +3023,8 @@
   "_clear_last_archive_timestamp": {
     "id": 10128,
     "name": "_clear_last_archive_timestamp",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type":"varchar",
     "info": "clear last archive timestamp in mysql mode",
     "flags": "GLOBAL | MYSQL_ONLY | INVISIBLE",
@@ -2824,7 +3036,8 @@
   "_aggregation_optimization_settings": {
     "id": 10129,
     "name": "_aggregation_optimization_settings",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "info": "Manually control some behaviors of aggregation",
     "flags": "GLOBAL | SESSION",
@@ -2836,7 +3049,8 @@
   "_px_shared_hash_join": {
     "id": 10130,
     "name": "_px_shared_hash_join",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "enable shared hash table hash join optimization.",
     "flags": "GLOBAL | SESSION | INVISIBLE | NEED_SERIALIZE",
@@ -2848,7 +3062,8 @@
   "sql_notes": {
     "id": 10131,
     "name": "sql_notes",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": " ",
     "flags": "GLOBAL | SESSION",
@@ -2860,7 +3075,8 @@
   "innodb_strict_mode": {
     "id": 10132,
     "name": "innodb_strict_mode",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "in certain case, warnings would be transformed to errors",
     "flags": "GLOBAL | SESSION",
@@ -2872,7 +3088,8 @@
   "_windowfunc_optimization_settings": {
     "id": 10133,
     "name": "_windowfunc_optimization_settings",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "uint",
     "min_val": "0",
     "max_val": "9223372036854775807",
@@ -2886,7 +3103,8 @@
   "ob_enable_rich_error_msg": {
     "id": 10134,
     "name": "ob_enable_rich_error_msg",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "control whether print svr_ip,execute_time,trace_id",
     "flags": "Global | SESSION",
@@ -2898,7 +3116,8 @@
   "log_row_value_options": {
     "id": 10136,
     "name": "log_row_value_options",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "control whether lob use partial update",
     "flags": "Global | SESSION",
@@ -2911,7 +3130,8 @@
   "ob_max_read_stale_time": {
     "id": 10137,
     "name": "ob_max_read_stale_time",
-    "value": "-1",
+    "default_value": "-1",
+    "base_value": "-1",
     "data_type": "int",
     "info": "max stale time(us) for weak read query ",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -2924,7 +3144,8 @@
   "_optimizer_gather_stats_on_load": {
     "id": 10138,
     "name": "_optimizer_gather_stats_on_load",
-    "value": "1",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "control wether we need to gather optimizer stats on insert into select/create table as select",
     "flags": "GLOBAL | SESSION",
@@ -2936,7 +3157,8 @@
   "_set_reverse_dblink_infos": {
     "id": 10139,
     "name": "_set_reverse_dblink_infos",
-    "value": "",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "used in the dblink write transaction, the TM side informs the RM side of the necessary information about establishing a reverse dblink by setting system variables",
     "flags": "SESSION | ORACLE_ONLY",
@@ -2948,7 +3170,8 @@
   "_show_ddl_in_compat_mode": {
     "id": 10141,
     "name": "_show_ddl_in_compat_mode",
-    "value": "0",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "bool",
     "info": "When enabled, show create table will show the strict compatible results with the compatibility mode.",
     "flags": "SESSION",
