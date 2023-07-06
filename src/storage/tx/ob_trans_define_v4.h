@@ -117,19 +117,41 @@ public:
   }
 };
 
+
+#define OB_TX_ABORT_CAUSE_LIST                  \
+  _XX(TX_RESULT_INCOMPLETE)                     \
+  _XX(IN_CONSIST_STATE)                         \
+  _XX(SAVEPOINT_ROLLBACK_FAIL)                  \
+  _XX(IMPLICIT_ROLLBACK)                        \
+  _XX(SESSION_DISCONNECT)                       \
+  _XX(STOP)                                     \
+  _XX(PARTICIPANT_STATE_INCOMPLETE)             \
+  _XX(PARTICIPANTS_SET_INCOMPLETE)              \
+  _XX(END_STMT_FAIL)                            \
+  _XX(EXPLICIT_ROLLBACK)                        \
+
 enum ObTxAbortCause
 {
-  TX_RESULT_INCOMPLETE = 1,
-  IN_CONSIST_STATE = 2,
-  SAVEPOINT_ROLLBACK_FAIL = 3,
-  IMPLICIT_ROLLBACK = 4,
-  SESSION_DISCONNECT = 5,
-  STOP = 6,
-  PARTICIPANT_STATE_INCOMPLETE = 7,
-  PARTICIPANTS_SET_INCOMPLETE = 8,
-  END_STMT_FAIL = 9,
-  EXPLICIT_ROLLBACK = 10,
+SUCCESS = 0,
+#define _XX(X) X,
+OB_TX_ABORT_CAUSE_LIST
+#undef _XX
 };
+
+struct ObTxAbortCauseNames {
+  static char const* of(int i) {
+    static const char* names[] = {
+#define _XX(X) #X,
+  OB_TX_ABORT_CAUSE_LIST
+#undef _XX
+    };
+    if (i < 0) { return common::ob_error_name(i); }
+    if (sizeof(names)/ sizeof(char*) <= i) { return "unknown"; }
+    return names[i];
+  }
+};
+
+#undef OB_TX_ABORT_CAUSE_LIST
 
 enum class ObTxClass { USER, SYS };
 
