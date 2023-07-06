@@ -508,6 +508,9 @@ public:
   // Get the state of this ObLSTxCtxMgr
   int64_t get_state() { return get_state_(); }
 
+  // check is master
+  bool is_master() const { return is_master_(); }
+
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
   int refresh_aggre_rec_scn();
 
