@@ -7695,6 +7695,7 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
       char* path_buf = NULL;
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(path_buf = static_cast<char*>(allocator->alloc(path_buffer.length() + 1)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate path buffer", K(ret), K(path_buffer.length()));
       } else {
         MEMCPY(path_buf, path_buffer.ptr(), path_buffer.length());

@@ -84,6 +84,7 @@ int ObLinkDmlOp::send_reverse_link_info(transaction::ObTransID &tx_id)
       char * seri_buff = NULL;
       ObString hex_str;
       if (OB_ISNULL(seri_buff = static_cast<char*>(MY_SPEC.allocator_.alloc(seri_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(seri_size), K(ret));
       } else if (OB_FAIL(reverse_link_info.serialize(seri_buff, seri_size, seri_pos))) {
           LOG_WARN("failed to serialize", KP(seri_buff), K(seri_size), K(seri_pos), K(ret));

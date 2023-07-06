@@ -951,6 +951,7 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
         data_desc_ret.start_ = data_desc.start_;
         allocator.set_tenant_id(MTL_ID());
         if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", KR(ret));
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < count - 1; ++i) {

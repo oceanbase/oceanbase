@@ -777,6 +777,8 @@ int ObTxTableMergeExecutePrepareTask::prepare_compaction_filter()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only tx data tablet can execute minor merge", K(ret), K(ctx_->param_));
   } else if (OB_ISNULL(buf = ctx_->allocator_.alloc(sizeof(ObTransStatusFilter)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ObTransStatusFilter)));
   } else {
     ObTransStatusFilter *compaction_filter = new(buf) ObTransStatusFilter();
     ObTxTableGuard guard;

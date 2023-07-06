@@ -318,6 +318,7 @@ int ObExprOracleDecode::calc_result_type_for_literal(ObExprResType &type,
   } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session, expr_ctx.cast_mode_))) {
     LOG_WARN("failed to get default cast mode", K(ret));
   } else if (OB_ISNULL(obj_stack = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * param_num)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc obj stack", K(ret));
   } else {
     expr_ctx.my_session_ = const_cast<ObSQLSessionInfo *>(session);

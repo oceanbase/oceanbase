@@ -69,6 +69,7 @@
             ret = oceanbase::common::OB_ERR_UNEXPECTED; \
             DDLOG(WARN, "expected valid allocator while deserialize meta", KR(ret), K(allocator)); \
           } else if (OB_ISNULL(array_ptr = static_cast<ARRAY_TYPE*>(allocator->alloc(alloc_size)))) { \
+            ret = oceanbase::common::OB_ALLOCATE_MEMORY_FAILED; \
             DDLOG(WARN, #ARRAY_TYPE ": alloc memory for deserialize array", KR(ret), K(alloc_size)); \
           } else { \
             for (int i = 0; OB_SUCC(ret) && i < array_size; i++) { \
@@ -97,6 +98,7 @@
             ret = oceanbase::common::OB_ERR_UNEXPECTED; \
             DDLOG(WARN, "expected valid allocator while deserialize meta", KR(ret), K(allocator)); \
           } else if (OB_ISNULL(array_ptr = static_cast<ARRAY_TYPE*>(allocator->alloc(alloc_size)))) { \
+            ret = oceanbase::common::OB_ALLOCATE_MEMORY_FAILED; \
             DDLOG(WARN, #ARRAY_TYPE ": alloc memory for deserialize array", KR(ret), K(alloc_size)); \
           } else { \
             for (int i = 0; OB_SUCC(ret) && i < array_size; i++) { \

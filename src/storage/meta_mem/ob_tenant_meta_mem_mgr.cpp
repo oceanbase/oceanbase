@@ -670,6 +670,7 @@ int ObTenantMetaMemMgr::acquire_sstable(ObTableHandleV2 &handle, common::ObIAllo
   } else {
     void *buf = nullptr;
     if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSSTable)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to acquire sstable object", K(ret));
     } else {
       ObSSTable *sstable = new (buf) ObSSTable();
