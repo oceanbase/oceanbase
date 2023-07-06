@@ -806,6 +806,18 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
 
+  // test tiny tablet
+  ASSERT_EQ(new_handle.get_obj()->allocator_, nullptr);
+  ObArenaAllocator tmp_allocator;
+  ObTabletHandle tmp_handle;
+  ret = t3m_.get_tablet_with_allocator(WashTabletPriority::WTP_LOW, key, tmp_allocator, tmp_handle, true/*force_alloc_new*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_NE(tmp_handle.get_obj(), new_handle.get_obj()); // get tablet allocated by allocator
+  ASSERT_TRUE(tmp_handle.get_obj()->get_tablet_addr().is_block());
+  ASSERT_EQ(tmp_handle.allocator_, tmp_handle.get_obj()->allocator_);
+  ASSERT_FALSE(tmp_handle.allow_copy_and_assign_);
+  tmp_handle.reset();
+
   void *free_obj = nullptr;
   new_handle.reset();
   ASSERT_EQ(1, tablet->get_ref());
@@ -822,7 +834,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ret = t3m_.compare_and_swap_tablet(key, addr, mem_addr);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
 
-  ObTabletHandle tmp_handle;
+  tmp_handle.reset();
   ret = t3m_.tablet_map_.erase(key, tmp_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
@@ -1268,6 +1280,24 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   ASSERT_EQ(common::OB_ITEM_NOT_SETTED, ret);
   ASSERT_TRUE(!tmp_handle.is_valid());
 
+  ret = t3m_.compare_and_swap_tablet(key, handle, handle);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+  ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
+  ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
+
+  // test full tablet
+  ASSERT_EQ(handle.get_obj()->allocator_, handle.allocator_);
+  ASSERT_NE(handle.allocator_, nullptr);
+  ObArenaAllocator tmp_allocator;
+  tmp_handle.reset();
+  ret = t3m_.get_tablet_with_allocator(WashTabletPriority::WTP_LOW, key, tmp_allocator, tmp_handle, false/*force_alloc_new*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(tmp_handle.get_obj(), handle.get_obj()); // get full tablet
+  ASSERT_TRUE(tmp_handle.get_obj()->get_tablet_addr().is_memory());
+  ASSERT_EQ(handle.allocator_, tmp_handle.allocator_);
+  ASSERT_TRUE(tmp_handle.allow_copy_and_assign_);
+  tmp_handle.reset();
+
   ObMetaDiskAddr addr;
   addr.first_id_ = 1;
   addr.second_id_ = 2;
@@ -1275,7 +1305,6 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   addr.size_ = 4096;
   addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
   handle.get_obj()->set_tablet_addr(addr);
-
   ret = t3m_.compare_and_swap_tablet(key, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());

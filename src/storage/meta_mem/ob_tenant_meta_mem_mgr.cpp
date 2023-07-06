@@ -1539,7 +1539,7 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
     LOG_WARN("tablet is null", K(ret), K(key), K(handle));
   } else {
     handle.set_wash_priority(priority);
-    if (OB_NOT_NULL(handle.get_allocator())) {
+    if (&allocator == handle.get_allocator()) {
       handle.disallow_copy_and_assign();
       handle.get_obj()->set_allocator(handle.get_allocator());
     }
@@ -2314,8 +2314,9 @@ int ObTenantTabletIterator::get_next_tablet(ObTabletHandle &handle)
         }
         if (OB_SUCC(ret) || ignore_err_code(ret)) {
           handle.set_wash_priority(WashTabletPriority::WTP_LOW);
-          if (OB_NOT_NULL(handle.get_allocator())) {
+          if (allocator_ == handle.get_allocator()) {
             handle.disallow_copy_and_assign();
+            handle.get_obj()->set_allocator(handle.get_allocator());
           }
           ++idx_;
         }
