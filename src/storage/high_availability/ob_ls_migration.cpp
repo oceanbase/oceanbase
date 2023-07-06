@@ -2570,6 +2570,8 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
   } else if (!is_tablet_exist) {
     if (OB_FAIL(tablet_copy_finish_task->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
       LOG_WARN("failed to set tablet status", K(ret), K(copy_table_key), KPC(copy_tablet_ctx_));
+    } else if (OB_FAIL(parent_task->add_child(*child_task))) {
+      LOG_WARN("failed to add chiild task", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
     }
   } else {
     if (FALSE_IT(init_param.tenant_id_ = ctx_->tenant_id_)) {
