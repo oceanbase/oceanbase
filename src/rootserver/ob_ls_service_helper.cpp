@@ -969,12 +969,14 @@ int ObTenantLSInfo::gather_all_ls_info_()
   if (OB_ISNULL(sql_proxy_) || OB_ISNULL(tenant_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy or tenant schema is null", KR(ret), KP(tenant_schema_), KP(sql_proxy_));
-  } else {
-    const uint64_t tenant_id = tenant_schema_->get_tenant_id();
+  } else if (OB_ISNULL(trans_)) {
     if (OB_FAIL(status_operator_.get_all_ls_status_by_order(
-                 tenant_id, status_info_array, *sql_proxy_))) {
-      LOG_WARN("failed to get all ls status by order", KR(ret), K(tenant_id));
+                 tenant_id_, status_info_array, *sql_proxy_))) {
+      LOG_WARN("failed to get all ls status by order", KR(ret), K(tenant_id_), KP(trans_));
     }
+  } else if (OB_FAIL(status_operator_.get_all_ls_status_by_order(
+          tenant_id_, status_info_array, *trans_))) {
+    LOG_WARN("failed to get all ls status by order", KR(ret), K(tenant_id_), KP(trans_));
   }
   if (OB_FAIL(ret)) {
   } else {

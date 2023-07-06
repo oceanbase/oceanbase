@@ -856,7 +856,7 @@ int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
       ret = OB_TENANT_NOT_EXIST;
       LOG_WARN("tenant not exist", KR(ret), K(tenant_id_));
     } else {
-      ObTenantLSInfo tenant_stat(GCTX.sql_proxy_, tenant_schema, tenant_id_);
+      ObTenantLSInfo tenant_stat(GCTX.sql_proxy_, tenant_schema, tenant_id_, &trans);
       ObLSFlag ls_flag = ls_attr.get_ls_flag();
       if (OB_FAIL(ObLSServiceHelper::create_new_ls_in_trans(ls_attr.get_ls_id(),
               ls_attr.get_ls_group_id(), ls_attr.get_create_scn(),

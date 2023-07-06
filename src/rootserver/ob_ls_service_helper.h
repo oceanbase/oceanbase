@@ -130,7 +130,8 @@ class ObTenantLSInfo
 public:
   ObTenantLSInfo(ObMySQLProxy *sql_proxy,
                  const share::schema::ObTenantSchema *tenant_schema,
-                 const uint64_t tenant_id)
+                 const uint64_t tenant_id,
+                 common::ObMySQLTransaction *trans = NULL)
      : sql_proxy_(sql_proxy),
        tenant_schema_(tenant_schema),
        status_operator_(),
@@ -138,7 +139,8 @@ public:
        unit_group_array_(),
        ls_group_array_(),
        primary_zone_(),
-       tenant_id_(tenant_id) {}
+       tenant_id_(tenant_id),
+       trans_(trans) {}
 
   virtual ~ObTenantLSInfo(){};
   void reset();
@@ -193,6 +195,7 @@ private:
   ObLSGroupInfoArray ls_group_array_;
   ObArray<common::ObZone> primary_zone_;
   uint64_t tenant_id_;
+  ObMySQLTransaction *trans_;
 };
 
 class ObLSServiceHelper
