@@ -127,7 +127,7 @@ int ObLSAllPartBuilder::build_part_info_(
     ret = OB_NEED_RETRY;
     LOG_WARN("table schema is NULL, maybe schema guard is not latest, retry again", KR(ret), K(tablet));
   } else if (! need_balance_table(*table_schema)) {
-    LOG_INFO("[BUILD_LS_ALL_PART] ignore need not balance table", K(tablet), KPC(table_schema));
+    LOG_TRACE("[BUILD_LS_ALL_PART] ignore need not balance table", K(tablet));
     need_skip = true;
   } else {
     const ObTabletID &tablet_id = tablet.get_tablet_id();
