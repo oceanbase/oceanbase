@@ -296,6 +296,47 @@ TEST_F(TestTabletDumpedMediumInfo, standby_cluster)
   ret = ObTabletMdsData::check_medium_info_continuity(result);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
+
+TEST_F(TestTabletDumpedMediumInfo, mds_table_dump)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  compaction::ObMediumCompactionInfo *info = nullptr;
+
+  ObTabletDumpedMediumInfo input_medium_info1;
+  ret = input_medium_info1.init(allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTabletComplexAddr<ObTabletDumpedMediumInfo> mds_table_data;
+  mds_table_data.ptr_ = &input_medium_info1;
+
+  APPEND_MEDIUM_INFO(input_medium_info1, allocator, 7, 6, false, info);
+  APPEND_MEDIUM_INFO(input_medium_info1, allocator, 9, 7, false, info);
+
+  ObTabletDumpedMediumInfo input_medium_info2;
+  ret = input_medium_info2.init(allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTabletComplexAddr<ObTabletDumpedMediumInfo> base_data;
+  base_data.ptr_ = &input_medium_info2;
+
+  APPEND_MEDIUM_INFO(input_medium_info2, allocator, 2, 1, false, info);
+  APPEND_MEDIUM_INFO(input_medium_info2, allocator, 4, 2, false, info);
+  APPEND_MEDIUM_INFO(input_medium_info2, allocator, 6, 4, false, info);
+  APPEND_MEDIUM_INFO(input_medium_info2, allocator, 7, 6, false, info);
+
+  ObTabletDumpedMediumInfo result;
+  ret = result.init(allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTabletComplexAddr<ObTabletDumpedMediumInfo> result_data;
+  result_data.ptr_ = &result;
+
+  const int64_t finish_medium_scn = 4;
+  ret = ObTabletMdsData::fuse_mds_dump_node(allocator, finish_medium_scn, mds_table_data, base_data, result_data);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(3, result.medium_info_list_.count());
+  ASSERT_EQ(6, result.medium_info_list_.at(0)->medium_snapshot_);
+  ASSERT_EQ(7, result.medium_info_list_.at(1)->medium_snapshot_);
+  ASSERT_EQ(9, result.medium_info_list_.at(2)->medium_snapshot_);
+}
 } // namespace unittest
 } // namespace oceanbase
 

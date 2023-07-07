@@ -541,8 +541,6 @@ int ObTabletMdsData::init_medium_info_list(
     extra_medium_info_.reset();
   } else if (OB_FAIL(copy_medium_info_list(finish_medium_scn, *old_medium_info_list, *cur_medium_info_list))) {
     LOG_WARN("failed to copy medium info list", K(ret), K(finish_medium_scn), KPC(old_medium_info_list));
-  } else if (OB_FAIL(check_medium_info_continuity(*cur_medium_info_list))) {
-    LOG_WARN("failed to check medium info cotinuity", K(ret));
   } else if (is_major_merge_type(merge_type)) {
     extra_medium_info_.last_compaction_type_ = is_major_merge(merge_type) ? compaction::ObMediumCompactionInfo::MAJOR_COMPACTION : compaction::ObMediumCompactionInfo::MEDIUM_COMPACTION;
     extra_medium_info_.last_medium_scn_ = finish_medium_scn;
@@ -583,7 +581,7 @@ int ObTabletMdsData::init_medium_info_list(
       && OB_FAIL(copy_medium_info_list(finish_medium_scn, full_memory_medium_info_list.medium_info_list_, *cur_medium_info_list))) {
     LOG_WARN("failed to copy medium info", K(ret));
   } else if (OB_FAIL(check_medium_info_continuity(*cur_medium_info_list))) {
-    LOG_WARN("failed to check medium info cotinuity", K(ret));
+    LOG_WARN("failed to check medium info continuity", K(ret), K(finish_medium_scn), KPC(cur_medium_info_list));
   } else {
     /*
      * finish_medium_scn = last_major->get_snapshot_version()
@@ -628,8 +626,6 @@ int ObTabletMdsData::init_with_update_medium_info(
     LOG_WARN("failed to init medium info list", K(ret));
   } else if (OB_FAIL(copy_medium_info_list(finish_medium_scn, *old_medium_info_list, *cur_medium_info_list))) {
     LOG_WARN("failed to copy medium info", K(ret));
-  } else if (OB_FAIL(check_medium_info_continuity(*cur_medium_info_list))) {
-    LOG_WARN("failed to check medium info cotinuity", K(ret));
   } else {
     extra_medium_info_.last_compaction_type_ = old_extra_medium_info.last_compaction_type_;
     extra_medium_info_.last_medium_scn_ = old_extra_medium_info.last_medium_scn_;
@@ -659,6 +655,9 @@ int ObTabletMdsData::copy_medium_info_list(
       LOG_WARN("unexpected error, medium info is null", K(ret), K(i), KP(input_medium_info));
     } else if (input_medium_info->medium_snapshot_ <= finish_medium_scn) {
       // medium snapshot no bigger than finish medium scn(which is from last major sstable),
+      // no need to copy it
+    } else if (input_medium_info->medium_snapshot_ <= medium_info_list.get_max_medium_snapshot()) {
+      // medium info no bigger than current max medium snapshot,
       // no need to copy it
     } else if (OB_FAIL(medium_info_list.append(*input_medium_info))) {
       LOG_WARN("failed to append medium info", K(ret), K(i), KPC(input_medium_info));
@@ -780,7 +779,9 @@ int ObTabletMdsData::check_medium_info_continuity(
           LOG_WARN("medium info ist null", K(ret), K(i), KP(info));
         } else if (OB_UNLIKELY(prev_medium_snapshot != info->last_medium_snapshot_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("medium info list is not continuous", K(ret), K(i), K(prev_medium_snapshot), KPC(info));
+          LOG_WARN("medium info list is not continuous", K(ret), K(i), K(prev_medium_snapshot),
+              "last_medium_snapshot", info->last_medium_snapshot_,
+              K(medium_info_list));
         } else {
           prev_medium_snapshot = info->medium_snapshot_;
         }
@@ -932,8 +933,6 @@ int ObTabletMdsData::fuse_mds_dump_node(
       LOG_WARN("failed to copy base medium info list", K(ret));
     } else if (OB_FAIL(copy_medium_info_list(finish_medium_scn, *mds_table_medium_info_list, *fused_medium_info_list))) {
       LOG_WARN("failed to copy mds table medium info list", K(ret));
-    } else if (OB_FAIL(check_medium_info_continuity(*fused_medium_info_list))) {
-      LOG_WARN("failed to check medium info cotinuity", K(ret));
     }
 
     ObTabletMdsData::free_medium_info_list(allocator, base_medium_info_list);
