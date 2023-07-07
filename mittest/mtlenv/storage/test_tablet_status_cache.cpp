@@ -525,6 +525,51 @@ TEST_F(TestTabletStatusCache, get_transfer_out_deleted)
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 }
 
+TEST_F(TestTabletStatusCache, get_empty_result_tablet)
+{
+  int ret = OB_SUCCESS;
+
+  // create tablet without any tablet status
+  const common::ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
+  const ObTabletMapKey key(LS_ID, tablet_id);
+  ObTabletHandle tablet_handle;
+  const uint64_t table_id = 1234567;
+  share::schema::ObTableSchema table_schema;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get ls", K(ret));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), KP(ls));
+  } else if (OB_FAIL(build_test_schema(table_schema, table_id))) {
+    LOG_WARN("failed to build table schema");
+  } else if (OB_FAIL(TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_,
+      ObTabletStatus::Status::MAX, share::SCN::min_scn()))) {
+    LOG_WARN("failed to create tablet", K(ret), K(ls_id), K(tablet_id));
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // test READ_WITHOUT_CHECK
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1 * 1000 * 1000/*timeout_us*/,
+      ObMDSGetTabletMode::READ_WITHOUT_CHECK, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_FALSE(tablet_handle.get_obj()->tablet_status_cache_.is_valid());
+
+  // test READ_READABLE_COMMITED
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1 * 1000 * 1000/*timeout_us*/,
+      ObMDSGetTabletMode::READ_READABLE_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
+  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
+  ASSERT_FALSE(tablet_handle.get_obj()->tablet_status_cache_.is_valid());
+
+  // test READ_ALL_COMMITED
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1 * 1000 * 1000/*timeout_us*/,
+      ObMDSGetTabletMode::READ_ALL_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
+  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
+  ASSERT_FALSE(tablet_handle.get_obj()->tablet_status_cache_.is_valid());
+}
+
 TEST_F(TestTabletStatusCache, get_read_all_committed_tablet)
 {
   int ret = OB_SUCCESS;
@@ -545,27 +590,10 @@ TEST_F(TestTabletStatusCache, get_read_all_committed_tablet)
     tablet->tablet_status_cache_.reset();
   }
 
-
   ObTabletCreateDeleteMdsUserData user_data;
   share::SCN min_scn;
-  share::SCN commit_scn;
-
-  // creation not commited
-  user_data.tablet_status_ = ObTabletStatus::MAX;
   min_scn.set_min();
-  user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
-  user_data.create_commit_scn_ = share::SCN::plus(min_scn, 50);
-  user_data.create_commit_version_ = 50;
-  mds::MdsCtx ctx1(mds::MdsWriter(transaction::ObTransID(2023062801)));
-  ret = tablet->set(user_data, ctx1);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  commit_scn = share::SCN::plus(min_scn, 100);
-  ctx1.single_log_commit(commit_scn, commit_scn);
-
-  tablet_handle.reset();
-  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1 * 1000 * 1000/*timeout_us*/,
-      ObMDSGetTabletMode::READ_ALL_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
-  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
+  share::SCN commit_scn;
 
   // creation commited
   user_data.tablet_status_ = ObTabletStatus::NORMAL;

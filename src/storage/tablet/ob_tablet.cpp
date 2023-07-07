@@ -5749,10 +5749,15 @@ int ObTablet::check_tablet_status_for_read_all_committed()
   // first make sure tablet is in any committed state
   // then check if it is a empty shell
   if (OB_FAIL(get_tablet_status(share::SCN::max_scn(), user_data, 0/*timeout*/))) {
-    LOG_WARN("failed to get tablet status", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_UNLIKELY(!user_data.tablet_status_.is_valid() || is_empty_shell())) {
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
+    } else {
+      LOG_WARN("failed to get tablet status", K(ret), K(ls_id), K(tablet_id));
+    }
+  } else if (OB_UNLIKELY(is_empty_shell())) {
     ret = OB_TABLET_NOT_EXIST;
-    LOG_WARN("tablet does not exist", K(ret), K(ls_id), K(tablet_id), K(user_data));
+    LOG_WARN("tablet become empty shell", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
 }
