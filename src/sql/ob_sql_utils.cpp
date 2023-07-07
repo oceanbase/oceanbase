@@ -1999,6 +1999,7 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
                                 ObObjPrintParams print_params)
 {
   int ret = OB_SUCCESS;
+  ObSqlPrinter sql_printer(stmt, schema_guard, print_params, NULL);
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(stmt), K(ret));
@@ -2008,144 +2009,195 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
   } else if (!stmt->is_dml_stmt()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected stmt type", K(stmt->get_stmt_type()), K(stmt->get_query_ctx()->get_sql_stmt()), K(ret));
-  } else {
-    //First try 64K buf on the stack, if it fails, then try 128K.
-    //If it still fails, allocate 256K from the heap. If it continues to fail, expand twice each time.
-    SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
-      if (OB_FAIL(print_sql(allocator, buf, sizeof(buf), stmt, sql, schema_guard, print_params))) {
-          LOG_WARN("failed to print sql", K(sizeof(buf)), K(ret));
+  } else if (OB_FAIL(sql_printer.do_print(allocator, sql))) {
+    LOG_WARN("failed to print sql", K(ret));
+  }
+  return ret;
+}
+
+int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
+{
+  int ret = OB_SUCCESS;
+  //First try 64K buf on the stack, if it fails, then try 128K.
+  //If it still fails, allocate 256K from the heap. If it continues to fail, expand twice each time.
+  int64_t res_len = 0;
+  SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
+    MEMSET(buf, 0, sizeof(buf));
+    if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
+        LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+      LOG_WARN("fail to deep copy string", K(ret));
+    }
+  }
+  if (OB_SIZE_OVERFLOW == ret) {
+    ret = OB_SUCCESS;
+    SMART_VAR(char[OB_MAX_SQL_LENGTH * 2], buf) {
+      MEMSET(buf, 0, sizeof(buf));
+      if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
+        LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+        LOG_WARN("fail to deep copy string", K(ret));
       }
     }
-    if (OB_SIZE_OVERFLOW == ret) {
-      ret = OB_SUCCESS;
-      SMART_VAR(char[OB_MAX_SQL_LENGTH * 2], buf) {
-        if (OB_FAIL(print_sql(allocator, buf, sizeof(buf), stmt, sql, schema_guard, print_params))) {
-          LOG_WARN("failed to print sql", K(sizeof(buf)), K(ret));
-        }
+  }
+  if (OB_SIZE_OVERFLOW == ret) {
+    bool is_succ = false;
+    ret = OB_SUCCESS;
+    for (int64_t i = 4; OB_SUCC(ret) && !is_succ && i <= 1024; i = i * 2) {
+      ObArenaAllocator alloc;
+      const int64_t length = OB_MAX_SQL_LENGTH * i;
+      char *buf = NULL;
+      if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(length)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory for sql", K(ret), K(length));
+      } else if (FALSE_IT(MEMSET(buf, 0, length))) {
+      } else if (OB_FAIL(inner_print(buf, length, res_len))) {
+        LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+        LOG_WARN("fail to deep copy string", K(ret));
       }
-    }
-    if (OB_SIZE_OVERFLOW == ret) {
-      bool is_succ = false;
-      ret = OB_SUCCESS;
-      for (int64_t i = 4; OB_SUCC(ret) && !is_succ && i <= 1024; i = i * 2) {
-        ObArenaAllocator alloc;
-        const int64_t length = OB_MAX_SQL_LENGTH * i;
-        char *buf = NULL;
-        if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(length)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc memory for set sql", K(ret), K(length));
-        } else if (OB_FAIL(print_sql(allocator, buf, length, stmt, sql, schema_guard, print_params))) {
-          LOG_WARN("failed to print sql", K(length), K(i), K(ret));
-        }
-        if (OB_SUCC(ret)) {
-          is_succ = true;
-        } else if (OB_SIZE_OVERFLOW == ret) {
-          ret = OB_SUCCESS;
-        }
+      if (OB_SUCC(ret)) {
+        is_succ = true;
+      } else if (OB_SIZE_OVERFLOW == ret) {
+        ret = OB_SUCCESS;
       }
     }
   }
   return ret;
 }
 
-int ObSQLUtils::print_sql(ObIAllocator &allocator,
-                          char *buf,
+int ObSqlPrinter::inner_print(char *buf, int64_t buf_len, int64_t &res_len)
+{
+  return ObSQLUtils::print_sql(buf,
+                               buf_len,
+                               res_len,
+                               stmt_,
+                               schema_guard_,
+                               print_params_);
+}
+
+int ObSQLUtils::print_sql(char *buf,
                           int64_t buf_len,
+                          int64_t &res_len,
                           const ObStmt *stmt,
-                          ObString &sql,
                           ObSchemaGetterGuard *schema_guard,
                           ObObjPrintParams print_params)
 {
   int ret = OB_SUCCESS;
-  MEMSET(buf, 0, buf_len);
   int64_t pos = 0;
-  switch (stmt->get_stmt_type()) {
-  case stmt::T_SELECT: {
-    ObSelectStmtPrinter printer(buf,
-                                buf_len,
-                                &pos,
-                                static_cast<const ObSelectStmt*>(stmt),
-                                schema_guard,
-                                print_params);
-    printer.set_is_root(true);
-    printer.set_is_first_stmt_for_hint(true);
-    printer.enable_print_temp_table_as_cte();
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print select stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy select stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_INSERT_ALL: {
-    ObInsertAllStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertAllStmt*>(stmt),
-                                   schema_guard, print_params);
-    printer.set_is_root(true);
-    printer.set_is_first_stmt_for_hint(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print insert stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy insert stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_REPLACE:
-  case stmt::T_INSERT: {
-    ObInsertStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertStmt*>(stmt),
-                                schema_guard, print_params);
-    printer.set_is_root(true);
-    printer.set_is_first_stmt_for_hint(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print insert stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy insert stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_DELETE: {
-    ObDeleteStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObDeleteStmt*>(stmt),
-                                schema_guard, print_params);
-    printer.set_is_root(true);
-    printer.set_is_first_stmt_for_hint(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print delete stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy delete stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_UPDATE: {
-    ObUpdateStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObUpdateStmt*>(stmt),
-                                schema_guard, print_params);
-    printer.set_is_root(true);
-    printer.set_is_first_stmt_for_hint(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print update stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy update stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_MERGE: {
-    ObMergeStmtPrinter printer(buf, buf_len, &pos,
-                                static_cast<const ObMergeStmt*>(stmt),
-                                schema_guard, print_params);
-    printer.set_is_root(true);
-    printer.set_is_first_stmt_for_hint(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("failed to print merge stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("failed to deep copy merge stmt string", K(ret));
+  const ObDMLStmt *reconstruct_stmt = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (stmt->is_explain_stmt()) {
+    if (OB_ISNULL(reconstruct_stmt = static_cast<const ObExplainStmt*>(stmt)->get_explain_query_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("Explain query stmt is NULL", K(ret));
+    } else {
+      BUF_PRINTF("EXPLAIN ");
     }
-  }
-    break;
-  default: {
+  } else if (stmt->is_dml_stmt()) {
+    reconstruct_stmt = static_cast<const ObDMLStmt*>(stmt);
+  } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Invalid stmt type", K(stmt->get_stmt_type()), K(stmt->get_query_ctx()->get_sql_stmt()), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "stmt type");
   }
-    break;
+  if (OB_SUCC(ret)) {
+    switch (reconstruct_stmt->get_stmt_type()) {
+    case stmt::T_SELECT: {
+      ObSelectStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObSelectStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params);
+      printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
+      printer.enable_print_temp_table_as_cte();
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print select stmt", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_INSERT_ALL: {
+      ObInsertAllStmtPrinter printer(buf,
+                                    buf_len,
+                                    &pos,
+                                    static_cast<const ObInsertAllStmt*>(reconstruct_stmt),
+                                    schema_guard,
+                                    print_params);
+      printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print insert stmt", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_REPLACE:
+    case stmt::T_INSERT: {
+      ObInsertStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObInsertStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params);
+      printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print insert stmt", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_DELETE: {
+      ObDeleteStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObDeleteStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params);
+      printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print delete stmt", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_UPDATE: {
+      ObUpdateStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObUpdateStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params);
+      printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print update stmt", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_MERGE: {
+      ObMergeStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObMergeStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params);
+      printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("failed to print merge stmt", K(ret));
+      }
+    }
+      break;
+    default: {
+
+    }
+      break;
+    }
   }
+  res_len = pos;
   return ret;
 }
 

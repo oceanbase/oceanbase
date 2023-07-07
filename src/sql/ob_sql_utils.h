@@ -110,6 +110,36 @@ private:
   int ret_;
 };
 
+class ObISqlPrinter
+{
+protected:
+  virtual int inner_print(char *buf, int64_t buf_len, int64_t &pos) = 0;
+public:
+  virtual int do_print(ObIAllocator &allocator, ObString &result);
+  virtual ~ObISqlPrinter() = default;
+};
+
+class ObSqlPrinter : public ObISqlPrinter
+{
+public:
+  ObSqlPrinter(const ObStmt *stmt,
+               ObSchemaGetterGuard *schema_guard,
+               ObObjPrintParams print_params,
+               const ParamStore *param_store) :
+    stmt_(stmt),
+    schema_guard_(schema_guard),
+    print_params_(print_params),
+    param_store_(param_store)
+    {}
+  virtual int inner_print(char *buf, int64_t buf_len, int64_t &res_len) override;
+
+protected:
+  const ObStmt *stmt_;
+  ObSchemaGetterGuard *schema_guard_;
+  ObObjPrintParams print_params_;
+  const ParamStore *param_store_;
+};
+
 class ObSQLUtils
 {
 public:
@@ -364,11 +394,10 @@ public:
   static int reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
                              ObSchemaGetterGuard *schema_guard,
                              ObObjPrintParams print_params = ObObjPrintParams());
-  static int print_sql(ObIAllocator &allocator,
-                       char *buf,
+  static int print_sql(char *buf,
                        int64_t buf_len,
+                       int64_t &pos,
                        const ObStmt *stmt,
-                       ObString &sql,
                        ObSchemaGetterGuard *schema_guard,
                        ObObjPrintParams print_params);
 

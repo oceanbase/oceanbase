@@ -53,6 +53,28 @@ class ObTableStmt;
 
 class ObCreateTableExecutor
 {
+  class ObInsSQLPrinter : public ObISqlPrinter
+  {
+  public:
+    ObInsSQLPrinter(ObCreateTableStmt *stmt,
+                    ObSchemaGetterGuard *schema_guard,
+                    ObObjPrintParams print_params,
+                    const ParamStore *param_store,
+                    bool do_osg) :
+      stmt_(stmt),
+      schema_guard_(schema_guard),
+      print_params_(print_params),
+      param_store_(param_store),
+      do_osg_(do_osg)
+      {}
+    virtual int inner_print(char *buf, int64_t buf_len, int64_t &res_len) override;
+  private:
+    ObCreateTableStmt *stmt_;
+    ObSchemaGetterGuard *schema_guard_;
+    ObObjPrintParams print_params_;
+    const ParamStore *param_store_;
+    bool do_osg_;
+  };
 public:
   ObCreateTableExecutor();
   virtual ~ObCreateTableExecutor();
