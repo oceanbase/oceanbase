@@ -388,6 +388,7 @@ void ObResourceGroup::check_worker_count()
         workers_.remove(wnode);
         destroy_worker(w);
       } else if (w->has_req_flag()
+                 && 0 != w->blocking_ts()
                  && now - w->blocking_ts() >= threshold
                  && enable_dynamic_worker) {
         ++token;
@@ -1385,6 +1386,7 @@ void ObTenant::check_worker_count()
         workers_.remove(wnode);
         destroy_worker(w);
       } else if (w->has_req_flag()
+                 && 0 != w->blocking_ts()
                  && now - w->blocking_ts() >= threshold
                  && w->is_default_worker()
                  && enable_dynamic_worker) {
