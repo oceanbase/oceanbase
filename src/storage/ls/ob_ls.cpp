@@ -1746,10 +1746,11 @@ int ObLS::get_ls_meta_package_and_tablet_metas(
   } else if (OB_UNLIKELY(is_stopped_)) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(tablet_gc_handler_.disable_gc())) {
+    LOG_WARN("failed to disable gc", K(ret), "ls_id", ls_meta_.ls_id_);
   } else {
     // TODO(wangxiaohui.wxh) consider the ls is offline meanwhile.
     // disable gc while get all tablet meta
-    tablet_gc_handler_.disable_gc();
     ObLSMetaPackage meta_package;
     if (OB_FAIL(get_ls_meta_package(check_archive, meta_package))) {
       LOG_WARN("failed to get ls meta package", K(ret), K_(ls_meta));
