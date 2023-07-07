@@ -178,6 +178,7 @@ public:
   int start();
   int stop();
   void wait();
+  int prepare_for_safe_destroy();
   bool safe_to_destroy();
   void destroy();
   int offline();

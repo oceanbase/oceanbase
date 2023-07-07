@@ -988,7 +988,9 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk)
   static const int64_t SLEEP_TS = 100_ms;
   int64_t retry_cnt = 0;
   do {
-    if (remove_from_disk && OB_FAIL(ls->remove_ls())) {
+    if (OB_FAIL(ls->prepare_for_safe_destroy())) {
+      LOG_WARN("prepare safe destroy failed", K(ret), KPC(ls));
+    } else if (remove_from_disk && OB_FAIL(ls->remove_ls())) {
       LOG_WARN("remove ls from disk failed", K(ret), K(remove_from_disk), K(ls_id));
     } else if (OB_FAIL(remove_ls_from_map_(ls_id))) {
       LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));
