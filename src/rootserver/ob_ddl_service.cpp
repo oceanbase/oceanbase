@@ -7555,6 +7555,7 @@ int ObDDLService::alter_table_update_aux_column(
             new_aux_column_schema.set_rowkey_position(origin_column_schema->get_rowkey_position());
             new_aux_column_schema.set_index_position(origin_column_schema->get_index_position());
             new_aux_column_schema.set_tbl_part_key_pos(origin_column_schema->get_tbl_part_key_pos());
+            ObIndexBuilderUtil::del_column_flags_and_default_value(new_aux_column_schema);
           }
           if (!is_index) {
             // VP column of primary table need not update.
