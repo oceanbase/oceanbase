@@ -884,6 +884,7 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
   ObLS *src_ls = NULL;
   ObLSService* ls_srv = nullptr;
   SCN max_decided_scn;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   if ((!scn.is_valid() && for_replay) || !tx_start_transfer_in_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(scn), K(for_replay), K(tx_start_transfer_in_info));
@@ -905,6 +906,11 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
   } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is NULL", KR(ret), K(src_ls));
+  } else if (CLICK_FAIL(src_ls->get_migration_status(migration_status))) {
+    LOG_WARN("failed to get rebuild info", K(ret), KPC(src_ls));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    ret = OB_EAGAIN;
+    LOG_WARN("src ls migration status not none", K(ret), K(scn), K(migration_status), KPC(src_ls));
   } else if (CLICK_FAIL(src_ls->get_max_decided_scn(max_decided_scn))) {
     LOG_WARN("failed to log stream get decided scn", K(ret), K(src_ls), K(tx_start_transfer_in_info));
   } else if (max_decided_scn < tx_start_transfer_in_info.start_scn_) {
@@ -935,11 +941,17 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablet_(
   ObTabletCreateDeleteMdsUserData user_data;
   bool unused_committed_flag = false;
   const ObLSID &dest_ls_id = tablet_meta.ls_id_;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
 
   //replay scn need check
   if (!tablet_meta.is_valid() || OB_ISNULL(src_ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check src tablete get invalid argument", K(ret), K(tablet_meta), KP(src_ls));
+  } else if (CLICK_FAIL(src_ls->get_migration_status(migration_status))) {
+    LOG_WARN("failed to get rebuild info", K(ret), KPC(src_ls));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    ret = OB_EAGAIN;
+    LOG_WARN("src ls migration status not none", K(ret), K(migration_status), KPC(src_ls));
   } else if (CLICK_FAIL(src_ls->get_tablet(tablet_meta.tablet_id_, tablet_handle, 0,
       ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     if (ret == OB_TABLET_NOT_EXIST) {
