@@ -293,25 +293,27 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   int64_t tenant_id = 0;
   int64_t id = ObLSID::INVALID_LS_ID;
   int64_t ls_role = -1;
-  uint64_t weak_read_scn_uint = 0;
+  int64_t weak_read_scn = 0;
   int64_t migrate_status_int = -1;
+  common::number::ObNumber weak_read_number;
 
   (void)GET_COL_IGNORE_NULL(result.get_varchar, "svr_ip", ip);
   (void)GET_COL_IGNORE_NULL(result.get_int, "svr_port", port);
   (void)GET_COL_IGNORE_NULL(result.get_int, "tenant_id", tenant_id);
   (void)GET_COL_IGNORE_NULL(result.get_int, "ls_id", id);
   (void)GET_COL_IGNORE_NULL(result.get_int, "role", ls_role);
-  (void)GET_COL_IGNORE_NULL(result.get_uint, "weak_read_scn", weak_read_scn_uint);
+  (void)GET_COL_IGNORE_NULL(result.get_number, "weak_read_scn", weak_read_number);
   (void)GET_COL_IGNORE_NULL(result.get_int, "migrate_status", migrate_status_int);
 
   ObLSID ls_id(id);
   common::ObAddr server;
-  int64_t weak_read_scn = static_cast<int64_t>(weak_read_scn_uint);
   ObMigrateStatus migrate_status = ObMigrateStatus(migrate_status_int);
 
   if (false == server.set_ip_addr(ip, static_cast<uint32_t>(port))) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid server address", K(ip), K(port));
+  } else if (OB_FAIL(weak_read_number.cast_to_int64(weak_read_scn))) {
+    TRANS_LOG(WARN, "failed to cast int", K(ret), K(weak_read_number));
   } else if (OB_FAIL(bl_key.init(server, tenant_id, ls_id))) {
     TRANS_LOG(WARN, "bl_key init fail", K(server), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(ls_info.init(ls_role, weak_read_scn, migrate_status))) {
