@@ -134,6 +134,10 @@ int ObRpcLoadDataShuffleTaskExecuteP::process()
 
   if (OB_FAIL(ObGlobalLoadDataStatMap::getInstance()->get_job_status(task.gid_, job_status))) {
     LOG_WARN("fail to get job, main thread has already quit", K(ret), K(task));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard_))) {
+    //Confirmed with the load data owner that the inability to calculate the correct tablet_id here will not affect the execution,
+    //so we use the latest schema version to obtain the guard
+    LOG_WARN("get tenant schema guard failed", KR(ret));
   } else if (OB_ISNULL(job_status)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("job status is null", K(ret));
@@ -144,6 +148,7 @@ int ObRpcLoadDataShuffleTaskExecuteP::process()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("handle is null", K(ret));
     } else  {
+      handle->exec_ctx.get_sql_ctx()->schema_guard_ = &schema_guard_;
       if (OB_UNLIKELY(THIS_WORKER.is_timeout())) {
         ret = OB_TIMEOUT;
         LOG_WARN("LOAD DATA shuffle task timeout", K(ret), K(task));

@@ -51,7 +51,7 @@ private:
 public:
   struct IndexAndType
   {
-    IndexAndType() : index_(-1) {}
+    IndexAndType() : index_(-1), column_schema_(nullptr) {}
     int64_t index_;
     const share::schema::ObColumnSchemaV2 *column_schema_;
     TO_STRING_KV(K_(index), KP_(column_schema));
