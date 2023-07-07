@@ -2206,6 +2206,8 @@ int ObTablet::get_src_tablet_read_tables_(
   ObTablet *tablet = nullptr;
   succ_get_src_tables = false;
   ObTabletCreateDeleteMdsUserData user_data;
+  ObLSTabletService *tablet_service = nullptr;
+  ObLSTabletService::AllowToReadMgr::AllowToReadInfo read_info;
   if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(snapshot_version));
@@ -2225,8 +2227,17 @@ int ObTablet::get_src_tablet_read_tables_(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(user_data));
+  } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls tablet service should not be NULL", K(ret), KP(ls));
+  } else if (OB_FAIL(tablet_service->check_allow_to_read(read_info))) {
+    if (OB_REPLICA_NOT_READABLE == ret) {
+      LOG_WARN("replica unreadable", K(ret), "ls_id", ls->get_ls_id(), "tablet_id", tablet_meta_.tablet_id_, K(user_data));
+    } else {
+      LOG_WARN("failed to check allow to read", K(ret), "ls_id", ls->get_ls_id(), "tablet_id", tablet_meta_.tablet_id_, K(user_data));
+    }
   } else if (OB_FAIL(ls->get_tablet(tablet_meta_.tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-    LOG_WARN("failed to get tablet", K(ret), K(tablet_meta_.tablet_id_), K(ls->get_ls_id()));
+    LOG_WARN("failed to get tablet", K(ret), "ls_id", ls->get_ls_id(), "tablet_id", tablet_meta_.tablet_id_);
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(user_data));
@@ -2236,7 +2247,7 @@ int ObTablet::get_src_tablet_read_tables_(
       void *meta_hdl_buf = ob_malloc(sizeof(ObStorageMetaHandle), ObMemAttr(MTL_ID(), "TransferMetaH"));
       if (OB_ISNULL(meta_hdl_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocator memory for handles");
+        LOG_WARN("fail to allocator memory for handles", K(ret));
       } else {
         iter.table_store_iter_.transfer_src_table_store_handle_ = new (meta_hdl_buf) ObStorageMetaHandle();
       }
@@ -2250,6 +2261,8 @@ int ObTablet::get_src_tablet_read_tables_(
         *(iter.table_store_iter_.transfer_src_table_store_handle_),
         allow_no_ready_read))) {
       LOG_WARN("failed to get read tables from table store", K(ret), KPC(tablet));
+    } else if (OB_FAIL(tablet_service->check_read_info_same(read_info))) {
+      LOG_WARN("failed to check read info same", K(ret), KPC(tablet));
     } else {
       succ_get_src_tables = true;
     }

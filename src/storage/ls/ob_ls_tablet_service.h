@@ -290,7 +290,8 @@ public:
       const int64_t snapshot_version,
       ObTabletTableIterator &iter,
       const bool allow_no_ready_read = false);
-  int check_allow_to_read();
+  int check_allow_to_read(AllowToReadMgr::AllowToReadInfo &read_info);
+  int check_read_info_same(const AllowToReadMgr::AllowToReadInfo &read_info);
   int set_tablet_status(
       const common::ObTabletID &tablet_id,
       const ObTabletCreateDeleteMdsUserData &tablet_status,
