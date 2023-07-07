@@ -22,9 +22,9 @@ Query Plan
 ===========================================
 |ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------
-|0 |MERGE JOIN |    |1       |4           |
-|1 | TABLE SCAN|t1  |1       |2           |
-|2 | TABLE SCAN|t2  |1       |2           |
+|0 |MERGE JOIN |    |1       |8           |
+|1 | TABLE SCAN|t1  |1       |4           |
+|2 | TABLE SCAN|t2  |1       |4           |
 ===========================================
 Outputs & filters:
 -------------------------------------
@@ -52,9 +52,9 @@ Query Plan
 ===========================================
 |ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------
-|0 |MERGE JOIN |    |2       |4           |
-|1 | TABLE SCAN|t1  |1       |2           |
-|2 | TABLE SCAN|t2  |2       |2           |
+|0 |MERGE JOIN |    |2       |8           |
+|1 | TABLE SCAN|t1  |1       |4           |
+|2 | TABLE SCAN|t2  |2       |4           |
 ===========================================
 Outputs & filters:
 -------------------------------------
@@ -82,9 +82,9 @@ Query Plan
 ===========================================
 |ID|OPERATOR   |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------
-|0 |MERGE JOIN |    |2       |4           |
-|1 | TABLE SCAN|a   |1       |2           |
-|2 | TABLE SCAN|b   |2       |2           |
+|0 |MERGE JOIN |    |2       |8           |
+|1 | TABLE SCAN|a   |1       |4           |
+|2 | TABLE SCAN|b   |2       |4           |
 ===========================================
 Outputs & filters:
 -------------------------------------
@@ -112,10 +112,10 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |    |3       |4           |
-|1 | TABLE SCAN                |b   |3       |2           |
-|2 | MATERIAL                  |    |1       |2           |
-|3 |  TABLE SCAN               |a   |1       |2           |
+|0 |NESTED-LOOP JOIN CARTESIAN |    |3       |8           |
+|1 | TABLE SCAN                |b   |3       |4           |
+|2 | MATERIAL                  |    |1       |4           |
+|3 |  TABLE SCAN               |a   |1       |4           |
 ===========================================================
 Outputs & filters:
 -------------------------------------

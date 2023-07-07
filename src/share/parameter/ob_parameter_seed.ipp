@@ -1441,3 +1441,7 @@ DEF_CAP(range_optimizer_max_mem_size, OB_TENANT_PARAMETER, "128M", "[16M,1G]",
 DEF_TIME(_worker_long_stall_threshold, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
          "threshold of dynamic worker works",
 		 ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_optimizer_better_inlist_costing, OB_TENANT_PARAMETER, "False",
+        "enable improved costing of index access using in-list(s)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

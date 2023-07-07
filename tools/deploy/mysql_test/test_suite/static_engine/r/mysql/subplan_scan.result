@@ -17,10 +17,10 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |HASH GROUP BY  |    |5       |5           |
-|1 | SUBPLAN SCAN  |x   |5       |4           |
-|2 |  HASH DISTINCT|    |5       |4           |
-|3 |   TABLE SCAN  |t1  |5       |2           |
+|0 |HASH GROUP BY  |    |5       |7           |
+|1 | SUBPLAN SCAN  |x   |5       |6           |
+|2 |  HASH DISTINCT|    |5       |6           |
+|3 |   TABLE SCAN  |t1  |5       |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -48,10 +48,10 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |HASH GROUP BY  |    |5       |5           |
-|1 | SUBPLAN SCAN  |x   |5       |4           |
-|2 |  HASH DISTINCT|    |5       |4           |
-|3 |   TABLE SCAN  |t1  |5       |2           |
+|0 |HASH GROUP BY  |    |5       |7           |
+|1 | SUBPLAN SCAN  |x   |5       |6           |
+|2 |  HASH DISTINCT|    |5       |6           |
+|3 |   TABLE SCAN  |t1  |5       |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -79,10 +79,10 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |HASH GROUP BY  |    |5       |5           |
-|1 | SUBPLAN SCAN  |x   |5       |4           |
-|2 |  HASH DISTINCT|    |5       |4           |
-|3 |   TABLE SCAN  |t1  |5       |2           |
+|0 |HASH GROUP BY  |    |5       |7           |
+|1 | SUBPLAN SCAN  |x   |5       |6           |
+|2 |  HASH DISTINCT|    |5       |6           |
+|3 |   TABLE SCAN  |t1  |5       |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -110,7 +110,7 @@ Query Plan
 ==========================================
 |ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
 ------------------------------------------
-|0 |TABLE SCAN|t1  |1       |2           |
+|0 |TABLE SCAN|t1  |1       |5           |
 ==========================================
 Outputs & filters:
 -------------------------------------

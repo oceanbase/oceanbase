@@ -8,16 +8,16 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                            |NAME        |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |TEMP TABLE TRANSFORMATION           |            |1       |5           |
-|1 | PX COORDINATOR                     |            |1       |4           |
-|2 |  EXCHANGE OUT DISTR                |:EX10001    |1       |4           |
-|3 |   TEMP TABLE INSERT                |TEMP1       |1       |3           |
-|4 |    HASH GROUP BY                   |            |1       |3           |
-|5 |     EXCHANGE IN DISTR              |            |2       |3           |
-|6 |      EXCHANGE OUT DISTR (HASH)     |:EX10000    |2       |3           |
-|7 |       HASH GROUP BY                |            |2       |2           |
-|8 |        PX BLOCK ITERATOR           |            |1       |1           |
-|9 |         TABLE SCAN                 |t1          |1       |1           |
+|0 |TEMP TABLE TRANSFORMATION           |            |1       |6           |
+|1 | PX COORDINATOR                     |            |1       |5           |
+|2 |  EXCHANGE OUT DISTR                |:EX10001    |1       |5           |
+|3 |   TEMP TABLE INSERT                |TEMP1       |1       |4           |
+|4 |    HASH GROUP BY                   |            |1       |4           |
+|5 |     EXCHANGE IN DISTR              |            |2       |4           |
+|6 |      EXCHANGE OUT DISTR (HASH)     |:EX10000    |2       |4           |
+|7 |       HASH GROUP BY                |            |2       |3           |
+|8 |        PX BLOCK ITERATOR           |            |1       |2           |
+|9 |         TABLE SCAN                 |t1          |1       |2           |
 |10| PX COORDINATOR                     |            |1       |2           |
 |11|  EXCHANGE OUT DISTR                |:EX20002    |1       |2           |
 |12|   SHARED HASH JOIN                 |            |1       |1           |
@@ -73,26 +73,26 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                             |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |PX COORDINATOR                       |        |1       |5           |
-|1 | EXCHANGE OUT DISTR                  |:EX10003|1       |5           |
-|2 |  HASH GROUP BY                      |        |1       |5           |
-|3 |   EXCHANGE IN DISTR                 |        |2       |5           |
-|4 |    EXCHANGE OUT DISTR (HASH)        |:EX10002|2       |4           |
-|5 |     HASH GROUP BY                   |        |2       |4           |
-|6 |      SUBPLAN SCAN                   |VIEW1   |1       |3           |
-|7 |       MERGE GROUP BY                |        |1       |3           |
-|8 |        PARTITION SORT               |        |1       |3           |
-|9 |         MERGE JOIN                  |        |1       |3           |
-|10|          SORT                       |        |1       |2           |
-|11|           EXCHANGE IN DISTR         |        |1       |2           |
-|12|            EXCHANGE OUT DISTR (HASH)|:EX10000|1       |2           |
-|13|             PX BLOCK ITERATOR       |        |1       |1           |
-|14|              TABLE SCAN             |b       |1       |1           |
-|15|          SORT                       |        |1       |2           |
-|16|           EXCHANGE IN DISTR         |        |1       |2           |
-|17|            EXCHANGE OUT DISTR (HASH)|:EX10001|1       |2           |
-|18|             PX BLOCK ITERATOR       |        |1       |1           |
-|19|              TABLE SCAN             |t1      |1       |1           |
+|0 |PX COORDINATOR                       |        |1       |8           |
+|1 | EXCHANGE OUT DISTR                  |:EX10003|1       |7           |
+|2 |  HASH GROUP BY                      |        |1       |7           |
+|3 |   EXCHANGE IN DISTR                 |        |2       |7           |
+|4 |    EXCHANGE OUT DISTR (HASH)        |:EX10002|2       |6           |
+|5 |     HASH GROUP BY                   |        |2       |6           |
+|6 |      SUBPLAN SCAN                   |VIEW1   |1       |5           |
+|7 |       MERGE GROUP BY                |        |1       |5           |
+|8 |        PARTITION SORT               |        |1       |5           |
+|9 |         MERGE JOIN                  |        |1       |5           |
+|10|          SORT                       |        |1       |3           |
+|11|           EXCHANGE IN DISTR         |        |1       |3           |
+|12|            EXCHANGE OUT DISTR (HASH)|:EX10000|1       |3           |
+|13|             PX BLOCK ITERATOR       |        |1       |2           |
+|14|              TABLE SCAN             |b       |1       |2           |
+|15|          SORT                       |        |1       |3           |
+|16|           EXCHANGE IN DISTR         |        |1       |3           |
+|17|            EXCHANGE OUT DISTR (HASH)|:EX10001|1       |3           |
+|18|             PX BLOCK ITERATOR       |        |1       |2           |
+|19|              TABLE SCAN             |t1      |1       |2           |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -140,21 +140,21 @@ Query Plan
 ====================================================================
 |ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------
-|0 |PX COORDINATOR                  |        |1       |5           |
-|1 | EXCHANGE OUT DISTR             |:EX10002|1       |4           |
-|2 |  MERGE GROUP BY                |        |1       |4           |
-|3 |   PARTITION SORT               |        |1       |4           |
-|4 |    MERGE JOIN                  |        |1       |4           |
-|5 |     SORT                       |        |1       |2           |
-|6 |      EXCHANGE IN DISTR         |        |1       |2           |
-|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|1       |2           |
-|8 |        PX BLOCK ITERATOR       |        |1       |1           |
-|9 |         TABLE SCAN             |t1      |1       |1           |
-|10|     SORT                       |        |1       |2           |
-|11|      EXCHANGE IN DISTR         |        |1       |2           |
-|12|       EXCHANGE OUT DISTR (HASH)|:EX10001|1       |2           |
-|13|        PX BLOCK ITERATOR       |        |1       |1           |
-|14|         TABLE SCAN             |b       |1       |1           |
+|0 |PX COORDINATOR                  |        |1       |7           |
+|1 | EXCHANGE OUT DISTR             |:EX10002|1       |6           |
+|2 |  MERGE GROUP BY                |        |1       |6           |
+|3 |   PARTITION SORT               |        |1       |6           |
+|4 |    MERGE JOIN                  |        |1       |6           |
+|5 |     SORT                       |        |1       |3           |
+|6 |      EXCHANGE IN DISTR         |        |1       |3           |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|1       |3           |
+|8 |        PX BLOCK ITERATOR       |        |1       |2           |
+|9 |         TABLE SCAN             |t1      |1       |2           |
+|10|     SORT                       |        |1       |3           |
+|11|      EXCHANGE IN DISTR         |        |1       |3           |
+|12|       EXCHANGE OUT DISTR (HASH)|:EX10001|1       |3           |
+|13|        PX BLOCK ITERATOR       |        |1       |2           |
+|14|         TABLE SCAN             |b       |1       |2           |
 ====================================================================
 Outputs & filters:
 -------------------------------------

@@ -104,7 +104,6 @@ int ObJoinOrder::compute_table_location_for_paths(ObIArray<AccessPath *> &access
     // generate table location for main table
     if (OB_FAIL(compute_table_location(table_id_,
                                        table_meta_info_.ref_table_id_,
-                                       access_paths,
                                        false,
                                        table_partition_info_))) {
       LOG_WARN("failed to calc table location", K(ret));
@@ -114,6 +113,8 @@ int ObJoinOrder::compute_table_location_for_paths(ObIArray<AccessPath *> &access
     } else if (OB_FAIL(tbl_part_infos.push_back(table_partition_info_))) {
       LOG_WARN("failed to push back table partition info", K(ret));
     }
+  } else if (OB_FAIL(tbl_part_infos.push_back(table_partition_info_))) {
+    LOG_WARN("failed to push back table partition info", K(ret));
   }
   // compute table location for global index
   for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
@@ -140,7 +141,6 @@ int ObJoinOrder::compute_table_location_for_paths(ObIArray<AccessPath *> &access
         ObTablePartitionInfo *table_partition_info = NULL;
         if (OB_FAIL(compute_table_location(path->table_id_,
                                            path->index_id_,
-                                           access_paths,
                                            true,
                                            table_partition_info))) {
           LOG_WARN("failed to calc table location", K(ret));
@@ -161,7 +161,6 @@ int ObJoinOrder::compute_table_location_for_paths(ObIArray<AccessPath *> &access
 
 int ObJoinOrder::compute_table_location(const uint64_t table_id,
                                         const uint64_t ref_table_id,
-                                        ObIArray<AccessPath *> &access_paths,
                                         const bool is_global_index,
                                         ObTablePartitionInfo *&table_partition_info)
 {
@@ -238,7 +237,7 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
                                                                               dtc_params))) {
       LOG_WARN("failed to calculate table location", K(ret));
     } else {
-      LOG_TRACE("succeed to calculate base table sharding info", K(table_id), K(ref_table_id),
+      LOG_INFO("succeed to calculate base table sharding info", K(table_id), K(ref_table_id),
           K(is_global_index));
     }
   }
@@ -2910,15 +2909,27 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   } else {
     void *tmp_ptr = allocator_->alloc(sizeof(ObQueryRange));
     ObQueryRange *tmp_qr = NULL;
+    ObSEArray<ObRawExpr*, 4> range_predicates;
+    bool enable_better_inlist = false;
     if (OB_ISNULL(tmp_ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for query range", K(ret));
+    } else if (session_info->is_better_inlist_enabled(enable_better_inlist)) {
+      LOG_WARN("failed to check better inlist enabled", K(ret));
+    } else if (enable_better_inlist &&
+               OB_FAIL(get_candi_range_expr(range_columns,
+                                            predicates,
+                                            range_predicates))) {
+      LOG_WARN("failed to get candi range expr", K(ret));
+    } else if (!enable_better_inlist &&
+               OB_FAIL(range_predicates.assign(predicates))) {
+      LOG_WARN("failed to assign exprs", K(ret));
     } else {
       tmp_qr = new(tmp_ptr)ObQueryRange(*allocator_);
       const ObDataTypeCastParams dtc_params =
             ObBasicSessionInfo::create_dtc_params(session_info);
       bool is_in_range_optimization_enabled = session_info->is_in_range_optimization_enabled();
-      if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
+      if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, range_predicates,
                                                           dtc_params, opt_ctx->get_exec_ctx(),
                                                           &expr_constraints,
                                                           params, false, true,
@@ -2993,8 +3004,342 @@ int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> 
   return ret;
 }
 
-int ObJoinOrder::estimate_size_and_width_for_base_table(PathHelper &helper,
-                                                        ObIArray<AccessPath *> &access_paths)
+int ObJoinOrder::get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
+                                      const ObIArray<ObRawExpr*> &predicates,
+                                      ObIArray<ObRawExpr*> &range_predicates)
+{
+  int ret = OB_SUCCESS;
+  double min_cost = 0;
+  double cost = 0;
+  bool has_in_pred = false;
+  int64_t range_count = 1;
+  ObSEArray<ObRawExpr*, 4> range_exprs;
+  ObSEArray<ObRawExpr*, 4> ignore_predicates;
+  ObSEArray<CandiRangeExprs*, 4> sorted_predicates;
+  LOG_TRACE("check index", K(range_columns));
+  if (OB_FAIL(sort_predicate_by_index_column(range_columns,
+                                              predicates,
+                                              sorted_predicates,
+                                              has_in_pred))) {
+    LOG_WARN("failed to sort predicate by index column", K(ret));
+  } else if (!has_in_pred) {
+    //do nothing
+    //calculate full index scan cost
+  } else if (OB_FAIL(calculate_range_expr_cost(sorted_predicates,
+                                                range_exprs,
+                                                range_columns.count(),
+                                                range_count,
+                                                min_cost))) {
+    LOG_WARN("failed to calculate range expr cost", K(ret));
+  }
+  if (OB_SUCC(ret) && has_in_pred) {
+    auto compare_op = [](CandiRangeExprs *lhs, CandiRangeExprs *rhs)
+                      { bool b_ret = false;
+                        if (NULL != lhs && NULL != rhs)
+                        { b_ret = lhs->index_ < rhs->index_; }
+                        return b_ret; };
+    std::sort(sorted_predicates.begin(), sorted_predicates.end(), compare_op);
+    LOG_TRACE("sort predicates and calc cost", K(min_cost), K(sorted_predicates));
+  }
+  //for earch candi range expr, check scan cost
+  for (int64_t i = 0; OB_SUCC(ret) && has_in_pred && i < sorted_predicates.count(); ++i) {
+    CandiRangeExprs *candi_exprs = sorted_predicates.at(i);
+    ObRawExpr *min_cost_in_expr = NULL;
+    uint64_t min_cost_range_count = INT64_MAX;
+    if (OB_ISNULL(candi_exprs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null range exprs", K(ret));
+    } else if (!candi_exprs->eq_exprs_.empty()) {
+      //has equal condition, ignore all in exprs
+      if (OB_FAIL(append(range_exprs, candi_exprs->eq_exprs_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(calculate_range_expr_cost(sorted_predicates,
+                                                    range_exprs,
+                                                    range_columns.count(),
+                                                    range_count,
+                                                    min_cost))) {
+        LOG_WARN("failed to calculate range expr cost", K(ret));
+      } else if (OB_FAIL(append(ignore_predicates, candi_exprs->in_exprs_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      }
+    } else {
+      //choose less in list expr
+      for (int64_t j = 0; OB_SUCC(ret) && j < candi_exprs->in_exprs_.count(); ++j) {
+        ObRawExpr* in_expr = candi_exprs->in_exprs_.at(j);
+        ObRawExpr* row_expr = NULL;
+        if (OB_ISNULL(in_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null in expr", K(ret));
+        } else if (2 != in_expr->get_param_count() ||
+                    OB_ISNULL(row_expr=in_expr->get_param_expr(1))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null expr", K(ret));
+        } else if (row_expr->get_param_count() * range_count < min_cost_range_count) {
+          min_cost_range_count = row_expr->get_param_count() * range_count;
+          if (NULL == min_cost_in_expr) {
+            min_cost_in_expr = in_expr;
+          } else if (OB_FAIL(ignore_predicates.push_back(min_cost_in_expr))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          } else {
+            min_cost_in_expr = in_expr;
+          }
+        } else if (OB_FAIL(ignore_predicates.push_back(in_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && NULL != min_cost_in_expr) {
+        //check cost
+        if (OB_FAIL(range_exprs.push_back(min_cost_in_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_FAIL(calculate_range_expr_cost(sorted_predicates,
+                                                      range_exprs,
+                                                      range_columns.count(),
+                                                      min_cost_range_count,
+                                                      cost))) {
+          LOG_WARN("failed to calculate range expr cost", K(ret));
+        } else if (cost >= min_cost) {
+          //increase cost, ignore in expr
+          range_exprs.pop_back();
+          if (OB_FAIL(ignore_predicates.push_back(min_cost_in_expr))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          }
+        } else {
+          //reduce cost, use in expr
+          range_count = min_cost_range_count;
+          min_cost = cost;
+        }
+      }
+    }
+  }
+  //remove ignore in expr
+  for (int64_t i = 0; OB_SUCC(ret) && i < predicates.count(); ++i) {
+    if (ObOptimizerUtil::find_item(ignore_predicates, predicates.at(i))) {
+      //do nothing
+    } else if (OB_FAIL(range_predicates.push_back(predicates.at(i)))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
+  }
+  //destroy candi range exprs
+  for (int64_t i = 0; i < sorted_predicates.count(); ++i) {
+    if (NULL != sorted_predicates.at(i)) {
+      sorted_predicates.at(i)->~CandiRangeExprs();
+      sorted_predicates.at(i) = NULL;
+    }
+  }
+  LOG_TRACE("used predicates calc query range:", K(range_predicates));
+  return ret;
+}
+
+int ObJoinOrder::calculate_range_expr_cost(ObIArray<CandiRangeExprs*> &sorted_predicates,
+                                           ObIArray<ObRawExpr*> &range_exprs,
+                                           int64_t range_column_count,
+                                           int64_t range_count,
+                                           double &cost)
+{
+  int ret = OB_SUCCESS;
+  double range_sel = 1;
+  ObSEArray<ObRawExpr*, 4> filters;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null plan", K(ret));
+  } else if (OB_FAIL(get_range_filter(sorted_predicates,
+                                      range_exprs,
+                                      filters))) {
+    LOG_WARN("failed to get range filter", K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
+                                                              get_plan()->get_selectivity_ctx(),
+                                                              range_exprs,
+                                                              range_sel,
+                                                              get_plan()->get_predicate_selectivities()))) {
+    LOG_WARN("failed to calculate selectivity", K(ret));
+  } else if (OB_FAIL(ObOptEstCost::cost_range_scan(table_meta_info_,
+                                                  filters,
+                                                  range_column_count,
+                                                  range_count,
+                                                  range_sel,
+                                                  cost,
+                                                  get_plan()->get_optimizer_context().get_cost_model_type()))) {
+      LOG_WARN("failed to estimate range scan cost", K(ret));
+  } else {
+    LOG_TRACE("query range cost:", K(range_column_count), K(range_count), K(range_sel), K(cost));
+    LOG_TRACE("candi range exprs:", K(range_exprs));
+  }
+  return ret;
+}
+
+int ObJoinOrder::sort_predicate_by_index_column(const ObIArray<ColumnItem> &range_columns,
+                                                const ObIArray<ObRawExpr*> &predicates,
+                                                ObIArray<CandiRangeExprs*> &sort_exprs,
+                                                bool &has_in_pred)
+{
+  int ret = OB_SUCCESS;
+  has_in_pred = false;
+  int64_t column_id = 0;
+  bool is_in_expr = false;
+  bool is_valid = false;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null allocator", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < predicates.count(); ++i) {
+    ObRawExpr* expr = predicates.at(i);
+    bool find = false;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(is_eq_or_in_range_expr(expr,
+                                              column_id,
+                                              is_in_expr,
+                                              is_valid))) {
+      LOG_WARN("failed check is valid range expr", K(ret));
+    } else if (!is_valid) {
+      find = true;
+    } else {
+      has_in_pred |= is_in_expr;
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && !find && j < sort_exprs.count(); ++j) {
+      CandiRangeExprs *candi_exprs = sort_exprs.at(j);
+      if (OB_ISNULL(candi_exprs)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null range exprs", K(ret));
+      } else if (column_id == candi_exprs->column_id_) {
+        find = true;
+        if (is_in_expr &&
+            OB_FAIL(candi_exprs->in_exprs_.push_back(expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (!is_in_expr &&
+                   OB_FAIL(candi_exprs->eq_exprs_.push_back(expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !find) {
+      int64_t index = OB_INVALID_INDEX;
+      for (int64_t j = 0; OB_INVALID_INDEX == index && j < range_columns.count(); ++j) {
+        if (column_id == range_columns.at(j).column_id_) {
+          index = j;
+        }
+      }
+      if (OB_INVALID_INDEX != index) {
+        CandiRangeExprs *candi_exprs = NULL;
+        if (OB_ISNULL(candi_exprs = static_cast<CandiRangeExprs*>(
+                      allocator_->alloc(sizeof(CandiRangeExprs))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to create outer join info", K(ret));
+        } else {
+          candi_exprs = new (candi_exprs) CandiRangeExprs();
+          candi_exprs->index_ = index;
+          candi_exprs->column_id_ = column_id;
+          if (is_in_expr &&
+              OB_FAIL(candi_exprs->in_exprs_.push_back(expr))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          } else if (!is_in_expr &&
+                    OB_FAIL(candi_exprs->eq_exprs_.push_back(expr))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          } else if (sort_exprs.push_back(candi_exprs)) {
+            LOG_WARN("failed to push back expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::is_eq_or_in_range_expr(ObRawExpr* expr,
+                                        int64_t &column_id,
+                                        bool &is_in_expr,
+                                        bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  column_id = OB_INVALID_ID;
+  is_in_expr = false;
+  is_valid = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (T_OP_EQ == expr->get_expr_type() ||
+             T_OP_NSEQ == expr->get_expr_type()) {
+    ObRawExpr* l_expr = NULL;
+    ObRawExpr* r_expr = NULL;
+    if (expr->get_param_count() < 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null param count", K(ret));
+    } else if (OB_ISNULL(l_expr=expr->get_param_expr(0)) ||
+               OB_ISNULL(r_expr=expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (T_OP_ROW == l_expr->get_expr_type()) {
+      //do nothing
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
+      LOG_WARN("failed to get lossless cast expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(r_expr, r_expr))) {
+      LOG_WARN("failed to get lossless cast expr", K(ret));
+    } else if (l_expr->has_flag(IS_COLUMN) && r_expr->is_const_expr()) {
+      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(l_expr);
+      column_id = col_expr->get_column_id();
+      is_in_expr = false;
+      is_valid = true;
+    } else if (l_expr->is_const_expr() && r_expr->has_flag(IS_COLUMN)) {
+      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(r_expr);
+      column_id = col_expr->get_column_id();
+      is_in_expr = false;
+      is_valid = true;
+    }
+  } else if (T_OP_IN == expr->get_expr_type()) {
+    ObRawExpr* l_expr = NULL;
+    if (expr->get_param_count() < 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null param count", K(ret));
+    } else if (OB_ISNULL(l_expr=expr->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
+      LOG_WARN("failed to get lossless cast expr", K(ret));
+    } else if (l_expr->has_flag(IS_COLUMN)) {
+      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(l_expr);
+      column_id = col_expr->get_column_id();
+      is_in_expr = true;
+      is_valid = true;
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_range_filter(ObIArray<CandiRangeExprs*> &sort_exprs,
+                                  ObIArray<ObRawExpr*> &range_exprs,
+                                  ObIArray<ObRawExpr*> &filters)
+{
+  int ret = OB_SUCCESS;
+  filters.reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < sort_exprs.count(); ++i) {
+    CandiRangeExprs *candi_exprs = sort_exprs.at(i);
+    if (OB_ISNULL(candi_exprs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null range exprs", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < candi_exprs->eq_exprs_.count(); ++j) {
+      ObRawExpr *expr = candi_exprs->eq_exprs_.at(j);
+      if (ObOptimizerUtil::find_item(range_exprs, expr)) {
+        //do nothing
+      } else if (OB_FAIL(filters.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < candi_exprs->in_exprs_.count(); ++j) {
+      ObRawExpr *expr = candi_exprs->in_exprs_.at(j);
+      if (ObOptimizerUtil::find_item(range_exprs, expr)) {
+        //do nothing
+      } else if (OB_FAIL(filters.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::estimate_size_for_base_table(PathHelper &helper,
+                                              ObIArray<AccessPath *> &access_paths)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
@@ -3005,30 +3350,18 @@ int ObJoinOrder::estimate_size_and_width_for_base_table(PathHelper &helper,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null or path type",
                 K(ret), K(get_plan()), K(table_item), K(type_), K(stmt));
-  } else if (!helper.is_inner_path_ &&
-             OB_FAIL(ObOptEstCost::estimate_width_for_table(get_plan()->get_basic_table_metas(),
-                                                            get_plan()->get_selectivity_ctx(),
-                                                            stmt->get_column_items(),
-                                                            table_id_,
-                                                            output_row_size_))) {
-    LOG_WARN("estimate width of row failed", K(table_id_), K(ret));
-  } else if (!helper.is_inner_path_ &&
-             OB_FAIL(compute_table_meta_info(table_item->table_id_, table_item->ref_id_))) {
-    LOG_WARN("failed to compute table meta info", K(ret));
   } else if (OB_FAIL(fill_path_index_meta_info(table_item->table_id_,
                                                table_item->ref_id_,
                                                access_paths))) {
     LOG_WARN("failed to fill path index meta info", K(ret));
+  } else if (OB_FAIL(estimate_rowcount_for_access_path(table_item->table_id_,
+                                                      table_item->ref_id_,
+                                                      access_paths,
+                                                      helper.is_inner_path_))) {
+    LOG_WARN("failed to estimate and add access path", K(ret));
   } else {
-    if (OB_FAIL(estimate_rowcount_for_access_path(table_item->table_id_,
-                                                  table_item->ref_id_,
-                                                  access_paths,
-                                                  helper.is_inner_path_))) {
-      LOG_WARN("failed to estimate and add access path", K(ret));
-    } else {
-      LOG_TRACE("estimate rows for base table", K(output_rows_),
-                  K(get_plan()->get_basic_table_metas()), K(output_row_size_));
-    }
+    LOG_TRACE("estimate rows for base table", K(output_rows_),
+                K(get_plan()->get_basic_table_metas()), K(output_row_size_));
   }
   return ret;
 }
@@ -6243,7 +6576,7 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
   } else if (OB_FAIL(compute_table_location_for_paths(access_paths,
                                                       tbl_part_infos))) {
     LOG_WARN("failed to calc table location", K(ret));
-  } else if (OB_FAIL(estimate_size_and_width_for_base_table(helper, access_paths))) {
+  } else if (OB_FAIL(estimate_size_for_base_table(helper, access_paths))) {
     LOG_WARN("failed to estimate_size", K(ret));
   } else if (!helper.is_inner_path_ && !is_virtual_table(ref_table_id) &&
              OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
@@ -6269,7 +6602,12 @@ int ObJoinOrder::compute_base_table_property(uint64_t table_id,
                                              uint64_t ref_table_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null or path type",
+                K(ret), K(get_plan()), K(stmt));
+  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
     LOG_WARN("failed to compute const exprs", K(ret));
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(allocator_,
                                                         restrict_info_set_,
@@ -6279,6 +6617,19 @@ int ObJoinOrder::compute_base_table_property(uint64_t table_id,
                                                         ref_table_id,
                                                         get_restrict_infos()))) {
     LOG_WARN("failed to extract fd item set", K(ret));
+  } else if (OB_FAIL(compute_table_location(table_id,
+                                            ref_table_id,
+                                            false,
+                                            table_partition_info_))) {
+    LOG_WARN("failed to calc table location", K(ret));
+  } else if (OB_FAIL(compute_table_meta_info(table_id, ref_table_id))) {
+    LOG_WARN("failed to compute table meta info", K(ret));
+  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_table(get_plan()->get_basic_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            stmt->get_column_items(),
+                                                            table_id_,
+                                                            output_row_size_))) {
+    LOG_WARN("estimate width of row failed", K(table_id_), K(ret));
   } else {
     LOG_TRACE("succeed to compute base table property",
         K(restrict_info_set_), K(output_const_exprs_),

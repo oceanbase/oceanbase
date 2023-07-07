@@ -29,10 +29,10 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |    |25      |6           |
-|1 | TABLE SCAN                |t1  |5       |3           |
-|2 | MATERIAL                  |    |5       |3           |
-|3 |  TABLE SCAN               |t2  |5       |3           |
+|0 |NESTED-LOOP JOIN CARTESIAN |    |25      |10          |
+|1 | TABLE SCAN                |t1  |5       |5           |
+|2 | MATERIAL                  |    |5       |5           |
+|3 |  TABLE SCAN               |t2  |5       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -52,10 +52,10 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |    |25      |6           |
-|1 | TABLE SCAN                |t1  |5       |3           |
-|2 | MATERIAL                  |    |5       |3           |
-|3 |  TABLE SCAN               |t2  |5       |3           |
+|0 |NESTED-LOOP JOIN CARTESIAN |    |25      |10          |
+|1 | TABLE SCAN                |t1  |5       |5           |
+|2 | MATERIAL                  |    |5       |5           |
+|3 |  TABLE SCAN               |t2  |5       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------

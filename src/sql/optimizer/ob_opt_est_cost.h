@@ -172,6 +172,14 @@ public:
 
   static int cost_delete(ObDelUpCostInfo& cost_info, double &cost, MODEL_TYPE model_type);
 
+  static int cost_range_scan(const ObTableMetaInfo& table_meta_info,
+                            const ObIArray<ObRawExpr *> &filters,
+                            int64_t index_column_count,
+                            int64_t range_count,
+                            double range_sel,
+                            double &cost,
+                            MODEL_TYPE model_type);
+
   static int estimate_width_for_table(const OptTableMetas &table_metas,
                                       const OptSelectivityCtx &ctx,
                                       const ObIArray<ColumnItem> &columns,

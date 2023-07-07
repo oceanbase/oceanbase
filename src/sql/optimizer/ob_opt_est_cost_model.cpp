@@ -305,6 +305,8 @@ int ObOptEstCostModel::cost_hashjoin(const ObCostHashJoinInfo &est_cost_info,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected join type", K(est_cost_info.join_type_), K(ret));
     }
+  } else {
+    cond_tuples = left_rows * right_rows * cond_sel;
   }
   out_tuples = cond_tuples * filter_sel;
   double join_filter_cost = 0.0;
@@ -1666,8 +1668,10 @@ int ObOptEstCostModel::cost_table_scan_one_batch_inner(double row_count,
       qual_cost += cost_quals(row_count, est_cost_info.postfix_filters_);
     }
     // CPU代价，包括get_next_row调用的代价和谓词代价
+    double range_cost = 0;
+    range_cost = est_cost_info.ranges_.count() * cost_params_.RANGE_COST;
     double cpu_cost = row_count * cost_params_.CPU_TUPLE_COST
-                      + qual_cost;
+                      + range_cost + qual_cost;
     // 从memtable读取数据的代价，待提供
     double memtable_cost = 0;
     // memtable数据和基线数据合并的代价，待提供
@@ -1815,8 +1819,12 @@ int ObOptEstCostModel::cost_table_get_one_batch_inner(double row_count,
       }
     }
     // CPU代价，包括get_next_row调用的代价和谓词代价
+    double range_cost = 0;
+    if (est_cost_info.ranges_.count() > 1) {
+      range_cost = est_cost_info.ranges_.count() * cost_params_.RANGE_COST;
+    }
     double cpu_cost = row_count * cost_params_.CPU_TUPLE_COST
-                      + qual_cost;
+                      + range_cost + qual_cost;
     // 从memtable读取数据的代价，待提供
     double memtable_cost = 0;
     // memtable数据和基线数据合并的代价，待提供
@@ -2215,5 +2223,35 @@ int ObOptEstCostModel::cost_delete(ObDelUpCostInfo& cost_info, double &cost)
          cost_params_.DELETE_PER_ROW_COST * cost_info.affect_rows_ +
          cost_params_.DELETE_INDEX_PER_ROW_COST * cost_info.index_count_ +
          cost_params_.DELETE_CHECK_PER_ROW_COST * cost_info.constraint_count_;
+  return ret;
+}
+
+int ObOptEstCostModel::cost_range_scan(const ObTableMetaInfo& table_meta_info,
+                                      const ObIArray<ObRawExpr *> &filters,
+                                      int64_t index_column_count,
+                                      int64_t range_count,
+                                      double range_sel,
+                                      double &cost)
+{
+  int ret = OB_SUCCESS;
+  cost = 0;
+  int64_t row_count = table_meta_info.table_row_count_ * range_sel;
+  double num_micro_blocks = -1;
+  if (table_meta_info.has_opt_stat_) {
+    num_micro_blocks = table_meta_info.micro_block_count_;
+    num_micro_blocks *= index_column_count * 1.0 / table_meta_info.table_column_count_;
+  }
+  double num_micro_blocks_read = 0;
+  if (OB_LIKELY(table_meta_info.table_row_count_ > 0)) {
+    num_micro_blocks_read = std::ceil(num_micro_blocks
+                                      * row_count
+                                      / static_cast<double> (table_meta_info.table_row_count_));
+  }
+  double io_cost = cost_params_.MICRO_BLOCK_SEQ_COST * num_micro_blocks_read;
+  double qual_cost = cost_quals(row_count, filters);
+  double cpu_cost = row_count * cost_params_.CPU_TUPLE_COST
+                      + range_count * cost_params_.RANGE_COST + qual_cost;
+  cpu_cost += row_count * cost_params_.TABLE_SCAN_CPU_TUPLE_COST;
+  cost = io_cost + cpu_cost;
   return ret;
 }

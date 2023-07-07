@@ -143,13 +143,13 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |62          |
-|1 | RECURSIVE UNION ALL|    |200     |61          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  NESTED-LOOP JOIN  |    |199     |58          |
+|0 |SUBPLAN SCAN        |rw  |200     |66          |
+|1 | RECURSIVE UNION ALL|    |200     |66          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  NESTED-LOOP JOIN  |    |199     |61          |
 |4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   MATERIAL         |    |14      |5           |
-|6 |    TABLE SCAN      |e   |14      |3           |
+|5 |   MATERIAL         |    |14      |7           |
+|6 |    TABLE SCAN      |e   |14      |5           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -224,13 +224,13 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |125         |
-|1 | RECURSIVE UNION ALL|    |200     |125         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  MERGE JOIN        |    |199     |122         |
-|4 |   MATERIAL         |    |14      |7           |
-|5 |    SORT            |    |14      |5           |
-|6 |     TABLE SCAN     |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |129         |
+|1 | RECURSIVE UNION ALL|    |200     |129         |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  MERGE JOIN        |    |199     |124         |
+|4 |   MATERIAL         |    |14      |9           |
+|5 |    SORT            |    |14      |8           |
+|6 |     TABLE SCAN     |e   |14      |5           |
 |7 |   SORT             |    |199     |107         |
 |8 |    TABLE SCAN      |r   |199     |1           |
 ====================================================
@@ -312,11 +312,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -392,17 +392,17 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |213     |42          |
-|1 | RECURSIVE UNION ALL|    |213     |41          |
-|2 |  NESTED-LOOP JOIN  |    |14      |9           |
-|3 |   TABLE SCAN       |e   |14      |3           |
-|4 |   MATERIAL         |    |14      |3           |
-|5 |    TABLE SCAN      |d   |14      |3           |
-|6 |  HASH JOIN         |    |199     |32          |
-|7 |   MATERIAL         |    |14      |10          |
-|8 |    HASH JOIN       |    |14      |9           |
-|9 |     TABLE SCAN     |d   |14      |3           |
-|10|     TABLE SCAN     |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |213     |58          |
+|1 | RECURSIVE UNION ALL|    |213     |57          |
+|2 |  NESTED-LOOP JOIN  |    |14      |14          |
+|3 |   TABLE SCAN       |e   |14      |5           |
+|4 |   MATERIAL         |    |14      |5           |
+|5 |    TABLE SCAN      |d   |14      |5           |
+|6 |  HASH JOIN         |    |199     |44          |
+|7 |   MATERIAL         |    |14      |15          |
+|8 |    HASH JOIN       |    |14      |14          |
+|9 |     TABLE SCAN     |d   |14      |5           |
+|10|     TABLE SCAN     |e   |14      |5           |
 |11|   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -536,11 +536,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -616,11 +616,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -698,19 +698,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |430         |
-|1 | SUBPLAN SCAN        |rw  |787     |194         |
-|2 |  RECURSIVE UNION ALL|    |787     |192         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |175         |
-|9 |    HASH JOIN        |    |199     |112         |
+|0 |SORT                 |    |787     |477         |
+|1 | SUBPLAN SCAN        |rw  |787     |241         |
+|2 |  RECURSIVE UNION ALL|    |787     |239         |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |213         |
+|9 |    HASH JOIN        |    |199     |121         |
 |10|     TABLE SCAN      |r   |199     |1           |
-|11|     TABLE SCAN      |e   |5       |3           |
-|12|    TABLE SCAN       |n   |17      |3           |
+|11|     TABLE SCAN      |e   |5       |5           |
+|12|    TABLE SCAN       |n   |17      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -803,19 +803,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |341         |
-|1 | SUBPLAN SCAN        |rw  |787     |105         |
-|2 |  RECURSIVE UNION ALL|    |787     |103         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |86          |
-|9 |    HASH JOIN        |    |199     |23          |
-|10|     TABLE SCAN      |e   |5       |3           |
+|0 |SORT                 |    |787     |389         |
+|1 | SUBPLAN SCAN        |rw  |787     |153         |
+|2 |  RECURSIVE UNION ALL|    |787     |151         |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |124         |
+|9 |    HASH JOIN        |    |199     |33          |
+|10|     TABLE SCAN      |e   |5       |5           |
 |11|     TABLE SCAN      |r   |199     |1           |
-|12|    TABLE SCAN       |n   |17      |3           |
+|12|    TABLE SCAN       |n   |17      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -908,19 +908,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |286         |
-|1 | SUBPLAN SCAN        |rw  |787     |51          |
-|2 |  RECURSIVE UNION ALL|    |787     |48          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |31          |
-|9 |    MATERIAL         |    |17      |10          |
-|10|     HASH JOIN       |    |17      |8           |
-|11|      TABLE SCAN     |e   |5       |3           |
-|12|      TABLE SCAN     |n   |17      |3           |
+|0 |SORT                 |    |787     |327         |
+|1 | SUBPLAN SCAN        |rw  |787     |91          |
+|2 |  RECURSIVE UNION ALL|    |787     |89          |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |63          |
+|9 |    MATERIAL         |    |17      |14          |
+|10|     HASH JOIN       |    |17      |13          |
+|11|      TABLE SCAN     |e   |5       |5           |
+|12|      TABLE SCAN     |n   |17      |5           |
 |13|    TABLE SCAN       |r   |199     |1           |
 =====================================================
 Outputs & filters:
@@ -1015,19 +1015,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |289         |
-|1 | SUBPLAN SCAN        |rw  |787     |53          |
-|2 |  RECURSIVE UNION ALL|    |787     |51          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |34          |
-|9 |    MATERIAL         |    |17      |12          |
-|10|     HASH JOIN       |    |17      |11          |
-|11|      TABLE SCAN     |n   |17      |3           |
-|12|      TABLE SCAN     |e   |5       |3           |
+|0 |SORT                 |    |787     |330         |
+|1 | SUBPLAN SCAN        |rw  |787     |94          |
+|2 |  RECURSIVE UNION ALL|    |787     |92          |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |65          |
+|9 |    MATERIAL         |    |17      |17          |
+|10|     HASH JOIN       |    |17      |16          |
+|11|      TABLE SCAN     |n   |17      |5           |
+|12|      TABLE SCAN     |e   |5       |5           |
 |13|    TABLE SCAN       |r   |199     |1           |
 =====================================================
 Outputs & filters:
@@ -1121,12 +1121,12 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |116         |
-|1 | RECURSIVE UNION ALL|    |200     |116         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |112         |
+|0 |SUBPLAN SCAN        |rw  |200     |128         |
+|1 | RECURSIVE UNION ALL|    |200     |127         |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |122         |
 |4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   TABLE SCAN       |e   |14      |3           |
+|5 |   TABLE SCAN       |e   |14      |5           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -1201,11 +1201,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -1282,20 +1282,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|0 |SORT                           |    |787     |1854        |
+|1 | SUBPLAN SCAN                  |rw  |787     |1618        |
+|2 |  RECURSIVE UNION ALL          |    |787     |1616        |
+|3 |   HASH JOIN                   |    |62      |25          |
+|4 |    HASH JOIN                  |    |17      |13          |
+|5 |     TABLE SCAN                |e   |5       |5           |
+|6 |     TABLE SCAN                |n1  |17      |5           |
+|7 |    TABLE SCAN                 |n2  |17      |5           |
+|8 |   HASH JOIN                   |    |725     |1590        |
+|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
 |10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
+|11|     MATERIAL                  |    |17      |7           |
+|12|      TABLE SCAN               |n   |17      |5           |
+|13|    TABLE SCAN                 |e   |5       |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -1389,20 +1389,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|0 |SORT                           |    |787     |1854        |
+|1 | SUBPLAN SCAN                  |rw  |787     |1618        |
+|2 |  RECURSIVE UNION ALL          |    |787     |1616        |
+|3 |   HASH JOIN                   |    |62      |25          |
+|4 |    HASH JOIN                  |    |17      |13          |
+|5 |     TABLE SCAN                |e   |5       |5           |
+|6 |     TABLE SCAN                |n1  |17      |5           |
+|7 |    TABLE SCAN                 |n2  |17      |5           |
+|8 |   HASH JOIN                   |    |725     |1590        |
+|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
 |10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
+|11|     MATERIAL                  |    |17      |7           |
+|12|      TABLE SCAN               |n   |17      |5           |
+|13|    TABLE SCAN                 |e   |5       |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -1494,11 +1494,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -1573,11 +1573,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |27          |
-|1 | RECURSIVE UNION ALL|    |200     |27          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |24          |
-|4 |   TABLE SCAN       |e   |5       |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |39          |
+|1 | RECURSIVE UNION ALL|    |200     |38          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |33          |
+|4 |   TABLE SCAN       |e   |5       |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -1680,13 +1680,13 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |62          |
-|1 | RECURSIVE UNION ALL|    |200     |61          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  NESTED-LOOP JOIN  |    |199     |58          |
+|0 |SUBPLAN SCAN        |rw  |200     |66          |
+|1 | RECURSIVE UNION ALL|    |200     |66          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  NESTED-LOOP JOIN  |    |199     |61          |
 |4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   MATERIAL         |    |14      |5           |
-|6 |    TABLE SCAN      |e   |14      |3           |
+|5 |   MATERIAL         |    |14      |7           |
+|6 |    TABLE SCAN      |e   |14      |5           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -1761,13 +1761,13 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |125         |
-|1 | RECURSIVE UNION ALL|    |200     |125         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  MERGE JOIN        |    |199     |122         |
-|4 |   MATERIAL         |    |14      |7           |
-|5 |    SORT            |    |14      |5           |
-|6 |     TABLE SCAN     |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |129         |
+|1 | RECURSIVE UNION ALL|    |200     |129         |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  MERGE JOIN        |    |199     |124         |
+|4 |   MATERIAL         |    |14      |9           |
+|5 |    SORT            |    |14      |8           |
+|6 |     TABLE SCAN     |e   |14      |5           |
 |7 |   SORT             |    |199     |107         |
 |8 |    TABLE SCAN      |r   |199     |1           |
 ====================================================
@@ -1849,11 +1849,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -1929,17 +1929,17 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |213     |42          |
-|1 | RECURSIVE UNION ALL|    |213     |41          |
-|2 |  NESTED-LOOP JOIN  |    |14      |9           |
-|3 |   TABLE SCAN       |e   |14      |3           |
-|4 |   MATERIAL         |    |14      |3           |
-|5 |    TABLE SCAN      |d   |14      |3           |
-|6 |  HASH JOIN         |    |199     |32          |
-|7 |   MATERIAL         |    |14      |10          |
-|8 |    HASH JOIN       |    |14      |9           |
-|9 |     TABLE SCAN     |d   |14      |3           |
-|10|     TABLE SCAN     |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |213     |58          |
+|1 | RECURSIVE UNION ALL|    |213     |57          |
+|2 |  NESTED-LOOP JOIN  |    |14      |14          |
+|3 |   TABLE SCAN       |e   |14      |5           |
+|4 |   MATERIAL         |    |14      |5           |
+|5 |    TABLE SCAN      |d   |14      |5           |
+|6 |  HASH JOIN         |    |199     |44          |
+|7 |   MATERIAL         |    |14      |15          |
+|8 |    HASH JOIN       |    |14      |14          |
+|9 |     TABLE SCAN     |d   |14      |5           |
+|10|     TABLE SCAN     |e   |14      |5           |
 |11|   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -2073,11 +2073,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -2153,11 +2153,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -2235,19 +2235,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |430         |
-|1 | SUBPLAN SCAN        |rw  |787     |194         |
-|2 |  RECURSIVE UNION ALL|    |787     |192         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |175         |
-|9 |    HASH JOIN        |    |199     |112         |
+|0 |SORT                 |    |787     |477         |
+|1 | SUBPLAN SCAN        |rw  |787     |241         |
+|2 |  RECURSIVE UNION ALL|    |787     |239         |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |213         |
+|9 |    HASH JOIN        |    |199     |121         |
 |10|     TABLE SCAN      |r   |199     |1           |
-|11|     TABLE SCAN      |e   |5       |3           |
-|12|    TABLE SCAN       |n   |17      |3           |
+|11|     TABLE SCAN      |e   |5       |5           |
+|12|    TABLE SCAN       |n   |17      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -2340,19 +2340,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |341         |
-|1 | SUBPLAN SCAN        |rw  |787     |105         |
-|2 |  RECURSIVE UNION ALL|    |787     |103         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |86          |
-|9 |    HASH JOIN        |    |199     |23          |
-|10|     TABLE SCAN      |e   |5       |3           |
+|0 |SORT                 |    |787     |389         |
+|1 | SUBPLAN SCAN        |rw  |787     |153         |
+|2 |  RECURSIVE UNION ALL|    |787     |151         |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |124         |
+|9 |    HASH JOIN        |    |199     |33          |
+|10|     TABLE SCAN      |e   |5       |5           |
 |11|     TABLE SCAN      |r   |199     |1           |
-|12|    TABLE SCAN       |n   |17      |3           |
+|12|    TABLE SCAN       |n   |17      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -2445,19 +2445,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |286         |
-|1 | SUBPLAN SCAN        |rw  |787     |51          |
-|2 |  RECURSIVE UNION ALL|    |787     |48          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |31          |
-|9 |    MATERIAL         |    |17      |10          |
-|10|     HASH JOIN       |    |17      |8           |
-|11|      TABLE SCAN     |e   |5       |3           |
-|12|      TABLE SCAN     |n   |17      |3           |
+|0 |SORT                 |    |787     |327         |
+|1 | SUBPLAN SCAN        |rw  |787     |91          |
+|2 |  RECURSIVE UNION ALL|    |787     |89          |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |63          |
+|9 |    MATERIAL         |    |17      |14          |
+|10|     HASH JOIN       |    |17      |13          |
+|11|      TABLE SCAN     |e   |5       |5           |
+|12|      TABLE SCAN     |n   |17      |5           |
 |13|    TABLE SCAN       |r   |199     |1           |
 =====================================================
 Outputs & filters:
@@ -2552,19 +2552,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |289         |
-|1 | SUBPLAN SCAN        |rw  |787     |53          |
-|2 |  RECURSIVE UNION ALL|    |787     |51          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |34          |
-|9 |    MATERIAL         |    |17      |12          |
-|10|     HASH JOIN       |    |17      |11          |
-|11|      TABLE SCAN     |n   |17      |3           |
-|12|      TABLE SCAN     |e   |5       |3           |
+|0 |SORT                 |    |787     |330         |
+|1 | SUBPLAN SCAN        |rw  |787     |94          |
+|2 |  RECURSIVE UNION ALL|    |787     |92          |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |65          |
+|9 |    MATERIAL         |    |17      |17          |
+|10|     HASH JOIN       |    |17      |16          |
+|11|      TABLE SCAN     |n   |17      |5           |
+|12|      TABLE SCAN     |e   |5       |5           |
 |13|    TABLE SCAN       |r   |199     |1           |
 =====================================================
 Outputs & filters:
@@ -2659,12 +2659,12 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |116         |
-|1 | RECURSIVE UNION ALL|    |200     |116         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |112         |
+|0 |SUBPLAN SCAN        |rw  |200     |128         |
+|1 | RECURSIVE UNION ALL|    |200     |127         |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |122         |
 |4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   TABLE SCAN       |e   |14      |3           |
+|5 |   TABLE SCAN       |e   |14      |5           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -2739,11 +2739,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -2820,20 +2820,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|0 |SORT                           |    |787     |1854        |
+|1 | SUBPLAN SCAN                  |rw  |787     |1618        |
+|2 |  RECURSIVE UNION ALL          |    |787     |1616        |
+|3 |   HASH JOIN                   |    |62      |25          |
+|4 |    HASH JOIN                  |    |17      |13          |
+|5 |     TABLE SCAN                |e   |5       |5           |
+|6 |     TABLE SCAN                |n1  |17      |5           |
+|7 |    TABLE SCAN                 |n2  |17      |5           |
+|8 |   HASH JOIN                   |    |725     |1590        |
+|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
 |10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
+|11|     MATERIAL                  |    |17      |7           |
+|12|      TABLE SCAN               |n   |17      |5           |
+|13|    TABLE SCAN                 |e   |5       |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -2927,20 +2927,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|0 |SORT                           |    |787     |1854        |
+|1 | SUBPLAN SCAN                  |rw  |787     |1618        |
+|2 |  RECURSIVE UNION ALL          |    |787     |1616        |
+|3 |   HASH JOIN                   |    |62      |25          |
+|4 |    HASH JOIN                  |    |17      |13          |
+|5 |     TABLE SCAN                |e   |5       |5           |
+|6 |     TABLE SCAN                |n1  |17      |5           |
+|7 |    TABLE SCAN                 |n2  |17      |5           |
+|8 |   HASH JOIN                   |    |725     |1590        |
+|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
 |10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
+|11|     MATERIAL                  |    |17      |7           |
+|12|      TABLE SCAN               |n   |17      |5           |
+|13|    TABLE SCAN                 |e   |5       |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -3032,11 +3032,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -3111,11 +3111,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |27          |
-|1 | RECURSIVE UNION ALL|    |200     |27          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |24          |
-|4 |   TABLE SCAN       |e   |5       |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |39          |
+|1 | RECURSIVE UNION ALL|    |200     |38          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |33          |
+|4 |   TABLE SCAN       |e   |5       |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -3218,13 +3218,13 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |62          |
-|1 | RECURSIVE UNION ALL|    |200     |61          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  NESTED-LOOP JOIN  |    |199     |58          |
+|0 |SUBPLAN SCAN        |rw  |200     |66          |
+|1 | RECURSIVE UNION ALL|    |200     |66          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  NESTED-LOOP JOIN  |    |199     |61          |
 |4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   MATERIAL         |    |14      |5           |
-|6 |    TABLE SCAN      |e   |14      |3           |
+|5 |   MATERIAL         |    |14      |7           |
+|6 |    TABLE SCAN      |e   |14      |5           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -3299,13 +3299,13 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |125         |
-|1 | RECURSIVE UNION ALL|    |200     |125         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  MERGE JOIN        |    |199     |122         |
-|4 |   MATERIAL         |    |14      |7           |
-|5 |    SORT            |    |14      |5           |
-|6 |     TABLE SCAN     |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |129         |
+|1 | RECURSIVE UNION ALL|    |200     |129         |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  MERGE JOIN        |    |199     |124         |
+|4 |   MATERIAL         |    |14      |9           |
+|5 |    SORT            |    |14      |8           |
+|6 |     TABLE SCAN     |e   |14      |5           |
 |7 |   SORT             |    |199     |107         |
 |8 |    TABLE SCAN      |r   |199     |1           |
 ====================================================
@@ -3387,11 +3387,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -3467,17 +3467,17 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |213     |42          |
-|1 | RECURSIVE UNION ALL|    |213     |41          |
-|2 |  NESTED-LOOP JOIN  |    |14      |9           |
-|3 |   TABLE SCAN       |e   |14      |3           |
-|4 |   MATERIAL         |    |14      |3           |
-|5 |    TABLE SCAN      |d   |14      |3           |
-|6 |  HASH JOIN         |    |199     |32          |
-|7 |   MATERIAL         |    |14      |10          |
-|8 |    HASH JOIN       |    |14      |9           |
-|9 |     TABLE SCAN     |d   |14      |3           |
-|10|     TABLE SCAN     |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |213     |58          |
+|1 | RECURSIVE UNION ALL|    |213     |57          |
+|2 |  NESTED-LOOP JOIN  |    |14      |14          |
+|3 |   TABLE SCAN       |e   |14      |5           |
+|4 |   MATERIAL         |    |14      |5           |
+|5 |    TABLE SCAN      |d   |14      |5           |
+|6 |  HASH JOIN         |    |199     |44          |
+|7 |   MATERIAL         |    |14      |15          |
+|8 |    HASH JOIN       |    |14      |14          |
+|9 |     TABLE SCAN     |d   |14      |5           |
+|10|     TABLE SCAN     |e   |14      |5           |
 |11|   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -3611,11 +3611,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -3691,11 +3691,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -3773,19 +3773,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |430         |
-|1 | SUBPLAN SCAN        |rw  |787     |194         |
-|2 |  RECURSIVE UNION ALL|    |787     |192         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |175         |
-|9 |    HASH JOIN        |    |199     |112         |
+|0 |SORT                 |    |787     |477         |
+|1 | SUBPLAN SCAN        |rw  |787     |241         |
+|2 |  RECURSIVE UNION ALL|    |787     |239         |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |213         |
+|9 |    HASH JOIN        |    |199     |121         |
 |10|     TABLE SCAN      |r   |199     |1           |
-|11|     TABLE SCAN      |e   |5       |3           |
-|12|    TABLE SCAN       |n   |17      |3           |
+|11|     TABLE SCAN      |e   |5       |5           |
+|12|    TABLE SCAN       |n   |17      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -3878,19 +3878,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |341         |
-|1 | SUBPLAN SCAN        |rw  |787     |105         |
-|2 |  RECURSIVE UNION ALL|    |787     |103         |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |86          |
-|9 |    HASH JOIN        |    |199     |23          |
-|10|     TABLE SCAN      |e   |5       |3           |
+|0 |SORT                 |    |787     |389         |
+|1 | SUBPLAN SCAN        |rw  |787     |153         |
+|2 |  RECURSIVE UNION ALL|    |787     |151         |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |124         |
+|9 |    HASH JOIN        |    |199     |33          |
+|10|     TABLE SCAN      |e   |5       |5           |
 |11|     TABLE SCAN      |r   |199     |1           |
-|12|    TABLE SCAN       |n   |17      |3           |
+|12|    TABLE SCAN       |n   |17      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -3983,19 +3983,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |286         |
-|1 | SUBPLAN SCAN        |rw  |787     |51          |
-|2 |  RECURSIVE UNION ALL|    |787     |48          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |31          |
-|9 |    MATERIAL         |    |17      |10          |
-|10|     HASH JOIN       |    |17      |8           |
-|11|      TABLE SCAN     |e   |5       |3           |
-|12|      TABLE SCAN     |n   |17      |3           |
+|0 |SORT                 |    |787     |327         |
+|1 | SUBPLAN SCAN        |rw  |787     |91          |
+|2 |  RECURSIVE UNION ALL|    |787     |89          |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |63          |
+|9 |    MATERIAL         |    |17      |14          |
+|10|     HASH JOIN       |    |17      |13          |
+|11|      TABLE SCAN     |e   |5       |5           |
+|12|      TABLE SCAN     |n   |17      |5           |
 |13|    TABLE SCAN       |r   |199     |1           |
 =====================================================
 Outputs & filters:
@@ -4090,19 +4090,19 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SORT                 |    |787     |289         |
-|1 | SUBPLAN SCAN        |rw  |787     |53          |
-|2 |  RECURSIVE UNION ALL|    |787     |51          |
-|3 |   HASH JOIN         |    |62      |16          |
-|4 |    HASH JOIN        |    |17      |8           |
-|5 |     TABLE SCAN      |e   |5       |3           |
-|6 |     TABLE SCAN      |n1  |17      |3           |
-|7 |    TABLE SCAN       |n2  |17      |3           |
-|8 |   HASH JOIN         |    |725     |34          |
-|9 |    MATERIAL         |    |17      |12          |
-|10|     HASH JOIN       |    |17      |11          |
-|11|      TABLE SCAN     |n   |17      |3           |
-|12|      TABLE SCAN     |e   |5       |3           |
+|0 |SORT                 |    |787     |330         |
+|1 | SUBPLAN SCAN        |rw  |787     |94          |
+|2 |  RECURSIVE UNION ALL|    |787     |92          |
+|3 |   HASH JOIN         |    |62      |25          |
+|4 |    HASH JOIN        |    |17      |13          |
+|5 |     TABLE SCAN      |e   |5       |5           |
+|6 |     TABLE SCAN      |n1  |17      |5           |
+|7 |    TABLE SCAN       |n2  |17      |5           |
+|8 |   HASH JOIN         |    |725     |65          |
+|9 |    MATERIAL         |    |17      |17          |
+|10|     HASH JOIN       |    |17      |16          |
+|11|      TABLE SCAN     |n   |17      |5           |
+|12|      TABLE SCAN     |e   |5       |5           |
 |13|    TABLE SCAN       |r   |199     |1           |
 =====================================================
 Outputs & filters:
@@ -4196,12 +4196,12 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |116         |
-|1 | RECURSIVE UNION ALL|    |200     |116         |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |112         |
+|0 |SUBPLAN SCAN        |rw  |200     |128         |
+|1 | RECURSIVE UNION ALL|    |200     |127         |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |122         |
 |4 |   TABLE SCAN       |r   |199     |1           |
-|5 |   TABLE SCAN       |e   |14      |3           |
+|5 |   TABLE SCAN       |e   |14      |5           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -4276,11 +4276,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -4357,20 +4357,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|0 |SORT                           |    |787     |1854        |
+|1 | SUBPLAN SCAN                  |rw  |787     |1618        |
+|2 |  RECURSIVE UNION ALL          |    |787     |1616        |
+|3 |   HASH JOIN                   |    |62      |25          |
+|4 |    HASH JOIN                  |    |17      |13          |
+|5 |     TABLE SCAN                |e   |5       |5           |
+|6 |     TABLE SCAN                |n1  |17      |5           |
+|7 |    TABLE SCAN                 |n2  |17      |5           |
+|8 |   HASH JOIN                   |    |725     |1590        |
+|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
 |10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
+|11|     MATERIAL                  |    |17      |7           |
+|12|      TABLE SCAN               |n   |17      |5           |
+|13|    TABLE SCAN                 |e   |5       |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -4464,20 +4464,20 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                           |    |787     |1813        |
-|1 | SUBPLAN SCAN                  |rw  |787     |1577        |
-|2 |  RECURSIVE UNION ALL          |    |787     |1575        |
-|3 |   HASH JOIN                   |    |62      |16          |
-|4 |    HASH JOIN                  |    |17      |8           |
-|5 |     TABLE SCAN                |e   |5       |3           |
-|6 |     TABLE SCAN                |n1  |17      |3           |
-|7 |    TABLE SCAN                 |n2  |17      |3           |
-|8 |   HASH JOIN                   |    |725     |1558        |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |92          |
+|0 |SORT                           |    |787     |1854        |
+|1 | SUBPLAN SCAN                  |rw  |787     |1618        |
+|2 |  RECURSIVE UNION ALL          |    |787     |1616        |
+|3 |   HASH JOIN                   |    |62      |25          |
+|4 |    HASH JOIN                  |    |17      |13          |
+|5 |     TABLE SCAN                |e   |5       |5           |
+|6 |     TABLE SCAN                |n1  |17      |5           |
+|7 |    TABLE SCAN                 |n2  |17      |5           |
+|8 |   HASH JOIN                   |    |725     |1590        |
+|9 |    NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
 |10|     TABLE SCAN                |r   |199     |1           |
-|11|     MATERIAL                  |    |17      |5           |
-|12|      TABLE SCAN               |n   |17      |3           |
-|13|    TABLE SCAN                 |e   |5       |3           |
+|11|     MATERIAL                  |    |17      |7           |
+|12|      TABLE SCAN               |n   |17      |5           |
+|13|    TABLE SCAN                 |e   |5       |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -4569,11 +4569,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |29          |
-|1 | RECURSIVE UNION ALL|    |200     |29          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |26          |
-|4 |   TABLE SCAN       |e   |14      |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |41          |
+|1 | RECURSIVE UNION ALL|    |200     |40          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |35          |
+|4 |   TABLE SCAN       |e   |14      |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -4648,11 +4648,11 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SUBPLAN SCAN        |rw  |200     |27          |
-|1 | RECURSIVE UNION ALL|    |200     |27          |
-|2 |  TABLE SCAN        |e   |1       |3           |
-|3 |  HASH JOIN         |    |199     |24          |
-|4 |   TABLE SCAN       |e   |5       |3           |
+|0 |SUBPLAN SCAN        |rw  |200     |39          |
+|1 | RECURSIVE UNION ALL|    |200     |38          |
+|2 |  TABLE SCAN        |e   |1       |5           |
+|3 |  HASH JOIN         |    |199     |33          |
+|4 |   TABLE SCAN       |e   |5       |5           |
 |5 |   TABLE SCAN       |r   |199     |1           |
 ====================================================
 Outputs & filters:
@@ -4756,25 +4756,25 @@ Query Plan
 ==========================================================
 |ID|OPERATOR                 |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |SORT                     |     |1190    |872         |
-|1 | SUBPLAN SCAN            |rw   |1190    |503         |
-|2 |  RECURSIVE UNION ALL    |     |1190    |500         |
-|3 |   HASH JOIN             |     |62      |16          |
-|4 |    HASH JOIN            |     |17      |8           |
-|5 |     TABLE SCAN          |e    |5       |3           |
-|6 |     TABLE SCAN          |n1   |17      |3           |
-|7 |    TABLE SCAN           |n2   |17      |3           |
-|8 |   NESTED-LOOP SEMI JOIN |     |1128    |481         |
-|9 |    HASH JOIN            |     |3383    |36          |
-|10|     MATERIAL            |     |17      |14          |
-|11|      HASH JOIN          |     |17      |10          |
-|12|       TABLE SCAN        |n    |17      |3           |
-|13|       TABLE SCAN        |e    |1       |3           |
+|0 |SORT                     |     |1190    |1013        |
+|1 | SUBPLAN SCAN            |rw   |1190    |643         |
+|2 |  RECURSIVE UNION ALL    |     |1190    |640         |
+|3 |   HASH JOIN             |     |62      |25          |
+|4 |    HASH JOIN            |     |17      |13          |
+|5 |     TABLE SCAN          |e    |5       |5           |
+|6 |     TABLE SCAN          |n1   |17      |5           |
+|7 |    TABLE SCAN           |n2   |17      |5           |
+|8 |   NESTED-LOOP SEMI JOIN |     |1128    |612         |
+|9 |    HASH JOIN            |     |3383    |165         |
+|10|     MATERIAL            |     |17      |19          |
+|11|      HASH JOIN          |     |17      |15          |
+|12|       TABLE SCAN        |n    |17      |5           |
+|13|       TABLE SCAN        |e    |1       |5           |
 |14|     TABLE SCAN          |r    |199     |1           |
-|15|    MATERIAL             |     |7       |4           |
-|16|     SUBPLAN SCAN        |VIEW1|7       |4           |
-|17|      HASH GROUP BY      |     |7       |4           |
-|18|       TABLE SCAN        |t1   |7       |2           |
+|15|    MATERIAL             |     |7       |6           |
+|16|     SUBPLAN SCAN        |VIEW1|7       |6           |
+|17|      HASH GROUP BY      |     |7       |6           |
+|18|       TABLE SCAN        |t1   |7       |5           |
 ==========================================================
 Outputs & filters:
 -------------------------------------
@@ -4871,29 +4871,29 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                       |NAME   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SORT                           |       |1190    |968         |
-|1 | SUBPLAN SCAN                  |rw     |1190    |598         |
-|2 |  RECURSIVE UNION ALL          |       |1190    |595         |
-|3 |   HASH JOIN                   |       |62      |16          |
-|4 |    HASH JOIN                  |       |17      |8           |
-|5 |     TABLE SCAN                |e      |5       |3           |
-|6 |     TABLE SCAN                |n1     |17      |3           |
-|7 |    TABLE SCAN                 |n2     |17      |3           |
-|8 |   NESTED-LOOP SEMI JOIN       |       |1128    |577         |
-|9 |    NESTED-LOOP JOIN CARTESIAN |       |3383    |132         |
-|10|     HASH JOIN                 |       |3383    |36          |
-|11|      MATERIAL                 |       |17      |14          |
-|12|       HASH JOIN               |       |17      |10          |
-|13|        TABLE SCAN             |n      |17      |3           |
-|14|        TABLE SCAN             |e      |1       |3           |
+|0 |SORT                           |       |1190    |1110        |
+|1 | SUBPLAN SCAN                  |rw     |1190    |741         |
+|2 |  RECURSIVE UNION ALL          |       |1190    |738         |
+|3 |   HASH JOIN                   |       |62      |25          |
+|4 |    HASH JOIN                  |       |17      |13          |
+|5 |     TABLE SCAN                |e      |5       |5           |
+|6 |     TABLE SCAN                |n1     |17      |5           |
+|7 |    TABLE SCAN                 |n2     |17      |5           |
+|8 |   NESTED-LOOP SEMI JOIN       |       |1128    |710         |
+|9 |    NESTED-LOOP JOIN CARTESIAN |       |3383    |263         |
+|10|     HASH JOIN                 |       |3383    |165         |
+|11|      MATERIAL                 |       |17      |19          |
+|12|       HASH JOIN               |       |17      |15          |
+|13|        TABLE SCAN             |n      |17      |5           |
+|14|        TABLE SCAN             |e      |1       |5           |
 |15|      TABLE SCAN               |r      |199     |1           |
-|16|     MATERIAL                  |       |1       |2           |
-|17|      SUBPLAN SCAN             |VIEW2  |1       |2           |
-|18|       TABLE SCAN              |disemp1|1       |2           |
-|19|    MATERIAL                   |       |7       |4           |
-|20|     SUBPLAN SCAN              |VIEW1  |7       |4           |
-|21|      HASH GROUP BY            |       |7       |4           |
-|22|       TABLE SCAN              |t1     |7       |2           |
+|16|     MATERIAL                  |       |1       |4           |
+|17|      SUBPLAN SCAN             |VIEW2  |1       |4           |
+|18|       TABLE SCAN              |disemp1|1       |4           |
+|19|    MATERIAL                   |       |7       |6           |
+|20|     SUBPLAN SCAN              |VIEW1  |7       |6           |
+|21|      HASH GROUP BY            |       |7       |6           |
+|22|       TABLE SCAN              |t1     |7       |5           |
 ==================================================================
 Outputs & filters:
 -------------------------------------

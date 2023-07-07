@@ -3618,7 +3618,7 @@ SQL: select distinct c1, c2 from t4;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|t4(idx_t4_c2)|100      |78  |
+|0 |TABLE SCAN|t4(idx_t4_c2)|100      |48  |
 ============================================
 
 Outputs & filters: 
@@ -3921,12 +3921,12 @@ Outputs & filters:
 
 SQL: select distinct c2 from t4 order by c2; 
 
-===================================================
-|ID|OPERATOR      |NAME            |EST. ROWS|COST|
----------------------------------------------------
-|0 |MERGE DISTINCT|                |10       |82  |
-|1 | TABLE SCAN   |t4(idx_t4_c2_c3)|100      |78  |
-===================================================
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE DISTINCT|             |10       |52  |
+|1 | TABLE SCAN   |t4(idx_t4_c2)|100      |48  |
+================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -3935,7 +3935,7 @@ Outputs & filters:
   1 - output([t4.c2]), filter(nil), 
       access([t4.c2]), partitions(p0), 
       is_index_back=false, 
-      range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+      range_key([t4.c2], [t4.c1]), range(MIN,MIN ; MAX,MAX)always true
 
 *************** Case 110(end)  ************** 
 
@@ -4034,20 +4034,20 @@ Outputs & filters:
 
 SQL: select distinct c2 from t5 order by c3 limit 3; 
 
-==============================================================
-|ID|OPERATOR                         |NAME    |EST. ROWS|COST|
---------------------------------------------------------------
-|0 |LIMIT                            |        |3        |286 |
-|1 | PX COORDINATOR MERGE SORT       |        |3        |286 |
-|2 |  EXCHANGE OUT DISTR             |:EX10001|3        |286 |
-|3 |   TOP-N SORT                    |        |3        |285 |
-|4 |    MERGE DISTINCT               |        |100      |279 |
-|5 |     EXCHANGE IN MERGE SORT DISTR|        |100      |274 |
-|6 |      EXCHANGE OUT DISTR (HASH)  |:EX10000|100      |265 |
-|7 |       PX PARTITION ITERATOR     |        |100      |246 |
-|8 |        MERGE DISTINCT           |        |100      |246 |
-|9 |         TABLE SCAN              |t5      |300      |233 |
-==============================================================
+===================================================================
+|ID|OPERATOR                         |NAME         |EST. ROWS|COST|
+-------------------------------------------------------------------
+|0 |LIMIT                            |             |3        |196 |
+|1 | PX COORDINATOR MERGE SORT       |             |3        |195 |
+|2 |  EXCHANGE OUT DISTR             |:EX10001     |3        |195 |
+|3 |   TOP-N SORT                    |             |3        |195 |
+|4 |    MERGE DISTINCT               |             |100      |189 |
+|5 |     EXCHANGE IN MERGE SORT DISTR|             |100      |183 |
+|6 |      EXCHANGE OUT DISTR (HASH)  |:EX10000     |100      |174 |
+|7 |       PX PARTITION ITERATOR     |             |100      |155 |
+|8 |        MERGE DISTINCT           |             |100      |155 |
+|9 |         TABLE SCAN              |t5(idx_t5_c2)|300      |142 |
+===================================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -4077,15 +4077,15 @@ SQL: select distinct c2 from t5 order by c3;
 ==================================================================
 |ID|OPERATOR                        |NAME         |EST. ROWS|COST|
 ------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |             |100      |363 |
-|1 | EXCHANGE OUT DISTR             |:EX10001     |100      |354 |
-|2 |  SORT                          |             |100      |335 |
-|3 |   MERGE DISTINCT               |             |100      |279 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|             |100      |274 |
-|5 |     EXCHANGE OUT DISTR (HASH)  |:EX10000     |100      |265 |
-|6 |      PX PARTITION ITERATOR     |             |100      |246 |
-|7 |       MERGE DISTINCT           |             |100      |246 |
-|8 |        TABLE SCAN              |t5(idx_t5_c2)|300      |233 |
+|0 |PX COORDINATOR MERGE SORT       |             |100      |272 |
+|1 | EXCHANGE OUT DISTR             |:EX10001     |100      |263 |
+|2 |  SORT                          |             |100      |244 |
+|3 |   MERGE DISTINCT               |             |100      |189 |
+|4 |    EXCHANGE IN MERGE SORT DISTR|             |100      |183 |
+|5 |     EXCHANGE OUT DISTR (HASH)  |:EX10000     |100      |174 |
+|6 |      PX PARTITION ITERATOR     |             |100      |155 |
+|7 |       MERGE DISTINCT           |             |100      |155 |
+|8 |        TABLE SCAN              |t5(idx_t5_c2)|300      |142 |
 ==================================================================
 
 Outputs & filters: 
@@ -5145,10 +5145,10 @@ SQL: select /*+ index(t5 idx_t5_c2) */ c1, c2 from t5 where c1 = 2 or c2 =5;
 =========================================================
 |ID|OPERATOR               |NAME         |EST. ROWS|COST|
 ---------------------------------------------------------
-|0 |PX COORDINATOR         |             |6        |299 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |298 |
-|2 |  PX PARTITION ITERATOR|             |6        |297 |
-|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |297 |
+|0 |PX COORDINATOR         |             |6        |564 |
+|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |564 |
+|2 |  PX PARTITION ITERATOR|             |6        |563 |
+|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |563 |
 =========================================================
 
 Outputs & filters: 
@@ -5171,10 +5171,10 @@ SQL: select /*+ index(t5 idx_t5_c3) */ c1, c2 from t5 where c1 = 2 or c2 =5;
 =========================================================
 |ID|OPERATOR               |NAME         |EST. ROWS|COST|
 ---------------------------------------------------------
-|0 |PX COORDINATOR         |             |6        |299 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |298 |
-|2 |  PX PARTITION ITERATOR|             |6        |297 |
-|3 |   TABLE SCAN          |t5(idx_t5_c3)|6        |297 |
+|0 |PX COORDINATOR         |             |6        |564 |
+|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |564 |
+|2 |  PX PARTITION ITERATOR|             |6        |563 |
+|3 |   TABLE SCAN          |t5(idx_t5_c3)|6        |563 |
 =========================================================
 
 Outputs & filters: 
@@ -5223,10 +5223,10 @@ SQL: select /*+ index(t5 idx_t5_c2) */ * from t5;
 =========================================================
 |ID|OPERATOR               |NAME         |EST. ROWS|COST|
 ---------------------------------------------------------
-|0 |PX COORDINATOR         |             |300      |411 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |300      |371 |
-|2 |  PX PARTITION ITERATOR|             |300      |290 |
-|3 |   TABLE SCAN          |t5(idx_t5_c2)|300      |290 |
+|0 |PX COORDINATOR         |             |300      |676 |
+|1 | EXCHANGE OUT DISTR    |:EX10000     |300      |637 |
+|2 |  PX PARTITION ITERATOR|             |300      |555 |
+|3 |   TABLE SCAN          |t5(idx_t5_c2)|300      |555 |
 =========================================================
 
 Outputs & filters: 
@@ -5275,10 +5275,10 @@ SQL: select c1, c2 from t5 use index for join (idx_t5_c2) where c1 =2 or c2 = 5;
 =========================================================
 |ID|OPERATOR               |NAME         |EST. ROWS|COST|
 ---------------------------------------------------------
-|0 |PX COORDINATOR         |             |6        |299 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |298 |
-|2 |  PX PARTITION ITERATOR|             |6        |297 |
-|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |297 |
+|0 |PX COORDINATOR         |             |6        |564 |
+|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |564 |
+|2 |  PX PARTITION ITERATOR|             |6        |563 |
+|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |563 |
 =========================================================
 
 Outputs & filters: 
@@ -5327,10 +5327,10 @@ SQL: select c1, c2 from t5 use index for order by (idx_t5_c2) where c1 =2 or c2 
 =========================================================
 |ID|OPERATOR               |NAME         |EST. ROWS|COST|
 ---------------------------------------------------------
-|0 |PX COORDINATOR         |             |6        |299 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |298 |
-|2 |  PX PARTITION ITERATOR|             |6        |297 |
-|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |297 |
+|0 |PX COORDINATOR         |             |6        |564 |
+|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |564 |
+|2 |  PX PARTITION ITERATOR|             |6        |563 |
+|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |563 |
 =========================================================
 
 Outputs & filters: 
@@ -5353,10 +5353,10 @@ SQL: select c1, c2 from t5 force index for group by (idx_t5_c2) where c1 =2 or c
 =========================================================
 |ID|OPERATOR               |NAME         |EST. ROWS|COST|
 ---------------------------------------------------------
-|0 |PX COORDINATOR         |             |6        |299 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |298 |
-|2 |  PX PARTITION ITERATOR|             |6        |297 |
-|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |297 |
+|0 |PX COORDINATOR         |             |6        |564 |
+|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |564 |
+|2 |  PX PARTITION ITERATOR|             |6        |563 |
+|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |563 |
 =========================================================
 
 Outputs & filters: 
@@ -5483,10 +5483,10 @@ SQL: select c1, c2 from t5 ignore index (idx_t5_c3, primary) where c1 =2 or c2 =
 =========================================================
 |ID|OPERATOR               |NAME         |EST. ROWS|COST|
 ---------------------------------------------------------
-|0 |PX COORDINATOR         |             |6        |299 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |298 |
-|2 |  PX PARTITION ITERATOR|             |6        |297 |
-|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |297 |
+|0 |PX COORDINATOR         |             |6        |564 |
+|1 | EXCHANGE OUT DISTR    |:EX10000     |6        |564 |
+|2 |  PX PARTITION ITERATOR|             |6        |563 |
+|3 |   TABLE SCAN          |t5(idx_t5_c2)|6        |563 |
 =========================================================
 
 Outputs & filters: 
@@ -6122,7 +6122,7 @@ SQL: select sum(c1 + 1) from t4 group by c1, c2;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|t4(idx_t4_c2)|100      |78  |
+|0 |TABLE SCAN|t4(idx_t4_c2)|100      |48  |
 ============================================
 
 Outputs & filters: 
@@ -7332,8 +7332,8 @@ SQL: select t11.c2 from (select c1,c2 from t4) t11 left join t6 on t11.c1=1;
 ===========================================================
 |ID|OPERATOR                 |NAME         |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |NESTED-LOOP OUTER JOIN   |             |2700     |1210|
-|1 | TABLE SCAN              |t4(idx_t4_c2)|100      |78  |
+|0 |NESTED-LOOP OUTER JOIN   |             |2700     |1180|
+|1 | TABLE SCAN              |t4(idx_t4_c2)|100      |48  |
 |2 | MATERIAL                |             |300      |281 |
 |3 |  PX COORDINATOR         |             |300      |280 |
 |4 |   EXCHANGE OUT DISTR    |:EX10000     |300      |263 |
@@ -8193,14 +8193,14 @@ Outputs & filters:
 
 SQL: select count(*) from (select count(*) as a  from t4) t ; 
 
-==========================================
-|ID|OPERATOR         |NAME|EST. ROWS|COST|
-------------------------------------------
-|0 |SCALAR GROUP BY  |    |1        |81  |
-|1 | SUBPLAN SCAN    |t   |1        |81  |
-|2 |  SCALAR GROUP BY|    |1        |81  |
-|3 |   TABLE SCAN    |t4  |100      |78  |
-==========================================
+===================================================
+|ID|OPERATOR         |NAME         |EST. ROWS|COST|
+---------------------------------------------------
+|0 |SCALAR GROUP BY  |             |1        |51  |
+|1 | SUBPLAN SCAN    |t            |1        |51  |
+|2 |  SCALAR GROUP BY|             |1        |51  |
+|3 |   TABLE SCAN    |t4(idx_t4_c2)|100      |48  |
+===================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -8213,7 +8213,7 @@ Outputs & filters:
   3 - output(nil), filter(nil), 
       access([t4.c1]), partitions(p0), 
       is_index_back=false, 
-      range_key([t4.c1], [t4.c2]), range(MIN,MIN ; MAX,MAX)always true
+      range_key([t4.c2], [t4.c1]), range(MIN,MIN ; MAX,MAX)always true
 
 *************** Case 246(end)  ************** 
 
@@ -9142,8 +9142,8 @@ SQL: select c1 from t4 where c1 not in (select c1 from t7 where t7.c1>(select c1
 ==================================================
 |ID|OPERATOR       |NAME         |EST. ROWS|COST |
 --------------------------------------------------
-|0 |SUBPLAN FILTER |             |50       |12526|
-|1 | TABLE SCAN    |t4(idx_t4_c2)|100      |78   |
+|0 |SUBPLAN FILTER |             |50       |12496|
+|1 | TABLE SCAN    |t4(idx_t4_c2)|100      |48   |
 |2 | SUBPLAN FILTER|             |34       |124  |
 |3 |  TABLE SCAN   |t7           |34       |46   |
 |4 |  TABLE SCAN   |t8           |100      |78   |
@@ -9178,8 +9178,8 @@ SQL: select c1 from t4 where c1 not in (select c1 from t7 where t4.c1>(select c1
 ==================================================
 |ID|OPERATOR       |NAME         |EST. ROWS|COST |
 --------------------------------------------------
-|0 |SUBPLAN FILTER |             |50       |15902|
-|1 | TABLE SCAN    |t4(idx_t4_c2)|100      |78   |
+|0 |SUBPLAN FILTER |             |50       |15871|
+|1 | TABLE SCAN    |t4(idx_t4_c2)|100      |48   |
 |2 | SUBPLAN FILTER|             |100      |157  |
 |3 |  TABLE SCAN   |t7           |100      |78   |
 |4 |  TABLE SCAN   |t8           |100      |78   |
@@ -9281,8 +9281,8 @@ SQL: select c1 from t4 where c1 in (select c1 from t7 where t4.c1>(select c1 fro
 ==================================================
 |ID|OPERATOR       |NAME         |EST. ROWS|COST |
 --------------------------------------------------
-|0 |SUBPLAN FILTER |             |50       |15902|
-|1 | TABLE SCAN    |t4(idx_t4_c2)|100      |78   |
+|0 |SUBPLAN FILTER |             |50       |15871|
+|1 | TABLE SCAN    |t4(idx_t4_c2)|100      |48   |
 |2 | SUBPLAN FILTER|             |100      |157  |
 |3 |  TABLE SCAN   |t7           |100      |78   |
 |4 |  TABLE SCAN   |t8           |100      |78   |
@@ -10321,29 +10321,29 @@ SQL: select * from t1, t2 where t1.c1 > any(select t3.c2 from t2,t3 where t2.c1 
 ======================================================================
 |ID|OPERATOR                          |NAME         |EST. ROWS|COST  |
 ----------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN        |             |50000    |961484|
-|1 | NESTED-LOOP SEMI JOIN            |             |167      |956719|
+|0 |NESTED-LOOP JOIN CARTESIAN        |             |50000    |934259|
+|1 | NESTED-LOOP SEMI JOIN            |             |167      |929494|
 |2 |  PX COORDINATOR                  |             |500      |528   |
 |3 |   EXCHANGE OUT DISTR             |:EX10000     |500      |481   |
 |4 |    PX PARTITION ITERATOR         |             |500      |387   |
 |5 |     TABLE SCAN                   |t1           |500      |387   |
-|6 |  MATERIAL                        |             |20000    |157065|
-|7 |   SUBPLAN SCAN                   |VIEW2        |20000    |156994|
-|8 |    NESTED-LOOP JOIN CARTESIAN    |             |20000    |156643|
-|9 |     NESTED-LOOP SEMI JOIN        |             |100      |153876|
+|6 |  MATERIAL                        |             |20000    |129840|
+|7 |   SUBPLAN SCAN                   |VIEW2        |20000    |129769|
+|8 |    NESTED-LOOP JOIN CARTESIAN    |             |20000    |129418|
+|9 |     NESTED-LOOP SEMI JOIN        |             |100      |126652|
 |10|      PX COORDINATOR              |             |300      |280   |
 |11|       EXCHANGE OUT DISTR         |:EX20000     |300      |263   |
 |12|        PX PARTITION ITERATOR     |             |300      |233   |
 |13|         TABLE SCAN               |t2           |300      |233   |
-|14|      SUBPLAN SCAN                |VIEW1        |1        |463   |
-|15|       SUBPLAN FILTER             |             |1        |463   |
-|16|        NESTED-LOOP JOIN CARTESIAN|             |1        |326   |
+|14|      SUBPLAN SCAN                |VIEW1        |1        |372   |
+|15|       SUBPLAN FILTER             |             |1        |372   |
+|16|        NESTED-LOOP JOIN CARTESIAN|             |1        |236   |
 |17|         TABLE SCAN               |t4           |1        |46    |
-|18|         MATERIAL                 |             |300      |281   |
-|19|          PX COORDINATOR          |             |300      |280   |
-|20|           EXCHANGE OUT DISTR     |:EX30000     |300      |263   |
-|21|            PX PARTITION ITERATOR |             |300      |233   |
-|22|             TABLE SCAN           |t5(idx_t5_c2)|300      |233   |
+|18|         MATERIAL                 |             |300      |190   |
+|19|          PX COORDINATOR          |             |300      |189   |
+|20|           EXCHANGE OUT DISTR     |:EX30000     |300      |173   |
+|21|            PX PARTITION ITERATOR |             |300      |142   |
+|22|             TABLE SCAN           |t5(idx_t5_c2)|300      |142   |
 |23|        LIMIT                     |             |1        |137   |
 |24|         PX COORDINATOR           |             |1        |137   |
 |25|          EXCHANGE OUT DISTR      |:EX40000     |1        |137   |
@@ -11612,29 +11612,29 @@ Outputs & filters:
 
 SQL: select * from t5,t16 where t5.c2 = t16.c2 and t5.c3 = t16.c3; 
 
-=========================================================
-|ID|OPERATOR               |NAME         |EST. ROWS|COST|
----------------------------------------------------------
-|0 |PX COORDINATOR         |             |197      |749 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |197      |701 |
-|2 |  PX PARTITION ITERATOR|             |197      |597 |
-|3 |   MERGE JOIN          |             |197      |597 |
-|4 |    TABLE SCAN         |t5(idx_t5_c3)|300      |290 |
-|5 |    TABLE SCAN         |t16          |300      |233 |
-=========================================================
+====================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST|
+----------------------------------------------------
+|0 |PX COORDINATOR         |        |197      |772 |
+|1 | EXCHANGE OUT DISTR    |:EX10000|197      |724 |
+|2 |  PX PARTITION ITERATOR|        |197      |620 |
+|3 |   HASH JOIN           |        |197      |620 |
+|4 |    TABLE SCAN         |t5      |300      |233 |
+|5 |    TABLE SCAN         |t16     |300      |233 |
+====================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, t16.c1, t16.c2, t16.c3)]), filter(nil)
   1 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, t16.c1, t16.c2, t16.c3)]), filter(nil), dop=1
-  2 - output([t5.c3], [t16.c3], [t5.c2], [t16.c2], [t5.c1], [t16.c1]), filter(nil), 
+  2 - output([t5.c2], [t16.c2], [t5.c3], [t16.c3], [t5.c1], [t16.c1]), filter(nil),
       partition wise, force partition granule.
-  3 - output([t5.c3], [t16.c3], [t5.c2], [t16.c2], [t5.c1], [t16.c1]), filter(nil), 
-      equal_conds([t5.c3 = t16.c3], [t5.c2 = t16.c2]), other_conds(nil)
+  3 - output([t5.c2], [t16.c2], [t5.c3], [t16.c3], [t5.c1], [t16.c1]), filter(nil),
+      equal_conds([t5.c2 = t16.c2], [t5.c3 = t16.c3]), other_conds(nil)
   4 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
-      is_index_back=true, 
-      range_key([t5.c3], [t5.c2]), range(MIN,MIN ; MAX,MAX)always true
+      is_index_back=false,
+      range_key([t5.c2], [t5.c3]), range(MIN,MIN ; MAX,MAX)always true
   5 - output([t16.c3], [t16.c2], [t16.c1]), filter(nil), 
       access([t16.c3], [t16.c2], [t16.c1]), partitions(p[0-2]), 
       is_index_back=false, 
@@ -11646,29 +11646,29 @@ Outputs & filters:
 
 SQL: select * from t5,t16 where t5.c2 = t16.c2 and t5.c3 = t16.c3 and t5.c1 = t16.c1; 
 
-=========================================================
-|ID|OPERATOR               |NAME         |EST. ROWS|COST|
----------------------------------------------------------
-|0 |PX COORDINATOR         |             |160      |712 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |160      |673 |
-|2 |  PX PARTITION ITERATOR|             |160      |589 |
-|3 |   MERGE JOIN          |             |160      |589 |
-|4 |    TABLE SCAN         |t5(idx_t5_c3)|300      |290 |
-|5 |    TABLE SCAN         |t16          |300      |233 |
-=========================================================
+====================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST|
+----------------------------------------------------
+|0 |PX COORDINATOR         |        |160      |752 |
+|1 | EXCHANGE OUT DISTR    |:EX10000|160      |713 |
+|2 |  PX PARTITION ITERATOR|        |160      |629 |
+|3 |   HASH JOIN           |        |160      |629 |
+|4 |    TABLE SCAN         |t5      |300      |233 |
+|5 |    TABLE SCAN         |t16     |300      |233 |
+====================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, t16.c1, t16.c2, t16.c3)]), filter(nil)
   1 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, t16.c1, t16.c2, t16.c3)]), filter(nil), dop=1
-  2 - output([t5.c3], [t16.c3], [t5.c2], [t16.c2], [t5.c1], [t16.c1]), filter(nil), 
+  2 - output([t5.c2], [t16.c2], [t5.c3], [t16.c3], [t5.c1], [t16.c1]), filter(nil),
       partition wise, force partition granule.
-  3 - output([t5.c3], [t16.c3], [t5.c2], [t16.c2], [t5.c1], [t16.c1]), filter(nil), 
-      equal_conds([t5.c3 = t16.c3], [t5.c2 = t16.c2], [t5.c1 = t16.c1]), other_conds(nil)
+  3 - output([t5.c2], [t16.c2], [t5.c3], [t16.c3], [t5.c1], [t16.c1]), filter(nil),
+      equal_conds([t5.c2 = t16.c2], [t5.c3 = t16.c3], [t5.c1 = t16.c1]), other_conds(nil)
   4 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
-      is_index_back=true, 
-      range_key([t5.c3], [t5.c2]), range(MIN,MIN ; MAX,MAX)always true
+      is_index_back=false,
+      range_key([t5.c2], [t5.c3]), range(MIN,MIN ; MAX,MAX)always true
   5 - output([t16.c3], [t16.c2], [t16.c1]), filter(nil), 
       access([t16.c3], [t16.c2], [t16.c1]), partitions(p[0-2]), 
       is_index_back=false, 
@@ -12014,29 +12014,29 @@ Outputs & filters:
 
 SQL: select * from t5 left join t16 on t5.c2 = t16.c2 and t5.c3 = t16.c3; 
 
-=========================================================
-|ID|OPERATOR               |NAME         |EST. ROWS|COST|
----------------------------------------------------------
-|0 |PX COORDINATOR         |             |300      |829 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |300      |756 |
-|2 |  PX PARTITION ITERATOR|             |300      |597 |
-|3 |   MERGE OUTER JOIN    |             |300      |597 |
-|4 |    TABLE SCAN         |t5(idx_t5_c3)|300      |290 |
-|5 |    TABLE SCAN         |t16          |300      |233 |
-=========================================================
+====================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST|
+----------------------------------------------------
+|0 |PX COORDINATOR         |        |300      |852 |
+|1 | EXCHANGE OUT DISTR    |:EX10000|300      |778 |
+|2 |  PX PARTITION ITERATOR|        |300      |620 |
+|3 |   HASH OUTER JOIN     |        |300      |620 |
+|4 |    TABLE SCAN         |t5      |300      |233 |
+|5 |    TABLE SCAN         |t16     |300      |233 |
+====================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, t16.c1, t16.c2, t16.c3)]), filter(nil)
   1 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, t16.c1, t16.c2, t16.c3)]), filter(nil), dop=1
-  2 - output([t5.c3], [t16.c3], [t5.c2], [t16.c2], [t5.c1], [t16.c1]), filter(nil), 
+  2 - output([t5.c2], [t16.c2], [t5.c3], [t16.c3], [t5.c1], [t16.c1]), filter(nil),
       partition wise, force partition granule.
-  3 - output([t5.c3], [t16.c3], [t5.c2], [t16.c2], [t5.c1], [t16.c1]), filter(nil), 
-      equal_conds([t5.c3 = t16.c3], [t5.c2 = t16.c2]), other_conds(nil)
+  3 - output([t5.c2], [t16.c2], [t5.c3], [t16.c3], [t5.c1], [t16.c1]), filter(nil),
+      equal_conds([t5.c2 = t16.c2], [t5.c3 = t16.c3]), other_conds(nil)
   4 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
-      is_index_back=true, 
-      range_key([t5.c3], [t5.c2]), range(MIN,MIN ; MAX,MAX)always true
+      is_index_back=false,
+      range_key([t5.c2], [t5.c3]), range(MIN,MIN ; MAX,MAX)always true
   5 - output([t16.c3], [t16.c2], [t16.c1]), filter(nil), 
       access([t16.c3], [t16.c2], [t16.c1]), partitions(p[0-2]), 
       is_index_back=false, 
@@ -12048,29 +12048,29 @@ Outputs & filters:
 
 SQL: select * from t5 left join t16 on t5.c2 = t16.c2 and t5.c3 = t16.c3 and t5.c1 = t16.c1; 
 
-=========================================================
-|ID|OPERATOR               |NAME         |EST. ROWS|COST|
----------------------------------------------------------
-|0 |PX COORDINATOR         |             |300      |820 |
-|1 | EXCHANGE OUT DISTR    |:EX10000     |300      |747 |
-|2 |  PX PARTITION ITERATOR|             |300      |589 |
-|3 |   MERGE OUTER JOIN    |             |300      |589 |
-|4 |    TABLE SCAN         |t5(idx_t5_c3)|300      |290 |
-|5 |    TABLE SCAN         |t16          |300      |233 |
-=========================================================
+====================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST|
+----------------------------------------------------
+|0 |PX COORDINATOR         |        |300      |861 |
+|1 | EXCHANGE OUT DISTR    |:EX10000|300      |787 |
+|2 |  PX PARTITION ITERATOR|        |300      |629 |
+|3 |   HASH OUTER JOIN     |        |300      |629 |
+|4 |    TABLE SCAN         |t5      |300      |233 |
+|5 |    TABLE SCAN         |t16     |300      |233 |
+====================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, t16.c1, t16.c2, t16.c3)]), filter(nil)
   1 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, t16.c1, t16.c2, t16.c3)]), filter(nil), dop=1
-  2 - output([t5.c3], [t16.c3], [t5.c2], [t16.c2], [t5.c1], [t16.c1]), filter(nil), 
+  2 - output([t5.c2], [t16.c2], [t5.c3], [t16.c3], [t5.c1], [t16.c1]), filter(nil),
       partition wise, force partition granule.
-  3 - output([t5.c3], [t16.c3], [t5.c2], [t16.c2], [t5.c1], [t16.c1]), filter(nil), 
-      equal_conds([t5.c3 = t16.c3], [t5.c2 = t16.c2], [t5.c1 = t16.c1]), other_conds(nil)
+  3 - output([t5.c2], [t16.c2], [t5.c3], [t16.c3], [t5.c1], [t16.c1]), filter(nil),
+      equal_conds([t5.c2 = t16.c2], [t5.c3 = t16.c3], [t5.c1 = t16.c1]), other_conds(nil)
   4 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
-      is_index_back=true, 
-      range_key([t5.c3], [t5.c2]), range(MIN,MIN ; MAX,MAX)always true
+      is_index_back=false,
+      range_key([t5.c2], [t5.c3]), range(MIN,MIN ; MAX,MAX)always true
   5 - output([t16.c3], [t16.c2], [t16.c1]), filter(nil), 
       access([t16.c3], [t16.c2], [t16.c1]), partitions(p[0-2]), 
       is_index_back=false, 
@@ -13777,8 +13777,8 @@ SQL: select * from (select c1 from t4 group by "adg") as a;
 ================================================
 |ID|OPERATOR      |NAME         |EST. ROWS|COST|
 ------------------------------------------------
-|0 |MERGE GROUP BY|             |1        |80  |
-|1 | TABLE SCAN   |t4(idx_t4_c2)|100      |78  |
+|0 |MERGE GROUP BY|             |1        |49  |
+|1 | TABLE SCAN   |t4(idx_t4_c2)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -15205,16 +15205,16 @@ SQL: select/*+index(t5 idx_t5_c3)*/ t3.c2 from t5, t3;
 ============================================================
 |ID|OPERATOR                  |NAME         |EST. ROWS|COST|
 ------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN|             |60000    |5625|
+|0 |NESTED-LOOP JOIN CARTESIAN|             |60000    |5534|
 |1 | PX COORDINATOR           |             |200      |187 |
 |2 |  EXCHANGE OUT DISTR      |:EX10000     |200      |176 |
 |3 |   PX PARTITION ITERATOR  |             |200      |155 |
 |4 |    TABLE SCAN            |t3           |200      |155 |
-|5 | MATERIAL                 |             |300      |281 |
-|6 |  PX COORDINATOR          |             |300      |280 |
-|7 |   EXCHANGE OUT DISTR     |:EX20000     |300      |263 |
-|8 |    PX PARTITION ITERATOR |             |300      |233 |
-|9 |     TABLE SCAN           |t5(idx_t5_c3)|300      |233 |
+|5 | MATERIAL                 |             |300      |190 |
+|6 |  PX COORDINATOR          |             |300      |189 |
+|7 |   EXCHANGE OUT DISTR     |:EX20000     |300      |173 |
+|8 |    PX PARTITION ITERATOR |             |300      |142 |
+|9 |     TABLE SCAN           |t5(idx_t5_c3)|300      |142 |
 ============================================================
 
 Outputs & filters: 
@@ -19478,11 +19478,7 @@ SQL: select avg(1) from t1;
 
 Outputs & filters: 
 -------------------------------------
-<<<<<<< HEAD
   0 - output([T_FUN_SUM(T_FUN_SUM(?)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(*)), DECIMAL(20, 0))]), filter(nil), 
-=======
-  0 - output([cast(T_FUN_SUM(T_FUN_SUM(?)) / T_FUN_COUNT_SUM(T_FUN_COUNT(*)), DECIMAL(5, 4))]), filter(nil), 
->>>>>>> 4ace446e738... fix aggr convert lost origin type
       group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(?))], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
   1 - output([T_FUN_SUM(?)], [T_FUN_COUNT(*)]), filter(nil)
   2 - output([T_FUN_SUM(?)], [T_FUN_COUNT(*)]), filter(nil), dop=1
@@ -21687,8 +21683,8 @@ SQL: select c3 from t_normal_idx order by c3;
 =================================================
 |ID|OPERATOR   |NAME             |EST. ROWS|COST|
 -------------------------------------------------
-|0 |SORT       |                 |100      |133 |
-|1 | TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |SORT       |                 |100      |103 |
+|1 | TABLE SCAN|t_normal_idx(idx)|100      |48  |
 =================================================
 
 Outputs & filters: 
@@ -21708,7 +21704,7 @@ SQL: select c3 from t_normal_idx where c2=1 order by c3;
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21728,7 +21724,7 @@ SQL: select c3 from t_normal_idx where c2 is null order by c3;
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21748,7 +21744,7 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null order by c4,c5;
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21768,7 +21764,7 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c4=1 order by c5,
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21788,7 +21784,7 @@ SQL: select c3 from t_normal_idx where c2 is null and c3 is null and c4 is null 
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21808,7 +21804,7 @@ SQL: select c3 from t_normal_idx where c2 is null and c3=1 order by c4;
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21828,7 +21824,7 @@ SQL: select c3 from t_normal_idx where c2 is null and c3=1 and c4 is null order 
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21848,7 +21844,7 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c4=1 order by c3,
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21868,7 +21864,7 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c4=1 order by c2,
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|100      |78  |
+|0 |TABLE SCAN|t_normal_idx(idx)|100      |48  |
 ================================================
 
 Outputs & filters: 
@@ -21888,7 +21884,7 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c4=1 and c6 is nu
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|10       |80  |
+|0 |TABLE SCAN|t_normal_idx(idx)|10       |50  |
 ================================================
 
 Outputs & filters: 
@@ -21908,7 +21904,7 @@ SQL: select c3 from t_normal_idx where c2=1 and c4 is null and c5=1 order by c3,
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|1        |79  |
+|0 |TABLE SCAN|t_normal_idx(idx)|1        |49  |
 ================================================
 
 Outputs & filters: 
@@ -21928,7 +21924,7 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c5=1 order by c4,
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|9        |79  |
+|0 |TABLE SCAN|t_normal_idx(idx)|9        |49  |
 ================================================
 
 Outputs & filters: 
@@ -21948,8 +21944,8 @@ SQL: select c3 from t_normal_idx where c2 is not null order by c3;
 =================================================
 |ID|OPERATOR   |NAME             |EST. ROWS|COST|
 -------------------------------------------------
-|0 |SORT       |                 |90       |129 |
-|1 | TABLE SCAN|t_normal_idx(idx)|90       |80  |
+|0 |SORT       |                 |90       |99  |
+|1 | TABLE SCAN|t_normal_idx(idx)|90       |50  |
 =================================================
 
 Outputs & filters: 
@@ -21969,8 +21965,8 @@ SQL: select c3 from t_normal_idx group by c3;
 ===================================================
 |ID|OPERATOR     |NAME             |EST. ROWS|COST|
 ---------------------------------------------------
-|0 |HASH GROUP BY|                 |10       |104 |
-|1 | TABLE SCAN  |t_normal_idx(idx)|100      |78  |
+|0 |HASH GROUP BY|                 |10       |74  |
+|1 | TABLE SCAN  |t_normal_idx(idx)|100      |48  |
 ===================================================
 
 Outputs & filters: 
@@ -21991,8 +21987,8 @@ SQL: select c3 from t_normal_idx where c2=1 group by c3;
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |10       |82  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |10       |52  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22014,8 +22010,8 @@ SQL: select c3 from t_normal_idx where c2 is null group by c3;
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |10       |82  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |10       |52  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22037,8 +22033,8 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null group by c4,c5;
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |71       |83  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |71       |53  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22060,8 +22056,8 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c4=1 group by c5,
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |71       |84  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |71       |53  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22083,8 +22079,8 @@ SQL: select c3 from t_normal_idx where c2 is null and c3 is null and c4 is null 
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |10       |82  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |10       |52  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22106,8 +22102,8 @@ SQL: select c3 from t_normal_idx where c2 is null and c3=1 group by c4;
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |10       |82  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |10       |52  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22129,8 +22125,8 @@ SQL: select c3 from t_normal_idx where c2 is null and c3=1 and c4 is null group 
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |71       |84  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |71       |53  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22152,8 +22148,8 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c4=1 group by c3,
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |71       |84  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |71       |53  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22175,8 +22171,8 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c4=1 group by c2,
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |71       |84  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|100      |78  |
+|0 |MERGE GROUP BY|                 |71       |53  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|100      |48  |
 ====================================================
 
 Outputs & filters: 
@@ -22198,8 +22194,8 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c4=1 and c6 is nu
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |7        |81  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|10       |80  |
+|0 |MERGE GROUP BY|                 |7        |51  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|10       |50  |
 ====================================================
 
 Outputs & filters: 
@@ -22221,8 +22217,8 @@ SQL: select c3 from t_normal_idx where c2=1 and c4 is null and c5=1 group by c3,
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |1        |79  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|1        |79  |
+|0 |MERGE GROUP BY|                 |1        |49  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|1        |49  |
 ====================================================
 
 Outputs & filters: 
@@ -22244,8 +22240,8 @@ SQL: select c3 from t_normal_idx where c2=1 and c3 is null and c5=1 group by c4,
 ====================================================
 |ID|OPERATOR      |NAME             |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |MERGE GROUP BY|                 |9        |80  |
-|1 | TABLE SCAN   |t_normal_idx(idx)|9        |79  |
+|0 |MERGE GROUP BY|                 |9        |49  |
+|1 | TABLE SCAN   |t_normal_idx(idx)|9        |49  |
 ====================================================
 
 Outputs & filters: 
@@ -22267,8 +22263,8 @@ SQL: select c3 from t_normal_idx where c2 is not null group by c3;
 ===================================================
 |ID|OPERATOR     |NAME             |EST. ROWS|COST|
 ---------------------------------------------------
-|0 |HASH GROUP BY|                 |10       |104 |
-|1 | TABLE SCAN  |t_normal_idx(idx)|90       |80  |
+|0 |HASH GROUP BY|                 |10       |74  |
+|1 | TABLE SCAN  |t_normal_idx(idx)|90       |50  |
 ===================================================
 
 Outputs & filters: 
@@ -22827,8 +22823,8 @@ SQL: select /*+ index(y_t1 y_t1_i1) */ * from y_t1 where c2=10 order by c1;
 =============================================
 |ID|OPERATOR   |NAME         |EST. ROWS|COST|
 ---------------------------------------------
-|0 |SORT       |             |1        |79  |
-|1 | TABLE SCAN|y_t1(y_t1_i1)|1        |79  |
+|0 |SORT       |             |1        |94  |
+|1 | TABLE SCAN|y_t1(y_t1_i1)|1        |94  |
 =============================================
 
 Outputs & filters: 
@@ -22868,8 +22864,8 @@ SQL: select /*+ index(y_t1 y_t1_i1) */ * from y_t1 where c2=c1 order by c1;
 =============================================
 |ID|OPERATOR   |NAME         |EST. ROWS|COST|
 ---------------------------------------------
-|0 |SORT       |             |1        |79  |
-|1 | TABLE SCAN|y_t1(y_t1_i1)|1        |79  |
+|0 |SORT       |             |1        |94  |
+|1 | TABLE SCAN|y_t1(y_t1_i1)|1        |94  |
 =============================================
 
 Outputs & filters: 
@@ -22908,8 +22904,8 @@ SQL: select /*+ index(y_t1 y_t1_i1) */ * from y_t1 where c2=c1 order by c1, c2;
 =============================================
 |ID|OPERATOR   |NAME         |EST. ROWS|COST|
 ---------------------------------------------
-|0 |SORT       |             |1        |79  |
-|1 | TABLE SCAN|y_t1(y_t1_i1)|1        |79  |
+|0 |SORT       |             |1        |94  |
+|1 | TABLE SCAN|y_t1(y_t1_i1)|1        |94  |
 =============================================
 
 Outputs & filters: 
@@ -22929,7 +22925,7 @@ SQL: select /*+ index(y_t1 y_t1_i2) */ * from y_t1 where c3=c1 order by c1, c3;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|y_t1(y_t1_i2)|1        |79  |
+|0 |TABLE SCAN|y_t1(y_t1_i2)|1        |94  |
 ============================================
 
 Outputs & filters: 
@@ -22988,7 +22984,7 @@ SQL: select /*+ index(y_t1 y_t1_i2) */ * from y_t1 where c3=c1 order by c1;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|y_t1(y_t1_i2)|1        |79  |
+|0 |TABLE SCAN|y_t1(y_t1_i2)|1        |94  |
 ============================================
 
 Outputs & filters: 
@@ -23200,7 +23196,7 @@ SQL: select c1 from t4 where c1 is null and c2 <=> null;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|t4(idx_t4_c2)|100      |78  |
+|0 |TABLE SCAN|t4(idx_t4_c2)|100      |48  |
 ============================================
 
 Outputs & filters: 
@@ -23832,7 +23828,7 @@ SQL: select count(c2) from t4 group by c3, c1, c2;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|t4(idx_t4_c2)|100      |78  |
+|0 |TABLE SCAN|t4(idx_t4_c2)|100      |48  |
 ============================================
 
 Outputs & filters: 
@@ -23908,11 +23904,11 @@ Outputs & filters:
 
 SQL: select distinct b from y_t5 where (a2 >= 'b') and (b = 'a'); 
 
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|y_t5|0        |84  |
-===================================
+=============================================
+|ID|OPERATOR  |NAME          |EST. ROWS|COST|
+---------------------------------------------
+|0 |TABLE SCAN|y_t5(idx_t1_1)|0        |54  |
+=============================================
 
 Outputs & filters: 
 -------------------------------------
@@ -23920,7 +23916,7 @@ Outputs & filters:
       access([y_t5.a2], [y_t5.b]), partitions(p0), 
       limit(1), offset(nil), 
       is_index_back=false, filter_before_indexback[false,false], 
-      range_key([y_t5.__pk_increment], [y_t5.__pk_cluster_id], [y_t5.__pk_partition_id]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+      range_key([y_t5.a1], [y_t5.a2], [y_t5.b], [y_t5.c], [y_t5.__pk_increment], [y_t5.__pk_cluster_id], [y_t5.__pk_partition_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 
 *************** Case 738(end)  ************** 
 
@@ -23931,7 +23927,7 @@ SQL: select distinct c2 from y_t6 where c1=c2;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|y_t6(y_t6_i1)|1        |80  |
+|0 |TABLE SCAN|y_t6(y_t6_i1)|1        |50  |
 ============================================
 
 Outputs & filters: 
@@ -24140,9 +24136,9 @@ SQL: select /*+index(t_normal_idx idx)*/* from t_normal_idx order by c3 limit 1;
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |111 |
-|1 | TOP-N SORT     |                  |1        |80  |
-|2 |  TABLE SCAN    |t_normal_idx(idx) |100      |78  |
+|0 |NESTED-LOOP JOIN|                  |1        |81  |
+|1 | TOP-N SORT     |                  |1        |50  |
+|2 |  TABLE SCAN    |t_normal_idx(idx) |100      |48  |
 |3 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24170,9 +24166,9 @@ SQL: select /*+index(t_normal_idx idx)*/* from t_normal_idx where c4>1 order by 
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |112 |
-|1 | TOP-N SORT     |                  |1        |81  |
-|2 |  TABLE SCAN    |t_normal_idx(idx) |86       |79  |
+|0 |NESTED-LOOP JOIN|                  |1        |82  |
+|1 | TOP-N SORT     |                  |1        |51  |
+|2 |  TABLE SCAN    |t_normal_idx(idx) |86       |49  |
 |3 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24200,7 +24196,7 @@ SQL: select /*+index(t_normal_idx idx)*/* from t_normal_idx order by c2 limit 1;
 ================================================
 |ID|OPERATOR  |NAME             |EST. ROWS|COST|
 ------------------------------------------------
-|0 |TABLE SCAN|t_normal_idx(idx)|1        |46  |
+|0 |TABLE SCAN|t_normal_idx(idx)|1        |91  |
 ================================================
 
 Outputs & filters: 
@@ -24220,8 +24216,8 @@ SQL: select /*+index(t_normal_idx idx)*/* from t_normal_idx where c10>1 order by
 =================================================
 |ID|OPERATOR   |NAME             |EST. ROWS|COST|
 -------------------------------------------------
-|0 |TOP-N SORT |                 |1        |138 |
-|1 | TABLE SCAN|t_normal_idx(idx)|86       |135 |
+|0 |TOP-N SORT |                 |1        |108 |
+|1 | TABLE SCAN|t_normal_idx(idx)|86       |105 |
 =================================================
 
 Outputs & filters: 
@@ -24241,9 +24237,9 @@ SQL: select /*+index(t_normal_idx idx)*/c2,c9,c10 from t_normal_idx order by c3 
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |111 |
-|1 | TOP-N SORT     |                  |1        |80  |
-|2 |  TABLE SCAN    |t_normal_idx(idx) |100      |78  |
+|0 |NESTED-LOOP JOIN|                  |1        |80  |
+|1 | TOP-N SORT     |                  |1        |50  |
+|2 |  TABLE SCAN    |t_normal_idx(idx) |100      |48  |
 |3 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24271,9 +24267,9 @@ SQL: select /*+index(t_normal_idx idx)*/c1,c9 from t_normal_idx order by c3 limi
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |111 |
-|1 | TOP-N SORT     |                  |1        |80  |
-|2 |  TABLE SCAN    |t_normal_idx(idx) |100      |78  |
+|0 |NESTED-LOOP JOIN|                  |1        |80  |
+|1 | TOP-N SORT     |                  |1        |50  |
+|2 |  TABLE SCAN    |t_normal_idx(idx) |100      |48  |
 |3 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24301,9 +24297,9 @@ SQL: select /*+index(t_normal_idx idx)*/c1,c9 from t_normal_idx order by c1 limi
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |110 |
-|1 | TOP-N SORT     |                  |1        |80  |
-|2 |  TABLE SCAN    |t_normal_idx(idx) |100      |78  |
+|0 |NESTED-LOOP JOIN|                  |1        |80  |
+|1 | TOP-N SORT     |                  |1        |50  |
+|2 |  TABLE SCAN    |t_normal_idx(idx) |100      |48  |
 |3 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24331,10 +24327,10 @@ SQL: select /*+index(t_normal_idx idx)*/c1,c9 from t_normal_idx order by c3 limi
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |120 |
-|1 | LIMIT          |                  |1        |89  |
-|2 |  TOP-N SORT    |                  |11       |89  |
-|3 |   TABLE SCAN   |t_normal_idx(idx) |100      |78  |
+|0 |NESTED-LOOP JOIN|                  |1        |89  |
+|1 | LIMIT          |                  |1        |59  |
+|2 |  TOP-N SORT    |                  |11       |59  |
+|3 |   TABLE SCAN   |t_normal_idx(idx) |100      |48  |
 |4 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24363,10 +24359,10 @@ SQL: select /*+index(t_normal_idx idx)*/c1,c9 from t_normal_idx order by c3 desc
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |120 |
-|1 | LIMIT          |                  |1        |89  |
-|2 |  TOP-N SORT    |                  |11       |89  |
-|3 |   TABLE SCAN   |t_normal_idx(idx) |100      |78  |
+|0 |NESTED-LOOP JOIN|                  |1        |89  |
+|1 | LIMIT          |                  |1        |59  |
+|2 |  TOP-N SORT    |                  |11       |59  |
+|3 |   TABLE SCAN   |t_normal_idx(idx) |100      |48  |
 |4 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24395,10 +24391,10 @@ SQL: select /*+index(t_normal_idx idx)*/c1,c9 from t_normal_idx order by c3 desc
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |121 |
-|1 | LIMIT          |                  |1        |90  |
-|2 |  TOP-N SORT    |                  |11       |90  |
-|3 |   TABLE SCAN   |t_normal_idx(idx) |100      |78  |
+|0 |NESTED-LOOP JOIN|                  |1        |90  |
+|1 | LIMIT          |                  |1        |60  |
+|2 |  TOP-N SORT    |                  |11       |60  |
+|3 |   TABLE SCAN   |t_normal_idx(idx) |100      |48  |
 |4 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24427,10 +24423,10 @@ SQL: select /*+index(t_normal_idx idx)*/c1,c9 from t_normal_idx order by c3 desc
 =======================================================
 |ID|OPERATOR        |NAME              |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN|                  |1        |121 |
-|1 | LIMIT          |                  |1        |90  |
-|2 |  TOP-N SORT    |                  |11       |90  |
-|3 |   TABLE SCAN   |t_normal_idx(idx) |100      |78  |
+|0 |NESTED-LOOP JOIN|                  |1        |90  |
+|1 | LIMIT          |                  |1        |60  |
+|2 |  TOP-N SORT    |                  |11       |60  |
+|3 |   TABLE SCAN   |t_normal_idx(idx) |100      |48  |
 |4 | TABLE GET      |t_normal_idx_alias|1        |31  |
 =======================================================
 
@@ -24459,9 +24455,9 @@ SQL: select /*+no_use_late_materialization index(t_normal_idx idx)*/c1,c9 from t
 ==================================================
 |ID|OPERATOR    |NAME             |EST. ROWS|COST|
 --------------------------------------------------
-|0 |LIMIT       |                 |1        |108 |
-|1 | TOP-N SORT |                 |11       |108 |
-|2 |  TABLE SCAN|t_normal_idx(idx)|100      |97  |
+|0 |LIMIT       |                 |1        |106 |
+|1 | TOP-N SORT |                 |11       |106 |
+|2 |  TABLE SCAN|t_normal_idx(idx)|100      |95  |
 ==================================================
 
 Outputs & filters: 
@@ -24482,8 +24478,8 @@ SQL: select /*+use_late_materialization index(t_normal_idx idx)*/* from t_normal
 =================================================
 |ID|OPERATOR   |NAME             |EST. ROWS|COST|
 -------------------------------------------------
-|0 |TOP-N SORT |                 |1        |138 |
-|1 | TABLE SCAN|t_normal_idx(idx)|86       |135 |
+|0 |TOP-N SORT |                 |1        |108 |
+|1 | TABLE SCAN|t_normal_idx(idx)|86       |105 |
 =================================================
 
 Outputs & filters: 
@@ -25591,7 +25587,7 @@ SQL: select * from tidx where c2 > 0 and c2 < 1000 order by c2 limit 100;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|tidx(tidx_c2)|100      |118 |
+|0 |TABLE SCAN|tidx(tidx_c2)|100      |95  |
 ============================================
 
 Outputs & filters: 
@@ -25612,7 +25608,7 @@ SQL: select * from tidx where c2 > 0 and c2 < 1000 limit 100;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|tidx(tidx_c2)|100      |118 |
+|0 |TABLE SCAN|tidx(tidx_c2)|100      |95  |
 ============================================
 
 Outputs & filters: 
@@ -26107,15 +26103,15 @@ SQL: select * from t1 join t5 on t1.c1 = t5.c3 where t5.c3 > 0 and t5.c3 < 100 o
 =================================================================
 |ID|OPERATOR                       |NAME         |EST. ROWS|COST|
 -----------------------------------------------------------------
-|0 |LIMIT                          |             |100      |1086|
-|1 | PX COORDINATOR MERGE SORT     |             |100      |1084|
-|2 |  EXCHANGE OUT DISTR           |:EX10001     |100      |1064|
-|3 |   TOP-N SORT                  |             |100      |1019|
-|4 |    HASH JOIN                  |             |270      |966 |
-|5 |     EXCHANGE IN DISTR         |             |270      |392 |
-|6 |      EXCHANGE OUT DISTR (PKEY)|:EX10000     |270      |357 |
-|7 |       PX PARTITION ITERATOR   |             |270      |283 |
-|8 |        TABLE SCAN             |t5(idx_t5_c3)|270      |283 |
+|0 |LIMIT                          |             |100      |1357|
+|1 | PX COORDINATOR MERGE SORT     |             |100      |1355|
+|2 |  EXCHANGE OUT DISTR           |:EX10001     |100      |1335|
+|3 |   TOP-N SORT                  |             |100      |1290|
+|4 |    HASH JOIN                  |             |270      |1237|
+|5 |     EXCHANGE IN DISTR         |             |270      |663 |
+|6 |      EXCHANGE OUT DISTR (PKEY)|:EX10000     |270      |628 |
+|7 |       PX PARTITION ITERATOR   |             |270      |554 |
+|8 |        TABLE SCAN             |t5(idx_t5_c3)|270      |554 |
 |9 |     PX PARTITION ITERATOR     |             |500      |387 |
 |10|      TABLE SCAN               |t1           |500      |387 |
 =================================================================
@@ -26154,15 +26150,15 @@ SQL: select * from t1 join t5 on t1.c1 = t5.c3 where t5.c3 > 0 and t5.c3 < 100 o
 =================================================================
 |ID|OPERATOR                       |NAME         |EST. ROWS|COST|
 -----------------------------------------------------------------
-|0 |LIMIT                          |             |270      |1211|
-|1 | PX COORDINATOR MERGE SORT     |             |270      |1206|
-|2 |  EXCHANGE OUT DISTR           |:EX10001     |270      |1150|
-|3 |   TOP-N SORT                  |             |270      |1031|
-|4 |    HASH JOIN                  |             |270      |966 |
-|5 |     EXCHANGE IN DISTR         |             |270      |392 |
-|6 |      EXCHANGE OUT DISTR (PKEY)|:EX10000     |270      |357 |
-|7 |       PX PARTITION ITERATOR   |             |270      |283 |
-|8 |        TABLE SCAN             |t5(idx_t5_c3)|270      |283 |
+|0 |LIMIT                          |             |270      |1482|
+|1 | PX COORDINATOR MERGE SORT     |             |270      |1477|
+|2 |  EXCHANGE OUT DISTR           |:EX10001     |270      |1421|
+|3 |   TOP-N SORT                  |             |270      |1302|
+|4 |    HASH JOIN                  |             |270      |1237|
+|5 |     EXCHANGE IN DISTR         |             |270      |663 |
+|6 |      EXCHANGE OUT DISTR (PKEY)|:EX10000     |270      |628 |
+|7 |       PX PARTITION ITERATOR   |             |270      |554 |
+|8 |        TABLE SCAN             |t5(idx_t5_c3)|270      |554 |
 |9 |     PX PARTITION ITERATOR     |             |500      |387 |
 |10|      TABLE SCAN               |t1           |500      |387 |
 =================================================================
@@ -26201,7 +26197,7 @@ SQL: select * from tidx where c2 > 0 and c2 < 1000 order by c2 limit 10000;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|tidx(tidx_c2)|100      |118 |
+|0 |TABLE SCAN|tidx(tidx_c2)|100      |95  |
 ============================================
 
 Outputs & filters: 
@@ -26222,7 +26218,7 @@ SQL: select * from tidx where c2 > 0 and c2 < 1000 limit 10000;
 ============================================
 |ID|OPERATOR  |NAME         |EST. ROWS|COST|
 --------------------------------------------
-|0 |TABLE SCAN|tidx(tidx_c2)|100      |118 |
+|0 |TABLE SCAN|tidx(tidx_c2)|100      |95  |
 ============================================
 
 Outputs & filters: 

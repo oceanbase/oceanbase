@@ -68,6 +68,7 @@ const static double VECTOR_DELETE_PER_ROW_COST = 5.0310162499999995;
 const static double VECTOR_DELETE_INDEX_PER_ROW_COST = 6.549611874999999;
 const static double VECTOR_DELETE_CHECK_PER_ROW_COST = 59.4583275;
 const static double VECTOR_SPATIAL_PER_ROW_COST = 3.2434868757557513;  // todo: fix later
+const static double VECTOR_RANGE_COST = 2.1;
 
 const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // null
@@ -152,7 +153,8 @@ const static ObOptEstCostModel::ObCostParams cost_params_vector(
    VECTOR_DELETE_PER_ROW_COST,
    VECTOR_DELETE_INDEX_PER_ROW_COST,
    VECTOR_DELETE_CHECK_PER_ROW_COST,
-   VECTOR_SPATIAL_PER_ROW_COST
+   VECTOR_SPATIAL_PER_ROW_COST,
+   VECTOR_RANGE_COST
 );
 
 }

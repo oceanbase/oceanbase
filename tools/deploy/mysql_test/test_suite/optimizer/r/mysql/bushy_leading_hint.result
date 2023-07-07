@@ -33,12 +33,12 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |11          |
-|1 | HASH JOIN     |    |2       |11          |
-|2 |  TABLE SCAN   |c   |11      |3           |
-|3 |  HASH JOIN    |    |2       |7           |
-|4 |   TABLE SCAN  |b   |11      |3           |
-|5 |   TABLE SCAN  |a   |2       |3           |
+|0 |SCALAR GROUP BY|    |1       |18          |
+|1 | HASH JOIN     |    |2       |18          |
+|2 |  TABLE SCAN   |c   |11      |5           |
+|3 |  HASH JOIN    |    |2       |12          |
+|4 |   TABLE SCAN  |b   |11      |5           |
+|5 |   TABLE SCAN  |a   |2       |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -72,12 +72,12 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |11          |
-|1 | HASH JOIN     |    |2       |11          |
-|2 |  TABLE SCAN   |c   |11      |3           |
-|3 |  HASH JOIN    |    |2       |7           |
-|4 |   TABLE SCAN  |b   |11      |3           |
-|5 |   TABLE SCAN  |a   |2       |3           |
+|0 |SCALAR GROUP BY|    |1       |17          |
+|1 | HASH JOIN     |    |2       |17          |
+|2 |  TABLE SCAN   |c   |11      |5           |
+|3 |  HASH JOIN    |    |2       |11          |
+|4 |   TABLE SCAN  |b   |11      |5           |
+|5 |   TABLE SCAN  |a   |2       |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -112,14 +112,14 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |16          |
-|1 | HASH JOIN     |    |2       |16          |
-|2 |  HASH JOIN    |    |11      |8           |
-|3 |   TABLE SCAN  |c   |11      |3           |
-|4 |   TABLE SCAN  |d   |11      |3           |
-|5 |  HASH JOIN    |    |2       |6           |
-|6 |   TABLE SCAN  |a   |2       |3           |
-|7 |   TABLE SCAN  |b   |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |24          |
+|1 | HASH JOIN     |    |2       |24          |
+|2 |  HASH JOIN    |    |11      |12          |
+|3 |   TABLE SCAN  |c   |11      |5           |
+|4 |   TABLE SCAN  |d   |11      |5           |
+|5 |  HASH JOIN    |    |2       |10          |
+|6 |   TABLE SCAN  |a   |2       |5           |
+|7 |   TABLE SCAN  |b   |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -162,14 +162,14 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |19          |
-|1 | HASH JOIN     |    |11      |18          |
-|2 |  HASH JOIN    |    |11      |8           |
-|3 |   TABLE SCAN  |c   |11      |3           |
-|4 |   TABLE SCAN  |d   |11      |3           |
-|5 |  HASH JOIN    |    |11      |8           |
-|6 |   TABLE SCAN  |a   |11      |3           |
-|7 |   TABLE SCAN  |b   |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |28          |
+|1 | HASH JOIN     |    |11      |28          |
+|2 |  HASH JOIN    |    |11      |12          |
+|3 |   TABLE SCAN  |c   |11      |5           |
+|4 |   TABLE SCAN  |d   |11      |5           |
+|5 |  HASH JOIN    |    |11      |12          |
+|6 |   TABLE SCAN  |a   |11      |5           |
+|7 |   TABLE SCAN  |b   |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -213,14 +213,14 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |14          |
-|1 | HASH JOIN     |    |2       |14          |
-|2 |  TABLE SCAN   |c   |11      |3           |
-|3 |  HASH JOIN    |    |2       |9           |
-|4 |   HASH JOIN   |    |2       |6           |
-|5 |    TABLE SCAN |a   |2       |3           |
-|6 |    TABLE SCAN |d   |1       |3           |
-|7 |   TABLE SCAN  |b   |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |22          |
+|1 | HASH JOIN     |    |2       |22          |
+|2 |  TABLE SCAN   |c   |11      |5           |
+|3 |  HASH JOIN    |    |2       |15          |
+|4 |   HASH JOIN   |    |2       |10          |
+|5 |    TABLE SCAN |a   |2       |5           |
+|6 |    TABLE SCAN |d   |1       |5           |
+|7 |   TABLE SCAN  |b   |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -264,12 +264,12 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |14          |
-|1 | HASH JOIN     |    |1       |14          |
-|2 |  TABLE SCAN   |c   |11      |3           |
-|3 |  HASH JOIN    |    |11      |8           |
-|4 |   TABLE SCAN  |d   |11      |3           |
-|5 |   TABLE SCAN  |b   |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |20          |
+|1 | HASH JOIN     |    |1       |20          |
+|2 |  TABLE SCAN   |c   |11      |5           |
+|3 |  HASH JOIN    |    |11      |13          |
+|4 |   TABLE SCAN  |d   |11      |5           |
+|5 |   TABLE SCAN  |b   |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -309,24 +309,24 @@ Query Plan
 ================================================
 |ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
 ------------------------------------------------
-|0 |SCALAR GROUP BY |    |1       |33          |
-|1 | HASH JOIN      |    |1       |33          |
-|2 |  HASH JOIN     |    |1       |19          |
-|3 |   HASH JOIN    |    |1       |11          |
-|4 |    HASH JOIN   |    |1       |8           |
-|5 |     TABLE SCAN |t2  |2       |3           |
-|6 |     HASH JOIN  |    |1       |5           |
-|7 |      TABLE SCAN|t1  |1       |3           |
-|8 |      TABLE SCAN|t3  |1       |3           |
-|9 |    TABLE SCAN  |t7  |11      |3           |
-|10|   HASH JOIN    |    |11      |7           |
-|11|    TABLE SCAN  |t8  |11      |3           |
-|12|    TABLE SCAN  |t9  |11      |3           |
-|13|  HASH JOIN     |    |11      |13          |
-|14|   HASH JOIN    |    |11      |7           |
-|15|    TABLE SCAN  |t4  |11      |3           |
-|16|    TABLE SCAN  |t5  |11      |3           |
-|17|   TABLE SCAN   |t6  |11      |3           |
+|0 |SCALAR GROUP BY |    |1       |53          |
+|1 | HASH JOIN      |    |1       |53          |
+|2 |  HASH JOIN     |    |1       |32          |
+|3 |   HASH JOIN    |    |1       |20          |
+|4 |    HASH JOIN   |    |1       |14          |
+|5 |     TABLE SCAN |t2  |2       |5           |
+|6 |     HASH JOIN  |    |1       |10          |
+|7 |      TABLE SCAN|t1  |1       |5           |
+|8 |      TABLE SCAN|t3  |1       |5           |
+|9 |    TABLE SCAN  |t7  |11      |5           |
+|10|   HASH JOIN    |    |11      |12          |
+|11|    TABLE SCAN  |t8  |11      |5           |
+|12|    TABLE SCAN  |t9  |11      |5           |
+|13|  HASH JOIN     |    |11      |19          |
+|14|   HASH JOIN    |    |11      |12          |
+|15|    TABLE SCAN  |t4  |11      |5           |
+|16|    TABLE SCAN  |t5  |11      |5           |
+|17|   TABLE SCAN   |t6  |11      |5           |
 ================================================
 Outputs & filters:
 -------------------------------------
@@ -404,25 +404,25 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |219         |
-|1 | HASH JOIN                     |    |1       |219         |
-|2 |  HASH JOIN                    |    |11      |193         |
-|3 |   HASH JOIN                   |    |11      |14          |
-|4 |    HASH JOIN                  |    |11      |8           |
-|5 |     TABLE SCAN                |t1  |11      |3           |
-|6 |     TABLE SCAN                |t2  |11      |3           |
-|7 |    TABLE SCAN                 |t3  |11      |3           |
-|8 |   NESTED-LOOP JOIN CARTESIAN  |    |1331    |44          |
-|9 |    NESTED-LOOP JOIN CARTESIAN |    |121     |8           |
-|10|     TABLE SCAN                |t4  |11      |3           |
-|11|     MATERIAL                  |    |11      |3           |
-|12|      TABLE SCAN               |t5  |11      |3           |
-|13|    MATERIAL                   |    |11      |3           |
-|14|     TABLE SCAN                |t6  |11      |3           |
-|15|  NESTED-LOOP JOIN CARTESIAN   |    |121     |9           |
-|16|   TABLE SCAN                  |t7  |11      |3           |
-|17|   MATERIAL                    |    |11      |4           |
-|18|    TABLE SCAN                 |t8  |11      |3           |
+|0 |SCALAR GROUP BY                |    |1       |237         |
+|1 | HASH JOIN                     |    |1       |237         |
+|2 |  HASH JOIN                    |    |11      |206         |
+|3 |   HASH JOIN                   |    |11      |21          |
+|4 |    HASH JOIN                  |    |11      |13          |
+|5 |     TABLE SCAN                |t1  |11      |5           |
+|6 |     TABLE SCAN                |t2  |11      |5           |
+|7 |    TABLE SCAN                 |t3  |11      |5           |
+|8 |   NESTED-LOOP JOIN CARTESIAN  |    |1331    |51          |
+|9 |    NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
+|10|     TABLE SCAN                |t4  |11      |5           |
+|11|     MATERIAL                  |    |11      |5           |
+|12|      TABLE SCAN               |t5  |11      |5           |
+|13|    MATERIAL                   |    |11      |5           |
+|14|     TABLE SCAN                |t6  |11      |5           |
+|15|  NESTED-LOOP JOIN CARTESIAN   |    |121     |13          |
+|16|   TABLE SCAN                  |t7  |11      |5           |
+|17|   MATERIAL                    |    |11      |6           |
+|18|    TABLE SCAN                 |t8  |11      |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -494,15 +494,15 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |14          |
-|1 | HASH JOIN                   |    |2       |14          |
-|2 |  TABLE SCAN                 |c   |11      |3           |
-|3 |  NESTED-LOOP JOIN CARTESIAN |    |13      |9           |
-|4 |   TABLE SCAN                |d   |11      |3           |
-|5 |   MATERIAL                  |    |2       |6           |
-|6 |    HASH JOIN                |    |2       |6           |
-|7 |     TABLE SCAN              |a   |2       |3           |
-|8 |     TABLE SCAN              |b   |11      |3           |
+|0 |SCALAR GROUP BY              |    |1       |23          |
+|1 | HASH JOIN                   |    |2       |23          |
+|2 |  TABLE SCAN                 |c   |11      |5           |
+|3 |  NESTED-LOOP JOIN CARTESIAN |    |13      |15          |
+|4 |   TABLE SCAN                |d   |11      |5           |
+|5 |   MATERIAL                  |    |2       |11          |
+|6 |    HASH JOIN                |    |2       |10          |
+|7 |     TABLE SCAN              |a   |2       |5           |
+|8 |     TABLE SCAN              |b   |11      |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -548,24 +548,24 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |SCALAR GROUP BY    |    |1       |40          |
-|1 | HASH JOIN         |    |1       |40          |
-|2 |  TABLE SCAN       |t2  |11      |3           |
-|3 |  HASH JOIN        |    |1       |36          |
-|4 |   TABLE SCAN      |t1  |11      |3           |
-|5 |   HASH JOIN       |    |1       |32          |
-|6 |    TABLE SCAN     |t3  |1       |3           |
-|7 |    HASH JOIN      |    |11      |28          |
-|8 |     TABLE SCAN    |t7  |11      |3           |
-|9 |     HASH JOIN     |    |11      |23          |
-|10|      TABLE SCAN   |t8  |11      |3           |
-|11|      HASH JOIN    |    |11      |18          |
-|12|       TABLE SCAN  |t9  |11      |3           |
-|13|       HASH JOIN   |    |11      |13          |
-|14|        TABLE SCAN |t4  |11      |3           |
-|15|        HASH JOIN  |    |11      |8           |
-|16|         TABLE SCAN|t5  |11      |3           |
-|17|         TABLE SCAN|t6  |11      |3           |
+|0 |SCALAR GROUP BY    |    |1       |60          |
+|1 | HASH JOIN         |    |1       |60          |
+|2 |  TABLE SCAN       |t2  |11      |5           |
+|3 |  HASH JOIN        |    |1       |54          |
+|4 |   TABLE SCAN      |t1  |11      |5           |
+|5 |   HASH JOIN       |    |1       |48          |
+|6 |    TABLE SCAN     |t3  |1       |5           |
+|7 |    HASH JOIN      |    |11      |42          |
+|8 |     TABLE SCAN    |t7  |11      |5           |
+|9 |     HASH JOIN     |    |11      |35          |
+|10|      TABLE SCAN   |t8  |11      |5           |
+|11|      HASH JOIN    |    |11      |27          |
+|12|       TABLE SCAN  |t9  |11      |5           |
+|13|       HASH JOIN   |    |11      |20          |
+|14|        TABLE SCAN |t4  |11      |5           |
+|15|        HASH JOIN  |    |11      |12          |
+|16|         TABLE SCAN|t5  |11      |5           |
+|17|         TABLE SCAN|t6  |11      |5           |
 ===================================================
 Outputs & filters:
 -------------------------------------
@@ -644,21 +644,21 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |193         |
-|1 | HASH JOIN                     |    |1       |193         |
-|2 |  HASH JOIN                    |    |1       |171         |
-|3 |   TABLE SCAN                  |t1  |11      |3           |
-|4 |   NESTED-LOOP JOIN CARTESIAN  |    |1331    |45          |
-|5 |    NESTED-LOOP JOIN CARTESIAN |    |121     |8           |
-|6 |     TABLE SCAN                |t2  |11      |3           |
-|7 |     MATERIAL                  |    |11      |3           |
-|8 |      TABLE SCAN               |t3  |11      |3           |
-|9 |    MATERIAL                   |    |11      |4           |
-|10|     TABLE SCAN                |t4  |11      |3           |
-|11|  NESTED-LOOP JOIN CARTESIAN   |    |121     |8           |
-|12|   TABLE SCAN                  |t5  |11      |3           |
-|13|   MATERIAL                    |    |11      |3           |
-|14|    TABLE SCAN                 |t6  |11      |3           |
+|0 |SCALAR GROUP BY                |    |1       |207         |
+|1 | HASH JOIN                     |    |1       |207         |
+|2 |  HASH JOIN                    |    |1       |181         |
+|3 |   TABLE SCAN                  |t1  |11      |5           |
+|4 |   NESTED-LOOP JOIN CARTESIAN  |    |1331    |51          |
+|5 |    NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
+|6 |     TABLE SCAN                |t2  |11      |5           |
+|7 |     MATERIAL                  |    |11      |5           |
+|8 |      TABLE SCAN               |t3  |11      |5           |
+|9 |    MATERIAL                   |    |11      |6           |
+|10|     TABLE SCAN                |t4  |11      |5           |
+|11|  NESTED-LOOP JOIN CARTESIAN   |    |121     |12          |
+|12|   TABLE SCAN                  |t5  |11      |5           |
+|13|   MATERIAL                    |    |11      |5           |
+|14|    TABLE SCAN                 |t6  |11      |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -719,16 +719,16 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                      |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |SCALAR GROUP BY               |    |1       |171         |
-|1 | HASH JOIN                    |    |1       |171         |
-|2 |  TABLE SCAN                  |t1  |11      |3           |
-|3 |  NESTED-LOOP JOIN CARTESIAN  |    |1331    |45          |
-|4 |   NESTED-LOOP JOIN CARTESIAN |    |121     |8           |
-|5 |    TABLE SCAN                |t2  |11      |3           |
-|6 |    MATERIAL                  |    |11      |3           |
-|7 |     TABLE SCAN               |t3  |11      |3           |
-|8 |   MATERIAL                   |    |11      |4           |
-|9 |    TABLE SCAN                |t4  |11      |3           |
+|0 |SCALAR GROUP BY               |    |1       |181         |
+|1 | HASH JOIN                    |    |1       |181         |
+|2 |  TABLE SCAN                  |t1  |11      |5           |
+|3 |  NESTED-LOOP JOIN CARTESIAN  |    |1331    |51          |
+|4 |   NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
+|5 |    TABLE SCAN                |t2  |11      |5           |
+|6 |    MATERIAL                  |    |11      |5           |
+|7 |     TABLE SCAN               |t3  |11      |5           |
+|8 |   MATERIAL                   |    |11      |6           |
+|9 |    TABLE SCAN                |t4  |11      |5           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -774,13 +774,13 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |SCALAR GROUP BY    |    |1       |14          |
-|1 | HASH JOIN         |    |1       |14          |
-|2 |  TABLE SCAN       |t1  |11      |3           |
-|3 |  NESTED-LOOP JOIN |    |11      |8           |
-|4 |   TABLE SCAN      |t2  |11      |3           |
-|5 |   MATERIAL        |    |11      |4           |
-|6 |    TABLE SCAN     |t3  |11      |3           |
+|0 |SCALAR GROUP BY    |    |1       |20          |
+|1 | HASH JOIN         |    |1       |20          |
+|2 |  TABLE SCAN       |t1  |11      |5           |
+|3 |  NESTED-LOOP JOIN |    |11      |12          |
+|4 |   TABLE SCAN      |t2  |11      |5           |
+|5 |   MATERIAL        |    |11      |6           |
+|6 |    TABLE SCAN     |t3  |11      |5           |
 ===================================================
 Outputs & filters:
 -------------------------------------
@@ -827,25 +827,25 @@ Query Plan
 =================================================================
 |ID|OPERATOR                        |NAME |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |     |1       |47          |
-|1 | HASH JOIN                      |     |11      |47          |
-|2 |  HASH JOIN                     |     |11      |42          |
-|3 |   HASH SEMI JOIN               |     |11      |37          |
-|4 |    TABLE SCAN                  |c    |11      |3           |
-|5 |    SUBPLAN SCAN                |VIEW1|121     |22          |
-|6 |     NESTED-LOOP JOIN CARTESIAN |     |121     |22          |
-|7 |      HASH JOIN                 |     |11      |13          |
-|8 |       HASH JOIN                |     |11      |8           |
-|9 |        TABLE SCAN              |z    |11      |3           |
-|10|        TABLE SCAN              |y    |11      |3           |
-|11|       TABLE SCAN               |x    |11      |3           |
-|12|      MATERIAL                  |     |11      |7           |
-|13|       NESTED-LOOP JOIN         |     |11      |7           |
-|14|        TABLE SCAN              |y2   |11      |3           |
-|15|        MATERIAL                |     |11      |3           |
-|16|         TABLE SCAN             |y3   |11      |3           |
-|17|   TABLE SCAN                   |b    |11      |3           |
-|18|  TABLE SCAN                    |a    |11      |3           |
+|0 |SCALAR GROUP BY                 |     |1       |66          |
+|1 | HASH JOIN                      |     |11      |65          |
+|2 |  HASH JOIN                     |     |11      |58          |
+|3 |   HASH SEMI JOIN               |     |11      |51          |
+|4 |    TABLE SCAN                  |c    |11      |5           |
+|5 |    SUBPLAN SCAN                |VIEW1|121     |33          |
+|6 |     NESTED-LOOP JOIN CARTESIAN |     |121     |33          |
+|7 |      HASH JOIN                 |     |11      |20          |
+|8 |       HASH JOIN                |     |11      |12          |
+|9 |        TABLE SCAN              |z    |11      |5           |
+|10|        TABLE SCAN              |y    |11      |5           |
+|11|       TABLE SCAN               |x    |11      |5           |
+|12|      MATERIAL                  |     |11      |11          |
+|13|       NESTED-LOOP JOIN         |     |11      |11          |
+|14|        TABLE SCAN              |y2   |11      |5           |
+|15|        MATERIAL                |     |11      |5           |
+|16|         TABLE SCAN             |y3   |11      |5           |
+|17|   TABLE SCAN                   |b    |11      |5           |
+|18|  TABLE SCAN                    |a    |11      |5           |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -926,20 +926,20 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                       |NAME        |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |TEMP TABLE TRANSFORMATION      |            |2       |78          |
-|1 | TEMP TABLE INSERT             |TEMP1       |11      |76          |
-|2 |  HASH JOIN                    |            |11      |74          |
-|3 |   HASH JOIN                   |            |121     |35          |
-|4 |    HASH JOIN                  |            |11      |14          |
-|5 |     TABLE SCAN                |t6          |11      |3           |
-|6 |     HASH JOIN                 |            |11      |9           |
-|7 |      TABLE SCAN               |t5          |11      |3           |
-|8 |      TABLE SCAN               |t4          |11      |3           |
-|9 |    NESTED-LOOP JOIN CARTESIAN |            |121     |8           |
-|10|     TABLE SCAN                |t3          |11      |3           |
-|11|     MATERIAL                  |            |11      |3           |
-|12|      TABLE SCAN               |t1          |11      |3           |
-|13|   TABLE SCAN                  |t2          |11      |3           |
+|0 |TEMP TABLE TRANSFORMATION      |            |2       |95          |
+|1 | TEMP TABLE INSERT             |TEMP1       |11      |94          |
+|2 |  HASH JOIN                    |            |11      |92          |
+|3 |   HASH JOIN                   |            |121     |50          |
+|4 |    HASH JOIN                  |            |11      |21          |
+|5 |     TABLE SCAN                |t6          |11      |5           |
+|6 |     HASH JOIN                 |            |11      |13          |
+|7 |      TABLE SCAN               |t5          |11      |5           |
+|8 |      TABLE SCAN               |t4          |11      |5           |
+|9 |    NESTED-LOOP JOIN CARTESIAN |            |121     |12          |
+|10|     TABLE SCAN                |t3          |11      |5           |
+|11|     MATERIAL                  |            |11      |5           |
+|12|      TABLE SCAN               |t1          |11      |5           |
+|13|   TABLE SCAN                  |t2          |11      |5           |
 |14| UNION ALL                     |            |2       |2           |
 |15|  SCALAR GROUP BY              |            |1       |1           |
 |16|   TEMP TABLE ACCESS           |VIEW1(TEMP1)|10      |1           |
@@ -1029,24 +1029,24 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |SCALAR GROUP BY  |    |1       |30          |
-|1 | HASH JOIN       |    |1       |30          |
-|2 |  HASH JOIN      |    |1       |28          |
-|3 |   HASH JOIN     |    |1       |23          |
-|4 |    TABLE SCAN   |t9  |11      |3           |
-|5 |    HASH JOIN    |    |1       |19          |
-|6 |     HASH JOIN   |    |1       |15          |
-|7 |      HASH JOIN  |    |1       |8           |
-|8 |       TABLE SCAN|t8  |11      |3           |
-|9 |       TABLE SCAN|t7  |11      |3           |
-|10|      HASH JOIN  |    |1       |7           |
-|11|       TABLE SCAN|t6  |11      |3           |
-|12|       TABLE SCAN|t5  |1       |3           |
-|13|     TABLE SCAN  |t4  |11      |3           |
-|14|   HASH JOIN     |    |1       |5           |
-|15|    TABLE SCAN   |t3  |1       |3           |
-|16|    TABLE SCAN   |t1  |1       |3           |
-|17|  TABLE SCAN     |t2  |1       |3           |
+|0 |SCALAR GROUP BY  |    |1       |49          |
+|1 | HASH JOIN       |    |1       |49          |
+|2 |  HASH JOIN      |    |1       |44          |
+|3 |   HASH JOIN     |    |1       |35          |
+|4 |    TABLE SCAN   |t9  |11      |5           |
+|5 |    HASH JOIN    |    |1       |29          |
+|6 |     HASH JOIN   |    |1       |24          |
+|7 |      HASH JOIN  |    |1       |12          |
+|8 |       TABLE SCAN|t8  |11      |5           |
+|9 |       TABLE SCAN|t7  |11      |5           |
+|10|      HASH JOIN  |    |1       |12          |
+|11|       TABLE SCAN|t6  |11      |5           |
+|12|       TABLE SCAN|t5  |1       |5           |
+|13|     TABLE SCAN  |t4  |11      |5           |
+|14|   HASH JOIN     |    |1       |10          |
+|15|    TABLE SCAN   |t3  |1       |5           |
+|16|    TABLE SCAN   |t1  |1       |5           |
+|17|  TABLE SCAN     |t2  |1       |5           |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1136,16 +1136,16 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |SCALAR GROUP BY  |    |1       |21          |
-|1 | HASH JOIN       |    |11      |21          |
-|2 |  TABLE SCAN     |a   |11      |3           |
-|3 |  HASH JOIN      |    |11      |16          |
-|4 |   SUBPLAN SCAN  |c   |11      |6           |
-|5 |    HASH DISTINCT|    |11      |6           |
-|6 |     TABLE SCAN  |cc  |11      |3           |
-|7 |   HASH JOIN     |    |11      |8           |
-|8 |    TABLE SCAN   |nn2 |11      |3           |
-|9 |    TABLE SCAN   |d   |11      |3           |
+|0 |SCALAR GROUP BY  |    |1       |31          |
+|1 | HASH JOIN       |    |11      |30          |
+|2 |  TABLE SCAN     |a   |11      |5           |
+|3 |  HASH JOIN      |    |11      |23          |
+|4 |   SUBPLAN SCAN  |c   |11      |8           |
+|5 |    HASH DISTINCT|    |11      |8           |
+|6 |     TABLE SCAN  |cc  |11      |5           |
+|7 |   HASH JOIN     |    |11      |12          |
+|8 |    TABLE SCAN   |nn2 |11      |5           |
+|9 |    TABLE SCAN   |d   |11      |5           |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1193,15 +1193,15 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                      |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |SCALAR GROUP BY               |    |1       |29          |
-|1 | HASH JOIN                    |    |11      |29          |
-|2 |  TABLE SCAN                  |a   |11      |3           |
-|3 |  HASH JOIN                   |    |11      |24          |
-|4 |   TABLE SCAN                 |c   |11      |3           |
-|5 |   NESTED-LOOP JOIN CARTESIAN |    |121     |8           |
-|6 |    TABLE SCAN                |b   |11      |3           |
-|7 |    MATERIAL                  |    |11      |3           |
-|8 |     TABLE SCAN               |d   |11      |3           |
+|0 |SCALAR GROUP BY               |    |1       |38          |
+|1 | HASH JOIN                    |    |11      |38          |
+|2 |  TABLE SCAN                  |a   |11      |5           |
+|3 |  HASH JOIN                   |    |11      |31          |
+|4 |   TABLE SCAN                 |c   |11      |5           |
+|5 |   NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
+|6 |    TABLE SCAN                |b   |11      |5           |
+|7 |    MATERIAL                  |    |11      |5           |
+|8 |     TABLE SCAN               |d   |11      |5           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -1247,17 +1247,17 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                      |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |SUBPLAN FILTER                |    |1       |31          |
-|1 | SCALAR GROUP BY              |    |1       |3           |
-|2 |  TABLE SCAN                  |x   |11      |3           |
-|3 | HASH JOIN                    |    |1       |29          |
-|4 |  TABLE SCAN                  |a   |11      |3           |
-|5 |  HASH JOIN                   |    |11      |24          |
-|6 |   TABLE SCAN                 |c   |11      |3           |
-|7 |   NESTED-LOOP JOIN CARTESIAN |    |121     |8           |
-|8 |    TABLE SCAN                |b   |11      |3           |
-|9 |    MATERIAL                  |    |11      |3           |
-|10|     TABLE SCAN               |d   |11      |3           |
+|0 |SUBPLAN FILTER                |    |1       |42          |
+|1 | SCALAR GROUP BY              |    |1       |5           |
+|2 |  TABLE SCAN                  |x   |11      |5           |
+|3 | HASH JOIN                    |    |1       |38          |
+|4 |  TABLE SCAN                  |a   |11      |5           |
+|5 |  HASH JOIN                   |    |11      |31          |
+|6 |   TABLE SCAN                 |c   |11      |5           |
+|7 |   NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
+|8 |    TABLE SCAN                |b   |11      |5           |
+|9 |    MATERIAL                  |    |11      |5           |
+|10|     TABLE SCAN               |d   |11      |5           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -1309,21 +1309,21 @@ Query Plan
 =============================================================
 |ID|OPERATOR                    |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY             |     |1       |22          |
-|1 | NESTED-LOOP JOIN CARTESIAN |     |2       |22          |
-|2 |  TABLE SCAN                |t3   |2       |3           |
-|3 |  MATERIAL                  |     |1       |19          |
-|4 |   HASH JOIN                |     |1       |19          |
-|5 |    NESTED-LOOP JOIN        |     |1       |16          |
-|6 |     SUBPLAN SCAN           |VIEW1|1       |13          |
-|7 |      SCALAR GROUP BY       |     |1       |13          |
-|8 |       HASH JOIN            |     |11      |13          |
-|9 |        TABLE SCAN          |x    |11      |3           |
-|10|        HASH JOIN           |     |11      |8           |
-|11|         TABLE SCAN         |y    |11      |3           |
-|12|         TABLE SCAN         |z    |11      |3           |
-|13|     TABLE SCAN             |t1   |11      |3           |
-|14|    TABLE SCAN              |t2   |11      |3           |
+|0 |SCALAR GROUP BY             |     |1       |35          |
+|1 | NESTED-LOOP JOIN CARTESIAN |     |2       |35          |
+|2 |  TABLE SCAN                |t3   |2       |5           |
+|3 |  MATERIAL                  |     |1       |31          |
+|4 |   HASH JOIN                |     |1       |31          |
+|5 |    NESTED-LOOP JOIN        |     |1       |25          |
+|6 |     SUBPLAN SCAN           |VIEW1|1       |20          |
+|7 |      SCALAR GROUP BY       |     |1       |20          |
+|8 |       HASH JOIN            |     |11      |20          |
+|9 |        TABLE SCAN          |x    |11      |5           |
+|10|        HASH JOIN           |     |11      |12          |
+|11|         TABLE SCAN         |y    |11      |5           |
+|12|         TABLE SCAN         |z    |11      |5           |
+|13|     TABLE SCAN             |t1   |11      |5           |
+|14|    TABLE SCAN              |t2   |11      |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1384,15 +1384,15 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |45          |
-|1 | HASH JOIN                   |    |121     |40          |
-|2 |  NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
-|3 |   HASH JOIN                 |    |11      |8           |
-|4 |    TABLE SCAN               |d   |11      |3           |
-|5 |    TABLE SCAN               |c   |11      |3           |
-|6 |   MATERIAL                  |    |11      |3           |
-|7 |    TABLE SCAN               |b   |11      |3           |
-|8 |  TABLE SCAN                 |a   |11      |3           |
+|0 |SCALAR GROUP BY              |    |1       |57          |
+|1 | HASH JOIN                   |    |121     |53          |
+|2 |  NESTED-LOOP JOIN CARTESIAN |    |121     |20          |
+|3 |   HASH JOIN                 |    |11      |12          |
+|4 |    TABLE SCAN               |d   |11      |5           |
+|5 |    TABLE SCAN               |c   |11      |5           |
+|6 |   MATERIAL                  |    |11      |5           |
+|7 |    TABLE SCAN               |b   |11      |5           |
+|8 |  TABLE SCAN                 |a   |11      |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1435,15 +1435,15 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |48          |
-|1 | HASH JOIN                   |    |121     |44          |
-|2 |  NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
-|3 |   HASH JOIN                 |    |11      |8           |
-|4 |    TABLE SCAN               |d   |11      |3           |
-|5 |    TABLE SCAN               |c   |11      |3           |
-|6 |   MATERIAL                  |    |11      |3           |
-|7 |    TABLE SCAN               |b   |11      |3           |
-|8 |  TABLE SCAN                 |a   |11      |3           |
+|0 |SCALAR GROUP BY              |    |1       |60          |
+|1 | HASH JOIN                   |    |121     |56          |
+|2 |  NESTED-LOOP JOIN CARTESIAN |    |121     |20          |
+|3 |   HASH JOIN                 |    |11      |12          |
+|4 |    TABLE SCAN               |d   |11      |5           |
+|5 |    TABLE SCAN               |c   |11      |5           |
+|6 |   MATERIAL                  |    |11      |5           |
+|7 |    TABLE SCAN               |b   |11      |5           |
+|8 |  TABLE SCAN                 |a   |11      |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1486,15 +1486,15 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |44          |
-|1 | HASH JOIN                   |    |121     |40          |
-|2 |  NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
-|3 |   TABLE SCAN                |b   |11      |3           |
-|4 |   MATERIAL                  |    |11      |8           |
-|5 |    HASH JOIN                |    |11      |8           |
-|6 |     TABLE SCAN              |c   |11      |3           |
-|7 |     TABLE SCAN              |d   |11      |3           |
-|8 |  TABLE SCAN                 |a   |11      |3           |
+|0 |SCALAR GROUP BY              |    |1       |57          |
+|1 | HASH JOIN                   |    |121     |53          |
+|2 |  NESTED-LOOP JOIN CARTESIAN |    |121     |20          |
+|3 |   TABLE SCAN                |b   |11      |5           |
+|4 |   MATERIAL                  |    |11      |12          |
+|5 |    HASH JOIN                |    |11      |12          |
+|6 |     TABLE SCAN              |c   |11      |5           |
+|7 |     TABLE SCAN              |d   |11      |5           |
+|8 |  TABLE SCAN                 |a   |11      |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1537,15 +1537,15 @@ Query Plan
 ============================================================
 |ID|OPERATOR                    |NAME|EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |SCALAR GROUP BY             |    |1       |23          |
-|1 | NESTED-LOOP JOIN CARTESIAN |    |121     |19          |
-|2 |  HASH JOIN                 |    |11      |8           |
-|3 |   TABLE SCAN               |a   |11      |3           |
-|4 |   TABLE SCAN               |b   |11      |3           |
-|5 |  MATERIAL                  |    |11      |8           |
-|6 |   HASH JOIN                |    |11      |8           |
-|7 |    TABLE SCAN              |d   |11      |3           |
-|8 |    TABLE SCAN              |c   |11      |3           |
+|0 |SCALAR GROUP BY             |    |1       |32          |
+|1 | NESTED-LOOP JOIN CARTESIAN |    |121     |28          |
+|2 |  HASH JOIN                 |    |11      |12          |
+|3 |   TABLE SCAN               |a   |11      |5           |
+|4 |   TABLE SCAN               |b   |11      |5           |
+|5 |  MATERIAL                  |    |11      |13          |
+|6 |   HASH JOIN                |    |11      |12          |
+|7 |    TABLE SCAN              |d   |11      |5           |
+|8 |    TABLE SCAN              |c   |11      |5           |
 ============================================================
 Outputs & filters:
 -------------------------------------
@@ -1590,20 +1590,20 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |SCALAR GROUP BY  |    |1       |28          |
-|1 | HASH JOIN       |    |1       |28          |
-|2 |  HASH JOIN      |    |1       |25          |
-|3 |   HASH JOIN     |    |1       |21          |
-|4 |    HASH JOIN    |    |1       |18          |
-|5 |     HASH JOIN   |    |11      |13          |
-|6 |      HASH JOIN  |    |11      |7           |
-|7 |       TABLE SCAN|t2  |11      |3           |
-|8 |       TABLE SCAN|t1  |11      |3           |
-|9 |      TABLE SCAN |t4  |11      |3           |
-|10|     TABLE SCAN  |t3  |1       |3           |
-|11|    TABLE SCAN   |t5  |11      |3           |
-|12|   TABLE SCAN    |t6  |11      |3           |
-|13|  TABLE SCAN     |t7  |11      |3           |
+|0 |SCALAR GROUP BY  |    |1       |44          |
+|1 | HASH JOIN       |    |1       |44          |
+|2 |  HASH JOIN      |    |1       |38          |
+|3 |   HASH JOIN     |    |1       |33          |
+|4 |    HASH JOIN    |    |1       |27          |
+|5 |     HASH JOIN   |    |11      |20          |
+|6 |      HASH JOIN  |    |11      |12          |
+|7 |       TABLE SCAN|t2  |11      |5           |
+|8 |       TABLE SCAN|t1  |11      |5           |
+|9 |      TABLE SCAN |t4  |11      |5           |
+|10|     TABLE SCAN  |t3  |1       |5           |
+|11|    TABLE SCAN   |t5  |11      |5           |
+|12|   TABLE SCAN    |t6  |11      |5           |
+|13|  TABLE SCAN     |t7  |11      |5           |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1667,22 +1667,22 @@ Query Plan
 ================================================================
 |ID|OPERATOR                        |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |    |1       |103         |
-|1 | HASH OUTER JOIN                |    |67      |100         |
-|2 |  HASH JOIN                     |    |67      |82          |
-|3 |   NESTED-LOOP JOIN CARTESIAN   |    |121     |51          |
-|4 |    HASH JOIN                   |    |11      |40          |
-|5 |     NESTED-LOOP JOIN CARTESIAN |    |121     |8           |
-|6 |      TABLE SCAN                |t4  |11      |3           |
-|7 |      MATERIAL                  |    |11      |3           |
-|8 |       TABLE SCAN               |t6  |11      |3           |
-|9 |     TABLE SCAN                 |t5  |11      |3           |
-|10|    MATERIAL                    |    |11      |8           |
-|11|     HASH OUTER JOIN            |    |11      |8           |
-|12|      TABLE SCAN                |t1  |11      |3           |
-|13|      TABLE SCAN                |t2  |11      |3           |
-|14|   TABLE SCAN                   |t3  |7       |3           |
-|15|  TABLE SCAN                    |t7  |11      |3           |
+|0 |SCALAR GROUP BY                 |    |1       |122         |
+|1 | HASH OUTER JOIN                |    |67      |120         |
+|2 |  HASH JOIN                     |    |67      |97          |
+|3 |   NESTED-LOOP JOIN CARTESIAN   |    |121     |62          |
+|4 |    HASH JOIN                   |    |11      |47          |
+|5 |     NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
+|6 |      TABLE SCAN                |t4  |11      |5           |
+|7 |      MATERIAL                  |    |11      |5           |
+|8 |       TABLE SCAN               |t6  |11      |5           |
+|9 |     TABLE SCAN                 |t5  |11      |5           |
+|10|    MATERIAL                    |    |11      |13          |
+|11|     HASH OUTER JOIN            |    |11      |12          |
+|12|      TABLE SCAN                |t1  |11      |5           |
+|13|      TABLE SCAN                |t2  |11      |5           |
+|14|   TABLE SCAN                   |t3  |7       |5           |
+|15|  TABLE SCAN                    |t7  |11      |5           |
 ================================================================
 Outputs & filters:
 -------------------------------------
@@ -1748,14 +1748,14 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |14          |
-|1 | HASH JOIN     |    |2       |14          |
-|2 |  TABLE SCAN   |c   |11      |3           |
-|3 |  HASH JOIN    |    |2       |9           |
-|4 |   TABLE SCAN  |a   |2       |3           |
-|5 |   HASH JOIN   |    |1       |6           |
-|6 |    TABLE SCAN |d   |1       |3           |
-|7 |    TABLE SCAN |b   |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |22          |
+|1 | HASH JOIN     |    |2       |22          |
+|2 |  TABLE SCAN   |c   |11      |5           |
+|3 |  HASH JOIN    |    |2       |15          |
+|4 |   TABLE SCAN  |a   |2       |5           |
+|5 |   HASH JOIN   |    |1       |11          |
+|6 |    TABLE SCAN |d   |1       |5           |
+|7 |    TABLE SCAN |b   |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -1823,24 +1823,24 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |38          |
-|1 | HASH JOIN     |    |1       |38          |
-|2 |  HASH JOIN    |    |1       |24          |
-|3 |   HASH JOIN   |    |1       |11          |
-|4 |    TABLE SCAN |t2  |11      |3           |
-|5 |    HASH JOIN  |    |1       |7           |
-|6 |     TABLE SCAN|t1  |11      |3           |
-|7 |     TABLE SCAN|t3  |1       |3           |
-|8 |   HASH JOIN   |    |11      |12          |
-|9 |    TABLE SCAN |t7  |11      |3           |
-|10|    HASH JOIN  |    |11      |7           |
-|11|     TABLE SCAN|t8  |11      |3           |
-|12|     TABLE SCAN|t9  |11      |3           |
-|13|  HASH JOIN    |    |11      |13          |
-|14|   HASH JOIN   |    |11      |8           |
-|15|    TABLE SCAN |t4  |11      |3           |
-|16|    TABLE SCAN |t5  |11      |3           |
-|17|   TABLE SCAN  |t6  |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |58          |
+|1 | HASH JOIN     |    |1       |58          |
+|2 |  HASH JOIN    |    |1       |37          |
+|3 |   HASH JOIN   |    |1       |17          |
+|4 |    TABLE SCAN |t2  |11      |5           |
+|5 |    HASH JOIN  |    |1       |11          |
+|6 |     TABLE SCAN|t1  |11      |5           |
+|7 |     TABLE SCAN|t3  |1       |5           |
+|8 |   HASH JOIN   |    |11      |19          |
+|9 |    TABLE SCAN |t7  |11      |5           |
+|10|    HASH JOIN  |    |11      |12          |
+|11|     TABLE SCAN|t8  |11      |5           |
+|12|     TABLE SCAN|t9  |11      |5           |
+|13|  HASH JOIN    |    |11      |20          |
+|14|   HASH JOIN   |    |11      |12          |
+|15|    TABLE SCAN |t4  |11      |5           |
+|16|    TABLE SCAN |t5  |11      |5           |
+|17|   TABLE SCAN  |t6  |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -1913,24 +1913,24 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |SCALAR GROUP BY  |    |1       |34          |
-|1 | HASH JOIN       |    |1       |34          |
-|2 |  HASH JOIN      |    |1       |31          |
-|3 |   HASH JOIN     |    |1       |27          |
-|4 |    HASH JOIN    |    |1       |24          |
-|5 |     HASH JOIN   |    |1       |11          |
-|6 |      TABLE SCAN |t2  |11      |3           |
-|7 |      HASH JOIN  |    |1       |7           |
-|8 |       TABLE SCAN|t1  |11      |3           |
-|9 |       TABLE SCAN|t3  |1       |3           |
-|10|     HASH JOIN   |    |11      |12          |
-|11|      TABLE SCAN |t7  |11      |3           |
-|12|      HASH JOIN  |    |11      |7           |
-|13|       TABLE SCAN|t8  |11      |3           |
-|14|       TABLE SCAN|t9  |11      |3           |
-|15|    TABLE SCAN   |t6  |11      |3           |
-|16|   TABLE SCAN    |t4  |11      |3           |
-|17|  TABLE SCAN     |t5  |11      |3           |
+|0 |SCALAR GROUP BY  |    |1       |54          |
+|1 | HASH JOIN       |    |1       |54          |
+|2 |  HASH JOIN      |    |1       |48          |
+|3 |   HASH JOIN     |    |1       |43          |
+|4 |    HASH JOIN    |    |1       |37          |
+|5 |     HASH JOIN   |    |1       |17          |
+|6 |      TABLE SCAN |t2  |11      |5           |
+|7 |      HASH JOIN  |    |1       |11          |
+|8 |       TABLE SCAN|t1  |11      |5           |
+|9 |       TABLE SCAN|t3  |1       |5           |
+|10|     HASH JOIN   |    |11      |19          |
+|11|      TABLE SCAN |t7  |11      |5           |
+|12|      HASH JOIN  |    |11      |12          |
+|13|       TABLE SCAN|t8  |11      |5           |
+|14|       TABLE SCAN|t9  |11      |5           |
+|15|    TABLE SCAN   |t6  |11      |5           |
+|16|   TABLE SCAN    |t4  |11      |5           |
+|17|  TABLE SCAN     |t5  |11      |5           |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2006,24 +2006,24 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |36          |
-|1 | HASH JOIN     |    |1       |36          |
-|2 |  HASH JOIN    |    |1       |25          |
-|3 |   HASH JOIN   |    |1       |12          |
-|4 |    HASH JOIN  |    |11      |7           |
-|5 |     TABLE SCAN|t2  |11      |3           |
-|6 |     TABLE SCAN|t1  |11      |3           |
-|7 |    TABLE SCAN |t3  |1       |3           |
-|8 |   HASH JOIN   |    |11      |12          |
-|9 |    TABLE SCAN |t4  |11      |3           |
-|10|    HASH JOIN  |    |11      |7           |
-|11|     TABLE SCAN|t5  |11      |3           |
-|12|     TABLE SCAN|t6  |11      |3           |
-|13|  HASH JOIN    |    |4       |12          |
-|14|   TABLE SCAN  |t8  |4       |3           |
-|15|   HASH JOIN   |    |11      |7           |
-|16|    TABLE SCAN |t9  |11      |3           |
-|17|    TABLE SCAN |t7  |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |57          |
+|1 | HASH JOIN     |    |1       |57          |
+|2 |  HASH JOIN    |    |1       |38          |
+|3 |   HASH JOIN   |    |1       |19          |
+|4 |    HASH JOIN  |    |11      |12          |
+|5 |     TABLE SCAN|t2  |11      |5           |
+|6 |     TABLE SCAN|t1  |11      |5           |
+|7 |    TABLE SCAN |t3  |1       |5           |
+|8 |   HASH JOIN   |    |11      |19          |
+|9 |    TABLE SCAN |t4  |11      |5           |
+|10|    HASH JOIN  |    |11      |12          |
+|11|     TABLE SCAN|t5  |11      |5           |
+|12|     TABLE SCAN|t6  |11      |5           |
+|13|  HASH JOIN    |    |4       |18          |
+|14|   TABLE SCAN  |t8  |4       |5           |
+|15|   HASH JOIN   |    |11      |12          |
+|16|    TABLE SCAN |t9  |11      |5           |
+|17|    TABLE SCAN |t7  |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -2099,24 +2099,24 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |39          |
-|1 | HASH JOIN     |    |1       |39          |
-|2 |  HASH JOIN    |    |1       |25          |
-|3 |   HASH JOIN   |    |1       |11          |
-|4 |    TABLE SCAN |t2  |11      |3           |
-|5 |    HASH JOIN  |    |1       |7           |
-|6 |     TABLE SCAN|t1  |11      |3           |
-|7 |     TABLE SCAN|t3  |1       |3           |
-|8 |   HASH JOIN   |    |11      |14          |
-|9 |    HASH JOIN  |    |11      |8           |
-|10|     TABLE SCAN|t7  |11      |3           |
-|11|     TABLE SCAN|t8  |11      |3           |
-|12|    TABLE SCAN |t9  |11      |3           |
-|13|  HASH JOIN    |    |11      |13          |
-|14|   HASH JOIN   |    |11      |7           |
-|15|    TABLE SCAN |t4  |11      |3           |
-|16|    TABLE SCAN |t5  |11      |3           |
-|17|   TABLE SCAN  |t6  |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |59          |
+|1 | HASH JOIN     |    |1       |59          |
+|2 |  HASH JOIN    |    |1       |39          |
+|3 |   HASH JOIN   |    |1       |17          |
+|4 |    TABLE SCAN |t2  |11      |5           |
+|5 |    HASH JOIN  |    |1       |11          |
+|6 |     TABLE SCAN|t1  |11      |5           |
+|7 |     TABLE SCAN|t3  |1       |5           |
+|8 |   HASH JOIN   |    |11      |21          |
+|9 |    HASH JOIN  |    |11      |12          |
+|10|     TABLE SCAN|t7  |11      |5           |
+|11|     TABLE SCAN|t8  |11      |5           |
+|12|    TABLE SCAN |t9  |11      |5           |
+|13|  HASH JOIN    |    |11      |19          |
+|14|   HASH JOIN   |    |11      |12          |
+|15|    TABLE SCAN |t4  |11      |5           |
+|16|    TABLE SCAN |t5  |11      |5           |
+|17|   TABLE SCAN  |t6  |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -2192,24 +2192,24 @@ Query Plan
 ================================================
 |ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
 ------------------------------------------------
-|0 |SCALAR GROUP BY |    |1       |37          |
-|1 | HASH JOIN      |    |1       |37          |
-|2 |  HASH JOIN     |    |1       |33          |
-|3 |   HASH JOIN    |    |1       |29          |
-|4 |    HASH JOIN   |    |1       |11          |
-|5 |     TABLE SCAN |t1  |11      |3           |
-|6 |     HASH JOIN  |    |1       |7           |
-|7 |      TABLE SCAN|t2  |11      |3           |
-|8 |      TABLE SCAN|t3  |1       |3           |
-|9 |    HASH JOIN   |    |11      |18          |
-|10|     HASH JOIN  |    |11      |8           |
-|11|      TABLE SCAN|t4  |11      |3           |
-|12|      TABLE SCAN|t5  |11      |3           |
-|13|     HASH JOIN  |    |11      |7           |
-|14|      TABLE SCAN|t6  |11      |3           |
-|15|      TABLE SCAN|t7  |11      |3           |
-|16|   TABLE SCAN   |t9  |11      |3           |
-|17|  TABLE SCAN    |t8  |11      |3           |
+|0 |SCALAR GROUP BY |    |1       |57          |
+|1 | HASH JOIN      |    |1       |57          |
+|2 |  HASH JOIN     |    |1       |51          |
+|3 |   HASH JOIN    |    |1       |45          |
+|4 |    HASH JOIN   |    |1       |17          |
+|5 |     TABLE SCAN |t1  |11      |5           |
+|6 |     HASH JOIN  |    |1       |11          |
+|7 |      TABLE SCAN|t2  |11      |5           |
+|8 |      TABLE SCAN|t3  |1       |5           |
+|9 |    HASH JOIN   |    |11      |27          |
+|10|     HASH JOIN  |    |11      |12          |
+|11|      TABLE SCAN|t4  |11      |5           |
+|12|      TABLE SCAN|t5  |11      |5           |
+|13|     HASH JOIN  |    |11      |12          |
+|14|      TABLE SCAN|t6  |11      |5           |
+|15|      TABLE SCAN|t7  |11      |5           |
+|16|   TABLE SCAN   |t9  |11      |5           |
+|17|  TABLE SCAN    |t8  |11      |5           |
 ================================================
 Outputs & filters:
 -------------------------------------
@@ -2284,24 +2284,24 @@ Query Plan
 ==================================================
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |SCALAR GROUP BY   |    |1       |39          |
-|1 | HASH JOIN        |    |1       |39          |
-|2 |  HASH JOIN       |    |1       |36          |
-|3 |   HASH JOIN      |    |1       |32          |
-|4 |    HASH JOIN     |    |1       |29          |
-|5 |     HASH JOIN    |    |11      |23          |
-|6 |      TABLE SCAN  |t2  |11      |3           |
-|7 |      HASH JOIN   |    |11      |18          |
-|8 |       HASH JOIN  |    |11      |7           |
-|9 |        TABLE SCAN|t7  |11      |3           |
-|10|        TABLE SCAN|t1  |11      |3           |
-|11|       HASH JOIN  |    |11      |8           |
-|12|        TABLE SCAN|t8  |11      |3           |
-|13|        TABLE SCAN|t9  |11      |3           |
-|14|     TABLE SCAN   |t3  |1       |3           |
-|15|    TABLE SCAN    |t4  |11      |3           |
-|16|   TABLE SCAN     |t5  |11      |3           |
-|17|  TABLE SCAN      |t6  |11      |3           |
+|0 |SCALAR GROUP BY   |    |1       |59          |
+|1 | HASH JOIN        |    |1       |59          |
+|2 |  HASH JOIN       |    |1       |54          |
+|3 |   HASH JOIN      |    |1       |48          |
+|4 |    HASH JOIN     |    |1       |43          |
+|5 |     HASH JOIN    |    |11      |35          |
+|6 |      TABLE SCAN  |t2  |11      |5           |
+|7 |      HASH JOIN   |    |11      |27          |
+|8 |       HASH JOIN  |    |11      |12          |
+|9 |        TABLE SCAN|t7  |11      |5           |
+|10|        TABLE SCAN|t1  |11      |5           |
+|11|       HASH JOIN  |    |11      |12          |
+|12|        TABLE SCAN|t8  |11      |5           |
+|13|        TABLE SCAN|t9  |11      |5           |
+|14|     TABLE SCAN   |t3  |1       |5           |
+|15|    TABLE SCAN    |t4  |11      |5           |
+|16|   TABLE SCAN     |t5  |11      |5           |
+|17|  TABLE SCAN      |t6  |11      |5           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -2376,16 +2376,16 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |63          |
-|1 | HASH JOIN                   |    |11      |63          |
-|2 |  NESTED-LOOP JOIN CARTESIAN |    |121     |9           |
-|3 |   TABLE SCAN                |t1  |11      |3           |
-|4 |   MATERIAL                  |    |11      |4           |
-|5 |    TABLE SCAN               |t4  |11      |3           |
-|6 |  NESTED-LOOP JOIN CARTESIAN |    |121     |9           |
-|7 |   TABLE SCAN                |t2  |11      |3           |
-|8 |   MATERIAL                  |    |11      |4           |
-|9 |    TABLE SCAN               |t3  |11      |3           |
+|0 |SCALAR GROUP BY              |    |1       |72          |
+|1 | HASH JOIN                   |    |11      |71          |
+|2 |  NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
+|3 |   TABLE SCAN                |t1  |11      |5           |
+|4 |   MATERIAL                  |    |11      |6           |
+|5 |    TABLE SCAN               |t4  |11      |5           |
+|6 |  NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
+|7 |   TABLE SCAN                |t2  |11      |5           |
+|8 |   MATERIAL                  |    |11      |6           |
+|9 |    TABLE SCAN               |t3  |11      |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -2434,34 +2434,34 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                      |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                          |     |11      |5           |
-|1 | SUBPLAN FILTER               |     |11      |3           |
-|2 |  TABLE SCAN                  |x    |11      |3           |
-|3 |  LIMIT                       |     |1       |23          |
-|4 |   NESTED-LOOP JOIN CARTESIAN |     |1       |23          |
-|5 |    SUBPLAN SCAN              |VIEW5|1       |12          |
-|6 |     LIMIT                    |     |1       |12          |
-|7 |      UNION ALL               |     |1       |12          |
-|8 |       LIMIT                  |     |1       |6           |
-|9 |        HASH JOIN             |     |1       |6           |
-|10|         TABLE SCAN           |a    |11      |3           |
-|11|         TABLE SCAN           |b    |1       |2           |
-|12|       LIMIT                  |     |1       |6           |
-|13|        HASH JOIN             |     |1       |6           |
-|14|         TABLE SCAN           |a    |1       |3           |
-|15|         TABLE SCAN           |b    |11      |3           |
-|16|    MATERIAL                  |     |1       |12          |
-|17|     SUBPLAN SCAN             |VIEW6|1       |12          |
-|18|      LIMIT                   |     |1       |12          |
-|19|       UNION ALL              |     |1       |12          |
-|20|        LIMIT                 |     |1       |6           |
-|21|         HASH JOIN            |     |1       |6           |
-|22|          TABLE SCAN          |a    |1       |3           |
-|23|          TABLE SCAN          |b    |11      |3           |
-|24|        LIMIT                 |     |1       |6           |
-|25|         HASH JOIN            |     |1       |6           |
-|26|          TABLE SCAN          |b    |11      |3           |
-|27|          TABLE SCAN          |a    |2       |2           |
+|0 |SORT                          |     |11      |7           |
+|1 | SUBPLAN FILTER               |     |11      |5           |
+|2 |  TABLE SCAN                  |x    |11      |5           |
+|3 |  LIMIT                       |     |1       |40          |
+|4 |   NESTED-LOOP JOIN CARTESIAN |     |1       |40          |
+|5 |    SUBPLAN SCAN              |VIEW5|1       |20          |
+|6 |     LIMIT                    |     |1       |20          |
+|7 |      UNION ALL               |     |1       |20          |
+|8 |       LIMIT                  |     |1       |10          |
+|9 |        HASH JOIN             |     |1       |10          |
+|10|         TABLE SCAN           |a    |11      |5           |
+|11|         TABLE SCAN           |b    |1       |4           |
+|12|       LIMIT                  |     |1       |10          |
+|13|        HASH JOIN             |     |1       |10          |
+|14|         TABLE SCAN           |a    |1       |5           |
+|15|         TABLE SCAN           |b    |11      |5           |
+|16|    MATERIAL                  |     |1       |20          |
+|17|     SUBPLAN SCAN             |VIEW6|1       |20          |
+|18|      LIMIT                   |     |1       |20          |
+|19|       UNION ALL              |     |1       |20          |
+|20|        LIMIT                 |     |1       |10          |
+|21|         HASH JOIN            |     |1       |10          |
+|22|          TABLE SCAN          |a    |1       |5           |
+|23|          TABLE SCAN          |b    |11      |5           |
+|24|        LIMIT                 |     |1       |11          |
+|25|         HASH JOIN            |     |1       |11          |
+|26|          TABLE SCAN          |b    |11      |5           |
+|27|          TABLE SCAN          |a    |2       |4           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -2566,34 +2566,34 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                      |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                          |     |11      |5           |
-|1 | SUBPLAN FILTER               |     |11      |3           |
-|2 |  TABLE SCAN                  |x    |11      |3           |
-|3 |  LIMIT                       |     |1       |23          |
-|4 |   NESTED-LOOP JOIN CARTESIAN |     |1       |23          |
-|5 |    SUBPLAN SCAN              |VIEW5|1       |12          |
-|6 |     LIMIT                    |     |1       |12          |
-|7 |      UNION ALL               |     |1       |12          |
-|8 |       LIMIT                  |     |1       |6           |
-|9 |        HASH JOIN             |     |1       |6           |
-|10|         TABLE SCAN           |a    |11      |3           |
-|11|         TABLE SCAN           |b    |1       |2           |
-|12|       LIMIT                  |     |1       |6           |
-|13|        HASH JOIN             |     |1       |6           |
-|14|         TABLE SCAN           |a    |1       |3           |
-|15|         TABLE SCAN           |b    |11      |3           |
-|16|    MATERIAL                  |     |1       |12          |
-|17|     SUBPLAN SCAN             |VIEW6|1       |12          |
-|18|      LIMIT                   |     |1       |12          |
-|19|       UNION ALL              |     |1       |12          |
-|20|        LIMIT                 |     |1       |6           |
-|21|         HASH JOIN            |     |1       |6           |
-|22|          TABLE SCAN          |a    |1       |3           |
-|23|          TABLE SCAN          |b    |11      |3           |
-|24|        LIMIT                 |     |1       |6           |
-|25|         HASH JOIN            |     |1       |6           |
-|26|          TABLE SCAN          |b    |11      |3           |
-|27|          TABLE SCAN          |a    |2       |2           |
+|0 |SORT                          |     |11      |7           |
+|1 | SUBPLAN FILTER               |     |11      |5           |
+|2 |  TABLE SCAN                  |x    |11      |5           |
+|3 |  LIMIT                       |     |1       |40          |
+|4 |   NESTED-LOOP JOIN CARTESIAN |     |1       |40          |
+|5 |    SUBPLAN SCAN              |VIEW5|1       |20          |
+|6 |     LIMIT                    |     |1       |20          |
+|7 |      UNION ALL               |     |1       |20          |
+|8 |       LIMIT                  |     |1       |10          |
+|9 |        HASH JOIN             |     |1       |10          |
+|10|         TABLE SCAN           |a    |11      |5           |
+|11|         TABLE SCAN           |b    |1       |4           |
+|12|       LIMIT                  |     |1       |10          |
+|13|        HASH JOIN             |     |1       |10          |
+|14|         TABLE SCAN           |a    |1       |5           |
+|15|         TABLE SCAN           |b    |11      |5           |
+|16|    MATERIAL                  |     |1       |20          |
+|17|     SUBPLAN SCAN             |VIEW6|1       |20          |
+|18|      LIMIT                   |     |1       |20          |
+|19|       UNION ALL              |     |1       |20          |
+|20|        LIMIT                 |     |1       |10          |
+|21|         HASH JOIN            |     |1       |10          |
+|22|          TABLE SCAN          |a    |1       |5           |
+|23|          TABLE SCAN          |b    |11      |5           |
+|24|        LIMIT                 |     |1       |11          |
+|25|         HASH JOIN            |     |1       |11          |
+|26|          TABLE SCAN          |b    |11      |5           |
+|27|          TABLE SCAN          |a    |2       |4           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -2698,34 +2698,34 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                      |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SORT                          |     |11      |5           |
-|1 | SUBPLAN FILTER               |     |11      |3           |
-|2 |  TABLE SCAN                  |x    |11      |3           |
-|3 |  LIMIT                       |     |1       |23          |
-|4 |   NESTED-LOOP JOIN CARTESIAN |     |1       |23          |
-|5 |    SUBPLAN SCAN              |VIEW5|1       |12          |
-|6 |     LIMIT                    |     |1       |12          |
-|7 |      UNION ALL               |     |1       |12          |
-|8 |       LIMIT                  |     |1       |6           |
-|9 |        HASH JOIN             |     |1       |6           |
-|10|         TABLE SCAN           |a    |11      |3           |
-|11|         TABLE SCAN           |b    |1       |2           |
-|12|       LIMIT                  |     |1       |6           |
-|13|        HASH JOIN             |     |1       |6           |
-|14|         TABLE SCAN           |a    |1       |3           |
-|15|         TABLE SCAN           |b    |11      |3           |
-|16|    MATERIAL                  |     |1       |12          |
-|17|     SUBPLAN SCAN             |VIEW6|1       |12          |
-|18|      LIMIT                   |     |1       |12          |
-|19|       UNION ALL              |     |1       |12          |
-|20|        LIMIT                 |     |1       |6           |
-|21|         HASH JOIN            |     |1       |6           |
-|22|          TABLE SCAN          |a    |1       |3           |
-|23|          TABLE SCAN          |b    |11      |3           |
-|24|        LIMIT                 |     |1       |6           |
-|25|         HASH JOIN            |     |1       |6           |
-|26|          TABLE SCAN          |b    |11      |3           |
-|27|          TABLE SCAN          |a    |2       |2           |
+|0 |SORT                          |     |11      |7           |
+|1 | SUBPLAN FILTER               |     |11      |5           |
+|2 |  TABLE SCAN                  |x    |11      |5           |
+|3 |  LIMIT                       |     |1       |40          |
+|4 |   NESTED-LOOP JOIN CARTESIAN |     |1       |40          |
+|5 |    SUBPLAN SCAN              |VIEW5|1       |20          |
+|6 |     LIMIT                    |     |1       |20          |
+|7 |      UNION ALL               |     |1       |20          |
+|8 |       LIMIT                  |     |1       |10          |
+|9 |        HASH JOIN             |     |1       |10          |
+|10|         TABLE SCAN           |a    |11      |5           |
+|11|         TABLE SCAN           |b    |1       |4           |
+|12|       LIMIT                  |     |1       |10          |
+|13|        HASH JOIN             |     |1       |10          |
+|14|         TABLE SCAN           |a    |1       |5           |
+|15|         TABLE SCAN           |b    |11      |5           |
+|16|    MATERIAL                  |     |1       |20          |
+|17|     SUBPLAN SCAN             |VIEW6|1       |20          |
+|18|      LIMIT                   |     |1       |20          |
+|19|       UNION ALL              |     |1       |20          |
+|20|        LIMIT                 |     |1       |10          |
+|21|         HASH JOIN            |     |1       |10          |
+|22|          TABLE SCAN          |a    |1       |5           |
+|23|          TABLE SCAN          |b    |11      |5           |
+|24|        LIMIT                 |     |1       |11          |
+|25|         HASH JOIN            |     |1       |11          |
+|26|          TABLE SCAN          |b    |11      |5           |
+|27|          TABLE SCAN          |a    |2       |4           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -2830,14 +2830,14 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |SCALAR GROUP BY|    |1       |18          |
-|1 | HASH JOIN     |    |1       |18          |
-|2 |  HASH JOIN    |    |11      |7           |
-|3 |   TABLE SCAN  |t1  |11      |3           |
-|4 |   TABLE SCAN  |t2  |11      |3           |
-|5 |  HASH JOIN    |    |11      |8           |
-|6 |   TABLE SCAN  |t4  |11      |3           |
-|7 |   TABLE SCAN  |t5  |11      |3           |
+|0 |SCALAR GROUP BY|    |1       |27          |
+|1 | HASH JOIN     |    |1       |27          |
+|2 |  HASH JOIN    |    |11      |12          |
+|3 |   TABLE SCAN  |t1  |11      |5           |
+|4 |   TABLE SCAN  |t2  |11      |5           |
+|5 |  HASH JOIN    |    |11      |12          |
+|6 |   TABLE SCAN  |t4  |11      |5           |
+|7 |   TABLE SCAN  |t5  |11      |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
@@ -2881,11 +2881,11 @@ Query Plan
 ========================================================
 |ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |HASH JOIN               |    |1       |6           |
-|1 | HASH RIGHT ANTI JOIN NA|    |1       |4           |
-|2 |  TABLE SCAN            |t2  |1       |2           |
-|3 |  TABLE SCAN            |t1  |1       |2           |
-|4 | TABLE SCAN             |t3  |1       |2           |
+|0 |HASH JOIN               |    |1       |12          |
+|1 | HASH RIGHT ANTI JOIN NA|    |1       |8           |
+|2 |  TABLE SCAN            |t2  |1       |4           |
+|3 |  TABLE SCAN            |t1  |1       |4           |
+|4 | TABLE SCAN             |t3  |1       |4           |
 ========================================================
 Outputs & filters:
 -------------------------------------
@@ -2910,11 +2910,11 @@ Query Plan
 ========================================================
 |ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |HASH JOIN               |    |1       |6           |
-|1 | HASH RIGHT ANTI JOIN NA|    |1       |4           |
-|2 |  TABLE SCAN            |t2  |1       |2           |
-|3 |  TABLE SCAN            |t1  |1       |2           |
-|4 | TABLE SCAN             |t3  |1       |2           |
+|0 |HASH JOIN               |    |1       |12          |
+|1 | HASH RIGHT ANTI JOIN NA|    |1       |8           |
+|2 |  TABLE SCAN            |t2  |1       |4           |
+|3 |  TABLE SCAN            |t1  |1       |4           |
+|4 | TABLE SCAN             |t3  |1       |4           |
 ========================================================
 Outputs & filters:
 -------------------------------------
@@ -2939,11 +2939,11 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH ANTI JOIN NA|    |1       |6           |
-|1 | HASH JOIN       |    |1       |4           |
-|2 |  TABLE SCAN     |t3  |1       |2           |
-|3 |  TABLE SCAN     |t1  |1       |2           |
-|4 | TABLE SCAN      |t2  |1       |2           |
+|0 |HASH ANTI JOIN NA|    |1       |13          |
+|1 | HASH JOIN       |    |1       |9           |
+|2 |  TABLE SCAN     |t3  |1       |4           |
+|3 |  TABLE SCAN     |t1  |1       |4           |
+|4 | TABLE SCAN      |t2  |1       |4           |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2968,11 +2968,11 @@ Query Plan
 ==================================================
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |HASH JOIN         |    |1       |6           |
-|1 | HASH ANTI JOIN NA|    |1       |4           |
-|2 |  TABLE SCAN      |t1  |1       |2           |
-|3 |  TABLE SCAN      |t2  |1       |2           |
-|4 | TABLE SCAN       |t3  |1       |2           |
+|0 |HASH JOIN         |    |1       |12          |
+|1 | HASH ANTI JOIN NA|    |1       |8           |
+|2 |  TABLE SCAN      |t1  |1       |4           |
+|3 |  TABLE SCAN      |t2  |1       |4           |
+|4 | TABLE SCAN       |t3  |1       |4           |
 ==================================================
 Outputs & filters:
 -------------------------------------

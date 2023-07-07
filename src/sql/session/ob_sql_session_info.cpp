@@ -439,6 +439,18 @@ bool ObSQLSessionInfo::is_in_range_optimization_enabled() const
   return bret;
 }
 
+int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
+{
+  int ret = OB_SUCCESS;
+  enabled = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    enabled = tenant_config->_optimizer_better_inlist_costing;
+  }
+  return ret;
+}
+
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {

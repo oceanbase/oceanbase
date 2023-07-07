@@ -646,7 +646,8 @@ public:
     const double DEFAULT_DELETE_PER_ROW_COST,
     const double DEFAULT_DELETE_INDEX_PER_ROW_COST,
     const double DEFAULT_DELETE_CHECK_PER_ROW_COST,
-    const double DEFAULT_SPATIAL_PER_ROW_COST
+    const double DEFAULT_SPATIAL_PER_ROW_COST,
+    const double DEFAULT_RANGE_COST
     )
     : CPU_TUPLE_COST(DEFAULT_CPU_TUPLE_COST),
       TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
@@ -696,7 +697,8 @@ public:
       DELETE_PER_ROW_COST(DEFAULT_DELETE_PER_ROW_COST),
       DELETE_INDEX_PER_ROW_COST(DEFAULT_DELETE_INDEX_PER_ROW_COST),
       DELETE_CHECK_PER_ROW_COST(DEFAULT_DELETE_CHECK_PER_ROW_COST),
-      SPATIAL_PER_ROW_COST(DEFAULT_SPATIAL_PER_ROW_COST)
+      SPATIAL_PER_ROW_COST(DEFAULT_SPATIAL_PER_ROW_COST),
+      RANGE_COST(DEFAULT_RANGE_COST)
     {}
     /** 读取一行的CPU开销，基本上只包括get_next_row()操作 */
     double CPU_TUPLE_COST;
@@ -794,6 +796,8 @@ public:
     double DELETE_CHECK_PER_ROW_COST;
     //空间索引扫描的线性参数
     double SPATIAL_PER_ROW_COST;
+    //存储层切换一次range的代价
+    double RANGE_COST;
   };
 
 	ObOptEstCostModel(
@@ -932,6 +936,13 @@ public:
 								double phy_query_range_row_count,
 								double &cost,
 								double &index_back_cost);
+
+  int cost_range_scan(const ObTableMetaInfo& table_meta_info,
+                      const ObIArray<ObRawExpr *> &filters,
+                      int64_t index_column_count,
+                      int64_t range_count,
+                      double range_sel,
+                      double &cost);
 
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,

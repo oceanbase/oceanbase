@@ -362,10 +362,10 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |7           |
-|1 | TABLE SCAN   |t1  |3       |2           |
+|0 |SUBPLAN FILTER|    |3       |11          |
+|1 | TABLE SCAN   |t1  |3       |4           |
 |2 | TABLE GET    |t2  |1       |3           |
-|3 | TABLE SCAN   |t2  |3       |2           |
+|3 | TABLE SCAN   |t2  |3       |4           |
 ==============================================
 Outputs & filters:
 -------------------------------------
@@ -397,9 +397,9 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |56          |
-|1 | TABLE SCAN   |t1  |3       |2           |
-|2 | TABLE GET    |t2  |1       |18          |
+|0 |SUBPLAN FILTER|    |3       |65          |
+|1 | TABLE SCAN   |t1  |3       |4           |
+|2 | TABLE GET    |t2  |1       |21          |
 ==============================================
 Outputs & filters:
 -------------------------------------
@@ -427,9 +427,9 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |1       |56          |
-|1 | TABLE SCAN   |t1  |3       |2           |
-|2 | TABLE GET    |t2  |1       |18          |
+|0 |SUBPLAN FILTER|    |1       |65          |
+|1 | TABLE SCAN   |t1  |3       |5           |
+|2 | TABLE GET    |t2  |1       |21          |
 ==============================================
 Outputs & filters:
 -------------------------------------
@@ -456,8 +456,8 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |5           |
-|1 | TABLE SCAN   |t1  |3       |2           |
+|0 |SUBPLAN FILTER|    |3       |7           |
+|1 | TABLE SCAN   |t1  |3       |4           |
 |2 | TABLE GET    |t2  |1       |3           |
 ==============================================
 Outputs & filters:
@@ -486,8 +486,8 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |5           |
-|1 | TABLE SCAN   |t1  |3       |2           |
+|0 |SUBPLAN FILTER|    |3       |7           |
+|1 | TABLE SCAN   |t1  |3       |4           |
 |2 | TABLE GET    |t2  |1       |3           |
 ==============================================
 Outputs & filters:
@@ -516,8 +516,8 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |5           |
-|1 | TABLE SCAN   |t1  |3       |2           |
+|0 |SUBPLAN FILTER|    |3       |7           |
+|1 | TABLE SCAN   |t1  |3       |4           |
 |2 | TABLE GET    |t2  |1       |3           |
 ==============================================
 Outputs & filters:
@@ -546,8 +546,8 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |5           |
-|1 | TABLE SCAN   |t1  |3       |2           |
+|0 |SUBPLAN FILTER|    |3       |7           |
+|1 | TABLE SCAN   |t1  |3       |4           |
 |2 | TABLE GET    |t2  |1       |3           |
 ==============================================
 Outputs & filters:
@@ -576,8 +576,8 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |7           |
-|1 | TABLE SCAN   |t1  |3       |2           |
+|0 |SUBPLAN FILTER|    |3       |9           |
+|1 | TABLE SCAN   |t1  |3       |4           |
 |2 | TABLE GET    |t2  |1       |3           |
 |3 | TABLE GET    |t2  |1       |3           |
 ==============================================
@@ -612,8 +612,8 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |7           |
-|1 | TABLE SCAN   |t1  |3       |2           |
+|0 |SUBPLAN FILTER|    |3       |9           |
+|1 | TABLE SCAN   |t1  |3       |4           |
 |2 | TABLE GET    |t2  |1       |3           |
 |3 | TABLE GET    |t2  |1       |3           |
 ==============================================
@@ -649,9 +649,9 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |3       |4           |
-|1 | TABLE SCAN   |t1  |3       |2           |
-|2 | TABLE SCAN   |t2  |3       |2           |
+|0 |SUBPLAN FILTER|    |3       |8           |
+|1 | TABLE SCAN   |t1  |3       |4           |
+|2 | TABLE SCAN   |t2  |3       |5           |
 ==============================================
 Outputs & filters:
 -------------------------------------
@@ -678,9 +678,9 @@ Query Plan
 ==============================================
 |ID|OPERATOR      |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------
-|0 |SUBPLAN FILTER|    |1       |56          |
-|1 | TABLE SCAN   |t1  |3       |2           |
-|2 | TABLE GET    |t2  |1       |18          |
+|0 |SUBPLAN FILTER|    |1       |65          |
+|1 | TABLE SCAN   |t1  |3       |5           |
+|2 | TABLE GET    |t2  |1       |21          |
 ==============================================
 Outputs & filters:
 -------------------------------------
@@ -744,17 +744,17 @@ Query Plan
 ==========================================================
 |ID|OPERATOR              |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |SUBPLAN FILTER        |        |1       |10          |
-|1 | PX COORDINATOR       |        |1       |5           |
-|2 |  EXCHANGE OUT DISTR  |:EX10000|1       |5           |
-|3 |   PX BLOCK ITERATOR  |        |1       |5           |
-|4 |    TABLE SCAN        |t2      |1       |5           |
-|5 | SCALAR GROUP BY      |        |1       |5           |
-|6 |  PX COORDINATOR      |        |2       |5           |
-|7 |   EXCHANGE OUT DISTR |:EX20000|2       |5           |
-|8 |    MERGE GROUP BY    |        |2       |5           |
-|9 |     PX BLOCK ITERATOR|        |1       |5           |
-|10|      TABLE SCAN      |t1      |1       |5           |
+|0 |SUBPLAN FILTER        |        |1       |20          |
+|1 | PX COORDINATOR       |        |1       |10          |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|1       |10          |
+|3 |   PX BLOCK ITERATOR  |        |1       |10          |
+|4 |    TABLE SCAN        |t2      |1       |10          |
+|5 | SCALAR GROUP BY      |        |1       |11          |
+|6 |  PX COORDINATOR      |        |2       |11          |
+|7 |   EXCHANGE OUT DISTR |:EX20000|2       |10          |
+|8 |    MERGE GROUP BY    |        |2       |10          |
+|9 |     PX BLOCK ITERATOR|        |1       |10          |
+|10|      TABLE SCAN      |t1      |1       |10          |
 ==========================================================
 Outputs & filters:
 -------------------------------------
@@ -796,17 +796,17 @@ Query Plan
 ================================================================
 |ID|OPERATOR                    |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |SUBPLAN FILTER              |        |1       |9           |
-|1 | PX COORDINATOR             |        |1       |5           |
-|2 |  EXCHANGE OUT DISTR        |:EX10000|1       |5           |
-|3 |   PX BLOCK ITERATOR        |        |1       |5           |
-|4 |    TABLE SCAN              |t2      |1       |5           |
-|5 | LIMIT                      |        |1       |5           |
-|6 |  PX COORDINATOR MERGE SORT |        |1       |5           |
-|7 |   EXCHANGE OUT DISTR       |:EX20000|1       |5           |
-|8 |    TOP-N SORT              |        |1       |5           |
-|9 |     PX BLOCK ITERATOR      |        |1       |5           |
-|10|      TABLE SCAN            |t1      |1       |5           |
+|0 |SUBPLAN FILTER              |        |1       |20          |
+|1 | PX COORDINATOR             |        |1       |10          |
+|2 |  EXCHANGE OUT DISTR        |:EX10000|1       |10          |
+|3 |   PX BLOCK ITERATOR        |        |1       |10          |
+|4 |    TABLE SCAN              |t2      |1       |10          |
+|5 | LIMIT                      |        |1       |10          |
+|6 |  PX COORDINATOR MERGE SORT |        |1       |10          |
+|7 |   EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|8 |    TOP-N SORT              |        |1       |10          |
+|9 |     PX BLOCK ITERATOR      |        |1       |10          |
+|10|      TABLE SCAN            |t1      |1       |10          |
 ================================================================
 Outputs & filters:
 -------------------------------------
@@ -849,16 +849,16 @@ Query Plan
 =========================================================
 |ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                 |        |1       |9           |
-|1 | SUBPLAN FILTER      |        |1       |9           |
-|2 |  PX COORDINATOR     |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR|        |1       |5           |
-|5 |     TABLE SCAN      |t1      |1       |5           |
-|6 |  PX COORDINATOR     |        |1       |5           |
-|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
-|8 |    PX BLOCK ITERATOR|        |1       |5           |
-|9 |     TABLE SCAN      |t2      |1       |5           |
+|0 |SORT                 |        |1       |20          |
+|1 | SUBPLAN FILTER      |        |1       |20          |
+|2 |  PX COORDINATOR     |        |1       |10          |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR|        |1       |10          |
+|5 |     TABLE SCAN      |t1      |1       |10          |
+|6 |  PX COORDINATOR     |        |1       |10          |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |10          |
+|8 |    PX BLOCK ITERATOR|        |1       |10          |
+|9 |     TABLE SCAN      |t2      |1       |10          |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -899,20 +899,20 @@ Query Plan
 =========================================================
 |ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                 |        |1       |412         |
-|1 | SUBPLAN FILTER      |        |1       |412         |
-|2 |  PX COORDINATOR     |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR|        |1       |5           |
-|5 |     TABLE SCAN      |t1      |1       |5           |
-|6 |  PX COORDINATOR     |        |1       |5           |
-|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
-|8 |    PX BLOCK ITERATOR|        |1       |5           |
-|9 |     TABLE SCAN      |t2      |1       |5           |
-|10|  PX COORDINATOR     |        |1       |5           |
-|11|   EXCHANGE OUT DISTR|:EX30000|1       |5           |
-|12|    PX BLOCK ITERATOR|        |1       |5           |
-|13|     TABLE SCAN      |t2      |1       |5           |
+|0 |SORT                 |        |1       |428         |
+|1 | SUBPLAN FILTER      |        |1       |428         |
+|2 |  PX COORDINATOR     |        |1       |10          |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR|        |1       |10          |
+|5 |     TABLE SCAN      |t1      |1       |10          |
+|6 |  PX COORDINATOR     |        |1       |10          |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |10          |
+|8 |    PX BLOCK ITERATOR|        |1       |10          |
+|9 |     TABLE SCAN      |t2      |1       |10          |
+|10|  PX COORDINATOR     |        |1       |10          |
+|11|   EXCHANGE OUT DISTR|:EX30000|1       |10          |
+|12|    PX BLOCK ITERATOR|        |1       |10          |
+|13|     TABLE SCAN      |t2      |1       |10          |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -962,13 +962,13 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1       |9           |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1       |9           |
-|2 |  SORT                    |        |1       |9           |
-|3 |   PX PARTITION ITERATOR  |        |1       |9           |
-|4 |    SUBPLAN FILTER        |        |1       |9           |
-|5 |     TABLE SCAN           |t1      |1       |5           |
-|6 |     TABLE SCAN           |t2      |1       |5           |
+|0 |PX COORDINATOR MERGE SORT |        |1       |20          |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1       |20          |
+|2 |  SORT                    |        |1       |19          |
+|3 |   PX PARTITION ITERATOR  |        |1       |19          |
+|4 |    SUBPLAN FILTER        |        |1       |19          |
+|5 |     TABLE SCAN           |t1      |1       |10          |
+|6 |     TABLE SCAN           |t2      |1       |10          |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -1007,14 +1007,14 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1       |13          |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1       |13          |
-|2 |  SORT                    |        |1       |13          |
-|3 |   PX PARTITION ITERATOR  |        |1       |13          |
-|4 |    SUBPLAN FILTER        |        |1       |13          |
-|5 |     TABLE SCAN           |t1      |1       |5           |
-|6 |     TABLE SCAN           |t2      |1       |5           |
-|7 |     TABLE SCAN           |t2      |1       |5           |
+|0 |PX COORDINATOR MERGE SORT |        |1       |29          |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1       |29          |
+|2 |  SORT                    |        |1       |29          |
+|3 |   PX PARTITION ITERATOR  |        |1       |29          |
+|4 |    SUBPLAN FILTER        |        |1       |29          |
+|5 |     TABLE SCAN           |t1      |1       |10          |
+|6 |     TABLE SCAN           |t2      |1       |10          |
+|7 |     TABLE SCAN           |t2      |1       |10          |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -1058,20 +1058,20 @@ Query Plan
 =========================================================
 |ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                 |        |1       |810         |
-|1 | SUBPLAN FILTER      |        |1       |810         |
-|2 |  PX COORDINATOR     |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR|        |1       |5           |
-|5 |     TABLE SCAN      |t1      |1       |5           |
-|6 |  PX COORDINATOR     |        |1       |5           |
-|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
-|8 |    PX BLOCK ITERATOR|        |1       |5           |
-|9 |     TABLE SCAN      |t2      |1       |5           |
-|10|  PX COORDINATOR     |        |1       |4           |
-|11|   EXCHANGE OUT DISTR|:EX30000|1       |4           |
-|12|    PX BLOCK ITERATOR|        |1       |4           |
-|13|     TABLE SCAN      |t3      |1       |4           |
+|0 |SORT                 |        |1       |825         |
+|1 | SUBPLAN FILTER      |        |1       |825         |
+|2 |  PX COORDINATOR     |        |1       |10          |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR|        |1       |10          |
+|5 |     TABLE SCAN      |t1      |1       |10          |
+|6 |  PX COORDINATOR     |        |1       |10          |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |10          |
+|8 |    PX BLOCK ITERATOR|        |1       |10          |
+|9 |     TABLE SCAN      |t2      |1       |10          |
+|10|  PX COORDINATOR     |        |1       |8           |
+|11|   EXCHANGE OUT DISTR|:EX30000|1       |8           |
+|12|    PX BLOCK ITERATOR|        |1       |8           |
+|13|     TABLE SCAN      |t3      |1       |8           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -1120,16 +1120,16 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1       |10          |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1       |10          |
-|2 |  SORT                        |        |1       |9           |
-|3 |   SUBPLAN FILTER             |        |1       |9           |
-|4 |    EXCHANGE IN DISTR         |        |1       |5           |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |5           |
-|6 |      PX BLOCK ITERATOR       |        |1       |5           |
-|7 |       TABLE SCAN             |t1      |1       |5           |
-|8 |    PX PARTITION ITERATOR     |        |1       |5           |
-|9 |     TABLE SCAN               |t2      |1       |5           |
+|0 |PX COORDINATOR MERGE SORT     |        |1       |20          |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1       |20          |
+|2 |  SORT                        |        |1       |20          |
+|3 |   SUBPLAN FILTER             |        |1       |20          |
+|4 |    EXCHANGE IN DISTR         |        |1       |10          |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |10          |
+|6 |      PX BLOCK ITERATOR       |        |1       |10          |
+|7 |       TABLE SCAN             |t1      |1       |10          |
+|8 |    PX PARTITION ITERATOR     |        |1       |10          |
+|9 |     TABLE SCAN               |t2      |1       |10          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -1172,26 +1172,26 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                             |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |SORT                                 |        |1       |814         |
-|1 | SUBPLAN FILTER                      |        |1       |814         |
-|2 |  PX COORDINATOR                     |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR                |:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR                |        |1       |5           |
-|5 |     TABLE SCAN                      |t1      |1       |5           |
-|6 |  PX COORDINATOR                     |        |1       |8           |
-|7 |   EXCHANGE OUT DISTR                |:EX20001|1       |8           |
-|8 |    NESTED-LOOP JOIN CARTESIAN       |        |1       |8           |
-|9 |     PX BLOCK ITERATOR               |        |1       |5           |
-|10|      TABLE SCAN                     |t2      |1       |5           |
-|11|     MATERIAL                        |        |1       |4           |
-|12|      EXCHANGE IN DISTR              |        |1       |4           |
-|13|       EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |4           |
-|14|        PX BLOCK ITERATOR            |        |1       |4           |
-|15|         TABLE SCAN                  |t3      |1       |4           |
-|16|  PX COORDINATOR                     |        |1       |5           |
-|17|   EXCHANGE OUT DISTR                |:EX30000|1       |5           |
-|18|    PX BLOCK ITERATOR                |        |1       |5           |
-|19|     TABLE SCAN                      |t2      |1       |5           |
+|0 |SORT                                 |        |1       |834         |
+|1 | SUBPLAN FILTER                      |        |1       |834         |
+|2 |  PX COORDINATOR                     |        |1       |11          |
+|3 |   EXCHANGE OUT DISTR                |:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR                |        |1       |10          |
+|5 |     TABLE SCAN                      |t1      |1       |10          |
+|6 |  PX COORDINATOR                     |        |1       |18          |
+|7 |   EXCHANGE OUT DISTR                |:EX20001|1       |18          |
+|8 |    NESTED-LOOP JOIN CARTESIAN       |        |1       |18          |
+|9 |     PX BLOCK ITERATOR               |        |1       |10          |
+|10|      TABLE SCAN                     |t2      |1       |10          |
+|11|     MATERIAL                        |        |1       |8           |
+|12|      EXCHANGE IN DISTR              |        |1       |8           |
+|13|       EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |8           |
+|14|        PX BLOCK ITERATOR            |        |1       |8           |
+|15|         TABLE SCAN                  |t3      |1       |8           |
+|16|  PX COORDINATOR                     |        |1       |10          |
+|17|   EXCHANGE OUT DISTR                |:EX30000|1       |10          |
+|18|    PX BLOCK ITERATOR                |        |1       |10          |
+|19|     TABLE SCAN                      |t2      |1       |10          |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1253,30 +1253,30 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                             |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |SORT                                 |        |1       |1217        |
-|1 | SUBPLAN FILTER                      |        |1       |1217        |
-|2 |  PX COORDINATOR                     |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR                |:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR                |        |1       |5           |
-|5 |     TABLE SCAN                      |t1      |1       |5           |
-|6 |  PX COORDINATOR                     |        |1       |8           |
-|7 |   EXCHANGE OUT DISTR                |:EX20001|1       |8           |
-|8 |    NESTED-LOOP JOIN CARTESIAN       |        |1       |8           |
-|9 |     PX BLOCK ITERATOR               |        |1       |5           |
-|10|      TABLE SCAN                     |t2      |1       |5           |
-|11|     MATERIAL                        |        |1       |4           |
-|12|      EXCHANGE IN DISTR              |        |1       |4           |
-|13|       EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |4           |
-|14|        PX BLOCK ITERATOR            |        |1       |4           |
-|15|         TABLE SCAN                  |t3      |1       |4           |
-|16|  PX COORDINATOR                     |        |1       |5           |
-|17|   EXCHANGE OUT DISTR                |:EX30000|1       |5           |
-|18|    PX BLOCK ITERATOR                |        |1       |5           |
-|19|     TABLE SCAN                      |t2      |1       |5           |
-|20|  PX COORDINATOR                     |        |1       |5           |
-|21|   EXCHANGE OUT DISTR                |:EX40000|1       |5           |
-|22|    PX BLOCK ITERATOR                |        |1       |5           |
-|23|     TABLE SCAN                      |t2      |1       |5           |
+|0 |SORT                                 |        |1       |1242        |
+|1 | SUBPLAN FILTER                      |        |1       |1242        |
+|2 |  PX COORDINATOR                     |        |1       |11          |
+|3 |   EXCHANGE OUT DISTR                |:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR                |        |1       |10          |
+|5 |     TABLE SCAN                      |t1      |1       |10          |
+|6 |  PX COORDINATOR                     |        |1       |18          |
+|7 |   EXCHANGE OUT DISTR                |:EX20001|1       |18          |
+|8 |    NESTED-LOOP JOIN CARTESIAN       |        |1       |18          |
+|9 |     PX BLOCK ITERATOR               |        |1       |10          |
+|10|      TABLE SCAN                     |t2      |1       |10          |
+|11|     MATERIAL                        |        |1       |8           |
+|12|      EXCHANGE IN DISTR              |        |1       |8           |
+|13|       EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |8           |
+|14|        PX BLOCK ITERATOR            |        |1       |8           |
+|15|         TABLE SCAN                  |t3      |1       |8           |
+|16|  PX COORDINATOR                     |        |1       |10          |
+|17|   EXCHANGE OUT DISTR                |:EX30000|1       |10          |
+|18|    PX BLOCK ITERATOR                |        |1       |10          |
+|19|     TABLE SCAN                      |t2      |1       |10          |
+|20|  PX COORDINATOR                     |        |1       |10          |
+|21|   EXCHANGE OUT DISTR                |:EX40000|1       |10          |
+|22|    PX BLOCK ITERATOR                |        |1       |10          |
+|23|     TABLE SCAN                      |t2      |1       |10          |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1346,20 +1346,20 @@ Query Plan
 =========================================================
 |ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                 |        |1       |810         |
-|1 | SUBPLAN FILTER      |        |1       |810         |
-|2 |  PX COORDINATOR     |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR|        |1       |5           |
-|5 |     TABLE SCAN      |t1      |1       |5           |
-|6 |  PX COORDINATOR     |        |1       |5           |
-|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
-|8 |    PX BLOCK ITERATOR|        |1       |5           |
-|9 |     TABLE SCAN      |t2      |1       |5           |
-|10|  PX COORDINATOR     |        |1       |4           |
-|11|   EXCHANGE OUT DISTR|:EX30000|1       |4           |
-|12|    PX BLOCK ITERATOR|        |1       |4           |
-|13|     TABLE SCAN      |t3      |1       |4           |
+|0 |SORT                 |        |1       |825         |
+|1 | SUBPLAN FILTER      |        |1       |825         |
+|2 |  PX COORDINATOR     |        |1       |11          |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR|        |1       |10          |
+|5 |     TABLE SCAN      |t1      |1       |10          |
+|6 |  PX COORDINATOR     |        |1       |10          |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |10          |
+|8 |    PX BLOCK ITERATOR|        |1       |10          |
+|9 |     TABLE SCAN      |t2      |1       |10          |
+|10|  PX COORDINATOR     |        |1       |8           |
+|11|   EXCHANGE OUT DISTR|:EX30000|1       |8           |
+|12|    PX BLOCK ITERATOR|        |1       |8           |
+|13|     TABLE SCAN      |t3      |1       |8           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -1408,18 +1408,18 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1       |12          |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1       |12          |
-|2 |  SORT                        |        |1       |12          |
-|3 |   SUBPLAN FILTER             |        |1       |12          |
-|4 |    EXCHANGE IN DISTR         |        |1       |5           |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |5           |
-|6 |      PX BLOCK ITERATOR       |        |1       |5           |
-|7 |       TABLE SCAN             |t1      |1       |5           |
-|8 |    PX PARTITION ITERATOR     |        |1       |4           |
-|9 |     TABLE SCAN               |t4      |1       |4           |
-|10|    PX PARTITION ITERATOR     |        |1       |4           |
-|11|     TABLE SCAN               |t3      |1       |4           |
+|0 |PX COORDINATOR MERGE SORT     |        |1       |26          |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1       |26          |
+|2 |  SORT                        |        |1       |26          |
+|3 |   SUBPLAN FILTER             |        |1       |26          |
+|4 |    EXCHANGE IN DISTR         |        |1       |10          |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |10          |
+|6 |      PX BLOCK ITERATOR       |        |1       |10          |
+|7 |       TABLE SCAN             |t1      |1       |10          |
+|8 |    PX PARTITION ITERATOR     |        |1       |8           |
+|9 |     TABLE SCAN               |t4      |1       |8           |
+|10|    PX PARTITION ITERATOR     |        |1       |8           |
+|11|     TABLE SCAN               |t3      |1       |8           |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -1468,18 +1468,18 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |SORT                         |        |1       |408         |
-|1 | SUBPLAN FILTER              |        |1       |408         |
-|2 |  PX COORDINATOR             |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR        |:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR        |        |1       |5           |
-|5 |     TABLE SCAN              |t2      |1       |5           |
-|6 |  LIMIT                      |        |1       |5           |
-|7 |   PX COORDINATOR MERGE SORT |        |1       |5           |
-|8 |    EXCHANGE OUT DISTR       |:EX20000|1       |5           |
-|9 |     TOP-N SORT              |        |1       |5           |
-|10|      PX BLOCK ITERATOR      |        |1       |5           |
-|11|       TABLE SCAN            |t1      |1       |5           |
+|0 |SORT                         |        |1       |418         |
+|1 | SUBPLAN FILTER              |        |1       |418         |
+|2 |  PX COORDINATOR             |        |1       |10          |
+|3 |   EXCHANGE OUT DISTR        |:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR        |        |1       |10          |
+|5 |     TABLE SCAN              |t2      |1       |10          |
+|6 |  LIMIT                      |        |1       |10          |
+|7 |   PX COORDINATOR MERGE SORT |        |1       |10          |
+|8 |    EXCHANGE OUT DISTR       |:EX20000|1       |10          |
+|9 |     TOP-N SORT              |        |1       |10          |
+|10|      PX BLOCK ITERATOR      |        |1       |10          |
+|11|       TABLE SCAN            |t1      |1       |10          |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -1524,16 +1524,16 @@ Query Plan
 =========================================================
 |ID|OPERATOR             |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                 |        |1       |408         |
-|1 | SUBPLAN FILTER      |        |1       |408         |
-|2 |  PX COORDINATOR     |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR|:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR|        |1       |5           |
-|5 |     TABLE SCAN      |t1      |1       |5           |
-|6 |  PX COORDINATOR     |        |1       |5           |
-|7 |   EXCHANGE OUT DISTR|:EX20000|1       |5           |
-|8 |    PX BLOCK ITERATOR|        |1       |5           |
-|9 |     TABLE SCAN      |t2      |1       |5           |
+|0 |SORT                 |        |1       |419         |
+|1 | SUBPLAN FILTER      |        |1       |419         |
+|2 |  PX COORDINATOR     |        |1       |11          |
+|3 |   EXCHANGE OUT DISTR|:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR|        |1       |10          |
+|5 |     TABLE SCAN      |t1      |1       |10          |
+|6 |  PX COORDINATOR     |        |1       |10          |
+|7 |   EXCHANGE OUT DISTR|:EX20000|1       |10          |
+|8 |    PX BLOCK ITERATOR|        |1       |10          |
+|9 |     TABLE SCAN      |t2      |1       |10          |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -1573,30 +1573,30 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                                |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |SORT                                    |        |1       |415         |
-|1 | SUBPLAN FILTER                         |        |1       |415         |
-|2 |  PX COORDINATOR                        |        |1       |5           |
-|3 |   EXCHANGE OUT DISTR                   |:EX10000|1       |5           |
-|4 |    PX BLOCK ITERATOR                   |        |1       |5           |
-|5 |     TABLE SCAN                         |t1      |1       |5           |
-|6 |  MERGE GROUP BY                        |        |1       |12          |
-|7 |   PX COORDINATOR                       |        |2       |12          |
-|8 |    EXCHANGE OUT DISTR                  |:EX20002|2       |12          |
-|9 |     MERGE GROUP BY                     |        |2       |12          |
-|10|      NESTED-LOOP JOIN CARTESIAN        |        |1       |11          |
-|11|       NESTED-LOOP JOIN CARTESIAN       |        |1       |8           |
-|12|        PX BLOCK ITERATOR               |        |1       |5           |
-|13|         TABLE SCAN                     |t2      |1       |5           |
-|14|        MATERIAL                        |        |1       |4           |
-|15|         EXCHANGE IN DISTR              |        |1       |4           |
-|16|          EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |4           |
-|17|           PX BLOCK ITERATOR            |        |1       |4           |
-|18|            TABLE SCAN                  |t3      |1       |4           |
-|19|       MATERIAL                         |        |1       |4           |
-|20|        EXCHANGE IN DISTR               |        |1       |4           |
-|21|         EXCHANGE OUT DISTR (BROADCAST) |:EX20001|1       |4           |
-|22|          PX BLOCK ITERATOR             |        |1       |4           |
-|23|           TABLE SCAN                   |t4      |1       |4           |
+|0 |SORT                                    |        |1       |434         |
+|1 | SUBPLAN FILTER                         |        |1       |434         |
+|2 |  PX COORDINATOR                        |        |1       |11          |
+|3 |   EXCHANGE OUT DISTR                   |:EX10000|1       |10          |
+|4 |    PX BLOCK ITERATOR                   |        |1       |10          |
+|5 |     TABLE SCAN                         |t1      |1       |10          |
+|6 |  MERGE GROUP BY                        |        |1       |25          |
+|7 |   PX COORDINATOR                       |        |2       |25          |
+|8 |    EXCHANGE OUT DISTR                  |:EX20002|2       |25          |
+|9 |     MERGE GROUP BY                     |        |2       |25          |
+|10|      NESTED-LOOP JOIN CARTESIAN        |        |1       |25          |
+|11|       NESTED-LOOP JOIN CARTESIAN       |        |1       |18          |
+|12|        PX BLOCK ITERATOR               |        |1       |10          |
+|13|         TABLE SCAN                     |t2      |1       |10          |
+|14|        MATERIAL                        |        |1       |8           |
+|15|         EXCHANGE IN DISTR              |        |1       |8           |
+|16|          EXCHANGE OUT DISTR (BROADCAST)|:EX20000|1       |8           |
+|17|           PX BLOCK ITERATOR            |        |1       |8           |
+|18|            TABLE SCAN                  |t3      |1       |8           |
+|19|       MATERIAL                         |        |1       |8           |
+|20|        EXCHANGE IN DISTR               |        |1       |8           |
+|21|         EXCHANGE OUT DISTR (BROADCAST) |:EX20001|1       |8           |
+|22|          PX BLOCK ITERATOR             |        |1       |8           |
+|23|           TABLE SCAN                   |t4      |1       |8           |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -1718,12 +1718,12 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |23          |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |22          |
-|2 |  SUBPLAN FILTER         |        |1       |22          |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|0 |PX COORDINATOR           |        |1       |29          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |29          |
+|2 |  SUBPLAN FILTER         |        |1       |28          |
+|3 |   PX PARTITION ITERATOR |        |1       |8           |
+|4 |    TABLE SCAN           |t1      |1       |8           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1771,12 +1771,12 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |23          |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |23          |
-|2 |  SUBPLAN FILTER         |        |1       |22          |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |1       |19          |
+|0 |PX COORDINATOR           |        |1       |29          |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |29          |
+|2 |  SUBPLAN FILTER         |        |1       |28          |
+|3 |   PX PARTITION ITERATOR |        |1       |8           |
+|4 |    TABLE SCAN           |t1      |1       |8           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |1       |21          |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1824,12 +1824,12 @@ Query Plan
 ============================================================
 |ID|OPERATOR                |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |PX COORDINATOR          |        |1       |22          |
-|1 | EXCHANGE OUT DISTR     |:EX10000|1       |22          |
-|2 |  SUBPLAN FILTER        |        |1       |22          |
-|3 |   PX PARTITION ITERATOR|        |1       |4           |
-|4 |    TABLE SCAN          |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE GET|t2      |1       |18          |
+|0 |PX COORDINATOR          |        |1       |29          |
+|1 | EXCHANGE OUT DISTR     |:EX10000|1       |28          |
+|2 |  SUBPLAN FILTER        |        |1       |28          |
+|3 |   PX PARTITION ITERATOR|        |1       |8           |
+|4 |    TABLE SCAN          |t1      |1       |8           |
+|5 |   DISTRIBUTED TABLE GET|t2      |1       |21          |
 ============================================================
 Outputs & filters:
 -------------------------------------
@@ -1874,24 +1874,24 @@ select c1,c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
 +----+----+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |41          |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |41          |
-|2 |  SUBPLAN FILTER         |        |1       |40          |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-=============================================================
+============================================================
+|ID|OPERATOR                |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |SUBPLAN FILTER          |        |1       |49          |
+|1 | PX COORDINATOR         |        |1       |9           |
+|2 |  EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|3 |   PX PARTITION ITERATOR|        |1       |8           |
+|4 |    TABLE SCAN          |t1      |1       |8           |
+|5 | TABLE SCAN             |t2      |8       |21          |
+|6 | DISTRIBUTED TABLE SCAN |t2      |8       |21          |
+============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
-      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -1899,12 +1899,12 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
   5 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
+      access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 >= :0])
   6 - output([t2.c2]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c2]), partitions(p0)
+      access([t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 >= :1])
@@ -1933,24 +1933,24 @@ select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 f
 +----+------+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) or c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |41          |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |41          |
-|2 |  SUBPLAN FILTER         |        |1       |40          |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-=============================================================
+============================================================
+|ID|OPERATOR                |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |SUBPLAN FILTER          |        |1       |49          |
+|1 | PX COORDINATOR         |        |1       |9           |
+|2 |  EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|3 |   PX PARTITION ITERATOR|        |1       |8           |
+|4 |    TABLE SCAN          |t1      |1       |8           |
+|5 | TABLE SCAN             |t2      |8       |21          |
+|6 | DISTRIBUTED TABLE SCAN |t2      |8       |21          |
+============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
-      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -1958,12 +1958,12 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
   5 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
+      access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 >= :0])
   6 - output([t2.c2]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c2]), partitions(p0)
+      access([t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 >= :1])
@@ -1992,24 +1992,24 @@ select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) or c1 in  (select c2 fr
 +----+------+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |41          |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |41          |
-|2 |  SUBPLAN FILTER         |        |1       |40          |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-=============================================================
+============================================================
+|ID|OPERATOR                |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |SUBPLAN FILTER          |        |1       |49          |
+|1 | PX COORDINATOR         |        |1       |9           |
+|2 |  EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|3 |   PX PARTITION ITERATOR|        |1       |8           |
+|4 |    TABLE SCAN          |t1      |1       |8           |
+|5 | TABLE SCAN             |t2      |8       |21          |
+|6 | DISTRIBUTED TABLE SCAN |t2      |8       |21          |
+============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
-      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2017,12 +2017,12 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
   5 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
+      access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :0])
   6 - output([t2.c2]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c2]), partitions(p0)
+      access([t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :1])
@@ -2051,24 +2051,24 @@ select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 f
 +----+------+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |41          |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |41          |
-|2 |  SUBPLAN FILTER         |        |1       |40          |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-=============================================================
+============================================================
+|ID|OPERATOR                |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |SUBPLAN FILTER          |        |1       |49          |
+|1 | PX COORDINATOR         |        |1       |9           |
+|2 |  EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|3 |   PX PARTITION ITERATOR|        |1       |8           |
+|4 |    TABLE SCAN          |t1      |1       |8           |
+|5 | TABLE SCAN             |t2      |8       |21          |
+|6 | DISTRIBUTED TABLE SCAN |t2      |8       |21          |
+============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)))]), filter(nil), rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
-      exec_params_([t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2076,12 +2076,12 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
   5 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
+      access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :0])
   6 - output([t2.c2]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c2]), partitions(p0)
+      access([t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :1])
@@ -2110,27 +2110,25 @@ select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 in  (select c2 fr
 +----+------+
 EXPLAIN EXTENDED_NOADDR select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |59          |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |59          |
-|2 |  SUBPLAN FILTER         |        |1       |58          |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|7 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
-=============================================================
+============================================================
+|ID|OPERATOR                |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |SUBPLAN FILTER          |        |1       |69          |
+|1 | PX COORDINATOR         |        |1       |9           |
+|2 |  EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|3 |   PX PARTITION ITERATOR|        |1       |8           |
+|4 |    TABLE SCAN          |t1      |1       |8           |
+|5 | TABLE SCAN             |t2      |8       |21          |
+|6 | DISTRIBUTED TABLE SCAN |t2      |8       |21          |
+|7 | DISTRIBUTED TABLE GET  |t2      |1       |21          |
+============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)))]), filter(nil),
-rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)))]), filter(nil),
-rowset=256
+  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3))]), filter(nil), rowset=256
+      exec_params_([t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=false
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))], [subquery(3)]), filter(nil), rowset=256
-      exec_params_([t1.c1], [t1.c1], [t1.c1]), onetime_exprs_(nil), init_plan_idxs_(nil), batch_das=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -2138,17 +2136,17 @@ rowset=256
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
   5 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
+      access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :0])
   6 - output([t2.c2]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c2]), partitions(p0)
+      access([t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :1])
   7 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
+      access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 = :2])
@@ -2181,18 +2179,18 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |131         |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |131         |
-|2 |  SUBPLAN FILTER         |        |1       |130         |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|7 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|8 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|10|   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|11|   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|0 |PX COORDINATOR           |        |1       |150         |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |150         |
+|2 |  SUBPLAN FILTER         |        |1       |149         |
+|3 |   PX PARTITION ITERATOR |        |1       |8           |
+|4 |    TABLE SCAN           |t1      |1       |8           |
+|5 |   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
+|7 |   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|8 |   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
+|10|   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|11|   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -2276,18 +2274,18 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |131         |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |131         |
-|2 |  SUBPLAN FILTER         |        |1       |131         |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|7 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|8 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|10|   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|11|   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|0 |PX COORDINATOR           |        |1       |150         |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |150         |
+|2 |  SUBPLAN FILTER         |        |1       |150         |
+|3 |   PX PARTITION ITERATOR |        |1       |8           |
+|4 |    TABLE SCAN           |t1      |1       |8           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
+|7 |   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|8 |   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
+|10|   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|11|   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -2369,18 +2367,18 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |131         |
-|1 | EXCHANGE OUT DISTR      |:EX10000|1       |131         |
-|2 |  SUBPLAN FILTER         |        |1       |131         |
-|3 |   PX PARTITION ITERATOR |        |1       |4           |
-|4 |    TABLE SCAN           |t1      |1       |4           |
-|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|7 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|8 |   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
-|10|   DISTRIBUTED TABLE GET |t2      |1       |18          |
-|11|   DISTRIBUTED TABLE SCAN|t2      |8       |19          |
+|0 |PX COORDINATOR           |        |1       |150         |
+|1 | EXCHANGE OUT DISTR      |:EX10000|1       |150         |
+|2 |  SUBPLAN FILTER         |        |1       |150         |
+|3 |   PX PARTITION ITERATOR |        |1       |8           |
+|4 |    TABLE SCAN           |t1      |1       |8           |
+|5 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
+|6 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
+|7 |   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|8 |   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|9 |   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
+|10|   DISTRIBUTED TABLE GET |t2      |1       |21          |
+|11|   DISTRIBUTED TABLE SCAN|t2      |8       |21          |
 =============================================================
 Outputs & filters:
 -------------------------------------

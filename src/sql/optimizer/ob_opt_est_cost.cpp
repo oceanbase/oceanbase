@@ -403,6 +403,26 @@ int ObOptEstCost::cost_delete(ObDelUpCostInfo& cost_info,
   return ret;
 }
 
+int ObOptEstCost::cost_range_scan(const ObTableMetaInfo& table_meta_info,
+                                  const ObIArray<ObRawExpr *> &filters,
+                                  int64_t index_column_count,
+                                  int64_t range_count,
+                                  double range_sel,
+                                  double &cost,
+                                  MODEL_TYPE model_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_model(model_type).cost_range_scan(table_meta_info,
+                                                    filters,
+                                                    index_column_count,
+                                                    range_count,
+                                                    range_sel,
+                                                    cost))) {
+    LOG_WARN("failed to est cost for range scan", K(model_type), K(ret));
+  }
+  return ret;
+}
+
 int ObOptEstCost::estimate_width_for_table(const OptTableMetas &table_metas,
                                            const OptSelectivityCtx &ctx,
                                            const ObIArray<ColumnItem> &columns,

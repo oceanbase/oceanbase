@@ -73,16 +73,16 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |0       |11          |
-|1 | EXCHANGE OUT DISTR                |:EX10001|0       |11          |
-|2 |  NESTED-LOOP JOIN                 |        |0       |11          |
-|3 |   PX BLOCK ITERATOR               |        |1       |6           |
-|4 |    TABLE SCAN                     |score   |1       |6           |
-|5 |   MATERIAL                        |        |1       |6           |
-|6 |    EXCHANGE IN DISTR              |        |1       |6           |
-|7 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |6           |
-|8 |      PX BLOCK ITERATOR            |        |1       |6           |
-|9 |       TABLE SCAN                  |stu     |1       |6           |
+|0 |PX COORDINATOR                     |        |0       |23          |
+|1 | EXCHANGE OUT DISTR                |:EX10001|0       |23          |
+|2 |  NESTED-LOOP JOIN                 |        |0       |23          |
+|3 |   PX BLOCK ITERATOR               |        |1       |12          |
+|4 |    TABLE SCAN                     |score   |1       |12          |
+|5 |   MATERIAL                        |        |1       |12          |
+|6 |    EXCHANGE IN DISTR              |        |1       |12          |
+|7 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |12          |
+|8 |      PX BLOCK ITERATOR            |        |1       |12          |
+|9 |       TABLE SCAN                  |stu     |1       |12          |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -138,13 +138,13 @@ Query Plan
 ====================================================================
 |ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------
-|0 |PX COORDINATOR                  |        |1       |10          |
-|1 | EXCHANGE OUT DISTR             |:EX10001|1       |9           |
-|2 |  SHARED HASH JOIN              |        |1       |8           |
-|3 |   EXCHANGE IN DISTR            |        |1       |6           |
-|4 |    EXCHANGE OUT DISTR (BC2HOST)|:EX10000|1       |6           |
-|5 |     PX BLOCK ITERATOR          |        |1       |6           |
-|6 |      TABLE SCAN                |score   |1       |6           |
+|0 |PX COORDINATOR                  |        |1       |16          |
+|1 | EXCHANGE OUT DISTR             |:EX10001|1       |15          |
+|2 |  SHARED HASH JOIN              |        |1       |14          |
+|3 |   EXCHANGE IN DISTR            |        |1       |13          |
+|4 |    EXCHANGE OUT DISTR (BC2HOST)|:EX10000|1       |12          |
+|5 |     PX BLOCK ITERATOR          |        |1       |12          |
+|6 |      TABLE SCAN                |score   |1       |12          |
 |7 |   PX BLOCK ITERATOR            |        |1       |2           |
 |8 |    TABLE GET                   |teacher |1       |2           |
 ====================================================================

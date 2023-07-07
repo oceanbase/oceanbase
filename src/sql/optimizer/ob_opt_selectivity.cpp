@@ -3169,8 +3169,7 @@ int ObOptSelectivity::get_column_basic_from_meta(const OptTableMetas &table_meta
     row_count = table_meta->get_rows();
     const OptColumnMeta *column_meta = table_meta->get_column_meta(column_id);
     if (OB_ISNULL(column_meta)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column meta not find", K(ret), K(*table_meta), K(column_expr));
+      use_default = true;
     } else {
       ndv = column_meta->get_ndv();
       num_null = column_meta->get_num_null();

@@ -283,20 +283,21 @@ select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c
 ## broadcast shuffle
 EXPLAIN BASIC select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1=b.c2 order by a.c1,b.c1;
 Query Plan
-============================================
-|ID|OPERATOR                      |NAME    |
---------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |
-|1 | EXCHANGE OUT DISTR           |:EX10001|
-|2 |  SORT                        |        |
-|3 |   HASH JOIN                  |        |
-|4 |    PX PARTITION ITERATOR     |        |
-|5 |     TABLE SCAN               |b       |
-|6 |    EXCHANGE IN DISTR         |        |
-|7 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|8 |      PX BLOCK ITERATOR       |        |
-|9 |       TABLE SCAN             |a       |
-============================================
+===============================================
+|ID|OPERATOR                         |NAME    |
+-----------------------------------------------
+|0 |PX COORDINATOR MERGE SORT        |        |
+|1 | EXCHANGE OUT DISTR              |:EX10001|
+|2 |  SORT                           |        |
+|3 |   HASH JOIN                     |        |
+|4 |    PART JOIN FILTER CREATE      |:BF0000 |
+|5 |     EXCHANGE IN DISTR           |        |
+|6 |      EXCHANGE OUT DISTR (PKEY)  |:EX10000|
+|7 |       PX BLOCK ITERATOR         |        |
+|8 |        TABLE SCAN               |b       |
+|9 |    PX PARTITION HASH JOIN-FILTER|:BF0000 |
+|10|     TABLE SCAN                  |a       |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
@@ -307,17 +308,18 @@ Outputs & filters:
       sort_keys([a.c1, ASC], [b.c1, ASC])
   3 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.c2]), other_conds(nil)
-  4 - output([b.c2], [b.c1]), filter(nil), rowset=256
-      affinitize
-  5 - output([b.c2], [b.c1]), filter(nil), rowset=256
+  4 - output([b.c1], [b.c2]), filter(nil), rowset=256
+  5 - output([b.c1], [b.c2]), filter(nil), rowset=256
+  6 - output([b.c1], [b.c2]), filter(nil), rowset=256
+      (#keys=1, [b.c2]), dop=2
+  7 - output([b.c2], [b.c1]), filter(nil), rowset=256
+  8 - output([b.c2], [b.c1]), filter(nil), rowset=256
       access([b.c2], [b.c1]), partitions(p[0-5])
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([a.c1], [a.c2]), filter(nil), rowset=256
-  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
-      (#keys=1, [a.c1]), dop=2
-  8 - output([a.c1], [a.c2]), filter(nil), rowset=256
   9 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      affinitize
+ 10 - output([a.c1], [a.c2], [PARTITION_ID]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.__pk_increment]), range(MIN ; MAX)always true

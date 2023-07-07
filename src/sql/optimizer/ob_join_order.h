@@ -51,6 +51,18 @@ namespace sql
   class ObIndexSkylineDim;
   class ObIndexInfoCache;
   class ObSelectLogPlan;
+  struct CandiRangeExprs {
+    int64_t column_id_;
+    int64_t index_;
+    ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> eq_exprs_;
+    ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> in_exprs_;
+    TO_STRING_KV(
+      K_(column_id),
+      K_(index),
+      K_(eq_exprs),
+      K_(in_exprs)
+    );
+  };
   /*
    * 用于指示inner join未来的连接条件
    */
@@ -1296,8 +1308,8 @@ struct NullAwareAntiJoinInfo {
                                       const Path &second_path,
                                       DominateRelation &relation);
 
-    int estimate_size_and_width_for_base_table(PathHelper &helper,
-                                               ObIArray<AccessPath *> &access_paths);
+    int estimate_size_for_base_table(PathHelper &helper,
+                                    ObIArray<AccessPath *> &access_paths);
 
     int estimate_size_and_width_for_join(const ObJoinOrder* lefttree,
                                          const ObJoinOrder* righttree,
@@ -1474,6 +1486,30 @@ struct NullAwareAntiJoinInfo {
                                         const common::ObIArray<ObRawExpr*> &predicates,
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         ObQueryRange* &range);
+
+    int get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
+                            const ObIArray<ObRawExpr*> &predicates,
+                            ObIArray<ObRawExpr*> &range_predicates);
+
+    int calculate_range_expr_cost(ObIArray<CandiRangeExprs*> &sorted_predicates,
+                                  ObIArray<ObRawExpr*> &range_exprs,
+                                  int64_t range_column_count,
+                                  int64_t range_count,
+                                  double &cost);
+
+    int sort_predicate_by_index_column(const ObIArray<ColumnItem> &range_columns,
+                                       const ObIArray<ObRawExpr*> &predicates,
+                                       ObIArray<CandiRangeExprs*> &sort_exprs,
+                                       bool &has_in_pred);
+
+    int is_eq_or_in_range_expr(ObRawExpr* expr,
+                               int64_t &column_id,
+                               bool &is_in_expr,
+                               bool &is_valid);
+
+    int get_range_filter(ObIArray<CandiRangeExprs*> &sort_exprs,
+                         ObIArray<ObRawExpr*> &range_exprs,
+                         ObIArray<ObRawExpr*> &filters);
 
     int extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                               const ObIArray<ObRawExpr*> &predicates,
@@ -2009,7 +2045,6 @@ struct NullAwareAntiJoinInfo {
 
     int compute_table_location(const uint64_t table_id,
                                const uint64_t ref_id,
-                               ObIArray<AccessPath *> &access_paths,
                                const bool is_global_index,
                                ObTablePartitionInfo *&table_partition_info);
 

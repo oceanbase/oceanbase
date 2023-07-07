@@ -106,8 +106,10 @@ int ObOptEstVectorCostModel::cost_table_scan_one_batch_inner(double row_count,
       qual_cost += cost_quals(row_count, est_cost_info.postfix_filters_);
     }
     // CPU代价，包括get_next_row调用的代价和谓词代价
+    double range_cost = 0;
+    range_cost = est_cost_info.ranges_.count() * cost_params_.RANGE_COST;
     double cpu_cost = row_count * cost_params_.CPU_TUPLE_COST
-                      + qual_cost;
+                      + range_cost + qual_cost;
     // 从memtable读取数据的代价，待提供
     double memtable_cost = 0;
     // memtable数据和基线数据合并的代价，待提供
