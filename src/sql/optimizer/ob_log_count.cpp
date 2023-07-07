@@ -186,12 +186,10 @@ int ObLogCount::get_plan_item_info(PlanText &plan_text,
 	return ret;
 }
 
-int ObLogCount::inner_replace_op_exprs(
-    const ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogCount::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (NULL != rownum_limit_expr_ &&
-      OB_FAIL(replace_expr_action(to_replace_exprs, rownum_limit_expr_))) {
+  if (NULL != rownum_limit_expr_ && OB_FAIL(replace_expr_action(replacer, rownum_limit_expr_))) {
     LOG_WARN("failed to replace expr", K(ret));
   }
   return ret;

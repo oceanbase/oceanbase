@@ -211,8 +211,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
       K_(is_push_down));
 private:
-  virtual int inner_replace_op_exprs(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs) override;
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
   int create_fd_item_from_select_list(ObFdItemSet *fd_item_set);

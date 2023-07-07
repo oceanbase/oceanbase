@@ -324,8 +324,7 @@ public:
   { is_multi_part_table_scan_ = multi_part_tsc; }
   bool get_is_multi_part_table_scan() { return is_multi_part_table_scan_; }
   int set_query_ranges(ObIArray<ObNewRange> &ranges, ObIArray<ObNewRange> &ss_ranges);
-  virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs) override;
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   inline common::ObIArray<bool> &get_filter_before_index_flags() { return filter_before_index_back_; }
   inline const common::ObIArray<bool> &get_filter_before_index_flags() const { return filter_before_index_back_; }
   inline ObRawExpr *get_limit_expr() { return limit_count_expr_; }
@@ -430,13 +429,11 @@ public:
   inline bool has_index_lookup_filter() { return has_index_lookup_filter_; }
   inline void set_has_index_lookup_filter(bool has_index_lookup_filter) { has_index_lookup_filter_ = has_index_lookup_filter; }
   int generate_ddl_output_column_ids();
-  int replace_gen_col_op_exprs(
-    const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>  >&to_replace_exprs);
+  int replace_gen_col_op_exprs(ObRawExprReplacer &replacer);
   int extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                              ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                              ObIArray<ObRawExpr*> &lookup_pushdown_filters);
-  int replace_index_back_pushdown_filters(
-                    const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>  >&to_replace_exprs);
+  int replace_index_back_pushdown_filters(ObRawExprReplacer &replacer);
   int extract_virtual_gen_access_exprs(ObIArray<ObRawExpr*> &access_exprs,
                                       uint64_t scan_table_id);
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);

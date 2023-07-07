@@ -301,10 +301,9 @@ public:
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
   int extract_err_log_info();
   static int generate_errlog_info(const ObDelUpdStmt &stmt, ObErrLogDefine &errlog_define);
-  virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   int replace_dml_info_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs,
+        ObRawExprReplacer &replacer,
         const ObIArray<IndexDMLInfo *> &index_dml_infos);
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;

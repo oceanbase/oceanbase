@@ -67,14 +67,13 @@ uint64_t ObLogJoinFilter::hash(uint64_t seed) const
   return seed;
 }
 
-int ObLogJoinFilter::inner_replace_op_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogJoinFilter::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_exprs_action(to_replace_exprs, join_exprs_))) {
+  if (OB_FAIL(replace_exprs_action(replacer, join_exprs_))) {
     LOG_WARN("failed to replace join exprs", K(ret));
   } else if (OB_NOT_NULL(calc_tablet_id_expr_)
-      && OB_FAIL(replace_expr_action(to_replace_exprs, calc_tablet_id_expr_))) {
+      && OB_FAIL(replace_expr_action(replacer, calc_tablet_id_expr_))) {
     LOG_WARN("failed to replace calc_tablet_id_expr_", K(ret));
   }
   return ret;

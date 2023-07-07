@@ -58,11 +58,10 @@ int ObLogDistinct::get_plan_item_info(PlanText &plan_text,
 }
 
 
-int ObLogDistinct::inner_replace_op_exprs(
-      const ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs)
+int ObLogDistinct::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if(OB_FAIL(replace_exprs_action(to_replace_exprs, distinct_exprs_))) {
+  if(OB_FAIL(replace_exprs_action(replacer, distinct_exprs_))) {
     SQL_OPT_LOG(WARN, "failed to replace agg exprs in distinct op", K(ret));
   }
   return ret;

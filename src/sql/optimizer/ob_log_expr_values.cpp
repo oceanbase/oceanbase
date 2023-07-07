@@ -471,11 +471,10 @@ bool ObLogExprValues::contain_array_binding_param() const
   return bret;
 }
 
-int ObLogExprValues::inner_replace_op_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogExprValues::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_exprs_action(to_replace_exprs, value_exprs_))) {
+  if (OB_FAIL(replace_exprs_action(replacer, value_exprs_))) {
     LOG_WARN("failed to replace exprs", K(ret));
   }
   return ret;

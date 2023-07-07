@@ -1492,8 +1492,7 @@ public:
   /*
    * replace exprs which will be returned by get_op_exprs during allocating expr
    */
-  int replace_op_exprs(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>  >&to_replace_exprs);
+  int replace_op_exprs(ObRawExprReplacer &replacer);
 
   // check if this operator is some kind of table scan.
   // the default return value is false
@@ -1649,12 +1648,9 @@ protected:
   void do_project_pruning(common::ObIArray<ObRawExpr *> &exprs,
                           PPDeps &deps);
   int try_add_remove_const_exprs();
-  virtual int inner_replace_op_exprs(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*> >&to_replace_exprs);
-  int replace_exprs_action(const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*> >&to_replace_exprs,
-                           common::ObIArray<ObRawExpr*> &dest_exprs);
-  int replace_expr_action(const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*> >&to_replace_exprs,
-                          ObRawExpr *&dest_expr);
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer);
+  int replace_exprs_action(ObRawExprReplacer &replacer, common::ObIArray<ObRawExpr*> &dest_exprs);
+  int replace_expr_action(ObRawExprReplacer &replacer, ObRawExpr *&dest_expr);
 
   int explain_print_partitions(ObTablePartitionInfo &table_partition_info,
                                char *buf, int64_t &buf_len, int64_t &pos);

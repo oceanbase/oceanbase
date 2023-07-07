@@ -59,8 +59,7 @@ public:
   virtual int est_cost() override;
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
 
-  int inner_replace_op_exprs(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs) override;
+  int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 
   inline void set_table_id(uint64_t table_id) { table_id_ = table_id; };
   inline uint64_t get_table_id() { return table_id_; };

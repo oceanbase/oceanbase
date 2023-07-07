@@ -376,23 +376,22 @@ int ObLogMerge::gen_location_constraint(void *ctx)
   return ret;
 }
 
-int ObLogMerge::inner_replace_op_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogMerge::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLogDelUpd::inner_replace_op_exprs(to_replace_exprs))) {
+  if (OB_FAIL(ObLogDelUpd::inner_replace_op_exprs(replacer))) {
     LOG_WARN("failed to replace op exprs", K(ret));
-  } else if (OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_update_infos()))) {
+  } else if (OB_FAIL(replace_dml_info_exprs(replacer, get_update_infos()))) {
     LOG_WARN("failed to replace update dml info exprs");
-  } else if (OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_delete_infos()))) {
+  } else if (OB_FAIL(replace_dml_info_exprs(replacer, get_delete_infos()))) {
     LOG_WARN("failed to replace delete dml info exprs");
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+  } else if (OB_FAIL(replace_exprs_action(replacer,
                         static_cast<ObMergeLogPlan &>(my_dml_plan_).get_insert_condition()))) {
     LOG_WARN("failed to replace insert condition exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+  } else if (OB_FAIL(replace_exprs_action(replacer,
                         static_cast<ObMergeLogPlan &>(my_dml_plan_).get_update_condition()))) {
     LOG_WARN("failed to replace update condition exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+  } else if (OB_FAIL(replace_exprs_action(replacer,
                         static_cast<ObMergeLogPlan &>(my_dml_plan_).get_delete_condition()))) {
     LOG_WARN("failed to replace delete condition exprs", K(ret));
   }

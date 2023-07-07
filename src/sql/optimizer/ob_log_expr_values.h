@@ -65,8 +65,7 @@ class ObLogExprValues : public ObLogicalOperator
     int extract_err_log_info();
     int mark_probably_local_exprs();
     int allocate_dummy_output();
-    virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+    virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 
     virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;

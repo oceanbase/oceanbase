@@ -437,33 +437,31 @@ int ObLogGroupBy::get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs)
   return ret;
 }
 
-int ObLogGroupBy::inner_replace_op_exprs(
-    const ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs)
+int ObLogGroupBy::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_group_by_exprs()))) {
+  if (OB_FAIL(replace_exprs_action(replacer, get_group_by_exprs()))) {
     LOG_WARN("failed to extract subplan params in log group by exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_rollup_exprs()))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, get_rollup_exprs()))) {
     LOG_WARN("failed to extract subplan params in log rollup exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_aggr_funcs()))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, get_aggr_funcs()))) {
     LOG_WARN("failed to extract subplan params in log agg funcs", K(ret));
   } else {
     for(int64_t i = 0; OB_SUCC(ret) && i < rollup_adaptive_info_.sort_keys_.count(); ++i) {
       OrderItem &cur_order_item = rollup_adaptive_info_.sort_keys_.at(i);
-      if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_order_item.expr_))) {
+      if (OB_FAIL(replace_expr_action(replacer, cur_order_item.expr_))) {
         LOG_WARN("failed to resolve ref params in sort key ", K(cur_order_item), K(ret));
       } else { /* Do nothing */ }
     }
   }
   if (OB_SUCC(ret) && is_three_stage_aggr()) {
-    if (OB_FAIL(replace_exprs_action(to_replace_exprs, three_stage_info_.distinct_exprs_))) {
+    if (OB_FAIL(replace_exprs_action(replacer, three_stage_info_.distinct_exprs_))) {
       LOG_WARN("failed to replace three stage info distinct exprs", K(ret));
     } else {
       for(int64_t i = 0; OB_SUCC(ret) && i < three_stage_info_.distinct_aggr_batch_.count(); ++i) {
         ObDistinctAggrBatch &distinct_batch = three_stage_info_.distinct_aggr_batch_.at(i);
         for (int64_t j = 0; OB_SUCC(ret) && j < distinct_batch.mocked_params_.count(); ++j) {
-          if (OB_FAIL(replace_expr_action(to_replace_exprs,
-                      distinct_batch.mocked_params_.at(j).first))) {
+          if (OB_FAIL(replace_expr_action(replacer, distinct_batch.mocked_params_.at(j).first))) {
             LOG_WARN("failed to replace distinct expr", K(ret));
           }
         }

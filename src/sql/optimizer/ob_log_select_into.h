@@ -102,8 +102,7 @@ public:
   virtual int est_cost() override;
   virtual int compute_plan_type() override;
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
-  virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs);
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer);
 private:
   ObItemType into_type_;
   common::ObObj outfile_name_;

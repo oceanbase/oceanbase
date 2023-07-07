@@ -211,34 +211,33 @@ int ObLogSort::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
-int ObLogSort::inner_replace_op_exprs(
-        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
+int ObLogSort::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
   int64_t N = sort_keys_.count();
-  if (NULL != topn_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, topn_expr_))) {
+  if (NULL != topn_expr_ && OB_FAIL(replace_expr_action(replacer, topn_expr_))) {
     LOG_WARN("failed to replace topn expr", K(ret));
   } else if (NULL != topk_limit_expr_ &&
-             OB_FAIL(replace_expr_action(to_replace_exprs, topk_limit_expr_))) {
+             OB_FAIL(replace_expr_action(replacer, topk_limit_expr_))) {
     LOG_WARN("failed to replace topk limit expr", K(ret));
   } else if (NULL != topk_offset_expr_ &&
-             OB_FAIL(replace_expr_action(to_replace_exprs, topk_offset_expr_))) {
+             OB_FAIL(replace_expr_action(replacer, topk_offset_expr_))) {
     LOG_WARN("failed to replace topk offset expr", K(ret));
   }
   for(int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
     OrderItem &cur_order_item = sort_keys_.at(i);
-    if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_order_item.expr_))) {
+    if (OB_FAIL(replace_expr_action(replacer, cur_order_item.expr_))) {
       LOG_WARN("failed to resolve ref params in sort key ", K(cur_order_item), K(ret));
     } else { /* Do nothing */ }
   }
   for(int64_t i = 0; OB_SUCC(ret) && i < encode_sortkeys_.count(); ++i) {
     OrderItem &cur_order_item = encode_sortkeys_.at(i);
-    if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_order_item.expr_))) {
+    if (OB_FAIL(replace_expr_action(replacer, cur_order_item.expr_))) {
       LOG_WARN("failed to resolve ref params in sort key ", K(cur_order_item), K(ret));
     } else { /* Do nothing */ }
   }
   if (OB_SUCC(ret) && part_cnt_ > 0) {
-    if (OB_FAIL(replace_expr_action(to_replace_exprs, hash_sortkey_.expr_))) {
+    if (OB_FAIL(replace_expr_action(replacer, hash_sortkey_.expr_))) {
       LOG_WARN("failed to resolve ref params of hash sortkey", K(hash_sortkey_), K(ret));
     } else { /* Do nothing */ }
   }

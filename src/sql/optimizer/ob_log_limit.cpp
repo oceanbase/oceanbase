@@ -297,22 +297,21 @@ int ObLogLimit::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
-int ObLogLimit::inner_replace_op_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogLimit::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (NULL != limit_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, limit_expr_))) {
+  if (NULL != limit_expr_ && OB_FAIL(replace_expr_action(replacer, limit_expr_))) {
     LOG_WARN("failed to replace limit expr", K(ret));
-  } else if (NULL != offset_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, offset_expr_))) {
+  } else if (NULL != offset_expr_ && OB_FAIL(replace_expr_action(replacer, offset_expr_))) {
     LOG_WARN("failed to replace offset expr", K(ret));
-  } else if (NULL != percent_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, percent_expr_))) {
+  } else if (NULL != percent_expr_ && OB_FAIL(replace_expr_action(replacer, percent_expr_))) {
     LOG_WARN("failed to replace percent expr", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < order_items_.count(); ++i) {
     if (OB_ISNULL(order_items_.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null ", K(ret));
-    } else if (OB_FAIL(replace_expr_action(to_replace_exprs, order_items_.at(i).expr_))) {
+    } else if (OB_FAIL(replace_expr_action(replacer, order_items_.at(i).expr_))) {
       LOG_WARN("failed to adjust order expr with onetime", K(ret));
     }
   }

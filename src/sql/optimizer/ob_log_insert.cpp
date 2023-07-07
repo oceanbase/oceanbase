@@ -483,17 +483,16 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
   return ret;
 }
 
-int ObLogInsert::inner_replace_op_exprs(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogInsert::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObLogDelUpd::inner_replace_op_exprs(to_replace_exprs))) {
+  if (OB_FAIL(ObLogDelUpd::inner_replace_op_exprs(replacer))) {
     LOG_WARN("failed to replace op exprs", K(ret));
   } else if (is_replace() &&
-             OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_replace_index_dml_infos()))) {
+             OB_FAIL(replace_dml_info_exprs(replacer, get_replace_index_dml_infos()))) {
     LOG_WARN("failed to replace dml info exprs", K(ret));
   } else if (get_insert_up() &&
-             OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_insert_up_index_dml_infos()))) {
+             OB_FAIL(replace_dml_info_exprs(replacer, get_insert_up_index_dml_infos()))) {
     LOG_WARN("failed to replace dml info exprs", K(ret));
   } else if (NULL != constraint_infos_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < constraint_infos_->count(); ++i) {
@@ -507,7 +506,7 @@ int ObLogInsert::inner_replace_op_exprs(
         } else if (expr->is_virtual_generated_column()) {
           ObRawExpr *&dependant_expr = static_cast<ObColumnRefRawExpr *>(
                                       expr)->get_dependant_expr();
-          if (OB_FAIL(replace_expr_action(to_replace_exprs, dependant_expr))) {
+          if (OB_FAIL(replace_expr_action(replacer, dependant_expr))) {
             LOG_WARN("failed to push back generate replace pair", K(ret));
           }
         }

@@ -3164,34 +3164,32 @@ int ObLogicalOperator::check_stmt_can_be_packed(const ObDMLStmt *stmt, bool &nee
   return ret;
 }
 
-int ObLogicalOperator::replace_op_exprs(
-        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>  >&to_replace_exprs)
+int ObLogicalOperator::replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (0 < to_replace_exprs.count()) {
+  if (!replacer.empty()) {
     FOREACH_CNT_X(it, get_op_ordering(), OB_SUCC(ret)) {
-      if (OB_FAIL(replace_expr_action(to_replace_exprs, it->expr_))) {
-        LOG_WARN("replace agg expr failed", K(ret));
+      if (OB_FAIL(replace_expr_action(replacer, it->expr_))) {
+        LOG_WARN("replace expr failed", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_filter_exprs()))) {
-      LOG_WARN("failed to replace agg expr", K(ret));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, get_output_exprs()))) {
-      LOG_WARN("failed to replace agg expr", K(ret));
-    } else if (OB_FAIL(inner_replace_op_exprs(to_replace_exprs))) {
-      LOG_WARN("failed to inner replace agg expr", K(ret));
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_filter_exprs()))) {
+      LOG_WARN("failed to replace expr", K(ret));
+    } else if (OB_FAIL(replace_exprs_action(replacer, get_output_exprs()))) {
+      LOG_WARN("failed to replace expr", K(ret));
+    } else if (OB_FAIL(inner_replace_op_exprs(replacer))) {
+      LOG_WARN("failed to inner replace expr", K(ret));
     } else { /* Do nothing */ }
   } else { /* Do nothing */ }
   return ret;
 }
 
-int ObLogicalOperator::inner_replace_op_exprs(
-        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs)
+int ObLogicalOperator::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
   //do operator specific
-  UNUSED(to_replace_exprs);
+  UNUSED(replacer);
   return ret;
 }
 
@@ -3199,34 +3197,27 @@ int ObLogicalOperator::inner_replace_op_exprs(
  * pair: orig_expr  new_expr
  */
 int ObLogicalOperator::replace_exprs_action(
-        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>  >&to_replace_exprs,
+        ObRawExprReplacer &replacer,
         ObIArray<ObRawExpr *> &dest_exprs)
 {
   int ret = OB_SUCCESS;
-  int64_t src_num = to_replace_exprs.count();
   int64_t dest_num = dest_exprs.count();
-  if (src_num > 0) {
+  if (!replacer.empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < dest_num; ++i) {
       ObRawExpr *&cur_expr = dest_exprs.at(i);
-      if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_expr))) {
-        LOG_WARN("failed to do replace agg expr action", K(ret));
+      if (OB_FAIL(replace_expr_action(replacer, cur_expr))) {
+        LOG_WARN("failed to do replace expr action", K(ret));
       } else { /* Do nothing */ }
     }
   } else { /* Do nothing */ }
   return ret;
 }
 
-int ObLogicalOperator::replace_expr_action(
-        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs,
-        ObRawExpr *&dest_expr)
+int ObLogicalOperator::replace_expr_action(ObRawExprReplacer &replacer, ObRawExpr *&dest_expr)
 {
   int ret = OB_SUCCESS;
-  int64_t src_num = to_replace_exprs.count();
-  if (src_num > 0) {
-    ObRawExprReplacer replacer;
-    if (OB_FAIL(replacer.add_replace_exprs(to_replace_exprs))) {
-      LOG_WARN("failed to add replaced exprs");
-    } else if (OB_FAIL(replacer.replace(dest_expr))) {
+  if (!replacer.empty()) {
+    if (OB_FAIL(replacer.replace(dest_expr))) {
       LOG_WARN("failed to replace expr", K(ret));
     } else if (replacer.get_replace_happened()) {
       ObSQLSessionInfo *session_info = get_plan()->get_optimizer_context().get_session_info();

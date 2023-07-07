@@ -111,31 +111,30 @@ const char *ObLogExchange::get_name() const
   return result;
 }
 
-int ObLogExchange::inner_replace_op_exprs(const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs)
+int ObLogExchange::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_exprs_action(to_replace_exprs, repartition_keys_))) {
+  if (OB_FAIL(replace_exprs_action(replacer, repartition_keys_))) {
     LOG_WARN("failed to replace agg exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, repartition_sub_keys_))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, repartition_sub_keys_))) {
     LOG_WARN("failed to replace agg exprs", K(ret));
-  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, repartition_func_exprs_))) {
+  } else if (OB_FAIL(replace_exprs_action(replacer, repartition_func_exprs_))) {
     LOG_WARN("failed to replace agg exprs", K(ret));
   } else if (calc_part_id_expr_ != NULL
-             && OB_FAIL(replace_expr_action(to_replace_exprs, calc_part_id_expr_))) {
+             && OB_FAIL(replace_expr_action(replacer, calc_part_id_expr_))) {
     LOG_WARN("failed to replace calc part id expr", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < hash_dist_exprs_.count(); i++) {
       if (OB_ISNULL(hash_dist_exprs_.at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(replace_expr_action(to_replace_exprs,
-                                             hash_dist_exprs_.at(i).expr_))) {
+      } else if (OB_FAIL(replace_expr_action(replacer, hash_dist_exprs_.at(i).expr_))) {
         LOG_WARN("failed to replace agg exprs", K(ret));
       } else { /*do nothing*/ }
     }
     for(int64_t i = 0; OB_SUCC(ret) && i < sort_keys_.count(); ++i) {
       OrderItem &cur_order_item = sort_keys_.at(i);
-      if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_order_item.expr_))) {
+      if (OB_FAIL(replace_expr_action(replacer, cur_order_item.expr_))) {
         LOG_WARN("failed to resolve ref params in sort key ", K(cur_order_item), K(ret));
       } else { /* Do nothing */ }
     }

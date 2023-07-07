@@ -41,8 +41,7 @@ public:
   { return distinct_exprs_; }
   int set_distinct_exprs(const common::ObIArray<ObRawExpr*> &exprs)
   { return append(distinct_exprs_, exprs); }
-  virtual int inner_replace_op_exprs(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs) override;
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual uint64_t hash(uint64_t seed) const override;
 
   inline void set_hash_type() { algo_ = HASH_AGGREGATE; }

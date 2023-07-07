@@ -39,8 +39,7 @@ public:
   void set_is_none_partition(bool flag) { is_none_partition_ = flag; }
   bool get_is_none_partition() { return is_none_partition_;   }
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
-  virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 private:
   common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
   bool is_none_partition_;

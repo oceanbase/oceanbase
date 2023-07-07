@@ -74,8 +74,7 @@ public:
   inline void set_is_no_shared_partition_join_filter()
   { filter_type_ = JoinFilterType::NONSHARED_PARTITION_JOIN_FILTER; }
   JoinFilterType get_filter_type() { return filter_type_; }
-  virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
 private:

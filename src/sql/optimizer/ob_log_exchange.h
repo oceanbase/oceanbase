@@ -200,8 +200,7 @@ private:
       const common::ObIArray<int64_t> &drop_expr_idxs,
       bool &is_need);
 private:
-  virtual int inner_replace_op_exprs(
-          const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs) override;
+  virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 
 private:
   // the 'partition key' expressions

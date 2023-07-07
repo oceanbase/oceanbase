@@ -1731,9 +1731,10 @@ protected: // member variable
   ObLogOperatorFactory log_op_factory_;
   All_Candidate_Plans candidates_;
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true > group_replaced_exprs_;
-  common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true >
-      window_function_replaced_exprs_;
-  common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true > gen_col_replaced_exprs_;
+  ObRawExprReplacer group_replacer_;
+  ObRawExprReplacer window_function_replacer_;
+  ObRawExprReplacer gen_col_replacer_;
+  ObRawExprReplacer onetime_replacer_;
   //上层stmt条件下推下来的谓词，已经抽出？
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_filters_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> startup_filters_;

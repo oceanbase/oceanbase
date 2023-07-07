@@ -101,7 +101,6 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     log_op_factory_(allocator_),
     candidates_(),
     group_replaced_exprs_(),
-    window_function_replaced_exprs_(),
     query_ref_(NULL),
     root_(NULL),
     sql_text_(),
@@ -157,6 +156,10 @@ void ObLogPlan::destory()
     onetime_copier_->~ObRawExprCopier();
     onetime_copier_ = NULL;
   }
+  group_replacer_.destroy();
+  window_function_replacer_.destroy();
+  gen_col_replacer_.destroy();
+  onetime_replacer_.destroy();
 }
 
 double ObLogPlan::get_optimization_cost()
@@ -6393,14 +6396,14 @@ int ObLogPlan::perform_window_function_pushdown(ObLogicalOperator *op)
           LOG_WARN("failed to build_common_aggr_expr", K(ret));
         } else if (FALSE_IT(static_cast<ObWinFunRawExpr*>(new_wf_expr)->set_agg_expr(
                             new_aggr_expr))) {
-        } else if (OB_FAIL(window_function_replaced_exprs_.push_back(
-                           std::pair<ObRawExpr *, ObRawExpr *>(window_exprs.at(i), new_wf_expr)))) {
+        } else if (OB_FAIL(window_function_replacer_.add_replace_expr(window_exprs.at(i),
+                                                                      new_wf_expr))) {
           LOG_WARN("failed to push back pushdown aggr", K(ret));
         }
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(window_function_replaced_exprs_))) {
+  if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(window_function_replacer_))) {
     LOG_WARN("failed to replace generated aggr expr", K(ret));
   }
   return ret;
@@ -6449,6 +6452,9 @@ int ObLogPlan::perform_group_by_pushdown(ObLogicalOperator *op)
             for (int64_t k = 0; k < group_replaced_exprs_.count(); ++k) {
               if (group_replaced_exprs_.at(k).first == from) {
                 group_replaced_exprs_.at(k).second = to;
+                if (OB_FAIL(group_replacer_.add_replace_expr(from, to))) {
+                  LOG_WARN("failed to add replace expr", K(ret));
+                }
                 break;
               }
             }
@@ -6456,7 +6462,7 @@ int ObLogPlan::perform_group_by_pushdown(ObLogicalOperator *op)
         }
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(group_replaced_exprs_))) {
+    if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(group_replacer_))) {
       LOG_WARN("failed to replace generated aggr expr", K(ret));
     }
   }
@@ -6492,6 +6498,8 @@ int ObLogPlan::try_to_generate_pullup_aggr(ObAggFunRawExpr *old_aggr,
                          static_cast<ObAggFunRawExpr *>(group_replaced_exprs_.at(i).second),
                          new_aggr))) {
       LOG_WARN("failed to generate pullup aggr expr", K(ret));
+    } else if (OB_FAIL(group_replacer_.add_replace_expr(old_aggr, new_aggr, true))) {
+      LOG_WARN("failed to add replace expr" ,K(ret));
     } else {
       group_replaced_exprs_.at(i).second = new_aggr;
       break;
@@ -11295,7 +11303,7 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
       LOG_WARN("failed to generate replace generated tsc expr", K(ret));
     } else if (OB_FAIL(scan_op->generate_ddl_output_column_ids())) {
       LOG_WARN("fail to generate ddl output column ids");
-    } else if (OB_FAIL(scan_op->replace_gen_col_op_exprs(gen_col_replaced_exprs_))) {
+    } else if (OB_FAIL(scan_op->replace_gen_col_op_exprs(gen_col_replacer_))) {
       LOG_WARN("failed to replace generated tsc expr", K(ret));
     }
   } else if ((op->get_type() == log_op_def::LOG_INSERT) ||
@@ -11305,13 +11313,13 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
       LOG_WARN("fail to generate insert replace exprs pair");
     } else if (OB_FAIL(generate_old_column_values_exprs(insert_op))) {
       LOG_WARN("fail to generate index dml info column old values exprs");
-    } else if (OB_FAIL(insert_op->replace_op_exprs(gen_col_replaced_exprs_))) {
+    } else if (OB_FAIL(insert_op->replace_op_exprs(gen_col_replacer_))) {
       LOG_WARN("failed to replace generated exprs", K(ret));
     }
   } else {
     if (OB_FAIL(generate_old_column_values_exprs(op))) {
       LOG_WARN("fail to generate index dml info column old values exprs");
-    } else if (OB_FAIL(op->replace_op_exprs(gen_col_replaced_exprs_))) {
+    } else if (OB_FAIL(op->replace_op_exprs(gen_col_replacer_))) {
       LOG_WARN("failed to replace generated exprs", K(ret));
     }
   }
@@ -11401,8 +11409,7 @@ int ObLogPlan::generate_tsc_replace_exprs_pair(ObLogTableScan *op)
             }
           }
         }
-        if (OB_SUCC(ret) && OB_FAIL(gen_col_replaced_exprs_.push_back(
-                    std::pair<ObRawExpr *, ObRawExpr *>(expr, dependant_expr)))) {
+        if (OB_SUCC(ret) && OB_FAIL(gen_col_replacer_.add_replace_expr(expr, dependant_expr))) {
           LOG_WARN("failed to push back generate replace pair", K(ret));
         }
       }
@@ -11423,8 +11430,7 @@ int ObLogPlan::generate_ins_replace_exprs_pair(ObLogDelUpd *op)
       if (expr->is_virtual_generated_column()) {
         ObRawExpr *dependant_expr = static_cast<ObColumnRefRawExpr *>(
                                     expr)->get_dependant_expr();
-        if (OB_FAIL(gen_col_replaced_exprs_.push_back(
-                    std::pair<ObRawExpr *, ObRawExpr *>(expr, dependant_expr)))) {
+        if (OB_FAIL(gen_col_replacer_.add_replace_expr(expr, dependant_expr))) {
           LOG_WARN("failed to push back generate replace pair", K(ret));
         }
       }
@@ -11507,11 +11513,11 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
               OB_ISNULL(child_plan = op->get_child(i)->get_plan())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("child expr is null", K(ret));
-          } else if (OB_FAIL(append(plan->group_replaced_exprs_,
-                                    child_plan->group_replaced_exprs_))) {
+          } else if (OB_FAIL(plan->group_replacer_.append_replace_exprs(
+                                    child_plan->group_replacer_))) {
             LOG_WARN("failed to append group replaced exprs", K(ret));
-          } else if (OB_FAIL(append(plan->window_function_replaced_exprs_,
-                                    child_plan->window_function_replaced_exprs_))) {
+          } else if (OB_FAIL(plan->window_function_replacer_.append_replace_exprs(
+                                    child_plan->window_function_replacer_))) {
             LOG_WARN("failed to append window_function_replaced_exprs", K(ret));
           }
         }
@@ -13221,11 +13227,11 @@ int ObLogPlan::perform_adjust_onetime_expr(ObLogicalOperator *op)
   } else if (OB_FAIL(init_onetime_replaced_exprs_if_needed())) {
     LOG_WARN("faile to init onetime replaced exprs", K(ret));
   } else if (NULL != (subplan_filter = dynamic_cast<ObLogSubPlanFilter *>(op))) {
-    if (OB_FAIL(subplan_filter->replace_nested_subquery_exprs(onetime_replaced_exprs_))) {
+    if (OB_FAIL(subplan_filter->replace_nested_subquery_exprs(onetime_replacer_))) {
       LOG_WARN("failed to replace nested subquery exprs", K(ret));
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(onetime_replaced_exprs_))) {
+  if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(onetime_replacer_))) {
     LOG_WARN("failed to replace onetime subquery", K(ret));
   }
   return ret;
@@ -13241,6 +13247,8 @@ int ObLogPlan::init_onetime_replaced_exprs_if_needed()
     LOG_WARN("onetime expr copier is null", K(ret));
   } else if (OB_FAIL(onetime_copier_->get_copied_exprs(onetime_replaced_exprs_))) {
     LOG_WARN("failed to get copied exprs", K(ret));
+  } else if (OB_FAIL(onetime_replacer_.add_replace_exprs(onetime_replaced_exprs_))) {
+    LOG_WARN("failed to add replace exprs", K(ret));
   }
   return ret;
 }

@@ -68,11 +68,10 @@ int ObLogSelectInto::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogSelectInto::inner_replace_op_exprs(
-        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
+int ObLogSelectInto::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(replace_exprs_action(to_replace_exprs, select_exprs_))) {
+  if (OB_FAIL(replace_exprs_action(replacer, select_exprs_))) {
     LOG_WARN("failed to replace select exprs", K(ret));
   }
   return ret;

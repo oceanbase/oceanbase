@@ -58,8 +58,7 @@ namespace sql
     virtual int allocate_granule_pre(AllocGIContext &ctx) override;
     int get_win_partition_intersect_exprs(ObIArray<ObWinFunRawExpr *> &win_exprs,
                                           ObIArray<ObRawExpr *> &win_part_exprs);
-    virtual int inner_replace_op_exprs(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+    virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
     void set_single_part_parallel(bool v) { single_part_parallel_ = v; }
     bool is_single_part_parallel() const { return single_part_parallel_; }
     void set_ragne_dist_parallel(bool v) { range_dist_parallel_ = v; }
