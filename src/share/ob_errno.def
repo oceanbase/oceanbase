@@ -2289,6 +2289,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_MULTI_RECORD, -9746, -1, "HY000", "coercion into mult
 DEFINE_ERROR(OB_ERR_MALFORMED_PS_PACKET, -9747, -1, "HY000", "malformed ps packet");
 DEFINE_ERROR(OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK, -9748, 1351, "HY000", "View's SELECT contains a variable or parameter");
 DEFINE_ORACLE_ERROR(OB_ERR_OBJECT_NOT_EXIST, -9749, -1, "HY000", "object does not exist", 6564, "object does not exist", "object %.*s does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_TABLE_OUT_OF_RANGE, -9750, -1, "HY000", "PL/SQL: index for PL/SQL table out of range for host language array", 6513, "PL/SQL: index for PL/SQL table out of range for host language array");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
