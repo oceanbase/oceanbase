@@ -223,7 +223,7 @@ public:
 
 public:
   // 初始化common部分(不包括expr_info_, exec_ctx_, all_exprs_)
-  int init_common(const ObTableApiCredential &credential,
+  int init_common(ObTableApiCredential &credential,
                   const common::ObTabletID &arg_tablet_id,
                   const common::ObString &arg_table_name,
                   const int64_t &timeout_ts);
@@ -263,7 +263,7 @@ private:
   // for common
   int get_tablet_by_rowkey(const common::ObRowkey &rowkey,
                            common::ObTabletID &tablet_id);
-  int init_sess_info(uint64_t tenant_id, const common::ObString &tenant_name, uint64_t user_id);
+  int init_sess_info(ObTableApiCredential &credential);
   // for scan
   int init_index_info(const common::ObString &index_name);
   int generate_columns_type(common::ObIArray<sql::ObExprResType> &columns_type);

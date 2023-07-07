@@ -65,16 +65,15 @@ void ObTableApiSessPoolMgr::destroy()
   }
 }
 
-int ObTableApiSessPoolMgr::get_sess_info(uint64_t tenant_id,
-                                         uint64_t user_id,
+int ObTableApiSessPoolMgr::get_sess_info(ObTableApiCredential &credential,
                                          ObTableApiSessGuard &guard)
 {
   int ret = OB_SUCCESS;
   ObTableApiSessPoolGuard &pool_guard = guard.get_sess_pool_guard();
-  if (OB_FAIL(get_session_pool(tenant_id, pool_guard))) {
+  if (OB_FAIL(get_session_pool(credential.tenant_id_, pool_guard))) {
     LOG_WARN("fail to get session pool", K(ret));
-  } else if (OB_FAIL(pool_guard.get_sess_pool()->get_sess_info(user_id, guard))) {
-    LOG_WARN("fail to get sess info", K(ret), K(tenant_id), K(user_id));
+  } else if (OB_FAIL(pool_guard.get_sess_pool()->get_sess_info(credential, guard))) {
+    LOG_WARN("fail to get sess info", K(ret), K(credential));
   }
 
   return ret;
@@ -206,7 +205,7 @@ int ObTableApiSessPoolMgr::ObTableApiSessEliminationTask::run_retire_sess_task()
         ObTableApiSessPoolGuard pool_guard;
         if (OB_FAIL(sess_pool_mgr_->get_session_pool(tenant_id, pool_guard))) {
           LOG_WARN("fail to get sess pool", K(ret), K(tenant_id));
-        } else if (OB_FAIL(pool_guard.get_sess_pool()->move_retired_sess())) {
+        } else if (OB_FAIL(pool_guard.get_sess_pool()->move_sess_to_retired_list())) {
           LOG_WARN("fail to move retired session", K(ret));
         }
       }
@@ -300,7 +299,7 @@ void ObTableApiSessPool::destroy()
 }
 
 // 将过期的node从hash map中摘掉，加入retired_nodes_链表中
-int ObTableApiSessPool::move_retired_sess()
+int ObTableApiSessPool::move_sess_to_retired_list()
 {
   int ret = OB_SUCCESS;
   int64_t cur_time = ObTimeUtility::current_time();
@@ -314,7 +313,7 @@ int ObTableApiSessPool::move_retired_sess()
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       const ObTableApiSessForeachOp::ObTableApiSessKV &kv = arr.at(i);
       if (cur_time - kv.node_->get_last_active_ts() >= SESS_RETIRE_TIME) {
-        if (OB_FAIL(move_retired_sess(kv.key_))) {
+        if (OB_FAIL(move_sess_to_retired_list(kv.key_))) {
           LOG_WARN("fail to move retired session", K(ret), K(kv.key_));
         }
       }
@@ -324,7 +323,7 @@ int ObTableApiSessPool::move_retired_sess()
   return ret;
 }
 
-int ObTableApiSessPool::move_retired_sess(uint64_t key)
+int ObTableApiSessPool::move_sess_to_retired_list(uint64_t key)
 {
   int ret = OB_SUCCESS;
   ObTableApiSessNode *del_node = nullptr;
@@ -339,6 +338,22 @@ int ObTableApiSessPool::move_retired_sess(uint64_t key)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to add retired sess node to retired list", K(ret), K(*del_node));
     }
+  }
+
+  return ret;
+}
+
+int ObTableApiSessPool::move_sess_to_retired_list(ObTableApiSessNode *node)
+{
+  int ret = OB_SUCCESS;
+
+  ObLockGuard<ObSpinLock> guard(lock_);
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session node is null", K(ret));
+  } else if (false == (retired_nodes_.add_last(node))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to add retired sess node to retired list", K(ret), K(*node));
   }
 
   return ret;
@@ -420,16 +435,26 @@ int ObTableApiSessPool::get_sess_node(uint64_t key,
   return ret;
 }
 
-int ObTableApiSessPool::get_sess_info(uint64_t key, ObTableApiSessGuard &guard)
+int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableApiSessGuard &guard)
 {
   int ret = OB_SUCCESS;
   ObTableApiSessNode *sess_node = nullptr;
   ObTableApiSessNodeVal *sess_val = nullptr;
   bool need_extend = false;
 
-  if (OB_FAIL(get_sess_node(key, sess_node))) {
-    LOG_WARN("fail to get sess node", K(ret), K(key));
-  } else {
+  if (OB_FAIL(get_sess_node(credential.user_id_, sess_node))) {
+    LOG_WARN("fail to get sess node", K(ret), K(credential));
+  }
+
+  if (OB_HASH_NOT_EXIST == ret) {
+    if (OB_FAIL(create_and_add_node(credential))) {
+      LOG_WARN("fail to create and add session node to session pool", K(ret), K(credential));
+    } else if (OB_FAIL(get_sess_node(credential.user_id_, sess_node))) { // get again
+      LOG_WARN("fail to get sess node", K(ret), K(credential));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(sess_node->get_sess_node_val(sess_val))) { // exist
       LOG_WARN("fail to get sess node value", K(ret), K(*sess_node));
     } else if (OB_ISNULL(sess_val)) {
@@ -441,7 +466,7 @@ int ObTableApiSessPool::get_sess_info(uint64_t key, ObTableApiSessGuard &guard)
 
   if (need_extend) {
     if (OB_FAIL(sess_node->extend_sess_val(guard))) {
-      LOG_WARN("fail to extend sess val", K(ret), K(*sess_node), K(key));
+      LOG_WARN("fail to extend sess val", K(ret), K(*sess_node), K(credential));
     }
   }
 
@@ -509,12 +534,22 @@ int ObTableApiSessPool::update_sess(ObTableApiCredential &credential)
     } else {
       LOG_WARN("fail to get session node", K(ret), K(key));
     }
-  } else { // exist, 摘掉原来的，添加新的
-    if (OB_FAIL(move_retired_sess(key))) {
-      LOG_WARN("fail to move retired session", K(ret), K(key));
-    } else if (OB_FAIL(create_and_add_node(credential))) {
-      LOG_WARN("fail to create and add new node", K(ret), K(credential));
+  } else { // exist, 替换node，old node移动到淘汰链表等待淘汰
+    if (OB_FAIL(replace_sess(credential))) {
+      LOG_WARN("fail to replace session node", K(ret), K(credential));
     }
+  }
+
+  return ret;
+}
+
+int ObTableApiSessPool::replace_sess(ObTableApiCredential &credential)
+{
+  int ret = OB_SUCCESS;
+
+  ObTableApiSessNodeReplaceOp replace_callback(*this, credential);
+  if (OB_FAIL(key_node_map_.atomic_refactored(credential.user_id_, replace_callback))) {
+    LOG_WARN("fail to replace session", K(ret), K(credential));
   }
 
   return ret;
@@ -648,6 +683,7 @@ int ObTableApiSessNode::extend_sess_val(ObTableApiSessGuard &guard)
 {
   int ret = OB_SUCCESS;
 
+  ObLockGuard<ObSpinLock> alloc_guard(lock_); // avoid concurrent allocator_.alloc
   void *buf = nullptr;
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObTableApiSessNodeVal)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -680,6 +716,30 @@ int ObTableApiSessNodeAtomicOp::get_value(ObTableApiSessNode *&node)
     LOG_WARN("sess node is not init", K(ret));
   } else {
     node = sess_node_;
+  }
+
+  return ret;
+}
+
+int ObTableApiSessNodeReplaceOp::operator()(MapKV &entry)
+{
+  int ret = OB_SUCCESS;
+
+  if (nullptr == entry.second) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null session node", K(ret), K(entry.first));
+  } else {
+    // 1. 创建新的session node
+    ObTableApiSessNode *new_node = nullptr;
+    if (OB_FAIL(pool_.create_node(credential_, new_node))) {
+      LOG_WARN("fail to create node", K(ret), K_(credential));
+    } else {
+      // 2. 替换
+      ObTableApiSessNode *old_node = entry.second;
+      entry.second = new_node;
+      // 3. old node移动到淘汰链表
+      pool_.move_sess_to_retired_list(old_node); // 添加到链表末尾，不会出错，故不判断返回值
+    }
   }
 
   return ret;
