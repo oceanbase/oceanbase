@@ -50796,7 +50796,8 @@ def_table_schema(
                 WHEN A.TENANT_ID = 1 THEN NULL
                 WHEN BITAND(A.TENANT_ID, 1) = 1 THEN NULL
                 ELSE CAST(B.READABLE_SCN AS NUMBER)
-            END) AS READABLE_SCN
+            END) AS READABLE_SCN,
+            FLAG
     FROM SYS.ALL_VIRTUAL_LS_STATUS A
          JOIN SYS.ALL_VIRTUAL_LS_RECOVERY_STAT B
               ON A.TENANT_ID = B.TENANT_ID AND A.LS_ID = B.LS_ID
