@@ -1690,6 +1690,8 @@ int ObRootService::start_service()
       LOG_WARN("START_SERVICE: inspect queue start failed", K(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::IdxBuild))) {
       LOG_WARN("START_SERVICE: index build thread start failed", K(ret));
+    } else if (OB_FAIL(ttl_scheduler_.start())) {
+      LOG_WARN("fail to start ttl scheduler", K(ret));
     } else {
       ObTaskController::get().allow_next_syslog();
       LOG_INFO("START_SERSVICE: start some queue success");
@@ -5926,15 +5928,6 @@ int ObRootService::do_restart()
     } else {
       ObTaskController::get().allow_next_syslog();
       LOG_INFO("START_SERVICE: start global index builder succeed");
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ttl_scheduler_.start())) {
-      LOG_WARN("fail to start ttl scheduler", K(ret));
-    } else {
-      ObTaskController::get().allow_next_syslog();
-      LOG_INFO("START_SERVICE: start ttl scheduler succeed");
     }
   }
 
