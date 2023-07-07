@@ -455,7 +455,7 @@ public:
   virtual int query_cluster_min_observer_version(uint64_t &min_observer_version);
 
   /// Query timezone info version, for oracle new timezone type synchronization
-  /// ObLogTimeZoneInfoGetter
+  /// ObCDCTimeZoneInfoGetter
   virtual int query_timezone_info_version(const uint64_t tenant_id,
       int64_t &timezone_info_version);
 

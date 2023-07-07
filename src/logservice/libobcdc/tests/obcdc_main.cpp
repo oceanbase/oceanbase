@@ -60,7 +60,7 @@ ObLogMain::ObLogMain() : inited_(false),
                          start_timestamp_usec_(0),
                          tenant_id_(OB_INVALID_TENANT_ID),
                          tg_match_pattern_(NULL),
-                         last_heartbeat_timestamp_micro_sec_(0),
+                         last_heartbeat_timestamp_usec_(OB_INVALID_VERSION),
                          stop_flag_(true)
 {
 }
@@ -89,7 +89,7 @@ int ObLogMain::init(int argc, char **argv)
   } else {
     stop_flag_ = true;
     inited_ = true;
-    last_heartbeat_timestamp_micro_sec_ = start_timestamp_usec_;
+    last_heartbeat_timestamp_usec_ = OB_INVALID_VERSION;
   }
 
   return ret;
@@ -116,7 +116,7 @@ void ObLogMain::destroy()
   start_timestamp_usec_ = 0;
   tenant_id_ = OB_INVALID_TENANT_ID;
   tg_match_pattern_ = NULL;
-  last_heartbeat_timestamp_micro_sec_ = 0;
+  last_heartbeat_timestamp_usec_ = OB_INVALID_VERSION;
   stop_flag_ = true;
   output_br_detail_ = false;
   output_br_special_detail_ = false;
@@ -438,43 +438,49 @@ int ObLogMain::verify_record_info_(IBinlogRecord *br)
     LOG_ERROR("get user data fail", K(br), K(oblog_br));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    // heartbeat, updtae last_heartbeat_timestamp_micro_sec_
-    if (HEARTBEAT == br->recordType()) {
-      int64_t timestamp_usec = OB_INVALID_TIMESTAMP;
-      if (is_first_br) {
-        // oblog_tailf -f $CONFIG -t 0 means start at current time
-        // The libobcdc start timestamp is not available
-        // So the first BinlogRecord is obtained based on the checkpoint
-        timestamp_usec = br->getCheckpoint1() * 1000000 + br->getCheckpoint2();
-        is_first_br = false;
-      } else {
-        timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
+    // heartbeat, updtae last_heartbeat_timestamp_usec_
+    int64_t checkpoint_timestamp_usec = OB_INVALID_TIMESTAMP;
+
+    if (is_first_br) {
+      // oblog_tailf -f $CONFIG -t 0 means start at current time
+      // The libobcdc start timestamp is not available
+      // So the first BinlogRecord is obtained based on the checkpoint
+      checkpoint_timestamp_usec = br->getCheckpoint1() * 1000000 + br->getCheckpoint2();
+      is_first_br = false;
+    } else if (HEARTBEAT == br->recordType()) {
+      checkpoint_timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
+      if (checkpoint_timestamp_usec < last_heartbeat_timestamp_usec_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("checkpoint rollbacked", KR(ret), K(checkpoint_timestamp_usec), K_(last_heartbeat_timestamp_usec));
       }
-      last_heartbeat_timestamp_micro_sec_ = std::max(timestamp_usec, last_heartbeat_timestamp_micro_sec_);
     }
 
-    // Calibration timestamp and checkpoint
-    int64_t precise_timestamp = ObBinlogRecordPrinter::get_precise_timestamp(*br);
-    int64_t timestamp_sec = precise_timestamp / 1000000;
-    int64_t timestamp_usec = precise_timestamp % 1000000;
-    int64_t expect_checkpoint1 = last_heartbeat_timestamp_micro_sec_ / 1000000;
-    int64_t expect_checkpoint2 = last_heartbeat_timestamp_micro_sec_ % 1000000;
+    if (OB_SUCC(ret)) {
+      last_heartbeat_timestamp_usec_ = std::max(checkpoint_timestamp_usec, last_heartbeat_timestamp_usec_);
 
-    if (OB_UNLIKELY(timestamp_sec != br->getTimestamp())
-        || OB_UNLIKELY(timestamp_usec != br->getRecordUsec())) {
-      LOG_ERROR("timestamp is not right", K(precise_timestamp), "br_sec", br->getTimestamp(),
-          "br_usec", br->getRecordUsec());
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_UNLIKELY(expect_checkpoint1 != br->getCheckpoint1())
-        || OB_UNLIKELY(expect_checkpoint2 != br->getCheckpoint2())) {
-      LOG_ERROR("checkpoint is not right", K(br), K(last_heartbeat_timestamp_micro_sec_),
-          K(expect_checkpoint1), "br_checkpoint1", br->getCheckpoint1(),
-          K(expect_checkpoint2), "br_checkpoint2", br->getCheckpoint2(),
-          "getTimestamp", br->getTimestamp(), "getRecordUsec", br->getRecordUsec(),
-          K(is_first_br));
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      // succ
+      // Calibration timestamp and checkpoint
+      int64_t precise_timestamp = ObBinlogRecordPrinter::get_precise_timestamp(*br);
+      int64_t timestamp_sec = precise_timestamp / 1000000;
+      int64_t timestamp_usec = precise_timestamp % 1000000;
+      int64_t expect_checkpoint1 = last_heartbeat_timestamp_usec_ / 1000000;
+      int64_t expect_checkpoint2 = last_heartbeat_timestamp_usec_ % 1000000;
+
+      if (OB_UNLIKELY(timestamp_sec != br->getTimestamp())
+          || OB_UNLIKELY(timestamp_usec != br->getRecordUsec())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("timestamp is not right", KR(ret), K(precise_timestamp), "br_sec", br->getTimestamp(),
+            "br_usec", br->getRecordUsec());
+      } else if (OB_UNLIKELY(expect_checkpoint1 != br->getCheckpoint1())
+          || OB_UNLIKELY(expect_checkpoint2 != br->getCheckpoint2())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("checkpoint is not right", KR(ret), K(br), K(last_heartbeat_timestamp_usec_),
+            K(expect_checkpoint1), "br_checkpoint1", br->getCheckpoint1(),
+            K(expect_checkpoint2), "br_checkpoint2", br->getCheckpoint2(),
+            "getTimestamp", br->getTimestamp(), "getRecordUsec", br->getRecordUsec(),
+            K(is_first_br));
+      } else {
+        // succ
+      }
     }
   }
 

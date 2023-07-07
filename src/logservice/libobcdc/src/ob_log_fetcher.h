@@ -223,6 +223,7 @@ private:
 
 private:
   bool                          is_inited_;
+  bool                          is_running_;
   bool                          is_loading_data_dict_baseline_data_;
   ClientFetchingMode            fetching_mode_;
   ObBackupPathString            archive_dest_;

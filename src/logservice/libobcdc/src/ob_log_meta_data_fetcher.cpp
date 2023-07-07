@@ -109,7 +109,9 @@ int ObLogMetaDataFetcher::start()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(log_fetcher_)) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(log_fetcher_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log_fetcher_ is nullptr", KR(ret), K(log_fetcher_));
   } else if (OB_FAIL(log_fetcher_->start())) {
@@ -125,10 +127,13 @@ void ObLogMetaDataFetcher::stop()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(log_fetcher_)) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(log_fetcher_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log_fetcher_ is nullptr", KR(ret), K(log_fetcher_));
   } else {
+    LOG_INFO("ObLogMetaDataFetcher stop begin");
     bool stop_flag = false;
     RETRY_FUNC(stop_flag, *log_fetcher_, wait_for_all_ls_to_be_removed, FETCHER_WAIT_LS_TIMEOUT);
     log_fetcher_->mark_stop_flag();
@@ -141,6 +146,7 @@ void ObLogMetaDataFetcher::stop()
 void ObLogMetaDataFetcher::destroy()
 {
   if (is_inited_) {
+    stop();
     LOG_INFO("ObLogMetaDataFetcher destroy begin");
 
     DESTROY(log_fetcher_, ObLogFetcher);

@@ -21,6 +21,7 @@
 #include "ob_log_schema_getter.h"       // IObLogSchemaGetter
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
 #include "ob_log_config.h"              // TCONF
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
@@ -276,10 +277,14 @@ int ObLogSysLsTaskHandler::get_progress(
   } else if (OB_ISNULL(tenant_mgr)) {
     LOG_ERROR("tenant_mgr_ is NULL", K(tenant_mgr));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(tenant_mgr->get_sys_ls_progress(sys_min_progress_tenant_id, sys_ls_min_progress,
+  } else if (OB_FAIL(tenant_mgr->get_sys_ls_progress(
+      sys_min_progress_tenant_id,
+      sys_ls_min_progress,
       sys_ls_min_handle_log_lsn))) {
-    LOG_ERROR("get_sys_ls_progress fail", KR(ret), K(sys_min_progress_tenant_id),
-        K(sys_ls_min_progress), K(sys_ls_min_handle_log_lsn));
+    if (OB_EMPTY_RESULT != ret) {
+      LOG_ERROR("get_sys_ls_progress fail", KR(ret), K(sys_min_progress_tenant_id),
+          K(sys_ls_min_progress), K(sys_ls_min_handle_log_lsn));
+    }
   } else {
     // success
   }
@@ -339,6 +344,7 @@ int ObLogSysLsTaskHandler::handle_task_(PartTransTask &task,
     const bool is_tenant_served)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
 
   if (OB_UNLIKELY(! task.is_ddl_trans()
       && ! task.is_ls_op_trans()

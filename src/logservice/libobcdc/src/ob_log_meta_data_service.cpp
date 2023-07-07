@@ -91,7 +91,7 @@ int ObLogMetaDataService::init(
 
 void ObLogMetaDataService::destroy()
 {
-  if (is_inited_) {
+  if (IS_INIT) {
     fetcher_.destroy();
     sql_queryer_.destroy();
     baseline_loader_.destroy();

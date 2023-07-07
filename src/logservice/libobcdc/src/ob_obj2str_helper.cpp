@@ -49,7 +49,7 @@ ObObj2strHelper::~ObObj2strHelper()
   destroy();
 }
 
-int ObObj2strHelper::init(IObLogTimeZoneInfoGetter &timezone_info_getter,
+int ObObj2strHelper::init(IObCDCTimeZoneInfoGetter &timezone_info_getter,
     ObLogHbaseUtil &hbase_util,
     const bool enable_hbase_mode,
     const bool enable_convert_timestamp_to_unix_timestamp,
@@ -216,14 +216,19 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
     if (OB_SUCC(ret)) {
       common::ObObj str_obj;
       common::ObObjType target_type = common::ObMaxType;
+      ObCDCTenantTimeZoneInfo *obcdc_tenant_tz_info = nullptr;
 
-      // OBCDC need use_standard_format
-      const common::ObTimeZoneInfo *tz_info = nullptr;
-      if (OB_ISNULL(tz_info_wrap)) {
+      if (OB_ISNULL(timezone_info_getter_)) {
         ret = OB_ERR_UNEXPECTED;
-        OBLOG_LOG(ERROR, "tz_info_wrap is null", KR(ret), K(tenant_id));
+        OBLOG_LOG(ERROR, "timezone_info_getter_ is null", K(timezone_info_getter_));
+      } else if (OB_FAIL(timezone_info_getter_->get_tenant_tz_info(tenant_id, obcdc_tenant_tz_info))) {
+        OBLOG_LOG(ERROR, "get_tenant_tz_wrap failed", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(obcdc_tenant_tz_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        OBLOG_LOG(ERROR, "tenant_tz_info not valid", KR(ret), K(tenant_id));
       } else {
-        tz_info = tz_info_wrap->get_time_zone_info();
+        // obcdc need use_standard_format
+        const common::ObTimeZoneInfo *tz_info = obcdc_tenant_tz_info->get_timezone_info();
         const ObDataTypeCastParams dtc_params(tz_info);
         ObObjCastParams cast_param(&allocator, &dtc_params, CM_NONE, collation_type);
         cast_param.format_number_with_limit_ = false;//here need no limit format number for libobcdc
@@ -310,16 +315,13 @@ int ObObj2strHelper::convert_timestamp_with_timezone_data_util_succ_(const commo
 {
   int ret = OB_SUCCESS;
   bool done = false;
-  ObTZInfoMap *tz_info_map = NULL;
 
   if (OB_ISNULL(timezone_info_getter_)) {
-    OBLOG_LOG(ERROR, "timezone_info_getter_ is null", K(timezone_info_getter_));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(tenant_mgr_->get_tenant_tz_map(tenant_id, tz_info_map))) {
-    OBLOG_LOG(ERROR, "get_tenant_tz_map failed", KR(ret), K(tenant_id));
+    OBLOG_LOG(ERROR, "timezone_info_getter_ is null", KR(ret), K(timezone_info_getter_));
   } else {
-    while (! done && OB_SUCCESS == ret) {
-      if (OB_FAIL(timezone_info_getter_->fetch_tenant_timezone_info_util_succ(tenant_id, tz_info_map))) {
+    while (! done && OB_SUCC(ret)) {
+      if (OB_FAIL(timezone_info_getter_->refresh_tenant_timezone_info_until_succ(tenant_id))) {
         OBLOG_LOG(ERROR, "fetch_tenant_timezone_info_util_succ fail", KR(ret), K(tenant_id));
       } else if (OB_FAIL(ObObjCaster::to_type(target_type, cast_param, in_obj, str_obj))) {
         if (OB_ERR_INVALID_TIMEZONE_REGION_ID == ret) {

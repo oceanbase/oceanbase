@@ -33,7 +33,7 @@ class ObTimeZoneInfo;
 namespace libobcdc
 {
 
-class IObLogTimeZoneInfoGetter;
+class IObCDCTimeZoneInfoGetter;
 class ObObj2strHelper
 {
 public:
@@ -62,7 +62,7 @@ public:
        const ObTimeZoneInfoWrap *tz_info_wrap) const;
 
 public:
-  int init(IObLogTimeZoneInfoGetter &timezone_info_getter,
+  int init(IObCDCTimeZoneInfoGetter &timezone_info_getter,
       ObLogHbaseUtil &hbase_util,
       const bool enable_hbase_mode,
       const bool enable_convert_timestamp_to_unix_timestamp,
@@ -122,7 +122,7 @@ private:
 
 private:
   bool                          inited_;
-  IObLogTimeZoneInfoGetter      *timezone_info_getter_;
+  IObCDCTimeZoneInfoGetter      *timezone_info_getter_;
   ObLogHbaseUtil                *hbase_util_;
   bool                          enable_hbase_mode_;
   bool                          enable_convert_timestamp_to_unix_timestamp_;

@@ -218,6 +218,10 @@ private:
       svr_req_map_.reset();
       archive_req_list_.reset();
     }
+    bool has_valid_req() const
+    {
+      return svr_req_list_.count() > 0 || archive_req_list_.count() > 0;
+    }
   };
 
 // member variables

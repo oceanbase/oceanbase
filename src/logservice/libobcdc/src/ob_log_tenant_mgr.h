@@ -31,7 +31,6 @@ namespace oceanbase
 namespace libobcdc
 {
 class IObLogSchemaGetter;
-class IObLogTimeZoneInfoGetter;
 
 class IObLogTenantMgr
 {
@@ -120,25 +119,6 @@ public:
   /// @retval other error code  Fail
   virtual int get_all_tenant_ids(std::vector<uint64_t> &tenant_ids) = 0;
   virtual bool is_inited() = 0;
-
-  /// Get the specified Tenant ID tz_info_wrap, called by ObObj2strHelper, where the tenant does not exist and an error is required
-  ///
-  /// @param [in]  tenant_id    TenantID
-  /// @param [out] tz_info_wrap Timezone info
-  ///
-  /// @retval OB_SUCCESS        Success
-  /// @retval other error code  Fail
-  virtual int get_tenant_tz_wrap(const uint64_t tenant_id, common::ObTimeZoneInfoWrap *&tz_info_wrap) = 0;
-
-  /// get tz_info_map, ObLogTimeZoneInfoGetter with specified Tenant ID
-  ///
-  /// @param [in]  tenant_id    TenantID
-  /// @param [out] tz_info_wrap Timezone info
-  ///
-  /// @retval OB_SUCCESS        Success
-  /// @retval other error code  Fail
-  virtual int get_tenant_tz_map(const uint64_t tenant_id,
-      common::ObTZInfoMap *&tz_info_map) = 0;
 
   // @retval OB_SUCCESS         Success
   // @retval OB_ENTRY_NOT_EXIST Tenant not exist
@@ -238,11 +218,6 @@ public:
   int filter_ddl_stmt(const uint64_t tenant_id, bool &chosen);
   int filter_tenant(const char *tenant_name, bool &chosen);
   int get_all_tenant_ids(std::vector<uint64_t> &tenant_ids);
-
-  virtual int get_tenant_tz_wrap(const uint64_t tenant_id,
-      common::ObTimeZoneInfoWrap *&tz_info_wrap);
-  virtual int get_tenant_tz_map(const uint64_t tenant_id,
-      common::ObTZInfoMap *&tz_info_map);
 
   // Get the corresponding ObLogTenant based on tenant id
   int get_tenant_guard(const uint64_t tenant_id, ObLogTenantGuard &guard);

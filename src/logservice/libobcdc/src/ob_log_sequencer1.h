@@ -175,7 +175,7 @@ private:
   int wait_until_parser_done_(volatile bool &stop_flag);
   // wait reader/parser/formatter module empty
   int wait_until_formatter_done_(volatile bool &stop_flag);
-  int recycle_resources_after_trans_ready_(TransCtx &trans_ctx, ObLogTenant &tenant);
+  int recycle_resources_after_trans_ready_(TransCtx &trans_ctx, ObLogTenant &tenant, volatile bool &stop_flag);
   int push_task_into_br_sorter_(TransCtx &trans_ctx, volatile bool &stop_flag);
   int push_task_into_redo_dispatcher_(TransCtx &trans_ctx, volatile bool &stop_flag);
   int push_task_into_committer_(PartTransTask *task,

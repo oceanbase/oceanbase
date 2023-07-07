@@ -272,11 +272,17 @@ void ObLogStartLSNLocator::run(const int64_t thread_index)
     while (! stop_flag_ && OB_SUCCESS == ret) {
       if (OB_FAIL(do_retrieve_(thread_index, data))) {
         LOG_ERROR("retrieve request fail", KR(ret), K(thread_index));
+      } else if (! data.has_valid_req()) {
+        if (REACH_TIME_INTERVAL(30 * _SEC_)) {
+          LOG_INFO("no request should be launch, ignore");
+        }
       } else if (OB_FAIL(do_request_(data))) {
 				if (OB_IN_STOP_STATE != ret) {
 		      LOG_ERROR("do request fail", KR(ret));
 				}
-      } else {
+      }
+
+      if (OB_SUCC(ret)) {
         cond_timedwait(thread_index, DATA_OP_TIMEOUT);
       }
     }
@@ -314,7 +320,7 @@ int ObLogStartLSNLocator::do_retrieve_(const int64_t thread_index, WorkerData &w
   int ret = OB_SUCCESS;
   int64_t batch_count = ATOMIC_LOAD(&g_batch_count);
 
-  for (int64_t cnt = 0; OB_SUCCESS == ret && (cnt < batch_count); ++cnt) {
+  for (int64_t cnt = 0; OB_SUCCESS == ret && !is_stoped() && (cnt < batch_count); ++cnt) {
     StartLSNLocateReq *request = NULL;
     StartLSNLocateReq::SvrItem *item = NULL;
     SvrReq *svr_req = NULL;
@@ -477,7 +483,7 @@ int ObLogStartLSNLocator::do_integrated_request_(WorkerData &data)
         // 2. Each partition request is removed from the request list as soon as it completes, so each request is split into multiple requests, each starting with the first element
         // 3. Partition request completion condition: regardless of success, as long as no breakpoint message is returned, the request is considered completed
         while (! stop_flag_ && OB_SUCCESS == ret && svr_req.locate_req_list_.count() > 0) {
-          // 一次请求的最大个数
+          // maximum request count
           int64_t item_cnt_limit = RpcReq::ITEM_CNT_LMT;
           int64_t req_cnt = std::min(svr_req.locate_req_list_.count(), item_cnt_limit);
 
@@ -495,6 +501,10 @@ int ObLogStartLSNLocator::do_integrated_request_(WorkerData &data)
             // Build request parameters
             if (OB_FAIL(build_request_params_(rpc_req, svr_req, req_cnt))) {
               LOG_ERROR("build request params fail", KR(ret), K(rpc_req), K(req_cnt), K(svr_req));
+            } else if (svr_req.locate_req_list_.count() <= 0) {
+              if (REACH_TIME_INTERVAL(30 * _SEC_)) {
+                LOG_INFO("no svr_req to request, ignore", K(svr_req));
+              }
             }
             // Executing RPC requests
             else if (OB_FAIL(do_rpc_and_dispatch_(*(rpc_), rpc_req, svr_req, succ_req_cnt))) {
@@ -568,7 +578,7 @@ int ObLogStartLSNLocator::build_request_params_(RpcReq &req,
   int64_t total_cnt = svr_req.locate_req_list_.count();
   req.reset();
 
-  for (int64_t index = 0; OB_SUCCESS == ret && index < req_cnt && index < total_cnt; ++index) {
+  for (int64_t index = 0; OB_SUCCESS == ret && ! is_stoped() && index < req_cnt && index < total_cnt; ++index) {
     StartLSNLocateReq *request = svr_req.locate_req_list_.at(index);
     StartLSNLocateReq::SvrItem *svr_item = NULL;
 
@@ -639,7 +649,7 @@ int ObLogStartLSNLocator::do_rpc_and_dispatch_(
 
   if (OB_SUCCESS == ret) {
     // Scanning of arrays in reverse order to support deletion of completed ls requests
-    for (int64_t idx = request_cnt - 1; OB_SUCCESS == ret && idx >= 0; idx--) {
+    for (int64_t idx = request_cnt - 1; OB_SUCCESS == ret && ! is_stoped() && idx >= 0; idx--) {
       int ls_err = OB_SUCCESS;
       palf::LSN start_lsn;
       int64_t start_log_tstamp = OB_INVALID_TIMESTAMP;

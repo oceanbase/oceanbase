@@ -97,20 +97,21 @@ void ObLSWorker::destroy()
 {
   stop();
 
-  inited_ = false;
-  stream_paused_ = false;
-  fetcher_resume_time_ = OB_INVALID_TIMESTAMP;
-  StreamWorkerThread::destroy();
+  if (inited_) {
+    LOG_INFO("destroy stream worker begin");
+    inited_ = false;
+    stream_paused_ = false;
+    fetcher_resume_time_ = OB_INVALID_TIMESTAMP;
+    StreamWorkerThread::destroy();
+    timer_.destroy();
+    fetcher_host_ = nullptr;
+    idle_pool_ = NULL;
+    dead_pool_ = NULL;
+    err_handler_ = NULL;
+    stream_task_seq_ = 0;
 
-  timer_.destroy();
-
-  fetcher_host_ = nullptr;
-  idle_pool_ = NULL;
-  dead_pool_ = NULL;
-  err_handler_ = NULL;
-  stream_task_seq_ = 0;
-
-  LOG_INFO("destroy stream worker succ");
+    LOG_INFO("destroy stream worker succ");
+  }
 }
 
 int ObLSWorker::start()
@@ -132,6 +133,9 @@ int ObLSWorker::start()
 void ObLSWorker::stop()
 {
   if (OB_LIKELY(inited_)) {
+    LOG_INFO("stop stream worker begin");
+    mark_stop_flag();
+    timer_.stop();
     StreamWorkerThread::stop();
     LOG_INFO("stop stream worker succ");
   }
@@ -139,8 +143,10 @@ void ObLSWorker::stop()
 
 void ObLSWorker::mark_stop_flag()
 {
+  LOG_INFO("stream worker mark_stop_flag begin");
   timer_.mark_stop_flag();
   StreamWorkerThread::mark_stop_flag();
+  LOG_INFO("stream worker mark_stop_flag end");
 }
 
 void ObLSWorker::pause()

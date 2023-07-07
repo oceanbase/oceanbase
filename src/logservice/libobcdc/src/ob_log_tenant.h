@@ -23,15 +23,10 @@
 #include "ob_log_part_mgr.h"                        // ObLogPartMgr
 #include "ob_log_ls_mgr.h"                          // ObLogLSMgr
 #include "ob_log_ref_state.h"                       // RefState
-#include "lib/timezone/ob_timezone_info.h"          // ObTimeZoneInfo
 #include <cstdint>
 
 namespace oceanbase
 {
-namespace common
-{
-}
-
 namespace libobcdc
 {
 
@@ -130,14 +125,6 @@ public:
   IObLogPartMgr &get_part_mgr() { return part_mgr_; }
   int64_t get_global_schema_version() const { return global_seq_and_schema_version_.hi; }
   int64_t get_global_seq() const { return global_seq_and_schema_version_.lo; }
-  // get timezone info version
-  int64_t get_timezone_info_version() const { return ATOMIC_LOAD(&tz_info_map_version_); }
-  // update timezone info version
-  void update_timezone_info_version(const int64_t timezone_info_version)
-  { ATOMIC_STORE(&tz_info_map_version_, timezone_info_version); }
-  common::ObTimeZoneInfoWrap *get_tz_info_wrap() { return tz_info_wrap_; }
-  common::ObTZInfoMap *get_tz_info_map() { return tz_info_map_; }
-
   void *get_cf() { return cf_handle_; }
 
 public:
@@ -265,9 +252,6 @@ private:
   int start_drop_tenant_if_needed_(bool &need_drop_tenant);
   bool need_drop_tenant_() const;
   int drop_sys_ls_();
-  // 1. If the low version of OB upgrades to 226, if the low version imports a time zone table, then the post script will split the time zone related table under the tenant
-  // 2. If the low version does not import the time zone table, do nothing
-  int init_tz_info_(const uint64_t tenant_id);
 
 public:
   TO_STRING_KV(
@@ -286,8 +270,7 @@ public:
       //"cur_schema_version", part_mgr_.get_schema_version(),
       K_(committer_cur_schema_version),
       K_(committer_next_trans_schema_version),
-      KPC_(task_queue),
-      K_(tz_info_map_version));
+      KPC_(task_queue));
 
 private:
   bool                    inited_;
@@ -334,11 +317,6 @@ private:
   // Committer is currently a tenant parallel commit model:
   // Transaction data and DDL data need to be matched for consumption, where the global_schema_version of the current transaction is recorded, which is used by the DDL to determine if it needs to be consumed.
   int64_t                 committer_next_trans_schema_version_ CACHE_ALIGNED;
-
-  // 2_2_6 branch start: Oracle time zone related data types: internal table dependency split to tenant
-  int64_t                    tz_info_map_version_;
-  common::ObTZInfoMap        *tz_info_map_;
-  common::ObTimeZoneInfoWrap *tz_info_wrap_;
 
   void                       *cf_handle_;
 

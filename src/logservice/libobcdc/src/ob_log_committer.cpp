@@ -29,6 +29,7 @@
 #include "ob_log_binlog_record_pool.h"  // IObLogBRPool
 #include "ob_log_config.h"              // ObLogConfig
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 #define _STAT(level, fmt, args...) _OBLOG_COMMITTER_LOG(level, "[STAT] [COMMITTER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_COMMITTER_LOG(level, "[STAT] [COMMITTER] " fmt, ##args)
@@ -711,6 +712,7 @@ void ObLogCommitter::heartbeat_routine()
   } else {
     // Heartbeat thread that periodically generates heartbeat messages
     while (! stop_flag_ && OB_SUCCESS == ret) {
+      ObLogTraceIdGuard trace_guard;
       CheckpointTask *task = NULL;
       bool need_continue = false;
 
@@ -785,6 +787,7 @@ void ObLogCommitter::commit_routine()
     int64_t commit_trans_count = 0;
 
     while (OB_SUCC(ret) && ! stop_flag_) {
+      ObLogTraceIdGuard trace_guard;
       PartTransTask *part_trans_task = NULL;
       int64_t next_seq = trans_committer_queue_.begin_sn();
       ret = trans_committer_queue_.get(next_seq, part_trans_task);

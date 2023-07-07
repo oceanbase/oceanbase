@@ -194,7 +194,7 @@ int ObLogBatchBuffer::submit(IObLogBufTask *task)
       if (OB_SUCC(ret)) {
         if (auto_freeze_
             && OB_SUCCESS != (tmp_ret = try_freeze(next_flush_block_id_))) {
-          if (OB_IN_STOP_STATE != ret) {
+          if (OB_IN_STOP_STATE != tmp_ret) {
             LOG_ERROR( "try_freeze failed", K(tmp_ret), K_(next_flush_block_id));
           }
         }

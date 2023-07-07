@@ -155,11 +155,19 @@ int ObLogAllSvrCache::get_svr_item_(const common::ObAddr &svr, SvrItem &item)
     // succ
   }
 
-  LOG_DEBUG("[STAT] [ALL_SVR_CACHE] [GET_SVR_ITEM]", KR(ret), K(svr),
-      "status", OB_SUCCESS == ret ? print_svr_status_(item.status_) : "NOT_EXIST",
-      "svr_ver", item.version_, K(cur_ver),
-      "zone", item.zone_,
-      "region_priority", item.region_priority_);
+  if (OB_SUCC(ret)) {
+    LOG_DEBUG("[STAT] [ALL_SVR_CACHE] [GET_SVR_ITEM]", K(svr),
+        "status", OB_SUCCESS == ret ? print_svr_status_(item.status_) : "NOT_EXIST",
+        "svr_ver", item.version_, K(cur_ver),
+        "zone", item.zone_,
+        "region_priority", item.region_priority_);
+  } else {
+    LOG_INFO("[STAT] [ALL_SVR_CACHE] [GET_SVR_ITEM]", KR(ret), K(svr),
+        "status", OB_SUCCESS == ret ? print_svr_status_(item.status_) : "NOT_EXIST",
+        "svr_ver", item.version_, K(cur_ver),
+        "zone", item.zone_,
+        "region_priority", item.region_priority_);
+  }
 
   return ret;
 }
@@ -275,7 +283,7 @@ void ObLogAllSvrCache::query_and_update()
 
   if (OB_SUCC(ret)) {
     int64_t all_svr_cache_update_interval = ATOMIC_LOAD(&all_server_cache_update_interval_);
-    if (REACH_TIME_INTERVAL(all_svr_cache_update_interval)) {
+    if (TC_REACH_TIME_INTERVAL(all_svr_cache_update_interval)) {
       if (OB_FAIL(update_server_cache_())) {
         LOG_ERROR("update server cache error", KR(ret));
       } else if (OB_FAIL(purge_stale_records_())) {

@@ -33,7 +33,7 @@
 #include "ob_log_sql_server_provider.h"   // ObLogSQLServerProvider
 #include "ob_cdc_tenant_sql_server_provider.h" // ObCDCTenantSQLServerProvider
 #include "ob_log_schema_getter.h"         // ObLogSchemaGetter
-#include "ob_log_timezone_info_getter.h"  // ObLogTimeZoneInfoGetter
+#include "ob_log_timezone_info_getter.h"  // ObCDCTimeZoneInfoGetter
 #include "ob_log_committer.h"             // ObLogCommitter
 #include "ob_log_formatter.h"             // ObLogFormatter
 #include "ob_cdc_lob_data_merger.h"       // ObCDCLobDataMerger
@@ -128,7 +128,6 @@ void ObLogInstance::destroy_instance()
 
 ObLogInstance::ObLogInstance() :
     inited_(false),
-    is_running_(false),
     oblog_major_(0),
     oblog_minor_(0),
     oblog_major_patch_(0),
@@ -150,7 +149,9 @@ ObLogInstance::ObLogInstance() :
     part_trans_task_count_(0),
     trans_task_pool_alloc_(),
     start_tstamp_ns_(0),
+    sys_start_schema_version_(OB_INVALID_VERSION),
     is_schema_split_mode_(true),
+    enable_filter_sys_tenant_(false),
     drc_message_factory_binlog_record_type_(),
     working_mode_(WorkingMode::UNKNOWN_MODE),
     refresh_mode_(RefreshMode::UNKNOWN_REFRSH_MODE),
@@ -580,18 +581,21 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
       flow_control_tid_ = 0;
       output_dml_br_count_ = 0;
       output_ddl_br_count_ = 0;
-      last_heartbeat_timestamp_micro_sec_ = start_tstamp_ns / NS_CONVERSION;
+      last_heartbeat_timestamp_micro_sec_ = start_tstamp_ns / NS_CONVERSION - 1;
       log_clean_cycle_time_us_ = TCONF.log_clean_cycle_time_in_hours * _HOUR_;
       part_trans_task_count_ = 0;
     }
   }
 
   if (OB_SUCC(ret)) {
-    LOG_INFO("init obcdc succ", K_(is_schema_split_mode), K_(start_tstamp_ns),
+    LOG_INFO("init obcdc succ",
+        K_(is_schema_split_mode),
+        K_(start_tstamp_ns),
         "start_tstamp", NTS_TO_STR(start_tstamp_ns_),
         "working_mode", print_working_mode(working_mode_),
         "refresh_mode", print_refresh_mode(refresh_mode_),
         "fetching_mode", print_fetching_mode(fetching_mode_),
+        K_(enable_filter_sys_tenant),
         K(err_cb));
   }
 
@@ -711,7 +715,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const char *ob_trace_id_ptr = TCONF.ob_trace_id.str();
   const char *drc_message_factory_binlog_record_type_str = TCONF.drc_message_factory_binlog_record_type.str();
   // The starting schema version of the SYS tenant
-  int64_t sys_start_schema_version = OB_INVALID_VERSION;
   const char *data_start_schema_version = TCONF.data_start_schema_version.str();
   const char *store_service_path = TCONF.store_service_path.str();
   const char *working_mode_str = TCONF.working_mode.str();
@@ -725,7 +728,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const bool enable_ssl_client_authentication = (1 == TCONF.ssl_client_authentication);
   const bool enable_sort_by_seq_no = (1 == TCONF.enable_output_trans_order_by_sql_operation);
   const int64_t redo_dispatcher_mem_limit = TCONF.redo_dispatcher_memory_limit.get();
-
+  enable_filter_sys_tenant_ = (0 != TCONF.enable_filter_sys_tenant);
 
   drc_message_factory_binlog_record_type_.assign(drc_message_factory_binlog_record_type_str,
       strlen(drc_message_factory_binlog_record_type_str));
@@ -747,7 +750,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       refresh_mode_ = refresh_mode;
 
       if (is_data_dict_refresh_mode(refresh_mode_)) {
-        TCONF.enable_filter_sys_tenant = true;
+        enable_filter_sys_tenant_ = true;
       }
 
       LOG_INFO("set refresh mode", K(refresh_mode_str), K(refresh_mode_), "refresh_mode", print_refresh_mode(refresh_mode_));
@@ -763,7 +766,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       fetching_mode_ = fetching_mode;
       if (is_direct_fetching_mode(fetching_mode_)) {
         // don't fetch sys tenant in direct fetching mode
-        TCONF.enable_filter_sys_tenant = true;
+        enable_filter_sys_tenant_ = true;
       }
       LOG_INFO("set fetching mode", K(fetching_mode_str), K(fetching_mode_), "fetching_mode",
       print_fetching_mode(fetching_mode_));
@@ -894,12 +897,16 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive, refresh_mode_);
 
-  INIT(timezone_info_getter_, ObLogTimeZoneInfoGetter, TCONF.timezone.str(),
-      tenant_sql_proxy_.get_ob_mysql_proxy(), *systable_helper_, *tenant_mgr_, *err_handler);
-
   if (OB_SUCC(ret)) {
-    // init interface for getting tenant timezone map
-    OTTZ_MGR.init(ObLogTimeZoneInfoGetter::get_tenant_timezone_map);
+    if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init(TCONF.timezone.str(),
+        mysql_proxy_.get_ob_mysql_proxy(), *systable_helper_, *err_handler))) {
+          LOG_ERROR("init timezone_info_getter failed", KR(ret));
+    } else {
+      timezone_info_getter_ = &ObCDCTimeZoneInfoGetter::get_instance();
+      // init interface for getting tenant timezone map
+      // get_tenant_tz_map_function is defined in ob_log_timezone_info_getter file
+      OTTZ_MGR.init(get_tenant_tz_map_function);
+    }
   }
 
   const int64_t start_tstamp_usec = start_tstamp_ns / NS_CONVERSION;
@@ -908,11 +915,11 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   if (OB_SUCC(ret)) {
     // Initialize schema-related modules, split patterns, and SYS tenant starting schema versions based on start-up timestamps
     if (is_online_refresh_mode(refresh_mode_)) {
-      if (OB_FAIL(init_schema_(start_tstamp_usec, sys_start_schema_version))) {
+      if (OB_FAIL(init_schema_(start_tstamp_usec, sys_start_schema_version_))) {
         LOG_ERROR("init schema fail", KR(ret), K(start_tstamp_usec));
       }
     } else if (is_data_dict_refresh_mode(refresh_mode_)) {
-      sys_start_schema_version = start_tstamp_usec;
+      sys_start_schema_version_ = start_tstamp_usec;
       // set g_liboblog_mode_ is true
       ObSchemaService::g_liboblog_mode_ = true;
     }
@@ -1010,35 +1017,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  // config tenant mgr
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(config_tenant_mgr_(start_tstamp_ns, sys_start_schema_version))) {
-      LOG_ERROR("config_tenant_mgr_ fail", KR(ret), K(start_tstamp_ns), K(sys_start_schema_version));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (is_online_schema_not_avaliable()) {
-      if (OB_FAIL(set_all_tenant_compat_mode_())) {
-        LOG_ERROR("set_all_tenant_compat_mode_ failed", KR(ret));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(config_data_start_schema_version_(TCONF.global_data_start_schema_version))) {
-      LOG_ERROR("config_data_start_schema_version_ fail", KR(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(update_data_start_schema_version_on_split_mode_())) {
-      LOG_ERROR("update_data_start_schema_on_split_mode_ fail", KR(ret));
-    }
-  }
-
-  LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K(sys_start_schema_version),
-      K(max_cached_trans_ctx_count), K_(is_schema_split_mode));
+  LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
+      K(max_cached_trans_ctx_count), K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
 
   return ret;
 }
@@ -1102,6 +1082,38 @@ int ObLogInstance::config_data_start_schema_version_(const int64_t global_data_s
     }
   }
 
+  return ret;
+}
+
+
+int ObLogInstance::start_tenant_service_()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("start_tenant_service_ begin", K_(start_tstamp_ns), K_(sys_start_schema_version));
+  // config tenant mgr
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(config_tenant_mgr_(start_tstamp_ns_, sys_start_schema_version_))) {
+      LOG_ERROR("config_tenant_mgr_ fail", KR(ret), K_(start_tstamp_ns), K_(sys_start_schema_version));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_online_schema_not_avaliable()) {
+      if (OB_FAIL(set_all_tenant_compat_mode_())) {
+        LOG_ERROR("set_all_tenant_compat_mode_ failed", KR(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(config_data_start_schema_version_(TCONF.global_data_start_schema_version))) {
+      LOG_ERROR("config_data_start_schema_version_ fail", KR(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(update_data_start_schema_version_on_split_mode_())) {
+      LOG_ERROR("update_data_start_schema_on_split_mode_ fail", KR(ret));
+    }
+  }
+  LOG_INFO("start_tenant_service_ success", K_(start_tstamp_ns), K_(sys_start_schema_version));
   return ret;
 }
 
@@ -1199,7 +1211,6 @@ void ObLogInstance::destroy_components_()
   DESTROY(meta_manager_, ObLogMetaManager);
   DESTROY(trans_ctx_mgr_, ObLogTransCtxMgr);
   DESTROY(trans_stat_mgr_, ObLogTransStatMgr);
-  DESTROY(timezone_info_getter_, ObLogTimeZoneInfoGetter);
   DESTROY(tenant_mgr_, ObLogTenantMgr);
   DESTROY(log_entry_task_pool_, ObLogEntryTaskPool);
   DESTROY(br_pool_, ObLogBRPool);
@@ -1217,53 +1228,61 @@ void ObLogInstance::destroy()
 {
   do_stop_("DESTROY_OBCDC");
 
-  inited_ = false;
+  if (inited_) {
+    LOG_INFO("destroy obcdc begin");
+    inited_ = false;
 
-  oblog_major_ = 0;
-  oblog_minor_ = 0;
-  oblog_major_patch_ = 0;
-  oblog_minor_patch_ = 0;
+    oblog_major_ = 0;
+    oblog_minor_ = 0;
+    oblog_major_patch_ = 0;
+    oblog_minor_patch_ = 0;
 
-  destroy_components_();
-  err_cb_ = NULL;
+    destroy_components_();
+    err_cb_ = NULL;
 
-  TCONF.destroy();
-  stop_flag_ = true;
-  last_heartbeat_timestamp_micro_sec_ = 0;
-  trans_stat_mgr_ = NULL;
-  tenant_mgr_ = NULL;
-  global_errno_ = 0;
-  handle_error_flag_ = 0;
-  disable_redirect_log_ = false;
-  log_clean_cycle_time_us_ = 0;
-  global_info_.reset();
-  hbase_util_.destroy();
-  obj2str_helper_.destroy();
-  br_queue_.destroy();
-  timer_tid_ = 0;
-  sql_tid_ = 0;
-  flow_control_tid_ = 0;
+    TCONF.destroy();
+    stop_flag_ = true;
+    last_heartbeat_timestamp_micro_sec_ = 0;
+    trans_stat_mgr_ = NULL;
+    tenant_mgr_ = NULL;
+    global_errno_ = 0;
+    handle_error_flag_ = 0;
+    disable_redirect_log_ = false;
+    log_clean_cycle_time_us_ = 0;
+    global_info_.reset();
+    hbase_util_.destroy();
+    obj2str_helper_.destroy();
+    br_queue_.destroy();
+    timer_tid_ = 0;
+    sql_tid_ = 0;
+    flow_control_tid_ = 0;
 
-  (void)trans_task_pool_.destroy();
-  (void)trans_task_pool_alloc_.destroy();
+    (void)trans_task_pool_.destroy();
+    (void)trans_task_pool_alloc_.destroy();
 
-  output_dml_br_count_ = 0;
-  output_ddl_br_count_ = 0;
+    output_dml_br_count_ = 0;
+    output_ddl_br_count_ = 0;
 
-  ObKVGlobalCache::get_instance().destroy();
-  ObMemoryDump::get_instance().destroy();
-  ObClockGenerator::destroy();
+    ObCDCTimeZoneInfoGetter::get_instance().destroy();
+    timezone_info_getter_ = nullptr;
+    ObKVGlobalCache::get_instance().destroy();
+    ObMemoryDump::get_instance().destroy();
+    ObClockGenerator::destroy();
 
-  is_assign_log_dir_valid_ = false;
-  MEMSET(assign_log_dir_, 0, sizeof(assign_log_dir_));
-  MEMSET(ob_trace_id_str_, 0, sizeof(ob_trace_id_str_));
-  br_index_in_trans_ = 0;
-  part_trans_task_count_ = 0;
-  start_tstamp_ns_ = 0;
-  is_schema_split_mode_ = true;
-  working_mode_ = WorkingMode::UNKNOWN_MODE;
-  refresh_mode_ = RefreshMode::UNKNOWN_REFRSH_MODE;
-  fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
+    is_assign_log_dir_valid_ = false;
+    MEMSET(assign_log_dir_, 0, sizeof(assign_log_dir_));
+    MEMSET(ob_trace_id_str_, 0, sizeof(ob_trace_id_str_));
+    br_index_in_trans_ = 0;
+    part_trans_task_count_ = 0;
+    start_tstamp_ns_ = 0;
+    sys_start_schema_version_ = OB_INVALID_VERSION;
+    is_schema_split_mode_ = true;
+    enable_filter_sys_tenant_ = false;
+    working_mode_ = WorkingMode::UNKNOWN_MODE;
+    refresh_mode_ = RefreshMode::UNKNOWN_REFRSH_MODE;
+    fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
+    LOG_INFO("destroy obcdc end");
+  }
 }
 
 int ObLogInstance::launch()
@@ -1308,8 +1327,9 @@ int ObLogInstance::launch()
       LOG_ERROR("start_threads_ fail", KR(ret));
     } else if (OB_FAIL(timezone_info_getter_->start())) {
       LOG_ERROR("start_timezone_info_thread_ fail", KR(ret));
+    } else if (OB_FAIL(start_tenant_service_())) {
+      LOG_ERROR("start_tenant_service_ failed", KR(ret));
     } else {
-      is_running_ = true;
       LOG_INFO("launch all components end success");
     }
   }
@@ -1324,7 +1344,7 @@ void ObLogInstance::stop()
 
 void ObLogInstance::do_stop_(const char *stop_reason)
 {
-  if (inited_ && is_running_) {
+  if (inited_) {
 
     mark_stop_flag(stop_reason);
 
@@ -1354,7 +1374,6 @@ void ObLogInstance::do_stop_(const char *stop_reason)
 
     // set global error code
     global_errno_ = (global_errno_ == OB_SUCCESS ? OB_IN_STOP_STATE : global_errno_);
-    is_running_ = false;
 
     LOG_INFO("stop all components end");
     LOG_INFO("obcdc stopped", KR(global_errno_), KCSTRING(stop_reason));
@@ -1382,7 +1401,7 @@ int ObLogInstance::get_tenant_ids(std::vector<uint64_t> &tenant_ids)
 
 void ObLogInstance::mark_stop_flag(const char *stop_reason)
 {
-  if (inited_ && is_running_) {
+  if (inited_) {
     if (OB_ISNULL(stop_reason)) {
       stop_reason = "UNKNOWN";
     }

@@ -24,6 +24,7 @@
 #include "ob_log_common.h"            // DEFAULT_START_SEQUENCE_NUM
 #include "ob_log_config.h"            // TCONF
 #include "ob_log_store_service.h"
+#include "ob_log_timezone_info_getter.h"
 #include "ob_cdc_tenant_sql_server_provider.h"
 #include "lib/utility/ob_macro_utils.h"
 
@@ -1004,6 +1005,7 @@ int ObLogTenantMgr::remove_tenant_(const uint64_t tenant_id, ObLogTenant *tenant
     // should not affect following process for remove tenant.
     ret = OB_SUCCESS;
   } else {
+    ObCDCTimeZoneInfoGetter::get_instance().remove_tenant_tz_info(tenant_id);
     //do nothing
   }
 
@@ -1121,6 +1123,9 @@ int ObLogTenantMgr::get_sys_ls_progress(uint64_t &tenant_id,
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("ObLogTenantMgr has not inited");
     ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(tenant_id_set_.size() <= 0)) {
+    ret = OB_EMPTY_RESULT;
+    LOG_INFO("no valid tenant is in serve", KR(ret));
   } else {
     TenantDDLProgessGetter getter;
 
@@ -1239,7 +1244,7 @@ int ObLogTenantMgr::add_all_tenants(const int64_t start_tstamp_ns,
     bool is_new_created_tenant = false;
     bool is_new_tenant_by_restore = false;
     const int64_t total_tenant_count = tenant_ids.count();
-    const bool enable_filter_sys_tenant = (1 == TCONF.enable_filter_sys_tenant);
+    const bool enable_filter_sys_tenant = TCTX.enable_filter_sys_tenant_;
     ISTAT("[ADD_ALL_TENANTS] BEGIN", K(sys_schema_version), K(start_tstamp_ns),
         "start_tstamp_ns", NTS_TO_STR(start_tstamp_ns), K(total_tenant_count), K(tenant_ids));
 
@@ -1408,68 +1413,6 @@ int ObLogTenantMgr::get_all_tenant_ids(std::vector<uint64_t> &tenant_ids)
     _ISTAT("[GET_TENANT] TENANT=%ld", tenant_id);
   }
 
-  return ret;
-}
-
-// the following function needs to be compatible, pre-226 versions only had time zone tables for system tenants, so only one map needs to be maintained.
-// After 226 the time zone table is split into tenant level and a tz_info_map needs to be maintained for each tenant
-// Obj2Str uses this interface to get the tz_info_wrap of a particular tenant for obj to string conversion
-int ObLogTenantMgr::get_tenant_tz_wrap(const uint64_t tenant_id, ObTimeZoneInfoWrap *&tz_info_wrap)
-{
-  int ret = OB_SUCCESS;
-  ObLogTenantGuard guard;
-  const uint64_t tz_tenant_id = tenant_id;
-
-  if (OB_SYS_TENANT_ID == tz_tenant_id) {
-    tz_info_wrap = &TCTX.tz_info_wrap_;
-  } else {
-    ObLogTenantGuard tenant_guard;
-    ObLogTenant *tenant = NULL;
-    if (OB_FAIL(get_tenant_guard(tz_tenant_id, guard))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        LOG_ERROR("tenant not exist when get tz_wrap", KR(ret), K(tenant_id), K(tz_tenant_id));
-      } else {
-        LOG_ERROR("get_tenant_guard fail", KR(ret), K(tenant_id), K(tz_tenant_id));
-      }
-    } else if (OB_ISNULL(tenant = guard.get_tenant())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid tenant", KR(ret), K(tenant), K(tenant_id), K(tz_tenant_id));
-    } else {
-      tz_info_wrap = tenant->get_tz_info_wrap();
-    }
-  }
-
-  return ret;
-}
-
-// get_tenant_timezone
-int ObLogTenantMgr::get_tenant_tz_map(const uint64_t tenant_id,
-    ObTZInfoMap *&tz_info_map)
-{
-  int ret = OB_SUCCESS;
-  ObLogTenantGuard guard;
-  //TODO:(madoll.tw) should use tenant_id as tz_tenant_id
-  const uint64_t tz_tenant_id = OB_SYS_TENANT_ID;
-
-  if (OB_SYS_TENANT_ID == tz_tenant_id) {
-    tz_info_map = &TCTX.tz_info_map_;
-  } else {
-    ObLogTenantGuard tenant_guard;
-    ObLogTenant *tenant = NULL;
-    if (OB_FAIL(get_tenant_guard(tz_tenant_id, guard))) {
-      // TODO ERROR auto_switch_mode_and_refresh_schema not exit
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        LOG_ERROR("tenant not exist when get tz_wrap", KR(ret), K(tenant_id), K(tz_tenant_id));
-      } else {
-        LOG_ERROR("get_tenant_guard fail", KR(ret), K(tenant_id), K(tz_tenant_id));
-      }
-    } else if (OB_ISNULL(tenant = guard.get_tenant())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid tenant", KR(ret), K(tenant), K(tenant_id), K(tz_tenant_id));
-    } else {
-      tz_info_map = tenant->get_tz_info_map();
-    }
-  }
   return ret;
 }
 

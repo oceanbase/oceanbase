@@ -27,6 +27,7 @@
 #include "ob_log_store_key.h"           // ObLogStoreKey
 #include "ob_log_binlog_record.h"       // ObLogBR
 #include "ob_log_meta_manager.h"        // IObLogMetaManager
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 #include "ob_log_instance.h"
 #include "ob_log_tenant.h"
 #include "ob_log_config.h"
@@ -470,6 +471,7 @@ int ObLogResourceCollector::handle(void *data,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   ObLogResourceRecycleTask *recycle_task = NULL;
 
   if (OB_UNLIKELY(! inited_)) {

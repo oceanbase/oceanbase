@@ -38,6 +38,7 @@ public:
   virtual int submit(TransCtx *trans) = 0;
   virtual void mark_stop_flag() = 0;
   virtual int get_task_count(int64_t &task_count) = 0;
+  virtual const transaction::ObTransID &get_cur_sort_trans_id() const = 0;
 };
 
 /**
@@ -69,6 +70,8 @@ public:
            IObLogTransStatMgr &trans_stat_mgr,
            IObLogErrHandler *err_handler);
   void destroy();
+  OB_INLINE const transaction::ObTransID &get_cur_sort_trans_id() const
+  { return cur_sort_trans_id_; }
 
 private:
   struct StmtSequerenceCompFunc
@@ -106,6 +109,7 @@ private:
   int64_t                   total_task_count_;
   IObLogTransStatMgr        *trans_stat_mgr_;
   bool                      enable_sort_by_seq_no_;
+  transaction::ObTransID    cur_sort_trans_id_;
   IObLogErrHandler          *err_handler_;
 
 private:

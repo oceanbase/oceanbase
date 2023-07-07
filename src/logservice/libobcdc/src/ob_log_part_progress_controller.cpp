@@ -224,6 +224,7 @@ int PartProgressController::get_min_progress(int64_t &progress)
     ret = OB_ERR_UNEXPECTED;
   } else if (ATOMIC_LOAD(&valid_progress_cnt_) <= 0) {
     progress = INVALID_PROGRESS;
+    ret = OB_EMPTY_RESULT;
   } else {
     progress = INVALID_PROGRESS;
     const int64_t cnt = ATOMIC_LOAD(&progress_cnt_);

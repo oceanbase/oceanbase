@@ -22,7 +22,7 @@
 #include "ob_log_tenant_mgr.h"                                      // ObLogTenantMgr
 #include "ob_log_instance.h"                                        // TCTX
 #include "ob_log_config.h"                                          // TCONF
-#include "ob_log_timezone_info_getter.h"                            // ObLogTimeZoneInfoGetter
+#include "ob_log_timezone_info_getter.h"                            // ObCDCTimeZoneInfoGetter
 
 #include "ob_log_start_schema_matcher.h"                            // ObLogStartSchemaMatcher
 
@@ -54,9 +54,6 @@ ObLogTenant::ObLogTenant() :
     committer_global_heartbeat_(OB_INVALID_VERSION),
     committer_cur_schema_version_(OB_INVALID_VERSION),
     committer_next_trans_schema_version_(OB_INVALID_VERSION),
-    tz_info_map_version_(OB_INVALID_TIMESTAMP),
-    tz_info_map_(NULL),
-    tz_info_wrap_(NULL),
     cf_handle_(NULL)
 {
   tenant_name_[0] = '\0';
@@ -105,8 +102,8 @@ int ObLogTenant::init(const uint64_t tenant_id,
       LOG_ERROR("part_mgr_ init fail", KR(ret), K(tenant_id), K(start_schema_version));
   } else if (OB_FAIL(databuff_printf(tenant_name_, sizeof(tenant_name_), pos, "%s", tenant_name))) {
     LOG_ERROR("print tenant name fail", KR(ret), K(pos), K(tenant_id), K(tenant_name));
-  } else if (OB_FAIL(init_tz_info_(tenant_id))) {
-    LOG_ERROR("init tz info failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(TCTX.timezone_info_getter_->init_tenant_tz_info(tenant_id))) {
+    LOG_ERROR("fail to init tenant timezone info", KR(ret), K(tenant_id));
   } else if (OB_FAIL(init_all_ddl_operation_table_schema_info_())) {
     LOG_ERROR("init_all_ddl_operation_table_schema_info_ failed", KR(ret), K(tenant_id));
   }
@@ -181,17 +178,6 @@ void ObLogTenant::reset()
 
   tenant_state_.reset();
 
-  tz_info_map_version_ = OB_INVALID_TIMESTAMP;
-  if (OB_SYS_TENANT_ID != tenant_id) {
-    if (! OB_ISNULL(tz_info_map_)) {
-      OB_DELETE(ObTZInfoMap, "ObLogTenantTz", tz_info_map_);
-      tz_info_map_ = NULL;
-    }
-    if (! OB_ISNULL(tz_info_wrap_)) {
-      OB_DELETE(ObTimeZoneInfoWrap, "ObLogTenantTz", tz_info_wrap_);
-      tz_info_wrap_ = NULL;
-    }
-  }
   sys_ls_progress_ = OB_INVALID_TIMESTAMP;
   ddl_log_lsn_.reset();
   all_ddl_operation_table_schema_info_.reset();
@@ -871,50 +857,6 @@ int ObLogTenant::update_data_start_schema_version_on_split_mode()
     LOG_INFO("[UPDATE_START_SCHEMA] update_data_start_schema_version_on_split_mode succ", KR(ret),
         K(tenant_id_), K(schema_version), K(global_seq_and_schema_version_.hi),
         K(old_data_schema_version));
-  }
-
-  return ret;
-}
-
-int ObLogTenant::init_tz_info_(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_SYS_TENANT_ID == tenant_id) {
-    tz_info_map_ = &TCTX.tz_info_map_;
-    tz_info_wrap_ = &TCTX.tz_info_wrap_;
-  } else {
-    if (OB_ISNULL(tz_info_map_ = OB_NEW(ObTZInfoMap, "ObLogTenantTz"))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("create tenant timezone info map failed", KR(ret));
-    } else if (OB_ISNULL(tz_info_wrap_ = OB_NEW(ObTimeZoneInfoWrap, "ObLogTenantTz"))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("create tenant timezone info wrap failed", KR(ret));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tz_info_map_->init(ObModIds::OB_HASH_BUCKET_TIME_ZONE_INFO_MAP))) {
-    LOG_ERROR("fail to init tz_info_map_", K(tenant_id), KR(ret));
-  } else if (TCTX.timezone_info_getter_->init_tz_info_wrap(
-      tenant_id,
-      tz_info_map_version_,
-      *tz_info_map_,
-      *tz_info_wrap_)) {
-    LOG_ERROR("fail to init tz info wrap", KR(ret), K(tenant_id));
-  } else {
-    // succ
-  }
-
-  if (OB_FAIL(ret)) {
-    if (NULL != tz_info_map_) {
-      OB_DELETE(ObTZInfoMap, "ObLogTenantTz", tz_info_map_);
-      tz_info_map_ = NULL;
-    }
-    if (NULL != tz_info_wrap_) {
-      OB_DELETE(ObTimeZoneInfoWrap, "ObLogTenantTz", tz_info_wrap_);
-      tz_info_wrap_ = NULL;
-    }
   }
 
   return ret;

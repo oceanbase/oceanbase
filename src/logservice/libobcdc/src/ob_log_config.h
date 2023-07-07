@@ -92,7 +92,7 @@ public:
 #define OB_CLUSTER_PARAMETER(args...) args
   // Liboblog config.
   // max memory occupied by libobcdc: 20G
-  DEF_CAP(memory_limit, OB_CLUSTER_PARAMETER, "20G", "[2G,]", "memory limit");
+  DEF_CAP(memory_limit, OB_CLUSTER_PARAMETER, "8G", "[2G,]", "memory limit");
   // Preserve the lower bound of system memory in %, in the range of 10% ~ 80%
   // i.e.: ensure that the system memory remaining cannot be lower than this percentage based on the memory occupied by libobcdc
   DEF_INT(system_memory_avail_percentage_lower_bound, OB_CLUSTER_PARAMETER, "10", "[10, 80]", "system memory avail upper bound");
@@ -388,10 +388,10 @@ public:
   T_DEF_BOOL(print_ls_server_list_update_info, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   // Whether to sequentially output within a transaction
   // Not on by default (participatn-by-participant output)
-  T_DEF_BOOL(enable_output_trans_order_by_sql_operation, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  T_DEF_BOOL(enable_output_trans_order_by_sql_operation, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
   // redo dispatcher memory limit
-  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "512M", "[128M,]", "redo dispatcher memory limit");
-  DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "4M", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
+  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "128M", "[128M,]", "redo dispatcher memory limit");
+  DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "1M", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
   // redo diepatcher memory limit ratio for output br by sql operation(compare with redo_dispatcher_memory_limit)
   T_DEF_INT_INFT(redo_dispatched_memory_limit_exceed_ratio, OB_CLUSTER_PARAMETER, 2, 1,
       "redo_dispatcher_memory_limit ratio for output by sql operation order");

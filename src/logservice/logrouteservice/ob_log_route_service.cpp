@@ -134,8 +134,7 @@ int ObLogRouteService::start()
 
   if (OB_FAIL(ls_route_timer_task_.init(lib::TGDefIDs::LogRouterTimer))) {
     LOG_WARN("ObLSRouteTimerTask init failed", KR(ret));
-  } else if (OB_FAIL(timer_.schedule(ls_route_timer_task_, ObLSRouteTimerTask::REFRESH_INTERVAL,
-      true/*repeat*/))) {
+  } else if (OB_FAIL(timer_.schedule_repeate_task_immediately(ls_route_timer_task_, ObLSRouteTimerTask::REFRESH_INTERVAL))) {
     LOG_WARN("fail to schedule min minor sstable gc task", K(ret));
   } else {
     is_stopped_ = false;
@@ -947,7 +946,7 @@ int ObLogRouteService::update_server_list_(
       ret = OB_NEED_RETRY;
     }
 
-    LOG_INFO("update server list succ", KR(ret), K(router_key), K(ls_log_info), K(ls_svr_list));
+    LOG_INFO("update server list done", KR(ret), K(router_key), K(ls_log_info), K(ls_svr_list), K_(tg_id));
   }
 
   return ret;

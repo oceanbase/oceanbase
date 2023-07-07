@@ -215,10 +215,10 @@ public:
   const ObLink *get_row_tail() const { return row_tail_; }
   void set_row_tail(ObLink *row_tail) { row_tail_ = row_tail; }
 
-  void inc_valid_row_num() { ++valid_row_num_; }
-  void set_valid_row_num(const int64_t row_num) { valid_row_num_ = row_num; }
-  int64_t get_valid_row_num() const { return valid_row_num_; }
-  bool is_contain_valid_row() const { return 0 != valid_row_num_; }
+  void inc_valid_row_num() { ATOMIC_INC(&valid_row_num_); }
+  void set_valid_row_num(const int64_t row_num) { ATOMIC_SET(&valid_row_num_, row_num); }
+  int64_t get_valid_row_num() const { return ATOMIC_LOAD(&valid_row_num_); }
+  bool is_contain_valid_row() const { return get_valid_row_num() > 0; }
 
   // Retrieve the last digit of reserve_field_
   bool is_stored() const { return reserve_field_ & 0x01; }

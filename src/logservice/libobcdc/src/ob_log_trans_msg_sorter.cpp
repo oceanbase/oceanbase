@@ -59,6 +59,7 @@ ObLogTransMsgSorter::ObLogTransMsgSorter() :
   total_task_count_(0),
   trans_stat_mgr_(NULL),
   enable_sort_by_seq_no_(false),
+  cur_sort_trans_id_(),
   err_handler_(NULL)
 {
   br_sort_func_ = NULL;
@@ -115,6 +116,7 @@ void ObLogTransMsgSorter::destroy()
     task_limit_ = 0;
     total_task_count_ = 0;
     trans_stat_mgr_ = NULL;
+    cur_sort_trans_id_.reset();
     err_handler_ = NULL;
     br_sort_func_ = NULL;
     LOG_INFO("TransMsgSorter destroy succ");
@@ -220,6 +222,7 @@ int ObLogTransMsgSorter::sort_br_by_part_order_(TransCtx &trans)
   int ret = OB_SUCCESS;
   LOG_DEBUG("br sorter handle trans begin", K(trans));
   PartTransTask *part_trans_task = trans.get_participant_objs();
+  cur_sort_trans_id_ = trans.get_trans_id();
 
   if (OB_ISNULL(part_trans_task)) {
     ret = OB_ERR_UNEXPECTED;
@@ -248,6 +251,7 @@ int ObLogTransMsgSorter::sort_br_by_seq_no_(TransCtx &trans)
   int ret = OB_SUCCESS;
   LOG_DEBUG("br sorter handle trans begin", K(trans));
   DmlStmtTask *dml_stmt_task = NULL;
+  cur_sort_trans_id_ = trans.get_trans_id();
   // 1. build a min-top heap
   std::priority_queue<DmlStmtTask*, std::vector<DmlStmtTask*>, StmtSequerenceCompFunc> heap;
   PartTransTask *part_trans_task = trans.get_participant_objs();
