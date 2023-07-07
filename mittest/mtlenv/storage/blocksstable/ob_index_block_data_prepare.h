@@ -536,7 +536,7 @@ void TestIndexBlockDataPrepare::prepare_ddl_kv()
 
   share::SCN ddl_start_scn;
   ddl_start_scn.convert_from_ts(ObTimeUtility::current_time());
-  ASSERT_EQ(OB_SUCCESS, ddl_kv_.init(ls_id, tablet_id, ddl_start_scn, sstable_.get_data_version(), ddl_start_scn, 4000));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_.init(*tablet_handle.get_obj(), ddl_start_scn, sstable_.get_data_version(), ddl_start_scn, 4000));
 
   SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
     ObDatumRange query_range;

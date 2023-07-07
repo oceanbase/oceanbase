@@ -716,7 +716,7 @@ int ObDDLRedoLogWriter::write(
   } else if (OB_FAIL(tmp_log.deserialize(buffer, buffer_size, log_start_pos))) {
     LOG_WARN("fail to deserialize ddl redo log", K(ret));
   /* use the ObString data_buffer_ in tmp_log.redo_info_, do not rely on the macro_block_buf in original log*/
-  } else if (OB_FAIL(cb->init(ls_id, tmp_log.get_redo_info(), macro_block_id, ddl_kv_mgr_handle))) {
+  } else if (OB_FAIL(cb->init(ls_id, tmp_log.get_redo_info(), macro_block_id, tablet_handle, ddl_kv_mgr_handle))) {
     LOG_WARN("init ddl clog callback failed", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
@@ -834,7 +834,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
       const int64_t saved_snapshot_version = log.get_table_key().get_snapshot_version();
       start_scn = scn;
       // remove ddl sstable if exists and flush ddl start log ts and snapshot version into tablet meta
-      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->update_tablet(start_scn, saved_snapshot_version, log.get_data_format_version(), log.get_execution_id(), start_scn))) {
+      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->update_tablet(*tablet_handle.get_obj(), start_scn, saved_snapshot_version, log.get_data_format_version(), log.get_execution_id(), start_scn))) {
         LOG_WARN("clean up ddl sstable failed", K(ret), K(log));
       }
       FLOG_INFO("start ddl kv mgr finished", K(ret), K(start_scn), K(log));
@@ -1220,7 +1220,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
   if (OB_FAIL(ret)) {
   } else if (is_remote_write) {
     LOG_INFO("ddl commit log is written in remote, need wait replay", K(ddl_task_id), K(tablet_id), K(ddl_start_scn), K(commit_scn));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(ddl_start_scn, commit_scn))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(*tablet_handle.get_obj(), ddl_start_scn, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
           K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
@@ -1229,7 +1229,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_merge_success(ddl_start_scn, commit_scn))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_merge_success(*tablet_handle.get_obj(), ddl_start_scn, commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
           K(ddl_start_scn), "new_ddl_start_scn",

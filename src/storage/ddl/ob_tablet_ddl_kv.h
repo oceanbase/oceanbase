@@ -49,7 +49,7 @@ class ObBlockMetaTree
 public:
   ObBlockMetaTree();
   virtual ~ObBlockMetaTree();
-  int init(const share::ObLSID &ls_id,
+  int init(ObTablet &tablet,
            const ObITable::TableKey &table_key,
            const share::SCN &ddl_start_scn,
            const int64_t data_format_version);
@@ -115,18 +115,17 @@ public:
   virtual void inc_ref() override { ATOMIC_AAF(&ref_cnt_, 1); }
   virtual int64_t dec_ref() override { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   virtual int64_t get_ref() const override { return ObITable::get_ref(); }
-  int init(const share::ObLSID &ls_id,
-           const common::ObTabletID &tablet_id,
+  int init(ObTablet &tablet,
            const share::SCN &ddl_start_scn,
            const int64_t snapshot_version,
            const share::SCN &last_freezed_scn,
            const int64_t data_format_version);
   void reset();
-  int set_macro_block(const ObDDLMacroBlock &macro_block);
+  int set_macro_block(ObTablet &tablet, const ObDDLMacroBlock &macro_block);
 
   int freeze(const share::SCN &freeze_scn);
   bool is_freezed() const { return ATOMIC_LOAD(&is_freezed_); }
-  int close();
+  int close(ObTablet &tablet);
   int prepare_sstable(const bool need_check = true);
   bool is_closed() const { return is_closed_; }
   share::SCN get_min_scn() const { return min_scn_; }
@@ -146,7 +145,7 @@ public:
 private:
   int insert_block_meta_tree(const ObDDLMacroHandle &macro_handle,
                              blocksstable::ObDataMacroBlockMeta *data_macro_meta);
-  int init_sstable_param(const share::ObLSID &ls_id,
+  int init_sstable_param(ObTablet &tablet,
                          const ObITable::TableKey &table_key,
                          const share::SCN &ddl_start_scn,
                          ObTabletCreateSSTableParam &sstable_param);

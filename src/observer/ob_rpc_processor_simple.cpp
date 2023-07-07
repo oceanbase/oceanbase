@@ -2142,7 +2142,7 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
                                                        commit_scn,
                                                        is_remote_write))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(arg_.start_scn_, commit_scn))) {
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(*tablet_handle.get_obj(), arg_.start_scn_, commit_scn))) {
         LOG_WARN("failed to do ddl kv commit", K(ret), K(arg_));
       } else {
         result_ = commit_scn.get_val_for_tx();

@@ -45,20 +45,24 @@ public:
       tablet_id_(),
       rec_scn_(share::SCN::min_scn()),
       is_commit_(false),
-      start_scn_(share::SCN::min_scn())
+      start_scn_(share::SCN::min_scn()),
+      compat_mode_(lib::Worker::CompatMode::INVALID),
+      ddl_kv_mgr_handle_()
   { }
   bool is_valid() const
   {
-    return ls_id_.is_valid() && tablet_id_.is_valid() && start_scn_.is_valid_and_not_min();
+    return ls_id_.is_valid() && tablet_id_.is_valid() && start_scn_.is_valid_and_not_min() && ddl_kv_mgr_handle_.is_valid();
   }
   virtual ~ObDDLTableMergeDagParam() = default;
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(start_scn));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(start_scn), K_(compat_mode), K_(ddl_kv_mgr_handle));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   share::SCN rec_scn_;
   bool is_commit_;
   share::SCN start_scn_; // start log ts at schedule, for skipping expired task
+  lib::Worker::CompatMode compat_mode_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
 
 class ObDDLTableMergeDag : public share::ObIDag
@@ -68,7 +72,7 @@ public:
   virtual ~ObDDLTableMergeDag();
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int create_first_task() override;
-  INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(ddl_param), K_(compat_mode));
+  INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(ddl_param));
 public:
   virtual bool operator == (const ObIDag &other) const override;
   virtual int64_t hash() const override;
@@ -77,13 +81,12 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool ignore_warning() override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
-  { return compat_mode_; }
+  { return ddl_param_.compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
 private:
   bool is_inited_;
   ObDDLTableMergeDagParam ddl_param_;
-  lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObDDLTableMergeDag);
 };
 
@@ -141,30 +144,33 @@ public:
 class ObTabletDDLUtil
 {
 public:
-  static int prepare_index_data_desc(const share::ObLSID &ls_id,
-                                     const ObTabletID &tablet_id,
+  static int prepare_index_data_desc(ObTablet &tablet,
                                      const int64_t snapshot_version,
                                      const int64_t ddl_format_version,
                                      const blocksstable::ObSSTable *first_ddl_sstable,
                                      blocksstable::ObDataStoreDesc &data_desc);
 
-  static int create_ddl_sstable(const ObTabletDDLParam &ddl_param,
+  static int create_ddl_sstable(ObTablet &tablet,
+                                const ObTabletDDLParam &ddl_param,
                                 const ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array,
                                 const blocksstable::ObSSTable *first_ddl_sstable,
                                 common::ObArenaAllocator &allocator,
                                 blocksstable::ObSSTable &sstable);
 
-  static int create_ddl_sstable(blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
+  static int create_ddl_sstable(ObTablet &tablet,
+                                blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
                                 const ObTabletDDLParam &ddl_param,
                                 const blocksstable::ObSSTable *first_ddl_sstable,
                                 common::ObArenaAllocator &allocator,
                                 blocksstable::ObSSTable &sstable);
 
-  static int update_ddl_table_store(const ObTabletDDLParam &ddl_param,
+  static int update_ddl_table_store(ObTablet &tablet,
+                                    const ObTabletDDLParam &ddl_param,
                                     common::ObArenaAllocator &allocator,
                                     blocksstable::ObSSTable &sstable);
 
-  static int compact_ddl_sstable(ObTableStoreIterator &ddl_sstable_iter,
+  static int compact_ddl_sstable(ObTablet &tablet,
+                                 ObTableStoreIterator &ddl_sstable_iter,
                                  const ObITableReadInfo &read_info,
                                  const bool is_commit,
                                  const share::SCN &rec_scn,
