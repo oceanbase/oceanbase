@@ -5804,10 +5804,17 @@ int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
 int ObBasicSessionInfo::stmt_restore_session(StmtSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
-  OX (thread_data_.cur_query_start_time_ = saved_value.cur_query_start_time_);
-  OZ (tx_result_.merge_result(saved_value.tx_result_));
-  OZ (base_restore_session(saved_value));
-  OX (stmt_type_ = saved_value.stmt_type_);
+  int tmp_ret = OB_SUCCESS;
+  thread_data_.cur_query_start_time_ = saved_value.cur_query_start_time_;
+  if (OB_TMP_FAIL(tx_result_.merge_result(saved_value.tx_result_))) {
+    LOG_WARN("failed to merge trans result", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
+  if (OB_TMP_FAIL(base_restore_session(saved_value))) {
+    LOG_WARN("failed to restore base session", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+	}
+  stmt_type_ = saved_value.stmt_type_;
   return ret;
 }
 
@@ -5846,15 +5853,22 @@ int ObBasicSessionInfo::trans_save_session(TransSavedValue &saved_value)
 int ObBasicSessionInfo::trans_restore_session(TransSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   LockGuard lock_guard(thread_data_mutex_);
-  OX (nested_count_ = saved_value.nested_count_);
-  OX (trans_flags_ = saved_value.trans_flags_);
+  nested_count_ = saved_value.nested_count_;
+  trans_flags_ = saved_value.trans_flags_;
   /*
    * restore means switch to saved transaction context, drop current one.
    */
-  OZ (tx_result_.assign(saved_value.tx_result_));
-  OX (tx_desc_ = saved_value.tx_desc_);
-  OZ (base_restore_session(saved_value));
+  if (OB_TMP_FAIL(tx_result_.assign(saved_value.tx_result_))) {
+    LOG_WARN("failed to assign trans result", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
+  tx_desc_ = saved_value.tx_desc_;
+  if (OB_TMP_FAIL(base_restore_session(saved_value))) {
+    LOG_WARN("failed to restore base session", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
   return ret;
 }
 
