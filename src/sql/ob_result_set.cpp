@@ -780,7 +780,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
   return ret;
 }
 
-int ObResultSet::close()
+int ObResultSet::close(int &client_ret)
 {
   int ret = OB_SUCCESS;
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
@@ -896,7 +896,7 @@ int ObResultSet::close()
   // notify close fail to listener
   int err = OB_SUCCESS != do_close_plan_ret ? do_close_plan_ret : ret;
   if (OB_SUCCESS != err && err != errcode_ && close_fail_cb_.is_valid()) {
-    close_fail_cb_(err);
+    close_fail_cb_(err, client_ret);
   }
   //NG_TRACE_EXT(result_set_close, OB_ID(ret), ret, OB_ID(arg1), prev_ret,
                //OB_ID(arg2), ins_ret, OB_ID(arg3), errcode_, OB_ID(async), async);

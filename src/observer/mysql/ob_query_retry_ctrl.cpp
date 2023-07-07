@@ -1119,21 +1119,28 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
     retry_err_code_ = client_ret;
   }
   if (RETRY_TYPE_NONE != retry_type_) {
-    result.set_close_fail_callback([this](const int err)-> void { this->on_close_resultset_fail_(err); });
+    result.set_close_fail_callback([this](const int err, int &client_ret)-> void { this->on_close_resultset_fail_(err, client_ret); });
   }
 }
 
-void ObQueryRetryCtrl::on_close_resultset_fail_(const int err)
+void ObQueryRetryCtrl::on_close_resultset_fail_(const int err, int &client_ret)
 {
   // some unretryable error happened in close result set phase
   if (OB_SUCCESS != err && RETRY_TYPE_NONE != retry_type_) {
     // the txn relative error in close stmt
+    // thses error will cause the txn must to be rollbacked
+    // and can not accept new request any more, so if retry
+    // current stmt, it must be failed, hence we cancel retry
     if (OB_TRANS_NEED_ROLLBACK == err ||
         OB_TRANS_INVALID_STATE == err ||
         OB_TRANS_HAS_DECIDED == err) {
       retry_type_ = RETRY_TYPE_NONE;
       // also clear the packet retry
       THIS_WORKER.unset_need_retry();
+      // rewrite the client error code
+      // when decide to cancel the retry, return an unretryable error
+      // is better, because it won't leak the internal error to user
+      client_ret = err;
     }
   }
 }
