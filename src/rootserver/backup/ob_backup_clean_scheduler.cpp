@@ -1884,7 +1884,7 @@ int ObBackupAutoObsoleteDeleteTrigger::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else {
-    tenant_id_ = tenant_id;
+    tenant_id_ = gen_user_tenant_id(tenant_id);
     sql_proxy_ = &sql_proxy;
     rpc_proxy_ = &rpc_proxy;
     schema_service_ = &schema_service;
@@ -1947,7 +1947,7 @@ int ObBackupAutoObsoleteDeleteTrigger::start_auto_delete_obsolete_data_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup auto delete obsolete bakcup do not init", K(ret));
-  } else if (is_meta_tenant(tenant_id_)) {
+  } else if (is_user_tenant(tenant_id_)) {
     recovery_window = 0;
     default_delete_policy.reset();
     obrpc::ObBackupCleanArg arg;
