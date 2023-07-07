@@ -1452,35 +1452,7 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
   }
 
 #define DEF_TEXT_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)                       \
-  template <>                                                           \
-      inline int obj_val_serialize<OBJTYPE>(const ObObj &obj, char* buf, \
-                                            const int64_t buf_len, int64_t& pos) \
-  {                                                                     \
-   int ret = OB_SUCCESS;                                                \
-   OB_UNIS_ENCODE(obj.get_##TYPE());                                    \
-   return ret;                                                          \
-   }                                                                    \
-                                                                        \
-  template <>                                                           \
-  inline int obj_val_deserialize<OBJTYPE>(ObObj &obj, const char* buf,  \
-                                          const int64_t data_len, int64_t& pos) \
-  {                                                                     \
-   int ret = OB_SUCCESS;                                                \
-   VTYPE v = VTYPE();                                                   \
-   OB_UNIS_DECODE(v);                                                   \
-   if (OB_SUCC(ret)) {                                                  \
-     obj.set_##TYPE(OBJTYPE, v);                                        \
-   }                                                                    \
-   return ret;                                                          \
-  }                                                                    \
-                                                                        \
-  template <>                                                           \
-  inline int64_t obj_val_get_serialize_size<OBJTYPE>(const ObObj &obj)         \
-  {                                                                     \
-   int64_t len = 0;                                                     \
-   OB_UNIS_ADD_LEN(obj.get_##TYPE());                                   \
-   return len;                                                          \
-   }
+  DEF_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)
 
 // ToDo: @gehao
 // 1. SERIALIZE/DESERIALIZE will drop has_lob_header flag. However, only table api use these functions,
@@ -1916,7 +1888,7 @@ inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_l
     ret = serialization::decode_otimestamp_tz_type(buf, buf_len, pos, \
                                                    *((int64_t *)&ot_data.time_us_), \
                                                    *((uint32_t *)&ot_data.time_ctx_.desc_)); \
-    obj.set_otimestamp_value(OBJTYPE, ot_data);\
+    obj.set_obj_value(ot_data);\
     return ret;\
   }                                                                     \
                                                                         \
@@ -2003,7 +1975,7 @@ inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_l
     ret = serialization::decode_otimestamp_type(buf, buf_len, pos, \
                                                 *((int64_t *)&ot_data.time_us_), \
                                                 *((uint16_t *)&ot_data.time_ctx_.time_desc_)); \
-    obj.set_otimestamp_value(OBJTYPE, ot_data);\
+    obj.set_obj_value(ot_data);\
     return ret;\
   }                                                                     \
                                                                         \
@@ -2362,7 +2334,7 @@ template <>
   int64_t val = 0;
   OB_UNIS_DECODE(val);
   if (OB_SUCC(ret)) {
-    obj.set_unknown(val);
+    obj.set_obj_value(val);
   }
   return ret;
 }

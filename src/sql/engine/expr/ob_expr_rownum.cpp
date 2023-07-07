@@ -61,7 +61,10 @@ int ObExprRowNum::rownum_eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
   int ret = OB_SUCCESS;
   uint64_t operator_id = expr.extra_;
   ObOperatorKit *kit = ctx.exec_ctx_.get_operator_kit(operator_id);
-  if (OB_ISNULL(kit) || OB_ISNULL(kit->op_)) {
+  if (OB_UNLIKELY(OB_INVALID_ID == operator_id)) {
+    ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Usage of rownum is");
+  } else if (OB_ISNULL(kit) || OB_ISNULL(kit->op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operator is NULL", K(ret), K(operator_id), KP(kit));
   } else if (OB_UNLIKELY(PHY_COUNT != kit->op_->get_spec().type_)) {

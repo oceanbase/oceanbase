@@ -4556,6 +4556,9 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
     LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, col_name.length(), col_name.ptr(), scope_name.length(), scope_name.ptr());
   } else if (OB_FAIL(expr->formalize(session_info))) {
     LOG_WARN("formalize expr failed", K(ret));
+  } else if (OB_UNLIKELY(expr->has_flag(CNT_ROWNUM))) {
+    ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+    LOG_WARN("rownum in default value is not allowed", K(ret));
   } else {
     LOG_DEBUG("succ to resolve_default_expr_v2_column_expr",
               "is_const_expr", expr->is_const_raw_expr(),

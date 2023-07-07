@@ -3691,6 +3691,7 @@ DEFINE_SET_COMMON_OBJ_VALUE(float, float);
 DEFINE_SET_COMMON_OBJ_VALUE(double, double);
 DEFINE_SET_COMMON_OBJ_VALUE(int64, int64_t);
 DEFINE_SET_COMMON_OBJ_VALUE(uint64, uint64_t);
+
 template<>
 inline void ObObj::set_obj_value<ObString>(const ObString &v)
 {
@@ -3717,6 +3718,13 @@ inline void ObObj::set_obj_value<ObURowIDData>(const ObURowIDData &urowid)
 {
   v_.string_ = (const char *)urowid.rowid_content_;
   val_len_ = static_cast<int32_t>(urowid.rowid_len_);
+}
+
+template<>
+inline void ObObj::set_obj_value<ObOTimestampData>(const ObOTimestampData &otimestamp)
+{
+  time_ctx_ = otimestamp.time_ctx_;
+  v_.datetime_ = otimestamp.time_us_;
 }
 
 struct ParamFlag
