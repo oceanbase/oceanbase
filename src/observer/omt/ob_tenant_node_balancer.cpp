@@ -260,7 +260,8 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
         server_resource.min_cpu_ += tenant_units.at(i).config_.min_cpu();
       }
 
-      server_resource.memory_size_ += tenant_units.at(i).config_.memory_size();
+      server_resource.memory_size_ += max(ObMallocAllocator::get_instance()->get_tenant_limit(tenant_units.at(i).tenant_id_),
+                                          tenant_units.at(i).config_.memory_size());
       server_resource.log_disk_size_ += tenant_units.at(i).config_.log_disk_size();
     }
   }
