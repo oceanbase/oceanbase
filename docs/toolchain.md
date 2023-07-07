@@ -39,7 +39,7 @@ The installation instructions vary among the operator systems and package manage
 This includes CentOS, Fedora, OpenAnolis, RedHat, UOS, etc.
 
 ```shell
-yum install git wget rpm* cpio make glibc-devel glibc-headers binutils m4
+yum install git wget rpm* cpio make glibc-devel glibc-headers binutils m4 libtool libaio
 ```
 
 ### Debian based

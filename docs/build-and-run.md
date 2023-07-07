@@ -34,7 +34,7 @@ Now that you built the `observer` binary, you can deploy a OceanBase instance wi
 
 ```shell
 ./tools/deploy/obd.sh prepare -p /tmp/obtest
-./tools/deploy/obd.sh deploy -c single.yaml 
+./tools/deploy/obd.sh deploy -c ./tools/deploy/single.yaml
 ```
 
 This starts the OceanBase server listening on port 10000.
@@ -50,7 +50,7 @@ mysql -uroot -h127.0.0.1 -P10000
 Alternatively, you can use the `obclient` to connect to OceanBase:
 
 ```shell
-./deps/3rd/u01/obclient/bin/obclient -h127.0.0.1 -P10000 -uroot -Doceanbase
+./deps/3rd/u01/obclient/bin/obclient -h127.0.0.1 -P10000 -uroot -Doceanbase -A
 ```
 
 ## Shutdown
@@ -59,13 +59,4 @@ You can run the following command to shut down the server and clean up the deplo
 
 ```shell
 ./tools/deploy/obd.sh destroy --rm -n single
-```
-
-## Bonus: RPM packages
-
-You can build OceanBase RPM packages on Fedora based OS:
-
-```shell
-sudo yum install rpm-build
-bash build.sh rpm --init && cd build_rpm && make -j16 rpm
 ```
