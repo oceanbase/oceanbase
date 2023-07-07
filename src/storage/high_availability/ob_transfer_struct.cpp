@@ -327,30 +327,20 @@ int ObTXTransferUtils::get_tablet_status_(
 }
 
 // TODO(wenjinyu.wjy) (4.3)It needs to be added to trigger the tablet freezing operation
-int ObTXTransferUtils::set_tablet_freeze_flag(const share::ObLSID &ls_id, ObTablet *tablet)
+int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *tablet)
 {
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   ObIMemtableMgr *memtable_mgr = nullptr;
   ObArray<ObTableHandleV2> memtables;
   ObTabletID tablet_id = tablet->get_tablet_meta().tablet_id_;
-  ObLSService *ls_service = nullptr;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
   SCN weak_read_scn;
+  share::ObLSID ls_id = ls.get_ls_id();
 
   if (OB_ISNULL(tablet) ) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), KP(tablet));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
-  } else if (FALSE_IT(weak_read_scn = ls->get_ls_wrs_handler()->get_ls_weak_read_ts())) {
+  } else if (FALSE_IT(weak_read_scn = ls.get_ls_wrs_handler()->get_ls_weak_read_ts())) {
   } else if (!weak_read_scn.is_valid()
       || ObScnRange::MAX_SCN == weak_read_scn) {
     ret = OB_ERR_UNEXPECTED;

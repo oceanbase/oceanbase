@@ -77,7 +77,7 @@ private:
       const share::ObTransferTabletInfo &tablet_info,
       ObLS *ls,
       mds::BufferCtx &ctx);
-
+  static int set_transfer_tablets_freeze_flag_(const ObTXStartTransferOutInfo &tx_start_transfer_out_info);
   static int on_replay_success_(
       const share::SCN &scn,
       const ObTXStartTransferOutInfo &tx_start_transfer_out_info,
