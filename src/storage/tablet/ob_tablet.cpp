@@ -2494,7 +2494,7 @@ int ObTablet::update_upper_trans_version(ObLS &ls, bool &is_updated)
   is_updated = false;
   bool is_paused = false;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  ObTableStoreIterator iter;
+  ObTableStoreIterator iter(false/*is_reverse*/, false/*need_load_sstable*/);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
