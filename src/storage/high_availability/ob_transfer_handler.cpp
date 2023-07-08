@@ -582,8 +582,12 @@ int ObTransferHandler::lock_src_and_dest_ls_member_list_(
 int ObTransferHandler::reset_timeout_for_trans_(ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_EXECUTE_TIMEOUT_US = GCONF._transfer_start_trans_timeout; //default 1s
-  int64_t stmt_timeout = MAX_EXECUTE_TIMEOUT_US;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  int64_t get_transfer_trans_timeout = 10_s;
+  if (tenant_config.is_valid()) {
+    get_transfer_trans_timeout = tenant_config->_transfer_start_trans_timeout;
+  }
+  const int64_t stmt_timeout = get_transfer_trans_timeout;
   if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
     LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
   } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
@@ -891,9 +895,12 @@ int ObTransferHandler::start_trans_(
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_EXECUTE_TIMEOUT_US = GCONF._transfer_start_trans_timeout; //default 1s
-  int64_t stmt_timeout = MAX_EXECUTE_TIMEOUT_US;
   const uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  int64_t stmt_timeout = 10_s;
+  if (tenant_config.is_valid()) {
+    stmt_timeout = tenant_config->_transfer_start_trans_timeout;
+  }
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1535,14 +1542,19 @@ bool ObTransferHandler::can_retry_(
     const int32_t result)
 {
   bool bool_ret = false;
-  const int64_t MAX_TRANSFER_START_RETRY_COUNT = GCONF._transfer_start_retry_count;
+  int64_t max_transfer_start_retry_count = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    max_transfer_start_retry_count = tenant_config->_transfer_start_retry_count;
+  }
+
   if (!task_info.is_valid()) {
     bool_ret = false;
   } else if (ObTransferStatus::DOING == task_info.status_) {
     bool_ret = true;
     retry_count_++;
   } else if (ObTransferStatus::START == task_info.status_) {
-    if (ObTransferUtils::is_need_retry_error(result) && retry_count_ < MAX_TRANSFER_START_RETRY_COUNT) {
+    if (ObTransferUtils::is_need_retry_error(result) && retry_count_ < max_transfer_start_retry_count) {
       retry_count_++;
       bool_ret = true;
     } else {

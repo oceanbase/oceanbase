@@ -2398,7 +2398,11 @@ int ObCopyTransferTabletInfoObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
-  const int64_t FETCH_TABLET_INFO_TIMEOUT = GCONF._transfer_start_rpc_timeout; //default 10ms
+  int64_t get_transfer_start_scn_timeout = 10_s;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(rpc_arg.tenant_id_));
+  if (tenant_config.is_valid()) {
+    get_transfer_start_scn_timeout = tenant_config->_transfer_start_rpc_timeout;
+  }
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -2409,7 +2413,7 @@ int ObCopyTransferTabletInfoObReader::init(
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
-  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(FETCH_TABLET_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(get_transfer_start_scn_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_transfer_tablet_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));

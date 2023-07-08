@@ -3428,7 +3428,11 @@ int ObStorageRpc::get_transfer_start_scn(
 {
   int ret = OB_SUCCESS;
   transfer_start_scn.reset();
-  const int64_t GET_TRANSFER_START_SCN_TIMEOUT = GCONF._transfer_start_rpc_timeout; //default 10ms
+  int64_t get_transfer_start_scn_timeout = 10_s;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    get_transfer_start_scn_timeout = tenant_config->_transfer_start_rpc_timeout;
+  }
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3446,7 +3450,7 @@ int ObStorageRpc::get_transfer_start_scn(
     } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                                   .by(tenant_id)
                                   .dst_cluster_id(src_info.cluster_id_)
-                                  .timeout(GET_TRANSFER_START_SCN_TIMEOUT)
+                                  .timeout(get_transfer_start_scn_timeout)
                                   .get_transfer_start_scn(arg, res))) {
       LOG_WARN("failed to get transfer start scn", K(ret), K(src_info), K(arg));
     } else {
