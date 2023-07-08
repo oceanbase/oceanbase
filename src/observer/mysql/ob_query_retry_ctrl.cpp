@@ -611,6 +611,21 @@ private:
   }
 };
 
+class ObAutoincCacheNotEqualRetryPolicy: public ObRetryPolicy
+{
+public:
+  ObAutoincCacheNotEqualRetryPolicy() = default;
+  ~ObAutoincCacheNotEqualRetryPolicy() = default;
+  virtual void test(ObRetryParam &v) const override
+  {
+    if (v.stmt_retry_times_ < ObQueryRetryCtrl::MAX_SCHEMA_ERROR_LOCAL_RETRY_TIMES) {
+      v.retry_type_ = RETRY_TYPE_LOCAL;
+    } else {
+      try_packet_retry(v);
+    }
+  }
+};
+
 
 ////////// end of policies ////////////
 
@@ -696,6 +711,14 @@ void ObQueryRetryCtrl::schema_error_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObCheckSchemaUpdatePolicy schema_update_policy;
   retry_obj.test(schema_update_policy);
+}
+
+void ObQueryRetryCtrl::autoinc_cache_not_equal_retry_proc(ObRetryParam &v)
+{
+  ObRetryObject retry_obj(v);
+  ObAutoincCacheNotEqualRetryPolicy autoinc_retry_policy;
+  ObCommonRetryLinearShortWaitPolicy retry_short_wait;
+  retry_obj.test(autoinc_retry_policy).test(retry_short_wait);
 }
 
 void ObQueryRetryCtrl::snapshot_discard_proc(ObRetryParam &v)
@@ -935,6 +958,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_EAGAIN,                   schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_NOT_UPTODATE,             schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_ERR_PARALLEL_DDL_CONFLICT,       schema_error_proc,          inner_schema_error_proc,                              nullptr);
+  ERR_RETRY_FUNC("SCHEMA",   OB_AUTOINC_CACHE_NOT_EQUAL,         autoinc_cache_not_equal_retry_proc, autoinc_cache_not_equal_retry_proc, nullptr);
 
   /* location */
   ERR_RETRY_FUNC("LOCATION", OB_LOCATION_LEADER_NOT_EXIST,       location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_location_retry_proc);

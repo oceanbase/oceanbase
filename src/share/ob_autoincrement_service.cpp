@@ -877,7 +877,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam &param, TableNode 
         table_node->autoinc_version_ = autoinc_version;
       // old request cannot get table node, it should retry
       } else if (OB_UNLIKELY(autoinc_version < table_node->autoinc_version_)) {
-        ret = OB_SCHEMA_ERROR;
+        ret = OB_AUTOINC_CACHE_NOT_EQUAL;
         LOG_WARN("old reqeust can not get table node, it should retry", KR(ret), K(autoinc_version), K(table_node->autoinc_version_));
       }
       table_node->alloc_mutex_.unlock();
@@ -1780,7 +1780,7 @@ int ObAutoIncInnerTableProxy::check_inner_autoinc_version(const int64_t &request
                                                                         K(inner_autoinc_version), K(request_autoinc_version));
   // old request
   } else if (OB_UNLIKELY(inner_autoinc_version > request_autoinc_version)) {
-    ret = OB_SCHEMA_ERROR;
+    ret = OB_AUTOINC_CACHE_NOT_EQUAL;
     LOG_WARN("inner_autoinc_version is greater than autoinc_version, request needs retry", KR(ret), K(key),
                                                                                            K(inner_autoinc_version), K(request_autoinc_version));
   }

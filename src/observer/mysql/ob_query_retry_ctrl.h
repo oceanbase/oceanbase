@@ -303,6 +303,7 @@ private:
   static void force_local_retry_proc(ObRetryParam &v);
   static void switch_consumer_group_retry_proc(ObRetryParam &v);
   static void timeout_proc(ObRetryParam &v);
+  static void autoinc_cache_not_equal_retry_proc(ObRetryParam &v);
 
 
   // processors for inner SQL error codes only

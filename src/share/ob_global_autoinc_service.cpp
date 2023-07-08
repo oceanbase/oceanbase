@@ -211,7 +211,7 @@ int ObGlobalAutoIncService::handle_next_autoinc_request(
       cache_node.reset();
       OZ(fetch_next_node_(request, cache_node));
     } else if (OB_UNLIKELY(request_version < cache_node.autoinc_version_)) {
-      ret = OB_SCHEMA_ERROR;
+      ret = OB_AUTOINC_CACHE_NOT_EQUAL;
       LOG_WARN("request autoinc_version is less than autoinc_version_ in table_node, it should retry", KR(ret), K(tenant_id), K(table_id),
                                                                                                        K(request_version), K(cache_node.autoinc_version_));
     }
@@ -352,13 +352,13 @@ int ObGlobalAutoIncService::handle_push_autoinc_request(
       if (OB_FAIL(autoinc_map_.erase_refactored(key))) {
         LOG_WARN("fail to erase autoinc cache map key", K(ret));
       } else {
-        ret = OB_SCHEMA_ERROR;
+        ret = OB_AUTOINC_CACHE_NOT_EQUAL;
         LOG_WARN("request autoinc_version is bigger than cache_node autoinc_version, erase key", KR(ret), K(tenant_id), K_(key.table_id),
                                                                                                  K(request_version), K(cache_node.autoinc_version_));
       }
     // old request just ignore
     } else if (OB_UNLIKELY(request_version < cache_node.autoinc_version_)) {
-      ret = OB_SCHEMA_ERROR;
+      ret = OB_AUTOINC_CACHE_NOT_EQUAL;
       LOG_WARN("request autoinc_version is less than cache_node autoinc_version", KR(ret), K(tenant_id), K_(key.table_id),
                                                                                   K(request_version), K(cache_node.autoinc_version_));
     } else if (OB_LIKELY(request_version == cache_node.autoinc_version_)) {
