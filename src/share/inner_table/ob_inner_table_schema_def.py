@@ -11945,11 +11945,10 @@ def_table_schema(
           AND    db.in_recyclebin = 0
           AND    db.database_name != '__recyclebin'
           LEFT JOIN oceanbase.__all_column d_col
-          ON     c.is_hidden = 1
-          AND    substr(c.column_name, 1, 8) = '__substr'
-          AND    i.data_table_id = d_col.table_id
-          AND    i.tenant_id = d_col.tenant_id
-          AND    substr(c.column_name, 8 + instr(substr(c.column_name, 8), '_')) = d_col.column_id
+          ON    i.data_table_id = d_col.table_id
+          AND   i.tenant_id = d_col.tenant_id
+          AND   (case when (c.is_hidden = 1 and substr(c.column_name, 1, 8) = '__substr') then
+                   substr(c.column_name, 8 + instr(substr(c.column_name, 8), '_')) else 0 end) = d_col.column_id
         UNION ALL
           SELECT  db.database_name  AS TABLE_SCHEMA,
                   t.table_name      AS TABLE_NAME,
@@ -12007,11 +12006,10 @@ def_table_schema(
           JOIN   oceanbase.__all_database db
           ON     i.database_id = db.database_id
           LEFT JOIN oceanbase.__ALL_VIRTUAL_CORE_COLUMN_TABLE d_col
-          ON    c.is_hidden = 1
-          AND   substr(c.column_name, 1, 8) = '__substr'
-          AND   i.data_table_id = d_col.table_id
+          ON    i.data_table_id = d_col.table_id
           AND   i.tenant_id = d_col.tenant_id
-          AND   substr(c.column_name, 8 + instr(substr(c.column_name, 8), '_')) = d_col.column_id
+          AND   (case when (c.is_hidden = 1 and substr(c.column_name, 1, 8) = '__substr') then
+                   substr(c.column_name, 8 + instr(substr(c.column_name, 8), '_')) else 0 end) = d_col.column_id
         UNION ALL
           SELECT db.database_name  AS TABLE_SCHEMA,
                   t.table_name      AS TABLE_NAME,
