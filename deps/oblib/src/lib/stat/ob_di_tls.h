@@ -22,7 +22,7 @@ namespace oceanbase
 {
 namespace common
 {
-static thread_local bool is_thread_in_exit = false;
+extern thread_local bool is_thread_in_exit;
 
 template <class T, size_t tag>
 class ObDITls
