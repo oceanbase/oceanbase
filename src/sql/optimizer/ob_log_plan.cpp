@@ -6615,7 +6615,7 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
                                                       origin_child_card))) {
       LOG_WARN("failed to allocate scala group by as top", K(ret));
     } else {
-      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false, groupby_helper.can_basic_pushdown_ || is_partition_wise); //zzydebug
+      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false, groupby_helper.can_basic_pushdown_ || is_partition_wise);
     }
   }
 
@@ -10919,6 +10919,7 @@ int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
   int ret = OB_SUCCESS;
   is_multi_part_dml = false;
   is_result_local = false;
+  ObShardingInfo *source_sharding = NULL;
   if (OB_UNLIKELY(index_dml_infos.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index dml info is empty", K(ret));
@@ -10937,7 +10938,8 @@ int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
   } else if (OB_FAIL(check_location_need_multi_partition_dml(top,
                                                              index_dml_infos.at(0)->loc_table_id_,
                                                              is_multi_part_dml,
-                                                             is_result_local))) {
+                                                             is_result_local,
+                                                             source_sharding))) {
     LOG_WARN("failed to check whether location need multi-partition dml", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -11015,10 +11017,11 @@ int ObLogPlan::check_stmt_need_multi_partition_dml(const ObDMLStmt &stmt,
 int ObLogPlan::check_location_need_multi_partition_dml(ObLogicalOperator &top,
                                                        uint64_t table_id,
                                                        bool &is_multi_part_dml,
-                                                       bool &is_result_local)
+                                                       bool &is_result_local,
+                                                       ObShardingInfo *&source_sharding)
 {
   int ret = OB_SUCCESS;
-  ObShardingInfo *source_sharding = NULL;
+  source_sharding = NULL;
   ObTablePartitionInfo *source_table_part = NULL;
   ObTableLocationType source_loc_type = OB_TBL_LOCATION_UNINITIALIZED;
   is_multi_part_dml = false;

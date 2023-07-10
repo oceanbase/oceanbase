@@ -52,8 +52,7 @@ int ObStmtExprCopier::do_visit(ObRawExpr *&expr)
   return copier_.copy_on_replace(expr, expr);
 }
 
-int ObSharedExprChecker::init(ObDMLStmt &stmt,
-                              bool ignore_column /* default false */ )
+int ObSharedExprChecker::init(ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   hash::ObHashSet<uint64_t> stmt_expr_set;
@@ -63,7 +62,6 @@ int ObSharedExprChecker::init(ObDMLStmt &stmt,
     LOG_WARN("failed to create expr set", K(ret));
   } else {
     stmt_expr_set_ = &stmt_expr_set;
-    ignore_column_ = ignore_column;
     set_relation_scope();
     if (OB_FAIL(stmt.iterate_stmt_expr(*this))) {
       LOG_WARN("failed to iterate stmt expr", K(ret));
@@ -91,7 +89,12 @@ int ObSharedExprChecker::is_shared_expr(const ObRawExpr *expr, bool &is_shared) 
 {
   int ret = OB_SUCCESS;
   is_shared = false;
-  if (shared_expr_set_.created()) {
+  if (OB_ISNULL(expr)) {
+    /* do nothing */
+  } else if (T_FUN_COLUMN_CONV == expr->get_expr_type()
+             || expr->is_column_ref_expr()) {
+    /* do nothing */
+  } else if (shared_expr_set_.created()) {
     uint64_t key = reinterpret_cast<uint64_t>(expr);
     int tmp_ret = shared_expr_set_.exist_refactored(key);
     if (OB_HASH_EXIST == tmp_ret) {
@@ -112,14 +115,13 @@ int ObSharedExprChecker::do_visit(ObRawExpr *&expr)
   if (OB_ISNULL(expr) || OB_ISNULL(stmt_expr_set_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(expr), K(stmt_expr_set_));
-  } else if (expr->is_column_ref_expr() && ignore_column_) {
-    /* do nothing */
   } else if (expr->has_flag(CNT_COLUMN) ||
               expr->has_flag(CNT_AGG) ||
               expr->has_flag(CNT_SET_OP) ||
               expr->has_flag(CNT_WINDOW_FUNC) ||
               expr->has_flag(CNT_DYNAMIC_PARAM) ||
               expr->has_flag(CNT_SUB_QUERY)) {
+    bool need_check_in_share = T_FUN_COLUMN_CONV == expr->get_expr_type();
     if (OB_FAIL(stmt_expr_set_->set_refactored(key, 0))) {
       if (OB_HASH_EXIST == ret) {
         is_shared = true;
@@ -130,7 +132,7 @@ int ObSharedExprChecker::do_visit(ObRawExpr *&expr)
         LOG_WARN("failed to add expr into set", K(ret));
       }
     }
-    if (OB_SUCC(ret) && !is_shared) {
+    if (OB_SUCC(ret) && (!is_shared || need_check_in_share)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
         if (OB_FAIL(SMART_CALL(do_visit(expr->get_param_expr(i))))) {
           LOG_WARN("failed to visit first", K(ret));

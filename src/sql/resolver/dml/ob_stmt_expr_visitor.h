@@ -201,18 +201,16 @@ class ObSharedExprChecker : public ObStmtExprVisitor
 {
 public:
   ObSharedExprChecker() : stmt_expr_set_(NULL),
-                          shared_expr_set_(),
-                          ignore_column_(false) {}
+                          shared_expr_set_() {}
 
   virtual int do_visit(ObRawExpr *&expr) override;
 
-  int init(ObDMLStmt &stmt, bool ignore_column = false);
+  int init(ObDMLStmt &stmt);
   int destroy();
   int is_shared_expr(const ObRawExpr *expr, bool &is_shared) const;
 private:
   hash::ObHashSet<uint64_t> *stmt_expr_set_;
   hash::ObHashSet<uint64_t> shared_expr_set_;
-  bool ignore_column_;
 };
 
 }

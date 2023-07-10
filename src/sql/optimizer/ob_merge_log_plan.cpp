@@ -200,9 +200,10 @@ int ObMergeLogPlan::create_merge_plans(ObIArray<CandidatePlan> &candi_plans,
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
   CandidatePlan candi_plan;
-  ObSEArray<ObPCParamEqualInfo, 1> equal_infos;
+  ObSEArray<std::pair<ObRawExpr*, ObRawExpr*>, 1> equal_pairs;
   bool is_multi_part_dml = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_plans.count(); i++) {
+    equal_pairs.reuse();
     candi_plan = candi_plans.at(i);
     is_multi_part_dml = force_multi_part;
     if (OB_ISNULL(candi_plan.plan_tree_)) {
@@ -213,7 +214,7 @@ int ObMergeLogPlan::create_merge_plans(ObIArray<CandidatePlan> &candi_plans,
                                                             insert_table_part,
                                                             insert_sharding,
                                                             is_multi_part_dml,
-                                                            equal_infos))) {
+                                                            equal_pairs))) {
       LOG_WARN("failed to check need multi-partition dml", K(ret));
     } else if (is_multi_part_dml && force_no_multi_part) {
       /*do nothing*/
@@ -222,7 +223,7 @@ int ObMergeLogPlan::create_merge_plans(ObIArray<CandidatePlan> &candi_plans,
                && OB_FAIL(allocate_exchange_as_top(candi_plan.plan_tree_, exch_info))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
     } else if (OB_FAIL(allocate_merge_as_top(candi_plan.plan_tree_, insert_table_part,
-                                             is_multi_part_dml, &equal_infos))) {
+                                             is_multi_part_dml, &equal_pairs))) {
       LOG_WARN("failed to allocate merge as top", K(ret));
     } else if (OB_FAIL(merge_plans.push_back(candi_plan))) {
       LOG_WARN("failed to push back", K(ret));
@@ -366,7 +367,7 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
 int ObMergeLogPlan::allocate_merge_as_top(ObLogicalOperator *&top,
                                           ObTablePartitionInfo *table_partition_info,
                                           bool is_multi_part_dml,
-                                          const ObIArray<ObPCParamEqualInfo> *equal_infos)
+                                          const ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> *equal_pairs)
 {
   int ret = OB_SUCCESS;
   ObLogMerge *merge_op = NULL;
@@ -386,8 +387,8 @@ int ObMergeLogPlan::allocate_merge_as_top(ObLogicalOperator *&top,
     merge_op->set_child(ObLogicalOperator::first_child, top);
     merge_op->set_is_multi_part_dml(is_multi_part_dml);
     merge_op->set_table_partition_info(table_partition_info);
-    if (NULL != equal_infos && OB_FAIL(merge_op->set_equal_infos(*equal_infos))) {
-      LOG_WARN("failed to set equal infos", K(ret));
+    if (NULL != equal_pairs && OB_FAIL(merge_op->set_equal_pairs(*equal_pairs))) {
+      LOG_WARN("failed to set equal pairs", K(ret));
     } else if (OB_FAIL(merge_op->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
@@ -407,34 +408,44 @@ int ObMergeLogPlan::check_merge_need_multi_partition_dml(ObLogicalOperator &top,
                                                          ObTablePartitionInfo *insert_table_partition,
                                                          ObShardingInfo *insert_sharding,
                                                          bool &is_multi_part_dml,
-                                                         ObIArray<ObPCParamEqualInfo> &equal_infos)
+                                                         ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
 {
   int ret = OB_SUCCESS;
   is_multi_part_dml = false;
-  equal_infos.reset();
+  equal_pairs.reset();
   bool is_one_part_table = false;
   bool is_partition_wise = false;
   bool is_basic = false;
   const ObMergeStmt *merge_stmt = NULL;
   bool is_result_local = false;
-  if (OB_ISNULL(merge_stmt = get_stmt())) {
+  ObShardingInfo *update_sharding = NULL;
+  if (OB_ISNULL(merge_stmt = get_stmt()) ||
+      OB_UNLIKELY(index_dml_infos_.empty()) || OB_ISNULL(index_dml_infos_.at(0))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(merge_stmt));
-  } else if (OB_FAIL(check_need_multi_partition_dml(*merge_stmt,  // zhanyue todo:will call basic function, need check it
-                                                    top,
-                                                    index_dml_infos_,
-                                                    is_multi_part_dml,
-                                                    is_result_local))) {
-    LOG_WARN("failed to check need multi-partition dml", K(ret));
+    LOG_WARN("unexpected params", K(ret), K(merge_stmt), K(index_dml_infos_));
+  } else if (OB_FAIL(check_stmt_need_multi_partition_dml(*merge_stmt, index_dml_infos_, is_multi_part_dml))) {
+    LOG_WARN("failed to check stmt need multi partition dml", K(ret));
   } else if (is_multi_part_dml) {
     /*do nothing*/
   } else if (OB_FAIL(check_merge_stmt_need_multi_partition_dml(is_multi_part_dml, is_one_part_table))) {
     LOG_WARN("failed to check need multi-partition dml", K(ret));
   } else if (is_multi_part_dml) {
     /*do nothing*/
+  } else if (OB_FAIL(check_location_need_multi_partition_dml(top,
+                                                             index_dml_infos_.at(0)->loc_table_id_,
+                                                             is_multi_part_dml,
+                                                             is_result_local,
+                                                             update_sharding))) {
+    LOG_WARN("failed to check whether location need multi-partition dml", K(ret));
+  } else if (is_multi_part_dml) {
+    /*do nothing*/
   } else if (!merge_stmt->has_insert_clause() || is_one_part_table) {
     is_multi_part_dml = false;
-  } else if (OB_FAIL(check_update_insert_sharding_basic(top, insert_sharding, is_basic, equal_infos))) {
+  } else if (OB_FAIL(check_update_insert_sharding_basic(top,
+                                                        insert_sharding,
+                                                        update_sharding,
+                                                        is_basic,
+                                                        equal_pairs))) {
     LOG_WARN("failed to check update insert sharding basic", K(ret));
   } else if (is_basic) {
     is_multi_part_dml = false;
@@ -449,21 +460,23 @@ int ObMergeLogPlan::check_merge_need_multi_partition_dml(ObLogicalOperator &top,
 
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to check merge_stmt need multi-partition-dml", K(is_multi_part_dml),
-                                                          K(is_partition_wise), K(equal_infos));
+                                                          K(is_partition_wise), K(equal_pairs));
   }
   return ret;
 }
 
 int ObMergeLogPlan::check_update_insert_sharding_basic(ObLogicalOperator &top,
                                                        ObShardingInfo *insert_sharding,
+                                                       ObShardingInfo *update_sharding,
                                                        bool &is_basic,
-                                                       ObIArray<ObPCParamEqualInfo> &equal_infos)
+                                                       ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
 {
   int ret = OB_SUCCESS;
   is_basic = false;
   bool can_gen_cons = false;
-  ObShardingInfo *update_sharding = top.get_strong_sharding();
   ObSEArray<ObShardingInfo*, 2> input_sharding;
+  bool is_sharding_basic = false;
+  bool is_match_same_partition = false;
   if (NULL == insert_sharding || NULL == update_sharding) {
     /* do nothing */
   } else if (OB_FAIL(input_sharding.push_back(insert_sharding))
@@ -471,21 +484,23 @@ int ObMergeLogPlan::check_update_insert_sharding_basic(ObLogicalOperator &top,
     LOG_WARN("failed to push back sharding info", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::check_basic_sharding_info(get_optimizer_context().get_local_server_addr(),
                                                                 input_sharding,
-                                                                is_basic))) {
+                                                                is_sharding_basic))) {
     LOG_WARN("failed to check basic sharding info", K(ret));
-  } else if (!is_basic) {
+  } else if (!is_sharding_basic) {
     /* do nothing */
-  } else if (!match_same_partition(*insert_sharding, *update_sharding)) {
+  } else if (false == (is_match_same_partition = match_same_partition(*insert_sharding, *update_sharding))) {
     /* insert_sharding and update_sharding match basic,
        but the partition is different, need multi part merge */
     is_basic = false;
-  } else if (OB_FAIL(generate_equal_constraint(top, *insert_sharding, can_gen_cons, equal_infos))) {
+  } else if (OB_FAIL(generate_equal_constraint(top, *insert_sharding, can_gen_cons, equal_pairs))) {
     LOG_WARN("failed to generate equal constraint", K(ret));
   } else if (can_gen_cons) {
     is_basic = true;
   } else {
     is_basic = false;
   }
+  LOG_TRACE("finish check update insert sharding basic", K(is_basic), K(is_sharding_basic),
+          K(is_match_same_partition), K(can_gen_cons), KPC(insert_sharding), KPC(update_sharding));
   return ret;
 }
 
@@ -512,21 +527,20 @@ bool ObMergeLogPlan::match_same_partition(const ObShardingInfo &l_sharding_info,
 int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
                                               ObShardingInfo &insert_sharding,
                                               bool &can_gen_cons,
-                                              ObIArray<ObPCParamEqualInfo> &equal_infos)
+                                              ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
 {
   int ret = OB_SUCCESS;
-  equal_infos.reset();
+  equal_pairs.reset();
   can_gen_cons = false;
   ObLogTableScan *target_table_scan = NULL;
   ObSEArray<ObRawExpr*, 4> left_part_keys;
   ObSEArray<ObRawExpr*, 4> right_part_keys;
   ObSEArray<ObRawExpr*, 4> right_conds;
-  ObQueryCtx *query_ctx = NULL;
   const ObMergeStmt *stmt = NULL;
   const TableItem *target_table = NULL;
-  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx = get_stmt()->get_query_ctx())) {
+  if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(stmt), K(query_ctx));
+    LOG_WARN("get unexpected null", K(ret), K(stmt));
   } else if (OB_ISNULL(target_table = stmt->get_table_item_by_id(stmt->get_target_table_id()))) {
     LOG_WARN("failed to get target table", K(ret));
   } else if (OB_FAIL(get_target_table_scan(target_table->get_base_table_item().table_id_,
@@ -546,57 +560,77 @@ int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected part key size", K(ret), K(left_part_keys), K(right_part_keys));
   } else {
-    ObSEArray<ObConstRawExpr*, 4> l_const_exprs;
-    ObSEArray<ObConstRawExpr*, 4> r_const_exprs;
+    ObSEArray<ObRawExpr*, 4> l_const_exprs;
+    ObSEArray<ObRawExpr*, 4> r_const_exprs;
     const ObIArray<ObRawExpr*> &left_conds = stmt->get_sharding_conditions();
     bool has_equal = true;
     can_gen_cons = true;
-    ObStmtCompareContext context;
-    context.init(&query_ctx->calculable_items_);
     for (int64_t i = 0; OB_SUCC(ret) && has_equal && i < left_part_keys.count(); ++i) {
-      if (OB_FAIL(get_const_expr_values(left_part_keys.at(i), left_conds, l_const_exprs))) {
+      if (OB_FAIL(get_const_expr_values(left_part_keys.at(i),
+                                        left_conds,
+                                        l_const_exprs))) {
         LOG_WARN("failed to get const expr values", K(ret));
       } else if (OB_FAIL(get_const_expr_values(right_part_keys.at(i),
                                                right_conds,
                                                r_const_exprs))) {
         LOG_WARN("failed to get const expr values", K(ret));
+      } else if (ObOptimizerUtil::overlap(l_const_exprs, r_const_exprs)) {
+        /* exists shared exprs in l_const_exprs and r_const_exprs, need not add constrain */
       } else if (OB_FAIL(has_equal_values(l_const_exprs,
                                           r_const_exprs,
-                                          context,
                                           has_equal,
-                                          equal_infos))) {
+                                          equal_pairs))) {
         LOG_WARN("failed to check has equal values", K(ret));
       }
     }
     if (OB_SUCC(ret) && !has_equal) {
-      equal_infos.reset();
+      equal_pairs.reset();
       can_gen_cons = false;
     }
+    LOG_TRACE("finish generate equal constraint", K(can_gen_cons), K(equal_pairs),
+                    K(left_part_keys), K(left_conds), K(right_part_keys), K(right_conds));
   }
   return ret;
 }
 
-int ObMergeLogPlan::has_equal_values(const ObIArray<ObConstRawExpr*> &l_const_exprs,
-                                     const ObIArray<ObConstRawExpr*> &r_const_exprs,
-                                     ObStmtCompareContext &context,
+int ObMergeLogPlan::has_equal_values(const ObIArray<ObRawExpr*> &l_const_exprs,
+                                     const ObIArray<ObRawExpr*> &r_const_exprs,
                                      bool &has_equal,
-                                     ObIArray<ObPCParamEqualInfo> &equal_infos)
+                                     ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
 {
   int ret = OB_SUCCESS;
   has_equal = false;
+  ObObj l_value;
+  ObObj r_value;
+  bool is_valid = false;
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
+  int eq_cmp = 0;
   for (int64_t i = 0; OB_SUCC(ret) && !has_equal && i < l_const_exprs.count(); ++i) {
-    if (OB_ISNULL(l_const_exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(i), K(l_const_exprs));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && !has_equal && j < r_const_exprs.count(); ++j) {
-      context.equal_param_info_.reset();
-      if (OB_ISNULL(r_const_exprs.at(j))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(j), K(r_const_exprs));
-      } else if (l_const_exprs.at(i)->same_as(*r_const_exprs.at(j), &context)) {
-        if (OB_FAIL(append(equal_infos, context.equal_param_info_))) {
-          LOG_WARN("failed to append equal infos", K(ret));
+    if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(opt_ctx.get_exec_ctx(),
+                                                          l_const_exprs.at(i),
+                                                          l_value,
+                                                          is_valid,
+                                                          opt_ctx.get_allocator()))) {
+      LOG_WARN("failed to calc const or calculable expr", K(ret));
+    } else if (!is_valid) {
+      /* do nothing */
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && !has_equal && j < r_const_exprs.count(); ++j) {
+        if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(opt_ctx.get_exec_ctx(),
+                                                              r_const_exprs.at(j),
+                                                              r_value,
+                                                              is_valid,
+                                                              opt_ctx.get_allocator()))) {
+          // Since calculated expr is cached in exec_ctx when call calc_const_or_calculable_expr,
+          // we can call calc_const_or_calculable_expr repeatedly for the same expr.
+          LOG_WARN("failed to calc const or calculable expr", K(ret));
+        } else if (!is_valid) {
+          /* do nothing */
+        } else if (OB_UNLIKELY(OB_SUCCESS != l_value.compare(r_value, eq_cmp))
+                   || 0 != eq_cmp) {
+          /* do nothing */
+        } else if (OB_FAIL(equal_pairs.push_back(std::pair<ObRawExpr*, ObRawExpr*>(l_const_exprs.at(i), r_const_exprs.at(j))))) {
+          LOG_WARN("failed to push back", K(ret));
         } else {
           has_equal = true;
         }
@@ -607,8 +641,8 @@ int ObMergeLogPlan::has_equal_values(const ObIArray<ObConstRawExpr*> &l_const_ex
 }
 
 int ObMergeLogPlan::get_const_expr_values(const ObRawExpr *part_expr,
-                                      const ObIArray<ObRawExpr*> &conds,
-                                      ObIArray<ObConstRawExpr*> &const_exprs)
+                                          const ObIArray<ObRawExpr*> &conds,
+                                          ObIArray<ObRawExpr*> &const_exprs)
 {
   int ret = OB_SUCCESS;
   const_exprs.reuse();
@@ -619,7 +653,7 @@ int ObMergeLogPlan::get_const_expr_values(const ObRawExpr *part_expr,
     /* do nothing */
   } else {
     ObRawExpr *cur_expr = NULL;
-    ObConstRawExpr *const_expr = NULL;
+    ObRawExpr *const_expr = NULL;
     ObRawExpr *param_1 = NULL;
     ObRawExpr *param_2 = NULL;
     bool is_const = false;
@@ -638,10 +672,10 @@ int ObMergeLogPlan::get_const_expr_values(const ObRawExpr *part_expr,
         LOG_WARN("failed to get expr without lossless cast", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(param_2, param_2))) {
         LOG_WARN("failed to get expr without lossless cast", K(ret));
-      } else if (part_expr == param_1 && param_2->is_const_raw_expr()) {
-        const_expr = static_cast<ObConstRawExpr*>(param_2);
-      } else if (part_expr == param_2 && param_1->is_const_raw_expr()) {
-        const_expr = static_cast<ObConstRawExpr*>(param_1);
+      } else if (part_expr == param_1 && param_2->is_const_expr()) {
+        const_expr = param_2;
+      } else if (part_expr == param_2 && param_1->is_const_expr()) {
+        const_expr = param_1;
       }
 
       if (NULL != const_expr && ob_is_valid_obj_tc(const_expr->get_type_class())) {
@@ -709,8 +743,7 @@ int ObMergeLogPlan::check_update_insert_sharding_partition_wise(ObLogicalOperato
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(stmt->get_value_exprs(source_exprs))) {
     LOG_WARN("failed to get value exprs", K(ret));
-  }
-  else if (OB_UNLIKELY(target_exprs.count() != source_exprs.count())) {
+  } else if (OB_UNLIKELY(target_exprs.count() != source_exprs.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected exprs count", K(ret), K(target_exprs), K(source_exprs));
   } else {

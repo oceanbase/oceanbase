@@ -52,7 +52,7 @@ private:
   int allocate_merge_as_top(ObLogicalOperator *&top,
                             ObTablePartitionInfo *table_partition_info,
                             bool is_multi_part_dml,
-                            const ObIArray<ObPCParamEqualInfo> *equal_infos);
+                            const ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> *equal_pairs);
   int candi_allocate_subplan_filter_for_merge();
   int candi_allocate_pdml_merge();
   int create_pdml_merge_plan(ObLogicalOperator *&top,
@@ -63,25 +63,25 @@ private:
                                            ObTablePartitionInfo *insert_table_partition,
                                            ObShardingInfo *insert_sharding,
                                            bool &is_multi_part_dml,
-                                           ObIArray<ObPCParamEqualInfo> &equal_infos);
+                                           ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs);
   int check_update_insert_sharding_basic(ObLogicalOperator &top,
                                          ObShardingInfo *insert_sharding,
+                                         ObShardingInfo *update_sharding,
                                          bool &is_basic,
-                                         ObIArray<ObPCParamEqualInfo> &equal_infos);
+                                         ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs);
   bool match_same_partition(const ObShardingInfo &l_sharding_info,
                             const ObShardingInfo &r_sharding_info);
   int generate_equal_constraint(ObLogicalOperator &top,
                                 ObShardingInfo &insert_sharding,
                                 bool &can_gen_cons,
-                                ObIArray<ObPCParamEqualInfo> &equal_infos);
-  int has_equal_values(const ObIArray<ObConstRawExpr*> &l_const_exprs,
-                       const ObIArray<ObConstRawExpr*> &r_const_exprs,
-                       ObStmtCompareContext &context,
+                                ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs);
+  int has_equal_values(const ObIArray<ObRawExpr*> &l_const_exprs,
+                       const ObIArray<ObRawExpr*> &r_const_exprs,
                        bool &has_equal,
-                       ObIArray<ObPCParamEqualInfo> &equal_infos);
+                       ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs);
   int get_const_expr_values(const ObRawExpr *part_expr,
                             const ObIArray<ObRawExpr*> &conds,
-                            ObIArray<ObConstRawExpr*> &const_exprs);
+                            ObIArray<ObRawExpr*> &const_exprs);
   int get_target_table_scan(const uint64_t target_table_id,
                             ObLogicalOperator *cur_op,
                             ObLogTableScan *&target_table_scan);

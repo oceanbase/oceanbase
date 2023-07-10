@@ -232,7 +232,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     LOG_WARN("invalid parameter", K(ret));
   } else if (OB_FAIL(ObTransformRule::check_hint_status(*stmt, hint_allowed_trans))) {
     LOG_WARN("failed to check_hint_status", K(ret));
-  } else if (!stmt->is_insert_stmt() && OB_FAIL(shared_expr_checker.init(*stmt, true))) {
+  } else if (!stmt->is_insert_stmt() && OB_FAIL(shared_expr_checker.init(*stmt))) {
     LOG_WARN("failed to init shared expr checker", K(ret));
   } else {
     ConstInfoContext const_ctx(shared_expr_checker, hint_allowed_trans);
