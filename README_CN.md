@@ -133,5 +133,5 @@ OceanBase 数据库根据 Mulan 公共许可证版本 2 获得许可。有关详
 
 * [中文论坛](https://ask.oceanbase.com/)
 * [Slack Workspace](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
-* 钉钉群: 33254054 ([QR code](images/dingtalk.svg))
+* 钉钉群: 33254054 ([二维码](images/dingtalk.svg))
 * 微信群 (添加微信小助手: OBCE666)
