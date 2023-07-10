@@ -33,7 +33,6 @@ namespace tools
 int ObAdminDumpBlockHelper::mmap_log_file(char *&buf_out,
                                           const int64_t buf_len,
                                           const char *path,
-                                          const int64_t header_size,
                                           int &fd_out)
 {
   int ret = OB_SUCCESS;
@@ -42,12 +41,12 @@ int ObAdminDumpBlockHelper::mmap_log_file(char *&buf_out,
   if (-1 == (fd_out = ::open(path, O_RDONLY))) {
     ret = palf::convert_sys_errno();
     LOG_WARN("open file fail", K(path), KERRMSG, K(ret));
-  } else if (NULL == (buf = ::mmap(NULL, buf_len, PROT_READ, MAP_SHARED, fd_out, 0 + header_size))) {
+  } else if (MAP_FAILED== (buf = ::mmap(NULL, buf_len, PROT_READ, MAP_PRIVATE, fd_out, 0)) || NULL == buf) {
     ret = palf::convert_sys_errno();
-    LOG_WARN("failed to mmap file", K(buf_len), K(path), K(errno), KERRMSG, K(ret), K(fd_out), K(header_size));
+    LOG_WARN("failed to mmap file", K(buf_len), K(path), K(errno), KERRMSG, K(ret), K(fd_out));
   } else {
     buf_out = static_cast<char *>(buf);
-    LOG_INFO("map_log_file success", K(path), K(buf), K(fd_out));
+    LOG_INFO("map_log_file success", K(path), KP(buf), K(fd_out), KP(buf_out));
   }
   return ret;
 }
@@ -166,15 +165,17 @@ int ObAdminDumpBlock::dump()
     LOG_WARN("ObAdminDumpBlockHelper get_file_meta failed", K(block_path_));
   } else {
     MemoryStorage mem_storage;
-    char *buf = NULL;
+    char *mmap_buf = NULL;
+    char *data_buf = NULL;
     int fd_out = -1;
     const LSN end_lsn = start_lsn + body_size;
     auto get_file_size = [&]() -> LSN { return end_lsn; };
     if (mem_storage.init(start_lsn)) {
       LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
-    } else if (OB_FAIL(helper.mmap_log_file(buf, body_size, block_path_, header_size, fd_out))) {
+    } else if (OB_FAIL(helper.mmap_log_file(mmap_buf, header_size + body_size, block_path_, fd_out))) {
       LOG_WARN("mmap_log_file_ failed", K(ret));
-    } else if (OB_FAIL(mem_storage.append(buf, body_size))) {
+    } else if (FALSE_IT(data_buf = mmap_buf + header_size)) {
+    } else if (OB_FAIL(mem_storage.append(data_buf, body_size))) {
       LOG_WARN("MemoryStorage append failed", K(ret));
     } else if (OB_FAIL(iter.init(start_lsn, get_file_size, &mem_storage))) {
       LOG_WARN("LogIteratorImpl init failed", K(ret), K(start_lsn), K(end_lsn));
@@ -184,7 +185,7 @@ int ObAdminDumpBlock::dump()
       LOG_INFO("ObAdminDumpBlock dump success", K(ret), K(block_path_), K(start_lsn), K(header_size),
                K(body_size));
     }
-    helper.unmap_log_file(buf, body_size, fd_out);
+    helper.unmap_log_file(mmap_buf, header_size + body_size, fd_out);
   }
   return ret;
 }
@@ -305,13 +306,15 @@ int ObAdminDumpMetaBlock::dump()
     start_lsn = LSN(PALF_INITIAL_LSN_VAL);
     const LSN end_lsn = start_lsn + body_size;
     auto get_file_size = [&]() -> LSN { return end_lsn; };
-    char *buf = NULL;
+    char *mmap_buf = NULL;
+    char *data_buf = NULL;
     int fd_out = -1;
     if (mem_storage.init(start_lsn)) {
       LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
-    } else if (OB_FAIL(helper.mmap_log_file(buf, body_size, block_path_, header_size, fd_out))) {
+    } else if (OB_FAIL(helper.mmap_log_file(mmap_buf, header_size + body_size, block_path_, fd_out))) {
       LOG_WARN("mmap_log_file_ failed", K(ret));
-    } else if (OB_FAIL(mem_storage.append(buf, body_size))) {
+    } else if (FALSE_IT(data_buf = mmap_buf + header_size)) {
+    } else if (OB_FAIL(mem_storage.append(data_buf, body_size))) {
       LOG_WARN("MemoryStorage append failed", K(ret));
     } else if (OB_FAIL(iter.init(start_lsn, get_file_size, &mem_storage))) {
       LOG_WARN("LogIteratorImpl init failed", K(ret), K(start_lsn), K(end_lsn));
@@ -320,7 +323,7 @@ int ObAdminDumpMetaBlock::dump()
     } else {
       LOG_INFO("ObAdminDumpBlock dump success", K(ret), K(block_path_));
     }
-    helper.unmap_log_file(buf, body_size, fd_out);
+    helper.unmap_log_file(mmap_buf, header_size + body_size, fd_out);
   }
   return ret;
 }

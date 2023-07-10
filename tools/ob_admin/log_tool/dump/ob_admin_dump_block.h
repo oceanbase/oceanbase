@@ -27,7 +27,6 @@ public:
   int mmap_log_file(char *&buf_out,
                     const int64_t buf_len,
                     const char *path,
-                    const int64_t header_size,
                     int &fd_out);
   void unmap_log_file(char *buf_in,
                       const int64_t buf_len,
