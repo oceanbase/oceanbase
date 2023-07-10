@@ -16,7 +16,7 @@
     <a href="https://github.com/oceanbase/oceanbase">
         <img alt="forks" src="https://img.shields.io/badge/dynamic/json?color=blue&label=forks&query=forks&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
     </a>
-    <a href="https://en.oceanbase.com/docs/community-observer-en-10000000000829617">
+    <a href="https://en.oceanbase.com/docs/oceanbase-database">
         <img alt="English doc" src="https://img.shields.io/badge/docs-English-blue" />
     </a>
     <a href="https://www.oceanbase.com/docs/oceanbase-database-cn">
@@ -97,7 +97,7 @@ obd demo
     docker exec -it oceanbase-ce ob-mysql sys # Connect to the root user of the sys tenant.
     ```
 
-See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://www.oceanbase.com/docs/common-oceanbase-database-cn-10000000001692850) for more details.
+See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://open.oceanbase.com/quickStart) for more details.
 
 ## 👨‍💻 Start developing
 
