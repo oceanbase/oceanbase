@@ -1,0 +1,142 @@
+
+# owner: kongfanhao.kfh
+# owner group: sql
+# tags: rewrite
+
+--disable_info
+--disable_metadata
+--disable_abort_on_error
+
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+DROP DATABASE IF EXISTS DB_REDUNDANT_CASE_WHEN;
+--enable_warnings
+CREATE DATABASE DB_REDUNDANT_CASE_WHEN;
+USE DB_REDUNDANT_CASE_WHEN;
+
+create table t1(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int);
+create table t2(c1 int, c2 int, c3 int);
+
+insert/*trace*/ into t1 values(1,1,1,1,1,1), (2,2,2,2,2,2), (3,3,3,3,3,3), (4,4,4,4,4,4), (5,5,5,5,5,5);
+
+# disable plan cache
+set ob_enable_plan_cache = 0;
+--echo **************************** basic test **************************** 
+--echo ==== basic select
+--echo
+--echo == basic select: case 1
+select /*+no_rewrite*/ * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 2 end > 3;
+select * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 2 end > 3;
+
+--echo
+--echo == basic select: case 2
+select /*+no_rewrite*/ * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 4 end > 3;
+select * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 4 end > 3;
+
+--echo 
+--echo == basic select: case 3
+select /*+no_rewrite*/* from t1 where c1 > 0 and c4 > 0 and case when c1 > 0 then c2 else c3 end > 3;
+select * from t1 where c1 > 0 and c2 > 0 and case when c1 > 0 then c3 else c4 end > 3;
+
+--echo 
+--echo == basic select: case 4
+select /*+no_rewrite*/* from t1 where c1 > 1 and case when c1 > 1 then c2 else c3 end;
+select * from t1 where c1 > 1 and case when c1 > 1 then c2 else c3 end;
+
+--echo 
+--echo == basic select: case 5
+select /*+no_rewrite*/* from t1 where c1 > 0 and case when c1 > 1 then c2 else c3 end > 3;
+select * from t1 where c1 > 0 and case when c1 > 1 then c2 else c3 end > 3;
+
+--echo 
+--echo == basic select: case 6
+select /*+no_rewrite*/* from t1 where c1 > 1 and c2 > 1 and 
+            case when c1 > 1 then c2 else c3 end is not null;
+select * from t1 where c1 > 1 and c2 > 1 and 
+            case when c1 > 1 then c2 else c3 end is not null;
+
+--echo 
+--echo == basic select: case 7
+select /*+no_rewrite*/* from t1 where c1 > 1 and c2 > 1 and 
+            case when c1 > 1 then c2 else c3 end > 
+            case when c2 > 1 then c1 else c3 end;
+select * from t1 where c1 > 1 and c2 > 1 and 
+            case when c1 > 1 then c2 else c3 end > 
+            case when c2 > 1 then c1 else c3 end;
+
+--echo
+--echo == basic select: case 8
+select /*+no_rewrite*/ max(c1) as c from t1 where c1 > 0 having c > 2 and case when c > 2 then c else c end > 3;
+select max(c1) as c from t1 where c1 > 0 having c > 2 and case when c > 2 then c else c end > 3;
+
+--echo ==== basic update
+--echo 
+--echo == basic update: case 1
+update /*+no_rewrite */ t1
+set c1 = 2
+where c2 > 3 and c3 > 4 and case when c2 > 3 then c4 else c5 end > 5;
+
+update t1
+set c1 = 2
+where c2 > 3 and c3 > 4 and case when c2 > 3 then c4 else c5 end > 5;
+
+--echo **************************** cache test **************************** 
+set ob_enable_plan_cache = 1;
+--echo None
+--echo
+
+--echo **************************** index test **************************** 
+create index t1c3 on t1(c3);
+--echo ==== index test 
+--echo
+--echo == index select: case 1
+select /*+no_rewrite*/ * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 2 end > 3;
+select * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 2 end > 3;
+
+--echo
+--echo == index select: case 2
+select /*+no_rewrite*/ * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 4 end > 3;
+select * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 4 end > 3;
+
+--echo 
+--echo == index select: case 3
+select /*+no_rewrite*/* from t1 where c1 > 0 and c4 > 0 and case when c1 > 0 then c2 else c3 end > 3;
+select * from t1 where c1 > 0 and c2 > 0 and case when c1 > 0 then c3 else c4 end > 3;
+
+--echo 
+--echo == index select: case 4
+SELECT /*+no_rewrite*/* FROM T1 WHERE c1 > 0 AND CASE WHEN c1 > 1 THEN c2 ELSE c3 END > 3;
+SELECT * FROM T1 WHERE c1 > 0 AND CASE WHEN c1 > 1 THEN c2 ELSE c3 END > 3;
+
+--echo **************************** shared stmt test **************************** 
+--echo ==== shared stmt test
+--echo
+--echo == shared stmt: case 1
+--echo `case when c1 > c2 then c2 else c4 end > 2` is shared stmt, should be rewritten
+select /*+no_rewrite*/ case when c1 > c2 then c2 else c4 end > 1 
+from t1 
+where c1 > c2 and case when c1 > c2 then c2 else c4 end > 2;
+
+select case when c1 > c2 then c2 else c4 end > 1 
+from t1 
+where c1 > c2 and case when c1 > c2 then c2 else c4 end > 2;
+
+--echo 
+--echo == shared stmt: case 2
+--echo `case when c1 > c2 then c2 else c4 end > 1` is shared stmt, shouldn't be rewritten
+select /*+no_rewrite*/ case when c1 > c2 then c2 else c4 end > 1 
+from t1 
+where c1 > c2 and case when c1 > c2 then c2 else c4 end > 1;
+
+select case when c1 > c2 then c2 else c4 end > 1 
+from t1 
+where c1 > c2 and case when c1 > c2 then c2 else c4 end > 1;
+
+
+DROP TABLE T1;
+DROP TABLE T2;
+
+USE DB_REDUNDANT_CASE_WHEN;
+DROP DATABASE DB_REDUNDANT_CASE_WHEN;
