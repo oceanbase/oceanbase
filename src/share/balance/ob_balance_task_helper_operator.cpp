@@ -252,6 +252,7 @@ int ObBalanceTaskHelperTableOperator::fill_dml_spliter(share::ObDMLSqlSplicer &d
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dml.add_column("operation_type", ls_balance_task.get_task_op().to_str()))
+      || OB_FAIL(dml.add_column("tenant_id", ls_balance_task.get_tenant_id()))
       || OB_FAIL(dml.add_column("operation_scn", ls_balance_task.get_operation_scn().get_val_for_inner_table_field()))
       || OB_FAIL(dml.add_column("src_ls", ls_balance_task.get_src_ls().id()))
       || OB_FAIL(dml.add_column("dest_ls", ls_balance_task.get_dest_ls().id()))

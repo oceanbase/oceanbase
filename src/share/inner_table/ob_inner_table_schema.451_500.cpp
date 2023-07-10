@@ -752,7 +752,7 @@ int ObInnerTableSchema::all_balance_task_helper_schema(ObTableSchema &table_sche
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(1);
+  table_schema.set_rowkey_column_num(2);
   table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
   table_schema.set_table_type(SYSTEM_TABLE);
   table_schema.set_index_type(INDEX_TYPE_IS_NOT);
@@ -820,9 +820,24 @@ int ObInnerTableSchema::all_balance_task_helper_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("operation_scn", //column_name
+    ADD_COLUMN_SCHEMA("tenant_id", //column_name
       ++column_id, //column_id
       1, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("operation_scn", //column_name
+      ++column_id, //column_id
+      2, //rowkey_id
       0, //index_id
       0, //part_key_pos
       ObUInt64Type, //column_type

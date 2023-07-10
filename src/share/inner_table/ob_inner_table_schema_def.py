@@ -5679,6 +5679,7 @@ def_table_schema(
   table_type = 'SYSTEM_TABLE',
   gm_columns = ['gmt_create', 'gmt_modified'],
   rowkey_columns = [
+    ('tenant_id', 'int', 'false'),
     ('operation_scn', 'uint', 'false'),
   ],
   in_tenant_space = True,
