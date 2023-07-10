@@ -16,6 +16,7 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_stat_define.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 namespace oceanbase {
 namespace common {
 namespace sqlclient
@@ -92,12 +93,14 @@ public:
                         const ObOptTableStat *tab_stat,
                         const bool is_index_stat);
   int update_table_stat(const uint64_t tenant_id,
+                        ObMySQLTransaction &trans,
                         const common::ObIArray<ObOptTableStat*> &table_stats,
                         const int64_t current_time,
                         const bool is_index_stat,
                         const bool is_history_stat = false);
   int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t exec_tenant_id,
+                         ObMySQLTransaction &trans,
                          const common::ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,
                          bool only_update_col_stat = false,

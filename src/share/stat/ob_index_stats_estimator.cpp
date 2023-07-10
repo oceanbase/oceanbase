@@ -324,14 +324,28 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
       }
     }
     if (OB_SUCC(ret) && is_continued && !index_table_stats.empty()) {
-      if (OB_FAIL(mgr.update_table_stat(index_param.tenant_id_,
-                                        index_table_stats,
-                                        index_param.is_index_stat_))) {
+      ObMySQLTransaction trans;
+      if (OB_FAIL(trans.start(ctx.get_sql_proxy(), index_param.tenant_id_))) {
+          LOG_WARN("fail to start transaction", K(ret));
+      } else if (OB_FAIL(mgr.update_table_stat(index_param.tenant_id_,
+                                               trans,
+                                               index_table_stats,
+                                               index_param.is_index_stat_))) {
         LOG_WARN("failed to update table stats", K(ret));
       } else {
         is_fast_gather = true;
         LOG_TRACE("Succeed to fast gather index stats", K(data_param), K(index_param),
                                                         K(index_table_stats));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(trans.end(true))) {
+          LOG_WARN("fail to commit transaction", K(ret));
+        }
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+          LOG_WARN("fail to roll back transaction", K(tmp_ret));
+        }
       }
     }
   }

@@ -48,7 +48,7 @@ GB_3 [\x30-\x39]
 UTF8_GB_CHAR ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}|{GB_1}{GB_2}|{GB_1}{GB_3}{GB_1}{GB_3})
 space            [ \t\n\r\f]
 non_newline      [^\n\r]
-sql_comment      ("--"{space}+{non_newline}*)|(#{non_newline}*)
+sql_comment      ("--"[ \t]+{non_newline}*)|(#{non_newline}*|"--"[\n\r])
 whitespace       ({space}+|{sql_comment})
 select_hint_begin       (select{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 update_hint_begin       (update{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))

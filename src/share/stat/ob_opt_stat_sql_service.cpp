@@ -16,7 +16,6 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_statement.h"
@@ -328,7 +327,6 @@ int ObOptStatSqlService::update_table_stat(const uint64_t tenant_id,
   ObSqlString table_stat_sql;
   ObSqlString tmp;
   int64_t current_time = ObTimeUtility::current_time();
-  uint64_t exec_tenant_id = tenant_id;
   int64_t affected_rows = 0;
   if (OB_ISNULL(table_stat)) {
     ret = OB_ERR_UNEXPECTED;
@@ -342,9 +340,9 @@ int ObOptStatSqlService::update_table_stat(const uint64_t tenant_id,
   } else {
     ObMySQLTransaction trans;
     LOG_TRACE("sql string of table stat update", K(table_stat_sql));
-    if (OB_FAIL(trans.start(mysql_proxy_, exec_tenant_id))) {
-      LOG_WARN("fail to start transaction", K(ret), K(exec_tenant_id));
-    } else if (OB_FAIL(trans.write(exec_tenant_id, table_stat_sql.ptr(), affected_rows))) {
+    if (OB_FAIL(trans.start(mysql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start transaction", K(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.write(tenant_id, table_stat_sql.ptr(), affected_rows))) {
       LOG_WARN("failed to exec sql", K(ret));
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
@@ -362,6 +360,7 @@ int ObOptStatSqlService::update_table_stat(const uint64_t tenant_id,
 }
 
 int ObOptStatSqlService::update_table_stat(const uint64_t tenant_id,
+                                           ObMySQLTransaction &trans,
                                            const common::ObIArray<ObOptTableStat *> &table_stats,
                                            const int64_t current_time,
                                            const bool is_index_stat,
@@ -396,21 +395,8 @@ int ObOptStatSqlService::update_table_stat(const uint64_t tenant_id,
   }
   if (OB_SUCC(ret)) {
     LOG_TRACE("sql string of table stat update", K(table_stat_sql));
-    ObMySQLTransaction trans;
-    if (OB_FAIL(trans.start(mysql_proxy_, tenant_id))) {
-      LOG_WARN("fail to start transaction", K(ret));
-    } else if (OB_FAIL(trans.write(tenant_id, table_stat_sql.ptr(), affected_rows))) {
+    if (OB_FAIL(trans.write(tenant_id, table_stat_sql.ptr(), affected_rows))) {
       LOG_WARN("failed to exec sql", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(trans.end(true))) {
-        LOG_WARN("fail to commit transaction", K(ret));
-      }
-    } else {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
-        LOG_WARN("fail to roll back transaction", K(tmp_ret));
-      }
     }
   }
   return ret;
@@ -418,6 +404,7 @@ int ObOptStatSqlService::update_table_stat(const uint64_t tenant_id,
 
 int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                             const uint64_t exec_tenant_id,
+                                            ObMySQLTransaction &trans,
                                             const ObIArray<ObOptColumnStat*> &column_stats,
                                             const int64_t current_time,
                                             bool only_update_col_stat /*default false*/,
@@ -425,7 +412,6 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
                                             const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
   int64_t affected_rows = 0;
   ObSqlString insert_histogram;
   ObSqlString delete_histogram;
@@ -464,8 +450,6 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
                                                     need_histogram,
                                                     print_params))) {
     LOG_WARN("failed to construct histogram insert sql", K(ret));
-  } else if (OB_FAIL(trans.start(mysql_proxy_, exec_tenant_id))) {
-    LOG_WARN("fail to start transaction", K(ret));
   } else if (!only_update_col_stat && !is_history_stat &&
               OB_FAIL(trans.write(exec_tenant_id, delete_histogram.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(delete_histogram), K(ret));
@@ -474,16 +458,6 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
     LOG_WARN("failed to exec sql", K(insert_histogram), K(ret));
   } else if (OB_FAIL(trans.write(exec_tenant_id, column_stats_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to exec sql", K(column_stats_sql), K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(trans.end(true))) {
-      LOG_WARN("fail to commit transaction", K(ret));
-    }
-  } else {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
-      LOG_WARN("fail to roll back transaction", K(tmp_ret));
-    }
   }
   return ret;
 }

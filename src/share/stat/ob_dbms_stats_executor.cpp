@@ -339,14 +339,30 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
         LOG_WARN("failed to do set table stats", K(ret));
       } else if (OB_FAIL(column_stats.push_back(col_stat))) {
         LOG_WARN("failed to push back column stat", K(ret));
-      } else if (OB_FAIL(mgr.update_column_stat(ctx.get_virtual_table_ctx().schema_guard_,
-                                                param.table_param_.tenant_id_,
-                                                column_stats,
-                                                true,
-                                                CREATE_OBJ_PRINT_PARAM(ctx.get_my_session())))) {
-        LOG_WARN("failed to update column stats", K(ret));
       } else {
-        LOG_TRACE("end set column stats", K(param), K(*col_stat));
+        ObMySQLTransaction trans;
+        if (OB_FAIL(trans.start(ctx.get_sql_proxy(), param.table_param_.tenant_id_))) {
+          LOG_WARN("fail to start transaction", K(ret));
+        } else if (OB_FAIL(mgr.update_column_stat(ctx.get_virtual_table_ctx().schema_guard_,
+                                                  param.table_param_.tenant_id_,
+                                                  trans,
+                                                  column_stats,
+                                                  true,
+                                                  CREATE_OBJ_PRINT_PARAM(ctx.get_my_session())))) {
+          LOG_WARN("failed to update column stats", K(ret));
+        } else {
+          LOG_TRACE("end set column stats", K(param), K(*col_stat));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(trans.end(true))) {
+            LOG_WARN("fail to commit transaction", K(ret));
+          }
+        } else {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+            LOG_WARN("fail to roll back transaction", K(tmp_ret));
+          }
+        }
       }
     }
   }
