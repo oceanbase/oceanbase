@@ -397,6 +397,10 @@ int ObTransformFullOuterJoin::create_left_outer_join_stmt(ObDMLStmt* stmt, ObSel
     LOG_WARN("failed to create dummy select item", K(ret));
   } else if (OB_FAIL(sub_stmt.get_part_exprs().assign(stmt->get_part_exprs()))) {
     LOG_WARN("failed to assign to part expr items.", K(ret));
+  } else if (OB_FAIL(append(sub_stmt.get_subquery_exprs(), stmt->get_subquery_exprs()))) {
+    LOG_WARN("view stmt append subquery failed", K(ret));
+  } else if (OB_FAIL(sub_stmt.adjust_subquery_stmt_parent(stmt, &sub_stmt))) {
+    LOG_WARN("failed to adjust subquery stmt parent", K(ret));
   } else if (OB_FAIL(sub_stmt.get_stmt_hint().assign(stmt->get_stmt_hint()))) {
     LOG_WARN("failed to assign to stmt hints.", K(ret));
   } else if (OB_FAIL(sub_stmt.adjust_view_parent_namespace_stmt(stmt->get_parent_namespace_stmt()))) {
