@@ -111,7 +111,11 @@ void ObTenantNodeBalancer::run1()
 
     // check whether tenant unit is changed, try to update unit config of tenant
     ObSEArray<uint64_t, 10> tenants;
-    if (OB_FAIL(unit_getter_.get_tenants(tenants))) {
+    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+      // do nothing if not finish replaying slog
+      LOG_INFO("server slog not finish replaying, need wait");
+      ret = OB_NEED_RETRY;
+    } else if (OB_FAIL(unit_getter_.get_tenants(tenants))) {
       LOG_WARN("get cluster tenants fail", K(ret));
     } else if (OB_FAIL(OTC_MGR.refresh_tenants(tenants))) {
       LOG_WARN("fail refresh tenant config", K(tenants), K(ret));
