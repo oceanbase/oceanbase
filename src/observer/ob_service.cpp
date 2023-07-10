@@ -933,17 +933,17 @@ int ObService::notify_archive(const obrpc::ObNotifyArchiveArg &arg)
         switch(arg.notify_archive_op_) {
           case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::START: {
             archive_service->process_start_archive();
-            LOG_INFO("success notify start archive service", K(arg));
+            LOG_INFO("succeed to notify start archive service", K(arg));
           }
             break;
           case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::DEFER: {
             archive_service->process_defer_archive();
-            LOG_INFO("success notify defer archive service", K(arg));
+            LOG_INFO("succeed to notify defer archive service", K(arg));
           }
             break;
           case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::STOP: {
             archive_service->process_stop_archive();
-            LOG_INFO("success notify stop archive service", K(arg));
+            LOG_INFO("succeed to notify stop archive service", K(arg));
           }
             break;
           default: {
