@@ -16,6 +16,7 @@
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "../dumpsst/ob_admin_dumpsst_print_helper.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/ob_master_key_getter.h"
 
 #include <algorithm>
 #include <functional>
