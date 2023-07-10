@@ -1671,10 +1671,11 @@ int ObFetchLSInfoP::process()
       LOG_WARN("failed to get ls meta package and tablet ids", K(ret));
     } else if (OB_FAIL(result_.ls_meta_package_.ls_meta_.get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), K(result_));
-    } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
+    } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status) || ls->is_stopped()
+        || ls->is_offline()) {
       ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
       STORAGE_LOG(WARN, "src migration status do not allow to migrate out", K(ret), "src migration status",
-          migration_status);
+          migration_status, KPC(ls));
     } else if (OB_FAIL(ObStorageHAUtils::get_server_version(result_.version_))) {
       LOG_WARN("failed to get server version", K(ret), K_(arg));
     } else if (OB_FAIL(MTL(logservice::ObLogService*)->get_palf_role(ls->get_ls_id(), role, proposal_id))) {

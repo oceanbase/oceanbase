@@ -832,6 +832,7 @@ int ObMigrationUtils::get_ls_rebuild_seq(const uint64_t tenant_id,
   storage::ObLS *ls = NULL;
   ObLSService *ls_service = NULL;
   ObLSHandle handle;
+  ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
@@ -843,6 +844,12 @@ int ObMigrationUtils::get_ls_rebuild_seq(const uint64_t tenant_id,
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream not exist", K(ret), K(ls_id));
+  } else if (OB_FAIL(ls->get_migration_status(status))) {
+    LOG_WARN("failed to get migration status", K(ret), KPC(ls));
+  } else if (!ObMigrationStatusHelper::check_can_migrate_out(status) || ls->is_stopped() || ls->is_offline()) {
+    ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
+    LOG_WARN("migration src ls migration status is not none or ls in stop status",
+        K(ret), KPC(ls), K(status));
   } else {
     rebuild_seq = ls->get_rebuild_seq();
   }

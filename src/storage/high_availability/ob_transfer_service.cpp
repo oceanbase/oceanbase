@@ -142,7 +142,7 @@ void ObTransferService::run1()
       int64_t wait_time_ms = 10_s;
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
       if (tenant_config.is_valid()) {
-        wait_time_ms = tenant_config->_transfer_service_wakeup_interval;
+        wait_time_ms = tenant_config->_transfer_service_wakeup_interval / 1000;
       }
       thread_cond_.wait(wait_time_ms);
     }
