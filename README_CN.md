@@ -16,7 +16,7 @@
     <a href="https://github.com/oceanbase/oceanbase">
         <img alt="forks" src="https://img.shields.io/badge/dynamic/json?color=blue&label=forks&query=forks&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
     </a>
-    <a href="https://en.oceanbase.com/docs/community-observer-en-10000000000829617">
+    <a href="https://en.oceanbase.com/docs/oceanbase-database">
         <img alt="English doc" src="https://img.shields.io/badge/docs-English-blue" />
     </a>
     <a href="https://www.oceanbase.com/docs/oceanbase-database-cn">
@@ -63,7 +63,7 @@
 
     基于 LSM-Tree 的高压缩引擎，存储成本降低 70% - 90%；原生支持多租户架构，同集群可为多个独立业务提供服务，租户间数据隔离，降低部署和运维成本。
 
-更多信息请参考[OceanBase 产品](https://www.oceanbase.com/product/oceanbase)。
+更多信息请参考 [OceanBase 产品](https://www.oceanbase.com/product/oceanbase)。
 
 # 快速开始
 
@@ -84,24 +84,24 @@ obd demo
 
 ## 🐳 使用 docker
 
-1. 启动OceanBase数据库实例
+1. 启动 OceanBase 数据库实例
 
     ```shell
     # 部署一个mini模式实例
     docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=1 -d oceanbase/oceanbase-ce
     ```
 
-2. 连接OceanBase
+2. 连接 OceanBase
 
     ```shell
     docker exec -it oceanbase-ce ob-mysql sys # 连接root用户sys租户
     ```
 
-更多信息参考[快速体验 OceanBase 数据库](https://www.oceanbase.com/docs/common-oceanbase-database-cn-10000000001692850)。
+更多信息参考[快速体验 OceanBase 数据库](https://open.oceanbase.com/quickStart)。
 
 ## 👨‍💻 使用开发模式
 
-参考[OceanBase 开发者文档](https://github.com/oceanbase/oceanbase/wiki/Compile)了解如何编译和部署手动编译的observer。
+参考 [OceanBase 开发者文档](https://github.com/oceanbase/oceanbase/wiki/Compile)了解如何编译和部署手动编译的observer。
 
 # Roadmap
 
@@ -109,7 +109,7 @@ obd demo
 
 # 案例
 
-OceanBase通过技术创新让数据管理和使用更简单。OceanBase已服务超过 400 家来自不同行业的客户，包括金融服务、电信、零售、互联网等。
+OceanBase 通过技术创新让数据管理和使用更简单。OceanBase 已服务超过 400 家来自不同行业的客户，包括金融服务、电信、零售、互联网等。
 
 更详细的信息请参考[客户案例](https://www.oceanbase.com/customer/home)和[谁在使用 OceanBase](https://github.com/oceanbase/oceanbase/issues/1301)。
 
