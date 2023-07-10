@@ -457,7 +457,8 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
     bool is_src_inrow = (is_simple ? true : lob_common->in_row_);
     // systable read always get full lob data and output inrow lobs
     bool is_dst_inrow = ((is_systable) ? true : is_src_inrow);
-    if (byte_size <= LOB_FORCE_INROW_SIZE) {
+    bool is_enable_force_inrow = false;
+    if (is_enable_force_inrow && (byte_size <= LOB_FORCE_INROW_SIZE)) {
       // if lob is smaller than datum allow size
       // let lob obj force inrow for hash/cmp cannot handle error
       is_dst_inrow = true;

@@ -739,7 +739,12 @@ int ObLSService::enable_replay()
       } else if (!can_replay) {
         // ls can not enable replay
       } else if (OB_FAIL(ls->enable_replay())) {
-        LOG_ERROR("fail to enable replay", K(ret));
+        if (OB_LS_IS_DELETED == ret) {
+          ret = OB_SUCCESS;
+          LOG_WARN("ls status is WAIT_GC, skip it", K(ls->get_ls_id()));
+        } else {
+          LOG_ERROR("fail to enable replay", K(ret));
+        }
       }
     }
     if (OB_ITER_END == ret) {
@@ -918,6 +923,7 @@ int ObLSService::remove_ls(
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("log stream is null, unexpected error", K(ls_id));
+    } else if (FALSE_IT(ls->set_is_remove())) {
     // ls leader gc must has block tx start, gracefully kill tx and write offline log before here.
     } else if (OB_FAIL(ls->offline())) {
       LOG_WARN("ls offline failed", K(ret), K(ls_id), KP(ls));
@@ -982,7 +988,9 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk)
   static const int64_t SLEEP_TS = 100_ms;
   int64_t retry_cnt = 0;
   do {
-    if (remove_from_disk && OB_FAIL(ls->remove_ls())) {
+    if (OB_FAIL(ls->prepare_for_safe_destroy())) {
+      LOG_WARN("prepare safe destroy failed", K(ret), KPC(ls));
+    } else if (remove_from_disk && OB_FAIL(ls->remove_ls())) {
       LOG_WARN("remove ls from disk failed", K(ret), K(remove_from_disk), K(ls_id));
     } else if (OB_FAIL(remove_ls_from_map_(ls_id))) {
       LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));

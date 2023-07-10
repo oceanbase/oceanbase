@@ -210,6 +210,13 @@ private:
       const int64_t finish_medium_scn,
       const ObTabletDumpedMediumInfo &input_medium_info_list,
       ObTabletDumpedMediumInfo &medium_info_list);
+  static int copy_medium_info_list(
+      const int64_t finish_medium_scn,
+      const ObTabletDumpedMediumInfo &input_medium_info_list1,
+      const ObTabletDumpedMediumInfo &input_medium_info_list2,
+      ObTabletDumpedMediumInfo &medium_info_list);
+  static int check_medium_info_continuity(
+      const ObTabletDumpedMediumInfo &medium_info_list);
   template <typename T>
   static int update_user_data_from_complex_addr(
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,

@@ -170,7 +170,7 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
   const ObMergeType merge_type = param.merge_type_;
   result.reset();
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtables;
+  ObSEArray<ObTableHandleV2, MAX_MEMSTORE_CNT> memtable_handles;
   DEBUG_SYNC(BEFORE_GET_MINOR_MGERGE_TABLES);
   if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
@@ -186,13 +186,13 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
               K(ret), K(PRINT_TS_WRAPPER(table_store_wrapper)), K(tablet));
     // add compaction diagnose info
     ObPartitionMergePolicy::diagnose_table_count_unsafe(MINI_MERGE, tablet);
-  } else if (OB_FAIL((table_store_wrapper.get_member()->get_memtables(memtables, true)))) {
+  } else if (OB_FAIL(tablet.get_memtable_mgr()->get_all_memtables(memtable_handles))) {
     LOG_WARN("failed to get all memtables from memtable mgr", K(ret));
   } else if (OB_FAIL(get_neighbour_freeze_info(merge_inc_base_version,
                                                table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true),
                                                freeze_info))) {
     LOG_WARN("failed to get next major freeze", K(ret), K(merge_inc_base_version), K(PRINT_TS_WRAPPER(table_store_wrapper)));
-  } else if (OB_FAIL(find_mini_merge_tables(param, freeze_info, ls, tablet, memtables, result))) {
+  } else if (OB_FAIL(find_mini_merge_tables(param, freeze_info, ls, tablet, memtable_handles, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to find mini merge tables", K(ret), K(freeze_info));
     }
@@ -209,7 +209,7 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
     const ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
     ObLS &ls,
     const storage::ObTablet &tablet,
-    ObIArray<ObITable *> &memtables,
+    ObIArray<ObTableHandleV2> &memtable_handles,
     ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
@@ -225,15 +225,16 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   ObIMemtable *memtable = nullptr;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   bool need_update_snapshot_version = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
-    if (OB_ISNULL(memtable = static_cast<ObIMemtable *>(memtables.at(i)))) {
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
+    if (OB_ISNULL(memtable = static_cast<ObIMemtable *>(memtable_handles.at(i).get_table()))) {
       ret = OB_ERR_SYS;
       LOG_ERROR("memtable must not null", K(ret), K(tablet));
     } else if (OB_UNLIKELY(memtable->is_active_memtable())) {
-      LOG_DEBUG("skip active memtable", K(i), KPC(memtable), K(memtables));
+      LOG_DEBUG("skip active memtable", K(i), KPC(memtable), K(memtable_handles));
       break;
     } else if (!memtable->can_be_minor_merged()) {
-      FLOG_INFO("memtable cannot mini merge now", K(ret), K(i), KPC(memtable), K(max_snapshot_version), K(memtables), K(param));
+      FLOG_INFO("memtable cannot mini merge now", K(ret), K(i), KPC(memtable), K(max_snapshot_version), K(memtable_handles), K(param));
       break;
     } else if (memtable->get_end_scn() <= clog_checkpoint_scn) {
       if (!tablet_id.is_special_merge_tablet() &&
@@ -271,6 +272,8 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       }
     }
   } // end for
+
+  bool need_check_tablet = false;
   if (OB_FAIL(ret)) {
   } else {
     result.suggest_merge_type_ = param.merge_type_;
@@ -285,9 +288,24 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       } else {
         ret = OB_NO_NEED_MERGE;
       }
-    } else if (OB_FAIL(refine_mini_merge_result(tablet, result))) {
+    } else if (OB_FAIL(refine_mini_merge_result(tablet, result, need_check_tablet))) {
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("failed to refine mini merge result", K(ret), K(tablet_id));
+      }
+    } else if (OB_UNLIKELY(need_check_tablet)) {
+      ret = OB_EAGAIN;
+      int tmp_ret = OB_SUCCESS;
+      ObTabletHandle tmp_tablet_handle;
+      if (OB_TMP_FAIL(ls.get_tablet(tablet_id, tmp_tablet_handle, 0, storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        LOG_WARN("failed to get tablet", K(tmp_ret), K(tablet_id));
+      } else if (OB_UNLIKELY(!tmp_tablet_handle.is_valid())) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid tablet", K(tmp_ret), K(tablet_id));
+      } else if (tmp_tablet_handle.get_obj()->get_clog_checkpoint_scn() != clog_checkpoint_scn) {
+        // do nothing, just retry the mini compaction
+      } else {
+        LOG_ERROR("Unexpected uncontinuous scn_range in mini merge",
+              K(ret), K(clog_checkpoint_scn), K(result), K(tablet), KPC(tmp_tablet_handle.get_obj()));
       }
     }
 
@@ -295,7 +313,6 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       result.schedule_major_ = true;
     }
   }
-
   return ret;
 }
 
@@ -781,9 +798,11 @@ int ObPartitionMergePolicy::diagnose_table_count_unsafe(
 
 int ObPartitionMergePolicy::refine_mini_merge_result(
     const ObTablet &tablet,
-    ObGetMergeTablesResult &result)
+    ObGetMergeTablesResult &result,
+    bool &need_check_tablet)
 {
   int ret = OB_SUCCESS;
+  need_check_tablet = false;
   ObITable *last_table = nullptr;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
 
@@ -796,9 +815,7 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
       table_store_wrapper.get_member()->get_minor_sstables().get_boundary_table(true/*last*/))) {
     // no minor sstable, skip to cut memtable's boundary
   } else if (result.scn_range_.start_scn_ > last_table->get_end_scn()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexpected uncontinuous scn_range in mini merge",
-              K(ret), K(result), KPC(last_table), K(PRINT_TS_WRAPPER(table_store_wrapper)), K(tablet));
+    need_check_tablet = true;
   } else if (result.scn_range_.start_scn_ < last_table->get_end_scn()
       && !tablet.get_tablet_meta().tablet_id_.is_special_merge_tablet()) {
     // fix start_scn to make scn_range continuous in migrate phase for issue 42832934

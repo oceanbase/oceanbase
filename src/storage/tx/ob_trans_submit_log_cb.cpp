@@ -158,7 +158,7 @@ int ObTxLogCb::on_success()
     TRANS_LOG(ERROR, "ctx is null", K(ret), K(trans_id_), KP(ctx_));
   } else {
     // make sure set log type to log callback successfully
-    ctx_->test_lock();
+    ctx_->test_lock(this);
     if (cb_arg_array_.count() == 0) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(trans_id_), KP(ctx_));
@@ -166,7 +166,6 @@ int ObTxLogCb::on_success()
     } else {
       TRANS_LOG(DEBUG, "get last log type success", K(trans_id_));
       // TODO. iterate all log type
-      check_warn_();
       ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
 
       if (OB_FAIL(part_ctx->on_success(this))) {
@@ -190,7 +189,7 @@ int ObTxLogCb::on_failure()
     TRANS_LOG(ERROR, "ctx is null", KR(ret), K(*this));
   } else {
     // make sure set log type to log callback successfully
-    ctx_->test_lock();
+    ctx_->test_lock(this);
     if (cb_arg_array_.count() == 0) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "cb arg array is empty", K(ret));

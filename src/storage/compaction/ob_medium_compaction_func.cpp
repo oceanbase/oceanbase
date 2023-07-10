@@ -270,10 +270,10 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
     // do nothing
   } else if (OB_FAIL(tablet->get_max_sync_medium_scn(max_sync_medium_scn))) { // check info in memory
     LOG_WARN("failed to get max sync medium scn", K(ret), K(max_sync_medium_scn));
+  } else if (nullptr != last_major && last_major->get_snapshot_version() < max_sync_medium_scn) {
+    // there is unfinish medium info, schedule next time
   } else if (is_major && schedule_major_snapshot > max_sync_medium_scn) {
     schedule_medium_flag = true;
-  } else if (nullptr != last_major && last_major->get_snapshot_version() < max_sync_medium_scn) {
-    // do nothing
   } else if (OB_FAIL(ObAdaptiveMergePolicy::get_adaptive_merge_reason(*tablet, adaptive_merge_reason))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get meta merge priority", K(ret), KPC(this));
@@ -310,7 +310,7 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
       ret = decide_medium_snapshot(is_major);
     } else {
       ++schedule_stat.wait_rs_validate_cnt_;
-      LOG_DEBUG("cannot schedule next round merge now", K(ret), K(ret_info), KPC_(medium_info_list), KPC(tablet));
+      LOG_TRACE("cannot schedule next round merge now", K(ret), K(ret_info), KPC_(medium_info_list), KPC(tablet));
     }
   } else {
     ret = decide_medium_snapshot(is_major, adaptive_merge_reason);
@@ -422,8 +422,8 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
   if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet_handle", K(ret), K(tablet_handle_));
-  } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
   } else {
+    tablet = tablet_handle_.get_obj();
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     int64_t max_sync_medium_scn = 0;
     uint64_t compat_version = 0;

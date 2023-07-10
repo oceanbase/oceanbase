@@ -167,6 +167,23 @@ int ObTransferTaskOperator::get_all_task_status(
   return ret;
 }
 
+int ObTransferTaskOperator::get_by_src_ls(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObLSID &src_ls,
+    ObTransferTask &task)
+{
+  int ret = OB_SUCCESS;
+  const bool is_src_ls = true;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !src_ls.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(src_ls));
+  } else if (OB_FAIL(get_by_ls_id_(sql_proxy, tenant_id, src_ls, is_src_ls, task))) {
+    LOG_WARN("failed to get by ls id", K(ret), K(tenant_id), K(src_ls));
+  }
+  return ret;
+}
+
 int ObTransferTaskOperator::get_by_dest_ls(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
@@ -174,28 +191,12 @@ int ObTransferTaskOperator::get_by_dest_ls(
     ObTransferTask &task)
 {
   int ret = OB_SUCCESS;
+  const bool is_src_ls = false;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !dest_ls.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(dest_ls));
-  } else {
-    ObSqlString sql;
-    SMART_VAR(ObISQLClient::ReadResult, result) {
-      if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE dest_ls = %ld",
-          OB_ALL_TRANSFER_TASK_TNAME, dest_ls.id()))) {
-        LOG_WARN("fail to assign sql", KR(ret), K(dest_ls));
-      } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_ISNULL(result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_FAIL(construct_transfer_task_(*result.get_result(), task))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("construct transfer task failed", KR(ret), K(tenant_id), K(dest_ls), K(sql));
-        } else {
-          LOG_TRACE("dest ls transfer task not found", KR(ret), K(tenant_id), K(dest_ls));
-        }
-      }
-    }
+  } else if (OB_FAIL(get_by_ls_id_(sql_proxy, tenant_id, dest_ls, is_src_ls, task))) {
+    LOG_WARN("failed to get by ls id", K(ret), K(tenant_id), K(dest_ls));
   }
   return ret;
 }
@@ -678,6 +679,50 @@ int ObTransferTaskOperator::update_finish_scn(
           K(old_status), K(finish_scn), K(affected_rows));
     }
   }
+  return ret;
+}
+
+int ObTransferTaskOperator::get_by_ls_id_(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const bool is_src_ls,
+    ObTransferTask &task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    ObSqlString sql;
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      if (is_src_ls) {
+        if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE src_ls = %ld",
+            OB_ALL_TRANSFER_TASK_TNAME, ls_id.id()))) {
+          LOG_WARN("fail to assign sql", KR(ret), K(ls_id));
+        }
+      } else {
+        if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE dest_ls = %ld",
+            OB_ALL_TRANSFER_TASK_TNAME, ls_id.id()))) {
+          LOG_WARN("fail to assign sql", KR(ret), K(ls_id));
+        }
+      }
+
+      if (FAILEDx(sql_proxy.read(result, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(construct_transfer_task_(*result.get_result(), task))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("construct transfer task failed", KR(ret), K(tenant_id), K(ls_id), K(sql));
+        } else {
+          LOG_WARN("dest ls transfer task not found", KR(ret), K(tenant_id), K(ls_id));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

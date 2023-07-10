@@ -262,6 +262,8 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(ls_id), K(tablet_id));
+  } else if (tablet->is_empty_shell()) {
+    LOG_INFO("[TRANSFER_BACKFILL]source tablet is empty shell", K(ls_id), K(tablet_id));
   } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
     LOG_WARN("failed to get tablet status", K(ret), K(ls_id), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
@@ -1276,7 +1278,8 @@ int ObTransferReplaceTableTask::check_source_minor_end_scn_(
     } else if (last_minor_mini_sstable->get_end_scn() > dest_tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
       // After adding transfer_freeze_flag_, it can ensure that start is less than transfer_start_scn's sstable,
       // and end_scn will not be greater than transfer_start_scn
-      LOG_ERROR("last sstable end scn is bigger than transfer start scn", K(OB_TRANSFER_SYS_ERROR), KPC(last_minor_mini_sstable),
+      ret = OB_TRANSFER_SYS_ERROR;
+      LOG_ERROR("last sstable end scn is bigger than transfer start scn", K(ret), KPC(last_minor_mini_sstable),
             "transfer info", dest_tablet->get_tablet_meta().transfer_info_);
     }
   }
@@ -1443,8 +1446,8 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet));
   } else if (tablet->is_empty_shell()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("transfer src tablet should not be empty shell", K(ret), KPC(tablet), "ls_id", ctx_->src_ls_id_);
+    ret = OB_EAGAIN;
+    LOG_WARN("transfer src tablet should not be empty shell, task need to retry", K(ret), KPC(tablet), "ls_id", ctx_->src_ls_id_);
   } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet_handle, src_user_data))) {
     LOG_WARN("failed to get src user data", K(ret), K(tablet_handle), KPC(tablet));
   } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, dest_tablet, dest_user_data))) {

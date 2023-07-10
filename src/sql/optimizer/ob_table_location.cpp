@@ -1444,11 +1444,12 @@ int ObTableLocation::calculate_partition_ids_by_rows2(ObSQLSessionInfo &session_
   ObArenaAllocator allocator(ObModIds::OB_SQL_TABLE_LOCATION);
   SMART_VAR(ObExecContext, exec_ctx, allocator) {
     ObSqlSchemaGuard sql_schema_guard;
+    ObSqlCtx sql_ctx;
+    sql_ctx.schema_guard_ = &schema_guard;
     sql_schema_guard.set_schema_guard(&schema_guard);
+    exec_ctx.set_sql_ctx(&sql_ctx);
     exec_ctx.set_my_session(&session_info);
     ObDASTabletMapper tablet_mapper;
-    OZ(OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(table_id, tablet_mapper,
-                                                            &loc_meta_.related_table_ids_)));
     if (OB_UNLIKELY(is_virtual_table(table_id))) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Calculate virtual table partition id with rowkey");
@@ -1470,6 +1471,10 @@ int ObTableLocation::calculate_partition_ids_by_rows2(ObSQLSessionInfo &session_
           }
         }
       }
+    } else if (OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(table_id,
+                                                                    tablet_mapper,
+                                                                    &loc_meta_.related_table_ids_))) {
+      LOG_WARN("get das tablet mapper failed", KR(ret), K(table_id));
     } else {//TODO: copied from calc_partition_ids_by_rowkey()
       ObSEArray<ObObjectID, 1> tmp_part_ids;
       ObSEArray<ObTabletID, 1> tmp_tablet_ids;
@@ -1528,6 +1533,7 @@ int ObTableLocation::calculate_partition_ids_by_rowkey(ObSQLSessionInfo &session
   SMART_VAR(ObExecContext, exec_ctx, allocator) {
     ObSqlSchemaGuard sql_schema_guard;
     ObSqlCtx sql_ctx;
+    sql_ctx.schema_guard_ = &schema_guard;
     sql_schema_guard.set_schema_guard(&schema_guard);
     exec_ctx.set_my_session(&session_info);
     exec_ctx.set_sql_ctx(&sql_ctx);

@@ -142,6 +142,36 @@ int ObTransferLockInfoOperator::get(const ObTransferLockInfoRowKey &row_key, con
   return ret;
 }
 
+int ObTransferLockInfoOperator::fetch_all(common::ObISQLClient &sql_proxy, const uint64_t tenant_id,
+    common::ObArray<ObTransferTaskLockInfo> &lock_infos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id));
+  } else {
+    ObSqlString sql;
+    SMART_VAR(ObISQLClient::ReadResult, result)
+    {
+      if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE tenant_id = %lu",
+              OB_ALL_LS_TRANSFER_MEMBER_LIST_LOCK_INFO_TNAME,
+              tenant_id))) {
+        LOG_WARN("fail to assign sql", K(ret), K(tenant_id));
+      } else if (OB_FAIL(sql_proxy.read(result, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(parse_sql_results_(*result.get_result(), lock_infos))) {
+        LOG_WARN("construct transfer task failed", K(ret), K(tenant_id), K(sql));
+      } else {
+        LOG_INFO("get lock info success", K(tenant_id), K(lock_infos), K(sql));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransferLockInfoOperator::fill_dml_splicer_(const ObTransferTaskLockInfo &lock_info, ObDMLSqlSplicer &dml_splicer)
 {
   int ret = OB_SUCCESS;
@@ -217,6 +247,29 @@ int ObTransferLockInfoOperator::parse_sql_result_(
     LOG_WARN("failed to parse from str", K(ret), K(status_str));
   } else if (FAILEDx(lock_info.set(tenant_id, ObLSID(ls_id), task_id, status, lock_owner, comment))) {
     LOG_WARN("failed to set lock info", K(ret), K(ls_id), K(task_id), K(status), K(lock_owner), K(comment));
+  }
+  return ret;
+}
+
+int ObTransferLockInfoOperator::parse_sql_results_(
+    common::sqlclient::ObMySQLResult &result, common::ObArray<ObTransferTaskLockInfo> &lock_infos)
+{
+  int ret = OB_SUCCESS;
+  lock_infos.reset();
+  while (OB_SUCC(ret)) {
+    ObTransferTaskLockInfo lock_info;
+    if (OB_FAIL(result.next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("failed to get next row", K(ret));
+      }
+    } else if (OB_FAIL(parse_sql_result_(result, lock_info))) {
+      LOG_WARN("failed to parse sql result", K(ret));
+    } else if (OB_FAIL(lock_infos.push_back(lock_info))) {
+      LOG_WARN("failed to push back lock info", K(ret));
+    }
   }
   return ret;
 }

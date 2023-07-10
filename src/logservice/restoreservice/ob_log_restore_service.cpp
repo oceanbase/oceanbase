@@ -201,7 +201,7 @@ void ObLogRestoreService::do_thread_task_()
       last_normal_work_ts_ = common::ObTimeUtility::fast_current_time();
     }
     update_restore_upper_limit_();
-
+    refresh_error_context_();
     set_compressor_type_();
   }
 }
@@ -263,6 +263,40 @@ void ObLogRestoreService::set_compressor_type_()
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log_service is nullptr", KR(ret));
+  }
+}
+
+void ObLogRestoreService::refresh_error_context_()
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = NULL;
+  ObLSIterator *iter = NULL;
+  common::ObSharedGuard<ObLSIterator> guard;
+  ObLogRestoreHandler *restore_handler = NULL;
+  if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
+    LOG_WARN("get ls iter failed", K(ret));
+  } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("iter is NULL", K(ret), K(iter));
+  } else {
+    while (OB_SUCC(ret)) {
+      ls = NULL;
+      if (OB_FAIL(iter->get_next(ls))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("iter ls get next failed", K(ret));
+        } else {
+          LOG_TRACE("iter to end", K(ret));
+        }
+      } else if (OB_ISNULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("ls is NULL", K(ret), K(ls));
+      } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_INFO("restore_handler is NULL", K(ret), K(ls->get_ls_id()));
+      } else if (OB_FAIL(restore_handler->refresh_error_context())) {
+        LOG_WARN("refresh error failed", K(ls->get_ls_id()));
+      }
+    }
   }
 }
 

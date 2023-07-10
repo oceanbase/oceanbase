@@ -25,7 +25,7 @@ using namespace share;
 
 namespace storage
 {
-int ObLSWRSHandler::init()
+int ObLSWRSHandler::init(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
 
@@ -35,7 +35,8 @@ int ObLSWRSHandler::init()
   } else {
     is_enabled_ = true;
     is_inited_ = true;
-    STORAGE_LOG(INFO, "ObLSWRSHandler init success", K(this));
+    ls_id_ = ls_id;
+    STORAGE_LOG(INFO, "ObLSWRSHandler init success", K(*this));
   }
 
   return ret;
@@ -46,6 +47,7 @@ void ObLSWRSHandler::reset()
   is_inited_ = false;
   ls_weak_read_ts_.set_min();
   is_enabled_ = false;
+  ls_id_.reset();
 }
 
 int ObLSWRSHandler::offline()
@@ -54,7 +56,7 @@ int ObLSWRSHandler::offline()
   ObSpinLockGuard guard(lock_);
   is_enabled_ = false;
   ls_weak_read_ts_.set_min();
-  STORAGE_LOG(INFO, "weak read handler disabled", K(this));
+  STORAGE_LOG(INFO, "weak read handler disabled", K(*this));
   return ret;
 }
 
@@ -64,11 +66,11 @@ int ObLSWRSHandler::online()
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObLSWRSHandler not init", K(ret), K(is_inited_), K(this));
+    STORAGE_LOG(WARN, "ObLSWRSHandler not init", K(ret), K(*this));
   } else {
     ObSpinLockGuard guard(lock_);
     is_enabled_ = true;
-    STORAGE_LOG(INFO, "weak read handler enabled", K(this));
+    STORAGE_LOG(INFO, "weak read handler enabled", K(*this));
   }
   return ret;
 }
@@ -82,7 +84,6 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
   int ret = OB_SUCCESS;
   SCN timestamp;
   SCN gts_scn;
-  const ObLSID &ls_id = ls.get_ls_id();
   need_skip = false;
   ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
 
@@ -94,14 +95,14 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
     // do nothing
     need_skip = true;
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      STORAGE_LOG(INFO, "weak read handler not enabled", K(ls_id), K(this));
+      STORAGE_LOG(INFO, "weak read handler not enabled", K(*this));
     }
   } else if (OB_FAIL(generate_weak_read_timestamp_(ls, max_stale_time, timestamp))) {
     STORAGE_LOG(DEBUG, "fail to generate weak read timestamp", KR(ret), K(max_stale_time));
     need_skip = true;
     ret = OB_SUCCESS;
   } else if (OB_TS_MGR.get_gts(MTL_ID(), NULL, gts_scn)) {
-    TRANS_LOG(WARN, "get gts scn error", K(ls_id), K(max_stale_time));
+    TRANS_LOG(WARN, "get gts scn error", K(max_stale_time), K(*this));
   } else if (OB_FAIL(ls.get_migration_status(status))
                   || ObMigrationStatus::OB_MIGRATION_STATUS_NONE == status ) {
     // check the weak read timestamp of the migrated ls
@@ -124,7 +125,7 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
 
   // check replica type
   if (OB_SUCC(ret) && false == need_skip) {
-    if (ls_id.is_sys_ls()) {
+    if (ls_id_.is_sys_ls()) {
       is_user_ls = false;
     } else {
       is_user_ls = true;

@@ -41,6 +41,7 @@ OB_SERIALIZE_MEMBER(DupTabletSetChangeStatus,
                     need_confirm_scn_,
                     readable_version_);
 OB_SERIALIZE_MEMBER(DupTabletSetAttribute, common_header_, change_status_);
+OB_SERIALIZE_MEMBER(RelatedSetAttribute, related_common_header_, related_change_status_, related_set_type_);
 OB_SERIALIZE_MEMBER(DupTabletLogBody, hash_map_);
 
 //**********************************************************************
@@ -191,6 +192,9 @@ int DupTabletChangeMap::serialize(char *buf, const int64_t buf_len, int64_t &pos
     if (OB_FAIL(dup_set_attr_.serialize(buf, buf_len, tmp_pos))) {
       DUP_TABLE_LOG(WARN, "serialize dup tablet attribute failed", K(ret), K(tmp_pos),
                     K(dup_set_attr_));
+    } else if (OB_FAIL(related_set_attr_.serialize(buf, buf_len, tmp_pos))) {
+      DUP_TABLE_LOG(WARN, "serialize related dup tablet attribute failed", K(ret), K(tmp_pos),
+                    K(related_set_attr_));
     }
   }
 
@@ -221,6 +225,9 @@ int DupTabletChangeMap::deserialize(const char *buf, const int64_t data_len, int
 
       DUP_TABLE_LOG(WARN, "deserialize dup tablet attribute failed", K(ret), K(tmp_pos),
                     K(dup_set_attr_));
+    } else if (OB_FAIL(related_set_attr_.deserialize(buf, data_len, tmp_pos))) {
+      DUP_TABLE_LOG(WARN, "deserialize related dup tablet attribute failed", K(ret), K(tmp_pos),
+                    K(related_set_attr_));
     }
   }
 
@@ -249,6 +256,7 @@ int64_t DupTabletChangeMap::get_serialize_size() const
   TabletsGetSizeCallBack get_size_cb;
   serialize_size += hash_for_each_serialize_size(*this, get_size_cb);
   serialize_size += dup_set_attr_.get_serialize_size();
+  serialize_size += related_set_attr_.get_serialize_size();
 
   return serialize_size;
 }
@@ -358,6 +366,7 @@ int ObLSDupTabletsMgr::init_free_tablet_pool_()
     DUP_TABLE_LOG(WARN, "get free tablet set failed", K(ret));
   } else {
     removing_old_set_->get_common_header().set_old();
+    removing_old_set_->set_related_set_type(DupTableRelatedSetType::OLD_GC);
   }
 
   DUP_TABLE_LOG(INFO, "finish init tablet map", K(ret), KPC(removing_old_set_),
@@ -426,7 +435,7 @@ int ObLSDupTabletsMgr::offline()
   int ret = OB_SUCCESS;
 
   // DUP_TABLE_LOG(INFO, "before dup_tablets_mgr offline", K(ret),KPC(this));
-
+  SpinWLockGuard guard(dup_tablets_lock_);
   if (OB_FAIL(clean_unlog_tablets_())) {
     DUP_TABLE_LOG(WARN, "clean unlog tablets failed", K(ret), KPC(this));
   } else if (OB_FAIL(clean_durable_confirming_tablets_(share::SCN::max_scn()))) {
@@ -643,6 +652,7 @@ int ObLSDupTabletsMgr::gc_dup_tablets(const int64_t gc_ts, const int64_t max_tas
     DupTabletSetCommonHeader old_tablet_common_header;
     old_tablet_common_header.set_old();
     old_tablet_common_header.set_invalid_unique_id();
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_target_tablet_set_(old_tablet_common_header, old_tablet_set))) {
       DUP_TABLE_LOG(WARN, "get old tablet set failed, need skip gc readable tablets", K(ret),
@@ -652,7 +662,7 @@ int ObLSDupTabletsMgr::gc_dup_tablets(const int64_t gc_ts, const int64_t max_tas
       ret = OB_EAGAIN; // should not update gc succ time to increase gc freq
       DUP_TABLE_LOG(INFO, "old tablet set can not be modified, skip gc readable tablets", K(ret),
                     KPC(old_tablet_set));
-    } else {
+    } else if (old_tablet_set->get_related_set_type() == DupTableRelatedSetType::OLD_GC) {
       DLIST_FOREACH(readable_tablets_ptr, readable_tablets_list_)
       {
         if (readable_tablets_ptr->is_logging()) {
@@ -672,6 +682,9 @@ int ObLSDupTabletsMgr::gc_dup_tablets(const int64_t gc_ts, const int64_t max_tas
           gc_tablet_cnt += readable_gc_handler.get_gc_tablet_cnt();
         }
       }
+    } else {
+      DUP_TABLE_LOG(WARN, "related set type not match", K(ret),
+                    KPC(removing_old_set_));
     }
 
     /**
@@ -745,8 +758,13 @@ int ObLSDupTabletsMgr::refresh_dup_tablet(const common::ObTabletID &tablet_id,
     }
 
   } else {
-    if (OB_FAIL(lose_dup_tablet_(tablet_id))) {
-      DUP_TABLE_LOG(WARN, "a dup tablet lose dup attr failed", K(tablet_id));
+    if (OB_NOT_NULL(removing_old_set_)
+        && removing_old_set_->get_related_set_type() == DupTableRelatedSetType::OLD_GC) {
+      if (OB_FAIL(lose_dup_tablet_(tablet_id))) {
+        DUP_TABLE_LOG(WARN, "a dup tablet lose dup attr failed", K(tablet_id));
+      }
+    } else {
+      DUP_TABLE_LOG(WARN, "related set type not match", K(ret), KPC(removing_old_set_));
     }
   }
 
@@ -758,6 +776,7 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
                                          const int64_t max_log_buf_len)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   SpinRLockGuard guard(dup_tablets_lock_);
 
@@ -1225,7 +1244,6 @@ int ObLSDupTabletsMgr::cal_single_set_max_ser_size_(DupTabletChangeMap *hash_map
       max_ser_size += tmp_ser_size;
     }
   }
-
   return ret;
 }
 
@@ -1418,7 +1436,7 @@ bool ObLSDupTabletsMgr::check_removing_tablet_exist()
     bool_ret = false;
   } else if (removing_old_set_->size() > 0) {
     bool_ret = true;
-  } else if (removing_old_set_->get_change_status()->is_modifiable()){
+  } else if (!removing_old_set_->get_change_status()->is_modifiable()){
     bool_ret = true;
   } else {
     bool_ret = false;
@@ -1437,7 +1455,7 @@ bool ObLSDupTabletsMgr::check_changing_new_tablet_exist()
     bool_ret = false;
   } else if (changing_new_set_->size() > 0) {
     bool_ret = true;
-  } else if (changing_new_set_->get_change_status()->is_modifiable()) {
+  } else if (!changing_new_set_->get_change_status()->is_modifiable()) {
     bool_ret = true;
   } else {
     bool_ret = false;
@@ -2144,6 +2162,7 @@ int ObLSDupTabletsMgr::return_tablet_set_(DupTabletChangeMap *need_free_set)
   } else if (need_free_set->get_common_header().is_old_set()) {
     need_free_set->reuse();
     need_free_set->get_common_header().set_old();
+    need_free_set->set_related_set_type(DupTableRelatedSetType::OLD_GC);
   } else {
     if (OB_FAIL(ret)) {
     } else {

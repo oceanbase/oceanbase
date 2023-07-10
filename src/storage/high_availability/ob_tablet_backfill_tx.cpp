@@ -896,7 +896,6 @@ int ObTabletTableBackfillTXTask::do_backfill_tx_()
 {
   int ret = OB_SUCCESS;
   const int64_t idx = 0;
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet table backfill tx task do not init", K(ret));
@@ -912,6 +911,13 @@ int ObTabletTableBackfillTXTask::do_backfill_tx_()
 
   if (OB_NOT_NULL(merger_)) {
     merger_->reset();
+  }
+
+  if (OB_FAIL(ret)) {
+    // Need to wait for background thread dump
+    // Backfilling continuously trigger dumps will cause background thread dumps to be unscheduled
+    LOG_INFO("failed to execute table backfill tx, sleep 200ms", K(ret), K(tablet_merge_ctx_));
+    ob_usleep(200 * 1000/* 200ms */);
   }
   return ret;
 }
@@ -955,7 +961,7 @@ int ObTabletTableBackfillTXTask::update_merge_sstable_()
                                   is_major_merge_type(tablet_merge_ctx_.param_.merge_type_),
                                   tablet_merge_ctx_.merged_sstable_.get_end_scn());
 
-    if (ObMergeType::MINI_MERGE == tablet_merge_ctx_.param_.merge_type_ ) {
+    if (ObMergeType::MINI_MERGE == tablet_merge_ctx_.param_.merge_type_) {
       if (OB_FAIL(read_msd_from_memtable_(param))) {
         LOG_WARN("failed to read msd from memtable", K(ret), K(tablet_merge_ctx_));
       }

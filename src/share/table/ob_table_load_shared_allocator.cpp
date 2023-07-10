@@ -48,11 +48,9 @@ ObTableLoadSharedAllocatorHandle::ObTableLoadSharedAllocatorHandle(
 ObTableLoadSharedAllocatorHandle::ObTableLoadSharedAllocatorHandle(
     const ObTableLoadSharedAllocatorHandle &other)
 {
-  if (other.allocator_ != allocator_) {
-    allocator_ = other.allocator_;
-    if (OB_NOT_NULL(allocator_)) {
-      allocator_->inc_ref_count();
-    }
+  allocator_ = other.allocator_;
+  if (OB_NOT_NULL(allocator_)) {
+    allocator_->inc_ref_count();
   }
 }
 

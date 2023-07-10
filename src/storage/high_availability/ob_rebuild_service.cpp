@@ -682,11 +682,11 @@ int ObRebuildService::check_can_rebuild_(
   logservice::ObLogService *log_service = nullptr;
   ObRole role;
   int64_t proposal_id = 0;
-  share::ObAllTenantInfo tenant_info;
   const uint64_t tenant_id = MTL_ID();
   common::ObMemberList member_list;
   int64_t paxos_replica_num = 0;
   const ObAddr &self_addr = GCONF.self_addr_;
+  const bool is_primary = MTL_IS_PRIMARY_TENANT();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -694,15 +694,14 @@ int ObRebuildService::check_can_rebuild_(
   } else if (!rebuild_ctx.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls should not be NULL", K(ret), K(rebuild_ctx), KP(ls));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_, false/*for update*/, tenant_info))) {
-    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
   } else if (OB_FAIL(ls->get_log_handler()->get_paxos_member_list(member_list, paxos_replica_num))) {
     LOG_WARN("failed to get paxos member list and learner list", K(ret), KPC(ls));
   } else if (ObLSRebuildType::TRANSFER == rebuild_ctx.type_
-      && tenant_info.is_primary() && member_list.contains(self_addr)) {
+      && is_primary
+      && member_list.contains(self_addr)) {
     //primary will has this condition
     can_rebuild = false;
-    LOG_INFO("ls cannot do rebuild", K(rebuild_ctx), K(tenant_info), K(member_list));
+    LOG_INFO("ls cannot do rebuild", K(rebuild_ctx), K(is_primary), K(member_list));
   } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log service should not be NULL", K(ret), KP(log_service));

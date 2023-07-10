@@ -2154,7 +2154,7 @@ int ObSqlParameterization::resolve_paramed_const(SelectItemTraverseCtx &ctx)
     // there is no need to copy it. paramed_field_name_ should be replaced with '?'
     if (0 == ctx.org_expr_name_.case_compare(ObString(param_node->str_len_, param_node->str_value_))) {
       // do nothing
-    } else if (tmp_len > 0) {
+    } else if (tmp_len > 0 && ctx.org_expr_name_.length() > 0) {
       int32_t len = static_cast<int64_t>(tmp_len);
       MEMCPY(ctx.param_info_.paramed_field_name_ + ctx.param_info_.name_len_, ctx.org_expr_name_.ptr() + ctx.expr_pos_ - ctx.expr_start_pos_, len);
       ctx.param_info_.name_len_ += len;

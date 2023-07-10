@@ -2371,15 +2371,29 @@ int ObLSTabletService::create_memtable(
   return ret;
 }
 
-int ObLSTabletService::check_allow_to_read()
+int ObLSTabletService::check_allow_to_read(AllowToReadMgr::AllowToReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  AllowToReadMgr::AllowToReadInfo read_info;
   allow_to_read_mgr_.load_allow_to_read_info(read_info);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (!read_info.allow_to_read()) {
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
+  }
+  return ret;
+}
+
+int ObLSTabletService::check_read_info_same(const AllowToReadMgr::AllowToReadInfo &read_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_same = false;
+  allow_to_read_mgr_.check_read_info_same(read_info, is_same);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (!is_same) {
     ret = OB_REPLICA_NOT_READABLE;
     LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
   }
@@ -6079,7 +6093,6 @@ int ObLSTabletService::set_frozen_for_all_memtables()
 int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_tablet_meta_f)
 {
   int ret = OB_SUCCESS;
-  bool is_initial_state = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -6104,11 +6117,6 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
         } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
-        } else if (OB_FAIL(tablet->check_initial_state(is_initial_state))) {
-          LOG_WARN("failed to check initial state", K(ret));
-        } else if (OB_UNLIKELY(is_initial_state)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("tablet must not be initial state", K(ret), KPC(tablet), K(is_initial_state));
         } else if (OB_FAIL(tablet->build_migration_tablet_param(tablet_info.param_))) {
           LOG_WARN("failed to build migration tablet param", K(ret));
         } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {

@@ -105,9 +105,15 @@ int ObExprMultiSet::calc_result_type2(ObExprResType &type,
         if (OB_SUCC(ret)) { \
           elem = static_cast<ObObj *>(ca->get_data()) + i; \
           if (OB_NOT_NULL(elem)) { \
-            if (OB_FAIL(deep_copy_obj(*coll_allocator, *elem, dst[cnt + offset]))) { \
+            if (elem->is_pl_extend() &&  \
+                elem->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { \
+              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, *elem, dst[cnt + offset], true))) { \
+                LOG_WARN("fail to fill obobj", K(*elem), K(ret)); \
+              } \
+            } else if (OB_FAIL(deep_copy_obj(*coll_allocator, *elem, dst[cnt + offset]))) { \
               LOG_WARN("fail to fill obobj", K(*elem), K(ret)); \
-            } else { \
+            } \
+            if (OB_SUCC(ret)) {  \
               cnt++; \
             } \
           } else { \
@@ -247,7 +253,12 @@ int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
           LOG_WARN("allocate result obobj array failed, size is: ", K(res_cnt));
         } else {
           for (int64_t i = 0; i < res_cnt; ++i) {
-            if (OB_FAIL(deep_copy_obj(*coll_allocator, objs[i], data_arr[i]))) {
+            if (objs[i].is_pl_extend() &&
+                objs[i].get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, objs[i], data_arr[i], true))) {
+                LOG_WARN("copy obobj failed.", K(ret));
+              }
+            } else if (OB_FAIL(deep_copy_obj(*coll_allocator, objs[i], data_arr[i]))) {
               LOG_WARN("copy obobj failed.", K(ret));
             }
           }
@@ -339,7 +350,11 @@ int ObExprMultiSet::calc_ms_all_impl(common::ObIAllocator *coll_allocator,
         #define COPY_ELEM(iscopy) \
         do{ \
           if (iscopy) { \
-            OZ (common::deep_copy_obj(*coll_allocator, *elem, data_arr[index])); \
+            if (elem->is_pl_extend() && elem->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { \
+              OZ (pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, *elem, data_arr[index], true)); \
+            } else {  \
+              OZ (common::deep_copy_obj(*coll_allocator, *elem, data_arr[index])); \
+            }  \
             ++index; \
           }\
         } while(0)

@@ -148,7 +148,7 @@ struct ObTXTransferUtils
       const ObStorageSchema &table_schema,
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &table_handle);
-  static int set_tablet_freeze_flag(const share::ObLSID &ls_id, ObTablet *tablet);
+  static int set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *tablet);
 
 private:
   static int get_tablet_status_(
@@ -204,6 +204,7 @@ public:
   ~ObTransferTaskLockInfo() = default;
   void reset();
   bool is_valid() const;
+  int assign(const ObTransferTaskLockInfo &other);
   int set(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id, const ObTransferLockStatus &status,
       const int64_t lock_owner, const common::ObString &comment);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(task_id), K_(status), K_(lock_owner), K_(comment));

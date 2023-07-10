@@ -1020,7 +1020,7 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id, unit.config_.log_disk_size()))) {
       LOG_WARN("fail to update tenant log disk size", K(ret), K(tenant_id));
-  } else if (FALSE_IT(tenant->set_unit_memory_size(unit.config_.memory_size()))) {
+  } else if (FALSE_IT(tenant->set_unit_memory_size(allowed_mem_limit))) {
     // unreachable
   } else {
     if (tenant->unit_min_cpu() != min_cpu) {

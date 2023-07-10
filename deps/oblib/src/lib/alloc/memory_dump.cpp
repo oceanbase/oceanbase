@@ -194,10 +194,12 @@ int ObMemoryDump::push(void *task)
 int ObMemoryDump::load_malloc_sample_map(ObMallocSampleMap &malloc_sample_map)
 {
   int ret = OB_SUCCESS;
-  ObLatchRGuard guard(iter_lock_, ObLatchIds::MEM_DUMP_ITER_LOCK);
-  auto &map = r_stat_->malloc_sample_map_;
-  for (auto it = map.begin(); OB_SUCC(ret) && it != map.end(); ++it) {
-    ret = malloc_sample_map.set_refactored(it->first, it->second);
+  if (is_inited_) {
+    ObLatchRGuard guard(iter_lock_, ObLatchIds::MEM_DUMP_ITER_LOCK);
+    auto &map = r_stat_->malloc_sample_map_;
+    for (auto it = map.begin(); OB_SUCC(ret) && it != map.end(); ++it) {
+      ret = malloc_sample_map.set_refactored(it->first, it->second);
+    }
   }
   return ret;
 }

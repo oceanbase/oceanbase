@@ -90,6 +90,7 @@ ObLS::ObLS()
     tenant_id_(OB_INVALID_TENANT_ID),
     is_stopped_(false),
     is_offlined_(false),
+    is_remove_(false),
     ls_meta_(),
     rs_reporter_(nullptr),
     startup_transfer_info_()
@@ -161,7 +162,7 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("init keep_alive_ls_handler failed", K(ret));
     } else if (OB_FAIL(gc_handler_.init(this))) {
       LOG_WARN("init gc handler failed", K(ret));
-    } else if (OB_FAIL(ls_wrs_handler_.init())) {
+    } else if (OB_FAIL(ls_wrs_handler_.init(ls_meta_.ls_id_))) {
       LOG_WARN("ls loop worker init failed", K(ret));
     } else if (OB_FAIL(ls_restore_handler_.init(this))) {
       LOG_WARN("init ls restore handler", K(ret));
@@ -560,9 +561,7 @@ int ObLS::stop_()
 
   if (OB_SUCC(ret)) {
     ObRebuildService *rebuild_service = nullptr;
-    if (OB_FAIL(prepare_for_safe_destroy_())) {
-      LOG_WARN("fail to prepare_for_safe_destroy", K(ret));
-    } else if (OB_ISNULL(rebuild_service = MTL(ObRebuildService *))) {
+    if (OB_ISNULL(rebuild_service = MTL(ObRebuildService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rebuild service should not be NULL", K(ret), KP(rebuild_service));
     } else if (OB_FAIL(rebuild_service->remove_rebuild_ls(get_ls_id()))) {
@@ -615,6 +614,11 @@ void ObLS::wait_()
       }
     }
   } while (!wait_finished);
+}
+
+int ObLS::prepare_for_safe_destroy()
+{
+  return prepare_for_safe_destroy_();
 }
 
 // a class should implement prepare_for_safe_destroy() if it has
@@ -709,6 +713,9 @@ void ObLS::destroy()
     LOG_WARN("ls stop failed.", K(tmp_ret), K(ls_meta_.ls_id_));
   } else {
     wait_();
+    if (OB_TMP_FAIL(prepare_for_safe_destroy_())) {
+      LOG_WARN("failed to prepare for safe destroy", K(ret));
+    }
   }
   UNREGISTER_FROM_LOGSERVICE(logservice::TRANS_SERVICE_LOG_BASE_TYPE, &ls_tx_svr_);
   UNREGISTER_FROM_LOGSERVICE(logservice::STORAGE_SCHEMA_LOG_BASE_TYPE, &ls_tablet_svr_);
@@ -1739,10 +1746,11 @@ int ObLS::get_ls_meta_package_and_tablet_metas(
   } else if (OB_UNLIKELY(is_stopped_)) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(tablet_gc_handler_.disable_gc())) {
+    LOG_WARN("failed to disable gc", K(ret), "ls_id", ls_meta_.ls_id_);
   } else {
     // TODO(wangxiaohui.wxh) consider the ls is offline meanwhile.
     // disable gc while get all tablet meta
-    tablet_gc_handler_.disable_gc();
     ObLSMetaPackage meta_package;
     if (OB_FAIL(get_ls_meta_package(check_archive, meta_package))) {
       LOG_WARN("failed to get ls meta package", K(ret), K_(ls_meta));
@@ -1809,6 +1817,9 @@ int ObLS::enable_replay()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
+  } else if (is_remove()) {
+    ret = OB_LS_IS_DELETED;
+    LOG_WARN("ls status is WAIT_GC when enable replay", K(get_ls_id()));
   } else if (OB_FAIL(log_handler_.enable_replay(ls_meta_.get_clog_base_lsn(),
                                                 ls_meta_.get_clog_checkpoint_scn()))) {
     LOG_WARN("failed to enable replay", K(ret));

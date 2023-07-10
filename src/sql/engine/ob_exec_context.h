@@ -322,7 +322,7 @@ public:
 //  const common::ObInterruptibleTaskID &get_interrupt_id() { return interrupt_id_;}
 //  void set_interrupt_id(const common::ObInterruptibleTaskID &int_id) { interrupt_id_ = int_id; }
 
-  void set_sql_ctx(ObSqlCtx *ctx) { sql_ctx_ = ctx; }
+  void set_sql_ctx(ObSqlCtx *ctx) { sql_ctx_ = ctx; das_ctx_.set_sql_ctx(ctx); }
   ObSqlCtx *get_sql_ctx() { return sql_ctx_; }
   const ObSqlCtx *get_sql_ctx() const { return sql_ctx_; }
   pl::ObPLContext *get_pl_stack_ctx() { return pl_stack_ctx_; }

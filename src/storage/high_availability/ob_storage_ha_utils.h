@@ -38,6 +38,11 @@ public:
       const share::ObLSID &ls_id,
       bool &is_deleted);
 
+  // When the src_ls of the transfer does not exist, it is necessary to check whether the dest_ls can be rebuilt
+  static int check_transfer_ls_can_rebuild(
+      const share::SCN replay_scn,
+      bool &need_rebuild);
+
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
   static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,

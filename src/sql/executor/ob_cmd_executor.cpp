@@ -749,6 +749,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_CHANGE_TENANT: {
         DEFINE_EXECUTE_CMD(ObChangeTenantStmt, ObChangeTenantExecutor);
+        sql_text = ObString::make_empty_string();  // do not record
         break;
       }
       case stmt::T_CREATE_FUNC: {

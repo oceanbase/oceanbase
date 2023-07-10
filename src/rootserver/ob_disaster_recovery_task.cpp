@@ -1802,24 +1802,16 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
     LOG_WARN("invalid server address", K(dest_ip), K(dest_port));
   } else {
     //transform replica_type(string) -> src_type_to_set(ObReplicaType)
-    if (src_type == common::ObString("REPLICA_TYPE_FULL")) {
+    if (src_type == common::ObString("FULL")) {
       src_type_to_set = REPLICA_TYPE_FULL;
-    } else if (src_type == common::ObString("REPLICA_TYPE_LOGONLY")) {
-      src_type_to_set = REPLICA_TYPE_LOGONLY;
-    } else if (src_type == common::ObString("REPLICA_TYPE_READONLY")) {
+    } else if (src_type == common::ObString("READONLY")) {
       src_type_to_set = REPLICA_TYPE_READONLY;
-    } else if (src_type == common::ObString("REPLICA_TYPE_ENCRYPTION_LOGONLY")) {
-      src_type_to_set = REPLICA_TYPE_ENCRYPTION_LOGONLY;
     }
     //transform replica_type(string) -> dest_type_to_set(ObReplicaType)
-    if (dest_type == common::ObString("REPLICA_TYPE_FULL")) {
+    if (dest_type == common::ObString("FULL")) {
       dest_type_to_set = REPLICA_TYPE_FULL;
-    } else if (dest_type == common::ObString("REPLICA_TYPE_LOGONLY")) {
-      dest_type_to_set = REPLICA_TYPE_LOGONLY;
-    } else if (dest_type == common::ObString("REPLICA_TYPE_READONLY")) {
+    } else if (dest_type == common::ObString("READONLY")) {
       dest_type_to_set = REPLICA_TYPE_READONLY;
-    } else if (dest_type == common::ObString("REPLICA_TYPE_ENCRYPTION_LOGONLY")) {
-      dest_type_to_set = REPLICA_TYPE_ENCRYPTION_LOGONLY;
     }
     //transform priority(int) -> priority_to_set(ObDRTaskPriority)
     if (priority == 0) {
@@ -1832,15 +1824,15 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
     ObReplicaMember src_member(src_server, 0);
     ObReplicaMember dest_member(dest_server, 0);
     if (OB_FAIL(src_member.set_replica_type(src_type_to_set))) {
-      LOG_WARN("fail to set src replica type", KR(ret));
+      LOG_WARN("fail to set src replica type", KR(ret), K(src_type_to_set));
     } else if (OB_FAIL(dest_member.set_replica_type(dest_type_to_set))) {
-      LOG_WARN("fail to set dest replica type", KR(ret));
+      LOG_WARN("fail to set dest replica type", KR(ret), K(dest_type_to_set));
     } else if (OB_FAIL(dst_replica.assign(
                     0/*unit id*/,
                     0/*unit group id*/,
                     zone,
                     dest_member))) {
-      LOG_WARN("fail to init a ObDstReplica", KR(ret));
+      LOG_WARN("fail to init a ObDstReplica", KR(ret), K(zone), K(dest_member));
     }
     //STEP3_0: to build a task
     if (OB_FAIL(ret)) {
@@ -1859,10 +1851,13 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
                     comment_to_set.ptr(),        //comment
                     dst_replica,                 //(in used)dest_server
                     src_member,                  //(in used)src_server
-                    src_member,                  //(not used)data_src_server             
+                    src_member,                  //(not used)data_src_server
                     src_paxos_replica_number,                  //(in used)
                     dest_paxos_replica_number))) {             //(in used)
-      LOG_WARN("fail to build a ObLSTypeTransformTask", KR(ret));
+      LOG_WARN("fail to build a ObLSTypeTransformTask", KR(ret), K(task_key), K(tenant_id), K(ls_id),
+               K(task_id_to_set), K(schedule_time_us), K(generate_time_us), K(transmit_data_size),
+               K(priority_to_set), K(dst_replica), K(src_member), K(comment_to_set), K(src_paxos_replica_number),
+               K(dest_paxos_replica_number));
     } else {
       LOG_INFO("success to build a ObLSTypeTransformTask", KPC(this));
     }

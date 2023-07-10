@@ -77,7 +77,7 @@ private:
       const share::ObTransferTabletInfo &tablet_info,
       ObLS *ls,
       mds::BufferCtx &ctx);
-
+  static int set_transfer_tablets_freeze_flag_(const ObTXStartTransferOutInfo &tx_start_transfer_out_info);
   static int on_replay_success_(
       const share::SCN &scn,
       const ObTXStartTransferOutInfo &tx_start_transfer_out_info,
@@ -124,6 +124,7 @@ private:
       ObLS *dest_ls);
   // TODO:(muwei) donot pass parameter 'for_replay'
   static int check_transfer_src_tablets_(
+      const share::SCN &scn,
       const bool for_replay,
       const ObTXStartTransferInInfo &tx_start_transfer_in_info);
   static int check_transfer_src_tablet_(

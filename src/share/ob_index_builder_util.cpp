@@ -32,6 +32,29 @@ using namespace share::schema;
 using namespace sql;
 namespace share
 {
+void ObIndexBuilderUtil::del_column_flags_and_default_value(ObColumnSchemaV2 &column)
+{
+  if ((column.is_generated_column() && !column.is_fulltext_column() &&
+      !column.is_spatial_generated_column()) || column.is_identity_column()) {
+    if (column.is_virtual_generated_column()) {
+      column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+    } else if (column.is_stored_generated_column()) {
+      column.del_column_flag(STORED_GENERATED_COLUMN_FLAG);
+    } else if (column.is_always_identity_column()) {
+      column.del_column_flag(ALWAYS_IDENTITY_COLUMN_FLAG);
+    } else if (column.is_default_identity_column()) {
+      column.del_column_flag(DEFAULT_IDENTITY_COLUMN_FLAG);
+    } else if (column.is_default_on_null_identity_column()) {
+      column.del_column_flag(DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG);
+    }
+    ObObj obj;
+    obj.set_null();
+    column.set_cur_default_value(obj);
+    column.set_orig_default_value(obj);
+  }
+  return;
+}
+
 int ObIndexBuilderUtil::add_column(
     const ObColumnSchemaV2 *data_column,
     const bool is_index,
@@ -83,24 +106,7 @@ int ObIndexBuilderUtil::add_column(
     // Fulltext column's default value is needed, because we need to set GENERATED_CTXCAT_CASCADE_FLAG
     // spatial column's default value is needed, because we need to set SPATIAL_INDEX_GENERATED_COLUMN_FLAG
     // flag by parsing the default value.
-    if ((column.is_generated_column() && !column.is_fulltext_column() &&
-        !column.is_spatial_generated_column()) || column.is_identity_column()) {
-      if (column.is_virtual_generated_column()) {
-        column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
-      } else if (column.is_stored_generated_column()) {
-        column.del_column_flag(STORED_GENERATED_COLUMN_FLAG);
-      } else if (column.is_always_identity_column()) {
-        column.del_column_flag(ALWAYS_IDENTITY_COLUMN_FLAG);
-      } else if (column.is_default_identity_column()) {
-        column.del_column_flag(DEFAULT_IDENTITY_COLUMN_FLAG);
-      } else if (column.is_default_on_null_identity_column()) {
-        column.del_column_flag(DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG);
-      }
-      ObObj obj;
-      obj.set_null();
-      column.set_cur_default_value(obj);
-      column.set_orig_default_value(obj);
-    }
+    del_column_flags_and_default_value(column);
     if (is_rowkey) {
       column.set_rowkey_position(row_desc.get_column_num());
       column.set_order_in_rowkey(order_type);

@@ -44,14 +44,6 @@ public:
                                ObIArray<ObOptColumnStat*> &column_stats,
                                const bool is_index_stat = false,
                                const bool is_history_stat = false,
-                               const bool is_online_stat = false);
-
-  static int split_batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
-                               const uint64_t tenant_id,
-                               ObIArray<ObOptTableStat*> &table_stats,
-                               ObIArray<ObOptColumnStat*> &column_stats,
-                               const bool is_index_stat = false,
-                               const bool is_history_stat = false,
                                const bool is_online_stat = false,
                                const ObObjPrintParams &print_params = ObObjPrintParams());
 
@@ -135,6 +127,7 @@ public:
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,
+                         ObMySQLTransaction &trans,
                          ObIArray<ObOptTableStat *> &table_stats,
                          ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,

@@ -377,7 +377,7 @@ int ObLogFlashbackService::BaseLSOperator::update_leader_()
 int ObLogFlashbackService::BaseLSOperator::get_leader_palf_stat_(palf::PalfStat &palf_stat)
 {
   int ret = OB_SUCCESS;
-  constexpr int64_t CONN_TIMEOUT_US = 500 * 1000;
+  const int64_t CONN_TIMEOUT_US = GCONF.rpc_timeout;
   if (false == leader_.is_valid() && OB_FAIL(update_leader_())) {
     ret = OB_EAGAIN;
   } else {
@@ -398,7 +398,8 @@ int ObLogFlashbackService::BaseLSOperator::get_leader_palf_stat_(palf::PalfStat 
   return ret;
 }
 
-int ObLogFlashbackService::BaseLSOperator::get_leader_member_list_(common::ObMemberList &member_list)
+int ObLogFlashbackService::BaseLSOperator::get_leader_list_(common::ObMemberList &member_list,
+                                                            common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   palf::PalfStat palf_stat;
@@ -406,6 +407,7 @@ int ObLogFlashbackService::BaseLSOperator::get_leader_member_list_(common::ObMem
     CLOG_LOG(WARN, "get_leader_palf_stat_ failed", K(ret), KPC(this), K(palf_stat));
   } else {
     member_list = palf_stat.paxos_member_list_;
+    learner_list = palf_stat.learner_list_;
   }
   return ret;
 }
@@ -413,7 +415,6 @@ int ObLogFlashbackService::BaseLSOperator::get_leader_member_list_(common::ObMem
 int ObLogFlashbackService::CheckLSLogSyncOperator::switch_state()
 {
   int ret = OB_SUCCESS;
-  constexpr int64_t CONN_TIMEOUT_US = 500 * 1000;
   palf::PalfStat palf_stat;
   if (false == this->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
@@ -427,35 +428,21 @@ int ObLogFlashbackService::CheckLSLogSyncOperator::switch_state()
   } else {
     has_get_member_list_ = true;
     member_list_ = (palf_stat.is_valid())? palf_stat.paxos_member_list_: member_list_;
-    LogGetPalfStatReq get_ts_req(self_, ls_id_.id(), false);
-    LogGetPalfStatResp get_ts_resp;
+    learner_list_ = (palf_stat.is_valid())? palf_stat.learner_list_: learner_list_;
     int64_t unsync_member_cnt = 0;
-    for (int i = 0; i < member_list_.get_member_number(); i++) {
-      common::ObAddr server;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = member_list_.get_server_by_index(i, server))) {
-      } else if (log_sync_memberlist_.contains(server)) {
-        // has sync, do not need check
-      } else if (OB_SUCCESS != (tmp_ret = rpc_proxy_->to(server).timeout(CONN_TIMEOUT_US).trace_time(true).
-          max_process_handler_time(CONN_TIMEOUT_US).by(tenant_id_).
-          get_palf_stat(get_ts_req, get_ts_resp))) {
-        CLOG_LOG(WARN, "get_palf_stat failed", K(tmp_ret), KPC(this), K(get_ts_req));
-        ret = OB_EAGAIN;
-        // some replicas may has been removed, try get member_list again
-        has_get_member_list_ = false;
-        // do not execute flashback until all uncommitted logs have been committed
-      } else if (get_ts_resp.palf_stat_.end_scn_ < get_ts_resp.palf_stat_.max_scn_) {
-        ret = OB_EAGAIN;
-      } else if (get_ts_resp.palf_stat_.end_scn_ < flashback_scn_) {
-        ret = OB_EAGAIN;
-        unsync_member_cnt += 1;
-      } else {
-        (void) log_sync_memberlist_.add_server(server);
-      }
-    }
-    // end_ts of some log stream may be smaller than flasback_ts, skip them
+    int64_t unused_cnt = 0;
+    int tmp_ret_member = check_list_log_sync(member_list_, log_sync_memberlist_, unsync_member_cnt);
+    int tmp_ret_learner = check_list_log_sync(learner_list_, log_sync_learnerlist_, unused_cnt);
+    ret = (OB_SUCCESS == tmp_ret_member && OB_SUCCESS == tmp_ret_learner)? OB_SUCCESS: OB_EAGAIN;
+    // Note: end_scn of some log stream may be smaller than flasback_scn in switchover scenario,
+    //       becauase flashback_scn is the end_scn of the log stream whose end_scn is the greatest.
+    //       Therefore, we skip log streams whose logs are committed entirely and its end_scn is
+    //       smaller than flashback_scn. It's safe because these log streams must be in PREPARE_FLASHBACK
+    //       mode (its end_scn will not increase)
     if (unsync_member_cnt == member_list_.get_member_number()) {
       ret = OB_SUCCESS;
+      CLOG_LOG(INFO, "end_scn of all members are smaller than flashback_scn",
+          K(ret), KPC(this), K(unsync_member_cnt));
     }
   }
   if (OB_SUCC(ret)) {
@@ -474,7 +461,7 @@ int ObLogFlashbackService::ChangeAccessModeOperator::switch_state()
   int ret = OB_SUCCESS;
   // 1. get access_mode
   // 2. change_access_mode
-  constexpr int64_t CONN_TIMEOUT_US = 500 * 1000;
+  const int64_t CONN_TIMEOUT_US = GCONF.rpc_timeout;
   LogGetPalfStatReq get_mode_req(self_, ls_id_.id(), true);
   LogGetPalfStatResp get_mode_resp;
   if (false == this->is_valid()) {
@@ -515,7 +502,6 @@ int ObLogFlashbackService::ChangeAccessModeOperator::switch_state()
 int ObLogFlashbackService::ExecuteFlashbackOperator::switch_state()
 {
   int ret = OB_SUCCESS;
-  constexpr int64_t CONN_TIMEOUT_US = 500 * 1000;
   common::ObSpinLockGuard guard(lock_);
   if (false == this->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
@@ -523,25 +509,11 @@ int ObLogFlashbackService::ExecuteFlashbackOperator::switch_state()
   } else if (false == leader_.is_valid() && OB_FAIL(update_leader_())) {
     ret = OB_EAGAIN;
   } else if (true == has_get_member_list_ ||
-      (false == has_get_member_list_ && OB_SUCC(get_leader_member_list_(member_list_)))) {
+      (false == has_get_member_list_ && OB_SUCC(get_leader_list_(member_list_, learner_list_)))) {
     has_get_member_list_ = true;
-    const bool is_flashback_req = true;
-    LogFlashbackMsg flashback_msg(MTL_ID(), self_, ls_id_.id(), mode_version_, flashback_scn_, is_flashback_req);
-    for (int i = 0; i < member_list_.get_member_number(); i++) {
-      common::ObAddr server;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = member_list_.get_server_by_index(i, server))) {
-      } else if (flashbacked_memberlist_.contains(server)) {
-        // has been flashbacked, skip
-      } else if (OB_SUCCESS != (tmp_ret = rpc_proxy_->to(server).timeout(CONN_TIMEOUT_US).trace_time(true).
-          max_process_handler_time(CONN_TIMEOUT_US).by(tenant_id_).
-          send_log_flashback_msg(flashback_msg, NULL))) {
-        CLOG_LOG(WARN, "send_log_flashback_msg failed", K(tmp_ret), KPC(this), K(flashback_msg));
-        ret = OB_EAGAIN;
-      } else {
-        ret = OB_EAGAIN;
-      }
-    }
+    const int tmp_ret_member = flashback_list_(member_list_, flashbacked_memberlist_);
+    const int tmp_ret_learner = flashback_list_(learner_list_, flashbacked_learnerlist_);
+    ret = (OB_SUCCESS == tmp_ret_member && OB_SUCCESS == tmp_ret_learner)? OB_SUCCESS: OB_EAGAIN;
   }
   if (OB_SUCC(ret)) {
     CLOG_LOG(INFO, "do_flashback success", K(ret), KPC(this));
@@ -565,6 +537,8 @@ int ObLogFlashbackService::ExecuteFlashbackOperator::handle_flashback_resp(const
     CLOG_LOG(WARN, "invalid argument", K(ret), KPC(this), K(resp));
   } else if (true == member_list_.contains(resp.src_)) {
     (void) flashbacked_memberlist_.add_server(resp.src_);
+  } else if (true == learner_list_.contains(resp.src_)) {
+    (void) flashbacked_learnerlist_.add_server(resp.src_);
   } else {
     CLOG_LOG(WARN, "flashbacked member is not in memberlist", K(ret), KPC(this), K(resp));
   }

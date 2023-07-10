@@ -99,6 +99,7 @@ inline int TestTabletHelper::create_tablet(
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
 
   ObTabletCreateSSTableParam param;
   prepare_sstable_param(tablet_id, table_schema, param);
@@ -127,7 +128,7 @@ inline int TestTabletHelper::create_tablet(
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
         snapshot_version, table_schema, compat_mode, store_flag, sstable, freezer))){
       STORAGE_LOG(WARN, "tablet init failed", K(ret), K(ls_id), K(tablet_id));
-    } else {
+    } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;
       data.tablet_status_ = tablet_status;
       data.create_commit_scn_ = create_commit_scn;
@@ -142,19 +143,13 @@ inline int TestTabletHelper::create_tablet(
         STORAGE_LOG(WARN, "data serialize failed", K(ret), K(data_serialize_size), K(pos));
       } else {
         tablet_handle.get_obj()->mds_data_.tablet_status_.committed_kv_.get_ptr()->v_.user_data_.assign(buf, data_serialize_size);
-        ObMetaDiskAddr disk_addr;
-        disk_addr.set_mem_addr(0, sizeof(ObTablet));
-        if(OB_FAIL(t3m->compare_and_swap_tablet(key,
-                                                tablet_handle,
-                                                tablet_handle))) {
-          STORAGE_LOG(WARN, "failed to compare and swap tablet", K(ret), K(ls_id), K(tablet_id), K(disk_addr));
-        } else {
-          ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
-          if OB_FAIL(ls_tablet_svr->tablet_id_set_.set(tablet_id)) {
-            STORAGE_LOG(WARN, "set tablet id failed", K(ret), K(tablet_id));
-          }
-        }
       }
+    }
+
+    if (FAILEDx(t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle))) {
+      STORAGE_LOG(WARN, "failed to compare and swap tablet", K(ret), K(ls_id), K(tablet_id));
+    } else if OB_FAIL (ls_tablet_svr->tablet_id_set_.set(tablet_id)){
+      STORAGE_LOG(WARN, "set tablet id failed", K(ret), K(tablet_id));
     }
   }
   return ret;

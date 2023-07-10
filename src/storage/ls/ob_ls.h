@@ -178,6 +178,7 @@ public:
   int start();
   int stop();
   void wait();
+  int prepare_for_safe_destroy();
   bool safe_to_destroy();
   void destroy();
   int offline();
@@ -185,6 +186,8 @@ public:
   int offline_without_lock();
   int enable_for_restore();
   bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
+  bool is_remove() const { return ATOMIC_LOAD(&is_remove_); }
+  void set_is_remove() { return ATOMIC_STORE(&is_remove_, true); }
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }
@@ -636,6 +639,7 @@ public:
   DELEGATE_WITH_RET(member_list_service_, switch_learner_to_acceptor, int);
   DELEGATE_WITH_RET(member_list_service_, add_member, int);
   DELEGATE_WITH_RET(member_list_service_, replace_member, int);
+  DELEGATE_WITH_RET(member_list_service_, get_config_version_and_transfer_scn, int);
   DELEGATE_WITH_RET(log_handler_, add_learner, int); //TODO(yanfeng): fix it
   DELEGATE_WITH_RET(log_handler_, replace_learner, int); //TODO(yanfeng): fix it
   DELEGATE_WITH_RET(block_tx_service_, ha_block_tx, int);
@@ -863,6 +867,7 @@ private:
   uint64_t tenant_id_;
   bool is_stopped_;
   bool is_offlined_;
+  bool is_remove_;
   ObLSMeta ls_meta_;
   observer::ObIMetaReport *rs_reporter_;
   ObLSLock lock_;

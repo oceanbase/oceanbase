@@ -41,8 +41,14 @@ int ObPxWorkNotifier::wait_all_worker_start()
    * 如果丢了信号，则wait一段时间，
    * 如果未丢信号量，则是直接被唤醒。
    */
-  while (start_worker_count_ != expect_worker_count_) {
+  bool is_interrupted = false;
+  int64_t cnt = 1;
+  while (start_worker_count_ != expect_worker_count_ && !is_interrupted) {
     cond_.wait(wait_key, wait_us);
+    // check status after at most 1 second.
+    if (0 == (cnt++ % 32)) {
+      is_interrupted = IS_INTERRUPTED();
+    }
   }
   return ret;
 }
@@ -377,6 +383,7 @@ int ObPxSqcHandler::link_qc_sqc_channel()
 void ObPxSqcHandler::check_interrupt()
 {
   if (OB_UNLIKELY(IS_INTERRUPTED())) {
+    has_interrupted_ = true;
     // 中断错误处理
     ObInterruptCode code = GET_INTERRUPT_CODE();
     int ret = code.code_;

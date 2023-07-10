@@ -1808,14 +1808,13 @@ int ObDDLOperator::drop_sequence_in_drop_column(const ObColumnSchemaV2 &column_s
 }
 
 int ObDDLOperator::reinit_autoinc_row(const ObTableSchema &table_schema,
-                                      common::ObMySQLTransaction &trans,
-                                      const ObArray<ObAddr>* alive_server_list)
+                                      common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
   uint64_t table_id = table_schema.get_table_id();
   ObString table_name = table_schema.get_table_name();
-  uint64_t schema_version = table_schema.get_schema_version();
+  int64_t truncate_version = table_schema.get_truncate_version();
   uint64_t column_id = table_schema.get_autoinc_column_id();
   ObAutoincrementService &autoinc_service = share::ObAutoincrementService::get_instance();
 
@@ -1823,24 +1822,18 @@ int ObDDLOperator::reinit_autoinc_row(const ObTableSchema &table_schema,
     bool is_oracle_mode = false;
     if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("fail to check is oracle mode",
-                KR(ret), K(table_id), K(table_name), K(schema_version), K(column_id));
+                KR(ret), K(table_id), K(table_name), K(truncate_version), K(column_id));
     } else if (is_oracle_mode) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("in oracle mode, autoic_column_id must be illegal",
-              KR(ret), K(table_id), K(table_name), K(schema_version), K(column_id));
+              KR(ret), K(table_id), K(table_name), K(truncate_version), K(column_id));
     } else {
-      // 1、reinit auto_increment value
-      // 2、clear increment cache
+      // reinit auto_increment value
       uint64_t tenant_id = table_schema.get_tenant_id();
       if (OB_FAIL(autoinc_service.reinit_autoinc_row(tenant_id, table_id,
-                                                     column_id, trans))) {
+                                                     column_id, truncate_version, trans))) {
         LOG_WARN("failed to reint auto_increment",
-                KR(ret), K(tenant_id), K(table_id), K(table_name), K(schema_version), K(column_id));
-        // to do
-        // Cache can't be cleaned totally when RS change leader in autoinc_in_order mode
-      } else if (OB_FAIL(cleanup_autoinc_cache(table_schema, alive_server_list))) {
-        LOG_WARN("failed to cleanup_autoinc_caceh",
-                KR(ret), K(tenant_id), K(table_id), K(table_name), K(schema_version), K(column_id));
+                KR(ret), K(tenant_id), K(table_id), K(table_name), K(truncate_version), K(column_id));
       }
     }
   }
@@ -4245,8 +4238,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
 // ref
 // When tables with auto-increment columns are frequently created or deleted, if the auto-increment column cache is not cleared, the memory will grow slowly.
 // so every time when you drop table, if you bring auto-increment columns, clean up the corresponding cache.
-int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema,
-                                         const common::ObArray<ObAddr> *alive_server_list/*nullptr*/)
+int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   ObAutoincrementService &autoinc_service = share::ObAutoincrementService::get_instance();
@@ -4265,8 +4257,7 @@ int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema,
     if (OB_FAIL(autoinc_service.clear_autoinc_cache_all(tenant_id,
                                                         table_id,
                                                         autoinc_column_id,
-                                                        table_schema.is_order_auto_increment_mode(),
-                                                        alive_server_list))) {
+                                                        table_schema.is_order_auto_increment_mode()))) {
       LOG_WARN("failed to clear auto-increment cache",
                K(tenant_id), K(table_id));
     }

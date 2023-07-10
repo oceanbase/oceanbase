@@ -657,7 +657,7 @@ OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc)
     scan_op->set_scan_ctdef(&MY_CTDEF.scan_ctdef_);
     scan_op->set_scan_rtdef(&tsc_rtdef_.scan_rtdef_);
     scan_op->set_can_part_retry(nullptr == tsc_rtdef_.scan_rtdef_.sample_info_
-                                && ctx_.get_my_session()->is_user_session());
+                                && can_partition_retry());
     tsc_rtdef_.scan_rtdef_.table_loc_->is_reading_ = true;
     if (!MY_SPEC.is_index_global_ && MY_CTDEF.lookup_ctdef_ != nullptr) {
       //is local index lookup, need to set the lookup ctdef to the das scan op
@@ -3163,7 +3163,7 @@ int ObGlobalIndexLookupOpImpl::process_data_table_rowkey()
       das_scan_op = static_cast<ObDASScanOp*>(tmp_op);
       das_scan_op->set_scan_ctdef(get_lookup_ctdef());
       das_scan_op->set_scan_rtdef(lookup_rtdef);
-      das_scan_op->set_can_part_retry(table_scan_op_->get_exec_ctx().get_my_session()->is_user_session());
+      das_scan_op->set_can_part_retry(table_scan_op_->can_partition_retry());
     }
   }
   if (OB_SUCC(ret)) {

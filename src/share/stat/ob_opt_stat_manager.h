@@ -61,6 +61,7 @@ public:
                         const bool is_index_stat);
 
   int update_table_stat(const uint64_t tenant_id,
+                        ObMySQLTransaction &trans,
                         const ObIArray<ObOptTableStat*> &table_stats,
                         const bool is_index_stat);
 
@@ -119,6 +120,7 @@ public:
                               ObOptColumnStatHandle &handle);
   virtual int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                  const uint64_t tenant_id,
+                                 ObMySQLTransaction &trans,
                                  const common::ObIArray<ObOptColumnStat *> &column_stats,
                                  bool only_update_col_stat = false,
                                  const ObObjPrintParams &print_params = ObObjPrintParams());
@@ -153,6 +155,7 @@ public:
 
   int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                   const uint64_t tenant_id,
+                  ObMySQLTransaction &trans,
                   ObIArray<ObOptTableStat *> &table_stats,
                   ObIArray<ObOptColumnStat *> &column_stats,
                   const int64_t current_time,

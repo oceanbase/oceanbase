@@ -107,7 +107,7 @@ private:
       const storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
       ObLS &ls,
       const storage::ObTablet &tablet,
-      ObIArray<storage::ObITable *> &memtables,
+      common::ObIArray<ObTableHandleV2> &memtable_handles,
       storage::ObGetMergeTablesResult &result);
 
   static int find_minor_merge_tables(
@@ -127,7 +127,8 @@ private:
 private:
   static int refine_mini_merge_result(
       const storage::ObTablet &tablet,
-      storage::ObGetMergeTablesResult &result);
+      storage::ObGetMergeTablesResult &result,
+      bool &need_check_tablet);
   static int refine_minor_merge_result(
       const int64_t minor_compact_trigger,
       storage::ObGetMergeTablesResult &result);

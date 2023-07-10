@@ -178,15 +178,6 @@ private:
   int wait_trans_tablet_explain_data_();
   int change_member_list_with_retry_();
   int change_member_list_();
-  int get_ls_transfer_scn_(
-      ObLS *ls,
-      share::SCN &transfer_scn);
-  int add_member_(
-      const common::ObAddr &leader_addr,
-      const share::SCN &ls_transfer_scn);
-  int replace_member_(
-      const common::ObAddr &leader_addr,
-      const share::SCN &ls_transfer_scn);
   int check_need_wait_(
       ObLS *ls,
       bool &need_wait);

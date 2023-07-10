@@ -572,58 +572,19 @@ public:
   bool backfill_finished_;
 };
 
-struct ObStorageReplaceMemberArg final
+struct ObStorageChangeMemberArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObStorageReplaceMemberArg();
-  ~ObStorageReplaceMemberArg() {}
+  ObStorageChangeMemberArg();
+  ~ObStorageChangeMemberArg() {}
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(added_member), K_(removed_member), K_(ls_transfer_scn));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
-  common::ObMember added_member_;
-  common::ObMember removed_member_;
-  share::SCN ls_transfer_scn_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObStorageReplaceMemberArg);
-};
-
-struct ObStorageAddMemberArg final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObStorageAddMemberArg();
-  ~ObStorageAddMemberArg() {}
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(member), K_(new_replica_num), K_(ls_transfer_scn));
-  uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  common::ObMember member_;
-  int64_t new_replica_num_;
-  share::SCN ls_transfer_scn_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObStorageAddMemberArg);
-};
-
-struct ObStorageSwitchLToFArg final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObStorageSwitchLToFArg();
-  ~ObStorageSwitchLToFArg() {}
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(learner), K_(new_replica_num), K_(ls_transfer_scn));
-  uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  common::ObMember learner_;
-  int64_t new_replica_num_;
-  share::SCN ls_transfer_scn_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObStorageSwitchLToFArg);
+  DISALLOW_COPY_AND_ASSIGN(ObStorageChangeMemberArg);
 };
 
 struct ObStorageChangeMemberRes final
@@ -633,8 +594,9 @@ public:
   ObStorageChangeMemberRes();
   ~ObStorageChangeMemberRes() {}
   void reset();
-  TO_STRING_KV(K_(change_succ));
-  bool change_succ_;
+  TO_STRING_KV(K_(config_version), K_(transfer_scn));
+  palf::LogConfigVersion config_version_;
+  share::SCN transfer_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageChangeMemberRes);
 };
@@ -753,6 +715,19 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageConfigChangeOpRes);
 };
 
+struct ObStorageWakeupTransferServiceArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageWakeupTransferServiceArg();
+  ~ObStorageWakeupTransferServiceArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t tenant_id_;
+};
+
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
 {
@@ -779,15 +754,14 @@ public:
   RPC_S(PR5 get_transfer_start_scn, OB_GET_TRANSFER_START_SCN, (ObGetTransferStartScnArg), ObGetTransferStartScnRes);
   RPC_S(PR5 fetch_ls_replay_scn, OB_HA_FETCH_LS_REPLAY_SCN, (ObFetchLSReplayScnArg), ObFetchLSReplayScnRes);
   RPC_S(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (ObCheckTransferTabletBackfillArg), ObCheckTransferTabletBackfillRes);
-  RPC_S(PR5 replace_member, OB_HA_REPLACE_MEMBER, (ObStorageReplaceMemberArg), ObStorageChangeMemberRes);
-  RPC_S(PR5 add_member, OB_HA_ADD_MEMBER, (ObStorageAddMemberArg), ObStorageChangeMemberRes);
-  RPC_S(PR5 switch_learner_to_acceptor, OB_HA_SWITCH_LEARNER_TO_ACCEPTOR, (ObStorageSwitchLToFArg), ObStorageChangeMemberRes);
+  RPC_S(PR5 get_config_version_and_transfer_scn, OB_HA_CHANGE_MEMBER_SERVICE, (ObStorageChangeMemberArg), ObStorageChangeMemberRes);
   RPC_S(PR5 block_tx, OB_HA_BLOCK_TX, (ObStorageBlockTxArg));
   RPC_S(PR5 kill_tx, OB_HA_KILL_TX, (ObStorageKillTxArg));
   RPC_S(PR5 unblock_tx, OB_HA_UNBLOCK_TX, (ObStorageUnBlockTxArg));
   RPC_S(PR5 lock_config_change, OB_HA_LOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 unlock_config_change, OB_HA_UNLOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
+  RPC_S(PR5 wakeup_transfer_service, OB_HA_WAKEUP_TRANSFER_SERVICE, (ObStorageWakeupTransferServiceArg));
 };
 
 template <ObRpcPacketCode RPC_CODE>
@@ -992,32 +966,12 @@ private:
       storage::ObLS *ls, bool &has_transfer_table);
 };
 
-class ObStorageReplaceMemberP:
-    public ObStorageStreamRpcP<OB_HA_REPLACE_MEMBER>
+class ObStorageGetConfigVersionAndTransferScnP:
+    public ObStorageStreamRpcP<OB_HA_CHANGE_MEMBER_SERVICE>
 {
 public:
-  explicit ObStorageReplaceMemberP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
-  virtual ~ObStorageReplaceMemberP() {}
-protected:
-  int process();
-};
-
-class ObStorageAddMemberP:
-    public ObStorageStreamRpcP<OB_HA_ADD_MEMBER>
-{
-public:
-  explicit ObStorageAddMemberP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
-  virtual ~ObStorageAddMemberP() {}
-protected:
-  int process();
-};
-
-class ObStorageSwitchLearnerToAcceptorP:
-    public ObStorageStreamRpcP<OB_HA_SWITCH_LEARNER_TO_ACCEPTOR>
-{
-public:
-  explicit ObStorageSwitchLearnerToAcceptorP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
-  virtual ~ObStorageSwitchLearnerToAcceptorP() {}
+  explicit ObStorageGetConfigVersionAndTransferScnP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageGetConfigVersionAndTransferScnP() {}
 protected:
   int process();
 };
@@ -1105,6 +1059,16 @@ class ObStorageGetLogConfigStatP:
 public:
   explicit ObStorageGetLogConfigStatP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
   virtual ~ObStorageGetLogConfigStatP() {}
+protected:
+  int process();
+};
+
+class ObStorageWakeupTransferServiceP:
+    public ObStorageStreamRpcP<OB_HA_WAKEUP_TRANSFER_SERVICE>
+{
+public:
+  explicit ObStorageWakeupTransferServiceP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageWakeupTransferServiceP() {}
 protected:
   int process();
 };
@@ -1198,31 +1162,12 @@ public:
       const share::ObLSID &dest_ls_id,
       const common::ObIArray<share::ObTransferTabletInfo> &tablet_array,
       bool &replace_finished) = 0;
-
-  virtual int replace_member(
+  virtual int get_config_version_and_transfer_scn(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
-      const common::ObMember &added_member,
-      const common::ObMember &removed_member,
-      const share::SCN &ls_transfer_scn,
-      const int64_t timeout) = 0;
-  virtual int add_member(
-      const uint64_t tenant_id,
-      const ObStorageHASrcInfo &src_info,
-      const share::ObLSID &ls_id,
-      const common::ObMember &added_member,
-      const int64_t new_replica_num,
-      const share::SCN &ls_transfer_scn,
-      const int64_t timeout) = 0;
-  virtual int switch_learner_to_acceptor(
-      const uint64_t tenant_id,
-      const ObStorageHASrcInfo &src_info,
-      const share::ObLSID &ls_id,
-      const common::ObMember &learner,
-      const int64_t paxos_replica_num,
-      const share::SCN &ls_transfer_scn,
-      const int64_t timeout) = 0;
+      palf::LogConfigVersion &config_version,
+      share::SCN &transfer_scn) = 0;
   virtual int block_tx(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
@@ -1256,6 +1201,9 @@ public:
       const share::ObLSID &ls_id,
       int64_t &palf_lock_owner,
       bool &is_locked) = 0;
+  virtual int wakeup_transfer_service(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info) = 0;
 };
 
 class ObStorageRpc: public ObIStorageRpc
@@ -1339,30 +1287,12 @@ public:
       const share::ObLSID &dest_ls_id,
       const common::ObIArray<share::ObTransferTabletInfo> &tablet_array,
       bool &replace_finished);
-  virtual int replace_member(
+  virtual int get_config_version_and_transfer_scn(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
-      const common::ObMember &added_member,
-      const common::ObMember &removed_member,
-      const share::SCN &ls_transfer_scn,
-      const int64_t timeout);
-  virtual int add_member(
-      const uint64_t tenant_id,
-      const ObStorageHASrcInfo &src_info,
-      const share::ObLSID &ls_id,
-      const common::ObMember &added_member,
-      const int64_t new_replica_num,
-      const share::SCN &ls_transfer_scn,
-      const int64_t timeout);
-  virtual int switch_learner_to_acceptor(
-      const uint64_t tenant_id,
-      const ObStorageHASrcInfo &src_info,
-      const share::ObLSID &ls_id,
-      const common::ObMember &learner,
-      const int64_t new_replica_num,
-      const share::SCN &ls_transfer_scn,
-      const int64_t timeout);
+      palf::LogConfigVersion &config_version,
+      share::SCN &transfer_scn);
   virtual int block_tx(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
@@ -1396,6 +1326,9 @@ public:
       const share::ObLSID &ls_id,
       int64_t &palf_lock_owner,
       bool &is_locked);
+  virtual int wakeup_transfer_service(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info);
 
 private:
   bool is_inited_;

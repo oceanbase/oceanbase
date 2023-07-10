@@ -49,7 +49,7 @@ int ObDupTableLSLeaseMgr::init(ObDupTableLSHandler *dup_ls_handle)
 int ObDupTableLSLeaseMgr::offline()
 {
   int ret = OB_SUCCESS;
-
+  SpinWLockGuard guard(lease_lock_);
   follower_lease_info_.reset();
   leader_lease_map_.clear();
   return ret;

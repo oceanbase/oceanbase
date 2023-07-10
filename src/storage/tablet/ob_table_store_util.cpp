@@ -684,30 +684,28 @@ int ObMemtableArray::build(
 int ObMemtableArray::rebuild(const common::ObIArray<ObITable *> &table_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(trim_empty_last_memtable())) {
-    LOG_WARN("failed to trim empty last memtable", K(ret));
-  } else {
-    const memtable::ObIMemtable *last_memtable = count_ > 0 ? memtable_array_[count_ - 1] : nullptr;
-    const share::SCN endscn = (NULL == last_memtable) ? share::SCN::min_scn() : last_memtable->get_end_scn();
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
-      memtable::ObIMemtable *memtable = nullptr;
-      ObITable *table = table_array.at(i);
-      if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
-      } else if (FALSE_IT(memtable = static_cast<memtable::ObIMemtable *>(table))) {
-      } else if (memtable->is_empty()) {
-        FLOG_INFO("Empty memtable discarded", KPC(memtable));
-      } else if (table->get_end_scn() < endscn) {
-      } else if (table->get_end_scn() == endscn && memtable == last_memtable) { //fix issue 41996395
-      } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("too many elements for memtable array", K(ret));
-      } else {
-        memtable_array_[count_] = memtable;
-        ++count_;
-      }
+  const memtable::ObIMemtable *last_memtable = count_ > 0 ? memtable_array_[count_ - 1] : nullptr;
+  const share::SCN endscn = (NULL == last_memtable) ? share::SCN::min_scn() : last_memtable->get_end_scn();
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
+    memtable::ObIMemtable *memtable = nullptr;
+    ObITable *table = table_array.at(i);
+    if (OB_UNLIKELY(nullptr == table || !table->is_memtable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
+    } else if (FALSE_IT(memtable = static_cast<memtable::ObIMemtable *>(table))) {
+    } else if (memtable->is_empty()) {
+      FLOG_INFO("Empty memtable discarded", KPC(memtable));
+    } else if (table->get_end_scn() < endscn) {
+    } else if (exist_memtable_with_end_scn(table, endscn)) {
+      FLOG_INFO("duplicated memtable with same end_scn discarded", KPC(table), K(endscn));
+    } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("too many elements for memtable array", K(ret));
+    } else {
+      memtable_array_[count_] = memtable;
+      ++count_;
     }
   }
 
@@ -812,19 +810,23 @@ int ObMemtableArray::find(
   return ret;
 }
 
-int ObMemtableArray::trim_empty_last_memtable()
+bool ObMemtableArray::exist_memtable_with_end_scn(const ObITable *table, const SCN &end_scn)
 {
-  // trim last memtable if it is empty since right boundary of memtable could be refine asynchronuously
-  int ret = OB_SUCCESS;
-  const int64_t last_memtable_idx = count_ - 1;
-  if (0 == count_) {
-    // skip
-  } else if (memtable_array_[last_memtable_idx]->is_empty()) {
-    LOG_INFO("trim empty last memtable", K(ret), K(memtable_array_[last_memtable_idx]));
-    memtable_array_[last_memtable_idx] = nullptr;
-    count_--;
+  // when frozen memtable's log was not committed, its right boundary is open (end_scn == MAX)
+  // the right boundary would be refined asynchronuously
+  // we need to make sure duplicate memtable was not added to tablet,
+  // and ensure active memtable could be added to tablet
+  bool is_exist = false;
+  if (table->get_end_scn() == end_scn && count_ >= 1) {
+    for (int64_t i = count_ - 1; i >= 0 ; --i) {
+      const ObITable *memtable = memtable_array_[i];
+      if (memtable == table) {
+        is_exist = true;
+        break;
+      }
+    }
   }
-  return ret;
+  return is_exist;
 }
 
 int64_t ObMemtableArray::to_string(char *buf, const int64_t buf_len) const

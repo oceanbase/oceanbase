@@ -71,6 +71,8 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
     LOG_ERROR("fail to get trans timeout ts", K(ret));
   } else if (FALSE_IT(tenant_id = my_session->get_effective_tenant_id())) {
   } else {
+    ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     const int64_t flags = stmt.get_flags();
     transaction::ObTxParam &tx_param = plan_ctx->get_trans_param();
     const bool is_readonly = ObXAFlag::contain_tmreadonly(flags);
@@ -196,6 +198,8 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
     ret = OB_TRANS_XA_NOTA;
     TRANS_LOG(WARN, "xid not match", K(ret), K(xid));
   } else {
+    ObSQLSessionInfo::LockGuard session_query_guard(my_session->get_query_lock());
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     int64_t flags = stmt.get_flags();
     flags = my_session->has_tx_level_temp_table() ? (flags | ObXAFlag::TEMPTABLE) : flags;
     if (OB_FAIL(MTL(transaction::ObXAService*)->xa_end(xid, flags,

@@ -1611,10 +1611,13 @@ private:
       ObDDLOperator *ddl_operator = NULL,
       common::ObMySQLTransaction *trans = NULL);
   int modify_generated_column_default_value(share::schema::ObColumnSchemaV2 &generated_column,
-                                            common::ObString &column_name,
-                                            const common::ObString &new_column_name,
+                                            const ObColumnSchemaV2 &orig_column_schema,
+                                            const AlterColumnSchema &alter_column_schema,
                                             const share::schema::ObTableSchema &table_schema,
                                             const common::ObTimeZoneInfo &tz_info);
+  int modify_depend_column_type(sql::ObRawExpr *expr,
+                                const ObString &column_name,
+                                const AlterColumnSchema &column_schema);
   int validate_update_column_for_materialized_view(
       const share::schema::ObTableSchema &origin_table_schema,
       const share::schema::ObColumnSchemaV2 &orig_column_schema);
