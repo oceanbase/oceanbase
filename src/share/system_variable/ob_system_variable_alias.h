@@ -248,6 +248,7 @@ namespace share
   static const char* const OB_SV_RUNTIME_FILTER_WAIT_TIME_MS = "runtime_filter_wait_time_ms";
   static const char* const OB_SV_RUNTIME_FILTER_MAX_IN_NUM = "runtime_filter_max_in_num";
   static const char* const OB_SV_RUNTIME_BLOOM_FILTER_MAX_SIZE = "runtime_bloom_filter_max_size";
+  static const char* const OB_SV_OPTIMIZER_FEATURES_ENABLE = "optimizer_features_enable";
 
 }
 }

@@ -2643,6 +2643,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_runtime_bloom_filter_max_size(int_val));
       break;
     }
+    case SYS_VAR_OPTIMIZER_FEATURES_ENABLE: {
+      if (OB_FAIL(check_optimizer_features_enable_valid(val))) {
+        LOG_WARN("fail check optimizer_features_enable valid", K(val), K(ret));
+      }
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3238,6 +3244,25 @@ int ObBasicSessionInfo::process_session_log_level(const ObObj &val)
     } else {
       log_id_level_map_valid_ = true;
     }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::check_optimizer_features_enable_valid(const ObObj &val)
+{
+  int ret = OB_SUCCESS;
+  ObString version_str;
+  uint64_t version = 0;
+  if (OB_FAIL(val.get_varchar(version_str))) {
+    LOG_WARN("fail get varchar", K(val), K(ret));
+  } else if (version_str.empty()) {
+    /* do nothing */
+  } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
+    LOG_WARN("failed to get version");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "version for optimizer_features_enable");
+  } else if (version < CLUSTER_VERSION_4_0_0_0 || version > CLUSTER_CURRENT_VERSION) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "version for optimizer_features_enable");
   }
   return ret;
 }

@@ -1677,6 +1677,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(231); }
 };
+class ObSysVarOptimizerFeaturesEnable : public ObVarcharSysVar
+{
+public:
+  ObSysVarOptimizerFeaturesEnable() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OPTIMIZER_FEATURES_ENABLE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(232); }
+};
 
 
 class ObSysVarFactory
@@ -1697,7 +1704,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 135;
+  const static int64_t OB_SYS_VARS_COUNT = 136;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

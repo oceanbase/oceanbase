@@ -1290,6 +1290,7 @@ public:
   int get_enable_optimizer_null_aware_antijoin(bool &is_enabled) const;
   common::ActiveSessionStat &get_ash_stat() {  return ash_stat_; }
   void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };
+  static int check_optimizer_features_enable_valid(const ObObj &val);
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
