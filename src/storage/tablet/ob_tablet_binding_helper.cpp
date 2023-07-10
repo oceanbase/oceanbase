@@ -117,13 +117,16 @@ int ObTabletBindingHelper::get_tablet_for_new_mds(const ObLS &ls, const ObTablet
   const ObTabletMapKey key(ls.get_ls_id(), tablet_id);
   const bool for_replay = replay_scn.is_valid();
   if (for_replay) {
-    if (OB_FAIL(ls.replay_get_tablet(tablet_id, replay_scn, handle))) {
+    if (OB_FAIL(ls.replay_get_tablet_no_check(tablet_id, replay_scn, handle))) {
       if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
         ret = OB_NO_NEED_UPDATE;
         LOG_WARN("clog is obsolete, should skip replay", K(ret));
       } else {
         LOG_WARN("failed to get tablet", K(ret));
       }
+    } else if (OB_UNLIKELY(handle.get_obj()->is_empty_shell())) {
+      ret = OB_NO_NEED_UPDATE;
+      LOG_WARN("tablet is already deleted, need skip", K(ret), K(key));
     }
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(key));

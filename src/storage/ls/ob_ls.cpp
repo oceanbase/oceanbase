@@ -1442,9 +1442,10 @@ int ObLS::finish_slog_replay()
   return ret;
 }
 
-int ObLS::replay_get_tablet_no_check(const common::ObTabletID &tablet_id,
-                            const SCN &scn,
-                            ObTabletHandle &handle) const
+int ObLS::replay_get_tablet_no_check(
+    const common::ObTabletID &tablet_id,
+    const SCN &scn,
+    ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_meta_.ls_id_, tablet_id);
@@ -1495,19 +1496,23 @@ int ObLS::replay_get_tablet_no_check(const common::ObTabletID &tablet_id,
   return ret;
 }
 
-int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
-                            const SCN &scn,
-                            ObTabletHandle &handle) const
+int ObLS::replay_get_tablet(
+    const common::ObTabletID &tablet_id,
+    const SCN &scn,
+    ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = ls_meta_.ls_id_;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
+  ObTabletCreateDeleteMdsUserData data;
+  bool is_committed = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", KR(ret));
   } else if (OB_FAIL(replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(ls_meta_.ls_id_));
+    LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_id), K(scn));
   } else if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
@@ -1515,8 +1520,6 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id), K(scn));
   } else if (tablet->is_empty_shell()) {
     ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
-    ObTabletCreateDeleteMdsUserData data;
-    bool is_committed = false;
     if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
       LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
     } else if (!is_committed) {
@@ -1529,9 +1532,26 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
       LOG_WARN("tablet is empty shell but user data is unexpected", K(ret), KPC(tablet));
     } else {
       ret = OB_OBSOLETE_CLOG_NEED_SKIP;
-      LOG_INFO("tablet is already deleted, need skip", KR(ret), K(tablet_id), K(ls_meta_.ls_id_), K(scn));
+      LOG_INFO("tablet is already deleted, need skip", KR(ret), K(ls_id), K(tablet_id), K(scn));
+    }
+  } else if (scn > tablet->get_clog_checkpoint_scn()) {
+    if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
+      if (OB_EMPTY_RESULT == ret) {
+        ret = OB_EAGAIN;
+        LOG_INFO("read empty mds data, should retry", KR(ret), K(ls_id), K(tablet_id), K(scn));
+      } else {
+        LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
+      }
+    } else if (!is_committed) {
+      if ((ObTabletStatus::NORMAL == data.tablet_status_ && data.create_commit_version_ == ObTransVersion::INVALID_TRANS_VERSION)
+          || ObTabletStatus::TRANSFER_IN == data.tablet_status_) {
+        ret = OB_EAGAIN;
+        LOG_INFO("latest transaction has not committed yet, should retry", KR(ret), K(ls_id), K(tablet_id),
+            K(scn), "clog_checkpoint_scn", tablet->get_clog_checkpoint_scn(), K(data));
+      }
     }
   }
+
   if (OB_SUCC(ret)) {
     handle = tablet_handle;
   }

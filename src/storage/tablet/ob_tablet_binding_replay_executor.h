@@ -37,7 +37,9 @@ public:
 protected:
   bool is_replay_update_tablet_status_() const override
   {
-    return false;
+     // TODO (jiahua.cjh): binding is pre barrier that doesn't
+     // need call ObLS::replay_get_tablet. Consider refactor base execuator interface
+    return true;
   }
 
   int do_replay_(ObTabletHandle &tablet_handle) override;
