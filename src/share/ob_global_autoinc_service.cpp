@@ -340,21 +340,13 @@ int ObGlobalAutoIncService::handle_push_autoinc_request(
       LOG_WARN("failed to get seq value", K(ret), K(key));
     } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST == err
                         || (request_version == cache_node.autoinc_version_
-                            && cache_node.need_sync(request.base_value_)))) {
+                            && cache_node.need_sync(request.base_value_))
+                        // cache node is expired
+                        || (request_version > cache_node.autoinc_version_))) {
       if (OB_FAIL(sync_value_to_inner_table_(request, cache_node, sync_value))) {
         LOG_WARN("sync to inner table failed", K(ret));
       } else if (OB_FAIL(autoinc_map_.set_refactored(key, cache_node, 1))) {
         LOG_WARN("set autoinc_map_ failed", K(ret));
-      }
-    // cache node is expired
-    } else if (OB_UNLIKELY(request_version > cache_node.autoinc_version_)) {
-      uint64_t sequence_value = 0;
-      if (OB_FAIL(autoinc_map_.erase_refactored(key))) {
-        LOG_WARN("fail to erase autoinc cache map key", K(ret));
-      } else {
-        ret = OB_AUTOINC_CACHE_NOT_EQUAL;
-        LOG_WARN("request autoinc_version is bigger than cache_node autoinc_version, erase key", KR(ret), K(tenant_id), K_(key.table_id),
-                                                                                                 K(request_version), K(cache_node.autoinc_version_));
       }
     // old request just ignore
     } else if (OB_UNLIKELY(request_version < cache_node.autoinc_version_)) {
@@ -503,6 +495,10 @@ int ObGlobalAutoIncService::sync_value_to_inner_table_(
     node.reset();
     node.sync_value_ = sync_value; // update sync value for next sync
   }
+  if (OB_SUCC(ret)) {
+    node.autoinc_version_ = autoinc_version > node.autoinc_version_ ? autoinc_version : node.autoinc_version_;
+  }
+
   return ret;
 }
 
