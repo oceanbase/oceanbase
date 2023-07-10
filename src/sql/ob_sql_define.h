@@ -483,7 +483,7 @@ struct ObSqlArrayObj
       element_()
   {
   }
-  typedef common::ObArrayWrap<common::ObObj> DataArray;
+  typedef common::ObArrayWrap<common::ObObjParam> DataArray;
   static ObSqlArrayObj *alloc(common::ObIAllocator &allocator, int64_t count);
   TO_STRING_KV("data", DataArray(data_, count_),
                K_(count),
