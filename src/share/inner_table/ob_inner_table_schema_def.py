@@ -279,7 +279,7 @@ all_table_def = dict(
 def_table_schema(**all_table_def)
 
 all_column_def = dict(
-    owner = 'xiaofeng.lby',
+    owner = 'bin.lb',
     table_name    = '__all_column',
     table_id      = '4',
     table_type = 'SYSTEM_TABLE',
@@ -824,7 +824,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   database_id    = 'OB_MYSQL_SCHEMA_ID',
   table_name     = 'help_topic',
   table_id       = '130',
@@ -845,7 +845,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   database_id    = 'OB_MYSQL_SCHEMA_ID',
   table_name     = 'help_category',
   table_id       = '131',
@@ -864,7 +864,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   database_id    = 'OB_MYSQL_SCHEMA_ID',
   table_name     = 'help_keyword',
   table_id       = '132',
@@ -881,7 +881,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   database_id    = 'OB_MYSQL_SCHEMA_ID',
   table_name     = 'help_relation',
   table_id       = '133',
@@ -998,7 +998,7 @@ def_table_schema(**gen_history_table_def(143, all_outline_def))
 # table_id = 144: __all_election_event_history not used on 4.0
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name = '__all_recyclebin',
   table_id = '145',
   table_type = 'SYSTEM_TABLE',
@@ -1619,7 +1619,7 @@ def_table_schema(
 # table_id = 205: __all_tenant_gc_partition_info not used on 4.0
 
 all_constraint_def = dict(
-    owner = 'xiaofeng.lby',
+    owner = 'bin.lb',
     table_name    = '__all_constraint',
     table_id      = '206',
     table_type = 'SYSTEM_TABLE',
@@ -2621,7 +2621,7 @@ def_table_schema(
 )
 
 all_tenant_constraint_column_def = dict(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name    = '__all_tenant_constraint_column',
   table_id      = '294',
   table_type = 'SYSTEM_TABLE',
@@ -5030,7 +5030,7 @@ def_table_schema(
 )
 
 all_mock_fk_parent_table_def = dict(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name    = '__all_mock_fk_parent_table',
   table_id      = '405',
   table_type = 'SYSTEM_TABLE',
@@ -5052,7 +5052,7 @@ def_table_schema(**all_mock_fk_parent_table_def)
 def_table_schema(**gen_history_table_def(406, all_mock_fk_parent_table_def))
 
 all_mock_fk_parent_table_column_def = dict(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name    = '__all_mock_fk_parent_table_column',
   table_id      = '407',
   table_type = 'SYSTEM_TABLE',
@@ -5760,7 +5760,7 @@ def_table_schema(
 ################################################################################
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_all_table',
   table_id       = '10001',
   table_type = 'VIRTUAL_TABLE',
@@ -5794,7 +5794,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_table_column',
   table_id       = '10002',
   table_type = 'VIRTUAL_TABLE',
@@ -5818,7 +5818,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_table_index',
   table_id       = '10003',
   table_type = 'VIRTUAL_TABLE',
@@ -5850,7 +5850,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_show_create_database',
   table_id       = '10004',
   table_type = 'VIRTUAL_TABLE',
@@ -5868,7 +5868,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_show_create_table',
   table_id       = '10005',
   table_type = 'VIRTUAL_TABLE',
@@ -5965,7 +5965,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_warning',
   table_id       = '10009',
   table_type = 'VIRTUAL_TABLE',
@@ -5983,7 +5983,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_current_tenant',
   table_id       = '10010',
   table_type = 'VIRTUAL_TABLE',
@@ -5999,7 +5999,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_database_status',
   table_id       = '10011',
   table_type = 'VIRTUAL_TABLE',
@@ -6018,7 +6018,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_tenant_status',
   table_id       = '10012',
   table_type = 'VIRTUAL_TABLE',
@@ -6100,7 +6100,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__tenant_virtual_show_tables',
   table_id       = '10018',
   table_type = 'VIRTUAL_TABLE',
@@ -8390,7 +8390,7 @@ def_table_schema(
 
 ############################ NOTE: Id 12005 is deprecated, do not reuse ############################
 #def_table_schema(
-#  owner = 'xiaofeng.lby',
+#  owner = 'bin.lb',
 #  tablegroup_id = 'OB_INVALID_ID',
 #  database_id   = 'OB_INFORMATION_SCHEMA_ID',
 #  table_name    = 'TABLE_CONSTRAINTS',
@@ -9394,7 +9394,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 #tablespace end
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name     = '__ALL_VIRTUAL_INFORMATION_COLUMNS',
   table_id       = '12144',
   table_type = 'VIRTUAL_TABLE',
@@ -9707,7 +9707,7 @@ def_table_schema(
 
 ############################ NOTE: Id 12177 is deprecated, do not reuse ############################
 #def_table_schema(
-#  owner = 'xiaofeng.lby',
+#  owner = 'bin.lb',
 #  tablegroup_id = 'OB_INVALID_ID',
 #  database_id   = 'OB_INFORMATION_SCHEMA_ID',
 #  table_name    = 'REFERENTIAL_CONSTRAINTS',
@@ -10256,7 +10256,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 ############################ NOTE: Id 12235 is deprecated, do not reuse ############################
 #def_table_schema(
-#  owner = 'xiaofeng.lby',
+#  owner = 'bin.lb',
 #  tablegroup_id = 'OB_INVALID_ID',
 #  database_id   = 'OB_INFORMATION_SCHEMA_ID',
 #  table_name    = 'CHECK_CONSTRAINTS',
@@ -12701,7 +12701,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   tablegroup_id  = 'OB_INVALID_ID',
   database_id    = 'OB_INFORMATION_SCHEMA_ID',
   table_name     = 'SCHEMATA',
@@ -12925,7 +12925,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   tablegroup_id = 'OB_INVALID_ID',
   database_id    = 'OB_INFORMATION_SCHEMA_ID',
   table_name     = 'VIEWS',
@@ -12972,7 +12972,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   tablegroup_id  = 'OB_INVALID_ID',
   database_id    = 'OB_INFORMATION_SCHEMA_ID',
   table_name     = 'TABLES',
@@ -13117,7 +13117,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   tablegroup_id  = 'OB_INVALID_ID',
   database_id    = 'OB_INFORMATION_SCHEMA_ID',
   table_name     = 'KEY_COLUMN_USAGE',
@@ -14454,7 +14454,7 @@ def_table_schema(
 
 # rename to DBA_RECYCLEBIN
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_RECYCLEBIN',
   table_id        = '21038',
   table_type      = 'SYSTEM_VIEW',
@@ -14774,7 +14774,7 @@ def_table_schema(
 # 21067 is abandoned
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   tablegroup_id = 'OB_INVALID_ID',
   database_id    = 'OB_INFORMATION_SCHEMA_ID',
   table_name     = 'COLUMNS',
@@ -25813,7 +25813,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   tablegroup_id = 'OB_INVALID_ID',
   database_id   = 'OB_INFORMATION_SCHEMA_ID',
   table_name    = 'CHECK_CONSTRAINTS',
@@ -25838,7 +25838,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   tablegroup_id = 'OB_INVALID_ID',
   database_id   = 'OB_INFORMATION_SCHEMA_ID',
   table_name    = 'REFERENTIAL_CONSTRAINTS',
@@ -25949,7 +25949,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   tablegroup_id = 'OB_INVALID_ID',
   database_id   = 'OB_INFORMATION_SCHEMA_ID',
   table_name    = 'TABLE_CONSTRAINTS',
@@ -29687,7 +29687,7 @@ def_table_schema(
 
 # oracle view/synonym dba/all/user_ind_columns
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_IND_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25012',
@@ -29765,7 +29765,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_IND_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25013',
@@ -29847,7 +29847,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_IND_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25014',
@@ -29926,7 +29926,7 @@ def_table_schema(
 # end oracle view/synonym dba/all/user_ind_columns
 # oracle view/synonym dba/all/user_constraints
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_CONSTRAINTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25015',
@@ -30112,7 +30112,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_CONSTRAINTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25016',
@@ -30323,7 +30323,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_CONSTRAINTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25017',
@@ -30508,7 +30508,7 @@ def_table_schema(
 # end oracle view/synonym dba/all/user_constraints
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_TAB_COLS_V$',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25018',
@@ -30727,7 +30727,7 @@ FROM
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_TAB_COLS_V$',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25019',
@@ -30944,7 +30944,7 @@ FROM
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_TAB_COLS_V$',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25020',
@@ -31161,7 +31161,7 @@ FROM
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_TAB_COLS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25021',
@@ -31221,7 +31221,7 @@ FROM SYS.ALL_TAB_COLS_V$
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_TAB_COLS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25022',
@@ -31281,7 +31281,7 @@ FROM SYS.DBA_TAB_COLS_V$
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_TAB_COLS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25023',
@@ -31340,7 +31340,7 @@ FROM SYS.USER_TAB_COLS_V$
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_TAB_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25024',
@@ -31394,7 +31394,7 @@ WHERE USER_GENERATED = 'YES'
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_TAB_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25025',
@@ -31448,7 +31448,7 @@ WHERE USER_GENERATED = 'YES'
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_TAB_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25026',
@@ -31501,7 +31501,7 @@ WHERE USER_GENERATED = 'YES'
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_TABLES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25027',
@@ -31674,7 +31674,7 @@ FROM
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_TABLES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25028',
@@ -31845,7 +31845,7 @@ FROM
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_TABLES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25029',
@@ -32018,7 +32018,7 @@ FROM
 # start oracle view dba/all/user/tab_comments
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_TAB_COMMENTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25030',
@@ -32049,7 +32049,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_TAB_COMMENTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25031',
@@ -32082,7 +32082,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_TAB_COMMENTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25032',
@@ -32115,7 +32115,7 @@ def_table_schema(
 
 # start oracle view dba/all/user/col_comments
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_COL_COMMENTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25033',
@@ -32145,7 +32145,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_COL_COMMENTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25034',
@@ -32177,7 +32177,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_COL_COMMENTS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25035',
@@ -32207,7 +32207,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_INDEXES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25036',
@@ -32371,7 +32371,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_INDEXES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25037',
@@ -32539,7 +32539,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_INDEXES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25038',
@@ -32702,7 +32702,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_CONS_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25039',
@@ -32769,7 +32769,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'ALL_CONS_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25040',
@@ -32858,7 +32858,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_CONS_COLUMNS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25041',
@@ -41201,7 +41201,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DICTIONARY',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -41425,7 +41425,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DICT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -41990,7 +41990,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'DBA_RECYCLEBIN',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -42067,7 +42067,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaofeng.lby',
+  owner = 'bin.lb',
   table_name      = 'USER_RECYCLEBIN',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
