@@ -28,6 +28,11 @@ namespace common
 
 ObClockGenerator ObClockGenerator::clock_generator_;
 
+ObClockGenerator &ObClockGenerator::get_instance()
+{
+  return clock_generator_;
+}
+
 int ObClockGenerator::init()
 {
   int ret = OB_SUCCESS;
@@ -44,6 +49,7 @@ int ObClockGenerator::init()
       clock_generator_.cur_ts_ = clock_generator_.get_us();
       clock_generator_.last_used_time_ = clock_generator_.get_us();
       clock_generator_.inited_ = true;
+      clock_generator_.stopped_ = false;
       clock_generator_.ready_ = true;
       TRANS_LOG(INFO, "clock generator inited success");
     }
@@ -52,13 +58,27 @@ int ObClockGenerator::init()
   return ret;
 }
 
+void ObClockGenerator::stop()
+{
+  if (inited_) {
+    stopped_ = true;
+    lib::ThreadPool::stop();
+  }
+}
+void ObClockGenerator::wait()
+{
+  if (inited_) {
+    lib::ThreadPool::wait();
+  }
+}
+
 void ObClockGenerator::destroy(void)
 {
   if (clock_generator_.inited_) {
-    clock_generator_.inited_ = false;
     clock_generator_.stop();
     clock_generator_.wait();
-    clock_generator_.destroy();
+    clock_generator_.lib::ThreadPool::destroy();
+    clock_generator_.inited_ = false;
     // Global variables and thread local variables when printing logs disable_logging_
     // Uncertain release order may lead to core dump
     // TRANS_LOG(INFO, "clock generator destroyed");
@@ -76,7 +96,7 @@ void ObClockGenerator::run1()
   while (!ready_) {
     ob_usleep(SLEEP_US);
   }
-  while (inited_) {
+  while (!stopped_) {
     int64_t retry = 0;
     int64_t cur_ts = 0;
     int64_t delta = 0;

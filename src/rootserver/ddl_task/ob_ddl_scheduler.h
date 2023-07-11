@@ -216,6 +216,7 @@ public:
   int start();
   void stop();
   void wait();
+  void destroy();
   virtual void run1() override;
 
   int create_ddl_task(

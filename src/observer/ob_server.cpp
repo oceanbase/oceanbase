@@ -478,6 +478,15 @@ void ObServer::destroy()
 
   if (is_arbitration_mode()) {
   } else if (!has_destroy_ && has_stopped_) {
+
+    FLOG_INFO("begin to destroy OB_LOGGER");
+    OB_LOGGER.destroy();
+    FLOG_INFO("OB_LOGGER destroyed");
+
+    FLOG_INFO("begin to destroy task controller");
+    ObTaskController::get().destroy();
+    FLOG_INFO("task controller destroyed");
+
     FLOG_INFO("begin destroy signal worker");
     sig_worker_->destroy();
     FLOG_INFO("signal worker destroyed");
@@ -676,6 +685,10 @@ void ObServer::destroy()
     palf::election::GLOBAL_REPORT_TIMER.destroy();
     FLOG_INFO("global election report timer destroyed");
 
+    FLOG_INFO("begin to destroy virtual tenant manager");
+    ObVirtualTenantManager::get_instance().destroy();
+    FLOG_INFO("virtual tenant manager destroyed");
+
     FLOG_INFO("begin to destroy OB_PRIMARY_STANDBY_SERVICE");
     OB_PRIMARY_STANDBY_SERVICE.destroy();
     FLOG_INFO("OB_PRIMARY_STANDBY_SERVICE destroyed");
@@ -683,6 +696,14 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy rootservice event history");
     ROOTSERVICE_EVENT_INSTANCE.destroy();
     FLOG_INFO("rootservice event history destroyed");
+
+    FLOG_INFO("begin to destroy kv global cache");
+    ObKVGlobalCache::get_instance().destroy();
+    FLOG_INFO("kv global cache destroyed");
+
+    FLOG_INFO("begin to destroy clock generator");
+    ObClockGenerator::destroy();
+    FLOG_INFO("clock generator destroyed");
 
 
     has_destroy_ = true;
@@ -1022,6 +1043,14 @@ int ObServer::stop()
   int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer begin");
 
+  FLOG_INFO("begin to stop OB_LOGGER");
+  OB_LOGGER.stop();
+  FLOG_INFO("stop OB_LOGGER success");
+
+  FLOG_INFO("begin to stop task controller");
+  ObTaskController::get().stop();
+  FLOG_INFO("stop task controller success");
+
   FLOG_INFO("begin to stop config manager");
   config_mgr_.stop();
   FLOG_INFO("stop config manager success");
@@ -1295,6 +1324,15 @@ int ObServer::stop()
     FLOG_INFO("begin to stop global election report timer");
     palf::election::GLOBAL_REPORT_TIMER.stop();
     FLOG_INFO("global election report timer stopped");
+
+    FLOG_INFO("begin to stop kv global cache");
+    ObKVGlobalCache::get_instance().stop();
+    FLOG_INFO("kv global cache stopped");
+
+    FLOG_INFO("begin to stop clock generator");
+    ObClockGenerator::get_instance().stop();
+    FLOG_INFO("clock generator stopped");
+
   }
 
   has_stopped_ = true;
@@ -1334,6 +1372,14 @@ int ObServer::wait()
 
   if (is_arbitration_mode()) {
   } else {
+
+    FLOG_INFO("begin to wait OB_LOGGER");
+    OB_LOGGER.wait();
+    FLOG_INFO("wait OB_LOGGER success");
+
+    FLOG_INFO("begin to wait task controller");
+    ObTaskController::get().wait();
+    FLOG_INFO("wait task controller success");
 
     FLOG_INFO("begin wait signal worker");
     sig_worker_->wait();
@@ -1534,6 +1580,14 @@ int ObServer::wait()
     FLOG_INFO("begin to wait rootservice event history");
     ROOTSERVICE_EVENT_INSTANCE.wait();
     FLOG_INFO("wait rootservice event history success");
+
+    FLOG_INFO("begin to wait kv global cache");
+    ObKVGlobalCache::get_instance().wait();
+    FLOG_INFO("wait kv global cache success");
+
+    FLOG_INFO("begin to wait clock generator");
+    ObClockGenerator::get_instance().wait();
+    FLOG_INFO("wait clock generator success");
 
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));

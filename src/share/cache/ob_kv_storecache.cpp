@@ -151,7 +151,7 @@ ObKVGlobalCache::ObKVGlobalCache()
       map_replace_pos_(0),
       map_once_replace_num_(0),
       map_replace_skip_count_(0),
-      start_destory_(false),
+      stopped_(true),
       cache_wash_interval_(0)
 {
 }
@@ -229,7 +229,7 @@ int ObKVGlobalCache::init(
     COMMON_LOG(WARN, "failed to reload wash interval", K(ret));
   } else {
     cache_num_ = 0;
-    start_destory_ = false;
+    stopped_ = false;
     mem_limit_getter_ = mem_limit_getter;
     map_once_clean_num_ = min(MAX_MAP_ONCE_CLEAN_NUM, bucket_num / MAP_ONCE_CLEAN_RATIO);
     map_once_replace_num_ = min(MAX_MAP_ONCE_REPLACE_NUM, bucket_num / MAP_ONCE_REPLACE_RATIO);
@@ -252,17 +252,31 @@ int ObKVGlobalCache::init(
   return ret;
 }
 
+void ObKVGlobalCache::stop()
+{
+  if (inited_) {
+    stopped_ = true;
+    TG_STOP(lib::TGDefIDs::KVCacheWash);
+    TG_STOP(lib::TGDefIDs::KVCacheRep);
+  }
+}
+
+void ObKVGlobalCache::wait()
+{
+  if (inited_) {
+    TG_WAIT(lib::TGDefIDs::KVCacheWash);
+    TG_WAIT(lib::TGDefIDs::KVCacheRep);
+  }
+}
+
 void ObKVGlobalCache::destroy()
 {
-  if (!start_destory_) {
+  if (inited_) {
     COMMON_LOG(INFO, "Begin destroy the ObKVGlobalCache!");
     // should destroy store_ before timer threads exit, before some mb_handles may
     // cache in wash thread.
-    start_destory_ = true;
-    TG_CANCEL(lib::TGDefIDs::KVCacheWash, wash_task_);
-    TG_CANCEL(lib::TGDefIDs::KVCacheRep, replace_task_);
-    TG_WAIT(lib::TGDefIDs::KVCacheWash);
-    TG_WAIT(lib::TGDefIDs::KVCacheRep);
+    stop();
+    wait();
     ws_mgr_.destroy();
     map_.destroy();
     store_.destroy();
@@ -702,7 +716,7 @@ int ObKVGlobalCache::set_priority(const int64_t cache_id, const int64_t priority
 
 void ObKVGlobalCache::wash()
 {
-  if (OB_LIKELY(inited_ && !start_destory_)) {
+  if (OB_LIKELY(inited_ && !stopped_)) {
     DEBUG_SYNC(BEFORE_BACKGROUND_WASH);
     static int64_t wash_count = 0;
     if (store_.wash() || (++wash_count >= MAP_WASH_CLEAN_INTERNAL)) {
@@ -714,7 +728,7 @@ void ObKVGlobalCache::wash()
 
 void ObKVGlobalCache::replace_map()
 {
-  if (inited_ && !start_destory_) {
+  if (inited_ && !stopped_) {
     int ret = OB_SUCCESS;
     int64_t replace_node_count = 0;
     if (map_replace_skip_count_ <= 0) {

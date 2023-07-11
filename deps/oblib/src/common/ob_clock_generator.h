@@ -33,10 +33,13 @@ class ObClockGenerator
 {
 private:
   ObClockGenerator()
-      : inited_(false), ready_(false), cur_ts_(0), last_used_time_(0)
+      : inited_(false), stopped_(true), ready_(false), cur_ts_(0), last_used_time_(0)
   {}
   ~ObClockGenerator() { destroy(); }
 public:
+  static ObClockGenerator &get_instance();
+  void stop();
+  void wait();
   static int init();
   static void destroy();
   static int64_t getClock();
@@ -52,6 +55,7 @@ private:
 
 private:
   bool inited_;
+  bool stopped_;
   bool ready_;
   int64_t cur_ts_;
   int64_t last_used_time_;

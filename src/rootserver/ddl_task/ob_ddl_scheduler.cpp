@@ -736,19 +736,37 @@ int ObDDLScheduler::start()
 
 void ObDDLScheduler::stop()
 {
-  TG_STOP(tg_id_);
-  TG_STOP(lib::TGDefIDs::DDLScanTask);
-  TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
-  task_queue_.set_stop(true);
-  idle_stop_ = true;
-  is_started_ = false;
+  if (is_inited_) {
+    TG_STOP(tg_id_);
+    TG_STOP(lib::TGDefIDs::DDLScanTask);
+    TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
+    task_queue_.set_stop(true);
+    idle_stop_ = true;
+    is_started_ = false;
+  }
 }
 
 void ObDDLScheduler::wait()
 {
-  TG_WAIT(tg_id_);
-  TG_WAIT(lib::TGDefIDs::DDLScanTask);
-  TG_WAIT(lib::TGDefIDs::HeartBeatCheckTask);
+  if (is_inited_) {
+    TG_WAIT(tg_id_);
+    TG_WAIT(lib::TGDefIDs::DDLScanTask);
+    TG_WAIT(lib::TGDefIDs::HeartBeatCheckTask);
+  }
+}
+
+void ObDDLScheduler::destroy()
+{
+  if (is_inited_) {
+    TG_DESTROY(tg_id_);
+    TG_DESTROY(lib::TGDefIDs::DDLScanTask);
+    TG_DESTROY(lib::TGDefIDs::HeartBeatCheckTask);
+    allocator_.destroy();
+    task_queue_.destroy();
+    root_service_ = nullptr;
+    tg_id_ = -1;
+    is_inited_ = false;
+  }
 }
 
 void ObDDLScheduler::run1()

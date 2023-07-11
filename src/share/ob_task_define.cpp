@@ -233,7 +233,6 @@ int ObTaskController::init()
 
 void ObTaskController::stop()
 {
-  OB_LOGGER.set_enable_log_limit(false);
   ObSyslogPerErrLimiter::instance().stop();
 }
 

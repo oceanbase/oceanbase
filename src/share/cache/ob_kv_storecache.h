@@ -134,6 +134,8 @@ public:
            const int64_t max_cache_size = DEFAULT_MAX_CACHE_SIZE,
            const int64_t block_size = lib::ACHUNK_SIZE,
            const int64_t cache_wash_interval = 0);
+  void stop();
+  void wait();
   void destroy();
   void reload_priority();
   int reload_wash_interval();
@@ -303,7 +305,7 @@ private:
   int64_t map_once_replace_num_;
   int64_t map_replace_skip_count_;
   KVMapReplaceTask replace_task_;
-  bool start_destory_;
+  bool stopped_;
   int64_t cache_wash_interval_;
 };
 

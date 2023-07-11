@@ -983,6 +983,9 @@ void ObRootService::destroy()
   dbms_job::ObDBMSJobMaster::get_instance().destroy();
   FLOG_INFO("ObDBMSJobMaster destroy");
 
+  ddl_scheduler_.destroy();
+  FLOG_INFO("ddl task scheduler destroy");
+
 
   if (OB_FAIL(disaster_recovery_task_mgr_.destroy())) {
     FLOG_WARN("disaster recovery task mgr destroy failed", KR(ret));

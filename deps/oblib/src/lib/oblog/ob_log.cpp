@@ -499,6 +499,7 @@ ObLogger::~ObLogger()
 }
 void ObLogger::stop()
 {
+  OB_LOGGER.set_enable_async_log(false);
   ObBaseLogWriter::stop();
 }
 void ObLogger::wait()
