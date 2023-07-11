@@ -72,12 +72,8 @@ public:
                         bool &async_resp_used,
                         ObPsStmtId &inner_stmt_id);
   int response_query_header(sql::ObSQLSessionInfo &session,
-                            const ColumnsFieldIArray *fields,
-                            const ParamsFieldIArray *inout_params,
-                            const ParamsFieldIArray *returning_params_field,
-                            int8_t has_result,
-                            int64_t warning_count = 0,
-                            bool ps_out = false);
+                            ObResultSet &result,
+                            bool need_flush_buffer = false);
   int response_param_query_header(sql::ObSQLSessionInfo &session,
                                 const ColumnsFieldIArray *fields,
                                 ParamStore *params,
@@ -87,8 +83,8 @@ public:
                                 bool ps_out = false);
   inline int32_t get_iteration_count() { return iteration_count_; }
   virtual bool is_send_long_data() { return SEND_LONG_DATA & extend_flag_;}
-  void check_has_result(ObMySQLResultSet &result, int8_t &has_result);
   inline ObIAllocator *get_alloc() { return allocator_;}
+  int clean_ps_stmt(sql::ObSQLSessionInfo &session, const bool is_local_retry, const bool is_batch);
 
 protected:
   virtual int deserialize()  { return common::OB_SUCCESS; }
@@ -150,6 +146,13 @@ private:
 private:
   common::ObString sql_;
   uint64_t sql_len_;
+  /*
+   * iteration_count_ 的含义
+   *  1. DML 语句 + iteration_count_ > 1 表示当前是 arraybinding 模式
+   *  2. arraybinding 模式下， 此值代表了 array 的大小
+   *  3. exact_fetch + select 模式下， 此值代表了返回结果集的大小
+   *  4. 其余场景，此值 > 0 表示需要有结果集返回
+   **/
   int32_t iteration_count_;
   uint32_t exec_mode_;
   uint32_t close_stmt_count_;

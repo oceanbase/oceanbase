@@ -352,32 +352,6 @@ int ObMPStmtPrexecute::before_process()
                   }
                 }
               }
-              if (OB_FAIL(ret)) {
-                // do nothing
-              } else if (is_send_long_data()) {
-                // response prepare packet
-                if (!first_time_) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("send long data need stmt_id is 0.", K(ret));
-                } else {
-                  OMPKPrepare prepare_packet;
-                  prepare_packet.set_statement_id(static_cast<uint32_t>(result.get_statement_id()));
-                  prepare_packet.set_column_num(static_cast<uint16_t>(result.get_field_cnt()));
-                  prepare_packet.set_warning_count(static_cast<uint16_t>(result.get_warning_count()));
-                  if (OB_ISNULL(result.get_param_fields())) {
-                    ret = OB_INVALID_ARGUMENT;
-                    LOG_WARN("invalid argument", K(ret), K(result.get_param_fields()));
-                  } else {
-                    prepare_packet.set_param_num(
-                      static_cast<uint16_t>(result.get_param_fields()->count()));
-                  }
-                  if (OB_SUCC(ret) && OB_FAIL(response_packet(prepare_packet, &result.get_session()))) {
-                    LOG_WARN("response packet failed", K(ret));
-                  }
-                }
-              }
-              LOG_DEBUG("after get packet in prexecute protocol.", K(close_stmt_count_),
-                      K(exec_mode_), K(extend_flag_));
             }
           }
         }
@@ -398,6 +372,28 @@ int ObMPStmtPrexecute::before_process()
     OZ (flush_buffer(true));
   }
 
+  return ret;
+}
+
+int ObMPStmtPrexecute::clean_ps_stmt(ObSQLSessionInfo &session,
+                                     const bool is_local_retry,
+                                     const bool is_batch)
+{
+  int ret = OB_SUCCESS;
+  if (first_time_
+        && ((!is_batch && !is_local_retry)
+              || (is_batch && THIS_WORKER.need_retry()))) {
+    /* 清理 ps stmt 的时机
+     * 1. 第一次执行时，也就是在 before_process 中执行 prepare 生成 stmt 时
+     * 2. 第一次执行且 非batch 模式， 非 local retry 的报错都需要清理
+     * 3. 第一次执行且 batch 模式， 参考 try_batch_multi_stmt_optimization 的实现，
+     *    只有 THIS_WORKER.need_retry() 的时候队列重试需要清理，
+     *    其他时候都退化成了 local 重试，不需要清理
+     */
+    if (OB_FAIL(session.close_ps_stmt(stmt_id_))) {
+      LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
+    }
+  }
   return ret;
 }
 
@@ -633,106 +629,83 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     if (OB_SUCCESS != close_ret) {
       LOG_WARN("fail to close result", K(close_ret));
     }
+
+    int tmp_ret = clean_ps_stmt(session,
+                                RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(),
+                                ctx.multi_stmt_item_.is_batched_multi_stmt());
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("prexecute clean ps stmt fail. ", K(ret), K(tmp_ret));
+    }
   } else {
-    if (first_time_
-        && stmt::T_ANONYMOUS_BLOCK == stmt_type_
-        && !is_send_long_data()
-        && !get_arraybounding()) {
-      int8_t has_result = 0;
-      if (OB_NOT_NULL(result.get_field_columns())
-          && result.get_field_columns()->count() > 0) {
-        has_result = 1;
-      }
-      if (OB_FAIL(response_query_header(session,
-                                        result.get_field_columns(),
-                                        result.get_param_fields(),
-                                        NULL,
-                                        has_result,
-                                        result.get_warning_count(),
-                                        has_result /*ps_out*/))) {
-        LOG_WARN("send header packet faild.", K(ret));
-      }
-    }
-    int8_t has_result = 0;
-    if (OB_SUCC(ret)) {
-      //监控项统计开始
-      set_exec_start_timestamp(ObTimeUtility::current_time());
-      // 本分支内如果出错, 全部会在response_result内部处理妥当, 无需再额外处理回复错误包
-      need_response_error = false;
-      is_diagnostics_stmt = ObStmt::is_diagnostic_stmt(result.get_literal_stmt_type());
-      ctx.is_show_trace_stmt_ = ObStmt::is_show_trace_stmt(result.get_literal_stmt_type());
-      session.set_current_execution_id(execution_id);
-      result.set_statement_id(stmt_id_);
-      check_has_result(result, has_result);
-    }
-    if (OB_FAIL(ret)) {
-    } else if (get_arraybounding()) {
+    //监控项统计开始
+    set_exec_start_timestamp(ObTimeUtility::current_time());
+    // 本分支内如果出错, 全部会在response_result内部处理妥当, 无需再额外处理回复错误包
+    need_response_error = false;
+    is_diagnostics_stmt = ObStmt::is_diagnostic_stmt(result.get_literal_stmt_type());
+    ctx.is_show_trace_stmt_ = ObStmt::is_show_trace_stmt(result.get_literal_stmt_type());
+    session.set_current_execution_id(execution_id);
+    result.set_statement_id(stmt_id_);
+    if (get_arraybounding()) {
       if (OB_FAIL(after_do_process_for_arraybinding(session, result))) {
         LOG_WARN("failed to process arraybinding sql", K(ret));
       }
-    } else {
-      if (OB_FAIL(response_query_header(session,
-                                        result.get_field_columns(),
-                                        result.get_param_fields(),
-                                        result.get_returning_param_fields(),
-                                        has_result,
-                                        result.get_warning_count(),
-                                        1 == has_result ? true : false))) {
-        LOG_WARN("send header packet faild.", K(ret));
+    } else if (OB_FAIL(response_result(result, session, force_sync_resp, async_resp_used))) {
+      ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
+      if (OB_ISNULL(plan_ctx)) {
+        LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
+      } else {
+        LOG_WARN("execute query fail",
+                K(ret), "timeout_timestamp", plan_ctx->get_timeout_timestamp());
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(response_result(result, session, force_sync_resp, async_resp_used))) {
-          ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
-          if (OB_ISNULL(plan_ctx)) {
-            LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
-          } else {
-            LOG_WARN("execute query fail",
-                    K(ret), "timeout_timestamp", plan_ctx->get_timeout_timestamp());
-          }
-        } else if (OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_) {
-          int exact_fetch_ret = OB_SUCCESS;
-          if (0 == iteration_count_) {
-            // do nothing
-          } else if (iteration_count_ > result.get_return_rows()) {
-            exact_fetch_ret = OB_READ_NOTHING;
-            LOG_WARN("OCI_EXACT_FETCH has not enoughrows.", K(ret));
-          } else if (iteration_count_ < result.get_return_rows()) {
-            exact_fetch_ret = OB_ERR_TOO_MANY_ROWS;
-            LOG_WARN("OCI_EXACT_FETCH has too many rows.", K(ret));
-          }
-          if (OB_SUCCESS == exact_fetch_ret) {
-            uint64_t affected_rows_of_ok_param = result.get_return_rows() < iteration_count_
-                ? result.get_return_rows()
-                : iteration_count_;
-            if (OB_FAIL(send_ok_packet(session,
-                                       affected_rows_of_ok_param,
-                                       session.partition_hit().get_bool(),
-                                       false,
-                                       true,
-                                       true))) {
-              LOG_WARN("fail to send ok packt", K(affected_rows_of_ok_param),
-                                     "is_partition_hit" ,session.partition_hit().get_bool(), K(ret));
-            }
-          } else {
-            bool is_partition_hit = session.get_err_final_partition_hit(exact_fetch_ret);
-            if (OB_FAIL(send_error_packet(exact_fetch_ret, NULL, is_partition_hit))) {
-              LOG_WARN("exact fetch : iterator_count dose not match result set",
-                        K(exact_fetch_ret), K(ret));
-            }
-          }
-        } else if (sql::ObDMLStmt::is_dml_write_stmt(stmt_type_) && result.is_with_rows()) {
-          if (OB_FAIL(send_ok_packet(session,
-                                     result.get_return_rows(),
-                                     session.partition_hit().get_bool(),
-                                     false,
-                                     false,
-                                     true))) {
-            LOG_WARN("fail to send ok packt", "affect_rows", result.get_return_rows(),
-                     "is_partition_hit" ,session.partition_hit().get_bool(), K(ret));
-          }
+
+      int tmp_ret = clean_ps_stmt(session,
+                                  RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(),
+                                  ctx.multi_stmt_item_.is_batched_multi_stmt());
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("prexecute clean ps stmt fail. ", K(ret), K(tmp_ret));
+      }
+    } else if (OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_) {
+      int exact_fetch_ret = OB_SUCCESS;
+      if (0 == iteration_count_) {
+        // do nothing
+      } else if (iteration_count_ > result.get_return_rows()) {
+        exact_fetch_ret = OB_READ_NOTHING;
+        LOG_WARN("OCI_EXACT_FETCH has not enoughrows.", K(ret));
+      } else if (iteration_count_ < result.get_return_rows()) {
+        exact_fetch_ret = OB_ERR_TOO_MANY_ROWS;
+        LOG_WARN("OCI_EXACT_FETCH has too many rows.", K(ret));
+      }
+      if (OB_SUCCESS == exact_fetch_ret) {
+        uint64_t affected_rows_of_ok_param = result.get_return_rows() < iteration_count_
+            ? result.get_return_rows()
+            : iteration_count_;
+        if (OB_FAIL(send_ok_packet(session,
+                                    affected_rows_of_ok_param,
+                                    session.partition_hit().get_bool(),
+                                    false,
+                                    true,
+                                    true))) {
+          LOG_WARN("fail to send ok packt", K(affected_rows_of_ok_param),
+                                  "is_partition_hit" ,session.partition_hit().get_bool(), K(ret));
+        }
+      } else {
+        bool is_partition_hit = session.get_err_final_partition_hit(exact_fetch_ret);
+        if (OB_FAIL(send_error_packet(exact_fetch_ret, NULL, is_partition_hit))) {
+          LOG_WARN("exact fetch : iterator_count dose not match result set",
+                    K(exact_fetch_ret), K(ret));
         }
       }
-    }
+    } /*else if (sql::ObDMLStmt::is_dml_write_stmt(stmt_type_) && result.is_with_rows()) {
+      if (OB_FAIL(send_ok_packet(session,
+                                  result.get_return_rows(),
+                                  session.partition_hit().get_bool(),
+                                  false,
+                                  false,
+                                  true))) {
+        LOG_WARN("fail to send ok packt", "affect_rows", result.get_return_rows(),
+                  "is_partition_hit" ,session.partition_hit().get_bool(), K(ret));
+      }
+    }*/
     if ((OB_SUCC(ret) && is_diagnostics_stmt) || async_resp_used) {
       // if diagnostic stmt succeed, no need to clear warning buf.
       // or async resp is used, it will be cleared in callback thread.
@@ -744,93 +717,80 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
   return ret;
 }
 
-void ObMPStmtPrexecute::check_has_result(ObMySQLResultSet &result, int8_t &has_result)
-{
-  if ((0 != iteration_count_
-      && OB_NOT_NULL(result.get_field_columns())
-      && result.get_field_columns()->count() > 0)
-      || (OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_)) {
-    has_result = 1;
-  }
-}
-
 int ObMPStmtPrexecute::response_query_header(ObSQLSessionInfo &session,
-                                            const ColumnsFieldIArray *fields,
-                                            const ParamsFieldIArray *inout_params,
-                                            const ParamsFieldIArray *returning_params_field,
-                                            int8_t has_result,
-                                            int64_t warning_count,
-                                            bool ps_out)
+                                             ObResultSet &result,
+                                             bool need_flush_buffer)
 {
   // TODO: 增加com类型的处理
   int ret = OB_SUCCESS;
-  bool need_send_eof = false;
-  LOG_DEBUG("before response_query_header",KPC(fields), KPC(inout_params), KPC(returning_params_field));
   if (!prepare_packet_sent_) {
-    uint64_t params_cnt = 0;
+    const ColumnsFieldIArray *fields = result.get_field_columns();
+    const ParamsFieldIArray *param_fields = result.get_param_fields();
+    const ParamsFieldIArray *returning_params_field = result.get_returning_param_fields();
+    uint64_t params_cnt = OB_NOT_NULL(param_fields) ? param_fields->count() : 0;
+    int64_t fields_count = OB_NOT_NULL(fields) ? fields->count() : 0;
     uint64_t returning_params_cnt = 0;
-    int64_t fields_count = 0;
     bool has_arraybinding_result = false;
-    bool has_ps_out = false;
-    if (OB_NOT_NULL(inout_params)) {
-      params_cnt = inout_params->count();
-    }
-    if (OB_NOT_NULL(fields)) {
-      fields_count = fields->count();
-    }
+    int8_t has_result = 0;
+    bool ps_out = false;
 
+    LOG_DEBUG("before response_query_header",KPC(fields), KPC(param_fields), KPC(returning_params_field));
+
+    // check has arraybinding result
     if (OB_NOT_NULL(returning_params_field) && is_arraybinding_has_result_type(stmt_type_)) {
+      /*
+       * 1. arraybinding 带结果集的语句类型 包含了 DML 语句 + 匿名块 + CALL
+       * 1. returning_params_field 不为空 且语句类型满足 1 的情况，认为 arraybinding 有结果集返回
+       * 2. param 的个数包含了 returning 的个数
+       */
       returning_params_cnt = returning_params_field->count();
       params_cnt = params_cnt + returning_params_cnt;
+      has_arraybinding_result = returning_params_cnt > 0 ? true : false;
     }
 
-    if (returning_params_cnt > 0) {
-      has_arraybinding_result = true;
+    // check has result
+    if (((0 != iteration_count_ || stmt::T_ANONYMOUS_BLOCK == stmt_type_) && fields_count > 0)
+        || (OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_)) {
+
+      /* has result 的几种情况：
+       * 1. 预取且有结果集： iteration_count_ > 0 & fields_count > 0
+       * 2. 匿名块且有结果集 ： T_ANONYMOUS_BLOCK == stmt_type_ && fields_count > 0.
+       *                     匿名块情况下无论 iteration_count_ 是多少，是否有预取， 都需要设置 has_result
+       * 3. exact_fetch 模式 ： OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_
+       */
+
+      has_result = 1;
     }
 
-    if ((stmt::T_ANONYMOUS_BLOCK == stmt_type_ || stmt::T_CALL_PROCEDURE == stmt_type_)
-          && ps_out && get_arraybounding()) {
-      has_ps_out = true;
+    // check ps out
+    if ((stmt::T_ANONYMOUS_BLOCK == stmt_type_ || stmt::T_CALL_PROCEDURE == stmt_type_) && has_result) {
+      // PL 语句 + has_result
+      ps_out = true;
     }
-    if (OB_FAIL(send_prepare_packet(stmt_id_,
-                                    fields_count,
-                                    params_cnt,
-                                    warning_count,
-                                    has_result,
-                                    has_arraybinding_result,
-                                    has_ps_out))) {
+
+    // send packet
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(send_prepare_packet(stmt_id_,
+                                           fields_count,
+                                           params_cnt,
+                                           result.get_warning_count(),
+                                           has_result,
+                                           has_arraybinding_result,
+                                           ps_out && get_arraybounding()))) { // 只有 arraybinding + PL + 有结果集返回， prepare 中的 ps_out 才设置为 true
       LOG_WARN("packet send prepare infomation fail", K(ret), K(stmt_id_));
-    }
-    if (OB_SUCC(ret) && params_cnt > 0) {
-      need_send_eof = true;
-      if (OB_FAIL(send_param_field_packet(session, inout_params))) {
-        LOG_WARN("response param packet fail", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && returning_params_cnt > 0 && is_arraybinding_has_result_type(stmt_type_)) {
-      need_send_eof = true;
-      if (OB_FAIL(send_param_field_packet(session, returning_params_field))) {
-        LOG_WARN("response param packet fail", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && need_send_eof) {
-      if (OB_FAIL(send_eof_packet(session, 0, false, true, false))) {
-        LOG_WARN("send eof field failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && fields_count > 0) {
-      if (stmt::T_ANONYMOUS_BLOCK == stmt_type_
-              || (OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_)) {
-        // send column at sync_cmd_driver or sync_plan_driver
-        // do nothing here.
-      } else if (is_arraybinding_has_result_type(stmt_type_) && returning_params_field->count() > 0) {
-        // insert, update, delete returning stmt will send column at sync_plan_driver
-        // do nothing here.
-      } else if (OB_FAIL(send_column_packet(session, fields, ps_out))) {
-        LOG_WARN("response column packet fail", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
+    } else if (params_cnt > 0 && OB_FAIL(send_param_field_packet(session, param_fields))) {
+      LOG_WARN("response param packet fail", K(ret));
+    } else if (returning_params_cnt > 0 && is_arraybinding_has_result_type(stmt_type_)
+      && OB_FAIL(send_param_field_packet(session, returning_params_field))) {
+      LOG_WARN("response param packet fail", K(ret));
+    } else if (params_cnt > 0 && OB_FAIL(send_eof_packet(session, 0, false, true, false))) {
+      LOG_WARN("send eof field failed", K(ret));
+    } else if (fields_count > 0 && OB_FAIL(send_column_packet(session, fields, ps_out))) {
+      LOG_WARN("response column packet fail", K(ret));
+    } else if (need_flush_buffer && OB_FAIL(flush_buffer(false))) {
+      LOG_WARN("flush buffer fail before send async ok packet.", K(ret), K(stmt_id_));
+    } else {
       prepare_packet_sent_ = true;
     }
   }
@@ -1303,7 +1263,7 @@ int ObMPStmtPrexecute::send_column_packet(ObSQLSessionInfo &session,
       }
     }
     if (OB_SUCC(ret) && fields_count > 0) {
-      if (OB_FAIL(send_eof_packet(session, 0, false, true, false, ps_out))) {
+      if (OB_FAIL(send_eof_packet(session, 0, false, is_ps_cursor(), false, ps_out))) {
         LOG_WARN("column send eof fail", K(ret));
       }
     }
@@ -1340,7 +1300,8 @@ int ObMPStmtPrexecute::send_eof_packet(ObSQLSessionInfo &session,
       if(OB_FAIL(response_packet(eofp, &session))) {
         LOG_WARN("response packet fail", K(ret));
       } else {
-        LOG_DEBUG("send eof packet in prepare-execute protocol.");
+        LOG_DEBUG("send eof packet in prepare-execute protocol.", K(warning_count),
+          K(has_result), K(cursor_exist), K(last_row), K(ps_out));
       }
     }
   }

@@ -23,6 +23,7 @@
 #include <string.h>
 #include "share/ob_lob_access_utils.h"
 #include "lib/charset/ob_charset.h"
+#include "observer/mysql/obmp_stmt_prexecute.h"
 
 
 namespace oceanbase
@@ -34,37 +35,71 @@ namespace observer
 {
 
 int ObQueryDriver::response_query_header(ObResultSet &result,
-                                         bool has_nore_result,
+                                         bool has_more_result,
                                          bool need_set_ps_out_flag,
-                                         bool is_prexecute)
+                                         bool need_flush_buffer)
+{
+  int ret = OB_SUCCESS;
+  if (is_prexecute_) {
+    // 二合一协议发送 header 包, 不单独发送 column
+    if (OB_FAIL(static_cast<ObMPStmtPrexecute&>(sender_).response_query_header(session_, result, need_flush_buffer))) {
+      LOG_WARN("prexecute response query head fail. ", K(ret));
+    }
+  } else {
+    if (NULL == result.get_field_columns()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("response field is null. ", K(ret));
+    } else if (OB_FAIL(response_query_header(*result.get_field_columns(),
+                                             has_more_result,
+                                             need_set_ps_out_flag,
+                                             false,
+                                             &result))) {
+      LOG_WARN("response query head fail. ", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    result.set_errcode(ret);
+  }
+  return ret;
+}
+
+int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
+                                         bool has_more_result,
+                                         bool need_set_ps_out_flag,
+                                         bool ps_cursor_execute,
+                                         ObResultSet *result)
 {
   int ret = OB_SUCCESS;
   bool ac = true;
-  if (result.get_field_cnt() <= 0) {
-    LOG_WARN("result set column", K(result.get_field_cnt()));
+  // result == null means ps cursor in execute or fetch .
+  if (NULL != result && (&fields != result->get_field_columns())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("filed is not from result in non ps cursor mode. ", K(ret));
+  } else if (fields.count() <= 0) {
+    LOG_WARN("column cnt is null ", K(fields.count()));
     ret = OB_ERR_BAD_FIELD_ERROR;
   } else if (OB_FAIL(session_.get_autocommit(ac))) {
     LOG_WARN("fail to get autocommit", K(ret));
-  }
-  if (OB_SUCC(ret) && !result.get_is_com_filed_list() && !is_prexecute) {
+  } else if (!(NULL != result && result->get_is_com_filed_list())) {
+    // 普通协议发送 cnt 值
     OMPKResheader rhp;
-    rhp.set_field_count(result.get_field_cnt());
-    if (OB_FAIL(sender_.response_packet(rhp, &result.get_session()))) {
+    rhp.set_field_count(fields.count());
+    if (OB_FAIL(sender_.response_packet(rhp, &session_))) {
       LOG_WARN("response packet fail", K(ret));
     }
+  } else {
+    // com field 协议在这里什么都不发，直接发送 field 信息
   }
+
+  // 发送 field 信息
   if (OB_SUCC(ret)) {
-    const ColumnsFieldIArray *fields = result.get_field_columns();
-    if (OB_ISNULL(fields)) {
-      ret = OB_INVALID_ARGUMENT;
-      result.set_errcode(ret);
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < result.get_field_cnt(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < fields.count(); ++i) {
       bool is_not_match = false;
       ObMySQLField field;
-      const ObField &ob_field = result.get_field_columns()->at(i);
-      if (OB_FAIL(is_com_filed_list_match_wildcard_str(
-                                                  result,
+      const ObField &ob_field = fields.at(i);
+      if (NULL != result && result->get_is_com_filed_list()
+                         && OB_FAIL(is_com_filed_list_match_wildcard_str(
+                                                  *result,
                                                   static_cast<ObCollationType>(ob_field.charsetnr_),
                                                   ob_field.org_cname_,
                                                   is_not_match))) {
@@ -73,14 +108,13 @@ int ObQueryDriver::response_query_header(ObResultSet &result,
         /*do nothing*/
       } else {
         ret = ObMySQLResultSet::to_mysql_field(ob_field, field);
-        result.replace_lob_type(result.get_session(), ob_field, field);
-        if (result.get_is_com_filed_list()) {
-          field.default_value_ = static_cast<EMySQLFieldType>(ob_field.default_value_.get_ext());
-        }
-        result.set_errcode(ret);
         if (OB_SUCC(ret)) {
+          ObMySQLResultSet::replace_lob_type(session_, ob_field, field);
+          if (NULL != result && result->get_is_com_filed_list()) {
+            field.default_value_ = static_cast<EMySQLFieldType>(ob_field.default_value_.get_ext());
+          }
           OMPKField fp(field);
-          if (OB_FAIL(sender_.response_packet(fp, &result.get_session()))) {
+          if (OB_FAIL(sender_.response_packet(fp, &session_))) {
             LOG_WARN("response packet fail", K(ret));
           }
         }
@@ -95,16 +129,35 @@ int ObQueryDriver::response_query_header(ObResultSet &result,
     flags.status_flags_.OB_SERVER_STATUS_IN_TRANS
       = (session_.is_server_status_in_transaction() ? 1 : 0);
     flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
-    flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_nore_result;
+    flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_more_result;
     flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = need_set_ps_out_flag ? 1 : 0;
+    // NULL == result 说明是老协议 ps cursor execute 回包，或者fetch 协议回包， cursor_exit = true
+    flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = NULL == result ? 1 : 0;
     if (!session_.is_obproxy_mode()) {
       // in java client or others, use slow query bit to indicate partition hit or not
       flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session_.partition_hit().get_bool();
     }
     eofp.set_server_status(flags);
 
-    if (OB_FAIL(sender_.response_packet(eofp, &result.get_session()))) {
-      LOG_WARN("response packet fail", K(ret));
+    if (ps_cursor_execute && sender_.need_send_extra_ok_packet()) {
+      // 老协议 ps cursor execute 回包， 只回 field 信息， 所以对于 proxy ， 需要额外回一个 OK包
+      // 但是由于 2.0 协议需要在回 OK 包的同时了解 EOF 包的情况，所以这个 OK 包没办法抽到 execute 协议层处理
+      if (OB_FAIL(sender_.update_last_pkt_pos())) {
+        LOG_WARN("failed to update last packet pos", K(ret));
+      } else {
+        // in multi-stmt, send extra ok packet in the last stmt(has no more result)
+        ObOKPParam ok_param;
+        ok_param.affected_rows_ = 0;
+        ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
+        ok_param.has_more_result_ = false;
+        if (OB_FAIL(sender_.send_ok_packet(session_, ok_param, &eofp))) {
+          LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
+        }
+      }
+    } else {
+      if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
+        LOG_WARN("response packet fail", K(ret));
+      }
     }
   }
   return ret;
@@ -152,7 +205,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
     if (is_first_row) {
       is_first_row = false;
       can_retry = false; // 已经获取到第一行数据，不再重试了
-      if (OB_FAIL(response_query_header(result, has_more_result, false, is_prexecute_))) {
+      if (OB_FAIL(response_query_header(result, has_more_result, false))) {
         LOG_WARN("fail to response query header", K(ret), K(row_num), K(can_retry));
       }
     }
@@ -235,7 +288,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
   if (OB_SUCC(ret) && 0 == row_num) {
     // 如果是一行数据也没有，则还是要给客户端回复field等信息，并且不再重试了
     can_retry = false;
-    if (OB_FAIL(response_query_header(result, has_more_result, false, is_prexecute_))) {
+    if (OB_FAIL(response_query_header(result, has_more_result, false))) {
       LOG_WARN("fail to response query header", K(ret), K(row_num), K(can_retry));
     }
   }

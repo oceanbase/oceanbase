@@ -266,57 +266,21 @@ int ObMPStmtFetch::response_query_header(ObSQLSessionInfo &session,
   // TODO: 增加com类型的处理
   int ret = OB_SUCCESS;
   bool ac = true;
-  CK (OB_NOT_NULL(fields));
-  if (OB_SUCC(ret)) {
-    int64_t fields_count = fields->count();
-    if (fields_count <= 0) {
-      ret = OB_ERR_BAD_FIELD_ERROR;
-      LOG_WARN("cursor set column", K(ret), K(fields_count));
-    } else if (OB_FAIL(session.get_autocommit(ac))) {
-      LOG_WARN("fail to get autocommit", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      OMPKResheader rhp;
-      rhp.set_field_count(fields_count);
-      if (OB_FAIL(response_packet(rhp, &session))) {
-        LOG_WARN("response packet fail", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < fields_count; ++i) {
-        ObMySQLField field;
-        const ObField &ob_field = fields->at(i);
-        ret = ObMySQLResultSet::to_mysql_field(ob_field, field);
-        if (OB_SUCC(ret)) {
-          ObMySQLResultSet::replace_lob_type(session, ob_field, field);
-          OMPKField fp(field);
-          if (OB_FAIL(response_packet(fp, &session))) {
-            LOG_WARN("response packet fail", K(ret));
-          }
-        }
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    OMPKEOF eofp;
-    eofp.set_warning_count(0);
-    ObServerStatusFlags flags = eofp.get_server_status();
-    flags.status_flags_.OB_SERVER_STATUS_IN_TRANS
-      = (session.is_server_status_in_transaction() ? 1 : 0);
-    flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
-    flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_ok_packet() ? true : false;
-    flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = false;
-    flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = true;
-    if (!session.is_obproxy_mode()) {
-      // in java client or others, use slow query bit to indicate partition hit or not
-      flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session.partition_hit().get_bool();
-    }
-    eofp.set_server_status(flags);
-
-    if (OB_FAIL(response_packet(eofp, &session))) {
-      LOG_WARN("response packet fail", K(ret));
-    }
+  ObSqlCtx ctx;
+  ObQueryRetryCtrl retry_ctrl;
+  ObSyncPlanDriver drv(gctx_,
+                           ctx,
+                           session,
+                           retry_ctrl,
+                           *this,
+                           false,
+                           OB_INVALID_COUNT);
+  if (NULL == fields) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(drv.response_query_header(*fields,
+                                               has_ok_packet(),
+                                               false))) {
+    LOG_WARN("fail to get autocommit", K(ret));
   }
   return ret;
 }

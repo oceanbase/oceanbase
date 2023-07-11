@@ -24,6 +24,7 @@
 #include "obsm_row.h"
 #include "observer/mysql/obmp_query.h"
 #include "observer/mysql/ob_mysql_end_trans_cb.h"
+#include "observer/mysql/obmp_stmt_prexecute.h"
 
 namespace oceanbase
 {
@@ -63,18 +64,15 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
   } else if (OB_FAIL(result.update_last_insert_id_to_client())) {
     LOG_WARN("failed to update last insert id after open", K(ret));
   } else {
-    if (is_prexecute_ && OB_FAIL(sender_.flush_buffer(false))) {
-      LOG_WARN("flush buffer fail before send async ok packet.", K(ret));
-    } else {
-      result.set_end_trans_async(true);
-    }
+    // open 成功，允许异步回包
+    result.set_end_trans_async(true);
   }
 
   if (OB_SUCCESS != ret) {
     // 如果try_again为true，说明这条SQL需要重做。考虑到重做之前我们需要回滚整个事务，会调用EndTransCb
     // 所以这里设置一个标记，告诉EndTransCb这种情况下不要给客户端回包。
     int cli_ret = OB_SUCCESS;
-    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret, is_prexecute_);
+    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
     if (retry_ctrl_.need_retry()) {
       result.set_end_trans_async(false);
     }
@@ -93,11 +91,39 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
                K(ret), K(cli_ret), K(cret), K(retry_ctrl_.need_retry()));
     }
     ret = cli_ret;
+  } else if (is_prexecute_ && OB_FAIL(response_query_header(result, false, false, true))) {
+    /*
+    * prexecute 仅在执行成功时候发送 header 包
+    * 执行失败时候有两种表现
+    *  1. 只返回一个 error 包， 这个时候需要注意 ps stmt 的泄漏问题
+    *  2. 重试， local 重试直接交给上层做， package 重试需要 注意 ps stmt 的泄漏问题
+    *  3. response_query_header & flush_buffer 不会产生需要重试的报错，此位置是 ObAsyncPlanDriver 重试前的一步，中间不会有别的可能重试的操作
+    *  4. ps stmt 清理要注意异步回包的情况，可能需要在异步包里面做清理
+    */
+    LOG_WARN("prexecute response query head fail. ", K(ret));
   } else if (result.is_with_rows()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("SELECT should not use async method. wrong code!!!", K(ret));
   } else if (OB_FAIL(result.close())) {
     LOG_WARN("result close failed, let's leave process(). EndTransCb will clean this mess", K(ret));
+  } else {
+    // async 并没有调用 ObSqlEndTransCb 回复  OK 包
+    // 所以 二合一协议的 OK 包也要放在这里处理
+    if (is_prexecute_) {
+      if (stmt::T_SELECT == result.get_stmt_type()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select stmt do not use async plan in prexecute.", K(ret));
+      } else {
+        ObOKPParam ok_param;
+        ok_param.affected_rows_ = result.get_affected_rows();
+        ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
+        ok_param.has_more_result_ = result.has_more_result();
+        ok_param.send_last_row_ = true;
+        if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
+          LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
+        }
+      }
+    }
   }
 
   // 仅在end_trans执行后（无论成功与否）才会设置，意味着一定会回调

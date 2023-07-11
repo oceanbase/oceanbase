@@ -2952,80 +2952,19 @@ void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_t
 
 int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbmsCursorInfo &cursor)
 {
-  // TODO: 增加com类型的处理
   int ret = OB_SUCCESS;
-  bool ac = true;
-  const ColumnsFieldArray &fields = cursor.get_field_columns();
-  int64_t fields_count = fields.count();
-  if (fields_count <= 0) {
-    LOG_WARN("cursor set column", K(fields_count));
-    ret = OB_ERR_BAD_FIELD_ERROR;
-  } else if (OB_FAIL(session.get_autocommit(ac))) {
+  ObSyncPlanDriver drv(gctx_,
+                           ctx_,
+                           session,
+                           retry_ctrl_,
+                           *this,
+                           false,
+                           OB_INVALID_COUNT);
+  if (OB_FAIL(drv.response_query_header(cursor.get_field_columns(),
+                                        false,
+                                        false,
+                                        true))) {
     LOG_WARN("fail to get autocommit", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    OMPKResheader rhp;
-    rhp.set_field_count(fields_count);
-    if (OB_FAIL(response_packet(rhp, &session))) {
-      LOG_WARN("response packet fail", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < fields_count; ++i) {
-      ObMySQLField field;
-      const ObField &ob_field = fields.at(i);
-      ret = ObMySQLResultSet::to_mysql_field(ob_field, field);
-      if (OB_SUCC(ret)) {
-        ObMySQLResultSet::replace_lob_type(session, ob_field, field);
-        OMPKField fp(field);
-        if (OB_FAIL(response_packet(fp, &session))) {
-          LOG_WARN("response packet fail", K(ret));
-        }
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    OMPKEOF eofp;
-    eofp.set_warning_count(0);
-    ObServerStatusFlags flags = eofp.get_server_status();
-    flags.status_flags_.OB_SERVER_STATUS_IN_TRANS
-      = (session.is_server_status_in_transaction() ? 1 : 0);
-    flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
-    flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = false;
-    flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = false;
-    flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = true;
-    if (!session.is_obproxy_mode()) {
-      // in java client or others, use slow query bit to indicate partition hit or not
-      flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session.partition_hit().get_bool();
-    }
-    eofp.set_server_status(flags);
-
-    // for obproxy, 最后一次要把 eof和OK包放一起
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(update_last_pkt_pos())) {
-        LOG_WARN("failed to update last packet pos", K(ret));
-      } else {
-        // do nothing
-      }
-    }
-    // for obproxy
-    if (OB_SUCC(ret)) {
-      // in multi-stmt, send extra ok packet in the last stmt(has no more result)
-      if (need_send_extra_ok_packet()) {
-        ObOKPParam ok_param;
-        ok_param.affected_rows_ = 0;
-        ok_param.is_partition_hit_ = session.partition_hit().get_bool();
-        ok_param.has_more_result_ = false;
-        if (OB_FAIL(send_ok_packet(session, ok_param, &eofp))) {
-          LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
-        }
-      } else {
-        if (OB_FAIL(response_packet(eofp, &session))) {
-          LOG_WARN("response packet fail", K(ret));
-        }
-      }
-    }
   }
   return ret;
 }
