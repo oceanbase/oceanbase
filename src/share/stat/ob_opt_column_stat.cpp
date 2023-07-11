@@ -390,15 +390,11 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
   } else {
     const ObObj &other_min = other.get_min_value();
     const ObObj &other_max = other.get_max_value();
-    if (min_value_.is_null() || (!other_min.is_null() && other_min < min_value_)) {
-      ret = ob_write_obj(allocator_, other_min, min_value_);
-    }
-    if (OB_SUCC(ret) && (max_value_.is_null() || (!other_max.is_null() && other_max > max_value_))) {
-      ret = ob_write_obj(allocator_, other_max, max_value_);
-    }
-    LOG_TRACE("succeed to merge min/max val", K(min_value_), K(max_value_),
-                                              K(other.get_min_value()), K(other.get_max_value()));
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(merge_min_max(min_value_, other_min, true))) {
+      LOG_WARN("failed to merge min value", K(other_min), K(min_value_));
+    } else if (OB_FAIL(merge_min_max(max_value_, other_max, false))) {
+      LOG_WARN("failed to merge max value", K(other_max), K(max_value_));
+    } else {
       add_num_null(other.get_num_null());
       add_num_not_null(other.get_num_not_null());
       add_col_len(other.get_total_col_len());
@@ -408,6 +404,37 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
       }
     }
   }
+  return ret;
+}
+
+/**
+ * @brief
+ *
+ * @param cur
+ * @param other
+ * @param is_cmp_min true: merge min, false: merge max
+ * @return int
+ */
+int ObOptColumnStat::merge_min_max(ObObj &cur, const ObObj &other, bool is_cmp_min)
+{
+  int ret = OB_SUCCESS;
+  int cmp = 0;
+  if (cur.is_null()) {
+    ret = ob_write_obj(allocator_, other, cur);
+  } else if (!other.is_null()) {
+    if (OB_FAIL(other.compare(cur, cmp))) {
+      LOG_WARN("failed to compare", K(other), K(cur), K(cmp));
+    } else if (is_cmp_min) {
+      if (cmp < 0) {
+        ret = ob_write_obj(allocator_, other, cur);
+      }
+    } else {
+      if (cmp > 0) {
+        ret = ob_write_obj(allocator_, other, cur);
+      }
+    }
+  }
+  LOG_TRACE("succeed to merge min/max val", K(ret), K(cur), K(other), K(is_cmp_min), K(cmp));
   return ret;
 }
 
