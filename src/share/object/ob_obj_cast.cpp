@@ -3869,7 +3869,19 @@ int common_string_integer(const ObCastMode& cast_mode, const ObObjType& in_type,
 {
   int ret = OB_SUCCESS;
   if (ObHexStringType == in_type) {
-    out_val = static_cast<int64_t>(hex_to_uint64(in_str));
+    ObObj uint64_in;
+    ObObj out;
+    ObObjCastParams dummy;
+    ObCastMode uint_int_cm = cast_mode;
+    uint64_in.set_uint64(hex_to_uint64(in_str));
+    if (CM_IS_EXPLICIT_CAST(cast_mode)) {
+      uint_int_cm |= CM_NO_RANGE_CHECK;
+    }
+    if (OB_FAIL(uint_int(ObIntType, dummy, uint64_in, out, uint_int_cm))) {
+      LOG_WARN("convert hex string to int64 failed", K(ret));
+    } else {
+      out_val = out.get_int();
+    }
   } else {
     int err = 0;
     char* endptr = NULL;
