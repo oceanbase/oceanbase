@@ -23,7 +23,8 @@ namespace mds
 ObMdsTableMergeDagParam::ObMdsTableMergeDagParam()
   : ls_id_(),
     tablet_id_(),
-    flush_scn_(share::SCN::invalid_scn())
+    flush_scn_(share::SCN::invalid_scn()),
+    generate_ts_(0)
 {
 }
 } // namespace mds

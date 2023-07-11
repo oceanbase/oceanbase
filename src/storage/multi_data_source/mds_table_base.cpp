@@ -152,6 +152,7 @@ int MdsTableBase::merge(const share::SCN &flushing_scn)
   param.ls_id_ = ls_id_;
   param.tablet_id_ = tablet_id_;
   param.flush_scn_ = flushing_scn;
+  param.generate_ts_ = ObClockGenerator::getCurrentTime();
   if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_mds_table_merge_dag(param))) {
     if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
       MDS_LOG(WARN, "failed to schedule mds table merge dag", K(ret), K(param));

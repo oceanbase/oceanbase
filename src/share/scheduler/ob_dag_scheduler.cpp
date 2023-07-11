@@ -2106,7 +2106,7 @@ int ObTenantDagScheduler::get_all_compaction_dag_info(
           ObIDag *cur = head->get_next();
           while (head != cur && idx < total_dag_cnt && prio_cnt < MAX_SHOW_DAG_CNT_PER_PRIO) {
             if (OB_UNLIKELY(OB_TMP_FAIL(cur->gene_compaction_info(progress[idx])))) {
-              if (OB_EAGAIN != tmp_ret) {
+              if (OB_EAGAIN != tmp_ret && OB_NOT_IMPLEMENT != tmp_ret) {
                 COMMON_LOG(WARN, "failed to generate compaction dag info", K(tmp_ret), KPC(cur));
               }
             } else {
@@ -2249,7 +2249,11 @@ int ObTenantDagScheduler::diagnose_minor_exe_dag(
         compaction::ObTabletMergeExecuteDag *exe_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(cur);
         if (exe_dag->belong_to_same_tablet(merge_dag_info)) {
           if (OB_FAIL(exe_dag->diagnose_compaction_info(progress))) {
-            LOG_WARN("failed to diagnose compaction dag", K(ret), K(exe_dag));
+            if (OB_NOT_IMPLEMENT != ret) {
+              LOG_WARN("failed to diagnose compaction dag", K(ret), K(exe_dag));
+            } else {
+              ret = OB_SUCCESS;
+            }
           } else {
             find = true;
             break;
@@ -2323,7 +2327,11 @@ int ObTenantDagScheduler::diagnose_dag(
       ret = OB_ERR_SYS;
       LOG_WARN("dag is null", K(ret));
     } else if (OB_FAIL(stored_dag->diagnose_compaction_info(progress))) {
-      LOG_WARN("failed to generate compaction info", K(ret));
+      if (OB_NOT_IMPLEMENT != ret) {
+        LOG_WARN("failed to generate compaction info", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
     }
   }
   return ret;

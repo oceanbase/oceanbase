@@ -33,11 +33,12 @@ public:
   virtual bool is_valid() const override;
   bool operator==(const ObMdsTableMergeDagParam &other) const;
 
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(flush_scn));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(flush_scn), KTIME_(generate_ts));
 public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   share::SCN flush_scn_;
+  int64_t generate_ts_;
 };
 
 inline bool ObMdsTableMergeDagParam::is_valid() const

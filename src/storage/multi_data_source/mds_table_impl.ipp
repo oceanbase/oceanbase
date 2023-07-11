@@ -969,20 +969,24 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN recycle_scn, bool need_freeze)
   if (OB_SUCC(ret) &&
       (flushing_scn_.is_valid() || // need_freeze is false, not calculate temp_flushing_scn, but need generate dag
        temp_flushing_scn.is_valid())) {// need_freeze is true, calculated a temp flushing scn
+    if (flushing_scn_.is_valid() && temp_flushing_scn.is_valid()) {// can not both be valid
+      MDS_LOG_FLUSH(ERROR, "both flushing_scn_ and temp_flushing_scn is valid");
+    } else {
     // if we get a valid flushing_scn, schedule mini merge
 #ifndef UNITTEST_DEBUG
-    share::SCN do_merge_scn = temp_flushing_scn.is_valid() ? temp_flushing_scn : flushing_scn_;
-    if (MDS_FAIL(merge(do_merge_scn))) {
-      MDS_LOG_FLUSH(WARN, "failed to merge mds table");
-    } else {
-      if (temp_flushing_scn.is_valid()) {
-        flushing_scn_ = temp_flushing_scn;// if and only if calculated valid temp_flushing_scn(need_freeze is true) and generate dag success, set flushing_scn
+      share::SCN do_merge_scn = temp_flushing_scn.is_valid() ? temp_flushing_scn : flushing_scn_;
+      if (MDS_FAIL(merge(do_merge_scn))) {
+        MDS_LOG_FLUSH(WARN, "failed to merge mds table");
+      } else {
+        if (temp_flushing_scn.is_valid()) {
+          flushing_scn_ = temp_flushing_scn;// if and only if calculated valid temp_flushing_scn(need_freeze is true) and generate dag success, set flushing_scn
+        }
+        report_flush_event_("DO_FLUSH", flushing_scn_, need_freeze);
       }
-      report_flush_event_("DO_FLUSH", flushing_scn_, need_freeze);
-    }
 #else
-  flushing_scn_ = temp_flushing_scn;
+      flushing_scn_ = temp_flushing_scn;
 #endif
+    }
   }
   MDS_LOG_FLUSH(DEBUG, "call flush mds_table");
   return ret;

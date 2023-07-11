@@ -41,6 +41,7 @@ int ObMdsTableMergeTask::init(const ObMdsTableMergeDagParam &param)
     ret = OB_INIT_TWICE;
   } else {
     param_ = param;
+    param_.generate_ts_ = ObClockGenerator::getClock();
     is_inited_ = true;
   }
 
@@ -77,6 +78,8 @@ int ObMdsTableMergeTask::process()
     LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_handle));
   } else if (OB_FAIL(ls->get_tablet_svr()->build_new_tablet_from_mds_table(tablet_id, flush_scn))) {
     LOG_WARN("failed to build new tablet from mds table", K(ret), K(ls_id), K(tablet_id), K(flush_scn));
+  } else {
+    share::dag_yield();
   }
 
   // always notify flush ret
