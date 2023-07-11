@@ -210,17 +210,22 @@ void ObRoleChangeService::handle(void *task)
   // TIMEGUARD will pring lbt().
   TIMEGUARD_INIT(CLOG, 30_s, 30_s);
   RoleChangeEvent *event = reinterpret_cast<RoleChangeEvent*>(task);
+  const int64_t ls_id = event->ls_id_.id();
   const int64_t start_ts = ObTimeUtility::current_time();
+  RetrySubmitRoleChangeEventCtx retry_ctx;
   CLOG_LOG(INFO, "begin handle_role_change_event_", "sequence:", start_ts, KPC(event));
   if (NULL == event) {
     CLOG_LOG(WARN, "unexpected error, task is nullptr", KP(event));
-  } else if (OB_FAIL(handle_role_change_event_(*event))) {
-    CLOG_LOG(WARN, "handle_role_change_event_ failed", K(ret), KPC(event));
+  } else if (OB_FAIL(handle_role_change_event_(*event, retry_ctx))) {
+    CLOG_LOG(WARN, "handle_role_change_event_ failed", K(ret), KPC(event), K(retry_ctx));
   } else {
     CLOG_LOG(INFO, "end handle_role_change_event_", "sequence:", start_ts, KPC(event));
   }
   if (NULL != event) {
     OB_DELETE(RoleChangeEvent, "RCService", event);
+  }
+  if (retry_ctx.need_retry() && OB_FAIL(on_role_change(ls_id))) {
+    CLOG_LOG(WARN, "retry submit role change event failed", K(ls_id), K(retry_ctx));
   }
 }
 
@@ -296,7 +301,8 @@ int ObRoleChangeService::push_event_into_queue_(const RoleChangeEvent &event)
   return ret;
 }
 
-int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event)
+int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
+                                                   RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -328,13 +334,13 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event)
         break;
       case RoleChangeEventType::ROLE_CHANGE_CB_EVENT_TYPE:
         CLOG_LOG(INFO, "begin log handler role change", K(curr_access_mode), K(event), KPC(ls));
-        if (OB_FAIL(handle_role_change_cb_event_for_log_handler_(curr_access_mode, ls))) {
+        if (OB_FAIL(handle_role_change_cb_event_for_log_handler_(curr_access_mode, ls, retry_ctx))) {
           CLOG_LOG(WARN, "handle_role_change_cb_event_for_log_handler_ failed", K(ret),
               K(curr_access_mode), KPC(ls));
         }
-        CLOG_LOG(INFO, "end log handler role change", K(ret), K(curr_access_mode), K(event), KPC(ls));
+        CLOG_LOG(INFO, "end log handler role change", K(ret), K(curr_access_mode), K(event), KPC(ls), K(retry_ctx));
         CLOG_LOG(INFO, "begin restore handler role change", K(curr_access_mode), K(event), KPC(ls));
-        if (OB_FAIL(handle_role_change_cb_event_for_restore_handler_(curr_access_mode, ls))) {
+        if (!retry_ctx.need_retry() && OB_FAIL(handle_role_change_cb_event_for_restore_handler_(curr_access_mode, ls))) {
           CLOG_LOG(WARN, "handle_role_change_cb_event_for_restore_handler_ failed", K(ret),
               K(curr_access_mode), KPC(ls));
         }
@@ -345,7 +351,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event)
         CLOG_LOG(WARN, "unexpected role change event type", K(ret));
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(ls)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(ls) && !retry_ctx.need_retry()) {
     (void)ls->report_replica_info();
   }
   return ret;
@@ -421,7 +427,8 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
 
 int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
     const AccessMode &curr_access_mode,
-    ObLS *ls)
+    ObLS *ls,
+    RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
   int ret = OB_SUCCESS;
   const bool log_handler_is_offline = ls->get_log_handler()->is_offline();
@@ -459,14 +466,14 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
         break;
       // follower -> follower
       case RoleChangeOptType::FOLLOWER_2_LEADER:
-        if (OB_FAIL(switch_follower_to_leader_(new_proposal_id, ls))) {
+        if (OB_FAIL(switch_follower_to_leader_(new_proposal_id, ls, retry_ctx))) {
           CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), K(curr_role),
               K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
         }
         break;
       // leader -> leader
       case RoleChangeOptType::LEADER_2_LEADER:
-        if (OB_FAIL(switch_leader_to_leader_(new_proposal_id, curr_proposal_id, ls))) {
+        if (OB_FAIL(switch_leader_to_leader_(new_proposal_id, curr_proposal_id, ls, retry_ctx))) {
           CLOG_LOG(WARN, "switch_leader_to_leader_ failed", K(ret), K(curr_role),
               K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
         }
@@ -549,7 +556,8 @@ int ObRoleChangeService::handle_change_leader_event_for_log_handler_(
 
 int ObRoleChangeService::switch_follower_to_leader_(
     const int64_t new_proposal_id,
-    ObLS *ls)
+    ObLS *ls,
+    RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
   int ret = OB_SUCCESS;
   const ObRole new_role = LEADER;
@@ -566,8 +574,12 @@ int ObRoleChangeService::switch_follower_to_leader_(
   //     We must guarantee that 'replay_service_' has replayed complete data, and before
   //     stop 'replay_service_', other components can not submit log.
   } else if (FALSE_IT(time_guard.click("wait_replay_service_apply_done_"))
-      || OB_FAIL(wait_replay_service_replay_done_(ls_id, end_lsn))) {
-    CLOG_LOG(WARN, "wait_replay_service_replay_done_ failed", K(ret), K(end_lsn));
+      || OB_FAIL(wait_replay_service_replay_done_(ls_id, end_lsn, WAIT_REPLAY_DONE_TIMEOUT_US))) {
+    if (need_retry_submit_role_change_event_(ret)) {
+      retry_ctx.set_retry_reason(RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT);
+    } else {
+      CLOG_LOG(WARN, "wait_replay_service_replay_done_ failed", K(ret), K(end_lsn));
+    }
   } else if (FALSE_IT(time_guard.click("apply_service->switch_to_leader"))
       || OB_FAIL(apply_service_->switch_to_leader(ls_id, new_proposal_id))) {
     CLOG_LOG(WARN, "apply_service_ switch_to_leader failed", K(ret), K(new_role), K(new_proposal_id));
@@ -584,7 +596,7 @@ int ObRoleChangeService::switch_follower_to_leader_(
     ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
     CLOG_LOG(INFO, "switch_follower_to_leader_ success", K(ret), KPC(ls));
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && !retry_ctx.need_retry()) {
     log_handler->revoke_leader();
     CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), KPC(ls));
   }
@@ -696,7 +708,8 @@ int ObRoleChangeService::switch_leader_to_follower_gracefully_(
 int ObRoleChangeService::switch_leader_to_leader_(
     const int64_t new_proposal_id,
     const int64_t curr_proposal_id,
-    ObLS *ls)
+    ObLS *ls,
+    RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard time_guard("switch_leader_to_leader", EACH_ROLE_CHANGE_COST_MAX_TIME);
@@ -704,7 +717,7 @@ int ObRoleChangeService::switch_leader_to_leader_(
       || OB_FAIL(switch_leader_to_follower_forcedly_(curr_proposal_id, ls))) {
     CLOG_LOG(WARN, "switch_leader_to_leader_, switch leader to follower failed", K(ret), KPC(ls));
   } else if (FALSE_IT(time_guard.click("switch_follower_to_leader_"))
-      || OB_FAIL(switch_follower_to_leader_(new_proposal_id, ls))) {
+      || OB_FAIL(switch_follower_to_leader_(new_proposal_id, ls, retry_ctx))) {
     CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), K(new_proposal_id));
   } else {
     CLOG_LOG(INFO, "switch_leader_to_leader_ success", K(ret), KPC(ls));
@@ -813,16 +826,18 @@ int ObRoleChangeService::switch_leader_to_leader_restore_(
 
 int ObRoleChangeService::wait_replay_service_replay_done_(
     const share::ObLSID &ls_id,
-    const palf::LSN &end_lsn)
+    const palf::LSN &end_lsn,
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   bool is_done = false;
   const int64_t start_ts = ObTimeUtility::current_time();
-  while (OB_SUCC(ret) && false == is_done) {
+  palf::TimeoutChecker not_timeout(timeout_us);
+  while (OB_SUCC(ret) && false == is_done && OB_SUCC(not_timeout())) {
     if (OB_FAIL(replay_service_->is_replay_done(ls_id, end_lsn, is_done))) {
       CLOG_LOG(WARN, "replay_service_ is_replay_done failed", K(ret), K(is_done), K(end_lsn));
     } else if (false == is_done) {
-      ob_usleep(5*1000);
+      ob_usleep(50*1000);
       CLOG_LOG(INFO, "wait replay done return false, need retry", K(ls_id), K(end_lsn), K(start_ts));
     } else {
     }
@@ -957,6 +972,15 @@ bool ObRoleChangeService::is_raw_write_or_flashback_mode(const AccessMode &mode)
 {
   return (AccessMode::RAW_WRITE == mode || AccessMode::FLASHBACK == mode ||
       AccessMode::PREPARE_FLASHBACK == mode);
+}
+
+bool ObRoleChangeService::need_retry_submit_role_change_event_(int ret) const
+{
+  bool bool_ret = false;
+  if (OB_TIMEOUT == ret) {
+    bool_ret = true;
+  }
+  return bool_ret;
 }
 
 } // end namespace logservice
