@@ -109,6 +109,24 @@ int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAl
   return ret;
 }
 
+int ObTableLoadSchema::check_has_udt_column(const ObTableSchema *table_schema, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+    ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid column schema", K(column_schema));
+    } else if (column_schema->get_udt_set_id() > 0) {
+      bret = true;
+      break;
+    }
+  }
+  return ret;
+}
+
 ObTableLoadSchema::ObTableLoadSchema()
   : allocator_("TLD_Schema"),
     is_partitioned_table_(false),

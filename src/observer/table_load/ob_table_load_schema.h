@@ -31,6 +31,7 @@ public:
   static int get_column_names(const share::schema::ObTableSchema *table_schema,
                               common::ObIAllocator &allocator,
                               table::ObTableLoadArray<common::ObString> &column_names);
+  static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();

@@ -213,6 +213,7 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
     bool trigger_enabled = false;
+    bool has_udt_column = false;
     if (OB_FAIL(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
@@ -238,6 +239,13 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
     } else if (trigger_enabled) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table with trigger enabled", KR(ret), K(trigger_enabled));
+    }
+    // check has udt column
+    else if (OB_FAIL(ObTableLoadSchema::check_has_udt_column(table_schema, has_udt_column))) {
+      LOG_WARN("fail to check has udt column", KR(ret));
+    } else if (has_udt_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has udt column", KR(ret));
     }
   }
   return ret;
