@@ -1305,11 +1305,15 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         } else if (!schedule_ignore_error(tmp_ret)) {
           LOG_WARN("failed to schedule ls merge", K(tmp_ret), KPC(ls));
         }
-      } else {
-        // loop tablet_meta table to update smaller report_scn because of migration
-        if (check_report_scn_flag) {
-          (void) update_report_scn_as_ls_leader(*ls);
-        }
+      }
+
+      // loop tablet_meta table to update smaller report_scn because of migration
+      if (OB_SUCC(ret) && check_report_scn_flag) {
+        int tmp_ret = update_report_scn_as_ls_leader(*ls);
+
+#ifndef ERRSIM
+        LOG_INFO("try to update report scn as ls leader", K(tmp_ret), "ls_id:", ls->get_ls_id()); // low printing frequency
+#endif
       }
     } // end while
 
@@ -1416,7 +1420,7 @@ int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
   if (OB_FAIL(check_ls_state(ls, need_merge))) {
     LOG_WARN("failed to check ls state", K(ret), K(ls_id));
   } else if (!need_merge) {
-    // do nothing
+    ret = OB_STATE_NOT_MATCH; // do nothing
   } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_palf_role(ls_id, role))) {
     if (OB_LS_NOT_EXIST != ret) {
       LOG_WARN("failed to get palf handle role", K(ret), K(ls_id));
@@ -1430,6 +1434,8 @@ int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
           MTL_ID(), ls_id, major_merged_scn, tablet_id_array))) {
       LOG_WARN("failed to get unequal report scn", K(ret), K(ls_id), K(major_merged_scn));
     }
+  } else {
+    ret = OB_LS_LOCATION_LEADER_NOT_EXIST;
   }
   return ret;
 }

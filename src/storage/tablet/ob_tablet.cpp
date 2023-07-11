@@ -5324,9 +5324,9 @@ int ObTablet::get_mds_table_handle_(mds::MdsTableHandle &handle,
     LOG_TRACE("there is no mds table on ls inner tablet yet", KR(ret));
   } else if (OB_FAIL(inner_get_mds_table(handle, create_if_not_exist))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("inner get mds table failed", KR(ret));
-    } else {
-      LOG_TRACE("inner get mds table failed", KR(ret));
+      LOG_WARN("inner get mds table failed", KR(ret), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_);
+    } else if (REACH_TENANT_TIME_INTERVAL(10_s)) {
+      LOG_TRACE("inner get mds table failed", KR(ret), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_);
     }
   }
   return ret;
