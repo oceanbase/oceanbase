@@ -116,8 +116,8 @@ public:
 
   inline void set_sub_data_type(const uint64_t sub_data_type) { sub_type_ = sub_data_type; }
   inline uint64_t get_sub_data_type() const { return sub_type_; }
-
   inline bool is_udt_hidden_column() const { return is_udt_column() && is_hidden(); }
+  inline bool is_udt_main_column() const { return is_udt_column() && ! is_hidden(); }
   inline bool is_xmltype() const {
     return is_udt_column()
         && (((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)

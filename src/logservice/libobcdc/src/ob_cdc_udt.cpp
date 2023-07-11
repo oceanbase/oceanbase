@@ -71,16 +71,90 @@ int ObCDCUdtValueMap::init()
   return ret;
 }
 
-int ObCDCUdtValueMap::add_column_value_to_udt(uint64_t udt_set_id, ColValue *cv_node)
+int ObCDCUdtValueMap::add_column_value_to_udt(
+    const ColumnSchemaInfo &column_schema_info,
+    const bool is_out_row,
+    const ObObj *value)
 {
   int ret = OB_SUCCESS;
   ColValue *udt_val = nullptr;
+  uint64_t udt_set_id = column_schema_info.get_udt_set_id();
+  bool is_main_column = column_schema_info.is_udt_main_column();
   if (IS_NOT_INIT && OB_FAIL(init())) {
     LOG_ERROR("init fail", KR(ret), K(udt_set_id));
+  } else if (OB_ISNULL(value)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("value should not be null", KR(ret), K(udt_set_id));
   } else if (OB_FAIL(get_udt_value_(udt_set_id, udt_val))) {
     LOG_ERROR("get udt value fail", KR(ret), K(udt_set_id));
-  } else if (OB_FAIL(udt_val->add_child(cv_node))) {
-    LOG_ERROR("add value to udt fail", KR(ret), K(udt_set_id), KP(cv_node));
+  } else if (is_main_column) {
+    if (OB_FAIL(set_main_column_value_(column_schema_info, *value, *udt_val))) {
+      LOG_ERROR("set_udt_main_col_ fail", KR(ret), K(column_schema_info), K(*udt_val));
+    }
+  } else if (OB_FAIL(add_hidden_column_value_(column_schema_info, is_out_row, *value, *udt_val))) {
+    LOG_ERROR("add_hidden_column_value_ fail", KR(ret), K(column_schema_info), K(*udt_val));
+  }
+  return ret;
+}
+
+int ObCDCUdtValueMap::set_main_column_value_(
+    const ColumnSchemaInfo &main_column_schema_info,
+    const ObObj &value,
+    ColValue &udt_val)
+{
+  int ret = OB_SUCCESS;
+  if (main_column_schema_info.is_xmltype()) {
+    if (set_xmltype_main_column_value_(value, udt_val)) {
+      LOG_WARN("xmltype main column value not correct", KR(ret), K(value));
+    }
+  } else {
+    LOG_ERROR(
+        "not supported column type, only support xmltype currently",
+        KR(ret),
+        K(main_column_schema_info));
+  }
+  return ret;
+}
+
+int ObCDCUdtValueMap::set_xmltype_main_column_value_(const ObObj &value, ColValue &udt_val)
+{
+  int ret = OB_SUCCESS;
+  if (value.is_null() || value.get_string().empty()) {
+    // xmltype udt main column value should be null or emtpy
+    udt_val.value_ = value;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("xmltype main column value not correct", KR(ret), K(value));
+  }
+  return ret;
+}
+
+int ObCDCUdtValueMap::add_hidden_column_value_(
+    const ColumnSchemaInfo &column_schema_info,
+    const bool is_out_row,
+    const ObObj &value,
+    ColValue &udt_val)
+{
+  int ret = OB_SUCCESS;
+  ColValue *cv_node = nullptr;
+  if (OB_ISNULL(cv_node = static_cast<ColValue *>(allocator_.alloc(sizeof(ColValue))))) {
+    LOG_ERROR("allocate memory for ColValue fail", "size", sizeof(ColValue));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    cv_node->reset();
+    cv_node->value_ = value;
+    cv_node->column_id_ = column_schema_info.get_column_id();
+    cv_node->is_out_row_ = is_out_row;
+    column_cast(cv_node->value_, column_schema_info);
+    if (OB_FAIL(udt_val.add_child(cv_node))) {
+      LOG_ERROR("add value to udt fail", KR(ret), K(udt_val), KP(cv_node));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (NULL != cv_node) {
+      allocator_.free((void *)cv_node);
+      cv_node = NULL;
+    }
   }
   return ret;
 }
@@ -137,7 +211,6 @@ int ObCDCUdtValueBuilder::build(
     const ColumnSchemaInfo &column_schema_info,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool is_new_value,
-    common::ObIAllocator &allocator,
     DmlStmtTask &dml_stmt_task,
     ObObj2strHelper &obj2str_helper,
     ObLobDataOutRowCtxList &lob_ctx_cols,
@@ -149,7 +222,6 @@ int ObCDCUdtValueBuilder::build(
         column_schema_info,
         tz_info_wrap,
         is_new_value,
-        allocator,
         dml_stmt_task,
         obj2str_helper,
         lob_ctx_cols,
@@ -170,7 +242,6 @@ int ObCDCUdtValueBuilder::build_xmltype(
     const ColumnSchemaInfo &column_schema_info,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool is_new_value,
-    common::ObIAllocator &allocator,
     DmlStmtTask &dml_stmt_task,
     ObObj2strHelper &obj2str_helper,
     ObLobDataOutRowCtxList &lob_ctx_cols,
@@ -184,7 +255,14 @@ int ObCDCUdtValueBuilder::build_xmltype(
     LOG_ERROR("input is null", KR(ret), K(cv));
   } else {
     if (! value->is_out_row_) {
-      col_str =  &value->string_value_;
+      // ColValue not called obj2str before, so used origin obj value
+      // and because xmltype only have one hidden blob cloumn
+      // so call ObObj::get_string is fine, but other type hidden column cannot
+      if (OB_FAIL(value->value_.get_string(value->string_value_))) {
+        LOG_WARN("get_string from col_value", KR(ret), K(*value), K(cv));
+      } else {
+        col_str =  &value->string_value_;
+      }
     } else {
       if (OB_FAIL(lob_ctx_cols.get_lob_column_value(value->column_id_, is_new_value, col_str))) {
         if (OB_ENTRY_NOT_EXIST != ret) {

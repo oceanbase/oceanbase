@@ -64,11 +64,24 @@ public:
 
   // add cv_node to udt value children list
   // if udt value not exist, create new
-  int add_column_value_to_udt(uint64_t udt_set_id, ColValue *cv_node);
+  int add_column_value_to_udt(
+      const ColumnSchemaInfo &column_schema_info,
+      const bool is_out_row,
+      const ObObj *value);
 
 private:
   int create_udt_value_(uint64_t udt_set_id, ColValue *&cv_node);
   int get_udt_value_(uint64_t udt_set_id, ColValue*& val);
+  int set_main_column_value_(
+      const ColumnSchemaInfo &main_column_schema_info,
+      const ObObj &value,
+      ColValue &udt_val);
+  int set_xmltype_main_column_value_(const ObObj &value, ColValue &udt_val);
+  int add_hidden_column_value_(
+      const ColumnSchemaInfo &column_schema_info,
+      const bool is_out_row,
+      const ObObj &value,
+      ColValue &udt_val);
 
 private:
   bool is_inited_;
@@ -99,7 +112,6 @@ public:
       const ColumnSchemaInfo &column_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool is_new_value,
-      common::ObIAllocator &allocator,
       DmlStmtTask &dml_stmt_task,
       ObObj2strHelper &obj2str_helper,
       ObLobDataOutRowCtxList &lob_ctx_cols,
@@ -111,7 +123,6 @@ private:
       const ColumnSchemaInfo &column_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool is_new_value,
-      common::ObIAllocator &allocator,
       DmlStmtTask &dml_stmt_task,
       ObObj2strHelper &obj2str_helper,
       ObLobDataOutRowCtxList &lob_ctx_cols,

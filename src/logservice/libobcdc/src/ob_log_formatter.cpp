@@ -1216,7 +1216,6 @@ int ObLogFormatter::group_udt_column_values_(
       column_schema_info,
       tz_info_wrap,
       is_new_value,
-      allocator_,
       stmt_task,
       *obj2str_helper_,
       ob_ctx_cols,

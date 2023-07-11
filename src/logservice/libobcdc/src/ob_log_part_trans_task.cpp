@@ -383,7 +383,6 @@ int MutatorRow::parse_columns_(
           // for normal column which is not belong to some udt, is_usr_column is true and is_udt_column is false
           // for udt column
           // if is main column of group, is_usr_column is true , is_udt_column is also true.
-          // and currently main column without data, always is nop, will not execute to here.
           // if is hidden column of udt, is_usr_column is false, is_udt_column is true.
           if (! (column_schema_info->is_usr_column() || column_schema_info->is_udt_column())) {
             // ignore non user columns
@@ -537,10 +536,18 @@ int MutatorRow::add_column_(
     ObCDCUdtValueMap *udt_value_map)
 {
   int ret = OB_SUCCESS;
-  ColValue *cv_node = static_cast<ColValue *>(allocator_.alloc(sizeof(ColValue)));
+  ColValue *cv_node = nullptr;
 
   // NOTE: Allow obj2str_helper and column_schema to be empty
-  if (OB_ISNULL(cv_node)) {
+  if (OB_NOT_NULL(column_schema_info)
+      && OB_NOT_NULL(udt_value_map)
+      && column_schema_info->is_udt_column()) {
+    // for udt column, no need calling obj2str, just add to udt column group
+    // then will group columns obj value of same udt to single string value together
+    if (OB_FAIL(udt_value_map->add_column_value_to_udt(*column_schema_info, is_out_row, value))) {
+      LOG_ERROR("add_column_value_to_udt fail", KR(ret), K(cols));
+    }
+  } else if (OB_ISNULL(cv_node = static_cast<ColValue *>(allocator_.alloc(sizeof(ColValue))))) {
     LOG_ERROR("allocate memory for ColValue fail", "size", sizeof(ColValue));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (NULL != column_schema_info && column_schema_info->is_delete()) {
@@ -608,13 +615,6 @@ int MutatorRow::add_column_(
         tz_info_wrap))) {
       LOG_ERROR("obj2str fail", KR(ret),
           "obj", *value, K(obj2str_helper), K(accuracy), K(collation_type), K(column_id), K(column_schema_info));
-    } else if ( // add to udt if is udt column , else add to cols as usual
-        OB_NOT_NULL(column_schema_info)
-        && OB_NOT_NULL(udt_value_map)
-        && column_schema_info->is_udt_column()) {
-      if (OB_FAIL(udt_value_map->add_column_value_to_udt(column_schema_info->get_udt_set_id(), cv_node))) {
-        LOG_ERROR("add column to udt fail", KR(ret), "column_value", *cv_node, K(cols));
-      }
     } else if (OB_FAIL(cols.add(cv_node))) {
       LOG_ERROR("add column into ColValueList fail", KR(ret), "column_value", *cv_node, K(cols));
     }
