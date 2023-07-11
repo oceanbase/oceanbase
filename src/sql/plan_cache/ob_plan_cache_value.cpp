@@ -1852,6 +1852,13 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
                                                                 false,
                                                                 table_schema))) {
           LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
+        } else if (nullptr == table_schema && OB_FAIL(schema_guard.get_simple_table_schema(
+                                                                tenant_id, // 否则用session上db id和table name查schema
+                                                                database_id,
+                                                                pcv_schema->table_name_,
+                                                                false,
+                                                                table_schema))) {
+          LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
         } else if (nullptr == table_schema && OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
                                                                                            common::OB_ORA_SYS_DATABASE_ID,
                                                                                            pcv_schema->table_name_,
