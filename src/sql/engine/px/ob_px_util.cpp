@@ -244,12 +244,19 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       }
     }
   } else {
-    const int64_t file_count = files.count();
-    int64_t files_per_sqc = (file_count - 1) / sqcs.count() + 1;
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
-      for (int j = i * files_per_sqc; OB_SUCC(ret) && j < std::min((i + 1) * files_per_sqc, file_count); j++) {
-        OZ (sqcs.at(i)->get_access_external_table_files().push_back(files.at(j)));
+    ObArray<int64_t> file_assigned_sqc_ids;
+    OZ (ObExternalTableUtils::calc_assigned_files_to_sqcs(files, file_assigned_sqc_ids, sqcs.count()));
+    if (OB_SUCC(ret) && file_assigned_sqc_ids.count() != files.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid result of assigned sqc", K(file_assigned_sqc_ids.count()), K(files.count()));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < file_assigned_sqc_ids.count(); i++) {
+      int64_t assign_sqc_idx = file_assigned_sqc_ids.at(i);
+      if (OB_UNLIKELY(assign_sqc_idx >= sqcs.count() || assign_sqc_idx < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected file idx", K(file_assigned_sqc_ids.at(i)));
+      } else {
+        OZ (sqcs.at(assign_sqc_idx)->get_access_external_table_files().push_back(files.at(i)));
       }
     }
   }

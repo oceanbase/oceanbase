@@ -3120,7 +3120,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
         }
       }
       RS_TRACE(generate_schema_lob);
-      if (OB_FAIL(ret) || table_schema.is_view_table()) {
+      if (OB_FAIL(ret) || table_schema.is_view_table() || table_schema.is_external_table()) {
         // do nothing
       } else if (OB_FAIL(ddl_service_.build_aux_lob_table_schema_if_need(table_schema, table_schemas))) {
         LOG_WARN("fail to build_aux_lob_table_schema_if_need", K(ret), K(table_schema));

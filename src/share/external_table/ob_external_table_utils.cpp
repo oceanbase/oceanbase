@@ -365,5 +365,62 @@ int ObExternalTableUtils::filter_external_table_files(const ObString &pattern,
   return ret;
 }
 
+int ObExternalTableUtils::calc_assigned_files_to_sqcs(
+  const ObIArray<ObExternalFileInfo> &files,
+  ObIArray<int64_t> &assigned_idx,
+  int64_t sqc_count)
+{
+  int ret = OB_SUCCESS;
+
+  struct SqcFileSet {
+    int64_t total_file_size_;
+    int64_t sqc_idx_;
+    TO_STRING_KV(K(total_file_size_), K(sqc_idx_));
+  };
+
+  struct SqcFileSetCmp {
+    bool operator()(const SqcFileSet &l, const SqcFileSet &r) {
+      return l.total_file_size_ < r.total_file_size_;
+    }
+    int get_error_code() { return OB_SUCCESS; }
+  };
+
+  struct FileInfoWithIdx {
+    const ObExternalFileInfo *file_info_;
+    int64_t file_idx_;
+    TO_STRING_KV(K(file_idx_));
+  };
+  SqcFileSetCmp temp_cmp;
+  ObBinaryHeap<SqcFileSet, SqcFileSetCmp> heap(temp_cmp);
+  ObArray<FileInfoWithIdx> sorted_files;
+  OZ (sorted_files.reserve(files.count()));
+  OZ (assigned_idx.prepare_allocate(files.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); i++) {
+    FileInfoWithIdx file_info;
+    file_info.file_info_ = &(files.at(i));
+    file_info.file_idx_ = i;
+    OZ (sorted_files.push_back(file_info));
+  }
+  std::sort(sorted_files.begin(), sorted_files.end(),
+            [](const FileInfoWithIdx &l, const FileInfoWithIdx &r) -> bool {
+              return l.file_info_->file_size_ >= r.file_info_->file_size_; });
+  for (int64_t i = 0; OB_SUCC(ret) && i < sqc_count; i++) {
+    SqcFileSet new_set;
+    new_set.total_file_size_ = sorted_files.at(i).file_info_->file_size_;
+    new_set.sqc_idx_ = i;
+    OZ (heap.push(new_set));
+    assigned_idx.at(sorted_files.at(i).file_idx_) = i;
+  }
+  for (int64_t i = sqc_count; OB_SUCC(ret) && i < sorted_files.count(); i++) {
+    //assign file to set with the minimum total file size
+    SqcFileSet cur_min_set = heap.top();
+    cur_min_set.total_file_size_ += sorted_files.at(i).file_info_->file_size_;
+    assigned_idx.at(sorted_files.at(i).file_idx_) = cur_min_set.sqc_idx_;
+    OZ (heap.pop());
+    OZ (heap.push(cur_min_set));
+  }
+  return ret;
+}
+
 }  // namespace share
 }  // namespace oceanbase

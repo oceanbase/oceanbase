@@ -21,11 +21,12 @@ namespace oceanbase {
 namespace share {
 
 struct ObExternalFileInfo {
-  ObExternalFileInfo() : file_id_(INT64_MAX) {}
+  ObExternalFileInfo() : file_id_(INT64_MAX), file_size_(0) {}
   common::ObString file_url_;
   int64_t file_id_;
   common::ObAddr file_addr_;
-  TO_STRING_KV(K_(file_url), K_(file_id), K_(file_addr));
+  int64_t file_size_;
+  TO_STRING_KV(K_(file_url), K_(file_id), K_(file_addr), K_(file_size));
   OB_UNIS_VERSION(1);
 };
 
@@ -67,6 +68,7 @@ public:
 public:
   ObArrayWrap<ObString> file_urls_;
   ObArrayWrap<int64_t> file_ids_;
+  ObArrayWrap<int64_t> file_sizes_;
   int64_t create_ts_;
 };
 

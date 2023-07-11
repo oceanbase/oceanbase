@@ -81,6 +81,10 @@ class ObExternalTableUtils {
   static int filter_external_table_files(const common::ObString &pattern,
                                          sql::ObExecContext &exec_ctx,
                                          common::ObIArray<common::ObString> &file_urls);
+  static int calc_assigned_files_to_sqcs(
+    const common::ObIArray<ObExternalFileInfo> &files,
+    common::ObIArray<int64_t> &assigned_idx,
+    int64_t sqc_count);
  private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);

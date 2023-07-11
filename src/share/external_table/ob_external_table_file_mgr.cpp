@@ -64,7 +64,8 @@ int ObExternalTableFilesKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCa
 
 int64_t ObExternalTableFiles::size() const
 {
-   int64_t size = sizeof(*this) + sizeof(ObString) * file_urls_.count() + sizeof(int64_t) * file_ids_.count();
+   int64_t size = sizeof(*this) + sizeof(ObString) * file_urls_.count()
+                  + sizeof(int64_t) * file_ids_.count() + sizeof(int64_t) * file_sizes_.count();
    for (int i = 0; i < file_urls_.count(); ++i) {
      size += file_urls_.at(i).length();
    }
@@ -97,6 +98,15 @@ int ObExternalTableFiles::deep_copy(char *buf, const int64_t buf_len, ObIKVCache
     } else {
       MEMCPY(new_value->file_ids_.get_data(), this->file_ids_.get_data(),
              sizeof(int64_t) * this->file_ids_.count());
+    }
+  }
+
+  if (OB_SUCC(ret) && this->file_sizes_.count() > 0) {
+    if (OB_FAIL(new_value->file_sizes_.allocate_array(allocator, this->file_sizes_.count()))) {
+      LOG_WARN("fail to allocate array", K(ret));
+    } else {
+      MEMCPY(new_value->file_sizes_.get_data(), this->file_sizes_.get_data(),
+             sizeof(int64_t) * this->file_sizes_.count());
     }
   }
   if (OB_SUCC(ret)) {
@@ -201,6 +211,7 @@ int ObExternalTableFileManager::get_external_files_by_part_id(
       ObExternalFileInfo file_info;
       ObString file_url = ext_files->file_urls_.at(i);
       file_info.file_id_ = ext_files->file_ids_.at(i);
+      file_info.file_size_ = ext_files->file_sizes_.at(i);
       if (is_local_file_on_disk) {
         ObString ip_port = file_url.split_on('%');
         OZ (file_info.file_addr_.parse_from_string(ip_port));
@@ -431,7 +442,7 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
           ret = OB_ERR_UNEXPECTED;
         }
 
-        OZ (sql.append_fmt("SELECT file_url, file_id FROM %s"
+        OZ (sql.append_fmt("SELECT file_url, file_id, file_size FROM %s"
                            " WHERE table_id = %lu AND part_id = %lu"
                            " AND create_version <=%ld AND %ld < delete_version",
                            OB_ALL_EXTERNAL_TABLE_FILE_TNAME, key.table_id_, key.partition_id_,
@@ -445,16 +456,20 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
           } else {
             ObSEArray<ObString, 16> temp_file_urls;
             ObSEArray<int64_t, 16> temp_file_ids;
+            ObSEArray<int64_t, 16> temp_file_sizes;
             ObArenaAllocator allocator;
             while (OB_SUCC(result->next())) {
               ObString file_url;
               ObString tmp_url;
               int64_t file_id = INT64_MAX;
+              int64_t file_size = 0;
               EXTRACT_VARCHAR_FIELD_MYSQL(*result, "file_url", tmp_url);
               EXTRACT_INT_FIELD_MYSQL(*result, "file_id", file_id, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "file_size", file_size, int64_t);
               OZ (ob_write_string(allocator, tmp_url, file_url));
               OZ (temp_file_urls.push_back(file_url));
               OZ (temp_file_ids.push_back(file_id));
+              OZ (temp_file_sizes.push_back(file_size));
             }
             if (OB_FAIL(ret) && OB_ITER_END != ret) {
               LOG_WARN("get next result failed", K(ret));
@@ -466,6 +481,7 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
               temp_ext_files.create_ts_ = cur_time;
               temp_ext_files.file_urls_ = ObArrayWrap<ObString>(temp_file_urls.get_data(), temp_file_urls.count());
               temp_ext_files.file_ids_ = ObArrayWrap<int64_t>(temp_file_ids.get_data(), temp_file_ids.count());
+              temp_ext_files.file_sizes_ = ObArrayWrap<int64_t>(temp_file_sizes.get_data(), temp_file_sizes.count());
               OZ (kv_cache_.put_and_fetch(key, temp_ext_files, ext_files, handle, true));
             }
           }
@@ -507,7 +523,7 @@ int ObExternalTableFileManager::lock_for_refresh(
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_);
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_);
 
 }
 }

@@ -2384,9 +2384,10 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
 
     if (OB_SUCC(ret) && table_schema.is_external_table()) {
       if (table_schema.get_external_file_format().empty()
-          || table_schema.get_external_file_location().empty())
+          || table_schema.get_external_file_location().empty()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
+      }
     }
   }
   return ret;
