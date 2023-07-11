@@ -3666,16 +3666,16 @@ int ObLSTabletService::check_old_row_legitimacy(
     }
     if (OB_ERR_DEFENSIVE_CHECK == ret) {
       int tmp_ret = OB_SUCCESS;
-      if (is_udf) {
-        ret = OB_ERR_INDEX_KEY_NOT_FOUND;
-        LOG_WARN("index key not found on udf column", K(ret), K(old_row));
-      } else if (OB_TMP_FAIL(check_real_leader_for_4377_(run_ctx.store_ctx_.ls_id_))) {
+      if (OB_TMP_FAIL(check_real_leader_for_4377_(run_ctx.store_ctx_.ls_id_))) {
         ret = tmp_ret;
         LOG_WARN("check real leader for 4377 found exception", K(ret), K(old_row), K(data_table));
       } else if (OB_TMP_FAIL(check_need_rollback_in_transfer_for_4377_(run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_,
                                                                        data_tablet_handle))) {
         ret = tmp_ret;
         LOG_WARN("check need rollback in transfer for 4377 found exception", K(ret), K(old_row), K(data_table));
+      } else if (is_udf) {
+        ret = OB_ERR_INDEX_KEY_NOT_FOUND;
+        LOG_WARN("index key not found on udf column", K(ret), K(old_row));
       } else {
         ObString func_name = ObString::make_string("check_old_row_legitimacy");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
