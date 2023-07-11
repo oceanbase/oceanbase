@@ -50,7 +50,7 @@ int my_sk_consume(my_sk_t* s, int64_t time_limit, int64_t* avail_bytes) {
   while(0 == err && !is_epoll_handle_timeout(time_limit)) {
     if (0 != (err = my_sk_do_decode(s, &msg, avail_bytes))) {
       if (EAGAIN != err) {
-        rk_info("do_decode fail: %d", err);
+        rk_warn("do_decode fail: %d", err);
       }
     } else if (NULL == msg.payload) {
       // not read a complete package yet
