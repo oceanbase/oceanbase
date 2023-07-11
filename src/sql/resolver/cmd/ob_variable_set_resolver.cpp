@@ -132,8 +132,9 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
               }
             } else if (T_OBJ_ACCESS_REF == set_node->children_[1]->type_) { //Oracle mode
               if (OB_ISNULL(set_node->children_[1]->children_[0]) || OB_UNLIKELY(set_node->children_[1]->children_[1] != NULL)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("Variable value not a varchar nor identifier type", K(ret));
+                ret = OB_ERR_UNKNOWN_SET_OPTION;
+                LOG_WARN("unknown SET option", K(ret), K(set_node->children_[1]->children_[0]->type_));
+                LOG_USER_ERROR(OB_ERR_UNKNOWN_SET_OPTION, var->str_value_);
               } else {
                 MEMCPY(&value_node, set_node->children_[1]->children_[0], sizeof(ParseNode));
               }
