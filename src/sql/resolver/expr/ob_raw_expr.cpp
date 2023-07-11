@@ -810,6 +810,9 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
         bool complete = true;
         if (OB_UNLIKELY(!value.is_string_type())) {
           // just pass, will report error when calc result type
+          if (value.is_null()) {
+            is_non_pure = true;
+          }
         } else if (OB_FAIL(ObTimeConverter::check_dfm_deterministic(value.get_string(),
                                                       value.get_collation_type(),
                                                       need_tz, complete))) {
