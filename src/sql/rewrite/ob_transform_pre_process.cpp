@@ -2214,8 +2214,11 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(left_view_stmt->get_condition_exprs().assign(stmt.get_condition_exprs()))) {
       LOG_WARN("failed to assign conditions", K(ret));
+    } else if (OB_FAIL(left_view_stmt->get_start_with_exprs().assign(stmt.get_start_with_exprs()))) {
+      LOG_WARN("failed to assign conditions", K(ret));
     } else {
       stmt.get_condition_exprs().reset();
+      stmt.get_start_with_exprs().reset();
     }
   }
   // 3. handle clauses processed by the upper_stmt
@@ -2231,7 +2234,6 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
     left_view_stmt->clear_sequence();
     left_view_stmt->set_select_into(NULL);
     left_view_stmt->get_pseudo_column_like_exprs().reset();
-    left_view_stmt->get_start_with_exprs().reset();
     left_view_stmt->get_connect_by_exprs().reset();
     left_view_stmt->set_hierarchical_query(false);
     left_view_stmt->set_has_prior(false);
@@ -2280,6 +2282,8 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
       LOG_WARN("failed to adjust statement id", K(ret));
     } else if (OB_FAIL(right_view_stmt->update_stmt_table_id(*left_view_stmt))) {
       LOG_WARN("failed to update stmt table id", K(ret));
+    } else {
+      right_view_stmt->get_start_with_exprs().reset();
     }
   }
   // 6. link upper stmt and view stmt
@@ -2320,13 +2324,7 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
   // 7. 预处理start with exprs，放置到第一个视图的where condition
   //调整subquery exprs
   if (OB_SUCC(ret)) {
-    ObRawExprCopier copier(*expr_factory);
-    ReplaceRownumRowidExpr replacer(left_view_stmt);
-    if (OB_FAIL(copier.copy_on_replace(stmt.get_start_with_exprs(),
-                                       stmt.get_start_with_exprs(),
-                                       &replacer))) {
-      LOG_WARN("failed to copy on replace start with exprs", K(ret));
-    } else if (OB_FAIL(left_view_stmt->add_condition_exprs(stmt.get_start_with_exprs()))) {
+    if (OB_FAIL(left_view_stmt->add_condition_exprs(left_view_stmt->get_start_with_exprs()))) {
       LOG_WARN("failed to push start with exprs to view", K(ret));
     } else if (OB_FAIL(left_view_stmt->adjust_subquery_list())) {
       LOG_WARN("failed to adjust subquery list", K(ret));
@@ -2335,7 +2333,7 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*right_view_stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     } else {
-      stmt.get_start_with_exprs().reset();
+      left_view_stmt->get_start_with_exprs().reset();
     }
   }
   // 8. 如果stmt有for update标记，需要把标记打在connect by的右侧表上，
