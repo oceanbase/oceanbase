@@ -543,9 +543,14 @@ int ObGVSql::fill_cells(const ObCacheObject* cache_obj, const ObPlanCache& plan_
       }
       case share::ALL_VIRTUAL_PLAN_STAT_CDE::ACS_SEL_INFO: {
         if (cache_obj->is_sql_crsr()) {
+          ObString acs_info;
           stmt.assign_ptr(plan->stat_.plan_sel_info_str_, plan->stat_.plan_sel_info_str_len_);
-          cells[i].set_lob_value(ObLongTextType, stmt.ptr(), static_cast<int32_t>(stmt.length()));
-          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          if (OB_FAIL(ob_write_string(*allocator_, stmt, acs_info))) {
+            SERVER_LOG(ERROR, "copy acs_info failed", K(ret));
+          } else {
+            cells[i].set_lob_value(ObLongTextType, acs_info.ptr(), static_cast<int32_t>(acs_info.length()));
+            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
         } else {
           cells[i].set_null();
         }
@@ -625,9 +630,14 @@ int ObGVSql::fill_cells(const ObCacheObject* cache_obj, const ObPlanCache& plan_
       }
       case share::ALL_VIRTUAL_PLAN_STAT_CDE::TEMP_TABLES: {
         if (cache_obj->is_sql_crsr()) {
+          ObString tmp_tbls;
           stmt.assign_ptr(plan->stat_.plan_tmp_tbl_name_str_, plan->stat_.plan_tmp_tbl_name_str_len_);
-          cells[i].set_lob_value(ObLongTextType, stmt.ptr(), static_cast<int32_t>(stmt.length()));
-          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          if (OB_FAIL(ob_write_string(*allocator_, stmt, tmp_tbls))) {
+            SERVER_LOG(ERROR, "copy acs_info failed", K(ret));
+          } else {
+            cells[i].set_lob_value(ObLongTextType, tmp_tbls.ptr(), static_cast<int32_t>(tmp_tbls.length()));
+            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
         } else {
           cells[i].set_null();
         }
