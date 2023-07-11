@@ -75,7 +75,7 @@ class ObBasicDag : public ObIDag
 {
 public:
   ObBasicDag() :
-    ObIDag(ObDagType::DAG_TYPE_MINI_MERGE)
+    ObIDag(ObDagType::DAG_TYPE_TABLET_BACKFILL_TX)
   {}
   void init() { is_inited_ = true; }
   virtual int64_t hash() const {

@@ -405,6 +405,7 @@ int ObBasicTabletMergeDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
     if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                   ls_id_.id(),
                                   static_cast<int64_t>(tablet_id_.id()),
+                                  param_.merge_version_,
                                   "merge_type", merge_type))) {
       LOG_WARN("failed to fill info param", K(ret));
     }

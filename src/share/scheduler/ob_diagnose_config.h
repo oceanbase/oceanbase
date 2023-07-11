@@ -73,10 +73,10 @@ static constexpr ObDiagnoseInfoStruct OB_SUSPECT_INFO_TYPES[] = {
 static_assert(sizeof(OB_SUSPECT_INFO_TYPES) / sizeof(ObDiagnoseInfoStruct) == SUSPECT_INFO_TYPE_MAX + 1, "Not enough initializer");
 
 static constexpr ObDiagnoseInfoStruct OB_DAG_WARNING_INFO_TYPES[] = {
-  {2, true, "DAG_MINI_MERGE", {"ls_id", "tablet_id"}},
-  {2, true, "DAG_MINOR_MERGE", {"ls_id", "tablet_id"}},
-  {2, true, "DAG_MAJOR_MERGE", {"ls_id", "tablet_id"}},
-  {2, true, "DAG_TX_TABLE_MERGE", {"ls_id", "tablet_id"}},
+  {3, true, "DAG_MINI_MERGE", {"ls_id", "tablet_id", "compaction_scn"}},
+  {3, true, "DAG_MINOR_MERGE", {"ls_id", "tablet_id", "compaction_scn"}},
+  {3, true, "DAG_MAJOR_MERGE", {"ls_id", "tablet_id", "compaction_scn"}},
+  {3, true, "DAG_TX_TABLE_MERGE", {"ls_id", "tablet_id", "compaction_scn"}},
   {0, false, "DAG_WRITE_CKPT", {}},
   {3, false, "DAG_TYPE_MDS_TABLE_MERGE", {"ls_id", "tablet_id", "flush_scn"}},
 
