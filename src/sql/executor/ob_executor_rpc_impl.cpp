@@ -87,6 +87,10 @@ int ObExecutorRpcImpl::task_execute(ObExecutorRpcCtx &rpc_ctx,
       const obrpc::ObRpcResultCode &rcode = to_proxy.get_result_code();
       if (OB_LIKELY(OB_SUCCESS != rcode.rcode_)) {
         FORWARD_USER_ERROR(rcode.rcode_, rcode.msg_);
+      } else if (OB_RPC_SEND_ERROR == ret || OB_RPC_POST_ERROR == ret) {
+        // these two error means the request hasn't been sent out to network
+        // either because the server is in blacklist or network link breaks
+        has_sent_task = false;
       } else {
         has_transfer_err = true;
       }

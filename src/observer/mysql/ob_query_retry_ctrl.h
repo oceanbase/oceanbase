@@ -310,7 +310,7 @@ private:
   static void inner_location_error_proc(ObRetryParam &v);
   static void inner_location_error_nothing_readable_proc(ObRetryParam &v);
   static void inner_peer_server_status_uncertain_proc(ObRetryParam &v);
-  void on_close_resultset_fail_(const int err);
+  void on_close_resultset_fail_(const int err, int &client_ret);
 
   /* variables */
   // map_ is used to fast lookup the error code retry processor

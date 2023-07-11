@@ -118,7 +118,9 @@ public:
   /// @return OB_ITER_END when no more data available
   int get_next_row(const common::ObNewRow *&row);
   /// close the result set after get all the rows
-  int close();
+  int close() { int unused = 0; return close(unused); }
+  // close result set and rewrite the client ret
+  int close(int &client_ret);
   /// get number of rows affected by INSERT/UPDATE/DELETE
   int64_t get_affected_rows() const;
   int64_t get_return_rows() const { return return_rows_; }
@@ -320,7 +322,7 @@ public:
   static void replace_lob_type(const ObSQLSessionInfo &session,
                                const ObField &field,
                                obmysql::ObMySQLField &mfield);
-  void set_close_fail_callback(ObFunction<void(const int)> func) { close_fail_cb_ = func; }
+  void set_close_fail_callback(ObFunction<void(const int, int&)> func) { close_fail_cb_ = func; }
 private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;
@@ -426,7 +428,7 @@ private:
   common::ObString ps_sql_; // for sql in pl
   bool is_init_;
   common::ParamStore ps_params_; // 文本 ps params 记录，用于填入 sql_audit
-  common::ObFunction<void(const int)> close_fail_cb_;
+  common::ObFunction<void(const int, int&)> close_fail_cb_;
 };
 
 
