@@ -3208,6 +3208,9 @@ int ObQueryRange::or_single_head_graphs(
             } else if (0 == cmp) {
               cur1->normal_keypart_->include_start_ =
                   (cur1->normal_keypart_->include_start_ || cur2->normal_keypart_->include_start_);
+              if (cur1->normal_keypart_->include_start_ && cur1->normal_keypart_->start_.is_null()) {
+                cur1->null_safe_ = cur1->null_safe_ || cur2->null_safe_;
+              }
             }
             cmp = cur2->normal_keypart_->end_.compare(cur1->normal_keypart_->end_);
             if (cmp > 0) {
@@ -3216,6 +3219,9 @@ int ObQueryRange::or_single_head_graphs(
             } else if (0 == cmp) {
               cur1->normal_keypart_->include_end_ =
                   (cur1->normal_keypart_->include_end_ || cur2->normal_keypart_->include_end_);
+              if (cur1->normal_keypart_->include_end_ && cur1->normal_keypart_->end_.is_null()) {
+                cur1->null_safe_ = cur1->null_safe_ || cur2->null_safe_;
+              }
             }
             if (cur1->and_next_ && cur1->and_next_->equal_to(cur2->and_next_)) {
               // keep and_next_
