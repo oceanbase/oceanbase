@@ -136,6 +136,7 @@ public:
   RPC_S(PR5 accept_plan_baseline, obrpc::OB_RS_ACCEPT_PLAN_BASELINE, (ObModifyPlanBaselineArg));
   RPC_S(PRD cancel_evolve_task, obrpc::OB_RS_CANCEL_EVOLVE_TASK, (ObModifyPlanBaselineArg));
   RPC_S(PR5 admin_load_baseline, obrpc::OB_ADMIN_LOAD_BASELINE, (ObLoadPlanBaselineArg));
+  RPC_S(PR5 admin_load_baseline_v2, obrpc::OB_ADMIN_LOAD_BASELINE_V2, (ObLoadPlanBaselineArg), ObLoadBaselineRes);
   // RPC_S(PRD drop_plan_baseline, obrpc::OB_DROP_PLAN_BASELINE, (ObDropPlanBaselineArg));
 
   //----End of definitions for managing plan_baselines----

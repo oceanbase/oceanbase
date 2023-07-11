@@ -8592,5 +8592,16 @@ int ObBroadcastConsensusVersionArg::assign(const ObBroadcastConsensusVersionArg 
 }
 
 OB_SERIALIZE_MEMBER(ObBroadcastConsensusVersionRes, ret_);
+
+int ObLoadBaselineRes::assign(const ObLoadBaselineRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    load_count_ = other.load_count_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObLoadBaselineRes, load_count_);
+
 }//end namespace obrpc
 }//end namepsace oceanbase

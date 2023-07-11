@@ -9322,6 +9322,18 @@ private:
   int ret_;
 };
 
+struct ObLoadBaselineRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLoadBaselineRes()
+    : load_count_(0)
+  {}
+  int assign(const ObLoadBaselineRes &other);
+  TO_STRING_KV(K_(load_count));
+  uint64_t load_count_;
+};
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif
