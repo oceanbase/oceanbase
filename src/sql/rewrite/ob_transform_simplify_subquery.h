@@ -217,6 +217,10 @@ private:
                                   ObNotNullContext *not_null_cxt,
                                   bool is_bool_expr,
                                   bool &trans_happened);
+  int empty_table_subquery_can_be_eliminated_in_exists(ObRawExpr *expr,
+                                                       bool &is_valid);
+  int do_trans_empty_table_subquery_as_expr(ObRawExpr *&expr,
+                                            bool &trans_happened);
 };
 
 }
