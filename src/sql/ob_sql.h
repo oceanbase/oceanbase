@@ -474,6 +474,10 @@ private:
   int handle_text_execute(const ObStmt *basic_stmt, ObSqlCtx &sql_ctx, ObResultSet &result);
   int check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObPhysicalPlan *plan, bool &need_reroute);
   int get_first_batched_multi_stmt(ObMultiStmtItem& multi_stmt_item, ObString& sql);
+  int check_read_only_privilege(ParseResult &parse_result,
+                                ObExecContext &exec_ctx,
+                                ObSchemaGetterGuard &schema_guard,
+                                ObSqlTraits &sql_traits);
   static int add_param_to_param_store(const ObObjParam &param,
                                       ParamStore &param_store);
 

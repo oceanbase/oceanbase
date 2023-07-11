@@ -1951,6 +1951,52 @@ int ObSql::reconstruct_ps_params_store(ObIAllocator &allocator,
   return ret;
 }
 
+int ObSql::check_read_only_privilege(ParseResult &parse_result,
+                                     ObExecContext &exec_ctx,
+                                     ObSchemaGetterGuard &schema_guard,
+                                     ObSqlTraits &sql_traits)
+{
+  int ret = OB_SUCCESS;
+  bool read_only = false;
+  ObPhysicalPlanCtx *pctx = exec_ctx.get_physical_plan_ctx();
+  ObSQLSessionInfo *session = exec_ctx.get_my_session();
+  sql_traits.is_readonly_stmt_ = ObSQLUtils::is_readonly_stmt(parse_result);
+  sql_traits.is_modify_tenant_stmt_
+      = ObSQLUtils::is_modify_tenant_stmt(parse_result);
+  sql_traits.is_cause_implicit_commit_
+      = ObSQLUtils::cause_implicit_commit(parse_result);
+  sql_traits.is_commit_stmt_ = ObSQLUtils::is_commit_stmt(parse_result);
+  sql_traits.stmt_type_ = ObSQLUtils::get_sql_item_type(parse_result);
+  if (OB_ISNULL(pctx) || OB_ISNULL(session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_read_only(MTL_ID(), read_only))) {
+    LOG_WARN("fail to get tenant read only attribute", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(session->check_read_only_privilege(read_only,
+                                                        sql_traits))) {
+    LOG_WARN("failed to check read_only privilege", K(ret));
+    if (ObSQLUtils::is_end_trans_stmt(parse_result)) {
+      int et_ret = OB_SUCCESS;
+      exec_ctx.set_need_disconnect(false);
+      //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
+      LOG_WARN("is commit or rollback stmt, but fail to check read_only privilege, "
+              "rollback", K(ret));
+      int64_t plan_timeout = 0;
+      if (OB_SUCCESS != (et_ret = session->get_query_timeout(plan_timeout))) {
+        LOG_ERROR("fail to get query timeout", K(ret), K(et_ret));
+      } else {
+        pctx->set_timeout_timestamp(session->get_query_start_time() + plan_timeout);
+        // explicitly rollback the transaction, if it fails, the connection will be disconnected
+        if (OB_SUCCESS != (et_ret = ObSqlTransControl::explicit_end_trans(
+                    exec_ctx, true))) {
+          LOG_ERROR("fail explicit rollback trans", K(ret), K(et_ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
                              const stmt::StmtType stmt_type,
                              const ParamStore &params,
@@ -2111,16 +2157,16 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
         ObParser parser(allocator, session.get_sql_mode(),
                         session.get_local_collation_connection());
         ParseResult parse_result;
+        ObSqlTraits sql_traits;
         ParseMode parse_mode = context.is_dbms_sql_ ? DBMS_SQL_MODE :
                                 context.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
                                 (context.session_info_->is_for_trigger_package() ? TRIGGER_MODE : STD_MODE);
         if (OB_FAIL(parser.parse(sql, parse_result, parse_mode))) {
           LOG_WARN("failed to parse sql", K(ret), K(sql), K(stmt_type));
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(generate_physical_plan(
-            parse_result, NULL, context, result, false /*is_begin_commit_stmt*/, PC_PS_MODE))) {
+        } else if (OB_FAIL(check_read_only_privilege(parse_result, ectx, *schema_guard, sql_traits))) {
+          LOG_WARN("failed to check read only privilege", K(ret));
+        } else if (OB_FAIL(generate_physical_plan(parse_result, NULL, context, result,
+            false /*is_begin_commit_stmt*/, PC_PS_MODE))) {
           LOG_WARN("generate physical plan failed", K(ret), K(sql), K(stmt_type));
         } // TODO 生成物理计划的路径可x需q区分
       }
@@ -4022,17 +4068,6 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
   }
 
   if (OB_SUCC(ret)) {
-    const uint64_t tenant_id = session->get_effective_tenant_id();
-    ObSqlTraits &sql_traits = pc_ctx.sql_traits_;
-    sql_traits.is_readonly_stmt_ = ObSQLUtils::is_readonly_stmt(parse_result);
-    sql_traits.is_modify_tenant_stmt_
-        = ObSQLUtils::is_modify_tenant_stmt(parse_result);
-    sql_traits.is_cause_implicit_commit_
-        = ObSQLUtils::cause_implicit_commit(parse_result);
-    sql_traits.is_commit_stmt_ = ObSQLUtils::is_commit_stmt(parse_result);
-    sql_traits.stmt_type_ = ObSQLUtils::get_sql_item_type(parse_result);
-
-    bool read_only = false;
     //租户级别的read only检查
     if (session->is_inner() || pc_ctx.is_begin_commit_stmt()) {
       // FIXME:
@@ -4041,30 +4076,9 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
     } else if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid argument", K(pc_ctx.sql_ctx_.schema_guard_));
-    } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id, read_only))) {
-      LOG_WARN("fail to get tenant read only attribute", K(ret), K(tenant_id));
-    } else if (OB_FAIL(session->check_read_only_privilege(read_only,
-                                                         sql_traits))) {
-      LOG_WARN("failed to check read_only privilege", K(ret));
-      if (ObSQLUtils::is_end_trans_stmt(parse_result)) {
-        int et_ret = OB_SUCCESS;
-        // 是commit或者rollback语句检查read only权限失败，不断连接
-        exec_ctx.set_need_disconnect(false);
-        //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
-        LOG_WARN("is commit or rollback stmt, but fail to check read_only privilege, "
-                 "rollback", K(ret));
-        // 回滚事务
-        int64_t plan_timeout = 0;
-        if (OB_SUCCESS != (et_ret = session->get_query_timeout(plan_timeout))) {
-          LOG_ERROR("fail to get query timeout", K(ret), K(et_ret));
-        } else {
-          pctx->set_timeout_timestamp(session->get_query_start_time() + plan_timeout);
-          if (OB_SUCCESS != (et_ret = ObSqlTransControl::explicit_end_trans(
-                      exec_ctx, true))) { // 这里是显式回滚事务，失败了是要断连接的
-            LOG_ERROR("fail explicit rollback trans", K(ret), K(et_ret));
-          }
-        }
-      }
+    } else if (OB_FAIL(check_read_only_privilege(parse_result, exec_ctx,
+        *pc_ctx.sql_ctx_.schema_guard_, pc_ctx.sql_traits_))) {
+      LOG_WARN("failed to check read only privilege", K(ret));
     }
   }
 
