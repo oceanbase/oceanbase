@@ -56,17 +56,16 @@ int ObExprExtractValue::calc_result_typeN(ObExprResType &type,
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-", "-");
       LOG_WARN("inconsistent datatypes", K(ret), K(ob_obj_type_str(in_type)));
-    } else {
-      for (int8_t i = 1; i < param_num && OB_SUCC(ret); i++) {
-        ObObjType param_type = types[i].get_type();
-        if (param_type == ObNullType) {
-        } else if (ob_is_string_type(param_type)) {
-          if (types[i].get_charset_type() != CHARSET_UTF8MB4) {
-            types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-          }
-        } else {
-          ret = OB_ERR_INVALID_XPATH_EXPRESSION;
+    }
+    for (int8_t i = 1; i < param_num && OB_SUCC(ret); i++) {
+      ObObjType param_type = types[i].get_type();
+      if (param_type == ObNullType) {
+      } else if (ob_is_string_type(param_type)) {
+        if (types[i].get_charset_type() != CHARSET_UTF8MB4) {
+          types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
+      } else {
+        ret = OB_ERR_INVALID_XPATH_EXPRESSION;
       }
     }
 

@@ -53,6 +53,8 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-", "-");
     LOG_WARN("inconsistent datatypes", K(ret), K(ob_obj_type_str(types[0].get_type())));
+  }
+  if (OB_FAIL(ret)) {
   } else {
     bool has_ns_str = (param_num - 1) % 2 == 1;
     int64_t xpath_value_end = has_ns_str ? param_num - 1 : param_num;
