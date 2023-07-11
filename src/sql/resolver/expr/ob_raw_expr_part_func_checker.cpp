@@ -115,9 +115,6 @@ int ObRawExprPartFuncChecker::visit(ObAggFunRawExpr& expr)
 int ObRawExprPartFuncChecker::visit(ObSysFunRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  /**
-   * http://dev.mysql.com/doc/refman/5.6/en/partitioning-limitations-functions.html
-   */
   // white list, some of them are not implemented now
   switch (expr.get_expr_type()) {
     case T_FUN_SYS_DAY_OF_MONTH:
@@ -150,6 +147,15 @@ int ObRawExprPartFuncChecker::visit(ObSysFunRawExpr& expr)
     case T_FUN_SYS_TO_NUMBER:  // case TO_NUMBER()
     case T_FUN_SYS_TO_CHAR: {
       ret = OB_SUCCESS;
+      break;
+    }
+    case T_FUN_SYS_CAST: {
+      if (expr.has_flag(IS_INNER_ADDED_EXPR)) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
+        LOG_WARN("invalid partition function", K(ret), K(expr));
+      }
       break;
     }
     case T_FUN_SYS_SUBSTR:

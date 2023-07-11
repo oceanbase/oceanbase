@@ -2763,7 +2763,11 @@ int ObResolverUtils::resolve_partition_range_value_expr(ObResolverParams& params
         LOG_WARN("formailize expr failed", K(ret));
       } else if (OB_FAIL(check_partition_value_expr_for_range(
                      part_name, part_func_expr, *part_value_expr, part_type, in_tablegroup))) {
-        LOG_WARN("check_valid_column_for_hash or range func failed", K(part_type), K(part_name), K(ret));
+        LOG_WARN("check_valid_column_for_hash or range func failed",
+            K(part_type),
+            K(part_name),
+            KPC(part_value_expr),
+            K(ret));
       } else {
         LOG_DEBUG("succ to check_partition_value_expr_for_range",
             K(part_type),
