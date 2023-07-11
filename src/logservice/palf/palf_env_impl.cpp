@@ -149,8 +149,11 @@ int PalfDiskOptionsWrapper::update_disk_options_not_guarded_by_lock_(const PalfD
     }
     //always update writing_throttling_trigger_percentage_
     const int64_t new_trigger_percentage = disk_opts_for_recycling_blocks.log_disk_throttling_percentage_;
+    const int64_t new_maximum_duration = disk_opts_for_recycling_blocks.log_disk_throttling_maximum_duration_;
     disk_opts_for_recycling_blocks_.log_disk_throttling_percentage_ = new_trigger_percentage;
     disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = new_trigger_percentage;
+    disk_opts_for_recycling_blocks_.log_disk_throttling_maximum_duration_ = new_maximum_duration;
+    disk_opts_for_stopping_writing_.log_disk_throttling_maximum_duration_ = new_maximum_duration;
 
   }
   return ret;

@@ -120,7 +120,6 @@ private:
   typedef common::ObSpinLockGuard SpinLockGuard;
   static const int64_t UPDATE_INTERVAL_US = 500 * 1000L;//500ms
   const int64_t DETECT_INTERVAL_US = 30 * 1000L;//30ms
-  const int64_t THROTTLING_DURATION_US = 1800 * 1000 * 1000L;//1800s
   const int64_t THROTTLING_CHUNK_SIZE = MAX_LOG_BUFFER_SIZE;
   //ts of lastest updating writing throttling info
   int64_t last_update_ts_;

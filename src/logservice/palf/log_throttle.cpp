@@ -146,6 +146,7 @@ int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *
     } else {
       const bool need_throttling = new_throttling_options.need_throttling();
       const int64_t new_available_size_after_limit = new_throttling_options.get_available_size_after_limit();
+      const int64_t new_maximum_duration = new_throttling_options.get_maximum_duration();
       bool need_update_decay_factor = false;
       bool need_start_throttling = false;
 
@@ -154,16 +155,16 @@ int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *
           need_start_throttling = true;
           need_update_decay_factor = true;
         } else {
-          need_update_decay_factor = (throttling_options_.get_available_size_after_limit() != new_available_size_after_limit);
+          need_update_decay_factor = (throttling_options_.get_available_size_after_limit() != new_available_size_after_limit)
+              || throttling_options_.get_maximum_duration() != new_maximum_duration;
         }
         if (need_update_decay_factor) {
-          if (OB_FAIL(ObThrottlingUtils::calc_decay_factor(new_available_size_after_limit, THROTTLING_DURATION_US,
+          if (OB_FAIL(ObThrottlingUtils::calc_decay_factor(new_available_size_after_limit, new_maximum_duration,
                   THROTTLING_CHUNK_SIZE, decay_factor_))) {
-            PALF_LOG(ERROR, "failed to calc_decay_factor", K(throttling_options_), "duration(s)",
-                     THROTTLING_DURATION_US / (1000 * 1000), K(THROTTLING_CHUNK_SIZE));
+            PALF_LOG(ERROR, "failed to calc_decay_factor", K(throttling_options_), K(THROTTLING_CHUNK_SIZE));
           } else {
             PALF_LOG(INFO, "[LOG DISK THROTTLING] success to calc_decay_factor", K(decay_factor_), K(throttling_options_),
-                     K(new_throttling_options), "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+                     K(new_throttling_options), K(THROTTLING_CHUNK_SIZE));
           }
         }
 
@@ -178,14 +179,12 @@ int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *
           throttling_options_ = new_throttling_options;
           if (need_start_throttling) {
             stat_.start_throttling();
-            PALF_LOG(INFO, "[LOG DISK THROTTLING] [START]", KPC(this),
-            "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+            PALF_LOG(INFO, "[LOG DISK THROTTLING] [START]", KPC(this), K(THROTTLING_CHUNK_SIZE));
           }
         }
       } else {
         if (throttling_options_.need_throttling()) {
-          PALF_LOG(INFO, "[LOG DISK THROTTLING] [STOP]", KPC(this),
-          "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+          PALF_LOG(INFO, "[LOG DISK THROTTLING] [STOP]", KPC(this), K(THROTTLING_CHUNK_SIZE));
           clean_up_not_guarded_by_lock_();
           stat_.stop_throttling();
         }
@@ -193,8 +192,7 @@ int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *
     }
   } else {
     if (throttling_options_.need_throttling()) {
-      PALF_LOG(INFO, "[LOG DISK THROTTLING] [STOP] no need throttling any more", KPC(this),
-               "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+      PALF_LOG(INFO, "[LOG DISK THROTTLING] [STOP] no need throttling any more", KPC(this), K(THROTTLING_CHUNK_SIZE));
       clean_up_not_guarded_by_lock_();
       stat_.stop_throttling();
     }

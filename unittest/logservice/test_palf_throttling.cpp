@@ -78,6 +78,7 @@ TEST_F(TestPalfThrottling, test_palf_options)
   int64_t utilization_limit_threshold = 95;
   int64_t throttling_percentage = 60;
   wrapper.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
+  wrapper.disk_opts_for_stopping_writing_.log_disk_throttling_maximum_duration_ = 7200 * 1000 * 1000L;
   wrapper.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ = total_disk_size;
   wrapper.disk_opts_for_stopping_writing_.log_disk_utilization_threshold_ = 80;
   wrapper.disk_opts_for_stopping_writing_.log_disk_utilization_limit_threshold_ = utilization_limit_threshold;
@@ -140,6 +141,7 @@ TEST_F(TestPalfThrottling, test_log_write_throttle)
   PalfEnvImpl palf_env_impl;
   palf_env_impl.is_inited_ = true;
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_maximum_duration_ = 7200 * 1000 * 1000L;
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ = total_disk_size;
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_utilization_threshold_ = 80;
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_utilization_limit_threshold_ = utilization_limit_threshold;
@@ -205,6 +207,7 @@ TEST_F(TestPalfThrottling, test_log_write_throttle)
   throttle.update_throttling_options(&palf_env_impl);
   throttle.throttling(1024, g_need_purging_throttling_func, &palf_env_impl);
   palf_env_impl.disk_options_wrapper_.get_throttling_options(throttle_options);
+  PALF_LOG(INFO, "case 4: YYY test need throttling", K(throttle_options), K(throttle.throttling_options_));
   ASSERT_EQ(throttle_options, throttle.throttling_options_);
   ASSERT_EQ(true, throttle.need_throttling_not_guarded_by_lock_(g_need_purging_throttling_func));
   ASSERT_EQ(true, throttle.stat_.has_ever_throttled());

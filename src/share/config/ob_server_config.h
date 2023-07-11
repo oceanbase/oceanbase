@@ -58,6 +58,9 @@ const char* const COMPATIBLE = "compatible";
 const char* const WEAK_READ_VERSION_REFRESH_INTERVAL = "weak_read_version_refresh_interval";
 const char* const PARTITION_BALANCE_SCHEDULE_INTERVAL = "partition_balance_schedule_interval";
 const char* const BALANCER_IDLE_TIME = "balancer_idle_time";
+const char* const LOG_DISK_UTILIZATION_LIMIT_THRESHOLD = "log_disk_utilization_limit_threshold";
+const char* const LOG_DISK_THROTTLING_PERCENTAGE = "log_disk_throttling_percentage";
+
 class ObServerMemoryConfig;
 
 class ObServerConfig : public ObCommonConfig

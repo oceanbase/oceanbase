@@ -31,6 +31,7 @@ struct PalfDiskOptions
                       log_disk_utilization_threshold_(-1),
                       log_disk_utilization_limit_threshold_(-1),
                       log_disk_throttling_percentage_(-1),
+                      log_disk_throttling_maximum_duration_(-1),
                       log_writer_parallelism_(-1)
   {}
   ~PalfDiskOptions() { reset(); }
@@ -43,11 +44,13 @@ struct PalfDiskOptions
   int log_disk_utilization_threshold_;
   int log_disk_utilization_limit_threshold_;
   int64_t log_disk_throttling_percentage_;
+  int64_t log_disk_throttling_maximum_duration_;
   int log_writer_parallelism_;
   TO_STRING_KV("log_disk_size(MB)", log_disk_usage_limit_size_ / MB,
                "log_disk_utilization_threshold(%)", log_disk_utilization_threshold_,
                "log_disk_utilization_limit_threshold(%)", log_disk_utilization_limit_threshold_,
                "log_disk_throttling_percentage(%)", log_disk_throttling_percentage_,
+               "log_disk_throttling_maximum_duration(s)", log_disk_throttling_maximum_duration_ / (1000 * 1000),
                "log_writer_parallelism", log_writer_parallelism_);
 };
 
@@ -193,14 +196,18 @@ struct PalfThrottleOptions
   bool operator==(const PalfThrottleOptions &rhs) const;
   // size of available log disk when writing throttling triggered
   inline int64_t get_available_size_after_limit() const;
+  inline int64_t get_maximum_duration() const {return maximum_duration_;}
   inline bool need_throttling() const;
   static constexpr int64_t MB = 1024*1024ll;
-  TO_STRING_KV("total_disk_space", total_disk_space_ / MB, K_(stopping_writing_percentage),
-               K_(trigger_percentage), "unrecyclable_disk_space(MB)", unrecyclable_disk_space_ / MB);
+  TO_STRING_KV("total_disk_space", total_disk_space_ / MB,
+               K_(stopping_writing_percentage), K_(trigger_percentage),
+               "maximum_duration(s)", maximum_duration_/ (1000 * 1000L),
+               "unrecyclable_disk_space(MB)", unrecyclable_disk_space_ / MB);
 public:
   int64_t total_disk_space_;
   int64_t stopping_writing_percentage_;
   int64_t trigger_percentage_;
+  int64_t maximum_duration_;
   int64_t unrecyclable_disk_space_;
 };
 

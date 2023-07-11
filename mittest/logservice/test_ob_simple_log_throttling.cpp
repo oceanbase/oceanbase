@@ -277,9 +277,19 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   int64_t cur_has_batched_size = log_io_worker->batch_io_task_mgr_.has_batched_size_;
   // no io reduce during writing throttling
   ASSERT_EQ(cur_has_batched_size, prev_has_batched_size);
+  const double old_decay_factor = throttle->decay_factor_;
 
+  PALF_LOG(INFO, "[CASE 7] defactor is will change when log_disk_throttling_maximum_duration changes", K(max_lsn_1));
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_maximum_duration_ = 1800 * 1000 * 1000L;
   usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
-  PALF_LOG(INFO, "[CASE 7] need break from writing throttling while unrecyclable size fallbacks", K(max_lsn_1));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id, 1024));
+  max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
+  wait_lsn_until_flushed(max_lsn_1, leader);
+  PALF_LOG(INFO, "YYY  change when log_disk_throttling_maximum_duration changes", K(old_decay_factor), KPC(throttle));
+  ASSERT_EQ(true, throttle->decay_factor_ < old_decay_factor);
+
+
+  PALF_LOG(INFO, "[CASE 8] need break from writing throttling while unrecyclable size fallbacks", K(max_lsn_1));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id, 1 * MB));
 
   cur_ts = common::ObClockGenerator::getClock();

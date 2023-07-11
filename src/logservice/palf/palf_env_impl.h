@@ -124,6 +124,7 @@ public:
     options.total_disk_space_ = disk_opts_for_stopping_writing_.log_disk_usage_limit_size_;
     options.stopping_writing_percentage_ = disk_opts_for_stopping_writing_.log_disk_utilization_limit_threshold_;
     options.trigger_percentage_ = disk_opts_for_stopping_writing_.log_disk_throttling_percentage_;
+    options.maximum_duration_ = disk_opts_for_stopping_writing_.log_disk_throttling_maximum_duration_;
     options.unrecyclable_disk_space_ = cur_unrecyclable_log_disk_size_;
   }
 
