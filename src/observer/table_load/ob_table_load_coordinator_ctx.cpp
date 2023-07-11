@@ -41,6 +41,44 @@ ObTableLoadCoordinatorCtx::~ObTableLoadCoordinatorCtx()
   destroy();
 }
 
+int ObTableLoadCoordinatorCtx::init_partition_location()
+{
+  int ret = OB_SUCCESS;
+  int retry = 0;
+  bool flag = false;
+  while (retry < 3 && OB_SUCC(ret)) {
+    // init partition_location_
+    if (OB_FAIL(partition_location_.init(ctx_->param_.tenant_id_, ctx_->schema_.partition_ids_,
+                                         allocator_))) {
+      LOG_WARN("fail to init partition location", KR(ret));
+    } else if (OB_FAIL(target_partition_location_.init(ctx_->param_.tenant_id_,
+        target_schema_.partition_ids_, allocator_))) {
+      LOG_WARN("fail to init origin partition location", KR(ret));
+    } else if (OB_FAIL(partition_location_.check_tablet_has_same_leader(target_partition_location_, flag))) {
+      LOG_WARN("fail to check_tablet_has_same_leader", KR(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (flag) {
+        break;
+      } else {
+        LOG_WARN("invalid leader info, maybe change master");
+      }
+    }
+    partition_location_.reset();
+    target_partition_location_.reset();
+    retry ++;
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!flag) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid leader info", KR(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t user_id,
                                     ObTableLoadExecCtx *exec_ctx)
 {
@@ -64,15 +102,8 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t
     // init idx array
     else if (OB_FAIL(idx_array_.assign(idx_array))) {
       LOG_WARN("failed to assign idx array", KR(ret), K(idx_array));
-    }
-    // init partition_location_
-    else if (OB_FAIL(partition_location_.init(ctx_->param_.tenant_id_, ctx_->schema_.partition_ids_,
-                                         allocator_))) {
+    } else if (OB_FAIL(init_partition_location())) {
       LOG_WARN("fail to init partition location", KR(ret));
-    }
-    else if (OB_FAIL(target_partition_location_.init(ctx_->param_.tenant_id_,
-        target_schema_.partition_ids_, allocator_))) {
-      LOG_WARN("fail to init origin partition location", KR(ret));
     }
     // init partition_calc_
     else if (OB_FAIL(

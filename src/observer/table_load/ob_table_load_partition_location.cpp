@@ -22,6 +22,27 @@ using namespace share;
 using namespace storage;
 using namespace table;
 
+int ObTableLoadPartitionLocation::check_tablet_has_same_leader(const ObTableLoadPartitionLocation &other, bool &result)
+{
+  int ret = OB_SUCCESS;
+  result = true;
+  if (tablet_ids_.count() != other.tablet_ids_.count()) {
+    result = false;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && result &&  i < tablet_ids_.count(); i ++) {
+    PartitionLocationInfo info1;
+    PartitionLocationInfo info2;
+    if (OB_FAIL(partition_map_.get_refactored(tablet_ids_.at(i), info1))) {
+      LOG_WARN("fail to get location info", KR(ret));
+    } else if (OB_FAIL(other.partition_map_.get_refactored(other.tablet_ids_.at(i), info2))) {
+      LOG_WARN("fail to get location info", KR(ret));
+    } else if (info1.leader_addr_ != info2.leader_addr_) {
+      result = false;
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadPartitionLocation::fetch_ls_id(uint64_t tenant_id, const ObTabletID &tablet_id,
                                               ObLSID &ls_id)
 {
