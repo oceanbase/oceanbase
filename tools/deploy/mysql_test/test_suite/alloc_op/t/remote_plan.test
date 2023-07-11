@@ -1,0 +1,16 @@
+set @@ob_enable_transformation=0;
+
+drop table if exists t1;
+CREATE TABLE t1 (c1 int, c2 int, c3 int);
+
+INSERT INTO t1 VALUES (1,1,1);
+INSERT INTO t1 VALUES (2,2,2);
+INSERT INTO t1 VALUES (3,3,3);
+
+--result_format 4
+--explain_protocol 2
+
+select /*+ blocking('all') */ * from t1;
+
+## clear tables
+drop table if exists t1;

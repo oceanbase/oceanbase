@@ -1,0 +1,50 @@
+set @@ob_enable_transformation=0;
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings
+
+CREATE TABLE t1 (
+  c1 int primary key,
+  c2 int, c3 int
+) partition by hash(c1) partitions 4;
+
+INSERT INTO t1 VALUES (1,1,1);
+INSERT INTO t1 VALUES (2,2,2);
+INSERT INTO t1 VALUES (3,3,3);
+
+create table t2 (
+  c1 int primary key,
+  c2 int, c3 int
+) partition by hash(c1) partitions 5;
+
+INSERT INTO t2 VALUES (1,1,1);
+INSERT INTO t2 VALUES (2,2,2);
+INSERT INTO t2 VALUES (3,3,3);
+
+create table t3 (
+  c1 int primary key,
+  c2 int, c3 int
+) partition by hash(c1) partitions 6;
+
+INSERT INTO t3 VALUES (1,1,1);
+INSERT INTO t3 VALUES (2,2,2);
+INSERT INTO t3 VALUES (3,3,3);
+
+--result_format 4
+--explain_protocol 2
+
+## 1 nestedloop jion
+select /*+use_nl(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+select /*+use_nl(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
+
+## 2 subplan filter
+select /*+blocking('all')*/ * from t1 order by c1,(select c1 from t2 limit 1);
+select /*+blocking('all')*/ * from t1 order by c1,(select c1 from t2 where t1.c1=t2.c1);
+select /*+blocking('all')*/ * from t1 order by c1,(select c1 from t2 where t1.c1=t2.c1 order by c1,(select c1 from t3 where t1.c1=t3.c1));
+
+## 3 multi-level
+select /*+use_hash(t1 t2), blocking('all'), blocking(0,1,2), blocking('dfo')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+select /*+use_mj(t1 t2), blocking('all'), blocking(0,1,2), blocking('dfo')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+
+## clear tables
+drop table if exists t1,t2,t3;

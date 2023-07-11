@@ -1,0 +1,38 @@
+set @@ob_enable_transformation=0;
+drop table if exists t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (c1 int, c2 int, c3 int);
+INSERT INTO t1 VALUES (1,1,1);
+INSERT INTO t1 VALUES (2,2,2);
+INSERT INTO t1 VALUES (3,3,3);
+result_format: 4
+explain_protocol: 2
+EXPLAIN select /*+ blocking('all') */ * from t1;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |EXCHANGE IN REMOTE   |    |3       |7           |
+|1 |└─EXCHANGE OUT REMOTE|    |3       |5           |
+|2 |  └─TABLE FULL SCAN  |t1  |3       |2           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+ blocking('all') */ * from t1;
++------+------+------+
+| c1   | c2   | c3   |
++------+------+------+
+|    1 |    1 |    1 |
+|    2 |    2 |    2 |
+|    3 |    3 |    3 |
++------+------+------+
+
+## clear tables
+drop table if exists t1;
