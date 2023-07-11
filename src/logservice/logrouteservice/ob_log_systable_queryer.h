@@ -45,6 +45,7 @@ public:
   void destroy();
 
 public:
+  // SELECT SVR_IP, SVR_PORT, ROLE, BEGIN_LSN, END_LSN FROM GV$OB_LOG_STAT
   int get_ls_log_info(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,

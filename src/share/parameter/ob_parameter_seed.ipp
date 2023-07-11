@@ -558,6 +558,12 @@ DEF_TIME(log_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "5s",
         "Range: [1s,300s]",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_TIME(ls_gc_delay_time, OB_TENANT_PARAMETER, "1h",
+        "[0s,)",
+        "The max delay time for ls gc when log archive is off. The default value is 3600s. Range: [0s, +∞). "
+        "The ls delay deletion mechanism will no longer take effect when the tenant is dropped.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(standby_db_fetch_log_rpc_timeout, OB_TENANT_PARAMETER, "15s",
         "[2s,)",
         "The threshold for detecting the RPC timeout for the standby tenant to fetch log from the log restore source tenant. "

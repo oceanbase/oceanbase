@@ -299,6 +299,13 @@ private:
   bool is_ls_offline_finished_(const LSGCState &state);
   bool is_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status);
   void try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_status);
+  int try_check_and_set_wait_gc_when_log_archive_is_off_(
+      const LSGCState &gc_state,
+      const share::SCN &readable_scn,
+      const share::SCN &offline_scn,
+      ObGarbageCollector::LSStatus &ls_status);
+  int check_if_tenant_is_dropping_or_dropped_(const uint64_t tenant_id,
+      bool &is_tenant_dropping_or_dropped);
   int get_tenant_readable_scn_(share::SCN &readable_scn);
   int check_if_tenant_in_archive_(bool &in_archive);
   void submit_log_(const ObGCLSLOGType log_type);

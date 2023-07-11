@@ -8,8 +8,6 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
- *
- * Sequencer: sequence trans.
  */
 
 #define USING_LOG_PREFIX OBLOG_SEQUENCER
@@ -382,7 +380,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
       }
     }
 
-    LOG_DEBUG("handle_to_be_sequenced_trans_ end", KR(ret), K(trans_id));
+    LOG_TRACE("handle_to_be_sequenced_trans_ end", KR(ret), K(trans_id), K(trx_sort_elem));
   }
 
   return ret;
