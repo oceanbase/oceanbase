@@ -43,8 +43,7 @@ public:
                                ObIArray<ObOptColumnStat*> &column_stats,
                                const bool is_index_stat = false,
                                const bool is_history_stat = false,
-                               const bool is_online_stat = false,
-                               const ObObjPrintParams &print_params = ObObjPrintParams());
+                               const bool is_online_stat = false);
 
   static int batch_write_history_stats(sql::ObExecContext &ctx,
                                        ObIArray<ObOptTableStatHandle> &history_tab_handles,

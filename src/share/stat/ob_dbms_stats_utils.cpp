@@ -340,8 +340,7 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                         ObIArray<ObOptColumnStat*> &column_stats,
                                         const bool is_index_stat/*default false*/,
                                         const bool is_history_stat/*default false*/,
-                                        const bool is_online_stat /*default false*/,
-                                        const ObObjPrintParams &print_params)
+                                        const bool is_online_stat /*default false*/)
 {
   int ret = OB_SUCCESS;
   int64_t idx_tab_stat = 0;
@@ -404,7 +403,7 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                                 is_index_stat,
                                                 is_history_stat,
                                                 is_online_stat,
-                                                print_params))) {
+                                                CREATE_OBJ_PRINT_PARAM(ctx.get_my_session())))) {
         LOG_WARN("failed to batch write stats", K(ret), K(idx_tab_stat), K(idx_col_stat));
       } else {/*do nothing*/}
     }
