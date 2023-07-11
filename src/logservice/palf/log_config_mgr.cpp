@@ -1617,18 +1617,15 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
   const LogConfigChangeType cc_type = args.type_;
   const common::ObMember member = args.server_;
   new_config_info = log_ms_meta_.curr_;
-  int64_t curr_replica_num = -1;
   if (INVALID_PROPOSAL_ID == proposal_id || !args.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(new_config_info.config_.config_version_.inc_update_version(proposal_id))) {
     PALF_LOG(WARN, "generate config_version failed", KR(ret), K_(palf_id), K_(self), K(new_config_info), K(proposal_id));
   } else if (STARTWORKING == cc_type) {
     // pass
-  } else if (OB_FAIL(get_replica_num(curr_replica_num))) {
-    PALF_LOG(WARN, "get_replica_num failed", KR(ret), K_(palf_id), K_(self), K(args));
   } else {
     // change replcia num
-    int64_t new_log_sync_replica_num = curr_replica_num;
+    int64_t new_log_sync_replica_num = new_config_info.config_.log_sync_replica_num_;
     if (is_may_change_replica_num(cc_type)) {
       const bool is_remove_degraded_learner = is_remove_log_sync_member_list(args.type_) &&
           new_config_info.config_.degraded_learnerlist_.contains(member);

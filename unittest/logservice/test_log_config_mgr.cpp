@@ -1097,6 +1097,93 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
     EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 2);
     PALF_LOG(INFO, "test_check_config_change_args end case 31");
   }
+  {
+    // 32. 4F1A, remove(D, 5), remove(C, 5),
+    PALF_LOG(INFO, "test_check_config_change_args begin case 32");
+    LogConfigMgr cm;
+    init_test_log_config_env(addr1, four_f_one_a_config_info, cm);
+    bool already_finished = false;
+    int tmp_ret = OB_SUCCESS;
+    LSN prev_lsn;
+    prev_lsn.val_ = PALF_INITIAL_LSN_VAL;
+    // remove(D, 5)
+    LogConfigChangeArgs remove_d_arg(ObMember(addr4, -1), 5, palf::REMOVE_MEMBER);
+    tmp_ret = cm.append_config_meta_(1, remove_d_arg, already_finished);
+    EXPECT_EQ(tmp_ret, OB_SUCCESS) << "remove(D, 5)";
+    EXPECT_EQ(already_finished, false) << "remove(D, 5)";
+    ObMemberList expect_member_list = four_f_member_list;
+    expect_member_list.remove_server(addr4);
+    expect_member_list.add_server(addr5);
+    // memberlist will not be applied right now when there is arb member, so use alive_paxos_memberlist_
+    bool member_equal = (cm.alive_paxos_memberlist_.member_addr_equal(expect_member_list));
+    EXPECT_TRUE(member_equal);
+    // remove(C, 5)
+    cm.reset_status();
+    LogConfigChangeArgs remove_c_arg(ObMember(addr3, -1), 5, palf::REMOVE_MEMBER);
+    tmp_ret = cm.append_config_meta_(1, remove_c_arg, already_finished);
+    EXPECT_EQ(tmp_ret, OB_INVALID_ARGUMENT) << "remove(C, 5)";
+    PALF_LOG(INFO, "test_check_config_change_args end case 32");
+  }
+  {
+    // 33. 2F1A - abc, degrade b, migrate b to d: add d as learner, remove degraded b.
+    PALF_LOG(INFO, "test_check_config_change_args begin case 33");
+    LogConfigMgr cm;
+    init_test_log_config_env(addr1, two_f_one_a_config_info, cm);
+    bool already_finished = false;
+    ObMemberList expect_member_list;
+    int64_t expect_replica_num = 0;
+    // degrade B
+    LogConfigChangeArgs degrade_b_arg(ObMember(addr2, -1), 0, palf::DEGRADE_ACCEPTOR_TO_LEARNER);
+    EXPECT_EQ(OB_SUCCESS, cm.append_config_meta_(1, degrade_b_arg, already_finished));
+    EXPECT_EQ(OB_SUCCESS, cm.get_curr_member_list(expect_member_list, expect_replica_num));
+    EXPECT_EQ(expect_replica_num, 2);
+    EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_replica_num_, 1);
+    EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 1);
+    // add d as learner
+    LogConfigVersion config_version;
+    common::ObMember migrating_d = common::ObMember(addr4, -1);
+    // migrating_d.set_migrating();
+    LogConfigChangeArgs add_d_arg(migrating_d, 0, palf::ADD_LEARNER);
+    EXPECT_EQ(OB_SUCCESS, cm.append_config_meta_(1, add_d_arg, already_finished));
+    EXPECT_EQ(OB_SUCCESS, cm.get_curr_member_list(expect_member_list, expect_replica_num));
+    EXPECT_EQ(expect_replica_num, 2);
+    EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_replica_num_, 1);
+    EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 1);
+    // add d as learner, reentrant
+    EXPECT_EQ(OB_SUCCESS, cm.append_config_meta_(1, add_d_arg, already_finished));
+    EXPECT_EQ(OB_SUCCESS, cm.get_curr_member_list(expect_member_list, expect_replica_num));
+    EXPECT_EQ(expect_replica_num, 2);
+    EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_replica_num_, 1);
+    EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 1);
+    // switch d to acceptor
+    // EXPECT_EQ(OB_SUCCESS, cm.get_config_version(config_version));
+    // LogConfigChangeArgs switch_d_arg(migrating_d, 2, config_version, palf::SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM);
+    // EXPECT_EQ(OB_SUCCESS, cm.append_config_meta_(1, switch_d_arg, already_finished));
+    // EXPECT_EQ(OB_SUCCESS, cm.get_curr_member_list(expect_member_list, expect_replica_num));
+    // EXPECT_EQ(expect_replica_num, 3);
+    // EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_replica_num_, 2);
+    // EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 2);
+    // // switch d to acceptor, reentrant
+    // EXPECT_EQ(OB_SUCCESS, cm.append_config_meta_(1, switch_d_arg, already_finished));
+    // EXPECT_EQ(OB_SUCCESS, cm.get_curr_member_list(expect_member_list, expect_replica_num));
+    // EXPECT_EQ(expect_replica_num, 3);
+    // EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_replica_num_, 2);
+    // EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 2);
+    // remove B and num
+    // LogConfigChangeArgs remove_b_arg(ObMember(addr2, -1), 0, palf::REMOVE_MEMBER_AND_NUM);
+    // EXPECT_EQ(OB_SUCCESS, cm.append_config_meta_(1, remove_b_arg, already_finished));
+    // EXPECT_EQ(OB_SUCCESS, cm.get_curr_member_list(expect_member_list, expect_replica_num));
+    // EXPECT_EQ(expect_replica_num, 2);
+    // EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_replica_num_, 2);
+    // EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 2);
+    // // remove B and num, reentrant
+    // EXPECT_EQ(OB_SUCCESS, cm.append_config_meta_(1, remove_b_arg, already_finished));
+    // EXPECT_EQ(OB_SUCCESS, cm.get_curr_member_list(expect_member_list, expect_replica_num));
+    // EXPECT_EQ(expect_replica_num, 2);
+    // EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_replica_num_, 2);
+    // EXPECT_EQ(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(), 2);
+    PALF_LOG(INFO, "test_check_config_change_args end case 31");
+  }
 }
 
 TEST_F(TestLogConfigMgr, test_submit_start_working_log)
