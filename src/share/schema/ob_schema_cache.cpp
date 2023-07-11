@@ -390,6 +390,21 @@ ObSchemaCache::ObSchemaCache()
 
 ObSchemaCache::~ObSchemaCache()
 {
+  destroy();
+}
+
+void ObSchemaCache::destroy()
+{
+  tablet_cache_.destroy();
+  cache_.destroy();
+
+  NoSwapCache::iterator iter;
+  for (iter = sys_cache_.begin(); iter != sys_cache_.end(); ++iter) {
+    if (OB_NOT_NULL(iter->second)) {
+      mem_context_->free((void *)iter->second);
+    }
+  }
+  sys_cache_.destroy();
   if (mem_context_ != nullptr) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;

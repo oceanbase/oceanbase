@@ -240,6 +240,24 @@ void ObTsMgr::destroy()
       stop();
       wait();
     }
+    (void)share::ObThreadPool::destroy();
+    (void)ts_worker_.destroy();
+
+    ObSEArray<uint64_t, 1> ids;
+    GetALLTenantFunctor get_all_tenant_functor(ids);
+    ts_source_info_map_.for_each(get_all_tenant_functor);
+    for (int64_t i = 0; i < ids.count(); i++) {
+      const uint64_t tenant_id = ids.at(i);
+      delete_tenant_(tenant_id);
+    }
+    ids.reset();
+    ts_source_info_map_.destroy();
+
+    location_adapter_def_.destroy();
+    lock_.destroy();
+    server_.reset();
+    location_adapter_ = NULL;
+    is_running_ = false;
     is_inited_ = false;
     TRANS_LOG(INFO, "ObTsMgr destroyed");
   }
@@ -251,7 +269,6 @@ void ObTsMgr::destroy()
     ObGtsRequestRpcFactory::release(gts_request_rpc_);
     gts_request_rpc_ = NULL;
   }
-  location_adapter_def_.destroy();
 }
 
 // 执行gts任务刷新，由一个专门的线程来负责

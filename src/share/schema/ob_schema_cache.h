@@ -142,6 +142,7 @@ public:
   virtual ~ObSchemaCache();
 
   int init();
+  void destroy();
   int get_schema(const ObSchemaType schema_type,
                  const uint64_t tenant_id,
                  const uint64_t schema_id,

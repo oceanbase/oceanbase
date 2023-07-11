@@ -1665,6 +1665,7 @@ int ObMultiVersionSchemaService::destroy()
   int ret = OB_SUCCESS;
   schema_store_map_.destroy();
   ddl_trans_controller_.destroy();
+  schema_cache_.destroy();
   return ret;
 }
 

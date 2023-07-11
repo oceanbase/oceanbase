@@ -621,6 +621,10 @@ void ObServer::destroy()
     location_service_.destroy();
     FLOG_INFO("location service destroyed");
 
+    FLOG_INFO("begin to destroy ts mgr");
+    OB_TS_MGR.destroy();
+    FLOG_INFO("ts mgr destroyed");
+
     FLOG_INFO("begin to destroy weak read service");
     weak_read_service_.destroy();
     FLOG_INFO("weak read service destroyed");

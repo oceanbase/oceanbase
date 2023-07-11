@@ -238,6 +238,29 @@ private:
   common::ObIArray<uint64_t> &array_;
 };
 
+class GetALLTenantFunctor
+{
+public:
+  GetALLTenantFunctor(common::ObIArray<uint64_t> &array)
+      : array_(array)
+  {
+    array_.reset();
+  }
+  ~GetALLTenantFunctor() {}
+  bool operator()(const ObTsTenantInfo &gts_tenant_info, ObTsSourceInfo *ts_source_info)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(array_.push_back(gts_tenant_info.get_value()))) {
+      TRANS_LOG(WARN, "push back tenant failed", K(ret), K(gts_tenant_info));
+    } else {
+      // do nothing
+    }
+    return true;
+  }
+private:
+  common::ObIArray<uint64_t> &array_;
+};
+
 class ObTsMgr;
 class ObTsSourceInfoGuard
 {
