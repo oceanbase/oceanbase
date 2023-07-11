@@ -4107,7 +4107,8 @@ int ObQueryRange::intersect_border_from(const ObKeyPart *l_key_part,
                                         const ObKeyPart *r_key_part,
                                         ObRowBorderType &start_border_type,
                                         ObRowBorderType &end_border_type,
-                                        bool &is_always_false)
+                                        bool &is_always_false,
+                                        bool &has_special_key)
 {
   int ret = OB_SUCCESS;
   bool start_identified = true;
@@ -4120,9 +4121,11 @@ int ObQueryRange::intersect_border_from(const ObKeyPart *l_key_part,
   if (OB_ISNULL(l_key_part) || OB_ISNULL(r_key_part)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(l_key_part), K(r_key_part));
+  } else if (has_special_key) {
+    // do nothing
   } else if (OB_UNLIKELY(!l_key_part->is_normal_key()) || OB_UNLIKELY(!r_key_part->is_normal_key())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("keypart isn't normal key", K(*l_key_part), K(*r_key_part));
+    has_special_key = true;
+    LOG_INFO("keypart isn't normal key", K(*l_key_part), K(*r_key_part));
   } else if (l_key_part->pos_.offset_ < r_key_part->pos_.offset_) {
     start_border_type = OB_FROM_LEFT;
     end_border_type = OB_FROM_LEFT;
@@ -4233,13 +4236,14 @@ int ObQueryRange::intersect_border_from(const ObKeyPart *l_key_part,
   }
   if (OB_SUCC(ret)
       && !is_always_false
+      && !has_special_key
       && NULL != l_key_part->and_next_
       && NULL != r_key_part->and_next_
       && (s_need_continue || e_need_continue)) {
     ObRowBorderType tmp_start_border = OB_FROM_NONE;
     ObRowBorderType tmp_end_border = OB_FROM_NONE;
     if (OB_FAIL(SMART_CALL(intersect_border_from(l_key_part->and_next_, r_key_part->and_next_,
-        tmp_start_border, tmp_end_border, is_always_false)))) {
+        tmp_start_border, tmp_end_border, is_always_false, has_special_key)))) {
       LOG_WARN("invalid argument.", K(ret), K(l_key_part), K(r_key_part));
     } else if (s_need_continue) {
       start_border_type = tmp_start_border;
@@ -4452,8 +4456,9 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           ObRowBorderType s_border = OB_FROM_NONE;
           ObRowBorderType e_border = OB_FROM_NONE;
           bool is_always_false = false;
+          bool has_special_key = false;
           if (OB_FAIL(intersect_border_from(l_cur, r_cur,
-              s_border, e_border, is_always_false))) {
+              s_border, e_border, is_always_false, has_special_key))) {
             LOG_WARN("Find row border failed", K(ret));
           } else if (is_always_false) {
             result->normal_keypart_->always_false_ = true;
@@ -4461,6 +4466,8 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
             result->normal_keypart_->start_.set_max_value();
             result->normal_keypart_->end_.set_min_value();
             find_false = result;
+          } else if (has_special_key) {
+            // do nothing
           } else if (OB_FAIL(set_partial_row_border(l_gt_next, r_gt_next,
               s_border, e_border, rest))) {
             LOG_WARN("Set row border failed", K(ret));

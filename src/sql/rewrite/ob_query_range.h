@@ -685,7 +685,8 @@ private:
                             const ObKeyPart *r_key_part,
                             ObRowBorderType &start_border_type,
                             ObRowBorderType &end_border_type,
-                            bool &is_always_false);
+                            bool &is_always_false,
+                            bool &has_special_key);
   int set_partial_row_border(ObKeyPart *l_gt,
                              ObKeyPart *r_gt,
                              ObRowBorderType start_border_type,
