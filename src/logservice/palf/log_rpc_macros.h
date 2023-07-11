@@ -27,6 +27,7 @@
         PALF_LOG(INFO, "need filter this packet", K(rpc_packet));                                                 \
       } else {                                                                                                    \
         LogRequestHandler handler(palf_env_impl_);                                                                \
+        TIMEGUARD_INIT(PALF, 50_ms, 10_s);                                                                        \
         ret = handler.handle_request(palf_id, server, req);                                                       \
         PALF_LOG(TRACE, "Processor handle_request success", K(ret), K(palf_id), K(req), KP(filter_));             \
       }                                                                                                           \

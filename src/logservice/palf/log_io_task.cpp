@@ -70,6 +70,7 @@ void LogIOTask::reset()
 	init_task_ts_ = OB_INVALID_TIMESTAMP;
 }
 
+// NB: if do_task failed, the caller is responsible for freeing LogIOTask.
 int LogIOTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
 	int ret = OB_SUCCESS;
@@ -86,6 +87,7 @@ int LogIOTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl)
 	return ret;
 }
 
+// NB: after after_consume, the caller needs free LogIOTask.
 int LogIOTask::after_consume(IPalfEnvImpl *palf_env_impl)
 {
 	int ret = OB_SUCCESS;
@@ -209,7 +211,6 @@ int LogIOFlushLogTask::after_consume_(IPalfEnvImpl *palf_env_impl)
   } else {
     PALF_LOG(TRACE, "LogIOFlushLogTask after_consume success", K(time_guard));
   }
-  palf_env_impl->get_log_allocator()->free_log_io_flush_log_task(this);
   return ret;
 }
 
@@ -294,7 +295,6 @@ int LogIOTruncateLogTask::after_consume_(IPalfEnvImpl *palf_env_impl)
     PALF_LOG(WARN, "PalfHandleImpl inner_after_truncate_log failed", K(ret));
   } else {
   }
-  palf_env_impl->get_log_allocator()->free_log_io_truncate_log_task(this);
   return ret;
 }
 
@@ -397,7 +397,6 @@ int LogIOFlushMetaTask::after_consume_(IPalfEnvImpl *palf_env_impl)
     PALF_LOG(WARN, "PalfHandleImpl after_flush_meta failed", K(ret), KP(this));
   } else {
   }
-  palf_env_impl->get_log_allocator()->free_log_io_flush_meta_task(this);
   return ret;
 }
 
@@ -487,7 +486,6 @@ int LogIOTruncatePrefixBlocksTask::after_consume_(IPalfEnvImpl *palf_env_impl)
     PALF_LOG(WARN, "PalfHandleImpl inner_after_truncate_prefix_blocks failed", K(ret));
   } else {
   }
-  palf_env_impl->get_log_allocator()->free_log_io_truncate_prefix_blocks_task(this);
   return ret;
 }
 
@@ -736,12 +734,11 @@ int LogIOFlashbackTask::do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
     PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_flashback(flashback_ctx_.flashback_scn_))) {
     PALF_LOG(ERROR, "PalfHandleImpl inner_flashback failed", K(ret), K(palf_id_));
-  } else if (OB_FAIL(after_consume(palf_env_impl))) {
+  } else if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
     PALF_LOG(WARN, "LogIOFlashbackTask after_consume", K(ret), KPC(palf_env_impl));
   } else {
     PALF_LOG(INFO, "LogIOFlashbackTask do_task success", K(ret), K(palf_id_));
   }
-  palf_env_impl->get_log_allocator()->free_log_io_flashback_task(this);
   return ret;
 }
 

@@ -313,6 +313,10 @@ int LogEngine::submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx,
   } else {
     PALF_LOG(TRACE, "submit_flush_log_task success", K(ret), K(flush_log_cb_ctx), K(write_buf));
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(flush_log_task)) {
+    alloc_mgr_->free_log_io_flush_log_task(flush_log_task);
+    flush_log_task = NULL;
+  }
   return ret;
 }
 
@@ -444,6 +448,10 @@ int LogEngine::submit_truncate_log_task(const TruncateLogCbCtx &truncate_log_cb_
   } else {
     PALF_LOG(INFO, "submit_truncate_log_task success", K(ret), K(truncate_log_cb_ctx));
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(truncate_log_task)) {
+    alloc_mgr_->free_log_io_truncate_log_task(truncate_log_task);
+    truncate_log_task = NULL;
+  }
   return ret;
 }
 
@@ -467,6 +475,10 @@ int LogEngine::submit_truncate_prefix_blocks_task(
     PALF_LOG(
         INFO, "submit_truncate_prefix_blocks_task success", K(ret), K(truncate_prefix_blocks_ctx));
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(truncate_prefix_blocks_task)) {
+    alloc_mgr_->free_log_io_truncate_prefix_blocks_task(truncate_prefix_blocks_task);
+    truncate_prefix_blocks_task = NULL;
+  }
   return ret;
 }
 
@@ -486,6 +498,10 @@ int LogEngine::submit_flashback_task(const FlashbackCbCtx &flashback_cb_ctx)
     PALF_LOG(ERROR, "submit_io_task failed", K(ret));
   } else {
     PALF_LOG(INFO, "submit_flashback_task success", K(ret), K(flashback_cb_ctx));
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(flashback_task)) {
+    alloc_mgr_->free_log_io_flashback_task(flashback_task);
+    flashback_task = NULL;
   }
   return ret;
 }
@@ -1158,6 +1174,10 @@ int LogEngine::submit_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx,
   } else {
     PALF_LOG(INFO, "submit_flush_meta_task_ success", K(flush_meta_cb_ctx), K(log_meta));
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(flush_meta_task)) {
+    alloc_mgr_->free_log_io_flush_meta_task(flush_meta_task);
+    flush_meta_task = NULL;
+  }
   return ret;
 }
 
@@ -1215,6 +1235,7 @@ int LogEngine::generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
   } else {/*do nothing*/}
   if (OB_FAIL(ret) && NULL != flush_log_task) {
     alloc_mgr_->free_log_io_flush_log_task(flush_log_task);
+    flush_log_task = NULL;
   }
   return ret;
 }
@@ -1234,6 +1255,7 @@ int LogEngine::generate_truncate_log_task_(const TruncateLogCbCtx &truncate_log_
   }
   if (OB_FAIL(ret) && NULL != truncate_log_task) {
     alloc_mgr_->free_log_io_truncate_log_task(truncate_log_task);
+    truncate_log_task = NULL;
   }
   return ret;
 }
@@ -1252,6 +1274,7 @@ int LogEngine::generate_truncate_prefix_blocks_task_(
   } else {/*do nothing*/}
   if (OB_FAIL(ret) && NULL != truncate_prefix_blocks_task) {
     alloc_mgr_->free_log_io_truncate_prefix_blocks_task(truncate_prefix_blocks_task);
+    truncate_prefix_blocks_task = NULL;
   }
   return ret;
 }
@@ -1290,6 +1313,7 @@ int LogEngine::generate_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx
     }
     if (NULL != flush_meta_task) {
       alloc_mgr_->free_log_io_flush_meta_task(flush_meta_task);
+      flush_meta_task = NULL;
     }
   }
 
@@ -1316,6 +1340,7 @@ int LogEngine::generate_flashback_task_(const FlashbackCbCtx &flashback_cb_ctx,
   }
   if (OB_FAIL(ret) && NULL != flashback_task) {
     alloc_mgr_->free_log_io_flashback_task(flashback_task);
+    flashback_task = NULL;
   }
   return ret;
 }
