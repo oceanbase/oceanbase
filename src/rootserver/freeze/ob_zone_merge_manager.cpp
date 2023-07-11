@@ -63,6 +63,8 @@ int ObZoneMergeManagerBase::reload()
 {
   int ret = OB_SUCCESS;
 
+  LOG_INFO("start to reload zone_merge_mgr", K_(tenant_id), K_(is_loaded), K_(global_merge_info),
+            "zone_merge_infos", ObArrayWrap<ObZoneMergeInfo>(zone_merge_infos_, zone_count_));
   ObSEArray<ObZone, DEFAULT_ZONE_COUNT> zone_list;
   HEAP_VAR(ObGlobalMergeInfo, global_merge_info) {
     ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
@@ -131,6 +133,10 @@ int ObZoneMergeManagerBase::try_reload()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
   } else if (is_loaded_) {
+    if (TC_REACH_TIME_INTERVAL(5 * 60 * 1000 * 1000)) { // 5min
+      FLOG_INFO("zone_merge_mgr is already loaded", K_(tenant_id), K_(global_merge_info),
+                "zone_merge_infos", ObArrayWrap<ObZoneMergeInfo>(zone_merge_infos_, zone_count_));
+    }
   } else if (OB_FAIL(reload())) {
     LOG_WARN("fail to reload", KR(ret), K_(tenant_id));
   }

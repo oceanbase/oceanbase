@@ -242,6 +242,15 @@ int ObMajorMergeScheduler::do_work()
       FREEZE_TIME_GUARD;
       if (OB_FAIL(zone_merge_mgr_->try_reload())) {
         LOG_WARN("fail to try reload", KR(ret), K_(tenant_id));
+      } else if (TC_REACH_TIME_INTERVAL(5 * 60 * 1000 * 1000)) { // 5min
+        HEAP_VARS_2((ObZoneMergeInfoArray, log_info_array), (ObGlobalMergeInfo, log_global_info)) {
+          if (OB_FAIL(zone_merge_mgr_->get_snapshot(log_global_info, log_info_array))) {
+            LOG_WARN("fail to get zone global merge info", KR(ret));
+          } else {
+            FLOG_INFO("succ to try reload", K_(tenant_id), "global_merge_info", log_global_info,
+                      "zone_merge_info", log_info_array);
+          }
+        }
       }
     }
     if (FAILEDx(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
