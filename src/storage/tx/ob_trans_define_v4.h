@@ -213,7 +213,8 @@ struct ObTxPart
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
   bool is_clean() const { return first_scn_ > last_scn_; }
-  bool is_without_ctx() const { return EPOCH_DEAD == epoch_; }
+  bool is_without_ctx() const { return is_without_ctx(epoch_); }
+  static bool is_without_ctx(int64_t epoch) { return EPOCH_DEAD == epoch; }
   TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts));
   OB_UNIS_VERSION(1);
 };
