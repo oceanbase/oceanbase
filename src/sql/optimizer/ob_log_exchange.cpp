@@ -210,6 +210,9 @@ int ObLogExchange::inner_replace_generated_agg_expr(
       LOG_WARN("failed to replace agg exprs", K(ret));
     } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, exch_info_.repartition_func_exprs_))) {
       LOG_WARN("failed to replace agg exprs", K(ret));
+    } else if (exch_info_.calc_part_id_expr_ != NULL &&
+               OB_FAIL(replace_expr_action(to_replace_exprs, exch_info_.calc_part_id_expr_))) {
+      LOG_WARN("failed to replace calc part id expr", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < exch_info_.hash_dist_exprs_.count(); i++) {
         if (OB_ISNULL(exch_info_.hash_dist_exprs_.at(i).expr_)) {
