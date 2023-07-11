@@ -416,6 +416,8 @@ public:
   ObJsonNull* get_js_null() { return &j_null_; }
   ObJsonArray* get_js_array() { return &j_arr_; }
   ObJsonObject* get_js_object() { return &j_obj_; }
+  ObIJsonBase* get_root_param() { return in_; }
+  JtScanNode* get_root_entry() { return jt_root_; }
   TO_STRING_KV(K_(is_inited),
                K_(col_count));
 

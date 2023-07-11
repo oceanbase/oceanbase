@@ -1842,7 +1842,10 @@ int JtScanNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_valu
       total_ = 1;
       is_null_value = is_null_result_ = true;
       curr_ = iter_ = nullptr;
-      if (col_info_.parent_id_ == common::OB_INVALID_ID) { ret = OB_ITER_END; }
+      if (col_info_.parent_id_ == common::OB_INVALID_ID
+          || (ctx->jt_op_->get_root_param() == in && ctx->jt_op_->get_root_entry()->reg_column_count() == 0)) {
+        ret = OB_ITER_END;
+      }
     } else if (hit.size() == 1) {
       iter_ = curr_ = hit[0];
       is_null_value = is_null_result_ = false;

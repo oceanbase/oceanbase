@@ -1497,14 +1497,17 @@ int ObJsonExprHelper::parse_res_type(ObExprResType& type1,
   const ObObj &param = res_type.get_param();
 
   if (param.get_int() == 0) {
-    result_type.set_type(type1.get_type());
-    result_type.set_collation_type(type1.get_collation_type());
-    result_type.set_accuracy(type1.get_accuracy());
-    ObObjType obj_type = type1.get_type();
-    int16_t length_semantics = ((dst_type.is_string_type())
-            ? dst_type.get_length_semantics()
-            : (OB_NOT_NULL(type_ctx.get_session())
-                ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE));
+    //     result_type.set_type(type1.get_type());
+    //     result_type.set_collation_type(type1.get_collation_type());
+    //     result_type.set_accuracy(type1.get_accuracy());
+    //     ObObjType obj_type = type1.get_type();
+
+    ObObjType obj_type = ObJsonType;
+    result_type.set_type(ObJsonType);
+    result_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    int16_t length_semantics = (OB_NOT_NULL(type_ctx.get_session())
+                ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
+    result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
 
     result_type.set_collation_level(CS_LEVEL_IMPLICIT);
     if (obj_type == ObVarcharType) {
@@ -1732,6 +1735,9 @@ int ObJsonExprHelper::parse_asc_option(ObExprResType& asc_type,
     } else {
       type1.set_calc_length(length);
       res_type.set_length(length * 10);
+      if (res_type.is_lob()) {
+        res_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType]).get_length());
+      }
     }
   }
 
@@ -1749,8 +1755,8 @@ int ObJsonExprHelper::character2_ascii_string(common::ObIAllocator *allocator,
   int64_t buf_len = result.length() * ObCharset::MAX_MB_LEN * 2;
   int32_t length = 0;
 
-  if ((OB_NOT_NULL(allocator) && OB_ISNULL(buf = static_cast<char*>(allocator->alloc(buf_len + reserve_len))))
-       || (OB_ISNULL(buf = static_cast<char*>(expr.get_str_res_mem(ctx, buf_len + reserve_len))))) {
+  if ((OB_NOT_NULL(allocator) && OB_ISNULL(buf = static_cast<char*>(allocator->alloc(buf_len + reserve_len + 1))))
+       || (OB_ISNULL(allocator) && OB_ISNULL(buf = static_cast<char*>(expr.get_str_res_mem(ctx, buf_len + reserve_len + 1))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(buf_len), K(result.length()));
   } else if (OB_FAIL(ObJsonExprHelper::calc_asciistr_in_expr(result,
@@ -1759,6 +1765,7 @@ int ObJsonExprHelper::character2_ascii_string(common::ObIAllocator *allocator,
                                                              buf, buf_len, length))) {
     LOG_WARN("fail to calc unistr", K(ret));
   } else {
+    buf[length] = 0;
     result.assign_ptr(buf, length);
   }
   return ret;

@@ -3005,6 +3005,11 @@ static int common_string_json(const ObExpr &expr,
       ObJsonNull j_null;
       ObJsonNode *j_tree = NULL;
       bool is_null_res = false;
+      bool is_scalar = (j_text.length()
+                        && ((j_text[0] == '\'' && j_text[j_text.length() - 1] == '\'')
+                            || (j_text[0] == '\"' && j_text[j_text.length() - 1] == '\"')));
+
+      bool is_oracle = lib::is_oracle_mode();
 
       bool relaxed_json = lib::is_oracle_mode() && !(CM_IS_STRICT_JSON(expr.extra_));
       uint32_t parse_flag = ObJsonParser::JSN_STRICT_FLAG;
@@ -3012,28 +3017,46 @@ static int common_string_json(const ObExpr &expr,
       ADD_FLAG_IF_NEED(relaxed_json, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
       ADD_FLAG_IF_NEED(lib::is_oracle_mode(), parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
 
-      if (lib::is_mysql_mode() && in_cs_type == CS_TYPE_BINARY) {
+      bool is_convert_jstr_type = (in_type == ObTinyTextType
+                                 || in_type == ObTextType
+                                 || in_type == ObMediumTextType
+                                 || in_type == ObLongTextType);
+
+      if (!is_oracle && in_cs_type == CS_TYPE_BINARY) {
         j_base = &j_opaque;
-      } else if (lib::is_oracle_mode() && CM_IS_IMPLICIT_CAST(expr.extra_) && OB_ISNULL(j_text.ptr())) {
+      } else if (is_oracle && CM_IS_IMPLICIT_CAST(expr.extra_) && OB_ISNULL(j_text.ptr())) {
         res_datum.set_null();
         is_null_res = true;
-      } else if (is_enumset_to_str || (CM_IS_IMPLICIT_CAST(expr.extra_)
-          && !CM_IS_COLUMN_CONVERT(expr.extra_) && !CM_IS_JSON_VALUE(expr.extra_)
-          && ob_is_string_type(in_type))) {
+      } else if (!is_oracle
+                  && (is_enumset_to_str
+                      || (CM_IS_IMPLICIT_CAST(expr.extra_)
+                          && !CM_IS_COLUMN_CONVERT(expr.extra_)
+                          && !CM_IS_JSON_VALUE(expr.extra_)
+                          && is_convert_jstr_type))) {
         // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
         j_base = &j_string;
-      } else if (lib::is_oracle_mode() && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
+      } else if (is_oracle && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
         j_base = &j_null;
       } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree, parse_flag))) {
-        if (lib::is_mysql_mode() && CM_IS_IMPLICIT_CAST(expr.extra_) && !CM_IS_COLUMN_CONVERT(expr.extra_)) {
+        if (!is_oracle && CM_IS_IMPLICIT_CAST(expr.extra_) && !CM_IS_COLUMN_CONVERT(expr.extra_)) {
           ret = OB_SUCCESS;
           j_base = &j_string;
         } else {
-          LOG_WARN("fail to parse string as json tree", K(ret), K(in_type), K(in_str));
+          LOG_DEBUG("fail to parse string as json tree", K(ret), K(in_type), K(in_str));
           if (CM_IS_COLUMN_CONVERT(expr.extra_)) {
-            if (lib::is_mysql_mode()) {
+            if (!is_oracle) {
               ret = OB_ERR_INVALID_JSON_TEXT;
               LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+            } else if (is_scalar) {
+              ObString tmp;
+              if (OB_FAIL(ob_write_string(temp_allocator, j_text, tmp))) {
+                LOG_DEBUG("fail to write buffer", K(ret), K(in_type), K(j_text));
+              } else {
+                tmp.ptr()[0] = tmp.ptr()[tmp.length() - 1] = '"';
+                new (&j_string)ObJsonString(tmp.ptr(), tmp.length());
+                j_base = &j_string;
+              }
+
             }
           } else {
             ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
