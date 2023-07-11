@@ -784,6 +784,7 @@ constexpr int OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE = -5382;
 constexpr int OB_ERR_CASCADE_CONSTRAINTS_MUST_BE_SPECIFIED_TO_PERFORM_THIS_REVOKE = -5383;
 constexpr int OB_ERR_YOU_MAY_NOT_REVOKE_PRIVILEGES_FROM_YOURSELF = -5384;
 constexpr int OB_ERR_MISS_ERR_LOG_MANDATORY_COLUMN = -5385;
+constexpr int OB_TABLE_DEFINITION_CHANGED = -5386;
 constexpr int OB_ERR_OBJECT_STRING_DOES_NOT_EXIST = -5400;
 constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5401;
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
@@ -2122,6 +2123,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ENCODING_EST_SIZE_OVERFLOW__USER_ERROR_MSG "Encoding estimated size overflow"
 #define OB_INVALID_SUB_PARTITION_TYPE__USER_ERROR_MSG "It is only possible to mix RANGE/LIST partitioning with HASH/KEY partitioning for subpartitioning"
 #define OB_ERR_UNEXPECTED_UNIT_STATUS__USER_ERROR_MSG "Unit status is not expected"
+#define OB_AUTOINC_CACHE_NOT_EQUAL__USER_ERROR_MSG "Autoinc cache's autoinc version is not equal to request's autoinc version"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -2678,6 +2680,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CASCADE_CONSTRAINTS_MUST_BE_SPECIFIED_TO_PERFORM_THIS_REVOKE__USER_ERROR_MSG "CASCADE CONSTRAINTS must be specified to perform this revoke"
 #define OB_ERR_YOU_MAY_NOT_REVOKE_PRIVILEGES_FROM_YOURSELF__USER_ERROR_MSG "you may not GRANT/REVOKE privileges to/from yourself"
 #define OB_ERR_MISS_ERR_LOG_MANDATORY_COLUMN__USER_ERROR_MSG "miss mandatory column %.*s of error log table"
+#define OB_TABLE_DEFINITION_CHANGED__USER_ERROR_MSG "Unable to read data -- Table definition has changed"
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__USER_ERROR_MSG "object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__USER_ERROR_MSG "resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
@@ -4218,7 +4221,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ENCODING_EST_SIZE_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4397, Encoding estimated size overflow"
 #define OB_INVALID_SUB_PARTITION_TYPE__ORA_USER_ERROR_MSG "ORA-14020: this physical attribute may not be specified for a table partition"
 #define OB_ERR_UNEXPECTED_UNIT_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4399, Unit status is not expected"
-#define OB_OB_AUTOINC_CACHE_NOT_EQUAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4400, Autoinc cache's autoinc version is not equal to request's autoinc version"
+#define OB_AUTOINC_CACHE_NOT_EQUAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4400, Autoinc cache's autoinc version is not equal to request's autoinc version"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"
@@ -4775,6 +4778,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CASCADE_CONSTRAINTS_MUST_BE_SPECIFIED_TO_PERFORM_THIS_REVOKE__ORA_USER_ERROR_MSG "ORA-01981: CASCADE CONSTRAINTS must be specified to perform this revoke"
 #define OB_ERR_YOU_MAY_NOT_REVOKE_PRIVILEGES_FROM_YOURSELF__ORA_USER_ERROR_MSG "ORA-01749: you may not GRANT/REVOKE privileges to/from yourself"
 #define OB_ERR_MISS_ERR_LOG_MANDATORY_COLUMN__ORA_USER_ERROR_MSG "ORA-38900: miss mandatory column %.*s of error log table"
+#define OB_TABLE_DEFINITION_CHANGED__ORA_USER_ERROR_MSG "ORA-01466: Unable to read data -- Table definition has changed"
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-04043: object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-54004: resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
@@ -5954,7 +5958,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2093];
+extern int g_all_ob_errnos[2094];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

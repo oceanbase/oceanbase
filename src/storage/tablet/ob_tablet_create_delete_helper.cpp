@@ -234,7 +234,6 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
 
-  ObTabletStatus infered_tablet_status = tablet_status;
   if (snapshot_version == ObTransVersion::MAX_TRANS_VERSION) {
     // do nothing
   } else if (OB_UNLIKELY(create_commit_version == ObTransVersion::INVALID_TRANS_VERSION)) {
@@ -244,7 +243,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
   } else if (snapshot_version < create_commit_version) {
     // read snapshot is smaller than create tablet trans version,
     // no previous committed transaction
-    infered_tablet_status = ObTabletStatus::MAX;
+    ret= OB_TABLE_DEFINITION_CHANGED;
     LOG_INFO("tablet status is set to MAX because read snapshot is smaller than create trans version",
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(create_commit_version));
   } else if (delete_commit_version == ObTransVersion::INVALID_TRANS_VERSION) {
@@ -252,23 +251,21 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
   } else if (snapshot_version < delete_commit_version) {
     // read snapshot is smaller than delete tablet trans version,
     // previous transaction is create tablet/transfer in create tablet, so tablet status is NORMAL
-    infered_tablet_status = ObTabletStatus::NORMAL;
     LOG_INFO("tablet status is set to NORMAL because read snapshot is smaller than delete trans version",
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(delete_commit_version));
   } else {
     // snapshot_version >= user_data.delete_commit_version_
-    // do nothing
+    ret = ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status ? OB_TABLET_NOT_EXIST : OB_TABLE_NOT_EXIST;
+    LOG_INFO("tablet is deleted or transfer out deleted",
+      K(ret), K(ls_id), K(tablet_id), K(tablet_status), K(snapshot_version), K(delete_commit_version));
   }
 
   if (OB_FAIL(ret)) {
-  } else if (ObTabletStatus::NORMAL == infered_tablet_status || ObTabletStatus::TRANSFER_IN == infered_tablet_status) {
+  } else if (ObTabletStatus::NORMAL == tablet_status || ObTabletStatus::TRANSFER_IN == tablet_status) {
     if (OB_UNLIKELY(tablet.is_empty_shell())) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet is empty shell", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(create_commit_version));
     }
-  } else if (ObTabletStatus::MAX == infered_tablet_status) {
-    ret = OB_SNAPSHOT_DISCARDED;
-    LOG_WARN("no valid tablet status can be read", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(create_commit_version));
   } else {
     ret = OB_TABLET_NOT_EXIST;
   }

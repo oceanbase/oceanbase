@@ -148,7 +148,7 @@ inline int TestTabletHelper::create_tablet(
 
     if (FAILEDx(t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle))) {
       STORAGE_LOG(WARN, "failed to compare and swap tablet", K(ret), K(ls_id), K(tablet_id));
-    } else if OB_FAIL (ls_tablet_svr->tablet_id_set_.set(tablet_id)){
+    } else if (OB_FAIL(ls_tablet_svr->tablet_id_set_.set(tablet_id))){
       STORAGE_LOG(WARN, "set tablet id failed", K(ret), K(tablet_id));
     }
   }

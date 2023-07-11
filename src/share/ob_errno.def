@@ -1024,6 +1024,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_CASCADE_CONSTRAINTS_MUST_BE_SPECIFIED_TO_PERFORM_THIS
 DEFINE_ORACLE_ERROR(OB_ERR_YOU_MAY_NOT_REVOKE_PRIVILEGES_FROM_YOURSELF, -5384, -1, "HY000", "you may not GRANT/REVOKE privileges to/from yourself", 1749, "you may not GRANT/REVOKE privileges to/from yourself");
 
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MISS_ERR_LOG_MANDATORY_COLUMN, -5385, -1, "HY000", "miss mandatory column of error log table", "miss mandatory column %.*s of error log table", 38900, "miss mandatory column of error log table", "miss mandatory column %.*s of error log table");
+DEFINE_ORACLE_ERROR(OB_TABLE_DEFINITION_CHANGED, -5386, ER_TABLE_DEF_CHANGED, "HY000", "Unable to read data -- Table definition has changed", 1466, "Unable to read data -- Table definition has changed");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_OBJECT_STRING_DOES_NOT_EXIST, -5400, -1, "HY000", "object string does not exist", "object %.*s does not exist", 4043, "object string does not exist", "object %.*s does not exist");
 DEFINE_ORACLE_ERROR(OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED, -5401, -1, "HY000", "resultant data type of virtual column is not supported", 54004, "resultant data type of virtual column is not supported");
 DEFINE_ERROR(OB_ERR_GET_STACKED_DIAGNOSTICS, -5402, ER_GET_STACKED_DIAGNOSTICS_INACTIVE, "0Z002", "GET STACKED DIAGNOSTICS when handler not active");
