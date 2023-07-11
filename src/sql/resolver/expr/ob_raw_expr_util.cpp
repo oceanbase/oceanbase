@@ -2312,6 +2312,29 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
           } else {
             dest = dest_scse;
           }
+        } else if (T_FUN_COLUMN_CONV == origin->get_expr_type()) {
+          ObSysFunRawExpr *dest_sys = NULL;
+          const ObSysFunRawExpr *origin_sys = static_cast<const ObSysFunRawExpr *>(origin);
+          ObExprColumnConv *column_conv = NULL;
+          ObExprOperator *op = NULL;
+          if (OB_FAIL(expr_factory.create_raw_expr(origin->get_expr_type(), dest_sys))) {
+            LOG_WARN("failed to allocate raw expr", K(dest_sys), K(ret));
+          } else if (OB_ISNULL(dest_sys)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr is NULL", K(dest_sys), K(ret));
+          } else if (OB_FAIL(dest_sys->deep_copy(expr_factory, *origin_sys, COPY_REF_DEFAULT, use_new_allocator))) {
+            LOG_WARN("failed to deep copy sys func expr", K(ret));
+          } else if (OB_ISNULL(op = dest_sys->get_op())) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate expr operator failed", K(ret));
+          } else if (OB_ISNULL(column_conv = static_cast<ObExprColumnConv *>(op))) {
+            LOG_WARN("fail to cast ObExprOperator* to ObExprColumnConv*", K(ret));
+          } else if (!dest_sys->get_enum_set_values().empty() &&
+                     OB_FAIL(column_conv->shallow_copy_str_values(dest_sys->get_enum_set_values()))) {
+            LOG_WARN("fail to shallow_copy_str_values", K(ret));
+          } else {
+            dest = dest_sys;
+          }
         } else {
           ObSysFunRawExpr* dest_sys = NULL;
           const ObSysFunRawExpr* origin_sys = static_cast<const ObSysFunRawExpr*>(origin);
