@@ -492,7 +492,7 @@ int ObPartitionMacroMergeIter::get_curr_range(ObDatumRange &range) const
 int ObPartitionMacroMergeIter::exist(const ObDatumRow *row, bool &is_exist)
 {
   int ret = OB_SUCCESS;
-
+  ObDatumRowkey rowkey;
   is_exist = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -501,15 +501,40 @@ int ObPartitionMacroMergeIter::exist(const ObDatumRow *row, bool &is_exist)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to check row exist", K(ret), KP(row));
   } else {
-    bool has_found = false;
-    ObDatumRowkey rowkey;
-    if (OB_FAIL(rowkey.assign(row->storage_datums_, schema_rowkey_column_cnt_))) {
+    const blocksstable::ObDatumRow *temp_row = nullptr;
+    blocksstable::ObDatumRange query_range;
+    query_range.end_key_.set_max_rowkey();
+    query_range.set_left_closed();
+    ObSSTableRowWholeScanner *iter = reinterpret_cast<ObSSTableRowWholeScanner *>(row_iter_);
+    iter->reset();
+
+    if (OB_FAIL(query_range.start_key_.assign(row->storage_datums_, schema_rowkey_column_cnt_))) {
+      STORAGE_LOG(WARN, "Failed to assign rowkey", K(ret), K(row), K_(schema_rowkey_column_cnt));
+    } else if (OB_FAIL(iter->open(
+      access_param_.iter_param_,
+      access_context_,
+      query_range,
+      curr_block_desc_,
+      *static_cast<ObSSTable *>(table_)))) {
+      LOG_WARN("fail to open iter", K(ret), K(query_range));
+    } else if (OB_FAIL(iter->get_next_row(temp_row))) {
+      STORAGE_LOG(WARN, "fail to get next row", K(ret), KPC(iter));
+    } else if (OB_ISNULL(temp_row)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unecxpected null row", K(ret));
+    } else if (OB_FAIL(rowkey.assign(temp_row->storage_datums_, schema_rowkey_column_cnt_))) {
       STORAGE_LOG(WARN, "Failed to assign rowkey", K(ret), KPC(row), K_(schema_rowkey_column_cnt));
-    } else if (OB_FAIL(table_->exist(access_param_.iter_param_, access_context_, rowkey, is_exist, has_found))) {
-      LOG_WARN("Failed to check row if exist", K(ret), KPC(row));
+    } else {
+      int temp_cmp_ret = 0;
+      if (OB_FAIL(query_range.start_key_.compare(rowkey, read_info_.get_datum_utils(), temp_cmp_ret))) {
+        STORAGE_LOG(WARN, "Failed to compare rowkey", K(ret), K(rowkey), K(query_range.start_key_), K(read_info_));
+      } else if (temp_cmp_ret == 0) {
+        is_exist = true;
+      } else {
+        is_exist = false;
+      }
     }
   }
-
   return ret;
 }
 
