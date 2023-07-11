@@ -263,11 +263,7 @@ int ObServerSchemaService::destroy_schema_struct(uint64_t tenant_id)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mem_mgr is null", K(ret), K(tenant_id));
     } else {
-      FLOG_INFO("[SCHEMA_RELEASE] try release schema_mgr_for_cache", K(ret), K(tenant_id),
-                "schema_mgr_tenant_id", schema_mgr->get_tenant_id(),
-                "schema_version", schema_mgr->get_schema_version());
-      schema_mgr->~ObSchemaMgr();
-      if (OB_FAIL(mem_mgr->free(static_cast<void *>(schema_mgr)))) {
+      if (OB_FAIL(mem_mgr->free_schema_mgr(schema_mgr))) {
         LOG_ERROR("free schema mgr for cache failed", K(ret), K(tenant_id));
       } else {
         schema_mgr = NULL;
@@ -5537,33 +5533,25 @@ int ObServerSchemaService::init_schema_struct(uint64_t tenant_id)
 
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(schema_mgr_for_cache_map_.get(tenant_id))) {
-      void *buffer = NULL;
-      ObIAllocator *allocator = NULL;
       ObSchemaMgr *schema_mgr_for_cache = NULL;
       ObSchemaMemMgr *mem_mgr = NULL;
+      bool alloc_for_liboblog = false;
       if (OB_FAIL(mem_mgr_map_.get_refactored(tenant_id, mem_mgr))) {
         LOG_WARN("fail to get mem_mgr", K(ret), K(tenant_id));
       } else if (OB_ISNULL(mem_mgr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mem_mgr is null", K(ret), K(tenant_id));
-      } else if (OB_FAIL(mem_mgr->alloc(sizeof(ObSchemaMgr), buffer, &allocator))) {
+      } else if (OB_FAIL(mem_mgr->alloc_schema_mgr(schema_mgr_for_cache, alloc_for_liboblog))) {
         LOG_WARN("alloc schema mgr failed", K(ret));
-      } else if (FALSE_IT(schema_mgr_for_cache = new(buffer)ObSchemaMgr(*allocator))) {
-        // will not reach here
       } else if (OB_FAIL(schema_mgr_for_cache->init(tenant_id))) {
         LOG_WARN("init schema mgr for cache failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache_map_.set_refactored(tenant_id, schema_mgr_for_cache))) {
         LOG_WARN("fail to set schema_mgr", K(ret), K(tenant_id));
       }
-      if (OB_FAIL(ret)) {
-        if (NULL != schema_mgr_for_cache) {
-          schema_mgr_for_cache->~ObSchemaMgr();
-          ob_free(buffer);
-          schema_mgr_for_cache = NULL;
-          buffer= NULL;
-        } else if (NULL != buffer) {
-          ob_free(buffer);
-          buffer = NULL;
+      if (OB_FAIL(ret) && OB_NOT_NULL(mem_mgr)) {
+        int64_t tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(mem_mgr->free_schema_mgr(schema_mgr_for_cache))) {
+          LOG_ERROR("fail to free mem_mgr", KR(ret));
         }
       }
     } else {

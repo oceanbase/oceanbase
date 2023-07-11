@@ -17,6 +17,7 @@
 #include "share/ob_define.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_array.h"
+#include "share/schema/ob_schema_mgr.h"
 
 namespace oceanbase
 {
@@ -66,14 +67,12 @@ public:
   //
   int init(const char *label,
            const uint64_t tenant_id);
-  int alloc(const int size, void *&ptr,
-            common::ObIAllocator **allocator = NULL);
-  int free(void *ptr);
   int get_cur_alloc_cnt(int64_t &cnt) const;
-  int check_can_switch_allocator(bool &can_switch) const;
+  int check_can_switch_allocator(const int64_t &switch_cnt, bool &can_switch) const;
   int in_current_allocator(const void *ptr, bool &in_curr_allocator);
   int is_same_allocator(const void *p1, const void * p2, bool &is_same_allocator);
   int switch_allocator();
+  int switch_back_allocator();
   void dump() const;
   int check_can_release(bool &can_release) const;
   int try_reset_allocator();
@@ -81,10 +80,15 @@ public:
   int try_reset_another_allocator();
   int get_another_ptrs(common::ObArray<void *> &ptrs);
   int get_all_alloc_info(common::ObIArray<ObSchemaMemory> &tenant_mem_infos);
+  int alloc_schema_mgr(ObSchemaMgr *&schema_mgr, bool alloc_for_liboblog);
+  int free_schema_mgr(ObSchemaMgr *&schema_mgr);
 private:
   bool check_inner_stat() const;
   void dump_without_lock_() const;
   int find_ptr(const void *ptr, const int ptrs_pos, int &idx);
+  int alloc_(const int size, void *&ptr,
+             common::ObIAllocator **allocator = NULL);
+  int free_(void *ptr);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaMemMgr);
 private:
@@ -92,7 +96,7 @@ private:
   union {
     common::ObArenaAllocator allocator_[2];
   };
-  common::ObArray<void *> all_ptrs_[2];
+  int64_t all_ptrs_[2];
   common::ObArray<void *> ptrs_[2];
   int pos_;
   bool is_inited_;

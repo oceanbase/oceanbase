@@ -40,6 +40,7 @@
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {

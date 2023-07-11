@@ -448,9 +448,11 @@ private:
                                   ObSchemaMgrCache &schema_mgr_cache,
                                   ObSchemaMemMgr &schema_mem_mgr,
                                   ObSchemaMgrHandle &handle);
-  int alloc_schema_mgr_for_liboblog(ObSchemaMemMgr &mem_mgr_for_liboblog, ObSchemaMgr *&schema_mgr);
-  int free_schema_mgr_for_liboblog(ObSchemaMemMgr &mem_mgr_for_liboblog, ObSchemaMgr *schema_mgr);
-
+  int alloc_and_put_schema_mgr_(ObSchemaMemMgr &mem_mgr,
+                                ObSchemaMgr &latest_schema_mgr,
+                                ObSchemaMgrCache &schema_mgr_cache);
+  int switch_allocator_(ObSchemaMemMgr &mem_mgr,
+                        ObSchemaMgr *&latest_schema_mgr);
 private:
   static const int64_t MAX_VERSION_COUNT = 64;
   static const int64_t MAX_VERSION_COUNT_FOR_LIBOBLOG = 6;
