@@ -392,12 +392,23 @@ public:
   int64_t multi_child_op_above_count_in_dfo_;
 };
 
-class AllocMDContext
+class AllocOpContext
 {
 public:
-  AllocMDContext() : org_op_id_(0) {};
-  ~AllocMDContext() = default;
-  int64_t org_op_id_;
+  AllocOpContext() :
+      visited_map_(), disabled_op_set_(), gen_temp_op_id_(false), next_op_id_(0) {}
+  ~AllocOpContext();
+
+  int init();
+  int visit(uint64_t op_id, uint8_t flag);
+  bool is_visited(uint64_t op_id, uint8_t flag);
+
+  // For the `blocking` hint, there are different insertion levels. We need to ensure that 
+  // when multiple insertion levels exist, material ops will not be inserted repeatedly.
+  hash::ObHashMap<uint8_t, ObSEArray<uint64_t, 8>> visited_map_; // key:flag, value:op ids
+  hash::ObHashSet<uint64_t> disabled_op_set_;
+  bool gen_temp_op_id_;
+  uint64_t next_op_id_;
 };
 
 class AllocBloomFilterContext
@@ -1338,8 +1349,18 @@ public:
    */
   int allocate_gi_recursively(AllocGIContext &ctx);
   /**
-   * Allocate m dump operator.
+   * Allocate op for monitering
    */
+  int alloc_op_pre(AllocOpContext& ctx);
+  int alloc_op_post(AllocOpContext& ctx);
+  int find_rownum_expr_recursively(bool &found, const ObRawExpr *expr);
+  int find_rownum_expr(bool &found, const ObIArray<ObRawExpr *> &exprs);
+  int find_rownum_expr(bool &found);
+  int disable_rownum_expr(hash::ObHashSet<uint64_t> &disabled_op_set, ObIArray<uint64_t> &cur_path);
+  int gen_temp_op_id(AllocOpContext& ctx);
+  int recursively_disable_alloc_op_above(AllocOpContext& ctx);
+  int alloc_nodes_above(AllocOpContext& ctx, const uint64_t &flags);
+  int allocate_material_node_above();
   int allocate_monitoring_dump_node_above(uint64_t flags, uint64_t line_id);
 
   virtual int gen_location_constraint(void *ctx);
@@ -1743,10 +1764,6 @@ private:
    */
   int numbering_operator_pre(NumberingCtx &ctx);
   void numbering_operator_post(NumberingCtx &ctx);
-  /**
-   *  allocate md operator
-   */
-  int alloc_md_post(AllocMDContext &ctx);
   /**
    * Numbering px transmit op with dfo id
    * for Explain display

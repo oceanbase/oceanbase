@@ -400,8 +400,6 @@ public:
   int set_children_pointer(ObOperator **children, uint32_t child_cnt);
   int set_child(const uint32_t idx, ObOperator *child);
 
-  int get_real_child(ObOperator *&child, const int32_t child_idx);
-
   int init();
 
   // open operator, cascading open child operators.

@@ -484,69 +484,6 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
   return ret;
 }
 
-
-int ObStaticEngineCG::find_rownum_expr_recursively(bool &found, const ObRawExpr *expr)
-{
-  int ret = OB_SUCCESS;
-  LOG_DEBUG("find_rownum_expr_recursively begin", K(expr->get_param_count()),
-           K(expr->get_expr_type()), K(found));
-  if (expr->get_expr_type() == T_FUN_SYS_ROWNUM) {
-    found = true;
-  } else {
-    for (auto i = 0; !found && i < expr->get_param_count(); i++) {
-      OZ(SMART_CALL(
-          find_rownum_expr_recursively(found, expr->get_param_expr(i))));
-    }
-  }
-  LOG_DEBUG("find_rownum_expr_recursively finished", K(expr->get_param_count()),
-           K(expr->get_expr_type()), K(found));
-  return ret;
-}
-
-int ObStaticEngineCG::find_rownum_expr(
-    bool &found, const common::ObIArray<ObRawExpr *> &exprs)
-{
-  LOG_DEBUG("find_rownum_expr begin", K(exprs.count()), K(found));
-  int ret = OB_SUCCESS;
-  for (auto i = 0; OB_SUCC(ret) && !found && i < exprs.count(); i++) {
-    ObRawExpr *expr = exprs.at(i);
-    ret = find_rownum_expr_recursively(found, expr);
-    LOG_DEBUG(
-        "find_rownum_expr_recursively done:", K(expr->get_expr_type()),
-        K(found), K(i), K(expr->get_param_count()));
-  }
-  return ret;
-}
-
-// rownum expr can show up in the following 4 cases, check them all
-// - filter expr
-// - output expr
-// - join conditions: equal ("=")
-// - join conditions: filter (">", "<", ">=", "<=")
-int ObStaticEngineCG::find_rownum_expr(bool &found, ObLogicalOperator *op)
-{
-  int ret = OB_SUCCESS;
-  LOG_DEBUG("find_rownum_expr debug: ", K(op->get_name()), K(found));
-  if (OB_FAIL(find_rownum_expr(found, op->get_filter_exprs()))) {
-    LOG_WARN("failure encountered during find rownum expr", K(ret));
-  } else if (OB_FAIL(find_rownum_expr(found, op->get_output_exprs()))) {
-    LOG_WARN("failure encountered during find rownum expr", K(ret));
-  } else if (!found && op->get_type() == log_op_def::LOG_JOIN) {
-    ObLogJoin *join_op = dynamic_cast<ObLogJoin *>(op);
-    // NO NPE check for join_op as it should NOT be nullptr
-    if (OB_FAIL(find_rownum_expr(found, join_op->get_other_join_conditions()))) {
-      LOG_WARN("failure encountered during find rownum expr", K(ret));
-    } else if (OB_FAIL(find_rownum_expr(found, join_op->get_equal_join_conditions()))) {
-      LOG_WARN("failure encountered during find rownum expr", K(ret));
-    }
-  }
-
-  for (auto i = 0; !found && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
-    OZ(SMART_CALL(find_rownum_expr(found, op->get_child(i))));
-  }
-  return ret;
-}
-
 void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
                                        bool &found)
 {
@@ -655,7 +592,7 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         //
         bool has_rownum_expr = false;
         for (int64_t i = 0; !has_rownum_expr && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
-          OZ(find_rownum_expr(has_rownum_expr, op->get_child(i)));
+          OZ(op->get_child(i)->find_rownum_expr(has_rownum_expr));
         }
         if (has_rownum_expr) {
           LOG_DEBUG("rownum expr is in count operator's subplan tree. Stop vectorization execution",
@@ -3317,11 +3254,25 @@ int ObStaticEngineCG::generate_spec(ObLogTempTableInsert &op, ObTempTableInsertO
   if (OB_ISNULL(parent = op.get_parent())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (log_op_def::LOG_EXCHANGE == parent->get_type()) {
-    is_distributed = true;
+  } else {
+    while (OB_SUCC(ret) &&
+           (log_op_def::LOG_MONITORING_DUMP == parent->get_type() ||
+           log_op_def::LOG_MATERIAL == parent->get_type())) {
+      if (OB_ISNULL(parent = parent->get_parent())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) &&
+        OB_NOT_NULL(parent) &&
+        log_op_def::LOG_EXCHANGE == parent->get_type()) {
+      is_distributed = true;
+    }
   }
-  spec.set_distributed(is_distributed);
-  spec.set_temp_table_id(op.get_temp_table_id());
+  if (OB_SUCC(ret)) {
+    spec.set_distributed(is_distributed);
+    spec.set_temp_table_id(op.get_temp_table_id());
+  }
   return ret;
 }
 

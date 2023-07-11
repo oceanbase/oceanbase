@@ -1365,31 +1365,6 @@ int ObOperator::do_drain_exch()
   return ret;
 }
 
-int ObOperator::get_real_child(ObOperator *&child, const int32_t child_idx)
-{
-  int ret = OB_SUCCESS;
-  const int32_t first_child_idx = 0;
-  ObOperator *first_child = nullptr;
-  if (first_child_idx >= child_cnt_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid child idx", K(ret), K(child_cnt_));
-  } else if (OB_ISNULL(first_child = get_child(first_child_idx))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null child", K(ret));
-  } else if (IS_DUMMY_PHY_OPERATOR(first_child->get_spec().get_type())) {
-    if (OB_FAIL(first_child->get_real_child(child, child_idx))) {
-      LOG_WARN("Failed to get real child", K(ret), K(first_child->get_spec().get_type()));
-    }
-  } else {
-    child = get_child(child_idx);
-    if (OB_ISNULL(child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Get a null child", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObOperator::check_status()
 {
   return ctx_.check_status();

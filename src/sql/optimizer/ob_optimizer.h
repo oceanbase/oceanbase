@@ -81,7 +81,7 @@ namespace sql
      * it must support rescan
      */
     PX_RESCAN,
-    ALLOC_MONITORING_DUMP,
+    ALLOC_OP,
     PX_ESTIMATE_SIZE,
     RUNTIME_FILTER,
 

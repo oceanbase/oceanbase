@@ -12453,12 +12453,13 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       break;
     }
     case T_TRACING:
-    case T_STAT: {
-      ObSEArray<ObMonitorHint, 8> monitoring_ids;
-      if (OB_FAIL(resolve_monitor_ids(hint_node, monitoring_ids))) {
-        LOG_WARN("Failed to resolve monitor ids", K(ret));
-      } else if (OB_FAIL(global_hint.merge_monitor_hints(monitoring_ids))) {
-        LOG_WARN("Failed to add tracing hint", K(ret));
+    case T_STAT:
+    case T_BLOCKING: {
+      ObSEArray<ObAllocOpHint, 8> alloc_op_hints;
+      if (OB_FAIL(resolve_alloc_ops(hint_node, alloc_op_hints))) {
+        LOG_WARN("Failed to resolve alloc op ids", K(ret));
+      } else if (OB_FAIL(global_hint.merge_alloc_op_hints(alloc_op_hints))){
+        LOG_WARN("Fail to merge alloc op hints", K(ret));
       }
       break;
     }
@@ -13549,37 +13550,57 @@ int ObDMLResolver::resolve_aggregation_hint(const ParseNode &hint_node,
   return ret;
 }
 
-int ObDMLResolver::resolve_monitor_ids(const ParseNode &tracing_node,
-                                       ObIArray<ObMonitorHint> &monitoring_ids)
+int ObDMLResolver::resolve_alloc_ops(const ParseNode &alloc_op_node, ObIArray<ObAllocOpHint> &alloc_op_hints)
 {
   int ret = OB_SUCCESS;
-  monitoring_ids.reuse();
-  if (OB_UNLIKELY(T_TRACING == tracing_node.type_ && T_STAT == tracing_node.type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected parse node.", K(ret), K(tracing_node.type_));
-  } else {
-    ObMonitorHint monitor_hint;
-    ObSEArray<uint64_t, 8> ids;
-    monitor_hint.flags_ = T_TRACING == tracing_node.type_
-                          ? ObMonitorHint::OB_MONITOR_TRACING
-                          : ObMonitorHint::OB_MONITOR_STAT;
-    ParseNode *node = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < tracing_node.num_child_; ++i) {
-      if (OB_ISNULL(node = tracing_node.children_[i])) {
+  alloc_op_hints.reuse();
+  ParseNode *node = NULL;
+  ObAllocOpHint alloc_op_hint;
+  for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_node.num_child_; ++i) {
+    switch (alloc_op_node.type_) {
+      case T_BLOCKING: {
+        alloc_op_hint.flags_ = ObAllocOpHint::OB_MATERIAL;
+        break;
+      }
+      case T_TRACING: {
+        alloc_op_hint.flags_ = ObAllocOpHint::OB_MONITOR_TRACING;
+        break;
+      }
+      case T_STAT: {
+        alloc_op_hint.flags_ = ObAllocOpHint::OB_MONITOR_STAT;
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected parse node.", K(ret), K(alloc_op_node.type_));
+        break;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(node = alloc_op_node.children_[i])) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Invalid tracing node", K(ret));
-      } else if (node->value_ < 0) {
+      } else if (T_INT == node->type_) {
+        if (node->value_ < 0) {
         // Invalid operator id, do nothing.
-      } else if (has_exist_in_array(ids, (uint64_t)node->value_)) {
-        //do nothing
-      } else if (OB_FALSE_IT(monitor_hint.id_ = (uint64_t)node->value_)) {
-      } else if (OB_FAIL(monitoring_ids.push_back(monitor_hint))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else if (OB_FAIL(ids.push_back(monitor_hint.id_))) {
-        LOG_WARN("failed to push back", K(ret));
+        } else {
+          alloc_op_hint.id_ = node->value_;
+          alloc_op_hint.alloc_level_ = ObAllocOpHint::OB_ENUMERATE;
+        }
+      } else if (NULL != node->str_value_){
+        ObString alloc_level;
+        alloc_level.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
+        if (0 == alloc_level.case_compare("all")) {
+          alloc_op_hint.alloc_level_ = ObAllocOpHint::OB_ALL;
+        } else if (0 == alloc_level.case_compare("dfo")) {
+          alloc_op_hint.alloc_level_ = ObAllocOpHint::OB_DFO;
+        }
       } else {
-        LOG_DEBUG("Resolve tracing hint", K(monitor_hint));
+        LOG_DEBUG("Resolve alloc op hint", K(alloc_op_hint));
       }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(alloc_op_hints.push_back(alloc_op_hint))) {
+        LOG_WARN("failed to push back", K(ret));
     }
   }
   return ret;
