@@ -340,7 +340,8 @@ int ObMPQuery::process()
                 // 但是目前的代码实现难以在不同的线程处理同一个请求的回包，
                 // 因此这里只允许只有一个query的multi query请求异步回包。
                 force_sync_resp = queries.count() <= 1? false : true;
-                ret = process_single_stmt(ObMultiStmtItem(true, i, queries.at(i)),
+                bool is_single_stmt = queries.count() <= 1? true : false;
+                ret = process_single_stmt(ObMultiStmtItem(true, i, queries.at(i), is_single_stmt),
                                           session,
                                           has_more,
                                           force_sync_resp,

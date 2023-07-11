@@ -5129,7 +5129,8 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
     if (should_reroute && !session.is_inner() && session.is_in_transaction()) {
       auto stmt_type = plan->get_stmt_type();
       bool fixed_route = true;
-      if (pc_ctx.sql_ctx_.multi_stmt_item_.is_part_of_multi_stmt()) {
+      if (pc_ctx.sql_ctx_.multi_stmt_item_.is_part_of_multi_stmt()
+          && !pc_ctx.sql_ctx_.multi_stmt_item_.is_single_stmt()) {
         // current is multi-stmt
       } else if (!STMT_SUPPORT_BY_TXN_FREE_ROUTE(stmt_type, false)) {
         // stmt is not DML

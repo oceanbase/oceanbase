@@ -163,17 +163,19 @@ public:
       batched_queries_(NULL),
       is_ins_multi_val_opt_(false),
       is_ps_mode_(false),
-      ab_cnt_(0)
+      ab_cnt_(0),
+      is_single_stmt_(false)
   {
   }
-  ObMultiStmtItem(bool is_part_of_multi, int64_t seq_num, const common::ObString &sql)
+  ObMultiStmtItem(bool is_part_of_multi, int64_t seq_num, const common::ObString &sql, bool is_single_stmt=false)
     : is_part_of_multi_stmt_(is_part_of_multi),
       seq_num_(seq_num),
       sql_(sql),
       batched_queries_(NULL),
       is_ins_multi_val_opt_(false),
       is_ps_mode_(false),
-      ab_cnt_(0)
+      ab_cnt_(0),
+      is_single_stmt_(is_single_stmt)
   {
   }
 
@@ -188,7 +190,8 @@ public:
       batched_queries_(queries),
       is_ins_multi_val_opt_(is_multi_vas_opt),
       is_ps_mode_(false),
-      ab_cnt_(0)
+      ab_cnt_(0),
+      is_single_stmt_(false)
   {
   }
   virtual ~ObMultiStmtItem() {}
@@ -200,6 +203,7 @@ public:
     sql_.reset();
     batched_queries_ = NULL;
     is_ins_multi_val_opt_ = false;
+    is_single_stmt_ = false;
   }
 
   inline bool is_part_of_multi_stmt() const { return is_part_of_multi_stmt_; }
@@ -234,9 +238,10 @@ public:
   inline bool is_ps_mode() { return is_ps_mode_; }
   inline void set_ab_cnt(int64_t cnt) { ab_cnt_ = cnt; }
   inline int64_t get_ab_cnt() { return ab_cnt_; }
+  inline bool is_single_stmt() const { return is_single_stmt_; }
 
-  TO_STRING_KV(K_(is_part_of_multi_stmt), K_(seq_num), K_(sql),
-               KPC_(batched_queries), K_(is_ins_multi_val_opt), K_(is_ps_mode), K_(ab_cnt));
+  TO_STRING_KV(K_(is_part_of_multi_stmt), K_(seq_num), K_(sql), KPC_(batched_queries),
+               K_(is_ins_multi_val_opt), K_(is_ps_mode), K_(ab_cnt), K_(is_single_stmt));
 
 private:
   bool is_part_of_multi_stmt_; // 是否为multi stmt，非multi stmt也使用这个结构体，因此需要这个标记
@@ -247,6 +252,7 @@ private:
   bool is_ins_multi_val_opt_;
   bool is_ps_mode_;
   int64_t ab_cnt_;
+  bool is_single_stmt_;
 };
 
 class ObQueryRetryInfo
