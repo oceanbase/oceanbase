@@ -338,6 +338,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       ObMigrationStatus new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       bool is_ls_deleted = true;
+      bool need_update_status = true;
 
       if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
@@ -356,9 +357,14 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
           bool is_in_member_list = false;
           if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
             if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD != current_migration_status
-                && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != current_migration_status) {
+                && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != current_migration_status
+                && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != current_migration_status) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("migration status is unexpected", K(ret), K(current_migration_status), K(ctx_));
+            } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == current_migration_status) {
+              need_update_status = false;
+              LOG_INFO("current migration status is none, no need update migration status",
+                  K(current_migration_status), K(ctx_));
             } else if (OB_FAIL(ObStorageHADagUtils::check_self_in_member_list(ls->get_ls_id(), is_in_member_list))) {
               LOG_WARN("failed to check self in member list", K(ret), K(ctx_));
             } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls->get_ls_id(), is_ls_deleted))) {
@@ -375,6 +381,8 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         }
 
         if (OB_FAIL(ret)) {
+        } else if (!need_update_status) {
+          is_finish = true;
         } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_ && ObMigrationStatus::OB_MIGRATION_STATUS_NONE == new_migration_status
             && OB_FAIL(ls->clear_saved_info())) {
           LOG_WARN("failed to clear ls saved info", K(ret), KPC(ls));
@@ -1230,21 +1238,21 @@ int ObStartCompleteMigrationTask::change_member_list_()
   } else if (FALSE_IT(cluster_version = GET_MIN_CLUSTER_VERSION())) {
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(ctx_->tenant_id_, ctx_->arg_.ls_id_, leader_addr))) {
     LOG_WARN("failed to get ls leader", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(OB_FAIL(get_ls_transfer_scn_(ls, ls_transfer_scn)))) {
-    LOG_WARN("failed to get ls transfer scn", K(ret), KP(ls));
   } else if (OB_FAIL(fake_config_version.generate(0, 0))) {
     LOG_WARN("failed to generate config version", K(ret));
   } else {
+    const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_) {
-      const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
       if (cluster_version < CLUSTER_VERSION_4_2_0_0) {
         if (OB_FAIL(ls->get_log_handler()->add_member(ctx_->arg_.dst_, ctx_->arg_.paxos_replica_number_,
             fake_config_version, change_member_list_timeout_us))) {
           LOG_WARN("failed to add member", K(ret), KPC(ctx_));
         }
       } else if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
-        if (OB_FAIL(add_member_(leader_addr, ls_transfer_scn))) {
-          LOG_WARN("failed to add member", K(ret), K(leader_addr), K(ls_transfer_scn));
+        if (OB_FAIL(ls->add_member(ctx_->arg_.dst_,
+                                   ctx_->arg_.paxos_replica_number_,
+                                   change_member_list_timeout_us))) {
+          LOG_WARN("failed to add member", K(ret));
         }
       } else {
         // R-replica
@@ -1253,15 +1261,16 @@ int ObStartCompleteMigrationTask::change_member_list_()
         }
       }
     } else if (ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_) {
-      const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
       if (cluster_version < CLUSTER_VERSION_4_2_0_0) {
         if (OB_FAIL(ls->get_log_handler()->replace_member(ctx_->arg_.dst_, ctx_->arg_.src_,
             fake_config_version, change_member_list_timeout_us))) {
           LOG_WARN("failed to repalce member", K(ret), KPC(ctx_));
         }
       } else if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
-        if (OB_FAIL(replace_member_(leader_addr, ls_transfer_scn))) {
-          LOG_WARN("failed to replace member", K(ret), K(leader_addr), K(ls_transfer_scn));
+        if (OB_FAIL(ls->replace_member(ctx_->arg_.dst_,
+                                       ctx_->arg_.src_,
+                                       change_member_list_timeout_us))) {
+          LOG_WARN("failed to replace member", K(ret));
         }
       } else {
         // R-replica
@@ -1279,62 +1288,6 @@ int ObStartCompleteMigrationTask::change_member_list_()
       const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
       LOG_INFO("succeed change member list", "cost", cost_ts, "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_);
     }
-  }
-  return ret;
-}
-
-int ObStartCompleteMigrationTask::get_ls_transfer_scn_(ObLS *ls, share::SCN &transfer_scn)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ls)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret));
-  } else if (OB_FAIL(ls->get_transfer_scn(transfer_scn))) {
-    LOG_WARN("failed to get transfer scn", K(ret), KP(ls));
-  }
-  return ret;
-}
-
-int ObStartCompleteMigrationTask::add_member_(const common::ObAddr &leader_addr, const share::SCN &ls_transfer_scn)
-{
-  int ret = OB_SUCCESS;
-  ObLSService *ls_svr = NULL;
-  ObStorageRpc *storage_rpc = NULL;
-  ObStorageHASrcInfo src_info;
-  src_info.cluster_id_ = GCONF.cluster_id;
-  src_info.src_addr_ = leader_addr;
-  const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
-  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
-  } else if (OB_FAIL(storage_rpc->add_member(ctx_->tenant_id_, src_info, ctx_->arg_.ls_id_, ctx_->arg_.dst_,
-      ctx_->arg_.paxos_replica_number_, ls_transfer_scn, timeout))) {
-    LOG_WARN("failed to add member", K(ret), KPC(ctx_));
-  }
-  return ret;
-}
-
-int ObStartCompleteMigrationTask::replace_member_(const common::ObAddr &leader_addr, const share::SCN &ls_transfer_scn)
-{
-  int ret = OB_SUCCESS;
-  ObLSService *ls_svr = NULL;
-  ObStorageRpc *storage_rpc = NULL;
-  ObStorageHASrcInfo src_info;
-  src_info.cluster_id_ = GCONF.cluster_id;
-  src_info.src_addr_ = leader_addr;
-  const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
-  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
-  } else if (OB_FAIL(storage_rpc->replace_member(ctx_->tenant_id_, src_info, ctx_->arg_.ls_id_, ctx_->arg_.dst_,
-      ctx_->arg_.src_, ls_transfer_scn, timeout))) {
-    LOG_WARN("failed to replace member", K(ret), KPC(ctx_));
   }
   return ret;
 }

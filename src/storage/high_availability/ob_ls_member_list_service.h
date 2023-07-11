@@ -30,20 +30,23 @@ public:
   void destroy();
 
 public:
+  int get_config_version_and_transfer_scn(
+      palf::LogConfigVersion &config_version,
+      share::SCN &transfer_scn);
   int add_member(const common::ObMember &member,
                  const int64_t paxos_replica_num,
-                 const share::SCN &transfer_scn,
-                 const int64_t add_member_timeout_us);
+                 const int64_t timeout);
   int replace_member(const common::ObMember &added_member,
                      const common::ObMember &removed_member,
-                     const share::SCN &transfer_scn,
-                     const int64_t replace_member_timeout_us);
+                     const int64_t timeout);
   int switch_learner_to_acceptor(const common::ObMember &learner,
                                  const int64_t paxos_replica_num,
-                                 const share::SCN &transfer_scn,
-                                 const int64_t timeout_us);
+                                 const int64_t timeout);
 
 private:
+  int get_leader_config_version_and_transfer_scn_(
+      palf::LogConfigVersion &leader_config_version,
+      share::SCN &leader_transfer_scn);
   int check_ls_transfer_scn_(const share::SCN &transfer_scn);
 private:
   bool is_inited_;

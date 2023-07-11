@@ -273,9 +273,9 @@ int ObDDLCommitReplayExecutor::do_replay_(ObTabletHandle &handle) //TODO(jianyun
     LOG_WARN("skip replay ddl commit", K(ret), "ls_id", ls_->get_ls_id(), K(handle));
   } else if (OB_FAIL(handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv mgr failed", K(ret), K_(scn), KPC_(log));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->set_commit_scn(scn_))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->set_commit_scn(handle.get_obj()->get_tablet_meta(), scn_))) {
     LOG_WARN("failed to start prepare", K(ret), KPC_(log), K_(scn));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(log_->get_start_scn(), scn_))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(*handle.get_obj(), log_->get_start_scn(), scn_))) {
     if (OB_TABLET_NOT_EXIST == ret || OB_TASK_EXPIRED == ret) {
       ret = OB_SUCCESS; // exit when tablet not exist or task expired
     } else {

@@ -36,6 +36,7 @@ namespace storage
 {
 
 ERRSIM_POINT_DEF(EN_BUILD_SYS_TABLETS_DAG_FAILED);
+ERRSIM_POINT_DEF(EN_UPDATE_LS_MIGRATION_STATUS_FAILED);
 
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
@@ -1070,7 +1071,17 @@ int ObStartMigrationTask::deal_with_local_ls_()
   } else if (OB_FAIL(ls->offline())) {
     LOG_WARN("failed to disable log", K(ret), KPC(ctx_));
   } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
-    if (OB_FAIL(ls->set_ls_rebuild())) {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_UPDATE_LS_MIGRATION_STATUS_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_UPDATE_LS_MIGRATION_STATUS_FAILED", K(ret));
+      }
+    }
+#endif
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ls->set_ls_rebuild())) {
       LOG_WARN("failed to set ls rebuild", K(ret), KPC(ctx_));
     }
   } else {
@@ -2559,6 +2570,8 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
   } else if (!is_tablet_exist) {
     if (OB_FAIL(tablet_copy_finish_task->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
       LOG_WARN("failed to set tablet status", K(ret), K(copy_table_key), KPC(copy_tablet_ctx_));
+    } else if (OB_FAIL(parent_task->add_child(*child_task))) {
+      LOG_WARN("failed to add chiild task", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
     }
   } else {
     if (FALSE_IT(init_param.tenant_id_ = ctx_->tenant_id_)) {

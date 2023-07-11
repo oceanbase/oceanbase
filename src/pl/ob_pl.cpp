@@ -651,7 +651,8 @@ void ObPLContext::destory(
   }
 
   if (lib::is_mysql_mode()
-      && OB_NOT_NULL(ctx.get_physical_plan_ctx())) {
+      && OB_NOT_NULL(ctx.get_physical_plan_ctx())
+      && !is_function_or_trigger_) {
     ctx.get_physical_plan_ctx()->set_affected_rows(get_cursor_info().get_rowcount());
   }
 

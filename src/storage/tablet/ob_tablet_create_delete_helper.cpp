@@ -208,7 +208,8 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_transfer_scn(
 
   if (!is_committed) {
     if (snapshot > transfer_scn) {
-      ret = OB_SCHEMA_EAGAIN;
+      // TODO(@bowen.gbw): temp solution
+      ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("read snapshot is bigger than transfer scn, should retry", K(ret), K(snapshot), K(transfer_scn));
     }
   } else if (is_committed) {

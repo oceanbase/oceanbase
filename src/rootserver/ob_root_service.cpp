@@ -4423,15 +4423,8 @@ int ObRootService::truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    uint64_t compat_version = 0;
     SCN frozen_scn;
-    if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, compat_version))) {
-      LOG_WARN("get min data_version failed", K(ret), K(arg.tenant_id_));
-    } else if (compat_version < DATA_VERSION_4_1_0_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("server state is not suppported when tenant's data version is below 4.1.0.0", KR(ret), K(compat_version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.1.0.0, truncate table is ");
-    } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
+    if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
       LOG_WARN("get_frozen_scn failed", K(ret));
     } else if (OB_FAIL(ddl_service_.new_truncate_table(arg, res, frozen_scn))) {
       LOG_WARN("ddl service failed to truncate table", K(arg), K(ret));

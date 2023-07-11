@@ -81,6 +81,7 @@ private:
   void report_error_();
   void update_restore_upper_limit_();
   void set_compressor_type_();
+  void refresh_error_context_();
   bool need_schedule_() const;
 
 private:

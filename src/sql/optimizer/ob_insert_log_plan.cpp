@@ -659,6 +659,8 @@ int ObInsertLogPlan::check_insert_location_need_multi_partition_dml(ObLogicalOpe
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(insert_table_part), K(insert_sharding),
                                     K(insert_stmt), K(ret));
+  } else if (0 == insert_table_part->get_phy_tbl_location_info().get_partition_cnt()) {
+    is_multi_part_dml = true;
   } else if (OB_FAIL(check_basic_sharding_for_insert_stmt(*insert_sharding,
                                                            top,
                                                            is_basic))) {

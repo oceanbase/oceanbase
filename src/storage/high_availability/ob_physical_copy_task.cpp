@@ -797,6 +797,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
       Besides, we fill default chksum array with zeros since there's no need to recalculate*/
     desc.full_stored_col_cnt_ = sstable_param->basic_meta_.column_cnt_;
     desc.col_default_checksum_array_.reset();
+    desc.default_col_checksum_array_valid_ = true;
     if (OB_FAIL(desc.col_default_checksum_array_.init(desc.full_stored_col_cnt_))) {
       LOG_WARN("fail to init col default chksum array", K(ret));
     } else {

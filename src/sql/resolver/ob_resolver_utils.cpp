@@ -4424,19 +4424,6 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         LOG_WARN("transform udt col expr for generated column failed", K(ret));
       }
     }
-    if (OB_SUCC(ret) &&
-        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
-         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
-      if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory->get_allocator()))) {
-        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
-                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
-          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
-          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
-        } else {
-          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
-        }
-      }
-    }
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();
@@ -4543,6 +4530,29 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("inconsistent datatypes", K(expr->get_result_type().get_type()));
+      }
+    }
+    if (OB_SUCC(ret) &&
+        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+        ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
+      ObExprResType cast_dst_type;
+      ObCastMode cast_mode;
+      cast_dst_type.set_meta(generated_column.get_meta_type());
+      cast_dst_type.set_accuracy(generated_column.get_accuracy());
+      ObRawExpr *expr_with_implicit_cast = NULL;
+      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, session_info, cast_mode))) {
+        LOG_WARN("get_default_cast_mode failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory, session_info,
+                                            *expr, cast_dst_type, cast_mode, expr_with_implicit_cast))) {
+        LOG_WARN("try add cast above failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr_with_implicit_cast, expr_factory->get_allocator()))) {
+        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+          LOG_WARN("sysfunc in expr is not valid for function index", K(ret), KP(expr_with_implicit_cast));
+        } else {
+          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), KP(expr_with_implicit_cast));
+        }
       }
     }
     if (OB_FAIL(ret)) {

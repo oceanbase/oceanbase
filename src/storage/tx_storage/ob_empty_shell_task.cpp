@@ -265,6 +265,9 @@ int ObTabletEmptyShellHandler::check_tablet_empty_shell_for_standby_(
   if (!user_data.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(user_data));
+  } else if (OB_ISNULL(info)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tenant info is null", K(ret), K(user_data));
   } else if (OB_FAIL(info->get_readable_scn(readable_scn))) {
     STORAGE_LOG(WARN, "failed to get readable scn", K(ret), K(readable_scn), K(user_data));
   } else if (MTL_IS_PRIMARY_TENANT() || !readable_scn.is_valid()) {

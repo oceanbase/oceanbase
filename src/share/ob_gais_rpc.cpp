@@ -291,4 +291,3 @@ int ObGAISRequestRpc::clear_autoinc_cache(const ObAddr &server, const ObGAISAuto
 
 } // share
 } // oceanbase
-

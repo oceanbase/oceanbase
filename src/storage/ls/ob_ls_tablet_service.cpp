@@ -2371,15 +2371,29 @@ int ObLSTabletService::create_memtable(
   return ret;
 }
 
-int ObLSTabletService::check_allow_to_read()
+int ObLSTabletService::check_allow_to_read(AllowToReadMgr::AllowToReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  AllowToReadMgr::AllowToReadInfo read_info;
   allow_to_read_mgr_.load_allow_to_read_info(read_info);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (!read_info.allow_to_read()) {
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
+  }
+  return ret;
+}
+
+int ObLSTabletService::check_read_info_same(const AllowToReadMgr::AllowToReadInfo &read_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_same = false;
+  allow_to_read_mgr_.check_read_info_same(read_info, is_same);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (!is_same) {
     ret = OB_REPLICA_NOT_READABLE;
     LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
   }

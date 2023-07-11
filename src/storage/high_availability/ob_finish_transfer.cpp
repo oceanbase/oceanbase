@@ -1031,8 +1031,12 @@ int ObTxFinishTransfer::start_trans_(
     ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_EXECUTE_TIMEOUT_US = GCONF._transfer_finish_trans_timeout; //default 10s
-  int64_t stmt_timeout = MAX_EXECUTE_TIMEOUT_US;
+  int64_t finish_trans_timeout = 10_s;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    finish_trans_timeout = tenant_config->_transfer_finish_trans_timeout;
+  }
+  const int64_t stmt_timeout = finish_trans_timeout;
 
   if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
     LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));

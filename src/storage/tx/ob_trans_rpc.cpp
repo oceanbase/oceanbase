@@ -32,6 +32,17 @@ namespace obrpc
 OB_SERIALIZE_MEMBER(ObTransRpcResult, status_, send_timestamp_, private_data_);
 OB_SERIALIZE_MEMBER(ObTxRpcRollbackSPResult, status_, send_timestamp_, addr_, born_epoch_);
 
+bool need_refresh_location_cache_(const int ret)
+{
+  return (common::OB_NOT_MASTER == ret ||
+          common::OB_PARTITION_IS_BLOCKED == ret ||
+          common::OB_REPLICA_NOT_READABLE == ret ||
+          common::OB_LS_NOT_EXIST == ret ||
+          common::OB_PARTITION_NOT_EXIST == ret ||
+          common::OB_TENANT_NOT_EXIST == ret ||
+          common::OB_TENANT_NOT_IN_SERVER == ret);
+}
+
 int refresh_location_cache(const share::ObLSID ls)
 {
   return MTL(ObTransService *)->refresh_location_cache(ls);

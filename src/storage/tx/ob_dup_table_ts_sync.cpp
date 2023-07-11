@@ -48,7 +48,7 @@ int ObDupTableLSTsSyncMgr::init(ObDupTableLSHandler *dup_ls_handle)
 int ObDupTableLSTsSyncMgr::offline()
 {
   int ret = OB_SUCCESS;
-
+  SpinWLockGuard guard(ts_sync_lock_);
   if (OB_FAIL(clean_ts_info_cache_())) {
     DUP_TABLE_LOG(WARN, "clean ts info cache", K(ret), KPC(this));
   }

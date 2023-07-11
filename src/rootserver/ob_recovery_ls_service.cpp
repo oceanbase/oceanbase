@@ -57,7 +57,6 @@ using namespace storage;
 using namespace palf;
 namespace rootserver
 {
-
 ERRSIM_POINT_DEF(ERRSIM_END_TRANS_ERROR);
 #define RESTORE_EVENT_ADD                                                      \
   int ret_code = OB_SUCCESS;                                                   \
@@ -66,6 +65,10 @@ ERRSIM_POINT_DEF(ERRSIM_END_TRANS_ERROR);
       ret_code = OB_PASSWORD_WRONG;                                            \
     case -ER_CONNECT_FAILED:                                                   \
       ret_code = OB_CONNECT_ERROR;                                             \
+    case OB_IN_STOP_STATE:                                                     \
+      ret_code = OB_IN_STOP_STATE;                                             \
+    default:                                                                   \
+      ret_code = ret;                                                          \
   }                                                                            \
   ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",              \
     "tenant_id", tenant_id_, K(ret),                                           \
@@ -588,15 +591,25 @@ int ObRecoveryLSService::process_gc_log_(logservice::ObGCLSLog &gc_log, const SC
   common::ObMySQLTransaction trans;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
   ObLSLifeAgentManager ls_life_agent(*proxy_);
+  ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
+  ObAllTenantInfo tenant_info;
   if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is null", KR(ret));
    } else if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(meta_tenant_id));
-  } else if (OB_FAIL(ls_life_agent.set_ls_offline_in_trans(
-            tenant_id_, SYS_LS, share::OB_LS_TENANT_DROPPING, sync_scn, share::NORMAL_SWITCHOVER_STATUS,
+   } else if (OB_ISNULL(tenant_info_loader)) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("tenant report is null", KR(ret), K(tenant_id_));
+   } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+     LOG_WARN("failed to get tenant info", KR(ret));
+   } else if (OB_UNLIKELY(tenant_info.is_primary())) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("tenant info is primary", KR(ret), K(tenant_info));
+   } else if (OB_FAIL(ls_life_agent.set_ls_offline_in_trans(
+           tenant_id_, SYS_LS, share::OB_LS_TENANT_DROPPING, sync_scn, tenant_info.get_switchover_status(),
             trans))) {
-    LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(sync_scn));
+    LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(sync_scn), K(tenant_info));
   } else if (OB_FAIL(report_sys_ls_recovery_stat_in_trans_(sync_scn, false, trans,
           "report recovery stat and process gc log"))) {
     LOG_WARN("failed to report sys ls recovery stat", KR(ret), K(sync_scn));
@@ -742,13 +755,23 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
     const share::ObLSAttr &ls_attr, const SCN &sync_scn, ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!ls_attr.is_valid() || !trans.is_started())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls attr is invalid", KR(ret), K(ls_attr), "trans_start", trans.is_started());
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is null", KR(ret));
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant report is null", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
+  } else if (OB_UNLIKELY(tenant_info.is_primary())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info is primary", KR(ret), K(tenant_info));
   } else {
     ObLSStatusOperator ls_operator;
     share::ObLSStatusInfo ls_status;
@@ -762,17 +785,18 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
       }
     } else if (share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())) {
       //create new ls;
-      if (OB_FAIL(create_new_ls_(ls_attr, sync_scn, trans))) {
-        LOG_WARN("failed to create new ls", KR(ret), K(sync_scn), K(ls_attr));
+      if (OB_FAIL(create_new_ls_(ls_attr, sync_scn, tenant_info.get_switchover_status(), trans))) {
+        LOG_WARN("failed to create new ls", KR(ret), K(sync_scn), K(ls_attr), K(tenant_info));
       }
     } else if (share::is_ls_create_abort_op(ls_attr.get_ls_operation_type())) {
-      if (OB_FAIL(ls_life_agent.drop_ls_in_trans(tenant_id_, ls_attr.get_ls_id(), share::NORMAL_SWITCHOVER_STATUS, trans))) {
+      if (OB_FAIL(ls_life_agent.drop_ls_in_trans(tenant_id_, ls_attr.get_ls_id(),
+              tenant_info.get_switchover_status(), trans))) {
         LOG_WARN("failed to drop ls", KR(ret), K(tenant_id_), K(ls_attr));
       }
     } else if (share::is_ls_drop_end_op(ls_attr.get_ls_operation_type())) {
       if (OB_FAIL(ls_life_agent.set_ls_offline_in_trans(tenant_id_, ls_attr.get_ls_id(),
-              ls_attr.get_ls_status(), sync_scn, share::NORMAL_SWITCHOVER_STATUS, trans))) {
-        LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(ls_attr), K(sync_scn));
+              ls_attr.get_ls_status(), sync_scn, tenant_info.get_switchover_status(), trans))) {
+        LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(ls_attr), K(sync_scn), K(tenant_info));
       }
     } else {
       ObLSStatus target_status = share::OB_LS_EMPTY;
@@ -795,12 +819,12 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected operation type", KR(ret), K(ls_attr));
       }
-      if (FAILEDx(ls_operator.update_ls_status(tenant_id_, ls_attr.get_ls_id(),
-              ls_status.status_, target_status,
-              share::NORMAL_SWITCHOVER_STATUS, trans))) {
+      if (FAILEDx(ls_operator.update_ls_status_in_trans(tenant_id_, ls_attr.get_ls_id(),
+              ls_status.status_, target_status, tenant_info.get_switchover_status(), trans))) {
         LOG_WARN("failed to update ls status", KR(ret), K(tenant_id_), K(ls_attr),
             K(ls_status), K(target_status));
       }
+      ret = ERRSIM_END_TRANS_ERROR ? : ret;
       LOG_INFO("[LS_RECOVERY] update ls status", KR(ret), K(ls_attr), K(target_status));
     }
   }
@@ -833,12 +857,14 @@ int ObRecoveryLSService::porcess_alter_ls_group_(const share::ObLSAttr &ls_attr,
 
 int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
                                         const SCN &sync_scn,
+                                        const ObTenantSwitchoverStatus &switchover_status,
                                         common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  if (!share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())) {
+  if (!share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())
+      || ! switchover_status.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls not create pre operation", KR(ret), K(ls_attr));
+    LOG_WARN("invalid argument", KR(ret), K(ls_attr), K(switchover_status));
   } else {
     //create new ls;
     DEBUG_SYNC(BEFORE_RECOVER_USER_LS);
@@ -856,12 +882,13 @@ int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
       ret = OB_TENANT_NOT_EXIST;
       LOG_WARN("tenant not exist", KR(ret), K(tenant_id_));
     } else {
-      ObTenantLSInfo tenant_stat(GCTX.sql_proxy_, tenant_schema, tenant_id_);
+      ObTenantLSInfo tenant_stat(GCTX.sql_proxy_, tenant_schema, tenant_id_, &trans);
       ObLSFlag ls_flag = ls_attr.get_ls_flag();
       if (OB_FAIL(ObLSServiceHelper::create_new_ls_in_trans(ls_attr.get_ls_id(),
               ls_attr.get_ls_group_id(), ls_attr.get_create_scn(),
-              share::NORMAL_SWITCHOVER_STATUS, tenant_stat, trans, ls_flag))) {
-        LOG_WARN("failed to add new ls status info", KR(ret), K(ls_attr), K(sync_scn), K(tenant_stat));
+              switchover_status, tenant_stat, trans, ls_flag))) {
+        LOG_WARN("failed to add new ls status info", KR(ret), K(ls_attr), K(sync_scn),
+            K(tenant_stat), K(switchover_status));
       }
     }
     LOG_INFO("[LS_RECOVERY] create new ls", KR(ret), K(ls_attr));

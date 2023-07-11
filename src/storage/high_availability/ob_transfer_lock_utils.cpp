@@ -21,6 +21,9 @@
 #include "share/ob_common_id.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/ob_storage_rpc.h"
+#include "observer/ob_srv_network_frame.h"
+#include "share/ob_tenant_info_proxy.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -225,6 +228,35 @@ int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const
   return ret;
 }
 
+int ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObTransferTaskLockInfo> lock_infos;
+  if (OB_FAIL(ObTransferLockInfoOperator::fetch_all(sql_proxy, tenant_id, lock_infos))) {
+    LOG_WARN("failed to fetch all lock info", K(ret), K(tenant_id));
+  } else if (lock_infos.empty()) {
+    LOG_INFO("no need unlock member list when switch to standby", K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < lock_infos.count(); ++i) {
+      const ObTransferTaskLockInfo &lock_info = lock_infos.at(i);
+      const uint64_t tenant_id = lock_info.tenant_id_;
+      const share::ObLSID &ls_id = lock_info.ls_id_;
+      const int64_t task_id = lock_info.task_id_;
+      const ObTransferLockStatus status = lock_info.status_;
+      ObMemberList fake_member_list;
+      if (OB_FAIL(unlock_ls_member_list(tenant_id,
+                                        ls_id,
+                                        task_id,
+                                        fake_member_list,
+                                        status,
+                                        sql_proxy))) {
+        LOG_WARN("failed to unlock ls member list", K(ret), K(lock_info));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMemberListLockUtils::try_lock_config_change_(
     const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout)
 {
@@ -234,27 +266,16 @@ int ObMemberListLockUtils::try_lock_config_change_(
   const uint64_t tenant_id = lock_info.tenant_id_;
   const share::ObLSID &ls_id = lock_info.ls_id_;
   const int64_t lock_owner = lock_info.lock_owner_;
-  if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant storage ptr is null", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ls_svr->check_ls_exist(ls_id, ls_exist))) {
-    LOG_WARN("fail to check log stream exist", KR(ret), K(ls_id));
-  } else if (!ls_exist) {
-    if (OB_FAIL(try_lock_config_change_fallback_(lock_info, lock_timeout))) {
-      LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
-    } else {
-      LOG_INFO("try lock config change fallback", K(lock_info), K(lock_timeout));
-    }
+  obrpc::ObStorageRpcProxy storage_svr_rpc_proxy;
+  storage::ObStorageRpc storage_rpc;
+  if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
+    LOG_WARN("failed to init storage rpc", K(ret));
+  } else if (OB_FAIL(try_lock_config_change_fallback_(lock_info, lock_timeout, storage_rpc))) {
+    LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
   } else {
-    ObLSHandle ls_handle;
-    if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
-      LOG_WARN("failed to get ls handle", K(ret), K(lock_info));
-    } else if (OB_FAIL(ls_handle.get_ls()->try_lock_config_change(lock_owner, lock_timeout))) {
-      LOG_WARN("failed to try lock config change", K(ret), K(lock_info));
-    } else {
-      LOG_INFO("try lock config change", K(lock_info), K(lock_timeout));
-    }
+    LOG_INFO("try lock config change fallback", K(lock_info), K(lock_timeout));
   }
+  destory_storage_rpc_(storage_svr_rpc_proxy, storage_rpc);
 #ifdef ERRSIM
   SERVER_EVENT_ADD("TRANSFER_LOCK", "LOCK_CONFIG_CHANGE",
       "tenant_id", lock_info.tenant_id_,
@@ -268,25 +289,18 @@ int ObMemberListLockUtils::try_lock_config_change_(
 }
 
 int ObMemberListLockUtils::try_lock_config_change_fallback_(
-    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout)
+    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout,
+    storage::ObStorageRpc &storage_rpc)
 {
   int ret = OB_SUCCESS;
-  ObLSService *ls_svr = NULL;
-  ObStorageRpc *storage_rpc = NULL;
   ObStorageHASrcInfo src_info;
   src_info.cluster_id_ = GCONF.cluster_id;
   if (!lock_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(lock_info));
-  } else if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(lock_info.tenant_id_, lock_info.ls_id_, src_info.src_addr_))) {
     LOG_WARN("failed to get ls leader", K(ret), K(lock_info));
-  } else if (OB_FAIL(storage_rpc->lock_config_change(lock_info.tenant_id_, src_info, lock_info.ls_id_,
+  } else if (OB_FAIL(storage_rpc.lock_config_change(lock_info.tenant_id_, src_info, lock_info.ls_id_,
       lock_info.lock_owner_, lock_timeout))) {
     LOG_WARN("failed to try lock config config", K(ret), K(lock_info));
   }
@@ -301,27 +315,16 @@ int ObMemberListLockUtils::get_config_change_lock_stat_(
   ObLSService *ls_svr = NULL;
   const uint64_t tenant_id = lock_info.tenant_id_;
   const share::ObLSID &ls_id = lock_info.ls_id_;
-  if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant storage ptr is null", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ls_svr->check_ls_exist(ls_id, ls_exist))) {
-    LOG_WARN("fail to check log stream exist", KR(ret), K(ls_id));
-  } else if (!ls_exist) {
-    if (OB_FAIL(get_config_change_lock_stat_fallback_(lock_info, palf_lock_owner, is_locked))) {
-      LOG_WARN("failed to get lock config change fallback", K(ret), K(lock_info));
-    } else {
-      LOG_INFO("get lock config change stat fallback", K(lock_info), K(palf_lock_owner), K(is_locked));
-    }
+  obrpc::ObStorageRpcProxy storage_svr_rpc_proxy;
+  storage::ObStorageRpc storage_rpc;
+  if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
+    LOG_WARN("failed to init storage rpc", K(ret));
+  } else if (OB_FAIL(get_config_change_lock_stat_fallback_(lock_info, palf_lock_owner, is_locked, storage_rpc))) {
+    LOG_WARN("failed to get lock config change fallback", K(ret), K(lock_info));
   } else {
-    ObLSHandle ls_handle;
-    if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
-      LOG_WARN("failed to get ls handle", K(ret), K(lock_info));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_config_change_lock_stat(palf_lock_owner, is_locked))) {
-      LOG_WARN("failed to try lock config change", K(ret), K(lock_info));
-    } else {
-      LOG_INFO("get lock config change stat", K(lock_info), K(palf_lock_owner), K(is_locked));
-    }
+    LOG_INFO("get lock config change stat fallback", K(lock_info), K(palf_lock_owner), K(is_locked));
   }
+  destory_storage_rpc_(storage_svr_rpc_proxy, storage_rpc);
 #ifdef ERRSIM
   SERVER_EVENT_ADD("TRANSFER_LOCK", "GET_CONFIG_CHANGE_LOCK_STAT",
       "tenant_id", lock_info.tenant_id_,
@@ -335,27 +338,20 @@ int ObMemberListLockUtils::get_config_change_lock_stat_(
 }
 
 int ObMemberListLockUtils::get_config_change_lock_stat_fallback_(
-    const ObTransferTaskLockInfo &lock_info, int64_t &palf_lock_owner, bool &is_locked)
+    const ObTransferTaskLockInfo &lock_info, int64_t &palf_lock_owner,
+    bool &is_locked, storage::ObStorageRpc &storage_rpc)
 {
   int ret = OB_SUCCESS;
   palf_lock_owner = -1;
   is_locked = false;
-  ObLSService *ls_svr = NULL;
-  ObStorageRpc *storage_rpc = NULL;
   ObStorageHASrcInfo src_info;
   src_info.cluster_id_ = GCONF.cluster_id;
   if (!lock_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(lock_info));
-  } else if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(lock_info.tenant_id_, lock_info.ls_id_, src_info.src_addr_))) {
     LOG_WARN("failed to get ls leader", K(ret), K(lock_info));
-  } else if (OB_FAIL(storage_rpc->get_config_change_lock_stat(lock_info.tenant_id_, src_info,
+  } else if (OB_FAIL(storage_rpc.get_config_change_lock_stat(lock_info.tenant_id_, src_info,
       lock_info.ls_id_, palf_lock_owner, is_locked))) {
     LOG_WARN("failed to get config change lock stat", K(ret), K(lock_info));
   }
@@ -371,27 +367,16 @@ int ObMemberListLockUtils::unlock_config_change_(
   const uint64_t tenant_id = lock_info.tenant_id_;
   const share::ObLSID &ls_id = lock_info.ls_id_;
   const int64_t lock_owner = lock_info.lock_owner_;
-  if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant storage ptr is null", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ls_svr->check_ls_exist(ls_id, ls_exist))) {
-    LOG_WARN("fail to check log stream exist", KR(ret), K(ls_id));
-  } else if (!ls_exist) {
-    if (OB_FAIL(unlock_config_change_fallback_(lock_info, lock_timeout))) {
-      LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
-    } else {
-      LOG_INFO("unlock lock config change fallback", K(lock_info), K(lock_timeout));
-    }
+  obrpc::ObStorageRpcProxy storage_svr_rpc_proxy;
+  storage::ObStorageRpc storage_rpc;
+  if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
+    LOG_WARN("failed to init storage rpc", K(ret));
+  } else if (OB_FAIL(unlock_config_change_fallback_(lock_info, lock_timeout, storage_rpc))) {
+    LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
   } else {
-    ObLSHandle ls_handle;
-    if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
-      LOG_WARN("failed to get ls handle", K(ret), K(lock_info));
-    } else if (OB_FAIL(ls_handle.get_ls()->unlock_config_change(lock_owner, lock_timeout))) {
-      LOG_WARN("failed to try lock config change", K(ret), K(lock_info));
-    } else {
-      LOG_INFO("unlock lock config change", K(lock_info), K(lock_timeout));
-    }
+    LOG_INFO("unlock lock config change fallback", K(lock_info), K(lock_timeout));
   }
+  destory_storage_rpc_(storage_svr_rpc_proxy, storage_rpc);
 #ifdef ERRSIM
   SERVER_EVENT_ADD("TRANSFER_LOCK", "UNLOCK_CONFIG_CHANGE",
       "tenant_id", lock_info.tenant_id_,
@@ -405,25 +390,17 @@ int ObMemberListLockUtils::unlock_config_change_(
 }
 
 int ObMemberListLockUtils::unlock_config_change_fallback_(
-    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout)
+    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, storage::ObStorageRpc &storage_rpc)
 {
   int ret = OB_SUCCESS;
-  ObLSService *ls_svr = NULL;
-  ObStorageRpc *storage_rpc = NULL;
   ObStorageHASrcInfo src_info;
   src_info.cluster_id_ = GCONF.cluster_id;
   if (!lock_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(lock_info));
-  } else if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(lock_info.tenant_id_, lock_info.ls_id_, src_info.src_addr_))) {
     LOG_WARN("failed to get ls leader", K(ret), K(lock_info));
-  } else if (OB_FAIL(storage_rpc->unlock_config_change(lock_info.tenant_id_, src_info, lock_info.ls_id_,
+  } else if (OB_FAIL(storage_rpc.unlock_config_change(lock_info.tenant_id_, src_info, lock_info.ls_id_,
       lock_info.lock_owner_, lock_timeout))) {
     LOG_WARN("failed to try lock config config", K(ret), K(lock_info));
   }
@@ -480,25 +457,41 @@ int ObMemberListLockUtils::insert_lock_info(const uint64_t tenant_id, const shar
     int64_t &real_lock_owner, common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   real_lock_owner = -1;
+  ObMySQLTransaction trans;
   ObTransferTaskLockInfo lock_info;
+  ObAllTenantInfo tenant_info;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
   if (OB_FAIL(lock_info.set(tenant_id, ls_id, task_id, status, lock_owner, comment))) {
     LOG_WARN("failed to set lock info", K(ret), K(tenant_id), K(ls_id), K(status), K(real_lock_owner));
-  } else if (OB_FAIL(ObTransferLockInfoOperator::insert(lock_info, sql_proxy))) {
-    if (OB_ENTRY_EXIST == ret) {
-      ret = OB_SUCCESS;
-      ObTransferTaskLockInfo tmp_lock_info;
-      if (OB_FAIL(get_lock_info(tenant_id, ls_id, task_id, status, tmp_lock_info, sql_proxy))) {
-        LOG_WARN("failed to get lock info", K(ret), K(ls_id));
+  } else if (OB_FAIL(trans.start(&sql_proxy, meta_tenant_id))) {
+    LOG_WARN("failed to start trans", K(ret), K(meta_tenant_id));
+  } else {
+    if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true/*for_update*/, tenant_info))) {
+      LOG_WARN("failed to load tenant info", K(ret), K(tenant_id));
+    } else if (!tenant_info.is_primary()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("tenant is not primary, do not allow insert lock info", K(tenant_id), K(tenant_info));
+    } else if (OB_FAIL(ObTransferLockInfoOperator::insert(lock_info, trans))) {
+      if (OB_ENTRY_EXIST == ret) {
+        ret = OB_SUCCESS;
+        ObTransferTaskLockInfo tmp_lock_info;
+        if (OB_FAIL(get_lock_info(tenant_id, ls_id, task_id, status, tmp_lock_info, trans))) {
+          LOG_WARN("failed to get lock info", K(ret), K(ls_id));
+        } else {
+          real_lock_owner = tmp_lock_info.lock_owner_;
+          LOG_INFO("lock info already exist", K(ret), K(real_lock_owner), K(lock_owner));
+        }
       } else {
-        real_lock_owner = tmp_lock_info.lock_owner_;
-        LOG_INFO("lock info already exist", K(ret), K(real_lock_owner), K(lock_owner));
+        LOG_WARN("failed to insert lock info", K(ret), K(ls_id));
       }
     } else {
-      LOG_WARN("failed to insert lock info", K(ret), K(ls_id));
+      real_lock_owner = lock_owner;
     }
-  } else {
-    real_lock_owner = lock_owner;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to end trans", K(tmp_ret), K(ret));
+    }
   }
   return ret;
 }
@@ -613,6 +606,28 @@ int ObMemberListLockUtils::relock_before_unlock_(const ObTransferTaskLockInfo &l
                   "result", ret);
 #endif
   return ret;
+}
+
+// TODO(yangyi.yyy): change the use of storage rpc later
+int ObMemberListLockUtils::init_storage_rpc_(
+    obrpc::ObStorageRpcProxy &storage_svr_rpc_proxy,
+    storage::ObStorageRpc &storage_rpc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(storage_svr_rpc_proxy.init(GCTX.net_frame_->get_req_transport(), GCTX.self_addr()))) {
+    LOG_WARN("failed to init storage svr rpc proxy", K(ret));
+  } else if (OB_FAIL(storage_rpc.init(&storage_svr_rpc_proxy, GCTX.self_addr(), GCTX.rs_rpc_proxy_))) {
+    STORAGE_LOG(WARN, "fail to init partition service rpc", K(ret));
+  }
+  return ret;
+}
+
+void ObMemberListLockUtils::destory_storage_rpc_(
+    obrpc::ObStorageRpcProxy &storage_svr_rpc_proxy,
+    storage::ObStorageRpc &storage_rpc)
+{
+  storage_svr_rpc_proxy.destroy();
+  storage_rpc.destroy();
 }
 
 }  // namespace storage

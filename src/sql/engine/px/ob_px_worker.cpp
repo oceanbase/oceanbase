@@ -126,17 +126,44 @@ int ObPxCoroWorker::deep_copy_assign(const ObPxRpcInitTaskArgs &src,
 //////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
-
+class SQCHandlerGuard
+{
+public:
+  SQCHandlerGuard(ObPxSqcHandler *h) : sqc_handler_(h)
+  {
+    if (OB_LIKELY(sqc_handler_)) {
+      sqc_handler_->get_notifier().worker_start(GETTID());
+    }
+  }
+  ~SQCHandlerGuard()
+  {
+    if (OB_LIKELY(sqc_handler_)) {
+      sqc_handler_->worker_end_hook();
+      int report_ret = OB_SUCCESS;
+      ObPxSqcHandler::release_handler(sqc_handler_, report_ret);
+      sqc_handler_ = nullptr;
+    }
+  }
+private:
+  ObPxSqcHandler *sqc_handler_;
+};
 
 void PxWorkerFunctor::operator ()()
 {
   int ret = OB_SUCCESS;
+  ObCurTraceId::set(env_arg_.get_trace_id());
+  /**
+   * 中断必须覆盖到release handler，因为它的流程含有sqc向qc发送消息，
+   * 需要check中断。而中断本身是线程局部，不依赖于租户空间才对。
+   */
+  ObPxInterruptGuard px_int_guard(task_arg_.task_.get_interrupt_id().px_interrupt_id_);
   ObPxSqcHandler *sqc_handler = task_arg_.get_sqc_handler();
+  SQCHandlerGuard sqc_handler_guard(sqc_handler);
   lib::MemoryContext mem_context = nullptr;
   const bool enable_trace_log = lib::is_trace_log_enabled();
   //ensure PX worker skip updating timeout_ts_ by ntp offset
   THIS_WORKER.set_ntp_offset(0);
-  if (OB_NOT_NULL(sqc_handler)) {
+  if (OB_NOT_NULL(sqc_handler) && OB_LIKELY(!sqc_handler->has_interrupted())) {
     THIS_WORKER.set_worker_level(sqc_handler->get_rpc_level());
     THIS_WORKER.set_curr_request_level(sqc_handler->get_rpc_level());
     LOG_TRACE("init flt ctx", K(sqc_handler->get_flt_ctx()));
@@ -150,13 +177,6 @@ void PxWorkerFunctor::operator ()()
                 sqc_id, task_arg_.task_.get_sqc_id(),
                 qc_id, task_arg_.task_.get_qc_id(),
                 group_id, THIS_WORKER.get_group_id());
-    /**
-     * 中断必须覆盖到release handler，因为它的流程含有sqc向qc发送消息，
-     * 需要check中断。而中断本身是线程局部，不依赖于租户空间才对。
-     */
-    ObPxInterruptGuard px_int_guard(task_arg_.task_.get_interrupt_id().px_interrupt_id_);
-    // 环境初始化
-    ObCurTraceId::set(env_arg_.get_trace_id());
     // Do not set thread local log level while log level upgrading (OB_LOGGER.is_info_as_wdiag)
     if (OB_LOGGER.is_info_as_wdiag()) {
       ObThreadLogLevelUtils::clear();
@@ -191,14 +211,10 @@ void PxWorkerFunctor::operator ()()
             // 执行
             ObPxTaskProcess worker(*env_arg_.get_gctx(), runtime_arg);
             worker.set_is_oracle_mode(env_arg_.is_oracle_mode());
-            sqc_handler->get_notifier().worker_start(GETTID());
             if (OB_SUCC(ret)) {
               worker.run();
             }
             runtime_arg.destroy();
-
-            LOG_TRACE("Is finish all worker", K(ret), K(sqc_handler->get_notifier()));
-            sqc_handler->worker_end_hook();
           }
         }
       }
@@ -212,25 +228,19 @@ void PxWorkerFunctor::operator ()()
           LOG_ERROR("page manager's used should be 0, unexpected!!!", KP(pm));
         }
       }
-      /**
-       * worker在经历了release handler的时候进行内存引用计数的释放。
-       * 当计数器为0的时候会真正释放sqc handler的内存。请保证所有的
-       * 内存使用超出次函数。释放的时候必须在租户的space中，所以不能放到外面了。
-       */
-      int report_ret = OB_SUCCESS;
-      ObPxSqcHandler::release_handler(sqc_handler, report_ret);
-      // 环境清理
-      ObCurTraceId::reset();
-      if (enable_trace_log) {
-        ObThreadLogLevelUtils::clear();
-      }
     }
+    if (enable_trace_log) {
+      ObThreadLogLevelUtils::clear();
+    }
+  } else if (OB_ISNULL(sqc_handler)) {
+    LOG_ERROR("Unexpected null sqc handler", K(sqc_handler));
   } else {
-    LOG_ERROR("Unexpected", K(ret), K(sqc_handler));
+    LOG_WARN("already interrupted");
   }
 
   PxWorkerFinishFunctor on_func_finish;
   on_func_finish();
+  ObCurTraceId::reset();
 }
 
 void PxWorkerFinishFunctor::operator ()()

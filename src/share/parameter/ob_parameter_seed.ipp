@@ -1416,27 +1416,27 @@ DEF_TIME(_advance_checkpoint_timeout, OB_CLUSTER_PARAMETER, "30m", "[10s,180m]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //transfer
-DEF_TIME(_transfer_start_rpc_timeout, OB_CLUSTER_PARAMETER, "10s", "[1ms,600s]",
+DEF_TIME(_transfer_start_rpc_timeout, OB_TENANT_PARAMETER, "10s", "[1ms,600s]",
         "transfer start status rpc check some status ready timeout, Range [1ms,600s]. "
-        "The default value is 10ms",
+        "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_transfer_finish_trans_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
+DEF_TIME(_transfer_finish_trans_timeout, OB_TENANT_PARAMETER, "10s", "[1s,600s]",
         "transfer finish transaction timeout, Range [1s,600s]. "
         "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_transfer_start_trans_timeout, OB_CLUSTER_PARAMETER, "10s", "[1ms,600s]",
+DEF_TIME(_transfer_start_trans_timeout, OB_TENANT_PARAMETER, "10s", "[1ms,600s]",
         "transfer start transaction timeout, Range [1ms,600s]. "
         "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(_transfer_start_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
+DEF_INT(_transfer_start_retry_count, OB_TENANT_PARAMETER, "3", "[0,64]",
         "the number of transfer start retry. Range: [0, 64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
 
-DEF_TIME(_transfer_service_wakeup_interval, OB_CLUSTER_PARAMETER, "5m", "[1s,5m]",
+DEF_TIME(_transfer_service_wakeup_interval, OB_TENANT_PARAMETER, "5m", "[1s,5m]",
         "transfer service wakeup interval in errsim mode"
         "Range: [1s, 5m]",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

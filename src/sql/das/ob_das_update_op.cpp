@@ -197,47 +197,51 @@ int ObDASUpdIterator::get_next_spatial_index_row(ObNewRow *&row)
   if (OB_SUCC(ret)) {
     ObDASWriteBuffer &write_buffer = get_write_buffer();
     ObSpatIndexRow *spatial_rows = get_spatial_index_rows();
-    if (OB_ISNULL(spatial_rows) || spatial_row_idx_ >= spatial_rows->count()) {
-      const ObChunkDatumStore::StoredRow *sr = nullptr;
-      spatial_row_idx_ = 0;
-      if (OB_FAIL(result_iter_.get_next_row(sr))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next row from result iterator failed", K(ret));
-        } else if (!got_old_row_) {
-          // ret == OB_ITER_END, old row is finished, get next new row
-          old_row_ = NULL;
-          got_old_row_ = true;
+    bool got_row = false;
+    while (OB_SUCC(ret) && ! got_row) {
+      if (OB_ISNULL(spatial_rows) || spatial_row_idx_ >= spatial_rows->count()) {
+        const ObChunkDatumStore::StoredRow *sr = nullptr;
+        spatial_row_idx_ = 0;
+        if (OB_FAIL(result_iter_.get_next_row(sr))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("get next row from result iterator failed", K(ret));
+          } else if (!got_old_row_) {
+            // ret == OB_ITER_END, old row is finished, get next new row
+            old_row_ = NULL;
+            got_old_row_ = true;
+          }
+        } else if (OB_ISNULL(spatial_rows)) {
+          if (OB_FAIL(create_spatial_index_store())) {
+            LOG_WARN("create spatila index rows store failed", K(ret));
+          } else {
+            spatial_rows = get_spatial_index_rows();
+          }
         }
-      } else if (OB_ISNULL(spatial_rows)) {
-        if (OB_FAIL(create_spatial_index_store())) {
-          LOG_WARN("create spatila index rows store failed", K(ret));
-        } else {
-          spatial_rows = get_spatial_index_rows();
+        if (OB_NOT_NULL(spatial_rows)) {
+          spatial_rows->reuse();
         }
-      }
-      if (OB_NOT_NULL(spatial_rows)) {
-        spatial_rows->reuse();
+
+        if(OB_SUCC(ret)) {
+          // get full row successfully
+          const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
+          int64_t geo_idx = cur_proj.at(rowkey_num);
+          ObString geo_wkb = sr->cells()[geo_idx].get_string();
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, ObGeometryType,
+                      CS_TYPE_UTF8MB4_BIN, true, geo_wkb))) {
+            LOG_WARN("fail to get real string data", K(ret), K(geo_wkb));
+          } else if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
+                                                              cur_proj, *sr, *spatial_rows))) {
+            LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_idx), K(geo_wkb), K(rowkey_num));
+          }
+        }
       }
 
-      if(OB_SUCC(ret)) {
-        // get full row successfully
-        const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
-        int64_t geo_idx = cur_proj.at(rowkey_num);
-        ObString geo_wkb = sr->cells()[geo_idx].get_string();
-        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, ObGeometryType,
-                    CS_TYPE_UTF8MB4_BIN, true, geo_wkb))) {
-          LOG_WARN("fail to get real string data", K(ret), K(geo_wkb));
-        } else if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
-                                                            cur_proj, *sr, *spatial_rows))) {
-          LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_idx), K(geo_wkb), K(rowkey_num));
-        }
+      if (OB_SUCC(ret) && spatial_row_idx_ < spatial_rows->count()) {
+        row = &(*spatial_rows)[spatial_row_idx_];
+        old_row_ = row;
+        spatial_row_idx_++;
+        got_row = true;
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      row = &(*spatial_rows)[spatial_row_idx_];
-      old_row_ = row;
-      spatial_row_idx_++;
     }
   }
   return ret;

@@ -107,6 +107,33 @@ void ObTransferHandler::wakeup_()
   }
 }
 
+int ObTransferHandler::wakeup_dest_ls_leader_(const share::ObTransferTaskInfo &task_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = task_info.tenant_id_;
+  const share::ObLSID &dest_ls_id = task_info.dest_ls_id_;
+  ObLSService *ls_svr = NULL;
+  common::ObAddr leader_addr;
+  ObStorageHASrcInfo src_info;
+  ObStorageRpc *storage_rpc = NULL;
+  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
+  } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, dest_ls_id, leader_addr))) {
+    LOG_WARN("failed to get ls leader", K(ret), K(tenant_id));
+  } else {
+    src_info.src_addr_ = leader_addr;
+    src_info.cluster_id_ = GCONF.cluster_id;
+    if (OB_FAIL(storage_rpc->wakeup_transfer_service(tenant_id, src_info))) {
+      LOG_WARN("failed to wakeup dest ls leader", K(ret), K(task_info), K(src_info));
+    }
+  }
+  return ret;
+}
+
 int ObTransferHandler::get_transfer_task_(ObTransferTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
@@ -114,7 +141,7 @@ int ObTransferHandler::get_transfer_task_(ObTransferTaskInfo &task_info)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (OB_FAIL(get_transfer_task_from_inner_table_(task_info))) {
+  } else if (OB_FAIL(fetch_transfer_task_from_inner_table_(task_info))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get transfer task from inner table", K(ret), KPC(ls_));
     }
@@ -148,24 +175,84 @@ int ObTransferHandler::get_transfer_task_from_inner_table_(
   return ret;
 }
 
-int ObTransferHandler::get_transfer_task_from_inner_table_(
+int ObTransferHandler::fetch_transfer_task_from_inner_table_(
     share::ObTransferTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
+  // currently START stage is executed on src ls leader
+  // and DOING stage is executed on dest ls leader
+  // so here try to fetch task by src ls first, then dest ls later
+  // either one succeeded will return the task
+  bool src_exist = false;
+  bool dst_exist = false;
+  share::ObTransferTaskInfo src_task_info;
+  share::ObTransferTaskInfo dst_task_info;
+  if (OB_FAIL(fetch_transfer_task_from_inner_table_by_src_ls_(src_task_info, src_exist))) {
+    LOG_WARN("failed to fetch transfer task from inner table by src ls", K(ret));
+  } else if (OB_FAIL(fetch_transfer_task_from_inner_table_by_dest_ls_(dst_task_info, dst_exist))) {
+    LOG_WARN("failed to fetch transfer task from inner table by dst ls", K(ret));
+  } else if (src_exist && dst_exist) {
+    ret = OB_SCHEDULER_TASK_CNT_MISTACH;
+    LOG_WARN("src task info and dst task info transfer ls overlap", K(ret), K(src_task_info), K(dst_task_info));
+  } else if (src_exist && OB_FAIL(task_info.assign(src_task_info))) {
+    LOG_WARN("failed to assign task info", K(ret), K(src_task_info));
+  } else if (dst_exist && OB_FAIL(task_info.assign(dst_task_info))) {
+    LOG_WARN("failed to assign task info", K(ret), K(dst_task_info));
+  }
+  return ret;
+}
+
+int ObTransferHandler::fetch_transfer_task_from_inner_table_by_src_ls_(
+    share::ObTransferTaskInfo &task_info,
+    bool &task_exist)
+{
+  int ret = OB_SUCCESS;
+  task_exist = false;
   task_info.reset();
   const uint64_t tenant_id = MTL_ID();
-  const bool for_update = false;
+  const ObLSID &src_ls_id = ls_->get_ls_id();
   ObTransferTask task;
-  const ObLSID &dest_ls_id = ls_->get_ls_id();
-
-  if (OB_FAIL(ObTransferTaskOperator::get_by_dest_ls(*sql_proxy_, tenant_id, dest_ls_id, task))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(dest_ls_id));
-    }
+  if (OB_FAIL(ObTransferTaskOperator::get_by_src_ls(
+      *sql_proxy_, tenant_id, src_ls_id, task))) {
+    LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(src_ls_id));
   } else if (OB_FAIL(task_info.convert_from(tenant_id, task))) {
     LOG_WARN("failed to convert from transfer task", K(ret), K(task));
+  } else if (!task_info.status_.is_start_status()
+      && !task_info.status_.is_aborted_status()) {
+    // task not exist
   } else {
-    LOG_INFO("get transfer task from inner table", K(task_info));
+    task_exist = true;
+  }
+  if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
+    task_exist = false;
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObTransferHandler::fetch_transfer_task_from_inner_table_by_dest_ls_(
+    share::ObTransferTaskInfo &task_info,
+    bool &task_exist)
+{
+  int ret = OB_SUCCESS;
+  task_exist = false;
+  task_info.reset();
+  const uint64_t tenant_id = MTL_ID();
+  const ObLSID &dest_ls_id = ls_->get_ls_id();
+  ObTransferTask task;
+  if (OB_FAIL(ObTransferTaskOperator::get_by_dest_ls(
+      *sql_proxy_, tenant_id, dest_ls_id, task))) {
+    LOG_WARN("failed to get transfer task by dest ls", K(ret), K(tenant_id), K(dest_ls_id));
+  } else if (OB_FAIL(task_info.convert_from(tenant_id, task))) {
+    LOG_WARN("failed to convert from transfer task", K(ret), K(task));
+  } else if (!task_info.status_.is_doing_status()) {
+    // task not exist
+  } else {
+    task_exist = true;
+  }
+  if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
+    task_exist = false;
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -300,16 +387,13 @@ int ObTransferHandler::check_self_is_leader_(bool &is_leader)
   logservice::ObLogService *log_service = nullptr;
   ObRole role = ObRole::INVALID_ROLE;
   int64_t proposal_id = 0;
-  share::ObAllTenantInfo tenant_info;
   const uint64_t tenant_id = MTL_ID();
   is_leader = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, false/*for update*/, tenant_info))) {
-    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (!tenant_info.is_primary()) {
+  } else if (!MTL_IS_PRIMARY_TENANT()) {
     is_leader = false;
   } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
     ret = OB_ERR_UNEXPECTED;
@@ -410,7 +494,15 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, round_, task_info))) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(retry_count_), K(task_info));
   }
-  wakeup_();
+  // if START stage execution failed, just wakeup self
+  // if START stage execution succeeded, try to wakeup dest ls leader to go to DOING stage
+  if (OB_FAIL(ret)) {
+    wakeup_(); // wakeup self
+  } else {
+    if (OB_TMP_FAIL(wakeup_dest_ls_leader_(task_info))) {
+      LOG_WARN("failed to wakeup dest ls leader", K(tmp_ret), K(task_info));
+    }
+  }
   LOG_INFO("[TRANSFER] finish do with start status", K(ret), K(task_info), "cost_ts", ObTimeUtil::current_time() - start_ts);
   return ret;
 }
@@ -490,8 +582,12 @@ int ObTransferHandler::lock_src_and_dest_ls_member_list_(
 int ObTransferHandler::reset_timeout_for_trans_(ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_EXECUTE_TIMEOUT_US = GCONF._transfer_start_trans_timeout; //default 1s
-  int64_t stmt_timeout = MAX_EXECUTE_TIMEOUT_US;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  int64_t get_transfer_trans_timeout = 10_s;
+  if (tenant_config.is_valid()) {
+    get_transfer_trans_timeout = tenant_config->_transfer_start_trans_timeout;
+  }
+  const int64_t stmt_timeout = get_transfer_trans_timeout;
   if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
     LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
   } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
@@ -799,9 +895,12 @@ int ObTransferHandler::start_trans_(
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_EXECUTE_TIMEOUT_US = GCONF._transfer_start_trans_timeout; //default 1s
-  int64_t stmt_timeout = MAX_EXECUTE_TIMEOUT_US;
   const uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  int64_t stmt_timeout = 10_s;
+  if (tenant_config.is_valid()) {
+    stmt_timeout = tenant_config->_transfer_start_trans_timeout;
+  }
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1443,14 +1542,19 @@ bool ObTransferHandler::can_retry_(
     const int32_t result)
 {
   bool bool_ret = false;
-  const int64_t MAX_TRANSFER_START_RETRY_COUNT = GCONF._transfer_start_retry_count;
+  int64_t max_transfer_start_retry_count = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    max_transfer_start_retry_count = tenant_config->_transfer_start_retry_count;
+  }
+
   if (!task_info.is_valid()) {
     bool_ret = false;
   } else if (ObTransferStatus::DOING == task_info.status_) {
     bool_ret = true;
     retry_count_++;
   } else if (ObTransferStatus::START == task_info.status_) {
-    if (ObTransferUtils::is_need_retry_error(result) && retry_count_ < MAX_TRANSFER_START_RETRY_COUNT) {
+    if (ObTransferUtils::is_need_retry_error(result) && retry_count_ < max_transfer_start_retry_count) {
       retry_count_++;
       bool_ret = true;
     } else {
@@ -1512,6 +1616,14 @@ int ObTransferHandler::do_with_doing_status_(const share::ObTransferTaskInfo &ta
   const uint64_t tenant_id = task_info.tenant_id_;
   const share::ObLSID &src_ls_id = task_info.src_ls_id_;
   const share::ObLSID &dest_ls_id = task_info.dest_ls_id_;
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("transfer_errsim", "before_transfer_doing",
+                      "task_id", task_id,
+                      "tenant_id", tenant_id,
+                      "src_ls_id", src_ls_id,
+                      "dest_ls_id", dest_ls_id);
+  DEBUG_SYNC(BEFORE_TRANSFER_DOING);
+#endif
 
   if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

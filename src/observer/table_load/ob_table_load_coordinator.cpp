@@ -731,7 +731,6 @@ int ObTableLoadCoordinator::drive_sql_stat(ObExecContext *ctx,
   const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
   ObSchemaGetterGuard schema_guard;
   ObSchemaGetterGuard *tmp_schema_guard = nullptr;
-  ObSchemaGetterGuard *tmp_schema_guard2 = nullptr;
   const ObTableSchema *table_schema = nullptr;
   if (OB_UNLIKELY(nullptr == ctx || sql_statistics.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -741,9 +740,8 @@ int ObTableLoadCoordinator::drive_sql_stat(ObExecContext *ctx,
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else {
     tmp_schema_guard = ctx->get_virtual_table_ctx().schema_guard_;
-    tmp_schema_guard2 = ctx->get_das_ctx().get_schema_guard();
     ctx->get_sql_ctx()->schema_guard_ = &schema_guard;
-    ctx->get_das_ctx().get_schema_guard() = &schema_guard;
+    ctx->get_das_ctx().set_sql_ctx(ctx->get_sql_ctx());
   }
   ObSEArray<ObOptColumnStat *, 64> part_column_stats;
   if (OB_FAIL(ret)) {
@@ -754,7 +752,7 @@ int ObTableLoadCoordinator::drive_sql_stat(ObExecContext *ctx,
     LOG_WARN("fail to drive global stat by direct load", KR(ret));
   }
   ctx->get_sql_ctx()->schema_guard_ = tmp_schema_guard;
-  ctx->get_das_ctx().get_schema_guard() = tmp_schema_guard2;
+  ctx->get_das_ctx().set_sql_ctx(ctx->get_sql_ctx());
   return ret;
 }
 

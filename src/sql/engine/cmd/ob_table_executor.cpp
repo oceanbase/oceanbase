@@ -2081,7 +2081,8 @@ int ObTruncateTableExecutor::check_use_parallel_truncate(const obrpc::ObTruncate
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table is not exist", K(ret), K(database_name), K(table_name));
   } else {
-    use_parallel_truncate = table_schema->get_autoinc_column_id() == 0 && compat_version >= DATA_VERSION_4_1_0_0;
+    use_parallel_truncate = (table_schema->get_autoinc_column_id() == 0 && compat_version >= DATA_VERSION_4_1_0_0)
+                            || compat_version >= DATA_VERSION_4_2_0_0;
   }
   return ret;
 }

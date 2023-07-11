@@ -496,6 +496,7 @@ int ObLSBackupCleanTask::post_rpc_result_(const int64_t result)
   clean_ls_res.ls_id_ = ls_id_;
   clean_ls_res.result_ = result;
   clean_ls_res.trace_id_ = trace_id_;
+  clean_ls_res.dag_id_ = get_dag()->get_dag_id();
   const int64_t cluster_id = GCONF.cluster_id;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
   if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {

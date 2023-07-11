@@ -178,6 +178,7 @@ public:
   int start();
   int stop();
   void wait();
+  int prepare_for_safe_destroy();
   bool safe_to_destroy();
   void destroy();
   int offline();
@@ -638,6 +639,7 @@ public:
   DELEGATE_WITH_RET(member_list_service_, switch_learner_to_acceptor, int);
   DELEGATE_WITH_RET(member_list_service_, add_member, int);
   DELEGATE_WITH_RET(member_list_service_, replace_member, int);
+  DELEGATE_WITH_RET(member_list_service_, get_config_version_and_transfer_scn, int);
   DELEGATE_WITH_RET(log_handler_, add_learner, int); //TODO(yanfeng): fix it
   DELEGATE_WITH_RET(log_handler_, replace_learner, int); //TODO(yanfeng): fix it
   DELEGATE_WITH_RET(block_tx_service_, ha_block_tx, int);

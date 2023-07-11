@@ -6123,7 +6123,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       partition wise, force partition granule
   3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
-      conds(nil), nl_params_([VIEW2.VIEW1.a(:2)], [VIEW2.VIEW1.b(:3)]), use_batch=false
+      conds(nil), nl_params_([VIEW2.VIEW1.a(:0)], [VIEW2.VIEW1.b(:1)]), use_batch=false
   4 - output([VIEW2.VIEW1.a], [VIEW2.VIEW1.b]), filter(nil), rowset=256
       access([VIEW2.VIEW1.a], [VIEW2.VIEW1.b])
   5 - output([t2.a], [t2.b]), filter(nil), rowset=256
@@ -6136,7 +6136,7 @@ Outputs & filters:
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t1.a], [t1.b], [t1.c]), range(MIN ; MAX),
-      range_cond([t1.a = :2], [t1.b = :3])
+      range_cond([t1.a = :0], [t1.b = :1])
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2) and (t1.a, t1.b) in (select t3.a, t3.b from t3);
 Query Plan
 =================================================================
@@ -6161,9 +6161,9 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       partition wise, force partition granule
   3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
-      conds(nil), nl_params_([t1.a(:4)], [t1.b(:5)]), use_batch=false
+      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
   4 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
-      conds(nil), nl_params_([VIEW3.VIEW1.a(:2)], [VIEW3.VIEW1.b(:3)]), use_batch=false
+      conds(nil), nl_params_([VIEW3.VIEW1.a(:0)], [VIEW3.VIEW1.b(:1)]), use_batch=false
   5 - output([VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=256
       access([VIEW3.VIEW1.a], [VIEW3.VIEW1.b])
   6 - output([t2.a], [t2.b]), filter(nil), rowset=256
@@ -6176,12 +6176,12 @@ Outputs & filters:
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t1.a], [t1.b], [t1.c]), range(MIN ; MAX),
-      range_cond([t1.a = :2], [t1.b = :3])
+      range_cond([t1.a = :0], [t1.b = :1])
   9 - output(nil), filter(nil), rowset=256
       access(nil), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX),
-      range_cond([:4 = t3.a], [:5 = t3.b])
+      range_cond([:2 = t3.a], [:3 = t3.b])
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2 where (t2.a, t2.b) in (select t3.a, t3.b from t3));
 Query Plan
 ===================================================================
@@ -6207,7 +6207,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       partition wise, force partition granule
   3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
-      conds(nil), nl_params_([t1.a(:4)], [t1.b(:5)]), use_batch=false
+      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
   4 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false,
@@ -6215,7 +6215,7 @@ Outputs & filters:
   5 - output(nil), filter(nil), rowset=256
       access(nil)
   6 - output([t2.a], [t2.b]), filter(nil), rowset=256
-      conds(nil), nl_params_([VIEW3.VIEW1.a(:8)], [VIEW3.VIEW1.b(:9)]), use_batch=false
+      conds(nil), nl_params_([VIEW3.VIEW1.a(:4)], [VIEW3.VIEW1.b(:5)]), use_batch=false
   7 - output([VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=256
       access([VIEW3.VIEW1.a], [VIEW3.VIEW1.b])
   8 - output([t3.a], [t3.b]), filter(nil), rowset=256
@@ -6228,7 +6228,7 @@ Outputs & filters:
       access([t2.a], [t2.b]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX),
-      range_cond([:4 = t2.a], [:5 = t2.b], [t2.a = :8], [t2.b = :9])
+      range_cond([:2 = t2.a], [:3 = t2.b], [t2.a = :4], [t2.b = :5])
 drop table if exists t1, t2, t3;
 create table t1(a int, b int) partition by hash(a+1) partitions 5;
 create table t2(a int, b int) partition by hash(a+1) partitions 5;

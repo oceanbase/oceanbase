@@ -146,13 +146,14 @@ ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
 int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
                                 const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                                 const blocksstable::MacroBlockId &macro_block_id,
+                                ObTabletHandle &tablet_handle,
                                 ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid() || !ddl_kv_mgr_handle.is_valid())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid() || !tablet_handle.is_valid() || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
   } else {
@@ -163,6 +164,7 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
     redo_info_.start_scn_ = redo_info.start_scn_;
     ls_id_ = ls_id;
     macro_block_id_ = macro_block_id;
+    tablet_handle_ = tablet_handle;
     ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
   }
   return ret;
@@ -184,16 +186,10 @@ int ObDDLMacroBlockClogCb::on_success()
 {
   int ret = OB_SUCCESS;
   ObDDLMacroBlock macro_block;
-  ObLSHandle ls_handle;
-  ObTabletHandle tablet_handle;
   {
     ObSpinLockGuard data_buffer_guard(data_buffer_lock_);
     if (is_data_buffer_freed_) {
       LOG_INFO("data buffer is freed, do not need to callback");
-    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-      LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
-    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, redo_info_.table_key_.get_tablet_id(), tablet_handle))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(redo_info_.table_key_));
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_block_id_))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
     } else {
@@ -203,8 +199,8 @@ int ObDDLMacroBlockClogCb::on_success()
       macro_block.buf_ = redo_info_.data_buffer_.ptr();
       macro_block.size_ = redo_info_.data_buffer_.length();
       macro_block.ddl_start_scn_ = redo_info_.start_scn_;
-      if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block))) {
-        LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block));
+      if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle_.get_obj(), macro_block))) {
+        LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle_), K(macro_block));
       }
     }
   }

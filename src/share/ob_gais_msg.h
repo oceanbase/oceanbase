@@ -35,7 +35,7 @@ struct ObGAISNextAutoIncValReq
 
 public:
   ObGAISNextAutoIncValReq() : autoinc_key_(), offset_(0), increment_(0), base_value_(0),
-                              max_value_(0), desired_cnt_(0), cache_size_(0), sender_() {}
+                              max_value_(0), desired_cnt_(0), cache_size_(0), sender_(), autoinc_version_(OB_INVALID_VERSION) {}
   int init(const AutoincKey &autoinc_key,
            const uint64_t offset,
            const uint64_t increment,
@@ -43,14 +43,16 @@ public:
            const uint64_t max_value,
            const uint64_t desired_cnt,
            const uint64_t cache_size,
-           const common::ObAddr &sender);
+           const common::ObAddr &sender,
+           const int64_t &autoinc_version);
   bool is_valid() const
   {
     return is_valid_tenant_id(autoinc_key_.tenant_id_) && offset_ > 0 && increment_ > 0 &&
-             max_value_ > 0 && desired_cnt_ > 0 && cache_size_ > 0 && sender_.is_valid();
+             max_value_ > 0 && desired_cnt_ > 0 && cache_size_ > 0 && sender_.is_valid()
+             && autoinc_version_ >= OB_INVALID_VERSION;
   }
   TO_STRING_KV(K_(autoinc_key), K_(offset), K_(increment), K_(base_value), K_(max_value),
-                                K_(desired_cnt), K_(cache_size), K_(sender));
+                                K_(desired_cnt), K_(cache_size), K_(sender), K_(autoinc_version));
 
   AutoincKey autoinc_key_;
   uint64_t offset_;
@@ -60,6 +62,7 @@ public:
   uint64_t desired_cnt_;
   uint64_t cache_size_;
   common::ObAddr sender_;
+  int64_t autoinc_version_;
 };
 
 /* GAIS autoinc key rpc argument */
@@ -68,16 +71,17 @@ struct ObGAISAutoIncKeyArg
   OB_UNIS_VERSION(1);
 
 public:
-  ObGAISAutoIncKeyArg() : autoinc_key_(), sender_() {}
-  int init(const AutoincKey &autoinc_key, const common::ObAddr &sender);
+  ObGAISAutoIncKeyArg() : autoinc_key_(), sender_(), autoinc_version_(OB_INVALID_VERSION) {}
+  int init(const AutoincKey &autoinc_key, const common::ObAddr &sender, const int64_t autoinc_version);
   bool is_valid() const
   {
-    return is_valid_tenant_id(autoinc_key_.tenant_id_) && sender_.is_valid();
+    return is_valid_tenant_id(autoinc_key_.tenant_id_) && sender_.is_valid() && autoinc_version_ >= OB_INVALID_VERSION;
   }
-  TO_STRING_KV(K_(autoinc_key), K_(sender));
+  TO_STRING_KV(K_(autoinc_key), K_(sender), K_(autoinc_version));
 
   AutoincKey autoinc_key_;
   common::ObAddr sender_;
+  int64_t autoinc_version_;
 };
 
 /* Request for push local sync value to global */
@@ -86,22 +90,24 @@ struct ObGAISPushAutoIncValReq
   OB_UNIS_VERSION(1);
 
 public:
-  ObGAISPushAutoIncValReq() : autoinc_key_(), base_value_(0), max_value_(0), sender_() {}
+  ObGAISPushAutoIncValReq() : autoinc_key_(), base_value_(0), max_value_(0), sender_(), autoinc_version_(OB_INVALID_VERSION) {}
   int init(const AutoincKey &autoinc_key,
            const uint64_t base_value,
            const uint64_t max_value,
-           const common::ObAddr &sender);
+           const common::ObAddr &sender,
+           const int64_t &autoinc_version);
   bool is_valid() const
   {
-    return is_valid_tenant_id(autoinc_key_.tenant_id_) &&
-             max_value_ > 0 && base_value_ <= max_value_ && sender_.is_valid();
+    return is_valid_tenant_id(autoinc_key_.tenant_id_) && max_value_ > 0 && base_value_ <= max_value_
+            && sender_.is_valid() && autoinc_version_ >= OB_INVALID_VERSION;
   }
-  TO_STRING_KV(K_(autoinc_key), K_(base_value), K_(max_value), K_(sender));
+  TO_STRING_KV(K_(autoinc_key), K_(base_value), K_(max_value), K_(sender), K_(autoinc_version));
 
   AutoincKey autoinc_key_;
   uint64_t base_value_;
   uint64_t max_value_;
   common::ObAddr sender_;
+  int64_t autoinc_version_;
 };
 
 } // share

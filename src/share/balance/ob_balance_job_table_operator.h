@@ -214,7 +214,7 @@ public:
    */
   static int clean_job(const uint64_t tenant_id,
                        const ObBalanceJobID job_id,
-                       ObISQLClient &client);
+                       ObMySQLProxy &client);
   static int fill_dml_spliter(share::ObDMLSqlSplicer &dml,
                               const ObBalanceJob &job);
 };

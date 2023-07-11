@@ -1463,7 +1463,6 @@ int ObSql::handle_pl_execute(const ObString &sql,
                                           ? PRIV_CHECK_FLAG_DISABLE
                                           : PRIV_CHECK_FLAG_IN_PL;
     pctx = ectx.get_physical_plan_ctx();
-    ectx.get_das_ctx().get_schema_guard() = context.schema_guard_;
     int64_t local_tenant_schema_version = -1;
     int64_t local_sys_schema_version = -1;
     if (OB_ISNULL(context.schema_guard_)) {
@@ -1972,7 +1971,6 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
   ObIAllocator &allocator = result.get_mem_pool();
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
-  ectx.get_das_ctx().get_schema_guard() = context.schema_guard_;
   ParamStore fixed_params( (ObWrapperAllocator(allocator)) );
   ParamStore ps_params( (ObWrapperAllocator(allocator)) );
   ObPsCache *ps_cache = session.get_ps_cache();
@@ -2144,7 +2142,6 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
 
   ObIAllocator &allocator = THIS_WORKER.get_sql_arena_allocator();
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
-  exec_ctx.get_das_ctx().get_schema_guard() = context.schema_guard_;
   int get_plan_err = OB_SUCCESS; //used for judge whether add plan to plan cache
   bool is_from_plan_cache = false;
   ObPlanCacheCtx *pc_ctx = NULL;
@@ -2359,7 +2356,6 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   ObSQLSessionInfo &session = result.get_session();
   const uint64_t tenant_id = session.get_effective_tenant_id();
   ObExecContext& ectx = result.get_exec_context();
-  ectx.get_das_ctx().get_schema_guard() = context.schema_guard_;
   int get_plan_err = OB_SUCCESS; //used for judge whether add plan to plan cache
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
   ObPlanCacheCtx *pc_ctx = NULL;

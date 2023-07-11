@@ -201,10 +201,8 @@ int ObLogRestoreNetDriver::scan_ls(const share::ObLogRestoreSourceType &type)
           }
         } else if (OB_FAIL(check_ls_stale_(id, proposal_id, is_stale))) {
           LOG_WARN("check_ls_stale_ failed", K(id));
-        } else if (! is_stale) {
-          if (OB_FAIL(refresh_error_context_(id))) {
-            LOG_WARN("refresh error context failed", K(id));
-          }
+        }  else if (!is_stale) {
+          // do nothing
         } else if (OB_FAIL(fetcher_->remove_ls(id)) && OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("remove ls failed", K(id), K(is_stale));
         } else {
@@ -569,18 +567,6 @@ int ObLogRestoreNetDriver::get_ls_count_in_fetcher_(int64_t &count)
     LOG_WARN("get_all_ls failed");
   } else {
     count = ls_list.count();
-  }
-  return ret;
-}
-
-int ObLogRestoreNetDriver::refresh_error_context_(const share::ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  ObRemoteFetchContext context;
-  GET_RESTORE_HANDLER_CTX(ls_id) {
-    if (OB_FAIL(restore_handler->refresh_error_context())) {
-      LOG_WARN("refresh error failed");
-    }
   }
   return ret;
 }

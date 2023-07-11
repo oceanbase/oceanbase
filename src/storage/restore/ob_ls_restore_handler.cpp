@@ -2086,6 +2086,7 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
 ObLSQuickRestoreState::ObLSQuickRestoreState()
   : ObILSRestoreState(ObLSRestoreStatus::Status::QUICK_RESTORE)
 {
+  has_rechecked_after_clog_recovered_ = false;
 }
 
 ObLSQuickRestoreState::~ObLSQuickRestoreState()
@@ -2143,6 +2144,10 @@ int ObLSQuickRestoreState::leader_quick_restore_()
         LOG_INFO("clog replay not finish, wait later", KPC(ls_));
       }
     } else if (!tablet_mgr_.is_restore_completed()) {
+    } else if (!has_rechecked_after_clog_recovered_) {
+      // Force reload all tablets, ensure all transfer tablets has no transfer table.
+      tablet_mgr_.set_force_reload();
+      has_rechecked_after_clog_recovered_ = true;
     } else if (OB_FAIL(check_tablet_checkpoint_())) {
       LOG_WARN("fail to check tablet clog checkpoint ts", K(ret), KPC(ls_));
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
@@ -2199,6 +2204,10 @@ int ObLSQuickRestoreState::follower_quick_restore_()
         LOG_INFO("clog replay not finish, wait later", KPC(ls_));
       }
     } else if (!tablet_mgr_.is_restore_completed()) {
+    } else if (!has_rechecked_after_clog_recovered_) {
+      // Force reload all tablets, ensure all transfer tablets has no transfer table.
+      tablet_mgr_.set_force_reload();
+      has_rechecked_after_clog_recovered_ = true;
     } else if (OB_FAIL(check_tablet_checkpoint_())) {
       LOG_WARN("fail to check tablet clog checkpoint ts", K(ret), KPC(ls_));
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {

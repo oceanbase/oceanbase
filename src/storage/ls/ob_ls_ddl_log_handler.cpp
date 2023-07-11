@@ -237,13 +237,12 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
           LOG_WARN("failed to check ddl kv", K(ret));
         } else if (has_ddl_kv) {
           DEBUG_SYNC(BEFORE_DDL_CHECKPOINT);
-          ObDDLTableMergeDagParam param;
-          param.ls_id_ = ls_->get_ls_id();
-          param.tablet_id_ = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
-          param.start_scn_ = ddl_kv_mgr_handle.get_obj()->get_start_scn();
-          param.rec_scn_ = rec_scn;
-          LOG_INFO("schedule ddl merge dag", K(param));
-          if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+          const SCN start_scn = ddl_kv_mgr_handle.get_obj()->get_start_scn();
+          const ObTabletID &tablet_id = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
+          ObTabletHandle tablet_handle;
+          if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle))) {
+            LOG_WARN("failed to get tablet", K(ret), K(ls_->get_ls_id()), K(tablet_id));
+          } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->schedule_ddl_dump_task(*tablet_handle.get_obj(), start_scn, rec_scn))) {
             if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
               LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
             } else {

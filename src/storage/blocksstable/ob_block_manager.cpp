@@ -330,6 +330,8 @@ int ObBlockManager::alloc_block(ObMacroBlockHandle &macro_handle)
       macro_id.set_block_index(io_fd.second_id_);
       if (OB_FAIL(macro_handle.set_macro_block_id(macro_id))) {
         LOG_ERROR("Failed to set macro block id", K(ret), K(macro_id));
+      } else {
+        FLOG_INFO("successfully alloc block", K(macro_id));
       }
     }
   }

@@ -123,19 +123,23 @@ int ObTransService::remove_ls(const share::ObLSID &ls_id, const bool graceful)
   return ret;
 }
 
-#ifdef TX_PARTS_CONTAIN_
-#error "redefine TX_PARTS_CONTAIN_"
+#ifdef CHECK_TX_PARTS_CONTAIN_
+#error "redefine CHECK_TX_PARTS_CONTAIN_"
 #else
-#define TX_PARTS_CONTAIN_(parts, id_, ls_id, hit)       \
-  do {                                                  \
-    hit = false;                                        \
-    ARRAY_FOREACH_NORET(parts, idx) {                   \
-      if (parts.at(idx).id_ == ls_id) {                 \
-        hit = true;                                     \
-        break;                                          \
-      }                                                 \
-    }                                                   \
-  } while(0)
+#define CHECK_TX_PARTS_CONTAIN_(parts, id, epoch, ls_id, exist)     \
+  if (OB_SUCC(ret)) {                                               \
+    exist = false;                                                  \
+    ARRAY_FOREACH_NORET(parts, idx) {                               \
+      if (parts.at(idx).id == ls_id) {                              \
+        if (ObTxPart::is_without_ctx(parts.at(idx).epoch)) {        \
+          /* target LS was dropped */                               \
+          /* can not accept access any more */                      \
+          ret = OB_PARTITION_IS_BLOCKED;                            \
+        } else { exist = true; }                                    \
+        break;                                                      \
+      }                                                             \
+    }                                                               \
+  }
 #endif
 
 int ObTransService::acquire_tx(const char* buf,
@@ -974,8 +978,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   if (OB_SUCC(ret) && snap_tx_id.is_valid()) {
     // inner tx read, we verify txCtx's status
     bool exist = false;
-    TX_PARTS_CONTAIN_(snapshot.parts_, left_, ls_id, exist);
-    if (exist || read_latest) {
+    CHECK_TX_PARTS_CONTAIN_(snapshot.parts_, left_, right_, ls_id, exist);
+    if (OB_SUCC(ret) && (exist || read_latest)) {
       if (OB_FAIL(get_tx_ctx_(ls_id, store_ctx.ls_, snap_tx_id, tx_ctx))) {
         if (OB_TRANS_CTX_NOT_EXIST == ret && !exist) {
           ret = OB_SUCCESS;
@@ -1148,8 +1152,9 @@ int ObTransService::acquire_tx_ctx(const share::ObLSID &ls_id, const ObTxDesc &t
 {
   int ret = OB_SUCCESS;
   bool exist = false;
-  TX_PARTS_CONTAIN_(tx.parts_, id_, ls_id, exist);
-  if (exist) {
+  CHECK_TX_PARTS_CONTAIN_(tx.parts_, id_, epoch_, ls_id, exist);
+  if (OB_FAIL(ret)) {
+  } else if (exist) {
     if (OB_FAIL(get_tx_ctx_(ls_id, ls, tx.tx_id_, ctx))) {
       TRANS_LOG(WARN, "get tx ctx fail", K(ret), K(ls_id), K(tx));
       if (ret == OB_TRANS_CTX_NOT_EXIST) {
@@ -2051,15 +2056,19 @@ int ObTransService::handle_tx_batch_req(int msg_type,
   return ret;
 }
 
-#define COMMON_RETRYABLE_ERROR(ret)             \
-  (OB_NOT_MASTER == ret                         \
-   || OB_EAGAIN == ret                          \
-   || OB_NEED_RETRY == ret                      \
-   || OB_LS_NOT_EXIST == ret                    \
-   || OB_PARTITION_NOT_EXIST == ret             \
-   || OB_TENANT_NOT_EXIST == ret                \
-   || is_location_service_renew_error(ret)      \
-   )
+bool ObTransService::common_retryable_error_(const int ret) {
+  return (OB_NOT_MASTER == ret
+          || OB_EAGAIN == ret
+          || OB_NEED_RETRY == ret
+          || OB_PARTITION_IS_BLOCKED == ret
+          || OB_REPLICA_NOT_READABLE == ret
+          || OB_LS_NOT_EXIST == ret
+          || OB_PARTITION_NOT_EXIST == ret
+          || OB_TENANT_NOT_EXIST == ret
+          || OB_TENANT_NOT_IN_SERVER == ret
+          || is_location_service_renew_error(ret)
+          );
+}
 
 void ObTransService::on_sp_rollback_succ_(const ObTxLSEpochPair &part,
                                           ObTxDesc &tx,
@@ -2096,7 +2105,7 @@ int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
     } else if (tx->op_sn_ > request_id) {
       TRANS_LOG(WARN, "receive old rpc result msg",
                 K(ret), K_(tx->op_sn), K(request_id), K(tx_id));
-    } else if (status == OB_TRANS_RPC_TIMEOUT || COMMON_RETRYABLE_ERROR(status)) {
+    } else if (status == OB_TRANS_RPC_TIMEOUT || common_retryable_error_(status)) {
       TRANS_LOG(WARN, "rollback savepoint on ls return an retryable error",
                 K(status), K(ls_id), K(tx_id), K(addr));
     } else if (status == OB_SUCCESS) {
@@ -2291,7 +2300,7 @@ bool ObTransService::commit_need_retry_(const int ret)
 {
   return OB_TX_NOLOGCB == ret
     || OB_BLOCK_FROZEN == ret
-    || COMMON_RETRYABLE_ERROR(ret);
+    || common_retryable_error_(ret);
 }
 
 int ObTransService::get_min_uncommit_tx_prepare_version(const share::ObLSID& ls_id, SCN &min_prepare_version)
@@ -3511,8 +3520,16 @@ bool ObTransService::is_ls_dropped_(const share::ObLSID ls_id) {
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "id service log stream not exist");
-  } else {
-    bret = ls->is_in_gc();
+  } else if (ls->is_in_gc()) {
+    ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+    if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr)) || OB_ISNULL(ls_tx_ctx_mgr)) {
+      TRANS_LOG(WARN, "get ls tx ctx fail", K(ret), K(ls_id));
+    } else if (ls_tx_ctx_mgr->is_master()) {
+      bret = true;
+    }
+    if (OB_NOT_NULL(ls_tx_ctx_mgr)) {
+      tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
+    }
   }
   return bret;
 }

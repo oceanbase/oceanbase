@@ -929,7 +929,7 @@ int ObIndexBlockTreeCursor::estimate_range_macro_count(const ObDatumRange &range
         if (OB_FAIL(locate_range_in_curr_block(range, begin_idx, end_idx))) {
           LOG_WARN("Fail to locate range in current block", K(ret), K(range));
         } else {
-          micro_count = end_idx - begin_idx;
+          micro_count = end_idx - begin_idx + 1;
         }
       } else {
         micro_count = micro_count * curr_path_item_->row_count_;

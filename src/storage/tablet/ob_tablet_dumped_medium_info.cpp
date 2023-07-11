@@ -174,18 +174,14 @@ bool ObTabletDumpedMediumInfo::is_valid() const
   bool valid = true;
   int ret = OB_SUCCESS;
 
-  if (medium_info_list_.empty()) {
-    valid = false;
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && valid && i < medium_info_list_.count(); ++i) {
-      const compaction::ObMediumCompactionInfo *medium_info = medium_info_list_.at(i);
-      if (OB_ISNULL(medium_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        valid = false;
-        LOG_ERROR("mds dump kv is null", K(ret), KP(medium_info), K(i));
-      } else if (!medium_info->is_valid()) {
-        valid = false;
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && valid && i < medium_info_list_.count(); ++i) {
+    const compaction::ObMediumCompactionInfo *medium_info = medium_info_list_.at(i);
+    if (OB_ISNULL(medium_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      valid = false;
+      LOG_ERROR("medium info is null", K(ret), KP(medium_info), K(i));
+    } else if (!medium_info->is_valid()) {
+      valid = false;
     }
   }
 
@@ -255,6 +251,24 @@ int64_t ObTabletDumpedMediumInfo::get_min_medium_snapshot() const
 int64_t ObTabletDumpedMediumInfo::get_max_medium_snapshot() const
 {
   return medium_info_list_.empty() ? 0 : medium_info_list_.at(medium_info_list_.count() - 1)->medium_snapshot_;
+}
+
+int ObTabletDumpedMediumInfo::is_contain(const compaction::ObMediumCompactionInfo &info, bool &contain) const
+{
+  int ret = OB_SUCCESS;
+  contain = false;
+
+  for (int64_t i = 0; OB_SUCC(ret) && !contain && i < medium_info_list_.count(); ++i) {
+    const compaction::ObMediumCompactionInfo *medium_info = medium_info_list_.at(i);
+    if (OB_ISNULL(medium_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("medium info should no be null", K(ret), K(i), KP(medium_info));
+    } else if (info.medium_snapshot_ == medium_info->medium_snapshot_) {
+      contain = true;
+    }
+  }
+
+  return ret;
 }
 
 int ObTabletDumpedMediumInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const

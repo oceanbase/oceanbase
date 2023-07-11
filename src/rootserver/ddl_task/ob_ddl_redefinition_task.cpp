@@ -929,9 +929,15 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
   } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
-    LOG_WARN("get data table schema failed", K(ret), K(tenant_id_), K(object_id_));
+    LOG_WARN("get data table schema failed", KR(ret), K(tenant_id_), K(object_id_));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_table_schema is NULL", KR(ret), K_(tenant_id), K_(object_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, dest_table_schema))) {
-    LOG_WARN("get dest table schema failed", K(ret), K(tenant_id_), K(target_object_id_));
+    LOG_WARN("get dest table schema failed", KR(ret), K(tenant_id_), K(target_object_id_));
+  } else if (OB_ISNULL(dest_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest_table_schema is NULL", KR(ret), K_(tenant_id), K_(target_object_id));
   } else {
     ObArray<uint64_t> column_ids;
     if (OB_FAIL(data_table_schema->get_column_ids(column_ids))) {
@@ -969,8 +975,9 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
         param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
         param.autoinc_mode_is_order_ = dest_table_schema->is_order_auto_increment_mode();
         param.autoinc_auto_increment_ = dest_table_schema->get_auto_increment();
-        if (OB_FAIL(auto_inc_service.get_sequence_value(tenant_id_, object_id_, cur_column_id, param.autoinc_mode_is_order_, sequence_value))) {
-          LOG_WARN("get sequence value failed", K(ret), K(tenant_id_), K(object_id_), K(cur_column_id));
+        param.autoinc_version_ = dest_table_schema->get_truncate_version();
+        if (OB_FAIL(auto_inc_service.get_sequence_value(tenant_id_, object_id_, cur_column_id, param.autoinc_mode_is_order_, data_table_schema->get_truncate_version(), sequence_value))) {
+          LOG_WARN("get sequence value failed", KR(ret), K(tenant_id_), K(object_id_), K(cur_column_id));
         } else if (FALSE_IT(param.global_value_to_sync_ = sequence_value - 1)) {
           // as sequence_value is an avaliable value. sync value will not be avaliable to user
         } else if (OB_FAIL(auto_inc_service.sync_insert_value_global(param))) {
@@ -1096,6 +1103,7 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
       param.autoinc_offset_ = 1;
       param.global_value_to_sync_ = autoinc_val - 1;
       param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
+      param.autoinc_version_ = new_table_schema->get_truncate_version();
       if (OB_FAIL(auto_inc_service.sync_insert_value_global(param))) {
         LOG_WARN("fail to clear autoinc cache", K(ret), K(param));
       }
@@ -2108,7 +2116,7 @@ int ObSyncTabletAutoincSeqCtx::call_and_process_all_tablet_autoinc_seqs(P &proxy
                 if (is_get) {
                   new_params_cnt++;
                 }
-              } 
+              }
             }
           }
         }

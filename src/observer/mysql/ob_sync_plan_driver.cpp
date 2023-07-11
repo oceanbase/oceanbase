@@ -82,7 +82,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
                  K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
       }
     }
-    cret = result.close();
+    cret = result.close(cli_ret);
     if (cret != OB_SUCCESS &&
         cret != OB_TRANSACTION_SET_VIOLATION &&
         OB_TRY_LOCK_ROW_CONFLICT != cret) {
@@ -116,7 +116,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       } else {
         result.refresh_location_cache(true, ret);
       }
-      int cret = result.close();
+      int cret = result.close(ret);
       if (cret != OB_SUCCESS) {
         LOG_WARN("close result set fail", K(cret));
       }

@@ -8650,7 +8650,8 @@ int ObDDLResolver::resolve_hash_or_key_partition_basic_infos(ParseNode *node,
         LOG_WARN("fail to check oralce mode", KR(ret), K(tenant_id), K_(table_id));
       } else if (OB_FAIL(get_part_str_with_type(is_oracle_mode, part_func_type, func_expr_name, part_expr))) {
         SQL_RESV_LOG(WARN, "Failed to get part str with type", K(ret));
-      } else if (FALSE_IT(func_expr_name = part_expr.string())) {
+      } else if (OB_FAIL(ob_write_string(*allocator_, part_expr.string(), func_expr_name))) {
+        LOG_WARN("failed to copy string", K(part_expr.string()));
       } else if (PARTITION_FUNC_TYPE_KEY == part_func_type) {
         part_func_type = PARTITION_FUNC_TYPE_KEY;
       }
