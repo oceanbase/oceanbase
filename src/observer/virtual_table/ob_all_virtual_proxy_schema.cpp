@@ -25,6 +25,7 @@
 #include "sql/session/ob_sql_session_info.h" // ObSqlSessionInfo
 #include "sql/parser/ob_parser.h" // ObParser
 #include "sql/resolver/dml/ob_select_resolver.h" // ObSelectResolver
+#include "sql/resolver/ob_resolver_utils.h" // ObResolverUtils
 
 namespace oceanbase
 {
@@ -519,15 +520,21 @@ int ObAllVirtualProxySchema::init_data()
       ObString object_table_name;
       const ObSimpleDatabaseSchema *database_schema = NULL;
       bool exist = false;
-      if (OB_FAIL(schema_guard_.get_object_with_synonym(
-                                                        tenant_id,
-                                                        database_id,
-                                                        table_name,
-                                                        object_database_id,
-                                                        synonym_id,
-                                                        object_table_name,
-                                                        exist))) {
-        LOG_WARN("get_object_with_synonym failed", KR(ret), K(tenant_id), K(database_id), K(table_name));
+      sql::ObSchemaChecker schema_checker;
+      sql::ObSynonymChecker synonym_checker;
+      if (OB_FAIL(schema_checker.init(schema_guard_))) {
+        LOG_WARN("failed to init schema checker", KR(ret), K(tenant_id), K(database_id), K(table_name));
+      } else if (OB_FAIL(sql::ObResolverUtils::resolve_synonym_object_recursively(
+          schema_checker,
+          synonym_checker,
+          tenant_id,
+          database_id,
+          table_name,
+          object_database_id,
+          object_table_name,
+          exist))) {
+        LOG_WARN("resolve_synonym_object_recursively failed", KR(ret), K(tenant_id),
+            K(database_id), K(table_name), K(object_database_id), K(object_table_name), K(exist));
       } else if (!exist) {
         //break
       } else if (OB_FAIL(ob_write_string(*allocator_, object_table_name, level1_decoded_table_name_))) {
