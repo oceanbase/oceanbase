@@ -2246,6 +2246,10 @@ typedef enum ObItemType
   T_PARTITION_HASH_ELEMENT,
   T_PARTITION_LIST_ELEMENT,
   T_PARTITION_RANGE_ELEMENT,
+
+  T_CONSTR_LOB_META_SIZE,
+  T_LOB_META_SIZE,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
