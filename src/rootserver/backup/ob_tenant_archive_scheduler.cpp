@@ -573,10 +573,10 @@ int ObArchiveHandler::enable_archive(const int64_t dest_no)
   } else if (OB_FAIL(round_handler_.enable_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to enable archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
+    if (new_round_attr.state_.status_ == ObArchiveRoundState::Status::BEGINNING) {
+      notify_(new_round_attr);
+    }
     LOG_INFO("enable archive", K(dest_no), K(new_round_attr));
-  }
-  if (new_round_attr.state_.status_ == ObArchiveRoundState::Status::BEGINNING) {
-    notify_(new_round_attr);
   }
 
   if (OB_SUCC(ret)) {
@@ -600,10 +600,8 @@ int ObArchiveHandler::disable_archive(const int64_t dest_no)
   } else if (OB_FAIL(round_handler_.disable_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to disable archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
-    LOG_INFO("disable archive", K(dest_no), K(new_round_attr));
-  }
-  if (new_round_attr.state_.status_ == ObArchiveRoundState::Status::STOPPING) {
     notify_(new_round_attr);
+    LOG_INFO("disable archive", K(dest_no), K(new_round_attr));
   }
 
   if (OB_SUCC(ret)) {
@@ -627,10 +625,8 @@ int ObArchiveHandler::defer_archive(const int64_t dest_no)
   } else if (OB_FAIL(round_handler_.defer_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to defer archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
-    LOG_INFO("defer archive", K(dest_no), K(new_round_attr));
-  }
-  if (new_round_attr.state_.status_ == ObArchiveRoundState::Status::SUSPENDING) {
     notify_(new_round_attr);
+    LOG_INFO("defer archive", K(dest_no), K(new_round_attr));
   }
 
   if (OB_SUCC(ret)) {
@@ -807,7 +803,7 @@ void ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
     LOG_INFO("leader_addr_set to be notified archive:", K(notify_addr_set));
     for (hash::ObHashSet<ObAddr>::const_iterator it = notify_addr_set.begin(); it != notify_addr_set.end(); it++) {
       if (OB_TMP_FAIL(rpc_proxy_->to(it->first).notify_archive(arg))) {
-        LOG_WARN("failed to notify ls leader archive", K(ret), K(arg));
+        LOG_WARN("failed to notify ls leader archive", K(tmp_ret), K(arg));
       } else {
         LOG_INFO("succeed to notify ls leader archive", K(arg), K(it->first));
       }
