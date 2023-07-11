@@ -135,15 +135,15 @@ private:
   int get_max_lsn_scn_(const ObLSID &id, palf::LSN &lsn, share::SCN &scn);
 
   // 1.1 检查任务是否delay处理
-  int check_need_delay_(const ObLSID &id, const ArchiveWorkStation &station, const LSN &cur_lsn,
-      const LSN &end_lsn, const LSN &commit_lsn, const share::SCN &commit_scn, bool &need_delay);
+  int check_need_delay_(const ObArchiveLogFetchTask &task, const LSN &commit_lsn, bool &need_delay);
 
   // 1.1.1 检查ob日志是否有产生满足处理单元大小的数据
   void check_capacity_enough_(const LSN &commit_lsn, const LSN &cur_lsn,
       const LSN &end_offset, bool &data_enough, bool &data_full);
 
   // 1.1.2 检查日志流落后程度是否需要触发归档
-  bool check_scn_enough_(const share::SCN &fetch_scn, const share::SCN &end_scn) const;
+  bool check_scn_enough_(const share::ObLSID &id, const bool new_block, const palf::LSN &lsn,
+      const palf::LSN &max_no_limit_lsn, const share::SCN &base_scn, const share::SCN &fetch_scn);
 
   // 1.2 初始化TmpMemoryHelper
   int init_helper_(ObArchiveLogFetchTask &task, const LSN &commit_lsn, TmpMemoryHelper &helper);

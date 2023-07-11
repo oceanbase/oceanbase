@@ -378,6 +378,19 @@ int ObLSArchiveTask::update_archive_progress(const ArchiveWorkStation &station,
   return ret;
 }
 
+int ObLSArchiveTask::get_max_no_limit_lsn(const ArchiveWorkStation &station, LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(rwlock_);
+  if (OB_UNLIKELY(station != station_)) {
+    ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
+    ARCHIVE_LOG(INFO, "stale task, just skip it", K(ret), K(station), K(station_), K(id_));
+  } else {
+    dest_.get_max_no_limit_lsn(lsn);
+  }
+  return ret;
+}
+
 int ObLSArchiveTask::print_self()
 {
   int ret = OB_SUCCESS;
@@ -392,6 +405,7 @@ int64_t ObLSArchiveTask::ArchiveDest::to_string(char *buf, const int64_t buf_len
   J_OBJ_START();
   J_KV(K_(has_encount_error),
       K_(is_worm),
+      K_(max_no_limit_lsn),
       K_(max_archived_info),
       K_(max_seq_log_offset),
       K_(max_fetch_info),
@@ -458,7 +472,8 @@ int ObLSArchiveTask::update_unlock_(const StartArchiveHelper &helper,
   tenant_id_ = helper.get_tenant_id();
   station_ = helper.get_station();
   round_start_scn_ = helper.get_round_start_scn();
-  ret = dest_.init(helper.get_piece_min_lsn(), helper.get_offset(),
+  ret = dest_.init(helper.get_max_no_limit_lsn(),
+      helper.get_piece_min_lsn(), helper.get_offset(),
       helper.get_file_id(), helper.get_file_offset(),
       helper.get_piece(), helper.get_max_archived_scn(),
       helper.is_log_gap_exist(), allocator);
@@ -481,6 +496,7 @@ void ObLSArchiveTask::mock_init(const ObLSID &id, ObArchiveAllocator *allocator)
 ObLSArchiveTask::ArchiveDest::ArchiveDest() :
   has_encount_error_(false),
   is_worm_(false),
+  max_no_limit_lsn_(),
   piece_min_lsn_(),
   max_archived_info_(),
   archive_file_id_(OB_INVALID_ARCHIVE_FILE_ID),
@@ -503,6 +519,7 @@ void ObLSArchiveTask::ArchiveDest::destroy()
 {
   has_encount_error_ = false;
   is_worm_ = false;
+  max_no_limit_lsn_.reset();
   piece_min_lsn_.reset();
   max_archived_info_.reset();
   archive_file_id_ = OB_INVALID_ARCHIVE_FILE_ID;
@@ -516,7 +533,8 @@ void ObLSArchiveTask::ArchiveDest::destroy()
   allocator_ = NULL;
 }
 
-int ObLSArchiveTask::ArchiveDest::init(const LSN &piece_min_lsn,
+int ObLSArchiveTask::ArchiveDest::init(const LSN &max_no_limit_lsn,
+    const LSN &piece_min_lsn,
     const LSN &lsn,
     const int64_t file_id,
     const int64_t file_offset,
@@ -551,6 +569,7 @@ int ObLSArchiveTask::ArchiveDest::init(const LSN &piece_min_lsn,
     ARCHIVE_LOG(INFO, "update archive dest with local archive progress", K(piece_min_lsn),
         K(tmp_tuple), K(piece), K(file_id), K(file_offset), KPC(this));
   }
+  max_no_limit_lsn_ = max_no_limit_lsn;
   wait_send_task_count_ = 0;
   free_fetch_log_tasks_();
   free_send_task_status_();
@@ -780,6 +799,11 @@ void ObLSArchiveTask::ArchiveDest::get_archive_send_arg(ObArchiveSendDestArg &ar
   arg.cur_file_offset_ = archive_file_offset_;
   arg.tuple_ = max_archived_info_;
   arg.piece_dir_exist_ = piece_dir_exist_;
+}
+
+void ObLSArchiveTask::ArchiveDest::get_max_no_limit_lsn(LSN &lsn)
+{
+  lsn = max_no_limit_lsn_;
 }
 
 void ObLSArchiveTask::ArchiveDest::mark_error()

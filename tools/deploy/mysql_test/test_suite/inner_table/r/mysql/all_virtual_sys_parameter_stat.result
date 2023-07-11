@@ -23,6 +23,7 @@ select name from __all_virtual_sys_parameter_stat where name not like "module_te
 name
 all_server_list
 arbitration_timeout
+archive_lag_target
 audit_sys_operations
 audit_trail
 autoinc_cache_refresh_interval

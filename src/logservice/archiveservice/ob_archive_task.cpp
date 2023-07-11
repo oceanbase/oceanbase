@@ -57,6 +57,7 @@ ObArchiveLogFetchTask::~ObArchiveLogFetchTask()
 int ObArchiveLogFetchTask::init(const uint64_t tenant_id,
                                 const ObLSID &id,
                                 const ArchiveWorkStation &station,
+                                const share::SCN &base_scn,
                                 const LSN &start_lsn,
                                 const LSN &end_lsn)
 {
@@ -64,16 +65,18 @@ int ObArchiveLogFetchTask::init(const uint64_t tenant_id,
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
         || !id.is_valid()
         || !station.is_valid()
+        || !base_scn.is_valid()
         || !start_lsn.is_valid()
         || ! end_lsn.is_valid()
         || end_lsn <= start_lsn)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(tenant_id),
-        K(id), K(station), K(start_lsn), K(end_lsn));
+        K(id), K(station), K(base_scn), K(start_lsn), K(end_lsn));
   } else {
     tenant_id_ = tenant_id;
     id_ = id;
     station_ = station;
+    base_scn_ = base_scn;
     start_offset_ = start_lsn;
     cur_offset_ = start_lsn;
     end_offset_ = end_lsn;

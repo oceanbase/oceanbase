@@ -63,6 +63,7 @@ public:
   uint64_t get_tenant_id() const { return tenant_id_; }
   const ArchiveWorkStation &get_station() const { return station_; }
   const LSN &get_piece_min_lsn() const { return piece_min_lsn_; }
+  const LSN &get_max_no_limit_lsn() const { return max_offset_; }
   const LSN &get_offset() const { return start_offset_; }
   int64_t get_file_id() const { return archive_file_id_; }
   int64_t get_file_offset() const { return archive_file_offset_; }
@@ -78,6 +79,7 @@ public:
                K_(genesis_scn),
                K_(base_piece_id),
                K_(piece_min_lsn),
+               K_(max_offset),
                K_(start_offset),
                K_(archive_file_id),
                K_(archive_file_offset),
@@ -102,6 +104,7 @@ private:
   share::SCN genesis_scn_;
   int64_t base_piece_id_;
   LSN piece_min_lsn_;
+  LSN max_offset_;    // archive_lag_target with noneffective smaller than this lsn
   LSN start_offset_;
   int64_t archive_file_id_;
   int64_t archive_file_offset_;

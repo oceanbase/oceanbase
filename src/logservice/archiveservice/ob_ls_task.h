@@ -125,6 +125,8 @@ public:
   int get_max_archive_info(const ArchiveKey &key,
                            ObLSArchivePersistInfo &info);
 
+  int get_max_no_limit_lsn(const ArchiveWorkStation &station, LSN &lsn);
+
   int mark_error(const ArchiveKey &key);
 
   int print_self();
@@ -150,7 +152,8 @@ private:
     ~ArchiveDest();
 
   public:
-    int init(const LSN &piece_min_lsn, const LSN &lsn, const int64_t file_id,
+    int init(const LSN &max_no_limit_lsn,
+        const LSN &piece_min_lsn, const LSN &lsn, const int64_t file_id,
         const int64_t file_offset, const share::ObArchivePiece &piece,
         const share::SCN &max_archived_scn, const bool is_log_gap_exist,
         ObArchiveAllocator *allocator);
@@ -170,6 +173,7 @@ private:
     void get_archive_progress(int64_t &file_id, int64_t &file_offset, LogFileTuple &tuple);
     void get_send_task_count(int64_t &count);
     void get_archive_send_arg(ObArchiveSendDestArg &arg);
+    void get_max_no_limit_lsn(LSN &lsn);
     void mark_error();
     void print_tasks_();
     int64_t to_string(char *buf, const int64_t buf_len) const;
@@ -181,6 +185,8 @@ private:
   private:
     bool               has_encount_error_;
     bool               is_worm_;
+    // archive_lag_target with noneffective for logs whose lsn smaller than this lsn
+    palf::LSN          max_no_limit_lsn_;
     palf::LSN          piece_min_lsn_;
     // archived log description
     LogFileTuple       max_archived_info_;

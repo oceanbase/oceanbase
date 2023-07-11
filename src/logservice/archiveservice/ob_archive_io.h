@@ -32,7 +32,8 @@ public:
       const share::ObBackupStorageInfo *storage_info,
       char *data,
       const int64_t data_len,
-      const int64_t offset);
+      const int64_t offset,
+      const bool is_full_file);
 
   int mkdir(const ObString &uri,
       const share::ObBackupStorageInfo *storage_info);
