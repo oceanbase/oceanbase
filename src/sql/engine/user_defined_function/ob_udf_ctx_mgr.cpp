@@ -54,6 +54,8 @@ int ObUdfCtxMgr::register_udf_expr(const ObExprDllUdf *expr, const ObNormalUdfFu
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else if (OB_ISNULL(tmp_udf_exec_unit = (ObNormalUdfExeUnit *)allocator_.alloc(sizeof(ObNormalUdfExeUnit)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObNormalUdfExeUnit)));
   } else {
     new_udf_ctx->state_ = ObUdfFunction::UDF_UNINITIALIZED;
     IGNORE_RETURN ObUdfUtil::construct_udf_args(new_udf_ctx->udf_args_);

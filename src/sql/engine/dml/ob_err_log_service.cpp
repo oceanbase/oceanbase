@@ -210,6 +210,7 @@ int ObErrLogService::catch_err_and_gen_sql(ObIAllocator &alloc, const ObSQLSessi
   } else if (OB_ISNULL(column_value_buf =
                        static_cast<char *>(alloc.alloc(column_value_size)))) {
     // allocate buff for dynamic_column_value
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate column_nvalue_buf", K(ret), K(column_value_size));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < err_log_ct_def.err_log_values_.count(); i++) {

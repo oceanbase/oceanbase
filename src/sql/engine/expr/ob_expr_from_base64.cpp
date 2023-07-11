@@ -55,6 +55,7 @@ int ObExprFromBase64::calc(ObObj &result,
       int64_t pos = 0;
       char *output_buf = static_cast<char*>(allocator->alloc(buf_len));
       if (OB_ISNULL(output_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("output_buf is null", K(ret), K(buf_len), K(in_raw_len));
         result.set_null();
       } else if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,

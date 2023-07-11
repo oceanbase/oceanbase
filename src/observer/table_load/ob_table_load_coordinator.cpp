@@ -1579,6 +1579,7 @@ int ObTableLoadCoordinator::write_peer_leader(const ObTableLoadTransId &trans_id
       int64_t buf_len = tablet_obj_rows.get_serialize_size();
       char *buf = static_cast<char *>(allocator.alloc(buf_len));
       if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", KR(ret), K(buf_len));
       } else if (OB_FAIL(tablet_obj_rows.serialize(buf, buf_len, pos))) {
         LOG_WARN("failed to serialize obj row array", KR(ret), KP(buf), K(buf_len), K(pos));

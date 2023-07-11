@@ -503,6 +503,7 @@ int ObConnectByOpPump::concat_sys_path(uint64_t sys_connect_by_path_id, const Ob
         buf_size *= 2;
       }
       if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate buf failed", K(ret), K(buf_size));
       } else {
         str.assign_buffer(buf, buf_size);
@@ -515,6 +516,7 @@ int ObConnectByOpPump::concat_sys_path(uint64_t sys_connect_by_path_id, const Ob
       char *buf = NULL;
       ObString new_str;
       if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate buf failed", K(ret), K(buf_size));
       } else if (FALSE_IT(new_str.assign_buffer(buf, buf_size))) {
       } else if (str.length() != new_str.write(str.ptr(), str.length())) {
