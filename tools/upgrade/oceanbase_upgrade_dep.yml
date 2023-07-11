@@ -20,20 +20,22 @@
 - version: 4.0.0.0
   can_be_upgraded_to:
       - 4.1.0.0
-  require_from_binary:
-    value: True
-    when_come_from: [4.0.0.0]
+
+- version: 4.1.0.0-100000982023031415   # 4.1 BETA版本 不能作为目标版本
+  can_be_upgraded_to:
+    - 4.1.0.0
+  deprecated: True
 
 - version: 4.1.0.0
   can_be_upgraded_to:
       - 4.1.0.1
-  require_from_binary:
-    value: True
-    when_come_from: [4.0.0.0]
 
 - version: 4.1.0.1
   can_be_upgraded_to:
       - 4.2.0.0
+  require_from_binary:
+    value: True
+    when_come_from: [4.0.0.0, 4.1.0.0-100000982023031415]
 
 - version: 4.2.0.0
   can_be_upgraded_to:
