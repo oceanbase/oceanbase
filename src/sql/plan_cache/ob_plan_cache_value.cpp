@@ -469,9 +469,12 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx& pc_ctx, const stmt::StmtTy
           SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
         } else if (ob_is_numeric_type(value.get_type())) {
           if (must_be_positive_idx.has_member(i)) {
-            if (share::is_oracle_mode() &&
-                (value.is_negative_number() ||
-                    (value.is_zero_number() && '-' == raw_param->str_value_[0]))) {  // -0 is also counted as negative
+            if (value.is_boolean()) {
+              // boolean will skip this check
+            } else if (lib::is_oracle_mode() &&
+                       (value.is_negative_number() ||
+                           (value.is_zero_number() &&
+                               '-' == raw_param->str_value_[0]))) {  // -0 is also counted as negative
               ret = OB_NOT_SUPPORTED;
               LOG_DEBUG("param must be positive", K(ret), K(i), K(value));
               pc_ctx.should_add_plan_ = false;

@@ -787,6 +787,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
         break;
       }
       case T_BOOL: {
+        val.set_is_boolean(true);
         val.set_bool(node->value_ == 1 ? true : false);
         val.set_scale(0);
         val.set_precision(1);
