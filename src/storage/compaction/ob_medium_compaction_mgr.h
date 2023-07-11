@@ -47,6 +47,7 @@ public:
   int submit_medium_compaction_info(ObMediumCompactionInfo &medium_info, ObIAllocator &allocator);
   // follower
   int replay_medium_compaction_log(const share::SCN &scn, const char *buf, const int64_t size, int64_t &pos);
+  INHERIT_TO_STRING_KV("ObIStorageClogRecorder", ObIStorageClogRecorder, K_(ignore_medium), K_(ls_id), K_(tablet_id));
 private:
   virtual int inner_replay_clog(
       const int64_t update_version,
@@ -118,6 +119,7 @@ public:
   {
     return !wait_check_flag_ && medium_info_list_.is_empty();
   }
+  const ObMediumCompactionInfo *get_next_schedule_medium_info(const int64_t last_major_snapshot) const;
   OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
   {
     return (ObMediumCompactionInfo::ObCompactionType)last_compaction_type_;
@@ -141,7 +143,10 @@ public:
   int64_t get_serialize_size() const;
 
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
-
+  static int check_medium_info_and_last_major(
+    const ObMediumCompactionInfo &medium_info,
+    const ObITable *last_major_sstable,
+    const bool force_check);
   TO_STRING_KV(K_(is_inited), K_(info), K_(last_compaction_type), K_(wait_check_flag), K_(last_medium_scn),
       "list_size", size(), K_(medium_info_list));
 

@@ -217,9 +217,13 @@ int ObIStorageClogRecorder::replay_clog(
 {
   int ret = OB_SUCCESS;
   if (update_version <= ATOMIC_LOAD(&max_saved_version_)) {
-    LOG_INFO("skip clog with smaller version", K(update_version), K(max_saved_version_));
+    LOG_INFO("skip clog with smaller version", K(update_version), K(max_saved_version_), KPC(this));
   } else if (OB_FAIL(inner_replay_clog(update_version, scn, buf, size, pos))) {
-    LOG_WARN("fail to replay clog", K(ret), KPC(this));
+    if (OB_NO_NEED_UPDATE == ret) { // not update max_saved_version_
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to replay clog", K(ret), KPC(this));
+    }
   } else {
     ATOMIC_STORE(&max_saved_version_, update_version);
     LOG_DEBUG("success to replay clog", K(ret), KPC(this), K(max_saved_version_));

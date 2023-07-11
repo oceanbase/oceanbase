@@ -260,7 +260,7 @@ int ObLSReservedSnapshotMgr::inner_replay_clog(
   UNUSEDx(scn, buf, size, pos);
   int ret = OB_SUCCESS;
   if (OB_FAIL(inner_update_reserved_snapshot(update_version))) {
-    LOG_WARN("failed to update reserved_snapshot", K(ret), K(update_version));
+    LOG_WARN("failed to update reserved_snapshot", K(ret), K(scn), K(update_version));
   }
   return ret;
 }

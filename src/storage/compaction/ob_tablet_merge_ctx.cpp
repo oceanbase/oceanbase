@@ -738,51 +738,13 @@ int ObTabletMergeCtx::init_get_medium_compaction_info(
       LOG_ERROR("multi version data is discarded, should not compaction now", K(ret), K(param_), K(medium_snapshot));
     }
   }
-  if (FAILEDx(check_medium_info_and_last_major(medium_info, get_merge_table_result))) {
+  if (FAILEDx(ObMediumCompactionInfoList::check_medium_info_and_last_major(
+      medium_info, get_merge_table_result.handle_.get_table(0), true/*force_check*/))) {
     LOG_WARN("failed to check medium info and last major sstable", KR(ret), K(medium_info), K(get_merge_table_result));
   } else {
     schema_ctx_.schema_version_ = medium_info.storage_schema_.schema_version_;
     data_version_ = medium_info.data_version_;
     is_tenant_major_merge_ = medium_info.is_major_compaction();
-  }
-  return ret;
-}
-
-int ObTabletMergeCtx::check_medium_info_and_last_major(
-    const ObMediumCompactionInfo &medium_info,
-    const ObGetMergeTablesResult &get_merge_table_result) const
-{
-  int ret = OB_SUCCESS;
-  if (ObMediumCompactionInfo::MEIDUM_COMPAT_VERSION_V2 == medium_info.medium_compat_version_) {
-    if (medium_info.from_cur_cluster()) {
-      if (OB_UNLIKELY(medium_info.last_medium_snapshot_
-          != get_merge_table_result.handle_.get_table(0)->get_snapshot_version())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("last medium snapshot in medium info is not equal to last "
-                 "major sstable, medium info may lost",
-                 KR(ret), K(medium_info), K(get_merge_table_result));
-      }
-    } else { // check next freeze info in inner_table & medium_info
-      const int64_t last_major_sstable_snapshot =
-          get_merge_table_result.handle_.get_table(0)->get_snapshot_version();
-      ObTenantFreezeInfoMgr::FreezeInfo freeze_info;
-      if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(
-              get_freeze_info_behind_snapshot_version,
-              last_major_sstable_snapshot, freeze_info))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("failed to get freeze info", K(ret),
-                   K(last_major_sstable_snapshot), KPC(this));
-        } else {
-          ret = OB_EAGAIN;
-          LOG_WARN("next freeze info is not exist yet, need to check after refresh freeze info",
-                   KR(ret), K(medium_info), K(get_merge_table_result));
-        }
-      } else if (OB_UNLIKELY(freeze_info.freeze_version != medium_info.medium_snapshot_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("next freeze info is not equal to last major sstable, medium info may lost",
-          KR(ret), "freeze_version", freeze_info.freeze_version, K(medium_info), K(get_merge_table_result));
-      }
-    }
   }
   return ret;
 }

@@ -711,6 +711,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
   ObTablet *tablet = nullptr;
   ObTableStoreIterator table_iter;
   medium_info.cluster_id_ = GCONF.cluster_id;
+  medium_info.tenant_id_ = MTL_ID();
   // get table schema
   if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;

@@ -194,11 +194,6 @@ struct ObTabletMergeCtx
             scn_range_.end_scn_.get_val_for_tx() : sstable_version_range_.snapshot_version_;
   }
   int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result);
-  int check_medium_info_and_last_major(
-    const ObMediumCompactionInfo &medium_info,
-    const ObGetMergeTablesResult &get_merge_table_result) const;
-
-  typedef common::ObSEArray<ObGetMergeTablesResult, ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
   // 1. init in dag

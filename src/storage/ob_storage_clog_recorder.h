@@ -74,7 +74,7 @@ public:
   ObIStorageClogRecorder(const ObIStorageClogRecorder&) = delete;
   ObIStorageClogRecorder& operator=(const ObIStorageClogRecorder&) = delete;
 
-  TO_STRING_KV(K(max_saved_version_), K(clog_scn_), KP(log_handler_));
+  VIRTUAL_TO_STRING_KV(K(max_saved_version_), K(clog_scn_), KP(log_handler_));
 protected:
   // follower, check update version
   int replay_clog(

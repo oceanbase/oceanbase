@@ -65,7 +65,7 @@ public:
 
   ObStorageSchemaRecorder(const ObStorageSchemaRecorder&) = delete;
   ObStorageSchemaRecorder& operator=(const ObStorageSchemaRecorder&) = delete;
-  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id));
+  INHERIT_TO_STRING_KV("ObIStorageClogRecorder", ObIStorageClogRecorder, K_(ls_id), K_(tablet_id));
 
 private:
   virtual int inner_replay_clog(

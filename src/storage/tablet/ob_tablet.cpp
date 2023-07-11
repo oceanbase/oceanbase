@@ -3073,7 +3073,7 @@ int ObTablet::replay_medium_compaction_clog(
   } else if (OB_UNLIKELY(buf_size <= pos || pos < 0 || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(buf_size), K(pos));
-  } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
+  } else if (tablet_meta_.tablet_id_.is_ls_inner_tablet()) {
     // do nothing
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
@@ -4459,7 +4459,18 @@ int ObTablet::check_medium_list() const
           LOG_WARN("medium list is invalid for last major sstable", K(ret), K(medium_info_list), KPC(last_major));
         }
       }
+      if (OB_SUCC(ret) && !medium_info_list.is_empty()) {
+        const ObMediumCompactionInfo *next_schedule_info = medium_info_list.get_next_schedule_medium_info(last_major->get_snapshot_version());
+        if (nullptr != next_schedule_info
+          && OB_FAIL(ObMediumCompactionInfoList::check_medium_info_and_last_major(
+            *next_schedule_info, last_major, false/*force_check*/))) {
+          LOG_WARN("failed to check medium info and last major", KR(ret), K(medium_info_list), KPC(last_major));
+        }
+      }
     }
+  } else {
+    LOG_INFO("skip check medium list for non empty ha_status", KR(ret),
+      "tablet_id", tablet_meta_.tablet_id_, K(tablet_meta_.ha_status_));
   }
   return ret;
 }

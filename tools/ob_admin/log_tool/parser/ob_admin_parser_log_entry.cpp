@@ -560,8 +560,21 @@ int ObAdminParserLogEntry::parse_reserved_snapshot_log_()
 
 int ObAdminParserLogEntry::parse_medium_log_()
 {
-  //not supported so far, just reserved
-  int ret = OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObTabletID tablet_id;
+  int64_t medium_snapshot = 0;
+  compaction::ObMediumCompactionInfo medium_info;
+  ObStorageSchema storage_schema;
+  if (OB_FAIL(tablet_id.deserialize(buf_, buf_len_, pos_))) {
+    LOG_WARN("fail to deserialize tablet id", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf_, buf_len_, pos_, &medium_snapshot))) {
+    LOG_WARN("fail to deserialize medium_snapshot", K(ret));
+  } else if (OB_FAIL(medium_info.deserialize(allocator, buf_, buf_len_, pos_))) {
+    LOG_WARN("fail to deserialize medium info", K(ret));
+  } else {
+    fprintf(stdout, " ###<MediumCompactionLog>: tablet_id:%ld, medium_info: %s\n", tablet_id.id(), to_cstring(medium_info));
+  }
   return ret;
 }
 

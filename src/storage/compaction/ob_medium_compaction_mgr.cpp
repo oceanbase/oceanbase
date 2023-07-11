@@ -232,9 +232,10 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
   ObTabletHandle tmp_tablet_handle;
   if (OB_FAIL(replay_medium_info.deserialize(tmp_allocator, buf, size, pos))) {
     LOG_WARN("failed to deserialize medium compaction info", K(ret));
-  } else if (!replay_medium_info.from_cur_cluster()
+  } else if (!replay_medium_info.cluster_id_equal()
       && replay_medium_info.is_medium_compaction()) {
     // throw medium compaction clog from other cluster
+    ret = OB_NO_NEED_UPDATE;
   } else { // new mds path
     ObTabletMediumClogReplayExecutor replay_executor(replay_medium_info);
     if (OB_FAIL(replay_executor.init(scn))) {
@@ -246,7 +247,7 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
         LOG_WARN("failed to replay medium info", K(ret), K(replay_medium_info));
       }
     } else {
-      FLOG_INFO("success to save medium info", K(ret), K_(tablet_id), K_(ls_id), K(replay_medium_info), K(max_saved_version_));
+      FLOG_INFO("success to save medium info", K(ret), K_(tablet_id), K_(ls_id), K(scn), K(replay_medium_info), K(max_saved_version_));
     }
   }
 
@@ -669,6 +670,59 @@ void ObMediumCompactionInfoList::gene_info(
     J_OBJ_END();
     J_OBJ_END();
   }
+}
+
+int ObMediumCompactionInfoList::check_medium_info_and_last_major(
+    const ObMediumCompactionInfo &medium_info,
+    const ObITable *last_major_sstable,
+    const bool force_check)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != last_major_sstable
+      && ObMediumCompactionInfo::MEIDUM_COMPAT_VERSION_V2 == medium_info.medium_compat_version_
+      && medium_info.medium_snapshot_ > last_major_sstable->get_snapshot_version()) {
+    if (medium_info.from_cur_cluster()) {
+      if (OB_UNLIKELY(medium_info.last_medium_snapshot_ != last_major_sstable->get_snapshot_version())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("last medium snapshot in medium info is not equal to last "
+                 "major sstable, medium info may lost",
+                 KR(ret), K(medium_info), K(last_major_sstable));
+      }
+    } else { // check next freeze info in inner_table & medium_info
+      const int64_t last_major_sstable_snapshot = last_major_sstable->get_snapshot_version();
+      ObTenantFreezeInfoMgr::FreezeInfo freeze_info;
+      if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(
+              get_freeze_info_behind_snapshot_version,
+              last_major_sstable_snapshot, freeze_info))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("failed to get freeze info", K(ret), K(last_major_sstable_snapshot));
+        } else if (force_check) {
+          ret = OB_EAGAIN;
+          LOG_WARN("next freeze info is not exist yet, need to check after refresh freeze info",
+                   KR(ret), K(medium_info), KPC(last_major_sstable));
+        } // if force_check = false, not return errno; check next time
+      } else if (OB_UNLIKELY(freeze_info.freeze_version < medium_info.medium_snapshot_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("next freeze info is not equal to last major sstable, medium info may lost",
+          KR(ret), "freeze_version", freeze_info.freeze_version, K(medium_info), KPC(last_major_sstable));
+      }
+    }
+  }
+  return ret;
+}
+
+const ObMediumCompactionInfo * ObMediumCompactionInfoList::get_next_schedule_medium_info(const int64_t last_major_snapshot) const
+{
+  const ObMediumCompactionInfo *ret_val = nullptr;
+  const ObMediumCompactionInfo *info = medium_info_list_.get_first();
+  while (nullptr != info && info != medium_info_list_.get_header()) {
+    // get next schedule medium info
+    if (info->medium_snapshot_ > last_major_snapshot) {
+      ret_val = info;
+    }
+    info = info->get_next();
+  }
+  return ret_val;
 }
 
 } //namespace compaction
