@@ -40,6 +40,7 @@ public:
 public:
   void reset();
   void reset(const FetchStreamType stype,
+      const uint64_t self_tenant_id,
       IObLogRpc &rpc,
       IFetchStreamPool &fs_pool,
       IObLSWorker &stream_worker,
@@ -72,6 +73,7 @@ private:
 
 private:
   FetchStreamType           stype_;
+  uint64_t                  self_tenant_id_;
   IObLogRpc                 *rpc_;                    // RPC Processor
   IFetchStreamPool          *fs_pool_;                // Fetch log stream task object pool
   IObLSWorker               *stream_worker_;          // Stream master

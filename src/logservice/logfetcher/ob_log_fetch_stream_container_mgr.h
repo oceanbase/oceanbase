@@ -50,7 +50,8 @@ public:
   ObFsContainerMgr();
   virtual ~ObFsContainerMgr();
   int init(
-      const uint64_t tenant_id,
+      const uint64_t source_tenant_id,
+      const uint64_t self_tenant_id,
       const int64_t svr_stream_cached_count,
       const int64_t fetch_stream_cached_count,
       const int64_t rpc_result_cached_count,
@@ -88,6 +89,7 @@ private:
 private:
   bool is_inited_;
 
+  uint64_t                      self_tenant_id_;
   // External modules
   IObLogRpc                     *rpc_;                    // RPC handler
   IObLSWorker                   *stream_worker_;          // Stream master

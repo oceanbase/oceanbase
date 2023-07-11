@@ -76,6 +76,7 @@ void FetchStream::reset()
   is_inited_ = false;
   // Wait for asynchronous RPC to end before clearing data
   fetch_log_arpc_.stop();
+  self_tenant_id_ = OB_INVALID_TENANT_ID;
 
   state_ = State::IDLE;
   stype_ = FETCH_STREAM_TYPE_HOT;
@@ -99,7 +100,8 @@ void FetchStream::reset()
 }
 
 int FetchStream::init(
-    const uint64_t tenant_id,
+    const uint64_t source_tenant_id,
+    const uint64_t self_tenant_id,
     LSFetchCtx &ls_fetch_ctx,
     const FetchStreamType stream_type,
     IObLogRpc &rpc,
@@ -113,15 +115,16 @@ int FetchStream::init(
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_ERROR("FetchStream has been inited twice", KR(ret), K(tenant_id), K(ls_fetch_ctx), KPC(this));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
+    LOG_ERROR("FetchStream has been inited twice", KR(ret), K(source_tenant_id), K(ls_fetch_ctx), KPC(this));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == source_tenant_id)
       || OB_UNLIKELY(! is_fetch_stream_type_valid(stream_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", KR(ret), K(tenant_id), K(stream_type), K(ls_fetch_ctx), KPC(this));
-  } else if (OB_FAIL(fetch_log_arpc_.init(tenant_id, rpc, stream_worker, rpc_result_pool))) {
-    LOG_ERROR("FetchLogARpc init failed", KR(ret), K(tenant_id));
+    LOG_ERROR("invalid argument", KR(ret), K(source_tenant_id), K(stream_type), K(ls_fetch_ctx), KPC(this));
+  } else if (OB_FAIL(fetch_log_arpc_.init(source_tenant_id, self_tenant_id, rpc, stream_worker, rpc_result_pool))) {
+    LOG_ERROR("FetchLogARpc init failed", KR(ret), K(source_tenant_id));
   } else {
     ls_fetch_ctx_ = &ls_fetch_ctx;
+    self_tenant_id_ = self_tenant_id;
     stype_ = stream_type;
     rpc_ = &rpc;
     stream_worker_ = &stream_worker;

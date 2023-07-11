@@ -85,7 +85,8 @@ public:
   void reset();
 
   int init(
-      const uint64_t tenant_id,
+      const uint64_t source_tenant_id,
+      const uint64_t self_tenant_id,
       LSFetchCtx &ls_fetch_ctx,
       const FetchStreamType stream_type,
       IObLogRpc &rpc,
@@ -261,6 +262,7 @@ public:
 
 private:
   bool                          is_inited_;
+  uint64_t                      self_tenant_id_;
   State                         state_;                             // Fetch log state
   FetchStreamType               stype_;                             // Stream type
   LSFetchCtx                    *ls_fetch_ctx_;                     // LSFetchCtx

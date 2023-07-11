@@ -298,7 +298,8 @@ const char *FetchLogARpc::print_rpc_stop_reason(const RpcStopReason reason)
 
 FetchLogARpc::FetchLogARpc(FetchStream &host) :
     host_(host),
-    tenant_id_(OB_INVALID_TENANT_ID),
+    source_tenant_id_(OB_INVALID_TENANT_ID),
+    self_tenant_id_(OB_INVALID_TENANT_ID),
     svr_(),
     rpc_(NULL),
     stream_worker_(NULL),
@@ -327,7 +328,8 @@ void FetchLogARpc::reset()
   // Wait for all asynchronous RPCs to complete
   stop();
 
-  tenant_id_ = OB_INVALID_TENANT_ID;
+  source_tenant_id_ = OB_INVALID_TENANT_ID;
+  self_tenant_id_ = OB_INVALID_TENANT_ID;
   svr_.reset();
   rpc_ = NULL;
   stream_worker_ = NULL;
@@ -339,18 +341,20 @@ void FetchLogARpc::reset()
 }
 
 int FetchLogARpc::init(
-    const uint64_t tenant_id,
+    const uint64_t source_tenant_id,
+    const uint64_t self_tenant_id,
     IObLogRpc &rpc,
     IObLSWorker &stream_worker,
     IFetchLogARpcResultPool &result_pool)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == source_tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", KR(ret), K(tenant_id));
+    LOG_ERROR("invalid argument", KR(ret), K(source_tenant_id));
   } else {
-    tenant_id_ = tenant_id;
+    source_tenant_id_ = source_tenant_id;
+    self_tenant_id_ = self_tenant_id;
     rpc_ = &rpc;
     stream_worker_ = &stream_worker;
     result_pool_ = &result_pool;
@@ -365,7 +369,7 @@ int FetchLogARpc::set_server(const common::ObAddr &svr)
 
   if (OB_UNLIKELY(! svr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("svr is not valid", KR(ret), K_(tenant_id), K(svr));
+    LOG_ERROR("svr is not valid", KR(ret), K_(source_tenant_id), K(svr));
   } else {
     svr_ = svr;
   }
@@ -765,11 +769,12 @@ int FetchLogARpc::alloc_rpc_request_(const ObLSID &ls_id,
   int ret = OB_SUCCESS;
   int64_t size = sizeof(RpcRequest);
   void *buf = NULL;
+  ObMemAttr attr(self_tenant_id_, ObModIds::OB_LOG_FETCH_LOG_ARPC_REQUEST);
 
   if (OB_UNLIKELY(! ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid ls_id", KR(ret), K(ls_id));
-  } else if (OB_ISNULL(buf = ob_malloc(size, ObModIds::OB_LOG_FETCH_LOG_ARPC_REQUEST))) {
+  } else if (OB_ISNULL(buf = ob_malloc(size, attr))) {
     LOG_ERROR("allocate memory for RpcRequest fail", K(size));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_ISNULL(req = new(buf) RpcRequest(*this, ls_id, rpc_timeout))) {
@@ -925,7 +930,7 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
     rpc_req.mark_flying_state(true);
 
     // Sending the asynchronous RPC
-    ret = rpc_->async_stream_fetch_log(tenant_id_, svr_, rpc_req.req_, rpc_req.cb_, rpc_req.rpc_timeout_);
+    ret = rpc_->async_stream_fetch_log(source_tenant_id_, svr_, rpc_req.req_, rpc_req.cb_, rpc_req.rpc_timeout_);
 
     if (OB_SUCC(ret)) {
       // RPC sent successfully

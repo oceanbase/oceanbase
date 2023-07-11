@@ -180,7 +180,8 @@ public:
   void reset();
 
   int init(
-      const uint64_t tenant_id,
+      const uint64_t source_tenant_id,
+      const uint64_t self_tenant_id,
       IObLogRpc &rpc,
       IObLSWorker &stream_worker,
       IFetchLogARpcResultPool &result_pool);
@@ -410,7 +411,7 @@ private:
 
 public:
   TO_STRING_KV(
-      K_(tenant_id),
+      K_(source_tenant_id),
       "host", reinterpret_cast<void *>(&host_),
       "state", print_state(state_),
       "rpc_result_cnt", res_queue_.count(),
@@ -422,7 +423,8 @@ private:
 
   FetchStream               &host_;
 
-  uint64_t                  tenant_id_;
+  uint64_t                  source_tenant_id_;
+  uint64_t                  self_tenant_id_;
   common::ObAddr            svr_;
   IObLogRpc                 *rpc_;
   IObLSWorker               *stream_worker_;

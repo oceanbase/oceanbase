@@ -169,6 +169,7 @@ int ObLogFetcher::init(
       LOG_ERROR("init stream worker fail", KR(ret));
     } else if (OB_FAIL(fs_container_mgr_.init(
             source_tenant_id,
+            self_tenant_id,
             cfg.svr_stream_cached_count,
             cfg.fetch_stream_cached_count,
             cached_fetch_log_arpc_res_cnt,
@@ -772,7 +773,7 @@ void ObLogFetcher::print_stat()
 int ObLogFetcher::suggest_cached_rpc_res_count_(const int64_t min_res_cnt,
     const int64_t max_res_cnt)
 {
-  const int64_t memory_limit = get_tenant_memory_limit(MTL_ID());
+  const int64_t memory_limit = get_tenant_memory_limit(self_tenant_id_);
   // the maximum memory hold by rpc_result should be 1/32 of the memory limit.
   const int64_t rpc_res_hold_max = (memory_limit >> 5);
   int64_t rpc_res_cnt = rpc_res_hold_max / FetchLogARpcResultPool::DEFAULT_RESULT_POOL_BLOCK_SIZE;

@@ -44,6 +44,7 @@ void FetchStreamContainer::reset()
   free_fs_list_();
 
   stype_ = FETCH_STREAM_TYPE_UNKNOWN;
+  self_tenant_id_ = OB_INVALID_TENANT_ID;
 
   rpc_ = NULL;
   fs_pool_ = NULL;
@@ -56,6 +57,7 @@ void FetchStreamContainer::reset()
 }
 
 void FetchStreamContainer::reset(const FetchStreamType stype,
+    const uint64_t self_tenant_id,
     IObLogRpc &rpc,
     IFetchStreamPool &fs_pool,
     IObLSWorker &stream_worker,
@@ -66,6 +68,7 @@ void FetchStreamContainer::reset(const FetchStreamType stype,
   reset();
 
   stype_ = stype;
+  self_tenant_id_ = self_tenant_id;
   rpc_ = &rpc;
   fs_pool_ = &fs_pool;
   stream_worker_ = &stream_worker;
@@ -179,7 +182,10 @@ int FetchStreamContainer::alloc_fetch_stream_(
   } else if (OB_ISNULL(fs)) {
     LOG_ERROR("invalid fetch stream", K(fs));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(fs->init(tenant_id, ls_fetch_ctx, stype_,
+  } else if (OB_FAIL(fs->init(tenant_id,
+        self_tenant_id_,
+        ls_fetch_ctx,
+        stype_,
         *rpc_,
         *stream_worker_,
         *rpc_result_pool_,

@@ -21,6 +21,7 @@ namespace logfetcher
 {
 ObFsContainerMgr::ObFsContainerMgr() :
     is_inited_(false),
+    self_tenant_id_(OB_INVALID_TENANT_ID),
     rpc_(nullptr),
     stream_worker_(nullptr),
     progress_controller_(nullptr),
@@ -39,7 +40,8 @@ ObFsContainerMgr::~ObFsContainerMgr()
 }
 
 int ObFsContainerMgr::init(
-    const uint64_t tenant_id,
+    const uint64_t source_tenant_id,
+    const uint64_t self_tenant_id,
     const int64_t svr_stream_cached_count,
     const int64_t fetch_stream_cached_count,
     const int64_t rpc_result_cached_count,
@@ -53,19 +55,20 @@ int ObFsContainerMgr::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObFsContainerMgr inited twice", KR(ret));
-  } else if (OB_FAIL(fsc_map_.init(ObModIds::OB_LOG_SVR_STREAM_MAP))) {
+  } else if (OB_FAIL(fsc_map_.init(ObModIds::OB_LOG_SVR_STREAM_MAP, self_tenant_id))) {
     LOG_ERROR("fsc_map_ init fail", KR(ret));
   } else if (OB_FAIL(fsc_pool_.init(svr_stream_cached_count,
           ObModIds::OB_LOG_SVR_STREAM_POOL,
-          OB_SERVER_TENANT_ID,
+          self_tenant_id,
           SVR_STREAM_POOL_BLOCK_SIZE))) {
     LOG_ERROR("init FetchStreamContainer pool fail", KR(ret));
   } else if (OB_FAIL(fs_pool_.init(fetch_stream_cached_count))) {
     LOG_ERROR("init fetch stream pool fail", KR(ret), K(fetch_stream_cached_count));
-  } else if (OB_FAIL(rpc_result_pool_.init(MTL_ID(), rpc_result_cached_count))) {
-    LOG_ERROR("init rpc result pool fail", KR(ret), K(tenant_id), K(rpc_result_cached_count));
+  } else if (OB_FAIL(rpc_result_pool_.init(self_tenant_id, rpc_result_cached_count))) {
+    LOG_ERROR("init rpc result pool fail", KR(ret), K(source_tenant_id), K(rpc_result_cached_count));
   } else {
     rpc_ = &rpc;
+    self_tenant_id_ = self_tenant_id;
     stream_worker_ = &stream_worker;
     progress_controller_ = &progress_controller;
     log_handler_ = &log_handler;
@@ -79,6 +82,7 @@ void ObFsContainerMgr::destroy()
 {
   if (is_inited_) {
     is_inited_ = false;
+    self_tenant_id_ = OB_INVALID_TENANT_ID;
     rpc_ = nullptr;
     stream_worker_ = nullptr;
     progress_controller_ = nullptr;
@@ -115,6 +119,7 @@ int ObFsContainerMgr::add_fsc(const FetchStreamType stype,
     LOG_ERROR("allocate fsc from pool failed", KR(ret), K(tls_id), K(fsc));
   } else {
     fsc->reset(stype,
+        self_tenant_id_,
         *rpc_,
         fs_pool_,
         *stream_worker_,
