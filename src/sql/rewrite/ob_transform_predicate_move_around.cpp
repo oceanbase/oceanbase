@@ -2029,6 +2029,10 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
                  generalized_columns, stmt.get_group_exprs())) {
       // do nothing
       OPT_TRACE(pred, "has none group by expr, can not pushdown");
+    } else if (is_mysql_mode() && ObOptimizerUtil::subset_exprs(
+                 generalized_columns, stmt.get_rollup_exprs())) {
+      //do nothing
+      OPT_TRACE(pred, "has rollup expr in mysql mode, can not pushdown");
     } else if (pred->has_flag(CNT_SUB_QUERY) &&
                OB_FAIL(ObOptimizerUtil::check_subquery_has_ref_assign_user_var(
                           pred, has_ref_assign_user_var))) {
