@@ -996,6 +996,12 @@
         res_obj.set_scale(column.get_data_scale());\
         ret = (class_obj).set_##column_name(res_obj); \
       } \
+      else if (column.is_generated_column()) { \
+        res_obj.set_string(data_type, str_value); \
+        res_obj.meta_.set_collation_type(CS_TYPE_UTF8MB4_BIN);  \
+        res_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT); \
+        ret = (class_obj).set_##column_name(res_obj); \
+      } \
       else if (column.is_identity_column() || ob_is_string_type(data_type) || ob_is_geometry(data_type)) \
       { \
         res_obj.set_string(data_type, str_value); \

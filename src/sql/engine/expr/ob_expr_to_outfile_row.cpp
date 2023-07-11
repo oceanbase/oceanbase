@@ -244,7 +244,7 @@ int ObExprToOutfileRow::print_field(char *buf, const int64_t buf_len, int64_t &p
   int ret = OB_SUCCESS;
   int64_t tmp_pos = 0;
   const bool need_enclose = 0 != out_info.wchar_enclose_ &&
-                            (!out_info.is_optional_ || obj.is_string_type());
+                            (!out_info.is_optional_ || obj.is_string_type()) && !obj.is_null();
   if (need_enclose) {
     OZ(out_info.enclose_.print_plain_str_literal(buf, buf_len, pos, out_info.print_params_));
   }
