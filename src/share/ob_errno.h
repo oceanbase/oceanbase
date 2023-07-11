@@ -1235,6 +1235,7 @@ constexpr int OB_ERR_TYPE_SPEC_NOT_EXIST = -9520;
 constexpr int OB_ERR_TYPE_SPEC_NO_ROUTINE = -9521;
 constexpr int OB_ERR_TYPE_BODY_NO_ROUTINE = -9522;
 constexpr int OB_ERR_IDENTIFIER_TOO_LONG = -9523;
+constexpr int OB_ERR_MALFORMED_PS_PACKET = -9747;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2696,6 +2697,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TYPE_SPEC_NO_ROUTINE__USER_ERROR_MSG "subprogram '%.*s' is declared in an object type body and must be defined in the object type specification"
 #define OB_ERR_TYPE_BODY_NO_ROUTINE__USER_ERROR_MSG "subprogram or cursor '%.*s' is declared in an object type specification and must be defined in the object type body"
 #define OB_ERR_IDENTIFIER_TOO_LONG__USER_ERROR_MSG "identifier '%.*s' too long"
+#define OB_ERR_MALFORMED_PS_PACKET__USER_ERROR_MSG "malformed ps packet"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "-%05ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4157,6 +4159,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TYPE_SPEC_NO_ROUTINE__ORA_USER_ERROR_MSG "PLS-00539: subprogram '%.*s' is declared in an object type body and must be defined in the object type specification"
 #define OB_ERR_TYPE_BODY_NO_ROUTINE__ORA_USER_ERROR_MSG "PLS-00538: subprogram or cursor '%.*s' is declared in an object type specification and must be defined in the object type body"
 #define OB_ERR_IDENTIFIER_TOO_LONG__ORA_USER_ERROR_MSG "PLS-00114: identifier '%.*s' too long"
+#define OB_ERR_MALFORMED_PS_PACKET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9747, malformed ps packet"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"

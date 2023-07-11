@@ -32,6 +32,44 @@ struct ObSavedException {
 
 typedef common::Ob2DArray<common::ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, ObWrapperAllocator, false> ParamStore;
 
+class ObPSAnalysisChecker {
+public:
+  ObPSAnalysisChecker() : pos_(nullptr), begin_pos_(nullptr), end_pos_(nullptr), data_len_(0), need_check_(true)
+  {}
+  void init(const char *&pos, const int64_t len)
+  {
+    pos_ = &pos;
+    begin_pos_ = pos;
+    end_pos_ = pos + len;
+    data_len_ = len;
+    need_check_ = true;
+  }
+  int detection(const int64_t len);
+  inline int64_t remain_len()
+  {
+    return end_pos_ - (*pos_);
+  }
+
+public:
+  const char **pos_;
+  const char *begin_pos_;
+  const char *end_pos_;
+  int64_t data_len_;
+  bool need_check_;
+};
+
+#define PS_DEFENSE_CHECK(len)                             \
+  if (OB_FAIL(ret)) {                                     \
+  } else if (OB_FAIL(analysis_checker_.detection(len))) { \
+    LOG_WARN("memory access out of bounds", K(ret));      \
+  } else
+
+#define PS_STATIC_DEFENSE_CHECK(checker, len)                          \
+  if (OB_FAIL(ret)) {                                                  \
+  } else if (nullptr != checker && OB_FAIL(checker->detection(len))) { \
+    LOG_WARN("memory access out of bounds", K(ret));                   \
+  } else
+
 class ObMPStmtExecute : public ObMPBase, public ObIMPPacketSender {
 public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_STMT_EXECUTE;
@@ -44,14 +82,15 @@ public:
   // see parse_param_value()
   static int parse_basic_param_value(ObIAllocator &allocator, const uint32_t type, const ObCharsetType charset,
       const ObCollationType cs_type, const ObCollationType ncs_type, const char *&data,
-      const common::ObTimeZoneInfo *tz_info, ObObj &param);
+      const common::ObTimeZoneInfo *tz_info, ObObj &param, ObPSAnalysisChecker *checker = nullptr);
   static int parse_mysql_timestamp_value(const obmysql::EMySQLFieldType field_type, const char *&data, ObObj &param,
-      const common::ObTimeZoneInfo *tz_info);
+      const common::ObTimeZoneInfo *tz_info, ObPSAnalysisChecker *checker = nullptr);
   static int parse_oracle_timestamp_value(
-      const obmysql::EMySQLFieldType field_type, const char*& data, const ObTimeConvertCtx& cvrt_ctx, ObObj& param);
-  static int parse_mysql_time_value(const char*& data, ObObj& param);
-  static int parse_oracle_interval_ym_value(const char*& data, ObObj& param);
-  static int parse_oracle_interval_ds_value(const char*& data, ObObj& param);
+      const obmysql::EMySQLFieldType field_type, const char*& data, const ObTimeConvertCtx& cvrt_ctx,
+      ObObj& param, ObPSAnalysisChecker *checker = nullptr);
+  static int parse_mysql_time_value(const char*& data, ObObj& param, ObPSAnalysisChecker *checker = nullptr);
+  static int parse_oracle_interval_ym_value(const char*& data, ObObj& param, ObPSAnalysisChecker *checker = nullptr);
+  static int parse_oracle_interval_ds_value(const char*& data, ObObj& param, ObPSAnalysisChecker *checker = nullptr);
   int64_t get_single_process_timestamp() const
   {
     return single_process_timestamp_;
@@ -192,6 +231,7 @@ private:
       const common::ObTimeZoneInfo* tz_info, sql::TypeInfo* type_info, sql::TypeInfo* dst_type_info, 
       ObObjParam& param, int16_t param_id);
   int decode_type_info(const char*& buf, sql::TypeInfo& type_info);
+  bool is_contain_complex_element(const sql::ParamTypeArray &param_types) const;
 
   virtual int before_response() override
   {
@@ -227,6 +267,7 @@ private:
   int64_t exec_start_timestamp_;
   int64_t exec_end_timestamp_;
   uint64_t params_num_;
+  ObPSAnalysisChecker analysis_checker_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtExecute);

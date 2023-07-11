@@ -1618,6 +1618,7 @@ DEFINE_PLS_ERROR_EXT(OB_ERR_TYPE_SPEC_NOT_EXIST, -9520, -1, "HY000", "cannot com
 DEFINE_PLS_ERROR_EXT(OB_ERR_TYPE_SPEC_NO_ROUTINE, -9521, -1, "HY000", "subprogram is declared in an object type body and must be defined in the object type specification", "subprogram '%.*s' is declared in an object type body and must be defined in the object type specification", 539, "subprogram is declared in an object type body and must be defined in the object type specification", "subprogram '%.*s' is declared in an object type body and must be defined in the object type specification");
 DEFINE_PLS_ERROR_EXT(OB_ERR_TYPE_BODY_NO_ROUTINE, -9522, -1, "HY000", "subprogram or cursor is declared in an object type specification and must be defined in the object type body", "subprogram or cursor '%.*s' is declared in an object type specification and must be defined in the object type body", 538, "subprogram or cursor is declared in an object type specification and must be defined in the object type body", "subprogram or cursor '%.*s' is declared in an object type specification and must be defined in the object type body");
 DEFINE_PLS_ERROR(OB_ERR_IDENTIFIER_TOO_LONG, -9523, -1, "HY000", "identifier '%.*s' too long", 114, "identifier '%.*s' too long");
+DEFINE_ERROR(OB_ERR_MALFORMED_PS_PACKET, -9747, -1, "HY000", "malformed ps packet");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
