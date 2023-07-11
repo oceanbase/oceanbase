@@ -170,7 +170,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              log_updater_(),
                              monitor_(NULL),
                              disk_options_wrapper_(),
-                             check_disk_print_log_interval_(OB_INVALID_TIMESTAMP),
+                             disk_not_enough_print_interval_(OB_INVALID_TIMESTAMP),
                              self_(),
                              palf_handle_impl_map_(64),  // 指定min_size=64
                              last_palf_epoch_(0),
@@ -333,6 +333,7 @@ void PalfEnvImpl::destroy()
   election_timer_.destroy();
   log_alloc_mgr_ = NULL;
   monitor_ = NULL;
+  disk_not_enough_print_interval_ = OB_INVALID_TIMESTAMP;
   self_.reset();
   log_dir_[0] = '\0';
   tmp_log_dir_[0] = '\0';
@@ -719,6 +720,8 @@ int PalfEnvImpl::try_recycle_blocks()
       ATOMIC_STORE(&diskspace_enough_, curr_diskspace_enough);
     }
     if ((true == need_recycle && false == has_recycled && false == is_shrinking) || false == diskspace_enough_) {
+      constexpr int64_t INTERVAL = 1*1000*1000;
+      if (palf_reach_time_interval(INTERVAL, disk_not_enough_print_interval_)) {
       int tmp_ret = OB_LOG_OUTOF_DISK_SPACE;
       LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "log disk space is almost full", "ret", tmp_ret,
           "total_size(MB)", disk_opts_for_recycling_blocks.log_disk_usage_limit_size_/MB,
@@ -733,6 +736,7 @@ int PalfEnvImpl::try_recycle_blocks()
           "maximum_log_stream", palf_id,
           "oldest_log_stream", oldest_palf_id,
           "oldest_scn", oldest_scn);
+      }
     } else {
        if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
          PALF_LOG(INFO, "LOG_DISK_OPTION", K(disk_options_wrapper_));

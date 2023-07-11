@@ -346,7 +346,7 @@ private:
   PalfMonitorCb *monitor_;
 
   PalfDiskOptionsWrapper disk_options_wrapper_;
-  int64_t check_disk_print_log_interval_;
+  int64_t disk_not_enough_print_interval_;
 
   char log_dir_[common::MAX_PATH_SIZE];
   char tmp_log_dir_[common::MAX_PATH_SIZE];
