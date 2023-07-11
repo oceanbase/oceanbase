@@ -360,7 +360,8 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
       } else if (OB_FAIL(build_dfo_sqc(ctx, locations, dfo))) {
         LOG_WARN("fail fill dfo with sqc infos", K(dfo), K(ret));
       } else if (OB_FAIL(set_dfo_accessed_location(ctx, table_location_key, dfo, scan_ops, dml_op, dml_full_loc))) {
-        LOG_WARN("fail to set all table partition for tsc", K(ret));
+        LOG_WARN("fail to set all table partition for tsc", K(ret), K(scan_ops.count()), K(dml_op),
+                 K(table_location_key), K(ref_table_id), K(locations));
       } else if (OB_NOT_NULL(table_locations) && !table_locations->empty() &&
             OB_FAIL(build_dynamic_partition_table_location(scan_ops, table_locations, dfo))) {
         LOG_WARN("fail to build dynamic partition pruning table", K(ret));
@@ -1019,7 +1020,8 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
           // table scan does not need to be set again
           OB_ISNULL(dml_op) ? base_table_location_key : OB_INVALID_ID,
           dfo, base_order, table_loc, scan_op))) {
-      LOG_WARN("failed to set sqc accessed location", K(ret));
+      LOG_WARN("failed to set sqc accessed location", K(ret), K(table_location_key),
+               K(ref_table_id), KPC(table_loc));
     }
   } // end for
   return ret;
@@ -1113,7 +1115,8 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && n_locations != locations.size()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("we do not find this addr's execution sqc", K(ret), K(n_locations), K(locations.size()));
+    LOG_WARN("we do not find this addr's execution sqc", K(ret), K(n_locations),
+             K(locations.size()), K(sqcs), K(locations));
   }
   return ret;
 }
