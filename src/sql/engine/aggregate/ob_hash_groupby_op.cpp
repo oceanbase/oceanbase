@@ -935,10 +935,8 @@ int ObHashGroupByOp::load_data()
   bool check_dump = false;
   ObGbyBloomFilter *bloom_filter = NULL;
   const ObChunkDatumStore::StoredRow *srow = NULL;
-  int64_t last_batch_size = 0;
   for (int64_t loop_cnt = 0; OB_SUCC(ret); ++loop_cnt) {
-    int64_t curr_batch_size = 0;
-    bypass_ctrl_.gby_process_state(last_batch_size,
+    bypass_ctrl_.gby_process_state(local_group_rows_.get_probe_cnt(),
                                    local_group_rows_.size(),
                                    get_actual_mem_used_size());
     if (bypass_ctrl_.processing_ht()) {
@@ -1001,8 +999,6 @@ int ObHashGroupByOp::load_data()
           srow, curr_gr_item.hash_))) {
         LOG_WARN("failed to get_groupby_exprs_hash", K(ret));
       }
-      ++curr_batch_size;
-      bypass_ctrl_.inc_processed_cnt(1);
       curr_gr_item.is_expr_row_ = true;
       curr_gr_item.batch_idx_ = 0;
       LOG_DEBUG("finish calc_groupby_exprs_hash", K(curr_gr_item));
@@ -1010,7 +1006,6 @@ int ObHashGroupByOp::load_data()
       } else if ((!start_dump || bloom_filter->exist(curr_gr_item.hash()))
                 && NULL != (exist_curr_gr_item = local_group_rows_.get(curr_gr_item))) {
         ++agged_row_cnt_;
-        bypass_ctrl_.inc_exists_cnt();
         if (OB_ISNULL(exist_curr_gr_item->group_row_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("group_row is null", K(ret));
@@ -1065,7 +1060,6 @@ int ObHashGroupByOp::load_data()
       }
       has_checked = true;
     } while (!last_group && OB_SUCC(ret));
-    last_batch_size = curr_batch_size;
   }
 
   //必须先reset，否则等自动析构时候，内存都被释放了，会有问题
@@ -1621,7 +1615,7 @@ int ObHashGroupByOp::load_data_batch(int64_t max_row_cnt)
   int64_t last_batch_size = 0;
 
   while (OB_SUCC(ret)) {
-    bypass_ctrl_.gby_process_state(last_batch_size,
+    bypass_ctrl_.gby_process_state(local_group_rows_.get_probe_cnt(),
                                    local_group_rows_.size(),
                                    get_actual_mem_used_size());
     if (bypass_ctrl_.processing_ht()) {
@@ -1637,8 +1631,6 @@ int ObHashGroupByOp::load_data_batch(int64_t max_row_cnt)
       if (NULL != cur_part) {
         store_rows = batch_rows_from_dump_;
       }
-      last_batch_size = child_brs->size_ - child_brs->skip_->accumulate_bit_cnt(child_brs->size_);
-      bypass_ctrl_.inc_processed_cnt(last_batch_size);
       clear_evaluated_flag();
       loop_cnt += child_brs->size_;
       if (OB_FAIL(try_check_status())) {
@@ -2274,7 +2266,6 @@ int ObHashGroupByOp::group_child_batch_rows(const ObChunkDatumStore::StoredRow *
           gris_per_batch_[gri_cnt_per_batch_++] = exist_curr_gr_item;
         }
         ++agged_row_cnt_;
-        bypass_ctrl_.inc_exists_cnt();
         batch_row_gri_ptrs_[i] = exist_curr_gr_item;
         const_cast<ObGroupRowItem *>(exist_curr_gr_item)->group_row_count_in_batch_++;
         LOG_DEBUG("exist item", K(gri_cnt_per_batch_), K(*exist_curr_gr_item),

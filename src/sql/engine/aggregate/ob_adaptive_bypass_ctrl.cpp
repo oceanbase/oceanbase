@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
+#include "sql/optimizer/ob_opt_selectivity.h"
 
 
 namespace oceanbase
@@ -19,9 +20,12 @@ namespace oceanbase
 namespace sql
 {
 
-void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt, int64_t row_cnt, int64_t mem_size)
+void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
+                                             int64_t row_cnt,
+                                             int64_t mem_size)
 {
   int64_t min_period_cnt = MIN_PERIOD_CNT;
+  processed_cnt_ += probe_cnt;
   if (!by_pass_ctrl_enabled_) {
     // do nothing
   } else if (STATE_PROCESS_HT == state_) {
@@ -29,30 +33,63 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt, int64_t row_cnt,
   } else if (0 == probe_cnt) {
   } else if (STATE_L2_INSERT == state_) {
     // insert until exceed l2 cache
-    probe_cnt_ += probe_cnt;
     if (!in_l2_cache(row_cnt, mem_size)) {
       state_ = STATE_ANALYZE;
     }
   } else if (STATE_L3_INSERT == state_) {
     // insert until exceed l3 cache
-    probe_cnt_ += probe_cnt;
     if (!in_l3_cache(row_cnt, mem_size)) {
       state_ = STATE_ANALYZE;
     }
   } else if (STATE_ANALYZE == state_) {
-    probe_cnt_ += probe_cnt;
     double ratio = MIN_RATIO_FOR_L3;
-    if (static_cast<double> (exists_cnt_) / probe_cnt_ >=
+    probe_cnt_for_period_[round_times_ % MAX_REBUILD_TIMES] = probe_cnt;
+    ndv_cnt_for_period_[round_times_ % MAX_REBUILD_TIMES] = row_cnt;
+    ++round_times_;
+    int64_t exists_cnt = probe_cnt - row_cnt;
+    if (static_cast<double> (exists_cnt) / probe_cnt >=
                       std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {
       // very good distinct rate, can expend hash map to l3 cache
       rebuild_times_ = 0;
-      if (in_l2_cache(row_cnt, mem_size)) {
+      if (in_l3_cache(row_cnt, mem_size)) {
         state_ = STATE_L3_INSERT;
         need_resize_hash_table_ = true;
       } else {
         state_ = STATE_PROCESS_HT;
       }
-    } else if (static_cast<double> (exists_cnt_) / probe_cnt_ >=
+    } else if (round_times_ >= MAX_REBUILD_TIMES) {
+      double select_rows = 0.0;
+      double ndv = 0.0;
+      for (int64_t i = 0; i < MAX_REBUILD_TIMES; ++i) {
+        select_rows += probe_cnt_for_period_[i];
+        ndv += ndv_cnt_for_period_[i];
+      }
+      ndv /= MAX_REBUILD_TIMES;
+      double rows = select_rows / MAX_REBUILD_TIMES;
+      double new_ndv = ObOptSelectivity::scale_distinct(select_rows, rows, ndv);
+      double new_ratio = 1 - new_ndv / select_rows;
+      if (new_ratio >= std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {
+        // very good distinct rate, can expend hash map to l3 cache
+        rebuild_times_ = 0;
+        if (in_l3_cache(row_cnt, mem_size)) {
+          state_ = STATE_L3_INSERT;
+          need_resize_hash_table_ = true;
+        } else {
+          state_ = STATE_PROCESS_HT;
+        }
+      } else if (new_ratio >= 1 - (1 / static_cast<double> (cut_ratio_))) {
+        // good distinct rate, reset rebuild times
+        state_ = STATE_PROCESS_HT;
+        rebuild_times_ = 0;
+      } else {
+        // distinct rate is not good
+        // prepare to release curr hash table
+        state_ = STATE_PROCESS_HT;
+      }
+      //ObTaskController::get().allow_next_syslog();
+      LOG_TRACE("adaptive groupby try redefine ratio", K(select_rows), K(rows), K(ndv),
+                                                       K(new_ndv), K(new_ratio), K(state_));
+    } else if (static_cast<double> (exists_cnt) / probe_cnt >=
                                           1 - (1 / static_cast<double> (cut_ratio_))) {
       // good distinct rate, reset rebuild times
       state_ = STATE_PROCESS_HT;
@@ -62,10 +99,10 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt, int64_t row_cnt,
       // prepare to release curr hash table
       state_ = STATE_PROCESS_HT;
     }
-    LOG_TRACE("get new state", K(state_), K(processed_cnt_), K(exists_cnt_),
-                              K(probe_cnt_), K(rebuild_times_), K(cut_ratio_), K(mem_size), K(op_id_), K(row_cnt));
-    probe_cnt_ = 0;
-    exists_cnt_ = 0;
+    //ObTaskController::get().allow_next_syslog();
+    LOG_TRACE("adaptive groupby generate new state", K(state_), K(rebuild_times_), K(cut_ratio_),
+                                                     K(mem_size), K(op_id_), K(row_cnt),
+                                                     K(probe_cnt), K(exists_cnt), K(processed_cnt_));
   }
 }
 
