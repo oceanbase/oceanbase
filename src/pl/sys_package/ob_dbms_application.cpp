@@ -146,7 +146,7 @@ int ObDBMSAppInfo::set_module(sql::ObExecContext &ctx, sql::ParamStore &params, 
     } else {
       OZ (params.at(0).get_string(module_name));
     }
-    OV (params.at(1).is_varchar() || params.at(0).is_null_oracle(), OB_INVALID_ARGUMENT);
+    OV (params.at(1).is_varchar() || params.at(1).is_null_oracle(), OB_INVALID_ARGUMENT);
     if (params.at(1).is_null_oracle()) {
       action_name.reset();
     } else {   

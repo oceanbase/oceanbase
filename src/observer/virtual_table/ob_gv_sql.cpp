@@ -135,8 +135,7 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
   SERVER_LOG(DEBUG,
              "add plan from a tenant",
              K(ret),
-             K(tenant_id),
-             K_(cur_row));
+             K(tenant_id));
   return ret;
 }
 
