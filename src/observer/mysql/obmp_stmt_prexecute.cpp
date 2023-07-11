@@ -77,6 +77,7 @@ ObMPStmtPrexecute::ObMPStmtPrexecute(const ObGlobalContext &gctx)
 int ObMPStmtPrexecute::before_process()
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
 
   if (OB_FAIL(ObMPBase::before_process())) {
     LOG_WARN("fail to call before process", K(ret));
@@ -357,9 +358,14 @@ int ObMPStmtPrexecute::before_process()
         }
       }
       session->set_last_trace_id(ObCurTraceId::get_trace_id());
-    }
-    if (session != NULL) {
-      revert_session(session);
+      //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
+      if (session != NULL && OB_FAIL(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        //清空WARNING BUFFER
+        ObSqlCtx sql_ctx; // sql_ctx do nothing in do_after_process
+        tmp_ret = do_after_process(*session, sql_ctx, false/*no asyn response*/);
+        UNUSED(tmp_ret);
+      }
     }
   }
 
@@ -370,6 +376,10 @@ int ObMPStmtPrexecute::before_process()
       LOG_WARN("prepare stmt checksum error, disconnect connection", K(ret));
     }
     OZ (flush_buffer(true));
+  }
+
+  if (session != NULL) {
+    revert_session(session);
   }
 
   return ret;
