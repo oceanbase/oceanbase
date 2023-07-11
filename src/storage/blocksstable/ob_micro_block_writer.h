@@ -52,7 +52,7 @@ public:
       const int64_t rowkey_column_count,
       const int64_t column_count = 0,
       const common::ObIArray<share::schema::ObColDesc> *col_desc_array = nullptr,
-      const bool need_calc_column_chksum = false);
+      const bool is_major = false);
 
   virtual int append_row(const ObDatumRow &row);
   virtual int build_block(char *&buf, int64_t &size);
@@ -92,7 +92,7 @@ private:
   ObSelfBufferWriter data_buffer_;
   ObSelfBufferWriter index_buffer_;
   const common::ObIArray<share::schema::ObColDesc> *col_desc_array_;
-  bool need_calc_column_chksum_;
+  bool is_major_;
   bool is_inited_;
 };
 
@@ -131,7 +131,7 @@ inline int64_t ObMicroBlockWriter::get_future_block_size(const int64_t row_lengt
 
 inline int64_t ObMicroBlockWriter::get_data_base_offset() const
 {
-  return ObMicroBlockHeader::get_serialize_size(column_count_, need_calc_column_chksum_);
+  return ObMicroBlockHeader::get_serialize_size(column_count_, is_major_);
 }
 
 inline int64_t ObMicroBlockWriter::get_index_base_offset() const

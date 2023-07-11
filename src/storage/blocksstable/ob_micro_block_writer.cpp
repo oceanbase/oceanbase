@@ -27,7 +27,7 @@ ObMicroBlockWriter::ObMicroBlockWriter()
    data_buffer_("MicrBlocWriter"),
    index_buffer_("MicrBlocWriter"),
    col_desc_array_(nullptr),
-   need_calc_column_chksum_(false),
+   is_major_(false),
    is_inited_(false)
 {
 }
@@ -41,7 +41,7 @@ int ObMicroBlockWriter::init(
     const int64_t rowkey_column_count,
     const int64_t column_count/* = 0*/,
     const common::ObIArray<share::schema::ObColDesc> *col_desc_array /* nullptr */,
-    const bool need_calc_column_chksum/* = false*/)
+    const bool is_major/* = false*/)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -52,11 +52,17 @@ int ObMicroBlockWriter::init(
     micro_block_size_limit_ = micro_block_size_limit;
     rowkey_column_count_ = rowkey_column_count;
     column_count_ = column_count;
-    need_calc_column_chksum_ = need_calc_column_chksum;
-    need_check_lob_ = false;
-    if (OB_NOT_NULL(col_desc_array_ = col_desc_array)) {
-      for (int64_t i = 0; OB_SUCC(ret) && !need_check_lob_ && i < col_desc_array_->count(); i++) {
-        need_check_lob_ = col_desc_array_->at(i).col_type_.is_lob_storage();
+    // major need calc column checksum
+    is_major_ = is_major;
+    // there are only rowkey column descs during minor merge, so we should alwasy check lob storage -_-
+    need_check_lob_ = true;
+    if (is_major) {
+      if (OB_NOT_NULL(col_desc_array_ = col_desc_array)) {
+        for (int64_t i = 0; OB_SUCC(ret) && !need_check_lob_ && i < col_desc_array_->count(); i++) {
+          need_check_lob_ = col_desc_array_->at(i).col_type_.is_lob_storage();
+        }
+      } else {
+        need_check_lob_ = false;
       }
     }
     is_inited_ = true;
@@ -76,7 +82,7 @@ int ObMicroBlockWriter::inner_init()
     STORAGE_LOG(WARN, "data buffer fail to ensure space.", K(ret));
   } else if (OB_FAIL(index_buffer_.ensure_space(DEFAULT_INDEX_BUFFER_SIZE))) {
     STORAGE_LOG(WARN, "index buffer fail to ensure space.", K(ret));
-  } else if (OB_FAIL(reserve_header(column_count_, rowkey_column_count_, need_calc_column_chksum_))) {
+  } else if (OB_FAIL(reserve_header(column_count_, rowkey_column_count_, is_major_))) {
     STORAGE_LOG(WARN, "micro block writer fail to reserve header.",
         K(ret), K_(column_count));
   } else if (OB_FAIL(index_buffer_.write(static_cast<int32_t>(0)))) {
@@ -103,6 +109,8 @@ int ObMicroBlockWriter::process_out_row_columns(const ObDatumRow &row)
   int ret = OB_SUCCESS;
 
   if (!need_check_lob_) {
+  } else if (!is_major_) {
+    has_lob_out_row_ = true;
   } else if (OB_UNLIKELY(nullptr == col_desc_array_ || row.get_column_count() != col_desc_array_->count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN ,"unexpected column count not match", K(ret), K(need_check_lob_), K(row), KPC(col_desc_array_));
@@ -245,7 +253,7 @@ void ObMicroBlockWriter::reset()
   micro_block_size_limit_ = 0;
   column_count_ = 0;
   rowkey_column_count_ = 0;
-  need_calc_column_chksum_ = false;
+  is_major_ = false;
   row_writer_.reset();
   header_ = nullptr;
   data_buffer_.reset();
