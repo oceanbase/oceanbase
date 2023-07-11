@@ -29,6 +29,7 @@ public:
                             int64_t row_num,
                             const ColContentIArray &column_infos,
                             bool is_ignore,
+                            bool is_single_value,
                             ObTableModifyOp &dml_op);
   static int check_column_type(const ExprFixedArray &dml_row,
                                int64_t row_num,

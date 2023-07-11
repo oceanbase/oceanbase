@@ -614,8 +614,10 @@ int ObInsertLogPlan::check_insert_stmt_need_multi_partition_dml(bool &is_multi_p
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FALSE_IT(is_one_part_table = ObSQLUtils::is_one_part_table_can_skip_part_calc(*table_schema))) {
-  } else if (insert_stmt->is_ignore() && !is_one_part_table) {
+  } else if ((insert_stmt->is_ignore() && !is_one_part_table) ||
+             (lib::is_mysql_mode() && !is_strict_mode(session_info->get_sql_mode()))) {
     // insert ignore，并且是分区表插入时，不能优化
+    // mysql non strict mode can not optimize as multi part dml
     is_multi_part_dml = true;
   } else if (!insert_stmt->get_insert_table_info().part_ids_.empty() &&
              insert_stmt->value_from_select()) {
