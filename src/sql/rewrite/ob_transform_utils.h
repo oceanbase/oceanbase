@@ -1773,6 +1773,10 @@ public:
                                   ObIArray<ObRawExpr *> &relation_exprs,
                                   ObIArray<ObRawExpr *> &common_exprs);
   static int check_is_index_part_key(ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *check_expr, bool &is_valid);
+  static int convert_preds_vector_to_scalar(ObTransformerCtx &ctx,
+                                            ObRawExpr *expr,
+                                            ObIArray<ObRawExpr*> &exprs,
+                                            bool &trans_happened);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

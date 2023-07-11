@@ -2443,7 +2443,7 @@ int ObTransformConstPropagate::acquire_pullup_infos(ObDMLStmt *stmt,
     PullupConstInfos *new_infos = NULL;
     index = stmt_pullup_const_infos_.count();
     if (OB_ISNULL(new_infos = (PullupConstInfos *) allocator_.alloc(sizeof(PullupConstInfos)))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate pullup predicates array", K(ret));
     } else {
       new_infos = new (new_infos) PullupConstInfos();

@@ -2995,7 +2995,7 @@ int ObTransformPredicateMoveAround::acquire_transform_params(ObDMLStmt *stmt,
     PullupPreds *new_preds = NULL;
     index = stmt_pullup_preds_.count();
     if (OB_ISNULL(new_preds = (PullupPreds *) allocator_.alloc(sizeof(PullupPreds)))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate pullup predicates array", K(ret));
     } else {
       new_preds = new (new_preds) PullupPreds();

@@ -8055,6 +8055,35 @@ int ObTransformPreProcess::transform_full_outer_join(ObDMLStmt *&stmt, bool &tra
   return ret;
 }
 
+int ObTransformPreProcess::convert_join_preds_vector_to_scalar(JoinedTable &joined_table,
+                                                               bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 16> new_join_cond;
+  bool is_happened = false;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get NULL ptr", K(ret) , KP(ctx_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < joined_table.get_join_conditions().count(); i++) {
+      if (OB_FAIL(ObTransformUtils::convert_preds_vector_to_scalar(*ctx_,
+                                                           joined_table.get_join_conditions().at(i),
+                                                           new_join_cond,
+                                                           is_happened))) {
+        LOG_WARN("failed to convert predicate vector to scalar", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && is_happened) {
+      trans_happened = true;
+      joined_table.get_join_conditions().reset();
+      if (OB_FAIL(append(joined_table.get_join_conditions(), new_join_cond))) {
+        LOG_WARN("failed to append join conditions", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformPreProcess::recursively_eliminate_full_join(ObDMLStmt &stmt,
                                                            TableItem *table_item,
                                                            bool &trans_happened)
@@ -8065,9 +8094,9 @@ int ObTransformPreProcess::recursively_eliminate_full_join(ObDMLStmt &stmt,
   JoinedTable *joined_table = static_cast<JoinedTable *>(table_item);
   TableItem *view_table = NULL;
   TableItem *from_table = table_item;
-  if (OB_ISNULL(table_item)) {
+  if (OB_ISNULL(table_item) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is null", K(ret), K(table_item));
+    LOG_WARN("table item is null", K(ret), K(table_item), K(ctx_));
   } else if (!table_item->is_joined_table()) {
     /* do nothing */
   } else if (OB_FAIL(recursively_eliminate_full_join(stmt,
@@ -8080,6 +8109,8 @@ int ObTransformPreProcess::recursively_eliminate_full_join(ObDMLStmt &stmt,
     LOG_WARN("failed to transform full nl join.", K(ret));
   } else if (!joined_table->is_full_join()) {
     /* do nothing */
+  } else if (OB_FAIL(convert_join_preds_vector_to_scalar(*joined_table, trans_happened))) {
+    LOG_WARN("failed to convert join preds vector to scalar", K(ret));
   } else if (OB_FAIL(check_join_condition(&stmt, joined_table, has_euqal, has_subquery))) {
     LOG_WARN("failed to check join condition", K(ret));
   } else if (has_euqal || has_subquery) {

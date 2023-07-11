@@ -13266,5 +13266,86 @@ int ObTransformUtils::check_is_index_part_key(ObTransformerCtx &ctx,
   return ret;
 }
 
+int ObTransformUtils::convert_preds_vector_to_scalar(ObTransformerCtx &ctx,
+                                                     ObRawExpr *expr,
+                                                     ObIArray<ObRawExpr*> &exprs,
+                                                     bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  bool need_push = true;
+  ObRawExprFactory *factory = NULL;
+  ObSQLSessionInfo *session = NULL;
+  bool is_stack_overflow = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(factory = ctx.expr_factory_) ||
+      OB_ISNULL(session = ctx.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL param", K(ret), KP(expr), KP(factory), KP(session));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
+  } else if (expr->get_expr_type() == T_OP_EQ || expr->get_expr_type() == T_OP_NSEQ) {
+    // 条件1: 是等号
+    ObOpRawExpr *op_expr = reinterpret_cast<ObOpRawExpr*>(expr);
+    ObRawExpr *param_expr1 = expr->get_param_expr(0);
+    ObRawExpr *param_expr2 = expr->get_param_expr(1);
+    if (OB_UNLIKELY(2 != op_expr->get_param_count()) ||
+        OB_ISNULL(param_expr1) || OB_ISNULL(param_expr2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is wrong", K(op_expr->get_param_count()),
+               K(param_expr1), K(param_expr2));
+    } else if (T_OP_ROW == param_expr1->get_expr_type() &&
+               T_OP_ROW == param_expr2->get_expr_type()) {
+      // 条件2: 两边都是 ROW
+      need_push = false;
+      trans_happened = true;
+      if (OB_UNLIKELY(!is_oracle_mode() && param_expr1->get_param_count() != param_expr2->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param number not equal", K(ret), K(param_expr1->get_param_count()),
+                 K(param_expr2->get_param_count()));
+      } else if (OB_UNLIKELY(is_oracle_mode()
+                             && 1 > param_expr2->get_param_count()
+                             && param_expr1->get_param_count() != param_expr2->get_param_expr(0)->get_param_count()
+                             && param_expr1->get_param_count() != param_expr2->get_param_count())) {
+        ret = OB_ERR_INVALID_COLUMN_NUM;
+        LOG_WARN("invalid relational operator on oracle mode", K(ret),
+                 K(param_expr2->get_param_count()));
+      } else {
+        if (is_oracle_mode() && T_OP_ROW == param_expr2->get_param_expr(0)->get_expr_type()) {
+          param_expr2 = param_expr2->get_param_expr(0);
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < param_expr1->get_param_count(); i++) {
+          ObOpRawExpr *new_op_expr = NULL;
+          if (OB_FAIL(factory->create_raw_expr(expr->get_expr_type(), new_op_expr))) {
+            LOG_WARN("failed to create raw expr", K(ret));
+          } else if (OB_ISNULL(new_op_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL new op expr", K(ret));
+          } else if (OB_FAIL(new_op_expr->set_param_exprs(
+                                param_expr1->get_param_expr(i), param_expr2->get_param_expr(i)))) {
+            LOG_WARN("failed to set param expr", K(ret));
+          } else if (OB_FAIL(new_op_expr->formalize(session))) {
+            LOG_WARN("failed to formalize expr", K(ret));
+          } else if (OB_FAIL(new_op_expr->pull_relation_id())) {
+            LOG_WARN("failed to pull relation id and levels", K(ret));
+          } else if (OB_FAIL(SMART_CALL(convert_preds_vector_to_scalar(ctx,
+                                                        reinterpret_cast<ObRawExpr*>(new_op_expr),
+                                                        exprs,
+                                                        trans_happened)))) {
+            /// 对拆分后 expr 继续递归
+            LOG_WARN("failed to call inner convert recursive", K(ret));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && need_push && OB_FAIL(exprs.push_back(expr))) {
+    /// 不满足上述两个条件, 将该 expr 添加至输出.
+    LOG_WARN("failed to push back expr", K(ret));
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase

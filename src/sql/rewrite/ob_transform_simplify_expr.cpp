@@ -591,7 +591,7 @@ int ObTransformSimplifyExpr::convert_preds_vector_to_scalar(ObDMLStmt *stmt, boo
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> new_cond;
   bool is_happened = false;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL stmt", K(ret));
   } else if (!stmt->is_sel_del_upd()) {
@@ -600,8 +600,8 @@ int ObTransformSimplifyExpr::convert_preds_vector_to_scalar(ObDMLStmt *stmt, boo
     /// 需要转换的谓词有: where, join condition.
     /// having 中能下降的都下降过了.
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); i++) {
-      if (OB_FAIL(inner_convert_preds_vector_to_scalar(
-                    stmt->get_condition_expr(i), new_cond, is_happened))) {
+      if (OB_FAIL(ObTransformUtils::convert_preds_vector_to_scalar(*ctx_,
+                                             stmt->get_condition_expr(i), new_cond, is_happened))) {
         LOG_WARN("failed to convert predicate vector to scalar", K(ret));
       }
     }
@@ -614,9 +614,9 @@ int ObTransformSimplifyExpr::convert_preds_vector_to_scalar(ObDMLStmt *stmt, boo
     }
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_joined_tables().count(); i++) {
-        if (OB_FAIL(convert_join_preds_vector_to_scalar(
-                      stmt->get_joined_tables().at(i), trans_happened))) {
-          LOG_WARN("failed to convert join preds vector to scalar", K(ret));
+        if (OB_FAIL(recursively_convert_join_preds_vector_to_scalar(stmt->get_joined_tables().at(i),
+                                                                    trans_happened))) {
+          LOG_WARN("failed to convert join vector condition to scalar", K(ret));
         }
       }
     }
@@ -624,19 +624,30 @@ int ObTransformSimplifyExpr::convert_preds_vector_to_scalar(ObDMLStmt *stmt, boo
   return ret;
 }
 
-int ObTransformSimplifyExpr::convert_join_preds_vector_to_scalar(TableItem *table_item, bool &trans_happened)
+int ObTransformSimplifyExpr::recursively_convert_join_preds_vector_to_scalar(TableItem *table_item,
+                                                                             bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_item)) {
+  JoinedTable *joined_table = NULL;
+  if (OB_ISNULL(table_item) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL table item", K(ret));
-  } else if (table_item->is_joined_table()) {
-    JoinedTable *joined_table = reinterpret_cast<JoinedTable*>(table_item);
+  } else if (!table_item->is_joined_table()) {
+  } else if (FALSE_IT(joined_table = reinterpret_cast<JoinedTable*>(table_item))){
+  } else if (OB_FAIL(recursively_convert_join_preds_vector_to_scalar(joined_table->left_table_,
+                                                                     trans_happened))) {
+    LOG_WARN("failed to convert join preds_vector to scalar", K(ret));
+  } else if (OB_FAIL(recursively_convert_join_preds_vector_to_scalar(joined_table->right_table_,
+                                                                     trans_happened))) {
+    LOG_WARN("failed to convert join preds_vector to scalar", K(ret));
+  } else {
     ObSEArray<ObRawExpr*, 16> new_join_cond;
     bool is_happened = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < joined_table->get_join_conditions().count(); i++) {
-      if (OB_FAIL(inner_convert_preds_vector_to_scalar(
-                    joined_table->get_join_conditions().at(i), new_join_cond, is_happened))) {
+      if (OB_FAIL(ObTransformUtils::convert_preds_vector_to_scalar(*ctx_,
+                                                          joined_table->get_join_conditions().at(i),
+                                                          new_join_cond,
+                                                          is_happened))) {
         LOG_WARN("failed to convert predicate vector to scalar", K(ret));
       }
     }
@@ -647,85 +658,6 @@ int ObTransformSimplifyExpr::convert_join_preds_vector_to_scalar(TableItem *tabl
         LOG_WARN("failed to append join conditions", K(ret));
       }
     }
-  }
-  return ret;
-}
-
-int ObTransformSimplifyExpr::inner_convert_preds_vector_to_scalar(ObRawExpr *expr,
-                                                                  ObIArray<ObRawExpr*> &exprs,
-                                                                  bool &trans_happened)
-{
-  int ret = OB_SUCCESS;
-  bool need_push = true;
-  ObRawExprFactory *factory = NULL;
-  ObSQLSessionInfo *session = NULL;
-  bool is_stack_overflow = false;
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(factory = ctx_->expr_factory_)
-      || OB_ISNULL(session = ctx_->session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL param", K(ret), K(expr), K_(ctx),
-             K(factory), K(session));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if ((expr->get_expr_type() == T_OP_EQ) || (expr->get_expr_type() == T_OP_NSEQ)) {
-    // 条件1: 是等号
-    ObOpRawExpr *op_expr = reinterpret_cast<ObOpRawExpr*>(expr);
-    ObRawExpr *param_expr1 = expr->get_param_expr(0);
-    ObRawExpr *param_expr2 = expr->get_param_expr(1);
-
-    if (OB_UNLIKELY(2 != op_expr->get_param_count())
-        || OB_ISNULL(param_expr1) || OB_ISNULL(param_expr2)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param expr is wrong", K(op_expr->get_param_count()),
-               K(param_expr1), K(param_expr2));
-    } else if (T_OP_ROW == param_expr1->get_expr_type()
-               && T_OP_ROW == param_expr2->get_expr_type()) {
-      // 条件2: 两边都是 ROW
-      need_push = false;
-      trans_happened = true;
-      if (OB_UNLIKELY(!is_oracle_mode() && param_expr1->get_param_count() != param_expr2->get_param_count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("param number not equal", K(ret), K(param_expr1->get_param_count()),
-                 K(param_expr2->get_param_count()));
-
-      } else if (OB_UNLIKELY(is_oracle_mode()
-                             && 1 > param_expr2->get_param_count()
-                             && param_expr1->get_param_count() != param_expr2->get_param_expr(0)->get_param_count()
-                             && param_expr1->get_param_count() != param_expr2->get_param_count())) {
-        ret = OB_ERR_INVALID_COLUMN_NUM;
-        LOG_WARN("invalid relational operator on oracle mode", K(ret),
-                 K(param_expr2->get_param_count()));
-      } else {
-        if (is_oracle_mode() && T_OP_ROW == param_expr2->get_param_expr(0)->get_expr_type()) {
-          param_expr2 = param_expr2->get_param_expr(0);
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_expr1->get_param_count(); i++) {
-          ObOpRawExpr *new_op_expr = NULL;
-          if (OB_FAIL(factory->create_raw_expr(expr->get_expr_type(), new_op_expr))) {
-            LOG_WARN("failed to create raw expr", K(ret));
-          } else if (OB_ISNULL(new_op_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("NULL new op expr", K(ret));
-          } else if (OB_FAIL(new_op_expr->set_param_exprs(
-                               param_expr1->get_param_expr(i), param_expr2->get_param_expr(i)))) {
-            LOG_WARN("failed to set param expr", K(ret));
-          } else if (OB_FAIL(new_op_expr->formalize(session))) {
-            LOG_WARN("failed to formalize expr", K(ret));
-          } else if (OB_FAIL(SMART_CALL(inner_convert_preds_vector_to_scalar(
-                                          reinterpret_cast<ObRawExpr*>(new_op_expr), exprs, trans_happened)))) {
-            /// 对拆分后 expr 继续递归
-            LOG_WARN("failed to call inner convert recursive", K(ret));
-          }
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && need_push && OB_FAIL(exprs.push_back(expr))) {
-    /// 不满足上述两个条件, 将该 expr 添加至输出.
-    LOG_WARN("failed to push back expr", K(ret));
   }
   return ret;
 }
