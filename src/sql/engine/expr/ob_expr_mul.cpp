@@ -479,7 +479,8 @@ struct ObIntIntBatchMulRaw : public ObArithOpRawType<int64_t, int64_t, int64_t>
   static int raw_check(const int64_t, const int64_t l, const int64_t r)
   {
     int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(is_multi_overflow64(l, r))) {
+    long long res;
+    if (OB_UNLIKELY(ObExprMul::is_mul_out_of_range(l, r, res))) {
       char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
       ret = OB_OPERATE_OVERFLOW;
       int64_t pos = 0;

@@ -150,22 +150,10 @@ public:
   }
   OB_INLINE static bool is_uint_uint_mul_out_of_range(uint64_t val1, uint64_t val2)
   {
-    int ret = false;
-    uint64_t tmp = val1;
-    if (val1 > val2) {
-      tmp = val1;
-      val1 = val2;
-      val2 = tmp;
-    }
-    if (val1 > UINT32_MAX) {
-      ret = true;
-    } else {
-      uint64_t c = val2 >> SHIFT_OFFSET;
-      uint64_t r = val1 * c;
-      if (r > UINT32_MAX)
-        ret = true;
-    }
-    return ret;
+    int overflow = false;
+    unsigned long long res;
+    overflow = __builtin_umulll_overflow(val1, val2, &res);
+    return overflow;
   }
 private:
   static ObArithFunc mul_funcs_[common::ObMaxTC];
