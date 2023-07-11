@@ -1070,9 +1070,15 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
     for (int64_t j = 0; OB_SUCC(ret) && j < queries.count(); ++j) {
       ObSelectStmt *subquery = NULL;
       ObQueryRefRawExpr *query_expr = queries.at(j).query_ref_expr_;
+      bool subq_match_idx = false;
       if (OB_ISNULL(query_expr) || OB_ISNULL(subquery = query_expr->get_ref_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_, query_expr, subquery, subq_match_idx))) {
+        LOG_WARN("fail to check subquery match index", K(ret));
+      } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
+                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
+        // do nothing
       } else if (subquery->get_select_item_size() >= 2) {
         // do nothing
       } else if (has_exist_in_array(transformed_subqueries, query_expr)) {
@@ -1107,10 +1113,16 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
     for (int64_t j = 0; OB_SUCC(ret) && j < queries.count(); ++j) {
       ObSelectStmt *subquery = NULL;
       ObQueryRefRawExpr *query_expr = queries.at(j).query_ref_expr_;
+      bool subq_match_idx = false;
       if (OB_ISNULL(query_expr) || 
           OB_ISNULL(subquery = query_expr->get_ref_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_, query_expr, subquery, subq_match_idx))) {
+        LOG_WARN("fail to check subquery match index", K(ret));
+      } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
+                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
+        // do nothing
       } else if (is_select_expr && !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
         //do nothing
       } else if (has_exist_in_array(transformed_subqueries, query_expr) ||
