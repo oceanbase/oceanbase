@@ -477,20 +477,6 @@ int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
   return ret;
 }
 
-void ObTabletCreateDeleteHelper::print_memtables_for_table(ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  common::ObSArray<storage::ObITable *> memtables;
-  if (!tablet_handle.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet_handle is not valid", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_memtables(memtables, true))) {
-    LOG_WARN("failed to get_memtables", K(ret), K(tablet_handle));
-  } else {
-    LOG_INFO("memtables print", K(memtables), K(tablet_handle));
-  }
-}
-
 int ObTabletCreateDeleteHelper::build_create_sstable_param(
     const ObTableSchema &table_schema,
     const ObTabletID &tablet_id,

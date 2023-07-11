@@ -306,7 +306,6 @@ public:
   int reset_storage_related_member();
 
   // multi-source data operation
-  int get_auto_inc_seq(common::ObArenaAllocator &allocator, share::ObTabletAutoincSeq &auto_inc_seq) const;
   int get_storage_schema_for_transfer_in(
       common::ObArenaAllocator &allocator,
       ObStorageSchema &storage_schema) const;
@@ -315,22 +314,6 @@ public:
       compaction::ObMediumCompactionInfoList &medium_info_list) const;
 
   int get_restore_status(ObTabletRestoreStatus::STATUS &restore_status);
-
-  template<class T>
-  int prepare_data(T &multi_source_data_unit, const transaction::ObMulSourceDataNotifyArg &trans_flags);
-  template<class T>
-  int clear_unsynced_cnt_for_tx_end_if_need(
-      T &multi_source_data_unit,
-      const share::SCN &scn,
-      const bool for_replay);
-
-  template<class T>
-  int save_multi_source_data_unit(
-      const T *const msd,
-      const share::SCN &memtable_scn,
-      const bool for_replay,
-      const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
-      const bool is_callback = false);
 
   // static help function
   static int deserialize_id(
@@ -447,10 +430,6 @@ public:
       const bool for_replay,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
       const bool is_callback = false);
-  int get_msd_from_memtables(
-      memtable::ObIMultiSourceDataUnit &msd,
-      ObIAllocator *allocator = nullptr,
-      const bool get_latest = true) const;
 
   int check_and_set_initial_state();
   int set_memtable_clog_checkpoint_scn(const ObMigrationTabletParam *tablet_meta);
@@ -705,18 +684,6 @@ private:
       ObStoreCtx &ctx,
       ObTableIterParam &param,
       ObTableAccessContext &context);
-  template<class T>
-  int dec_unsynced_cnt_for_if_need(
-      T &multi_source_data_unit,
-      const bool for_replay,
-      const memtable::MemtableRefOp ref_op);
-  template<class T>
-  int inner_set_multi_data_for_commit(
-      T &multi_source_data_unit,
-      const share::SCN &scn,
-      const bool for_replay,
-      const memtable::MemtableRefOp ref_op);
-  void print_memtables_for_table();
 
 
   // memtable operation
@@ -867,151 +834,6 @@ inline int64_t ObTablet::get_lock_wait_timeout(
 {
   return (abs_lock_timeout < 0 ? stmt_timeout :
           (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
-}
-
-template<class T>
-int ObTablet::prepare_data(T &multi_source_data_unit, const transaction::ObMulSourceDataNotifyArg &trans_flags)
-{
-  int ret = OB_SUCCESS;
-
-  const share::SCN scn = trans_flags.for_replay_ ? trans_flags.scn_ : share::SCN::max_scn();
-
-  TRANS_LOG(INFO, "prepare data when tx_end", K(multi_source_data_unit), K(tablet_meta_.tablet_id_));
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!multi_source_data_unit.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), K(multi_source_data_unit));
-  } else if (OB_UNLIKELY(multi_source_data_unit.is_tx_end())) {
-    TRANS_LOG(INFO, "skip for is_tx_end is true", K(multi_source_data_unit));
-    print_memtables_for_table();
-  } else if (FALSE_IT(multi_source_data_unit.set_tx_end(true))) {
-  } else if (OB_FAIL(save_multi_source_data_unit(&multi_source_data_unit, scn, trans_flags.for_replay_/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
-    TRANS_LOG(WARN, "failed to save multi_source_data", K(ret), K(multi_source_data_unit), K(scn));
-  }
-
-  return ret;
-}
-
-template<class T>
-int ObTablet::clear_unsynced_cnt_for_tx_end_if_need(
-    T &multi_source_data_unit,
-    const share::SCN &scn,
-    const bool for_replay)
-{
-  int ret = OB_SUCCESS;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!multi_source_data_unit.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), K(multi_source_data_unit));
-  } else if (OB_UNLIKELY(!multi_source_data_unit.is_tx_end())) {
-  } else if (FALSE_IT(multi_source_data_unit.set_tx_end(false))) {
-  } else if (OB_FAIL(save_multi_source_data_unit(&multi_source_data_unit, scn, for_replay, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
-    TRANS_LOG(WARN, "failed to save tx data", K(ret), K(multi_source_data_unit), K(scn));
-  }
-  return ret;
-}
-
-template<class T>
-int ObTablet::save_multi_source_data_unit(
-    const T *const msd,
-    const share::SCN &memtable_scn,
-    const bool for_replay,
-    const memtable::MemtableRefOp ref_op,
-    const bool is_callback)
-{
-  int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
-  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-
-  if (IS_NOT_INIT) {
-    ret = common::OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited), K(tablet_id));
-  } else if (OB_ISNULL(msd)) {
-    ret = common::OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), KP(msd));
-  } else if (OB_UNLIKELY(is_ls_inner_tablet())) {
-    ret = common::OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "ls inner tablet does not support multi source data", K(ret), K(tablet_id));
-  } else if (is_callback) {
-    ObTableHandleV2 handle;
-    memtable::ObMemtable *memtable = nullptr;
-    if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(handle, msd->type()))) {
-      if (OB_ENTRY_NOT_EXIST == ret && for_replay) {
-        TRANS_LOG(INFO, "clog_checkpoint_scn of ls is bigger than the commit_info scn of this multi-trans in replay, failed to get multi source data unit",
-                  K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
-        if (OB_FAIL(save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op, false))) {
-          TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
-        }
-      } else {
-        TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
-      }
-    } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
-      TRANS_LOG(WARN, "fail to get memtable", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op, is_callback))) {
-      TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
-    }
-  }
-  // for tx_end(inf_ref), binding_info must be prepared after tablet_state is prepared
-  else if (memtable::MemtableRefOp::INC_REF == ref_op
-           && memtable::MultiSourceDataUnitType::TABLET_BINDING_INFO == msd->type()) {
-    ObTableHandleV2 handle;
-    memtable::ObMemtable *memtable = nullptr;
-    if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(handle, memtable::MultiSourceDataUnitType::TABLET_TX_DATA))) {
-      TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
-    } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
-      TRANS_LOG(WARN, "[Freezer] fail to get memtable", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op/*add_ref*/, is_callback/*false*/))) {
-      TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
-    }
-  } else {
-    memtable::ObIMemtable *i_memtable = nullptr;
-    ObStoreCtx mock_store_ctx;
-    mock_store_ctx.replay_log_scn_ = memtable_scn;
-    mock_store_ctx.tablet_id_ = tablet_meta_.tablet_id_;
-
-    ObStorageTableGuard guard(this, mock_store_ctx, true, for_replay, memtable_scn, true/*for_multi_source_data*/);
-    if (OB_FAIL(guard.refresh_and_protect_memtable())) {
-      TRANS_LOG(WARN, "failed to refresh table", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(for_replay));
-    } else if (OB_FAIL(guard.get_memtable_for_replay(i_memtable))) {
-      if (OB_NO_NEED_UPDATE == ret) {
-        TRANS_LOG(INFO, "no need to replay log", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(for_replay));
-        ret = OB_SUCCESS;
-      } else {
-        TRANS_LOG(WARN, "failed to get memtable", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(for_replay));
-      }
-    } else {
-      memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(i_memtable);
-      const int64_t start = ObTimeUtility::current_time();
-      while (OB_SUCC(ret) &&
-             memtable->get_logging_blocked() &&
-             share::SCN::max_scn() == memtable_scn &&
-             !for_replay) {
-        if (ObTimeUtility::current_time() - start > 100 * 1000) {
-          ret = OB_BLOCK_FROZEN;
-          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "logging_block costs too much time", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));
-        }
-        ob_usleep(100);
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op, is_callback))) {
-        TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    TRANS_LOG(INFO, "succeed to save multi source data unit", K(ls_id), K(tablet_id), K(memtable_scn), K(for_replay), KPC(msd));
-  } else if (for_replay) {
-    if (OB_ALLOCATE_MEMORY_FAILED == ret || OB_MINOR_FREEZE_NOT_ALLOW == ret) {
-      ret = OB_EAGAIN;
-    }
-  }
-  return ret;
 }
 
 

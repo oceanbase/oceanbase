@@ -244,14 +244,6 @@ public:
     return OB_SUCCESS;
   }
 
-  virtual int get_multi_source_data_unit(
-      memtable::ObIMultiSourceDataUnit *const multi_source_data_unit,
-      ObIAllocator *allocator = nullptr) const;
-
-  virtual int get_memtable_for_multi_source_data_unit(
-      ObTableHandleV2 &handle,
-      const memtable::MultiSourceDataUnitType type) const;
-
   int release_memtables(const share::SCN &scn);
   // force release all memtables
   // WARNING: this will release all the ref of memtable, make sure you will not use it again.

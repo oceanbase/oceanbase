@@ -1375,15 +1375,16 @@ int ObTabletMergeFinishTask::traverse_all_memtables(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is not frozen memtable", K(ret), K(ctx.tables_handle_), KPC(table));
     } else if (table->is_data_memtable()) {
-      memtable = static_cast<ObMemtable*>(table);
-      if (memtable->has_multi_source_data_unit(type)) {
-        if (OB_FAIL(memtable->get_multi_source_data_unit(msd, &allocator))) {
-          LOG_WARN("failed to get msd from memtable", K(ret), K(type));
-        } else {
-          // succeeded to get msd, just break
-          break;
-        }
-      }
+      // TODO(lixia) delete this code
+      // memtable = static_cast<ObMemtable*>(table);
+      // if (memtable->has_multi_source_data_unit(type)) {
+      //   if (OB_FAIL(memtable->get_multi_source_data_unit(msd, &allocator))) {
+      //     LOG_WARN("failed to get msd from memtable", K(ret), K(type));
+      //   } else {
+      //     // succeeded to get msd, just break
+      //     break;
+      //   }
+      // }
     }
   }
 

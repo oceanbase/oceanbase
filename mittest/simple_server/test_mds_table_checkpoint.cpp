@@ -12,7 +12,6 @@
 
 #include <gtest/gtest.h>
 #define USING_LOG_PREFIX STORAGE
-#define DEBUG_FOR_MDS
 #define protected public
 #define private public
 

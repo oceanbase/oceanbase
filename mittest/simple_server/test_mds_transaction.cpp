@@ -9,10 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#ifndef DEBUG_FOR_MDS
-#define DEBUG_FOR_MDS
 #include "lib/ob_errno.h"
-#endif
 #include <chrono>
 #include <thread>
 #define TEST_MDS_TRANSACTION
@@ -91,7 +88,6 @@ public:
 
 TEST_F(TestMdsTransactionTest, simple_test)
 {
-  ASSERT_EQ(true, ObLSID(123).debug_for_mds());
   common::ObMySQLProxy *sql_proxy = GCTX.ddl_sql_proxy_;
   sqlclient::ObISQLConnection *connection = nullptr;
   ASSERT_EQ(OB_SUCCESS, sql_proxy->acquire(connection));

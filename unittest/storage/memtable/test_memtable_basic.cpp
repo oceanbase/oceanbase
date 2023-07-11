@@ -518,53 +518,6 @@ TEST_F(TestMemtable, multi_key)
   print(mvcc_row2);
 }
 
-TEST_F(TestMemtable, test_unsync_cnt_for_multi_data)
-{
-  ObMemtable memtable;
-  EXPECT_EQ(OB_SUCCESS, init_memtable(memtable));
-  share::schema::ObTableSchema table_schema;
-  ObStorageSchema storage_schema;
-  bool is_callback = true;
-  bool for_replay = true;
-  share::SCN scn;
-
-  ASSERT_EQ(OB_SUCCESS, scn.convert_from_ts(100));
-  prepare_schema(table_schema);
-  ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
-
-  storage_schema.set_sync_finish(false);
-  ASSERT_EQ(OB_SUCCESS, memtable.save_multi_source_data_unit(&storage_schema, scn, !for_replay, memtable::MemtableRefOp::INC_REF, !is_callback));
-  ASSERT_EQ(1, storage_schema.get_unsync_cnt_for_multi_data());
-
-  storage_schema.set_sync_finish(true);
-  ASSERT_EQ(OB_SUCCESS, memtable.save_multi_source_data_unit(&storage_schema, scn, !for_replay, memtable::MemtableRefOp::DEC_REF, is_callback));
-  ASSERT_EQ(0, storage_schema.get_unsync_cnt_for_multi_data());
-}
-
-TEST_F(TestMemtable, test_mds_commit_to_empty_memtable)
-{
-  ObMemtable memtable;
-  EXPECT_EQ(OB_SUCCESS, init_memtable(memtable));
-  ObTabletTxMultiSourceDataUnit tablet_status;
-  tablet_status.tablet_status_ = ObTabletStatus::NORMAL;
-  bool is_callback = true;
-  bool for_replay = true;
-  share::SCN scn;
-  scn.set_max();
-
-  ASSERT_EQ(OB_SUCCESS, memtable.save_multi_source_data_unit(&tablet_status, scn, !for_replay, memtable::MemtableRefOp::INC_REF, !is_callback));
-  ASSERT_EQ(1, tablet_status.get_unsync_cnt_for_multi_data());
-
-  memtable.key_.scn_range_.start_scn_.convert_for_gts(100);
-  memtable.key_.scn_range_.end_scn_.set_max();
-  memtable.max_end_scn_.set_min();
-  ASSERT_EQ(OB_SUCCESS, scn.convert_for_gts(102));
-  ASSERT_EQ(OB_SUCCESS, memtable.save_multi_source_data_unit(&tablet_status, scn, for_replay, memtable::MemtableRefOp::DEC_REF, is_callback));
-  ASSERT_EQ(0, tablet_status.get_unsync_cnt_for_multi_data());
-  ASSERT_EQ(OB_SUCCESS, scn.convert_for_gts(101));
-  ASSERT_EQ(scn, memtable.get_end_scn());
-}
-
 
 }// end of oceanbase
 

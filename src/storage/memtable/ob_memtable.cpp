@@ -134,8 +134,6 @@ ObMemtable::ObMemtable()
       mode_(lib::Worker::CompatMode::INVALID),
       minor_merged_time_(0),
       contain_hotspot_row_(false),
-      multi_source_data_(local_allocator_),
-      multi_source_data_lock_(),
       encrypt_meta_(nullptr),
       encrypt_meta_lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
       max_column_cnt_(0)
@@ -245,7 +243,6 @@ void ObMemtable::destroy()
   time_guard.click();
   query_engine_.destroy();
   time_guard.click();
-  multi_source_data_.reset();
   time_guard.click();
   local_allocator_.destroy();
   time_guard.click();
@@ -292,9 +289,7 @@ int ObMemtable::safe_to_destroy(bool &is_safe)
 
   is_safe = (0 == ref_cnt && 0 == write_ref_cnt);
   if (is_safe) {
-    int64_t multi_source_data_unsync_cnt = multi_source_data_.get_all_unsync_cnt_for_multi_data();
-    is_safe = (0 == unsubmitted_cnt && 0 == unsynced_cnt) ||
-      (unsubmitted_cnt == multi_source_data_unsync_cnt && unsynced_cnt == multi_source_data_unsync_cnt);
+    is_safe = (0 == unsubmitted_cnt && 0 == unsynced_cnt);
   }
 
   return ret;
@@ -1797,14 +1792,6 @@ bool ObMemtable::ready_for_flush_()
   int ret = OB_SUCCESS;
   SCN current_right_boundary = ObScnRange::MIN_SCN;
   share::ObLSID ls_id = freezer_->get_ls_id();
-  const SCN migration_clog_checkpoint_scn = get_migration_clog_checkpoint_scn();
-  if (!migration_clog_checkpoint_scn.is_min() &&
-      migration_clog_checkpoint_scn >= get_end_scn() &&
-      0 != unsynced_cnt &&
-      multi_source_data_.get_all_unsync_cnt_for_multi_data() == unsynced_cnt) {
-    bool_ret = true;
-    TRANS_LOG(INFO, "skip ready for flush for migration", KPC(this));
-  }
   if (bool_ret) {
     if (OB_FAIL(resolve_snapshot_version_())) {
       TRANS_LOG(WARN, "fail to resolve snapshot version", K(ret), KPC(this), K(ls_id));
@@ -2395,38 +2382,6 @@ int ObMemtable::get_active_table_ids(common::ObIArray<uint64_t> &table_ids)
 bool ObMemtable::is_partition_memtable_empty(const uint64_t table_id) const
 {
   return query_engine_.is_partition_memtable_empty(table_id);
-}
-
-int ObMemtable::get_multi_source_data_unit(
-    ObIMultiSourceDataUnit *const multi_source_data_unit,
-    ObIAllocator *allocator,
-    const bool get_lastest)
-{
-  int ret = OB_SUCCESS;
-  TCRLockGuard guard(multi_source_data_lock_);
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (OB_UNLIKELY(!multi_source_data_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "multi source data is invalid", K(ret));
-  } else if (OB_FAIL(multi_source_data_.get_multi_source_data_unit(multi_source_data_unit, allocator, get_lastest))) {
-    if (ret != OB_ENTRY_NOT_EXIST) {
-      TRANS_LOG(WARN, "fail to get multi source data unit", K(ret));
-    } else {
-      TRANS_LOG(DEBUG, "fail to get multi source data unit", K(ret));
-    }
-  }
-
-  return ret;
-}
-
-bool ObMemtable::has_multi_source_data_unit(const MultiSourceDataUnitType type) const
-{
-  TCRLockGuard guard(multi_source_data_lock_);
-
-  return multi_source_data_.is_valid() && multi_source_data_.has_multi_source_data_unit(type);
 }
 
 

@@ -463,25 +463,6 @@ public:
   void set_allow_freeze(const bool allow_freeze);
   inline bool allow_freeze() const { return ATOMIC_LOAD(&allow_freeze_); }
 
-  /* multi source data operations */
-  virtual int get_multi_source_data_unit(
-      ObIMultiSourceDataUnit *multi_source_data_unit,
-      ObIAllocator *allocator,
-      const bool get_lastest = true);
-  template<class T>
-  int get_multi_source_data_unit_list(
-      const T * const useless_unit,
-      ObMultiSourceData::ObIMultiSourceDataUnitList &dst_list,
-      ObIAllocator *allocator);
-  bool has_multi_source_data_unit(const MultiSourceDataUnitType type) const;
-
-  template<class T>
-  int save_multi_source_data_unit(const T *const multi_source_data_unit,
-                                  const share::SCN scn,
-                                  const bool for_replay,
-                                  const MemtableRefOp ref_op = MemtableRefOp::NONE,
-                                  const bool is_callback = false);
-
 
   // Print stat data in log.
   // For memtable debug.
@@ -606,113 +587,10 @@ private:
   lib::Worker::CompatMode mode_;
   int64_t minor_merged_time_;
   bool contain_hotspot_row_;
-  ObMultiSourceData multi_source_data_;
-  mutable common::TCRWLock multi_source_data_lock_;
   transaction::ObTxEncryptMeta *encrypt_meta_;
   common::SpinRWLock encrypt_meta_lock_;
   int64_t max_column_cnt_; // record max column count of row
 };
-
-template<class T>
-int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_unit,
-                                            const share::SCN scn,
-                                            const bool for_replay,
-                                            const MemtableRefOp ref_op,
-                                            const bool is_callback)
-{
-  int ret = OB_SUCCESS;
-  TCWLockGuard guard(multi_source_data_lock_);
-
-  if (IS_NOT_INIT) {
-    ret = common::OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (OB_ISNULL(multi_source_data_unit)) {
-    ret = common::OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret));
-  } else if (OB_UNLIKELY(!multi_source_data_unit->is_valid())) {
-    ret = common::OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "not valid", K(ret), KPC(multi_source_data_unit));
-  } else {
-    const MultiSourceDataUnitType &type = multi_source_data_unit->type();
-    if (MemtableRefOp::INC_REF == ref_op) {
-      const_cast<T*>(multi_source_data_unit)->inc_unsync_cnt_for_multi_data();
-      TRANS_LOG(INFO, "unsync_cnt_for_multi_data inc", K(key_.tablet_id_), K(type), KPC(multi_source_data_unit));
-    } else if (MemtableRefOp::DEC_REF == ref_op) {
-      const_cast<T*>(multi_source_data_unit)->dec_unsync_cnt_for_multi_data();
-      TRANS_LOG(INFO, "unsync_cnt_for_multi_data dec", K(key_.tablet_id_), K(type), KPC(multi_source_data_unit));
-    }
-    if (MemtableRefOp::INC_REF == ref_op) {
-      inc_unsubmitted_and_unsynced_cnt();
-    }
-    if (OB_FAIL(multi_source_data_.save_multi_source_data_unit(multi_source_data_unit, is_callback))) {
-      TRANS_LOG(WARN, "fail to save to memtable", K(ret), KPC(multi_source_data_unit), K(type), KPC(this));
-      if (MemtableRefOp::INC_REF == ref_op) {
-        const_cast<T*>(multi_source_data_unit)->dec_unsync_cnt_for_multi_data();
-        dec_unsubmitted_and_unsynced_cnt();
-        TRANS_LOG(INFO, "unsync_cnt_for_multi_data dec for rollback", K(key_.tablet_id_), K(type), KPC(multi_source_data_unit));
-      } else if (MemtableRefOp::DEC_REF == ref_op) {
-        const_cast<T*>(multi_source_data_unit)->inc_unsync_cnt_for_multi_data();
-        TRANS_LOG(INFO, "unsync_cnt_for_multi_data inc for rollback", K(key_.tablet_id_), K(type), KPC(multi_source_data_unit));
-      }
-    } else {
-      const share::SCN start_scn = get_start_scn();
-      if (scn > get_start_scn() && scn < share::ObScnRange::MAX_SCN) {
-        if (OB_FAIL(ret)) {
-        }
-        // skip updating max_end_scn of frozen memtable for commit/abort when replay clog.
-        else if ((!for_replay || !is_callback)
-                 && OB_FAIL(set_max_end_scn(scn))) {
-          TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
-        }
-        // commit log is replayed to empty memtable which is frozen after clog switch to follower gracefully, commit status mds will be lost.
-        // so push end_scn to start_scn + 1
-        else if (get_max_end_scn().is_min() && get_end_scn().is_max()) {
-          if (OB_FAIL(set_max_end_scn_to_inc_start_scn())) {
-            TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
-          }
-          TRANS_LOG(INFO, "empty memtable push end_scn to start_scn + 1", K(ret), K(scn), KPC(this));
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(set_rec_scn(scn))) {
-          TRANS_LOG(WARN, "failed to set rec_scn", K(ret), K(scn), KPC(this));
-        }
-      } else if (share::SCN::invalid_scn() != scn && share::ObScnRange::MAX_SCN != scn) {
-        ret = common::OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "invalid scn", K(ret), K(scn), KPC(this));
-      }
-
-      if (MemtableRefOp::DEC_REF == ref_op) {
-        dec_unsubmitted_and_unsynced_cnt();
-      }
-    }
-    TRANS_LOG(INFO, "memtable save multi source data unit", K(ret), K(scn), K(ref_op),
-              KPC(multi_source_data_unit), K(type), KPC(this));
-  }
-
-  return ret;
-}
-
-template<class T>
-int ObMemtable::get_multi_source_data_unit_list(
-    const T * const useless_unit,
-    ObMultiSourceData::ObIMultiSourceDataUnitList &dst_list,
-    ObIAllocator *allocator)
-{
-  int ret = OB_SUCCESS;
-  TCRLockGuard guard(multi_source_data_lock_);
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (OB_UNLIKELY(!multi_source_data_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "multi source data is invalid", K(ret));
-  } else if (OB_FAIL(multi_source_data_.get_multi_source_data_unit_list(useless_unit, dst_list, allocator))) {
-    TRANS_LOG(WARN, "fail to get multi source data unit", K(ret));
-  }
-
-  return ret;
-}
 
 class RowHeaderGetter
 {

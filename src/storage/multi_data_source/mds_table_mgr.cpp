@@ -38,7 +38,7 @@ int ObMdsTableMgr::init(ObLS *ls)
   } else if (OB_ISNULL(ls) || OB_ISNULL(ls->get_tx_svr())) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG(ERROR, "invalid ls when init mds table mgr", KR(ret), KPC(ls), KPC(this));
-  } else if (OB_FAIL(ls->get_ls_id().debug_for_mds() && ls->get_tx_svr()->register_common_checkpoint(checkpoint::MDS_TABLE_TYPE, this))) {
+  } else if (OB_FAIL(ls->get_tx_svr()->register_common_checkpoint(checkpoint::MDS_TABLE_TYPE, this))) {
     MDS_LOG(WARN, "register common checkpoint failed", KR(ret), KPC(this));
   } else if (OB_FAIL(mds_table_map_.init("MdsTableMgr", MTL_ID()))) {
     MDS_LOG(ERROR, "fail to init mds table map", KR(ret), KPC(ls), KPC(this));

@@ -123,7 +123,6 @@ public:
   static bool is_mixed_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_pure_aux_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_pure_hidden_tablets(const obrpc::ObCreateTabletInfo &info);
-  static void print_memtables_for_table(ObTabletHandle &tablet_handle);
   template<typename Arg, typename Helper>
   static int process_for_old_mds(
              const char *buf,

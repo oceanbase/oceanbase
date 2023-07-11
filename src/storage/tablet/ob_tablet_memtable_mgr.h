@@ -64,12 +64,6 @@ public:
                                       ObTableHandleV2 &handle) override;
   int get_last_frozen_memtable(ObTableHandleV2 &handle) const;
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) override;
-  virtual int get_multi_source_data_unit(
-      memtable::ObIMultiSourceDataUnit *const multi_source_data_unit,
-      ObIAllocator *allocator = nullptr) const override;
-  virtual int get_memtable_for_multi_source_data_unit(
-      ObTableHandleV2 &handle,
-      const memtable::MultiSourceDataUnitType type) const override;
   int release_tail_memtable(memtable::ObIMemtable *memtable);
   int create_memtable(const share::SCN clog_checkpoint_scn,
                       const int64_t schema_version,

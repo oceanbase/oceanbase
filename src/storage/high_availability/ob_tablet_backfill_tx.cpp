@@ -1023,17 +1023,18 @@ int ObTabletTableBackfillTXTask::traverse_frozen_memtable_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table should not be NULL or table type is unexpected", K(ret), K(tablet_merge_ctx_));
   } else if (table->is_data_memtable()) {
-    memtable = static_cast<memtable::ObMemtable*>(table);
-    if (!memtable->is_frozen_memtable()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("memtable should be frozen memtable", K(ret), KPC(memtable));
-    } else if (memtable->has_multi_source_data_unit(type)) {
-      if (OB_FAIL(memtable->get_multi_source_data_unit(msd, nullptr/*allocator*/))) {
-        LOG_WARN("failed to get msd from memtable", K(ret), K(type));
-      }
-    } else {
-      LOG_INFO("memtable do not has multi source data unit", KPC(memtable), K(type));
-    }
+    // TODO(lixia) delete this code
+    // memtable = static_cast<memtable::ObMemtable*>(table);
+    // if (!memtable->is_frozen_memtable()) {
+    //   ret = OB_ERR_UNEXPECTED;
+    //   LOG_WARN("memtable should be frozen memtable", K(ret), KPC(memtable));
+    // } else if (memtable->has_multi_source_data_unit(type)) {
+    //   if (OB_FAIL(memtable->get_multi_source_data_unit(msd, nullptr/*allocator*/))) {
+    //     LOG_WARN("failed to get msd from memtable", K(ret), K(type));
+    //   }
+    // } else {
+    //   LOG_INFO("memtable do not has multi source data unit", KPC(memtable), K(type));
+    // }
   }
   return ret;
 }

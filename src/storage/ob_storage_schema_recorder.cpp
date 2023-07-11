@@ -229,10 +229,10 @@ int ObStorageSchemaRecorder::dec_ref_on_memtable(const bool sync_finish)
         KP_(storage_schema), K_(tablet_handle_ptr));
   } else {
     storage_schema_->set_sync_finish(sync_finish);
-    if (OB_FAIL(tablet_handle_ptr_->get_obj()->save_multi_source_data_unit(storage_schema_, clog_scn_,
-        false/*for_replay*/, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
-      LOG_WARN("failed to save storage schema", K(ret), K_(tablet_id), K(storage_schema_));
-    }
+    // if (OB_FAIL(tablet_handle_ptr_->get_obj()->save_multi_source_data_unit(storage_schema_, clog_scn_,
+    //     false/*for_replay*/, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
+    //   LOG_WARN("failed to save storage schema", K(ret), K_(tablet_id), K(storage_schema_));
+    // }
   }
   return ret;
 }
@@ -360,11 +360,11 @@ int ObStorageSchemaRecorder::submit_log(
     LOG_WARN("log handler or storage_schema is null", K(ret), KP(storage_schema_),
         KP(clog_buf), K(clog_len), K(tablet_handle_ptr_));
   } else if (FALSE_IT(storage_schema_->set_sync_finish(false))) {
-  } else if (OB_FAIL(tablet_handle_ptr_->get_obj()->save_multi_source_data_unit(storage_schema_,
-      SCN::max_scn(), false/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
-    if (OB_BLOCK_FROZEN != ret) {
-      LOG_WARN("failed to inc ref for storage schema", K(ret), K_(tablet_id), K(storage_schema_));
-    }
+  //} else if (OB_FAIL(tablet_handle_ptr_->get_obj()->save_multi_source_data_unit(storage_schema_,
+  //    SCN::max_scn(), false/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
+  //  if (OB_BLOCK_FROZEN != ret) {
+  //    LOG_WARN("failed to inc ref for storage schema", K(ret), K_(tablet_id), K(storage_schema_));
+  //  }
   } else if (OB_FAIL(write_clog(clog_buf, clog_len))) {
     LOG_WARN("fail to submit log", K(ret), K_(tablet_id));
     int tmp_ret = OB_SUCCESS;

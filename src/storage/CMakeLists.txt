@@ -530,7 +530,6 @@ ob_set_subtarget(ob_storage memtable
   memtable/ob_memtable_interface.cpp
   memtable/ob_memtable_iterator.cpp
   memtable/ob_memtable_mutator.cpp
-  memtable/ob_multi_source_data.cpp
   memtable/ob_redo_log_generator.cpp
   memtable/ob_row_compactor.cpp
   memtable/ob_row_conflict_handler.cpp

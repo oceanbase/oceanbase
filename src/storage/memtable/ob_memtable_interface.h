@@ -211,12 +211,6 @@ public:
     }
     return ret;
   }
-  virtual int get_multi_source_data_unit(ObIMultiSourceDataUnit *multi_source_data_unit)
-  {
-    UNUSEDx(multi_source_data_unit);
-    int ret = OB_NOT_SUPPORTED;
-    return ret;
-  }
   virtual bool is_empty() const override
   {
     return false;

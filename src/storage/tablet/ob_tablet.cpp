@@ -3699,88 +3699,6 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
   return ret;
 }
 
-static int get_msd_from_table(
-    ObITable *table,
-    ObIAllocator *allocator,
-    const bool get_latest,
-    memtable::ObIMultiSourceDataUnit &msd)
-{
-  int ret = OB_SUCCESS;
-  memtable::ObMemtable * memtable = nullptr;
-  if (OB_ISNULL(table)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table is null", K(ret), KPC(table));
-  } else if (OB_ISNULL(memtable = static_cast<memtable::ObMemtable *>(table))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table pointer does not point to a ObMemtable object", K(ret), KPC(table));
-  } else if (OB_FAIL(memtable->get_multi_source_data_unit(
-      &msd,
-      allocator,
-      get_latest))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get multi_source_data from memtable", K(ret), KPC(table));
-    }
-  }
-  return ret;
-}
-
-int ObTablet::get_msd_from_memtables(
-    memtable::ObIMultiSourceDataUnit &msd,
-    ObIAllocator *allocator,
-    const bool get_latest) const
-{
-  int ret = OB_SUCCESS;
-  bool exist_on_memtable = false;
-  ObSEArray<ObITable*, MAX_MEMSTORE_CNT> memtables;
-  if (is_ls_inner_tablet()) {
-    // do nothing
-  } else if (OB_FAIL(get_memtables(memtables, true/*need_active*/))) {
-    LOG_WARN("failed to get memtables", K(ret), KPC(this));
-  } else if (memtables.empty()) {
-    // do nothing
-  } else {
-    if (get_latest) {
-      for (int64_t i = memtables.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-        if (OB_FAIL(get_msd_from_table(
-            memtables.at(i),
-            allocator,
-            get_latest,
-            msd))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("failed to get msd from memtable", K(ret), K(i), KPC(memtables.at(i)));
-          }
-        } else {
-          exist_on_memtable = true;
-          break;
-        }
-      } // end of for
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
-        if (OB_FAIL(get_msd_from_table(
-            memtables.at(i),
-            allocator,
-            get_latest,
-            msd))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("failed to get msd from memtable", K(ret), K(i), KPC(memtables.at(i)));
-          }
-        } else {
-          exist_on_memtable = true;
-          break;
-        }
-      } // end of for
-    }
-  }
-  if (OB_SUCC(ret) && !exist_on_memtable) {
-    ret = OB_ENTRY_NOT_EXIST;
-  }
-  return ret;
-}
-
 // MIN { ls min_reserved_snapshot, freeze_info, all_acquired_snapshot}
 int ObTablet::get_kept_multi_version_start(
     ObLS &ls,
@@ -4432,42 +4350,6 @@ int ObTablet::mds_table_flush(const share::SCN &recycle_scn)
     LOG_WARN("failed to get mds table", K(ret));
   } else if (OB_FAIL(mds_table.flush(recycle_scn))) {
     LOG_WARN("failed to flush mds table", KR(ret), KPC(this));
-  }
-  return ret;
-}
-
-int ObTablet::get_auto_inc_seq(common::ObArenaAllocator &allocator, share::ObTabletAutoincSeq &auto_inc_seq) const
-{
-  int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
-  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-  bool exist_on_memtable = false;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_msd_from_memtables(auto_inc_seq, &allocator))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      exist_on_memtable = false;
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get msd from memtable", K(ret), K(ls_id), K(tablet_id));
-    }
-  } else {
-    exist_on_memtable = true;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (exist_on_memtable) {
-  } else {
-    const share::ObTabletAutoincSeq *autoin_seq_from_meta = nullptr;
-    ObTabletMemberWrapper<share::ObTabletAutoincSeq> wrapper;
-    if (OB_FAIL(fetch_autoinc_seq(wrapper))) {
-      LOG_WARN("failed to get autoinc seq wrapper", K(ret));
-    } else if (OB_ISNULL(autoin_seq_from_meta = wrapper.get_member())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("autoinc seq from meta is null", K(ret));
-    } else if (OB_FAIL(auto_inc_seq.assign(allocator, *autoin_seq_from_meta))) {
-      LOG_WARN("failed to get tx data from tablet", K(ret), K(ls_id), K(tablet_id), KPC(autoin_seq_from_meta));
-    }
   }
   return ret;
 }
@@ -6028,17 +5910,6 @@ int ObTablet::set_frozen_for_all_memtables()
   }
 
   return ret;
-}
-
-void ObTablet::print_memtables_for_table()
-{
-  int ret = OB_SUCCESS;
-  common::ObSArray<storage::ObITable *> memtables;
-  if (OB_FAIL(get_memtables(memtables, true))) {
-    LOG_WARN("failed to get_memtables", K(ret), KPC(this));
-  } else {
-    LOG_INFO("memtables print", K(memtables), KPC(this));
-  }
 }
 
 } // namespace storage
