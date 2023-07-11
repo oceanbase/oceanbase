@@ -170,6 +170,7 @@ private:
                                    const share::schema::ObColumnSchemaV2 &dst_col_schema);
   int generate_index_arg_cascade();
 
+  int check_alter_column_schemas_valid(ObAlterTableStmt &stmt);
   const share::schema::ObTableSchema *table_schema_;
   const share::schema::ObTableSchema *index_schema_;
 

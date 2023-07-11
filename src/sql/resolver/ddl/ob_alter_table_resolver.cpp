@@ -490,6 +490,76 @@ int ObAlterTableResolver::resolve_set_interval(ObAlterTableStmt *stmt, const Par
   return ret;
 }
 
+// bug: 48644348
+int ObAlterTableResolver::check_alter_column_schemas_valid(ObAlterTableStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL ptr", K(ret));
+  } else if (stmt.get_alter_table_arg().is_alter_columns_) {
+    const AlterTableSchema &alter_table_schema = stmt.get_alter_table_arg().alter_table_schema_;
+    ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+    ObSEArray<const ObColumnSchemaV2 *, 2> dependent_columns;
+    ObSEArray<const ObColumnSchemaV2 *, 2> drop_columns;
+    const ObColumnSchemaV2 *col_schema = NULL;
+    AlterColumnSchema *alter_column_schema = NULL;
+    ObString alter_column_name;
+    for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+      if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alter_column_schema is NULL", K(ret), K(alter_table_schema));
+      } else if (OB_DDL_DROP_COLUMN == alter_column_schema->alter_type_) {
+        alter_column_name = alter_column_schema->get_origin_column_name();
+        if (OB_ISNULL(col_schema = table_schema_->get_column_schema(alter_column_name))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to find drop column schema!", K(ret), K(alter_column_name));
+        } else if (OB_FAIL(drop_columns.push_back(col_schema))) {
+          LOG_WARN("fail to push back column id", K(ret));
+        }
+      } else if (OB_DDL_ADD_COLUMN == alter_column_schema->alter_type_ &&
+                 alter_column_schema->is_generated_column()) {
+        ObSEArray<ObString, 2> columns_names;
+        ObItemType root_expr_type = T_INVALID;
+        if (OB_FAIL(alter_column_schema->get_cur_default_value().get_string(alter_column_name))) {
+          LOG_WARN("get expr string from default value failed", K(ret));
+        } else if (OB_UNLIKELY(alter_column_name.empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("got an empty column name", K(ret), K(alter_column_name));
+        } else if (OB_FAIL(ObResolverUtils::resolve_generated_column_info(alter_column_name,
+                                                                          *allocator_,
+                                                                          root_expr_type,
+                                                                          columns_names))) {
+          LOG_WARN("failed to resolve generated column info", K(ret), K(alter_column_name));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < columns_names.count(); ++i) {
+            col_schema = table_schema_->get_column_schema(columns_names.at(i));
+            if (NULL != col_schema) {
+              if (OB_FAIL(dependent_columns.push_back(col_schema))) {
+                LOG_WARN("fail to push back column id", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !drop_columns.empty() && !dependent_columns.empty()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < drop_columns.count(); ++i) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < dependent_columns.count(); ++j) {
+          if (drop_columns.at(i) == dependent_columns.at(j)) {
+            const ObString &column_name = drop_columns.at(i)->get_column_name();
+            ret = OB_ERR_DEPENDENT_BY_GENERATED_COLUMN;
+            LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_GENERATED_COLUMN, column_name.length(), column_name.ptr());
+            LOG_WARN("Dropping column has generated column deps", K(ret), K(column_name));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
@@ -908,6 +978,9 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         LOG_WARN("add/modify not null constraint together with other ddls", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify not null constraint together with other DDLs");
       }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(check_alter_column_schemas_valid(*alter_table_stmt))) {
+      LOG_WARN("failed to check alter column schemas valid", K(ret));
     }
   }
   return ret;
@@ -4385,7 +4458,10 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
   tmp_str[ObNLSFormatEnum::NLS_TIMESTAMP] = session_info_->get_local_nls_timestamp_format();
   tmp_str[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = session_info_->get_local_nls_timestamp_tz_format();
   AlterColumnSchema dummy_column(column.get_allocator());
-  if (OB_FAIL(resolve_column_definition(column, node, stat,
+  ObTableSchema tmp_table_schema; // check_default_value will change table_schema
+  if (OB_FAIL(tmp_table_schema.assign(*table_schema_))) {
+    LOG_WARN("failed to assign a table schema", K(ret));
+  } else if (OB_FAIL(resolve_column_definition(column, node, stat,
               is_modify_column_visibility, pk_name,
               is_oracle_temp_table))) {
     SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
@@ -4400,7 +4476,7 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
                               session_info_->get_tz_info_wrap(),
                               tmp_str,
                               *allocator_,
-                              *const_cast<ObTableSchema *>(table_schema_),
+                              tmp_table_schema,
                               resolved_cols,
                               dummy_column,
                               gen_col_expr_arr,
