@@ -4788,16 +4788,20 @@ bool ObOptimizerUtil::has_equal_join_conditions(const ObIArray<ObRawExpr*> &join
 int ObOptimizerUtil::get_subplan_const_column(const ObDMLStmt &parent_stmt,
                                               const uint64_t table_id,
                                               const ObSelectStmt &child_stmt,
+                                              const ObIArray<ObRawExpr*> &exec_ref_exprs,
                                               ObIArray<ObRawExpr *> &output_exprs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt.get_select_item_size(); ++i) {
     const ObRawExpr *expr = child_stmt.get_select_item(i).expr_;
     ObRawExpr *parent_expr = NULL;
+    bool is_const = false;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(expr));
-    } else if (!expr->is_const_expr()) {
+    } else if (OB_FAIL(is_const_expr_recursively(expr, exec_ref_exprs, is_const))) {
+      LOG_WARN("failed to check expr is const expr", K(ret));
+    } else if (!is_const) {
       // do nothing
     } else if (NULL == (parent_expr = parent_stmt.get_column_expr_by_id(table_id,
                                                                         OB_APP_MIN_COLUMN_ID + i))) {

@@ -3471,7 +3471,7 @@ int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
-      OB_ISNULL(root) || OB_ISNULL(root->get_stmt())) {
+      OB_ISNULL(root) || OB_ISNULL(root->get_stmt()) || OB_ISNULL(root->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(root), K(ret));
   } else if (OB_UNLIKELY(!root->get_stmt()->is_select_stmt())) {
@@ -3493,6 +3493,7 @@ int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
     } else if (OB_FAIL(ObOptimizerUtil::get_subplan_const_column(*parent_stmt,
                                                                  table_id,
                                                                  *child_stmt,
+                                                                 root->get_plan()->get_onetime_query_refs(),
                                                                  output_const_exprs_))) {
       LOG_WARN("failed to get subplan const column expr", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {

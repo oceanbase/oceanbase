@@ -4728,6 +4728,7 @@ int ObTransformUtils::compute_generate_table_property(const ObDMLStmt *stmt,
   ObSelectStmt *ref_query = NULL;
   ObSEArray<ObRawExpr*, 4> cur_cond_exprs;
   ObSqlBitSet<> table_set;
+  ObSEArray<ObRawExpr*, 1> dummy_exprs;
   if (OB_ISNULL(stmt) || OB_ISNULL(table) || OB_ISNULL(check_helper.alloc_)
       || OB_ISNULL(check_helper.fd_factory_) || OB_ISNULL(check_helper.expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4749,6 +4750,7 @@ int ObTransformUtils::compute_generate_table_property(const ObDMLStmt *stmt,
   } else if (OB_FAIL(ObOptimizerUtil::get_subplan_const_column(*stmt,
                                                                table->table_id_,
                                                                *ref_query,
+                                                               dummy_exprs,
                                                                res_info.const_exprs_))) {
     LOG_WARN("failed to get subplan const column", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(*check_helper.expr_factory_,

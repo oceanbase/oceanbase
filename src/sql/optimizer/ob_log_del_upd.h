@@ -116,6 +116,7 @@ public:
                                           ObIArray<ObRawExpr*> &access_exprs,
                                           int64_t col_cnt = -1);
   int generate_column_old_values_exprs();
+  int is_new_row_expr(const ObRawExpr *expr, bool &bret) const;
 public:
   // e.g.:
   //   create view V as select * from T1 as T;
@@ -183,7 +184,6 @@ public:
                K_(ck_cst_exprs),
                K_(is_update_unique_key),
                K_(is_update_part_key),
-               K_(assignments),
                K_(distinct_algo),
                K_(related_index_ids));
 };
@@ -327,6 +327,7 @@ public:
   int replace_dml_info_exprs(
         ObRawExprReplacer &replacer,
         const ObIArray<IndexDMLInfo *> &index_dml_infos);
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;
   virtual int generate_multi_part_partition_id_expr() = 0;

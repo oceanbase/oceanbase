@@ -271,6 +271,24 @@ int IndexDMLInfo::generate_column_old_values_exprs()
   return ret;
 }
 
+int IndexDMLInfo::is_new_row_expr(const ObRawExpr *expr, bool &bret) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    bret = false;
+  } else {
+    bret = ObOptimizerUtil::find_item(column_convert_exprs_, expr)
+        || ObOptimizerUtil::find_item(ck_cst_exprs_, expr)
+        || lookup_part_id_expr_ == expr
+        || new_part_id_expr_ == expr
+        || new_rowid_expr_ == expr;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !bret && i < assignments_.count(); ++i) {
+    bret = assignments_.at(i).expr_ == expr;
+  }
+  return ret;
+}
+
 ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
   : ObLogicalOperator(plan),
     my_dml_plan_(plan),
@@ -1475,6 +1493,21 @@ int ObLogDelUpd::print_used_hint(PlanText &plan_text)
       if (match_hint && OB_FAIL(hint->print_hint(plan_text))) {
         LOG_WARN("failed to print use multi part dml hint", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObLogDelUpd::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<IndexDMLInfo *> &index_dml_infos = get_index_dml_infos();
+  for (int64_t i = 0; OB_SUCC(ret) && !is_fixed && i < index_dml_infos.count(); ++i) {
+    if (OB_ISNULL(index_dml_infos.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index dml info is null", K(ret));
+    } else if (OB_FAIL(index_dml_infos.at(i)->is_new_row_expr(expr, is_fixed))) {
+      LOG_WARN("failed to check is new row expr", K(ret));
     }
   }
   return ret;

@@ -877,6 +877,7 @@ public:
   static int get_subplan_const_column(const ObDMLStmt &parent_stmt,
                                       const uint64_t table_id,
                                       const ObSelectStmt &child_stmt,
+                                      const ObIArray<ObRawExpr*> &exec_ref_exprs,
                                       ObIArray<ObRawExpr *> &output_exprs);
 
   /*
