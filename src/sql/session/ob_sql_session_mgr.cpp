@@ -160,8 +160,11 @@ void ObTenantSQLSessionMgr::free_session(ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   SessionPool *session_pool = NULL;
+  // add tracepoint for control session pool.
+  int64_t code = 0;
+  code = OB_E(EventTable::EN_SESS_POOL_MGR_CTRL) OB_SUCCESS;
   if (ObTenantSQLSessionMgr::is_valid_tenant_id(session->get_login_tenant_id()) &&
-      session->can_release_to_pool()) {
+      session->can_release_to_pool() && code == OB_SUCCESS) {
     if (session->is_use_inner_allocator() && !session->is_tenant_killed()) {
       session_pool = &session_pool_;
     }
