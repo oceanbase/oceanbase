@@ -5708,8 +5708,10 @@ int ObAggregateProcessor::get_wm_concat_result(const ObAggrInfo &aggr_info,
                                                ObDatum &concat_result)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_alloc;
-  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+  if (OB_ISNULL(GET_MY_SESSION(eval_ctx_.exec_ctx_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null session", K(ret));
+  } else if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
   } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
@@ -5718,6 +5720,9 @@ int ObAggregateProcessor::get_wm_concat_result(const ObAggrInfo &aggr_info,
   } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
   } else {
+    ObArenaAllocator tmp_alloc(aggr_alloc_.get_label(), common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+                               GET_MY_SESSION(eval_ctx_.exec_ctx_)->get_effective_tenant_id(),
+                               ObCtxIds::WORK_AREA);
     // 默认为逗号
     ObString sep_str = ObCharsetUtils::get_const_str(aggr_info.expr_->datum_meta_.cs_type_, ',');
     ObChunkDatumStore::LastStoredRow first_row(aggr_alloc_);
