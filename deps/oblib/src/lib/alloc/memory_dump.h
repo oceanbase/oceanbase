@@ -163,6 +163,8 @@ public:
   ~ObMemoryDump();
   static ObMemoryDump &get_instance();
   int init();
+  void stop();
+  void wait();
   void destroy();
   bool is_inited() const { return is_inited_; }
   int push(void *task);

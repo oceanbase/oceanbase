@@ -111,6 +111,7 @@ int ObLocalityManager::stop()
     STORAGE_LOG(ERROR, "locality manager not inited, cannot stop.", K(ret));
   } else {
     TG_STOP(lib::TGDefIDs::LocalityReload);
+    refresh_locality_task_queue_.stop();
   }
   return ret;
 }
@@ -119,6 +120,7 @@ int ObLocalityManager::wait()
 {
   int ret = OB_SUCCESS;
   TG_WAIT(lib::TGDefIDs::LocalityReload);
+  refresh_locality_task_queue_.wait();
   return ret;
 }
 

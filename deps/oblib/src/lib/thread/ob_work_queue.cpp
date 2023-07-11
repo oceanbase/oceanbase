@@ -42,7 +42,7 @@ int ObWorkQueue::init(const int64_t thread_count, const int64_t queue_size,
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("rs task queue already inited", K(ret));
-  } else if (OB_FAIL(timer_.init())) {
+  } else if (OB_FAIL(timer_.init(thread_name))) {
     LOG_WARN("failed to init timer", K(ret));
   } else if (OB_FAIL(task_queue_.init(thread_count, queue_size, thread_name))) {
     LOG_WARN("failed to init work queue", K(ret), K(thread_count), K(queue_size));

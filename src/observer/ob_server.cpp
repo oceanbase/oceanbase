@@ -661,6 +661,14 @@ void ObServer::destroy()
     ObMdsEventBuffer::destroy();
     FLOG_INFO("ObMdsEventBuffer destroyed");
 
+    FLOG_INFO("begin to wait destroy multi tenant");
+    multi_tenant_.destroy();
+    FLOG_INFO("wait destroy multi tenant success");
+
+    FLOG_INFO("begin to destroy safe destroy instance");
+    SAFE_DESTROY_INSTANCE.destroy();
+    FLOG_INFO("wait destroy safe destroy instance success");
+
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
@@ -1228,6 +1236,10 @@ int ObServer::stop()
     bl_service_.stop();
     FLOG_INFO("blacklist service stopped");
 
+    FLOG_INFO("begin to stop memory dump");
+    ObMemoryDump::get_instance().stop();
+    FLOG_INFO("memory dump stopped");
+
     FLOG_INFO("begin to stop tenant timezone manager");
     tenant_timezone_mgr_.stop();
     FLOG_INFO("tenant timezone manager stopped");
@@ -1474,18 +1486,11 @@ int ObServer::wait()
     multi_tenant_.wait();
     FLOG_INFO("wait multi tenant success");
 
-    FLOG_INFO("begin to wait destroy multi tenant");
-    multi_tenant_.destroy();
-    FLOG_INFO("wait destroy multi tenant success");
-
     // safe to destroy
     FLOG_INFO("begin to wait for safe destroy instance");
     SAFE_DESTROY_INSTANCE.wait();
     FLOG_INFO("wait for safe destroy instance success");
 
-    FLOG_INFO("begin to destroy safe destroy instance");
-    SAFE_DESTROY_INSTANCE.destroy();
-    FLOG_INFO("wait destroy safe destroy instance success");
 
     FLOG_INFO("begin to wait ratelimit manager");
     rl_mgr_.wait();
@@ -1559,6 +1564,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait blacklist service");
     bl_service_.wait();
     FLOG_INFO("wait blacklist service success");
+
+    FLOG_INFO("begin to wait memory dump");
+    ObMemoryDump::get_instance().wait();
+    FLOG_INFO("wait memory dump success");
 
     FLOG_INFO("begin to wait tenant timezone manager");
     tenant_timezone_mgr_.wait();

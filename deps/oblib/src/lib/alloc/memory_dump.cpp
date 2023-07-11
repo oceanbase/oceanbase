@@ -165,11 +165,25 @@ int ObMemoryDump::init()
   return ret;
 }
 
-void ObMemoryDump::destroy()
+void ObMemoryDump::stop()
 {
   if (is_inited_) {
     TG_STOP(TGDefIDs::MEMORY_DUMP);
+  }
+}
+
+void ObMemoryDump::wait()
+{
+  if (is_inited_) {
     TG_WAIT(TGDefIDs::MEMORY_DUMP);
+  }
+}
+
+void ObMemoryDump::destroy()
+{
+  if (is_inited_) {
+    stop();
+    wait();
     queue_.destroy();
     is_inited_ = false;
   }
