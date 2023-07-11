@@ -1931,7 +1931,7 @@
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn != finished_scn and max_received_scn > 0""")
+#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
@@ -2522,10 +2522,17 @@
 #
 ## 4. check major finish
 #def check_major_merge(query_cur, timeout):
-#  sql = """select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')"""
-#  check_until_timeout(query_cur, sql, 0, timeout)
-#  sql2 = """select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn != finished_scn and max_received_scn > 0"""
-#  check_until_timeout(query_cur, sql2, 0, timeout)
+#  need_check = 0
+#  (desc, results) = query_cur.exec_query("""select distinct value from  GV$OB_PARAMETERs where name = 'enable_major_freeze';""")
+#  if len(results) != 1:
+#    need_check = 1
+#  elif results[0][0] != 'True':
+#    need_check = 1
+#  if need_check == 1:
+#    sql = """select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')"""
+#    check_until_timeout(query_cur, sql, 0, timeout)
+#    sql2 = """select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0"""
+#    check_until_timeout(query_cur, sql2, 0, timeout)
 #
 #def check_until_timeout(query_cur, sql, value, timeout):
 #  times = timeout / 10
