@@ -77,6 +77,7 @@ private:
 
 extern ObPocRpcServer global_poc_server;
 extern ObListener* global_ob_listener;
+int64_t get_max_rpc_packet_size();
 extern "C" {
   int dispatch_to_ob_listener(int accept_fd);
   int tranlate_to_ob_error(int err);

@@ -3436,9 +3436,9 @@ TEST(TestQueryResult, alloc_memory_if_need)
       printf("allocator: %ld, result_buf: %ld\n", query_result.allocator_.total(), query_result.buf_.get_capacity());
     }
   }
-  ASSERT_EQ(query_result.buf_.get_capacity(), ObTableQueryResult::MAX_BUF_BLOCK_SIZE * 1);
-  ASSERT_GT(query_result.allocator_.total(), ObTableQueryResult::MAX_BUF_BLOCK_SIZE * 1);
-  ASSERT_LE(query_result.allocator_.total(), ObTableQueryResult::MAX_BUF_BLOCK_SIZE * 3);
+  ASSERT_EQ(query_result.buf_.get_capacity(), ObTableQueryResult::get_max_buf_block_size() * 1);
+  ASSERT_GT(query_result.allocator_.total(), ObTableQueryResult::get_max_buf_block_size() * 1);
+  ASSERT_LE(query_result.allocator_.total(), ObTableQueryResult::get_max_buf_block_size() * 3);
 }
 
 TEST_F(TestBatchExecute, update_table_with_index_by_lowercase_rowkey)

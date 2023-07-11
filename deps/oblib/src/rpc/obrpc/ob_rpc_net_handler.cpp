@@ -23,6 +23,7 @@
 #include "lib/allocator/ob_tc_malloc.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_virtual_rpc_protocol_processor.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "common/ob_clock_generator.h"
 
 using namespace oceanbase::common;
@@ -97,9 +98,9 @@ int ObRpcNetHandler::try_decode_keepalive(easy_message_t *ms, int &result)
           chid = bswap_32(*((uint32_t *)(net_header + 8)));
 
           full_demanded_len = common::OB_NET_HEADER_LENGTH + dlen;
-          if (dlen > OB_MAX_RPC_PACKET_LENGTH) {
+          if (dlen > get_max_rpc_packet_size()) {
             result = OB_RPC_PACKET_TOO_LONG;
-            LOG_WARN("obrpc packet payload exceeds its limit", K(magic), K(result), K(dlen), "limit", OB_MAX_RPC_PACKET_LENGTH);
+            LOG_WARN("obrpc packet payload exceeds its limit", K(magic), K(result), K(dlen), "limit", get_max_rpc_packet_size());
           } else if (recv_len < full_demanded_len) {
             //data is not enough
             result = 0;

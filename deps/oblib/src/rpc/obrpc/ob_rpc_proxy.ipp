@@ -430,10 +430,10 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input &args,
   ObReqTransport::Request req;
 
   if (OB_FAIL(ret)) {
-  } else if (payload > OB_MAX_RPC_PACKET_LENGTH) {
+  } else if (payload > get_max_rpc_packet_size()) {
     ret = OB_RPC_PACKET_TOO_LONG;
     RPC_OBRPC_LOG(WARN, "obrpc packet payload execced its limit",
-            K(payload), "limit", OB_MAX_RPC_PACKET_LENGTH,
+            K(payload), "limit", get_max_rpc_packet_size(),
             K(ret));
   } else if (OB_ISNULL(transport_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -620,10 +620,10 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (payload > OB_MAX_RPC_PACKET_LENGTH) {
+  } else if (payload > get_max_rpc_packet_size()) {
     ret = OB_RPC_PACKET_TOO_LONG;
     RPC_OBRPC_LOG(WARN, "obrpc packet payload execced its limit",
-                  K(ret), K(payload), "limit", OB_MAX_RPC_PACKET_LENGTH);
+                  K(ret), K(payload), "limit", get_max_rpc_packet_size());
   } else if (OB_ISNULL(transport_)) {
     ret = OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(WARN, "transport_ should not be NULL", K(ret), KP_(transport));

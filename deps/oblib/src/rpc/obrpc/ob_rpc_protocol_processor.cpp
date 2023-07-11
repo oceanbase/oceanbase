@@ -177,10 +177,10 @@ int ObRpcProtocolProcessor::resolve_packet_type(ObTimeGuard &timeguard,
       // net header length plus packet content length
       const uint32_t full_len = OB_NET_HEADER_LENGTH + plen;
 
-      if (plen > OB_MAX_RPC_PACKET_LENGTH) {
+      if (plen > get_max_rpc_packet_size()) {
         ret = OB_RPC_PACKET_TOO_LONG;
         LOG_WARN("obrpc packet payload exceed its limit",
-                 K(ret), K(plen), "limit", OB_MAX_RPC_PACKET_LENGTH);
+                 K(ret), K(plen), "limit", get_max_rpc_packet_size());
       } else if (recv_len < full_len) {
         if (NULL != ms->c && NULL != ms->c->sc) {
           //ssl will decrypt data into ssl buff, we should not set next_read_len here

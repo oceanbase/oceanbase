@@ -23,6 +23,8 @@
 #include "lib/list/ob_dlist.h"
 #include "common/ob_common_types.h"
 #include "common/ob_range.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
+
 namespace oceanbase
 {
 namespace common
@@ -787,8 +789,9 @@ public:
   bool reach_batch_size_or_result_size(const int32_t batch_count,
                                        const int64_t max_result_size);
   const common::ObIArray<common::ObString>& get_select_columns() const { return properties_names_; };
+  static int64_t get_max_packet_buffer_length() { return obrpc::get_max_rpc_packet_size() - (1<<20); }
+  static int64_t get_max_buf_block_size() { return get_max_packet_buffer_length() - (1024*1024LL); }
 private:
-  static const int64_t MAX_BUF_BLOCK_SIZE = common::OB_MAX_PACKET_BUFFER_LENGTH - (1024*1024LL);
   static const int64_t DEFAULT_BUF_BLOCK_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE - (1024*1024LL);
   int alloc_buf_if_need(const int64_t size);
 private:

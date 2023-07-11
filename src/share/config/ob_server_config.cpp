@@ -419,6 +419,10 @@ bool enable_pkt_nio() {
       && (!OBSERVER.is_arbitration_mode())
       && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
 }
+int64_t get_max_rpc_packet_size()
+{
+  return GCONF._max_rpc_packet_size;
+}
 }
 } // end of namespace oceanbase
 

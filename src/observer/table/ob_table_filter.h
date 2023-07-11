@@ -161,7 +161,7 @@ public:
         last_row_(NULL),
         batch_size_(query.get_batch()),
         max_result_size_(std::min(query.get_max_result_size(),
-                          static_cast<int64_t>(common::OB_MAX_PACKET_BUFFER_LENGTH-1024))),
+                          static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024))),
         scan_result_(NULL),
         is_first_result_(true),
         has_more_rows_(true)
@@ -199,7 +199,7 @@ public:
       tfilter_(NULL),
       batch_size_(query.get_batch()),
       max_result_size_(std::min(query.get_max_result_size(),
-                        static_cast<int64_t>(common::OB_MAX_PACKET_BUFFER_LENGTH-1024))),
+                        static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024))),
       is_first_result_(true),
       has_more_rows_(true),
       row_idx_(0)

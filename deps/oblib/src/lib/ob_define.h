@@ -450,7 +450,7 @@ const int64_t OB_MAX_PACKET_DECODE_TS = 10 * 1000L;
  * -----------------------------------
  */
 const uint32_t OB_NET_HEADER_LENGTH = 16;            // 16 bytes packet header
-const uint32_t OB_MAX_RPC_PACKET_LENGTH = (2L << 30) - (1<<20);
+const uint32_t OB_MAX_RPC_PACKET_LENGTH = (1L << 24);
 
 const int OB_TBNET_PACKET_FLAG = 0x416e4574;
 const int OB_SERVER_ADDR_STR_LEN = 128; //used for buffer size of easy_int_addr_to_str

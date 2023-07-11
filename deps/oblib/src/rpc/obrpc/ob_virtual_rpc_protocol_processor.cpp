@@ -297,11 +297,11 @@ int ObVirtualRpcProtocolProcessor::encode_raw_rpc_packet(ObTimeGuard &timeguard,
     uint32_t ez_pkt_size = OB_NET_HEADER_LENGTH + rpc_packet_size;
     uint32_t ez_rpc_header_size = OB_NET_HEADER_LENGTH + rpc_header_size;
 
-    if (ez_pkt_size > OB_MAX_RPC_PACKET_LENGTH) {
+    if (ez_pkt_size > get_max_rpc_packet_size()) {
       // We find out the packet size would beyond max size of limitation
       // in OceanBase.
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("packet size beyond limit", K(ret), K(ez_pkt_size), "limit", OB_MAX_RPC_PACKET_LENGTH);
+      LOG_WARN("packet size beyond limit", K(ret), K(ez_pkt_size), "limit", get_max_rpc_packet_size());
     } else {
       timeguard.click();
       ObRpcProxy::PCodeGuard pcode_guard(OB_RPC_STREAM_TEST_ENCODE_RAW_PCODE);
@@ -401,9 +401,9 @@ int ObVirtualRpcProtocolProcessor::decode_compressed_packet_data(ObTimeGuard &ti
         timeguard.click();
         if (OB_FAIL(header.decode(data, data_len, pos))) {
           LOG_WARN("failed to decode", K(ret));
-        } else if (header.origin_size_ > OB_MAX_RPC_PACKET_LENGTH) {
+        } else if (header.origin_size_ > get_max_rpc_packet_size()) {
           ret = OB_RPC_PACKET_TOO_LONG;
-          LOG_WARN("obrpc packet payload exceed its limit", K(ret), K(header.origin_size_), "limit", OB_MAX_RPC_PACKET_LENGTH);
+          LOG_WARN("obrpc packet payload exceed its limit", K(ret), K(header.origin_size_), "limit", get_max_rpc_packet_size());
         } else {
           timeguard.click();
           int32_t full_size = header.full_size_;
@@ -440,9 +440,9 @@ int ObVirtualRpcProtocolProcessor::decode_compressed_packet_data(ObTimeGuard &ti
         timeguard.click();
         if (OB_FAIL(header.decode(data, data_len, pos))) {
           LOG_WARN("failed to decode HeadPacketHeader", K(ret));
-        } else if (header.total_data_len_before_compress_ > OB_MAX_RPC_PACKET_LENGTH) {
+        } else if (header.total_data_len_before_compress_ > get_max_rpc_packet_size()) {
           ret = OB_RPC_PACKET_TOO_LONG;
-          LOG_WARN("obrpc packet payload exceed its limit", K(ret), K(header.total_data_len_before_compress_), "limit", OB_MAX_RPC_PACKET_LENGTH);
+          LOG_WARN("obrpc packet payload exceed its limit", K(ret), K(header.total_data_len_before_compress_), "limit", get_max_rpc_packet_size());
         } else if (OB_UNLIKELY(data_len != header.full_size_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid data", K(data_len), K(pos), K(header), K(ret));
@@ -612,9 +612,9 @@ int ObVirtualRpcProtocolProcessor::decode_raw_net_rpc_packet(common::ObTimeGuard
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("packet magic flag mismatch, close connection", K(ret));
           ms->status = EASY_ERROR;
-        } else if (plen > OB_MAX_RPC_PACKET_LENGTH) {
+        } else if (plen > get_max_rpc_packet_size()) {
           ret = OB_RPC_PACKET_TOO_LONG;
-          LOG_WARN("obrpc packet payload exceed its limit", K(ret), K(plen), "limit", OB_MAX_RPC_PACKET_LENGTH);
+          LOG_WARN("obrpc packet payload exceed its limit", K(ret), K(plen), "limit", get_max_rpc_packet_size());
         } else if (recv_len < full_demanded_len) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("invalid recv_len ", K(recv_len), K(full_demanded_len), K(ret));

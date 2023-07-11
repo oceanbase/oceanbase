@@ -33,6 +33,9 @@ ObListener* global_ob_listener;
 bool __attribute__((weak)) enable_pkt_nio() {
   return false;
 }
+int64_t  __attribute__((weak)) get_max_rpc_packet_size() {
+  return OB_MAX_RPC_PACKET_LENGTH;
+}
 }; // end namespace obrpc
 }; // end namespace oceanbase
 

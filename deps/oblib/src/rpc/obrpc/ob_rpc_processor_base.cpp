@@ -29,6 +29,7 @@
 #include "rpc/obrpc/ob_irpc_extra_payload.h"
 #include "rpc/obrpc/ob_rpc_processor_base.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
 
 using namespace oceanbase::common;
 
@@ -415,9 +416,9 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
     char *tmp_buf = NULL;
     if (OB_FAIL(ret)) {
       //do nothing
-    } else if (content_size + max_overflow_size > common::OB_MAX_PACKET_LENGTH) {
+    } else if (content_size + max_overflow_size > get_max_rpc_packet_size()) {
       ret = common::OB_RPC_PACKET_TOO_LONG;
-      RPC_OBRPC_LOG(WARN, "response content size bigger than OB_MAX_PACKET_LENGTH", K(ret));
+      RPC_OBRPC_LOG(ERROR, "response content size bigger than max_rpc_packet_size", K(ret), "limit", get_max_rpc_packet_size());
     } else {
       /*
        *                   RPC response packet buffer format

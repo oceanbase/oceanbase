@@ -1381,9 +1381,9 @@ int ObTableQueryResult::assign_property_names(const ObIArray<ObString> &other)
 int ObTableQueryResult::alloc_buf_if_need(const int64_t need_size)
 {
   int ret = OB_SUCCESS;
-  if (need_size <= 0 || need_size > MAX_BUF_BLOCK_SIZE) {
+  if (need_size <= 0 || need_size > get_max_buf_block_size()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(need_size), LITERAL_K(MAX_BUF_BLOCK_SIZE));
+    LOG_WARN("invalid argument", K(need_size), LITERAL_K(get_max_buf_block_size()));
   } else if (NULL == buf_.get_data()) { // first alloc
     int64_t actual_size = 0;
     if (need_size <= DEFAULT_BUF_BLOCK_SIZE) {
@@ -1399,12 +1399,12 @@ int ObTableQueryResult::alloc_buf_if_need(const int64_t need_size)
       buf_.set_data(tmp_buf, actual_size);
     }
   } else if (buf_.get_remain() < need_size) {
-    if (need_size + buf_.get_position() > MAX_BUF_BLOCK_SIZE) { // check max buf size when expand buf
+    if (need_size + buf_.get_position() > get_max_buf_block_size()) { // check max buf size when expand buf
       ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("will exceed max buf need_size", K(ret), K(need_size), K(buf_.get_position()), LITERAL_K(MAX_BUF_BLOCK_SIZE));
+      LOG_WARN("will exceed max buf need_size", K(ret), K(need_size), K(buf_.get_position()), LITERAL_K(get_max_buf_block_size()));
     } else {
       int64_t actual_size = MAX(need_size + buf_.get_position(), 2 * buf_.get_capacity());
-      actual_size = MIN(actual_size, MAX_BUF_BLOCK_SIZE);
+      actual_size = MIN(actual_size, get_max_buf_block_size());
       char *tmp_buf = static_cast<char*>(allocator_.alloc(actual_size));
       if (NULL == tmp_buf) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

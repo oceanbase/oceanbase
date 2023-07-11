@@ -96,10 +96,10 @@ int ObRpcProxy::rpc_post(
   const int64_t payload = calc_payload_size(0);
   ObReqTransport::Request req;
   if (OB_FAIL(ret)) {
-  } else if (payload > OB_MAX_RPC_PACKET_LENGTH) {
+  } else if (payload > get_max_rpc_packet_size()) {
     ret = OB_RPC_PACKET_TOO_LONG;
     LOG_WARN("obrpc packet payload execced its limit",
-        K(ret), K(payload), "limit", OB_MAX_RPC_PACKET_LENGTH);
+        K(ret), K(payload), "limit", get_max_rpc_packet_size());
   } else if (OB_ISNULL(transport_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("transport shoul not be NULL", K(ret));

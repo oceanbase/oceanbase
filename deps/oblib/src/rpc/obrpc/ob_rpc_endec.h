@@ -21,6 +21,7 @@ namespace oceanbase
 {
 namespace obrpc
 {
+extern int64_t get_max_rpc_packet_size();
 class ObRpcProxy;
 int64_t calc_extra_payload_size();
 int fill_extra_payload(ObRpcPacket& pkt, char* buf, int64_t len, int64_t pos);
@@ -54,10 +55,10 @@ template <typename T>
   if (NULL == header_buf) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     RPC_OBRPC_LOG(WARN, "alloc buffer fail", K(payload_sz));
-  } else if (payload_sz > common::OB_MAX_RPC_PACKET_LENGTH) {
+  } else if (payload_sz > get_max_rpc_packet_size()) {
     ret = common::OB_RPC_PACKET_TOO_LONG;
-    RPC_OBRPC_LOG(WARN, "obrpc packet payload execced its limit",
-                  K(payload_sz), "limit", common::OB_MAX_RPC_PACKET_LENGTH, K(ret));
+    RPC_OBRPC_LOG(ERROR, "obrpc packet payload execced its limit",
+                  K(payload_sz), "limit", get_max_rpc_packet_size(), K(ret));
   } else if (OB_FAIL(common::serialization::encode(
                          payload_buf, payload_sz, pos, args))) {
     RPC_OBRPC_LOG(WARN, "serialize argument fail", K(pos), K(payload_sz), K(ret));
