@@ -97,6 +97,7 @@ public:
   int deref_ps_stmt(const ObPsStmtId stmt_id, bool erase_item = false);
   int get_or_add_stmt_item(const uint64_t db_id,
                            const common::ObString &ps_sql,
+                           const bool is_contain_tmp_tbl,
                            ObPsStmtItem *&ps_item_value);
   int get_or_add_stmt_info(const PsCacheInfoCtx &info_ctx,
                            const ObResultSet &result,
@@ -126,7 +127,7 @@ public:
   int check_schema_version(ObSchemaGetterGuard &schema_guard,
                            ObPsStmtInfo &stmt_info,
                            bool &is_expired);
-  int erase_stmt_item(ObPsStmtId stmt_id, ObPsSqlKey &ps_key);
+  int erase_stmt_item(ObPsStmtId stmt_id, const ObPsSqlKey &ps_key);
 private:
   int inner_cache_evict(bool is_evict_all);
   int fill_ps_stmt_info(const ObResultSet &result,

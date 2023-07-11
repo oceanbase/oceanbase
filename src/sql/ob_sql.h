@@ -269,6 +269,9 @@ private:
   int do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
                       share::schema::ObSchemaGetterGuard &schema_guard,
                       ObResultSet &result);
+  int check_contain_temporary_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                    ObResultSet &result,
+                                    bool &is_contain_tmp_tbl);
   int fill_result_set(ObResultSet &result, ObSqlCtx *context, const PlanCacheMode mode, ObStmt &stmt);
   int fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, const PlanCacheMode mode,
                              ObCollationType collation_type, const ObString &type_name,

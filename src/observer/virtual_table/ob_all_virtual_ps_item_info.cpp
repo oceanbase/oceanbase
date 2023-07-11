@@ -125,7 +125,7 @@ int ObAllVirtualPsItemInfo::fill_cells(uint64_t tenant_id,
         break;
       }
       case share::ALL_VIRTUAL_PS_ITEM_INFO_CDE::DB_ID: {
-        cells[i].set_int(stmt_info->get_db_id());
+        cells[i].set_int(stmt_info->get_sql_key().db_id_);
         break;
       }
       case share::ALL_VIRTUAL_PS_ITEM_INFO_CDE::PS_SQL: {
@@ -228,8 +228,7 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
         } else if (OB_ISNULL(stmt_info)) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "stmt_info is NULL", K(ret));
-        } else if (FALSE_IT(tmp_ret = ps_cache_->ref_stmt_item(stmt_info->get_db_id(),
-                                                               stmt_info->get_ps_sql(),
+        } else if (FALSE_IT(tmp_ret = ps_cache_->ref_stmt_item(stmt_info->get_sql_key(),
                                                                stmt_item))) {
         } else if (OB_HASH_NOT_EXIST == tmp_ret) {
           SERVER_LOG(DEBUG, "cannot get stmt_item, may be deleted",

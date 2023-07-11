@@ -22,40 +22,48 @@ namespace sql
 {
 class ObCallProcedureStmt;
 
-//ps stmt key
-class ObPsSqlKey
+// prepared statement stmt key
+struct ObPsSqlKey
 {
 public:
-  ObPsSqlKey() : db_id_(OB_INVALID_ID), ps_sql_(), allocator_(NULL){}
+  ObPsSqlKey()
+    : db_id_(OB_INVALID_ID),
+      inc_id_(OB_INVALID_ID),
+      ps_sql_()
+  {}
   ObPsSqlKey(uint64_t db_id,
              const common::ObString &ps_sql)
-    : db_id_(db_id), ps_sql_(ps_sql), allocator_(NULL)
+    : db_id_(db_id),
+      inc_id_(OB_INVALID_ID),
+      ps_sql_(ps_sql)
   {}
-  //for deep copy
-  explicit ObPsSqlKey(common::ObIAllocator *allocator)
-    : db_id_(), ps_sql_(), allocator_(allocator) {}
-  int deep_copy(const ObPsSqlKey &other);
-
+  ObPsSqlKey(uint64_t db_id,
+             uint64_t inc_id,
+             const common::ObString &ps_sql)
+    : db_id_(db_id),
+      inc_id_(inc_id),
+      ps_sql_(ps_sql)
+  {}
+  int deep_copy(const ObPsSqlKey &other, common::ObIAllocator &allocator);
   int64_t hash() const;
-
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
-
   ObPsSqlKey &operator=(const ObPsSqlKey &other);
   bool operator==(const ObPsSqlKey &other) const;
-  //need to reset allocator?
-  void reset() { db_id_ = OB_INVALID_ID; ps_sql_.reset();}
+  void reset()
+  {
+    db_id_ = OB_INVALID_ID;
+    inc_id_ = OB_INVALID_ID;
+    ps_sql_.reset();
+  }
+  TO_STRING_KV(K_(db_id), K_(inc_id), K_(ps_sql));
 
-  int get_convert_size(int64_t &cv_size) const;
-  uint64_t get_db_id() const { return db_id_; }
-  const common::ObString &get_ps_sql() const { return ps_sql_; }
-
-  void set_db_id(uint64_t db_id) { db_id_ = db_id; } //not deep copy
-  void set_ps_sql(const common::ObString &ps_sql) { ps_sql_ = ps_sql; }//not deep copy
-  TO_STRING_KV(K_(db_id), K_(ps_sql));
-private:
-  uint64_t db_id_;//database id中存在tenant id，因此将db_id作为key的一个部分，可以区分租户
+public:
+  uint64_t db_id_;
+  // MySQL allows session-level temporary tables with the same name to have different schema definitions.
+  // In order to distinguish this scenario, an incremental id is used to generate different prepared
+  // statements each time.
+  uint64_t inc_id_;
   common::ObString ps_sql_;
-  common::ObIAllocator *allocator_;
 };
 
 //ps stmt item
@@ -79,29 +87,20 @@ public:
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
 
   int get_convert_size(int64_t &cv_size) const;
-  uint64_t get_db_id() const { return db_id_; }
-  const common::ObString &get_ps_sql() const { return ps_sql_; }
-  void get_sql_key(ObPsSqlKey &ps_sql_key)
-  {
-    ps_sql_key.set_db_id(db_id_);
-    ps_sql_key.set_ps_sql(ps_sql_);
-  }
+  const ObPsSqlKey& get_sql_key() const { return ps_key_; }
   void assign_sql_key(const ObPsSqlKey &ps_sql_key)
   {
-    db_id_ = ps_sql_key.get_db_id();
-    ps_sql_ = ps_sql_key.get_ps_sql();
+    ps_key_ = ps_sql_key;
   }
-  void set_ps_sql(const common::ObString &ps_sql) { ps_sql_ = ps_sql; }
   bool *get_is_expired_evicted_ptr() { return &is_expired_evicted_; }
 
   ObIAllocator *get_external_allocator() { return external_allocator_; }
 
-  TO_STRING_KV(K_(ref_count), K_(db_id), K_(ps_sql), K_(stmt_id), K_(is_expired_evicted));
+  TO_STRING_KV(K_(ref_count), K_(ps_key), K_(stmt_id), K_(is_expired_evicted));
 
 private:
   volatile int64_t ref_count_;
-  uint64_t db_id_;
-  common::ObString ps_sql_;
+  ObPsSqlKey ps_key_;
   ObPsStmtId stmt_id_;
   bool is_expired_evicted_;
   //ObDataBuffer用于ObPsStmtItem内部内存的使用，内存实质上来自ObPsPlancache中的inner_allocator_
@@ -151,8 +150,8 @@ public:
   inline int64_t get_num_of_column() const { return ps_sql_meta_.get_column_size(); }
   inline stmt::StmtType get_stmt_type() const { return stmt_type_; }
   inline void set_stmt_type(stmt::StmtType stmt_type) { stmt_type_ = stmt_type; }
-  inline uint64_t get_db_id() const { return db_id_; }
-  inline const common::ObString &get_ps_sql() const { return ps_sql_; }
+  const ObPsSqlKey& get_sql_key() const { return ps_key_; }
+  inline const common::ObString &get_ps_sql() const { return ps_key_.ps_sql_; }
   inline const common::ObString &get_no_param_sql() const { return no_param_sql_; }
   inline const common::ObIArray<int64_t> &get_raw_params_idx() const
   { return raw_params_idx_; }
@@ -195,8 +194,7 @@ public:
 
   void assign_sql_key(const ObPsStmtItem &ps_stmt_item)
   {
-    db_id_ = ps_stmt_item.get_db_id();
-    ps_sql_ = ps_stmt_item.get_ps_sql();
+    ps_key_ = ps_stmt_item.get_sql_key();
   }
   ObIAllocator *get_external_allocator() { return external_allocator_; }
   void set_inner_allocator(common::ObIAllocator *allocator)
@@ -225,8 +223,7 @@ public:
 private:
   stmt::StmtType stmt_type_;
   uint64_t ps_stmt_checksum_;
-  uint64_t db_id_;
-  common::ObString ps_sql_;
+  ObPsSqlKey ps_key_;
   ObPsSqlMeta ps_sql_meta_;
   volatile int64_t ref_count_;
   // simple prepare protocol协议不会填充ps_sql_meta, 这里记录下question mark cnt, 用于execute时对入参个数进行检查

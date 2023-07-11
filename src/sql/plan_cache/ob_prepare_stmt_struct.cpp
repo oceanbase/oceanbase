@@ -24,17 +24,13 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
-int ObPsSqlKey::deep_copy(const ObPsSqlKey &other)
+int ObPsSqlKey::deep_copy(const ObPsSqlKey &other, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is invalid", K(ret));
-  } else {
-    db_id_ = other.db_id_;
-    if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, other.get_ps_sql(), ps_sql_))) {
-      LOG_WARN("deep copy str failed", K(other), K(ret));
-    }
+  db_id_ = other.db_id_;
+  inc_id_ = other.inc_id_;
+  if (OB_FAIL(ObPsSqlUtils::deep_copy_str(allocator, other.ps_sql_, ps_sql_))) {
+    LOG_WARN("deep copy str failed", K(other), K(ret));
   }
   return ret;
 }
@@ -43,6 +39,7 @@ ObPsSqlKey &ObPsSqlKey::operator=(const ObPsSqlKey &other)
 {
   if (this != &other) {
     db_id_ = other.db_id_;
+    inc_id_ = other.inc_id_;
     ps_sql_ = other.ps_sql_;
   }
   return *this;
@@ -51,21 +48,21 @@ ObPsSqlKey &ObPsSqlKey::operator=(const ObPsSqlKey &other)
 bool ObPsSqlKey::operator==(const ObPsSqlKey &other) const
 {
   return db_id_ == other.db_id_ &&
-      ps_sql_.compare(other.get_ps_sql()) == 0;
+         inc_id_ == other.inc_id_ &&
+         ps_sql_.compare(other.ps_sql_) == 0;
 }
 
 int64_t ObPsSqlKey::hash() const
 {
   uint64_t hash_val = 0;
   hash_val = murmurhash(&db_id_, sizeof(uint64_t), hash_val);
+  hash_val = murmurhash(&inc_id_, sizeof(uint64_t), hash_val);
   ps_sql_.hash(hash_val, hash_val);
   return hash_val;
 }
 
 ObPsStmtItem::ObPsStmtItem()
   : ref_count_(1),
-    db_id_(OB_INVALID_ID),
-    ps_sql_(),
     stmt_id_(OB_INVALID_STMT_ID),
     is_expired_evicted_(false),
     allocator_(NULL),
@@ -75,8 +72,6 @@ ObPsStmtItem::ObPsStmtItem()
 
 ObPsStmtItem::ObPsStmtItem(const ObPsStmtId ps_stmt_id)
     : ref_count_(1),
-      db_id_(OB_INVALID_ID),
-      ps_sql_(),
       stmt_id_(ps_stmt_id),
       is_expired_evicted_(false),
       allocator_(NULL),
@@ -87,8 +82,6 @@ ObPsStmtItem::ObPsStmtItem(const ObPsStmtId ps_stmt_id)
 ObPsStmtItem::ObPsStmtItem(ObIAllocator *inner_allocator,
                            ObIAllocator *external_allocator)
      : ref_count_(1),
-       db_id_(OB_INVALID_ID),
-       ps_sql_(),
        stmt_id_(OB_INVALID_STMT_ID),
        is_expired_evicted_(false),
        allocator_(inner_allocator),
@@ -104,10 +97,8 @@ int ObPsStmtItem::deep_copy(const ObPsStmtItem &other)
     LOG_WARN("allocator is invalid", K(ret));
   } else {
     stmt_id_ = other.stmt_id_;
-    db_id_ = other.db_id_;
-    //not copy refcount
-    if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, other.get_ps_sql(), ps_sql_))) {
-      LOG_WARN("deep copy str failed", K(other), K(ret));
+    if (OB_FAIL(ps_key_.deep_copy(other.get_sql_key(), *allocator_))) {
+      LOG_WARN("deep copy ps key failed", K(other), K(ret));
     }
   }
   return ret;
@@ -117,8 +108,7 @@ ObPsStmtItem &ObPsStmtItem::operator=(const ObPsStmtItem &other)
 {
   if (this != &other) {
     ref_count_ = other.ref_count_;
-    db_id_ = other.get_db_id();
-    ps_sql_ = other.get_ps_sql();
+    ps_key_ = other.get_sql_key();
     stmt_id_ = other.get_ps_stmt_id();
     is_expired_evicted_ = other.is_expired_evicted_;
   }
@@ -128,7 +118,7 @@ ObPsStmtItem &ObPsStmtItem::operator=(const ObPsStmtItem &other)
 bool ObPsStmtItem::is_valid() const
 {
   bool bret = false;
-  if (!ps_sql_.empty()
+  if (!ps_key_.ps_sql_.empty()
       && OB_INVALID_STMT_ID != stmt_id_) {
     bret = true;
   }
@@ -138,7 +128,7 @@ bool ObPsStmtItem::is_valid() const
 int ObPsStmtItem::get_convert_size(int64_t &cv_size) const
 {
   cv_size = sizeof(ObPsStmtItem);
-  cv_size += ps_sql_.length() + 1;
+  cv_size += ps_key_.ps_sql_.length() + 1;
   return OB_SUCCESS;
 }
 
@@ -273,8 +263,6 @@ int ObPsSqlMeta::get_convert_size(int64_t &cv_size) const
 ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator)
   : stmt_type_(stmt::T_NONE),
     ps_stmt_checksum_(0),
-    db_id_(OB_INVALID_ID),
-    ps_sql_(),
     ps_sql_meta_(inner_allocator),
     ref_count_(1),
     question_mark_count_(0),
@@ -303,8 +291,6 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
                            ObIAllocator *external_allocator)
   : stmt_type_(stmt::T_NONE),
     ps_stmt_checksum_(0),
-    db_id_(OB_INVALID_ID),
-    ps_sql_(),
     ps_sql_meta_(inner_allocator),
     ref_count_(1),
     question_mark_count_(0),
@@ -330,7 +316,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
 
 bool ObPsStmtInfo::is_valid() const
 {
-  return !ps_sql_.empty();
+  return !ps_key_.ps_sql_.empty();
 }
 
 int ObPsStmtInfo::assign_no_param_sql(const common::ObString &no_param_sql)
@@ -460,7 +446,6 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
   } else {
     stmt_type_ = other.stmt_type_;
     ps_stmt_checksum_ = other.ps_stmt_checksum_;
-    db_id_ = other.db_id_;
     question_mark_count_ = other.question_mark_count_;
     num_of_returning_into_ = other.num_of_returning_into_;
     is_sensitive_sql_ = other.is_sensitive_sql_;
@@ -482,8 +467,8 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     }
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, other.get_ps_sql(), ps_sql_))) {
-      LOG_WARN("deep copy str failed", K(other), K(ret));
+    } else if (OB_FAIL(ps_key_.deep_copy(other.get_sql_key(), *allocator_))) {
+      LOG_WARN("failed to deep copy ps key", K(ret), K(other));
     } else if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, other.get_no_param_sql(),
                no_param_sql_))) {
       LOG_WARN("deep copy str failed", K(other), K(ret));
@@ -522,7 +507,7 @@ int ObPsStmtInfo::get_convert_size(int64_t &cv_size) const
   int ret = OB_SUCCESS;
   cv_size = 0;
   int64_t convert_size = sizeof(ObPsStmtInfo);
-  convert_size += ps_sql_.length() + 1;
+  convert_size += ps_key_.ps_sql_.length() + 1;
   convert_size += no_param_sql_.length() + 1;
   convert_size += raw_sql_.length() + 1;
   int64_t meta_convert_size = 0;
@@ -638,8 +623,7 @@ int64_t ObPsStmtInfo::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   int ret = OB_SUCCESS;
   J_OBJ_START();
-  J_KV(K_(db_id),
-       K_(ps_sql),
+  J_KV(K_(ps_key),
        K_(ref_count),
        K_(can_direct_use_param),
        K_(question_mark_count),

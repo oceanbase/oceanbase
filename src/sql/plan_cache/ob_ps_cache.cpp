@@ -147,9 +147,7 @@ int ObPsCache::deref_ps_stmt(const ObPsStmtId stmt_id, bool erase_item/*=false*/
      LOG_WARN("get stmt info guard failed", K(ret), K(stmt_id));
   } else {
     ObPsStmtInfo *ps_info = guard.get_stmt_info();
-    ObPsSqlKey ps_sql_key;
-    ps_sql_key.set_db_id(ps_info->get_db_id());
-    ps_sql_key.set_ps_sql(ps_info->get_ps_sql());
+    const ObPsSqlKey ps_sql_key = ps_info->get_sql_key();
     int tmp_ret = OB_SUCCESS;
     if (erase_item) { // dec cached ref
       if (OB_FAIL(erase_stmt_item(stmt_id, ps_sql_key))) {
@@ -237,12 +235,15 @@ int ObPsCache::get_stmt_info_guard(const ObPsStmtId ps_stmt_id,
 //  2) 报OB_HASH_NOT_EXIST, 则递归调get_or_add_stmt_item，尝试重新创建
 int ObPsCache::get_or_add_stmt_item(uint64_t db_id,
                                     const ObString &ps_sql,
+                                    const bool is_contain_tmp_tbl,
                                     ObPsStmtItem *&ps_item_value)
 {
   int ret = OB_SUCCESS;
   ObPsStmtId new_stmt_id = gen_new_ps_stmt_id();
   ObPsStmtItem tmp_item_value(new_stmt_id);
-  tmp_item_value.assign_sql_key(ObPsSqlKey(db_id, ps_sql));
+  tmp_item_value.assign_sql_key(ObPsSqlKey(db_id,
+                                           is_contain_tmp_tbl ? new_stmt_id : OB_INVALID_ID,
+                                           ps_sql));
   //will deep copy
   ObPsStmtItem *new_item_value = NULL;
   //由于stmt_id_map_中的value是ObPsStmtItem的指针，因此这里需要copy整个内存
@@ -260,8 +261,7 @@ int ObPsCache::get_or_add_stmt_item(uint64_t db_id,
     }
   }
   if (OB_SUCC(ret)) {
-    ObPsSqlKey ps_sql_key;
-    new_item_value->get_sql_key(ps_sql_key);
+    const ObPsSqlKey ps_sql_key = new_item_value->get_sql_key();
     new_item_value->check_erase_inc_ref_count(); //inc ref count for ps cache, ignore ret;
     ret = stmt_id_map_.set_refactored(ps_sql_key, new_item_value);
     if (OB_SUCC(ret)) {
@@ -276,7 +276,7 @@ int ObPsCache::get_or_add_stmt_item(uint64_t db_id,
       if (OB_FAIL(ref_stmt_item(ps_sql_key, tmp_item_value))) {
         LOG_WARN("get stmt item failed", K(ret));
         if (OB_HASH_NOT_EXIST == ret) {//stmt item被删除，需要重新创建
-          if (OB_FAIL(get_or_add_stmt_item(db_id, ps_sql, ps_item_value))) {
+          if (OB_FAIL(get_or_add_stmt_item(db_id, ps_sql, is_contain_tmp_tbl, ps_item_value))) {
             LOG_WARN("fail to get or add stmt item", K(ret));
           }
         } else {
@@ -292,12 +292,10 @@ int ObPsCache::get_or_add_stmt_item(uint64_t db_id,
       }
       //no matter succ or not release
       new_item_value->~ObPsStmtItem();
-      ps_sql_key.reset();
       inner_allocator_->free(new_item_value);
     } else {
       LOG_WARN("unexpecte error", K(ret), K(new_stmt_id));
       new_item_value->~ObPsStmtItem();
-      ps_sql_key.reset();
       inner_allocator_->free(new_item_value);
     }
   }
@@ -455,7 +453,7 @@ int ObPsCache::get_or_add_stmt_info(const PsCacheInfoCtx &info_ctx,
 }
 
 // may parallel execute by multi_thread
-int ObPsCache::erase_stmt_item(ObPsStmtId stmt_id, ObPsSqlKey &ps_key)
+int ObPsCache::erase_stmt_item(ObPsStmtId stmt_id, const ObPsSqlKey &ps_key)
 {
   int ret = OB_SUCCESS;
   ObPsStmtItem *ps_item = NULL;

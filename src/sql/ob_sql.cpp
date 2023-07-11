@@ -883,6 +883,7 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
                            ObResultSet &result)
 {
   int ret = OB_SUCCESS;
+  bool is_contain_tmp_tbl = false;
   ObSQLSessionInfo &session = result.get_session();
   ObPsCache *ps_cache = session.get_ps_cache();
   uint64_t db_id = OB_INVALID_ID;
@@ -890,6 +891,9 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
   if (OB_ISNULL(ps_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ps plan cache should not be null", K(ret));
+  } else if (lib::is_mysql_mode() &&
+      OB_FAIL(check_contain_temporary_table(schema_guard, result, is_contain_tmp_tbl))) {
+    LOG_WARN("failed to check contain temporary table", K(ret));
   } else {
     ObPsStmtItem *ps_stmt_item = NULL;
     ObPsStmtInfo *ref_stmt_info = NULL;
@@ -897,6 +901,7 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
     // add stmt item
     if (OB_FAIL(ps_cache->get_or_add_stmt_item(db_id,
                                                info_ctx.normalized_sql_,
+                                               is_contain_tmp_tbl,
                                                ps_stmt_item))) {
       LOG_WARN("get or create stmt item faield", K(ret), K(db_id), K(info_ctx.normalized_sql_));
     } else if (OB_FAIL(ps_cache->get_or_add_stmt_info(info_ctx,
@@ -937,6 +942,33 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
         }
         ps_stmt_item->dec_ref_count_check_erase();
       }
+    }
+  }
+  return ret;
+}
+
+int ObSql::check_contain_temporary_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                         ObResultSet &result,
+                                         bool &is_contain_tmp_tbl)
+{
+  int ret = OB_SUCCESS;
+  is_contain_tmp_tbl = false;
+  const ObTableSchema *table_schema = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contain_tmp_tbl && i < result.get_ref_objects().count(); i++) {
+    table_schema = nullptr;
+    ObSchemaObjVersion &obj_version = result.get_ref_objects().at(i);
+    if (DEPENDENCY_TABLE != obj_version.object_type_) {
+      // do nothing
+    } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(),
+                                              obj_version.object_id_,
+                                              table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(obj_version), K(table_schema));
+    } else if (nullptr == table_schema) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get an unexpected null schema", K(ret), K(table_schema));
+    } else if (table_schema->is_tmp_table()) {
+      is_contain_tmp_tbl = true;
+      break;
     }
   }
   return ret;
@@ -1629,11 +1661,8 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
                                                         is_expired))) {
         LOG_WARN("fail to check schema version", K(ret));
       } else if (is_expired) {
-        ObPsSqlKey ps_sql_key;
         stmt_info->set_is_expired();
-        ps_sql_key.set_db_id(stmt_info->get_db_id());
-        ps_sql_key.set_ps_sql(stmt_info->get_ps_sql());
-        if (OB_FAIL(ps_cache->erase_stmt_item(inner_stmt_id, ps_sql_key))) {
+        if (OB_FAIL(ps_cache->erase_stmt_item(inner_stmt_id, stmt_info->get_sql_key()))) {
           LOG_WARN("fail to erase stmt item", K(ret), K(*stmt_info));
         }
         need_do_real_prepare = true;
