@@ -6013,7 +6013,7 @@ int ObSelectResolver::check_pseudo_column_name_legal(const ObString& name)
 
 
 /* sequence 有如下禁忌用法：
- *  1. 不能同时与 limit、having、order by、group by 等一起使用
+ *  1. 不能同时与 having、order by、group by 等一起使用
  *  2. 不能出现在 subquery 中的任何地方 (insert into select 除外)
  *  3. 不能出现在 where 表达式里（resolve expr 处检查过了）
  **/
@@ -6025,14 +6025,13 @@ int ObSelectResolver::check_sequence_exprs()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null", K(select_stmt));
   } else if (select_stmt->has_sequence()) {
-    if (select_stmt->has_limit() ||
-        select_stmt->has_order_by() ||
+    if (select_stmt->has_order_by() ||
         select_stmt->has_distinct() ||
         select_stmt->has_having() ||
         select_stmt->has_group_by() ||
         params_.is_from_create_view_) {
       ret = OB_ERR_SEQ_NOT_ALLOWED_HERE;
-      LOG_WARN("sequence can not be used with create-view/select-subquery/orderby/limit/groupby/distinct", K(ret));
+      LOG_WARN("sequence can not be used with create-view/select-subquery/orderby/groupby/distinct", K(ret));
 
     }
   }
