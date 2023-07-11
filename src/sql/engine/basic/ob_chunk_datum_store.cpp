@@ -75,6 +75,27 @@ int ObChunkDatumStore::StoredRow::to_expr(const common::ObIArray<ObExpr*>& exprs
   return ret;
 }
 
+int ObChunkDatumStore::StoredRow::to_expr_skip_const(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(cnt_ != exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("datum count mismatch", K(ret), K(cnt_), K(exprs.count()));
+  } else {
+    for (uint32_t i = 0; i < cnt_; ++i) {
+      const ObExpr *expr = exprs.at(i);
+      if (IS_CONST_TYPE(expr->type_)) {
+        continue;
+      } else {
+        expr->locate_expr_datum(ctx) = cells()[i];
+        expr->get_eval_info(ctx).evaluated_ = true;
+        LOG_DEBUG("succ to_expr", K(cnt_), K(exprs.count()), KPC(exprs.at(i)), K(cells()[i]), K(lbt()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObChunkDatumStore::StoredRow::to_expr(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t count) const
 {
   int ret = OB_SUCCESS;

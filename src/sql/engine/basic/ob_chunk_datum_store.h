@@ -46,6 +46,7 @@ public:
     StoredRow() : cnt_(0), row_size_(0)
     {}
     int to_expr(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx) const;
+    int to_expr_skip_const(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx) const;
     int to_expr(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t count) const;
     // Build a stored row by exprs.
     // @param [out] sr, result stored row

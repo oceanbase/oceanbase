@@ -234,7 +234,7 @@ protected:
     } else if (OB_ISNULL(sr)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "unexpected status: store row is null", K(ret));
-    } else if (OB_FAIL(sr->to_expr(exprs, *eval_ctx_))) {
+    } else if (OB_FAIL(sr->to_expr_skip_const(exprs, *eval_ctx_))) {
       SQL_ENG_LOG(WARN, "convert store row to expr value failed", K(ret));
     }
     return ret;
