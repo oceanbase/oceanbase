@@ -6932,23 +6932,36 @@ int ObTransformPreProcess::transform_udt_columns(const ObIArray<ObParentDMLStmt>
 
         LOG_TRACE("succeed to do const propagation for assignment expr", K(is_happened));
       }
-    } else if (stmt->get_stmt_type() == stmt::T_INSERT) {
-        ObInsertStmt *insert_stmt = static_cast<ObInsertStmt*>(stmt);
-        common::ObIArray<ObRawExpr*> &value_vector = insert_stmt->get_values_vector();
-        int64_t column_count = insert_stmt->get_values_desc().count();
-        int64_t row_count = insert_stmt->get_values_vector().count() / column_count;
+    } else if (stmt->get_stmt_type() == stmt::T_INSERT || stmt->get_stmt_type() == stmt::T_INSERT_ALL) {
+      ObDelUpdStmt *insert_stmt = static_cast<ObDelUpdStmt*>(stmt);
+      // common::ObIArray<ObRawExpr*> &value_vector = insert_stmt->get_values_vector();
+      // int64_t column_count = insert_stmt->get_values_desc().count();
+      // int64_t row_count = insert_stmt->get_values_vector().count() / column_count;
+      ObInsertAllStmt *insert_all_stmt = static_cast<ObInsertAllStmt*>(stmt);
+      ObInsertStmt *single_insert_stmt = static_cast<ObInsertStmt*>(stmt);
+      common::ObArray<ObInsertTableInfo*> table_info_arr;
+      if (stmt->get_stmt_type() == stmt::T_INSERT) {
+        table_info_arr.push_back(&(single_insert_stmt->get_insert_table_info()));
+      } else {
+        ObIArray<ObInsertAllTableInfo*> &table_infos = insert_all_stmt->get_insert_all_table_info();
+        for (int64_t i = 0; i < table_infos.count(); i++) {
+          table_info_arr.push_back(table_infos.at(i));
+        }
+      }
 
-        for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_insert_table_info().column_exprs_.count(); ++i) {
-          ObColumnRefRawExpr *col = insert_stmt->get_insert_table_info().column_exprs_.at(i);
+      for (int64_t count = 0; OB_SUCC(ret) && count < table_info_arr.count(); ++count) {
+        ObInsertTableInfo *table_info = table_info_arr.at(count);
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_info->column_exprs_.count(); ++i) {
+          ObColumnRefRawExpr *col = table_info->column_exprs_.at(i);
           if (col->is_xml_column()) {
-            if (OB_FAIL(set_hidd_col_not_null_attr(*col, insert_stmt->get_insert_table_info().column_exprs_))) {
+            if (OB_FAIL(set_hidd_col_not_null_attr(*col, table_info->column_exprs_))) {
               LOG_WARN("failed to set hidden column not null attr", K(ret));
             }
           }
         }
 
-        for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_values_desc().count(); ++i) {
-          ObColumnRefRawExpr *value_desc = insert_stmt->get_values_desc().at(i);
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_info->values_desc_.count(); ++i) {
+          ObColumnRefRawExpr *value_desc = table_info->values_desc_.at(i);
           if (value_desc->is_xml_column()) {
             ObColumnRefRawExpr *hidd_col = NULL;
             bool need_transform = false;
@@ -6960,8 +6973,8 @@ int ObTransformPreProcess::transform_udt_columns(const ObIArray<ObParentDMLStmt>
               LOG_WARN("failed to create udt hidden exprs", K(ret));
             } else if (need_transform == false) {
               // do nothing
-            } else if (OB_FAIL(transform_udt_column_conv_function(insert_stmt->get_insert_table_info(),
-                                                                  insert_stmt->get_column_conv_exprs(),
+            } else if (OB_FAIL(transform_udt_column_conv_function(*table_info,
+                                                                  table_info->column_conv_exprs_,
                                                                   *value_desc, *hidd_col))) {
               LOG_WARN("failed to push back column conv exprs", K(ret));
             }
@@ -6969,8 +6982,8 @@ int ObTransformPreProcess::transform_udt_columns(const ObIArray<ObParentDMLStmt>
         }
         // process returning exprs
         if (OB_SUCC(ret) && insert_stmt->is_returning()) {
-          ObIArray<ObRawExpr*> &column_convert = insert_stmt->get_column_conv_exprs();
-          const ObIArray<ObColumnRefRawExpr *> &table_columns = insert_stmt->get_insert_table_info().column_exprs_;
+          ObIArray<ObRawExpr*> &column_convert = table_info->column_conv_exprs_;
+          const ObIArray<ObColumnRefRawExpr *> &table_columns = table_info->column_exprs_;
           ObSEArray<std::pair<int64_t, int64_t>, 8> xml_col_idxs; // use pair to store xml col idx and its hidden col idx
           for (int64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); i++) {
             ObColumnRefRawExpr *ref_col = table_columns.at(i);
@@ -7009,6 +7022,7 @@ int ObTransformPreProcess::transform_udt_columns(const ObIArray<ObParentDMLStmt>
           }
         } // end if
       }
+    }
   }
   return ret;
 }

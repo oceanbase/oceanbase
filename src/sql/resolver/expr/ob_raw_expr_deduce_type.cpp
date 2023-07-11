@@ -1966,6 +1966,8 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                         && T_FUN_GROUP_CONCAT != expr.get_expr_type()
                         && T_FUN_GROUP_PERCENT_RANK != expr.get_expr_type()
                         && T_FUN_GROUP_RANK != expr.get_expr_type()))
+                && !(ob_is_user_defined_sql_type(param_expr->get_data_type())
+                      && (T_FUN_APPROX_COUNT_DISTINCT == expr.get_expr_type() || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == expr.get_expr_type()))
                 && !(T_FUN_COUNT == expr.get_expr_type() && ob_is_json(param_expr->get_data_type()))
                 && !(T_FUN_COUNT == expr.get_expr_type() && (ob_is_user_defined_sql_type(param_expr->get_data_type()) ||
                                                              ob_is_user_defined_pl_type(param_expr->get_data_type())))
@@ -3024,10 +3026,16 @@ int ObRawExprDeduceType::set_xmlagg_result_type(ObAggFunRawExpr &expr,
           ret = OB_ERR_NO_ORDER_MAP_SQL;
           LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
         }
-      } else if (order_expr->get_result_type().get_type() == ObUserDefinedSQLType
-                  || order_expr->get_result_type().get_type() == ObExtendType) {
-        ret = OB_ERR_NO_ORDER_MAP_SQL;
-        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+      } else {
+        ObObjType result_type = order_expr->get_result_type().get_type();
+        if (result_type == ObUserDefinedSQLType || result_type == ObExtendType) {
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        } else if (ob_is_text_tc(result_type) ||
+                    ob_is_lob_tc(result_type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("Column of LOB type cannot be used for sorting", K(ret));
+        }
       }
     }
 

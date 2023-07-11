@@ -525,18 +525,12 @@ struct DatumUDTHashCalculator : public DefHashMethod<T>
 {
   static int calc_datum_hash(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
-    UNUSED(datum);
-    UNUSED(seed);
-    UNUSED(res);
-    return OB_NOT_SUPPORTED;
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
   }
 
   static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
-    UNUSED(datum);
-    UNUSED(seed);
-    UNUSED(res);
-    return OB_NOT_SUPPORTED;
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
   }
 };
 
