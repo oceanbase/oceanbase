@@ -16,6 +16,7 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
 namespace oceanbase
 {
@@ -377,8 +378,23 @@ int ObDefaultValueUtils::build_default_expr_strict(const ColumnItem *column, ObR
       } else {/*do nothing*/}
     }
     if (OB_SUCC(ret)) {
-      expr = c_expr;
-      if (OB_FAIL(expr->formalize(params_->session_info_))) {
+      if (!ob_is_numeric_type(column->get_column_type()->get_type())) {
+        // For non-numeric types, such as xml, use `_make_xml_binary` instead of the cast function,
+        // and does not add extra cast for the default value here.
+        expr = c_expr;
+      } else {
+        ObRawExpr *cast_expr = NULL;
+        if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(params_->expr_factory_,
+                                                            params_->session_info_,
+                                                            *c_expr,
+                                                            *column->get_column_type(),
+                                                            cast_expr))) {
+          LOG_WARN("failed to create raw expr.", K(ret));
+        } else {
+          expr = cast_expr;
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(expr->formalize(params_->session_info_))) {
         LOG_WARN("failed to extract info", K(ret));
       }
     }
