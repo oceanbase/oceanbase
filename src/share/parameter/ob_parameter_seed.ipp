@@ -88,9 +88,6 @@ _DEF_PARAMETER_SCOPE_CHECKER_EASY(private, Capacity, memory_limit, OB_CLUSTER_PA
         common::ObConfigMemoryLimitChecker, "[0M,)",
         "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. Range: 0, [1G,).",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(rootservice_memory_limit, OB_CLUSTER_PARAMETER, "2G", "[2G,)",
-        "max memory size which can be used by rs tenant The default value is 2G. Range: [2G,)",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 _DEF_PARAMETER_SCOPE_RANGE_EASY(private, Capacity, system_memory, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "the memory reserved for internal use which cannot be allocated to any outer-tenant, "
         "and should be determined to guarantee every server functions normally. Range: [0M,)",
@@ -100,13 +97,6 @@ DEF_INT(cpu_count, OB_CLUSTER_PARAMETER, "0", "[0,]",
         "If this parameter is set to zero, the number will be set according to sysconf; "
         "otherwise, this parameter is used. Range: [0,+∞) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(trace_log_sampling_interval, OB_CLUSTER_PARAMETER, "10ms", "[0ms,]",
-        "the time interval for periodically printing log info in trace log. "
-        "When force_trace_log is set to FALSE, "
-        "for each time interval specifies by sampling_trace_log_interval, "
-        "logging info regarding ‘slow query’ and ‘white list’ will be printed out. "
-        "Range: [0ms,+∞)",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "1s", "[1ms,]",
         "the threshold of execution time (in milliseconds) of a query beyond "
         "which it is considered to be a \\'slow query\\'. Range: [1ms,+∞)",
@@ -114,10 +104,6 @@ DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "1s", "[1ms,]",
 DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "True",
          "specifies whether to always record the trace log. The default value is True.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(system_trace_level, OB_CLUSTER_PARAMETER, "1", "[0,2]",
-        "system trace log level, 0:none, 1:standard, 2:debug. "
-        "The default log level for trace log is 1",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(max_string_print_length, OB_CLUSTER_PARAMETER, "500", "[0,]",
         "truncate very long string when printing to log file. Range:[0,]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -281,10 +267,6 @@ DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, 
 DEF_BOOL(enable_monotonic_weak_read, OB_TENANT_PARAMETER, "true",
          "specifies observer supportting atomicity and monotonic order read",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_DBL(tenant_cpu_variation_per_server, OB_CLUSTER_PARAMETER, "50", "[0,100]",
-        "the percentage variation for any tenant\\'s CPU quota allocation on each observer. "
-        "The default value is 50(%). Range: [0, 100] in percentage",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(server_cpu_quota_min, OB_CLUSTER_PARAMETER, "1", "[1,16]",
         "the number of minimal vCPUs allocated to the server tenant"
         "(a special internal tenant that exists on every observer). Range: [1, 16]",
@@ -320,16 +302,6 @@ DEF_INT(_ob_max_thread_num, OB_CLUSTER_PARAMETER, "0", "[0,10000)",
 DEF_DBL(cpu_quota_concurrency, OB_TENANT_PARAMETER, "4", "[1,20]",
         "max allowed concurrency for 1 CPU quota. Range: [1,20]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_DBL(token_reserved_percentage, OB_CLUSTER_PARAMETER,
-        "30", "[0,100]",
-        "specifies the amount of token increase allocated to a tenant based on "
-        "his consumption from the last round (without exceeding his upper limit). "
-        "Range: [0, 100] in percentage",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(global_write_halt_residual_memory, OB_CLUSTER_PARAMETER, "30", "(0, 100)",
-        "disable write to memstore when observer memstore free memory(plus memory hold by blockcache) lower than this limit, Range: (0, 100)"
-        "limit calc by (memory_limit - system_memory) * global_write_halt_residual_memory/100",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(px_workers_per_cpu_quota, OB_TENANT_PARAMETER, "10", "[0,20]",
         "the ratio(integer) between the number of system allocated px workers vs "
         "the maximum number of threads that can be scheduled concurrently. Range: [0, 20]",
@@ -379,20 +351,9 @@ DEF_INT(writing_throttling_trigger_percentage, OB_TENANT_PARAMETER, "60", "(0, 1
 DEF_TIME(writing_throttling_maximum_duration, OB_TENANT_PARAMETER, "2h", "[1s, 3d]",
           "maximum duration of writting throttling(in minutes), max value is 3 days",
           ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(plan_cache_high_watermark, OB_CLUSTER_PARAMETER, "2000M",
-        "(don't use now) memory usage at which plan cache eviction will be trigger immediately. Range: [0, +∞)",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(plan_cache_low_watermark, OB_CLUSTER_PARAMETER, "1500M",
-        "(don't use now) memory usage at which plan cache eviction will be stopped. "
-        "Range: [0, plan_cache_high_watermark)",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "5s", "[0s,)",
          "time interval for periodic plan cache eviction. Range: [0s, +∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(max_px_worker_count, OB_CLUSTER_PARAMETER, "64", "[0,65535]",
-        "maximum parallel execution worker count can be used for all parallel requests. "
-        "Range:[0, 65535]",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(default_progressive_merge_num, OB_TENANT_PARAMETER, "0", "[0,)",
          "default progressive_merge_num when tenant create table"
          "Range:[0,)",
@@ -838,12 +799,6 @@ DEF_INT_WITH_CHECKER(disk_io_thread_count, OB_CLUSTER_PARAMETER, "8",
 DEF_INT(_io_callback_thread_count, OB_TENANT_PARAMETER, "8", "[1,64]",
         "The number of io callback threads. The default value is 8. Range: [1,64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(io_category_config, OB_TENANT_PARAMETER, "other: 100,100,100",
-        "configs for different category of io request. specify with category name, minimal percentage, maximal percentage, weight percentage. devide the category with semicolon",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_large_query_io_percentage, OB_CLUSTER_PARAMETER, "0", "[0,100]",
-        "the max percentage of io resource for big query. Range: [0,100] in integer. Especially, 0 means unlimited. The default value is 0.",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_parallel_minor_merge, OB_TENANT_PARAMETER, "True",
          "specifies whether enable parallel minor merge. "
@@ -894,10 +849,6 @@ DEF_INT(_fast_commit_callback_count, OB_CLUSTER_PARAMETER, "10000", "[0,)"
 DEF_INT(_minor_compaction_amplification_factor, OB_TENANT_PARAMETER, "0", "[0,100]",
         "thre L1 compaction write amplification factor, 0 means default 25, Range: [0,100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(_minor_compaction_interval, OB_TENANT_PARAMETER, "0s", "[0s,30m]",
-         "the time interval to start next minor compaction, Range: [0s,30m]"
-         "Range: [0s, 30m)",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(major_compact_trigger, OB_TENANT_PARAMETER, "0", "[0,65535]",
         "specifies how many minor freeze should be triggered between two major freeze, Range: [0,65535] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1111,10 +1062,6 @@ DEF_BOOL(ob_enable_batched_multi_statement, OB_TENANT_PARAMETER, "False",
          "enable use of batched multi statement",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_dist_data_access_service, OB_TENANT_PARAMETER, "True",
-         "enable use das service",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_INT(_bloom_filter_ratio, OB_CLUSTER_PARAMETER, "35", "[0, 100]",
         "the px bloom filter false-positive rate.the default value is 1, range: [0,100]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1223,9 +1170,6 @@ DEF_INT(_max_schema_slot_num, OB_CLUSTER_PARAMETER, "128", "[2,8192]",
         "the max schema slot number for each tenant, "
         "Range: [2, 8192] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_fulltext_index, OB_CLUSTER_PARAMETER, "False",
-         "enable full text index",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT_WITH_CHECKER(_ob_query_rate_limit, OB_TENANT_PARAMETER, "-1",
         common::ObConfigQueryRateLimitChecker,
         "the maximun throughput allowed for a tenant per observer instance",
@@ -1310,10 +1254,6 @@ DEF_STR_WITH_CHECKER(_resource_limit_spec, OB_CLUSTER_PARAMETER, "auto", common:
 DEF_INT(_resource_limit_max_session_num, OB_TENANT_PARAMETER, "0", "[0,1000000]",
         "the maximum number of sessions that can be created concurrently",
         ObParameterAttr(Section::RESOURCE_LIMIT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
-DEF_BOOL(_enable_px_bloom_filter_sync, OB_TENANT_PARAMETER, "false",
-         "specifies whether wait px bloom filter ready with all thread",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(_px_bloom_filter_group_size, OB_TENANT_PARAMETER, "auto", common::ObConfigPxBFGroupSizeChecker,
          "specifies the px bloom filter each group size in sending to the other sqc"
