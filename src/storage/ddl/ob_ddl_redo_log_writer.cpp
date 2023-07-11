@@ -170,6 +170,7 @@ int ObDDLCtrlSpeedItem::check_cur_node_is_leader(bool &is_leader)
 
 int ObDDLCtrlSpeedItem::do_sleep(
   const int64_t next_available_ts,
+  const uint64_t tenant_id,
   const int64_t task_id,
   ObDDLKvMgrHandle &ddl_kv_mgr_handle,
   int64_t &real_sleep_us)
@@ -183,9 +184,9 @@ int ObDDLCtrlSpeedItem::do_sleep(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (next_available_ts <= 0 || task_id == 0) {
+  } else if (next_available_ts <= 0 || OB_INVALID_TENANT_ID == tenant_id || task_id == 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument.", K(ret), K(next_available_ts), K(task_id));
+    LOG_WARN("invalid argument.", K(ret), K(next_available_ts), K(tenant_id), K(task_id));
   } else if (OB_TMP_FAIL(check_need_stop_write(ddl_kv_mgr_handle, is_need_stop_write))) {
     LOG_WARN("fail to check need stop write", K(tmp_ret), K(ddl_kv_mgr_handle));
   }
@@ -197,7 +198,7 @@ int ObDDLCtrlSpeedItem::do_sleep(
       // TODO YIREN (FIXME-20221017), exit when task is canceled, etc.
       ob_usleep(SLEEP_INTERVAL);
       if (0 == loop_cnt % 100) {
-        if (OB_TMP_FAIL(rootserver::ObDDLTaskRecordOperator::check_task_id_exist(*sql_proxy, task_id, is_exist))) {
+        if (OB_TMP_FAIL(rootserver::ObDDLTaskRecordOperator::check_task_id_exist(*sql_proxy, tenant_id, task_id, is_exist))) {
           is_exist = true;
           LOG_WARN("check task id exist failed", K(tmp_ret), K(task_id));
         } else {
@@ -254,6 +255,7 @@ int ObDDLCtrlSpeedItem::check_need_stop_write(ObDDLKvMgrHandle &ddl_kv_mgr_handl
 // calculate the sleep time for the input bytes, sleep.
 int ObDDLCtrlSpeedItem::limit_and_sleep(
   const int64_t bytes,
+  const uint64_t tenant_id,
   const int64_t task_id,
   ObDDLKvMgrHandle &ddl_kv_mgr_handle,
   int64_t &real_sleep_us)
@@ -266,9 +268,9 @@ int ObDDLCtrlSpeedItem::limit_and_sleep(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if ((disk_used_stop_write_threshold_ <= 0
-      || disk_used_stop_write_threshold_ > 100) || bytes < 0 || 0 == task_id) {
+      || disk_used_stop_write_threshold_ > 100) || bytes < 0 || OB_INVALID_TENANT_ID == tenant_id || 0 == task_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument.", K(ret), K(disk_used_stop_write_threshold_), K(bytes), K(task_id));
+    LOG_WARN("invalid argument.", K(ret), K(disk_used_stop_write_threshold_), K(bytes), K(tenant_id), K(task_id));
   } else if (OB_FAIL(cal_limit(bytes, next_available_ts))) {
     LOG_WARN("fail to calculate sleep time", K(ret), K(bytes), K(next_available_ts));
   } else if (OB_ISNULL(GCTX.bandwidth_throttle_)) {
@@ -279,7 +281,7 @@ int ObDDLCtrlSpeedItem::limit_and_sleep(
                                                                    INT64_MAX,
                                                                    &transmit_sleep_us))) {
     LOG_WARN("fail to limit out and sleep", K(ret), K(bytes), K(transmit_sleep_us));
-  } else if (OB_FAIL(do_sleep(next_available_ts, task_id, ddl_kv_mgr_handle, real_sleep_us))) {
+  } else if (OB_FAIL(do_sleep(next_available_ts, tenant_id, task_id, ddl_kv_mgr_handle, real_sleep_us))) {
     LOG_WARN("fail to sleep", K(ret), K(next_available_ts), K(real_sleep_us));
   } else {/* do nothing. */}
   return ret;
@@ -400,6 +402,7 @@ int ObDDLCtrlSpeedHandle::limit_and_sleep(const uint64_t tenant_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err, ctrl speed item is nullptr", K(ret), K(speed_handle_key));
   } else if (OB_FAIL(speed_handle_item->limit_and_sleep(bytes,
+                                                        tenant_id,
                                                         task_id,
                                                         ddl_kv_mgr_handle,
                                                         real_sleep_us))) {

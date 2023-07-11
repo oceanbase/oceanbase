@@ -2654,6 +2654,7 @@ int ObDDLTaskRecordOperator::delete_record(common::ObMySQLProxy &proxy, const ui
 int ObDDLTaskRecordOperator::check_is_adding_constraint(
     common::ObMySQLProxy *proxy,
     common::ObIAllocator &allocator,
+    const uint64_t tenant_id,
     const uint64_t object_id,
     bool &is_building)
 {
@@ -2668,10 +2669,10 @@ int ObDDLTaskRecordOperator::check_is_adding_constraint(
       if (OB_FAIL(sql_string.assign_fmt(" SELECT time_to_usec(gmt_create) AS create_time, tenant_id, task_id, object_id, target_object_id, ddl_type, "
           "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id, "
           "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s "
-          "WHERE object_id = %" PRIu64 " && ddl_type IN (%d, %d, %d)", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
+          "WHERE object_id = %" PRIu64 " && ddl_type IN (%d, %d, %d)", OB_ALL_DDL_TASK_STATUS_TNAME,
           object_id, DDL_CHECK_CONSTRAINT, DDL_FOREIGN_KEY_CONSTRAINT, DDL_ADD_NOT_NULL_COLUMN))) {
         LOG_WARN("assign sql string failed", K(ret));
-      } else if (OB_FAIL(proxy->read(res, sql_string.ptr()))) {
+      } else if (OB_FAIL(proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2679,7 +2680,7 @@ int ObDDLTaskRecordOperator::check_is_adding_constraint(
       } else {
         ObDDLTaskRecord task_record;
         if (OB_SUCC(ret) && OB_SUCC(result->next())) {
-          if (OB_FAIL(fill_task_record(result, allocator, task_record))) {
+          if (OB_FAIL(fill_task_record(tenant_id, result, allocator, task_record))) {
             LOG_WARN("fill index task failed", K(ret), K(result));
           } else if (!task_record.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
@@ -2716,10 +2717,10 @@ int ObDDLTaskRecordOperator::check_has_long_running_ddl(
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql_string.assign_fmt(" SELECT * FROM %s "
-          "WHERE tenant_id = %lu AND object_id = %lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
-          tenant_id, table_id))) {
+          "WHERE object_id = %lu", OB_ALL_DDL_TASK_STATUS_TNAME,
+          table_id))) {
         LOG_WARN("assign sql string failed", K(ret));
-      } else if (OB_FAIL(proxy->read(res, sql_string.ptr()))) {
+      } else if (OB_FAIL(proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2760,10 +2761,9 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
       if (OB_FAIL(sql_string.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time, tenant_id, task_id, object_id, target_object_id, ddl_type,"
           "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id,"
           "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s "
-          "WHERE tenant_id = %lu AND object_id = %lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
-          tenant_id, table_id))) {
+          "WHERE object_id = %lu", OB_ALL_DDL_TASK_STATUS_TNAME, table_id))) {
         LOG_WARN("assign sql string failed", K(ret));
-      } else if (OB_FAIL(proxy->read(res, sql_string.ptr()))) {
+      } else if (OB_FAIL(proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2773,7 +2773,7 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
         ObArenaAllocator allocator("DdlTaskRec");
         while (OB_SUCC(ret) && !has_conflict_ddl && OB_SUCC(result->next())) {
           allocator.reuse();
-          if (OB_FAIL(fill_task_record(result, allocator, task_record))) {
+          if (OB_FAIL(fill_task_record(tenant_id, result, allocator, task_record))) {
             LOG_WARN("failed to fill task record", K(ret));
           } else if (task_record.task_id_ != task_id) {
             switch (ddl_type) {
@@ -2851,7 +2851,8 @@ int ObDDLTaskRecordOperator::check_has_index_task(
   return ret;
 }
 
-int ObDDLTaskRecordOperator::get_task_record(const ObSqlString &sql_string,
+int ObDDLTaskRecordOperator::get_task_record(const uint64_t tenant_id,
+                                             const ObSqlString &sql_string,
                                              common::ObMySQLProxy &proxy,
                                              common::ObIAllocator &allocator,
                                              common::ObIArray<ObDDLTaskRecord> &records)
@@ -2865,14 +2866,22 @@ int ObDDLTaskRecordOperator::get_task_record(const ObSqlString &sql_string,
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObDDLTaskRecord record;
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(proxy.read(res, sql_string.ptr()))) {
-        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+      if (OB_INVALID_TENANT_ID == tenant_id) {
+        if (OB_FAIL(proxy.read(res, sql_string.ptr()))) {
+          LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+        }
+      } else {
+        if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
+          LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sql result", K(ret), KP(result));
       } else {
         while (OB_SUCC(ret) && OB_SUCC(result->next())) {
-          if (OB_FAIL(fill_task_record(result, allocator, record))) {
+          if (OB_FAIL(fill_task_record(tenant_id, result, allocator, record))) {
             LOG_WARN("fill index task failed", K(ret), K(result));
           } else if (!record.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
@@ -2890,7 +2899,8 @@ int ObDDLTaskRecordOperator::get_task_record(const ObSqlString &sql_string,
   return ret;
 }
 
-int ObDDLTaskRecordOperator::get_ddl_task_record(const int64_t task_id,
+int ObDDLTaskRecordOperator::get_ddl_task_record(const uint64_t tenant_id,
+                                                 const int64_t task_id,
                                                  common::ObMySQLProxy &proxy,
                                                  common::ObIAllocator &allocator,
                                                  ObDDLTaskRecord &record)
@@ -2903,9 +2913,9 @@ int ObDDLTaskRecordOperator::get_ddl_task_record(const int64_t task_id,
     LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
   } else if (OB_FAIL(sql_string.assign_fmt(" SELECT time_to_usec(gmt_create) AS create_time, tenant_id, task_id, object_id, target_object_id, ddl_type, "
       "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id, "
-      "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s WHERE task_id=%lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME, task_id))) {
+      "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s WHERE task_id=%lu", OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
     LOG_WARN("assign sql string failed", K(ret), K(task_id));
-  } else if (OB_FAIL(get_task_record(sql_string, proxy, allocator, task_records))) {
+  } else if (OB_FAIL(get_task_record(tenant_id, sql_string, proxy, allocator, task_records))) {
     LOG_WARN("get task record failed", K(ret), K(sql_string));
   } else if (task_records.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -2932,13 +2942,13 @@ int ObDDLTaskRecordOperator::get_all_ddl_task_record(common::ObMySQLProxy &proxy
         "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version, execution_id, "
         "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s ", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME))) {
     LOG_WARN("assign sql string failed", K(ret));
-  } else if (OB_FAIL(get_task_record(sql_string, proxy, allocator, records))) {
+  } else if (OB_FAIL(get_task_record(OB_INVALID_TENANT_ID, sql_string, proxy, allocator, records))) {
     LOG_WARN("get task record failed", K(ret), K(sql_string));
   }
   return ret;
 }
 
-int ObDDLTaskRecordOperator::check_task_id_exist(common::ObMySQLProxy &proxy, const int64_t task_id, bool &exist)
+int ObDDLTaskRecordOperator::check_task_id_exist(common::ObMySQLProxy &proxy, const uint64_t tenant_id, const int64_t task_id, bool &exist)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!proxy.is_inited())) {
@@ -2948,10 +2958,9 @@ int ObDDLTaskRecordOperator::check_task_id_exist(common::ObMySQLProxy &proxy, co
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      // TODO:
-      if (OB_FAIL(sql_string.assign_fmt("SELECT count(*) as have FROM %s WHERE task_id=%lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME, task_id))) {
+      if (OB_FAIL(sql_string.assign_fmt("SELECT count(*) as have FROM %s WHERE task_id=%lu", OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
         LOG_WARN("assign sql string failed", K(ret));
-      } else if (OB_FAIL(proxy.read(res, sql_string.ptr()))) {
+      } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
       } else if (OB_ISNULL((result = res.get_result()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -3063,6 +3072,7 @@ int ObDDLTaskRecordOperator::insert_record(
 }
 
 int ObDDLTaskRecordOperator::fill_task_record(
+    const uint64_t tenant_id,
     const common::sqlclient::ObMySQLResult *result_row,
     common::ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -3095,6 +3105,14 @@ int ObDDLTaskRecordOperator::fill_task_record(
     EXTRACT_INT_FIELD_MYSQL(*result_row, "execution_id", task_record.execution_id_, int64_t);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result_row, "message_unhex", task_message);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result_row, "ddl_stmt_str_unhex", ddl_stmt_str);
+    if (OB_SUCC(ret) && OB_INVALID_TENANT_ID != tenant_id) {
+      if (OB_INVALID_TENANT_ID != task_record.tenant_id_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant id not empty, cannot overwrite it", K(ret));
+      } else {
+        task_record.tenant_id_ = tenant_id;
+      }
+    }
     if (OB_SUCC(ret)) {
       SCN check_snapshot_version;
       if (OB_FAIL(check_snapshot_version.convert_for_tx(task_record.snapshot_version_))) {

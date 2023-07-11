@@ -218,6 +218,7 @@ public:
       int64_t &execution_id);
 
   static int get_ddl_task_record(
+      const uint64_t tenant_id,
       const int64_t task_id,
       common::ObMySQLProxy &proxy,
       common::ObIAllocator &allocator,
@@ -229,12 +230,14 @@ public:
 
   static int check_task_id_exist(
       common::ObMySQLProxy &proxy,
+      const uint64_t tenant_id,
       const int64_t task_id,
       bool &exist);
 
   static int check_is_adding_constraint(
      common::ObMySQLProxy *proxy,
      common::ObIAllocator &allocator,
+     const uint64_t tenant_id,
      const uint64_t table_id,
      bool &is_building);
 
@@ -275,6 +278,7 @@ public:
 
 private:
   static int fill_task_record(
+      const uint64_t tenant_id,
       const common::sqlclient::ObMySQLResult *result_row,
       common::ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -286,6 +290,7 @@ private:
       const uint64_t session_id);
 
   static int get_task_record(
+      const uint64_t tenant_id,
       const ObSqlString &sql_string,
       common::ObMySQLProxy &proxy,
       common::ObIAllocator &allocator,

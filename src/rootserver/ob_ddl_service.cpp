@@ -11023,7 +11023,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
                                           table_id,
                                           has_index_operation))) {
         LOG_WARN("check has index operation failed", K(ret));
-      } else if (OB_FAIL(check_is_adding_constraint(table_id, is_adding_constraint))) {
+      } else if (OB_FAIL(check_is_adding_constraint(tenant_id, table_id, is_adding_constraint))) {
         LOG_WARN("failed to call check_is_adding_constraint", K(ret));
       } else if (has_index_operation) {
         ret = OB_NOT_SUPPORTED;
@@ -11081,10 +11081,10 @@ int ObDDLService::check_has_index_operation(ObSchemaGetterGuard &schema_guard,
 }
 
 // check if is adding check constraint, foreign key, not null constraint
-int ObDDLService::check_is_adding_constraint(const uint64_t table_id, bool &is_building)
+int ObDDLService::check_is_adding_constraint(const uint64_t tenant_id, const uint64_t table_id, bool &is_building)
 {
   ObArenaAllocator allocator(lib::ObLabel("DdlTasRecord"));
-  return ObDDLTaskRecordOperator::check_is_adding_constraint(sql_proxy_, allocator, table_id, is_building);
+  return ObDDLTaskRecordOperator::check_is_adding_constraint(sql_proxy_, allocator, tenant_id, table_id, is_building);
 }
 
 // check whether the foreign key related table is executing offline ddl, creating index, and executin constrtaint task.

@@ -56,6 +56,7 @@ public:
   int init(const share::ObLSID &ls_id);
   int refresh();
   int limit_and_sleep(const int64_t bytes,
+                      const uint64_t tenant_id,
                       const int64_t task_id,
                       ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                       int64_t &real_sleep_us);
@@ -72,6 +73,7 @@ private:
   int check_cur_node_is_leader(bool &is_leader);
   int cal_limit(const int64_t bytes, int64_t &next_available_ts);
   int do_sleep(const int64_t next_available_ts,
+               const uint64_t tenant_id,
                const int64_t task_id,
                ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                int64_t &real_sleep_us);

@@ -1124,7 +1124,7 @@ private:
       const uint64_t teannt_id,
       const uint64_t table_id,
       bool &has_index_operation);
-  int check_is_adding_constraint(const uint64_t table_id, bool &is_building);
+  int check_is_adding_constraint(const uint64_t tenant_id, const uint64_t table_id, bool &is_building);
   int modify_tenant_inner_phase(const obrpc::ObModifyTenantArg &arg,
       const ObTenantSchema *orig_tenant_schema,
       ObSchemaGetterGuard &schema_guard,
