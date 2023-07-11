@@ -1530,7 +1530,7 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
     LOG_WARN("recursive union all spec should have two children", K(ret), K(spec.get_child_cnt()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < left->get_output_count(); i++) {
-      if (left->output_.at(i)->datum_meta_.type_ != left->output_.at(i)->datum_meta_.type_) {
+      if (left->output_.at(i)->datum_meta_.type_ != right->output_.at(i)->datum_meta_.type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("left and right of recursive union all should have same output data type", K(ret));
       }
@@ -1554,10 +1554,13 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
     }
 
     //recursive union all的输出中的前n项一定是T_OP_UNION,与cte表的非伪列一一对应
+    ObSEArray<ObExpr *, 2> output_union_exprs;
+    ObSEArray<uint64_t, 2> output_union_offsets;
     OZ(spec.output_union_exprs_.init(left->output_.count()));
     ARRAY_FOREACH(left->output_, i)
     {
-      ObRawExpr *output_union_raw_expr = op.get_output_exprs().at(i);
+      ObSetOpRawExpr *output_union_raw_expr =
+          static_cast<ObSetOpRawExpr *>(op.get_output_exprs().at(i));
       ObExpr *output_union_expr = nullptr;
       if (OB_ISNULL(output_union_raw_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1572,8 +1575,26 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
         LOG_WARN("recursive union all invalid output", K(i), K(*output_union_expr));
       } else if (OB_FAIL(mark_expr_self_produced(output_union_raw_expr))) { // set expr
         LOG_WARN("fail to mark expr self produced", K(ret));
-      } else if (OB_FAIL(spec.output_union_exprs_.push_back(output_union_expr))) {
+      } else if (OB_FAIL(output_union_exprs.push_back(output_union_expr))) {
         LOG_WARN("array push back failed", K(ret));
+      } else if (OB_FAIL(output_union_offsets.push_back(output_union_raw_expr->get_idx()))) {
+        LOG_WARN("array push back failed", K(ret));
+      } else if (OB_FAIL(spec.output_union_exprs_.push_back(nullptr))) { // init nullptr
+        LOG_WARN("array push back failed", K(ret));
+      }
+    }
+
+    // adjust exprs order in output_union_exprs, and add to spec.output_union_exprs_
+    ARRAY_FOREACH(output_union_offsets, i) {
+      uint64_t idx = output_union_offsets.at(i);
+      if (idx >= spec.output_union_exprs_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index in output_union_offsets", K(ret));
+      } else if (OB_NOT_NULL(spec.output_union_exprs_.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected value in output_union_exprs_, expected nullptr yet", K(ret));
+      } else {
+        spec.output_union_exprs_[idx] = output_union_exprs.at(i);
       }
     }
 
