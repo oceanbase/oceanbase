@@ -3141,10 +3141,10 @@ int ObCharsetUtils::init(ObIAllocator &allocator)
   return ret;
 }
 
-bool ObStringScanner::next_character(ObString &encoding, int32_t &wchar, int &ret)
+bool ObStringScanner::next_character(ObString &encoding_value, int32_t &unicode_value, int &ret)
 {
   bool has_next = false;
-  ret = next_character(encoding, wchar);
+  ret = next_character(encoding_value, unicode_value);
 
   if (OB_ITER_END == ret) {
     has_next = false;
@@ -3158,20 +3158,26 @@ bool ObStringScanner::next_character(ObString &encoding, int32_t &wchar, int &re
   return has_next;
 }
 
-int ObStringScanner::next_character(ObString &encoding, int32_t &wchar)
+int ObStringScanner::next_character(ObString &encoding_value, int32_t &unicode_value)
 {
   int ret = OB_SUCCESS;
   int32_t length = 0;
 
-  ObString &str = const_cast<ObString &>(str_);
+  ObString &str = str_;
 
   if (str.empty()) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(ObCharset::mb_wc(collation_type_, str.ptr(), str.length(), length, wchar))) {
-    ret = OB_ERR_INCORRECT_STRING_VALUE;
-    LOG_WARN("fail to call mb_wc", K(ret), KPHEX(str.ptr(), str.length()));
-  } else {
-    encoding.assign_ptr(str.ptr(), length);
+  } else if (OB_FAIL(ObCharset::mb_wc(collation_type_, str.ptr(), str.length(), length, unicode_value))) {
+    if (!!(IGNORE_INVALID_CHARACTER & flags_)) {
+      ret = OB_SUCCESS;
+      length = 1;
+    } else {
+      ret = OB_ERR_INCORRECT_STRING_VALUE;
+      LOG_WARN("fail to call mb_wc", K(ret), KPHEX(str.ptr(), str.length()));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    encoding_value.assign_ptr(str.ptr(), length);
     LOG_DEBUG("next_character", K(ret), KPHEX(str.ptr(), str.length()));
     str += length;
   }

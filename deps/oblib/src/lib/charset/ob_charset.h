@@ -608,15 +608,22 @@ private:
 class ObStringScanner
 {
 public:
-  ObStringScanner(const ObString &str, common::ObCollationType collation_type)
-    : str_(str), collation_type_(collation_type)
+  enum {
+    IGNORE_INVALID_CHARACTER = 1<<0,
+  };
+  ObStringScanner(const ObString &str, common::ObCollationType collation_type, uint64_t flags = 0)
+    : origin_str_(str), str_(str), collation_type_(collation_type), flags_(flags)
   {}
-  int next_character(ObString &encoding, int32_t &wchar);
-  bool next_character(ObString &encoding, int32_t &wchar, int &ret);
+  int next_character(ObString &encoding_value, int32_t &unicode_value);
+  bool next_character(ObString &encoding_value, int32_t &unicode_value, int &ret);
+  ObString get_remain_str() { return str_; }
+  void forward_bytes(int64_t n) { str_ += n; }
   TO_STRING_KV(K_(str), K_(collation_type));
 private:
-  const ObString &str_;
+  const ObString &origin_str_;
+  ObString str_;
   common::ObCollationType collation_type_;
+  uint64_t flags_;
 };
 
 class ObCharSetString

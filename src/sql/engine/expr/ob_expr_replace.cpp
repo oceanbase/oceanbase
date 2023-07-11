@@ -131,9 +131,10 @@ int ObExprReplace::replace(ObString &ret_str,
                            ObExprStringBuf &string_buf)
 {
   int ret = OB_SUCCESS;
+  ObString dst_str;
+  bool is_null = false;
   if (OB_UNLIKELY(text.length() <= 0)) {
     // Return empty string
-    ret_str.reset();
   } else if (OB_UNLIKELY(from.length() <= 0) || OB_UNLIKELY(to.length() < 0)) {
     ret_str = text;
   } else if (OB_ISNULL(from.ptr())) {
@@ -142,51 +143,29 @@ int ObExprReplace::replace(ObString &ret_str,
   } else if (OB_UNLIKELY(text.length() < from.length()) ||
              OB_UNLIKELY(from == to)) {
     ret_str = text;
+  } else if (OB_FAIL(ObSQLUtils::check_well_formed_str(text, cs_type, dst_str, is_null, false, false))
+            || OB_FAIL(ObSQLUtils::check_well_formed_str(from, cs_type, dst_str, is_null, false, false))
+            || OB_FAIL(ObSQLUtils::check_well_formed_str(to, cs_type, dst_str, is_null, false, false))) {
+    LOG_WARN("check well formed str failed", K(ret));
   } else {
     ObSEArray<uint32_t, 4> locations(common::ObModIds::OB_SQL_EXPR_REPLACE,
                                      common::OB_MALLOC_NORMAL_BLOCK_SIZE);
-    const char *buf_start = text.ptr();
-    const char *buf_end = text.ptr() + text.length();
-    const ObCharsetInfo *cs = NULL;
-    int error = 0;
-    if (OB_UNLIKELY(OB_ISNULL(cs = ObCharset::get_charset(cs_type)) ||
-            OB_ISNULL(cs->cset))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected error. invalid argument(s)", K(cs_type));
-    }
-    int32_t char_len = 0;
-    int32_t next_char_len = 0;
-    while (OB_SUCC(ret) && OB_LIKELY(error == 0) && buf_start + char_len < buf_end) {
-      char_len += static_cast<int32_t>(cs->cset->well_formed_len(cs, buf_start + char_len, buf_end, 1, &error));
-      if (OB_UNLIKELY(0 != error)) {
-        bool is_null = false;
-        //mysql strict mode will return null, otherwise will return something
-        //so we should get session to acquire if is_strict mode here.
-        //we now set is_strict=false.
-        if (OB_FAIL(ObSQLUtils::check_well_formed_str(text, cs_type, ret_str, is_null, false, false))) {
-          LOG_WARN("check well formed str failed", K(ret));
-        }
-      } else if (next_char_len == 0 && FALSE_IT(next_char_len = char_len)) {
-      } else if (char_len < from.length()) {
-        //do nothing
-      } else if (char_len > from.length()) {
-        buf_start += next_char_len;
-        char_len = 0;
-        next_char_len = 0;
-      } else if (0 == MEMCMP(buf_start, from.ptr(), char_len)) {
-        ret = locations.push_back(buf_start - text.ptr());
-        buf_start += char_len;
-        char_len = 0;
-        next_char_len = 0;
+    ObString mb;
+    int32_t wc;
+    ObStringScanner scanner(text, cs_type, ObStringScanner::IGNORE_INVALID_CHARACTER);
+    while (OB_SUCC(ret) && scanner.get_remain_str().length() >= from.length()) {
+      if (0 == MEMCMP(scanner.get_remain_str().ptr(), from.ptr(), from.length())) {
+        ret = locations.push_back(scanner.get_remain_str().ptr() - text.ptr());
+        scanner.forward_bytes(from.length());
+      } else if (OB_FAIL(scanner.next_character(mb, wc))) {
+        LOG_WARN("get next character failed", K(ret));
       } else {
-        buf_start += next_char_len;
-        char_len = 0;
-        next_char_len = 0;
+        //do nothing
       }
     }
+
     int64_t tot_length = 0;
-    if (OB_UNLIKELY(error != 0)) {
-    } else if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret)) {
       ret_str.reset();
     } else if (locations.count() == 0) {
       ret_str = text;
@@ -253,7 +232,7 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
     expr_datum.set_datum(*text);
   } else if (!is_lob_res) { // non text tc inputs
     if (OB_FAIL(replace(res,
-                        expr.args_[0]->datum_meta_.cs_type_,
+                        expr.datum_meta_.cs_type_,
                         text->get_string(),
                         !from->is_null() ? from->get_string() : ObString(),
                         (NULL != to && !to->is_null()) ? to->get_string() : ObString(),
@@ -288,7 +267,7 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
       LOG_WARN("failed to get string data", K(ret), K(expr.args_[2]->datum_meta_));
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(replace(res, expr.args_[0]->datum_meta_.cs_type_, text_data, from_data, to_data, temp_allocator))) {
+      if (OB_FAIL(replace(res, expr.datum_meta_.cs_type_, text_data, from_data, to_data, temp_allocator))) {
         LOG_WARN("do replace for lob resutl failed", K(ret), K(expr.datum_meta_.type_));
       } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(expr, ctx, expr_datum, res))) {
         LOG_WARN("set lob result failed", K(ret));
