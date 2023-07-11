@@ -1882,7 +1882,7 @@ int ObDDLRedefinitionTask::generate_sync_column_partition_level_stats_sql(const 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(sql_string.append_fmt(" else partition_id end) where tenant_id=%ld and table_id=%ld and column_id=%ld",
           ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_),
-          batch_start == 0 ? object_id_ : target_object_id_, old_col_id))) {
+          batch_start == 0 ? object_id_ : target_object_id_, batch_start == 0 ? old_col_id : new_col_id))) {
       LOG_WARN("fail to append sql string", K(ret), K(object_id_), K(tenant_id_), K(exec_tenant_id), K(old_col_id));
     }
   }
