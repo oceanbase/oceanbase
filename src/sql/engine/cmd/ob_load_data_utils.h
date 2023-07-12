@@ -309,7 +309,7 @@ struct ObLoadDataStat
                      ref_cnt_(0),
                      tenant_id_(0),
                      job_id_(0),
-                     job_type_(),
+                     job_type_("normal"),
                      table_name_(),
                      file_path_(),
                      table_column_(0),
@@ -364,17 +364,17 @@ struct ObLoadDataStat
   int64_t max_allowed_error_rows_;
   int64_t detected_error_rows_;
   struct {
-    volatile int64_t received_rows_; // received from client
-    int64_t last_commit_segment_id_;
-    common::ObString status_; // none / inited / loading / frozen / merging / commit / error / abort
-    common::ObString trans_status_; // none / inited / running / frozen / commit / error / abort
+    volatile int64_t received_rows_ = 0; // received from client
+    int64_t last_commit_segment_id_ = 0;
+    common::ObString status_ = "none"; // none / inited / loading / frozen / merging / commit / error / abort
+    common::ObString trans_status_ = "none"; // none / inited / running / frozen / commit / error / abort
   } coordinator;
 
   struct {
-    volatile int64_t processed_rows_;
-    int64_t last_commit_segment_id_;
-    common::ObString status_;
-    common::ObString trans_status_;
+    volatile int64_t processed_rows_ = 0;
+    int64_t last_commit_segment_id_ = 0;
+    common::ObString status_ = "none";
+    common::ObString trans_status_ = "none";
   } store;
 
   TO_STRING_KV(K(tenant_id_), K(job_id_), K(job_type_),
