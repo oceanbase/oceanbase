@@ -5529,6 +5529,22 @@ int ObDMLResolver::resolve_special_expr(ObRawExpr *&expr, ObStmtScope scope)
     LOG_WARN("invalid argument", K(expr), K(stmt));
   } else if (expr->has_flag(CNT_LAST_INSERT_ID) || expr->has_flag(IS_LAST_INSERT_ID)) {
     stmt->set_affected_last_insert_id(true);
+  } else {
+    // pass `affected_last_insert_id` from child stmt
+    ObArray<ObSelectStmt*> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("get child stmt failed", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+        if (OB_ISNULL(child_stmts.at(i))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("child stmt is null", K(ret));
+        } else if (child_stmts.at(i)->get_affected_last_insert_id()) {
+          stmt->set_affected_last_insert_id(true);
+          break;
+        }
+      }
+    }
   }
   if (OB_SUCC(ret) && (expr->has_flag(CNT_DEFAULT)
       || (expr->has_flag(CNT_IS_EXPR) && T_WHERE_SCOPE == scope)

@@ -45,7 +45,14 @@ int ObExprLastInsertID::calc_result_typeN(ObExprResType &type,
   type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
   type.set_result_flag(NOT_NULL_FLAG);
   if (1 == param_num) {
-    types_array[0].set_calc_type(ObUInt64Type);
+    const ObObjType arg_type = types_array[0].get_type();
+    if (ob_is_int_tc(arg_type) || ob_is_uint_tc(arg_type)) {
+      // get the uint value directly without extra cast
+    } else if (ob_is_number_tc(arg_type)) {
+      types_array[0].set_calc_type(ObIntType);
+    } else {
+      types_array[0].set_calc_type(ObUInt64Type);
+    }
   }
   return OB_SUCCESS;
 }
