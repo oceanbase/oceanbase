@@ -672,18 +672,30 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             break;
           }
         case CHARACTER_SET_NAME: {
-            cells[cell_idx].set_varchar(common::ObCharset::charset_name(
-                column_schema->get_charset_type()));
-            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+              if(ob_is_varchar_char_type(column_schema->get_data_type(),column_schema->get_collation_type())
+                || ob_is_enum_or_set_type(column_schema->get_data_type())
+                || ob_is_text(column_schema->get_data_type(),column_schema->get_collation_type())){
+                  cells[cell_idx].set_varchar(common::ObCharset::charset_name(
+                    column_schema->get_charset_type()));
+                  cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                    ObCharset::get_default_charset()));
-            break;
+              } else {
+                  cells[cell_idx].reset();
+              }
+              break;
           }
         case COLLATION_NAME: {
-            cells[cell_idx].set_varchar(common::ObCharset::collation_name(
-                column_schema->get_collation_type()));
-            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                                   ObCharset::get_default_charset()));
-            break;
+              if(ob_is_varchar_char_type(column_schema->get_data_type(),column_schema->get_collation_type())
+                || ob_is_enum_or_set_type(column_schema->get_data_type())
+                || ob_is_text(column_schema->get_data_type(),column_schema->get_collation_type())){
+                cells[cell_idx].set_varchar(common::ObCharset::collation_name(
+                    column_schema->get_collation_type()));
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                                      ObCharset::get_default_charset()));
+              } else {
+                  cells[cell_idx].reset();
+              }
+              break;
           }
         case COLUMN_TYPE: {
             int64_t pos = 0;
