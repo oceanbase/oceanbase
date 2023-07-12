@@ -12,7 +12,9 @@
 
 #include "ob_ls_task.h"
 #include <cstdint>
+#include "lib/ob_define.h"
 #include "lib/ob_errno.h"
+#include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_print_utils.h"
 #include "ob_archive_define.h"                // ArchiveKey
 #include "share/backup/ob_archive_piece.h"    // ObArchivePiece
@@ -146,7 +148,8 @@ int ObLSArchiveTask::push_fetch_log(ObArchiveLogFetchTask &task)
 
 int ObLSArchiveTask::get_fetcher_progress(const ArchiveWorkStation &station,
     LSN &offset,
-    SCN &scn)
+    SCN &scn,
+    int64_t &last_fetch_timestamp)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
@@ -159,7 +162,7 @@ int ObLSArchiveTask::get_fetcher_progress(const ArchiveWorkStation &station,
      ARCHIVE_LOG(WARN, "stale task, just skip", K(ret), K(station), KPC(this));
   } else {
     LogFileTuple tuple;
-    dest_.get_fetcher_progress(tuple);
+    dest_.get_fetcher_progress(tuple, last_fetch_timestamp);
     offset = tuple.get_lsn();
     scn= tuple.get_scn();
   }
@@ -169,11 +172,12 @@ int ObLSArchiveTask::get_fetcher_progress(const ArchiveWorkStation &station,
 int ObLSArchiveTask::get_sorted_fetch_log(ObArchiveLogFetchTask *&task)
 {
   int ret = OB_SUCCESS;
+  int64_t unused_timestamp = OB_INVALID_TIMESTAMP;
   WLockGuard guard(rwlock_);
   ObArchiveLogFetchTask *tmp_task = NULL;
   LogFileTuple tuple;
   task = NULL;
-  dest_.get_fetcher_progress(tuple);
+  dest_.get_fetcher_progress(tuple, unused_timestamp);
   const LSN &cur_offset = tuple.get_lsn();
 
   if (OB_FAIL(dest_.get_top_fetch_log(tmp_task))) {
@@ -504,6 +508,7 @@ ObLSArchiveTask::ArchiveDest::ArchiveDest() :
   piece_dir_exist_(false),
   max_seq_log_offset_(),
   max_fetch_info_(),
+  last_fetch_timestamp_(OB_INVALID_TIMESTAMP),
   wait_send_task_array_(),
   wait_send_task_count_(0),
   send_task_queue_(NULL),
@@ -527,6 +532,7 @@ void ObLSArchiveTask::ArchiveDest::destroy()
   piece_dir_exist_ = false;
   max_seq_log_offset_.reset();
   max_fetch_info_.reset();
+  last_fetch_timestamp_ = OB_INVALID_TIMESTAMP;
 
   free_fetch_log_tasks_();
   free_send_task_status_();
@@ -596,9 +602,11 @@ int ObLSArchiveTask::ArchiveDest::update_sequencer_progress(const int64_t size, 
   return ret;
 }
 
-void ObLSArchiveTask::ArchiveDest::get_fetcher_progress(LogFileTuple &tuple) const
+void ObLSArchiveTask::ArchiveDest::get_fetcher_progress(LogFileTuple &tuple,
+    int64_t &last_fetch_timestamp) const
 {
   tuple = max_fetch_info_;
+  last_fetch_timestamp = last_fetch_timestamp_;
 }
 
 int ObLSArchiveTask::ArchiveDest::get_top_fetch_log(ObArchiveLogFetchTask *&task)
@@ -626,6 +634,7 @@ int ObLSArchiveTask::ArchiveDest::update_fetcher_progress(const SCN &round_start
     ARCHIVE_LOG(ERROR, "fetcher progress rollback", K(ret), K(max_fetch_info_), K(tuple));
   } else {
     max_fetch_info_ = tuple;
+    last_fetch_timestamp_ = common::ObTimeUtility::fast_current_time();
     ARCHIVE_LOG(TRACE, "update fetcher progress succ", K(max_fetch_info_));
   }
   return ret;

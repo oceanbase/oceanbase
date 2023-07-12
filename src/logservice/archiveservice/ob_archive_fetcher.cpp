@@ -463,46 +463,58 @@ int ObArchiveFetcher::check_need_delay_(const ObArchiveLogFetchTask &task,
   const LSN &end_lsn = task.get_end_offset();
   LSN offset;
   SCN fetch_scn;
+  int64_t last_fetch_timestamp = OB_INVALID_TIMESTAMP;
   need_delay = false;
   int64_t send_task_count = 0;
   int64_t ls_archive_task_count = 0;
   int64_t send_task_status_count = 0;
   const bool new_block = start_lsn == cur_lsn;
   palf::LSN max_no_limit_lsn;
+  storage::ObLSHandle handle;
+  share::SCN offline_scn;
 
-  GET_LS_TASK_CTX(ls_mgr_, id) {
-    if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, offset, fetch_scn))) {
-      ARCHIVE_LOG(WARN, "get fetch progress failed", K(ret), K(id), K(station));
-    } else if (OB_FAIL(ls_archive_task->get_send_task_count(station, send_task_count))) {
-      ARCHIVE_LOG(WARN, "get send task count failed", K(ret), K(id), K(station));
-    } else if (OB_FAIL(ls_archive_task->get_max_no_limit_lsn(station, max_no_limit_lsn))) {
-      ARCHIVE_LOG(WARN, "get max_no_limit_lsn failed", K(id), K(station));
-    } else if (send_task_count >= MAX_LS_SEND_TASK_COUNT_LIMIT) {
-      need_delay = true;
-      ARCHIVE_LOG(TRACE, "send_task_count exceed threshold, need delay",
-          K(id), K(station), K(send_task_count));
-    } else {
-      ls_archive_task_count = ls_mgr_->get_ls_task_count();
-      send_task_status_count = archive_sender_->get_send_task_status_count();
-      if (ls_archive_task_count < send_task_status_count) {
+  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(id, handle, ObLSGetMod::ARCHIVE_MOD))) {
+    ARCHIVE_LOG(WARN, "get ls failed", K(id));
+  } else if (OB_FAIL(handle.get_ls()->get_offline_scn(offline_scn))) {
+    ARCHIVE_LOG(WARN, "get offline_scn failed", K(id));
+  } else if (OB_UNLIKELY(offline_scn.is_valid())) {
+    // if ls is offline, it should be archived as soon as possible
+    need_delay = false;
+  } else {
+    GET_LS_TASK_CTX(ls_mgr_, id) {
+      if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, offset, fetch_scn, last_fetch_timestamp))) {
+        ARCHIVE_LOG(WARN, "get fetch progress failed", K(ret), K(id), K(station));
+      } else if (OB_FAIL(ls_archive_task->get_send_task_count(station, send_task_count))) {
+        ARCHIVE_LOG(WARN, "get send task count failed", K(ret), K(id), K(station));
+      } else if (OB_FAIL(ls_archive_task->get_max_no_limit_lsn(station, max_no_limit_lsn))) {
+        ARCHIVE_LOG(WARN, "get max_no_limit_lsn failed", K(id), K(station));
+      } else if (send_task_count >= MAX_LS_SEND_TASK_COUNT_LIMIT) {
         need_delay = true;
-        ARCHIVE_LOG(TRACE, "archive_sender_ task status count more than ls archive task count, just wait",
-            K(ls_archive_task_count), K(send_task_status_count), K(need_delay));
+        ARCHIVE_LOG(TRACE, "send_task_count exceed threshold, need delay",
+            K(id), K(station), K(send_task_count));
       } else {
-        check_capacity_enough_(commit_lsn, cur_lsn, end_lsn, data_enough, data_full);
-        if (data_full) {
-          // although data buffer not enough, but data reaches the end of the block, do archive
-          ARCHIVE_LOG(TRACE, "data buffer reach clog block end, do archive",
-              K(id), K(station), K(end_lsn), K(commit_lsn));
-        } else if (! check_scn_enough_(id, new_block, cur_lsn, max_no_limit_lsn, base_scn, fetch_scn)) {
+        ls_archive_task_count = ls_mgr_->get_ls_task_count();
+        send_task_status_count = archive_sender_->get_send_task_status_count();
+        if (ls_archive_task_count < send_task_status_count) {
           need_delay = true;
-          ARCHIVE_LOG(TRACE, "scn not enough, need delay", K(id), K(station), K(new_block), K(cur_lsn),
-              K(max_no_limit_lsn), K(base_scn), K(fetch_scn));
-        } else if (! data_enough) {
-          // data not enough to fill unit, just wait
-          need_delay = true;
-          ARCHIVE_LOG(TRACE, "data not enough, need delay", K(id), K(station), K(commit_lsn),
-              K(cur_lsn), K(end_lsn), K(data_enough));
+          ARCHIVE_LOG(TRACE, "archive_sender_ task status count more than ls archive task count, just wait",
+              K(ls_archive_task_count), K(send_task_status_count), K(need_delay));
+        } else {
+          check_capacity_enough_(commit_lsn, cur_lsn, end_lsn, data_enough, data_full);
+          if (data_full) {
+            // although data buffer not enough, but data reaches the end of the block, do archive
+            ARCHIVE_LOG(TRACE, "data buffer reach clog block end, do archive",
+                K(id), K(station), K(end_lsn), K(commit_lsn));
+          } else if (! check_scn_enough_(id, new_block, cur_lsn, max_no_limit_lsn, base_scn, fetch_scn, last_fetch_timestamp)) {
+            need_delay = true;
+            ARCHIVE_LOG(TRACE, "scn not enough, need delay", K(id), K(station), K(new_block), K(cur_lsn),
+                K(max_no_limit_lsn), K(base_scn), K(fetch_scn));
+          } else if (! data_enough) {
+            // data not enough to fill unit, just wait
+            need_delay = true;
+            ARCHIVE_LOG(TRACE, "data not enough, need delay", K(id), K(station), K(commit_lsn),
+                K(cur_lsn), K(end_lsn), K(data_enough));
+          }
         }
       }
     }
@@ -526,7 +538,8 @@ bool ObArchiveFetcher::check_scn_enough_(const share::ObLSID &id,
     const palf::LSN &lsn,
     const palf::LSN &max_no_limit_lsn,
     const SCN &base_scn,
-    const SCN &fetch_scn)
+    const SCN &fetch_scn,
+    const int64_t last_fetch_timestamp)
 {
   int ret = OB_SUCCESS;
   bool bret = false;    // archive limit default
@@ -537,6 +550,10 @@ bool ObArchiveFetcher::check_scn_enough_(const share::ObLSID &id,
     bret = true;
     // when ls archive task init or update, the max_no_limit_lsn set
     // logs whose lsn smaller than the max_no_limit_lsn will ignore the archive_lag_target limit
+  } else if (common::ObTimeUtility::fast_current_time() - last_fetch_timestamp >= lag_target) {
+    // for standby tenant, sync_scn will stop at the tenant dropping scn X,
+    // so logs whose scn bigger than (X - archive_lag_target) will be archived according to the condition
+    bret = true;
   } else if (OB_FAIL(get_max_archive_point_(replayable_scn))) {
     ARCHIVE_LOG(WARN, "get replayable_scn failed", K(id));
   } else if (new_block) {

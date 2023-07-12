@@ -97,7 +97,8 @@ public:
   // 获取fetch进度
   int get_fetcher_progress(const ArchiveWorkStation &station,
                          palf::LSN &offset,
-                         share::SCN &scn);
+                         share::SCN &scn,
+                         int64_t &last_fetch_timestamp);
 
   int compensate_piece(const ArchiveWorkStation &station,
                        const int64_t next_compensate_piece_id);
@@ -160,7 +161,7 @@ private:
     void destroy();
     void get_sequencer_progress(LSN &offset) const;
     int update_sequencer_progress(const int64_t size, const LSN &offset);
-    void get_fetcher_progress(LogFileTuple &tuple) const;
+    void get_fetcher_progress(LogFileTuple &tuple, int64_t &last_fetch_timestamp) const;
     int update_fetcher_progress(const share::SCN &round_start_scn, const LogFileTuple &tuple);
     int push_fetch_log(ObArchiveLogFetchTask &task);
     int push_send_task(ObArchiveSendTask &task, ObArchiveWorker &worker);
@@ -196,6 +197,7 @@ private:
 
     LSN       max_seq_log_offset_;
     LogFileTuple       max_fetch_info_;
+    int64_t last_fetch_timestamp_;
     ObArchiveLogFetchTask *wait_send_task_array_[MAX_FETCH_TASK_NUM];
     int64_t             wait_send_task_count_;
     ObArchiveTaskStatus *send_task_queue_;

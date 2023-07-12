@@ -143,7 +143,8 @@ private:
 
   // 1.1.2 检查日志流落后程度是否需要触发归档
   bool check_scn_enough_(const share::ObLSID &id, const bool new_block, const palf::LSN &lsn,
-      const palf::LSN &max_no_limit_lsn, const share::SCN &base_scn, const share::SCN &fetch_scn);
+      const palf::LSN &max_no_limit_lsn, const share::SCN &base_scn, const share::SCN &fetch_scn,
+      const int64_t last_fetch_timestamp);
 
   // 1.2 初始化TmpMemoryHelper
   int init_helper_(ObArchiveLogFetchTask &task, const LSN &commit_lsn, TmpMemoryHelper &helper);
