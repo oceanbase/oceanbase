@@ -50,7 +50,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObLobType,           /*NullType=>ObLobType*/
         ObJsonType,          /*NullType=>ObJsonType*/
         ObGeometryType,      /*NullType=>ObGeometryType*/
-        ObMaxType,           /*NullType=>ObUserDefinedSQLType*/
+        ObUserDefinedSQLType,/*NullType=>ObUserDefinedSQLType*/
     },
 
     /*TinyIntType*/

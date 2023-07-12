@@ -2668,7 +2668,15 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
                       if (params[i]->is_pl_extend()) {
                         if (params[i]->get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
                           new_param.set_int_value(0);
-                          OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, *params[i], new_param, true));
+                          if (!ob_is_xml_pl_type(params[i]->get_type(), params[i]->get_udt_id())) {
+                            OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, *params[i], new_param, true));
+                          } else {
+                            const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(ctx->exec_ctx_->get_my_session());
+                            ObCastCtx cast_ctx(ctx->allocator_, &dtc_params, CM_NONE, ObCharset::get_system_collation());
+                            if (OB_FAIL(ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, *params[i], new_param))) {
+                              LOG_WARN("failed to_type", K(ret), K(new_param));
+                            }
+                          }
                         }
                       } else {
                         OZ (deep_copy_obj(allocator, *params[i], new_param));
@@ -5157,6 +5165,14 @@ int ObSPIService::construct_exec_params(ObPLExecCtx *ctx,
       } else if (result.is_ext()) {
         if (result_type.is_ext()) {
           OX (result.set_udt_id(result_type.get_udt_id()));
+          // xml pl type add cast
+          if (ob_is_xml_pl_type(result_type.get_type(), result_type.get_udt_id())) {
+            const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(ctx->exec_ctx_->get_my_session());
+            ObCastCtx cast_ctx(ctx->allocator_, &dtc_params, CM_NONE, ObCharset::get_system_collation());
+            if (OB_FAIL(ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, result, result))) {
+              LOG_WARN("failed to_type", K(ret), K(result));
+            }
+          }
           if (OB_SUCC(ret)
               && result_type.get_extend_type() > 0
               && result_type.get_extend_type() < T_EXT_SQL_ARRAY

@@ -24,6 +24,7 @@ bool ObQuestionmarkEqualCtx::compare_const(const ObConstRawExpr &left,
       (left.get_result_type().is_ext()
         && left.get_result_type().get_extend_type() > 0
         && left.get_result_type().get_extend_type() < T_EXT_SQL_ARRAY) ||
+      left.get_result_type().is_user_defined_sql_type() ||
       OB_SUCCESS != err_code_) {
     // do nothing
   } else if (left.get_expr_type() != T_QUESTIONMARK) {

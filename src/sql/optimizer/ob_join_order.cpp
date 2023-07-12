@@ -3684,7 +3684,8 @@ int ObJoinOrder::generate_const_predicates_from_view(const ObDMLStmt *stmt,
     if (OB_ISNULL(sel_expr = child_stmt->get_select_item(idx).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected expr", K(ret), K(idx), K(sel_expr));
-    } else if (!sel_expr->is_const_expr() || sel_expr->get_result_type().is_lob()) {
+    } else if (!sel_expr->is_const_expr() || sel_expr->get_result_type().is_lob() ||
+                ob_is_xml_sql_type(sel_expr->get_result_type().get_type(), sel_expr->get_result_type().get_subschema_id())) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
                                                           sel_expr,
