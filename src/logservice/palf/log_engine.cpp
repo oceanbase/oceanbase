@@ -1409,7 +1409,7 @@ int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
   int64_t logical_block_size = 0;
-
+  const LSN log_storage_tail = log_storage_.get_end_lsn();
   if (OB_FAIL(log_storage_.get_logical_block_size(logical_block_size))) {
     PALF_LOG(WARN, "get_logical_block_size failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (FALSE_IT(base_block_id = lsn_2_block(base_lsn, logical_block_size))) {
@@ -1429,7 +1429,10 @@ int LogEngine::try_clear_up_holes_and_check_storage_integrity_(
     } else {
       ret = OB_SUCCESS;
     }
-  } else if (!last_group_entry_header.is_valid()) {
+    // If log_storage_ is not empty but last_group_entry_header is invalid, unexpected error.
+    // For rebuild, the base_lsn may be greater than the log_tail of LogStorage because we
+    // update LogSnapshotMeta firstly.
+  } else if (log_storage_.get_end_lsn() != base_lsn && !last_group_entry_header.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "unexpected error, LogStorage are not empty bus last log entry is invalid",
         K(last_entry_begin_lsn), K(expected_next_block_id), K(last_group_entry_header));
