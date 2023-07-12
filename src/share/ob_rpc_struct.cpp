@@ -6256,12 +6256,11 @@ int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObNotifyArchiveArg, tenant_id_, notify_archive_op_);
+OB_SERIALIZE_MEMBER(ObNotifyArchiveArg, tenant_id_);
 
 bool ObNotifyArchiveArg::is_valid() const
 {
-  return is_user_tenant(tenant_id_)
-      && notify_archive_op_ >= NotifyArchiveOp::START && notify_archive_op_ < NotifyArchiveOp::MAX_OP;
+  return is_user_tenant(tenant_id_);
 }
 
 int ObNotifyArchiveArg::assign(const ObNotifyArchiveArg &arg)
@@ -6272,7 +6271,6 @@ int ObNotifyArchiveArg::assign(const ObNotifyArchiveArg &arg)
     LOG_WARN("invalid argument", K(ret), K(arg));
   } else {
     tenant_id_ = arg.tenant_id_;
-    notify_archive_op_ = arg.notify_archive_op_;
   }
   return ret;
 }

@@ -930,28 +930,8 @@ int ObService::notify_archive(const obrpc::ObNotifyArchiveArg &arg)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null MTL scheduler", K(ret), KP(archive_service));
       } else {
-        switch(arg.notify_archive_op_) {
-          case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::START: {
-            archive_service->process_start_archive();
-            LOG_INFO("succeed to notify start archive service", K(arg));
-          }
-            break;
-          case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::DEFER: {
-            archive_service->process_defer_archive();
-            LOG_INFO("succeed to notify defer archive service", K(arg));
-          }
-            break;
-          case obrpc::ObNotifyArchiveArg::NotifyArchiveOp::STOP: {
-            archive_service->process_stop_archive();
-            LOG_INFO("succeed to notify stop archive service", K(arg));
-          }
-            break;
-          default: {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument", K(ret), K(arg));
-          }
-            break;
-        }
+        archive_service->wakeup();
+        LOG_INFO("succeed to notify archive service", K(arg));
       }
     }
   }

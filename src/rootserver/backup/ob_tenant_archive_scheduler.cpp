@@ -556,6 +556,7 @@ int ObArchiveHandler::check_can_do_archive(bool &can) const
 int ObArchiveHandler::enable_archive(const int64_t dest_no)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   bool can;
   bool create;
   ObTenantArchiveRoundAttr new_round_attr;
@@ -574,7 +575,9 @@ int ObArchiveHandler::enable_archive(const int64_t dest_no)
     LOG_WARN("failed to enable archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
     if (new_round_attr.state_.status_ == ObArchiveRoundState::Status::BEGINNING) {
-      notify_(new_round_attr);
+      if (OB_TMP_FAIL(notify_(new_round_attr))) {
+        LOG_WARN("notify failed", K(tmp_ret), K(new_round_attr));
+      }
     }
     LOG_INFO("enable archive", K(dest_no), K(new_round_attr));
   }
@@ -592,6 +595,7 @@ int ObArchiveHandler::enable_archive(const int64_t dest_no)
 int ObArchiveHandler::disable_archive(const int64_t dest_no)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTenantArchiveRoundAttr new_round_attr;
 
   if (IS_NOT_INIT) {
@@ -600,7 +604,9 @@ int ObArchiveHandler::disable_archive(const int64_t dest_no)
   } else if (OB_FAIL(round_handler_.disable_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to disable archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
-    notify_(new_round_attr);
+    if (OB_TMP_FAIL(notify_(new_round_attr))) {
+      LOG_WARN("notify failed", K(tmp_ret), K(new_round_attr));
+    }
     LOG_INFO("disable archive", K(dest_no), K(new_round_attr));
   }
 
@@ -617,6 +623,7 @@ int ObArchiveHandler::disable_archive(const int64_t dest_no)
 int ObArchiveHandler::defer_archive(const int64_t dest_no)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTenantArchiveRoundAttr new_round_attr;
 
   if (IS_NOT_INIT) {
@@ -625,7 +632,9 @@ int ObArchiveHandler::defer_archive(const int64_t dest_no)
   } else if (OB_FAIL(round_handler_.defer_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to defer archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
-    notify_(new_round_attr);
+    if (OB_TMP_FAIL(notify_(new_round_attr))) {
+      LOG_WARN("notify failed", K(tmp_ret), K(new_round_attr));
+    }
     LOG_INFO("defer archive", K(dest_no), K(new_round_attr));
   }
 
@@ -729,8 +738,8 @@ int ObArchiveHandler::start_archive_(ObTenantArchiveRoundAttr &round_attr)
     LOG_WARN("failed to init archive store", K(ret), K(round_attr), K(dest));
   } else if (OB_SUCCESS != (tmp_ret = record_round_start(new_round, store))) {
     LOG_WARN("failed to open archive", K(ret), K(round_attr), K(new_round));
-  } else {
-    notify_(new_round);
+  } else if (OB_SUCCESS != (tmp_ret = notify_(new_round))) {
+    LOG_WARN("notify failed", K(tmp_ret), K(new_round));
   }
 
   LOG_INFO("beginning archive", K(ret), K(new_round));
@@ -759,10 +768,11 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
   return ret;
 }
 
-void ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
+int ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  UNUSED(round);
   share::ObLSAttrArray ls_array;
   share::ObLSAttrOperator ls_operator(tenant_id_, sql_proxy_);
   hash::ObHashSet<ObAddr> notify_addr_set;
@@ -771,23 +781,8 @@ void ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
   common::ObAddr leader_addr;
   obrpc::ObNotifyArchiveArg arg;
   arg.tenant_id_ = tenant_id_;
-  switch (round.state_.status_) {
-    case ObArchiveRoundState::Status::BEGINNING:
-      arg.notify_archive_op_ = obrpc::ObNotifyArchiveArg::NotifyArchiveOp::START;
-      break;
-    case ObArchiveRoundState::Status::SUSPENDING:
-      arg.notify_archive_op_ = obrpc::ObNotifyArchiveArg::NotifyArchiveOp::DEFER;
-      break;
-    case ObArchiveRoundState::Status::STOPPING:
-      arg.notify_archive_op_ = obrpc::ObNotifyArchiveArg::NotifyArchiveOp::STOP;
-      break;
-    default:
-      arg.notify_archive_op_ = obrpc::ObNotifyArchiveArg::NotifyArchiveOp::MAX_OP;
-      break;
-  }
-  if (arg.notify_archive_op_ == obrpc::ObNotifyArchiveArg::NotifyArchiveOp::MAX_OP) {
-    LOG_INFO("no need to notify ls leader archive", K(round));
-  } else if (OB_FAIL(ls_operator.get_all_ls_by_order(ls_array))) {
+
+  if (OB_FAIL(ls_operator.get_all_ls_by_order(ls_array))) {
     LOG_WARN("failed to get all ls info", K(ret), K(tenant_id_));
   } else if (OB_FAIL(notify_addr_set.create(ls_array.count()))) {
     LOG_WARN("failed to create notify addr set", K(ret));
@@ -809,9 +804,8 @@ void ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
       }
     }
   }
-  if (OB_FAIL(notify_addr_set.destroy())) {
-    LOG_WARN("failed to destroy notify addr set", K(ret));
-  }
+  
+  return ret;
 }
 
 int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, SCN &max_checkpoint_scn) const

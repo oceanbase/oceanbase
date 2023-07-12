@@ -7490,25 +7490,16 @@ struct ObNotifyArchiveArg
 {
   OB_UNIS_VERSION(1);
 public:
-  enum NotifyArchiveOp {
-    START = 0,
-    DEFER = 1,
-    STOP = 2,
-    MAX_OP
-  };
-
   ObNotifyArchiveArg() : 
-      tenant_id_(common::OB_INVALID_TENANT_ID),
-      notify_archive_op_(MAX_OP)
+      tenant_id_(common::OB_INVALID_TENANT_ID)
   {
   }
 public:
   bool is_valid() const;
   int assign(const ObNotifyArchiveArg &arg);
-  TO_STRING_KV(K_(tenant_id), K_(notify_archive_op));
+  TO_STRING_KV(K_(tenant_id));
 public:
   uint64_t tenant_id_;
-  NotifyArchiveOp notify_archive_op_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNotifyArchiveArg);
 };
