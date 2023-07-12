@@ -59,7 +59,8 @@ public:
     : initial_bucket_num_(0),
       size_(0),
       buckets_(NULL),
-      allocator_("ExtendHTBucket")
+      allocator_("ExtendHTBucket"),
+      probe_cnt_(0)
   {
   }
   ~ObExtendHashTable() { destroy(); }
@@ -68,12 +69,12 @@ public:
            int64_t initial_size = INITIAL_SIZE);
   bool is_inited() const { return NULL != buckets_; }
   // return the first item which equal to, NULL for none exist.
-  const Item *get(const Item &item) const;
+  const Item *get(const Item &item);
   // Link item to hash table, extend buckets if needed.
   // (Do not check item is exist or not)
   int set(Item &item);
   int64_t size() const { return size_; }
-
+  int64_t get_probe_cnt() const { return probe_cnt_; }
   void reuse()
   {
     int ret = common::OB_SUCCESS;
@@ -85,6 +86,7 @@ public:
       }
     }
     size_ = 0;
+    probe_cnt_ = 0;
   }
 
   int resize(ObIAllocator *allocator, int64_t bucket_num);
@@ -154,6 +156,7 @@ protected:
   int64_t size_;
   BucketArray *buckets_;
   common::ModulePageAllocator allocator_;
+  int64_t probe_cnt_;
 };
 
 template <typename Item>
@@ -205,9 +208,10 @@ int ObExtendHashTable<Item>::resize(ObIAllocator *allocator, int64_t bucket_num)
 }
 
 template <typename Item>
-const Item *ObExtendHashTable<Item>::get(const Item &item) const
+const Item *ObExtendHashTable<Item>::get(const Item &item)
 {
   Item *res = NULL;
+  ++probe_cnt_;
   if (NULL == buckets_) {
     // do nothing
   } else {

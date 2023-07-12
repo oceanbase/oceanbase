@@ -26,9 +26,7 @@ const int64_t INIT_L3_CACHE_SIZE = get_level3_cache_size();
 const int64_t MAX_L3_CACHE_SIZE = 50 *1024 *1024; //50M
 const uint64_t FORCE_GPD = 0x100;
 const int64_t MAX_REBUILD_TIMES = 5;
-constexpr const double MIN_RATIO_FOR_L3 = 0.95;
-const int64_t DISTINCT_ITEM_SIZE = 24;
-const int64_t GROUP_BY_ITEM_SIZE = 40;
+constexpr const double MIN_RATIO_FOR_L3 = 0.80;
 class ObAdaptiveByPassCtrl {
 public:
   typedef enum {
@@ -43,7 +41,8 @@ public:
   ObAdaptiveByPassCtrl () : by_pass_(false), processed_cnt_(0), state_(STATE_L2_INSERT),
                          period_cnt_(MIN_PERIOD_CNT), probe_cnt_(0), exists_cnt_(0),
                          rebuild_times_(0), cut_ratio_(INIT_CUT_RATIO), by_pass_ctrl_enabled_(false),
-                         small_row_cnt_(0), op_id_(-1), need_resize_hash_table_(false) {}
+                         small_row_cnt_(0), op_id_(-1), need_resize_hash_table_(false),
+                         round_times_(0) {}
   inline void reset() {
     by_pass_ = false;
     processed_cnt_ = 0;
@@ -74,7 +73,7 @@ public:
   inline bool by_passing() { return by_pass_; }
   inline void start_by_pass() { by_pass_ = true; }
   inline void reset_rebuild_times() { rebuild_times_ = 0; }
-  inline bool rebuild_times_exceeded() { return rebuild_times_ > MAX_REBUILD_TIMES; }
+  inline bool rebuild_times_exceeded() { return rebuild_times_ >= MAX_REBUILD_TIMES; }
   inline void set_max_rebuild_times() { rebuild_times_ = MAX_REBUILD_TIMES + 1; }
   inline void open_by_pass_ctrl() { by_pass_ctrl_enabled_ = true; }
   inline void set_op_id(int64_t op_id) { op_id_ = op_id; }
@@ -92,6 +91,9 @@ public:
   int64_t small_row_cnt_; // 0 will be omit
   int64_t op_id_;
   bool need_resize_hash_table_;
+  int64_t probe_cnt_for_period_[MAX_REBUILD_TIMES];
+  int64_t ndv_cnt_for_period_[MAX_REBUILD_TIMES];
+  int64_t round_times_;
 };
 
 } // end namespace sql

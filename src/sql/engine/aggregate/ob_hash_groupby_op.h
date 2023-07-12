@@ -116,7 +116,7 @@ class ObGroupRowHashTable : public ObExtendHashTable<ObGroupRowItem>
 public:
   ObGroupRowHashTable() : ObExtendHashTable(), eval_ctx_(nullptr), cmp_funcs_(nullptr) {}
 
-  OB_INLINE const ObGroupRowItem *get(const ObGroupRowItem &item) const;
+  OB_INLINE const ObGroupRowItem *get(const ObGroupRowItem &item);
   OB_INLINE void prefetch(const ObBatchRows &brs, uint64_t *hash_vals) const;
   int init(ObIAllocator *allocator,
           lib::ObMemAttr &mem_attr,
@@ -133,9 +133,10 @@ private:
   static const int64_t HASH_BUCKET_PREFETCH_MAGIC_NUM = 4 * 1024;
 };
 
-OB_INLINE const ObGroupRowItem *ObGroupRowHashTable::get(const ObGroupRowItem &item) const
+OB_INLINE const ObGroupRowItem *ObGroupRowHashTable::get(const ObGroupRowItem &item)
 {
   ObGroupRowItem *res = NULL;
+  ++probe_cnt_;
   if (OB_UNLIKELY(NULL == buckets_)) {
     // do nothing
   } else {

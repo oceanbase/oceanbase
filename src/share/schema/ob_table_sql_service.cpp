@@ -4371,26 +4371,28 @@ int ObTableSqlService::delete_foreign_key(
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
     const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
-    if (is_truncate_table // truncate table will drop parent table and create it again
-        || table_schema.is_offline_ddl_table() // offline ddl table will swap and drop parent table
-        || table_schema.get_table_id() == foreign_key_info.child_table_id_) {
-      uint64_t foreign_key_id = foreign_key_info.foreign_key_id_;
-      if (OB_FAIL(delete_from_all_foreign_key(sql_client, tenant_id, new_schema_version, foreign_key_info))) {
-        LOG_WARN("failed to delete __all_foreign_key_history", K(table_schema), K(ret));
-      } else if (OB_UNLIKELY(foreign_key_info.child_column_ids_.count() != foreign_key_info.parent_column_ids_.count())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("child column num and parent column num should be equal", K(ret),
-                 K(foreign_key_info.child_column_ids_.count()),
-                 K(foreign_key_info.parent_column_ids_.count()));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < foreign_key_info.child_column_ids_.count(); j++) {
-          // delete from __all_foreign_key_column_history
-          uint64_t child_column_id = foreign_key_info.child_column_ids_.at(j);
-          uint64_t parent_column_id = foreign_key_info.parent_column_ids_.at(j);
-          if (OB_FAIL(delete_from_all_foreign_key_column(
-              sql_client, tenant_id, foreign_key_id, child_column_id, parent_column_id, j + 1 /* fk_column_pos */, new_schema_version))) {
-            LOG_WARN("failed to delete __all_foreign_key_column_history", K(ret));
-          }
+    /*When the parent table or child table is deleted,
+     *the foreign key relationship should be deleted.
+     *If the parent table is deleted under foreign_key_checks=off,
+     *the foreign key relationship will be mocked by the child table
+     */
+    uint64_t foreign_key_id = foreign_key_info.foreign_key_id_;
+    if (OB_FAIL(delete_from_all_foreign_key(sql_client, tenant_id, new_schema_version, foreign_key_info))) {
+      LOG_WARN("failed to delete __all_foreign_key_history", K(table_schema), K(ret));
+    } else if (OB_UNLIKELY(foreign_key_info.child_column_ids_.count() != foreign_key_info.parent_column_ids_.count())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("child column num and parent column num should be equal", K(ret),
+                K(foreign_key_info.child_column_ids_.count()),
+                K(foreign_key_info.parent_column_ids_.count()));
+    } else if (table_schema.get_table_id() == foreign_key_info.child_table_id_) {
+      //The column table needs to be updated only when the child table is deleted
+      for (int64_t j = 0; OB_SUCC(ret) && j < foreign_key_info.child_column_ids_.count(); j++) {
+        // delete from __all_foreign_key_column_history
+        uint64_t child_column_id = foreign_key_info.child_column_ids_.at(j);
+        uint64_t parent_column_id = foreign_key_info.parent_column_ids_.at(j);
+        if (OB_FAIL(delete_from_all_foreign_key_column(
+            sql_client, tenant_id, foreign_key_id, child_column_id, parent_column_id, j + 1 /* fk_column_pos */, new_schema_version))) {
+          LOG_WARN("failed to delete __all_foreign_key_column_history", K(ret));
         }
       }
     }
@@ -4506,51 +4508,29 @@ int ObTableSqlService::update_foreign_key_state(common::ObISQLClient &sql_client
       // skip
     } else {
       dml.reset();
-      if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
-                                                 exec_tenant_id, tenant_id)))
-          || OB_FAIL(dml.add_pk_column("foreign_key_id", ObSchemaUtils::get_extract_schema_id(
-                                                         exec_tenant_id, foreign_key_info.foreign_key_id_)))
-          || OB_FAIL(dml.add_gmt_modified())
-          ) {
-        LOG_WARN("failed to add columns", K(ret));
-      } else if (foreign_key_info.is_modify_enable_flag_  && OB_FAIL(dml.add_column("enable_flag", foreign_key_info.enable_flag_))) {
-        LOG_WARN("failed to add enable_flag column", K(ret));
-      } else if (foreign_key_info.is_modify_validate_flag_ && OB_FAIL(dml.add_column("validate_flag", foreign_key_info.validate_flag_))) {
-        LOG_WARN("failed to add validate_flag column", K(ret));
-      } else if (foreign_key_info.is_modify_rely_flag_ && OB_FAIL(dml.add_column("rely_flag", foreign_key_info.rely_flag_))) {
-        LOG_WARN("failed to add rely_flag column", K(ret));
-      } else if (foreign_key_info.is_modify_fk_name_flag_ && OB_FAIL(dml.add_column("foreign_key_name", foreign_key_info.foreign_key_name_))) {
-        LOG_WARN("failed to add foreign_key_name column", K(ret));
-      } else {
-        int64_t affected_rows = 0;
-        uint64_t table_id = foreign_key_info.table_id_;
-        if (OB_FAIL(exec_update(sql_client, tenant_id, table_id,
-                                OB_ALL_FOREIGN_KEY_TNAME, dml, affected_rows))) {
-          LOG_WARN("exec update failed", K(ret));
-        } else if (affected_rows > 1) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error", K(affected_rows), K(ret));
-        }
-        if (OB_SUCC(ret)) {
-          dml.reset();
-          if (OB_FAIL(gen_foreign_key_dml(exec_tenant_id, tenant_id, foreign_key_info, dml))) {
-             LOG_WARN("failed to gen foreign key dml", K(ret));
-          } else if (OB_FAIL(dml.add_column("schema_version", table.get_schema_version()))) {
-            LOG_WARN("add column failed", K(ret));
-          } else if (OB_FAIL(dml.add_column("is_deleted", false))) {
-            LOG_WARN("add column failed", K(ret));
-          } else if (OB_FAIL(exec.exec_insert(OB_ALL_FOREIGN_KEY_HISTORY_TNAME, dml, affected_rows))) {
-            LOG_WARN("execute insert failed", K(ret));
-          } else if (!is_single_row(affected_rows)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(update_data_table_schema_version(sql_client, tenant_id,
-                      foreign_key_info.parent_table_id_, table.get_in_offline_ddl_white_list()))) {
-            LOG_WARN("failed to update parent table schema version", K(ret));
-          }
+      int64_t affected_rows = 0;
+      //UPDATE is not used to update __all_foreign_key because the parent table may have deleted the record in advance
+      if (OB_FAIL(gen_foreign_key_dml(exec_tenant_id, tenant_id, foreign_key_info, dml))) {
+          LOG_WARN("failed to gen foreign key dml", K(ret));
+      } else if (OB_FAIL(exec.exec_insert_update(OB_ALL_FOREIGN_KEY_TNAME, dml, affected_rows))) {
+        LOG_WARN("exec update failed", K(ret));
+      } else if (affected_rows > 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(affected_rows), K(ret));
+      } else if (OB_FAIL(dml.add_column("schema_version", table.get_schema_version()))) {
+        LOG_WARN("add column failed", K(ret));
+      } else if (OB_FAIL(dml.add_column("is_deleted", false))) {
+        LOG_WARN("add column failed", K(ret));
+      } else if (OB_FAIL(exec.exec_insert(OB_ALL_FOREIGN_KEY_HISTORY_TNAME, dml, affected_rows))) {
+        LOG_WARN("execute insert failed", K(ret));
+      } else if (!is_single_row(affected_rows)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(update_data_table_schema_version(sql_client, tenant_id,
+                    foreign_key_info.parent_table_id_, table.get_in_offline_ddl_white_list()))) {
+          LOG_WARN("failed to update parent table schema version", K(ret));
         }
       }
     }
@@ -5115,41 +5095,24 @@ int ObTableSqlService::update_foreign_key_in_mock_fk_parent_table(
   for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); ++i) {
     const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
     dml.reset();
-    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
-        || OB_FAIL(dml.add_pk_column("foreign_key_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, foreign_key_info.foreign_key_id_)))
-        || OB_FAIL(dml.add_gmt_modified())) {
-      LOG_WARN("failed to add columns", K(ret));
-    } else if (OB_FAIL(dml.add_column("parent_table_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, foreign_key_info.parent_table_id_)))) {
-      LOG_WARN("failed to add parent_table_id column", K(ret));
-    } else if (OB_FAIL(dml.add_column("is_parent_table_mock", foreign_key_info.is_parent_table_mock_))) {
-      LOG_WARN("failed to add is_parent_table_mock column", K(ret));
-    } else if (OB_FAIL(dml.add_column("ref_cst_type", foreign_key_info.ref_cst_type_))) {
-      LOG_WARN("failed to add ref_cst_type column", K(ret));
-    } else if (OB_FAIL(dml.add_column("ref_cst_id", foreign_key_info.ref_cst_id_))) {
-      LOG_WARN("failed to add ref_cst_id column", K(ret));
-    } else {
-      int64_t affected_rows = 0;
-      if (OB_FAIL(exec.exec_update(OB_ALL_FOREIGN_KEY_TNAME, dml, affected_rows))) {
-        LOG_WARN("exec update failed", K(ret));
-      } else if (affected_rows > 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error", K(ret), K(affected_rows));
-      }
-      if (OB_SUCC(ret)) {
-        dml.reset();
-        if (OB_FAIL(gen_foreign_key_dml(exec_tenant_id, tenant_id, foreign_key_info, dml))) {
-           LOG_WARN("failed to gen foreign key dml", K(ret));
-        } else if (OB_FAIL(dml.add_column("schema_version", need_update_foreign_key_columns ? new_schema_version : new_mock_fk_parent_table_schema.get_schema_version()))) {
-          LOG_WARN("add column failed", K(ret));
-        } else if (OB_FAIL(dml.add_column("is_deleted", false))) {
-          LOG_WARN("add column failed", K(ret));
-        } else if (OB_FAIL(exec.exec_insert(OB_ALL_FOREIGN_KEY_HISTORY_TNAME, dml, affected_rows))) {
-          LOG_WARN("execute insert failed", K(ret));
-        } else if (!is_single_row(affected_rows)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
-        }
-      }
+    int64_t affected_rows = 0;
+    //UPDATE is not used to update __all_foreign_key because the parent table may have deleted the record in advance
+    if (OB_FAIL(gen_foreign_key_dml(exec_tenant_id, tenant_id, foreign_key_info, dml))) {
+        LOG_WARN("failed to gen foreign key dml", K(ret));
+    } else if (OB_FAIL(exec.exec_insert_update(OB_ALL_FOREIGN_KEY_TNAME, dml, affected_rows))) {
+      LOG_WARN("exec update failed", K(ret));
+    } else if (affected_rows > 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), K(affected_rows));
+    } else if (OB_FAIL(dml.add_column("schema_version", need_update_foreign_key_columns ? new_schema_version : new_mock_fk_parent_table_schema.get_schema_version()))) {
+      LOG_WARN("add column failed", K(ret));
+    } else if (OB_FAIL(dml.add_column("is_deleted", false))) {
+      LOG_WARN("add column failed", K(ret));
+    } else if (OB_FAIL(exec.exec_insert(OB_ALL_FOREIGN_KEY_HISTORY_TNAME, dml, affected_rows))) {
+      LOG_WARN("execute insert failed", K(ret));
+    } else if (!is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
     }
   }
   return ret;
