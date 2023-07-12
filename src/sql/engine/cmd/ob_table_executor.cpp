@@ -404,6 +404,14 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
               if (OB_LIKELY(OB_SUCCESS == ret)) {
                 tmp_ret = conn->commit();
               } else {
+                int64_t MIN_ROLLBACK_TIMEOUT = 10 * 1000 * 1000;// 10s
+                int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+                if (INT64_MAX != origin_timeout_ts &&
+                    origin_timeout_ts < ObTimeUtility::current_time() + MIN_ROLLBACK_TIMEOUT) {
+                  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + MIN_ROLLBACK_TIMEOUT);
+                  LOG_INFO("set timeout for rollback", K(origin_timeout_ts),
+                      K(ObTimeUtility::current_time() + MIN_ROLLBACK_TIMEOUT));
+                }
                 tmp_ret = conn->rollback();
               }
               if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
