@@ -20400,10 +20400,6 @@ int ObDDLService::upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(arg));
-  } else if (!GCONF.enable_sys_table_ddl) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("upgrade table schema when enable_sys_table_ddl is off is not allowed",
-             KR(ret), K(arg));
   } else {
     HEAP_VAR(ObTableSchema, hard_code_schema) {
       ObSchemaGetterGuard schema_guard;
