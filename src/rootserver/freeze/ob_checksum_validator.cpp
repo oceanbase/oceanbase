@@ -18,6 +18,7 @@
 #include "rootserver/freeze/ob_major_freeze_util.h"
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "rootserver/ob_root_utils.h"
+#include "rootserver/ob_rs_event_history_table_operator.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/time/ob_time_utility.h"
@@ -437,6 +438,9 @@ int ObTabletChecksumValidator::validate_tablet_replica_checksum(
       } else if (OB_CHECKSUM_ERROR == ret) {
         LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in major "
           "tablet_replica_checksum", KR(ret), K_(tenant_id), K(frozen_scn), "pair_cnt", pairs.count());
+        if (TC_REACH_TIME_INTERVAL(6 * 3600 * 1000 * 1000)) {  // record every 6h
+          ROOTSERVICE_EVENT_ADD("daily_merge", "checksum_error", K_(tenant_id), K(table_id));
+        }
       } else {
         LOG_WARN("fail to check major tablet_replica checksum", KR(ret), K_(tenant_id),
                  K(frozen_scn), K(table_id));
