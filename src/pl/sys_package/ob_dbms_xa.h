@@ -71,6 +71,9 @@ public:
   static const int XAER_DUPID = -8;
   static const int XAER_OUTSIDE = -9;
 
+  static int xa_xid(sql::ObExecContext &ctx,
+                    sql::ParamStore &params,
+                    common::ObObj &result);
   static int xa_start(sql::ObExecContext &ctx,
                         sql::ParamStore &params,
                         common::ObObj &result);
