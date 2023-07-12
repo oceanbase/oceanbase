@@ -42,10 +42,16 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
                                        int64_t row_num,
                                        const ColContentIArray &column_infos,
                                        bool is_ignore,
+                                       bool is_single_value,
                                        ObTableModifyOp &dml_op)
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
   CK(row.count() >= column_infos.count());
+  if (OB_ISNULL(session = dml_op.get_exec_ctx().get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  }
   for (int i = 0; OB_SUCC(ret) && i < column_infos.count(); i++) {
     ObDatum *datum = NULL;
     const bool is_nullable = column_infos.at(i).is_nullable_;
@@ -53,7 +59,8 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
     if (OB_FAIL(row.at(col_idx)->eval(eval_ctx, datum))) {
       dml_op.log_user_error_inner(ret, row_num, column_infos.at(i));
     } else if (!is_nullable && datum->is_null()) {
-      if (is_ignore) {
+      if (is_ignore ||
+          (lib::is_mysql_mode() && !is_single_value && !is_strict_mode(session->get_sql_mode()))) {
         ObObj zero_obj;
         ObDatum &row_datum = row.at(col_idx)->locate_datum_for_write(eval_ctx);
         if (is_oracle_mode()) {
@@ -588,6 +595,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
                                       ins_rtdef.cur_row_num_,
                                       ins_ctdef.column_infos_,
                                       ins_ctdef.das_ctdef_.is_ignore_,
+                                      ins_ctdef.is_single_value_,
                                       dml_op))) {
       LOG_WARN("check row null failed", K(ret));
     } else if (OB_FAIL(filter_row_for_view_check(ins_ctdef.view_check_exprs_,
@@ -803,6 +811,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
                                         upd_rtdef.cur_row_num_,
                                         upd_ctdef.assign_columns_,
                                         upd_ctdef.dupd_ctdef_.is_ignore_,
+                                        false,
                                         dml_op))) {
         LOG_WARN("check row null failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (OB_FAIL(check_row_whether_changed(upd_ctdef, upd_rtdef, dml_op.get_eval_ctx()))) {
