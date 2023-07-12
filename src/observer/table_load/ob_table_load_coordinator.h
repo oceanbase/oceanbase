@@ -28,7 +28,7 @@ public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
   static int init_ctx(ObTableLoadTableCtx *ctx, const common::ObIArray<int64_t> &idx_array,
-                      uint64_t user_id, ObTableLoadExecCtx *exec_ctx);
+                      ObTableLoadExecCtx *exec_ctx);
   static void abort_ctx(ObTableLoadTableCtx *ctx);
   int init();
   bool is_valid() const { return is_inited_; }
@@ -90,6 +90,8 @@ private:
 public:
   int write(const table::ObTableLoadTransId &trans_id, int32_t session_id, uint64_t sequence_no,
             const table::ObTableLoadObjRowArray &obj_rows);
+  // for client
+  int write(const table::ObTableLoadTransId &trans_id, const table::ObTableLoadObjRowArray &obj_rows);
   int flush(ObTableLoadCoordinatorTrans *trans);
   // 只写到主节点
   int write_peer_leader(const table::ObTableLoadTransId &trans_id, int32_t session_id,

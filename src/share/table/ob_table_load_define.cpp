@@ -11,13 +11,12 @@ namespace oceanbase
 namespace table
 {
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObTableLoadFlag, flag_);
-
 OB_SERIALIZE_MEMBER_SIMPLE(ObTableLoadConfig,
-                           session_count_,
+                           parallel_,
                            batch_size_,
                            max_error_row_count_,
-                           flag_);
+                           dup_action_,
+                           is_need_sort_);
 
 OB_SERIALIZE_MEMBER_SIMPLE(ObTableLoadSegmentID,
                            id_);

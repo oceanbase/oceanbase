@@ -25,12 +25,16 @@ public:
                               const common::ObString &table_name,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const share::schema::ObTableSchema *&table_schema);
+  static int get_table_id(uint64_t tenant_id, uint64_t database_id,
+                          const common::ObString &table_name, uint64_t &table_id);
   static int get_table_schema(uint64_t tenant_id, uint64_t table_id,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const share::schema::ObTableSchema *&table_schema);
   static int get_column_names(const share::schema::ObTableSchema *table_schema,
                               common::ObIAllocator &allocator,
-                              table::ObTableLoadArray<common::ObString> &column_names);
+                              common::ObIArray<common::ObString> &column_names);
+  static int get_column_idxs(const share::schema::ObTableSchema *table_schema,
+                             common::ObIArray<int64_t> &column_idxs);
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
 public:
   ObTableLoadSchema();

@@ -79,7 +79,7 @@ int ObTableLoadCoordinatorCtx::init_partition_location()
   return ret;
 }
 
-int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t user_id,
+int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
                                     ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
@@ -87,12 +87,11 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadCoordinatorCtx init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(
-               idx_array.count() != ctx_->param_.column_count_ || OB_INVALID_ID == user_id ||
-               nullptr == exec_ctx || !exec_ctx->is_valid() ||
+               idx_array.count() != ctx_->param_.column_count_ || nullptr == exec_ctx ||
+               !exec_ctx->is_valid() ||
                (ctx_->param_.online_opt_stat_gather_ && nullptr == exec_ctx->get_exec_ctx()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(idx_array.count()), K(user_id),
-             KPC(exec_ctx));
+    LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(idx_array.count()), KPC(exec_ctx));
   } else {
     allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
@@ -127,10 +126,6 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t
     // init segment_trans_ctx_map_
     else if (OB_FAIL(segment_ctx_map_.init("TLD_SegCtxMap", ctx_->param_.tenant_id_))) {
       LOG_WARN("fail to init segment ctx map", KR(ret));
-    }
-    // generate credential_
-    else if (OB_FAIL(generate_credential(user_id))) {
-      LOG_WARN("fail to generate credential", KR(ret), K(user_id));
     }
     // init task_scheduler_
     else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
@@ -200,31 +195,6 @@ void ObTableLoadCoordinatorCtx::destroy()
   trans_ctx_map_.reuse();
   segment_ctx_map_.reset();
   commited_trans_ctx_array_.reset();
-}
-
-int ObTableLoadCoordinatorCtx::generate_credential(uint64_t user_id)
-{
-  int ret = OB_SUCCESS;
-  const int64_t expire_ts = 0;
-
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const share::schema::ObUserInfo *user_info = NULL;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid schema service", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(ctx_->param_.tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), "tenant_id", ctx_->param_.tenant_id_);
-  } else if (OB_FAIL(schema_guard.get_user_info(ctx_->param_.tenant_id_, user_id, user_info))) {
-    LOG_WARN("fail to get user info", K(ret), K(ctx_->param_.tenant_id_), K(user_id));
-  } else if (OB_ISNULL(user_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("user info is null", K(ret), K(ctx_->param_.tenant_id_), K(user_id));
-  } else if (OB_FAIL(ObTableLoadUtils::generate_credential(ctx_->param_.tenant_id_, user_id,
-                                                    0, expire_ts,
-                                                    user_info->get_passwd_str().hash(), allocator_, credential_))) {
-    LOG_WARN("fail to generate credential", KR(ret));
-  }
-  return ret;
 }
 
 int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)

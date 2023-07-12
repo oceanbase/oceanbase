@@ -42,8 +42,7 @@ public:
   TO_STRING_KV(K_(param), KP_(coordinator_ctx), KP_(store_ctx), "ref_count", get_ref_count(),
                K_(is_dirty), K_(is_inited));
 public:
-  int init_client_exec_ctx();
-  int init_coordinator_ctx(const common::ObIArray<int64_t> &idx_array, uint64_t user_id,
+  int init_coordinator_ctx(const common::ObIArray<int64_t> &idx_array,
                            ObTableLoadExecCtx *exec_ctx);
   int init_store_ctx(
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
@@ -60,7 +59,6 @@ public:
   ObTableLoadParam param_;
   ObTableLoadDDLParam ddl_param_;
   ObTableLoadSchema schema_;
-  ObTableLoadClientExecCtx *client_exec_ctx_; // for java client
   ObTableLoadCoordinatorCtx *coordinator_ctx_; // 只在控制节点构造
   ObTableLoadStoreCtx *store_ctx_; // 只在数据节点构造
   sql::ObLoadDataGID gid_;

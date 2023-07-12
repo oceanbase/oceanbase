@@ -34,8 +34,7 @@ class ObTableLoadCoordinatorCtx
 public:
   ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadCoordinatorCtx();
-  int init(const common::ObIArray<int64_t> &idx_array, uint64_t user_id,
-           ObTableLoadExecCtx *exec_ctx);
+  int init(const common::ObIArray<int64_t> &idx_array, ObTableLoadExecCtx *exec_ctx);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -102,7 +101,6 @@ public:
   int check_exist_trans(bool &is_exist) const;
   int check_exist_committed_trans(bool &is_exist) const;
 private:
-  int generate_credential(uint64_t user_id);
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadSegmentID &segment_id,
                   ObTableLoadCoordinatorTrans *&trans);
@@ -121,7 +119,6 @@ public:
   common::ObArray<int64_t> idx_array_;
   ObTableLoadExecCtx *exec_ctx_;
   table::ObTableLoadResultInfo result_info_;
-  common::ObString credential_;
   share::schema::ObSequenceSchema sequence_schema_;
   struct SessionContext
   {

@@ -2089,7 +2089,6 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.max_error_row_count_ = execute_param_.max_error_rows_;
   load_param.column_count_ = execute_param_.store_column_idxs_.count();
   load_param.need_sort_ = execute_param_.need_sort_;
-  load_param.data_type_ = ObTableLoadDataType::OBJ_ARRAY;
   load_param.dup_action_ = execute_param_.dup_action_;
   load_param.sql_mode_ = execute_param_.sql_mode_;
   load_param.px_mode_ = false;

@@ -167,7 +167,6 @@ int64_t ObTableLoadRow<T>::get_serialize_size() const
 }
 
 typedef ObTableLoadRow<common::ObObj> ObTableLoadObjRow;
-typedef ObTableLoadRow<common::ObString> ObTableLoadStrRow;
 
 class ObTableLoadTabletObjRow
 {

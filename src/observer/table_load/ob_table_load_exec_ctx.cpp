@@ -63,6 +63,9 @@ int ObTableLoadClientExecCtx::check_status()
     LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
   } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
+  } else if (OB_UNLIKELY(timeout_ts_ < ObTimeUtil::current_time())) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("table load is timeout", KR(ret), K_(timeout_ts));
   }
   return ret;
 }

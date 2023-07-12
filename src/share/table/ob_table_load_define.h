@@ -11,49 +11,33 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_print_utils.h"
 #include "share/rc/ob_tenant_base.h"
+#include "sql/resolver/cmd/ob_load_data_stmt.h"
 
 namespace oceanbase
 {
 namespace table
 {
 
-static const int64_t TABLE_LOAD_CTX_ID = common::ObCtxIds::WORK_AREA;
-
-struct ObTableLoadFlag
-{
-  OB_UNIS_VERSION(1);
-public:
-  static const uint64_t BIT_IS_NEED_SORT = 1;
-  static const uint64_t BIT_DATA_TYPE = 2;
-  static const uint64_t BIT_DUP_ACTION_TYPE = 2;
-  static const uint64_t BIT_RESERVED = 59;
-
-  union {
-    uint64_t flag_;
-    struct {
-      uint64_t is_need_sort_   : BIT_IS_NEED_SORT;
-      uint64_t data_type_      : BIT_DATA_TYPE;
-      uint64_t dup_action_     : BIT_DUP_ACTION_TYPE;
-      uint64_t reserved_       : BIT_RESERVED;
-    };
-  };
-
-  ObTableLoadFlag() : flag_(0) {}
-  void reset() { flag_ = 0; }
-  TO_STRING_KV(K_(is_need_sort), K_(data_type), K_(dup_action));
-};
-
 struct ObTableLoadConfig final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadConfig() : session_count_(0), batch_size_(0), max_error_row_count_(0) {}
-  int32_t session_count_;
+  ObTableLoadConfig()
+    : parallel_(0),
+      batch_size_(0),
+      max_error_row_count_(0),
+      dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
+      is_need_sort_(false)
+  {
+  }
+  TO_STRING_KV(K_(parallel), K_(batch_size), K_(max_error_row_count), K_(dup_action),
+               K_(is_need_sort));
+public:
+  int32_t parallel_;
   int32_t batch_size_;
   uint64_t max_error_row_count_;
-  ObTableLoadFlag flag_;
-
-  TO_STRING_KV(K_(session_count), K_(batch_size), K_(max_error_row_count), K_(flag));
+  sql::ObLoadDupActionType dup_action_;
+  bool is_need_sort_;
 };
 
 struct ObTableLoadPartitionId
@@ -388,6 +372,44 @@ static int table_load_trans_status_to_string(ObTableLoadTransStatusType trans_st
       break;
   }
 
+  return ret;
+}
+
+enum class ObTableLoadClientStatus : int64_t
+{
+  RUNNING = 0,
+  COMMITTING = 1,
+  COMMIT = 2,
+  ERROR = 3,
+  ABORT = 4,
+  MAX_STATUS
+};
+
+static int table_load_client_status_to_string(ObTableLoadClientStatus client_status,
+                                              common::ObString &status_str)
+{
+  int ret = OB_SUCCESS;
+  switch (client_status) {
+    case ObTableLoadClientStatus::RUNNING:
+      status_str = "RUNNING";
+      break;
+    case ObTableLoadClientStatus::COMMITTING:
+      status_str = "COMMITTING";
+      break;
+    case ObTableLoadClientStatus::COMMIT:
+      status_str = "COMMIT";
+      break;
+    case ObTableLoadClientStatus::ERROR:
+      status_str = "ERROR";
+      break;
+    case ObTableLoadClientStatus::ABORT:
+      status_str = "ABORT";
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "unexpected client status", KR(ret), K(client_status));
+      break;
+  }
   return ret;
 }
 

@@ -855,6 +855,16 @@ public:
                K_(hash_val));
 };
 
+/// Table Direct Load Operation Type
+enum class ObTableDirectLoadOperationType {
+  BEGIN = 0,
+  COMMIT = 1,
+  ABORT = 2,
+  GET_STATUS = 3,
+  INSERT = 4,
+  MAX_TYPE
+};
+
 } // end namespace table
 } // end namespace oceanbase
 

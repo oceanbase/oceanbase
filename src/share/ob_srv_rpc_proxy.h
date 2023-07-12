@@ -21,6 +21,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/net/ob_net_endpoint_ingress_rpc_struct.h"
 #include "share/ob_heartbeat_struct.h"
+#include "observer/table_load/control/ob_table_load_control_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -204,6 +205,7 @@ public:
   RPC_AP(PR5 notify_switch_leader, OB_NOTIFY_SWITCH_LEADER, (obrpc::ObNotifySwitchLeaderArg));
   RPC_AP(PR5 update_tenant_info_cache, OB_UPDATE_TENANT_INFO_CACHE, (obrpc::ObUpdateTenantInfoCacheArg), obrpc::ObUpdateTenantInfoCacheRes);
   RPC_AP(PR5 broadcast_consensus_version, OB_BROADCAST_CONSENSUS_VERSION, (obrpc::ObBroadcastConsensusVersionArg), obrpc::ObBroadcastConsensusVersionRes);
+  RPC_S(PR5 direct_load_control, OB_DIRECT_LOAD_CONTROL, (observer::ObDirectLoadControlRequest), observer::ObDirectLoadControlResult);
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc

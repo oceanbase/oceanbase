@@ -48,17 +48,18 @@ public:
 class ObTableLoadClientExecCtx : public ObTableLoadExecCtx
 {
 public:
-  ObTableLoadClientExecCtx() : allocator_(nullptr), session_info_(nullptr) {}
+  ObTableLoadClientExecCtx() : allocator_(nullptr), session_info_(nullptr), timeout_ts_(0) {}
   virtual ~ObTableLoadClientExecCtx() = default;
   common::ObIAllocator *get_allocator() override { return allocator_; }
   sql::ObSQLSessionInfo *get_session_info() override { return session_info_; }
   sql::ObExecContext *get_exec_ctx() override { return nullptr; } // not support sql statistics
   int check_status() override;
   bool is_valid() const override { return nullptr != allocator_ && nullptr != session_info_; }
-  TO_STRING_KV(KP_(allocator), KP_(session_info));
+  TO_STRING_KV(KP_(allocator), KP_(session_info), K_(timeout_ts));
 public:
   common::ObIAllocator *allocator_;
   sql::ObSQLSessionInfo *session_info_;
+  int64_t timeout_ts_;
 };
 
 } // namespace observer

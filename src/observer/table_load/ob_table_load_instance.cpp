@@ -128,8 +128,7 @@ int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
       LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
     } else if (OB_FAIL(table_ctx->init(param, ddl_param, session_info))) {
       LOG_WARN("fail to init table ctx", KR(ret));
-    } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(
-                 table_ctx, idx_array, session_info->get_priv_user_id(), execute_ctx_))) {
+    } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, idx_array, execute_ctx_))) {
       LOG_WARN("fail to coordinator init ctx", KR(ret));
     } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
       LOG_WARN("fail to add ctx", KR(ret));

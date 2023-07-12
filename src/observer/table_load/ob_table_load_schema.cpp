@@ -48,6 +48,20 @@ int ObTableLoadSchema::get_table_schema(uint64_t tenant_id, uint64_t database_id
   return ret;
 }
 
+int ObTableLoadSchema::get_table_id(uint64_t tenant_id, uint64_t database_id,
+                                    const ObString &table_name, uint64_t &table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(get_table_schema(tenant_id, database_id, table_name, schema_guard, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(database_id), K(table_name));
+  } else {
+    table_id = table_schema->get_table_id();
+  }
+  return ret;
+}
+
 int ObTableLoadSchema::get_table_schema(uint64_t tenant_id, uint64_t table_id,
                                         ObSchemaGetterGuard &schema_guard,
                                         const ObTableSchema *&table_schema)
@@ -66,42 +80,62 @@ int ObTableLoadSchema::get_table_schema(uint64_t tenant_id, uint64_t table_id,
 }
 
 int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAllocator &allocator,
-                                        ObTableLoadArray<ObString> &column_names)
+                                        ObIArray<ObString> &column_names)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadSchema not init", KR(ret));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
-    ObSEArray<ObString, 64> column_name_array;
     ObColumnIterByPrevNextID iter(*table_schema);
     const ObColumnSchemaV2 *column_schema = NULL;
-    while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema))) {
-      if (OB_ISNULL(column_schema)) {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter.next(column_schema))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to iterate all table columns", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("The column is null", K(ret));
-      } else if (!column_schema->is_hidden()
-                 && !column_schema->is_invisible_column()) {
-        if (column_schema->is_virtual_generated_column()) {
-        } else if (OB_FAIL(column_name_array.push_back(column_schema->get_column_name_str()))) {
-          LOG_WARN("failed to push back item", K(ret));
+        LOG_WARN("The column is null", KR(ret));
+      } else if (!column_schema->is_hidden() && !column_schema->is_invisible_column()) {
+        ObString column_name;
+        if (OB_FAIL(
+              ob_write_string(allocator, column_schema->get_column_name_str(), column_name))) {
+          LOG_WARN("fail to write string", KR(ret), K(column_name));
+        } else if (OB_FAIL(column_names.push_back(column_name))) {
+          LOG_WARN("fail to push back column name", KR(ret));
         }
       }
     }
-    if (ret != OB_ITER_END) {
-      LOG_WARN("Failed to iterate all table columns. iter quit. ", K(ret));
-    } else {
-      ret = OB_SUCCESS;
-      if (OB_UNLIKELY(column_name_array.empty())) {
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::get_column_idxs(const ObTableSchema *table_schema,
+                                       ObIArray<int64_t> &column_idxs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else {
+    ObSEArray<ObColDesc, 64> column_descs;
+    if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
+      LOG_WARN("fail to get column ids", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && (i < column_descs.count()); ++i) {
+      ObColDesc &col_desc = column_descs.at(i);
+      const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
+      if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected empty column desc", KR(ret));
-      } else if (OB_FAIL(column_names.create(column_name_array.count(), allocator))) {
-        LOG_WARN("fail to create", KR(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < column_name_array.count(); ++i) {
-        const ObString &column_name = column_name_array.at(i);
-        if (OB_FAIL(ob_write_string(allocator, column_name, column_names[i]))) {
-          LOG_WARN("fail to write string", KR(ret), K(i), K(column_name));
+        LOG_WARN("The column is null", KR(ret));
+      } else if (!column_schema->is_hidden() && !column_schema->is_invisible_column()) {
+        const int64_t idx = col_desc.col_id_ - OB_APP_MIN_COLUMN_ID;
+        if (OB_FAIL(column_idxs.push_back(idx))) {
+          LOG_WARN("fail to push back idx", KR(ret), K(idx));
         }
       }
     }

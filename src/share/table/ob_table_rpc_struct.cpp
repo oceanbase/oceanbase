@@ -91,3 +91,12 @@ OB_SERIALIZE_MEMBER((ObTableQuerySyncRequest, ObTableQueryRequest),
                     query_session_id_,
                     query_type_
                     );
+////////////////////////////////////////////////////////////////
+OB_SERIALIZE_MEMBER(ObTableDirectLoadRequest,
+                    credential_,
+                    operation_type_,
+                    arg_content_);
+
+OB_SERIALIZE_MEMBER(ObTableDirectLoadResult,
+                    operation_type_,
+                    res_content_);

@@ -260,6 +260,92 @@ public:
   ObQueryOperationType query_type_;
 };
 
+class ObTableDirectLoadRequest
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableDirectLoadRequest() : operation_type_(ObTableDirectLoadOperationType::MAX_TYPE) {}
+  template <class Arg>
+  int set_arg(const Arg &arg, common::ObIAllocator &allocator)
+  {
+    int ret = common::OB_SUCCESS;
+    const int64_t size = arg.get_serialize_size();
+    char *buf = nullptr;
+    int64_t pos = 0;
+    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SERVER_LOG(WARN, "fail to alloc memory", K(ret), K(size));
+    } else if (OB_FAIL(arg.serialize(buf, size, pos))) {
+      SERVER_LOG(WARN, "fail to serialize arg", K(ret), K(arg));
+    } else {
+      arg_content_.assign_ptr(buf, size);
+    }
+    return ret;
+  }
+  template <class Arg>
+  int get_arg(Arg &arg) const
+  {
+    int ret = common::OB_SUCCESS;
+    int64_t pos = 0;
+    if (OB_UNLIKELY(arg_content_.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      SERVER_LOG(WARN, "invalid args", K(ret), KPC(this));
+    } else if (OB_FAIL(arg.deserialize(arg_content_.ptr(), arg_content_.length(), pos))) {
+      SERVER_LOG(WARN, "fail to deserialize arg content", K(ret), KPC(this));
+    }
+    return ret;
+  }
+  TO_STRING_KV("credential", common::ObHexStringWrap(credential_), K_(operation_type),
+               "arg_content", common::ObHexStringWrap(arg_content_));
+public:
+  ObString credential_;
+  ObTableDirectLoadOperationType operation_type_;
+  ObString arg_content_;
+};
+
+class ObTableDirectLoadResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableDirectLoadResult() : operation_type_(ObTableDirectLoadOperationType::MAX_TYPE) {}
+  template <class Res>
+  int set_res(const Res &res, common::ObIAllocator &allocator)
+  {
+    int ret = common::OB_SUCCESS;
+    const int64_t size = res.get_serialize_size();
+    if (size > 0) {
+      char *buf = nullptr;
+      int64_t pos = 0;
+      if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SERVER_LOG(WARN, "fail to alloc memory", K(ret), K(size));
+      } else if (OB_FAIL(res.serialize(buf, size, pos))) {
+        SERVER_LOG(WARN, "fail to serialize res", K(ret), K(res));
+      } else {
+        res_content_.assign_ptr(buf, size);
+      }
+    }
+    return ret;
+  }
+  template <class Res>
+  int get_res(Res &res) const
+  {
+    int ret = common::OB_SUCCESS;
+    int64_t pos = 0;
+    if (OB_UNLIKELY(res_content_.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      SERVER_LOG(WARN, "invalid args", K(ret), KPC(this));
+    } else if (OB_FAIL(res.deserialize(res_content_.ptr(), res_content_.length(), pos))) {
+      SERVER_LOG(WARN, "fail to deserialize res content", K(ret), KPC(this));
+    }
+    return ret;
+  }
+  TO_STRING_KV(K_(operation_type), "res_content", common::ObHexStringWrap(res_content_));
+public:
+  ObTableDirectLoadOperationType operation_type_;
+  ObString res_content_;
+};
+
 } // end namespace table
 } // end namespace oceanbase
 
