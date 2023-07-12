@@ -33,7 +33,7 @@
     </a>
 </p>
 
-[English](README.md)
+[English](README.md) | 中文版
 
 **OceanBase Database** 是一个分布式关系型数据库。完全由蚂蚁集团自主研发。 OceanBase 基于 [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) 协议以及分布式架构，实现了高可用和线性扩展。OceanBase 数据库运行在常见的服务器集群上，不依赖特殊的硬件架构。
 
