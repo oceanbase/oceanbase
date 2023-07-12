@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "lib/objectpool/ob_tc_factory.h"
 #include "lib/container/ob_array_serialization.h"
+#include "common/object/ob_obj_compare.h"
 #include "common/object/ob_object.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
 #include "lib/hash/ob_placement_hashmap.h"
@@ -175,15 +176,34 @@ struct InParamMeta
 
 struct InParamValsWrapper
 {
-  InParamValsWrapper(): param_vals_() { }
-  int assign(const InParamValsWrapper &other) { return param_vals_.assign(other.param_vals_); }
+  InParamValsWrapper():
+    param_vals_(),
+    cmp_funcs_()
+    { }
+  int assign(const InParamValsWrapper &other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(param_vals_.assign(other.param_vals_))) {
+      SQL_REWRITE_LOG(WARN, "failed to assign param vals", K(ret));
+    } else if (OB_FAIL(cmp_funcs_.assign(other.cmp_funcs_))) {
+      SQL_REWRITE_LOG(WARN, "failed to assign cmp funcs", K(ret));
+    }
+    return ret;
+  }
   inline bool operator==(const InParamValsWrapper &other) const
   {
-    bool bret = param_vals_.count() == other.param_vals_.count();
-    for (int64_t i = 0; bret && i < other.param_vals_.count(); ++i) {
-      if (param_vals_.at(i) != other.param_vals_.at(i)) {
-        bret = false;
-      }
+    int ret = OB_SUCCESS;
+    int64_t param_cnt = param_vals_.count();
+    int64_t other_param_cnt = other.param_vals_.count();
+    int64_t cmp_funcs_cnt = cmp_funcs_.count();
+    int64_t other_cmp_funcs_cnt = other.cmp_funcs_.count();
+    bool bret = param_cnt == other_param_cnt && cmp_funcs_cnt == other_cmp_funcs_cnt &&
+                param_cnt == cmp_funcs_cnt;
+    ObCompareCtx cmp_ctx(ObMaxType, CS_TYPE_INVALID, true, INVALID_TZ_OFF, default_null_pos());
+    for (int64_t i = 0; bret && i < param_cnt; ++i) {
+      obj_cmp_func cmp_op_func = cmp_funcs_.at(i);
+      OB_ASSERT(NULL != cmp_op_func);
+      bret = (ObObjCmpFuncs::CR_TRUE == cmp_op_func(param_vals_.at(i), other.param_vals_.at(i), cmp_ctx));
     }
     return bret;
   }
@@ -191,21 +211,17 @@ struct InParamValsWrapper
   {
     return !(*this == other);
   }
-  inline uint64_t hash() const
-  {
-    uint64_t hash_code = 0;
-    for (int64_t i = 0; i < param_vals_.count(); ++i) {
-      hash_code = param_vals_.at(i).hash(hash_code);
-    }
-    return hash_code;
-  }
   inline int hash(uint64_t &hash_code) const
   {
     int ret = OB_SUCCESS;
-    hash_code = hash();
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_vals_.count(); ++i) {
+      // no need to calculate hash for cmp_funcs_
+      ret = param_vals_.at(i).hash(hash_code, hash_code);
+    }
     return ret;
   }
   ObSEArray<ObObj, MAX_EXTRACT_IN_COLUMN_NUMBER> param_vals_;
+  ObSEArray<obj_cmp_func, MAX_EXTRACT_IN_COLUMN_NUMBER> cmp_funcs_;
   TO_STRING_KV(K_(param_vals));
 };
 
@@ -246,6 +262,7 @@ struct ObInKeyPart
   int get_dup_vals(int64_t offset, const common::ObObj &val, common::ObIArray<int64_t> &dup_val_idx);
   int remove_in_dup_vals();
   InParamMeta* create_param_meta(common::ObIAllocator &alloc);
+  int get_obj_cmp_funcs(ObIArray<obj_cmp_func> &cmp_funcs);
 
   uint64_t table_id_;
   InParamsArr in_params_;

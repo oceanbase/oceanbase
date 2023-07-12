@@ -1430,7 +1430,7 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
       } else if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is invalid", K(ret), K(expr));
-      } else if (is_oracle_mode() && expr->get_data_type() == ObURowIDType) {
+      } else if (is_oracle_mode() && expr->get_expr_type() == T_FUN_SYS_CALC_UROWID) {
         ret = OB_ERR_USE_ROWID_FOR_UPDATE;
         LOG_WARN("FOR UPDATE OF ROWID is illegal", K(ret), K(*expr));
       } else if (OB_UNLIKELY(!expr->is_column_ref_expr())) {

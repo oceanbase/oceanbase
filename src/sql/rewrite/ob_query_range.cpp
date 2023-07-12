@@ -3786,6 +3786,8 @@ int ObQueryRange::preliminary_extract(const ObRawExpr *node,
           LOG_WARN("extract in_op failed", K(ret));
         }
       }
+      LOG_TRACE("succeed to extract range from in_expr",
+        K(use_in_optimization), K(contain_in_), K(is_single_in), K(*out_key_part));
     } else if (T_OP_NOT_IN  == node->get_expr_type()) {
       if (OB_FAIL(pre_extract_not_in_op(b_expr, out_key_part, dtc_params))) {
         LOG_WARN("extract in_op failed", K(ret));

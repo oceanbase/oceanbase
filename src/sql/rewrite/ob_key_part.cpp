@@ -847,8 +847,14 @@ int ObInKeyPart::remove_in_dup_vals()
   int val_cnt = get_param_val_cnt();
   common::hash::ObHashSet<InParamValsWrapper> distinct_param_val_set;
   ObSEArray<InParamValsWrapper, 16> distinct_param_val_arr;
-  if (OB_FAIL(distinct_param_val_set.create(val_cnt))) {
+  ObSEArray<obj_cmp_func, MAX_EXTRACT_IN_COLUMN_NUMBER> cmp_funcs;
+  if (OB_UNLIKELY(param_cnt == 0 || val_cnt == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid in keypart", K(ret), K(param_cnt), K(val_cnt));
+  } else if (OB_FAIL(distinct_param_val_set.create(val_cnt))) {
     LOG_WARN("failed to create partition macro id set", K(ret));
+  } else if (OB_FAIL(get_obj_cmp_funcs(cmp_funcs))) {
+    LOG_WARN("failed to get cmp funcs", K(ret));
   }
   bool has_dup = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < val_cnt; ++i) {
@@ -863,6 +869,8 @@ int ObInKeyPart::remove_in_dup_vals()
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(cur_param_vals.cmp_funcs_.assign(cmp_funcs))) {
+      LOG_WARN("failed to assign cmp func", K(ret));
     } else if (OB_HASH_EXIST == (ret = distinct_param_val_set.set_refactored(cur_param_vals, 0))) {
       ret = OB_SUCCESS;
       has_dup = true;
@@ -894,6 +902,28 @@ int ObInKeyPart::remove_in_dup_vals()
     }
   }
   LOG_TRACE("succeed to remove duplicated values from in keypart", K(has_dup), K(val_cnt), K(distinct_param_val_arr.count()));
+  return ret;
+}
+
+int ObInKeyPart::get_obj_cmp_funcs(ObIArray<obj_cmp_func> &cmp_funcs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < in_params_.count(); ++i) {
+    InParamMeta *cur_param = in_params_.at(i);
+    obj_cmp_func cmp_op_func = NULL;
+    if (OB_ISNULL(cur_param) || OB_UNLIKELY(cur_param->vals_.count() == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid argument", K(ret), K(cur_param), K(i));
+    } else {
+      const ObObjTypeClass obj_tc = cur_param->vals_.at(0).get_meta().get_type_class();
+      if (OB_FAIL(ObObjCmpFuncs::get_cmp_func(obj_tc, obj_tc, CO_EQ, cmp_op_func))) {
+        LOG_WARN("failed to get cmp func", K(ret), K(obj_tc));
+      } else {
+        OB_ASSERT(cmp_op_func != NULL);
+        ret = cmp_funcs.push_back(cmp_op_func);
+      }
+    }
+  }
   return ret;
 }
 
