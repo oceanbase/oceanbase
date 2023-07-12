@@ -40,9 +40,10 @@ int ObDirectLoadMemLoader::add_table(ObIDirectLoadPartitionTable *table)
     if (OB_ISNULL(external_table = dynamic_cast<ObDirectLoadExternalTable *>(table))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table", KR(ret), KPC(table));
-    } else if (OB_UNLIKELY(external_table->get_fragments().count() != 1)) {
+    } else if (OB_UNLIKELY(external_table->get_fragments().count() <= 0)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("files handle should only have one handle", KR(ret));
+      LOG_WARN("files handle should have at least one handle",
+          KR(ret), K(external_table->get_fragments().count()));
     } else if (OB_FAIL(fragments_.push_back(external_table->get_fragments()))) {
       LOG_WARN("fail to push back", KR(ret));
     }
@@ -58,7 +59,7 @@ int ObDirectLoadMemLoader::work()
   ChunkType *chunk = nullptr;
   RowType row;
   for (int64_t i = 0; OB_SUCC(ret) && i < fragments_.count(); i++) {
-    const ObDirectLoadExternalFragment &fragment = fragments_.at(i);
+    ObDirectLoadExternalFragment &fragment = fragments_.at(i);
     ExternalReader external_reader;
     if (OB_FAIL(external_reader.init(mem_ctx_->table_data_desc_.external_data_block_size_,
                                      fragment.max_data_block_size_,
@@ -116,6 +117,9 @@ int ObDirectLoadMemLoader::work()
           external_row = nullptr;
         }
       }
+    }
+    if (OB_SUCC(ret)) {
+      fragment.reset();
     }
   }
 
