@@ -19,6 +19,7 @@
 #include "ob_archive_sender.h"                // ObArchiveSender
 #include "ob_archive_fetcher.h"               // ObArchiveFetcher
 #include "ob_archive_allocator.h"             // ObArchiveAllocator
+#include "share/rc/ob_tenant_base.h"          // MTL_CPU_COUNT
 #include <cstdint>
 
 namespace oceanbase
@@ -89,9 +90,17 @@ int ObArchiveScheduler::schedule()
 int ObArchiveScheduler::modify_thread_count_()
 {
   int ret = OB_SUCCESS;
+  int64_t archive_concurrency = 0;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  const int64_t archive_concurrency =
-    tenant_config.is_valid() ? tenant_config->log_archive_concurrency : 1L;
+  const int64_t log_archive_concurrency =
+    tenant_config.is_valid() ? tenant_config->log_archive_concurrency : 0L;
+  // if parameter log_archive_concurrency is default zero, set archive_concurrency = max_cpu / 4
+  // otherwise set archive_concurrency = log_archive_concurrency
+  if (0 == log_archive_concurrency) {
+    archive_concurrency = MTL_CPU_COUNT() / 4;
+  } else {
+    archive_concurrency = log_archive_concurrency;
+  }
   const int64_t fetcher_currency = std::max(1L, archive_concurrency / 3);
   const int64_t sender_concurrency = std::max(1L, archive_concurrency - fetcher_currency);
   if (OB_FAIL(sender_->modify_thread_count(sender_concurrency))) {
