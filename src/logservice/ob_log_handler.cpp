@@ -1265,6 +1265,9 @@ int ObLogHandler::get_max_decided_scn(SCN &scn)
   } else if (is_in_stop_state_) {
     //和replay service统一返回4109
     ret = OB_STATE_NOT_MATCH;
+  } else if (is_offline()) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(WARN, "log handle is offline", K(id_));
   } else if (FALSE_IT(id = id_)) {
   } else if (OB_FAIL(apply_service_->get_max_applied_scn(id, max_applied_scn))) {
     CLOG_LOG(WARN, "failed to get_max_applied_scn", K(ret), K(id));
@@ -1411,6 +1414,9 @@ int ObLogHandler::offline()
     //
     MEM_BARRIER();
     is_offline_ = true;
+    //4.Due to the order of ObLogHandle:offline() and  ObLSWRSHandler::offline() in ObLS::offline(), we must keep reset_max_applied_scn_meta() after set  is_offline_ to true, otherwise ls_wrs_service may
+    //print error log.
+    apply_status_->reset_max_applied_scn_meta();
     // NB: must ensure on_role_change not fail.
     if (OB_FAIL(rc_service_->on_role_change(id_))) {
       CLOG_LOG(WARN, "on_role_change failed", K(ret), KPC(this));
