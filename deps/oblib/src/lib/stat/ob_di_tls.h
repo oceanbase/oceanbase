@@ -22,6 +22,12 @@ namespace oceanbase
 {
 namespace common
 {
+template<class T, int N>
+struct ObDITlsPlaceHolder
+{
+  char buf_[sizeof(T[N])];
+};
+
 extern thread_local bool is_thread_in_exit;
 
 template <class T, size_t tag>
@@ -84,6 +90,8 @@ ObDITls<T, tag>::~ObDITls()
 template <class T, size_t tag>
 T* ObDITls<T, tag>::get_instance()
 {
+  // for static check
+  static ObDITlsPlaceHolder<T, 1> placeholder __attribute__((used));
   static thread_local ObDITls<T, tag> di_tls;
   if (OB_LIKELY(!di_tls.is_valid() && !is_thread_in_exit)) {
     static const char* label = get_label();
@@ -156,6 +164,8 @@ ObDITls<T[N], tag>::~ObDITls()
 template <class T, int N, size_t tag>
 T* ObDITls<T[N], tag>::get_instance()
 {
+  // for static check
+  static ObDITlsPlaceHolder<T, N> placeholder __attribute__((used));
   static thread_local ObDITls<T[N], tag> di_tls;
   if (OB_LIKELY(!di_tls.is_valid() && !is_thread_in_exit)) {
     static const char* label = get_label();
