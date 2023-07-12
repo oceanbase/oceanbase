@@ -3056,7 +3056,7 @@ int32_t ObTimeConverter::calc_max_name_length(const ObTimeConstStr names[], cons
   return res;
 }
 
-int ObTimeConverter::data_fmt_nd(char *buffer, int64_t buf_len, int64_t &pos, const int64_t n, int64_t target)
+int ObTimeConverter::data_fmt_nd(char *buffer, int64_t buf_len, int64_t &pos, const int64_t n, int64_t target, bool has_fm_flag)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(n <= 0 || target < 0 || target > 999999999)) {
@@ -3071,9 +3071,15 @@ int ObTimeConverter::data_fmt_nd(char *buffer, int64_t buf_len, int64_t &pos, co
       ret = OB_SIZE_OVERFLOW;
       LIB_TIME_LOG(WARN, "expected length is little", K(ret), K(n), K(ffi.length()), KCSTRING(ffi.str()));
     } else {
-      MEMSET(buffer + pos, '0', n - ffi.length());
-      MEMCPY(buffer + pos + n - ffi.length(), ffi.ptr(), ffi.length());
-      pos += n;
+      if(has_fm_flag) {
+        int len = ffi.length();
+        MEMCPY(buffer + pos, ffi.ptr(), len);
+        pos += len;
+      } else {
+        MEMSET(buffer + pos, '0', n - ffi.length());
+        MEMCPY(buffer + pos + n - ffi.length(), ffi.ptr(), ffi.length());
+        pos += n;
+      }
     }
   }
   return ret;
@@ -4313,6 +4319,7 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
 
     const char* const format_begin_ptr = format.ptr();
     int64_t last_elem_end_pos = 0;
+    bool fm_flag = false; // The flag of FM. If true, the date element located after fm should be set to non filled mode.
 
     //2. print each element
     for (int64_t i = 0; OB_SUCC(ret) && i < format_elems.count(); ++i) {
@@ -4349,13 +4356,13 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             break;
           }
           case ObDFMFlag::CC: {
-            ret = data_fmt_nd(buf, buf_len, pos, 2, (abs(ob_time.parts_[DT_YEAR]) + 99) / 100);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, (abs(ob_time.parts_[DT_YEAR]) + 99) / 100, fm_flag);
             break;
           }
           case ObDFMFlag::SCC: {
             char symbol = ob_time.parts_[DT_YEAR] > 0 ? ' ' : '-';
             if (OB_FAIL(str_write_buf(buf, buf_len, pos, &symbol, 1))) {
-            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, (abs(ob_time.parts_[DT_YEAR]) + 99) / 100))) {
+            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, (abs(ob_time.parts_[DT_YEAR]) + 99) / 100, fm_flag))) {
             }
             break;
           }
@@ -4365,29 +4372,29 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
           }
           case ObDFMFlag::DAY: {  //TODO wjh: NLS_LANGUAGE
             const ObTimeConstStr &day_str = WDAY_NAMES[ob_time.parts_[DT_WDAY]];
-            ret = ObDFMUtil::special_mode_sprintf(buf, buf_len, pos, day_str, elem.upper_case_mode_, MAX_WDAY_NAME_LENGTH);
+            ret = ObDFMUtil::special_mode_sprintf(buf, buf_len, pos, day_str, elem.upper_case_mode_, fm_flag ? -1 : MAX_WDAY_NAME_LENGTH);
             break;
           }
           case ObDFMFlag::DD: {
-            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MDAY]);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MDAY], fm_flag);
             break;
           }
           case ObDFMFlag::DDD: {
-            ret = data_fmt_nd(buf, buf_len, pos, 3, ob_time.parts_[DT_YDAY]);
+            ret = data_fmt_nd(buf, buf_len, pos, 3, ob_time.parts_[DT_YDAY], fm_flag);
             break;
           }
           case ObDFMFlag::DY: {  //TODO wjh: 1. NLS_LANGUAGE
             const ObTimeConstStr &day_str = WDAY_ABBR_NAMES[ob_time.parts_[DT_WDAY]];
-            ret = ObDFMUtil::special_mode_sprintf(buf, buf_len, pos, day_str, elem.upper_case_mode_);
+            ret = ObDFMUtil::special_mode_sprintf(buf, buf_len, pos, day_str, elem.upper_case_mode_, fm_flag ? -1 : MAX_WDAY_ABBR_NAME_LENGTH);
             break;
           }
           case ObDFMFlag::DS: {  //TODO wjh: 1. NLS_TERRITORY 2. NLS_LANGUAGE
             char symbol = '/';
-            if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MON]))) {
+            if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MON], !fm_flag))) {
             } else if (OB_FAIL(str_write_buf(buf, buf_len, pos, &symbol, 1))) {
-            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MDAY]))) {
+            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MDAY], !fm_flag))) {
             } else if (OB_FAIL(str_write_buf(buf, buf_len, pos, &symbol, 1))) {
-            } else if (OB_FAIL(data_fmt_d(buf, buf_len, pos, ob_time.parts_[DT_YEAR]))) {
+            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 4, ob_time.parts_[DT_YEAR], !fm_flag))) {
             }
             break;
           }
@@ -4398,9 +4405,9 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             } else if (OB_FAIL(str_write_buf(buf, buf_len, pos, STRING_WITH_LEN(", ")))) {
             } else if (OB_FAIL(str_write_buf(buf, buf_len, pos, mon_str.ptr_, mon_str.len_))) {
             } else if (OB_FAIL(str_write_buf(buf, buf_len, pos, STRING_WITH_LEN(" ")))) {
-            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MDAY]))) {
+            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MDAY], !fm_flag))) {
             } else if (OB_FAIL(str_write_buf(buf, buf_len, pos, STRING_WITH_LEN(", ")))){
-            } else if (OB_FAIL(data_fmt_d(buf, buf_len, pos, ob_time.parts_[DT_YEAR]))) {
+            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 4, ob_time.parts_[DT_YEAR], !fm_flag))) {
             }
             break;
           }
@@ -4411,7 +4418,7 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
               //print nothing
             } else {
               ret = data_fmt_nd(buf, buf_len, pos, scale,
-                                ob_time.parts_[DT_USEC] / power_of_10[MAX_SCALE_FOR_ORACLE_TEMPORAL - scale]);
+                                ob_time.parts_[DT_USEC] / power_of_10[MAX_SCALE_FOR_ORACLE_TEMPORAL - scale], fm_flag);
             }
             break;
           }
@@ -4439,17 +4446,17 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             if (0 == h) {
               h = 12;
             }
-            ret = data_fmt_nd(buf, buf_len, pos, 2, h);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, h, fm_flag);
             break;
           }
           case ObDFMFlag::HH24: {
             int32_t h = ob_time.parts_[DT_HOUR];
-            ret = data_fmt_nd(buf, buf_len, pos, 2, h);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, h, fm_flag);
             break;
           }
           case ObDFMFlag::IW: {
             calc_iso_week();
-            ret = data_fmt_nd(buf, buf_len, pos, 2, iso_week);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, iso_week, fm_flag);
             break;
           }
           case ObDFMFlag::LITERAL: {
@@ -4463,26 +4470,26 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
               ret = OB_NOT_SUPPORTED;
             } else {
               int32_t julian_day = base_julian_day + ob_time.parts_[DT_DATE] - base_date;
-              ret = data_fmt_nd(buf, buf_len, pos, 7, julian_day);
+              ret = data_fmt_nd(buf, buf_len, pos, 7, julian_day, fm_flag);
             }
             break;
           }
           case ObDFMFlag::MI: {
-            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MIN]);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MIN], fm_flag);
             break;
           }
           case ObDFMFlag::MM: {
-            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MON]);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_MON], fm_flag);
             break;
           }
           case ObDFMFlag::MONTH: {
             const ObTimeConstStr &mon_str = MON_NAMES[ob_time.parts_[DT_MON]];
-            ret = ObDFMUtil::special_mode_sprintf(buf, buf_len, pos, mon_str, elem.upper_case_mode_, MAX_MON_NAME_LENGTH);
+            ret = ObDFMUtil::special_mode_sprintf(buf, buf_len, pos, mon_str, elem.upper_case_mode_, fm_flag ? -1 : MAX_MON_NAME_LENGTH);
             break;
           }
           case ObDFMFlag::MON: {
             const ObTimeConstStr &mon_str = MON_ABBR_NAMES[ob_time.parts_[DT_MON]];
-            ret = ObDFMUtil::special_mode_sprintf(buf, buf_len, pos, mon_str, elem.upper_case_mode_);
+            ret = ObDFMUtil::special_mode_sprintf(buf, buf_len, pos, mon_str, elem.upper_case_mode_, fm_flag ? -1 : MAX_WDAY_ABBR_NAME_LENGTH);
             break;
           }
           case ObDFMFlag::AM:
@@ -4505,23 +4512,23 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             break;
           }
           case ObDFMFlag::RR: {
-            ret = data_fmt_nd(buf, buf_len, pos, 2, (ob_time.parts_[DT_YEAR]) % 100);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, (ob_time.parts_[DT_YEAR]) % 100, fm_flag);
             break;
           }
           case ObDFMFlag::RRRR: {
-            ret = data_fmt_nd(buf, buf_len, pos, 4, ob_time.parts_[DT_YEAR]);
+            ret = data_fmt_nd(buf, buf_len, pos, 4, ob_time.parts_[DT_YEAR], fm_flag);
             break;
           }
           case ObDFMFlag::SS: {
-            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_SEC]);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time.parts_[DT_SEC], fm_flag);
             break;
           }
           case ObDFMFlag::SSSSS: {
-            ret = data_fmt_nd(buf, buf_len, pos, 5, ob_time.parts_[DT_HOUR] * 3600 + ob_time.parts_[DT_MIN] * 60 + ob_time.parts_[DT_SEC]);
+            ret = data_fmt_nd(buf, buf_len, pos, 5, ob_time.parts_[DT_HOUR] * 3600 + ob_time.parts_[DT_MIN] * 60 + ob_time.parts_[DT_SEC], fm_flag);
             break;
           }
           case ObDFMFlag::WW: {  //the first complete week of a year
-            ret = data_fmt_nd(buf, buf_len, pos, 2, (ob_time.parts_[DT_YDAY] - 1) / 7 + 1);
+            ret = data_fmt_nd(buf, buf_len, pos, 2, (ob_time.parts_[DT_YDAY] - 1) / 7 + 1, fm_flag);
             break;
           }
           case ObDFMFlag::W: {  //the first complete week of a month
@@ -4531,7 +4538,7 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
           case ObDFMFlag::YGYYY: {
             if (OB_FAIL(data_fmt_d(buf, buf_len, pos, abs(ob_time.parts_[DT_YEAR]) / 1000))) {
             } else if (OB_FAIL(str_write_buf(buf, buf_len, pos, STRING_WITH_LEN(",")))) {
-            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 3, abs(ob_time.parts_[DT_YEAR]) % 1000))) {
+            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 3, abs(ob_time.parts_[DT_YEAR]) % 1000, fm_flag))) {
             }
             break;
           }
@@ -4546,44 +4553,44 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
           case ObDFMFlag::SYYYY: {
             char sign = ob_time.parts_[DT_YEAR] < 0 ? '-' : ' ';
             if (OB_FAIL(str_write_buf(buf, buf_len, pos, &sign, 1))) {
-            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 4, abs(ob_time.parts_[DT_YEAR])))) {
+            } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 4, abs(ob_time.parts_[DT_YEAR]), fm_flag))) {
             }
             break;
           }
           case ObDFMFlag::YYYY: {
-            ret = data_fmt_nd(buf, buf_len, pos, 4, abs(ob_time.parts_[DT_YEAR]));
+            ret = data_fmt_nd(buf, buf_len, pos, 4, abs(ob_time.parts_[DT_YEAR]), fm_flag);
             break;
           }
           case ObDFMFlag::YYY: {
-            ret = data_fmt_nd(buf, buf_len, pos, 3, abs(ob_time.parts_[DT_YEAR] % 1000));
+            ret = data_fmt_nd(buf, buf_len, pos, 3, abs(ob_time.parts_[DT_YEAR] % 1000), fm_flag);
             break;
           }
           case ObDFMFlag::YY: {
-            ret = data_fmt_nd(buf, buf_len, pos, 2, abs(ob_time.parts_[DT_YEAR] % 100));
+            ret = data_fmt_nd(buf, buf_len, pos, 2, abs(ob_time.parts_[DT_YEAR] % 100), fm_flag);
             break;
           }
           case ObDFMFlag::Y: {
-            ret = data_fmt_nd(buf, buf_len, pos, 1, abs(ob_time.parts_[DT_YEAR] % 10));
+            ret = data_fmt_nd(buf, buf_len, pos, 1, abs(ob_time.parts_[DT_YEAR] % 10), fm_flag);
             break;
           }
           case ObDFMFlag::IYYY: {
             calc_iso_week();
-            ret = data_fmt_nd(buf, buf_len, pos, 4, abs(ob_time.parts_[DT_YEAR] + iso_year_delta));
+            ret = data_fmt_nd(buf, buf_len, pos, 4, abs(ob_time.parts_[DT_YEAR] + iso_year_delta), fm_flag);
             break;
           }
           case ObDFMFlag::IYY: {
             calc_iso_week();
-            ret = data_fmt_nd(buf, buf_len, pos, 3, abs((ob_time.parts_[DT_YEAR] + iso_year_delta) % 1000));
+            ret = data_fmt_nd(buf, buf_len, pos, 3, abs((ob_time.parts_[DT_YEAR] + iso_year_delta) % 1000), fm_flag);
             break;
           }
           case ObDFMFlag::IY: {
             calc_iso_week();
-            ret = data_fmt_nd(buf, buf_len, pos, 2, abs((ob_time.parts_[DT_YEAR] + iso_year_delta) % 100));
+            ret = data_fmt_nd(buf, buf_len, pos, 2, abs((ob_time.parts_[DT_YEAR] + iso_year_delta) % 100), fm_flag);
             break;
           }
           case ObDFMFlag::I: {
             calc_iso_week();
-            ret = data_fmt_nd(buf, buf_len, pos, 1, abs((ob_time.parts_[DT_YEAR] + iso_year_delta) % 10));
+            ret = data_fmt_nd(buf, buf_len, pos, 1, abs((ob_time.parts_[DT_YEAR] + iso_year_delta) % 10), fm_flag);
             break;
           }
           case ObDFMFlag::TZD: {
@@ -4619,7 +4626,7 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             } else {
               char sign = ob_time.parts_[DT_OFFSET_MIN] < 0 ? '-' : '+';
               if (OB_FAIL(str_write_buf(buf, buf_len, pos, &sign, 1))) {
-              } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, abs(ob_time.parts_[DT_OFFSET_MIN]) / 60))) {
+              } else if (OB_FAIL(data_fmt_nd(buf, buf_len, pos, 2, abs(ob_time.parts_[DT_OFFSET_MIN]) / 60, fm_flag))) {
               }
             }
             break;
@@ -4628,7 +4635,7 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             if (OB_UNLIKELY(!HAS_TYPE_TIMEZONE(ob_time.mode_))) {
               ret = OB_INVALID_DATE_FORMAT;
             } else {
-              ret = data_fmt_nd(buf, buf_len, pos, 2, abs(ob_time.parts_[DT_OFFSET_MIN]) % 60);
+              ret = data_fmt_nd(buf, buf_len, pos, 2, abs(ob_time.parts_[DT_OFFSET_MIN]) % 60, fm_flag);
             }
             break;
           }
@@ -4638,7 +4645,10 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             }
             break;
           }
-
+          case ObDFMFlag::FM: {
+            fm_flag = true;
+            break;
+          }
           default: {
             ret = OB_INVALID_DATE_FORMAT;
             LOG_WARN("unknown elem", K(ret), K(elem));

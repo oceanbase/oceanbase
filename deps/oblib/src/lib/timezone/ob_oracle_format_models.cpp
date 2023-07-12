@@ -83,6 +83,7 @@ const ObTimeConstStr ObDFMFlag::PATTERN[ObDFMFlag::MAX_FLAG_NUMBER] =
   ObTimeConstStr("TZR"),
   ObTimeConstStr("X"),
   ObTimeConstStr("J"),
+  ObTimeConstStr("FM"),
   ObTimeConstStr(""),
 };
 constexpr int64_t ObDFMFlag::CONFLICT_GROUP_MAP[ObDFMFlag::MAX_FLAG_NUMBER];

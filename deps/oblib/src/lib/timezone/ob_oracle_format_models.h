@@ -127,6 +127,7 @@ enum ElementFlag : int64_t
   TZR,
   X,
   J,
+  FM,
   LITERAL,
   ///<<< !!!add any flag before this line!!!
   // Please also add in ELEMENTFLAG_MAX_LEN[ObDFMFlag::MAX_FLAG_NUMBER]

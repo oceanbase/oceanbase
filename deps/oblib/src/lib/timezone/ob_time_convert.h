@@ -568,7 +568,7 @@ public:
   static int decode_interval_ds(const char *data, const int64_t len, ObIntervalDSValue &value, ObScale &scale);
   static int encode_interval_ds(char *buf, const int64_t len, int64_t &pos,
                                 const ObIntervalDSValue &value, const ObScale scale);
-  static int data_fmt_nd(char *buffer, int64_t buf_len, int64_t &pos, const int64_t n, int64_t target);
+  static int data_fmt_nd(char *buffer, int64_t buf_len, int64_t &pos, const int64_t n, int64_t target, bool has_fm_flag = false);
   static int data_fmt_d(char *buffer, int64_t buf_len, int64_t &pos, int64_t target);
   static int data_fmt_s(char *buffer, int64_t buf_len, int64_t &pos, const char *ptr);
 
