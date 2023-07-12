@@ -282,7 +282,7 @@ public:
     if (OB_LIKELY(idx_ < CAPACITY)) {
       int64_t now = common::ObTimeUtility::current_time();
       line_array_[idx_] = static_cast<uint16_t>(line);
-      click_poinsts_[idx_] = static_cast<uint32_t>(now - last_click_ts_);
+      click_poinsts_[idx_] = now - last_click_ts_;
       last_click_ts_ = now;
       ++idx_;
     }
@@ -354,7 +354,7 @@ protected:
   const char * const func_name_;
   const char * const log_mod_;
   uint16_t line_array_[CAPACITY];
-  uint32_t click_poinsts_[CAPACITY];
+  uint64_t click_poinsts_[CAPACITY];
 };
 
 class ObOccamFastTimeGuard// must used in same thread

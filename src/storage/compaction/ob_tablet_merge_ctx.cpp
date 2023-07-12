@@ -437,7 +437,7 @@ int64_t ObCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) const
   if (total_cost > COMPACTION_SHOW_TIME_THRESHOLD) {
     float ratio = 0;
     for (int64_t idx = COMPACTION_POLICY; idx < idx_; ++idx) {
-      const uint32_t time_interval = click_poinsts_[idx];
+      const uint64_t time_interval = click_poinsts_[idx];
       ratio = (float)(time_interval)/ total_cost;
       if (ratio >= COMPACTION_SHOW_PERCENT_THRESHOLD || time_interval >= COMPACTION_SHOW_TIME_THRESHOLD) {
         fmt_ts_to_meaningful_str(buf, buf_len, pos, get_comp_event_str((ObTabletCompactionEvent)line_array_[idx]), click_poinsts_[idx]);
@@ -1267,7 +1267,7 @@ void ObTabletMergeCtx::collect_running_info()
 
   const int64_t dag_key = merge_dag_->hash();
   // calc flush macro speed
-  uint32_t exe_ts = time_guard_.get_specified_cost_time(ObCompactionTimeGuard::EXECUTE);
+  uint64_t exe_ts = time_guard_.get_specified_cost_time(ObCompactionTimeGuard::EXECUTE);
   if (exe_ts > 0 && sstable_merge_info.new_flush_occupy_size_ > 0) {
     sstable_merge_info.new_flush_data_rate_ = (int)(((float)sstable_merge_info.new_flush_occupy_size_/ 1024) / ((float)exe_ts / 1_s));
   }

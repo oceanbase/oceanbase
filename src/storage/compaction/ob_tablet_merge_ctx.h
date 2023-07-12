@@ -130,8 +130,8 @@ public:
   void add_time_guard(const ObCompactionTimeGuard &other);
   ObCompactionTimeGuard & operator=(const ObCompactionTimeGuard &other);
   OB_INLINE bool is_empty() const { return 0 == idx_; }
-  OB_INLINE uint32_t get_specified_cost_time(const int64_t line) {
-    uint32_t ret_val = 0;
+  OB_INLINE uint64_t get_specified_cost_time(const int64_t line) {
+    uint64_t ret_val = 0;
     for (int64_t idx = 0; idx < idx_; ++idx) {
       if (line_array_[idx] == line) {
         ret_val = click_poinsts_[idx];

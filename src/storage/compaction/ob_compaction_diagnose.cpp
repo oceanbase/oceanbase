@@ -1158,8 +1158,9 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_medium_merge(
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObArenaAllocator allocator;
   const compaction::ObMediumCompactionInfoList *medium_list = nullptr;
-
-  if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
+  if (tablet_id.is_ls_inner_tablet()) {
+    // do nothing
+  } else if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_ISNULL(last_major_sstable =
       table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/))) {
@@ -1212,7 +1213,9 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
   const ObMergeType merge_type = MEDIUM_MERGE;
   int64_t max_sync_medium_scn = 0;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  if (OB_UNLIKELY(compaction_scn <= 0)) {
+  if (tablet_id.is_ls_inner_tablet()) {
+    // do nothing
+  } else if (OB_UNLIKELY(compaction_scn <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(compaction_scn));
   } else if (tablet.get_tablet_meta().has_transfer_table()) {
