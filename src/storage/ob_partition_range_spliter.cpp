@@ -1157,7 +1157,7 @@ int ObPartitionMultiRangeSpliter::get_split_tables(ObTableStoreIterator &table_i
         } else if (table->is_major_sstable()) {
           major_size = sst_meta_hdl.get_sstable_meta().get_occupy_size();
           last_major_sstable = table;
-        } else if (table->is_minor_sstable()) {
+        } else if (table->is_minor_sstable() || table->is_ddl_sstable()) {
           minor_size += sst_meta_hdl.get_sstable_meta().get_occupy_size();
           if (OB_FAIL(minor_sstables.push_back(table))) {
             STORAGE_LOG(WARN, "Fail to cache minor sstables", K(ret), KP(table));
