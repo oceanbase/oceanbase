@@ -1884,11 +1884,11 @@ int ObSPIService::spi_query(ObPLExecCtx *ctx,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_spi_query);
-  OZ (spi_inner_execute(ctx, sql, "", type, NULL, 0,
+  OZ (SMART_CALL(spi_inner_execute(ctx, sql, "", type, NULL, 0,
                         into_exprs, into_count,
                         column_types, type_count,
                         exprs_not_null_flag,
-                        pl_integer_ranges, is_bulk, false, is_type_record, for_update),
+                        pl_integer_ranges, is_bulk, false, is_type_record, for_update)),
                         sql, type);
   return ret;
 }
@@ -1911,10 +1911,10 @@ int ObSPIService::spi_execute(ObPLExecCtx *ctx,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_spi_execute);
-  OZ (spi_inner_execute(ctx, NULL, ps_sql, type, param_exprs, param_count,
+  OZ (SMART_CALL(spi_inner_execute(ctx, NULL, ps_sql, type, param_exprs, param_count,
                         into_exprs, into_count, column_types, type_count,
                         exprs_not_null_flag, pl_integer_ranges, is_bulk,
-                        is_forall, is_type_record, for_update));
+                        is_forall, is_type_record, for_update)));
   return ret;
 }
 
@@ -6556,7 +6556,9 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
               OZ (pl::ObUserDefinedType::deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
             }
           }
-        } else if (var_type.is_obj_type() && var_type.get_data_type() != NULL && var_type.get_data_type()->get_meta_type().is_null()) {
+        } else if (var_type.is_obj_type() && var_type.get_data_type() != NULL &&
+                   var_type.get_data_type()->get_meta_type().is_null() &&
+                   calc_array->at(0).is_pl_extend()) {
           OZ (pl::ObUserDefinedType::deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
         } else {
           OZ (deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
