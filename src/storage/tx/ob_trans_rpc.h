@@ -210,6 +210,7 @@ int ObTxRPCCB<PC>::init()
 }
 
 // publich method
+bool need_refresh_location_cache_(const int status);
 int refresh_location_cache(const share::ObLSID ls);
 int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const share::ObLSID &receiver_ls_id,
@@ -227,7 +228,6 @@ int handle_sp_rollback_resp(const share::ObLSID &receiver_ls_id,
                             const ObAddr &addr,
                             const int64_t request_id,
                             const ObTxRpcRollbackSPResult &result);
-
 template<ObRpcPacketCode PC>
 int ObTxRPCCB<PC>::process()
 {
@@ -255,10 +255,7 @@ int ObTxRPCCB<PC>::process()
       } else {
         status = result.get_status();
       }
-      if (common::OB_TENANT_NOT_IN_SERVER == status ||
-          common::OB_NOT_MASTER == status ||
-          common::OB_PARTITION_NOT_EXIST == status ||
-          common::OB_LS_NOT_EXIST == status) {
+      if (need_refresh_location_cache_(status)) {
         if (OB_FAIL(refresh_location_cache(receiver_ls_id_))) {
           TRANS_LOG(WARN, "refresh location cache error", KR(ret),
                     K_(trans_id), "ls", receiver_ls_id_, K(result), K(dst), K(status), K_(msg_type));
