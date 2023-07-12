@@ -386,12 +386,15 @@ int ObTableGroupChecker::check_part_option(const ObSimpleTableSchemaV2 &table, O
       if (OB_FAIL(check_part_option_map_.get_refactored(tablegroup_id, table_in_map))) {
         //set to the map while not in check_part_option_map_
         if (OB_HASH_NOT_EXIST == ret) {
+          ObSimpleTableSchemaV2 *new_table_schema = NULL;
           if (OB_FAIL(schema_guard.get_primary_table_schema_in_tablegroup(tenant_id, tablegroup_id, primary_table_schema))) {
             LOG_WARN("fail to get primary table schema in tablegroup", KR(ret), K(tablegroup_id));
           } else if (OB_ISNULL(primary_table_schema)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("primary table schema is NULL", KR(ret), K(tenant_id), K(tablegroup_id));
-          } else if (OB_FAIL(check_part_option_map_.set_refactored(tablegroup_id, primary_table_schema))) {
+          } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_, *primary_table_schema, new_table_schema))) {
+            LOG_WARN("alloc schema failed", KR(ret), KPC(primary_table_schema));
+          } else if (OB_FAIL(check_part_option_map_.set_refactored(tablegroup_id, new_table_schema))) {
             LOG_WARN("set table_schema in hashmap fail", KR(ret), K(tablegroup_id), KPC(primary_table_schema));
           }
         } else {
