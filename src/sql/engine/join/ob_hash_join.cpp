@@ -1028,21 +1028,7 @@ int ObHashJoin::split_partition(ObPartHashJoinCtx& join_ctx, int64_t& num_left_r
       ++num_left_rows;
       const int64_t part_idx = join_ctx.get_part_idx(hash_value);
       if (OB_FAIL(join_ctx.hj_part_array_[part_idx].add_row(*join_ctx.left_row_, stored_row))) {
-        // if oom, then dump and add row again
-        if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-          if (GCONF.is_sql_operator_dump_enabled()) {
-            ret = OB_SUCCESS;
-            if (OB_FAIL(force_dump(join_ctx, true))) {
-              LOG_WARN("fail to dump", K(ret));
-            } else if (OB_FAIL(join_ctx.hj_part_array_[part_idx].add_row(*join_ctx.left_row_, stored_row))) {
-              LOG_WARN("add row to row store failed", K(ret), K(*join_ctx.left_row_));
-            }
-          } else {
-            LOG_WARN("add row to row store failed", K(ret), K(*join_ctx.left_row_));
-          }
-        } else {
-          LOG_WARN("add row to row store failed", K(ret), K(*join_ctx.left_row_));
-        }
+        LOG_WARN("failed to add row", K(ret));
       }
       if (OB_SUCC(ret)) {
         stored_row->set_is_match(false);
