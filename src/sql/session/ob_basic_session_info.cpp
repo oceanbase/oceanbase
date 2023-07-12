@@ -1247,8 +1247,7 @@ int ObBasicSessionInfo::change_value_for_special_sys_var(const ObSysVarClassType
   int ret = OB_SUCCESS;
   int64_t sys_var_store_idx = -1;
   if (SYS_VAR_VERSION_COMMENT == sys_var_id
-      || (SYS_VAR_VERSION == sys_var_id && 0 == ori_val.val_len_) //version not changed by user
-      || SYS_VAR_SYSTEM_TIME_ZONE == sys_var_id) {
+      || (SYS_VAR_VERSION == sys_var_id && 0 == ori_val.val_len_)) { //version not changed by user
     if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, sys_var_store_idx))) {
       LOG_WARN("fail to calc sys var store idx", K(ret), K(sys_var_id));
     } else if (SYS_VAR_VERSION == sys_var_id && 0 == ori_val.val_len_) {
