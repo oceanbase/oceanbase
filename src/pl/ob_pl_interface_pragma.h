@@ -21,6 +21,7 @@
 #include "pl/sys_package/ob_dbms_monitor.h"
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/sys_package/ob_dbms_user_define_rule.h"
+#include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #include "pl/sys_package/ob_dbms_session.h"
 
 #ifdef INTERFACE_DEF
@@ -51,6 +52,18 @@
   INTERFACE_DEF(INTERFACE_DBMS_TENANT_TRACE_ENABLE, "OB_TENANT_TRACE_ENABLE", (ObDBMSMonitor::tenant_trace_enable))
   INTERFACE_DEF(INTERFACE_DBMS_TENANT_TRACE_DISABLE, "OB_TENANT_TRACE_DISABLE", (ObDBMSMonitor::tenant_trace_disable))
   // end of dbms_monitor
+
+
+  //start of resource manager
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_PLAN, "CREATE_PLAN_INNER", (ObPlDBMSResourceManager::create_plan))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_PLAN, "DELETE_PLAN_INNER", (ObPlDBMSResourceManager::delete_plan))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_CONSUMER_GROUP, "CREATE_CONSUMER_GROUP_INNER", (ObPlDBMSResourceManager::create_consumer_group))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_CONSUMER_GROUP, "DELETE_CONSUMER_GROUP_INNER", (ObPlDBMSResourceManager::delete_consumer_group))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_PLAN_DIRECTIVE, "CREATE_PLAN_DIRECTIVE_INNER", (ObPlDBMSResourceManager::create_plan_directive))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_UPDATE_PLAN_DIRECTIVE, "UPDATE_PLAN_DIRECTIVE_INNER", (ObPlDBMSResourceManager::update_plan_directive))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_PLAN_DIRECTIVE, "DELETE_PLAN_DIRECTIVE_INNER", (ObPlDBMSResourceManager::delete_plan_directive))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_SET_CONSUMER_GROUP_MAPPING, "SET_CONSUMER_GROUP_MAPPING_INNER", (ObPlDBMSResourceManager::set_consumer_group_mapping))
+  //end of resource manager
 
   //start of dbms_stat
   INTERFACE_DEF(INTERFACE_DBMS_STATS_GATHER_TABLE_STATS, "GATHER_TABLE_STATS", (ObDbmsStats::gather_table_stats))
