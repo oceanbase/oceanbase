@@ -110,6 +110,7 @@ public:
   int convert_real_to_hidden_sys_tenant();
   int update_tenant_cpu(const uint64_t tenant_id, const double min_cpu, const double max_cpu);
   int update_tenant_memory(const uint64_t tenant_id, const int64_t mem_limit, int64_t &allowed_mem_limit);
+  int update_tenant_memory(const share::ObUnitInfoGetter::ObTenantConfig &unit);
   int update_tenant_log_disk_size(const uint64_t tenant_id,
                                   const int64_t expected_log_disk_size);
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);

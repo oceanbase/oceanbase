@@ -330,59 +330,34 @@ int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfi
 
   const int64_t tenant_id = unit.tenant_id_;
   ObTenant *tenant = nullptr;
-  bool is_new_tenant = true;
-  bool is_config_changed = true;
-  ObUnitInfoGetter::ObTenantConfig old_unit;
 
-  if (OB_SYS_TENANT_ID == tenant_id) {
-    if (OB_SUCC(omt_->get_tenant(tenant_id, tenant))) {
-      if (tenant->is_hidden()) {
-        if (OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
-          LOG_WARN("fail to create real sys tenant", K(unit));
-        }
-      } else { // is real sys tenant
-        old_unit = tenant->get_unit();
-        if (unit == old_unit) {
-          // has real sys tenant and config not change, do nothing
-        } else if (OB_FAIL(omt_->update_tenant_unit(unit))) {
-          LOG_ERROR("fail to update sys tenant config", K(ret), K(tenant_id));
-        }
-      }
-    } else {
+  if (OB_FAIL(omt_->get_tenant(tenant_id, tenant))) {
+    if (is_sys_tenant(tenant_id)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("real or hidden sys tenant must be exist", K(ret));
-    }
-  } else { // not sys tenant
-    if (OB_SUCC(omt_->get_tenant(tenant_id, tenant))) {
-      is_new_tenant = false;
-      old_unit = tenant->get_unit();
-      if (unit == old_unit) {
-        is_config_changed = false;
-      } else {
-        is_config_changed = true;
-      }
     } else {
       ret = OB_SUCCESS;
-      is_new_tenant = true;
-      is_config_changed = true;
-    }
-
-    if (OB_SUCC(ret)) {
-      if (!is_config_changed) {
-        // do nothing
-      } else {
-        if (is_new_tenant) {
-          ObTenantMeta tenant_meta;
-          ObTenantSuperBlock super_block(tenant_id, false/*is_hidden*/); // empty super block
-          if (OB_FAIL(tenant_meta.build(unit, super_block))) {
-            LOG_WARN("fail to build tenant meta", K(ret));
-          } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true/* write_slog */, abs_timeout_us))) {
-            LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
-          }
-        } else if (OB_FAIL(omt_->update_tenant_unit(unit))) {
-          LOG_WARN("fail to update tenant config", K(ret), K(tenant_id));
-        }
+      ObTenantMeta tenant_meta;
+      ObTenantSuperBlock super_block(tenant_id, false /*is_hidden*/);  // empty super block
+      if (OB_FAIL(tenant_meta.build(unit, super_block))) {
+        LOG_WARN("fail to build tenant meta", K(ret));
+      } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true /* write_slog */, abs_timeout_us))) {
+        LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
       }
+    }
+  } else {
+    if (is_sys_tenant(tenant_id) && tenant->is_hidden()) {
+      if (OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
+        LOG_WARN("fail to create real sys tenant", K(unit));
+      }
+    }
+    if (OB_SUCC(ret) && !(unit == tenant->get_unit())) {
+      if (OB_FAIL(omt_->update_tenant_unit(unit))) {
+        LOG_WARN("fail to update tenant unit", K(ret), K(tenant_id));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(omt_->update_tenant_memory(unit))) {
+      LOG_ERROR("fail to update tenant memory", K(ret), K(tenant_id));
     }
   }
   if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {

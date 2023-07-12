@@ -1014,11 +1014,7 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     LOG_ERROR("tenant is nullptr", K(tenant_id));
   } else if (OB_FAIL(write_update_tenant_unit_slog(unit))) {
     LOG_WARN("fail to write tenant meta slog", K(ret), K(tenant_id));
-  } else if (OB_FAIL(update_tenant_memory(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
-    LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
-  } else if (OB_FAIL(update_tenant_freezer_mem_limit(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
-    LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
-  } else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
+  }  else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
     LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id, unit.config_.log_disk_size()))) {
       LOG_WARN("fail to update tenant log disk size", K(ret), K(tenant_id));
@@ -1035,6 +1031,19 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     LOG_INFO("succecc to set tenant unit config", K(unit), K(allowed_mem_limit));
   }
 
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_memory(const ObUnitInfoGetter::ObTenantConfig &unit)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = unit.tenant_id_;
+  int64_t allowed_mem_limit = 0;
+  if (OB_FAIL(update_tenant_memory(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
+    LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
+  } else if (OB_FAIL(update_tenant_freezer_mem_limit(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
+    LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
+  }
   return ret;
 }
 
