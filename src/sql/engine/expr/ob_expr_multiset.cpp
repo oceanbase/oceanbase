@@ -244,30 +244,23 @@ int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
     }
     CK (res_cnt > 0);
     if (OB_SUCC(ret)) {
-      // 计算结果大于100，且有效数据是超过50%，拷贝有效数据到新的内存，释放老内存
-      // 这两个数字是拍脑袋想出来的，主要目的是希望节省内存。
-      if ((res_cnt < count / 2) && (count > 100)) {
-        data_arr = static_cast<ObObj *>(coll_allocator->alloc(res_cnt * sizeof(ObObj)));
-        if (OB_ISNULL(data_arr)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate result obobj array failed, size is: ", K(res_cnt));
-        } else {
-          for (int64_t i = 0; i < res_cnt; ++i) {
-            if (objs[i].is_pl_extend() &&
-                objs[i].get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
-              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, objs[i], data_arr[i], true))) {
-                LOG_WARN("copy obobj failed.", K(ret));
-              }
-            } else if (OB_FAIL(deep_copy_obj(*coll_allocator, objs[i], data_arr[i]))) {
+      data_arr = static_cast<ObObj *>(coll_allocator->alloc(res_cnt * sizeof(ObObj)));
+      if (OB_ISNULL(data_arr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate result obobj array failed, size is: ", K(res_cnt));
+      } else {
+        for (int64_t i = 0; i < res_cnt; ++i) {
+          if (objs[i].is_pl_extend() &&
+              objs[i].get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, objs[i], data_arr[i], true))) {
               LOG_WARN("copy obobj failed.", K(ret));
             }
+          } else if (OB_FAIL(deep_copy_obj(*coll_allocator, objs[i], data_arr[i]))) {
+            LOG_WARN("copy obobj failed.", K(ret));
           }
         }
-        elem_count = res_cnt;
-      } else {
-        data_arr = objs;
-        elem_count = res_cnt;
       }
+      elem_count = res_cnt;
     }
   }
   return ret;
