@@ -3815,7 +3815,8 @@ bool ObPxCheckAlive::is_in_blacklist(const common::ObAddr &addr, int64_t server_
   bool in_blacklist = false;
   obrpc::ObNetKeepAliveData alive_data;
   if (OB_FAIL(ObNetKeepAlive::get_instance().in_black(addr, in_blacklist, &alive_data))) {
-    LOG_WARN("check in black failed", K(ret));
+    ret = OB_SUCCESS;
+    in_blacklist = false;
   } else if (!in_blacklist && server_start_time > 0) {
     in_blacklist = alive_data.start_service_time_ >= server_start_time;
   }
