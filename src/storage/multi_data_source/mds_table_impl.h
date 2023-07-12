@@ -146,7 +146,7 @@ public:
     ForEachUnitFillVirtualInfoHelper helper(mds_node_info_array);
     return unit_tuple_.for_each(helper);
   }
-  virtual int forcely_release_all_mds_nodes(const char *reason) override;
+  virtual int forcely_reset_mds_table(const char *reason) override;
   /*****************************Single Key Unit Access Interface***********************************/
   template <typename T>
   int set(T &&data,

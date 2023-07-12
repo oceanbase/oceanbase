@@ -1064,7 +1064,11 @@ void MdsTableImpl<MdsTableType>::on_flush_(const share::SCN &flush_scn, const in
     MDS_LOG_FLUSH(WARN, "flush failed");
     flushing_scn_.reset();
   } else if (!flushing_scn_.is_valid() || flushing_scn_ != flush_scn) {
-    MDS_LOG_FLUSH(ERROR, "flush version mismatch!");
+    if (rec_scn_ == share::SCN::max_scn()) {
+      MDS_LOG_FLUSH(WARN, "maybe meet concurrent reset mds table");
+    } else {
+      MDS_LOG_FLUSH(ERROR, "flush version mismatch!");
+    }
   } else {
     last_flushed_scn_ = flushing_scn_;
     flushing_scn_.reset();
@@ -1437,7 +1441,7 @@ struct ForcelyReleaseAllNodeOp
   const char *reason_;
 };
 template <typename MdsTableType>
-int MdsTableImpl<MdsTableType>::forcely_release_all_mds_nodes(const char *reason)
+int MdsTableImpl<MdsTableType>::forcely_reset_mds_table(const char *reason)
 {
   #define PRINT_WRAPPER KR(ret), K(*this), K(reason)
   int ret = OB_SUCCESS;
@@ -1445,8 +1449,14 @@ int MdsTableImpl<MdsTableType>::forcely_release_all_mds_nodes(const char *reason
   MdsWLockGuard lg(lock_);
   ForcelyReleaseAllNodeOp op(reason);
   if (OB_FAIL(for_each_scan_row(op))) {
-    MDS_LOG_GC(ERROR, "fail to do recycle");
+    MDS_LOG_GC(ERROR, "fail to do reset");
   } else {
+    debug_info_.last_reset_ts_ = ObClockGenerator::getCurrentTime();
+    flushing_scn_.reset();
+    last_flushed_scn_ = share::SCN::min_scn();
+    last_inner_recycled_scn_ = share::SCN::min_scn();
+    rec_scn_ = share::SCN::max_scn();
+    ATOMIC_STORE(&total_node_cnt_, 0);
     MDS_LOG_GC(INFO, "forcely release all mds nodes");
   }
   return ret;

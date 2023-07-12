@@ -698,7 +698,7 @@ inline int MdsTableHandle::mark_removed_from_t3m(ObTabletPointer *pointer)
 }
 
 template <int N>
-inline int MdsTableHandle::forcely_release_all_mds_nodes(const char (&reason)[N])
+inline int MdsTableHandle::forcely_reset_mds_table(const char (&reason)[N])
 {
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();
@@ -706,7 +706,7 @@ inline int MdsTableHandle::forcely_release_all_mds_nodes(const char (&reason)[N]
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(WARN, "p_mds_table_base_ is invalid", K(*this));
   } else {
-    p_mds_table_base_->forcely_release_all_mds_nodes(reason);
+    p_mds_table_base_->forcely_reset_mds_table(reason);
   }
   return ret;
 }

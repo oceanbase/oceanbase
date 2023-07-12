@@ -150,7 +150,7 @@ public:
   virtual ObTabletID get_tablet_id() const;
   virtual bool is_flushing() const;
   virtual int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const = 0;
-  virtual int forcely_release_all_mds_nodes(const char *reason) = 0;
+  virtual int forcely_reset_mds_table(const char *reason) = 0;
   void mark_removed_from_t3m(ObTabletPointer *pointer);// need called in del tablet phase
   bool is_removed_from_t3m() const;
   int64_t get_removed_from_t3m_ts() const;
@@ -260,14 +260,16 @@ protected:
     : do_init_tablet_pointer_(nullptr),
     do_remove_tablet_pointer_(nullptr),
     init_ts_(0),
+    last_reset_ts_(0),
     remove_ts_(0),
     init_trace_id_(),
     remove_trace_id_() {}
-    TO_STRING_KV(KP_(do_init_tablet_pointer), KP_(do_remove_tablet_pointer), KTIME_(init_ts), KTIME_(remove_ts),
-                 K_(init_trace_id), K_(remove_trace_id));
+    TO_STRING_KV(KP_(do_init_tablet_pointer), KP_(do_remove_tablet_pointer), KTIME_(init_ts), KTIME_(last_reset_ts),
+                 KTIME_(remove_ts), K_(init_trace_id), K_(remove_trace_id));
     ObTabletPointer *do_init_tablet_pointer_;// can not be accessed, jsut record it to debug
     ObTabletPointer *do_remove_tablet_pointer_;// can not be accessed, jsut record it to debug
     int64_t init_ts_;
+    int64_t last_reset_ts_;
     int64_t remove_ts_;
     ObCurTraceId::TraceId init_trace_id_;
     ObCurTraceId::TraceId remove_trace_id_;

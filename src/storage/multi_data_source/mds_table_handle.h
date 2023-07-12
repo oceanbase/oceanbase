@@ -45,7 +45,7 @@ public:
   int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
   int mark_removed_from_t3m(ObTabletPointer *pointer);
   template <int N>
-  int forcely_release_all_mds_nodes(const char (&reason)[N]);
+  int forcely_reset_mds_table(const char (&reason)[N]);
   /******************************Single Key Unit Access Interface**********************************/
   template <typename T>
   int set(T &&data, MdsCtx &ctx, const int64_t lock_timeout_us = 0);

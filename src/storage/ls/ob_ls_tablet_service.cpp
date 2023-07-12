@@ -5923,7 +5923,7 @@ int ObLSTabletService::DestroyMemtableAndMemberAndMdsTableOperator::operator()(c
     }
   } else if (OB_FAIL(handle.get_obj()->release_memtables())) {
     LOG_WARN("failed to release memtables", K(tenant_id), K(tablet_id));
-  } else if (OB_FAIL(handle.get_obj()->forcely_release_all_mds_nodes("OFFLINE"))) {
+  } else if (OB_FAIL(handle.get_obj()->forcely_reset_mds_table("OFFLINE"))) {
     LOG_WARN("failed to release mds_table", K(tenant_id), K(tablet_id));
   } else if (!tablet_id.is_ls_inner_tablet() && OB_FAIL(handle.get_obj()->reset_storage_related_member())) {
     LOG_WARN("failed to destroy storage related member", K(ret), K(tenant_id), K(tablet_id));

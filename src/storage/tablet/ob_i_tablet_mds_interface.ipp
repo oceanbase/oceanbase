@@ -137,7 +137,7 @@ inline int ObITabletMdsInterface::check_mds_written(bool &written)
 }
 
 template <int N>
-int ObITabletMdsInterface::forcely_release_all_mds_nodes(const char (&reason)[N])
+int ObITabletMdsInterface::forcely_reset_mds_table(const char (&reason)[N])
 {
   #define PRINT_WRAPPER KR(ret), K(reason)
   MDS_TG(10_ms);
@@ -155,7 +155,7 @@ int ObITabletMdsInterface::forcely_release_all_mds_nodes(const char (&reason)[N]
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_GC(WARN, "mds cannot be NULL");
-  } else if (CLICK_FAIL(handle.forcely_release_all_mds_nodes(reason))) {
+  } else if (CLICK_FAIL(handle.forcely_reset_mds_table(reason))) {
     MDS_LOG_GC(WARN, "fail to release mds nodes in mds table");
   }
   return ret;
