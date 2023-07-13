@@ -823,7 +823,7 @@ private:
 
   // a synonym may a dblink synonym, while failed to resolving a sysnonym to a table name,
   // wo should try to resolving to a dblink name.
-  // in out param: table_name, in: may someting link "remote_schema.test@my_link", out: "test"
+  // in out param: table_name, in: may something link "remote_schema.test@my_link", out: "test"
   // out param: dblink_name("my_link"), db_name("remote_schema"), dblink_id(id of my_link)
   int resolve_dblink_with_synonym(uint64_t tenant_id, ObString &table_name, ObString &dblink_name,
                                   ObString &db_name, uint64_t &dblink_id);
@@ -853,7 +853,7 @@ private:
                             ObIArray<ObHint*> &opt_hints);
   int resolve_index_hint(const ParseNode &index_node,
                          ObOptHint *&opt_hint);
-  int resolve_index_hint(const TableItem &table, // resovle mysql mode index hint after table
+  int resolve_index_hint(const TableItem &table, // resolved mysql mode index hint after table
                          const ParseNode &index_hint_node);
   int resolve_table_parallel_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_order_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
@@ -970,7 +970,7 @@ protected:
 
   /*
    * 在with clause的解析中，我们不能将解析的表添加到影响此plan是否需要进入trans_service
-   * 的globle_dependency_table中去。
+   * 的global_dependency_table中去。
    * 例如：
    * with cte (select * from t1) select 1 from dual;
    * 如果加入了，上面这句将会进入trans_service，而之后则会报错，因为其实它检测到相关table的
