@@ -84,6 +84,7 @@ int ObSelectLogPlan::candi_allocate_group_by()
   ObSEArray<ObRawExpr*, 8> having_subquery_exprs;
   ObSEArray<ObRawExpr*, 8> having_normal_exprs;
   ObSEArray<ObRawExpr*, 8> candi_subquery_exprs;
+  OPT_TRACE_TITLE("start generate group by");
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -243,18 +244,19 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
                                     groupby_helper))) {
       LOG_WARN("failed to init group by helper", K(ret));
     } else if (groupby_helper.can_three_stage_pushdown_) {
-        if (OB_FAIL(candi_allocate_three_stage_group_by(reduce_exprs,
-                                                        group_by_exprs,
-                                                        group_directions,
-                                                        rollup_exprs,
-                                                        rollup_directions,
-                                                        aggr_items,
-                                                        having_exprs,
-                                                        is_from_povit,
-                                                        groupby_helper,
-                                                        groupby_plans))) {
-          LOG_WARN("failed to candi allocate three stage group by", K(ret));
-        }
+      OPT_TRACE("generate three stage group by");
+      if (OB_FAIL(candi_allocate_three_stage_group_by(reduce_exprs,
+                                                      group_by_exprs,
+                                                      group_directions,
+                                                      rollup_exprs,
+                                                      rollup_directions,
+                                                      aggr_items,
+                                                      having_exprs,
+                                                      is_from_povit,
+                                                      groupby_helper,
+                                                      groupby_plans))) {
+        LOG_WARN("failed to candi allocate three stage group by", K(ret));
+      }
     } else if (OB_FAIL(candi_allocate_normal_group_by(reduce_exprs,
                                                       group_by_exprs,
                                                       group_directions,
@@ -269,6 +271,7 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
       LOG_WARN("failed to inner allocate normal group by", K(ret));
     } else if (!groupby_plans.empty()) {
       LOG_TRACE("succeed to allocate group by using hint", K(groupby_plans.count()), K(groupby_helper));
+      OPT_TRACE("success to generate group plan with hint");
     } else if (OB_FAIL(get_log_plan_hint().check_status())) {
       LOG_WARN("failed to generate plans with hint", K(ret));
     } else if (OB_FAIL(candi_allocate_normal_group_by(reduce_exprs,
@@ -285,6 +288,7 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
       LOG_WARN("failed to inner allocate normal group by", K(ret));
     } else {
       LOG_TRACE("succeed to allocate group by ignore hint", K(groupby_plans.count()), K(groupby_helper));
+      OPT_TRACE("success to generate group plan without hint");
     }
 
     //add plans to candidates
@@ -471,6 +475,7 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < best_plans.count(); i++) {
         candidate_plan = best_plans.at(i);
+        OPT_TRACE("generate hash group by for plan:", candidate_plan);
         if (OB_FAIL(create_hash_group_plan(reduce_exprs,
                                             group_by_exprs,
                                             rollup_exprs,
@@ -493,6 +498,7 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
       candidate_plan = candidates_.candidate_plans_.at(i);
       bool is_needed = false;
+      OPT_TRACE("generate merge group by for plan:", candidate_plan);
       if (OB_FAIL(should_create_rollup_pushdown_plan(candidate_plan.plan_tree_,
                                                       reduce_exprs,
                                                       rollup_exprs,
@@ -1329,7 +1335,7 @@ int ObSelectLogPlan::candi_allocate_distinct()
   ObSEArray<ObRawExpr*, 8> reduce_exprs;
   ObSEArray<ObRawExpr*, 8> distinct_exprs;
   ObSEArray<ObRawExpr*, 8> candi_subquery_exprs;
-
+  OPT_TRACE_TITLE("start to generate distinct operator");
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -1385,6 +1391,7 @@ int ObSelectLogPlan::candi_allocate_distinct()
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < best_candidates.count(); i++) {
             candidate_plan = best_candidates.at(i);
+            OPT_TRACE("generate hash distinct for plan:", candidate_plan);
             if (OB_FAIL(create_hash_distinct_plan(candidate_plan.plan_tree_,
                                                   distinct_helper,
                                                   reduce_exprs,
@@ -1403,6 +1410,7 @@ int ObSelectLogPlan::candi_allocate_distinct()
         bool is_plan_valid = false;
         for(int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
           candidate_plan = candidates_.candidate_plans_.at(i);
+            OPT_TRACE("generate merge distinct for plan:", candidate_plan);
           if (OB_FAIL(create_merge_distinct_plan(candidate_plan.plan_tree_,
                                                 distinct_helper,
                                                 reduce_exprs,
@@ -1487,7 +1495,6 @@ int ObSelectLogPlan::create_hash_distinct_plan(ObLogicalOperator *&top,
   int ret = OB_SUCCESS;
   bool is_partition_wise = false;
   ObExchangeInfo exch_info;
-  OPT_TRACE("start generate hash distinct plan");
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(top), K(ret));
@@ -4700,6 +4707,7 @@ int ObSelectLogPlan::candi_allocate_window_function()
     LOG_WARN("failed to do allocate subplan filter", K(ret));
   } else if (stmt->get_window_func_count() > 0) {
     ObSEArray<CandidatePlan, 8> winfunc_plans;
+    OPT_TRACE_TITLE("start generate window function");
     if (OB_FAIL(ObRawExprUtils::build_inner_wf_aggr_status_expr(
                                 get_optimizer_context().get_expr_factory(),
                                 *get_optimizer_context().get_session_info(),
@@ -4707,6 +4715,7 @@ int ObSelectLogPlan::candi_allocate_window_function()
       LOG_WARN("build_inner_wf_aggr_status_expr failed", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
+      OPT_TRACE("generate window function for plan:", candidates_.candidate_plans_.at(i));
       if (OB_FAIL(generate_window_functions_plan(stmt->get_window_func_exprs(),
                   static_cast<ObOpPseudoColumnRawExpr *>(wf_aggr_status_expr),
                   winfunc_plans,
@@ -6088,11 +6097,13 @@ int ObSelectLogPlan::candi_allocate_late_materialization()
   if (OB_FAIL(if_stmt_need_late_materialization(need_late_mat))) {
     LOG_WARN("failed to check if stmt need late materialization", K(ret));
   } else if (need_late_mat) {
+    OPT_TRACE_TITLE("start generate late materialization plan");
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
       bool need = false;
       ObLogTableScan *index_scan = NULL;
       CandidatePlan &plain_plan = candidates_.candidate_plans_.at(i);
       double cost = 0.0;
+      OPT_TRACE("try to generate late materialization for plan:", plain_plan);
       if (OB_FAIL(if_plan_need_late_materialization(plain_plan.plan_tree_,
                                                     index_scan,
                                                     cost,

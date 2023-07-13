@@ -126,6 +126,28 @@ struct ObDistinctAggrBatch
   TO_STRING_KV(K(mocked_aggrs_), K(mocked_params_));
 };
 
+struct CandidatePlan
+{
+  CandidatePlan(ObLogicalOperator *plan_tree)
+  : plan_tree_(plan_tree)
+  { }
+  CandidatePlan()
+  : plan_tree_(NULL)
+  { }
+  virtual ~CandidatePlan() {}
+  void reset()
+  {
+    plan_tree_ = NULL;
+  }
+  ObLogicalOperator *plan_tree_;
+
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    UNUSED(buf);
+    UNUSED(buf_len);
+    return common::OB_SUCCESS;
+  }
+};
 
 typedef common::ObSEArray<ObJoinOrder*, 4> JoinOrderArray;
 
@@ -435,28 +457,6 @@ public:
   void set_insert_stmt(const ObInsertStmt *insert_stmt) { insert_stmt_ = insert_stmt; }
   const ObInsertStmt *get_insert_stmt() const { return insert_stmt_; }
 public:
-  struct CandidatePlan
-  {
-    CandidatePlan(ObLogicalOperator *plan_tree)
-    : plan_tree_(plan_tree)
-    { }
-    CandidatePlan()
-    : plan_tree_(NULL)
-    { }
-    virtual ~CandidatePlan() {}
-    void reset()
-    {
-      plan_tree_ = NULL;
-    }
-    ObLogicalOperator *plan_tree_;
-
-    int64_t to_string(char *buf, const int64_t buf_len) const
-    {
-      UNUSED(buf);
-      UNUSED(buf_len);
-      return common::OB_SUCCESS;
-    }
-  };
 
   struct All_Candidate_Plans
   {

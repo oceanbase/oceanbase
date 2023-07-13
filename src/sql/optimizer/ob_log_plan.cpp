@@ -814,7 +814,8 @@ int ObLogPlan::generate_join_orders()
     } else {
       LOG_TRACE("succeed to generate join order", K(ret));
       OPT_TRACE("SUCCEED TO GENERATE JOIN ORDER, try path count:",
-                        join_order_->get_total_path_num());
+                        join_order_->get_total_path_num(),
+                        ",interesting path count:", join_order_->get_interesting_paths().count());
       OPT_TRACE_TIME_USED;
       OPT_TRACE_MEM_USED;
     }
@@ -5560,6 +5561,7 @@ int ObLogPlan::candi_allocate_sequence()
   ObSEArray<CandidatePlan, 4> sequence_plans;
   ObDMLStmt *root_stmt = NULL;
   bool will_use_parallel_sequence = false;
+  OPT_TRACE_TITLE("start to generate sequence plan");
   if (OB_ISNULL(root_stmt = get_optimizer_context().get_root_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(root_stmt), K(ret));
@@ -5569,9 +5571,11 @@ int ObLogPlan::candi_allocate_sequence()
     LOG_WARN("get unexpected null", K(root_stmt), K(ret));
   } else {
     will_use_parallel_sequence = get_optimizer_context().is_online_ddl() || root_stmt->is_insert_stmt();
+    OPT_TRACE("check will use parallel sequence:", will_use_parallel_sequence);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
     candidate_plan = candidates_.candidate_plans_.at(i);
+    OPT_TRACE("generate sequence for plan:", candidate_plan);
     if (OB_ISNULL(candidate_plan.plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -5708,6 +5712,7 @@ int ObLogPlan::candi_allocate_temp_table_transformation()
   ObSEArray<CandidatePlan, 8> temp_table_trans_plans;
   ObSEArray<ObLogicalOperator*, 8> temp_table_insert;
   ObIArray<ObSqlTempTableInfo*> &temp_table_infos = get_optimizer_context().get_temp_table_infos();
+  OPT_TRACE_TITLE("start generate temp table transformation");
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); i++) {
     ObLogicalOperator *temp_table_plan = NULL;
     if (OB_ISNULL(temp_table_plan = temp_table_infos.at(i)->table_plan_)) {
@@ -5721,6 +5726,7 @@ int ObLogPlan::candi_allocate_temp_table_transformation()
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
     candidate_plan = candidates_.candidate_plans_.at(i);
+    OPT_TRACE("generate temp table transformation for plan:", candidate_plan);
     if (OB_FAIL(create_temp_table_transformation_plan(candidate_plan.plan_tree_,
                                                       temp_table_insert))) {
       LOG_WARN("failed to allocate temp table transformation", K(ret));
@@ -6445,6 +6451,7 @@ int ObLogPlan::candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExpr*> &a
       LOG_WARN("failed to get minimal cost candidate", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < best_plans.count(); i++) {
+        OPT_TRACE("generate scala group by for plan:", best_plans.at(i));
         if (OB_FAIL(create_scala_group_plan(agg_items,
                                             having_exprs,
                                             is_from_povit,
@@ -6489,6 +6496,7 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
              OB_FAIL(try_push_aggr_into_table_scan(top, aggr_items))) {
     LOG_WARN("failed to push group by into table scan", K(ret));
   } else if (!top->is_distributed()) {
+    OPT_TRACE("generate scala group plan without pushdown");
     if (OB_FAIL(allocate_scala_group_by_as_top(top,
                                                aggr_items,
                                                having_exprs,
@@ -6503,6 +6511,7 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
   } else if (groupby_helper.can_three_stage_pushdown_ && !is_partition_wise) {
+    OPT_TRACE("generate three stage group plan");
     if (NULL == groupby_helper.aggr_code_expr_ &&
         OB_FAIL(prepare_three_stage_info(dummy_exprs, dummy_exprs, groupby_helper))) {
       LOG_WARN("failed to prepare three stage info", K(ret));
@@ -7543,6 +7552,7 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
   ObRawExpr *topn_expr = NULL;
   bool is_fetch_with_ties = false;
   need_limit = false;
+  OPT_TRACE_TITLE("start generate order by");
   if (OB_ISNULL(get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -7581,6 +7591,7 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
       bool is_reliable = false;
       CandidatePlan candidate_plan = candidates_.candidate_plans_.at(i);
+      OPT_TRACE("generate order by for plan:", candidate_plan);
       if (OB_FAIL(create_order_by_plan(candidate_plan.plan_tree_,
                                        order_items,
                                        topn_expr,
@@ -8274,6 +8285,7 @@ int ObLogPlan::candi_allocate_limit(const ObIArray<OrderItem> &order_items)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
+  OPT_TRACE_TITLE("start generate limit");
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
@@ -8313,6 +8325,7 @@ int ObLogPlan::candi_allocate_limit(ObRawExpr *limit_expr,
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
       bool is_reliable = false;
       CandidatePlan &plain_plan = candidates_.candidate_plans_.at(i);
+      OPT_TRACE("generate limit for plan:", plain_plan);
       if (OB_ISNULL(plain_plan.plan_tree_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
@@ -8689,7 +8702,8 @@ int ObLogPlan::candi_allocate_subplan_filter_for_exprs(ObIArray<ObRawExpr*> &exp
   } else if (!nested_subquery_exprs.empty() &&
              OB_FAIL(candi_allocate_subplan_filter(nested_subquery_exprs))) {
     LOG_WARN("failed to allocate subplan filter for order by exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter(exprs))) {
+  } else if (!exprs.empty() &&
+             OB_FAIL(candi_allocate_subplan_filter(exprs))) {
     LOG_WARN("failed to allocate subplan filter for order by exprs", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -8709,6 +8723,7 @@ int ObLogPlan::candi_allocate_subplan_filter(const ObIArray<ObRawExpr*> &subquer
   ObSEArray<ObExecParamRawExpr *, 4> params;
   ObSEArray<ObExecParamRawExpr *, 4> onetime_exprs;
   ObSEArray<ObRawExpr *, 4> new_filters;
+  OPT_TRACE_TITLE("start generate subplan filter");
   if (OB_FAIL(generate_subplan_filter_info(subquery_exprs,
                                            subplans,
                                            query_refs,
@@ -8815,6 +8830,7 @@ int ObLogPlan::inner_candi_allocate_subplan_filter(ObIArray<ObLogPlan*> &subplan
   // generate subplan filter
   for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
     candidate_plan = candidates_.candidate_plans_.at(i);
+    OPT_TRACE("generate subplan filter for plan:", candidate_plan);
     if (OB_ISNULL(candidate_plan.plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(candidate_plan.plan_tree_), K(ret));
@@ -9059,16 +9075,20 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
   } else if ((!for_cursor_expr && is_basic) ||
              (for_cursor_expr && is_basic && !is_remote)) {
     dist_algo = DistAlgo::DIST_BASIC_METHOD;
+    OPT_TRACE("SPF will use basic method");
   } else if (for_cursor_expr) {
     dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+    OPT_TRACE("SPF will use pull to local method for cursor subquery expr");
   } else if (OB_FAIL(check_contains_recursive_cte(sf_childs,
                                                   is_recursive_cte))) {
     LOG_WARN("failed to check whether contains recursive cte", K(ret));
   } else if (is_recursive_cte) {
     dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+    OPT_TRACE("SPF will use pull to local method for recursive cte");
   } else if (!get_optimizer_context().is_var_assign_only_in_root_stmt() &&
               get_optimizer_context().has_var_assign()) {
     dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+    OPT_TRACE("SPF will use pull to local method for var assign");
   } else if (OB_FAIL(check_if_subplan_filter_match_partition_wise(top,
                                                                   subquery_ops,
                                                                   params,
@@ -9076,6 +9096,7 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
     LOG_WARN("failed to check if match partition wise", K(ret));
   } else if (is_partition_wise) {
     dist_algo = DistAlgo::DIST_PARTITION_WISE;
+    OPT_TRACE("SPF will use partition wise method");
   } else if (OB_FAIL(check_if_subplan_filter_match_repart(top,
                                                          subquery_ops,
                                                          params,
@@ -9083,14 +9104,17 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
     LOG_WARN("failed to check if match repart", K(ret));
   } else if (is_partition_none) {
     dist_algo = DistAlgo::DIST_PARTITION_NONE;
+    OPT_TRACE("SPF will use repartition method");
   } else if (OB_FAIL(check_if_match_none_all(top,
                                              subquery_ops,
                                              is_none_all))) {
     LOG_WARN("failed to check if match none all", K(ret));
   } else if (is_none_all && onetime_idxs.is_empty()) {
     dist_algo = DistAlgo::DIST_NONE_ALL;
+    OPT_TRACE("SPF will use none all method");
   } else {
     dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+    OPT_TRACE("SPF will use pull to local method");
   }
   if (OB_SUCC(ret)) {
     ObExchangeInfo exch_info;
@@ -10103,6 +10127,7 @@ int ObLogPlan::candi_allocate_count()
   ObSEArray<ObRawExpr*, 4> filter_exprs;
   ObSEArray<ObRawExpr*, 4> start_exprs;
   ObSEArray<ObRawExpr*, 4> subquery_exprs;
+  OPT_TRACE_TITLE("start generate count operator");
   if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(get_rownum_exprs(),
                                                   subquery_exprs))) {
     LOG_WARN("failed to get subquery exprs", K(ret));
@@ -10124,6 +10149,7 @@ int ObLogPlan::candi_allocate_count()
     ObSEArray<CandidatePlan, 4> rownum_plans;
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
       candidate_plan = candidates_.candidate_plans_.at(i);
+      OPT_TRACE("generate count for plan:", candidate_plan);
       if (OB_FAIL(create_rownum_plan(candidate_plan.plan_tree_,
                                      filter_exprs,
                                      start_exprs,
@@ -10304,6 +10330,7 @@ int ObLogPlan::prune_and_keep_best_plans(ObIArray<CandidatePlan> &candidate_plan
 {
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> best_plans;
+  OPT_TRACE_TITLE("prune and keep best plans");
   for (int64_t i = 0; OB_SUCC(ret) && i < candidate_plans.count(); i++) {
     CandidatePlan &candidate_plan = candidate_plans.at(i);
     if (OB_FAIL(add_candidate_plan(best_plans, candidate_plan))) {
@@ -10324,6 +10351,7 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
   int ret = OB_SUCCESS;
   bool should_add = true;
   DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
+  OPT_TRACE("new candidate plan:", new_plan);
   if (OB_ISNULL(new_plan.plan_tree_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -10336,10 +10364,12 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
     } else if (right_child->get_contains_match_all_fake_cte() &&
                !new_plan.plan_tree_->is_remote()) {
       should_add = false;
+      OPT_TRACE("containt match all fake cte, but not remote plan, will not add plan");
     }
   }
   for (int64_t i = current_plans.count() - 1;
        OB_SUCC(ret) && should_add && i >= 0; --i) {
+    OPT_TRACE("compare with current plan:", current_plans.at(i));
     if (OB_FAIL(compute_plan_relationship(current_plans.at(i),
                                           new_plan,
                                           plan_rel))) {
@@ -10348,16 +10378,23 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
     } else if (DominateRelation::OBJ_LEFT_DOMINATE == plan_rel ||
                DominateRelation::OBJ_EQUAL == plan_rel) {
       should_add = false;
+      OPT_TRACE("current plan has be dominated");
     } else if (DominateRelation::OBJ_RIGHT_DOMINATE == plan_rel) {
       if (OB_FAIL(current_plans.remove(i))) {
         LOG_WARN("failed to remove dominated plans", K(i), K(ret));
       } else { /* do nothing*/ }
-    } else { /* do nothing */ }
+      OPT_TRACE("new plan dominate current plan");
+    } else {
+      OPT_TRACE("plan can not compare");
+    }
   }
   if (OB_SUCC(ret) && should_add) {
     if (OB_FAIL(current_plans.push_back(new_plan))) {
       LOG_WARN("failed to add plan", K(ret));
     } else { /*do nothing*/ }
+    OPT_TRACE("new candidate plan added, candidate plan count:", current_plans.count());
+  } else {
+    OPT_TRACE("new candidate plan is dominated, candidate plan count:", current_plans.count());
   }
   return ret;
 }
@@ -10384,18 +10421,24 @@ int ObLogPlan::compute_plan_relationship(const CandidatePlan &first_candi_plan,
     // compare cost
     if (fabs(first_plan->get_cost() - second_plan->get_cost()) < OB_DOUBLE_EPSINON) {
       // do nothing
+      OPT_TRACE("the cost of two plan is equal");
     } else if (first_plan->get_cost() < second_plan->get_cost()) {
       left_dominated_count++;
+      OPT_TRACE("left plan is cheaper");
     } else {
       right_dominated_count++;
+      OPT_TRACE("right plan is cheaper");
     }
     // compare parallel degree
     if (first_plan->get_parallel() == second_plan->get_parallel()) {
       // do nothing
+      OPT_TRACE("the parallel of two plans is equal");
     } else if (first_plan->get_parallel() < second_plan->get_parallel()) {
       left_dominated_count++;
+      OPT_TRACE("left plan use less parallel");
     } else {
       right_dominated_count++;
+      OPT_TRACE("right plan use less parallel");
     }
     // compare interesting order
     if (OB_FAIL(ObOptimizerUtil::compute_ordering_relationship(
@@ -10409,9 +10452,12 @@ int ObLogPlan::compute_plan_relationship(const CandidatePlan &first_candi_plan,
       LOG_WARN("failed to compute ordering relationship", K(ret));
     } else if (temp_relation == DominateRelation::OBJ_EQUAL) {
       /*do nothing*/
+      OPT_TRACE("the interesting order of two plans is equal");
     } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
       left_dominated_count++;
+      OPT_TRACE("left plan dominate right plan beacuse of interesting order");
     } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
+      OPT_TRACE("right plan dominate left plan beacuse of interesting order");
       right_dominated_count++;
     } else {
       uncompareable_count++;
@@ -10428,12 +10474,16 @@ int ObLogPlan::compute_plan_relationship(const CandidatePlan &first_candi_plan,
         LOG_WARN("failed to compute sharding relationship", K(ret));
       } else if (temp_relation == DominateRelation::OBJ_EQUAL) {
         /*do nothing*/
+        OPT_TRACE("this sharding of two plans is equal");
       } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
         left_dominated_count++;
+        OPT_TRACE("left plan dominate right plan beacuse of sharding");
       } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
         right_dominated_count++;
+        OPT_TRACE("right plan dominate left plan beacuse of sharding");
       } else {
         uncompareable_count++;
+        OPT_TRACE("sharding can not compare");
       }
     }
 
@@ -10445,12 +10495,16 @@ int ObLogPlan::compute_plan_relationship(const CandidatePlan &first_candi_plan,
         LOG_WARN("failed to compute pipeline relationship", K(ret));
       } else if (temp_relation == DominateRelation::OBJ_EQUAL) {
         /*do nothing*/
+        OPT_TRACE("both plan is pipeline");
       } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
         left_dominated_count++;
+        OPT_TRACE("left plan dominate right plan beacuse of pipeline");
       } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
         right_dominated_count++;
+        OPT_TRACE("right plan dominate left plan beacuse of pipeline");
       } else {
         uncompareable_count++;
+        OPT_TRACE("pipeline path can not compare");
       }
     }
     // compute final result
@@ -12539,8 +12593,10 @@ int ObLogPlan::candi_allocate_for_update()
       if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, best_plans))) {
         LOG_WARN("failed to get minimal cost candidates", K(ret));
       } else {
+        OPT_TRACE_TITLE("start generate for update plan");
         for (int64_t i = 0; OB_SUCC(ret) && i < best_plans.count(); i++) {
           ObSEArray<int64_t, 4> origin_alloc_sfu_list;
+          OPT_TRACE("generate for update for plan:", best_plans.at(i));
           if (i != best_plans.count() - 1 &&
               OB_FAIL(origin_alloc_sfu_list.assign(get_alloc_sfu_list()))) {
             LOG_WARN("failed to assign", K(ret));

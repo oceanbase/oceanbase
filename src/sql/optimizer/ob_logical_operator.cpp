@@ -4653,7 +4653,8 @@ int ObLogicalOperator::create_runtime_filter_info(ObLogicalOperator *op,
 int ObLogicalOperator::find_table_scan(ObLogicalOperator* root_op,
                                        uint64_t table_id,
                                        ObLogicalOperator* &scan_op,
-                                       bool& table_scan_has_exchange)
+                                       bool& table_scan_has_exchange,
+                                       bool &has_px_coord)
 {
   int ret = OB_SUCCESS;
   scan_op = NULL;
@@ -4673,13 +4674,21 @@ int ObLogicalOperator::find_table_scan(ObLogicalOperator* root_op,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && NULL == scan_op && i < root_op->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root_op->get_child(i);
-      if (OB_FAIL(SMART_CALL(find_table_scan(child, table_id, scan_op, table_scan_has_exchange)))) {
+      if (OB_FAIL(SMART_CALL(find_table_scan(child,
+                                             table_id,
+                                             scan_op,
+                                             table_scan_has_exchange,
+                                             has_px_coord)))) {
         LOG_WARN("failed to find operator", K(ret));
       }
     }
     if (OB_SUCC(ret) && NULL != scan_op) {
       if (log_op_def::LOG_EXCHANGE == root_op->get_type()) {
         table_scan_has_exchange = true;
+        ObLogExchange* exch_op = static_cast<ObLogExchange*>(root_op);
+        if (exch_op->is_px_coord()) {
+          has_px_coord = true;
+        }
       }
     }
   }
@@ -4697,6 +4706,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
     filter_create = NULL;
     bool right_has_exchange = false;
+    bool right_has_px_coord = false;
     const JoinFilterInfo &info = infos.at(i);
     ObLogTableScan *scan_op = NULL;
     ObLogicalOperator *node = NULL;
@@ -4708,8 +4718,11 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
     } else if (OB_FAIL(find_table_scan(get_child(second_child),
                                        info.table_id_,
                                        node,
-                                       right_has_exchange))) {
+                                       right_has_exchange,
+                                       right_has_px_coord))) {
       LOG_WARN("failed to find table scan", K(ret));
+    } else if (right_has_px_coord) {
+      //not support now
     } else if (OB_ISNULL(node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table scan", K(ret));
@@ -4777,6 +4790,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
     DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
     for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
       bool right_has_exchange = false;
+      bool right_has_px_coord = false;
       filter_create = NULL;
       filter_use = NULL;
       const JoinFilterInfo &info = infos.at(i);
@@ -4790,8 +4804,11 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
       } else if (OB_FAIL(find_table_scan(get_child(second_child),
                                          info.table_id_,
                                          node,
-                                         right_has_exchange))) {
+                                         right_has_exchange,
+                                         right_has_px_coord))) {
         LOG_WARN("failed to find table scan", K(ret));
+      } else if (right_has_px_coord) {
+        //no support now
       } else if (OB_ISNULL(node)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null table scan", K(ret));

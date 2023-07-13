@@ -1773,7 +1773,8 @@ private:
   int find_table_scan(ObLogicalOperator* root_op,
                       uint64_t table_id,
                       ObLogicalOperator* &scan_op,
-                      bool& table_scan_has_exchange);
+                      bool& table_scan_has_exchange,
+                      bool &has_px_coord);
   //private function, just used for allocating join filter node.
   int allocate_partition_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                      int64_t &filter_id);

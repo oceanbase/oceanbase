@@ -3943,14 +3943,22 @@ int ObJoinOrder::add_path(Path* path)
   } else {
     bool should_add = true;
     DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
-    OPT_TRACE("path:", path);
+    OPT_TRACE_TITLE("new candidate path:", path);
+    /**
+     * fake cte会生成两条path，一条local、一条match all
+     * match fake cte路径只用来生成remote的计划
+     * 如果当前match all fake cte与其他表join之后sharding变成local了
+     * 说明这条路径非预期，只用local的fake cte路径即可
+     */
     if (!path->is_cte_path() &&
         path->contain_match_all_fake_cte() &&
         !path->is_remote()) {
       should_add = false;
+      OPT_TRACE("containt match all fake cte, but not remote path, will not add path");
     }
     for (int64_t i = interesting_paths_.count() - 1; OB_SUCC(ret) && should_add && i >= 0; --i) {
       Path *cur_path = interesting_paths_.at(i);
+      OPT_TRACE("compare with path:", cur_path);
       if (OB_ISNULL(cur_path)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(cur_path), K(ret));
@@ -3964,15 +3972,17 @@ int ObJoinOrder::add_path(Path* path)
         should_add = false;
         LOG_TRACE("current path has been dominated, no need to add", K(*cur_path),
             K(*path), K(ret));
-        OPT_TRACE("current path has been dominated by path:", cur_path);
+        OPT_TRACE("current path has been dominated");
       } else if (DominateRelation::OBJ_RIGHT_DOMINATE == plan_rel) {
         if (OB_FAIL(interesting_paths_.remove(i))) {
           LOG_WARN("failed to remove dominated plans", K(i), K(ret));
         } else {
           LOG_TRACE("current path dominated interesting path", K(*cur_path), K(*path), K(ret));
-          OPT_TRACE("current path dominated interesting path:", cur_path);
+          OPT_TRACE("current path dominated interesting path");
         }
-      } else { /* do nothing */ }
+      } else {
+        OPT_TRACE("path can not compare");
+      }
     }
     if (OB_SUCC(ret)) {
       increase_total_path_num();
@@ -4030,21 +4040,25 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
              static_cast<const JoinPath&>(first_path).contain_normal_nl() &&
              !static_cast<const JoinPath&>(second_path).contain_normal_nl()) {
     relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+    OPT_TRACE("right path dominate left path because of normal nl");
   } else if (first_path.is_join_path() &&
              second_path.is_join_path() &&
              !static_cast<const JoinPath&>(first_path).contain_normal_nl() &&
              static_cast<const JoinPath&>(second_path).contain_normal_nl()) {
     relation = DominateRelation::OBJ_LEFT_DOMINATE;
+    OPT_TRACE("left path dominate right path because of normal nl");
   } else if (first_path.is_access_path() &&
              second_path.is_access_path() &&
              static_cast<const AccessPath&>(first_path).est_cost_info_.pushdown_prefix_filters_.empty() &&
              !static_cast<const AccessPath&>(second_path).est_cost_info_.pushdown_prefix_filters_.empty()) {
     relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+    OPT_TRACE("right path dominate left path because of pushdown prefix filters");
   } else if (first_path.is_access_path() &&
              second_path.is_access_path() &&
              !static_cast<const AccessPath&>(first_path).est_cost_info_.pushdown_prefix_filters_.empty() &&
              static_cast<const AccessPath&>(second_path).est_cost_info_.pushdown_prefix_filters_.empty()) {
     relation = DominateRelation::OBJ_LEFT_DOMINATE;
+    OPT_TRACE("left path dominate right path because of pushdown prefix filters");
   } else {
     int64_t left_dominated_count = 0;
     int64_t right_dominated_count = 0;
@@ -4052,18 +4066,24 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
     // check dominate relationship for cost
     if (fabs(first_path.cost_ - second_path.cost_) < OB_DOUBLE_EPSINON) {
       // do nothing
+      OPT_TRACE("the cost of the two paths is equal");
     } else if (first_path.cost_ < second_path.cost_) {
       left_dominated_count++;
+      OPT_TRACE("left path is cheaper");
     } else {
       right_dominated_count++;
+      OPT_TRACE("right path is cheaper");
     }
     // check dominate relationship for parallel degree
     if (first_path.parallel_ == second_path.parallel_) {
       // do nothing
+      OPT_TRACE("the parallel of the two paths is equal");
     } else if (first_path.parallel_ < second_path.parallel_) {
       left_dominated_count++;
+      OPT_TRACE("left path use less parallel");
     } else {
       right_dominated_count++;
+      OPT_TRACE("right path use less parallel");
     }
     // check dominate relationship for sharding info
     if (OB_FAIL(ObOptimizerUtil::compute_sharding_relationship(first_path.get_strong_sharding(),
@@ -4075,17 +4095,21 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
       LOG_WARN("failed to compute sharding relationship", K(ret));
     } else if (temp_relation == DominateRelation::OBJ_EQUAL) {
       /*do nothing*/
+      OPT_TRACE("the sharding of the two paths is equal");
     } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
       left_dominated_count++;
+      OPT_TRACE("left path dominate right path beacuse of sharding");
       if (right_dominated_count > 0) {
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
     } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
       right_dominated_count++;
+      OPT_TRACE("right path dominate left path beacuse of sharding");
       if (left_dominated_count > 0) {
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
     } else {
+      OPT_TRACE("sharding can not compare");
       uncompareable_count++;
       relation = DominateRelation::OBJ_UNCOMPARABLE;
     }
@@ -4098,17 +4122,21 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
         LOG_WARN("failed to check pipeline relationship", K(ret));
       } else if (temp_relation == DominateRelation::OBJ_EQUAL) {
         /*do nothing*/
+        OPT_TRACE("both path is pipeline");
       } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
         left_dominated_count++;
+        OPT_TRACE("left path dominate right path beacuse of pipeline");
         if (right_dominated_count > 0) {
           relation = DominateRelation::OBJ_UNCOMPARABLE;
         }
       } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
+        OPT_TRACE("right path dominate left path beacuse of pipeline");
         right_dominated_count++;
         if (left_dominated_count > 0) {
           relation = DominateRelation::OBJ_UNCOMPARABLE;
         }
       } else {
+        OPT_TRACE("pipeline path can not compare");
         uncompareable_count++;
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
@@ -4127,17 +4155,21 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
       LOG_WARN("failed to compute ordering relationship", K(ret));
     } else if (temp_relation == DominateRelation::OBJ_EQUAL) {
       /*do nothing*/
+      OPT_TRACE("the interesting order of the two paths is equal");
     } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
       left_dominated_count++;
+      OPT_TRACE("left path dominate right path beacuse of interesting order");
       if (right_dominated_count > 0) {
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
     } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
+      OPT_TRACE("right path dominate left path beacuse of interesting order");
       right_dominated_count++;
       if (left_dominated_count > 0) {
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
     } else {
+      OPT_TRACE("interesting order can not compare");
       uncompareable_count++;
       relation = DominateRelation::OBJ_UNCOMPARABLE;
     }
@@ -7141,7 +7173,7 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
                                                              inner_row_count))) {
       LOG_WARN("failed to estimate size for inner subquery path", K(ret));
     } else {
-      ObIArray<ObLogPlan::CandidatePlan> &candidate_plans = log_plan->get_candidate_plans().candidate_plans_;
+      ObIArray<CandidatePlan> &candidate_plans = log_plan->get_candidate_plans().candidate_plans_;
       for (int64_t i = 0; OB_SUCC(ret) && i < candidate_plans.count(); i++) {
         ObLogicalOperator *root = NULL;
         SubQueryPath *sub_path = NULL;
@@ -9573,7 +9605,7 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
       OPT_TRACE("join filter info:");
       OPT_TRACE("in current dfo:", info.in_current_dfo_);
       OPT_TRACE("filter selectivity:", info.join_filter_selectivity_);
-      OPT_TRACE("force user:", NULL != info.force_filter_);
+      OPT_TRACE("force use join filter:", NULL != info.force_filter_);
       OPT_TRACE("use join filter:", info.can_use_join_filter_);
       LOG_TRACE("succeed to check normal join filter", K(info));
     }
