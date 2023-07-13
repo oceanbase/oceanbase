@@ -877,7 +877,6 @@ ObLCLNode::PushStateTask::PushStateTask(ObLCLNode &node) : expected_executed_ts(
 
 void ObLCLNode::PushStateTask::runTimerTask()
 {
-  DETECT_LOG(TRACE, "run lcl timer task", K(expected_executed_ts), K(*this));
   int ret = OB_SUCCESS;
   const int64_t current_ts = ObClockGenerator::getRealClock();
 
