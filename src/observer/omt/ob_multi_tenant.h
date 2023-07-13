@@ -112,7 +112,9 @@ public:
   int update_tenant_memory(const uint64_t tenant_id, const int64_t mem_limit, int64_t &allowed_mem_limit);
   int update_tenant_memory(const share::ObUnitInfoGetter::ObTenantConfig &unit);
   int update_tenant_log_disk_size(const uint64_t tenant_id,
-                                  const int64_t expected_log_disk_size);
+                                  const int64_t expected_log_disk_size,
+                                  const int64_t old_log_disk_size,
+                                  int64_t &allowed_log_disk_size);
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);
   int update_tenant_config(uint64_t tenant_id);
   int update_palf_config();
@@ -180,6 +182,9 @@ protected:
   int remove_tenant(const uint64_t tenant_id, bool &remove_tenant_succ);
   uint32_t get_tenant_lock_bucket_idx(const uint64_t tenant_id);
   int update_tenant_unit_no_lock(const share::ObUnitInfoGetter::ObTenantConfig &unit);
+  int construct_allowed_unit_config(const int64_t allowed_log_disk_size,
+                                    const share::ObUnitInfoGetter::ObTenantConfig &expected_unit_config,
+                                    share::ObUnitInfoGetter::ObTenantConfig &allowed_unit);
 
 protected:
       static const int DEL_TRY_TIMES = 30;

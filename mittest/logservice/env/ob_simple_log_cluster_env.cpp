@@ -426,6 +426,37 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
   return ret;
 }
 
+int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id,
+                                                   const int64_t recycle_threshold,
+                                                   const int64_t write_stop_threshold)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MB = 1024 * 1024;
+  PalfOptions opts;
+  auto cluster = get_cluster();
+  if (server_id >= 0 && server_id < cluster.size()) {
+    ObTenantEnv::set_tenant(cluster[server_id]->get_tenant_base());
+    auto srv = cluster[server_id];
+    if  (true == srv->is_arb_server()) {
+      ret = OB_NOT_SUPPORTED;
+    } else {
+      auto palf_env_impl = dynamic_cast<PalfEnvImpl*>(srv->get_palf_env());
+      if (OB_FAIL(palf_env_impl->get_options(opts))) {
+        PALF_LOG(ERROR, "get_optiosn failed", K(ret), K(server_id));
+      } else {
+       // palf_env_impl->disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_utilization_threshold_
+       //   = recycle_threshold;
+       // palf_env_impl->disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_utilization_limit_threshold_
+       //   = write_stop_threshold;
+        opts.disk_options_.log_disk_utilization_threshold_ = recycle_threshold;
+        opts.disk_options_.log_disk_utilization_limit_threshold_ = write_stop_threshold;
+        ret = srv->update_disk_opts(opts.disk_options_);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id, const int64_t file_block_num)
 {
   int ret = OB_SUCCESS;
@@ -443,8 +474,35 @@ int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id, cons
         PALF_LOG(ERROR, "get_optiosn failed", K(ret), K(server_id));
       } else {
         opts.disk_options_.log_disk_usage_limit_size_ = file_block_num * PALF_PHY_BLOCK_SIZE;
-        ret = palf_env_impl->update_options(opts);
+        ret = srv->update_disk_opts(opts.disk_options_);
       }
+    }
+  }
+  return ret;
+}
+
+int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t log_block_num)
+{
+  int ret = OB_SUCCESS;
+  auto cluster = get_cluster();
+  for (int64_t server_id = 0; server_id < cluster.size(); server_id++) {
+    ret = update_disk_options(server_id, log_block_num);
+  }
+  return ret;
+}
+
+int ObSimpleLogClusterTestEnv::get_disk_options(const int64_t server_id,
+                                                PalfDiskOptions &opts)
+{
+  int ret = OB_SUCCESS;
+  auto cluster = get_cluster();
+  if (server_id >= 0 && server_id < cluster.size()) {
+    ObTenantEnv::set_tenant(cluster[server_id]->get_tenant_base());
+    auto srv = cluster[server_id];
+    if (true == srv->is_arb_server()) {
+      ret = OB_NOT_SUPPORTED;
+    } else {
+      ret = srv->get_disk_opts(opts);
     }
   }
   return ret;
@@ -1392,6 +1450,34 @@ bool ObSimpleLogClusterTestEnv::is_upgraded(PalfHandleImplGuard &leader, const i
     PALF_LOG(INFO, "wait upgrade");
   }
   return has_upgraded;
+}
+
+int ObSimpleLogClusterTestEnv::wait_until_disk_space_to(const int64_t server_id,
+                                                        const int64_t expect_log_disk_space)
+{
+  int ret = OB_SUCCESS;
+  auto cluster = get_cluster();
+  if (server_id >= 0 && server_id < cluster.size()) {
+    ObTenantEnv::set_tenant(cluster[server_id]->get_tenant_base());
+    auto srv = cluster[server_id];
+    if  (true == srv->is_arb_server()) {
+      ret = OB_NOT_SUPPORTED;
+    } else {
+      auto palf_env_impl = dynamic_cast<PalfEnvImpl*>(srv->get_palf_env());
+      int64_t used_log_disk_space = INT64_MAX;
+      int64_t total_log_disk_space = 0;
+      while (used_log_disk_space >= expect_log_disk_space) {
+        if (OB_FAIL(palf_env_impl->get_disk_usage(used_log_disk_space, total_log_disk_space))) {
+          PALF_LOG(WARN, "get_disk_usage failed", K(used_log_disk_space), K(total_log_disk_space));
+        } else {
+          usleep(10*1000);
+          PALF_LOG(INFO, "disk_space is not enough", K(used_log_disk_space), K(expect_log_disk_space));
+        }
+      }
+      PALF_LOG(INFO, "wait_until_disk_space_to success", K(used_log_disk_space), K(expect_log_disk_space));
+    }
+  }
+  return ret;
 }
 
 } // end namespace unittest

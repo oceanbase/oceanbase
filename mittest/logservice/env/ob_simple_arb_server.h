@@ -80,6 +80,8 @@ public:
   {return &allocator_;}
   virtual int update_disk_opts(const PalfDiskOptions &opts) override final
   {return OB_NOT_SUPPORTED;};
+  virtual int get_disk_opts(PalfDiskOptions &opts) override final
+  {return OB_NOT_SUPPORTED;};
   virtual int get_palf_env(PalfEnv *&palf_env)
   {return OB_NOT_SUPPORTED;};
   bool is_valid() const override final

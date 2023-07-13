@@ -156,6 +156,11 @@ int PalfEnv::get_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte)
   return palf_env_impl_.get_disk_usage(used_size_byte, total_size_byte);
 }
 
+int PalfEnv::get_stable_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte)
+{
+  return palf_env_impl_.get_stable_disk_usage(used_size_byte, total_size_byte);
+}
+
 int PalfEnv::get_options(PalfOptions &options)
 {
   return palf_env_impl_.get_options(options);

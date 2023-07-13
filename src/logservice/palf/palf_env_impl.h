@@ -83,10 +83,14 @@ public:
     MAX_STATUS = 3
   };
 
+  static bool is_shrinking(const Status &status)
+  { return Status::SHRINKING_STATUS == status; }
+
   PalfDiskOptionsWrapper() : disk_opts_for_stopping_writing_(),
                              disk_opts_for_recycling_blocks_(),
                              status_(Status::INVALID_STATUS),
                              cur_unrecyclable_log_disk_size_(0),
+                             sequence_(-1),
                              disk_opts_lock_(common::ObLatchIds::PALF_ENV_LOCK) {}
   ~PalfDiskOptionsWrapper() { reset(); }
 
@@ -94,7 +98,7 @@ public:
   void reset();
   int update_disk_options(const PalfDiskOptions &disk_opts);
 
-  void change_to_normal();
+  void change_to_normal(const int64_t sequence);
   const PalfDiskOptions& get_disk_opts_for_stopping_writing() const
   {
     ObSpinLockGuard guard(disk_opts_lock_);
@@ -110,12 +114,14 @@ public:
 
   void get_disk_opts(PalfDiskOptions &disk_opts_for_stopping_writing,
                      PalfDiskOptions &disk_opts_for_recycling_blocks,
-                     Status &status) const
+                     Status &status,
+                     int64_t &sequence) const
   {
     ObSpinLockGuard guard(disk_opts_lock_);
     disk_opts_for_stopping_writing = disk_opts_for_stopping_writing_;
     disk_opts_for_recycling_blocks = disk_opts_for_recycling_blocks_;
     status = status_;
+    sequence = sequence_;
   }
 
   void get_throttling_options(PalfThrottleOptions &options)
@@ -131,11 +137,20 @@ public:
   bool is_shrinking() const
   {
     ObSpinLockGuard guard(disk_opts_lock_);
-    return Status::SHRINKING_STATUS == status_;
+    return is_shrinking(status_);
+  }
+
+  void set_stop_writing_disk_options_with_status(const PalfDiskOptions &new_opts,
+                                                 const Status &status)
+  {
+    ObSpinLockGuard guard(disk_opts_lock_);
+    status_ = status;
+    disk_opts_for_stopping_writing_ = new_opts;
   }
   static constexpr int64_t MB = 1024*1024ll;
   TO_STRING_KV(K_(disk_opts_for_stopping_writing), K_(disk_opts_for_recycling_blocks), K_(status),
-               "cur_unrecyclable_log_disk_size(MB)", cur_unrecyclable_log_disk_size_/MB);
+               "cur_unrecyclable_log_disk_size(MB)", cur_unrecyclable_log_disk_size_/MB,
+               K_(sequence));
 
 private:
   int update_disk_options_not_guarded_by_lock_(const PalfDiskOptions &new_opts);
@@ -148,6 +163,7 @@ private:
   PalfDiskOptions disk_opts_for_recycling_blocks_;
   Status status_;
   int64_t cur_unrecyclable_log_disk_size_;
+  int64_t sequence_;
   mutable ObSpinLock disk_opts_lock_;
 };
 
@@ -238,6 +254,7 @@ public:
   int try_recycle_blocks();
   bool check_disk_space_enough() override final;
   int get_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte);
+  int get_stable_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte);
   int update_options(const PalfOptions &options);
   int get_options(PalfOptions &options);
   int64_t get_rebuild_replica_log_lag_threshold() const

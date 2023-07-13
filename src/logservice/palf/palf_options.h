@@ -39,6 +39,7 @@ struct PalfDiskOptions
   void reset();
   bool is_valid() const;
   bool operator==(const PalfDiskOptions &rhs) const;
+  bool operator!=(const PalfDiskOptions &rhs) const;
   PalfDiskOptions &operator=(const PalfDiskOptions &other);
   int64_t log_disk_usage_limit_size_;
   int log_disk_utilization_threshold_;

@@ -301,7 +301,7 @@ int ObDiskUsageReportTask::count_tenant_clog(const uint64_t tenant_id)
   if (OB_ISNULL(log_svr = MTL(ObLogService*))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "log service is null", K(ret), KP(log_svr));
-  } else if (OB_FAIL(log_svr->get_palf_disk_usage(clog_space, size_limit))) {
+  } else if (OB_FAIL(log_svr->get_palf_stable_disk_usage(clog_space, size_limit))) {
     STORAGE_LOG(WARN, "failed to get the disk space that clog used", K(ret));
   } else {
     report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_CLOG_DATA;

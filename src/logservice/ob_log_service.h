@@ -143,7 +143,17 @@ public:
 
   int update_replayable_point(const share::SCN &replayable_point);
   int get_replayable_point(share::SCN &replayable_point);
+
+  // @brief get palf disk usage
+  // @param [out] used_size_byte
+  // @param [out] total_size_byte, if in shrinking status, total_size_byte is the value after shrinking.
+  // NB: total_size_byte may be smaller than used_size_byte.
   int get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
+
+  // @brief get palf disk usage
+  // @param [out] used_size_byte
+  // @param [out] total_size_byte, if in shrinking status, total_size_byte is the value before shrinking.
+  int get_palf_stable_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
   // why we need update 'log_disk_size_' and 'log_disk_util_threshold' separately.
   //
   // 'log_disk_size' is a member of unit config.

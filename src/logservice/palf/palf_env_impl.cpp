@@ -78,6 +78,7 @@ int PalfDiskOptionsWrapper::init(const PalfDiskOptions &disk_opts)
     disk_opts_for_recycling_blocks_ = disk_opts_for_stopping_writing_ = disk_opts;
     status_ = Status::NORMAL_STATUS;
     cur_unrecyclable_log_disk_size_ = 0;
+    sequence_ = 0;
   }
   return ret;
 }
@@ -89,6 +90,7 @@ void PalfDiskOptionsWrapper::reset()
   disk_opts_for_stopping_writing_.reset();
   status_ = Status::INVALID_STATUS;
   cur_unrecyclable_log_disk_size_ = -1;
+  sequence_ = -1;
 }
 
 int PalfDiskOptionsWrapper::update_disk_options(const PalfDiskOptions &disk_opts_for_recycling_blocks)
@@ -112,40 +114,53 @@ bool PalfDiskOptionsWrapper::need_throttling() const
   return disk_opts_for_stopping_writing_.is_valid() && cur_unrecyclable_log_disk_size_ > trigger_size;
 }
 
-void PalfDiskOptionsWrapper::change_to_normal()
+// Concurrent analysis
+// BlockGCThread                                                                     ConfigChangeThread
+// T1  get_disk_options
+//                                                                                   T2  shrink log_disk when status is SHRINKING_STATUS,
+//                                                                                       make disk_opts_for_recycling_blocks to new PalfDiskOptions.
+// T3  change disk_opts_for_stopping_writing for disk_opts_for_recycling_blocks
+//     and make status to NORMAL_STATUS
+// This will cause write-stop, therefore, we only change status to NORMAL when sequence is same.
+// And we only update sequence when PalfDiskOptions has change.
+void PalfDiskOptionsWrapper::change_to_normal(const int64_t sequence)
 {
   ObSpinLockGuard guard(disk_opts_lock_);
-  status_ = Status::NORMAL_STATUS;
-  disk_opts_for_stopping_writing_ = disk_opts_for_recycling_blocks_;
-  PALF_LOG(INFO, "change_to_normal", KPC(this));
+  if (sequence_ == sequence && Status::SHRINKING_STATUS == status_)  {
+    status_ = Status::NORMAL_STATUS;
+    disk_opts_for_stopping_writing_ = disk_opts_for_recycling_blocks_;
+    PALF_LOG(INFO, "change_to_normal", KPC(this));
+  } else {
+    PALF_LOG(INFO, "sequence has changed or status not match", KPC(this), K(sequence));
+  }
 }
 
 int PalfDiskOptionsWrapper::update_disk_options_not_guarded_by_lock_(const PalfDiskOptions &disk_opts_for_recycling_blocks)
 {
   int ret = OB_SUCCESS;
   int64_t curr_stop_write_limit_size =
-    disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ * disk_opts_for_stopping_writing_.log_disk_utilization_limit_threshold_;
+    disk_opts_for_stopping_writing_.log_disk_usage_limit_size_;
   int64_t next_stop_write_limit_size =
-    disk_opts_for_recycling_blocks.log_disk_usage_limit_size_ * disk_opts_for_recycling_blocks.log_disk_utilization_limit_threshold_;
+    disk_opts_for_recycling_blocks.log_disk_usage_limit_size_;
   if (false == disk_opts_for_recycling_blocks.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (disk_opts_for_recycling_blocks_ == disk_opts_for_recycling_blocks) {
+    PALF_LOG(INFO, "no need update disk options", K(ret), K(disk_opts_for_recycling_blocks_), K(disk_opts_for_recycling_blocks));
   } else {
-    if (Status::SHRINKING_STATUS == status_) {
-      ret = OB_STATE_NOT_MATCH;
-      PALF_LOG(WARN, "don't support shrink log disk concurrently", K(ret), KPC(this));
-    } else if (disk_opts_for_recycling_blocks_ == disk_opts_for_recycling_blocks) {
-      PALF_LOG(INFO, "no need update disk options", K(ret), K(disk_opts_for_recycling_blocks_), K(disk_opts_for_recycling_blocks));
-    } else if (curr_stop_write_limit_size > next_stop_write_limit_size) {
+    if (curr_stop_write_limit_size > next_stop_write_limit_size) {
       status_ = Status::SHRINKING_STATUS;
       // In process of shrinking, to avoid stopping writing,
       // 'disk_opts_for_stopping_writing_' is still an original value, update it
       // with 'disk_opts_for_recycling_blocks' until there is no possibility
       // caused stopping writing.
       disk_opts_for_recycling_blocks_ = disk_opts_for_recycling_blocks;
+      PALF_LOG(INFO, "shrink log disk success", K(curr_stop_write_limit_size), K(next_stop_write_limit_size),
+               KPC(this));
     } else {
       status_ = Status::NORMAL_STATUS;
       disk_opts_for_recycling_blocks_ = disk_opts_for_stopping_writing_ = disk_opts_for_recycling_blocks;
-      PALF_LOG(INFO, "update_disk_options_not_guarded_by_lock_ success", K(curr_stop_write_limit_size), K(next_stop_write_limit_size));
+      PALF_LOG(INFO, "expand log disk success", K(curr_stop_write_limit_size), K(next_stop_write_limit_size),
+               KPC(this));
     }
     //always update writing_throttling_trigger_percentage_
     const int64_t new_trigger_percentage = disk_opts_for_recycling_blocks.log_disk_throttling_percentage_;
@@ -155,6 +170,7 @@ int PalfDiskOptionsWrapper::update_disk_options_not_guarded_by_lock_(const PalfD
     disk_opts_for_recycling_blocks_.log_disk_throttling_maximum_duration_ = new_maximum_duration;
     disk_opts_for_stopping_writing_.log_disk_throttling_maximum_duration_ = new_maximum_duration;
 
+    sequence_++;
   }
   return ret;
 }
@@ -497,7 +513,6 @@ int PalfEnvImpl::scan_all_palf_handle_impl_director_()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard guard("PalfEnvImplStart", 0);
-	// TODO by runlin: how to avoid modify 'log_disk_usage_limit_size_' after restart?
   ReloadPalfHandleImplFunctor functor(this);
   if (OB_FAIL(scan_dir(log_dir_, functor))) {
     PALF_LOG(WARN, "scan_dir failed", K(ret));
@@ -658,9 +673,11 @@ int PalfEnvImpl::try_recycle_blocks()
   PalfDiskOptions disk_opts_for_stopping_writing;
   PalfDiskOptions disk_opts_for_recycling_blocks;
   PalfDiskOptionsWrapper::Status status = PalfDiskOptionsWrapper::Status::INVALID_STATUS;
+  int64_t sequence = -1;
   disk_options_wrapper_.get_disk_opts(disk_opts_for_stopping_writing,
                                       disk_opts_for_recycling_blocks,
-                                      status);
+                                      status,
+                                      sequence);
   int64_t total_used_size_byte = 0;
   int64_t total_unrecyclable_size_byte = 0;
   int64_t total_size_to_recycle_blocks = disk_opts_for_recycling_blocks.log_disk_usage_limit_size_;
@@ -700,7 +717,7 @@ int PalfEnvImpl::try_recycle_blocks()
     int64_t oldest_palf_id = INVALID_PALF_ID;
     if (OB_SUCC(ret) && PalfDiskOptionsWrapper::Status::SHRINKING_STATUS == status) {
       if (total_used_size_byte < usable_disk_size_to_recycle_blocks) {
-        disk_options_wrapper_.change_to_normal();
+        disk_options_wrapper_.change_to_normal(sequence);
         PALF_LOG(INFO, "change_to_normal success", K(disk_options_wrapper_),
                  K(total_used_size_byte), K(usable_disk_size_to_recycle_blocks));
       }
@@ -726,7 +743,7 @@ int PalfEnvImpl::try_recycle_blocks()
       LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "log disk space is almost full", "ret", tmp_ret,
           "total_size(MB)", disk_opts_for_recycling_blocks.log_disk_usage_limit_size_/MB,
           "used_size(MB)", total_used_size_byte/MB,
-          "used_percent(%)", (total_used_size_byte* 100) / (disk_opts_for_recycling_blocks.log_disk_usage_limit_size_ + 1),
+          "used_percent(%)", (total_used_size_byte* 100) / (disk_opts_for_stopping_writing.log_disk_usage_limit_size_ + 1),
           "warn_size(MB)", (total_size_to_recycle_blocks*disk_opts_for_recycling_blocks.log_disk_utilization_threshold_)/100/MB,
           "warn_percent(%)", disk_opts_for_recycling_blocks.log_disk_utilization_threshold_,
           "limit_size(MB)", (total_size_to_recycle_blocks*disk_opts_for_recycling_blocks.log_disk_utilization_limit_threshold_)/100/MB,
@@ -842,6 +859,20 @@ int PalfEnvImpl::get_disk_usage(int64_t &used_size_byte, int64_t &total_usable_s
   } else {
     total_usable_size_byte = disk_options.log_disk_usage_limit_size_;
     PALF_LOG(INFO, "get_disk_usage", K(ret), "capacity(MB):", total_usable_size_byte/MB, "used(MB):", used_size_byte/MB);
+  }
+  return ret;
+}
+
+int PalfEnvImpl::get_stable_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte)
+{
+  int ret = OB_SUCCESS;
+  constexpr int64_t MB = 1024 * 1024;
+  PalfDiskOptions disk_options = disk_options_wrapper_.get_disk_opts_for_stopping_writing();
+  if (OB_FAIL(get_disk_usage_(used_size_byte))) {
+    PALF_LOG(WARN, "get_disk_usage_ failed", K(ret));
+  } else {
+    total_usable_size_byte = disk_options.log_disk_usage_limit_size_;
+    PALF_LOG(INFO, "get_stable_disk_usage", K(ret), "capacity(MB):", total_usable_size_byte/MB, "used(MB):", used_size_byte/MB);
   }
   return ret;
 }

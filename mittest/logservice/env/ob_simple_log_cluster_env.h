@@ -175,6 +175,9 @@ public:
                                                 PalfHandleImplGuard &leader);
   virtual int delete_paxos_group(const int64_t id);
   virtual int update_disk_options(const int64_t server_id, const int64_t log_block_number);
+  virtual int update_disk_options(const int64_t server_id, const int64_t recycle_threshold, const int64_t write_stop_threshold);
+  virtual int update_disk_options(const int64_t log_block_number);
+  virtual int get_disk_options(const int64_t server_id, PalfDiskOptions &opts);
   virtual int restart_paxos_groups();
   virtual int restart_server(const int64_t server_id);
   virtual int remove_dir();
@@ -245,6 +248,7 @@ public:
   void set_disk_options_for_throttling(PalfEnvImpl &palf_env_impl);
   bool is_degraded(const PalfHandleImplGuard &leader, const int64_t degraded_server_idx);
   bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id);
+  int wait_until_disk_space_to(const int64_t server_id, const int64_t expect_log_disk_space);
 public:
   static int64_t palf_id_;
 private:

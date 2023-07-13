@@ -22,7 +22,6 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/log_define.h"
-#include "logservice/palf/palf_env.h"
 #include "logservice/palf/lsn.h"
 #include "logservice/archiveservice/ob_archive_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
@@ -203,17 +202,13 @@ bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)
   bool get_disk_usage_threshold_success = false;
   // avod clog disk full
   logservice::ObLogService *log_service = nullptr;
-  PalfEnv *palf_env = nullptr;
   if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get_log_service failed", K(ret));
-  } else if (OB_ISNULL(palf_env = log_service->get_palf_env())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "get_palf_env failed", K(ret));
   } else {
     int64_t used_size = 0;
     int64_t total_size = 0;
-    if (OB_FAIL(palf_env->get_disk_usage(used_size, total_size))) {
+    if (OB_FAIL(log_service->get_palf_disk_usage(used_size, total_size))) {
       STORAGE_LOG(WARN, "get_disk_usage failed", K(ret), K(used_size), K(total_size));
     } else {
       threshold = total_size * NEED_FLUSH_CLOG_DISK_PERCENT / 100;

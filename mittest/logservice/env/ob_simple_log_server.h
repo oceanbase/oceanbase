@@ -120,6 +120,26 @@ protected:
   common::ObAddr self_;
 };
 
+class ObSimpleLogServer;
+class ObLooper : public share::ObThreadPool {
+public:
+  static constexpr int64_t INTERVAL_US = 1000*1000;
+  ObLooper();
+  virtual ~ObLooper();
+public:
+  int init(ObSimpleLogServer *log_server);
+  void destroy();
+  void run1();
+private:
+  void log_loop_();
+private:
+  ObSimpleLogServer *log_server_;
+  int64_t run_interval_;
+  bool is_inited_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLooper);
+};
+
 class ObLogDeliver : public rpc::frame::ObReqDeliver, public lib::TGTaskHandler, public ObMittestBlacklist
 {
 public:
@@ -224,6 +244,7 @@ public:
   virtual ILogBlockPool *get_block_pool() = 0;
   virtual ObILogAllocator *get_allocator() = 0;
   virtual int update_disk_opts(const PalfDiskOptions &opts) = 0;
+  virtual int get_disk_opts(PalfDiskOptions &opts) = 0;
   virtual int get_palf_env(PalfEnv *&palf_env) = 0;
   virtual bool is_arb_server() const {return false;};
   virtual int64_t get_node_id() = 0;
@@ -264,6 +285,12 @@ public:
   ObILogAllocator *get_allocator() override final
   { return allocator_; }
   virtual int update_disk_opts(const PalfDiskOptions &opts) override final;
+  virtual int get_disk_opts(PalfDiskOptions &opts) override final
+  {
+    opts = disk_opts_;
+    return OB_SUCCESS;
+  }
+  virtual int try_resize();
   virtual int get_palf_env(PalfEnv *&palf_env)
   { palf_env = palf_env_; return OB_SUCCESS;}
   virtual void revert_palf_env(IPalfEnvImpl *palf_env) { UNUSED(palf_env); }
@@ -348,6 +375,16 @@ protected:
   int init_network_(const common::ObAddr &addr, const bool is_bootstrap);
   int init_log_service_();
   int init_memory_dump_timer_();
+  // 更新log_disk_size的逻辑保持和ObMultiTenant.cpp中维护同名函数一样
+  int construct_allowed_new_log_disk_(const uint64_t tenant_id,
+                                      const int64_t expected_log_disk_size,
+                                      const int64_t old_log_disk_size,
+                                      int64_t &allowed_new_log_disk_size);
+  int update_tenant_log_disk_size_(const uint64_t tenant_id,
+                                   const int64_t expected_log_disk_size,
+                                   const int64_t old_log_disk_size,
+                                   const int64_t allowed_log_disk_size);
+  int update_disk_opts_no_lock_(const PalfDiskOptions &opts);
 
 private:
   int64_t node_id_;
@@ -378,6 +415,10 @@ private:
   ObSrvRpcProxy srv_proxy_;
   logservice::coordinator::ObFailureDetector detector_;
   MockElectionMap mock_election_map_;
+  ObSpinLock log_disk_lock_;
+  palf::PalfDiskOptions disk_opts_;
+  palf::PalfDiskOptions inner_table_disk_opts_;
+  ObLooper looper_;
 };
 
 } // end unittest
