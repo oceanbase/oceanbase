@@ -6604,6 +6604,38 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::check_and_copy_composite(
+  ObObj &result, ObObj &src, ObIAllocator &allocator, ObPLType type, uint64_t dst_udt_id)
+{
+  int ret = OB_SUCCESS;
+  if (PL_OBJ_TYPE == type || PL_INTEGER_TYPE == type) {
+    ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+    LOG_WARN("expr is wrong type", K(ret));
+  } else {
+    ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(src.get_ext());
+    if (NULL == composite) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected composite to store datum", KPC(composite), K(ret));
+    } else if (OB_INVALID_ID == dst_udt_id || OB_INVALID_ID == composite->get_id()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected composite to store datum", K(dst_udt_id), K(composite->get_id()), K(ret));
+    } else if (dst_udt_id != composite->get_id()) {
+      ret =OB_ERR_EXPRESSION_WRONG_TYPE;
+      LOG_WARN("expr is wrong type", K(dst_udt_id), K(composite->get_id()), K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // in collect_cells interface, it has been deep copy using tmp allocator,
+    // now deep copy to table allocator and destruct obj_array
+    // @hr351303: consider in collect_cells use table allocator directly to avoid twice deep copy
+    OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, src, result));
+    if (OB_SUCC(ret) && src.get_meta().get_extend_type() != PL_CURSOR_TYPE) {
+      OZ (ObUserDefinedType::destruct_obj(src, nullptr));
+    }
+  }
+  return ret;
+}
+
 int ObSPIService::store_result(ObPLExecCtx *ctx,
                                ObIArray<ObPLCollection*> &bulk_tables,
                                int64_t row_count,
@@ -6686,32 +6718,11 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                 CK (OB_NOT_NULL(table->get_allocator()));
                 if (OB_FAIL(ret)) {
                 } else if (obj_array.at(idx).is_pl_extend()) {
-                  // recognize record member type is compatible
-                  if (into_record_type->get_record_member_type(k)->is_obj_type()) {
-                    ret =OB_ERR_EXPRESSION_WRONG_TYPE;
-                    LOG_WARN("expr is wrong type", K(ret));
-                  } else {
-                    uint64_t dst_id = into_record_type->get_record_member_type(k)->get_user_type_id();
-                    ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(obj_array.at(idx).get_ext());
-                    if (NULL == composite) {
-                      ret = OB_ERR_UNEXPECTED;
-                      LOG_WARN("unexpected composite to store datum", KPC(composite), K(ret));
-                    } else if (OB_INVALID_ID == dst_id || OB_INVALID_ID == composite->get_id()) {
-                      ret = OB_ERR_UNEXPECTED;
-                      LOG_WARN("unexpected composite to store datum", K(dst_id), K(composite->get_id()), K(ret));
-                    } else if (dst_id != composite->get_id()) {
-                      ret =OB_ERR_EXPRESSION_WRONG_TYPE;
-                      LOG_WARN("expr is wrong type", K(dst_id), K(composite->get_id()), K(ret));
-                    } else {
-                      // in collect_cells interface, it has been deep copy using tmp allocator,
-                      // now deep copy to table allocator and destruct obj_array
-                      // @hr351303: consider in collect_cells use table allocator directly to avoid twice deep copy
-                      OZ (pl::ObUserDefinedType::deep_copy_obj(*table->get_allocator(), obj_array.at(idx), tmp));
-                      if (OB_SUCC(ret) && obj_array.at(idx).get_meta().get_extend_type() != PL_CURSOR_TYPE) {
-                        OZ (ObUserDefinedType::destruct_obj(obj_array.at(idx), ctx->exec_ctx_->get_my_session()));
-                      }
-                    }
-                  }
+                  OZ (check_and_copy_composite(tmp,
+                                               obj_array.at(idx),
+                                               *(table->get_allocator()),
+                                               into_record_type->get_record_member_type(k)->get_type(),
+                                               into_record_type->get_record_member_type(k)->get_user_type_id()));
                 } else {
                   OZ (deep_copy_obj(*table->get_allocator(), obj_array.at(idx), tmp));
                 }
@@ -6736,31 +6747,11 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                 CK (OB_NOT_NULL(table->get_allocator()));
                 if (OB_FAIL(ret)) {
                 } else if (current_obj.is_pl_extend()) {
-                  if (table->get_element_desc().is_obj_type()) {
-                    ret =OB_ERR_EXPRESSION_WRONG_TYPE;
-                    LOG_WARN("expr is wrong type", K(ret));
-                  } else {
-                    uint64_t dst_id = table->get_element_desc().get_udt_id();
-                    ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(current_obj.get_ext());
-                    if (NULL == composite) {
-                      ret = OB_ERR_UNEXPECTED;
-                      LOG_WARN("unexpected composite to store datum", KPC(composite), K(ret));
-                    } else if (OB_INVALID_ID == dst_id || OB_INVALID_ID == composite->get_id()) {
-                      ret = OB_ERR_UNEXPECTED;
-                      LOG_WARN("unexpected composite to store datum", K(dst_id), K(composite->get_id()), K(ret));
-                    } else if (dst_id != composite->get_id()) {
-                      ret =OB_ERR_EXPRESSION_WRONG_TYPE;
-                      LOG_WARN("expr is wrong type", K(dst_id), K(composite->get_id()), K(ret));
-                    } else {
-                      // in collect_cells interface, it has been deep copy using tmp allocator,
-                      // now deep copy to table allocator and destruct obj_array
-                      // @hr351303: consider that collect_cells interface use table allocator directly to avoid twice deep copy
-                      OZ (pl::ObUserDefinedType::deep_copy_obj(*table->get_allocator(), current_obj, tmp));
-                      if (OB_SUCC(ret) && current_obj.get_meta().get_extend_type() != PL_CURSOR_TYPE) {
-                        OZ (ObUserDefinedType::destruct_obj(current_obj, ctx->exec_ctx_->get_my_session()));
-                      }
-                    }
-                  }
+                  OZ (check_and_copy_composite(tmp,
+                                               current_obj,
+                                               *(table->get_allocator()),
+                                               table->get_element_desc().get_pl_type(),
+                                               table->get_element_desc().get_udt_id()));
                 } else {
                   OZ (deep_copy_obj(*table->get_allocator(), current_obj, tmp));
                 }

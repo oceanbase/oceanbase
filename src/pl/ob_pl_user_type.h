@@ -645,6 +645,8 @@ public:
   inline bool is_nested_table_type() const { return PL_NESTED_TABLE_TYPE == type_; }
   inline bool is_associative_array_type() const { return PL_ASSOCIATIVE_ARRAY_TYPE == type_; }
   inline bool is_varray_type() const { return PL_VARRAY_TYPE == type_; }
+
+  inline bool is_opaque_type() const { return PL_OPAQUE_TYPE == type_; }
   inline bool is_collection_type() const
   {
     return is_nested_table_type() || is_associative_array_type() || is_varray_type();

@@ -893,6 +893,11 @@ private:
                           const ObDataType *return_types,
                           int64_t return_type_count,
                           bool is_type_record = false);
+  static int check_and_copy_composite(ObObj &result,
+                                      ObObj &src,
+                                      ObIAllocator &allocator,
+                                      pl::ObPLType type,
+                                      uint64_t dst_udt_id);
 
   static int get_package_var_info_by_expr(const ObSqlExpression *expr,
                                           uint64_t &package_id,
