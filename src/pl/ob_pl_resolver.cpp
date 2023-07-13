@@ -14858,12 +14858,11 @@ int ObPLResolver::replace_map_or_order_expr(
   const ObRoutineInfo* routine_info = NULL;
   ObRawExpr *left = expr->get_param_expr(0);
   ObRawExpr *right = expr->get_param_expr(1);
-  ObObjAccessRawExpr *left_access = static_cast<ObObjAccessRawExpr*>(left);
-  ObObjAccessRawExpr *right_access = static_cast<ObObjAccessRawExpr*>(right);
-  CK (OB_NOT_NULL(left_access));
-  CK (OB_NOT_NULL(right_access));
+  const ObUserDefinedType *user_type = NULL;
   OZ (resolve_ctx_.schema_guard_.get_routine_infos_in_udt(
                   get_tenant_id_by_object_id(udt_id), udt_id, routine_infos));
+  OZ (resolve_ctx_.get_user_type(udt_id, user_type));
+  CK (OB_NOT_NULL(user_type));
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_infos.count(); ++i) {
     if (routine_infos.at(i)->is_udt_order()) {
       CK (OB_ISNULL(routine_info));
@@ -14877,10 +14876,18 @@ int ObPLResolver::replace_map_or_order_expr(
   } else if (OB_NOT_NULL(routine_info)) {
     const ObString &routine_name = routine_info->get_routine_name();
     ObObjAccessIdent access_ident(routine_name);
-    ObSEArray<ObObjAccessIdx, 4> left_idxs;
-    ObSEArray<ObObjAccessIdx, 4> right_idxs;
-    OZ (left_idxs.assign(left_access->get_orig_access_idxs()));
-    OZ (right_idxs.assign(right_access->get_orig_access_idxs()));
+    ObSEArray<ObObjAccessIdx, 1> left_idxs;
+    ObSEArray<ObObjAccessIdx, 1> right_idxs;
+    OZ (left_idxs.push_back(ObObjAccessIdx(*user_type,
+                                           ObObjAccessIdx::AccessType::IS_EXPR,
+                                           ObString(""),
+                                           *user_type,
+                                           reinterpret_cast<int64_t>(left))));
+    OZ (right_idxs.push_back(ObObjAccessIdx(*user_type,
+                                            ObObjAccessIdx::AccessType::IS_EXPR,
+                                            ObString(""),
+                                            *user_type,
+                                            reinterpret_cast<int64_t>(right))));
     OX (access_ident.set_pl_udf());
     OX (access_ident.access_name_ = routine_name);
     if (routine_info->is_udt_order()) {
@@ -14930,25 +14937,24 @@ int ObPLResolver::replace_object_compare_expr(ObRawExpr *&expr, ObPLCompileUnitA
     CK (OB_NOT_NULL(expr->get_param_expr(0)));
     CK (OB_NOT_NULL(expr->get_param_expr(1)));
     if (OB_FAIL(ret)) {
-    } else if (T_OBJ_ACCESS_REF == expr->get_param_expr(0)->get_expr_type()
-               && T_OBJ_ACCESS_REF == expr->get_param_expr(1)->get_expr_type()) {
-      const ObObjAccessRawExpr *l
-        = static_cast<const ObObjAccessRawExpr *>(expr->get_param_expr(0));
-      const ObObjAccessRawExpr *r
-        = static_cast<const ObObjAccessRawExpr *>(expr->get_param_expr(1));
-      if (OB_ISNULL(l) || OB_ISNULL(r)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected expression", K(ret), K(*expr));
-      } else {
-        const ObPLDataType &l_type = ObObjAccessIdx::get_final_type(l->get_access_idxs());
-        const ObPLDataType &r_type = ObObjAccessIdx::get_final_type(r->get_access_idxs());
-        if (l_type.get_user_type_id() != r_type.get_user_type_id()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("compare between two different udt type", K(ret), K(l_type), K(r_type));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "compare between two different composite type");
-        } else if (l_type.is_object_type() && r_type.is_object_type()) {
-          OZ (replace_map_or_order_expr(l_type.get_user_type_id(), expr, unit_ast));
-        }
+    } else if (expr->get_param_expr(0)->get_result_type().is_ext()
+              && expr->get_param_expr(0)->get_result_type().get_udt_id() != OB_INVALID_ID
+              && expr->get_param_expr(1)->get_result_type().is_ext()
+              && expr->get_param_expr(1)->get_result_type().get_udt_id() != OB_INVALID_ID) {
+      const ObUserDefinedType *l_type = NULL;
+      const ObUserDefinedType *r_type = NULL;
+      CK (OB_NOT_NULL(current_block_));
+      OZ (current_block_->get_namespace().get_user_type(expr->get_param_expr(0)->get_result_type().get_udt_id(), l_type));
+      OZ (current_block_->get_namespace().get_user_type(expr->get_param_expr(1)->get_result_type().get_udt_id(), r_type));
+      CK (OB_NOT_NULL(l_type));
+      CK (OB_NOT_NULL(r_type));
+      if (OB_FAIL(ret)) {
+      } else if (l_type->get_user_type_id() != r_type->get_user_type_id()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("compare between two different udt type", K(ret), K(l_type), K(r_type));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "compare between two different composite type");
+      } else if (l_type->is_object_type() && r_type->is_object_type()) {
+        OZ (replace_map_or_order_expr(l_type->get_user_type_id(), expr, unit_ast));
       }
     }
   }
