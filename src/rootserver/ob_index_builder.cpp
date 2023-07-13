@@ -647,18 +647,6 @@ int ObIndexBuilder::generate_schema(
         if (OB_FAIL(sql::ObResolverUtils::check_unique_index_cover_partition_column(
                 data_schema, arg))) {
           RS_LOG(WARN, "fail to check unique key cover partition column", K(ret));
-          if (INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_ &&
-              OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF == ret) {
-            int tmp_ret = OB_SUCCESS;
-            bool allow = false;
-            if (OB_SUCCESS != (tmp_ret = ObDDLResolver::check_uniq_allow(data_schema,
-                                                                         arg, allow))) {
-              RS_LOG(WARN, "fail to check uniq allow", K(ret));
-            } else if (allow) {
-              RS_LOG(INFO, "uniq index allowd, deduced by constraint", K(ret));
-              ret = OB_SUCCESS;
-            }
-          }
         }
       }
       int64_t index_data_length = 0;
