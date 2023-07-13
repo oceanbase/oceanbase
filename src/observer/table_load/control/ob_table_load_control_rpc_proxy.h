@@ -49,13 +49,13 @@ public:
   int name(const Arg &arg)                                                                    \
   {                                                                                           \
     int ret = OB_SUCCESS;                                                                     \
+    obrpc::ObSrvRpcProxy rpc_proxy = rpc_proxy_.to(addr_);                                    \
     ObDirectLoadControlRequest request;                                                       \
     ObDirectLoadControlResult result;                                                         \
     request.command_type_ = pcode;                                                            \
     if (OB_FAIL(request.set_arg(arg, allocator_))) {                                          \
       SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                                    \
-    } else if (OB_FAIL(rpc_proxy_.to(addr_)                                                   \
-                         .timeout(timeout_)                                                   \
+    } else if (OB_FAIL(rpc_proxy.timeout(timeout_)                                            \
                          .by(tenant_id_)                                                      \
                          .direct_load_control(request, result))) {                            \
       SERVER_LOG(WARN, "fail to rpc call direct load control", K(ret), K_(addr), K(request)); \
@@ -73,13 +73,13 @@ public:
   int name(const Arg &arg, Res &res)                                                          \
   {                                                                                           \
     int ret = OB_SUCCESS;                                                                     \
+    obrpc::ObSrvRpcProxy rpc_proxy = rpc_proxy_.to(addr_);                                    \
     ObDirectLoadControlRequest request;                                                       \
     ObDirectLoadControlResult result;                                                         \
     request.command_type_ = pcode;                                                            \
     if (OB_FAIL(request.set_arg(arg, allocator_))) {                                          \
       SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                                    \
-    } else if (OB_FAIL(rpc_proxy_.to(addr_)                                                   \
-                         .timeout(timeout_)                                                   \
+    } else if (OB_FAIL(rpc_proxy.timeout(timeout_)                                            \
                          .by(tenant_id_)                                                      \
                          .direct_load_control(request, result))) {                            \
       SERVER_LOG(WARN, "fail to rpc call direct load control", K(ret), K_(addr), K(request)); \
