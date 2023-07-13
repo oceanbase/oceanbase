@@ -902,6 +902,7 @@ int ObMajorMergeScheduler::do_update_and_reload(const int64_t epoch)
       LOG_WARN("fail to reload freeze_info_mgr", KR(ret));
     }
     if (OB_FAIL(ret)) {
+      // reset merge info with lock, so as to avoid concurrent execution with reload merge info
       zone_merge_mgr_->reset_merge_info();
       freeze_info_mgr_->reset_freeze_info();
       LOG_WARN("fail to reload", KR(ret));

@@ -32,7 +32,7 @@ public:
   int init(const uint64_t tenant_id, common::ObMySQLProxy &proxy);
   virtual int reload();
   virtual int try_reload();
-  void reset_merge_info();
+  void reset_merge_info_without_lock();
 
   int is_in_merge(bool &merge) const;
   int is_merge_error(bool &merge_error) const;
@@ -139,6 +139,7 @@ public:
   virtual int update_global_merge_info_after_merge(const int64_t expected_epoch);
   virtual int try_update_zone_merge_info(const int64_t expected_epoch);
   virtual int adjust_global_merge_info(const int64_t expected_epoch);
+  void reset_merge_info();
 
 public:
   class ObZoneMergeMgrGuard
