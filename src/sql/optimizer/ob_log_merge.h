@@ -50,8 +50,8 @@ public:
   const ObIArray<IndexDMLInfo *> &get_delete_infos() const { return index_del_infos_; }
   ObIArray<IndexDMLInfo *> &get_update_infos() { return index_upd_infos_; }
   ObIArray<IndexDMLInfo *> &get_delete_infos() { return index_del_infos_; }
-  const common::ObIArray<ObPCParamEqualInfo> &get_equal_infos() const { return equal_infos_; }
-  int set_equal_infos(const ObIArray<ObPCParamEqualInfo> &equal_infos) { return equal_infos_.assign(equal_infos); }
+  const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &get_equal_pairs() const { return equal_pairs_; }
+  int set_equal_pairs(const ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_infos) { return equal_pairs_.assign(equal_infos); }
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
@@ -63,7 +63,7 @@ protected:
 private:
   ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_upd_infos_;
   ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_del_infos_;
-  common::ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_infos_;
+  common::ObSEArray<std::pair<ObRawExpr*, ObRawExpr*>, 4, common::ModulePageAllocator, true> equal_pairs_;
 };
 }//sql
 }//oceanbase
