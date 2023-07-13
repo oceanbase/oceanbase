@@ -45,8 +45,10 @@ class ObRawExprPrinter
 
 #define PRINT_IDENT(ident_str)                                                        \
   do {                                                                                \
-    if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::print_identifier(                         \
-                   buf_, buf_len_, (*pos_), print_params_.cs_type_, ident_str))) {    \
+    if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::print_identifier(buf_, buf_len_, (*pos_), \
+                                                             print_params_.cs_type_,  \
+                                                             ident_str,               \
+                                                             lib::is_oracle_mode()))) { \
       LOG_WARN("fail to print ident str", K(ret), K(ident_str));                      \
     }                                                                                 \
   } while(0)
@@ -88,6 +90,13 @@ class ObRawExprPrinter
 #define PRINT_QUOT_WITH_SPACE \
   DATA_PRINTF(" ");           \
   PRINT_QUOT;
+
+#define PRINT_IDENT_WITH_QUOT(ident_str)  \
+  do {                                    \
+    PRINT_QUOT;                           \
+    PRINT_IDENT(ident_str);               \
+    PRINT_QUOT;                           \
+  } while (0)
 
 // cast函数在parse阶段用到这两个宏, 但定义在sql_parse_tab.c中
 // cast函数功能不完善，beta之前不会修改, 先定义在这里

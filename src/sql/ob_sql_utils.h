@@ -552,7 +552,8 @@ public:
 
   static int print_identifier(char *buf, const int64_t buf_len, int64_t &pos,
                               common::ObCollationType connection_collation,
-                              const common::ObString &identifier_name);
+                              const common::ObString &identifier_name,
+                              bool is_oracle_mode);
   static bool is_one_part_table_can_skip_part_calc(const share::schema::ObTableSchema &schema);
 
   static int create_encode_sortkey_expr(ObRawExprFactory &expr_factory,
@@ -622,6 +623,10 @@ public:
                                   share::schema::ObObjectType &obj_type,
                                   uint64_t &schema_version);
   static bool check_need_disconnect_parser_err(const int ret_code);
+
+  static int print_identifier_require_quotes(ObCollationType collation_type,
+                                             const ObString &ident,
+                                             bool &require);
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);

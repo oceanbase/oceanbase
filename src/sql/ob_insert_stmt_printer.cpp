@@ -140,9 +140,7 @@ int ObInsertStmtPrinter::print_into()
           // 临时表的隐藏列，不需要print。TODO 将临时表insert改写由resolver转移到改写阶段后，可以去掉本分支
           LOG_DEBUG("do not print column", K(*column));
         } else {
-          PRINT_QUOT;
-          PRINT_IDENT(column->get_column_name());
-          PRINT_QUOT;
+          PRINT_IDENT_WITH_QUOT(column->get_column_name());
           DATA_PRINTF(",");
         }
       }

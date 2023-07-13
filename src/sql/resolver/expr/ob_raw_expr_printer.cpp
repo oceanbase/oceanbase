@@ -105,9 +105,7 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       && scope_ != T_ORDER_SCOPE) {
     //expr is a alias column ref
     //alias column target list
-    PRINT_QUOT;
-    DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_alias_column_name()));
-    PRINT_QUOT;
+    PRINT_IDENT_WITH_QUOT(expr->get_alias_column_name());
   } else {
     switch (expr->get_expr_class()) {
     case ObRawExpr::EXPR_CONST: {
@@ -378,101 +376,61 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr *expr)
     PRINT_EXPR(expr->get_dependant_expr());
   } else {
     ObArenaAllocator arena_alloc;
-    ObString col_name;
-    if (OB_FAIL(ObSQLUtils::generate_new_name_with_escape_character(allocator, expr->get_column_name(),
-        col_name, is_oracle_mode))) {
-      LOG_WARN("fail to generate new name with escape character", K(ret));
-    } else if (is_oracle_mode &&
+    ObString col_name = expr->get_column_name();
+    if (is_oracle_mode &&
           OB_FAIL(ObSelectStmtPrinter::remove_double_quotation_for_string(col_name, arena_alloc))) {
       LOG_WARN("failed to remove double quotation for string", K(ret));
-    } else if (OB_FAIL(ObCharset::charset_convert(allocator,
-                                                  col_name,
-                                                  CS_TYPE_UTF8MB4_BIN,
-                                                  print_params_.cs_type_,
-                                                  col_name))) {
-      LOG_WARN("fail to convert charset", K(ret));
     } else if (print_params_.for_dblink_) {
       if (!expr->is_cte_generated_column() &&
           !expr->get_database_name().empty()) {
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_database_name()));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(expr->get_database_name());
         DATA_PRINTF(".");
       }
       if (!expr->get_table_name().empty()) {
         ObString table_name = expr->get_table_name();
-        CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(table_name);
         DATA_PRINTF(".");
       }
-      PRINT_QUOT;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
-      PRINT_QUOT;
+      PRINT_IDENT_WITH_QUOT(col_name);
     } else if (expr->is_cte_generated_column()) {
       ObString table_name = expr->get_synonym_name().empty() ?
                                                   expr->get_table_name() : expr->get_synonym_name();
       if (OB_SUCC(ret)) {
         // note: expr's table_name is equal to alias if table's alias is not empty,
-        CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(table_name);
         DATA_PRINTF(".");
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(col_name);
       }
     } else if (OB_UNLIKELY(only_column_namespace_)) {
-      PRINT_QUOT;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
-      PRINT_QUOT;
+      PRINT_IDENT_WITH_QUOT(col_name);
     } else if (expr->is_from_alias_table()) {
-      PRINT_QUOT;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_table_name()));
-      PRINT_QUOT;
+      PRINT_IDENT_WITH_QUOT(expr->get_table_name());
       DATA_PRINTF(".");
-      PRINT_QUOT;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
-      PRINT_QUOT;
+      PRINT_IDENT_WITH_QUOT(col_name);
     } else {
       if (!expr->get_synonym_name().empty() && !expr->get_synonym_db_name().empty()) {
         ObString synonyn_db_name = expr->get_synonym_db_name();
-        CONVERT_CHARSET_FOR_RPINT(allocator, synonyn_db_name);
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(synonyn_db_name));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(synonyn_db_name);
         DATA_PRINTF(".");
       } else if (!expr->get_synonym_name().empty() && expr->get_synonym_db_name().empty()) {
         // do nothing, synonym database name is not explicit
       } else if (expr->get_database_name().length() > 0) {
         ObString database_name = expr->get_database_name();
-        CONVERT_CHARSET_FOR_RPINT(allocator, database_name);
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(database_name));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(database_name);
         DATA_PRINTF(".");
       }
       ObString table_name = expr->get_synonym_name().empty() ?
                                   expr->get_table_name() : expr->get_synonym_name();
       if (OB_SUCC(ret)) {
-        CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
         // note: expr's table_name is equal to alias if table's alias is not empty,
         if (!table_name.empty()) {
-          PRINT_QUOT;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
-          PRINT_QUOT;
+          PRINT_IDENT_WITH_QUOT(table_name);
           DATA_PRINTF(".");
-          PRINT_QUOT;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
-          PRINT_QUOT;
+          PRINT_IDENT_WITH_QUOT(col_name);
         } else {
           // oracle allow derived table without alias name, table_name is empty here.
           // e.g.:  select * from (select 1 from dual)
-          PRINT_QUOT;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
-          PRINT_QUOT;
+          PRINT_IDENT_WITH_QUOT(col_name);
         }
       }
     }
@@ -2844,19 +2802,13 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
           LOG_WARN("param count should be equal 1", K(ret), K(seq_expr->get_param_count()));
         } else {
           if (!seq_expr->get_database_name().empty()) {
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(seq_expr->get_database_name()));
-            PRINT_QUOT;
+            PRINT_IDENT_WITH_QUOT(seq_expr->get_database_name());
             DATA_PRINTF(".");
           }
           if (!seq_expr->get_name().empty() && !seq_expr->get_action().empty()) {
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(seq_expr->get_name()));
-            PRINT_QUOT;
+            PRINT_IDENT_WITH_QUOT(seq_expr->get_name());
             DATA_PRINTF(".");
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(seq_expr->get_action()));
-            PRINT_QUOT;
+            PRINT_IDENT_WITH_QUOT(seq_expr->get_action());
           } else {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("sequence should sepcify format as seqname.action", K(ret));
@@ -3032,13 +2984,9 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
           sub_pk_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
           ObString table_name = sub_pk_expr->get_table_name();
           if (!table_name.empty()) {
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
-            PRINT_QUOT;
+            PRINT_IDENT_WITH_QUOT(table_name);
             DATA_PRINTF(".");
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(ObString(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)));
-            PRINT_QUOT;
+            PRINT_IDENT_WITH_QUOT(ObString(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME));
           }
         }
         break;
@@ -3171,9 +3119,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         break;
       }
       case T_FUN_UDF: {
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(func_name);
         OZ(inner_print_fun_params(*expr));
         break;
       }
@@ -3237,21 +3183,15 @@ int ObRawExprPrinter::print(ObUDFRawExpr *expr)
     if (!print_params_.for_dblink_ &&
         !expr->get_database_name().empty() &&
          expr->get_database_name().case_compare("oceanbase") != 0) {
-      PRINT_QUOT;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_database_name()));
-      PRINT_QUOT;
+      PRINT_IDENT_WITH_QUOT(expr->get_database_name());
       DATA_PRINTF(".");
     }
     if (!expr->get_package_name().empty() &&
         !expr->get_is_udt_cons()) {
-      PRINT_QUOT;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_package_name()));
-      PRINT_QUOT;
+      PRINT_IDENT_WITH_QUOT(expr->get_package_name());
       DATA_PRINTF(".");
     }
-    PRINT_QUOT;
-    DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_func_name()));
-    PRINT_QUOT;
+    PRINT_IDENT_WITH_QUOT(expr->get_func_name());
     DATA_PRINTF("(");
 
     ObIArray<ObExprResType> &params_type = expr->get_params_type();
@@ -3266,9 +3206,7 @@ int ObRawExprPrinter::print(ObUDFRawExpr *expr)
         // do not print construnct null self argument
       } else {
         if (!params_name.at(i).empty()) {
-          PRINT_QUOT;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(params_name.at(i)));
-          PRINT_QUOT;
+          PRINT_IDENT_WITH_QUOT(params_name.at(i));
           DATA_PRINTF("=>");
         }
         PRINT_EXPR(expr->get_param_expr(i));
@@ -3397,15 +3335,11 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         }
         if (OB_SUCC(ret)) {
           if(!database.empty()){
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(database));
-            PRINT_QUOT;
+            PRINT_IDENT_WITH_QUOT(database);
             DATA_PRINTF(".");
           }
           if (T_FUN_PL_AGG_UDF == type) {
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
-            PRINT_QUOT;
+            PRINT_IDENT_WITH_QUOT(symbol);
           } else {
             DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
           }
@@ -4294,9 +4228,7 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
         } else if (OB_FAIL(schema_guard_->get_udt_info(dest_tenant_id, udt_id, dest_info))) {
           LOG_WARN("failed to get udt info", K(ret));
         } else {
-          PRINT_QUOT;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(dest_info->get_type_name()));
-          PRINT_QUOT;
+          PRINT_IDENT_WITH_QUOT(dest_info->get_type_name());
         }
         break;
       }

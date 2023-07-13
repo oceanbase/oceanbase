@@ -56,7 +56,9 @@
 #include "observer/omt/ob_tenant_srs_mgr.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
-
+extern "C" {
+#include "sql/parser/ob_non_reserved_keywords.h"
+}
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::obmysql;
@@ -3891,20 +3893,28 @@ int ObSQLUtils::convert_sql_text_to_schema_for_storing(ObIAllocator &allocator,
 
 int ObSQLUtils::print_identifier(char *buf, const int64_t buf_len, int64_t &pos,
                                  ObCollationType connection_collation,
-                                 const common::ObString &identifier_name)
+                                 const common::ObString &identifier_name,
+                                 bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("PrintIdentifier");
+  ObString print_name;
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(generate_new_name_with_escape_character(allocator,
+                                                      identifier_name,
+                                                      print_name,
+                                                      is_oracle_mode))) {
+    LOG_WARN("failed to generate new name with escape character", K(ret));
   } else if (ObCharset::charset_type_by_coll(connection_collation)
       == CHARSET_UTF8MB4) {
-    if (OB_UNLIKELY(pos + identifier_name.length() > buf_len)) {
+    if (OB_UNLIKELY(pos + print_name.length() > buf_len)) {
       ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("size overflow", K(ret), K(identifier_name));
+      LOG_WARN("size overflow", K(ret), K(print_name));
     } else {
-      MEMCPY(buf + pos, identifier_name.ptr(), identifier_name.length());
-      pos += identifier_name.length();
+      MEMCPY(buf + pos, print_name.ptr(), print_name.length());
+      pos += print_name.length();
     }
   } else if (OB_UNLIKELY(buf_len <= pos)) {
     ret = OB_SIZE_OVERFLOW;
@@ -3912,8 +3922,8 @@ int ObSQLUtils::print_identifier(char *buf, const int64_t buf_len, int64_t &pos,
   } else {
     uint32_t result_len = 0;
     if (OB_FAIL(ObCharset::charset_convert(CS_TYPE_UTF8MB4_BIN,
-                                           identifier_name.ptr(),
-                                           identifier_name.length(),
+                                           print_name.ptr(),
+                                           print_name.length(),
                                            connection_collation,
                                            buf + pos,
                                            buf_len - pos,
@@ -5040,6 +5050,42 @@ int ObSQLUtils::find_synonym_ref_obj(const uint64_t database_id,
     object_id = package_info->get_package_id();
     obj_type = ObObjectType::PACKAGE;
     schema_version = package_info->get_schema_version();
+  }
+  return ret;
+}
+
+int ObSQLUtils::print_identifier_require_quotes(ObCollationType collation_type,
+                                                const ObString &ident,
+                                                bool &require)
+{
+  int ret = OB_SUCCESS;
+  bool pure_digit = true;
+  const ObCharsetInfo *info = ObCharset::get_charset(collation_type);
+  require = false;
+  if (OB_ISNULL(info)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "arguemnt is invalid", K(ret));
+  } else if (ident.length() > 0 && ident[0] == '$') {
+    require = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !require && i < ident.length(); i++) {
+    char ch = ident[i];
+    uint length = ob_mbcharlen(info, ch);
+    if (length == 0) {
+      require = true;
+    } else if (length == 1 && !oceanbase::sql::MYSQL_IDENTIFIER_FALGS[static_cast<uint8_t>(ch)]) {
+      require = true;
+    } else if (length == 1 && (ch < '0' || ch > '9')) {
+      pure_digit = false;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (pure_digit) {
+    require = true;
+  } else if (require) {
+    //do nothing
+  } else if (-1 != mysql_sql_reserved_keyword_lookup(ident.ptr())) {
+    require = true;
   }
   return ret;
 }

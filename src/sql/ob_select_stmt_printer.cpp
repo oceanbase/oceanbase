@@ -488,9 +488,7 @@ int ObSelectStmtPrinter::print_select()
               LOG_WARN("failed to remove double quotation for string", K(ret));
             } else {
               DATA_PRINTF(" AS ");
-              PRINT_QUOT;
-              DATA_PRINTF("%.*s", LEN_AND_PTR(alias_string));
-              PRINT_QUOT;
+              PRINT_IDENT_WITH_QUOT(alias_string);
             }
           }
           DATA_PRINTF(",");

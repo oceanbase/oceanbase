@@ -225,9 +225,7 @@ int ObInsertAllStmtPrinter::print_into_table_values(const ObInsertAllStmt *inser
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column is NULL", K(ret));
       } else {
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(column->get_column_name()));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(column->get_column_name());
         DATA_PRINTF(",");
       }
     }
