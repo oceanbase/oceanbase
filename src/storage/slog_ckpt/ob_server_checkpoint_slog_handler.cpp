@@ -171,7 +171,7 @@ int ObServerCheckpointSlogHandler::try_write_checkpoint_for_compat()
   } else {
     bool need_svr_ckpt = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_metas.size(); ++i) {
-      const ObTenantSuperBlock &super_block = tenant_metas.at(i).super_block_;
+      ObTenantSuperBlock &super_block = tenant_metas.at(i).super_block_;
       MTL_SWITCH(super_block.tenant_id_) {
         ObTenantCheckpointSlogHandler *tenant_ckpt_handler = MTL(ObTenantCheckpointSlogHandler*);
         if (!super_block.is_old_version()) {
@@ -179,6 +179,11 @@ int ObServerCheckpointSlogHandler::try_write_checkpoint_for_compat()
         } else if (OB_FAIL(tenant_ckpt_handler->write_checkpoint(true/*is_force*/))) {
           LOG_WARN("fail to write tenant slog checkpoint", K(ret));
         } else {
+          // we don't write checkpoint or update super_block for hidden tenant
+          // so it is necessary to update version here
+          if (super_block.is_hidden_) {
+            super_block.version_ = ObTenantSuperBlock::TENANT_SUPER_BLOCK_VERSION;
+          }
           need_svr_ckpt = true;
         }
         if (OB_SUCC(ret) && OB_FAIL(tenant_ckpt_handler->enable_ls_read())) {
