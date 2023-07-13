@@ -85,6 +85,7 @@ public:
     // @param [in]  dest_ls_id                the LS that partition should be located
     // @param [in]  tablet_size               tablet data size
     // @param [in]  in_new_partition_group    is this partition in new partition group
+    // @param [in]  part_group_uid            partition group unique id
     virtual int on_new_partition(
         const ObBalanceGroup &bg,
         const common::ObObjectID table_id,
@@ -93,7 +94,8 @@ public:
         const share::ObLSID &src_ls_id,
         const share::ObLSID &dest_ls_id,
         const int64_t tablet_size,
-        const bool in_new_partition_group) = 0;
+        const bool in_new_partition_group,
+        const uint64_t part_group_uid) = 0;
   };
 
 private:
@@ -137,7 +139,8 @@ private:
       const common::ObObjectID part_object_id,
       const common::ObTabletID tablet_id,
       share::ObLSID &dest_ls_id,
-      bool &in_new_partition_group);
+      bool &in_new_partition_group,
+      const uint64_t part_group_uid);
   int prepare_tablet_data_size_();
 
 private:

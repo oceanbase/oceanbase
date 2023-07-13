@@ -77,7 +77,8 @@ public:
       const ObLSID &src_ls_id,
       const ObLSID &dest_ls_id,
       const int64_t tablet_size,
-      const bool in_new_partition_group);
+      const bool in_new_partition_group,
+      const uint64_t part_group_uid);
 
   class ObLSPartGroupDesc
   {

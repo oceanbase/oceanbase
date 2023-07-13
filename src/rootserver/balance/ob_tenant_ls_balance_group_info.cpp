@@ -86,13 +86,13 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
     const share::ObLSID &src_ls_id,
     const share::ObLSID &dest_ls_id,
     const int64_t tablet_size,
-    const bool in_new_partition_group)
+    const bool in_new_partition_group,
+    const uint64_t part_group_uid)
 {
+  UNUSEDx(tablet_id, dest_ls_id, in_new_partition_group);
   int ret = OB_SUCCESS;
   ObLSBalanceGroupInfo *ls_bg_info = NULL;
   ObTransferPartInfo part_info(table_id, part_object_id);
-  //This partition_group is iterated for the first time and needs to be newly created;
-  bool create_new_partition_group = in_new_partition_group;
 
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
@@ -104,10 +104,6 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
       LOG_WARN("create new ls balance group info fail", KR(ret), K(src_ls_id));
     } else if (OB_FAIL(ls_bg_map_.set_refactored(src_ls_id, ls_bg_info))) {
       LOG_WARN("set new ls balance group info fail", KR(ret), K(src_ls_id), K(ls_bg_info));
-    } else {
-      //It is not the first time that the partition in this partition_group has been iterated,
-      //but this partition is not on the same LS as the previous partition, and needs to be newly created.
-      create_new_partition_group = true;
     }
   }
 
@@ -115,10 +111,9 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
   } else if (OB_ISNULL(ls_bg_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ls balance group info", KR(ret), K(ls_bg_info), K(src_ls_id));
-  } else if (OB_FAIL(ls_bg_info->append_part_into_balance_group(bg.id(), part_info, tablet_size,
-      create_new_partition_group))) {
+  } else if (OB_FAIL(ls_bg_info->append_part_into_balance_group(bg.id(), part_info, tablet_size, part_group_uid))) {
     LOG_WARN("append part into balance group for LS balance group info fail", KR(ret), K(bg),
-        K(part_info), K(tablet_size), K(in_new_partition_group), K(create_new_partition_group));
+        K(part_info), K(tablet_size), K(part_group_uid));
   }
   return ret;
 }

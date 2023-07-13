@@ -206,7 +206,7 @@ int ObBalanceJobTableOperator::get_balance_job(const uint64_t tenant_id,
       } else if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
           ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("empty balance job", KR(ret), K(sql));
+          LOG_INFO("empty balance job", KR(ret), K(sql));
         } else {
           LOG_WARN("failed to get balance job", KR(ret), K(sql));
         }

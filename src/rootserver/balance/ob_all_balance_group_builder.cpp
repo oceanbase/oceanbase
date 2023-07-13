@@ -23,11 +23,11 @@
 #define ISTAT(fmt, args...) FLOG_INFO("[BALANCE_GROUP_BUILDER] " fmt, K_(mod), ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[BALANCE_GROUP_BUILDER] " fmt, K_(mod), ##args)
 
-#define ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg) \
+#define ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid) \
     do {\
-      if (OB_FAIL(add_new_part_(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg))) {\
+      if (OB_FAIL(add_new_part_(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid))) {\
         LOG_WARN("add new partition fail", KR(ret), K(bg), K(table_id), K(part_object_id), \
-            K(dest_ls_id), K(in_new_pg));\
+            K(dest_ls_id), K(in_new_pg), K(part_group_uid));\
       }\
     } while (0)
 
@@ -315,6 +315,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
   } else {
     ObLSID dest_ls_id; // binding to the first table first tablet
     bool in_new_pg = true; // in new partition group
+    const uint64_t part_group_uid = 0; // all partitions belong to the same partition group for each LS
     for (int64_t t = 0; OB_SUCC(ret) && t < table_schemas.count(); t++) {
       const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(t);
       if (OB_ISNULL(table_schema)) {
@@ -334,7 +335,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
             ObObjectID part_object_id = info.object_id_;
             ObTabletID tablet_id = info.tablet_id_;
 
-            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg);
+            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
           }
         }
       }
@@ -408,6 +409,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
     // partitions/subpartitions of all tables with same one-level-partition-value, are in the same partition group.
     // Here, partitions/subpartitions with same one-level-partition-index of all tables are in the same partition group
     bool in_new_pg = true; // in new partition group
+    const uint64_t part_group_uid = p; // all partitions/subpartitions with same one-level part index belong to the same partition group for each LS
     for (int64_t t = 0; OB_SUCC(ret) && t < table_schemas.count(); t++) {
       const ObSimpleTableSchemaV2 &table_schema = *table_schemas.at(t);
       const uint64_t table_id = table_schema.get_table_id();
@@ -420,7 +422,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
           ObObjectID part_object_id = part_info.get_part_id();
           ObTabletID tablet_id = part_info.get_tablet_id();
 
-          ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg);
+          ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
         }
       } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
         int64_t sub_part_num = 0;
@@ -436,7 +438,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
               ObObjectID part_object_id = part_info.get_part_id();
               ObTabletID tablet_id = part_info.get_tablet_id();
 
-              ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg);
+              ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
             }
           }
         }
@@ -487,6 +489,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_subpart_(
       for (int64_t sp = 0; OB_SUCC(ret) && sp < partition->get_sub_part_num(); sp++) {
         ObLSID dest_ls_id;
         bool in_new_pg = true; // in new partition group
+        const uint64_t part_group_uid = sp; // subpartitions with same sub_part_idx belong to the same partition group for each LS
         for (int64_t t = 0; OB_SUCC(ret) && t < table_schemas.count(); t++) {
           const ObSimpleTableSchemaV2 &table_schema = *table_schemas.at(t);
           const uint64_t table_id = table_schema.get_table_id();
@@ -498,7 +501,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_subpart_(
             ObObjectID part_object_id = part_info.get_part_id();
             ObTabletID tablet_id = part_info.get_tablet_id();
 
-            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg);
+            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
           }
         }
       }
@@ -527,8 +530,9 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_zero_(const ObSimpleTableSc
     const uint64_t table_id = table_schema.get_table_id();
     ObObjectID part_object_id = 0;
     ObTabletID tablet_id = table_schema.get_tablet_id();
+    const uint64_t part_group_uid = table_id; // each table is an independent partition group
 
-    ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg);
+    ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
   }
   return ret;
 }
@@ -555,8 +559,9 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_one_(const ObSimpleTableSch
         ObLSID dest_ls_id;
         ObObjectID part_object_id = part->get_part_id();
         ObTabletID tablet_id = part->get_tablet_id();
+        const uint64_t part_group_uid = part_object_id; // each partition is an independent partition group
 
-        ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg);
+        ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
       }
     }
   }
@@ -596,13 +601,14 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_two_(const ObSimpleTableSch
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("sub partition is null", KR(ret), K(table_schema));
           } else {
-            // every subpartition is a independent partition group
+            // every subpartition is an independent partition group
             ObLSID dest_ls_id;
             bool in_new_pg = true; // in new partition group
             ObObjectID part_object_id = sub_part->get_sub_part_id();
             ObTabletID tablet_id = sub_part->get_tablet_id();
+            const uint64_t part_group_uid = part_object_id; // each subpartition is an independent partition group
 
-            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg);
+            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
           }
         }
       }
@@ -617,7 +623,8 @@ int ObAllBalanceGroupBuilder::add_new_part_(
     const ObObjectID part_object_id,
     const ObTabletID tablet_id,
     ObLSID &dest_ls_id,
-    bool &in_new_partition_group)
+    bool &in_new_partition_group,
+    const uint64_t part_group_uid)
 {
   int ret = OB_SUCCESS;
   ObLSID src_ls_id;
@@ -637,11 +644,12 @@ int ObAllBalanceGroupBuilder::add_new_part_(
       // skip this partition
     }
   } else if ((in_new_partition_group && dest_ls_id.is_valid())
-      || (!in_new_partition_group && !dest_ls_id.is_valid())) {
+      || (!in_new_partition_group && !dest_ls_id.is_valid())
+      || !is_valid_id(part_group_uid)) {
     // dest_ls_id should only be valid when this partition is the first partition in new partition group
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dest_ls_id or in_new_partition_group is invalid", KR(ret), K(in_new_partition_group),
-        K(dest_ls_id), K(bg), K(table_id), K(part_object_id), K(tablet_id));
+    LOG_WARN("invalid args", KR(ret), K(in_new_partition_group),
+        K(dest_ls_id), K(bg), K(table_id), K(part_object_id), K(tablet_id), K(part_group_uid));
   } else if (in_new_partition_group && FALSE_IT(dest_ls_id = src_ls_id)) {
     // use first partition's LS as all other partitions' LS in same partition group
   } else if (OB_FAIL(callback_->on_new_partition(
@@ -652,9 +660,10 @@ int ObAllBalanceGroupBuilder::add_new_part_(
       src_ls_id,
       dest_ls_id,
       tablet_size,
-      in_new_partition_group))) {
+      in_new_partition_group,
+      part_group_uid))) {
     LOG_WARN("callback handle new partition fail", KR(ret), K(bg), K(table_id), K(part_object_id),
-        K(tablet_id), K(src_ls_id), K(dest_ls_id), K(tablet_size), K(in_new_partition_group));
+        K(tablet_id), K(src_ls_id), K(dest_ls_id), K(tablet_size), K(in_new_partition_group), K(part_group_uid));
   } else {
     // auto clear flag
     in_new_partition_group = false;

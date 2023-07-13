@@ -49,7 +49,7 @@ public:
   // @param [in] bg_id                        target balance group id
   // @param [in] part                         target partition info which will be added
   // @param [in] data_size                    partition data size
-  // @param [in] need_create_new_part_group   whether to create new partition group in balance group
+  // @param [in] part_group_uid               target partition group unique id
   //
   // @return OB_SUCCESS         success
   // @return OB_ENTRY_EXIST     no partition group found
@@ -57,7 +57,7 @@ public:
   int append_part_into_balance_group(const ObBalanceGroupID &bg_id,
       share::ObTransferPartInfo &part,
       const int64_t data_size,
-      const bool need_create_new_part_group);
+      const uint64_t part_group_uid);
 
   ////////////////////////////////////////////////
   // Transfer out partition groups by specified factor
