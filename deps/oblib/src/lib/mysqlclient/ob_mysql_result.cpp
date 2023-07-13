@@ -75,13 +75,15 @@ int ObMySQLResult::print_info() const
 }
 
 int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
-                                                  oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType cs_type,
-                                                  DblinkDriverProto link_type, bool old_max_length) const
+                                                  oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType meta_cs_type,DblinkDriverProto link_type, bool old_max_length) const
 {
   int ret = OB_SUCCESS;
   int16_t tmp_precision = precision;
   int16_t tmp_scale = scale;
   int32_t tmp_length = length;
+  int64_t mbmaxlen = 0;
+  LOG_DEBUG("dblink pull meta", K(precision), K(scale), K(length), K(ret), K(ob_type));
+  // format precision from others to oceanbase
   if (ob_is_nstring(ob_type)) {
     precision = LS_CHAR; // precision is LS_CHAR means national character set (unicode)
   } else if (ObNumberFloatType == ob_type) {
@@ -117,21 +119,22 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
     } else {
       length = tmp_length;
     }
-    if (ObIntervalYMType == ob_type || ObIntervalDSType == ob_type) {
-      precision = -1;
-      length = -1;
-      if (DBLINK_DRV_OCI == link_type) {
-        scale = (ObIntervalYMType == ob_type)  ? tmp_precision : (tmp_precision * 10 + tmp_scale);
-      } else {
-        // do nothing, keep the value of scale unchanged
-      }
-    }
   }
   if (ObDoubleType == ob_type || ObFloatType == ob_type) {
     precision = -1;
     scale = -1;
     length = -1;
   }
+  if (ObIntervalYMType == ob_type || ObIntervalDSType == ob_type) {
+    precision = -1;
+    length = -1;
+    if (DBLINK_DRV_OCI == link_type) {
+      scale = (ObIntervalYMType == ob_type)  ? tmp_precision : (tmp_precision * 10 + tmp_scale);
+    } else {
+      // do nothing, keep the value of scale unchanged
+    }
+  }
+  LOG_DEBUG("dblink pull meta after format", K(precision), K(scale), K(length), K(ret));
   return ret;
 }
 
