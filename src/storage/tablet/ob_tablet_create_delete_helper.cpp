@@ -243,7 +243,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
   } else if (snapshot_version < create_commit_version) {
     // read snapshot is smaller than create tablet trans version,
     // no previous committed transaction
-    ret= OB_TABLE_DEFINITION_CHANGED;
+    ret= OB_SNAPSHOT_DISCARDED;
     LOG_INFO("tablet status is set to MAX because read snapshot is smaller than create trans version",
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(create_commit_version));
   } else if (delete_commit_version == ObTransVersion::INVALID_TRANS_VERSION) {

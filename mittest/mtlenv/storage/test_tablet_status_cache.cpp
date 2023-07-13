@@ -178,7 +178,7 @@ TEST_F(TestTabletStatusCache, weak_read)
   // mode is READ_READABLE_COMMITED, snapshot version is smaller than create commit version, return OB_SNAPSHOT_DISCARDED
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1 * 1000 * 1000/*timeout_us*/,
       ObMDSGetTabletMode::READ_READABLE_COMMITED, 20/*snapshot*/);
-  ASSERT_EQ(OB_TABLE_DEFINITION_CHANGED, ret);
+  ASSERT_EQ(OB_SNAPSHOT_DISCARDED, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 
   // mode is READ_ALL_COMMITED, but snapshot is not max scn, not supported
