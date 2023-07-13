@@ -2250,6 +2250,7 @@ typedef enum ObItemType
   T_CONSTR_LOB_META_SIZE,
   T_LOB_META_SIZE,
 
+  T_ALTER_SYSTEM_KILL, // used to support kill session in oracle
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

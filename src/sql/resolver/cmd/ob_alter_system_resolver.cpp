@@ -39,6 +39,7 @@
 #include "share/backup/ob_backup_config.h"
 #include "observer/mysql/ob_query_response_time.h"
 #include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
+#include "sql/resolver/cmd/ob_kill_stmt.h"
 
 namespace oceanbase
 {
@@ -3650,6 +3651,7 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
 
   return ret;
 }
+
 
 int ObArchiveLogResolver::resolve(const ParseNode &parse_tree)
 {

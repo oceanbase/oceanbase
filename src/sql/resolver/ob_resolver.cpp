@@ -744,6 +744,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(AlterSystemSet);
         break;
       }
+      case T_ALTER_SYSTEM_KILL: {
+        REGISTER_STMT_RESOLVER(Kill);
+        break;
+      }
       case T_ALTER_SESSION_SET: {
         REGISTER_STMT_RESOLVER(AlterSessionSet);
         break;

@@ -196,6 +196,17 @@ private:
       const common::ObString &name_node, const common::ObString &value_node);
 };
 
+class ObAlterSystemKillResolver : public ObSystemCmdResolver
+{
+public:
+  ObAlterSystemKillResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
+  virtual ~ObAlterSystemKillResolver() {}
+  virtual int resolve(const ParseNode &parse_tree);
+private:
+  int check_param_valid(int64_t tenant_id,
+      const common::ObString &name_node, const common::ObString &value_node);
+};
+
 class ObSetConfigResolver : public ObSystemCmdResolver
 {
 public:
