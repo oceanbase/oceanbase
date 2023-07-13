@@ -110,7 +110,7 @@ For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issu
 
 # Case study
 
-OceanBase makes data management and use easier with technology innovation. It has been serving more than 400 customers upgrade their database from different industries, including Financial Services, Telecom, Retail, Internet and more.
+OceanBase has been serving more than 400 customers upgrade their database from different industries, including Financial Services, Telecom, Retail, Internet and more.
 
 See also [success stories](https://en.oceanbase.com/customer/home) and [Who is using OceanBase](https://github.com/oceanbase/oceanbase/issues/1301) for more details.
 
