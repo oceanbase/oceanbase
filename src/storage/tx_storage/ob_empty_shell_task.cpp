@@ -159,9 +159,6 @@ int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArra
       } else if (is_locked) {
         STORAGE_LOG(INFO, "tablet_status is changing", KR(ret), KPC(tablet));
         need_retry = true;
-      }
-
-      if (OB_FAIL(ret) || need_retry) {
       } else if (OB_FAIL(check_tablet_deleted_(tablet, is_deleted))) {
         STORAGE_LOG(WARN, "fail to check_tablet_deleted", KR(ret));
       } else if (!is_deleted) {
