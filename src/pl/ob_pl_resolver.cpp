@@ -2015,6 +2015,8 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
                                 access_idxs.at(access_idxs.count() - 2).var_index_,
                                 *extern_type_info));
   } else if (ObObjAccessIdx::is_package_variable(access_idxs)) {
+    ObObjAccessIdx::AccessType type = ObObjAccessIdx::IS_INVALID;
+    uint64_t package_id = OB_INVALID_ID;
     CK (access_idxs.count() <= 3);
     OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_PKG_VAR);
     OX (extern_type_info->type_name_ = access_idxs.at(access_idxs.count() - 1).var_name_);
@@ -2031,21 +2033,29 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
       } else {
         extern_type_info->type_owner_ = access_idxs.at(0).var_index_;
       }
+      OX (package_id = access_idxs.at(1).var_index_);
+      OX (type = access_idxs.at(1).access_type_);
     } else if (2 == access_idxs.count()) {
       if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(0).var_index_)) { // 系统包中的Var
         extern_type_info->type_owner_ = OB_SYS_DATABASE_ID;
       } else {
         OZ(resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
       }
+      OX (package_id = access_idxs.at(0).var_index_);
+      OX (type = access_idxs.at(0).access_type_);
     } else {
       OZ(resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
+      OX (package_id = current_block_->get_namespace().get_package_id());
+      OX (type = ObObjAccessIdx::IS_PKG_NS);
     }
-    OZ (fill_schema_obj_version(guard,
-                                ObParamExternType::SP_EXTERN_PKG_VAR,
-                                access_idxs.count() > 1
-                                  ? access_idxs.at(access_idxs.count() - 2).var_index_
-                                    : current_block_->get_namespace().get_package_id(),
-                                *extern_type_info));
+    if (ObObjAccessIdx::IS_LABEL_NS == type) {
+      // do nothing
+    } else {
+      OZ (fill_schema_obj_version(guard,
+                                  ObParamExternType::SP_EXTERN_PKG_VAR,
+                                  package_id,
+                                  *extern_type_info));
+    }
   } else if (ObObjAccessIdx::is_table(access_idxs)) {
     CK (1 == access_idxs.count() || 2 == access_idxs.count());
     OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_TAB);
