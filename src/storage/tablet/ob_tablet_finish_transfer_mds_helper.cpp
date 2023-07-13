@@ -29,6 +29,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/high_availability/ob_transfer_service.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -759,7 +760,12 @@ int ObTabletFinishTransferInReplayExecutor::check_transfer_table_replaced_(
   } else {
     ret = OB_EAGAIN;
     LOG_WARN("transfer table still exist, need retry", K(ret), K(can_skip_check), K(all_replaced), KPC(tablet));
-    if (OB_SUCCESS != (tmp_ret = (try_make_dest_ls_rebuild_()))) {
+    ObTransferService *transfer_service = nullptr;
+    if (OB_ISNULL(transfer_service = MTL(ObTransferService *))) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", K(tmp_ret), KP(transfer_service));
+    } else if (FALSE_IT(transfer_service->wakeup())) {
+    } else if (OB_SUCCESS != (tmp_ret = (try_make_dest_ls_rebuild_()))) {
       LOG_WARN("failed to try make dest ls rebuild", K(tmp_ret), K(tablet_info_), K(src_ls_id_), K(dest_ls_id_));
     }
   }

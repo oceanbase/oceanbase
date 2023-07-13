@@ -2539,7 +2539,7 @@ int ObCopyTransferTabletInfoObProducer::get_next_tablet_info_(
   tablet_info.reset();
   ObTabletCreateDeleteMdsUserData user_data;
   ObTablet *tablet = nullptr;
-  bool unused_committed_flag = false;
+  bool committed_flag = false;
 
   if (!transfer_tablet_info.is_valid() || !tablet_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -2547,14 +2547,18 @@ int ObCopyTransferTabletInfoObProducer::get_next_tablet_info_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(transfer_tablet_info));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, unused_committed_flag))) {
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, committed_flag))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet status is unexpected", K(ret), KPC(tablet), K(transfer_tablet_info), K(user_data));
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("tablet status is not match", K(ret), KPC(tablet), K(transfer_tablet_info), K(user_data));
+  } else if (committed_flag) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("transfer src tablet status is transfer out but is already committed, not match",
+        K(ret), KPC(tablet), K(transfer_tablet_info), K(user_data));
   } else if (transfer_tablet_info.transfer_seq_ != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet transfer seq is unexpected", K(ret), KPC(tablet), K(transfer_tablet_info));
+    ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
+    LOG_WARN("tablet transfer seq is not match", K(ret), KPC(tablet), K(transfer_tablet_info));
   } else if (OB_FAIL(tablet->build_transfer_tablet_param(dest_ls_id_, tablet_info.param_))) {
     LOG_WARN("failed to build transfer tablet param", K(ret), K(transfer_tablet_info));
   } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {

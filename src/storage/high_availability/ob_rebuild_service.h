@@ -104,7 +104,7 @@ private:
   common::ObThreadCond thread_cond_;
   int64_t wakeup_cnt_;
   ObLSService *ls_service_;
-  common::SpinRWLock lock_;
+  common::SpinRWLock map_lock_;
   LSRebuildCtxMap rebuild_ctx_map_;
   DISALLOW_COPY_AND_ASSIGN(ObRebuildService);
 };

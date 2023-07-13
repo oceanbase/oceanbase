@@ -162,7 +162,7 @@ ObRebuildService::ObRebuildService()
     thread_cond_(),
     wakeup_cnt_(0),
     ls_service_(nullptr),
-    lock_(),
+    map_lock_(),
     rebuild_ctx_map_()
 {
 }
@@ -189,7 +189,7 @@ int ObRebuildService::init(
     ObLSService *ls_service)
 {
   int ret = OB_SUCCESS;
-  common::SpinWLockGuard guard(lock_);
+  common::SpinWLockGuard guard(map_lock_);
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -223,7 +223,7 @@ int ObRebuildService::add_rebuild_ls(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("add rebuild ls get invalid argument", K(ret), K(ls_id), K(rebuild_type));
   } else {
-    common::SpinWLockGuard guard(lock_);
+    common::SpinWLockGuard guard(map_lock_);
     int hash_ret = rebuild_ctx_map_.get_refactored(ls_id, rebuild_ctx);
     if (OB_SUCCESS == hash_ret) {
       wakeup();
@@ -249,7 +249,7 @@ int ObRebuildService::inner_remove_rebuild_ls_(
     const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  common::SpinWLockGuard guard(lock_);
+  common::SpinWLockGuard guard(map_lock_);
   if (OB_FAIL(rebuild_ctx_map_.erase_refactored(ls_id))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -279,9 +279,14 @@ int ObRebuildService::finish_rebuild_ls(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("remove rebuild ls get invalid argument", K(ret), K(ls_id));
   } else {
-    common::SpinWLockGuard guard(lock_);
-    if (OB_FAIL(rebuild_ctx_map_.get_refactored(ls_id, rebuild_ctx))) {
-      LOG_WARN("failed to get rebuild ctx", K(ret), K(ls_id));
+    {
+      common::SpinRLockGuard guard(map_lock_);
+      if (OB_FAIL(rebuild_ctx_map_.get_refactored(ls_id, rebuild_ctx))) {
+        LOG_WARN("failed to get rebuild ctx", K(ret), K(ls_id));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ls_rebuild_mgr.init(rebuild_ctx, ls_service_))) {
       LOG_WARN("failed to init ls rebuild mgr", K(ret), K(ls_id), K(rebuild_ctx));
     } else if (OB_FAIL(ls_rebuild_mgr.finish_ls_rebuild(result))) {
@@ -307,7 +312,7 @@ int ObRebuildService::check_ls_need_rebuild(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("remove rebuild ls get invalid argument", K(ret), K(ls_id));
   } else {
-    common::SpinRLockGuard guard(lock_);
+    common::SpinRLockGuard guard(map_lock_);
     if (OB_FAIL(rebuild_ctx_map_.get_refactored(ls_id, rebuild_ctx))) {
       if (OB_HASH_NOT_EXIST == ret) {
         need_rebuild = false;
@@ -334,7 +339,7 @@ int ObRebuildService::remove_rebuild_ls(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("remove rebuild ls get invalid argument", K(ret), K(ls_id));
   } else {
-    common::SpinWLockGuard guard(lock_);
+    common::SpinWLockGuard guard(map_lock_);
     if (OB_FAIL(rebuild_ctx_map_.erase_refactored(ls_id))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -447,7 +452,6 @@ int ObRebuildService::build_rebuild_ctx_map_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls iter should not be NULL", K(ret));
   } else {
-    common::SpinWLockGuard guard(lock_);
     while (OB_SUCC(ret)) {
       ObLS *ls = nullptr;
       ObLSRebuildInfo rebuild_info;
@@ -465,19 +469,22 @@ int ObRebuildService::build_rebuild_ctx_map_()
         LOG_WARN("failed to get rebuild info", K(ret), KPC(ls));
       } else if (!rebuild_info.is_in_rebuild()) {
         //do nothing
-      } else if (FALSE_IT(hash_ret = rebuild_ctx_map_.get_refactored(ls->get_ls_id(), rebuild_ctx))) {
-      } else if (OB_SUCCESS == hash_ret) {
-        //do nothing
-      } else if (OB_HASH_NOT_EXIST == hash_ret) {
-        rebuild_ctx.ls_id_ = ls->get_ls_id();
-        rebuild_ctx.type_ = rebuild_info.type_;
-        rebuild_ctx.task_id_.init(GCONF.self_addr_);
-        if (OB_FAIL(rebuild_ctx_map_.set_refactored(ls->get_ls_id(), rebuild_ctx))) {
-          LOG_WARN("failed to set rebuild ctx", K(ret), KPC(ls), K(rebuild_info));
-        }
       } else {
-        ret = hash_ret;
-        LOG_WARN("failed to get ls rebuild ctx", K(ret), KPC(ls));
+        common::SpinWLockGuard guard(map_lock_);
+        if (FALSE_IT(hash_ret = rebuild_ctx_map_.get_refactored(ls->get_ls_id(), rebuild_ctx))) {
+        } else if (OB_SUCCESS == hash_ret) {
+          //do nothing
+        } else if (OB_HASH_NOT_EXIST == hash_ret) {
+          rebuild_ctx.ls_id_ = ls->get_ls_id();
+          rebuild_ctx.type_ = rebuild_info.type_;
+          rebuild_ctx.task_id_.init(GCONF.self_addr_);
+          if (OB_FAIL(rebuild_ctx_map_.set_refactored(ls->get_ls_id(), rebuild_ctx))) {
+            LOG_WARN("failed to set rebuild ctx", K(ret), KPC(ls), K(rebuild_info));
+          }
+        } else {
+          ret = hash_ret;
+          LOG_WARN("failed to get ls rebuild ctx", K(ret), KPC(ls));
+        }
       }
     }
   }
@@ -610,7 +617,7 @@ int ObRebuildService::get_ls_rebuild_ctx_array_(
     ret = OB_NOT_INIT;
     LOG_WARN("rebuild service do not init", K(ret));
   } else {
-    common::SpinRLockGuard guard(lock_);
+    common::SpinRLockGuard guard(map_lock_);
     for (LSRebuildCtxMap::iterator iter = rebuild_ctx_map_.begin(); OB_SUCC(ret) && iter != rebuild_ctx_map_.end(); ++iter) {
       const ObLSRebuildCtx &rebuild_ctx = iter->second;
       if (OB_FAIL(rebuild_ctx_array.push_back(rebuild_ctx))) {
