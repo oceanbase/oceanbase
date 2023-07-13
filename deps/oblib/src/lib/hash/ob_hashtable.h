@@ -1017,6 +1017,32 @@ private:
     return ret;
   }
 
+  inline int internal_erase(hashbucket &bucket,
+                            const _key_type &key)
+  {
+    int ret = OB_HASH_NOT_EXIST;
+    hashnode *node = bucket.node;
+    hashnode *prev = nullptr;
+    while (nullptr != node) {
+      if (equal_(getkey_(node->data), key)) {
+        ret = OB_SUCCESS;
+        if (nullptr == prev) {
+          bucket.node = node->next;
+        } else {
+          prev->next = node->next;
+        }
+        allocer_->free(node);
+        node = nullptr;
+        ATOMIC_DEC((uint64_t *) &size_);
+        break;
+      } else {
+        prev = node;
+        node = node->next;
+      }
+    }
+    return ret;
+  }
+
   // This function is unsafe in that the pointer it returns might be invalid when
   // the user uses it. The multi-thread safeness is left to the caller.
   int internal_get_with_timeout_unsafe(hashbucket &bucket,
@@ -1121,9 +1147,29 @@ public:
     return ret;
   }
 
-  // flag: 0 shows that not cover existing object.
+  template <typename _callback>
+  int callback_helper(const _value_type &value, _callback *callback)
+  {
+    return (*callback)(value);
+  }
+  template <>
+  int callback_helper<void>(const _value_type &value, void *callback)
+  {
+    return OB_SUCCESS;
+  }
+
+  // if key not exist, set node and execute callback
+  // if callback failed, erase the node
+  // parameters:
+  //   flag: 0 shows that not cover existing object.
+  //   callback: MUST with a int operater()
+  // return value:
+  //   OB_SUCCESS for success, the node is set
+  //   OB_HASH_EXIST for node already exist
+  //   others for error
+  template <typename _callback = void, bool with_callback = !std::is_void<_callback>::value>
   int set_refactored(const _key_type &key, const _value_type &value, int flag = 0,
-          int broadcast = 0, int overwrite_key = 0)
+      int broadcast = 0, int overwrite_key = 0, _callback *callback = nullptr)
   {
     int ret = OB_SUCCESS;
     UNUSED(overwrite_key);
@@ -1186,6 +1232,17 @@ public:
       }
       if (OB_SUCC(ret) && NULL == node) {
         ret = internal_set(bucket, value, false);
+        if (with_callback) {
+          if (OB_SUCC(ret)) {
+            int tmp_ret = callback_helper(value, callback);
+            if (OB_SUCCESS != tmp_ret) {
+              HASH_WRITE_LOG(HASH_WARNING, "hashtable executes callback failed, tmp_ret=%d", tmp_ret);
+              ret = OB_ERR_UNEXPECTED;
+              // never fail because internal_set succeed
+              (void) internal_erase(bucket, key);
+            }
+          }
+        }
       }
     }
     return ret;
@@ -1283,6 +1340,70 @@ public:
             ATOMIC_DEC((uint64_t *) &size_);
             bucket_lock_cond blc(bucket);
             cond_broadcaster()(blc.cond());
+          }
+          break;
+        } else {
+          prev = node;
+          node = node->next;
+        }
+      }
+    }
+    return ret;
+  }
+
+  // erase key value pair if pred is met
+  // thread safe erase, will add write lock to the bucket
+  // return value:
+  //   OB_SUCCESS for success
+  //   OB_HASH_NOT_EXIST for node not exists
+  //   others for error
+  template<class _pred>
+  int erase_if(const _key_type &key, _pred &pred, bool &is_erased, _value_type *value = NULL)
+  {
+    return erase_if(key, pred, preproc_, is_erased, value);
+  }
+  // erase key value pair if pred is met
+  // thread safe erase, will add write lock to the bucket
+  template<class _pred, class _preproc>
+  int erase_if(const _key_type &key, _pred &pred, _preproc &preproc,
+               bool &is_erased, _value_type *value = NULL)
+  {
+    int ret = OB_SUCCESS;
+    is_erased = false;
+    if (OB_UNLIKELY(!inited(buckets_)) || OB_UNLIKELY(NULL == allocer_)) {
+      HASH_WRITE_LOG(HASH_WARNING, "hashtable not init");
+      ret = OB_NOT_INIT;
+    } else {
+      uint64_t hash_value = hashfunc_(key);
+      int64_t bucket_pos = hash_value % bucket_num_;
+      hashbucket &bucket = buckets_[bucket_pos];
+      bucket_lock_cond blc(bucket);
+      writelocker locker(blc.lock());
+      hashnode *node = bucket.node;
+      hashnode *prev = NULL;
+      ret = OB_HASH_NOT_EXIST;
+      while (NULL != node) {
+        if (equal_(getkey_(node->data), key)) {
+          ret = OB_SUCCESS;
+          if (pred(preproc(node->data))) {
+            if (NULL != value) {
+              if (OB_FAIL(copy_assign(*value, node->data))) {
+                HASH_WRITE_LOG(HASH_FATAL, "failed to copy data, ret = %d", ret);
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (NULL == prev) {
+                bucket.node = node->next;
+              } else {
+                prev->next = node->next;
+              }
+              allocer_->free(node);
+              node = NULL;
+              ATOMIC_DEC((uint64_t *) &size_);
+              bucket_lock_cond blc(bucket);
+              cond_broadcaster()(blc.cond());
+              is_erased = true;
+            }
           }
           break;
         } else {

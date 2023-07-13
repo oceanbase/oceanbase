@@ -193,15 +193,16 @@ public:
     const _value_type *ret = get(const_cast<const _key_type&>(key));
     return const_cast<_value_type*>(ret);
   }
-  inline int set_refactored(const _key_type &key, const _value_type &value, int flag = 0,
-                 int broadcast = 0, int overwrite_key = 0)
+  template <typename _callback = void>
+  int set_refactored(const _key_type &key, const _value_type &value, int flag = 0,
+                 int broadcast = 0, int overwrite_key = 0, _callback *callback = nullptr)
   {
     int ret = OB_SUCCESS;
     pair_type pair;
     if (OB_FAIL(pair.init(key, value))) {
       HASH_WRITE_LOG(HASH_WARNING, "init pair failed, ret=%d", ret);
     } else {
-      ret = ht_.set_refactored(key, pair, flag, broadcast, overwrite_key);
+      ret = ht_.set_refactored(key, pair, flag, broadcast, overwrite_key, callback);
     }
     return ret;
   };
@@ -241,6 +242,29 @@ public:
     }
     return ret;
   };
+
+  // erase key value pair if pred is met
+  // thread safe erase, will add write lock to the bucket
+  // return value:
+  //   OB_SUCCESS for success
+  //   OB_HASH_NOT_EXIST for node not exists
+  //   others for error
+  template<class _pred>
+  int erase_if(const _key_type &key, _pred &pred, bool &is_erased, _value_type *value = NULL)
+  {
+    int ret = OB_SUCCESS;
+    pair_type pair;
+    if (NULL != value) {
+      if (OB_FAIL(ht_.erase_if(key, pred, is_erased, &pair))) {
+      } else if (is_erased && OB_FAIL(copy_assign(*value, pair.second))) {
+        HASH_WRITE_LOG(HASH_FATAL, "copy assign failed, ret=%d", ret);
+      }
+    } else {
+      ret = ht_.erase_if(key, pred, is_erased);
+    }
+    return ret;
+  }
+
   template <class _archive>
   int serialization(_archive &archive)
   {
