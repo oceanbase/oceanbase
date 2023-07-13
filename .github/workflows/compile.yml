@@ -16,10 +16,22 @@ jobs:
       shell: bash
       run: sudo apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin language-pack-en
 
+    - name: Cache deps
+      id: cache-deps
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-deps
+      with:
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
+        path: deps/3rd
+        
+    - name: Build init
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      run: bash build.sh init
+      
     - name: Build project
       shell: bash
       run: |
-        bash build.sh init
         bash build.sh debug
         cd build_debug && make -j4
         
