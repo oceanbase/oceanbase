@@ -228,26 +228,31 @@ bool ObXAFlag::is_valid(const int64_t flag, const int64_t xa_req_type)
 
   switch (xa_req_type) {
     case ObXAReqType::XA_START: {
-      const bool is_resumejoin = flag & (TMRESUME | TMJOIN);
-      if (!is_resumejoin) {
-        const int64_t mask = LOOSELY | TMREADONLY | TMSERIALIZABLE;
-        if (mask != (flag | mask)) {
-          ret_bool = false;
-        } else {
-          ret_bool = true;
-        }
+      if (((flag & TMRESUME) && ((flag & TMJOIN) || (flag & LOOSELY)))
+         || ((flag & LOOSELY) && (flag & TMJOIN))) {
+        ret_bool = false;
       } else {
-        if ((flag & TMJOIN) && (flag & TMRESUME)) {
-          ret_bool = false;
+        const bool is_resumejoin = flag & (TMRESUME | TMJOIN);
+        if (!is_resumejoin) {
+          const int64_t mask = LOOSELY | TMREADONLY | TMSERIALIZABLE;
+          if (mask != (flag | mask)) {
+            ret_bool = false;
+          } else {
+            ret_bool = true;
+          }
         } else {
-          ret_bool = true;
+          if ((flag & TMJOIN) && (flag & TMRESUME)) {
+            ret_bool = false;
+          } else {
+            ret_bool = true;
+          }
         }
       }
       break;
     }
     case ObXAReqType::XA_END: {
       const int64_t mask = 0x00000000FFFFFFFF;
-      if ((flag & mask) != TMSUSPEND && (flag & mask) != TMSUCCESS) {
+      if ((flag & mask) != TMSUSPEND && (flag & mask) != TMSUCCESS && (flag & mask) != TMFAIL) {
         ret_bool = false;
       } else {
         ret_bool = true;

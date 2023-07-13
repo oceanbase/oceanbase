@@ -115,6 +115,7 @@ public:
     TMSUSPEND = 0x2000000,
     TMSUCCESS = 0x4000000,
     TMRESUME = 0x8000000,
+    TMFAIL = 0x20000000,
     TMONEPHASE = 0x40000000,
     // non-standard xa protocol, to denote temp table xa trans
     TEMPTABLE = 0x100000000,
@@ -137,6 +138,7 @@ public:
   static bool contain_tmsuspend(const int64_t flag) { return flag & TMSUSPEND; }
   static bool contain_tmonephase(const int64_t flag) { return flag & TMONEPHASE; }
   static bool is_tmonephase(const int64_t flag) { return flag == TMONEPHASE; }
+  static bool contain_tmfail(const int64_t flag) { return flag & TMFAIL; }
   static int64_t add_end_flag(const int64_t flag, const int64_t end_flag)
   {
     int64_t ret = end_flag;

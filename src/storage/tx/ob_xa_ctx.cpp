@@ -1664,26 +1664,33 @@ int ObXACtx::xa_end(const ObXATransID &xid,
     // include branch fail
     TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
   } else {
-    if (!is_tightly_coupled_) {
-      // loosely coupled mode
-      if (is_original) {
-        if (OB_FAIL(xa_end_loose_local_(xid, flags, tx_desc))) {
-          TRANS_LOG(WARN, "xa end loose local failed", K(ret), K(xid), K(*this));
-        }
-      } else {
-        if (OB_FAIL(xa_end_loose_remote_(xid, flags, tx_desc))) {
-          TRANS_LOG(WARN, "xa end loose remote failed", K(ret), K(xid), K(*this));
-        }
+    if (ObXAFlag::contain_tmfail(flags) && !tx_desc_->need_rollback()) {
+      if (OB_FAIL(MTL(ObTransService *)->abort_tx(*tx_desc_, ObTxAbortCause::IMPLICIT_ROLLBACK))) {
+        TRANS_LOG(WARN, "abort tx fail", K(ret), K(*this));
       }
-    } else {
-      //tightly coupled mode
-      if (is_original) {
-        if (OB_FAIL(xa_end_tight_local_(xid, flags, tx_desc))) {
-          TRANS_LOG(WARN, "xa end tight local failed", K(ret), K(xid), K(*this));
+    }
+    if (OB_SUCC(ret)) {
+      if (!is_tightly_coupled_) {
+        // loosely coupled mode
+        if (is_original) {
+          if (OB_FAIL(xa_end_loose_local_(xid, flags, tx_desc))) {
+            TRANS_LOG(WARN, "xa end loose local failed", K(ret), K(xid), K(*this));
+          }
+        } else {
+          if (OB_FAIL(xa_end_loose_remote_(xid, flags, tx_desc))) {
+            TRANS_LOG(WARN, "xa end loose remote failed", K(ret), K(xid), K(*this));
+          }
         }
       } else {
-        if (OB_FAIL(xa_end_tight_remote_(xid, flags, tx_desc))) {
-          TRANS_LOG(WARN, "xa end tight remote failed", K(ret), K(xid), K(*this));
+        //tightly coupled mode
+        if (is_original) {
+          if (OB_FAIL(xa_end_tight_local_(xid, flags, tx_desc))) {
+            TRANS_LOG(WARN, "xa end tight local failed", K(ret), K(xid), K(*this));
+          }
+        } else {
+          if (OB_FAIL(xa_end_tight_remote_(xid, flags, tx_desc))) {
+            TRANS_LOG(WARN, "xa end tight remote failed", K(ret), K(xid), K(*this));
+          }
         }
       }
     }
