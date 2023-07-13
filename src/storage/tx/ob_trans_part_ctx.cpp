@@ -3772,8 +3772,9 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
       TRANS_LOG(WARN, "submit big segment log failed", K(ret), K(log_type), KPC(this));
     }
   } else if (OB_ERR_TOO_BIG_ROWSIZE == ret) {
-    if (OB_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
-      TRANS_LOG(WARN, "do local tx end failed", K(ret), K(log_type), KPC(this));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
+      TRANS_LOG(WARN, "do local tx end failed", K(tmp_ret), K(log_type), KPC(this));
     } else {
       TRANS_LOG(WARN, "row size is too big for only one redo", K(ret),
                 K(log_type), KPC(this));
