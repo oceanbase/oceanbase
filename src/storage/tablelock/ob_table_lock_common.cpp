@@ -185,16 +185,14 @@ bool ObTableLockOp::is_valid() const
          lock_op_status_ != UNKNOWN_STATUS;
 }
 
-bool ObTableLockOp::operator ==(const ObTableLockOp &other) const
+bool ObTableLockOp::need_replay_or_recover(const ObTableLockOp &other) const
 {
-  return (lock_seq_no_ == other.lock_seq_no_ &&
-          lock_id_ == other.lock_id_ &&
-          create_trans_id_ == other.create_trans_id_ &&
-          owner_id_ == other.owner_id_ &&
-          lock_mode_ == other.lock_mode_ &&
-          op_type_ == other.op_type_ &&
-          create_timestamp_ == other.create_timestamp_ &&
-          create_schema_version_ == other.create_schema_version_);
+  return !(lock_seq_no_ == other.lock_seq_no_ &&
+           lock_id_ == other.lock_id_ &&
+           create_trans_id_ == other.create_trans_id_ &&
+           owner_id_ == other.owner_id_ &&
+           lock_mode_ == other.lock_mode_ &&
+           op_type_ == other.op_type_);
 }
 
 void ObTableLockInfo::reset()
