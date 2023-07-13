@@ -114,6 +114,7 @@ int ObNetEndpointIngressManager::collect_predict_bw(ObNetEndpointKVArray &update
       const ObNetEndpointKey &endpoint_key = delete_keys[i];
       if (OB_FAIL(ingress_plan_map_.erase_refactored(endpoint_key))) {
         LOG_ERROR("failed to erase endpoint", K(ret), K(endpoint_key));
+        ret = OB_SUCCESS;  // ignore error
       }
     }
   }

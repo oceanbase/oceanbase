@@ -65,7 +65,10 @@ static int rl_timerfd_handle_event(rl_timerfd_t* s) {
     }
   } else {
     // read data
-    int64_t avail_bytes = 65536; // read only up to 64k once
+    int64_t avail_bytes = rl->bw * 0.1 + 1;
+    if (avail_bytes > 65536) {
+      avail_bytes = 65536; // read only up to 64k once
+    }
     int64_t temp_bytes = avail_bytes;
     int rl_err = 0;
     dlink_t* last_dlink = rl_queue->prev;
