@@ -1547,46 +1547,43 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
   return ret;
 }
 
-int ObTenantMetaMemMgr::get_tablet_buffer_infos(
-    const ObTabletPoolType &pool_type,
-    ObIArray<ObTabletBufferInfo> &buffer_infos)
+int ObTenantMetaMemMgr::get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos)
 {
   int ret = OB_SUCCESS;
-  int64_t size = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
   } else {
-    ObMetaObjBufferNode *tablet_buffer_node = nullptr;
-    ObMetaObjBufferNode *header = nullptr;
     SpinRLockGuard guard(wash_lock_);
-    if (pool_type == ObTabletPoolType::TP_LARGE) {
-      tablet_buffer_node = large_tablet_header_.get_first();
-      header = large_tablet_header_.get_header();
-      size = large_tablet_header_.get_size();
-    } else if (pool_type == ObTabletPoolType::TP_NORMAL) {
-      tablet_buffer_node = normal_tablet_header_.get_first();
-      header = normal_tablet_header_.get_header();
-      size = normal_tablet_header_.get_size();
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet pool type is invalid", K(ret), K(pool_type));
-    }
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(buffer_infos.reserve(size))) {
+    const int64_t size = normal_tablet_header_.get_size() + large_tablet_header_.get_size();
+    if (OB_FAIL(buffer_infos.reserve(size))) {
       LOG_WARN("fail to reserve memory for buffer_infos", K(ret), K(size));
+    } else if (OB_FAIL(fill_buffer_infos(
+        ObTabletPoolType::TP_NORMAL, normal_tablet_header_.get_header(), buffer_infos))) {
+      LOG_WARN("fail to fill normal buffer infos", K(ret), KP(normal_tablet_header_.get_first()));
+    } else if (OB_FAIL(fill_buffer_infos(
+        ObTabletPoolType::TP_LARGE, large_tablet_header_.get_header(), buffer_infos))) {
+      LOG_WARN("fail to fill large buffer infos", K(ret), KP(large_tablet_header_.get_header()));
+    }
+  }
+  return ret;
+}
+
+int ObTenantMetaMemMgr::fill_buffer_infos(
+    const ObTabletPoolType pool_type,
+    ObMetaObjBufferNode *tablet_buffer_node,
+    ObIArray<ObTabletBufferInfo> &buffer_infos)
+{
+  int ret = OB_SUCCESS;
+  ObMetaObjBufferNode *cur_node = tablet_buffer_node->get_next();
+  while (OB_SUCC(ret) && cur_node != tablet_buffer_node) {
+    ObTabletBufferInfo buffer_info;
+    if (OB_FAIL(buffer_info.fill_info(pool_type, cur_node))) {
+      LOG_WARN("fail to fill tablet buffer info", K(ret), K(pool_type), KP(tablet_buffer_node), KP(cur_node));
+    } else if (OB_FAIL(buffer_infos.push_back(buffer_info))) {
+      LOG_WARN("fail to push back buffer info", K(ret), K(buffer_info));
     } else {
-      while (OB_SUCC(ret) && header != tablet_buffer_node) {
-        ObTabletBufferInfo buffer_info;
-        if (OB_FAIL(buffer_info.fill_info(pool_type, tablet_buffer_node))) {
-          LOG_WARN("fail to fill tablet buffer info", K(ret));
-        } else if (OB_FAIL(buffer_infos.push_back(buffer_info))) {
-          LOG_WARN("fail to push back buffer info", K(ret), K(buffer_info));
-        } else {
-          tablet_buffer_node = tablet_buffer_node->get_next();
-        }
-      }
+      cur_node = cur_node->get_next();
     }
   }
   return ret;

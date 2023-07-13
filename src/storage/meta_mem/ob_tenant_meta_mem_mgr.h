@@ -245,7 +245,7 @@ public:
       common::ObArenaAllocator &allocator,
       ObTabletHandle &handle,
       const bool force_alloc_new = false);
-  int get_tablet_buffer_infos(const ObTabletPoolType &pool_type, ObIArray<ObTabletBufferInfo> &buffer_infos);
+  int get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int has_tablet(const ObTabletMapKey &key, bool &is_exist);
   int del_tablet(const ObTabletMapKey &key);
@@ -275,6 +275,10 @@ public:
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited), "tablet count", tablet_map_.count());
 private:
+  int fill_buffer_infos(
+      const ObTabletPoolType pool_type,
+      ObMetaObjBufferNode *tablet_buffer_node,
+      ObIArray<ObTabletBufferInfo> &buffer_infos);
   int64_t cal_adaptive_bucket_num();
   int push_tablet_into_gc_queue(ObTablet *tablet);
   void push_tablet_list_into_gc_queue(ObTablet *tablet);
