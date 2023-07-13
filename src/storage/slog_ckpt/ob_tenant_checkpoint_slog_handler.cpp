@@ -155,11 +155,83 @@ void ObTenantCheckpointSlogHandler::ObWriteCheckpointTask::runTimerTask()
   }
 }
 
+int ObTenantCheckpointSlogHandler::ObReplayCreateTabletTask::init(
+    const int64_t task_idx, ObTenantBase *tenant_base, ObTenantCheckpointSlogHandler *handler)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("task has been inited", K(ret), KPC(this));
+  } else {
+    idx_ = task_idx;
+    tenant_base_ = tenant_base;
+    tablet_addr_arr_.reset();
+    tnt_ckpt_slog_handler_ = handler;
+    handler->inc_inflight_replay_tablet_task_cnt();
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+void ObTenantCheckpointSlogHandler::ObReplayCreateTabletTask::destroy()
+{
+  if (IS_INIT) {
+    tnt_ckpt_slog_handler_->dec_inflight_replay_tablet_task_cnt();
+    idx_ = -1;
+    tenant_base_ = nullptr;
+    tnt_ckpt_slog_handler_ = nullptr;
+    tablet_addr_arr_.reset();
+    is_inited_ = false;
+  }
+}
+int ObTenantCheckpointSlogHandler::ObReplayCreateTabletTask::execute()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("task not init", K(ret), KPC(this));
+  } else {
+    ObTenantSwitchGuard guard(tenant_base_);
+    if (OB_UNLIKELY(MTL(ObTenantCheckpointSlogHandler*) != tnt_ckpt_slog_handler_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected ObTenantCheckpointSlogHandler", K(ret), KPC(this));
+    } else if (OB_FAIL(tnt_ckpt_slog_handler_->replay_create_tablets_per_task(tablet_addr_arr_))) {
+      LOG_WARN("fail to execute replay_create_tablets_per_task", K(ret), KPC(this));
+    } else {
+      FLOG_INFO("successfully execute replay create tablet task", KPC(this));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    tnt_ckpt_slog_handler_->set_replay_create_tablet_errcode(ret);
+  }
+  return ret;
+}
+
+int ObTenantCheckpointSlogHandler::ObReplayCreateTabletTask::add_tablet_addr(
+    const ObTabletMapKey &tablet_key, const ObMetaDiskAddr &tablet_addr, bool &is_enough)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("task not init", K(ret));
+  } else if (OB_FAIL(tablet_addr_arr_.push_back(std::make_pair(tablet_key, tablet_addr)))) {
+    LOG_WARN("fail to push_back", K(ret), K(*this));
+  } else if (tablet_addr_arr_.count() >= TABLET_NUM_PER_TASK) {
+    is_enough = true;
+  } else {
+    is_enough = false;
+  }
+  return ret;
+}
+
 ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
   : is_inited_(false),
     is_writing_checkpoint_(false),
     last_ckpt_time_(0),
     last_frozen_version_(0),
+    inflight_replay_tablet_task_cnt_(0),
+    finished_replay_tablet_cnt_(0),
+    replay_create_tablet_errcode_(OB_SUCCESS),
     lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
     mutex_(),
     tablet_key_set_(),
@@ -492,8 +564,8 @@ int ObTenantCheckpointSlogHandler::replay_tenant_slog(const common::ObLogCursor 
     LOG_WARN("fail to register redo module", K(ret));
   } else if (OB_FAIL(replayer.replay(start_point, replay_finish_point, MTL_ID()))) {
     LOG_WARN("fail to replay tenant slog", K(ret));
-  } else if (OB_FAIL(replay_load_tablets())) {
-    LOG_WARN("fail to replay load tablets", K(ret));
+  } else if (OB_FAIL(concurrent_replay_load_tablets())) {
+    LOG_WARN("fail to concurrent replay load tablets", K(ret));
   } else if (OB_FAIL(replayer.replay_over())) {
     LOG_WARN("fail to replay over", K(ret));
   } else if (OB_FAIL(MTL(ObStorageLogger *)->start_log(replay_finish_point))) {
@@ -631,32 +703,129 @@ int ObTenantCheckpointSlogHandler::record_ls_transfer_info(
   }
   return ret;
 }
-int ObTenantCheckpointSlogHandler::replay_load_tablets()
+int ObTenantCheckpointSlogHandler::concurrent_replay_load_tablets()
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_time = ObTimeUtility::current_time();
+  const int64_t total_tablet_cnt = replay_tablet_disk_addr_map_.size();
+  int64_t cost_time_us = 0;
+  ReplayTabletDiskAddrMap::iterator iter = replay_tablet_disk_addr_map_.begin();
+  ObReplayCreateTabletTask *task = nullptr;
+  int64_t task_idx = 0;
+  while (OB_SUCC(ret) && iter != replay_tablet_disk_addr_map_.end()) {
+    if (nullptr == task) {
+      if (OB_ISNULL(task = reinterpret_cast<ObReplayCreateTabletTask*>(
+          SERVER_STARTUP_TASK_HANDLER.get_task_allocator().alloc(sizeof(ObReplayCreateTabletTask))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc task buf", K(ret));
+      } else if (FALSE_IT(task = new(task) ObReplayCreateTabletTask())) {
+      } else if (OB_FAIL(task->init(task_idx++, share::ObTenantEnv::get_tenant(), this))) {
+        LOG_WARN("fail to init ObReplayCreateTabletTask", K(ret), KPC(task));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      bool is_enough = false;
+      if (OB_FAIL(task->add_tablet_addr(iter->first, iter->second, is_enough))) {
+        LOG_WARN("fail to add tablet", K(ret), K(iter->first), K(iter->second), KPC(task));
+      } else if (is_enough) { // tablet count of this task is enough and will create a new task at next round
+        if (OB_FAIL(add_replay_create_tablet_task(task))) {
+          LOG_WARN("fail to add replay tablet task", K(ret), KPC(task), K(inflight_replay_tablet_task_cnt_));
+        } else {
+          task = nullptr;
+          ++iter;
+        }
+      } else {
+        ++iter;
+      }
+    }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(task)) {
+      task->~ObReplayCreateTabletTask();
+      SERVER_STARTUP_TASK_HANDLER.get_task_allocator().free(task);
+      task = nullptr;
+    }
+  }
+
+  if (OB_SUCC(ret)) { // handle the last task
+    if (OB_NOT_NULL(task) && OB_FAIL(add_replay_create_tablet_task(task))) {
+      LOG_WARN("fail to add last replay tablet task", K(ret), KPC(task), K(inflight_replay_tablet_task_cnt_));
+      task->~ObReplayCreateTabletTask();
+      SERVER_STARTUP_TASK_HANDLER.get_task_allocator().free(task);
+      task = nullptr;
+    }
+  }
+  // waiting all task finish even if failure has occurred
+  while (ATOMIC_LOAD(&inflight_replay_tablet_task_cnt_) != 0) {
+    LOG_INFO("waiting replay create tablet task finish", K(inflight_replay_tablet_task_cnt_));
+    ob_usleep(10 * 1000); // 10ms
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ATOMIC_LOAD(&replay_create_tablet_errcode_))) {
+      LOG_WARN("ObReplayCreateTabletTask has failed", K(ret));
+    } else if (ATOMIC_LOAD(&finished_replay_tablet_cnt_) != total_tablet_cnt) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("finished replay tablet cnt mismatch", K(ret), K_(finished_replay_tablet_cnt), K(total_tablet_cnt));
+    }
+  }
+
+  cost_time_us = ObTimeUtility::current_time() - start_time;
+  FLOG_INFO("finish concurrently repaly load tablets", K(ret), K(total_tablet_cnt), K(cost_time_us));
+
+  return ret;
+}
+
+int ObTenantCheckpointSlogHandler::add_replay_create_tablet_task(ObReplayCreateTabletTask *task)
+{
+  int ret = OB_SUCCESS;
+  bool need_retry = false;
+  do {
+    if (OB_FAIL(ATOMIC_LOAD(&replay_create_tablet_errcode_))) {
+      LOG_WARN("ObReplayCreateTabletTask has failed", K(ret), K(inflight_replay_tablet_task_cnt_));
+    } else if (OB_FAIL(SERVER_STARTUP_TASK_HANDLER.push_task(task))) {
+      if (OB_EAGAIN == ret) {
+        LOG_INFO("task queue is full, wait and retry", KPC(task), K(inflight_replay_tablet_task_cnt_));
+        need_retry = true;
+        ob_usleep(10 * 1000); // 10ms
+      } else {
+        LOG_WARN("fail to push task", K(ret), KPC(task), K(inflight_replay_tablet_task_cnt_));
+      }
+    } else {
+      FLOG_INFO("add task success", KPC(task), K(inflight_replay_tablet_task_cnt_));
+    }
+  } while(OB_FAIL(ret) && need_retry);
+
+  return ret;
+}
+
+int ObTenantCheckpointSlogHandler::replay_create_tablets_per_task(
+    const ObIArray<std::pair<ObTabletMapKey, ObMetaDiskAddr>> &tablet_addr_arr)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
   int64_t buf_len = 0;
-  ReplayTabletDiskAddrMap::iterator iter = replay_tablet_disk_addr_map_.begin();
   ObTabletTransferInfo tablet_transfer_info;
-  while (OB_SUCC(ret) && iter != replay_tablet_disk_addr_map_.end()) {
-    ObArenaAllocator allocator("ReplayLoad");
-    const ObTabletMapKey &key = iter->first;
-    ObMetaDiskAddr addr = iter->second;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_addr_arr.count(); i++) {
+    ObArenaAllocator allocator("ReplayTablet");
+    const ObTabletMapKey &key = tablet_addr_arr.at(i).first;
+    const ObMetaDiskAddr &addr = tablet_addr_arr.at(i).second;
     ObLSTabletService *ls_tablet_svr = nullptr;
     ObLSHandle ls_handle;
     tablet_transfer_info.reset();
-    if (OB_FAIL(read_from_disk(addr, allocator, buf, buf_len))) {
+    if (OB_FAIL(ATOMIC_LOAD(&replay_create_tablet_errcode_))) {
+      LOG_WARN("replay create has already failed", K(ret));
+    } else if (OB_FAIL(read_from_disk(addr, allocator, buf, buf_len))) {
       LOG_WARN("fail to read from disk", K(ret), K(addr), KP(buf), K(buf_len));
     } else if (OB_FAIL(get_tablet_svr(key.ls_id_, ls_tablet_svr, ls_handle))) {
       LOG_WARN("fail to get ls tablet service", K(ret));
     } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(addr, buf, buf_len, key.tablet_id_, tablet_transfer_info))) {
       LOG_WARN("fail to create tablet for replay", K(ret), K(key), K(addr));
     } else if (tablet_transfer_info.has_transfer_table() && OB_FAIL(record_ls_transfer_info(ls_handle, key.tablet_id_, tablet_transfer_info))) {
-      LOG_WARN("fail to create tablet for replay", K(ret), K(key), K(addr));
-    } else {
-      LOG_INFO("Successfully load tablet", K(key), K(addr));
-      ++iter;
+      LOG_WARN("fail to record_ls_transfer_info", K(ret), K(key), K(tablet_transfer_info));
     }
+  }
+  if (OB_SUCC(ret)) {
+    inc_finished_replay_tablet_cnt(tablet_addr_arr.count());
   }
   return ret;
 }

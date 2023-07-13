@@ -1869,7 +1869,7 @@ int ObLSTabletService::replay_create_tablet(
 
     if (OB_SUCC(ret)) {
       tablet_transfer_info = tablet->get_tablet_meta().transfer_info_;
-      FLOG_INFO("succeeded to create tablet for replay slog", K(ret), K(ls_id), K(tablet_id), KPC(tablet));
+      FLOG_INFO("succeeded to replay create one tablet", K(ret), K(ls_id), K(tablet_id), KPC(tablet));
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(tablet_id_set_.erase(tablet_id))) {

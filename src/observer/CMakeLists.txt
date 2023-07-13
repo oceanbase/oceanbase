@@ -37,6 +37,7 @@ ob_set_subtarget(ob_server common
   ob_srv_xlator_storage.cpp
   ob_tenant_duty_task.cpp
   ob_uniq_task_queue.cpp
+  ob_server_startup_task_handler.cpp
 )
 
 ob_set_subtarget(ob_server common_mixed

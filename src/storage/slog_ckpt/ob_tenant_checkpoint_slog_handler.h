@@ -23,6 +23,7 @@
 #include "storage/ls/ob_ls_meta.h"
 #include "storage/tx/ob_dup_table_base.h"
 #include "storage/high_availability/ob_tablet_transfer_info.h"
+#include "observer/ob_server_startup_task_handler.h"
 
 namespace oceanbase
 {
@@ -88,6 +89,37 @@ public:
     ObTenantCheckpointSlogHandler *handler_;
   };
 
+  class ObReplayCreateTabletTask : public observer::ObServerStartupTask
+  {
+  public:
+    ObReplayCreateTabletTask()
+      : is_inited_(false),
+        idx_(-1),
+        tenant_base_(nullptr),
+        tnt_ckpt_slog_handler_(nullptr) {}
+
+    virtual ~ObReplayCreateTabletTask()
+    {
+      destroy();
+    }
+    int init(const int64_t task_idx, ObTenantBase *tenant_base, ObTenantCheckpointSlogHandler *handler);
+    int execute() override;
+    int add_tablet_addr(const ObTabletMapKey &tablet_key, const ObMetaDiskAddr &tablet_addr, bool &is_enough);
+
+    VIRTUAL_TO_STRING_KV(K_(idx), KP(this), KP_(tenant_base), "tablet_count", tablet_addr_arr_.count());
+
+  private:
+    static const int64_t TABLET_NUM_PER_TASK = 200;
+    void destroy();
+
+  private:
+    bool is_inited_;
+    int64_t idx_;
+    ObTenantBase *tenant_base_;
+    ObTenantCheckpointSlogHandler *tnt_ckpt_slog_handler_;
+    common::ObSEArray<std::pair<ObTabletMapKey, ObMetaDiskAddr>, TABLET_NUM_PER_TASK> tablet_addr_arr_;
+  };
+
   ObTenantCheckpointSlogHandler();
   ~ObTenantCheckpointSlogHandler() = default;
   ObTenantCheckpointSlogHandler(const ObTenantCheckpointSlogHandler &) = delete;
@@ -117,6 +149,15 @@ public:
       char *&buf,
       int64_t &buf_len);
 
+  void inc_inflight_replay_tablet_task_cnt() { ATOMIC_INC(&inflight_replay_tablet_task_cnt_); }
+  void dec_inflight_replay_tablet_task_cnt() { ATOMIC_DEC(&inflight_replay_tablet_task_cnt_); }
+  void inc_finished_replay_tablet_cnt(const int64_t cnt) { (void)ATOMIC_FAA(&finished_replay_tablet_cnt_, cnt); }
+  void set_replay_create_tablet_errcode(const int errcode)
+  {
+    ATOMIC_STORE(&replay_create_tablet_errcode_, errcode);
+  };
+  int replay_create_tablets_per_task(const common::ObIArray<std::pair<ObTabletMapKey, ObMetaDiskAddr>> &tablet_addr_arr);
+
 private:
   int get_cur_cursor();
   void clean_copy_status();
@@ -134,7 +175,7 @@ private:
       const bool is_replay_old, ObTenantStorageCheckpointWriter &ckpt_writer);
   int replay_dup_table_ls_meta(const transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_ls_meta);
   int replay_tenant_slog(const common::ObLogCursor &start_point);
-  int replay_load_tablets();
+  int concurrent_replay_load_tablets();
   int inner_replay_update_ls_slog(const ObRedoModuleReplayParam &param);
   int inner_replay_create_ls_slog(const ObRedoModuleReplayParam &param);
   int inner_replay_create_ls_commit_slog(const ObRedoModuleReplayParam &param);
@@ -172,6 +213,7 @@ private:
       const share::ObLSID &src_ls_id,
       const share::SCN &transfer_start_scn,
       bool &is_need);
+  int add_replay_create_tablet_task(ObReplayCreateTabletTask *task);
 
 private:
   const static int64_t BUCKET_NUM = 109;
@@ -181,6 +223,9 @@ private:
   bool is_writing_checkpoint_;
   int64_t last_ckpt_time_;
   int64_t last_frozen_version_;
+  int64_t inflight_replay_tablet_task_cnt_;
+  int64_t finished_replay_tablet_cnt_;
+  int replay_create_tablet_errcode_;
   common::TCRWLock lock_;  // protect block_handle
   lib::ObMutex mutex_;
   common::hash::ObHashSet<ObTabletMapKey> tablet_key_set_;

@@ -105,6 +105,7 @@
 #include "observer/ob_server_utils.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
+#include "observer/ob_server_startup_task_handler.h"
 #include "share/detect/ob_detect_manager.h"
 
 using namespace oceanbase::lib;
@@ -369,6 +370,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObStorageLoggerManager failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
+    } else if (OB_FAIL(SERVER_STARTUP_TASK_HANDLER.init())) {
+      LOG_ERROR("init server startup task handler failed", KR(ret));
     } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().init())) {
       LOG_ERROR("init server checkpoint slog handler failed", KR(ret));
     } else if (FALSE_IT(common::occam::ObThreadHungDetector::get_instance())) {
@@ -681,6 +684,10 @@ void ObServer::destroy()
     ObServerCheckpointSlogHandler::get_instance().destroy();
     FLOG_INFO("server checkpoint slog handler destroyed");
 
+    FLOG_INFO("begin to destroy server startup task handler");
+    SERVER_STARTUP_TASK_HANDLER.destroy();
+    FLOG_INFO("server startup task handler destroyed");
+
     FLOG_INFO("begin to destroy backup index cache");
     OB_BACKUP_INDEX_CACHE.destroy();
     FLOG_INFO("backup index cache destroyed");
@@ -748,6 +755,12 @@ int ObServer::start()
   } else {
     if (OB_FAIL(start_sig_worker_and_handle())) {
       LOG_ERROR("fail to start signal worker", KR(ret));
+    }
+
+    if (FAILEDx(SERVER_STARTUP_TASK_HANDLER.start())) {
+      LOG_ERROR("fail to start server startup task handler", KR(ret));
+    } else {
+      FLOG_INFO("success to start server startup task handler");
     }
 
     if (FAILEDx(OB_TS_MGR.start())) {
@@ -907,6 +920,8 @@ int ObServer::start()
       stop_ = false;
       has_stopped_ = false;
     }
+    // this handler is only used to process tasks during startup. so it can be destroied here.
+    SERVER_STARTUP_TASK_HANDLER.destroy();
 
     // refresh server configure
     //
@@ -1263,6 +1278,10 @@ int ObServer::stop()
     ObServerCheckpointSlogHandler::get_instance().stop();
     FLOG_INFO("server checkpoint slog handler stopped");
 
+    FLOG_INFO("begin to stop server startup task handler");
+    SERVER_STARTUP_TASK_HANDLER.stop();
+    FLOG_INFO("server startup task handler stopped");
+
     // It will wait for all requests done.
     FLOG_INFO("begin to stop multi tenant");
     multi_tenant_.stop();
@@ -1584,6 +1603,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait server checkpoint slog handler");
     ObServerCheckpointSlogHandler::get_instance().wait();
     FLOG_INFO("wait server checkpoint slog handler success");
+
+    FLOG_INFO("begin to wait server startup task handler");
+    SERVER_STARTUP_TASK_HANDLER.wait();
+    FLOG_INFO("wait server startup task handler success");
 
     FLOG_INFO("begin to wait global election report timer");
     palf::election::GLOBAL_REPORT_TIMER.wait();
