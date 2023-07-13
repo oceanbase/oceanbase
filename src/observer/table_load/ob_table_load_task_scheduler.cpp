@@ -48,9 +48,10 @@ void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
 }
 
 ObTableLoadTaskThreadPoolScheduler::ObTableLoadTaskThreadPoolScheduler(int64_t thread_count,
-                                                                       ObIAllocator &allocator,
+                                                                       uint64_t table_id,
+                                                                       const char *label,
                                                                        int64_t session_queue_size)
-  : allocator_(allocator),
+  : allocator_("TLD_ThreadPool"),
     thread_count_(thread_count),
     session_queue_size_(session_queue_size),
     timeout_ts_(INT64_MAX),
@@ -59,6 +60,7 @@ ObTableLoadTaskThreadPoolScheduler::ObTableLoadTaskThreadPoolScheduler(int64_t t
     state_(STATE_ZERO),
     is_inited_(false)
 {
+  snprintf(name_, OB_THREAD_NAME_BUF_LEN, "TLD_%03ld_%s", table_id % 1000, label);
 }
 
 ObTableLoadTaskThreadPoolScheduler::~ObTableLoadTaskThreadPoolScheduler()
@@ -101,9 +103,8 @@ int ObTableLoadTaskThreadPoolScheduler::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTaskThreadPoolScheduler init twice", KR(ret), KP(this));
-  } else if (OB_FAIL(init_worker_ctx_array())) {
-    LOG_WARN("fail to init worker ctx array", KR(ret));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     thread_pool_.set_thread_count(thread_count_);
     thread_pool_.set_run_wrapper(MTL_CTX());
     ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();
@@ -115,7 +116,11 @@ int ObTableLoadTaskThreadPoolScheduler::init()
       trace_id_.init(zero_addr);
     }
     timeout_ts_ = THIS_WORKER.get_timeout_ts();
-    is_inited_ = true;
+    if (OB_FAIL(init_worker_ctx_array())) {
+      LOG_WARN("fail to init worker ctx array", KR(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -203,7 +208,8 @@ void ObTableLoadTaskThreadPoolScheduler::after_running()
 void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
 {
   int ret = OB_SUCCESS;
-
+  // set thread name
+  lib::set_thread_name(name_);
   // set trace id
   ObCurTraceId::set(trace_id_);
   // set worker timeout

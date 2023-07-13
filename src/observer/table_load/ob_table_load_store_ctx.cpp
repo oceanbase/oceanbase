@@ -166,7 +166,7 @@ int ObTableLoadStoreCtx::init(
     }
     // 初始化task_scheduler_
     else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
-                                                 ctx_->param_.session_count_, allocator_))) {
+                                                 ctx_->param_.session_count_, ctx_->param_.table_id_, "Store"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
     } else if (OB_FAIL(task_scheduler_->init())) {

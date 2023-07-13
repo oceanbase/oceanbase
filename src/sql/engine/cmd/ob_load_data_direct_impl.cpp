@@ -1052,7 +1052,7 @@ int ObLoadDataDirectImpl::FileLoadExecutor::inner_init(const LoadExecuteParam &e
   // init task_scheduler_
   else if (OB_ISNULL(task_scheduler_ =
                          OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (execute_ctx_->allocator_),
-                                 worker_count_, *execute_ctx_->allocator_))) {
+                                 worker_count_, execute_param_->table_id_, "Parse"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {
