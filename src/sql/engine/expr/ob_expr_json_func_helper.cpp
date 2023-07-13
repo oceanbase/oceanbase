@@ -534,7 +534,8 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
     case ObUSmallIntType:
     case ObUMediumIntType:
     case ObUInt32Type:
-    case ObUInt64Type: {
+    case ObUInt64Type:
+    case ObYearType: {
       buf = allocator->alloc(sizeof(ObJsonUint));
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1727,10 +1728,13 @@ int ObJsonExprHelper::parse_asc_option(ObExprResType& asc_type,
     ObExprResType temp_type;
     temp_type.set_meta(type1.get_calc_meta());
     temp_type.set_length_semantics(res_type.get_length_semantics());
-    if (OB_FAIL(ObExprResultTypeUtil::deduce_max_string_length_oracle(type_ctx.get_session()->get_dtc_params(),
-                                                                      type1,
-                                                                      temp_type,
-                                                                      length))) {
+
+    if (doc_type == ObNCharType) {
+      length = type1.get_param().get_string_len() * ObCharset::MAX_MB_LEN * 2;
+      type1.set_calc_length(length);
+      res_type.set_length(length);
+    } else if (!temp_type.is_blob() && OB_FAIL(ObExprResultTypeUtil::deduce_max_string_length_oracle(
+      type_ctx.get_session()->get_dtc_params(), type1, temp_type, length))) {
       LOG_WARN("fail to deduce max string length.", K(ret), K(temp_type), K(type1));
     } else {
       type1.set_calc_length(length);

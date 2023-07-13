@@ -104,8 +104,6 @@ int ObExprJsonArray::calc_result_typeN(ObExprResType& type,
           LOG_WARN("get cast dest type failed", K(ret));
         } else if (OB_FAIL(ObJsonExprHelper::set_dest_type(types_stack[0], type, dst_type, type_ctx))) {
           LOG_WARN("set dest type failed", K(ret));
-        } else {
-          type.set_calc_collation_type(type.get_collation_type());
         }
       }
 

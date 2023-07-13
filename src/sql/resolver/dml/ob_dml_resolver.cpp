@@ -757,7 +757,7 @@ int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObS
     ret_node->int32_values_[0] = 22;
     ret_node->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
     ret_node->is_tree_not_param_ = 1;
-    ret_node->length_semantics_ = 1;
+    ret_node->length_semantics_ = 0;
     ret_node->raw_text_ = "default";
     ret_node->text_len_ = 7;
     param_vec[2] = ret_node;          // return type pos is 2 in json value clause
