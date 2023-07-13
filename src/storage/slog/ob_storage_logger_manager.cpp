@@ -52,9 +52,6 @@ int ObStorageLoggerManager::init(
     const bool need_reserved)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_CONCURRENT_ITEM_CNT = !lib::is_mini_mode() ?
-      MAX(128, sysconf(_SC_NPROCESSORS_ONLN) * 2) : 64;
-  static const int64_t MAX_TENANT_BUCKET = 63;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -64,9 +61,9 @@ int ObStorageLoggerManager::init(
     STORAGE_REDO_LOG(WARN, "invalid arguments", K(ret), KP(log_dir), K(max_log_file_size));
   } else if (OB_FAIL(prepare_log_buffers(MAX_CONCURRENT_ITEM_CNT, NORMAL_LOG_ITEM_SIZE))) {
     STORAGE_REDO_LOG(WARN, "fail to prepare log buffers", K(ret),
-        K(MAX_CONCURRENT_ITEM_CNT), LITERAL_K(NORMAL_LOG_ITEM_SIZE));
+        LITERAL_K(MAX_CONCURRENT_ITEM_CNT), LITERAL_K(NORMAL_LOG_ITEM_SIZE));
   } else if (OB_FAIL(prepare_log_items(MAX_CONCURRENT_ITEM_CNT))) {
-    STORAGE_REDO_LOG(WARN, "fail to prepare log items", K(ret), K(MAX_CONCURRENT_ITEM_CNT));
+    STORAGE_REDO_LOG(WARN, "fail to prepare log items", K(ret), LITERAL_K(MAX_CONCURRENT_ITEM_CNT));
   } else {
     log_dir_ = log_dir;
     max_log_file_size_ = max_log_file_size;
