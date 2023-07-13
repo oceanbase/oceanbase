@@ -26,9 +26,32 @@ OB_SERIALIZE_MEMBER(ObDirectLoadControlRequest,
                     command_type_,
                     arg_content_);
 
-OB_SERIALIZE_MEMBER(ObDirectLoadControlResult,
-                    command_type_,
-                    res_content_);
+OB_UNIS_DEF_SERIALIZE(ObDirectLoadControlResult,
+                      command_type_,
+                      res_content_);
+
+OB_UNIS_DEF_SERIALIZE_SIZE(ObDirectLoadControlResult,
+                           command_type_,
+                           res_content_);
+
+OB_DEF_DESERIALIZE(ObDirectLoadControlResult)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null allocator in deserialize", K(ret));
+  } else {
+    ObString tmp_res_content;
+    LST_DO_CODE(OB_UNIS_DECODE,
+                command_type_,
+                tmp_res_content);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ob_write_string(*allocator_, tmp_res_content, res_content_))) {
+      LOG_WARN("fail to copy string", K(ret));
+    }
+  }
+  return ret;
+}
 
 // pre_begin
 ObDirectLoadControlPreBeginArg::ObDirectLoadControlPreBeginArg()

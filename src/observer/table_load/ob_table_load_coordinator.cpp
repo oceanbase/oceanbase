@@ -31,7 +31,7 @@ using namespace share;
 using namespace sql;
 
 #define TABLE_LOAD_CONTROL_RPC_CALL(name, addr, arg, ...)                         \
-  if (OB_SUCC(ret)) {                                                             \
+  ({                                                                              \
     ObTableLoadControlRpcProxy proxy(*GCTX.srv_rpc_proxy_);                       \
     ObTimeoutCtx ctx;                                                             \
     if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFAULT_TIMEOUT_US))) { \
@@ -42,7 +42,7 @@ using namespace sql;
                          .name(arg, ##__VA_ARGS__))) {                            \
       LOG_WARN("fail to rpc call " #name, KR(ret), K(addr), K(arg));              \
     }                                                                             \
-  }
+  })
 
 ObTableLoadCoordinator::ObTableLoadCoordinator(ObTableLoadTableCtx *ctx)
   : ctx_(ctx),

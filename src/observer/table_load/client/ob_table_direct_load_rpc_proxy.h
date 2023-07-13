@@ -36,49 +36,55 @@ public:
   {
   };
 
-#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_1(name, pcode, Arg)                                   \
-  int name(const Arg &arg)                                                                         \
-  {                                                                                                \
-    int ret = OB_SUCCESS;                                                                          \
-    obrpc::ObTableRpcProxy rpc_proxy = rpc_proxy_.to(addr_);                                       \
-    table::ObTableDirectLoadRequest request;                                                       \
-    table::ObTableDirectLoadResult result;                                                         \
-    request.credential_ = credential_;                                                             \
-    request.operation_type_ = pcode;                                                               \
-    if (OB_FAIL(request.set_arg(arg, allocator_))) {                                               \
-      SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                                         \
-    } else if (OB_FAIL(rpc_proxy.timeout(timeout_).by(tenant_id_).direct_load(request, result))) { \
-      SERVER_LOG(WARN, "fail to rpc call direct load", K(ret), K_(addr), K(request));              \
-    } else if (OB_UNLIKELY(result.operation_type_ != pcode)) {                                     \
-      ret = OB_ERR_UNEXPECTED;                                                                     \
-      SERVER_LOG(WARN, "unexpected operation type", K(ret), K(request), K(result));                \
-    } else if (OB_UNLIKELY(!result.res_content_.empty())) {                                        \
-      ret = OB_ERR_UNEXPECTED;                                                                     \
-      SERVER_LOG(WARN, "unexpected non empty res content", K(ret), K(result));                     \
-    }                                                                                              \
-    return ret;                                                                                    \
+#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_1(name, pcode, Arg)                      \
+  int name(const Arg &arg)                                                            \
+  {                                                                                   \
+    int ret = OB_SUCCESS;                                                             \
+    table::ObTableDirectLoadRequest request;                                          \
+    table::ObTableDirectLoadResult result;                                            \
+    request.credential_ = credential_;                                                \
+    request.operation_type_ = pcode;                                                  \
+    result.allocator_ = &allocator_;                                                  \
+    if (OB_FAIL(request.set_arg(arg, allocator_))) {                                  \
+      SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                            \
+    } else if (OB_FAIL(rpc_proxy_.to(addr_)                                           \
+                         .timeout(timeout_)                                           \
+                         .by(tenant_id_)                                              \
+                         .direct_load(request, result))) {                            \
+      SERVER_LOG(WARN, "fail to rpc call direct load", K(ret), K_(addr), K(request)); \
+    } else if (OB_UNLIKELY(result.operation_type_ != pcode)) {                        \
+      ret = OB_ERR_UNEXPECTED;                                                        \
+      SERVER_LOG(WARN, "unexpected operation type", K(ret), K(request), K(result));   \
+    } else if (OB_UNLIKELY(!result.res_content_.empty())) {                           \
+      ret = OB_ERR_UNEXPECTED;                                                        \
+      SERVER_LOG(WARN, "unexpected non empty res content", K(ret), K(result));        \
+    }                                                                                 \
+    return ret;                                                                       \
   }
 
-#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_2(name, pcode, Arg, Res)                              \
-  int name(const Arg &arg, Res &res)                                                               \
-  {                                                                                                \
-    int ret = OB_SUCCESS;                                                                          \
-    obrpc::ObTableRpcProxy rpc_proxy = rpc_proxy_.to(addr_);                                       \
-    table::ObTableDirectLoadRequest request;                                                       \
-    table::ObTableDirectLoadResult result;                                                         \
-    request.credential_ = credential_;                                                             \
-    request.operation_type_ = pcode;                                                               \
-    if (OB_FAIL(request.set_arg(arg, allocator_))) {                                               \
-      SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                                         \
-    } else if (OB_FAIL(rpc_proxy.timeout(timeout_).by(tenant_id_).direct_load(request, result))) { \
-      SERVER_LOG(WARN, "fail to rpc call direct load", K(ret), K_(addr), K(request));              \
-    } else if (OB_UNLIKELY(result.operation_type_ != pcode)) {                                     \
-      ret = OB_ERR_UNEXPECTED;                                                                     \
-      SERVER_LOG(WARN, "unexpected operation type", K(ret), K(request), K(result));                \
-    } else if (OB_FAIL(result.get_res(res))) {                                                     \
-      SERVER_LOG(WARN, "fail to get res", K(ret), K(result));                                      \
-    }                                                                                              \
-    return ret;                                                                                    \
+#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_2(name, pcode, Arg, Res)                 \
+  int name(const Arg &arg, Res &res)                                                  \
+  {                                                                                   \
+    int ret = OB_SUCCESS;                                                             \
+    table::ObTableDirectLoadRequest request;                                          \
+    table::ObTableDirectLoadResult result;                                            \
+    request.credential_ = credential_;                                                \
+    request.operation_type_ = pcode;                                                  \
+    result.allocator_ = &allocator_;                                                  \
+    if (OB_FAIL(request.set_arg(arg, allocator_))) {                                  \
+      SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                            \
+    } else if (OB_FAIL(rpc_proxy_.to(addr_)                                           \
+                         .timeout(timeout_)                                           \
+                         .by(tenant_id_)                                              \
+                         .direct_load(request, result))) {                            \
+      SERVER_LOG(WARN, "fail to rpc call direct load", K(ret), K_(addr), K(request)); \
+    } else if (OB_UNLIKELY(result.operation_type_ != pcode)) {                        \
+      ret = OB_ERR_UNEXPECTED;                                                        \
+      SERVER_LOG(WARN, "unexpected operation type", K(ret), K(request), K(result));   \
+    } else if (OB_FAIL(result.get_res(res))) {                                        \
+      SERVER_LOG(WARN, "fail to get res", K(ret), K(result));                         \
+    }                                                                                 \
+    return ret;                                                                       \
   }
 
 #define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL(name, pcode, ...) \
