@@ -32,7 +32,16 @@ class ObDblinkService
 public:
   static int check_lob_in_result(common::sqlclient::ObMySQLResult *result, bool &have_lob);
   static int get_length_from_type_text(ObString &type_text, int32_t &length);
-  static int get_set_sql_mode_cstr(sql::ObSQLSessionInfo *session_info, const char *&set_sql_mode_cstr, ObIAllocator &allocator);
+  static int get_local_session_vars(sql::ObSQLSessionInfo *session_info,
+                                    ObIAllocator &allocator,
+                                    common::sqlclient::dblink_param_ctx &param_ctx);
+  static int get_set_sql_mode_cstr(sql::ObSQLSessionInfo *session_info,
+                                   const char *&set_sql_mode_cstr,
+                                   ObIAllocator &allocator);
+  static int get_set_names_cstr(sql::ObSQLSessionInfo *session_info,
+                                const char *&set_client_charset,
+                                const char *&set_connection_charset,
+                                const char *&set_results_charset);
 };
 
 enum DblinkGetConnType {
@@ -55,6 +64,7 @@ public:
   inline void set_self_addr(common::ObAddr addr) { self_addr_ = addr; }
   inline void set_tx_id(int64_t tx_id) { tx_id_ = tx_id; }
   inline void set_tm_sessid(uint32_t tm_sessid) { tm_sessid_ = tm_sessid; }
+  inline void set_session_info(sql::ObSQLSessionInfo *session_info) { session_info_ = session_info; }
   const ObString &get_user() { return user_; }
   const ObString &get_tenant() { return tenant_; }
   const ObString &get_cluster() { return cluster_; }
@@ -66,6 +76,7 @@ public:
 
   int open(int64_t session_sql_req_level);
   int read(const char *sql, ObISQLClient::ReadResult &res);
+  int ping();
   int close();
   TO_STRING_KV(K_(user),
               K_(tenant),
@@ -95,6 +106,7 @@ private:
   common::sqlclient::ObMySQLConnection reverse_conn_; // ailing.lcq to do, ObReverseLink can be used by serval connection, not just one
   char db_user_[OB_MAX_USER_NAME_LENGTH + OB_MAX_TENANT_NAME_LENGTH + OB_MAX_CLUSTER_NAME_LENGTH];
   char db_pass_[OB_MAX_PASSWORD_LENGTH];
+  sql::ObSQLSessionInfo *session_info_; // reverse link belongs to which session
 };
 
 class ObDblinkUtils

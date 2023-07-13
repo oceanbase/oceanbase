@@ -138,7 +138,7 @@ public:
       char *to, const int64_t to_size, int64_t &out_size);
 
   virtual int acquire(const uint64_t tenant_id, ObISQLConnection *&conn, ObISQLClient *client_addr) override;
-  virtual int release(ObISQLConnection *conn, const bool success, uint32_t sessid = 0) override;
+  virtual int release(ObISQLConnection *conn, const bool success) override;
 
   virtual int on_client_inactive(ObISQLClient *client_addr) override
   {
@@ -156,24 +156,16 @@ public:
   virtual DblinkDriverProto get_pool_link_driver_proto() { return DBLINK_DRV_OB; }
 
   // dblink
-  virtual int create_dblink_pool(uint64_t tenant_id, uint64_t dblink_id, const ObAddr &server,
-                         const ObString &db_tenant, const ObString &db_user,
-                         const ObString &db_pass, const ObString &db_name,
-                         const common::ObString &conn_str,
-                         const common::ObString &cluster_str,
-                         const dblink_param_ctx &param_ctx);
-  virtual int acquire_dblink(uint64_t tenant_id, uint64_t dblink_id,
-                             const dblink_param_ctx &param_ctx,
-                             ObISQLConnection *&dblink_conn,
-                             uint32_t sessid = 0, int64_t
-                             sql_request_level = 0);
-  virtual int release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid = 0);
-  virtual int do_acquire_dblink(uint64_t tenant_id, uint64_t dblink_id,
-                                const dblink_param_ctx &param_ctx,
-                                ObISQLConnection *&dblink_conn,
-                                uint32_t sessid);
+  virtual int create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+                                 const ObString &db_tenant, const ObString &db_user,
+                                 const ObString &db_pass, const ObString &db_name,
+                                 const common::ObString &conn_str,
+                                 const common::ObString &cluster_str);
+  virtual int acquire_dblink(const dblink_param_ctx &param_ctx, ObISQLConnection *&dblink_conn);
+  virtual int release_dblink(ObISQLConnection *dblink_conn);
+  virtual int do_acquire_dblink(const dblink_param_ctx &param_ctx, ObISQLConnection *&dblink_conn);
   virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t sql_request_level = 0);
-  int get_dblink_pool(uint64_t tenant_id, uint64_t dblink_id, ObServerConnectionPool *&dblink_pool);
+  int get_dblink_pool(const dblink_param_ctx &param_ctx, ObServerConnectionPool *&dblink_pool);
   void set_check_read_consistency(bool need_check) { check_read_consistency_ = need_check; }
   virtual int clean_dblink_connection(uint64_t tenant_id);
 protected:
@@ -191,7 +183,7 @@ protected:
 protected:
   int execute_init_sql(ObMySQLConnection *connection);
   int try_connect(ObMySQLConnection *connection);
-  int release(ObMySQLConnection *connection, const bool succ, uint32_t sessid = 0);
+  int release(ObMySQLConnection *connection, const bool succ);
   int get_pool(const uint64_t tenant_id, ObServerConnectionPool *&pool);
   int get_tenant_server_pool(const uint64_t tenant_id, ObTenantServerConnectionPool *&tenant_server_pool);
   int purge_connection_pool();

@@ -573,7 +573,7 @@ int ObMySQLConnectionPool::execute_init_sql(ObMySQLConnection *connection)
   return ret;
 }
 
-int ObMySQLConnectionPool::release(ObMySQLConnection *connection, const bool succ, uint32_t sessid)
+int ObMySQLConnectionPool::release(ObMySQLConnection *connection, const bool succ)
 {
   int ret = OB_SUCCESS;
   obsys::ObRLockGuard lock(get_lock_);
@@ -592,7 +592,7 @@ int ObMySQLConnectionPool::release(ObMySQLConnection *connection, const bool suc
     if (OB_ISNULL(pool = connection->get_root())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to release connection. connection pool not set", K(ret));
-    } else if (OB_FAIL(pool->release(connection, succ, sessid))) {
+    } else if (OB_FAIL(pool->release(connection, succ))) {
       LOG_WARN("fail to release connection", K(ret));
     }
   }
@@ -601,7 +601,7 @@ int ObMySQLConnectionPool::release(ObMySQLConnection *connection, const bool suc
     ATOMIC_DEC((uint64_t *)&busy_conn_count_);
   }
   LOG_TRACE("release connection to mysql connection pool", K(this), K(busy_conn_count_),
-            KP(connection), K(connection->is_closed()), K(pool), K(ret), K(sessid), K(lbt()));
+            KP(connection), K(connection->is_closed()), K(pool), K(ret), K(connection->get_sessid()), K(lbt()));
   return ret;
 }
 
@@ -711,7 +711,7 @@ int ObMySQLConnectionPool::acquire(const uint64_t tenant_id, ObISQLConnection *&
   return ret;
 }
 
-int ObMySQLConnectionPool::release(ObISQLConnection *conn, const bool success, uint32_t sessid)
+int ObMySQLConnectionPool::release(ObISQLConnection *conn, const bool success)
 {
   int ret = OB_SUCCESS;
   if (NULL != conn) {
@@ -720,7 +720,7 @@ int ObMySQLConnectionPool::release(ObISQLConnection *conn, const bool success, u
     if (OB_ISNULL(mysql_conn)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ObMySQLConnectionPool only release ObMySQLConnection", K(ret));
-    } else if (OB_FAIL(release(mysql_conn, success, sessid))) {
+    } else if (OB_FAIL(release(mysql_conn, success))) {
       LOG_WARN("release connection failed", K(ret));
     }
   }
@@ -750,19 +750,18 @@ int ObMySQLConnectionPool::escape(const char *from, const int64_t from_size,
   }
   return ret;
 }
-int ObMySQLConnectionPool::create_dblink_pool(uint64_t tenant_id, uint64_t dblink_id, const ObAddr &server,
-                                               const ObString &db_tenant, const ObString &db_user,
-                                               const ObString &db_pass, const ObString &db_name,
-                                               const common::ObString &conn_str,
-                                               const common::ObString &cluster_str,
-                                               const dblink_param_ctx &param_ctx)
+int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+                                              const ObString &db_tenant, const ObString &db_user,
+                                              const ObString &db_pass, const ObString &db_name,
+                                              const common::ObString &conn_str,
+                                              const common::ObString &cluster_str)
 {
   UNUSEDx(param_ctx);
   int ret = OB_SUCCESS;
   ObServerConnectionPool *dblink_pool = NULL;
 
-  if (OB_FAIL(get_dblink_pool(tenant_id, dblink_id, dblink_pool))) {
-    LOG_WARN("fail to get dblink connection pool", K(dblink_id));
+  if (OB_FAIL(get_dblink_pool(param_ctx, dblink_pool))) {
+    LOG_WARN("fail to get dblink connection pool", K(param_ctx));
   } else if (OB_NOT_NULL(dblink_pool)) {
     // nothing.
   } else {
@@ -770,14 +769,15 @@ int ObMySQLConnectionPool::create_dblink_pool(uint64_t tenant_id, uint64_t dblin
     // can not use obsys::ObWLockGuard lock(get_lock_), cause it will have dead lock
     // use a new lock for create_dblink_pool
     obsys::ObWLockGuard lock(dblink_pool_lock_);
-    if (OB_FAIL(get_dblink_pool(tenant_id, dblink_id, dblink_pool))) { //get again
-    LOG_WARN("fail to get dblink connection pool", K(dblink_id));
+    if (OB_FAIL(get_dblink_pool(param_ctx, dblink_pool))) { //get again
+    LOG_WARN("fail to get dblink connection pool", K(param_ctx));
     } else if (OB_NOT_NULL(dblink_pool)) {
       // nothing.
     } else if (OB_ISNULL(dblink_pool = server_pool_.alloc())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("out of memory", K(ret));
-    } else if (OB_FAIL(dblink_pool->init_dblink(tenant_id, dblink_id, server, db_tenant, db_user, db_pass,
+    } else if (OB_FAIL(dblink_pool->init_dblink(param_ctx.tenant_id_, param_ctx.dblink_id_,
+                                                server, db_tenant, db_user, db_pass,
                                                 db_name, conn_str, cluster_str,
                                                 this, config_.sqlclient_per_observer_conn_limit_))) {
       LOG_WARN("fail to init dblink connection pool", K(ret));
@@ -794,37 +794,33 @@ int ObMySQLConnectionPool::create_dblink_pool(uint64_t tenant_id, uint64_t dblin
   return ret;
 }
 
-int ObMySQLConnectionPool::acquire_dblink(uint64_t tenant_id, uint64_t dblink_id,
-                                          const dblink_param_ctx &param_ctx,
-                                          ObISQLConnection *&dblink_conn,
-                                          uint32_t sessid, int64_t sql_request_level)
+int ObMySQLConnectionPool::acquire_dblink(const dblink_param_ctx &param_ctx, ObISQLConnection *&dblink_conn)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(do_acquire_dblink(tenant_id, dblink_id, param_ctx, dblink_conn, sessid))) {
-    LOG_WARN("fail to acquire dblink", K(ret), K(dblink_id));
-  } else if (OB_FAIL(try_connect_dblink(dblink_conn, sql_request_level))) {
-    LOG_WARN("fail to try connect dblink", K(ret), K(dblink_id));
-    int release_ret = release_dblink(dblink_conn, sessid);
+  if (OB_FAIL(do_acquire_dblink(param_ctx, dblink_conn))) {
+    LOG_WARN("fail to acquire dblink", K(ret), K(param_ctx));
+  } else if (OB_FAIL(try_connect_dblink(dblink_conn, param_ctx.sql_request_level_))) {
+    LOG_WARN("fail to try connect dblink", K(ret), K(param_ctx));
+    int release_ret = release_dblink(dblink_conn);
     if (release_ret != OB_SUCCESS) {
-      LOG_WARN("fail to release dblink conn", K(release_ret), K(dblink_id));
+      LOG_WARN("fail to release dblink conn", K(release_ret), K(param_ctx));
     }
     dblink_conn = NULL;
   }
   return ret;
 }
 
-int ObMySQLConnectionPool::release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid)
+int ObMySQLConnectionPool::release_dblink(ObISQLConnection *dblink_conn)
 {
   int ret = OB_SUCCESS;
   const bool succ = OB_NOT_NULL(dblink_conn) ? dblink_conn->usable() : false;
-  if (OB_FAIL(release(dynamic_cast<ObMySQLConnection *>(dblink_conn), succ, sessid))) {
+  if (OB_FAIL(release(dynamic_cast<ObMySQLConnection *>(dblink_conn), succ))) {
     LOG_WARN("fail to release dblink conn", K(ret));
   }
   return ret;
 }
 
-int ObMySQLConnectionPool::get_dblink_pool(uint64_t tenant_id, uint64_t dblink_id,
-                                           ObServerConnectionPool *&dblink_pool)
+int ObMySQLConnectionPool::get_dblink_pool(const dblink_param_ctx &param_ctx, ObServerConnectionPool *&dblink_pool)
 {
   int ret = OB_SUCCESS;
   ObServerConnectionPool *pool = NULL;
@@ -834,7 +830,8 @@ int ObMySQLConnectionPool::get_dblink_pool(uint64_t tenant_id, uint64_t dblink_i
     if (OB_ISNULL(pool = *iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("pool is null", K(ret));
-    } else if (dblink_id == pool->get_dblink_id() && pool->get_tenant_id() == tenant_id) {
+    } else if (param_ctx.dblink_id_ == pool->get_dblink_id() &&
+               param_ctx.tenant_id_ == pool->get_tenant_id()) {
       dblink_pool = pool;
       break;
     }
@@ -842,20 +839,17 @@ int ObMySQLConnectionPool::get_dblink_pool(uint64_t tenant_id, uint64_t dblink_i
   return ret;
 }
 
-int ObMySQLConnectionPool::do_acquire_dblink(uint64_t tenant_id, uint64_t dblink_id,
-                                             const dblink_param_ctx &param_ctx,
-                                             ObISQLConnection *&dblink_conn, uint32_t sessid)
+int ObMySQLConnectionPool::do_acquire_dblink(const dblink_param_ctx &param_ctx, ObISQLConnection *&dblink_conn)
 {
-  UNUSED(param_ctx);
   int ret = OB_SUCCESS;
   ObServerConnectionPool *dblink_pool = NULL;
   ObMySQLConnection *dblink_conn1 = NULL;
-  if (OB_FAIL(get_dblink_pool(tenant_id, dblink_id, dblink_pool))) {
-    LOG_WARN("failed to get dblink pool", K(ret), K(dblink_id));
+  if (OB_FAIL(get_dblink_pool(param_ctx, dblink_pool))) {
+    LOG_WARN("failed to get dblink pool", K(ret), K(param_ctx));
   } else if (OB_ISNULL(dblink_pool)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dblink pool is NULL", K(ret));
-  } else if (OB_FAIL(dblink_pool->acquire(dblink_conn1, sessid))) {
+  } else if (OB_FAIL(dblink_pool->acquire(dblink_conn1, param_ctx.sessid_))) {
     LOG_WARN("failed to acquire dblink conn", K(ret));
   } else if (OB_ISNULL(dblink_conn1)) {
     ret = OB_ERR_UNEXPECTED;
@@ -866,10 +860,10 @@ int ObMySQLConnectionPool::do_acquire_dblink(uint64_t tenant_id, uint64_t dblink
   } else {
     ATOMIC_INC((uint64_t *)&busy_conn_count_);
     dblink_conn1->set_busy(true);
-    dblink_conn1->set_dblink_id(dblink_id);
+    dblink_conn1->set_dblink_id(param_ctx.dblink_id_);
     dblink_conn1->set_timestamp(::oceanbase::common::ObTimeUtility::current_time());
     dblink_conn = static_cast<ObISQLConnection *>(dblink_conn1);
-    LOG_TRACE("acquire connection from mysql connection pool", K(this), K(busy_conn_count_), KP(dblink_conn), K(dblink_conn1->is_closed()), K(dblink_pool), K(sessid));
+    LOG_TRACE("acquire connection from mysql connection pool", K(this), K(busy_conn_count_), KP(dblink_conn), K(dblink_conn1->is_closed()), K(dblink_pool), K(param_ctx));
   }
   return ret;
 }

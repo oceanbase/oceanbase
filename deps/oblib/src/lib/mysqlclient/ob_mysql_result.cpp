@@ -82,20 +82,24 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
   int16_t tmp_scale = scale;
   int32_t tmp_length = length;
   int64_t mbmaxlen = 0;
+  LOG_DEBUG("dblink pull meta", K(precision), K(scale), K(length), K(ret), K(ob_type));
   // format precision from others to oceanbase
   if (!lib::is_oracle_mode()) {
     switch (ob_type) {
+      case ObUNumberType:
       case ObNumberType: { // for mysql decimal
         if (2 == length) {
           precision = 1;
         } else {
-           precision = length - 2;
+           precision = length - 1;
         }
         length = -1;
         break;
       }
-      case ObDoubleType: // for mysql double type and float type
-      case ObFloatType: {
+      case ObUFloatType:
+      case ObUDoubleType:
+      case ObDoubleType:
+      case ObFloatType: {// for mysql double type and float type
         precision = length;
         length = -1;
         if (scale > precision) {
@@ -119,9 +123,21 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
       case ObSmallIntType:
       case ObInt32Type:
       case ObIntType:
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUInt32Type:
+      case ObUInt64Type:
       case ObBitType: {
         precision = length;
         length = -1;
+        scale = -1;
+        break;
+      }
+      case ObTinyTextType:
+      case ObTextType:
+      case ObMediumTextType:
+      case ObLongTextType: {
+        precision = -1;
         scale = -1;
         break;
       }
@@ -180,6 +196,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
       }
     }
   }
+  LOG_DEBUG("dblink pull meta after format", K(precision), K(scale), K(length), K(ret));
   return ret;
 }
 

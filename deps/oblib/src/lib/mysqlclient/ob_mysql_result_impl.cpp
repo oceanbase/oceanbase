@@ -651,10 +651,18 @@ int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType 
       }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_FLOAT:
-      ob_type = ObFloatType;
+      if (is_unsigned_type) {
+        ob_type = ObFloatType;
+      } else {
+        ob_type = ObUFloatType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_DOUBLE:
-      ob_type = ObDoubleType;
+      if (is_unsigned_type) {
+        ob_type = ObDoubleType;
+      } else {
+        ob_type = ObUDoubleType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_TIMESTAMP:
       ob_type = ObTimestampType;
@@ -703,7 +711,13 @@ int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType 
       ob_type = ObRawType;
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL:
-      ob_type = ObNumberType;
+      if (is_unsigned_type) {
+        // for decimal type , is_unsigned_type == 1 means signed
+        // is_unsigned_type comes from obmysql::EMySQLFieldType::fields_ UNSIGNED_FLAG
+        ob_type = ObUNumberType;
+      } else {
+        ob_type = ObNumberType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_OB_NUMBER_FLOAT:
       ob_type = ObNumberFloatType;

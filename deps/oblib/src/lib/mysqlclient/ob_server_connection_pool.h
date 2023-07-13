@@ -31,7 +31,7 @@ public:
   ObServerConnectionPool();
   ~ObServerConnectionPool();
   int acquire(ObMySQLConnection *&connection, uint32_t sessid);
-  int release(common::sqlclient::ObISQLConnection *conn, const bool succ, uint32_t sessid = 0) override;
+  int release(common::sqlclient::ObISQLConnection *conn, const bool succ) override;
   uint64_t get_busy_count(void) const;
 public:
   int init(ObMySQLConnectionPool *root,

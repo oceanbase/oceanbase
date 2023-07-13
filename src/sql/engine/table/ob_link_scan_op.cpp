@@ -94,9 +94,9 @@ int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
     LOG_WARN("unexpected NULL", K(ret), KP(link_stmt));
   } else if (sql::DblinkGetConnType::TM_CONN == conn_type_) {
     if (OB_FAIL(tm_rm_connection_->execute_read(OB_INVALID_TENANT_ID, link_stmt, res_))) {
-      LOG_WARN("failed to read table data by tm_rm_connection", K(ret), K(link_stmt), K(DblinkDriverProto(tm_rm_connection_->get_dblink_driver_proto())));
+      LOG_WARN("failed to read table data by tm_rm_connection", K(ret), K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
     } else {
-      LOG_DEBUG("succ to read table data by tm_rm_connection", K(link_stmt), K(DblinkDriverProto(tm_rm_connection_->get_dblink_driver_proto())));
+      LOG_DEBUG("succ to read table data by tm_rm_connection", K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));
     }
   } else if (sql::DblinkGetConnType::TEMP_CONN == conn_type_) {
     if (OB_FAIL(reverse_link_->read(link_stmt, res_))) {
@@ -125,7 +125,7 @@ int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink fetch lob type data");
   } else if (OB_FAIL(ObLinkOp::get_charset_id(ctx_, charset_id, ncharset_id))) {
     LOG_WARN("failed to get charset id", K(ret));
-  } else if (OB_FAIL(result_->set_expected_charset_id(charset_id, ncharset_id))) {
+  } else if (OB_FAIL(result_->set_expected_charset_id(charset_id, ncharset_id))) {// for oci dblink set expected result charset, actually useless...
     LOG_WARN("failed to set result set expected charset", K(ret), K(charset_id), K(ncharset_id));
   } else {
     LOG_DEBUG("succ to dblink read", K(link_stmt), KP(dblink_conn_));
@@ -137,7 +137,7 @@ void ObLinkScanOp::reset_dblink()
 {
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(dblink_proxy_) && OB_NOT_NULL(dblink_conn_) && !in_xa_trascaction_ &&
-             OB_SUCCESS != (tmp_ret = dblink_proxy_->release_dblink(link_type_, dblink_conn_, sessid_))) {
+             OB_SUCCESS != (tmp_ret = dblink_proxy_->release_dblink(link_type_, dblink_conn_))) {
     LOG_WARN_RET(tmp_ret, "failed to release connection", K(tmp_ret));
   }
   if (OB_NOT_NULL(reverse_link_)) {
@@ -302,6 +302,32 @@ int ObLinkScanOp::fetch_row()
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next row", K(ret));
     } else {
+      // check if connection is alive, if not, then OB_ITER_END is a fake errno
+      if (sql::DblinkGetConnType::TM_CONN == conn_type_) {
+        if (OB_ISNULL(tm_rm_connection_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ptr", K(ret));
+        } else if (OB_FAIL(tm_rm_connection_->ping())) {
+          LOG_WARN("failed to ping tm_rm_connection_", K(ret));
+        }
+      } else if (sql::DblinkGetConnType::TEMP_CONN == conn_type_) {
+        if (OB_ISNULL(reverse_link_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ptr", K(ret));
+        } else if (OB_FAIL(reverse_link_->ping())) {
+          LOG_WARN("failed to ping reverse_link_", K(ret));
+        }
+      } else {
+        if (OB_ISNULL(dblink_conn_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ptr", K(ret));
+        } else if (OB_FAIL(dblink_conn_->ping())) {
+          LOG_WARN("failed to ping dblink_conn_", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ret = OB_ITER_END;
+      }
       reset_result();
     }
   } else {
@@ -366,6 +392,7 @@ int ObLinkScanOp::inner_rescan()
   reset_link_sql();
   iter_end_ = false;
   iterated_rows_ = -1;
+  int tmp_ret = OB_SUCCESS;
   return ObOperator::inner_rescan();
 }
 

@@ -84,6 +84,7 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/optimizer/ob_explain_log_plan.h"
+#include "sql/dblink/ob_dblink_utils.h"
 
 namespace oceanbase
 {
@@ -4752,6 +4753,8 @@ int ObSql::check_batched_multi_stmt_after_resolver(ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = NULL;
   is_valid = true;
+  bool has_dblink = false;
+  bool has_any_dblink = false;
   bool is_ps_ab_opt = pc_ctx.sql_ctx_.multi_stmt_item_.is_ab_batch_opt();
   if (OB_ISNULL(plan_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx())
       || OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
@@ -4771,6 +4774,12 @@ int ObSql::check_batched_multi_stmt_after_resolver(ObPlanCacheCtx &pc_ctx,
     }
     if (delupd_stmt.has_order_by() || delupd_stmt.has_limit() ||
         !delupd_stmt.get_returning_exprs().empty()) {
+      is_valid = false;
+    }
+
+    if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(&delupd_stmt, has_dblink, has_any_dblink))) {
+      LOG_WARN("failed to check dblink in stmt", K(delupd_stmt), K(ret));
+    } else if (has_any_dblink) {
       is_valid = false;
     }
 

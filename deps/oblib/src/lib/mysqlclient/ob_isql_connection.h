@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/timezone/ob_timezone_info.h"
+#include "lib/mysqlclient/ob_isql_connection_pool.h"
 
 namespace oceanbase
 {
@@ -41,7 +42,7 @@ public:
 
   //dblink
   virtual int free_dblink_session(uint32_t sessid) = 0;
-  virtual int release(common::sqlclient::ObISQLConnection *connection, const bool succ, uint32_t sessid = 0) = 0;
+  virtual int release(common::sqlclient::ObISQLConnection *connection, const bool succ) = 0;
   TO_STRING_KV(K_(free_conn_count), K_(busy_conn_count));
 protected:
   volatile uint64_t free_conn_count_;
@@ -74,20 +75,26 @@ class ObISQLConnection
 public:
   ObISQLConnection() :
        oracle_mode_(false),
-       is_init_remote_env_(false),
+       is_inited_(false),
        dblink_id_(OB_INVALID_ID),
-       dblink_driver_proto_(-1),
+       dblink_driver_proto_(DBLINK_UNKNOWN),
        sessid_(-1),
        consumer_group_id_(0),
        has_reverse_link_credentials_(false),
        usable_(true),
        last_set_sql_mode_cstr_(NULL),
-       last_set_sql_mode_cstr_buf_size_(0)
+       last_set_sql_mode_cstr_buf_size_(0),
+       last_set_client_charset_cstr_(NULL),
+       last_set_connection_charset_cstr_(NULL),
+       last_set_results_charset_cstr_(NULL)
   {}
   virtual ~ObISQLConnection() {
     allocator_.reset();
     last_set_sql_mode_cstr_buf_size_ = 0;
     last_set_sql_mode_cstr_ = NULL;
+    last_set_client_charset_cstr_ = NULL;
+    last_set_connection_charset_cstr_ = NULL;
+    last_set_results_charset_cstr_ = NULL;
   }
 
   // sql execute interface
@@ -127,8 +134,8 @@ public:
   uint64_t get_dblink_id() { return dblink_id_; }
   void set_sessid(uint32_t sessid) { sessid_ = sessid; }
   uint32_t get_sessid() { return sessid_; }
-  void set_dblink_driver_proto(int64_t dblink_driver_proto) { dblink_driver_proto_ = dblink_driver_proto; }
-  int64_t get_dblink_driver_proto() { return dblink_driver_proto_; }
+  void set_dblink_driver_proto(DblinkDriverProto dblink_driver_proto) { dblink_driver_proto_ = dblink_driver_proto; }
+  DblinkDriverProto get_dblink_driver_proto() { return dblink_driver_proto_; }
 
   void set_mysql_compat_mode() { oracle_mode_ = false; }
   void set_oracle_compat_mode() { oracle_mode_ = true; }
@@ -140,20 +147,24 @@ public:
   virtual void set_force_remote_exec(bool v) { UNUSED(v); }
   virtual void set_use_external_session(bool v) { UNUSED(v); }
   virtual int64_t get_cluster_id() const { return common::OB_INVALID_ID; }
-  void set_init_remote_env(bool flag) { is_init_remote_env_ = flag;}
-  int is_session_inited(const char * sql_mode_cstr, bool &is_inited) {
+  void set_session_init_status(bool status) { is_inited_ = status;}
+  int is_session_inited(const sqlclient::dblink_param_ctx &param_ctx, bool &is_inited)
+  {
     int ret = OB_SUCCESS;
     is_inited = false;
     int64_t sql_mode_len = 0;
+    const char *sql_mode_cstr = param_ctx.set_sql_mode_cstr_;
     if (lib::is_oracle_mode()) {
-      is_inited = is_init_remote_env_;
-    } else if (OB_ISNULL(sql_mode_cstr)) {
-      ret = OB_ERR_UNEXPECTED;
+      is_inited = is_inited_;
     } else if (FALSE_IT([&]{
-                              is_inited = (0 == ObString(sql_mode_cstr).compare(last_set_sql_mode_cstr_));
-                              sql_mode_len = STRLEN(sql_mode_cstr);
+                              if (OB_NOT_NULL(sql_mode_cstr)) {
+                                is_inited = (0 == ObString(sql_mode_cstr).compare(last_set_sql_mode_cstr_));
+                                sql_mode_len = STRLEN(sql_mode_cstr);
+                              } else {
+                                is_inited = true;
+                              }
                            }())) {
-    } else if (!is_inited) {
+    } else if (!is_inited && OB_NOT_NULL(sql_mode_cstr)) {
       if (sql_mode_len >= last_set_sql_mode_cstr_buf_size_) {
         void *buf = NULL;
         if (OB_ISNULL(buf = allocator_.alloc((sql_mode_len * 2)))) {
@@ -168,6 +179,14 @@ public:
         last_set_sql_mode_cstr_[sql_mode_len] = 0;
       }
     }
+    if (param_ctx.set_client_charset_cstr_ != last_set_client_charset_cstr_ ||
+        param_ctx.set_connection_charset_cstr_ != last_set_connection_charset_cstr_ ||
+        param_ctx.set_results_charset_cstr_ != last_set_results_charset_cstr_) {
+      is_inited = false;
+      last_set_client_charset_cstr_ = param_ctx.set_client_charset_cstr_;
+      last_set_connection_charset_cstr_ = param_ctx.set_connection_charset_cstr_;
+      last_set_results_charset_cstr_ = param_ctx.set_results_charset_cstr_;
+    }
     return ret;
   }
   void set_group_id(const int64_t v) {consumer_group_id_ = v; }
@@ -179,15 +198,18 @@ public:
   virtual int ping() { return OB_SUCCESS; }
 protected:
   bool oracle_mode_;
-  bool is_init_remote_env_; // for oracle dblink, we have to init remote env with some sql
+  bool is_inited_; // for oracle dblink, we have to init remote env with some sql
   uint64_t dblink_id_; // for dblink, record dblink_id of a connection used by dblink
-  int64_t dblink_driver_proto_; //for dblink, record DblinkDriverProto of a connection used by dblink
+  DblinkDriverProto dblink_driver_proto_; //for dblink, record DblinkDriverProto of a connection used by dblink
   uint32_t sessid_;
   int64_t consumer_group_id_; //for resource isolation
   bool has_reverse_link_credentials_; // for dblink, mark if this link has credentials set
   bool usable_;  // usable_ = false: connection is unusable, should not execute query again.
   char *last_set_sql_mode_cstr_; // for mysql dblink to set sql mode
   int64_t last_set_sql_mode_cstr_buf_size_;
+  const char *last_set_client_charset_cstr_;
+  const char *last_set_connection_charset_cstr_;
+  const char *last_set_results_charset_cstr_;
   common::ObArenaAllocator allocator_;
 };
 
