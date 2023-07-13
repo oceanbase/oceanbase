@@ -681,14 +681,14 @@ int ObMediumCompactionInfoList::check_medium_info_and_last_major(
   if (nullptr != last_major_sstable
       && ObMediumCompactionInfo::MEIDUM_COMPAT_VERSION_V2 == medium_info.medium_compat_version_
       && medium_info.medium_snapshot_ > last_major_sstable->get_snapshot_version()) {
-    if (medium_info.from_cur_cluster()) {
+    if (medium_info.from_cur_cluster()) { // same cluster_id & same tenant_id
       if (OB_UNLIKELY(medium_info.last_medium_snapshot_ != last_major_sstable->get_snapshot_version())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("last medium snapshot in medium info is not equal to last "
                  "major sstable, medium info may lost",
                  KR(ret), K(medium_info), KPC(last_major_sstable));
       }
-    } else { // check next freeze info in inner_table & medium_info
+    } else if (medium_info.is_major_compaction()) { // check next freeze info in inner_table & medium_info
       const int64_t last_major_sstable_snapshot = last_major_sstable->get_snapshot_version();
       ObTenantFreezeInfoMgr::FreezeInfo freeze_info;
       if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(
@@ -708,6 +708,9 @@ int ObMediumCompactionInfoList::check_medium_info_and_last_major(
         LOG_ERROR("next major medium info may lost",
           KR(ret), "freeze_version", freeze_info.freeze_version, K(medium_info), KPC(last_major_sstable));
       }
+    } else {
+      // medium info from same cluster_id, can't make sure all medium info exists, so not check medium & last_major
+      // like primary-standby relations: cluster1(A) -> cluster2(B) -> cluster1(C), medium info is dropped by B for different cluster_id
     }
   }
   return ret;

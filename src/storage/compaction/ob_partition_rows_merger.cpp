@@ -722,9 +722,6 @@ int ObPartitionMergeHelper::check_iter_end() const
       } else if (!iter->is_iter_end()) {
         ret = OB_ERR_SYS;
         STORAGE_LOG(ERROR, "Merge iter not iter to end", K(ret), KPC(iter));
-      } else if (i == 0 && !iter->is_tx_table_valid()) {
-        ret = OB_STATE_NOT_MATCH;
-        STORAGE_LOG(ERROR, "Failed to complete the merge because of broken txn table", K(ret), KPC(iter));
       }
     }
   }

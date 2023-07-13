@@ -348,25 +348,6 @@ int ObTabletMergeInfo::create_sstable(ObTabletMergeCtx &ctx)
   return ret;
 }
 
-
-int ObTabletMergeInfo::get_data_macro_block_count(int64_t &macro_block_count)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTabletMergeInfo has not been inited", K(ret));
-  } else {
-    macro_block_count = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < block_ctxs_.count(); i++) {
-      if (OB_NOT_NULL(block_ctxs_.at(i))) {
-        macro_block_count += block_ctxs_.at(i)->macro_block_list_.count();
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObTabletMergeInfo::new_block_write_ctx(blocksstable::ObMacroBlocksWriteCtx *&ctx)
 {
   int ret = OB_SUCCESS;

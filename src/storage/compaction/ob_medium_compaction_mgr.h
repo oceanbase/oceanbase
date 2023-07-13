@@ -182,7 +182,7 @@ private:
       uint64_t reserved_                : MEDIUM_LIST_INFO_RESERVED_BITS;
     };
   };
-  int64_t last_medium_scn_;
+  int64_t last_medium_scn_; // record last finish medium_scn
 
   MediumInfoList medium_info_list_; // need for compat, will not store any MediumCompactionInfo after 4.2
 };

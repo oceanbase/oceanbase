@@ -60,7 +60,6 @@ public:
   ObSSTableMergeInfo &get_sstable_merge_info() { return sstable_merge_info_; }
   blocksstable::ObSSTableIndexBuilder *get_index_builder() const { return index_builder_; }
   void destroy();
-  int get_data_macro_block_count(int64_t &macro_block_count);
   TO_STRING_KV(K_(is_inited), K_(sstable_merge_info), KP_(index_builder));
 
 private:
@@ -153,9 +152,7 @@ struct ObTabletMergeCtx
   virtual ~ObTabletMergeCtx();
   void destroy();
   virtual bool is_valid() const;
-  bool need_full_checksum() const { return is_full_merge_; }
   bool need_rewrite_macro_block(const blocksstable::ObMacroBlockDesc &macro_desc) const;
-  int64_t get_storage_format_work_version() const { return param_.merge_version_; }
   int init_parallel_merge();
   int init_merge_progress(bool is_major);
   int get_merge_range(int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
@@ -169,8 +166,6 @@ struct ObTabletMergeCtx
   int get_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle);
   int try_swap_tablet_handle();
-
-  int get_medium_compaction_info_to_store();
   static bool need_swap_tablet(const ObTablet &tablet, const int64_t row_count, const int64_t macro_count);
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int cal_minor_merge_param();
