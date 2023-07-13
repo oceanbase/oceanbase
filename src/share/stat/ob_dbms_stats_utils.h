@@ -46,6 +46,15 @@ public:
                                const bool is_history_stat = false,
                                const bool is_online_stat = false);
 
+  static int split_batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
+                               sql::ObSQLSessionInfo *session_info,
+                               common::ObMySQLProxy *sql_proxy,
+                               ObIArray<ObOptTableStat*> &table_stats,
+                               ObIArray<ObOptColumnStat*> &column_stats,
+                               const bool is_index_stat = false,
+                               const bool is_history_stat = false,
+                               const bool is_online_stat = false);
+
   static int batch_write_history_stats(sql::ObExecContext &ctx,
                                        ObIArray<ObOptTableStatHandle> &history_tab_handles,
                                        ObIArray<ObOptColumnStatHandle> &history_col_handles);

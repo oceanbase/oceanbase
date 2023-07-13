@@ -37,9 +37,7 @@ public:
                                              int64_t subpart_cnt,
                                              bool is_gather_part);
 
-  static int derive_global_stat_by_direct_load(ObExecContext &ctx,
-                                              ObIArray<ObOptTableStat*> &part_tab_stats,
-                                              const ObIArray<ObOptColumnStat*> &part_column_stats);
+  static int derive_global_stat_by_direct_load(ObExecContext &ctx, const uint64_t table_id);
 private:
 
   static int derive_global_stat_from_part_stats(ObExecContext &ctx,
@@ -72,11 +70,6 @@ private:
 
   static int generate_all_opt_stat(ObIArray<ObOptTableStat> &table_stats,
                                    const ObIArray<ObOptColumnStatHandle> &col_handles,
-                                   int64_t col_cnt,
-                                   ObIArray<ObOptStat> &all_opt_stats);
-
-  static int generate_all_opt_stat(ObIArray<ObOptTableStat*> &table_stats,
-                                   const ObIArray<ObOptColumnStat*> &column_stats,
                                    int64_t col_cnt,
                                    ObIArray<ObOptStat> &all_opt_stats);
 
@@ -142,10 +135,10 @@ private:
                                                const uint64_t table_id,
                                                ObTableStatParam &param);
 
-  static int write_all_opt_stats_by_dircet_load(ObExecContext &ctx,
-                                                const ObTableStatParam &param,
-                                                ObIArray<ObOptTableStat *> &all_tstats,
-                                                ObIArray<ObOptColumnStat *> &all_cstats);
+  static int get_all_part_opt_stat_by_direct_load(const ObTableStatParam param,
+                                                  ObIArray<ObOptTableStat> &part_tab_stats,
+                                                  ObIArray<ObOptColumnStatHandle> &part_col_handles,
+                                                  ObIArray<ObOptStat> &part_opt_stats);
 
 };
 

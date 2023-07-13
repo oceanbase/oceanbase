@@ -259,7 +259,7 @@ int ObDirectLoadControlCommitExecutor::process()
       ObTableLoadStore store(table_ctx);
       if (OB_FAIL(store.init())) {
         LOG_WARN("fail to init store", KR(ret));
-      } else if (OB_FAIL(store.commit(res_.result_info_, res_.sql_statistics_))) {
+      } else if (OB_FAIL(store.commit(res_.result_info_))) {
         LOG_WARN("fail to store commit", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
         LOG_WARN("fail to remove table ctx", KR(ret), K(key));

@@ -357,6 +357,29 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                         const bool is_online_stat /*default false*/)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(split_batch_write(ctx.get_virtual_table_ctx().schema_guard_,
+                                ctx.get_my_session(),
+                                ctx.get_sql_proxy(),
+                                table_stats,
+                                column_stats,
+                                is_index_stat,
+                                is_history_stat,
+                                is_online_stat))) {
+    LOG_WARN("failed to split batch write", K(ret));
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::split_batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
+                                        sql::ObSQLSessionInfo *session_info,
+                                        common::ObMySQLProxy *sql_proxy,
+                                        ObIArray<ObOptTableStat*> &table_stats,
+                                        ObIArray<ObOptColumnStat*> &column_stats,
+                                        const bool is_index_stat/*default false*/,
+                                        const bool is_history_stat/*default false*/,
+                                        const bool is_online_stat /*default false*/)
+{
+  int ret = OB_SUCCESS;
   int64_t idx_tab_stat = 0;
   int64_t idx_col_stat = 0;
   //avoid the write stat sql is too long, we split write table stats and column stats:
@@ -366,10 +389,10 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
   int64_t current_time = ObTimeUtility::current_time();
   ObMySQLTransaction trans;
   //begin trans before writing stats
-  if (OB_ISNULL(ctx.get_my_session())) {
+  if (OB_ISNULL(session_info) || OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx.get_my_session()));
-  } else if (OB_FAIL(trans.start(ctx.get_sql_proxy(), ctx.get_my_session()->get_effective_tenant_id()))) {
+    LOG_WARN("get unexpected null", K(ret), K(session_info), K(sql_proxy));
+  } else if (OB_FAIL(trans.start(sql_proxy, session_info->get_effective_tenant_id()))) {
     LOG_WARN("fail to start transaction", K(ret));
   }
   while (OB_SUCC(ret) &&
@@ -408,8 +431,8 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDbmsStatsUtils::batch_write(ctx.get_virtual_table_ctx().schema_guard_,
-                                                ctx.get_my_session()->get_effective_tenant_id(),
+      if (OB_FAIL(ObDbmsStatsUtils::batch_write(schema_guard,
+                                                session_info->get_effective_tenant_id(),
                                                 trans,
                                                 write_table_stats,
                                                 write_column_stats,
@@ -417,7 +440,7 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                                 is_index_stat,
                                                 is_history_stat,
                                                 is_online_stat,
-                                                CREATE_OBJ_PRINT_PARAM(ctx.get_my_session())))) {
+                                                CREATE_OBJ_PRINT_PARAM(session_info)))) {
         LOG_WARN("failed to batch write stats", K(ret), K(idx_tab_stat), K(idx_col_stat));
       } else {/*do nothing*/}
     }
