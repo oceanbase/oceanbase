@@ -1649,7 +1649,9 @@ void ObTenantDagScheduler::destroy()
 
     destroy_all_workers();
     is_inited_ = false; // avoid alloc dag/dag_net
+    WEAK_BARRIER();
     int tmp_ret = OB_SUCCESS;
+    int64_t abort_dag_cnt = 0;
     for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
       for (int64_t i = 0; i < PriorityDagList::PRIO_CNT; ++i) {
         ObIDag *head = dag_list_[j].get_head(i);
@@ -1666,10 +1668,12 @@ void ObTenantDagScheduler::destroy()
           }
           if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cur_dag, tmp_dag_net))) {
             STORAGE_LOG_RET(WARN, tmp_ret, "failed to abort dag", K(tmp_ret), KPC(cur_dag));
+          } else {
+            ++abort_dag_cnt;
           }
           cur_dag = next;
         } // end of while
-      }
+      } // end of prio loop
       dag_list_[j].reset();
     } // end of for
     blocking_dag_net_list_.reset();
@@ -1692,7 +1696,7 @@ void ObTenantDagScheduler::destroy()
     if (dag_net_id_map_.created()) {
       dag_net_id_map_.destroy();
     }
-
+    COMMON_LOG(INFO, "ObTenantDagScheduler before allocator destroyed", K(abort_dag_cnt), K(allocator_.used()), K(ha_allocator_.used()));
     allocator_.reset();
     ha_allocator_.reset();
     scheduler_sync_.destroy();
@@ -1872,10 +1876,7 @@ int ObTenantDagScheduler::add_dag(
 {
   int ret = OB_SUCCESS;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_ISNULL(dag)) {
+  if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", KP(dag));
   } else if (OB_UNLIKELY(!dag->is_valid())) {
