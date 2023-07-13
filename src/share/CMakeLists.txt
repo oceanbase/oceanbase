@@ -236,7 +236,6 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_table.cpp
   table/ob_table_rpc_struct.cpp
   table/ob_table_load_define.cpp
-  table/ob_table_load_shared_allocator.cpp
   table/ob_table_load_row.cpp
   transfer/ob_transfer_info.cpp
   transfer/ob_transfer_task_operator.cpp

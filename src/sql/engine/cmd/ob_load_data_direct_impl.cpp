@@ -1319,7 +1319,7 @@ int ObLoadDataDirectImpl::FileLoadExecutor::process_task_handle(TaskHandle *hand
     while (OB_SUCC(ret) && !is_iter_end) {
       // 每个新的batch需要分配一个新的shared_allocator
       ObTableLoadSharedAllocatorHandle allocator_handle =
-        ObTableLoadSharedAllocatorHandle::make_handle();
+        ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       if (!allocator_handle) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to make allocator handle", KR(ret));

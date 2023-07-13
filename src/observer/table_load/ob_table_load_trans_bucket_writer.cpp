@@ -240,7 +240,7 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
     } else if (OB_FAIL(storage_datum.to_obj_enhance(obj_row.cells_[obj_index],
                                                     column_schema->get_meta_type()))) {
       LOG_WARN("fail to obj enhance", KR(ret), K(obj_row.cells_[obj_index]));
-    } else if (OB_FAIL(ob_write_obj(obj_row.get_allocator_handler()->get_allocator(), obj_row.cells_[obj_index],
+    } else if (OB_FAIL(ob_write_obj(*(obj_row.get_allocator_handler()), obj_row.cells_[obj_index],
                                     obj_row.cells_[obj_index]))) {
       LOG_WARN("fail to deep copy obj", KR(ret), K(obj_row.cells_[obj_index]));
     }

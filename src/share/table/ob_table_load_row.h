@@ -114,7 +114,7 @@ int ObTableLoadRow<T>::deep_copy_and_assign(const T *row, int64_t count,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < count; i ++) {
     if (OB_FAIL(observer::ObTableLoadUtils::deep_copy(row[i],
-        cells[i], allocator_handle->get_allocator()))) {
+        cells[i], *allocator_handle))) {
       OB_LOG(WARN, "fail to deep copy object", KR(ret));
     }
   }

@@ -13,30 +13,26 @@ namespace oceanbase
 namespace table
 {
 
-template<class T, class... Args>
+template<class T>
 class ObTableLoadHandle
 {
   class Object
   {
   public:
+    template<class... Args>
     Object(Args... args) : ref_count_(0), object_(args...) {}
   public:
-    int32_t ref_count_;
+    int64_t ref_count_;
     T object_;
   };
 
 public:
   ObTableLoadHandle() : ptr_(nullptr) {}
   virtual ~ObTableLoadHandle() {
-    int32_t ref_count = ATOMIC_AAF(&(ptr_->ref_count_), -1);
-    if (ref_count == 0) {
-      if (ptr_ != nullptr) {
-        ptr_->~Object();
-        ob_free(ptr_);
-      }
-    }
+    reset();
   }
 
+  template<class... Args >
   static ObTableLoadHandle make_handle(Args... args)
   {
     ObMemAttr attr(MTL_ID(), "TLD_Handle");
@@ -46,35 +42,50 @@ public:
     return handle;
   }
 
-  ObTableLoadHandle(ObTableLoadHandle &other) {
-    ptr_ = other.ptr_;
-    ATOMIC_AAF(&(ptr_->ref_count_), 1);
+  ObTableLoadHandle(const ObTableLoadHandle &other) : ptr_(nullptr) {
+    *this = other;
   }
 
-  ObTableLoadHandle(ObTableLoadHandle &&other) {
-    ptr_ = other.ptr_;
-    other.ptr_ = nullptr;
+  ObTableLoadHandle(ObTableLoadHandle &&other) : ptr_(nullptr) {
+    if (this != &other) {
+      reset();
+      ptr_ = other.ptr_;
+      other.ptr_ = nullptr;
+    }
   }
 
-  void operator= (ObTableLoadHandle &other) {
-    ptr_ = other.ptr_;
-    ATOMIC_AAF(&(ptr_->ref_count_), 1);
+  void operator = (const ObTableLoadHandle &other) {
+    if (this != &other) {
+      reset();
+      ptr_ = other.ptr_;
+      if (ptr_ != nullptr) {
+        ATOMIC_AAF(&(ptr_->ref_count_), 1);
+      }
+    }
   }
 
-  operator bool() {
+  operator bool() const {
     return ptr_ != nullptr;
   }
 
-  T *operator->() {
+  T *operator->() const {
     return &(ptr_->object_);
   }
 
-  T &operator*() {
+  T &operator*() const {
     return ptr_->object_;
   }
 
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObTableLoadHandle);
+  void reset() {
+    if (ptr_ != nullptr) {
+      int64_t ref_count = ATOMIC_AAF(&(ptr_->ref_count_), -1);
+      if (ref_count == 0) {
+        ptr_->~Object();
+        ob_free(ptr_);
+      }
+      ptr_ = nullptr;
+    }
+  }
 
 private:
   // data members
