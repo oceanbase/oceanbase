@@ -34,7 +34,7 @@ class ObISQLClient;
 class ObString;
 class ObSqlString;
 class ObIAllocator;
-class ObISQLClient;
+class ObMySQLProxy;
 namespace sqlclient
 {
 class ObMySQLResult;
@@ -270,12 +270,12 @@ public:
    * @param[in] old_status
    * @param[in] new_status
    * @param[in] working_sw_status only support working on specified switchover status
-   * @param[in] client: sql client or trans*/
+   * @param[in] client: sql client*/
   int update_ls_status(const uint64_t tenant_id, const ObLSID &id,
                        const ObLSStatus &old_status,
                        const ObLSStatus &new_status, 
                        const ObTenantSwitchoverStatus &working_sw_status,
-                       ObISQLClient &client);
+                       ObMySQLProxy &client);
 
   /*
    * description: update ls init member list while first create ls
@@ -342,7 +342,7 @@ public:
       const uint64_t tenant_id,
       const share::ObTenantSwitchoverStatus &status,
       const int64_t switchover_epoch,
-      ObISQLClient &client);
+      ObMySQLProxy &client);
 
   ////////////////////////////////////////////////////////////////////////////////
   // Get all ls paxos from __all_virtual_ls_status and __all_virtual_log_stat except 
@@ -378,6 +378,22 @@ public:
       const char *print_str,
       bool &has_ls_without_leader,
       common::ObSqlString &error_msg);
+ /*
+   * description: update ls's status
+   * @param[in] tenant_id
+   * @param[in] ls_id
+   * @param[in] old_status
+   * @param[in] new_status
+   * @param[in] working_sw_status only support working on specified switchover status
+   * @param[in] trans*/
+  int update_ls_status_in_trans(
+      const uint64_t tenant_id,
+      const ObLSID &id,
+      const ObLSStatus &old_status,
+      const ObLSStatus &new_status,
+      const ObTenantSwitchoverStatus &working_sw_status,
+      ObMySQLTransaction &trans);
+
 
   struct ObLSExistState final
   {
@@ -467,20 +483,6 @@ private:
       const common::ObIArray<ObAddr> &to_stop_servers,
       common::ObIArray<ObAddr> &valid_servers);
   int construct_ls_leader_info_sql_(common::ObSqlString &sql);
-
- /*
-   * description: update ls's status, can not do this when switchover tenant role
-   * @param[in] tenant_id
-   * @param[in] ls_id
-   * @param[in] old_status
-   * @param[in] new_status
-   * @param[in] trans*/
-  int update_ls_status_in_trans_(
-      const uint64_t tenant_id,
-      const ObLSID &id,
-      const ObLSStatus &old_status,
-      const ObLSStatus &new_status,
-      ObMySQLTransaction &trans);
 
 private:
   const int64_t MAX_ERROR_LOG_PRINT_SIZE = 1024;
