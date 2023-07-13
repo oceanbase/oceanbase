@@ -230,7 +230,7 @@ int ObTransService::stop_tx(ObTxDesc &tx)
   return ret;
 }
 
-int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param)
+int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param, const ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
   if (!tx_param.is_valid()) {
@@ -240,7 +240,12 @@ int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param)
     TX_STAT_START_INC
       ObSpinLockGuard guard(tx.lock_);
     tx.inc_op_sn();
-    if (OB_FAIL(tx_desc_mgr_.add(tx))) {
+    if (!tx_id.is_valid()) {
+      ret = tx_desc_mgr_.add(tx);
+    } else {
+      ret = tx_desc_mgr_.add_with_txid(tx_id, tx);
+    }
+    if (OB_FAIL(ret)) {
       TRANS_LOG(WARN, "add tx to txMgr fail", K(ret), K(tx));
     } else {
       tx.cluster_version_ = GET_MIN_CLUSTER_VERSION();

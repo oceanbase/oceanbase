@@ -1036,7 +1036,9 @@ int ObXAService::xa_start_(const ObXATransID &xid,
 
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   // step 1: if tightly coupled, insert lock record first.
-  if (OB_FAIL(trans.start(MTL(ObTransService *)->get_mysql_proxy(), exec_tenant_id))) {
+  if (OB_FAIL(MTL(transaction::ObTransService *)->gen_trans_id(trans_id))) {
+    TRANS_LOG(WARN, "gen trans id fail", K(ret), K(exec_tenant_id), K(xid));
+  } else if (OB_FAIL(trans.start(MTL(ObTransService *)->get_mysql_proxy(), exec_tenant_id))) {
     TRANS_LOG(WARN, "trans start failed", K(ret), K(exec_tenant_id), K(xid));
   } else {
     if (is_tightly_coupled) {
@@ -1082,12 +1084,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       // this code may be moved to pl sql level
       if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id))) {
         TRANS_LOG(WARN, "fail acquire trans", K(ret), K(tx_param));
-      } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param))) {
+      } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param, trans_id))) {
         TRANS_LOG(WARN, "fail start trans", K(ret), KPC(tx_desc));
         MTL(ObTransService *)->release_tx(*tx_desc);
         tx_desc = NULL;
-      } else {
-        trans_id = tx_desc->get_tx_id();
       }
     } else {
       // not first xa start
@@ -1117,9 +1117,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
   } else {
     // if enter this branch, tx_desc must be valid
     if (is_first_xa_start) {
-      if (is_tightly_coupled && OB_FAIL(update_xa_lock(trans, tenant_id, xid, trans_id))) {
-        TRANS_LOG(WARN, "update xa lock record failed", K(ret), K(trans_id), K(xid));
-      } else if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(trans_id, alloc, xa_ctx))) {
+      if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(trans_id, alloc, xa_ctx))) {
         TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(xid));
       } else if (!alloc) {
         ret = OB_ERR_UNEXPECTED;
