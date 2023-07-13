@@ -55,7 +55,7 @@ inline void eloop_delay_warn(int64_t start_us, int64_t warn_us) {
   if (warn_us > 0) {
     int64_t delay = rk_get_corse_us() - start_us;
     if (delay > warn_us) {
-      rk_info("eloop handle events delay high: %ld, malloc=%ld/%ld write=%ld/%ld read=%ld/%ld server_process=%ld/%ld client_cb=%ld/%ld",
+      rk_warn("[delay_warn] eloop handle events delay high: %ld, malloc=%ld/%ld write=%ld/%ld read=%ld/%ld server_process=%ld/%ld client_cb=%ld/%ld",
         delay, eloop_malloc_time, eloop_malloc_count, eloop_write_time, eloop_write_count, eloop_read_time, eloop_read_count,
         eloop_server_process_time, eloop_server_process_count, eloop_client_cb_time, eloop_client_cb_count);
     }
@@ -67,7 +67,7 @@ void delay_warn(const char* msg, int64_t start_us, int64_t warn_us)
   if (warn_us > 0) {
     int64_t delay = rk_get_corse_us() - start_us;
     if (delay > warn_us && PNIO_REACH_TIME_INTERVAL(500*1000)) {
-      rk_info("%s delay high: %ld, start_us = %ld", msg, delay, start_us);
+      rk_warn("[delay_warn] %s delay high: %ld, start_us=%ld", msg, delay, start_us);
     }
   }
 }
