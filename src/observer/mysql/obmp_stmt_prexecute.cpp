@@ -133,7 +133,6 @@ int ObMPStmtPrexecute::before_process()
 
     // params_num
     int32_t num = 0;
-    ObSQLSessionInfo *session = NULL;
     PS_DEFENSE_CHECK(4) // params_num
     {
       ObMySQLUtil::get_int4(pos, num);
