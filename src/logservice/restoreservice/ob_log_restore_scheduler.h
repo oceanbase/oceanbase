@@ -14,6 +14,7 @@
 #define OCEANBASE_LOGSERVICE_OB_LOG_RESTORE_SCHEDULER_H_
 
 #include "lib/utility/ob_macro_utils.h"
+#include "share/restore/ob_log_restore_source.h"   // ObLogRestoreSourceType
 #include <cstdint>
 
 namespace oceanbase
@@ -30,10 +31,10 @@ public:
 
   int init(const uint64_t tenant_id, ObLogRestoreAllocator *allocator, ObRemoteFetchWorker *worker);
   void destroy();
-  int schedule();
+  int schedule(const share::ObLogRestoreSourceType &source_type);
 
 private:
-  int modify_thread_count_();
+  int modify_thread_count_(const share::ObLogRestoreSourceType &source_type);
   int purge_cached_buffer_();
 
 private:

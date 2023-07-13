@@ -81,6 +81,8 @@ struct ObLogRestoreSourceTenant final
       K_(is_oracle),
       K_(ip_list));
 };
+
+int64_t get_restore_concurrency_by_max_cpu();
 } // namespace logservice
 } // namespace oceanbase
 

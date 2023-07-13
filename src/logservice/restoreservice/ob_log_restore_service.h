@@ -76,7 +76,7 @@ private:
   void update_restore_quota_();
   int update_upstream_(share::ObLogRestoreSourceItem &source, bool &source_exist);
   void schedule_fetch_log_(share::ObLogRestoreSourceItem &source);
-  void schedule_resource_();
+  void schedule_resource_(const share::ObLogRestoreSourceType &source_type);
   void clean_resource_();
   void report_error_();
   void update_restore_upper_limit_();

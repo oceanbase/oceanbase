@@ -18,6 +18,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "logservice/palf/log_define.h"
+#include "share/rc/ob_tenant_base.h"
 #include <cstdint>
 
 namespace oceanbase
@@ -78,5 +79,11 @@ bool ObLogRestoreSourceTenant::is_valid() const
     && !user_passwd_.is_empty()
     && ip_list_.count() > 0;
 }
+
+int64_t get_restore_concurrency_by_max_cpu()
+{
+  return static_cast<int64_t>(MTL_CPU_COUNT() + 7) / 8;
+}
+
 } // namespace logservice
 } // namespace oceanbase
