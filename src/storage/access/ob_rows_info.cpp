@@ -71,8 +71,8 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
 
 
 ObRowsInfo::ObRowsInfo()
-  : scan_mem_allocator_(common::ObModIds::OB_STORE_ROW_EXISTER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    key_allocator_(common::ObModIds::OB_STORE_ROW_EXISTER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+  : scan_mem_allocator_(ObMemAttr(MTL_ID(), common::ObModIds::OB_STORE_ROW_EXISTER), OB_MALLOC_NORMAL_BLOCK_SIZE),
+    key_allocator_(ObMemAttr(MTL_ID(), common::ObModIds::OB_STORE_ROW_EXISTER), OB_MALLOC_NORMAL_BLOCK_SIZE),
     rowkeys_(),
     rows_(nullptr),
     exist_helper_(),

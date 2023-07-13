@@ -1154,7 +1154,7 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt info is null", K(ret), K(stmt_info));
       } else {
-        session_info = new (buf) ObPsSessionInfo(stmt_info->get_num_of_param());
+        session_info = new (buf) ObPsSessionInfo(orig_tenant_id_, stmt_info->get_num_of_param());
         session_info->set_stmt_id(client_stmt_id);
         session_info->set_stmt_type(stmt_info->get_stmt_type());
         session_info->set_ps_stmt_checksum(stmt_info->get_ps_stmt_checksum());
