@@ -28,6 +28,10 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
+extern "C" {
+#include "ussl-hook.h"
+#include "auth-methods.h"
+}
 namespace oceanbase
 {
 namespace common
@@ -415,15 +419,21 @@ OB_DEF_SERIALIZE_SIZE(ObServerConfig)
 } // end of namespace common
 namespace obrpc {
 bool enable_pkt_nio() {
-  return GCONF._enable_pkt_nio
-      && (!OBSERVER.is_arbitration_mode())
-      && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+  bool bool_ret = false;
+  if (OB_UNLIKELY(OBSERVER.is_arbitration_mode())) {
+    bool enable_clent_auth = (get_client_auth_methods() != USSL_AUTH_NONE);
+    bool_ret = GCONF._enable_pkt_nio && enable_clent_auth;
+  } else {
+    bool_ret =  GCONF._enable_pkt_nio && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+  }
+  return bool_ret;
 }
+
 int64_t get_max_rpc_packet_size()
 {
   return GCONF._max_rpc_packet_size;
 }
-}
+} // end of namespace obrpc
 } // end of namespace oceanbase
 
 namespace easy
