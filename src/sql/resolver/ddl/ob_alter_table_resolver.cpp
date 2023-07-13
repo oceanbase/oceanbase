@@ -512,10 +512,7 @@ int ObAlterTableResolver::check_alter_column_schemas_valid(ObAlterTableStmt &stm
         LOG_WARN("alter_column_schema is NULL", K(ret), K(alter_table_schema));
       } else if (OB_DDL_DROP_COLUMN == alter_column_schema->alter_type_) {
         alter_column_name = alter_column_schema->get_origin_column_name();
-        if (OB_ISNULL(col_schema = table_schema_->get_column_schema(alter_column_name))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to find drop column schema!", K(ret), K(alter_column_name));
-        } else if (OB_FAIL(drop_columns.push_back(col_schema))) {
+        if (OB_FAIL(drop_columns.push_back(col_schema))) {
           LOG_WARN("fail to push back column id", K(ret));
         }
       } else if (OB_DDL_ADD_COLUMN == alter_column_schema->alter_type_ &&
@@ -549,8 +546,10 @@ int ObAlterTableResolver::check_alter_column_schemas_valid(ObAlterTableStmt &stm
         for (int64_t j = 0; OB_SUCC(ret) && j < dependent_columns.count(); ++j) {
           if (drop_columns.at(i) == dependent_columns.at(j)) {
             const ObString &column_name = drop_columns.at(i)->get_column_name();
-            ret = OB_ERR_DEPENDENT_BY_GENERATED_COLUMN;
-            LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_GENERATED_COLUMN, column_name.length(), column_name.ptr());
+            ObString scope_name = "generated column function";
+            ret = OB_ERR_BAD_FIELD_ERROR;
+            LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+                          scope_name.length(), scope_name.ptr());
             LOG_WARN("Dropping column has generated column deps", K(ret), K(column_name));
           }
         }
