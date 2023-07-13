@@ -10049,10 +10049,6 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
         }
       }
     }
-  } else if (q_name.is_pl_var()) {
-    if (OB_FAIL(resolve_var(q_name, unit_ast, expr))) {
-      LOG_WARN("failed to resolve var", K(q_name), K(ret));
-    }
   } else {
     if (OB_FAIL(resolve_var(q_name, unit_ast, expr))) {
       if (OB_ERR_SP_UNDECLARED_VAR == ret) {
@@ -11717,19 +11713,13 @@ int ObPLMockSelfArg::mock()
     if (expr_params_.at(0)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
       // already has self argument, do nothing ...
     } else if (ObObjAccessIdx::IS_UDT_NS == access_idxs_.at(access_idxs_.count() - 1).access_type_
-        && expr_params_.at(0)->get_result_type().get_udt_id()
+        && expr_params_.at(0)->get_result_type().get_expr_udt_id()
               == access_idxs_.at(access_idxs_.count() - 1).var_index_) {
       expr_params_.at(0)->add_flag(IS_UDT_UDF_SELF_PARAM);
       mocked_ = true;
       mark_only_ = true;
-    } else if (expr_params_.at(0)->get_result_type().is_xml_sql_type()
-               && (T_OBJ_XML == access_idxs_.at(access_idxs_.count() - 1).var_index_)) {
-      //select xmltype.getclobval(xmlparse()) from dual;
-      expr_params_.at(0)->add_flag(IS_UDT_UDF_SELF_PARAM);
-      mocked_ = true;
-      mark_only_ = true;
     } else if (access_idxs_.at(access_idxs_.count() - 1).elem_type_.is_composite_type()
-               && expr_params_.at(0)->get_result_type().get_udt_id()
+               && expr_params_.at(0)->get_result_type().get_expr_udt_id()
                     == access_idxs_.at(access_idxs_.count() - 1).elem_type_.get_user_type_id()) {
       ObConstRawExpr *null_expr = NULL;
       OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
