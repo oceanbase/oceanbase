@@ -32,6 +32,11 @@ namespace oceanbase
 {
 namespace logfetcher
 {
+#define IS_WARN_LOG_LEVEL(arg) \
+  if (OB_TIMEOUT == arg \
+  || OB_TENANT_NOT_EXIST == arg \
+  || OB_TENANT_NOT_IN_SERVER == arg \
+  || OB_IN_STOP_STATE == arg) \
 
 int64_t FetchStream::g_rpc_timeout = ObLogFetcherConfig::default_fetch_log_rpc_timeout_sec * _SEC_;
 int64_t FetchStream::g_dml_progress_limit = ObLogFetcherConfig::default_progress_limit_sec_for_dml * _SEC_;
@@ -1238,15 +1243,13 @@ int FetchStream::handle_fetch_log_error_(
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_RPC;
     if (OB_NOT_NULL(ls_fetch_ctx_)) {
-      if (OB_IN_STOP_STATE != rcode.rcode_) {
-        ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
-                                  IObLogErrHandler::ErrType::FETCH_LOG,
-                                  trace_id,
-                                  ls_fetch_ctx_->get_next_lsn(),
-                                  rcode.rcode_,
-                                  "%s");
-      }
-      if (OB_TIMEOUT == rcode.rcode_) {
+      ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
+                                IObLogErrHandler::ErrType::FETCH_LOG,
+                                trace_id,
+                                ls_fetch_ctx_->get_next_lsn(),
+                                rcode.rcode_,
+                                "%s");
+      IS_WARN_LOG_LEVEL(rcode.rcode_) {
         LOG_WARN("fetch log fail on rpc, need_switch_server", K(svr_), K(rcode), "fetch_stream", this);
       } else {
         LOG_ERROR("fetch log fail on rpc, need_switch_server", K(svr_), K(rcode), "fetch_stream", this);
@@ -1259,15 +1262,13 @@ int FetchStream::handle_fetch_log_error_(
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_SERVER;
     if (OB_NOT_NULL(ls_fetch_ctx_)) {
-      if (OB_IN_STOP_STATE != resp.get_err()) {
-        ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
-                                  IObLogErrHandler::ErrType::FETCH_LOG,
-                                  trace_id,
-                                  ls_fetch_ctx_->get_next_lsn(),
-                                  resp.get_err(),
-                                  "%s");
-      }
-      if (OB_TIMEOUT == resp.get_err()) {
+      ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
+                                IObLogErrHandler::ErrType::FETCH_LOG,
+                                trace_id,
+                                ls_fetch_ctx_->get_next_lsn(),
+                                resp.get_err(),
+                                "%s");
+      IS_WARN_LOG_LEVEL(resp.get_err()) {
         LOG_WARN("fetch log fail on server, need_switch_server", "fetch_stream", this, K(svr_),
                         "svr_err", resp.get_err(), "svr_debug_err", resp.get_debug_err(),
                         K(rcode), K(resp));

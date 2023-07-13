@@ -41,21 +41,29 @@ namespace share
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", privilege is insufficient");          \
       break;                                                                                           \
     case -ER_ACCESS_DENIED_ERROR:                                                                      \
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the user and password");                      \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the user and password"); \
       break;                                                                                           \
     case -ER_DBACCESS_DENIED_ERROR:                                                                    \
     case OB_ERR_NO_LOGIN_PRIVILEGE:                                                                    \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the privileges");        \
       break;                                                                                           \
     case OB_ERR_NULL_VALUE:                                                                            \
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", primary may not be ready");           \
+    case OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH:                                                            \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", query primary failed");               \
       break;                                                                                           \
     case -ER_CONNECT_FAILED:                                                                           \
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the network");                    \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the network");           \
       break;                                                                                           \
     default:                                                                                           \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args);                                        \
   }                                                                                                    \
+
+#define RESTORE_RETRY(arg)                                                                             \
+  int64_t retry_time = 0;                                                                              \
+  do {                                                                                                 \
+    arg                                                                                                \
+  } while (OB_FAIL(ret) && retry_time++ < server_prover_.get_server_count() - 1);
+
 
 ObLogRestoreMySQLProvider::ObLogRestoreMySQLProvider() : server_list_() {}
 
@@ -288,29 +296,10 @@ int ObLogRestoreProxyUtil::try_init(const uint64_t tenant_id,
   const char *ORACLE_DB = "SYS";
 
   if (OB_SUCC(init(tenant_id, server_list, user_name, user_password, MYSQL_DB))) {
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      ObSqlString sql;
-      if (OB_FAIL(sql.assign_fmt("SELECT 1"))) {
-        LOG_WARN("fail to generate sql");
-      } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
-        LOG_WARN("fail to execute sql", K(sql));
-      } else if (OB_ISNULL(result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("query result is null", K(tenant_id), K(sql));
-      } else if (OB_FAIL(result.get_result()->next())) {
-        LOG_WARN("get result next failed", K(sql));
-      } else {
-        LOG_INFO("proxy connect to primary oceanabse db success");
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-    LOG_WARN("proxy connect to primary oceanbase db failed, then try connect to sys db");
-    (void)destroy();
-    if (OB_SUCC(init(tenant_id, server_list, user_name, user_password, ORACLE_DB))) {
+    RESTORE_RETRY(
       SMART_VAR(ObMySQLProxy::MySQLResult, result) {
         ObSqlString sql;
-        if (OB_FAIL(sql.assign_fmt("SELECT 1 FROM DUAL"))) {
+        if (OB_FAIL(sql.assign_fmt("SELECT 1"))) {
           LOG_WARN("fail to generate sql");
         } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
           LOG_WARN("fail to execute sql", K(sql));
@@ -320,9 +309,32 @@ int ObLogRestoreProxyUtil::try_init(const uint64_t tenant_id,
         } else if (OB_FAIL(result.get_result()->next())) {
           LOG_WARN("get result next failed", K(sql));
         } else {
-          LOG_INFO("proxy connect to sys db success");
+          LOG_INFO("proxy connect to primary oceanabse db success");
         }
       }
+    )
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("proxy connect to primary oceanbase db failed, then try connect to sys db");
+    (void)destroy();
+    if (OB_SUCC(init(tenant_id, server_list, user_name, user_password, ORACLE_DB))) {
+      RESTORE_RETRY(
+        SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+          ObSqlString sql;
+          if (OB_FAIL(sql.assign_fmt("SELECT 1 FROM DUAL"))) {
+            LOG_WARN("fail to generate sql");
+          } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
+            LOG_WARN("fail to execute sql", K(sql));
+          } else if (OB_ISNULL(result.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("query result is null", K(tenant_id), K(sql));
+          } else if (OB_FAIL(result.get_result()->next())) {
+            LOG_WARN("get result next failed", K(sql));
+          } else {
+            LOG_INFO("proxy connect to sys db success");
+          }
+        }
+      )
     }
   }
   if (OB_FAIL(ret)) {
@@ -336,26 +348,28 @@ int ObLogRestoreProxyUtil::try_init(const uint64_t tenant_id,
 int ObLogRestoreProxyUtil::get_tenant_id(char *tenant_name, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("SELECT TENANT_ID FROM %s WHERE TENANT_NAME='%s'",
-        OB_DBA_OB_TENANTS_TNAME, tenant_name))) {
-      LOG_WARN("fail to generate sql");
-    } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
-      LOG_WARN("fail to execute sql", K(sql), K(connection_.get_db_name()));
-    } else if (OB_ISNULL(result.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query result is null", K(tenant_name), K(sql));
-    } else if (OB_FAIL(result.get_result()->next())) {
-      LOG_WARN("get result next failed", K(tenant_name), K(sql));
-    } else {
-      EXTRACT_UINT_FIELD_MYSQL(*result.get_result(), "TENANT_ID", tenant_id, uint64_t);
+  RESTORE_RETRY(
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt("SELECT TENANT_ID FROM %s WHERE TENANT_NAME='%s'",
+          OB_DBA_OB_TENANTS_TNAME, tenant_name))) {
+        LOG_WARN("fail to generate sql");
+      } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(sql), K(connection_.get_db_name()));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query result is null", K(tenant_name), K(sql));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        LOG_WARN("get result next failed", K(tenant_name), K(sql));
+      } else {
+        EXTRACT_UINT_FIELD_MYSQL(*result.get_result(), "TENANT_ID", tenant_id, uint64_t);
 
-      if (OB_FAIL(ret)) {
-        LOG_WARN("failed to get tenant id result", K(tenant_name), K(sql));
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to get tenant id result", K(tenant_name), K(sql));
+        }
       }
     }
-  }
+  )
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to get tenant id result");
     RESTORE_PROXY_USER_ERROR("tenant id");
@@ -366,25 +380,27 @@ int ObLogRestoreProxyUtil::get_tenant_id(char *tenant_name, uint64_t &tenant_id)
 int ObLogRestoreProxyUtil::get_cluster_id(uint64_t tenant_id, int64_t &cluster_id)
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("SELECT VALUE FROM %s WHERE NAME='cluster_id'", OB_GV_OB_PARAMETERS_TNAME))) {
-      LOG_WARN("fail to generate sql");
-    } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
-      LOG_WARN("fail to execute sql", K(sql));
-    } else if (OB_ISNULL(result.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query result is null", K(sql));
-    } else if (OB_FAIL(result.get_result()->next())) {
-      LOG_WARN("get result next failed", K(tenant_id), K(sql));
-    } else {
-      EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "VALUE", cluster_id, int64_t);
+  RESTORE_RETRY(
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt("SELECT VALUE FROM %s WHERE NAME='cluster_id'", OB_GV_OB_PARAMETERS_TNAME))) {
+        LOG_WARN("fail to generate sql");
+      } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query result is null", K(sql));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        LOG_WARN("get result next failed", K(sql));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "VALUE", cluster_id, int64_t);
 
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to get cluster id result", K(cluster_id), K(sql));
+        if (OB_FAIL(ret)) {
+          LOG_WARN("fail to get cluster id result", K(cluster_id), K(sql));
+        }
       }
     }
-  }
+  )
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to get cluster id result");
     RESTORE_PROXY_USER_ERROR("cluster id");
@@ -397,39 +413,41 @@ int ObLogRestoreProxyUtil::get_compatibility_mode(const uint64_t tenant_id, ObCo
   int ret = OB_SUCCESS;
   const char *MYSQL_STR = "MYSQL";
   const char *ORACLE_STR = "ORACLE";
-  SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("SELECT COMPATIBILITY_MODE FROM %s WHERE TENANT_ID=%ld",
-         OB_DBA_OB_TENANTS_TNAME, tenant_id))) {
-      LOG_WARN("fail to generate sql", K(tenant_id));
-    } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
-      LOG_WARN("read value from DBA_OB_TENANTS failed", K(tenant_id), K(sql.ptr()));
-    } else if (OB_ISNULL(result.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query result is null", K(tenant_id), K(sql));
-    } else if (OB_FAIL(result.get_result()->next())) {
-      LOG_WARN("get result next failed", K(tenant_id), K(sql));
-    } else {
-      ObString tmp_compat_mode;
-      char compact[OB_MAX_COMPAT_MODE_STR_LEN + 1] = { 0 };
-      EXTRACT_VARCHAR_FIELD_MYSQL(*result.get_result(), "COMPATIBILITY_MODE", tmp_compat_mode);
-
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to get compact mode result", K(tenant_id), K(sql.ptr()));
-        RESTORE_PROXY_USER_ERROR("compatibility mode");
-      } else if (OB_FAIL(databuff_printf(compact, sizeof(compact), "%.*s",
-          static_cast<int>(tmp_compat_mode.length()), tmp_compat_mode.ptr()))) {
-        LOG_WARN("fail to print compact_mode", K(tmp_compat_mode.ptr()));
-      } else if (0 == STRCASECMP(compact, ORACLE_STR)) {
-        compat_mode = ObCompatibilityMode::ORACLE_MODE;
-      } else if (0 == STRCASECMP(compact, MYSQL_STR)) {
-        compat_mode = ObCompatibilityMode::MYSQL_MODE;
-      } else {
+  RESTORE_RETRY(
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt("SELECT COMPATIBILITY_MODE FROM %s WHERE TENANT_ID=%ld",
+          OB_DBA_OB_TENANTS_TNAME, tenant_id))) {
+        LOG_WARN("fail to generate sql", K(tenant_id));
+      } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
+        LOG_WARN("read value from DBA_OB_TENANTS failed", K(tenant_id), K(sql.ptr()));
+      } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("compatibility mode is not expected");
+        LOG_WARN("query result is null", K(tenant_id), K(sql));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        LOG_WARN("get result next failed", K(sql));
+      } else {
+        ObString tmp_compat_mode;
+        char compact[OB_MAX_COMPAT_MODE_STR_LEN + 1] = { 0 };
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result.get_result(), "COMPATIBILITY_MODE", tmp_compat_mode);
+
+        if (OB_FAIL(ret)) {
+          LOG_WARN("fail to get compact mode result", K(tenant_id), K(sql.ptr()));
+          RESTORE_PROXY_USER_ERROR("compatibility mode");
+        } else if (OB_FAIL(databuff_printf(compact, sizeof(compact), "%.*s",
+            static_cast<int>(tmp_compat_mode.length()), tmp_compat_mode.ptr()))) {
+          LOG_WARN("fail to print compact_mode", K(tmp_compat_mode.ptr()));
+        } else if (0 == STRCASECMP(compact, ORACLE_STR)) {
+          compat_mode = ObCompatibilityMode::ORACLE_MODE;
+        } else if (0 == STRCASECMP(compact, MYSQL_STR)) {
+          compat_mode = ObCompatibilityMode::MYSQL_MODE;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("compatibility mode is not expected");
+        }
       }
     }
-  }
+  )
   return ret;
 }
 
@@ -441,39 +459,38 @@ int ObLogRestoreProxyUtil::check_begin_lsn(const uint64_t tenant_id)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      ObSqlString sql;
-      if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS CNT FROM %s OB_LS LEFT JOIN"
-                  "(SELECT TENANT_ID, LS_ID, BEGIN_LSN FROM %s WHERE ROLE= 'LEADER') LOG_STAT "
-                  "ON OB_LS.LS_ID = LOG_STAT.LS_ID "
-                  "WHERE LOG_STAT.TENANT_ID = %lu AND (BEGIN_LSN IS NULL OR BEGIN_LSN != 0)"
-                      "AND OB_LS.STATUS NOT IN ('TENANT_DROPPING', 'CREATE_ABORT', 'PRE_TENANT_DROPPING')",
-                      OB_DBA_OB_LS_TNAME, OB_GV_OB_LOG_STAT_ORA_TNAME, tenant_id))) {
-        LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
-        LOG_WARN("check_begin_lsn failed", KR(ret), K(tenant_id), K(sql));
-        RESTORE_PROXY_USER_ERROR("tenant ls begin_lsn failed");
-        ret = OB_INVALID_ARGUMENT;
-      } else if (OB_ISNULL(result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("config result is null", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_FAIL(result.get_result()->next())) {
-        LOG_WARN("get result next failed", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_ISNULL(result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", KR(ret), K(tenant_id), K(sql));
-      } else {
-        uint64_t cnt = 0;
-        EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "CNT", cnt, uint64_t);
-        if (OB_FAIL(ret)) {
-          LOG_WARN("failed to get result", KR(ret), K(tenant_id), K(sql));
-        } else if (cnt > 0) {
-          ret = OB_OP_NOT_ALLOW;
-          LOG_WARN("primary tenant LS log may be recycled, create standby tenant is not allow", KR(ret), K(tenant_id), K(sql));
-          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "primary tenant LS log may be recycled, create standby tenant is");
+    RESTORE_RETRY(
+      SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+        ObSqlString sql;
+        if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS CNT FROM %s OB_LS LEFT JOIN"
+                    "(SELECT TENANT_ID, LS_ID, BEGIN_LSN FROM %s WHERE ROLE= 'LEADER') LOG_STAT "
+                    "ON OB_LS.LS_ID = LOG_STAT.LS_ID "
+                    "WHERE LOG_STAT.TENANT_ID = %lu AND (BEGIN_LSN IS NULL OR BEGIN_LSN != 0)"
+                        "AND OB_LS.STATUS NOT IN ('TENANT_DROPPING', 'CREATE_ABORT', 'PRE_TENANT_DROPPING')",
+                        OB_DBA_OB_LS_TNAME, OB_GV_OB_LOG_STAT_ORA_TNAME, tenant_id))) {
+          LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
+          LOG_WARN("check_begin_lsn failed", KR(ret), K(tenant_id), K(sql));
+          RESTORE_PROXY_USER_ERROR("tenant ls begin_lsn failed");
+          ret = OB_INVALID_ARGUMENT;
+        } else if (OB_ISNULL(result.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("config result is null", KR(ret), K(tenant_id), K(sql));
+        } else if (OB_FAIL(result.get_result()->next())) {
+          LOG_WARN("get result next failed", K(sql));
+        } else {
+          uint64_t cnt = 0;
+          EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "CNT", cnt, uint64_t);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to get result", KR(ret), K(tenant_id), K(sql));
+          } else if (cnt > 0) {
+            ret = OB_OP_NOT_ALLOW;
+            LOG_WARN("primary tenant LS log may be recycled, create standby tenant is not allow", KR(ret), K(tenant_id), K(sql));
+            LOG_USER_ERROR(OB_OP_NOT_ALLOW, "primary tenant LS log may be recycled, create standby tenant is");
+          }
         }
       }
-    }
+    )
   }
   return ret;
 }
@@ -481,45 +498,47 @@ int ObLogRestoreProxyUtil::check_begin_lsn(const uint64_t tenant_id)
 int ObLogRestoreProxyUtil::get_server_ip_list(const uint64_t tenant_id, common::ObArray<common::ObAddr> &addrs)
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObMySQLProxy::MySQLResult ,result) {
-    ObSqlString sql;
-    ObMySQLResult *res = NULL;
-    if (OB_FAIL(sql.assign_fmt("SELECT SVR_IP, SQL_PORT FROM %s WHERE TENANT_ID=%ld",
-      OB_DBA_OB_ACCESS_POINT_TNAME, tenant_id))) {
-      LOG_WARN("fail to generate sql");
-    } else if (OB_FAIL(sql_proxy_.read(result, OB_INVALID_TENANT_ID, sql.ptr()))) {
-      LOG_WARN("read value from DBA_OB_ACCESS_POINT failed", K(tenant_id), K(sql));
-    } else if (OB_ISNULL(res = result.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query result is null", K(tenant_id), K(sql));
-    } else {
-      while (OB_SUCC(ret) && OB_SUCC(res->next())) {
-        ObString tmp_ip;
-        int32_t tmp_port;
-        ObAddr addr;
+  RESTORE_RETRY(
+    SMART_VAR(ObMySQLProxy::MySQLResult ,result) {
+      ObSqlString sql;
+      ObMySQLResult *res = NULL;
+      if (OB_FAIL(sql.assign_fmt("SELECT SVR_IP, SQL_PORT FROM %s WHERE TENANT_ID=%ld",
+        OB_DBA_OB_ACCESS_POINT_TNAME, tenant_id))) {
+        LOG_WARN("fail to generate sql");
+      } else if (OB_FAIL(sql_proxy_.read(result, OB_INVALID_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("read value from DBA_OB_ACCESS_POINT failed", K(tenant_id), K(sql));
+      } else if (OB_ISNULL(res = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query result is null", K(tenant_id), K(sql));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(res->next())) {
+          ObString tmp_ip;
+          int32_t tmp_port;
+          ObAddr addr;
 
-        EXTRACT_VARCHAR_FIELD_MYSQL(*res, "SVR_IP", tmp_ip);
-        EXTRACT_INT_FIELD_MYSQL(*res, "SQL_PORT", tmp_port, int32_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*res, "SVR_IP", tmp_ip);
+          EXTRACT_INT_FIELD_MYSQL(*res, "SQL_PORT", tmp_port, int32_t);
 
-        if (OB_FAIL(ret)) {
-          LOG_WARN("fail to get server ip and sql port", K(tmp_ip), K(tmp_port), K(tenant_id), K(sql));
-        } else if (!addr.set_ip_addr(tmp_ip, tmp_port)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to set addr", K(tmp_ip), K(tmp_port), K(tenant_id), K(sql));
-        } else if (!addr.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("addr is invalid", K(addr), K(tenant_id), K(sql));
-        } else if (OB_FAIL(addrs.push_back(addr))) {
-          LOG_WARN("fail to push back addr to addrs", K(addr), K(tenant_id), K(sql));
+          if (OB_FAIL(ret)) {
+            LOG_WARN("fail to get server ip and sql port", K(tmp_ip), K(tmp_port), K(tenant_id), K(sql));
+          } else if (!addr.set_ip_addr(tmp_ip, tmp_port)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to set addr", K(tmp_ip), K(tmp_port), K(tenant_id), K(sql));
+          } else if (!addr.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("addr is invalid", K(addr), K(tenant_id), K(sql));
+          } else if (OB_FAIL(addrs.push_back(addr))) {
+            LOG_WARN("fail to push back addr to addrs", K(addr), K(tenant_id), K(sql));
+          }
+        }
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "failed to get ip list", K(tenant_id));
+        } else {
+          ret = OB_SUCCESS;
         }
       }
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "failed to get ip list", K(tenant_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
     }
-  }
+  )
   return ret;
 }
 
@@ -539,33 +558,35 @@ int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantS
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
   } else {
-    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
-      common::sqlclient::ObMySQLResult *result = NULL;
-      common::ObSqlString sql;
-      const char *GET_TENANT_INFO_SQL = "SELECT %s, %s FROM %s";
-      if (OB_FAIL(sql.append_fmt(GET_TENANT_INFO_SQL, TENANT_ROLE, TENANT_STATUS, OB_DBA_OB_TENANTS_TNAME))) {
-        LOG_WARN("append_fmt failed");
-      } else if (OB_FAIL(proxy->read(res, sql.ptr()))) {
-        LOG_WARN("excute sql failed", K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get result failed", K(sql));
-      } else if (OB_FAIL(result->next())) {
-        LOG_WARN("next failed");
-      } else {
-        ObString status_str;
-        ObString role_str;
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, TENANT_ROLE, role_str);
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, TENANT_STATUS, status_str);
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(schema::get_tenant_status(status_str, status))) {
-            LOG_WARN("get tenant status failed");
-          } else {
-            role = ObTenantRole(role_str.ptr());
+    RESTORE_RETRY(
+      SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = NULL;
+        common::ObSqlString sql;
+        const char *GET_TENANT_INFO_SQL = "SELECT %s, %s FROM %s";
+        if (OB_FAIL(sql.append_fmt(GET_TENANT_INFO_SQL, TENANT_ROLE, TENANT_STATUS, OB_DBA_OB_TENANTS_TNAME))) {
+          LOG_WARN("append_fmt failed");
+        } else if (OB_FAIL(proxy->read(res, sql.ptr()))) {
+          LOG_WARN("excute sql failed", K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get result failed", K(sql));
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("next failed");
+        } else {
+          ObString status_str;
+          ObString role_str;
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, TENANT_ROLE, role_str);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, TENANT_STATUS, status_str);
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(schema::get_tenant_status(status_str, status))) {
+              LOG_WARN("get tenant status failed");
+            } else {
+              role = ObTenantRole(role_str.ptr());
+            }
           }
         }
       }
-    }
+    )
   }
   return ret;
 }
@@ -583,34 +604,36 @@ int ObLogRestoreProxyUtil::get_max_log_info(const ObLSID &id, palf::AccessMode &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invlaid argument", K(id));
   } else {
-    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
-      common::sqlclient::ObMySQLResult *result = NULL;
-      common::ObSqlString sql;
-      const char *GET_MAX_LOG_INFO_SQL = "SELECT %s, %s, %s FROM %s WHERE %s=%ld and ROLE = 'LEADER'";
-      if (OB_FAIL(sql.append_fmt(GET_MAX_LOG_INFO_SQL, LS_ID, MAX_SCN, ACCESS_MODE,
-              OB_GV_OB_LOG_STAT_TNAME,  LS_ID, id.id()))) {
-        LOG_WARN("append_fmt failed");
-      } else if (OB_FAIL(proxy->read(res, sql.ptr()))) {
-        LOG_WARN("excute sql failed", K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get result failed", K(sql));
-      } else if (OB_FAIL(result->next())) {
-        LOG_WARN("next failed");
-      } else {
-        uint64_t max_scn = 0;
-        ObString access_mode_str;
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, ACCESS_MODE, access_mode_str);
-        EXTRACT_UINT_FIELD_MYSQL(*result, MAX_SCN, max_scn, uint64_t);
-        if (OB_SUCC(ret) && OB_FAIL(palf::get_access_mode(access_mode_str, mode))) {
-          LOG_WARN("get_access_mode failed", K(id), K(access_mode_str));
-        }
+    RESTORE_RETRY(
+      SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = NULL;
+        common::ObSqlString sql;
+        const char *GET_MAX_LOG_INFO_SQL = "SELECT %s, %s, %s FROM %s WHERE %s=%ld and ROLE = 'LEADER'";
+        if (OB_FAIL(sql.append_fmt(GET_MAX_LOG_INFO_SQL, LS_ID, MAX_SCN, ACCESS_MODE,
+                OB_GV_OB_LOG_STAT_TNAME,  LS_ID, id.id()))) {
+          LOG_WARN("append_fmt failed");
+        } else if (OB_FAIL(proxy->read(res, sql.ptr()))) {
+          LOG_WARN("excute sql failed", K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get result failed", K(sql));
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("next failed");
+        } else {
+          uint64_t max_scn = 0;
+          ObString access_mode_str;
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, ACCESS_MODE, access_mode_str);
+          EXTRACT_UINT_FIELD_MYSQL(*result, MAX_SCN, max_scn, uint64_t);
+          if (OB_SUCC(ret) && OB_FAIL(palf::get_access_mode(access_mode_str, mode))) {
+            LOG_WARN("get_access_mode failed", K(id), K(access_mode_str));
+          }
 
-        if (OB_SUCC(ret) && OB_FAIL(scn.convert_for_logservice(max_scn))) {
-          LOG_WARN("convert_for_logservice failed", K(id), K(max_scn));
+          if (OB_SUCC(ret) && OB_FAIL(scn.convert_for_logservice(max_scn))) {
+            LOG_WARN("convert_for_logservice failed", K(id), K(max_scn));
+          }
         }
       }
-    }
+    )
   }
   return ret;
 }
