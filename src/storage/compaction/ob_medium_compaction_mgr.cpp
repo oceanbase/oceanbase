@@ -686,7 +686,7 @@ int ObMediumCompactionInfoList::check_medium_info_and_last_major(
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("last medium snapshot in medium info is not equal to last "
                  "major sstable, medium info may lost",
-                 KR(ret), K(medium_info), K(last_major_sstable));
+                 KR(ret), K(medium_info), KPC(last_major_sstable));
       }
     } else { // check next freeze info in inner_table & medium_info
       const int64_t last_major_sstable_snapshot = last_major_sstable->get_snapshot_version();
@@ -700,10 +700,12 @@ int ObMediumCompactionInfoList::check_medium_info_and_last_major(
           ret = OB_EAGAIN;
           LOG_WARN("next freeze info is not exist yet, need to check after refresh freeze info",
                    KR(ret), K(medium_info), KPC(last_major_sstable));
-        } // if force_check = false, not return errno; check next time
+        } else { // if force_check = false, not return errno; check next time
+          ret = OB_SUCCESS;
+        }
       } else if (OB_UNLIKELY(freeze_info.freeze_version < medium_info.medium_snapshot_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("next freeze info is not equal to last major sstable, medium info may lost",
+        LOG_ERROR("next major medium info may lost",
           KR(ret), "freeze_version", freeze_info.freeze_version, K(medium_info), KPC(last_major_sstable));
       }
     }
@@ -719,6 +721,7 @@ const ObMediumCompactionInfo * ObMediumCompactionInfoList::get_next_schedule_med
     // get next schedule medium info
     if (info->medium_snapshot_ > last_major_snapshot) {
       ret_val = info;
+      break;
     }
     info = info->get_next();
   }
