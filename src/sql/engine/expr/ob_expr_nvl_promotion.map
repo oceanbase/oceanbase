@@ -680,50 +680,58 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     /*null -> XXX*/
     ObNullType,/*null*/
     ObNumberType,/*int*/
-      ObMaxType,/*uint*/
+    ObMaxType,/*uint*/
     ObFloatType,/*float*/
     ObDoubleType,/*double*/
     ObNumberType,/*number*/
     ObDateTimeType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObVarcharType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
     ObLongTextType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
     ObTimestampTZType,/*OTimestamp*/
     ObRawType, /*Raw*/
     ObIntervalYMType, /*Interval*/
     ObURowIDType, /*Rowid*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObUserDefinedSQLType, /*User Defined Type*/
   },
   {
     // treat int as number, because const 1 will be parsed to bigint 1, not number 1 now.
     /*int -> XXX*/
     ObNumberType,/*null*/
     ObNumberType,/*int*/
-      ObMaxType,/*uint*/
+    ObMaxType,/*uint*/
     ObFloatType,/*float*/
     ObDoubleType,/*double*/
     ObNumberType,/*number*/
-      ObMaxType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObNumberType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
     ObNumberType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
-      ObMaxType,/*OTimestamp*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*OTimestamp*/
     ObNumberType,/*Raw*/
     ObMaxType, /*Interval*/
     ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*uint -> XXX*/
@@ -748,102 +756,122 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType, /*Interval*/
       ObMaxType, /*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObMaxType, /*User Defined Type*/
   },
   {
     /*float -> XXX*/
     ObFloatType,/*null*/
     ObFloatType,/*int*/
-      ObMaxType,/*uint*/
+    ObMaxType,/*uint*/
     ObFloatType,/*float*/
     ObDoubleType,/*double*/
     ObFloatType,/*number*/
-      ObMaxType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObFloatType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
-      ObMaxType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
-      ObMaxType,/*OTimestamp*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
+    ObMaxType,/*text*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*OTimestamp*/
     ObFloatType,/*Raw*/
     ObMaxType, /*Interval*/
     ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*double -> XXX*/
     ObDoubleType,/*null*/
     ObDoubleType,/*int*/
-      ObMaxType,/*uint*/
+    ObMaxType,/*uint*/
     ObDoubleType,/*float*/
     ObDoubleType,/*double*/
     ObDoubleType,/*number*/
-      ObMaxType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObDoubleType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
-      ObMaxType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
-      ObMaxType,/*OTimestamp*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
+    ObMaxType,/*text*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*OTimestamp*/
     ObDoubleType,/*Raw*/
     ObMaxType, /*Interval*/
     ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*number -> XXX*/
     ObNumberType,/*null*/
     ObNumberType,/*int*/
-      ObMaxType,/*uint*/
+    ObMaxType,/*uint*/
     ObFloatType,/*float*/
     ObDoubleType,/*double*/
     ObNumberType,/*number*/
-      ObMaxType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObNumberType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
     ObNumberType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
-      ObMaxType,/*OTimestamp*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*OTimestamp*/
     ObNumberType,/*Raw*/
     ObMaxType,/*Interval*/
     ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*datetime -> XXX*/
     ObDateTimeType,/*null*/
-      ObMaxType,/*int*/
-      ObMaxType,/*uint*/
-      ObMaxType,/*float*/
-      ObMaxType,/*double*/
-      ObMaxType,/*number*/
+    ObMaxType,/*int*/
+    ObMaxType,/*uint*/
+    ObMaxType,/*float*/
+    ObMaxType,/*double*/
+    ObMaxType,/*number*/
     ObDateTimeType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObDateTimeType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
-      ObMaxType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
+    ObMaxType,/*text*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
     ObDateTimeType,/*OTimestamp*/
     ObDateTimeType,/*Raw*/
     ObMaxType,/*Interval*/
     ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*date -> XXX*/
@@ -868,6 +896,10 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType,/*Interval*/
       ObMaxType,/*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObMaxType, /*User Defined Type*/
   },
   {
     /*time -> XXX*/
@@ -892,6 +924,10 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType,/*Interval*/
       ObMaxType,/*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObMaxType, /*User Defined Type*/
   },
   {
     /*year -> XXX*/
@@ -916,30 +952,38 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType,/*Interval*/
       ObMaxType,/*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObMaxType, /*User Defined Type*/
   },
   {
     /*string -> XXX*/
     ObVarcharType,/*null*/
     ObVarcharType,/*int*/
-      ObMaxType,/*uint*/
+    ObMaxType,/*uint*/
     ObVarcharType,/*float*/
     ObVarcharType,/*double*/
     ObVarcharType,/*number*/
     ObVarcharType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObVarcharType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
     ObVarcharType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
     ObVarcharType,/*OTimestamp*/
     ObVarcharType,/*Raw*/
     ObVarcharType,/*Interval*/
     ObVarcharType,/*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObVarcharType, /*User Defined Type*/
   },
   {
     /*extend -> XXX*/
@@ -964,6 +1008,10 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType,/*Interval*/
       ObMaxType,/*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObUserDefinedSQLType, /*User Defined Type*/
   },
   {
     /*unknown -> XXX*/
@@ -988,30 +1036,38 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType,/*Interval*/
       ObMaxType,/*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObMaxType, /*User Defined Type*/
   },
   {
     /*text -> XXX*/
     ObLongTextType,/*null*/
     ObLongTextType,/*int*/
-      ObMaxType,/*uint*/
+    ObMaxType,/*uint*/
     ObLongTextType,/*float*/
     ObLongTextType,/*double*/
     ObLongTextType,/*number*/
     ObLongTextType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObLongTextType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
     ObLongTextType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
     ObLongTextType,/*OTimestamp*/
     ObLongTextType,/*Raw*/
     ObLongTextType,/*Interval*/
     ObMaxType,/*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*bit -> XXX*/
@@ -1036,6 +1092,10 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType,/*Interval*/
       ObMaxType,/*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObMaxType, /*User Defined Type*/
   },
   {
     /*EnumSet -> XXX*/
@@ -1060,6 +1120,10 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType,/*Interval*/
       ObMaxType,/*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObMaxType, /*User Defined Type*/
   },
   {
     /*EnumSetInner -> XXX*/
@@ -1084,78 +1148,94 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*Raw*/
       ObMaxType,/*Interval*/
       ObMaxType,/*RowID*/
+      ObMaxType, /*Lob*/
+      ObMaxType, /*Json*/
+      ObMaxType, /*Geometry*/
+      ObMaxType, /*User Defined Type*/
   },
   {
     /*otimestamp-> XXX*/
     ObTimestampNanoType,/*null*/
-      ObMaxType,/*int*/
-      ObMaxType,/*uint*/
-      ObMaxType,/*float*/
-      ObMaxType,/*double*/
-      ObMaxType,/*number*/
+    ObMaxType,/*int*/
+    ObMaxType,/*uint*/
+    ObMaxType,/*float*/
+    ObMaxType,/*double*/
+    ObMaxType,/*number*/
     ObTimestampNanoType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObTimestampNanoType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
-      ObMaxType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
+    ObMaxType,/*text*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
     ObTimestampNanoType,/*OTimestamp*/
-      ObMaxType,/*Raw*/
-      ObMaxType,/*Interval*/
-      ObMaxType,/*RowID*/
+    ObMaxType,/*Raw*/
+    ObMaxType,/*Interval*/
+    ObMaxType,/*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*Raw-> XXX*/
     ObRawType,/*null*/
-      ObMaxType,/*int*/
-      ObMaxType,/*uint*/
-      ObMaxType,/*float*/
-      ObMaxType,/*double*/
-      ObMaxType,/*number*/
-      ObMaxType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*int*/
+    ObMaxType,/*uint*/
+    ObMaxType,/*float*/
+    ObMaxType,/*double*/
+    ObMaxType,/*number*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObRawType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
     ObRawType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
-      ObMaxType,/*OTimestamp*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*OTimestamp*/
     ObRawType,/*Raw*/
     ObMaxType,/*Interval*/
     ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*Interval-> XXX*/
     ObIntervalYMType,/*null*/
-      ObMaxType,/*int*/
-      ObMaxType,/*uint*/
-      ObMaxType,/*float*/
-      ObMaxType,/*double*/
-      ObMaxType,/*number*/
-      ObMaxType,/*datetime*/
-      ObMaxType,/*date*/
-      ObMaxType,/*time*/
-      ObMaxType,/*year*/
+    ObMaxType,/*int*/
+    ObMaxType,/*uint*/
+    ObMaxType,/*float*/
+    ObMaxType,/*double*/
+    ObMaxType,/*number*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
     ObIntervalYMType,/*string*/
-      ObMaxType,/*extend*/
-      ObMaxType,/*unknown*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
     ObIntervalYMType,/*text*/
-      ObMaxType,/*bit*/
-      ObMaxType,/*EnumSet*/
-      ObMaxType,/*EnumSetInner*/
-      ObMaxType,/*OTimestamp*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*OTimestamp*/
     ObMaxType,/*Raw*/
     ObIntervalYMType,/*Interval*/
     ObMaxType,/*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
   },
   {
     /*RowID-> XXX*/
@@ -1180,5 +1260,121 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType,/*Raw*/
     ObMaxType,/*Interval*/
     ObURowIDType,/*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
+  },
+  {
+    /*Lob -> XXX*/
+    ObMaxType, /*null*/
+    ObMaxType, /*int*/
+    ObMaxType, /*uint*/
+    ObMaxType, /*float*/
+    ObMaxType, /*double*/
+    ObMaxType, /*number*/
+    ObMaxType, /*datetime*/
+    ObMaxType, /*date*/
+    ObMaxType, /*time*/
+    ObMaxType, /*year*/
+    ObMaxType, /*string*/
+    ObMaxType, /*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
+  },
+  {
+    /*Json -> XXX*/
+    ObJsonType, /*null*/
+    ObJsonType, /*int*/
+    ObJsonType, /*uint*/
+    ObJsonType, /*float*/
+    ObJsonType, /*double*/
+    ObJsonType, /*number*/
+    ObJsonType, /*datetime*/
+    ObJsonType, /*date*/
+    ObJsonType, /*time*/
+    ObJsonType, /*year*/
+    ObJsonType, /*string*/
+    ObMaxType, /*extend*/
+    ObJsonType, /*unknown*/
+    ObJsonType, /*text*/
+    ObJsonType, /*bit*/
+    ObJsonType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObJsonType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObJsonType, /*Json*/
+    ObMaxType,  /*Geometry*/
+    ObMaxType, /*User Defined Type*/
+  },
+  {
+    /*Geometry -> XXX*/
+    ObMaxType, /*null*/
+    ObMaxType, /*int*/
+    ObMaxType, /*uint*/
+    ObMaxType, /*float*/
+    ObMaxType, /*double*/
+    ObMaxType, /*number*/
+    ObMaxType, /*datetime*/
+    ObMaxType, /*date*/
+    ObMaxType, /*time*/
+    ObMaxType, /*year*/
+    ObMaxType, /*string*/
+    ObMaxType, /*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*User Defined Type*/
+  },
+  {
+    /*User Defined Type -> XXX*/
+    ObMaxType, /*null*/
+    ObMaxType, /*int*/
+    ObMaxType, /*uint*/
+    ObMaxType, /*float*/
+    ObMaxType, /*double*/
+    ObMaxType, /*number*/
+    ObMaxType, /*datetime*/
+    ObMaxType, /*date*/
+    ObMaxType, /*time*/
+    ObMaxType, /*year*/
+    ObUserDefinedSQLType, /*string*/
+    ObUserDefinedSQLType, /*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObUserDefinedSQLType, /*User Defined Type*/
   },
 };

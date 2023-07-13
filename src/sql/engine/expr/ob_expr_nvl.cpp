@@ -72,6 +72,15 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
       type.set_result_flag(NOT_NULL_FLAG);
     }
   }
+
+  if (OB_SUCC(ret) && ob_is_user_defined_sql_type(type.get_type())) {
+    if (type1.is_xml_sql_type() || type2.is_xml_sql_type()) {
+      type.set_subschema_id(ObXMLSqlType);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unsupported udt failed", K(ret), K(type1), K(type2));
+    }
+  }
   return ret;
 }
 
