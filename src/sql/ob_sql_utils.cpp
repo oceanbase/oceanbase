@@ -4820,7 +4820,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
                                      ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
-  ObTableSchema new_view_schema;
+  ObTableSchema new_view_schema(&alloc);
   uint64_t data_version = 0;
   if (OB_FAIL(new_view_schema.assign(old_view_schema))) {
     LOG_WARN("failed to assign table schema", K(ret));

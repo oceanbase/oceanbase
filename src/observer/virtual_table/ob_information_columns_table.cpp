@@ -1184,7 +1184,7 @@ inline int ObInfoSchemaColumnsTable::init_mem_context()
   if (OB_LIKELY(NULL == mem_context_)) {
     lib::ContextParam param;
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
-      .set_mem_attr(tenant_id_, ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID);
+      .set_mem_attr(tenant_id_, "InfoColCtx", ObCtxIds::DEFAULT_CTX_ID);
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
