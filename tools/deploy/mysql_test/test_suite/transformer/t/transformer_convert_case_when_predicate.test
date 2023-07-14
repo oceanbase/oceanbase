@@ -1,0 +1,73 @@
+
+# owner: kongfanhao.kfh
+# owner group: sql
+# tags: optimizer
+
+--disable_info
+--disable_metadata
+--disable_abort_on_error
+
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+DROP DATABASE IF EXISTS DB_REDUNDANT_CASE_WHEN;
+--enable_warnings
+CREATE DATABASE DB_REDUNDANT_CASE_WHEN;
+USE DB_REDUNDANT_CASE_WHEN;
+
+create table t1(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int);
+create table t2(c1 int, c2 int, c3 int);
+
+insert/*trace*/ into t1 values(1,1,1,1,1,1), (2,2,2,2,2,2), (3,3,3,3,3,3), (4,4,4,4,4,4), (5,5,5,5,5,5);
+
+# disable plan cache
+set ob_enable_plan_cache = 0;
+--echo **************************** basic test **************************** 
+--echo ==== basic select
+--echo
+--echo == basic select: case 1
+select /*+no_rewrite*/ * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 2 end > 3;
+select * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 2 end > 3;
+
+--echo
+--echo == basic select: case 2
+select /*+no_rewrite*/ * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 4 end > 3;
+select * from t1 where c1 > 0 and case when c2 >= 1 then c3 else 4 end > 3;
+
+--echo 
+--echo == basic select: case 3
+select /*+no_rewrite*/ case when c1 > 0 then c1 else 0 end > 3 from t1
+where c1 > 0 and case when c1 > 0 then c1 else 0 end > 3;
+
+select case when c1 > 0 then c1 else 0 end > 3 from t1
+where c1 > 0 and case when c1 > 0 then c1 else 0 end > 3;
+
+--echo 
+--echo == basic select: case 4
+select /*+no_rewrite*/ 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5);
+select 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5);
+
+--echo 
+--echo == basic select: case 5
+select /*+no_rewrite*/ 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5);
+select 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5);
+
+--echo 
+--echo == basic select: case 5
+select /*+no_rewrite*/ 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5) 
+group by c3
+having case when c3 > 0 then c3 else 0 end > 4;
+
+select 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5) 
+group by c3
+having case when c3 > 0 then c3 else 0 end > 4;
+
+
+--echo **************************** index test **************************** 
+create index t1c2 on t1(c2);
+--echo
+--echo == index test: case 1
+select /*+no_rewrite*/ * from t1 where c1 > 0 and case when c2 >= 1 then c2 else 2 end > 3;
+select * from t1 where c1 > 0 and case when c2 >= 1 then c2 else 2 end > 3;
+
