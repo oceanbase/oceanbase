@@ -12647,6 +12647,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keywords['__all_virtual_tenant_event_history']))
 
 # 15400: __all_virtual_balance_task_helper
+
+# 15401: __all_virtual_data_activity_metrics
+
 # 余留位置
 
 ################################################################################
