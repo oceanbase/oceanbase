@@ -12273,6 +12273,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 #
 # 12416: __all_virtual_balance_task_helper
+
+# 12417: __all_virtual_balance_group_ls_stat
 # 余留位置
 #
 
@@ -12649,6 +12651,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keyword
 # 15400: __all_virtual_balance_task_helper
 
 # 15401: __all_virtual_data_activity_metrics
+
+# 15402: __all_virtual_ls
 
 # 余留位置
 
