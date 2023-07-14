@@ -660,7 +660,6 @@ int MockTenantModuleEnv::init()
       ret = OB_INIT_TWICE;
       STORAGE_LOG(ERROR, "init twice", K(ret));
     } else if (FALSE_IT(init_gctx_gconf())) {
-
     } else if (OB_FAIL(init_before_start_mtl())) {
       STORAGE_LOG(ERROR, "init_before_start_mtl failed", K(ret));
     } else {
@@ -706,6 +705,8 @@ int MockTenantModuleEnv::init()
       STORAGE_LOG(ERROR, "reload memory config failed", K(ret));
     } else if (OB_FAIL(start_())) {
       STORAGE_LOG(ERROR, "mock env start failed", K(ret));
+    } else if (ObTmpFileManager::get_instance().init()) {
+      STORAGE_LOG(WARN, "init_tmp_file_manager failed", K(ret));
     } else {
       inited_ = true;
     }
@@ -802,6 +803,7 @@ void MockTenantModuleEnv::destroy()
   ObKVGlobalCache::get_instance().destroy();
   ObServerCheckpointSlogHandler::get_instance().destroy();
   SLOGGERMGR.destroy();
+  ObTmpFileManager::get_instance().destroy();
 
   OB_SERVER_BLOCK_MGR.stop();
   OB_SERVER_BLOCK_MGR.wait();

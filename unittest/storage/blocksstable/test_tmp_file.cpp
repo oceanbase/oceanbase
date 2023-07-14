@@ -305,7 +305,7 @@ void TestTmpFileStress::write_plain_data(char *&buf, const int64_t macro_block_s
 void TestTmpFileStress::read_data(const int64_t macro_block_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t timeout_ms = 100000;
+  const int64_t timeout_ms = 5000;
   ObTmpFileIOInfo io_info;
   ObTmpFileIOHandle handle;
   io_info.fd_ = fd_;
@@ -327,7 +327,7 @@ void TestTmpFileStress::read_data(const int64_t macro_block_size)
 void TestTmpFileStress::read_plain_data(const char *read_buf, const int64_t macro_block_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t timeout_ms = 100000;
+  const int64_t timeout_ms = 5000;
   ObTmpFileIOInfo io_info;
   ObTmpFileIOHandle handle;
   io_info.fd_ = fd_;
@@ -454,7 +454,7 @@ void TestMultiTmpFileStress::run_normal_case()
 {
   int ret = OB_SUCCESS;
   int64_t fd = 0;
-  const int64_t timeout_ms = 50000;
+  const int64_t timeout_ms = 5000;
   TestTmpFileStress test_write(tenant_ctx_);
   TestTmpFileStress test_read(tenant_ctx_);
   ret = ObTmpFileManager::get_instance().open(fd, dir_id_);
@@ -610,8 +610,8 @@ TEST_F(TestTmpFile, test_big_file)
   const int64_t timeout_ms = 5000;
   int64_t write_time = ObTimeUtility::current_time();
   ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
-  write_time = ObTimeUtility::current_time() - write_time;
   ASSERT_EQ(OB_SUCCESS, ret);
+  write_time = ObTimeUtility::current_time() - write_time;
   io_info.buf_ = read_buf;
 
   io_info.size_ = write_size;
@@ -918,7 +918,7 @@ TEST_F(TestTmpFile, test_100_small_files)
   int64_t dir = 0;
   int64_t fd = 0;
   int count = 100;
-  const int64_t timeout_ms = 50000;
+  const int64_t timeout_ms = 5000;
   TestTmpFileStress test_write(MTL_CTX());
   TestTmpFileStress test_read(MTL_CTX());
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
@@ -1457,7 +1457,7 @@ TEST_F(TestTmpFile, test_drop_tenant_file)
 
   int64_t fd = 0;
   int count = 100;
-  const int64_t timeout_ms = 50000;
+  const int64_t timeout_ms = 5000;
   TestTmpFileStress test_write(MTL_CTX());
   TestTmpFileStress test_read(MTL_CTX());
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
@@ -1526,7 +1526,7 @@ TEST_F(TestTmpFile, test_handle_double_wait)
   int cmp = memcmp(handle.get_buffer(), write_buf, 256);
   ASSERT_EQ(0, cmp);
 
-  ASSERT_EQ(OB_ERR_UNEXPECTED, handle.wait(timeout_ms));
+  ASSERT_EQ(OB_SUCCESS, handle.wait(timeout_ms));
 
   STORAGE_LOG(INFO, "test_handle_double_wait");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
@@ -1825,11 +1825,11 @@ TEST_F(TestTmpFile, test_tmp_file_wash)
 {
   int ret = OB_SUCCESS;
   const int64_t timeout_ms = 5000;
-  int count = 64;
+  int count = 64 * 0.8;
   int64_t dir = -1;
   int64_t fd = -1;
   ObTmpFileIOHandle handle;
-  ObTmpFileIOInfo io_info;
+  ObTmpFileIOInfo io_info, io_info_2;
   io_info.tenant_id_ = 1;
   io_info.io_desc_.set_group_id(THIS_WORKER.get_group_id());
   io_info.io_desc_.set_wait_event(2);
@@ -1841,25 +1841,36 @@ TEST_F(TestTmpFile, test_tmp_file_wash)
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;
 
-  for(int64_t i=0; i<count;i++){
-    ret = ObTmpFileManager::get_instance().alloc_dir(dir);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ret = ObTmpFileManager::get_instance().open(fd, dir);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    io_info.fd_ = fd;
-    ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    if(i==count/2){
-      ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
-      ASSERT_EQ(OB_SUCCESS, ret);
-    }
-  }
+  io_info_2 = io_info;
 
-  free(write_buf);
+  int64_t write_size_2 = 2016 *1024;
+  char *write_buf_2 = (char *)malloc(write_size_2);
+  for (int64_t i = 0; i < write_size_2; ++i) {
+    write_buf_2[i] = static_cast<char>(i % 256);
+  }
+  io_info_2.buf_ = write_buf_2;
+  io_info_2.size_ = write_size_2;
 
   STORAGE_LOG(INFO, "test_tmp_file_wash");
   ObTmpTenantFileStoreHandle store_handle;
   OB_TMP_FILE_STORE.get_store(1, store_handle);
+
+  for (int64_t i=0; i<count; i++) {
+    ret = ObTmpFileManager::get_instance().alloc_dir(dir);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = ObTmpFileManager::get_instance().open(fd, dir);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    if (i == count/2) {
+      // This macro block will be freed immediately because its memory has been exhausted.
+      io_info_2.fd_ = fd;
+      ret = ObTmpFileManager::get_instance().write(io_info_2, timeout_ms);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    } else {
+      io_info.fd_ = fd;
+      ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+  }
 
   int64_t oldest_id = -1;
   int64_t oldest_time = INT64_MAX;
@@ -1867,19 +1878,16 @@ TEST_F(TestTmpFile, test_tmp_file_wash)
   int64_t newest_id = -1;
   int64_t used_up_id = -1;
   ObTmpTenantMemBlockManager::TmpMacroBlockMap::iterator iter;
-  for(iter = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.begin();
-      iter != store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.end(); ++iter){
+  for (iter = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.begin();
+      iter != store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.end(); ++iter) {
     int64_t alloc_time = iter->second->get_alloc_time();
-    if (alloc_time < oldest_time){
+    if (alloc_time < oldest_time) {
       oldest_id = iter->first;
       oldest_time = alloc_time;
     }
-    if (alloc_time > newest_time){
+    if (alloc_time > newest_time) {
       newest_id = iter->first;
       newest_time = alloc_time;
-    }
-    if(iter->second->get_free_page_nums()==0){
-      used_up_id = iter->first;
     }
   }
   ObTmpMacroBlock* wash_block;
@@ -1888,16 +1896,35 @@ TEST_F(TestTmpFile, test_tmp_file_wash)
   wash_block->alloc_time_ = wash_block->alloc_time_ - 60 * 1000000L;
 
   ObArray<ObTmpMacroBlock*> free_blocks;
-  ASSERT_EQ(64, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
-  store_handle.get_tenant_store()->tmp_mem_block_manager_.wash(3,free_blocks);
+  // 1 macro block has been disked immediately because its memory has been exhausted.
+  ASSERT_EQ(count-1, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+
+  for (int64_t i=0; i< 3; i++) {
+    ret = ObTmpFileManager::get_instance().alloc_dir(dir);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = ObTmpFileManager::get_instance().open(fd, dir);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    io_info.fd_ = fd;
+    ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+
+  store_handle.get_tenant_store()->tmp_mem_block_manager_.cleanup();
+
+  std::chrono::milliseconds(50);
+  ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.wait_write_finish(oldest_id, ObTmpTenantMemBlockManager::get_default_timeout_ms());
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.wait_write_finish(newest_id, ObTmpTenantMemBlockManager::get_default_timeout_ms());
+  ASSERT_EQ(OB_SUCCESS, ret);
+
   ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.get_refactored(oldest_id, wash_block);
   ASSERT_NE(OB_SUCCESS, ret);
   ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.get_refactored(newest_id, wash_block);
   ASSERT_NE(OB_SUCCESS, ret);
-  ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.get_refactored(used_up_id, wash_block);
-  ASSERT_NE(OB_SUCCESS, ret);
-  ASSERT_EQ(61, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+  ASSERT_EQ(count, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
 
+  free(write_buf);
+  free(write_buf_2);
 
   store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
@@ -1905,7 +1932,7 @@ TEST_F(TestTmpFile, test_tmp_file_wash)
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(500);
 
-  count = 64;
+  count = 64 * 0.8 + 3;
   while (count--) {
     ret = ObTmpFileManager::get_instance().remove(count);
     ASSERT_EQ(OB_SUCCESS, ret);

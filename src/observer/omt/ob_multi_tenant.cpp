@@ -1624,6 +1624,17 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       }
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(tenant_id))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        STORAGE_LOG(WARN, "fail to free tmp tenant file store", K(ret), K(tenant_id));
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && OB_NOT_NULL(removed_tenant)) {
     ObLDHandle handle;
     if (OB_FAIL(removed_tenant->try_wait())) {
@@ -1663,16 +1674,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       removed_tenant->destroy();
       ob_delete(removed_tenant);
       LOG_INFO("remove tenant success", K(tenant_id));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(tenant_id))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        STORAGE_LOG(WARN, "fail to free tmp tenant file store", K(ret), K(tenant_id));
-      }
     }
   }
 

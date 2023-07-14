@@ -82,6 +82,30 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTmpFilePageBuddy);
 };
 
+struct ObTmpFileMacroBlockHeader final
+{
+public:
+  ObTmpFileMacroBlockHeader();
+  ~ObTmpFileMacroBlockHeader() = default;
+  bool is_valid() const;
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
+  static int64_t get_serialize_size() { return sizeof(ObTmpFileMacroBlockHeader); }
+  void reset();
+
+  TO_STRING_KV(K_(version), K_(magic), K_(block_id), K_(dir_id), K_(tenant_id), K_(free_page_nums));
+private:
+  static const int32_t TMP_FILE_MACRO_BLOCK_HEADER_VERSION = 1;
+  static const int32_t TMP_FILE_MACRO_BLOCK_HEADER_MAGIC = 20720;
+public:
+  int32_t version_;
+  int32_t magic_;
+  int64_t block_id_;
+  int64_t dir_id_;
+  uint64_t tenant_id_;
+  int64_t free_page_nums_;
+};
+
 struct ObTmpBlockIOInfo final
 {
 public:
@@ -107,6 +131,12 @@ public:
 class ObTmpMacroBlock final
 {
 public:
+  enum BlockStatus: uint8_t {
+    MEMORY = 0,
+    WASHING,
+    DISKED,
+    MAX,
+  };
   ObTmpMacroBlock();
   ~ObTmpMacroBlock();
   int init(const int64_t block_id, const int64_t dir_id, const uint64_t tenant_id,
@@ -119,16 +149,18 @@ public:
   OB_INLINE void set_buffer(char *buf) { buffer_ = buf; }
   OB_INLINE char *get_buffer() { return buffer_; }
   OB_INLINE uint8_t get_max_cont_page_nums() const { return page_buddy_.get_max_cont_page_nums(); }
-  OB_INLINE uint8_t get_free_page_nums() const { return free_page_nums_; }
+  OB_INLINE uint8_t get_free_page_nums() const { return tmp_file_header_.free_page_nums_; }
   int64_t get_used_page_nums() const;
   int get_block_cache_handle(ObTmpBlockValueHandle &handle);
   int get_wash_io_info(ObTmpBlockIOInfo &info);
   void set_io_desc(const common::ObIOFlag &io_desc);
-  OB_INLINE bool is_washing() const { return ATOMIC_LOAD(&is_washing_); }
-  OB_INLINE void set_washing_status(bool is_washing) { ATOMIC_SET(&is_washing_, is_washing); }
+  int check_and_set_status(const BlockStatus old_block_status, const BlockStatus new_block_status);
+  OB_INLINE int get_block_status() const { return ATOMIC_LOAD(&block_status_); }
+  OB_INLINE void set_block_status(BlockStatus block_status) { ATOMIC_SET(&block_status_, block_status); }
+  OB_INLINE bool is_memory() const { return ATOMIC_LOAD(&block_status_) == MEMORY; }
+  OB_INLINE bool is_disked() const { return ATOMIC_LOAD(&block_status_) == DISKED; }
+  OB_INLINE bool is_washing() const { return ATOMIC_LOAD(&block_status_) == WASHING; }
   OB_INLINE bool is_inited() const { return is_inited_; }
-  OB_INLINE bool is_disked() const { return ATOMIC_LOAD(&is_disked_); }
-  OB_INLINE void set_disked() { ATOMIC_SET(&is_disked_, true); }
   static int64_t get_default_page_size() { return DEFAULT_PAGE_SIZE; }
   static int64_t calculate_offset(const int64_t page_start_id, const int64_t offset)
   {
@@ -138,54 +170,43 @@ public:
   {
     return 4 * DEFAULT_PAGE_SIZE;
   }
-  OB_INLINE int64_t get_block_id() const { return block_id_; }
+  OB_INLINE int64_t get_block_id() const { return tmp_file_header_.block_id_; }
+  OB_INLINE const ObTmpFileMacroBlockHeader &get_tmp_block_header() const { return tmp_file_header_; }
+  OB_INLINE uint64_t get_tenant_id() const { return tmp_file_header_.tenant_id_; }
+  OB_INLINE int64_t get_dir_id() const { return tmp_file_header_.dir_id_; }
   OB_INLINE const MacroBlockId& get_macro_block_id() const { return macro_block_handle_.get_macro_id(); }
   OB_INLINE ObMacroBlockHandle &get_macro_block_handle() { return macro_block_handle_; }
   OB_INLINE int64_t get_alloc_time() const { return alloc_time_; }
   OB_INLINE int64_t get_access_time() const { return ATOMIC_LOAD(&access_time_); }
-  OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
-  OB_INLINE int64_t get_dir_id() const { return dir_id_; }
-  common::ObIArray<ObTmpFileExtent *> &get_extents() { return using_extents_; }
-  ObTmpBlockValueHandle &get_handle() { return handle_; }
-  bool is_empty() const { return page_buddy_.is_empty(); }
-  int close(bool &is_all_close, uint8_t &free_page_nums);
-  int give_back_buf_into_cache(bool is_wash = false);
   OB_INLINE double get_wash_score(int64_t cur_time) const {
-    if (ObTmpFilePageBuddy::MAX_PAGE_NUMS == get_used_page_nums()) {
+    if (get_used_page_nums() == ObTmpFilePageBuddy::MAX_PAGE_NUMS) {
       return INT64_MAX;
     }
     return (double) get_used_page_nums() * (cur_time - get_alloc_time()) / (get_access_time() - get_alloc_time());
   }
+  common::ObIArray<ObTmpFileExtent *> &get_extents() { return using_extents_; }
+  ObTmpBlockValueHandle &get_handle() { return handle_; }
+  bool is_empty() const { return page_buddy_.is_empty(); }
+  int close(bool &is_all_close);
+  int is_extents_closed(bool &is_extents_closed);
+  int give_back_buf_into_cache();
 
-  static int64_t get_mblk_page_nums()
-  {
-    return ObTmpFilePageBuddy::MAX_PAGE_NUMS;
-  }
-  static int64_t get_block_size()
-  {
-    return get_mblk_page_nums() * ObTmpMacroBlock::get_default_page_size();
-  }
-
-  TO_STRING_KV(KP_(buffer), K_(page_buddy), K_(handle), K_(macro_block_handle), K_(block_id), K_(dir_id), K_(tenant_id),
-      K_(free_page_nums), K_(io_desc), K_(is_washing), K_(is_disked), K_(is_inited), K_(alloc_time), K_(access_time));
+  TO_STRING_KV(KP_(buffer), K_(page_buddy), K_(handle), K_(macro_block_handle), K_(tmp_file_header),
+      K_(io_desc), K_(block_status), K_(is_inited), K_(alloc_time), K_(access_time));
 private:
-  static const int64_t DEFAULT_PAGE_SIZE;
-  bool is_inited_;
-  bool is_washing_;
-  bool is_disked_;
-  uint8_t free_page_nums_;
+   static const int64_t DEFAULT_PAGE_SIZE;
   char *buffer_;
-  int64_t block_id_;
-  int64_t dir_id_;
-  uint64_t tenant_id_;
-  int64_t alloc_time_;
-  int64_t access_time_;
+  ObTmpFilePageBuddy page_buddy_;
+  ObTmpBlockValueHandle handle_;
+  ExtentArray using_extents_;
+  ObMacroBlockHandle macro_block_handle_;
+  ObTmpFileMacroBlockHeader tmp_file_header_;
   common::ObIOFlag io_desc_;
   common::SpinRWLock lock_;
-  ObMacroBlockHandle macro_block_handle_;
-  ObTmpBlockValueHandle handle_;
-  ObTmpFilePageBuddy page_buddy_;
-  ExtentArray using_extents_;
+  BlockStatus block_status_;
+  bool is_inited_;
+  int64_t alloc_time_;
+  int64_t access_time_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpMacroBlock);
 };
 
@@ -199,24 +220,16 @@ public:
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock *&t_mblk);
   int free_macro_block(const int64_t block_id);
   int get_macro_block(const int64_t block_id, ObTmpMacroBlock *&t_mblk);
-  OB_INLINE int64_t get_block_size() const {
-    return ObTmpFilePageBuddy::MAX_PAGE_NUMS * ObTmpMacroBlock::get_default_page_size();
-  }
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list);
   void print_block_usage();
-
-private:
-  int64_t get_next_blk_id();
 
 private:
   static const uint64_t MBLK_HASH_BUCKET_NUM = 10243L;
   typedef common::hash::ObHashMap<int64_t, ObTmpMacroBlock*, common::hash::SpinReadWriteDefendMode>
       TmpMacroBlockMap;
-  bool is_inited_;
-  int64_t next_blk_id_;
   common::ObIAllocator *allocator_;
   TmpMacroBlockMap blocks_;  // all of block meta.
-
+  bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpTenantMacroBlockManager);
 };
 
@@ -233,10 +246,12 @@ public:
   int free(const int64_t block_id, const int32_t start_page_id, const int32_t page_nums);
   int read(ObTmpBlockIOInfo &io_info, ObTmpFileIOHandle &handle);
   int write(const ObTmpBlockIOInfo &io_info);
-  int sync(const int64_t block_id);
+  int wash_block(const int64_t block_id, ObTmpTenantMemBlockManager::ObIOWaitInfoHandle &handle);
+  int sync_block(const int64_t block_id, ObTmpTenantMemBlockManager::ObIOWaitInfoHandle &handle);
+  int wait_write_finish(const int64_t block_id, const int64_t timeout_ms);
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list);
+  int get_macro_block(const int64_t block_id, ObTmpMacroBlock *&t_mblk);
   void print_block_usage() { tmp_block_manager_.print_block_usage(); }
-  OB_INLINE int64_t get_block_size() const { return tmp_block_manager_.get_block_size(); }
   OB_INLINE void inc_page_cache_num(const int64_t num) {
     ATOMIC_FAA(&page_cache_num_, num);
   };
@@ -258,8 +273,8 @@ private:
   int free_extent(const int64_t block_id, const int32_t start_page_id, const int32_t page_nums);
   int free_macro_block(ObTmpMacroBlock *&t_mblk);
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock *&t_mblk);
-  int wait_write_io_finish_if_need();
   int64_t get_memory_limit(const uint64_t tenant_id) const;
+
 
 private:
   static const uint64_t IO_LIMIT = 4 * 1024L * 1024L * 1024L;
@@ -274,9 +289,9 @@ private:
   volatile int64_t ref_cnt_;
   ObTmpPageCache *page_cache_;
   common::SpinRWLock lock_;
-  ObTmpTenantMacroBlockManager tmp_block_manager_;
   common::ObConcurrentFIFOAllocator allocator_;
   common::ObConcurrentFIFOAllocator io_allocator_;
+  ObTmpTenantMacroBlockManager tmp_block_manager_;
   ObTmpTenantMemBlockManager tmp_mem_block_manager_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTmpTenantFileStore);
@@ -313,14 +328,20 @@ public:
       ObTmpFileExtent &extent);
   int read(const uint64_t tenant_id, ObTmpBlockIOInfo &io_info, ObTmpFileIOHandle &handle);
   int write(const uint64_t tenant_id, const ObTmpBlockIOInfo &io_info);
-  int sync(const uint64_t tenant_id, const int64_t block_id);
+  int wash_block(const uint64_t tenant_id, const int64_t block_id,
+                 ObTmpTenantMemBlockManager::ObIOWaitInfoHandle &handle);
+  int sync_block(const uint64_t tenant_id, const int64_t block_id,
+                 ObTmpTenantMemBlockManager::ObIOWaitInfoHandle &handle);
+  int wait_write_finish(const uint64_t tenant_id, const int64_t block_id, const int64_t timeout_ms);
   int free(const uint64_t tenant_id, ObTmpFileExtent *extent);
   int free(const uint64_t tenant_id, const int64_t block_id, const int32_t start_page_id,
       const int32_t page_nums);
   int free_tenant_file_store(const uint64_t tenant_id);
+  int get_macro_block(const int64_t tenant_id, const int64_t block_id, ObTmpMacroBlock *&t_mblk);
   int get_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list);
   int get_macro_block_list(common::ObIArray<TenantTmpBlockCntPair> &tmp_block_cnt_pairs);
   int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
+  int64_t get_next_blk_id();
 
   static int64_t get_block_size()
   {
@@ -344,10 +365,11 @@ private:
   static const int TMP_FILE_BLOCK_CACHE_PRIORITY = 1;
   typedef common::hash::ObHashMap<uint64_t, ObTmpTenantFileStoreHandle,
                                   common::hash::SpinReadWriteDefendMode> TenantFileStoreMap;
-  bool is_inited_;
-  common::SpinRWLock lock_;
-  common::ObConcurrentFIFOAllocator allocator_;
+  int64_t next_blk_id_;
   TenantFileStoreMap tenant_file_stores_;
+  common::SpinRWLock lock_;
+  bool is_inited_;
+  common::ObConcurrentFIFOAllocator allocator_;
 };
 
 #define OB_TMP_FILE_STORE (::oceanbase::blocksstable::ObTmpFileStore::get_instance())
