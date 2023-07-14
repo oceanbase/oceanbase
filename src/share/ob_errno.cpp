@@ -20787,11 +20787,11 @@ static const _error _error_OB_ERR_XMLELEMENT_ALIASED = {
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "42000",
-      .str_error             = "parameter 1 of function XMLELEMENT must be aliased",
-      .str_user_error        = "parameter 1 of function XMLELEMENT must be aliased",
+      .str_error             = "parameter %d of function XMLELEMENT must be aliased",
+      .str_user_error        = "parameter %d of function XMLELEMENT must be aliased",
       .oracle_errno          = 19208,
-      .oracle_str_error      = "ORA-19208: parameter 1 of function XMLELEMENT must be aliased",
-      .oracle_str_user_error = "ORA-19208: parameter 1 of function XMLELEMENT must be aliased"
+      .oracle_str_error      = "ORA-19208: parameter %d of function XMLELEMENT must be aliased",
+      .oracle_str_user_error = "ORA-19208: parameter %d of function XMLELEMENT must be aliased"
 };
 static const _error _error_OB_INVALID_ALTERATIONG_DATATYPE = {
       .error_name            = "OB_INVALID_ALTERATIONG_DATATYPE",

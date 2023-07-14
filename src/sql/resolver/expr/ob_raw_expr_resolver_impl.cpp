@@ -1353,12 +1353,17 @@ int ObRawExprResolverImpl::process_xml_attributes_node(const ParseNode *node, Ob
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num child invalid", K(ret), K(node_ptr->num_child_));
   } else {
+    int attributes_count = 0;
     do {
       ObRawExpr *para_expr = NULL;
       if (T_LINK_NODE != node_ptr->type_) {
+        ++attributes_count;
         const ParseNode *expr_node = node_ptr;
         CK (OB_NOT_NULL(expr_node));
         OZ(recursive_resolve(expr_node, para_expr));
+        if (OB_ERR_XMLELEMENT_ALIASED == ret) {
+          LOG_USER_ERROR(OB_ERR_XMLELEMENT_ALIASED, attributes_count);
+        }
         CK(OB_NOT_NULL(para_expr));
         for (int i = 0; OB_SUCC(ret) && i < para_expr->get_param_count(); i++) {
           OZ(func_expr->add_param_expr(para_expr->get_param_expr(i)));
@@ -1366,9 +1371,13 @@ int ObRawExprResolverImpl::process_xml_attributes_node(const ParseNode *node, Ob
         break;
       } else if (T_LINK_NODE == node_ptr->type_ &&
                   node_ptr->children_[0]->num_child_ == 2) {
+        ++attributes_count;
         const ParseNode *expr_node = node_ptr->children_[0];
         CK (OB_NOT_NULL(expr_node));
         OZ(recursive_resolve(expr_node, para_expr));
+        if (OB_ERR_XMLELEMENT_ALIASED == ret) {
+          LOG_USER_ERROR(OB_ERR_XMLELEMENT_ALIASED, attributes_count);
+        }
         CK(OB_NOT_NULL(para_expr));
         node_ptr = node_ptr->children_[1];
         for (int i = 0; OB_SUCC(ret) && i < para_expr->get_param_count(); i++) {
