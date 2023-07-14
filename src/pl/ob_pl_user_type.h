@@ -142,7 +142,7 @@ public:
   virtual int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
   static int deep_copy_obj(
-    ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator = true);
+    ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator = true, bool ignore_del_element = false);
   static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL);
   static int serialize_obj(const ObObj &obj, char* buf, const int64_t len, int64_t& pos);
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
@@ -538,7 +538,8 @@ public:
                        ObIAllocator &allocator,
                        const ObPLINS *ns,
                        sql::ObSQLSessionInfo *session,
-                       bool need_new_allocator);
+                       bool need_new_allocator,
+                       bool ignore_del_element = false);
   static int assign_element(ObObj &src, ObObj &dest, ObIAllocator &allocator);
   static int copy_element(const ObObj &src,
                           ObObj &dest,
@@ -546,7 +547,8 @@ public:
                           const ObPLINS *ns = NULL,
                           sql::ObSQLSessionInfo *session = NULL,
                           const ObDataType *dest_type = NULL,
-                          bool need_new_allocator = true);
+                          bool need_new_allocator = true,
+                          bool ignore_del_element = false);
   //NOTICE：不能实现为虚函数！！！
   int64_t get_init_size() const;
   int64_t get_serialize_size() const;
@@ -601,7 +603,8 @@ public:
 
   int assign(ObPLRecord *src, ObIAllocator *allocator);
   int deep_copy(ObPLRecord &src, ObIAllocator &allocator,
-                const ObPLINS *ns = NULL, sql::ObSQLSessionInfo *session = NULL);
+                const ObPLINS *ns = NULL, sql::ObSQLSessionInfo *session = NULL,
+                bool ignore_del_element = false);
 
   int set_data(const ObIArray<ObObj> &row);
   int64_t get_init_size() const
@@ -741,7 +744,7 @@ public:
   static uint32_t last_offset_bits() { return offsetof(ObPLCollection, last_) * 8; }
   static uint32_t data_offset_bits() { return offsetof(ObPLCollection, data_) * 8; }
   void print() const;
-  int deep_copy(ObPLCollection *src, common::ObIAllocator *allocator);
+  int deep_copy(ObPLCollection *src, common::ObIAllocator *allocator, bool ignore_del_element = false);
   int assign(ObPLCollection *src, ObIAllocator *allocator);
   int64_t get_init_size() const
   {

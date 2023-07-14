@@ -279,7 +279,7 @@ int ObUserDefinedType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, 
 }
 
 int ObUserDefinedType::deep_copy_obj(
-  ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator)
+  ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator, bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
   CK (src.is_pl_extend());
@@ -292,12 +292,7 @@ int ObUserDefinedType::deep_copy_obj(
     }
       break;
     case PL_RECORD_TYPE: {
-      // why do this ?
-      // if (0 != dst.get_ext() && PL_RECORD_TYPE != dst.get_meta().get_extend_type()) {
-      //   dst.set_ext(0);
-      //   LOG_ERROR("Memory Leak", K(src), K(ret));
-      // }
-      OZ (ObPLComposite::copy_element(src, dst, allocator, NULL, NULL, NULL,  need_new_allocator));
+      OZ (ObPLComposite::copy_element(src, dst, allocator, NULL, NULL, NULL,  need_new_allocator, ignore_del_element));
     }
       break;
 
@@ -1413,7 +1408,8 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
                              ObIAllocator &allocator,
                              const ObPLINS *ns,
                              sql::ObSQLSessionInfo *session,
-                             bool need_new_allocator)
+                             bool need_new_allocator,
+                             bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
 
@@ -1432,7 +1428,7 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
     } else {
       OX (composite = static_cast<ObPLRecord*>(dest));
     }
-    OZ (composite->deep_copy(static_cast<ObPLRecord&>(src), allocator, ns, session));
+    OZ (composite->deep_copy(static_cast<ObPLRecord&>(src), allocator, ns, session, ignore_del_element));
   }
     break;
 
@@ -1467,7 +1463,8 @@ int ObPLComposite::copy_element(const ObObj &src,
                                 const ObPLINS *ns,
                                 sql::ObSQLSessionInfo *session,
                                 const ObDataType *dest_type,
-                                bool need_new_allocator)
+                                bool need_new_allocator,
+                                bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
   if (src.is_ext()) {
@@ -1481,7 +1478,8 @@ int ObPLComposite::copy_element(const ObObj &src,
                                    dest.get_ext() == src.get_ext() ? tmp_allocator : allocator,
                                    ns,
                                    session,
-                                   need_new_allocator));
+                                   need_new_allocator,
+                                   ignore_del_element));
       CK (OB_NOT_NULL(dest_composite));
       if (src.get_ext() == dest.get_ext()) {
         OX (dest.set_extend(reinterpret_cast<int64_t>(src_composite),
@@ -1493,7 +1491,8 @@ int ObPLComposite::copy_element(const ObObj &src,
                                    allocator,
                                    ns,
                                    session,
-                                   need_new_allocator));
+                                   need_new_allocator,
+                                   ignore_del_element));
         OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
                             src.get_meta().get_extend_type(),
                             src.get_val_len()));
@@ -1652,7 +1651,8 @@ int ObPLRecord::assign(ObPLRecord *src, ObIAllocator *allocator)
 int ObPLRecord::deep_copy(ObPLRecord &src,
                           ObIAllocator &allocator,
                           const ObPLINS *ns,
-                          sql::ObSQLSessionInfo *session)
+                          sql::ObSQLSessionInfo *session,
+                          bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
   if (get_id() == src.get_id()) {
@@ -1682,7 +1682,9 @@ int ObPLRecord::deep_copy(ObPLRecord &src,
                                     allocator,
                                     ns,
                                     session,
-                                    NULL == elem_type ? NULL : elem_type->get_data_type()));
+                                    NULL == elem_type ? NULL : elem_type->get_data_type(),
+                                    true, /*need_new_allocator*/
+                                    ignore_del_element));
   }
   return ret;
 }
@@ -1757,7 +1759,7 @@ int ObElemDesc::deserialize(const char* buf, const int64_t len, int64_t &pos)
  * 3、如果data域是record，那么该record本身的内存同样由Collection自己的allocator分配；record里的基础数据类型的内存同样由Collection自己的allocator分配；
  * 4、如果data域里是子Collection，那么该子Collection数据结构本身由父Collection的allocator分配，子Collection的内存管理递归遵循此约定。
  * */
-int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
+int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
   /*
@@ -1773,6 +1775,7 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
 
   if (OB_SUCC(ret)) {
     void* data = NULL;
+    int64_t k = 0;
     if (src->get_count() > 0) {
       data = coll_allocator->alloc(src->get_count() * sizeof(ObObj));
       if (OB_ISNULL(data)) {
@@ -1785,19 +1788,31 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
       int64_t i = 0;
       for (; OB_SUCC(ret) && i < src->get_count(); ++i) {
         ObObj old_obj = old_objs[i];
-        new (&new_objs[i])ObObj();
-        if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
-          old_obj.set_type(ObExtendType);
-          CK (old_obj.is_pl_extend());
-        }
-        OZ (ObPLComposite::copy_element(old_obj, new_objs[i], *coll_allocator));
-        if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
-          new_objs[i].set_type(ObMaxType);
+        if (old_objs[i].is_invalid_type() && ignore_del_element && !is_associative_array()) {
+          // ignore delete element
+        } else {
+          if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
+            old_obj.set_type(ObExtendType);
+            CK (old_obj.is_pl_extend());
+          }
+          OX (new (&new_objs[k])ObObj());
+          OZ (ObPLComposite::copy_element(old_obj,
+                                          new_objs[k],
+                                          *coll_allocator,
+                                          NULL, /*ns*/
+                                          NULL, /*session*/
+                                          NULL, /*dest_type*/
+                                          true, /*need_new_allocator*/
+                                          ignore_del_element));
+          OX (++k);
+          if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
+            new_objs[i].set_type(ObMaxType);
+          }
         }
       }
       // 对于已经copy成功的new obj释放内存
       if (OB_FAIL(ret) && OB_NOT_NULL(data)) {
-        for (int64_t j = 0; j <= i && j < src->get_count(); ++j) {
+        for (int64_t j = 0; j <= k && j < src->get_count(); ++j) {
           int tmp = ObUserDefinedType::destruct_obj(new_objs[j]);
           if (OB_SUCCESS != tmp) {
             LOG_WARN("fail torelease memory", K(ret), K(tmp));
@@ -1815,9 +1830,22 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
       set_id(src->get_id());
       set_is_null(src->is_null());
       set_element_desc(src->get_element_desc());
-      set_count(src->get_count());
-      set_first(src->get_first());
-      set_last(src->get_last());
+      set_count(src->get_count() > 0 ? k : src->get_count());
+      if (src->get_count() > 0) {
+        if (0 == k) {
+          set_first(OB_INVALID_INDEX);
+          set_last(OB_INVALID_INDEX);
+        } else if (ignore_del_element && !is_associative_array()) {
+          set_first(1);
+          set_last(k);
+        } else {
+          set_first(src->get_first());
+          set_last(src->get_last());
+        }
+      } else {
+        set_first(src->get_first());
+        set_last(src->get_last());
+      }
       set_data(new_objs);
     }
   }
