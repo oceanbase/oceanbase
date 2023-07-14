@@ -115,7 +115,7 @@ struct TableNode: public common::LinkHashValue<AutoincKey>
       last_refresh_ts_(common::ObTimeUtility::current_time()),
       prefetching_(false),
       curr_node_state_is_pending_(false),
-      autoinc_version_(0)
+      autoinc_version_(OB_INVALID_VERSION)
   {}
   virtual ~TableNode()
   {
@@ -209,12 +209,12 @@ public:
                          const uint64_t base_value,
                          const uint64_t max_value,
                          const uint64_t desired_count,
-                         const bool for_update,
+                         const int64_t &inner_autoinc_version,
                          uint64_t &start_inclusive,
                          uint64_t &end_inclusive,
-                         uint64_t &sync_value);
+                         uint64_t &sync_value );
 
-  int get_autoinc_value(const AutoincKey &key, uint64_t &seq_value, uint64_t &sync_value);
+  int get_autoinc_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &seq_value, uint64_t &sync_value);
 
   int get_autoinc_value_in_batch(const uint64_t tenant_id,
                                  const common::ObIArray<AutoincKey> &keys,
@@ -223,10 +223,13 @@ public:
   int sync_autoinc_value(const AutoincKey &key,
                          const uint64_t insert_value,
                          const uint64_t max_value,
-                         const bool for_update,
+                         const int64_t autoinc_version,
                          uint64_t &seq_value,
                          uint64_t &sync_value);
-
+private:
+  int check_inner_autoinc_version(const int64_t &request_autoinc_version,
+                                  const int64_t &inner_autoinc_version,
+                                  const AutoincKey &key);
 private:
   common::ObMySQLProxy *mysql_proxy_;
 };
@@ -250,15 +253,17 @@ public:
       const uint64_t table_auto_increment,
       const uint64_t desired_count,
       const uint64_t cache_size,
+      const int64_t &autoinc_version,
       uint64_t &sync_value,
       uint64_t &start_inclusive,
       uint64_t &end_inclusive) override;
 
-  virtual int get_sequence_value(const AutoincKey &key, uint64_t &sequence_value) override;
+  virtual int get_sequence_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &sequence_value) override;
 
   virtual int get_auto_increment_values(
       const uint64_t tenant_id,
       const common::ObIArray<AutoincKey> &autoinc_keys,
+      const common::ObIArray<int64_t> &autoinc_versions,
       common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values) override;
 
   // when we push local value to global, we may find in global end that the local value
@@ -268,9 +273,10 @@ public:
       const AutoincKey &key,
       const uint64_t max_value,
       const uint64_t value,
+      const int64_t &autoinc_version,
       uint64_t &global_sync_value) override;
 
-  virtual int local_sync_with_global_value(const AutoincKey &key, uint64_t &value) override;
+  virtual int local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &value) override;
 private:
   ObAutoIncInnerTableProxy inner_table_proxy_;
 };
@@ -292,15 +298,17 @@ public:
       const uint64_t table_auto_increment,
       const uint64_t desired_count,
       const uint64_t cache_size,
+      const int64_t &autoinc_version,
       uint64_t &sync_value,
       uint64_t &start_inclusive,
       uint64_t &end_inclusive) override;
 
-  virtual int get_sequence_value(const AutoincKey &key, uint64_t &sequence_value) override;
+  virtual int get_sequence_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &sequence_value) override;
 
   virtual int get_auto_increment_values(
       const uint64_t tenant_id,
       const common::ObIArray<AutoincKey> &autoinc_keys,
+      const common::ObIArray<int64_t> &autoinc_versions,
       common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values) override;
 
   // when we push local value to global, we may find in global end that the local value
@@ -310,9 +318,10 @@ public:
       const AutoincKey &key,
       const uint64_t max_value,
       const uint64_t value,
+      const int64_t &autoinc_version,
       uint64_t &global_sync_value) override;
 
-  virtual int local_sync_with_global_value(const AutoincKey &key, uint64_t &value) override;
+  virtual int local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &value) override;
 
   int clear_global_autoinc_cache(const AutoincKey &key);
 
@@ -363,23 +372,26 @@ public:
   int clear_autoinc_cache_all(const uint64_t tenant_id,
                               const uint64_t table_id,
                               const uint64_t column_id,
-                              const bool autoinc_mode_is_order,
-                              const common::ObArray<ObAddr>* alive_server_list = nullptr);
+                              const bool autoinc_mode_is_order);
   int clear_autoinc_cache(const obrpc::ObAutoincSyncArg &arg);
 
   int get_sequence_value(const uint64_t tenant_id,
                          const uint64_t table_id,
                          const uint64_t column_id,
                          const bool is_order,
+                         const int64_t autoinc_version,
                          uint64_t &seq_value);
 
   int get_sequence_values(const uint64_t tenant_id,
                           const common::ObIArray<AutoincKey> &order_autokeys,
                           const common::ObIArray<AutoincKey> &noorder_autokeys,
+                          const common::ObIArray<int64_t> &order_autoinc_versions,
+                          const common::ObIArray<int64_t> &noorder_autoinc_versions,
                           common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values);
   int reinit_autoinc_row(const uint64_t &tenant_id,
                          const uint64_t &table_id,
                          const uint64_t &column_id,
+                         const int64_t &autoinc_version,
                          common::ObMySQLTransaction &trans);
   int lock_autoinc_row(const uint64_t &tenant_id,
                        const uint64_t &table_id,
@@ -388,6 +400,7 @@ public:
   int reset_autoinc_row(const uint64_t &tenant_id,
                         const uint64_t &table_id,
                         const uint64_t &column_id,
+                        const int64_t &autoinc_version,
                         common::ObMySQLTransaction &trans);
   static int calc_next_value(const uint64_t last_next_value,
                              const uint64_t offset,

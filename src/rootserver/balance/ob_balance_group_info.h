@@ -13,10 +13,12 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_BALANCE_GROUP_INFO_H
 #define OCEANBASE_ROOTSERVER_OB_BALANCE_GROUP_INFO_H
 
-#include "lib/container/ob_array.h" //ObArray
-#include "lib/allocator/ob_allocator.h" // ObIAllocator
-#include "share/transfer/ob_transfer_info.h" // ObTransferPartInfo, ObTransferPartList
-#include "ob_balance_group_define.h"//ObBalanceGroupID
+#include "lib/container/ob_array.h"           //ObArray
+#include "lib/ob_define.h"                    // OB_MALLOC_NORMAL_BLOCK_SIZE
+#include "lib/allocator/ob_allocator.h"       // ObIAllocator
+#include "share/transfer/ob_transfer_info.h"  // ObTransferPartInfo, ObTransferPartList
+#include "ob_balance_group_define.h"          //ObBalanceGroupID
+#include "lib/allocator/page_arena.h"         // ModulePageAllocator
 
 namespace oceanbase
 {
@@ -27,7 +29,14 @@ namespace rootserver
 class ObTransferPartGroup
 {
 public:
-  ObTransferPartGroup() : data_size_(0), part_list_() {}
+  ObTransferPartGroup() :
+      data_size_(0),
+      part_list_("PartGroup") {}
+
+  ObTransferPartGroup(common::ObIAllocator &alloc) :
+      data_size_(0),
+      part_list_(alloc, "PartGroup") {}
+
   ~ObTransferPartGroup() {
     data_size_ = 0;
     part_list_.reset();
@@ -55,7 +64,7 @@ public:
   explicit ObBalanceGroupInfo(const ObBalanceGroupID &id, common::ObIAllocator &alloc) :
       id_(id),
       alloc_(alloc),
-      part_groups_()
+      part_groups_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, "PartGroupArray"))
   {
   }
 

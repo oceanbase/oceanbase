@@ -5350,7 +5350,7 @@ int ObServerSchemaService::refresh_full_schema(
             LOG_WARN("schema may be not persisted, try again",
                      KR(ret), K(schema_status), K(core_schema_version));
           } else if (core_schema_version > local_schema_version) {
-            // for core table schema, we publis as core_temp_version
+            // for core table schema, we publish as core_temp_version
             int64_t publish_version = 0;
             if (OB_FAIL(ObSchemaService::gen_core_temp_version(core_schema_version, publish_version))) {
               LOG_WARN("gen_core_temp_version failed", KR(ret), K(schema_status), K(core_schema_version));

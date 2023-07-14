@@ -65,7 +65,7 @@ public:
   void wait();
   void destroy();
   int get_session_pool(uint64_t tenant_id, ObTableApiSessPoolGuard &guard);
-  int get_sess_info(uint64_t tenant_id, uint64_t user_id, ObTableApiSessGuard &guard);
+  int get_sess_info(ObTableApiCredential &credential, ObTableApiSessGuard &guard);
   int update_sess(ObTableApiCredential &credential);
 private:
   int extend_sess_pool(uint64_t tenant_id, ObTableApiSessPoolGuard &guard);
@@ -122,17 +122,19 @@ public:
   void set_deleted() { ATOMIC_SET(&is_deleted_, true); }
   bool is_deleted() { return ATOMIC_LOAD(&is_deleted_); }
   bool is_empty() const { return key_node_map_.empty(); }
-  int get_sess_info(uint64_t key, ObTableApiSessGuard &guard);
+  int get_sess_info(ObTableApiCredential &credential, ObTableApiSessGuard &guard);
   int update_sess(ObTableApiCredential &credential);
   // 将过期的node移动到retired_nodes_
-  int move_retired_sess();
+  int move_sess_to_retired_list();
   int evict_retired_sess();
-private:
   int create_node(ObTableApiCredential &credential, ObTableApiSessNode *&node);
+  int move_sess_to_retired_list(ObTableApiSessNode *node);
+private:
+  int replace_sess(ObTableApiCredential &credential);
   int create_and_add_node(ObTableApiCredential &credential);
   int get_sess_node(uint64_t key, ObTableApiSessNode *&node);
   int evict_all_session();
-  int move_retired_sess(uint64_t key);
+  int move_sess_to_retired_list(uint64_t key);
 private:
   common::ObArenaAllocator allocator_;
   bool is_inited_;
@@ -311,6 +313,24 @@ protected:
   ObTableApiSessNode *sess_node_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessNodeAtomicOp);
+};
+
+class ObTableApiSessNodeReplaceOp
+{
+protected:
+  typedef common::hash::HashMapPair<uint64_t, ObTableApiSessNode*> MapKV;
+public:
+  ObTableApiSessNodeReplaceOp(ObTableApiSessPool &pool, ObTableApiCredential &credential)
+      : pool_(pool),
+        credential_(credential)
+  {}
+  virtual ~ObTableApiSessNodeReplaceOp() {}
+  int operator()(MapKV &entry);
+private:
+  ObTableApiSessPool &pool_;
+  ObTableApiCredential &credential_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableApiSessNodeReplaceOp);
 };
 
 class ObTableApiSessForeachOp

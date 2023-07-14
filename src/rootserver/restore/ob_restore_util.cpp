@@ -684,6 +684,7 @@ int ObRestoreUtil::do_fill_backup_info_(
 {
   int ret = OB_SUCCESS;
   storage::ObBackupDataStore store;
+  ObBackupDataLSAttrDesc ls_info;
   HEAP_VARS_2((ObExternBackupSetInfoDesc, backup_set_info),
     (ObExternTenantLocalityInfoDesc, locality_info)) {
     if (backup_set_path.is_empty()) {
@@ -698,6 +699,8 @@ int ObRestoreUtil::do_fill_backup_info_(
     } else if (!backup_set_info.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid backup set file", K(ret), K(backup_set_info));
+    } else if (OB_FAIL(store.read_ls_attr_info(backup_set_info.backup_set_file_.meta_turn_id_, ls_info))) {
+      LOG_WARN("failed to read ls attr info", K(ret), K(backup_set_info));
     } else if (OB_FAIL(check_backup_set_version_match_(backup_set_info.backup_set_file_))) {
       LOG_WARN("failed to check backup set version match", K(ret));
     } else if (OB_FAIL(job.set_backup_tenant_name(locality_info.tenant_name_.ptr()))) {
@@ -709,7 +712,13 @@ int ObRestoreUtil::do_fill_backup_info_(
       job.set_source_cluster_version(backup_set_info.backup_set_file_.cluster_version_);
       job.set_compat_mode(locality_info.compat_mode_);
       job.set_backup_tenant_id(backup_set_info.backup_set_file_.tenant_id_);
-      job.set_consistent_scn(backup_set_info.backup_set_file_.consistent_scn_);
+      // becuase of no consistent scn in 4.1.x backup set, using ls_info.backup_scn to set the restore consisitent scn
+      // ls_info.backup_scn is the default replayable scn when create restore tenant,
+      // so using it as the consistet scn can also make recovery service work normally
+      const SCN &scn = backup_set_info.backup_set_file_.tenant_compatible_ < DATA_VERSION_4_2_0_0
+                     ? ls_info.backup_scn_
+                     : backup_set_info.backup_set_file_.consistent_scn_;
+      job.set_consistent_scn(scn);
     }
   }
   return ret;

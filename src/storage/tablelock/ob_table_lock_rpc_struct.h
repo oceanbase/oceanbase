@@ -72,7 +72,8 @@ public:
       expired_time_(0),
       schema_version_(-1)
   {}
-  virtual ~ObLockParam() {}
+  virtual ~ObLockParam() { reset(); }
+  void reset();
   int set(
       const ObLockID &lock_id,
       const ObTableLockMode lock_mode,
@@ -245,6 +246,7 @@ public:
       need_release_tx_(false)
   {}
   ~ObTableLockTaskRequest();
+  void reset();
   int set(
       const ObTableLockTaskType task_type,
       const share::ObLSID &lsid,

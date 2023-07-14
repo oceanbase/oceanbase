@@ -154,7 +154,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     if (!GCONF.enable_record_trace_log) {
       tlog_ = NULL;
     } else {
-      tlog_ = ObTransTraceLogFactory::alloc();
+      tlog_ = &trace_log_;
     }
 
     is_inited_ = true;
@@ -246,7 +246,6 @@ void ObPartTransCtx::destroy()
 
     if (NULL != tlog_) {
       print_trace_log_if_necessary_();
-      ObTransTraceLogFactory::release(tlog_);
       tlog_ = NULL;
     }
 
@@ -320,6 +319,7 @@ void ObPartTransCtx::default_init_()
   state_info_array_.reset();
   lastest_snapshot_.reset();
   standby_part_collected_.reset();
+  trace_log_.reset();
 }
 
 int ObPartTransCtx::init_log_cbs_(const ObLSID &ls_id, const ObTransID &tx_id)
@@ -1251,7 +1251,7 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool &is_prepared, SCN &prep
   int ret = OB_SUCCESS;
   ObTxState cur_state = exec_info_.state_;
 
-  if (ObTxState::PREPARE == cur_state) {
+  if (ObTxState::PREPARE == cur_state || ObTxState::PRE_COMMIT == cur_state) {
     is_prepared = true;
     prepare_version = exec_info_.prepare_version_;
   } else if (ObTxState::COMMIT == cur_state || ObTxState::ABORT == cur_state
@@ -1264,6 +1264,8 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool &is_prepared, SCN &prep
   }
   if (is_prepared && OB_INVALID_SCN_VAL == prepare_version.get_val_for_gts()) {
     TRANS_LOG(ERROR, "invalid prepare version", K(cur_state));
+    // try lock
+    print_trace_log();
   }
 
   return ret;
@@ -1446,10 +1448,11 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
     TRANS_LOG(ERROR, "recover_from_table_lock_durable_info failed", K(ret));
   } else if (OB_FAIL(ctx_tx_data_.recover_tx_data(ctx_info.tx_data_guard_))) {
     TRANS_LOG(WARN, "recover tx data failed", K(ret), K(ctx_tx_data_));
+  } else if (OB_FAIL(exec_info_.assign(ctx_info.exec_info_))) {
+    TRANS_LOG(WARN, "exec_info assign error", K(ret), K(ctx_info));
   } else {
     trans_id_ = ctx_info.tx_id_;
     ls_id_ = ctx_info.ls_id_;
-    exec_info_ = ctx_info.exec_info_;
     if (!exec_info_.upstream_.is_valid() &&
         !is_local_tx_() &&
        (ObTxState::REDO_COMPLETE == exec_info_.state_ ||
@@ -1568,8 +1571,13 @@ int ObPartTransCtx::get_tx_ctx_table_info(ObTxCtxTableInfo &info)
     TRANS_LOG(INFO, "tx ctx has no persisted log", K(ret), KPC(this));
   // 3. Tx ctx has no persisted log, so donot need persisting
   } else if (is_incomplete_replay_ctx_) {
-    ret = OB_TRANS_CTX_NOT_EXIST;
-    TRANS_LOG(INFO, "tx ctx is in complete replay ctx", K(ret), KPC(this));
+    // NB: we need refresh rec log ts for incomplete replay ctx
+    if (OB_FAIL(refresh_rec_log_ts_())) {
+      TRANS_LOG(WARN, "refresh rec log ts failed", K(ret), KPC(this));
+    } else {
+      ret = OB_TRANS_CTX_NOT_EXIST;
+      TRANS_LOG(INFO, "tx ctx is in complete replay ctx", K(ret), KPC(this));
+    }
   // 3. Fetch the current state of the tx ctx table
   } else if (OB_FAIL(get_tx_ctx_table_info_(info))) {
     TRANS_LOG(WARN, "get tx ctx table info failed", K(ret), K(*this));
@@ -1794,7 +1802,10 @@ int ObPartTransCtx::abort_(int reason)
   if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
     TRANS_LOG(WARN, "do local tx abort failed", K(ret), K(reason));
   }
-  TRANS_LOG(INFO, "tx abort", K(ret), K(reason), KR(reason), KPC(this));
+  // if abort was caused by internal impl reason, don't disturb
+  if (ObTxAbortCause::IMPLICIT_ROLLBACK != reason) {
+    TRANS_LOG(INFO, "tx abort", K(ret), K(reason), "reason_str", ObTxAbortCauseNames::of(reason), KPC(this));
+  }
   return ret;
 }
 
@@ -1990,16 +2001,19 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
     if (ObTxLogType::TX_REDO_LOG == log_type) {
       // do nothing
     }  else if (ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type) {
-      tmp_array.reset();
       share::SCN notify_redo_scn =
           log_cb->get_first_part_scn().is_valid() ? log_cb->get_first_part_scn() : log_ts;
-      if (OB_FAIL(log_cb->get_mds_range().copy_to(tmp_array))) {
-        TRANS_LOG(WARN, "copy mds log array failed", K(ret));
-      } else if (OB_FAIL(log_cb->get_mds_range().move_to(exec_info_.multi_data_source_))) {
-        TRANS_LOG(WARN, "move MDS range into exec_info failed", K(ret));
+      if (OB_FAIL(log_cb->get_mds_range().move_from_cache_to_arr(mds_cache_,
+                                                                 exec_info_.multi_data_source_))) {
+        TRANS_LOG(WARN, "move from mds cache to durable arr failed", K(ret));
+        // } else if (OB_FAIL(log_cb->get_mds_range().move_to(exec_info_.multi_data_source_))) {
+        //   TRANS_LOG(WARN, "move MDS range into exec_info failed", K(ret));
       } else if (FALSE_IT(mds_cache_.clear_submitted_iterator())) {
-        //do nothing
-      } else if (OB_FAIL(notify_data_source_(NotifyType::ON_REDO, notify_redo_scn, false, tmp_array))) {
+        // do nothing
+      } else if (OB_FAIL(notify_data_source_(NotifyType::ON_REDO,
+                                             notify_redo_scn,
+                                             false,
+                                             log_cb->get_mds_range().get_range_array()))) {
         TRANS_LOG(WARN, "notify data source for ON_REDO", K(ret));
       } else {
         log_cb->get_mds_range().reset();
@@ -2280,7 +2294,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
     const SCN log_ts = log_cb->get_log_ts();
     // TODO, dingxi
     mt_ctx_.sync_log_fail(log_cb->get_callbacks());
-    log_cb->get_mds_range().range_sync_failed();
+    log_cb->get_mds_range().range_sync_failed(mds_cache_);
     if (log_ts == ctx_tx_data_.get_start_log_ts()) {
       ctx_tx_data_.set_start_log_ts(SCN());
     }
@@ -5822,10 +5836,11 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
     TRANS_LOG(ERROR, "calc checksum before log ts failed", K(ret), KPC(this));
   } else if (OB_FAIL(exec_info_.generate_mds_buffer_ctx_array())) {
     TRANS_LOG(WARN, "fail to generate mds buffer ctx array", K(ret), KPC(this));
+  } else if (OB_FAIL(info.exec_info_.assign(exec_info_))) {
+    TRANS_LOG(WARN, "fail to assign exec_info", K(ret), KPC(this));
   } else {
     info.tx_id_ = trans_id_;
     info.ls_id_ = ls_id_;
-    info.exec_info_ = exec_info_;
     info.cluster_id_ = cluster_id_;
     exec_info_.mds_buffer_ctx_array_.reset();
     if (OB_FAIL(mt_ctx_.get_table_lock_store_info(info.table_lock_info_))) {
@@ -6075,7 +6090,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
           TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
         }
       } else {
-        ret = mds_cache_.fill_mds_log(log, log_cb->get_mds_range(), barrier_type, mds_base_scn);
+        ret = mds_cache_.fill_mds_log(this, log, log_cb->get_mds_range(), barrier_type, mds_base_scn);
       }
 
       // TRANS_LOG(INFO, "after fill mds log", K(ret), K(trans_id_));
@@ -6334,13 +6349,16 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
         ret = mds::MdsFactory::create_buffer_ctx(data_source_type, trans_id_, buffer_ctx);
       }
       if (OB_FAIL(ret)) {
-        TRANS_LOG(WARN, "execute MDS frame code failed, execution interruped", KR(ret), K(data_source_type), K(*this));
-      } else if (OB_FAIL(node.init(data_source_type, data, register_flag.mds_base_scn_, buffer_ctx))) {
+        TRANS_LOG(WARN, "execute MDS frame code failed, execution interruped", KR(ret),
+                  K(data_source_type), K(*this));
+      } else if (OB_FAIL(
+                     node.init(data_source_type, data, register_flag.mds_base_scn_, buffer_ctx))) {
         TRANS_LOG(WARN, "init tx buffer node failed", KR(ret), K(data_source_type), K(*this));
       } else if (OB_FAIL(tmp_array.push_back(node))) {
         TRANS_LOG(WARN, "push back notify node  failed", KR(ret));
 #ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
-      } else if (tmp_array.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE) {
+      } else if (tmp_array.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE
+                 && !node.allow_to_use_mds_big_segment()) {
         ret = OB_LOG_TOO_LARGE;
         TRANS_LOG(WARN, "too large mds buf node", K(ret), K(tmp_array.get_serialize_size()));
 #endif
@@ -6352,10 +6370,9 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       if (OB_FAIL(ret)) {
         mtl_free(ptr);
         if (OB_NOT_NULL(buffer_ctx)) {
-          MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(buffer_ctx);
+          MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(buffer_ctx);
         }
-      } else if (OB_FAIL(notify_data_source_(NotifyType::REGISTER_SUCC, SCN(), false,
-                                             tmp_array))) {
+      } else if (OB_FAIL(notify_data_source_(NotifyType::REGISTER_SUCC, SCN(), false, tmp_array))) {
         if (OB_SUCCESS != (tmp_ret = mds_cache_.rollback_last_mds_node())) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "rollback last mds node failed", K(tmp_ret), K(ret));
@@ -6365,7 +6382,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       } else if (mds_cache_.get_unsubmitted_size() < ObTxMultiDataSourceLog::MAX_PENDING_BUF_SIZE
                  && !register_flag.need_flush_redo_instantly_) {
         // do nothing
-      } else if (OB_SUCCESS != (tmp_ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
+      } else if (OB_SUCCESS
+                 != (tmp_ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
         if (tmp_ret == OB_NOT_MASTER) {
           ret = OB_TRANS_NEED_ROLLBACK;
         } else if (tmp_ret == OB_TX_NOLOGCB) {
@@ -6374,8 +6392,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
             mds_cache_.set_need_retry_submit_mds(true);
           }
         }
-        TRANS_LOG(WARN, "submit mds log failed", K(tmp_ret), K(ret),
-                  K(register_flag), K(data_source_type),KPC(this));
+        TRANS_LOG(WARN, "submit mds log failed", K(tmp_ret), K(ret), K(register_flag),
+                  K(data_source_type), KPC(this));
       } else {
         TRANS_LOG(DEBUG, "submit mds log success", K(tmp_ret));
       }

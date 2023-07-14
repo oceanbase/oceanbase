@@ -74,10 +74,19 @@ void ObTxBufferNode::replace_data(const common::ObString &data)
   has_submitted_ = false;
   has_synced_ = false;
 }
-//#####################################################
-// ObTxMDSRange
-//#####################################################
 
+bool ObTxBufferNode::operator==(const ObTxBufferNode &buffer_node) const
+{
+  bool is_same = false;
+
+  if (has_submitted_ == buffer_node.has_submitted_ && has_synced_ == buffer_node.has_synced_
+      && mds_base_scn_ == buffer_node.mds_base_scn_ && type_ == buffer_node.type_
+      && data_ == buffer_node.data_) {
+    is_same = true;
+  }
+
+  return is_same;
+}
 
 //#####################################################
 // ObMulSourceTxDataNotifier

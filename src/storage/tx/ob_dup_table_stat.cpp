@@ -69,11 +69,23 @@ void ObDupTableLSTabletSetStat::set_from_change_status(
      struct DupTabletSetChangeStatus *tmp_status)
 {
   if (OB_NOT_NULL(tmp_status)) {
-    if (tmp_status->flag_ <= DupTabletSetChangeFlag::UNUSED) {
-      // map flag(-1) and flag(0) to TabletSetState(0)["INVALID"]
-      set_state(static_cast<TabletSetState>(0));
-    } else {
-      set_state(static_cast<TabletSetState>(tmp_status->flag_));
+    // remap state
+    switch(tmp_status->flag_)
+    {
+      case DupTabletSetChangeFlag::TEMPORARY:
+        set_state(TabletSetState::TMP);
+        break;
+      case DupTabletSetChangeFlag::CHANGE_LOGGING:
+        set_state(TabletSetState::LOGGING);
+        break;
+      case DupTabletSetChangeFlag::CONFIRMING:
+        set_state(TabletSetState::CONFIRMING);
+        break;
+      case DupTabletSetChangeFlag::CONFIRMED:
+        set_state(TabletSetState::CONFIRMED);
+        break;
+      default:
+        set_state(TabletSetState::INVALID);
     }
 
     set_trx_ref(tmp_status->trx_ref_);

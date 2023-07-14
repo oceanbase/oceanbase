@@ -121,6 +121,7 @@ ob_set_subtarget(oblib_lib common_mixed
   rc/context.cpp
   rc/ob_rc.cpp
   rowid/ob_urowid.cpp
+  stat/ob_di_tls.cpp
   stat/ob_di_cache.cpp
   stat/ob_diagnose_info.cpp
   stat/ob_latch_define.cpp

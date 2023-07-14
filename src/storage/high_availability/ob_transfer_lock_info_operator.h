@@ -33,11 +33,14 @@ public:
       const ObTransferLockStatus &status, common::ObISQLClient &sql_proxy);
   static int get(const ObTransferLockInfoRowKey &row_key, const int64_t task_id, const ObTransferLockStatus &status,
       const bool for_update, ObTransferTaskLockInfo &lock_info, common::ObISQLClient &sql_proxy);
+  static int fetch_all(common::ObISQLClient &sql_proxy, const uint64_t tenant_id,
+      common::ObArray<ObTransferTaskLockInfo> &lock_infos);
 
 private:
   static int fill_dml_splicer_(const ObTransferTaskLockInfo &lock_info, share::ObDMLSqlSplicer &dml_splicer);
   static int construct_result_(common::sqlclient::ObMySQLResult &res, ObTransferTaskLockInfo &lock_info);
   static int parse_sql_result_(common::sqlclient::ObMySQLResult &res, ObTransferTaskLockInfo &lock_info);
+  static int parse_sql_results_(common::sqlclient::ObMySQLResult &res, common::ObArray<ObTransferTaskLockInfo> &lock_infos);
 };
 
 }  // namespace storage

@@ -637,6 +637,8 @@ int ObLSRestoreTaskMgr::reload_tablets_()
       final_reload_ = false;
     }
     unset_force_reload_();
+  } else {
+    final_reload_ = false;
   }
 
   LOG_INFO("reload tablets", K(ret), K_(ls_id), K(is_follower),

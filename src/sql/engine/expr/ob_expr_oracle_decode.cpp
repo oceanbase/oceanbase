@@ -62,6 +62,9 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-",
                   ob_obj_type_str(types_stack[0].get_type()));
       LOG_WARN("invalid type of parameter", K(ret), K(types_stack[0]));
+    } else if (lib::is_oracle_mode() && types_stack[CALC_TYPE_INDEX].get_type() == ObUserDefinedSQLType) {
+      ret = OB_ERR_NO_ORDER_MAP_SQL;
+      LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
     }
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; i += 2) {
       if (has_default && i == param_num - 1) {
@@ -285,6 +288,9 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
                    K(ret), K(o_calc_type), K(o_result_type), K(o_type), K(i));
         }
       }
+    }
+    if (OB_SUCC(ret) && lib::is_oracle_mode() &&type.get_type() == ObUserDefinedSQLType) {
+      type.set_subschema_id(ObXMLSqlType);
     }
   }
   if (OB_SUCC(ret)) {

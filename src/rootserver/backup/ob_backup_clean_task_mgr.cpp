@@ -698,6 +698,44 @@ int ObBackupCleanTaskMgr::delete_meta_info_dir_()
   return ret; 
 }
 
+// file:///obbackup/backup_set_1_full/infos/major_data_info_turn_X/
+int ObBackupCleanTaskMgr::delete_major_data_info_dir_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupSetDesc desc;
+  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
+  desc.backup_type_ = backup_set_info_.backup_type_;
+  share::ObBackupDataType backup_data_type;
+  backup_data_type.set_major_data_backup();
+  if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, desc, backup_data_type,
+      backup_set_info_.major_turn_id_, path))) {
+    LOG_WARN("failed to get ls info data info", K(ret));
+  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/infos/minor_data_info_turn_X/
+int ObBackupCleanTaskMgr::delete_minor_data_info_dir_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupSetDesc desc;
+  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
+  desc.backup_type_ = backup_set_info_.backup_type_;
+  share::ObBackupDataType backup_data_type;
+  backup_data_type.set_minor_data_backup();
+  if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, desc,
+      backup_data_type, backup_set_info_.minor_turn_id_, path))) {
+    LOG_WARN("failed to get ls info data info path", K(ret));
+  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/single_backup_set_info.obbak
 int ObBackupCleanTaskMgr::delete_single_backup_set_info_()
 {
@@ -837,7 +875,11 @@ int ObBackupCleanTaskMgr::delete_backup_set_meta_info_files_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup set info is valid", K(ret)); 
   } else if (OB_FAIL(delete_meta_info_dir_())) { // first deleted meta file on infos dir
-    LOG_WARN("failed to delete ls attr info file", K(ret)); 
+    LOG_WARN("failed to delete ls attr info file", K(ret));
+  } else if (OB_FAIL(delete_major_data_info_dir_())) {
+    LOG_WARN("failed to delete major data info file", K(ret));
+  } else if (OB_FAIL(delete_minor_data_info_dir_())) {
+    LOG_WARN("failed to delete minor data info file", K(ret));
   } else if (OB_FAIL(ObBackupPathUtil::get_ls_info_dir_path(backup_dest_, desc, infos_path))) {
     LOG_WARN("failed to get backup log stream info path", K(ret));
   } else if (OB_FAIL(delete_data_info_turn_files_(infos_path))) {

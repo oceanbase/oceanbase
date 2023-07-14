@@ -327,6 +327,8 @@ public:
   // @param [in] tx_id
   // @param [in] fd
   int dump_single_tx_data_2_text(const int64_t tx_id, FILE *fd);
+  int start_readonly_request();
+  int end_readonly_request();
 
   // check this ObLSTxCtxMgr contains the specified ObLSID
   bool contain(const share::ObLSID &ls_id)
@@ -346,6 +348,20 @@ public:
 
   // Decrease active trx count in this ls
   void dec_active_tx_count() { (void)ATOMIC_AAF(&active_tx_count_, -1); }
+
+  void inc_total_active_readonly_request_count()
+  {
+    const int64_t count = ATOMIC_AAF(&total_active_readonly_request_count_, 1);
+  }
+  void dec_total_active_readonly_request_count()
+  {
+    int ret = common::OB_ERR_UNEXPECTED;
+    const int64_t count = ATOMIC_AAF(&total_active_readonly_request_count_, -1);
+    if (OB_UNLIKELY(count < 0)) {
+      TRANS_LOG(ERROR, "unexpected total_active_readonly_request_count", KP(this), K(count));
+    }
+  }
+  int64_t get_total_active_readonly_request_count() { return ATOMIC_LOAD(&total_active_readonly_request_count_); }
 
   // Get all tx obj lock information in this ObLSTxCtxMgr
   // @param [out] iter: all tx obj lock op information
@@ -492,6 +508,9 @@ public:
   // Get the state of this ObLSTxCtxMgr
   int64_t get_state() { return get_state_(); }
 
+  // check is master
+  bool is_master() const { return is_master_(); }
+
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
   int refresh_aggre_rec_scn();
 
@@ -539,6 +558,7 @@ public:
   static const int64_t MAX_HASH_ITEM_PRINT = 16;
   static const int64_t WAIT_SW_CB_TIMEOUT = 100 * 1000; // 100 ms
   static const int64_t WAIT_SW_CB_INTERVAL = 10 * 1000; // 10 ms
+  static const int64_t WAIT_READONLY_REQUEST_TIME = 10 * 1000 * 1000;
 private:
   class State
   {
@@ -754,7 +774,9 @@ private:
   mutable RWLock minor_merge_lock_;
 
   // Total TxCtx count in this ObLSTxCtxMgr
-  int64_t total_tx_ctx_count_;
+  int64_t total_tx_ctx_count_ CACHE_ALIGNED;
+
+  int64_t total_active_readonly_request_count_ CACHE_ALIGNED;
 
   int64_t active_tx_count_;
 

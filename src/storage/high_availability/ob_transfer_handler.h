@@ -65,6 +65,9 @@ public:
                      const share::SCN &scn) override final;
   virtual share::SCN get_rec_scn() override final { return share::SCN::max_scn(); }
   virtual int flush(share::SCN &scn) override final;
+  int safe_to_destroy(bool &is_safe);
+  int offline();
+  void online();
 
 private:
   int get_transfer_task_(share::ObTransferTaskInfo &task_info);
@@ -73,9 +76,16 @@ private:
       const bool for_update,
       common::ObISQLClient &trans,
       share::ObTransferTaskInfo &task_info);
-  int get_transfer_task_from_inner_table_(
+  int fetch_transfer_task_from_inner_table_(
       share::ObTransferTaskInfo &task_info);
+  int fetch_transfer_task_from_inner_table_by_src_ls_(
+      share::ObTransferTaskInfo &task_info,
+      bool &task_exist);
+  int fetch_transfer_task_from_inner_table_by_dest_ls_(
+      share::ObTransferTaskInfo &task_info,
+      bool &task_exist);
   void wakeup_();
+  int wakeup_dest_ls_leader_(const share::ObTransferTaskInfo &task_info);
 
   int do_leader_transfer_();
   int do_worker_transfer_();
@@ -201,6 +211,7 @@ private:
   int get_gts_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
+  int record_server_event_(const int32_t ret, const int64_t round, const share::ObTransferTaskInfo &task_info) const;
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;
@@ -214,6 +225,7 @@ private:
 
   int64_t retry_count_;
   ObTransferWorkerMgr transfer_worker_mgr_;
+  int64_t round_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 }

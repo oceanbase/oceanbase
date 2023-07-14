@@ -1037,6 +1037,7 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
     if (OB_FAIL(session->save_session(*session_value))) {
       LOG_WARN("failed to save session", K(ret));
     } else {
+      ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
       nested_count = session->get_nested_count();
       IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), is_no_backslash_escapes);
       session->set_sql_mode(session->get_sql_mode() & ~SMO_NO_BACKSLASH_ESCAPES);
@@ -1068,6 +1069,7 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
   } else if (OB_FAIL(session->restore_session(*session_value))) {
     LOG_WARN("failed to restore session", K(ret));
   } else {
+    ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
     session->set_nested_count(nested_count);
     if (is_no_backslash_escapes) {
       session->set_sql_mode(session->get_sql_mode() | SMO_NO_BACKSLASH_ESCAPES);

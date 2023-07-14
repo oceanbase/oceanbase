@@ -711,6 +711,19 @@ bool has_exist_in_array(const T *array, const int64_t num, const T &var)
   return ret;
 }
 
+template <typename ContainerT, typename ElementT>
+bool element_exist(const ContainerT &container, const ElementT &var)
+{
+  bool bret = false;
+  FOREACH(var_iter, container) {
+    if (*var_iter == var) {
+      bret = true;
+      break;
+    }
+  }
+  return bret;
+}
+
 template <typename T>
 int add_var_to_array_no_dup(ObIArray<T> &array, const T &var, int64_t *idx = NULL)
 {

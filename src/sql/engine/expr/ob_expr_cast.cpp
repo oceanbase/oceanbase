@@ -654,6 +654,8 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type, ObExprResTyp
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("cast unsupported sql udt type to pl udt type", K(ret), K(src_type), K(dst_type));
       }
+    } else if (dst_type.is_user_defined_sql_type()) {
+      dst_type.set_subschema_id(ObXMLSqlType);
     }
   } else if (src_type.is_null()) {
     if (dst_type.get_type() == ObUserDefinedSQLType) {
@@ -892,7 +894,8 @@ int ObExprCast::is_valid_for_generated_column(const ObRawExpr*expr, const common
       }
     } else if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
       is_valid = false;
-    } else if (ObTimestampType == src && ObTimestampType != dst) {
+    } else if ((ObTimestampType == src && ObTimestampType != dst)
+               || (ObTimestampType == dst && ObTimestampType != src)) {
       is_valid = false;
     }
   }

@@ -139,13 +139,25 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
 {
   int ret = OB_SUCCESS;
   Arg arg;
-  int64_t pos = 0;
 
   if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), KP(buf), K(len));
-  } else if (OB_FAIL(arg.deserialize(buf, len, pos))) {
-    TRANS_LOG(WARN, "failed to deserialize", K(ret));
+  } else {
+    do {
+      int64_t pos = 0;
+      if (OB_FAIL(arg.deserialize(buf, len, pos))) {
+        TRANS_LOG(WARN, "failed to deserialize", KR(ret), K(notify_arg), K(pos));
+        if (notify_arg.for_replay_) {
+          ret = OB_EAGAIN;
+        } else {
+          usleep(100 * 1000);
+        }
+      }
+    } while (OB_FAIL(ret) && !notify_arg.for_replay_);
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "arg is invalid", K(ret), K(arg));
@@ -153,17 +165,22 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
     mds::MdsCtx mds_ctx;
     mds_ctx.set_binding_type_id(mds::TupleTypeIdx<mds::BufferCtxTupleHelper, mds::MdsCtx>::value);
     mds_ctx.set_writer(mds::MdsWriter(notify_arg.tx_id_));
-    do {
-      if (OB_FAIL(Helper::register_process(arg, mds_ctx))) {
-        TRANS_LOG(ERROR, "fail to register_process, retry", K(ret), K(arg));
-        usleep(100 * 1000);
+
+    if (notify_arg.for_replay_) {
+      if (OB_FAIL(Helper::replay_process(arg, notify_arg.scn_, mds_ctx))) {
+        ret = OB_EAGAIN;
+        TRANS_LOG(WARN, "failed to replay_process", K(ret), K(notify_arg), K(arg));
       }
-    } while (OB_FAIL(ret) && !notify_arg.for_replay_);
+    } else {
+      do {
+        if (OB_FAIL(Helper::register_process(arg, mds_ctx))) {
+          TRANS_LOG(ERROR, "fail to register_process, retry", K(ret), K(arg), K(notify_arg));
+          usleep(100 * 1000);
+        }
+      } while (OB_FAIL(ret));
+    }
 
     if (OB_FAIL(ret)) {
-      if (notify_arg.for_replay_) {
-        ret = OB_EAGAIN;
-      }
     } else {
       mds_ctx.single_log_commit(notify_arg.trans_version_, notify_arg.scn_);
       TRANS_LOG(INFO, "replay create commit for old_mds", KR(ret), K(arg));

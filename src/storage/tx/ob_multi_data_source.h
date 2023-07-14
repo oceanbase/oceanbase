@@ -102,6 +102,10 @@ public:
     mds_base_scn_.reset();
   }
 
+  // only for some mds types of CDC
+  // can not be used by observer functions
+  bool allow_to_use_mds_big_segment() { return type_ == ObTxDataSourceType::DDL_TRANS; }
+
   void replace_data(const common::ObString &data);
 
   int64_t get_data_size() const { return data_.length(); }
@@ -116,6 +120,8 @@ public:
   bool is_synced() const { return has_synced_; }
 
   const share::SCN &get_base_scn() { return mds_base_scn_; }
+
+  bool operator==(const ObTxBufferNode & buffer_node) const;
 
   void log_sync_fail()
   {

@@ -53,24 +53,22 @@ int ObTableCtx::get_tablet_by_rowkey(const ObRowkey &rowkey,
   return ret;
 }
 
-int ObTableCtx::init_sess_info(uint64_t tenant_id, const ObString &tenant_name, uint64_t user_id)
+int ObTableCtx::init_sess_info(ObTableApiCredential &credential)
 {
   int ret = OB_SUCCESS;
 
   // try get session from session pool
-  if (OB_FAIL(GCTX.table_service_->get_sess_mgr().get_sess_info(tenant_id,
-                                                                user_id,
-                                                                sess_guard_))) {
-    LOG_WARN("fail to get session info", K(ret), K(tenant_id), K(user_id));
+  if (OB_FAIL(GCTX.table_service_->get_sess_mgr().get_sess_info(credential, sess_guard_))) {
+    LOG_WARN("fail to get session info", K(ret), K(credential));
   } else if (OB_ISNULL(sess_guard_.get_sess_node_val())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", K(ret), K(user_id));
+    LOG_WARN("session info is null", K(ret), K(credential));
   }
 
   return ret;
 }
 
-int ObTableCtx::init_common(const ObTableApiCredential &credential,
+int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const common::ObTabletID &arg_tablet_id,
                             const common::ObString &arg_table_name,
                             const int64_t &timeout_ts)
@@ -80,7 +78,6 @@ int ObTableCtx::init_common(const ObTableApiCredential &credential,
   const ObTenantSchema *tenant_schema = nullptr;
   const uint64_t tenant_id = credential.tenant_id_;
   const uint64_t database_id = credential.database_id_;
-  const uint64_t user_id = credential.user_id_;
   ObTabletID tablet_id = arg_tablet_id;
 
   if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard_))) {
@@ -99,8 +96,8 @@ int ObTableCtx::init_common(const ObTableApiCredential &credential,
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("tenant schema is null", K(ret));
-  } else if (OB_FAIL(init_sess_info(tenant_id, tenant_schema->get_tenant_name_str(), user_id))) {
-    LOG_WARN("fail to init session info", K(ret), K(tenant_id), K(user_id));
+  } else if (OB_FAIL(init_sess_info(credential))) {
+    LOG_WARN("fail to init session info", K(ret), K(credential));
   } else if (!arg_tablet_id.is_valid()) {
     if (is_scan_) { // 扫描场景使用table_schema上的tablet id,客户端已经做了路由分发
       if (table_schema_->is_partitioned_table()) { // 不支持分区表

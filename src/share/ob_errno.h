@@ -265,6 +265,7 @@ constexpr int OB_ERR_OBSERVICE_START = -4395;
 constexpr int OB_ENCODING_EST_SIZE_OVERFLOW = -4397;
 constexpr int OB_INVALID_SUB_PARTITION_TYPE = -4398;
 constexpr int OB_ERR_UNEXPECTED_UNIT_STATUS = -4399;
+constexpr int OB_AUTOINC_CACHE_NOT_EQUAL = -4400;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -1749,6 +1750,7 @@ constexpr int OB_ERR_MULTI_RECORD = -9746;
 constexpr int OB_ERR_MALFORMED_PS_PACKET = -9747;
 constexpr int OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK = -9748;
 constexpr int OB_ERR_OBJECT_NOT_EXIST = -9749;
+constexpr int OB_ERR_TABLE_OUT_OF_RANGE = -9750;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2315,6 +2317,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SKIP_CHECKING_LS_STATUS__USER_ERROR_MSG "This operation has been finished without checking ls status"
 #define OB_ERR_USE_ROWID_FOR_UPDATE__USER_ERROR_MSG "invalid user.table.column, table.column, or column specification"
 #define OB_ERR_UNKNOWN_SET_OPTION__USER_ERROR_MSG "unknown SET option \'%s\'"
+#define OB_CREATE_STANDBY_TENANT_FAILED__USER_ERROR_MSG "create standby tenant may fail, %s"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3843,6 +3846,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MALFORMED_PS_PACKET__USER_ERROR_MSG "malformed ps packet"
 #define OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK__USER_ERROR_MSG "View's SELECT contains a variable or parameter"
 #define OB_ERR_OBJECT_NOT_EXIST__USER_ERROR_MSG "object does not exist"
+#define OB_ERR_TABLE_OUT_OF_RANGE__USER_ERROR_MSG "PL/SQL: index for PL/SQL table out of range for host language array"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4214,6 +4218,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ENCODING_EST_SIZE_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4397, Encoding estimated size overflow"
 #define OB_INVALID_SUB_PARTITION_TYPE__ORA_USER_ERROR_MSG "ORA-14020: this physical attribute may not be specified for a table partition"
 #define OB_ERR_UNEXPECTED_UNIT_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4399, Unit status is not expected"
+#define OB_OB_AUTOINC_CACHE_NOT_EQUAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4400, Autoinc cache's autoinc version is not equal to request's autoinc version"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"
@@ -4409,6 +4414,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SKIP_CHECKING_LS_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4762, This operation has been finished without checking ls status"
 #define OB_ERR_USE_ROWID_FOR_UPDATE__ORA_USER_ERROR_MSG "ORA-01747: invalid user.table.column, table.column, or column specification"
 #define OB_ERR_UNKNOWN_SET_OPTION__ORA_USER_ERROR_MSG "ORA-00600: unknown SET option \'%s\'"
+#define OB_CREATE_STANDBY_TENANT_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4765, create standby tenant may fail, %s"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5937,6 +5943,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MALFORMED_PS_PACKET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9747, malformed ps packet"
 #define OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9748, View's SELECT contains a variable or parameter"
 #define OB_ERR_OBJECT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-06564: object does not exist"
+#define OB_ERR_TABLE_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-06513: PL/SQL: index for PL/SQL table out of range for host language array"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -5947,7 +5954,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2090];
+extern int g_all_ob_errnos[2093];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

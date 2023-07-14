@@ -293,7 +293,12 @@ int ObFreezeInfoManager::set_freeze_info()
 
     // In 'ddl_sql_transaction.start()', it implements the semantics of 'lock_all_ddl_operation'.
     if (OB_FAIL(trans.start(sql_proxy_, tenant_id_, fake_schema_version))) {
-      LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(fake_schema_version));
+      if ((OB_TRANS_TIMEOUT == ret) || (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret)) {
+        ret = OB_EAGAIN; // in order to try launch major freeze again, set ret = OB_EAGAIN here
+        LOG_WARN("ddl conflict, will try to launch major freeze again", KR(ret), K_(tenant_id));
+      } else {
+        LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(fake_schema_version));
+      }
     // 1. lock snapshot_gc_ts in __all_global_stat
     } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
               trans, tenant_id_, remote_snapshot_gc_scn))) {

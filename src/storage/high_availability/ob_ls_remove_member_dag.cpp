@@ -382,25 +382,13 @@ int ObLSRemoveMemberTask::transform_member_(ObLS *ls)
 int ObLSRemoveMemberTask::switch_learner_to_acceptor_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  ObLSService *ls_svr = NULL;
-  ObStorageRpc *storage_rpc = NULL;
-  ObStorageHASrcInfo src_info;
-  src_info.cluster_id_ = GCONF.cluster_id;
-  share::SCN ls_transfer_scn;
-  const uint64_t tenant_id = ctx_->arg_.tenant_id_;
   const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
-  if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+  if (OB_ISNULL(ls)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls->get_transfer_scn(ls_transfer_scn))) {
-    LOG_WARN("failed to get transfer scn", K(ret), KP(ls));
-  } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, ctx_->arg_.ls_id_, src_info.src_addr_))) {
-    LOG_WARN("failed to get ls leader", K(ret), KPC(ctx_));
-  } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
-  } else if (OB_FAIL(storage_rpc->switch_learner_to_acceptor(tenant_id, src_info, ctx_->arg_.ls_id_, ctx_->arg_.src_,
-      ctx_->arg_.new_paxos_replica_number_, ls_transfer_scn, timeout))) {
+    LOG_WARN("ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->switch_learner_to_acceptor(ctx_->arg_.src_,
+                                             ctx_->arg_.new_paxos_replica_number_,
+                                             timeout))) {
     LOG_WARN("failed to switch learner to acceptor", K(ret), KPC(ctx_));
   }
   return ret;

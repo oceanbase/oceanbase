@@ -25,9 +25,10 @@ using namespace storage;
 namespace transaction
 {
 
-const uint64_t DupTableDiagStd::DUP_DIAG_INFO_LOG_BUF_LEN[3] = {
+const uint64_t DupTableDiagStd::DUP_DIAG_INFO_LOG_BUF_LEN[DupTableDiagStd::TypeIndex::MAX_INDEX] = {
     1 << 12, // 4K
-    1 << 16, // 64k
+    1 << 20, // 1M
+    1 << 17, // 128K
     1 << 12, // 4k
 };
 const char *DupTableDiagStd::DUP_DIAG_INDENT_SPACE = "    "; // 4
@@ -35,7 +36,8 @@ const char *DupTableDiagStd::DUP_DIAG_COMMON_PREFIX = "DUP_TABLE_DIAG: ";
 const int64_t DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeIndex::MAX_INDEX] = {
     ObDupTableLSLeaseMgr::DEFAULT_LEASE_INTERVAL,
     30 * 1000 * 1000,    // 10s , tablet_print_interval
-    3 * 60 * 1000 * 1000 // 3min , ts_sync_print_interval
+    30 * 1000 * 1000,    // 10s , tablet_print_interval
+    5 * 60 * 1000 * 1000 // 3min , ts_sync_print_interval
 };
 
 
@@ -217,7 +219,23 @@ OB_SERIALIZE_MEMBER(DupTableLeaseLogHeader, addr_, lease_log_code_);
 /*******************************************************
  *  Dup_Table Tablets
  *******************************************************/
-// nothing
+bool DupTabletSetCommonHeader::operator==(const DupTabletSetCommonHeader &dup_common_header) const
+{
+  bool compare_res = false;
+
+  if (unique_id_ == dup_common_header.unique_id_
+      && tablet_set_type_ == dup_common_header.tablet_set_type_
+      && sp_op_type_ == dup_common_header.sp_op_type_) {
+    compare_res = true;
+  }
+
+  return compare_res;
+}
+
+bool DupTabletSetCommonHeader::operator!=(const DupTabletSetCommonHeader &dup_common_header) const
+{
+  return !((*this) == dup_common_header);
+}
 
 /*******************************************************
  *  Dup_Table Checkpoint
@@ -963,6 +981,7 @@ int ObDupTableLogOperator::deserialize_log_entry_()
 int ObDupTableLogOperator::retry_submit_log_block_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   int64_t block_buf_pos = 0;
   if (OB_ISNULL(block_buf_)) {
@@ -977,6 +996,13 @@ int ObDupTableLogOperator::retry_submit_log_block_()
     logservice::ObLogBaseHeader base_header(logservice::ObLogBaseType::DUP_TABLE_LOG_BASE_TYPE,
                                             logservice::ObReplayBarrierType::NO_NEED_BARRIER,
                                             ls_id_.hash());
+
+    share::SCN gts_base_scn = share::SCN::min_scn();
+    if (OB_TMP_FAIL(OB_TS_MGR.get_gts(MTL_ID(), nullptr, gts_base_scn))) {
+      DUP_TABLE_LOG(WARN, "get gts cache for base scn failed", K(ret), K(tmp_ret), K(gts_base_scn));
+      gts_base_scn = share::SCN::min_scn();
+    }
+
     bool unused = false;
     if (!big_segment_buf_.is_active()) {
       ret = OB_ERR_UNEXPECTED;
@@ -993,8 +1019,8 @@ int ObDupTableLogOperator::retry_submit_log_block_()
       ret = OB_LOG_TOO_LARGE;
       DUP_TABLE_LOG(WARN, "Too large dup table log. We can not submit it", K(ret),
                     K(big_segment_buf_.is_completed()), KPC(this));
-    } else if (OB_FAIL(log_handler_->append(block_buf_, block_buf_pos, share::SCN::min_scn(), false,
-                                            this, logging_lsn_, logging_scn_))) {
+    } else if (OB_FAIL(log_handler_->append(block_buf_, block_buf_pos, gts_base_scn, false, this,
+                                            logging_lsn_, logging_scn_))) {
       DUP_TABLE_LOG(WARN, "append block failed", K(ret), K(ls_id_));
     }
   }

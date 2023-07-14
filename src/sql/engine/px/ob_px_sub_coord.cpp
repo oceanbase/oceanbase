@@ -138,10 +138,13 @@ void ObPxSubCoord::notify_dispatched_task_exit(int64_t dispatched_worker_count)
 {
   (void) thread_worker_factory_.join();
   auto &tasks = sqc_ctx_.get_tasks();
-  for (int64_t idx = 0; idx < dispatched_worker_count && dispatched_worker_count <= tasks.count(); ++idx) {
+  bool is_interrupted = false;
+  for (int64_t idx = 0;
+       idx < dispatched_worker_count && dispatched_worker_count <= tasks.count() && !is_interrupted;
+       ++idx) {
     int tick = 1;
     ObPxTask &task = tasks.at(idx);
-    while (false == task.is_task_state_set(SQC_TASK_EXIT)) {
+    while (false == task.is_task_state_set(SQC_TASK_EXIT) && !is_interrupted) {
       // 每秒给当前 sqc 中未完成的 tasks 发送一次中断
       // 首次发中断的时间为 100ms 时。定这个时间是为了
       // cover px pool 调度 task 的延迟
@@ -151,7 +154,8 @@ void ObPxSubCoord::notify_dispatched_task_exit(int64_t dispatched_worker_count)
       }
       // 如果 10s 还没有退出，则打印一条日志。按照设计，不会出现这种情况
       if (tick++ % 10000 == 0) {
-        LOG_INFO("waiting for task exit", K(idx), K(dispatched_worker_count), K(tick));
+        is_interrupted = IS_INTERRUPTED();
+        LOG_INFO("waiting for task exit", K(idx), K(dispatched_worker_count), K(tick), K(is_interrupted));
       }
       ob_usleep(1000);
     }

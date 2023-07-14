@@ -726,10 +726,10 @@ int ObDupTableLSHandler::ls_loop_handle()
       last_diag_info_print_us_[DupTableDiagStd::TypeIndex::LEASE_INDEX] = fast_cur_time;
     }
 
-    if (fast_cur_time - last_diag_info_print_us_[DupTableDiagStd::TypeIndex::TABLET_INDEX]
-        >= DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeIndex::TABLET_INDEX]) {
+    if (fast_cur_time - last_diag_info_print_us_[DupTableDiagStd::TypeIndex::TABLET_SET_INDEX]
+        >= DupTableDiagStd::DUP_DIAG_PRINT_INTERVAL[DupTableDiagStd::TypeIndex::TABLET_SET_INDEX]) {
       tablets_mgr_ptr_->print_tablet_diag_info_log(is_leader);
-      last_diag_info_print_us_[DupTableDiagStd::TypeIndex::TABLET_INDEX] = fast_cur_time;
+      last_diag_info_print_us_[DupTableDiagStd::TypeIndex::TABLET_SET_INDEX] = fast_cur_time;
     }
 
     if (fast_cur_time - last_diag_info_print_us_[DupTableDiagStd::TypeIndex::TS_SYNC_INDEX]

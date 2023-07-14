@@ -305,7 +305,7 @@ int ObBalanceJobTableOperator::fill_dml_spliter(share::ObDMLSqlSplicer &dml,
 // remove job from __all_balance_job to __all_balance_job_history
 int ObBalanceJobTableOperator::clean_job(const uint64_t tenant_id,
                        const ObBalanceJobID job_id,
-                       ObISQLClient &client)
+                       ObMySQLProxy &client)
 {
   int ret = OB_SUCCESS;
   ObBalanceJob job;

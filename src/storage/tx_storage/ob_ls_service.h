@@ -46,6 +46,7 @@ struct ObLSMeta;
 // Support log stream meta persistent and checkpoint
 class ObLSService
 {
+  static const int64_t DEFAULT_LOCK_TIMEOUT = 60_s;
 public:
   ObLSService();
   ~ObLSService();

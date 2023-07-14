@@ -283,13 +283,15 @@ uint8_t ObTabletGCHandler::get_tablet_persist_trigger_and_reset()
   return old_v;
 }
 
-void ObTabletGCHandler::disable_gc()
+int ObTabletGCHandler::disable_gc()
 {
-  const int64_t cost_time = 10 * 1000 * 1000; //10s
-  common::ObTimeGuard timeguard("disable gc", cost_time);
-  timeguard.click();
-  gc_lock_.lock();
-  timeguard.click();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(gc_lock_.trylock())) {
+    ret = OB_EAGAIN;
+    LOG_WARN("try lock failed, please retry later", K(ret));
+  }
+
+  return ret;
 }
 
 void ObTabletGCHandler::enable_gc()

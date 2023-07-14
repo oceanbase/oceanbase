@@ -112,7 +112,7 @@ int ObTableLoadBeginP::process()
       param.table_id_ = table_id;
       param.batch_size_ = arg_.config_.batch_size_;
       param.parallel_ = arg_.config_.session_count_;
-      param.session_count_ = MIN(arg_.config_.session_count_, (int32_t)tenant->unit_max_cpu());
+      param.session_count_ = MIN(arg_.config_.session_count_, (int32_t)tenant->unit_max_cpu() * 2);
       param.max_error_row_count_ = arg_.config_.max_error_row_count_;
       param.column_count_ = column_names.count();
       param.need_sort_ = arg_.config_.flag_.is_need_sort_;

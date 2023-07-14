@@ -2024,13 +2024,31 @@ int ObLSTabletService::create_tablet(
   table_store_flag.set_with_major_sstable();
   tablet_handle.reset();
 
-  if (OB_FAIL(ObTabletCreateDeleteHelper::prepare_create_msd_tablet())) {
+  // ddl schema version defense
+  if (table_schema.is_index_table()) {
+    const int64_t table_schema_version = table_schema.get_schema_version();
+    ObTenantFreezeInfoMgr::FreezeInfo freeze_info;
+
+    if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(get_freeze_info_behind_snapshot_version, snapshot_version, freeze_info))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("failed to get freeze info behind snapshot version", K(ret), K(snapshot_version));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_UNLIKELY(table_schema_version > freeze_info.schema_version)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_ERROR("schema version in freeze info is less than table schema version", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
+        K(snapshot_version), K(table_schema_version), K(freeze_info), K(create_scn), K(table_schema));
+    }
+  }
+
+  if (FAILEDx(ObTabletCreateDeleteHelper::prepare_create_msd_tablet())) {
     LOG_WARN("fail to prepare create msd tablet", K(ret));
   }
 
-  {
+  if (OB_SUCC(ret)) {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.tablet_id_.hash());
-    if (FAILEDx(ObTabletCreateDeleteHelper::create_msd_tablet(key, tablet_handle))) {
+    if (OB_FAIL(ObTabletCreateDeleteHelper::create_msd_tablet(key, tablet_handle))) {
       LOG_WARN("failed to create msd tablet", K(ret), K(key));
     } else if (OB_ISNULL(tablet = tablet_handle.get_obj())
         || OB_ISNULL(allocator = tablet_handle.get_allocator())) {
@@ -2353,15 +2371,29 @@ int ObLSTabletService::create_memtable(
   return ret;
 }
 
-int ObLSTabletService::check_allow_to_read()
+int ObLSTabletService::check_allow_to_read(AllowToReadMgr::AllowToReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  AllowToReadMgr::AllowToReadInfo read_info;
   allow_to_read_mgr_.load_allow_to_read_info(read_info);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (!read_info.allow_to_read()) {
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
+  }
+  return ret;
+}
+
+int ObLSTabletService::check_read_info_same(const AllowToReadMgr::AllowToReadInfo &read_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_same = false;
+  allow_to_read_mgr_.check_read_info_same(read_info, is_same);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (!is_same) {
     ret = OB_REPLICA_NOT_READABLE;
     LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
   }
@@ -5836,8 +5868,7 @@ int ObLSTabletService::set_allow_to_read_(ObLS *ls)
     if (OB_FAIL(ls->get_migration_and_restore_status(migration_status, restore_status))) {
       LOG_WARN("failed to get ls migration and restore status", K(ret), KPC(ls));
     } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status
-        && ObLSRestoreStatus::RESTORE_MAJOR_DATA != restore_status
-        && ObLSRestoreStatus::RESTORE_NONE != restore_status) {
+        || ObLSRestoreStatus::RESTORE_NONE != restore_status) {
       allow_to_read_mgr_.disable_to_read();
       FLOG_INFO("set ls do not allow to read", KPC(ls), K(migration_status), K(restore_status));
     } else {
@@ -6062,7 +6093,6 @@ int ObLSTabletService::set_frozen_for_all_memtables()
 int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_tablet_meta_f)
 {
   int ret = OB_SUCCESS;
-
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));

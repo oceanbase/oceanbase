@@ -1360,7 +1360,7 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
                                           born_epoch,
                                           &tx,
                                           expire_ts))) {
-      if (OB_NOT_MASTER == ret) {
+      if (common_retryable_error_(ret)) {
         slowpath = true;
         TRANS_LOG(INFO, "fallback to msg driven rollback", K(ret), K(savepoint), K(p), K(tx));
       } else {
@@ -1433,6 +1433,9 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
               TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
             }
           }
+        } else if (OB_REPLICA_NOT_READABLE == ret && is_ls_dropped_(ls)) {
+          ctx_born_epoch = ObTxPart::EPOCH_DEAD;
+          ret = OB_SUCCESS;
         } else {
           TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(ls), K(tx_id));
         }
@@ -1768,7 +1771,9 @@ int ObTransService::start_epoch_(ObTxDesc &tx)
     } else if (OB_FAIL(tx.switch_to_idle())) {
       TRANS_LOG(WARN, "switch to idlefail", K(ret), K(tx));
     }
+#ifndef NDEBUG
     TRANS_LOG(INFO, "tx start new epoch", K(ret), K(tx));
+#endif
   }
   ObTransTraceLog &tlog = tx.get_tlog();
   int tlog_truncate_cnt = 0;

@@ -404,12 +404,20 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
                       pcv_schema->schema_id_, table_schema))) {
             LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
           } else { /* do nothing */ }
-        } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, //otherwise, use db id in session and table name search schema
+        } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
                                                                 database_id,
                                                                 pcv_schema->table_name_,
                                                                 false,
                                                                 table_schema))) {
           LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
+        } else if (nullptr == table_schema && OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
+                                                                pcv_schema->database_id_,
+                                                                pcv_schema->table_name_,
+                                                                false,
+                                                                table_schema))) {
+          LOG_WARN("failed to get table schema",
+                  K(ret), K(pcv_schema->tenant_id_), K(pcv_schema->database_id_),
+                  K(pcv_schema->table_name_));
         } else if (nullptr == table_schema && OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
                                                                                            common::OB_ORA_SYS_DATABASE_ID,
                                                                                            pcv_schema->table_name_,

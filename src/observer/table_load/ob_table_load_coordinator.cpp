@@ -300,14 +300,14 @@ int ObTableLoadCoordinator::begin()
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator begin");
-    obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
-    if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::INITED))) {
+    ObMutexGuard guard(coordinator_ctx_->get_op_lock());
+    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::INITED))) {
       LOG_WARN("fail to check status", KR(ret));
     } else if (OB_FAIL(pre_begin_peers())) {
       LOG_WARN("fail to pre begin peers", KR(ret));
     } else if (OB_FAIL(confirm_begin_peers())) {
       LOG_WARN("fail to confirm begin peers", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_loading_unlock())) {
+    } else if (OB_FAIL(coordinator_ctx_->set_status_loading())) {
       LOG_WARN("fail to set coordinator status loading", KR(ret));
     }
   }
@@ -396,11 +396,11 @@ int ObTableLoadCoordinator::finish()
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator finish");
+    ObMutexGuard guard(coordinator_ctx_->get_op_lock());
     bool active_trans_exist = false;
     bool committed_trans_eixst = false;
-    obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
     // 1. 冻结状态, 防止后续继续创建trans
-    if (OB_FAIL(coordinator_ctx_->set_status_frozen_unlock())) {
+    if (OB_FAIL(coordinator_ctx_->set_status_frozen())) {
       LOG_WARN("fail to set coordinator status frozen", KR(ret));
     }
     // 2. 检查当前是否还有trans没有结束
@@ -426,7 +426,7 @@ int ObTableLoadCoordinator::finish()
         LOG_WARN("fail to start merge peers", KR(ret));
       }
       // 5. 设置当前状态为合并中
-      else if (OB_FAIL(coordinator_ctx_->set_status_merging_unlock())) {
+      else if (OB_FAIL(coordinator_ctx_->set_status_merging())) {
         LOG_WARN("fail to set coordinator status merging", KR(ret));
       }
       // 6. 添加定时任务检查合并结果
@@ -656,9 +656,9 @@ int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator commit");
-    obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
+    ObMutexGuard guard(coordinator_ctx_->get_op_lock());
     ObTableLoadSqlStatistics sql_statistics;
-    if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
+    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
     } else if (OB_FAIL(commit_peers(sql_statistics))) {
       LOG_WARN("fail to commit peers", KR(ret));
@@ -668,7 +668,7 @@ int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
       LOG_WARN("fail to drive sql stat", KR(ret));
     } else if (OB_FAIL(commit_redef_table())) {
       LOG_WARN("fail to commit redef table", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_commit_unlock())) {
+    } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));
     } else {
       result_info = coordinator_ctx_->result_info_;
@@ -687,9 +687,9 @@ int ObTableLoadCoordinator::px_commit_data()
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator px_commit_data");
-    obsys::ObRLockGuard guard(coordinator_ctx_->get_status_lock());
+    ObMutexGuard guard(coordinator_ctx_->get_op_lock());
     ObTableLoadSqlStatistics sql_statistics;
-    if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
+    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
     } else if (OB_FAIL(commit_peers(sql_statistics))) {
       LOG_WARN("fail to commit peers", KR(ret));
@@ -711,12 +711,12 @@ int ObTableLoadCoordinator::px_commit_ddl()
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator px_commit_ddl");
-    obsys::ObWLockGuard guard(coordinator_ctx_->get_status_lock());
-    if (OB_FAIL(coordinator_ctx_->check_status_unlock(ObTableLoadStatusType::MERGED))) {
+    ObMutexGuard guard(coordinator_ctx_->get_op_lock());
+    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
     } else if (OB_FAIL(commit_redef_table())) {
       LOG_WARN("fail to commit redef table", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_commit_unlock())) {
+    } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));
     }
   }
@@ -731,7 +731,6 @@ int ObTableLoadCoordinator::drive_sql_stat(ObExecContext *ctx,
   const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
   ObSchemaGetterGuard schema_guard;
   ObSchemaGetterGuard *tmp_schema_guard = nullptr;
-  ObSchemaGetterGuard *tmp_schema_guard2 = nullptr;
   const ObTableSchema *table_schema = nullptr;
   if (OB_UNLIKELY(nullptr == ctx || sql_statistics.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -741,9 +740,8 @@ int ObTableLoadCoordinator::drive_sql_stat(ObExecContext *ctx,
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else {
     tmp_schema_guard = ctx->get_virtual_table_ctx().schema_guard_;
-    tmp_schema_guard2 = ctx->get_das_ctx().get_schema_guard();
     ctx->get_sql_ctx()->schema_guard_ = &schema_guard;
-    ctx->get_das_ctx().get_schema_guard() = &schema_guard;
+    ctx->get_das_ctx().set_sql_ctx(ctx->get_sql_ctx());
   }
   ObSEArray<ObOptColumnStat *, 64> part_column_stats;
   if (OB_FAIL(ret)) {
@@ -754,7 +752,7 @@ int ObTableLoadCoordinator::drive_sql_stat(ObExecContext *ctx,
     LOG_WARN("fail to drive global stat by direct load", KR(ret));
   }
   ctx->get_sql_ctx()->schema_guard_ = tmp_schema_guard;
-  ctx->get_das_ctx().get_schema_guard() = tmp_schema_guard2;
+  ctx->get_das_ctx().set_sql_ctx(ctx->get_sql_ctx());
   return ret;
 }
 
@@ -770,8 +768,7 @@ int ObTableLoadCoordinator::get_status(ObTableLoadStatusType &status, int &error
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
     LOG_INFO("coordinator get status");
-    status = coordinator_ctx_->get_status();
-    error_code = coordinator_ctx_->get_error_code();
+    coordinator_ctx_->get_status(status, error_code);
   }
   return ret;
 }
@@ -1258,8 +1255,7 @@ int ObTableLoadCoordinator::get_trans_status(const ObTableLoadTransId &trans_id,
     if (OB_FAIL(coordinator_ctx_->get_trans_ctx(trans_id, trans_ctx))) {
       LOG_WARN("fail to get trans ctx", KR(ret), K(trans_id));
     } else {
-      trans_status = trans_ctx->get_trans_status();
-      error_code = trans_ctx->get_error_code();
+      trans_ctx->get_trans_status(trans_status, error_code);
     }
   }
   return ret;

@@ -39,7 +39,7 @@ class ObAdminParserLogEntry
 {
 public:
   ObAdminParserLogEntry(const palf::LogEntry &log_entry,
-                        const palf::block_id_t block_id,
+                        const char *block_name,
                         const palf::LSN lsn,
                         const share::ObAdminMutatorStringArg &str_arg);
   ~ObAdminParserLogEntry();
@@ -81,7 +81,7 @@ private:
   int64_t pos_;
 
   int64_t scn_val_;
-  palf::block_id_t block_id_;
+  char block_name_[OB_MAX_FILE_NAME_LENGTH];
   palf::LSN lsn_;
   share::ObAdminMutatorStringArg str_arg_;
 };

@@ -23,7 +23,8 @@ using namespace sql;
 using namespace table;
 
 ObTableLoadPartitionCalc::ObTableLoadPartitionCalc()
-  : is_partition_with_autoinc_(false),
+  : session_info_(nullptr),
+    is_partition_with_autoinc_(false),
     partition_with_autoinc_idx_(OB_INVALID_INDEX),
     tenant_id_(OB_INVALID_ID),
     table_id_(OB_INVALID_ID),
@@ -42,6 +43,8 @@ int ObTableLoadPartitionCalc::init(uint64_t tenant_id, uint64_t table_id, sql::O
     LOG_WARN("ObTableLoadPartitionCalc init twice", KR(ret), KP(this));
   } else {
     allocator_.set_tenant_id(tenant_id);
+    sql_ctx_.schema_guard_ = &schema_guard_;
+    exec_ctx_.set_sql_ctx(&sql_ctx_);
     const ObTableSchema *table_schema = nullptr;
     ObDataTypeCastParams cast_params(session_info->get_timezone_info());
     if (OB_FAIL(time_cvrt_.init(cast_params.get_nls_format(ObDateTimeType)))) {
@@ -57,7 +60,6 @@ int ObTableLoadPartitionCalc::init(uint64_t tenant_id, uint64_t table_id, sql::O
           LOG_WARN("fail to get tablet and object", KR(ret));
         }
       } else {  // 分区表
-        exec_ctx_.set_sql_ctx(&sql_ctx_);
         // 初始化table_location_
         if (OB_FAIL(
               table_location_.init_partition_ids_by_rowkey2(exec_ctx_, *session_info, schema_guard_, table_id))) {

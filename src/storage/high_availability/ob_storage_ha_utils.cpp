@@ -30,6 +30,7 @@
 #include "storage/ob_storage_rpc.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "rootserver/ob_tenant_info_loader.h"
 
 using namespace oceanbase::share;
 
@@ -236,6 +237,34 @@ int ObStorageHAUtils::check_ls_deleted(
   return ret;
 }
 
+int ObStorageHAUtils::check_transfer_ls_can_rebuild(
+    const share::SCN replay_scn,
+    bool &need_rebuild)
+{
+  int ret = OB_SUCCESS;
+  SCN readable_scn = SCN::base_scn();
+  rootserver::ObTenantInfoLoader *info = MTL(rootserver::ObTenantInfoLoader*);
+  need_rebuild = false;
+  if (!replay_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument invalid", K(ret), K(replay_scn));
+  } else if (OB_ISNULL(info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info is null", K(ret), K(replay_scn));
+  } else if (MTL_IS_PRIMARY_TENANT()) {
+    need_rebuild = true;
+  } else if (OB_FAIL(info->get_readable_scn(readable_scn))) {
+    LOG_WARN("failed to get readable scn", K(ret), K(readable_scn));
+  } else if (!readable_scn.is_valid()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("readable_scn not valid", K(ret), K(readable_scn));
+  } else if (readable_scn >= replay_scn) {
+    need_rebuild = true;
+  } else {
+    need_rebuild = false;
+  }
+  return ret;
+}
 
 bool ObTransferUtils::is_need_retry_error(const int err)
 {
@@ -244,8 +273,10 @@ bool ObTransferUtils::is_need_retry_error(const int err)
   switch (err) {
   //Has active trans need retry
   case OB_TRANSFER_MEMBER_LIST_NOT_SAME:
+  case OB_LS_LOCATION_LEADER_NOT_EXIST:
   case OB_PARTITION_NOT_LEADER:
   case OB_TRANS_TIMEOUT:
+  case OB_TIMEOUT:
       bool_ret = true;
       break;
     default:

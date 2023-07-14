@@ -213,7 +213,7 @@ public:
 
 private:
   static const int32_t SCS_ONE_BIT = 1;
-  static const int32_t SCS_RESERVED_BITS = 49;
+  static const int32_t SCS_RESERVED_BITS = 48;
 
 public:
   union {
@@ -223,6 +223,7 @@ public:
       uint64_t compaction_type_                 : 2;
       uint64_t contain_parallel_range_          : SCS_ONE_BIT;
       uint64_t medium_merge_reason_             : 8;
+      uint64_t is_schema_changed_               : SCS_ONE_BIT;
       uint64_t reserved_                        : SCS_RESERVED_BITS;
     };
   };

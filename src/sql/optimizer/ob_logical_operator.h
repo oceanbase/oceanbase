@@ -1798,6 +1798,10 @@ private:
       ObLogicalOperator *join_filter_use_op,
       double join_filter_rate,
       RuntimeFilterType type);
+  int cal_runtime_filter_compare_func(
+      ObLogJoinFilter *join_filter_use,
+      ObRawExpr *join_use_expr,
+      ObRawExpr *join_create_expr);
 
 
   /* manual set dop for each dfo */

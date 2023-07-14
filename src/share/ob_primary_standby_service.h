@@ -81,6 +81,25 @@ public:
       const obrpc::ObRecoverTenantArg::RecoverType &recover_type,
       const share::SCN &recovery_until_scn);
 
+  /**
+   * @description:
+   *    check log_restore_source config, check whether can create net standby tenant
+   * @param[in] log_restore_source log_restore_source config string
+   * @param[out] compat_mode primary tenant compat_mode
+   * @return return code
+   */
+  int check_can_create_standby_tenant(
+      const common::ObString &log_restore_source,
+      ObCompatibilityMode &compat_mode);
+
+  /**
+   * @description:
+   *    wait net standby tenant create end
+   * @param[in] tenant_id
+   * @return return code
+   */
+  int wait_create_standby_tenant_end(const uint64_t tenant_id);
+
 private:
   int check_inner_stat_();
 
@@ -184,6 +203,14 @@ private:
   int get_tenant_status_(
       const uint64_t tenant_id,
       ObTenantStatus &status);
+
+  /**
+   * @description:
+   *    check ls restore_status is normal
+   * @param[in] tenant_id the tenant id to check
+   * @return return code
+   */
+  int check_ls_restore_status_(const uint64_t tenant_id);
 
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;

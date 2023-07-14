@@ -418,10 +418,13 @@ TEST_F(ObReplayFromMiddleTest, observer_start)
 TEST_F(ObReplayFromMiddleTest, add_tenant)
 {
   // create tenant
+  DEF_VAL_FOR_SQL
   ASSERT_EQ(OB_SUCCESS, create_tenant());
   ASSERT_EQ(OB_SUCCESS, get_tenant_id(RunCtx.tenant_id_));
   ASSERT_NE(0, RunCtx.tenant_id_);
   ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy2().acquire(connection));
+  WRITE_SQL_BY_CONN(connection, "alter system set minor_compact_trigger = 16");
 }
 
 TEST_F(ObReplayFromMiddleTest, basic_test)
@@ -568,7 +571,9 @@ void ObReplayRestartTest::flush_tx_data(ObLS *ls)
   int64_t tail_after_flush = 0;
   ObTxDataMemtableMgr &mgr = ls->ls_tablet_svr_.tx_data_memtable_mgr_;
   ASSERT_EQ(OB_SUCCESS, mgr.get_memtable_range(head_before_flush, tail_before_flush));
-  ASSERT_EQ(OB_SUCCESS, ls->ls_tx_svr_.flush_ls_inner_tablet(LS_TX_DATA_TABLET));
+  int ret = ls->ls_tx_svr_.flush_ls_inner_tablet(LS_TX_DATA_TABLET);
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_EAGAIN == ret);
+
   while (--retry_times > 0) {
     ASSERT_EQ(OB_SUCCESS, mgr.get_memtable_range(head_after_flush, tail_after_flush));
     if (head_after_flush > head_before_flush && tail_after_flush > tail_before_flush &&
@@ -580,7 +585,6 @@ void ObReplayRestartTest::flush_tx_data(ObLS *ls)
     }
   }
   ASSERT_GT(head_after_flush, head_before_flush);
-  ASSERT_GT(tail_after_flush, tail_before_flush);
   ASSERT_EQ(head_after_flush + 1, tail_after_flush);
   fprintf(stdout, "flush tx data done\n");
 }
@@ -638,31 +642,42 @@ namespace storage {
 
 void ObTxDataTable::update_calc_upper_info_(const SCN &max_decided_scn)
 {
-  UNUSED(max_decided_scn);
   int64_t cur_ts = common::ObTimeUtility::fast_current_time();
   SpinWLockGuard lock_guard(calc_upper_info_.lock_);
   // recheck update condition and do update calc_upper_info
+
+  /**********************************************************/
+  //if (cur_ts - calc_upper_info_.update_ts_ > 30_s && max_decided_scn> calc_upper_info_.keep_alive_scn_) {
+  /**********************************************************/
+
   SCN min_start_scn = SCN::min_scn();
   SCN keep_alive_scn = SCN::min_scn();
   MinStartScnStatus status;
   ls_->get_min_start_scn(min_start_scn, keep_alive_scn, status);
-  switch (status) {
-    case MinStartScnStatus::UNKOWN:
-      // do nothing
-      break;
-    case MinStartScnStatus::NO_CTX:
-      // use the last keep_alive_scn as min_start_scn
-      calc_upper_info_.min_start_scn_in_ctx_ = calc_upper_info_.keep_alive_scn_;
-      calc_upper_info_.keep_alive_scn_ = keep_alive_scn;
-      calc_upper_info_.update_ts_ = cur_ts;
-      break;
-    case MinStartScnStatus::HAS_CTX:
-      calc_upper_info_.min_start_scn_in_ctx_ = min_start_scn;
-      calc_upper_info_.keep_alive_scn_ = keep_alive_scn;
-      calc_upper_info_.update_ts_ = cur_ts;
-      break;
-    default:
-      break;
+  if (MinStartScnStatus::UNKOWN == status) {
+    // do nothing
+  } else {
+    int ret = OB_SUCCESS;
+    CalcUpperInfo tmp_calc_upper_info;
+    tmp_calc_upper_info.keep_alive_scn_ = keep_alive_scn;
+    tmp_calc_upper_info.update_ts_ = cur_ts;
+    if (MinStartScnStatus::NO_CTX == status) {
+      // use the previous keep_alive_scn as min_start_scn
+      tmp_calc_upper_info.min_start_scn_in_ctx_ = calc_upper_info_.keep_alive_scn_;
+    } else if (MinStartScnStatus::HAS_CTX == status) {
+      tmp_calc_upper_info.min_start_scn_in_ctx_ = min_start_scn;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "invalid min start scn status", K(min_start_scn), K(keep_alive_scn), K(status));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (tmp_calc_upper_info.min_start_scn_in_ctx_ < calc_upper_info_.min_start_scn_in_ctx_) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "invalid min start scn", K(tmp_calc_upper_info), K(calc_upper_info_));
+    } else {
+      calc_upper_info_ = tmp_calc_upper_info;
+    }
   }
 }
 

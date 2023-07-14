@@ -486,34 +486,27 @@ int ObRestoreService::fill_restore_statistics(const share::ObPhysicalRestoreJob 
   restore_progress_info.key_.tenant_id_ = job_info.get_tenant_id();
   restore_progress_info.restore_scn_ = job_info.get_restore_scn();
   int64_t idx = job_info.get_multi_restore_path_list().get_backup_set_path_list().count() - 1;
-  const int64_t turn_id = 1;// first turn;
-  share::ObBackupDataType type;
-  type.set_minor_data_backup();
+  ObBackupDataLSAttrDesc ls_info;
   if (idx < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid job info", K(ret), K(idx), K(job_info));
   } else {
     storage::ObBackupDataStore store;
     storage::ObExternBackupSetInfoDesc backup_set_info;
-    storage::ObBackupDataTabletToLSDesc tablet_to_ls_info;
     const share::ObBackupSetPath &backup_set_path = job_info.get_multi_restore_path_list().get_backup_set_path_list().at(idx);
     if (OB_FAIL(store.init(backup_set_path.ptr()))) {
       LOG_WARN("fail to init backup data store", K(backup_set_path));
     } else if (OB_FAIL(store.read_backup_set_info(backup_set_info))) {
       LOG_WARN("fail to read backup set info", K(ret));
-    } else if (OB_FAIL(store.read_tablet_to_ls_info(turn_id, type, tablet_to_ls_info))) {
-      LOG_WARN("fail to read tablet to ls info", K(ret));
+    } else if (OB_FAIL(store.read_ls_attr_info(backup_set_info.backup_set_file_.meta_turn_id_, ls_info))) {
+      LOG_WARN("fail to read ls attr info", K(ret));
     } else {
-      restore_progress_info.ls_count_ = tablet_to_ls_info.tablet_to_ls_.count();
-      ARRAY_FOREACH(tablet_to_ls_info.tablet_to_ls_, i) {
-        restore_progress_info.tablet_count_ += tablet_to_ls_info.tablet_to_ls_.at(i).tablet_id_list_.count();
-      }
+      restore_progress_info.ls_count_ = ls_info.ls_attr_array_.count();
+      restore_progress_info.tablet_count_ = backup_set_info.backup_set_file_.stats_.finish_tablet_count_;
       restore_progress_info.total_bytes_ = backup_set_info.backup_set_file_.stats_.output_bytes_;
     }
   }
-
-  if (OB_FAIL(ret)) {
-  } else {
+  if (OB_SUCC(ret)) {
     share::ObRestorePersistHelper helper;
     if (OB_FAIL(helper.init(job_info.get_tenant_id()))) {
       LOG_WARN("fail to init heler", K(ret));
@@ -1187,7 +1180,7 @@ int ObRestoreService::finish_create_ls_(
             //no need to update
           } else if (ls_info == status_info.status_) {
             //no need update
-          } else if (OB_FAIL(status_op.update_ls_status(
+          } else if (OB_FAIL(status_op.update_ls_status_in_trans(
                   tenant_id, status_info.ls_id_, status_info.status_,
                   ls_info, share::NORMAL_SWITCHOVER_STATUS, trans))) {
             LOG_WARN("failed to update status", KR(ret), K(tenant_id), K(status_info), K(ls_info));

@@ -353,7 +353,7 @@ Outputs & filters:
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c1]), other_conds(nil)
   4 - output([t_p4.c1]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[t_p4.c1]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_p4.c1)]
   5 - output([t_p4.c1]), filter(nil), rowset=256
   6 - output([t_p4.c1]), filter(nil), rowset=256
       dop=10
@@ -410,7 +410,7 @@ Outputs & filters:
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
   4 - output([t_p4.c2]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[t_p4.c2]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_p4.c2)]
   5 - output([t_p4.c2]), filter(nil), rowset=256
   6 - output([t_p4.c2]), filter(nil), rowset=256
       dop=10
@@ -452,7 +452,7 @@ Outputs & filters:
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
   4 - output([t_p4.c2]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[t_p4.c2]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_p4.c2)]
   5 - output([t_p4.c2]), filter(nil), rowset=256
   6 - output([t_p4.c2]), filter(nil), rowset=256
       dop=10
@@ -644,7 +644,7 @@ Outputs & filters:
   3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_s.c1]), other_conds(nil)
   4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[t_s.c1]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_s.c1)]
   5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
   6 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
@@ -1931,7 +1931,7 @@ Outputs & filters:
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
   5 - output([t_temp_p5.c1]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[t_temp_p5.c1]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_temp_p5.c1)]
   6 - output([t_temp_p5.c1]), filter(nil), rowset=256
   7 - output([t_temp_p5.c1]), filter(nil), rowset=256
       dop=10
@@ -1977,7 +1977,7 @@ Outputs & filters:
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
   5 - output([t_temp_p5.c1]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[t_temp_p5.c1]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_temp_p5.c1)]
   6 - output([t_temp_p5.c1]), filter(nil), rowset=256
   7 - output([t_temp_p5.c1]), filter(nil), rowset=256
       dop=10
@@ -2097,7 +2097,7 @@ Outputs & filters:
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p4.c1]), other_conds(nil)
   5 - output([t_temp_p4.c1]), filter(nil), rowset=256
-      RF_TYPE(bloom), RF_EXPR[t_temp_p4.c1]
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_temp_p4.c1)]
   6 - output([t_temp_p4.c1]), filter(nil), rowset=256
   7 - output([t_temp_p4.c1]), filter(nil), rowset=256
       dop=10

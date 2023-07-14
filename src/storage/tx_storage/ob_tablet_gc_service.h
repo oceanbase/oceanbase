@@ -81,7 +81,7 @@ public:
   int set_ls_transfer_scn(const common::ObIArray<ObTabletHandle> &deleted_tablets);
   int gc_tablets(const common::ObIArray<ObTabletHandle> &deleted_tablets);
   bool check_stop() { return ATOMIC_LOAD(&update_enabled_) == false; }
-  void disable_gc();
+  int disable_gc();
   void enable_gc();
   int set_tablet_change_checkpoint_scn(const share::SCN &scn);
   int offline();

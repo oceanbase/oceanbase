@@ -72,6 +72,7 @@ public:
   const char* pending_write_buf_;
   int64_t pending_write_sz_;
   common::ObAddr client_addr_;
+  uint32_t sql_session_id_; //debug only
 private:
   bool is_inited_;
 };

@@ -161,7 +161,9 @@ private:
   int unlock_and_clear_task_(
       const share::ObTransferTaskID task_id,
       share::ObTransferTask &task);
-  int notify_storage_transfer_service_(const share::ObTransferTaskID task_id, const share::ObLSID &dest_ls);
+  int notify_storage_transfer_service_(
+      const share::ObTransferTaskID task_id,
+      const share::ObLSID &src_ls);
   int add_in_trans_lock_and_refresh_schema_(
       ObMySQLTransaction &trans,
       const share::ObLSID &src_ls,

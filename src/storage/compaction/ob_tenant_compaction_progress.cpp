@@ -318,10 +318,14 @@ int ObTenantCompactionProgressMgr::get_pos_(const int64_t major_snapshot_version
 {
   int ret = OB_SUCCESS;
   pos = ObInfoRingArray::get_last_pos();
-  while (OB_SUCC(ret)) {
+  int64_t loop_cnt = max_cnt_;
+  while (OB_SUCC(ret) && 0 < loop_cnt) {
     if (array_[pos].merge_version_ == major_snapshot_version) {
       break;
     } else if (array_[pos].merge_version_ > major_snapshot_version) {
+      LOG_DEBUG("merge_version is larger than major_snapshot_version", K(pos),
+        "merge_version", array_[pos].merge_version_,
+        K(major_snapshot_version));
       pos = pos == 0 ? max_cnt_ - 1 : pos - 1;
     } else {
       pos = -1;
@@ -329,6 +333,7 @@ int ObTenantCompactionProgressMgr::get_pos_(const int64_t major_snapshot_version
       LOG_DEBUG("entry not exits", K(ret), K(pos), K(major_snapshot_version));
       break;
     }
+    --loop_cnt;
   }
   if (OB_SUCC(ret) && pos >= 0 && pos < SERVER_PROGRESS_MAX_CNT
       && array_[pos].merge_version_ != major_snapshot_version) {

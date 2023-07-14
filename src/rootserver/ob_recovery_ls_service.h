@@ -62,6 +62,10 @@ namespace transaction
 {
 class ObTxLogBlock;
 }
+namespace palf
+{
+class PalfHandleGuard;
+}
 namespace rootserver 
 {
 /*description:
@@ -83,7 +87,9 @@ public:
 private:
  //get log iterator by start_scn
  //interface for thread0
+ int init_palf_handle_guard_(palf::PalfHandleGuard &palf_handle_guard);
  int seek_log_iterator_(const share::SCN &syn_scn,
+                       palf::PalfHandleGuard &palf_handle_guard,
                         palf::PalfBufferIterator &iterator);
  int process_ls_log_(const ObAllTenantInfo &tenant_info,
                      share::SCN &start_scn,
@@ -98,6 +104,7 @@ private:
                           common::ObMySQLTransaction &trans);
  int create_new_ls_(const share::ObLSAttr &ls_attr,
                     const share::SCN &syn_scn,
+                    const ObTenantSwitchoverStatus &switchover_status,
                     common::ObMySQLTransaction &trans);
  int construct_sys_ls_recovery_stat_based_on_sync_scn_(
      const share::SCN &syn_scn,

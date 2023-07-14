@@ -2398,7 +2398,11 @@ int ObCopyTransferTabletInfoObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
-  const int64_t FETCH_TABLET_INFO_TIMEOUT = GCONF._transfer_start_rpc_timeout; //default 10ms
+  int64_t get_transfer_start_scn_timeout = 10_s;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(rpc_arg.tenant_id_));
+  if (tenant_config.is_valid()) {
+    get_transfer_start_scn_timeout = tenant_config->_transfer_start_rpc_timeout;
+  }
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -2409,7 +2413,7 @@ int ObCopyTransferTabletInfoObReader::init(
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
-  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(FETCH_TABLET_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(get_transfer_start_scn_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_transfer_tablet_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
@@ -2652,7 +2656,8 @@ ObCopyLSViewInfoRestoreReader::ObCopyLSViewInfoRestoreReader()
 
 int ObCopyLSViewInfoRestoreReader::init(
     const share::ObLSID &ls_id,
-    const ObRestoreBaseInfo &restore_base_info)
+    const ObRestoreBaseInfo &restore_base_info,
+    backup::ObBackupMetaIndexStoreWrapper *meta_index_store)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -2662,7 +2667,11 @@ int ObCopyLSViewInfoRestoreReader::init(
              || OB_UNLIKELY(!restore_base_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(restore_base_info));
-  } else if (OB_FAIL(reader_.init(restore_base_info.backup_dest_, ls_id))) {
+  } else if (restore_base_info.backup_data_version_ >= DATA_VERSION_4_2_0_0
+          && OB_FAIL(reader_.init(restore_base_info.backup_dest_, ls_id))) {
+    LOG_WARN("fail to init reader", K(ret), K(restore_base_info), K(ls_id));
+  } else if (restore_base_info.backup_data_version_ < DATA_VERSION_4_2_0_0
+          && OB_FAIL(init_for_4_1_x_(ls_id, restore_base_info, *meta_index_store))) {
     LOG_WARN("fail to init reader", K(ret), K(restore_base_info), K(ls_id));
   } else {
     ls_id_ = ls_id;
@@ -2703,17 +2712,50 @@ int ObCopyLSViewInfoRestoreReader::get_next_tablet_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCopyLSViewInfoRestoreReader not init", K(ret));
+  } else if (restore_base_info_->backup_data_version_ < DATA_VERSION_4_2_0_0) {
+    if (OB_FAIL(reader_41x_.fetch_tablet_info(tablet_info))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get next tablet meta", K(ret));
+      }
+    }
   } else if (OB_FAIL(reader_.get_next(tablet_info.param_))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next tablet meta", K(ret));
     }
-  } else {
+  }
+
+  if (OB_SUCC(ret)) {
     tablet_info.data_size_ = 0;
     tablet_info.status_ = ObCopyTabletStatus::TABLET_EXIST;
     tablet_info.tablet_id_ = tablet_info.param_.tablet_id_;
     tablet_info.version_ = 0;
   }
 
+  return ret;
+}
+
+int ObCopyLSViewInfoRestoreReader::init_for_4_1_x_(
+    const share::ObLSID &ls_id,
+    const ObRestoreBaseInfo &restore_base_info,
+    backup::ObBackupMetaIndexStoreWrapper &meta_index_store)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDataStore store;
+  ObArray<common::ObTabletID> tablet_id_array;
+  ObArray<common::ObTabletID> deleted_tablet_id_array;
+  ObArray<common::ObTabletID> tablet_need_restore_array;
+  const int64_t base_turn_id = 1; // for restore, read all tablet from turn 1
+  if (OB_FAIL(store.init(restore_base_info.backup_dest_))) {
+    LOG_WARN("failed to init backup data store", K(ret));
+  } else if (OB_FAIL(store.read_tablet_to_ls_info_v_4_1_x(base_turn_id, ls_id, tablet_id_array))) {
+    LOG_WARN("failed to read tablet to ls info from 4_1_x backup set", K(ret), K(ls_id));
+  } else if (OB_FAIL(store.read_deleted_tablet_info_v_4_1_x(ls_id, deleted_tablet_id_array))) {
+    LOG_WARN("failed to read deleted tablet info from 4_1_x backup set", K(ret), K(ls_id));
+  } else if (OB_FAIL(get_difference(tablet_id_array, deleted_tablet_id_array, tablet_need_restore_array))) {
+    LOG_WARN("failed to get difference", K(ret), K(tablet_id_array), K(deleted_tablet_id_array));
+  } else if (OB_FAIL(reader_41x_.init(restore_base_info, tablet_need_restore_array, meta_index_store))) {
+    LOG_WARN("failed to init copy tablet info restore reader", K(ret), K(restore_base_info));
+  }
   return ret;
 }
 }

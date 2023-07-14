@@ -276,7 +276,7 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
     STORAGE_LOG(WARN, "Invalid argument to reserve datum row", K(ret), K(capacity));
   } else if (capacity <= get_capacity()) {
     // skip
-  } else if (OB_FAIL(datum_buffer_.reserve(capacity))) {
+  } else if (OB_FAIL(datum_buffer_.reserve(capacity, keep_data))) {
     STORAGE_LOG(WARN, "Failed to reserve datum buffer", K(ret), K(capacity));
   } else if (OB_FAIL(obj_buf_.reserve(capacity))) {
     STORAGE_LOG(WARN, "Failed to reserve obj buf", K(ret), K(capacity));

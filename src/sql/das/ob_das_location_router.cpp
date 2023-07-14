@@ -22,6 +22,7 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/ob_sql_context.h"
 #include "storage/tx/wrs/ob_black_list.h"
+#include "lib/rc/context.h"
 
 namespace oceanbase
 {
@@ -744,6 +745,7 @@ ObDASLocationRouter::ObDASLocationRouter(ObIAllocator &allocator)
     cur_errno_(OB_SUCCESS),
     retry_cnt_(0),
     all_tablet_list_(allocator),
+    succ_tablet_list_(allocator),
     virtual_server_list_(allocator),
     allocator_(allocator)
 {
@@ -1156,20 +1158,35 @@ void ObDASLocationRouter::refresh_location_cache(bool is_nonblock, int err_no)
     //
     // all_tablet_list_ may contain duplicate tablet_id
     int ret = OB_SUCCESS;
-    if (OB_ISNULL(GCTX.location_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("GCTX.location_service_ is null", KR(ret));
-    } else if (OB_FAIL(GCTX.location_service_->batch_renew_tablet_locations(
-        MTL_ID(),
-        all_tablet_list_,
-        err_no,
-        is_nonblock))) {
-      LOG_WARN("batch renew tablet locations failed", KR(ret),
-          "tenant_id", MTL_ID(), K(err_no), K(is_nonblock), K_(all_tablet_list));
-    } else {
-      LOG_INFO("LOCATION: refresh tablet location cache succ", K(err_no), K_(all_tablet_list));
+    lib::ContextParam param;
+    param.set_mem_attr(MTL_ID(), "DasRefrLoca", ObCtxIds::DEFAULT_CTX_ID)
+      .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+      .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE)
+      .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
+    CREATE_WITH_TEMP_CONTEXT(param) {
+      ObList<ObTabletID, ObIAllocator> failed_list(CURRENT_CONTEXT->get_allocator());
+      FOREACH_X(id_iter, all_tablet_list_, OB_SUCC(ret)) {
+        if (!element_exist(succ_tablet_list_, *id_iter) && !element_exist(failed_list, *id_iter)) {
+          if (OB_FAIL(failed_list.push_back(*id_iter))) {
+            LOG_WARN("store failed tablet id failed", KR(ret), K(id_iter));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(GCTX.location_service_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("GCTX.location_service_ is null", KR(ret));
+        } else if (OB_FAIL(GCTX.location_service_->batch_renew_tablet_locations(MTL_ID(),
+                                                                                failed_list,
+                                                                                err_no,
+                                                                                is_nonblock))) {
+          LOG_WARN("batch renew tablet locations failed", KR(ret),
+              "tenant_id", MTL_ID(), K(err_no), K(is_nonblock), K(failed_list));
+        }
+      }
     }
     all_tablet_list_.clear();
+    succ_tablet_list_.clear();
   }
   NG_TRACE_TIMES(1, get_location_cache_end);
 }

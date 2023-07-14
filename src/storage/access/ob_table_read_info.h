@@ -54,8 +54,6 @@ public:
   ~ObColumnIndexArray() { reset(); }
   void reset()
   {
-    rowkey_mode_ = false;
-    for_memtable_ = false;
     schema_rowkey_cnt_ = 0;
     column_cnt_ = 0;
     array_.reset();

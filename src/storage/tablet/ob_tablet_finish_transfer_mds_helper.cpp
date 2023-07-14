@@ -262,7 +262,6 @@ int ObTabletFinishTransferOutReplayExecutor::check_src_transfer_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet tx data is unexpected",
         K(ret),
-        K(ObTabletStatus::get_str(user_data.tablet_status_)),
         K(transfer_seq),
         K(user_data),
         KPC(tablet));
@@ -384,7 +383,6 @@ int ObTabletFinishTransferOutHelper::inner_check_transfer_out_tablet_validity_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet tx data is unexpected",
         K(ret),
-        K(ObTabletStatus::get_str(user_data.tablet_status_)),
         K(transfer_seq),
         K(user_data),
         KPC(tablet));
@@ -711,10 +709,7 @@ int ObTabletFinishTransferInReplayExecutor::check_dest_transfer_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet tx data is unexpected",
         K(ret),
-        K(user_data),
         K(scn_),
-        K(tablet->get_tablet_meta()),
-        K(ObTabletStatus::get_str(user_data.tablet_status_)),
         K(transfer_seq),
         K(user_data),
         KPC(tablet));
@@ -791,13 +786,8 @@ int ObTabletFinishTransferInReplayExecutor::try_make_dest_ls_rebuild_()
     LOG_WARN("failed to get ls", K(ret), K(src_ls_id_), K(tablet_info_));
     if (OB_LS_NOT_EXIST == ret) {
       //overwrite ret
-      bool is_ls_deleted = true;
-      if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(src_ls_id_, is_ls_deleted))) {
-        LOG_WARN("failed to get ls status", K(ret), K(src_ls_id_));
-      } else if (!is_ls_deleted) {
-        need_rebuild = true;
-      } else {
-        need_rebuild = false;
+      if (OB_FAIL(ObStorageHAUtils::check_transfer_ls_can_rebuild(scn_, need_rebuild))) {
+        LOG_WARN("failed to check transfer ls can rebuild", K(ret), K(scn_), K(src_ls_id_));
       }
     }
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -805,7 +795,7 @@ int ObTabletFinishTransferInReplayExecutor::try_make_dest_ls_rebuild_()
     LOG_WARN("ls should not be NULL", K(ret), K(src_ls_id_), K(ls_handle));
   } else if (OB_FAIL(ls->get_max_decided_scn(max_decided_scn))) {
     LOG_WARN("failed to get max decided scn", K(ret), KPC(ls), K(src_ls_id_));
-  } else if (max_decided_scn <= scn_) {
+  } else if (max_decided_scn < scn_) {
     need_rebuild = false;
     //src still exist transfer out tablet, need wait
   } else if (OB_FAIL(ls->ha_get_tablet(tablet_info_.tablet_id_, src_tablet_handle))) {
@@ -997,7 +987,6 @@ int ObTabletFinishTransferInHelper::inner_check_transfer_in_tablet_validity_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet tx data is unexpected",
         K(ret),
-        K(ObTabletStatus::get_str(data.tablet_status_)),
         K(transfer_seq),
         K(data),
         KPC(tablet));

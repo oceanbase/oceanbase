@@ -1554,19 +1554,22 @@ public:
 
   int insert_mds_node(const ObTxBufferNode &buf_node);
   int rollback_last_mds_node();
-  int fill_mds_log(ObTxMultiDataSourceLog &mds_log,
+  int fill_mds_log(ObPartTransCtx* ctx,
+                   ObTxMultiDataSourceLog &mds_log,
                    ObTxMDSRange &mds_range,
                    logservice::ObReplayBarrierType &barrier_flag,
                    share::SCN &mds_base_scn);
+  int earse_from_cache(const ObTxBufferNode &node) {return mds_list_.erase(node); }
   int copy_to(ObTxBufferNodeArray &tmp_array) const;
 
   int64_t get_unsubmitted_size() const { return unsubmitted_size_; }
   int64_t count() const { return mds_list_.size(); }
-  void update_submitted_iterator(const ObTxBufferNodeList::iterator &iter)
-  {
-    unsubmitted_size_ = unsubmitted_size_ - iter->get_serialize_size();
-    submitted_iterator_ = iter;
-  }
+  void update_submitted_iterator(ObTxBufferNodeArray & range_array);
+  void update_sync_failed_range(ObTxBufferNodeArray & range_array);
+  // {
+  //   unsubmitted_size_ = unsubmitted_size_ - iter->get_serialize_size();
+  //   submitted_iterator_ = iter;
+  // }
   void clear_submitted_iterator() { submitted_iterator_ = mds_list_.end(); }
 
   bool is_contain(const ObTxDataSourceType target_type) const;
@@ -1589,25 +1592,31 @@ class ObTxMDSRange
 public:
   ObTxMDSRange() { reset(); }
   void reset();
-  void clear();
+  // void clear();
 
-  int init(ObTxBufferNodeList *list_ptr);
+  int init(ObPartTransCtx * tx_ctx);
   int update_range(ObTxBufferNodeList::iterator iter);
 
-  int move_to(ObTxBufferNodeArray &tx_buffer_node_arr);
-  int copy_to(ObTxBufferNodeArray &tx_buffer_node_arr) const;
+  int move_from_cache_to_arr(ObTxMDSCache & mds_cache, ObTxBufferNodeArray& mds_durable_arr);
+  // int move_to(ObTxBufferNodeArray &tx_buffer_node_arr);
+  // int copy_to(ObTxBufferNodeArray &tx_buffer_node_arr) const;
 
   int range_submitted(ObTxMDSCache &cache);
-  void range_sync_failed();
+  void range_sync_failed(ObTxMDSCache &cache);
 
-  int64_t count() const { return count_; };
+  int64_t count() const { return range_array_.count(); };
 
-  TO_STRING_KV(K(count_));
+  const ObTxBufferNodeArray & get_range_array() {return range_array_;}
+
+  TO_STRING_KV(K(range_array_.count()),K(range_array_));
 
 private:
-  ObTxBufferNodeList *list_ptr_;
-  ObTxBufferNodeList::iterator start_iter_;
-  int64_t count_;
+  ObTxBufferNodeArray range_array_;
+  ObPartTransCtx * tx_ctx_;
+
+  // ObTxBufferNodeList *list_ptr_;
+  // ObTxBufferNodeList::iterator start_iter_;
+  // int64_t count_;
 };
 
 static const int64_t MAX_TABLET_MODIFY_RECORD_COUNT = 16;
@@ -1629,6 +1638,12 @@ public:
   void reset();
   // can not destroy in tx_ctx_table
   void destroy();
+  int assign(const ObTxExecInfo &exec_info);
+
+private:
+  ObTxExecInfo &operator=(const ObTxExecInfo &info);
+
+public:
   TO_STRING_KV(K_(state),
                K_(upstream),
                K_(participants),

@@ -92,7 +92,7 @@ public:
       K_(property),
       K_(restore_status),
       K_(proposal_id));
-private:
+protected:
   common::ObAddr server_;
   common::ObRole role_;
   int64_t sql_port_;

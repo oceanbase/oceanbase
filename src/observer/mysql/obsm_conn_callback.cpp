@@ -117,6 +117,7 @@ int ObSMConnectionCallback::init(ObSqlSockSession& sess, ObSMConnection& conn)
   } else if (OB_FAIL(send_handshake(sess, hsp))) {
     LOG_WARN("send handshake fail", K(ret), K(sess.client_addr_));
   } else {
+    sess.sql_session_id_ = conn.sessid_;
     LOG_INFO("sm conn init succ", K(conn.sessid_), K(sess.client_addr_));
   }
 

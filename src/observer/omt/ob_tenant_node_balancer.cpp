@@ -112,7 +112,11 @@ void ObTenantNodeBalancer::run1()
 
     // check whether tenant unit is changed, try to update unit config of tenant
     ObSEArray<uint64_t, 10> tenants;
-    if (OB_FAIL(unit_getter_.get_tenants(tenants))) {
+    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+      // do nothing if not finish replaying slog
+      LOG_INFO("server slog not finish replaying, need wait");
+      ret = OB_NEED_RETRY;
+    } else if (OB_FAIL(unit_getter_.get_tenants(tenants))) {
       LOG_WARN("get cluster tenants fail", K(ret));
     } else if (OB_FAIL(OTC_MGR.refresh_tenants(tenants))) {
       LOG_WARN("fail refresh tenant config", K(tenants), K(ret));
@@ -256,7 +260,8 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
         server_resource.min_cpu_ += tenant_units.at(i).config_.min_cpu();
       }
 
-      server_resource.memory_size_ += tenant_units.at(i).config_.memory_size();
+      server_resource.memory_size_ += max(ObMallocAllocator::get_instance()->get_tenant_limit(tenant_units.at(i).tenant_id_),
+                                          tenant_units.at(i).config_.memory_size());
       server_resource.log_disk_size_ += tenant_units.at(i).config_.log_disk_size();
     }
   }

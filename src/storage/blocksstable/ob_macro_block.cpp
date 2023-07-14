@@ -482,6 +482,7 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc &desc)
   is_ddl_ = desc.is_ddl_;
   need_pre_warm_ = desc.need_pre_warm_;
   is_force_flat_store_type_ = desc.is_force_flat_store_type_;
+  default_col_checksum_array_valid_ = desc.default_col_checksum_array_valid_;
   col_desc_array_.reset();
   col_default_checksum_array_.reset();
   datum_utils_.reset();

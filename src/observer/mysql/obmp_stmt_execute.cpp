@@ -1643,7 +1643,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
   const bool enable_trace_log = lib::is_trace_log_enabled();
-
   //============================ 注意这些变量的生命周期 ================================
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
@@ -1658,6 +1657,8 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
                                          session.get_effective_tenant_id()))) {
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
+    } else if (OB_FAIL(session.update_timezone_info())) {
+      LOG_WARN("fail to update time zone info", K(ret));
     } else if (is_arraybinding_) {
       need_response_error = false;
       bool optimization_done = false;
@@ -1748,7 +1749,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
 
   //对于tracelog的处理, 不影响正常逻辑, 错误码无须赋值给ret, 清空WARNING BUFFER
   do_after_process(session, ctx_, async_resp_used);
-  record_flt_trace(session);
 
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL);
@@ -1896,6 +1896,7 @@ int ObMPStmtExecute::process()
         }
       }
     }
+    record_flt_trace(session);
   }
 
   if (OB_NOT_NULL(sess) && !sess->get_in_transaction()) {

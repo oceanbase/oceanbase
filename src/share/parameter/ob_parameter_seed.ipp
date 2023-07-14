@@ -317,8 +317,8 @@ DEF_INT(_ob_max_thread_num, OB_CLUSTER_PARAMETER, "0", "[0,10000)",
          "ob max thread number "
          "upper limit of observer thread count. Range: [0, 10000), 0 means no limit.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_DBL(cpu_quota_concurrency, OB_TENANT_PARAMETER, "4", "[1,10]",
-        "max allowed concurrency for 1 CPU quota. Range: [1,10]",
+DEF_DBL(cpu_quota_concurrency, OB_TENANT_PARAMETER, "4", "[1,20]",
+        "max allowed concurrency for 1 CPU quota. Range: [1,20]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(token_reserved_percentage, OB_CLUSTER_PARAMETER,
         "30", "[0,100]",
@@ -1343,7 +1343,7 @@ DEF_TIME(_follower_snapshot_read_retry_duration, OB_TENANT_PARAMETER, "0ms", "[0
 DEF_STR_WITH_CHECKER(default_auto_increment_mode, OB_TENANT_PARAMETER, "order",
         common::ObAutoIncrementModeChecker, "specifies default auto-increment mode, default is 'order'",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\n  \"type_t\": {\n    \"level\":1,\n    \"sample_pct\":\"1.00\",\n    \"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"\n  }\n}",
+DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\"type_t\":{\"level\":1,\"sample_pct\":\"0.10\",\"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"}}",
         "persistent control information for full-link trace",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_print_sample_ppm, OB_TENANT_PARAMETER, "0", "[0, 1000000]",
@@ -1416,27 +1416,27 @@ DEF_TIME(_advance_checkpoint_timeout, OB_CLUSTER_PARAMETER, "30m", "[10s,180m]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //transfer
-DEF_TIME(_transfer_start_rpc_timeout, OB_CLUSTER_PARAMETER, "10s", "[1ms,600s]",
+DEF_TIME(_transfer_start_rpc_timeout, OB_TENANT_PARAMETER, "10s", "[1ms,600s]",
         "transfer start status rpc check some status ready timeout, Range [1ms,600s]. "
-        "The default value is 10ms",
+        "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_transfer_finish_trans_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
+DEF_TIME(_transfer_finish_trans_timeout, OB_TENANT_PARAMETER, "10s", "[1s,600s]",
         "transfer finish transaction timeout, Range [1s,600s]. "
         "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_transfer_start_trans_timeout, OB_CLUSTER_PARAMETER, "10s", "[1ms,600s]",
+DEF_TIME(_transfer_start_trans_timeout, OB_TENANT_PARAMETER, "10s", "[1ms,600s]",
         "transfer start transaction timeout, Range [1ms,600s]. "
         "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(_transfer_start_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
+DEF_INT(_transfer_start_retry_count, OB_TENANT_PARAMETER, "3", "[0,64]",
         "the number of transfer start retry. Range: [0, 64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
 
-DEF_TIME(_transfer_service_wakeup_interval, OB_CLUSTER_PARAMETER, "5m", "[1s,5m]",
+DEF_TIME(_transfer_service_wakeup_interval, OB_TENANT_PARAMETER, "5m", "[1s,5m]",
         "transfer service wakeup interval in errsim mode"
         "Range: [1s, 5m]",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1575,3 +1575,6 @@ DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allowed to limit the memory of tenant 500",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #endif
+DEF_TIME(_worker_long_stall_threshold, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
+        "threshold of dynamic worker works",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

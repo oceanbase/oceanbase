@@ -2550,6 +2550,11 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
       // for use filter op, the compare funcs are used to compare left and right
       // the compare funcs will be stored in ObExprJoinFilterContext finally
         const common::ObIArray<common::ObDatumCmpFuncType> &join_filter_cmp_funcs = op.get_join_filter_cmp_funcs();
+        if (join_filter_cmp_funcs.count() != spec.join_keys_.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("compare func count not match with join_keys count",
+              K(join_filter_cmp_funcs.count()), K(spec.join_keys_.count()));
+        }
         for (int64_t i = 0; i < spec.join_keys_.count() && OB_SUCC(ret); ++i) {
           ObExpr *join_expr = spec.join_keys_.at(i);
           ObHashFunc hash_func;
@@ -2559,7 +2564,8 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
           if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_) ||
               OB_ISNULL(cmp_func.cmp_func_)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("hash func or cmp func is null, check datatype is valid", K(ret));
+            LOG_WARN("hash func or cmp func is null, check datatype is valid",
+                K(hash_func.hash_func_), K(cmp_func.cmp_func_));
           } else if (OB_FAIL(spec.hash_funcs_.push_back(hash_func))) {
             LOG_WARN("failed to push back hash func", K(ret));
           } else if (OB_FAIL(spec.cmp_funcs_.push_back(cmp_func))) {
@@ -6737,6 +6743,9 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
             }
             if (table_schema->is_oracle_sess_tmp_table()) {
               phy_plan.set_contain_oracle_session_level_temporary_table();
+            }
+            if (table_schema->is_mysql_tmp_table()) {
+              phy_plan.set_session_id(table_schema->get_session_id());
             }
             LOG_DEBUG("plan contain temporary table",
                       "trx level", table_schema->is_oracle_trx_tmp_table(),

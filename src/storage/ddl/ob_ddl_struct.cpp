@@ -131,7 +131,7 @@ ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const SCN &start_scn,
     LOG_WARN("invalid arguments", K(ret), KP(tablet), K(scn));
   } else if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv mgr failed", K(ret));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_or_create_ddl_kv(start_scn, scn, kv_handle_))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_or_create_ddl_kv(*tablet, start_scn, scn, kv_handle_))) {
     LOG_WARN("acquire ddl kv failed", K(ret));
   } else if (OB_ISNULL(curr_kv = static_cast<ObDDLKV *>(kv_handle_.get_table()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -186,7 +186,7 @@ int ObDDLKVPendingGuard::set_macro_block(ObTablet *tablet, const ObDDLMacroBlock
       } else if (OB_ISNULL(ddl_kv)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl kv is null", K(ret), KP(ddl_kv), K(guard));
-      } else if (OB_FAIL(ddl_kv->set_macro_block(macro_block))) {
+      } else if (OB_FAIL(ddl_kv->set_macro_block(*tablet, macro_block))) {
         LOG_WARN("fail to set macro block info", K(ret));
       } else {
         break;

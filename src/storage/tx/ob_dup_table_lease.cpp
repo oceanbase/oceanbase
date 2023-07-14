@@ -49,7 +49,7 @@ int ObDupTableLSLeaseMgr::init(ObDupTableLSHandler *dup_ls_handle)
 int ObDupTableLSLeaseMgr::offline()
 {
   int ret = OB_SUCCESS;
-
+  SpinWLockGuard guard(lease_lock_);
   follower_lease_info_.reset();
   leader_lease_map_.clear();
   return ret;
@@ -410,41 +410,6 @@ int ObDupTableLSLeaseMgr::handle_lease_req_cache_(int64_t loop_start_time,
   return ret;
 }
 
-// int ObDupTableLSLeaseMgr::leader_handle(bool &need_log)
-// {
-//   int ret = OB_SUCCESS;
-//
-//   SpinWLockGuard guard(lease_lock_);
-//
-//   common::ObAddr tmp_addr;
-//   int64_t loop_start_time = ObTimeUtility::current_time();
-//   DupTableTsInfo local_ts_info;
-//   need_log = false;
-//
-//   if (need_retry_lease_operation_(loop_start_time, last_lease_req_cache_handle_time_)) {
-//     if (OB_FAIL(dup_ls_handle_ptr_->get_local_ts_info(local_ts_info))) {
-//       need_log = false;
-//       DUP_TABLE_LOG(WARN, "get local ts info failed", K(ret), K(ls_id_), K(local_ts_info));
-//     } else {
-//       LeaseReqCacheHandler req_handler(this, loop_start_time, local_ts_info.max_replayed_scn_);
-//       if (OB_FAIL(hash_for_each_remove(tmp_addr, leader_lease_map_, req_handler))) {
-//         DUP_TABLE_LOG(WARN, "handle lease requests failed", K(ret));
-//       }
-//
-//       last_lease_req_cache_handle_time_ = loop_start_time;
-//       if (req_handler.get_lease_changed()) {
-//         need_log = true;
-//       } else {
-//         need_log = false;
-//       }
-//     }
-//   } else {
-//     need_log = false;
-//   }
-//   DUP_TABLE_LOG(DEBUG, "leader handler", K(loop_start_time), K(need_log));
-//   return ret;
-// }
-//
 int ObDupTableLSLeaseMgr::follower_handle()
 {
   int ret = OB_SUCCESS;
@@ -452,7 +417,7 @@ int ObDupTableLSLeaseMgr::follower_handle()
   if (ATOMIC_LOAD(&is_stopped_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "dup table lease mgr is not inited", K(ret));
-  } else if (dup_ls_handle_ptr_->get_local_ts_info(local_ts_info)) {
+  } else if (OB_FAIL(dup_ls_handle_ptr_->get_local_ts_info(local_ts_info))) {
     DUP_TABLE_LOG(WARN, "get local ts info failed", K(ret));
   } else {
     SpinWLockGuard guard(lease_lock_);

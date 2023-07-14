@@ -1904,7 +1904,6 @@ int ObBackupSetTaskMgr::write_extern_locality_info_(ObExternTenantLocalityInfoDe
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   const ObTenantSchema *tenant_info = NULL;
-  const ObSysVarSchema *var_schema = nullptr;
   if (OB_FAIL(schema_service_->get_tenant_schema_guard(job_attr_->tenant_id_, schema_guard))) {
     LOG_WARN("[DATA_BACKUP]failed to get_tenant_schema_guard", KR(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(schema_guard.get_tenant_info(job_attr_->tenant_id_, tenant_info))) {
@@ -1917,10 +1916,10 @@ int ObBackupSetTaskMgr::write_extern_locality_info_(ObExternTenantLocalityInfoDe
     LOG_WARN("[DATA_BACKUP]failed to assign primary zone", K(ret), K(tenant_info));
   } else if (OB_FAIL(locality_info.cluster_name_.assign(GCONF.cluster))) {
     LOG_WARN("fail to assign cluster name", K(ret));
-  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(job_attr_->tenant_id_, share::SYS_VAR_SYSTEM_TIME_ZONE, var_schema))) {
-    LOG_WARN("fail to get tenant system variable", K(ret));
-  } else if (OB_FAIL(locality_info.sys_time_zone_.assign(var_schema->get_value()))) {
-    LOG_WARN("fail to assign time zone", K(ret), KPC(var_schema));
+  } else if (OB_FAIL(ObBackupUtils::get_tenant_sys_time_zone_wrap(set_task_attr_.tenant_id_,
+                                                                  locality_info.sys_time_zone_,
+                                                                  locality_info.sys_time_zone_wrap_))) {
+    LOG_WARN("failed to get tenant sys time zone wrap", K(ret));
   } else {
     locality_info.tenant_id_ = job_attr_->tenant_id_;
     locality_info.backup_set_id_ = job_attr_->backup_set_id_;
@@ -1946,9 +1945,10 @@ int ObBackupSetTaskMgr::write_extern_diagnose_info_(
   } else {
     HEAP_VAR(ObExternTenantDiagnoseInfoDesc, diagnose_info) {
       diagnose_info.tenant_id_ = job_attr_->tenant_id_;
-      diagnose_info.tenant_locality_info_ = locality_info;
       diagnose_info.backup_set_file_ = backup_set_info.backup_set_file_;
-      if (OB_FAIL(store_.write_tenant_diagnose_info(diagnose_info))) {
+      if (OB_FAIL(diagnose_info.tenant_locality_info_.assign(locality_info))) {
+        LOG_WARN("failed to assign", K(ret), K(locality_info));
+      } else if (OB_FAIL(store_.write_tenant_diagnose_info(diagnose_info))) {
         LOG_WARN("[DATA_BACKUP]failed to write teannt diagnose info", K(ret), K(diagnose_info));
       }
     }

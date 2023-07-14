@@ -151,15 +151,15 @@ int ObMergeParameter::init(compaction::ObTabletMergeCtx &merge_ctx, const int64_
     rowkey_read_info_ = &(merge_ctx.tablet_handle_.get_obj()->get_rowkey_read_info());
     merge_scn_ = merge_ctx.merge_scn_;
 
-   if (merge_scn_ > scn_range_.end_scn_) {
-     if (ObMergeType::BACKFILL_TX_MERGE != merge_type_) {
-       ret = OB_ERR_UNEXPECTED;
-       LOG_WARN("merge scn is bigger than scn range but merge type is not backfill, unexpected",
-           K(ret), K(merge_scn_), K(scn_range_), K(merge_type_));
-     } else {
-       FLOG_INFO("set backfill merge scn", K(merge_scn_), K(scn_range_), K(merge_type_));
-     }
-   }
+    if (merge_scn_ > scn_range_.end_scn_) {
+      if (ObMergeType::BACKFILL_TX_MERGE != merge_type_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("merge scn is bigger than scn range but merge type is not backfill, unexpected",
+            K(ret), K(merge_scn_), K(scn_range_), K(merge_type_));
+      } else {
+        FLOG_INFO("set backfill merge scn", K(merge_scn_), K(scn_range_), K(merge_type_));
+      }
+    }
   }
   return ret;
 }

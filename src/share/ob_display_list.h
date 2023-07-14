@@ -14,7 +14,7 @@
 #define OCEANBASE_SHARE_OB_DISPLAY_LIST
 #include <stdint.h>
 #include "lib/container/ob_iarray.h"        // ObIArray
-#include "lib/container/ob_array.h"         // ObArrayImpl
+#include "lib/container/ob_se_array.h"      // ObSEArrayImpl
 #include "lib/string/ob_string.h"           // ObString
 #include "lib/ob_errno.h"                   // OB_xx
 #include "lib/utility/ob_print_utils.h"     // COMMON_LOG
@@ -143,12 +143,28 @@ public:
 
 
 // ObDisplayList: a list which can convert to string or parse from string
-template<typename T, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false, typename CallBack = ObArrayDefaultCallBack<T>, typename ItemEncode = NotImplementItemEncode<T> >
-class ObDisplayList : public common::ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>
+template<typename T, int64_t LOCAL_ARRAY_SIZE = 1, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false>
+class ObDisplayList : public common::ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>
 {
 public:
-  // use ObArrayImpl constructors
-  using common::ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::ObArrayImpl;
+  // use ObSEArrayImpl constructors
+  using common::ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>::ObSEArrayImpl;
+
+  ObDisplayList(int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
+      const BlockAllocatorT &alloc = BlockAllocatorT("DisplayList")) :
+      common::ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>(block_size, alloc)
+  {}
+
+  // specify label
+  ObDisplayList(const lib::ObLabel &label) :
+      common::ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>(label, OB_MALLOC_NORMAL_BLOCK_SIZE)
+  {}
+
+  // specify allocator and label
+  ObDisplayList(ObIAllocator &alloc, const lib::ObLabel &label) :
+      common::ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>
+      (OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, label))
+  {}
 
   // to display string
   // See list_to_display_str(..) for more information

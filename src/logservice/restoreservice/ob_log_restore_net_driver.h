@@ -116,7 +116,6 @@ private:
 
   int check_ls_stale_(const share::ObLSID &id, const int64_t proposal_id, bool &is_stale);
   int get_ls_count_in_fetcher_(int64_t &count);
-  int refresh_error_context_(const share::ObLSID &ls_id);
 
 private:
   class LogErrHandler : public logfetcher::IObLogErrHandler

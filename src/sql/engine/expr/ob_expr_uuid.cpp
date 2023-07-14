@@ -390,15 +390,31 @@ int ObExprSysGuid::eval_sys_guid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
 int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator calc_buf(ObModIds::OB_SQL_EXPR);
+  ObArenaAllocator calc_buf("ServerUuid");
   unsigned char scratch[UuidCommon::LENGTH_UUID] = {0};
-  if (OB_ISNULL(server_uuid) || OB_UNLIKELY(uuid_len != UuidCommon::LENGTH_UUID)) {
+  bool need_reset = false;
+  if (OB_ISNULL(uuid_node)) {
+    need_reset = true;
+    if (OB_ISNULL(uuid_node = static_cast<ObUUIDNode*>(calc_buf.alloc(sizeof(ObUUIDNode))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (OB_FAIL(uuid_node->init())) {
+      LOG_WARN("failed to init", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_ISNULL(server_uuid) || OB_UNLIKELY(uuid_len != UuidCommon::LENGTH_UUID)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(server_uuid), K(uuid_len));
   } else if (OB_FAIL(calc(scratch))) {
     LOG_WARN("failed to calc", K(ret));
   } else if (OB_FAIL(UuidCommon::bin2uuid(server_uuid, scratch))) {
     LOG_WARN("fail to convert strach to server_uuid", K(ret), K(server_uuid), K(scratch));
+  } else {/*do nothing*/}
+
+  if (need_reset) {
+    uuid_node = NULL;
   }
   return ret;
 }

@@ -94,10 +94,17 @@ function mirror_create {
     mkdir -p $BASE_DIR/tools/deploy/{bin,etc,admin}
     cp -f $OBSERVER_PATH $OBSERVER_BIN || exit 1
   fi
-  obs_version=$($OBSERVER_BIN -V 2>&1 | grep -E "observer \(OceanBase([ \_]CE)? ([.0-9]+)\)" | grep -Eo '([.0-9]+)')
+  obs_version_info=`$OBSERVER_BIN -V 2>&1`
+  if [[ $? != 0 ]]
+  then
+    echo $obs_version_info
+    return 1
+  fi
+  obs_version=$(echo "$obs_version_info" | grep -E "observer \(OceanBase([ \_]CE)? ([.0-9]+)\)" | grep -Eo '([.0-9]+)')
   if [[ "$obs_version" == "" ]]
   then
-    echo "$OBSERVER_BIN not found"
+    echo "can not check observer version"
+    echo $obs_version_info
     return 1
   fi
   if [ "x$IS_CE" == "x" ]

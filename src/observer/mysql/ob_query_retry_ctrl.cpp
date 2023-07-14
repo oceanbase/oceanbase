@@ -611,6 +611,21 @@ private:
   }
 };
 
+class ObAutoincCacheNotEqualRetryPolicy: public ObRetryPolicy
+{
+public:
+  ObAutoincCacheNotEqualRetryPolicy() = default;
+  ~ObAutoincCacheNotEqualRetryPolicy() = default;
+  virtual void test(ObRetryParam &v) const override
+  {
+    if (v.stmt_retry_times_ < ObQueryRetryCtrl::MAX_SCHEMA_ERROR_LOCAL_RETRY_TIMES) {
+      v.retry_type_ = RETRY_TYPE_LOCAL;
+    } else {
+      try_packet_retry(v);
+    }
+  }
+};
+
 
 ////////// end of policies ////////////
 
@@ -696,6 +711,14 @@ void ObQueryRetryCtrl::schema_error_proc(ObRetryParam &v)
   ObRetryObject retry_obj(v);
   ObCheckSchemaUpdatePolicy schema_update_policy;
   retry_obj.test(schema_update_policy);
+}
+
+void ObQueryRetryCtrl::autoinc_cache_not_equal_retry_proc(ObRetryParam &v)
+{
+  ObRetryObject retry_obj(v);
+  ObAutoincCacheNotEqualRetryPolicy autoinc_retry_policy;
+  ObCommonRetryLinearShortWaitPolicy retry_short_wait;
+  retry_obj.test(autoinc_retry_policy).test(retry_short_wait);
 }
 
 void ObQueryRetryCtrl::snapshot_discard_proc(ObRetryParam &v)
@@ -935,6 +958,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_EAGAIN,                   schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_NOT_UPTODATE,             schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_ERR_PARALLEL_DDL_CONFLICT,       schema_error_proc,          inner_schema_error_proc,                              nullptr);
+  ERR_RETRY_FUNC("SCHEMA",   OB_AUTOINC_CACHE_NOT_EQUAL,         autoinc_cache_not_equal_retry_proc, autoinc_cache_not_equal_retry_proc, nullptr);
 
   /* location */
   ERR_RETRY_FUNC("LOCATION", OB_LOCATION_LEADER_NOT_EXIST,       location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_location_retry_proc);
@@ -957,8 +981,8 @@ int ObQueryRetryCtrl::init()
   // Just use location_error_proc to retry sql and a new schema guard will be obtained during the retry process.
   ERR_RETRY_FUNC("LOCATION", OB_TABLET_NOT_EXIST,                location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_not_exist_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_LS_LOCATION_NOT_EXIST,           location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_PARTITION_IS_BLOCKED,            location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_nothing_readable_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST, location_error_proc,inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
+  ERR_RETRY_FUNC("LOCATION", OB_PARTITION_IS_BLOCKED,            location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
+  ERR_RETRY_FUNC("LOCATION", OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST, location_error_proc,inner_location_error_proc,                            ObDASRetryCtrl::tablet_not_exist_retry_proc);
 
   ERR_RETRY_FUNC("LOCATION", OB_GET_LOCATION_TIME_OUT,           location_error_proc,        inner_table_location_error_proc,                      ObDASRetryCtrl::tablet_location_retry_proc);
 
@@ -1119,21 +1143,28 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
     retry_err_code_ = client_ret;
   }
   if (RETRY_TYPE_NONE != retry_type_) {
-    result.set_close_fail_callback([this](const int err)-> void { this->on_close_resultset_fail_(err); });
+    result.set_close_fail_callback([this](const int err, int &client_ret)-> void { this->on_close_resultset_fail_(err, client_ret); });
   }
 }
 
-void ObQueryRetryCtrl::on_close_resultset_fail_(const int err)
+void ObQueryRetryCtrl::on_close_resultset_fail_(const int err, int &client_ret)
 {
   // some unretryable error happened in close result set phase
   if (OB_SUCCESS != err && RETRY_TYPE_NONE != retry_type_) {
     // the txn relative error in close stmt
+    // thses error will cause the txn must to be rollbacked
+    // and can not accept new request any more, so if retry
+    // current stmt, it must be failed, hence we cancel retry
     if (OB_TRANS_NEED_ROLLBACK == err ||
         OB_TRANS_INVALID_STATE == err ||
         OB_TRANS_HAS_DECIDED == err) {
       retry_type_ = RETRY_TYPE_NONE;
       // also clear the packet retry
       THIS_WORKER.unset_need_retry();
+      // rewrite the client error code
+      // when decide to cancel the retry, return an unretryable error
+      // is better, because it won't leak the internal error to user
+      client_ret = err;
     }
   }
 }

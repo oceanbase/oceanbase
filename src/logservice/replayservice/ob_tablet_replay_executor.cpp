@@ -200,7 +200,8 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     storage::ObTabletHandle &tablet_handle,
     const ObTabletCreateDeleteMdsUserData &mds,
     storage::mds::MdsCtx &ctx,
-    const share::SCN &scn)
+    const share::SCN &scn,
+    const bool for_old_mds)
 {
   int ret = OB_SUCCESS;
   storage::ObTablet *tablet = tablet_handle.get_obj();
@@ -224,8 +225,14 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "ls is null", K(ret), K(ls_id), KP(ls));
-    } else if (OB_FAIL(ls->get_tablet_svr()->replay_set_tablet_status(tablet_id, scn, mds, ctx))) {
-      CLOG_LOG(WARN, "failed to replay set tablet status", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
+    } else if (for_old_mds) {
+      if (OB_FAIL(ls->get_tablet_svr()->set_tablet_status(tablet_id, mds, ctx))) {
+        CLOG_LOG(WARN, "failed to set mds data", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
+      }
+    } else {
+      if (OB_FAIL(ls->get_tablet_svr()->replay_set_tablet_status(tablet_id, scn, mds, ctx))) {
+        CLOG_LOG(WARN, "failed to replay set tablet status", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
+      }
     }
   }
   return ret;
@@ -235,7 +242,8 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     storage::ObTabletHandle &tablet_handle,
     const ObTabletBindingMdsUserData &mds,
     storage::mds::MdsCtx &ctx,
-    const share::SCN &scn)
+    const share::SCN &scn,
+    const bool for_old_mds)
 {
   int ret = OB_SUCCESS;
   storage::ObTablet *tablet = tablet_handle.get_obj();
@@ -259,8 +267,14 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "ls is null", K(ret), K(ls_id), KP(ls));
-    } else if (OB_FAIL(ls->get_tablet_svr()->replay_set_ddl_info(tablet_id, scn, mds, ctx))) {
-      CLOG_LOG(WARN, "failed to replay set ddl info", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
+    } else if (for_old_mds) {
+      if (OB_FAIL(ls->get_tablet_svr()->set_ddl_info(tablet_id, mds, ctx, 0))) {
+        CLOG_LOG(WARN, "failed to save tablet binding info", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
+      }
+    } else {
+      if (OB_FAIL(ls->get_tablet_svr()->replay_set_ddl_info(tablet_id, scn, mds, ctx))) {
+        CLOG_LOG(WARN, "failed to replay set ddl info", K(ret), K(ls_id), K(tablet_id), K(scn), K(mds));
+      }
     }
   }
   return ret;

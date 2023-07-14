@@ -118,7 +118,7 @@ public:
 };
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
-int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;
+int64_t ObSimpleLogClusterTestBase::node_cnt_ = 5;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
@@ -149,10 +149,14 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_basic_func)
   ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT_US));
   ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
   EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_learner(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_learner(ObMember(get_cluster()[4]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT_US));
   ASSERT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->get_config_version(config_version));
   EXPECT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT_US));
   ASSERT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->get_config_version(config_version));
   EXPECT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->add_learner(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, leader2.palf_handle_impl_->add_learner(ObMember(get_cluster()[4]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT_US));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader1, 500, leader_idx1));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader2, 500, leader_idx2));
   SCN flashback_scn;
@@ -173,10 +177,15 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_basic_func)
 
   // 4. test a follower blocknet
   block_net(leader_idx1, (leader_idx1+1) % 3);
-  int64_t mode_version;
   flashback_srv = get_cluster()[0]->get_flashback_service();
   ASSERT_EQ(OB_OP_NOT_ALLOW, flashback_srv->flashback(MTL_ID(), flashback_scn, 5 * 1000 * 1000));
   unblock_net(leader_idx1, (leader_idx1+1) % 3);
+
+  // test a learner blocknet
+  block_net(leader_idx1, 3);
+  flashback_srv = get_cluster()[0]->get_flashback_service();
+  ASSERT_EQ(OB_OP_NOT_ALLOW, flashback_srv->flashback(MTL_ID(), flashback_scn, 5 * 1000 * 1000));
+  unblock_net(leader_idx1, 3);
 
   // 5. test basic flashback
   EXPECT_EQ(OB_SUCCESS, flashback_srv->flashback(MTL_ID(), flashback_scn, TIMEOUT_US));
@@ -193,6 +202,17 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_basic_func)
   EXPECT_EQ(OB_ITER_END, read_log(leader2));
   wait_until_has_committed(leader2, leader2.palf_handle_impl_->sw_.get_max_lsn());
   EXPECT_EQ(OB_ITER_END, read_log(leader2));
+
+  std::vector<PalfHandleImplGuard*> palf_list1;
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id1, palf_list1));
+  EXPECT_GE(flashback_scn, palf_list1[3]->palf_handle_impl_->sw_.last_slide_scn_);
+  EXPECT_GE(flashback_scn, palf_list1[4]->palf_handle_impl_->sw_.last_slide_scn_);
+  revert_cluster_palf_handle_guard(palf_list1);
+  std::vector<PalfHandleImplGuard*> palf_list2;
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id1, palf_list2));
+  EXPECT_GE(flashback_scn, palf_list2[3]->palf_handle_impl_->sw_.last_slide_scn_);
+  EXPECT_GE(flashback_scn, palf_list2[4]->palf_handle_impl_->sw_.last_slide_scn_);
+  revert_cluster_palf_handle_guard(palf_list2);
   // 4. delete paxos group
   leader1.reset();
   leader2.reset();
@@ -221,6 +241,8 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_with_reconfirm1)
   EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT_US));
   ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
   EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_learner(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_learner(ObMember(get_cluster()[4]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT_US));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader1, 1000, leader_idx1));
   wait_until_has_committed(leader1, leader1.palf_handle_impl_->get_max_lsn());
   LogEntryHeader header_origin;
@@ -256,6 +278,8 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_with_reconfirm1)
   restart_paxos_groups();
 
   // 6. get_leader and check values
+  std::vector<PalfHandleImplGuard*> palf_list;
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id1, palf_list));
   EXPECT_EQ(OB_SUCCESS, get_leader(id1, leader1, leader_idx1));
   if (leader_idx1 != 0) {
     EXPECT_EQ(OB_SUCCESS, switch_leader(id1, 0, leader1));
@@ -264,13 +288,11 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_with_reconfirm1)
   EXPECT_EQ(AccessMode::FLASHBACK, unused_access_mode);
   sleep(2);
   EXPECT_EQ(OB_NOT_MASTER, submit_log(leader1, 1, leader_idx1));
-  std::vector<PalfHandleImplGuard*> palf_list;
-  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id1, palf_list));
   EXPECT_GT(palf_list[1]->palf_handle_impl_->get_end_lsn(), leader1.palf_handle_impl_->get_end_lsn());
   EXPECT_GE(flashback_scn, leader1.palf_handle_impl_->sw_.last_slide_scn_);
 
   // 7. do flashback
-  EXPECT_EQ(OB_SUCCESS, flashback_srv->flashback(MTL_ID(), flashback_scn, TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, flashback_srv->flashback(tenant_id, flashback_scn, TIMEOUT_US));
   LSN new_log_tail1 = leader1.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
   // in FLASHBACK mode, committed_end_lsn has been advanced to max_flshed_end_lsn by reconfirm
   EXPECT_EQ(new_log_tail1.val_, leader1.palf_handle_impl_->sw_.committed_end_lsn_.val_);
@@ -285,11 +307,11 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_with_reconfirm1)
   restart_paxos_groups();
 
   // 8. change to APPEND mode and submit_log
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id1, palf_list));
   EXPECT_EQ(OB_SUCCESS, get_leader(id1, leader1, leader_idx1));
   if (leader_idx1 != 0) {
     EXPECT_EQ(OB_SUCCESS, switch_leader(id1, 0, leader1));
   }
-  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id1, palf_list));
   switch_flashback_to_append(leader1, mode_version1);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader1, 400, leader_idx1));
   wait_until_has_committed(leader1, leader1.palf_handle_impl_->get_max_lsn());
@@ -330,6 +352,7 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_with_reconfirm1)
   restart_paxos_groups();
 
   // 12. get_leader and check values
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id1, palf_list));
   EXPECT_EQ(OB_SUCCESS, get_leader(id1, leader1, leader_idx1));
   if (leader_idx1 != 0) {
     EXPECT_EQ(OB_SUCCESS, switch_leader(id1, 0, leader1));
@@ -338,7 +361,6 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_with_reconfirm1)
   EXPECT_EQ(AccessMode::FLASHBACK, unused_access_mode);
   sleep(2);
   EXPECT_EQ(OB_NOT_MASTER, submit_log(leader1, 1, leader_idx1));
-  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id1, palf_list));
   EXPECT_GT(leader1.palf_handle_impl_->get_end_lsn(), palf_list[1]->palf_handle_impl_->get_end_lsn());
   EXPECT_GT(leader1.palf_handle_impl_->get_end_lsn(), palf_list[2]->palf_handle_impl_->get_end_lsn());
 
@@ -350,7 +372,7 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_with_reconfirm1)
       "committed_end_lsn:", leader1.palf_handle_impl_->sw_.committed_end_lsn_,
       "log_storage_tail:", leader1.palf_handle_impl_->log_engine_.log_storage_.log_tail_);
 
-  EXPECT_EQ(OB_SUCCESS, flashback_srv->flashback(MTL_ID(), flashback_scn, TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, flashback_srv->flashback(tenant_id, flashback_scn, TIMEOUT_US));
 
   CLOG_LOG(INFO, "runlin trace after last flashback", K(flashback_scn), K(leader1), K(leader_idx1),
       "max_lsn:", leader1.palf_handle_impl_->sw_.last_submit_lsn_,
@@ -386,10 +408,13 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_after_restart)
     EXPECT_EQ(OB_SUCCESS, switch_leader(id1, 0, leader1));
   }
   LogConfigVersion config_version;
+  const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
   EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT_US));
   ASSERT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->get_config_version(config_version));
   EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_member(ObMember(get_cluster()[2]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_learner(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, leader1.palf_handle_impl_->add_learner(ObMember(get_cluster()[4]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT_US));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader1, 1000, leader_idx1));
   wait_until_has_committed(leader1, leader1.palf_handle_impl_->get_max_lsn());
   switch_append_to_raw_write(leader1, mode_version1);
@@ -398,9 +423,9 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_after_restart)
   ObLogFlashbackService::ChangeModeOpArray mode_op_array;
   share::ObLSStatusInfoArray ls_array;
   flashback_srv = get_cluster()[0]->get_flashback_service();
-  EXPECT_EQ(OB_SUCCESS, flashback_srv->get_ls_list_(MTL_ID(), ls_array));
-  EXPECT_EQ(OB_SUCCESS, flashback_srv->wait_all_ls_replicas_log_sync_(MTL_ID(), flashback_scn, ls_array, TIMEOUT_US));
-  EXPECT_EQ(OB_SUCCESS, flashback_srv->get_and_change_access_mode_(MTL_ID(), flashback_scn, palf::AccessMode::FLASHBACK, ls_array, TIMEOUT_US, mode_op_array));
+  EXPECT_EQ(OB_SUCCESS, flashback_srv->get_ls_list_(tenant_id, ls_array));
+  EXPECT_EQ(OB_SUCCESS, flashback_srv->wait_all_ls_replicas_log_sync_(tenant_id, flashback_scn, ls_array, TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, flashback_srv->get_and_change_access_mode_(tenant_id, flashback_scn, palf::AccessMode::FLASHBACK, ls_array, TIMEOUT_US, mode_op_array));
 
   // after restarting servers in FLASHBACK MODE, committed_end_lsn will smaller than max_lsn
   leader1.reset();
@@ -416,7 +441,7 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_after_restart)
 
   // choose a flashback_scn, which is in (end_ts_ns, max_ts_ns)
   flashback_scn.convert_for_tx((leader1.palf_handle_impl_->get_max_scn().get_val_for_inner_table_field() + leader1.palf_handle_impl_->get_end_scn().get_val_for_inner_table_field()) / 2);
-  EXPECT_EQ(OB_SUCCESS, flashback_srv->flashback(MTL_ID(), flashback_scn, TIMEOUT_US));
+  EXPECT_EQ(OB_SUCCESS, flashback_srv->flashback(tenant_id, flashback_scn, TIMEOUT_US));
   EXPECT_GE(flashback_scn, leader1.palf_handle_impl_->sw_.last_slide_scn_);
   LSN new_log_tail1 = leader1.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
   EXPECT_EQ(new_log_tail1, leader1.palf_handle_impl_->sw_.committed_end_lsn_);

@@ -451,6 +451,7 @@ DEFINE_ERROR_DEP(OB_ERR_THREAD_PANIC, -4396, -1, "HY000", "Worker thread panic, 
 DEFINE_ERROR(OB_ENCODING_EST_SIZE_OVERFLOW, -4397, -1, "HY000", "Encoding estimated size overflow");
 DEFINE_ORACLE_ERROR(OB_INVALID_SUB_PARTITION_TYPE, -4398, 1500, "HY000", "It is only possible to mix RANGE/LIST partitioning with HASH/KEY partitioning for subpartitioning", 14020, "this physical attribute may not be specified for a table partition");
 DEFINE_ERROR(OB_ERR_UNEXPECTED_UNIT_STATUS, -4399, -1, "HY000", "Unit status is not expected");
+DEFINE_ERROR(OB_AUTOINC_CACHE_NOT_EQUAL, -4400, -1, "HY000", "Autoinc cache's autoinc version is not equal to request's autoinc version");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000
@@ -654,6 +655,7 @@ DEFINE_ERROR(OB_LS_IS_DELETED, -4761, -1, "HY000", "log stream is deleted");
 DEFINE_ERROR(OB_SKIP_CHECKING_LS_STATUS, -4762, -1, "HY000", "This operation has been finished without checking ls status");
 DEFINE_ORACLE_ERROR(OB_ERR_USE_ROWID_FOR_UPDATE, -4763, -1, "HY000", "invalid user.table.column, table.column, or column specification", 1747, "invalid user.table.column, table.column, or column specification");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_UNKNOWN_SET_OPTION, -4764, -1, "HY000", "unknown SET option", "unknown SET option \'%s\'", 600, "unknown SET option", "unknown SET option \'%s\'");
+DEFINE_ERROR_EXT_DEP(OB_CREATE_STANDBY_TENANT_FAILED, -4765, -1, "HY000", "create standby tenant may fail", "create standby tenant may fail, %s");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -2288,6 +2290,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_MULTI_RECORD, -9746, -1, "HY000", "coercion into mult
 DEFINE_ERROR(OB_ERR_MALFORMED_PS_PACKET, -9747, -1, "HY000", "malformed ps packet");
 DEFINE_ERROR(OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK, -9748, 1351, "HY000", "View's SELECT contains a variable or parameter");
 DEFINE_ORACLE_ERROR(OB_ERR_OBJECT_NOT_EXIST, -9749, -1, "HY000", "object does not exist", 6564, "object does not exist", "object %.*s does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_TABLE_OUT_OF_RANGE, -9750, -1, "HY000", "PL/SQL: index for PL/SQL table out of range for host language array", 6513, "PL/SQL: index for PL/SQL table out of range for host language array");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code

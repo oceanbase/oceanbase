@@ -315,6 +315,7 @@ inline bool is_partition_change_error(int err)
     case OB_PARTITION_NOT_EXIST:
     case OB_LOCATION_NOT_EXIST:
     case OB_PARTITION_IS_STOPPED:
+    case OB_PARTITION_IS_BLOCKED:
     case OB_LS_LOCATION_NOT_EXIST:
     case OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST:
     case OB_LS_NOT_EXIST:

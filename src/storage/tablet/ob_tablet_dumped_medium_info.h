@@ -36,6 +36,8 @@ struct MdsDumpNode;
 class ObTabletDumpedMediumInfo
 {
 public:
+  typedef common::ObSEArray<compaction::ObMediumCompactionInfo*, 1>::iterator iterator;
+public:
   ObTabletDumpedMediumInfo();
   ~ObTabletDumpedMediumInfo();
   ObTabletDumpedMediumInfo(const ObTabletDumpedMediumInfo &) = delete;
@@ -57,6 +59,8 @@ public:
 
   int64_t get_min_medium_snapshot() const;
   int64_t get_max_medium_snapshot() const;
+
+  int is_contain(const compaction::ObMediumCompactionInfo &info, bool &contain) const;
 
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);

@@ -53,7 +53,8 @@ public:
   enum TypeIndex
   {
     LEASE_INDEX = 0,
-    TABLET_INDEX,
+    TBALET_MEMBER_INDEX,
+    TABLET_SET_INDEX,
     TS_SYNC_INDEX,
     MAX_INDEX,
   };
@@ -673,12 +674,11 @@ private:
   // static const uint64_t SPECIAL_OP_BIT_COUNT = 8;
   // static const uint64_t UNIQUE_ID_BIT = static_cast<uint64_t>(0xFFFFFFFFULL);
   // static const uint64_t TABLET_SET_BIT = static_cast<uint64_t>(0xFULL) << UNIQUE_ID_BIT_COUNT;
-  // static const uint64_t SPECIAL_OP_BIT = static_cast<uint64_t>(0xFFULL) << (UNIQUE_ID_BIT_COUNT + TABLET_SET_BIT_COUNT);
+  // static const uint64_t SPECIAL_OP_BIT = static_cast<uint64_t>(0xFFULL) << (UNIQUE_ID_BIT_COUNT +
+  // TABLET_SET_BIT_COUNT);
 
 public:
-  TO_STRING_KV(K(unique_id_),
-               K(tablet_set_type_),
-               K(sp_op_type_));
+  TO_STRING_KV(K(unique_id_), K(tablet_set_type_), K(sp_op_type_));
 
   DupTabletSetCommonHeader(const uint64_t id) : unique_id_(id)
   {
@@ -689,9 +689,7 @@ public:
   DupTabletSetCommonHeader() { reset(); }
   ~DupTabletSetCommonHeader() { reset(); }
 
-  bool is_valid() const {
-    return  unique_id_is_valid() && tablet_set_type_is_valid();
-  }
+  bool is_valid() const { return unique_id_is_valid() && tablet_set_type_is_valid(); }
   void reset()
   {
     set_invalid_unique_id();
@@ -739,14 +737,8 @@ public:
   {
     return DUP_SPECIAL_OP_CLEAN_DATA_CONFIRMING_SET == sp_op_type_;
   }
-  void set_op_of_block_confirming()
-  {
-    set_special_op_(DUP_SPECIAL_OP_BLOCK_CONFIRMING);
-  }
-  bool need_block_confirming() const
-  {
-    return DUP_SPECIAL_OP_BLOCK_CONFIRMING == sp_op_type_;
-  }
+  void set_op_of_block_confirming() { set_special_op_(DUP_SPECIAL_OP_BLOCK_CONFIRMING); }
+  bool need_block_confirming() const { return DUP_SPECIAL_OP_BLOCK_CONFIRMING == sp_op_type_; }
   // bool contain_special_op(uint64_t special_op) const { return get_special_op_() == special_op; }
   bool no_specail_op() const { return INVALID_SPECIAL_OP == sp_op_type_; }
   void copy_tablet_set_type(const DupTabletSetCommonHeader &src_common_header)
@@ -755,6 +747,10 @@ public:
     set_special_op_(src_common_header.get_special_op());
     change_tablet_set_type_(src_common_header.get_tablet_set_type());
   }
+
+public:
+  bool operator==(const DupTabletSetCommonHeader &dup_common_header) const;
+  bool operator!=(const DupTabletSetCommonHeader &dup_common_header) const;
 
 private:
   void set_unique_id_(const uint64_t id)
@@ -767,19 +763,10 @@ private:
     }
     unique_id_ = id;
   }
-  void change_tablet_set_type_(const int64_t set_type)
-  {
-    tablet_set_type_ = set_type;
-  }
-  int64_t get_tablet_set_type_() const
-  {
-    return tablet_set_type_;
-  }
+  void change_tablet_set_type_(const int64_t set_type) { tablet_set_type_ = set_type; }
+  int64_t get_tablet_set_type_() const { return tablet_set_type_; }
 
-  void set_special_op_(const int64_t special_op_type)
-  {
-    sp_op_type_ = special_op_type;
-  }
+  void set_special_op_(const int64_t special_op_type) { sp_op_type_ = special_op_type; }
   int64_t get_special_op_() const
   {
     // return (common_code_ & SPECIAL_OP_BIT) >> (UNIQUE_ID_BIT_COUNT + TABLET_SET_BIT_COUNT);

@@ -513,7 +513,11 @@ void ObLogRestoreHandler::mark_error(share::ObTaskId &trace_id,
     context_.error_context_.ret_code_ = ret_code;
     context_.error_context_.trace_id_.set(trace_id);
     context_.error_context_.err_lsn_ = lsn;
-    CLOG_LOG(ERROR, "fatal error occur in restore", KPC(parent_), KPC(this));
+    if (OB_TIMEOUT == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
+      CLOG_LOG(WARN, "fetch log timeout in restore", KPC(parent_), KPC(this));
+    } else if(OB_SUCCESS != ret_code) {
+      CLOG_LOG(ERROR, "fatal error occur in restore", KPC(parent_), KPC(this));
+    }
   }
 }
 

@@ -69,9 +69,18 @@ int ObBackupSetFileOperator::fill_dml_with_backup_set_(const ObBackupSetFileDesc
     tenant_version_display, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, backup_set_desc.tenant_compatible_);
   const int64_t pos1 =  ObClusterVersion::get_instance().print_version_str(
     cluster_version_display, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, backup_set_desc.cluster_version_);
-
   const char *comment =  OB_SUCCESS == backup_set_desc.result_ ? "" : common::ob_strerror(backup_set_desc.result_);
-  if (OB_FAIL(dml.add_pk_column(OB_STR_BACKUP_SET_ID, backup_set_desc.backup_set_id_))) {
+  char min_restore_scn_display[OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH] = "";
+  if (backup_set_desc.min_restore_scn_.is_valid_and_not_min()) {
+    if (OB_FAIL(ObBackupUtils::backup_scn_to_str(backup_set_desc.tenant_id_,
+                                                 backup_set_desc.min_restore_scn_,
+                                                 min_restore_scn_display,
+                                                 OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH))) {
+      LOG_WARN("failed to backup scn to str", K(ret), K(backup_set_desc));
+    }
+  }
+
+  if (FAILEDx(dml.add_pk_column(OB_STR_BACKUP_SET_ID, backup_set_desc.backup_set_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, backup_set_desc.tenant_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
@@ -138,6 +147,8 @@ int ObBackupSetFileOperator::fill_dml_with_backup_set_(const ObBackupSetFileDesc
   } else if (OB_FAIL(dml.add_column(OB_STR_MAJOR_TURN_ID, backup_set_desc.major_turn_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_CONSISTENT_SCN, backup_set_desc.consistent_scn_.get_val_for_inner_table_field()))) {
+    LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
+  } else if (OB_FAIL(dml.add_column(OB_STR_MIN_RESTORE_SCN_DISPLAY, min_restore_scn_display))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   }
   return ret;

@@ -49,6 +49,8 @@ public:
   int remove_tablet_from_queue(const ObTabletHandle &tablet_handle);
   void free_tablet(ObTablet *tablet);
   OB_INLINE int64_t total() const { return tiny_allocator_.total() + mstx_allocator_.total(); }
+  OB_INLINE int64_t used() const { return tiny_allocator_.used() + mstx_allocator_.used(); }
+  OB_INLINE int64_t get_used_obj_cnt() const { return ATOMIC_LOAD(&created_tablets_cnt_); }
   TO_STRING_KV(K(mstx_allocator_.used()), K(mstx_allocator_.total()),
                K(tiny_allocator_.used()), K(tiny_allocator_.total()),
                "full allocator total", total());
@@ -63,8 +65,6 @@ private:
   int64_t wait_create_tablets_cnt_; // tablets waiting to be created
   int64_t created_tablets_cnt_; // tablets has been created
   int64_t persist_queue_cnt_; // tablets in persist queue
-  int64_t persist_tablets_cnt_; // tablets has been persisted
-  int64_t gc_tablets_cnt_; // tablets has been gc
   lib::ObMutex mutex_;
   DISALLOW_COPY_AND_ASSIGN(ObFullTabletCreator);
 };

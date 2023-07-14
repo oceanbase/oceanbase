@@ -310,7 +310,7 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
     DEBUG_SYNC(AFTER_TRANSFER_PROCESS_INIT_TASK_AND_BEFORE_NOTIFY_STORAGE);
   }
   if (OB_FAIL(ret) || task.get_tablet_list().empty()) {
-  } else if (OB_FAIL(notify_storage_transfer_service_(task_id, task.get_dest_ls()))) {
+  } else if (OB_FAIL(notify_storage_transfer_service_(task_id, task.get_src_ls()))) {
     LOG_WARN("notify storage transfer service failed", KR(ret), K(task_id), K(task));
   }
   TTS_INFO("process init task finish", KR(ret), K(task_id),
@@ -1424,7 +1424,7 @@ int ObTenantTransferService::unlock_table_lock_(
 
 int ObTenantTransferService::notify_storage_transfer_service_(
     const ObTransferTaskID task_id,
-    const ObLSID &dest_ls)
+    const ObLSID &src_ls)
 {
   int ret = OB_SUCCESS;
   obrpc::ObStartTransferTaskArg arg;
@@ -1432,25 +1432,25 @@ int ObTenantTransferService::notify_storage_transfer_service_(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(! task_id.is_valid() || !dest_ls.is_valid())) {
+  } else if (OB_UNLIKELY(! task_id.is_valid() || !src_ls.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(task_id), K(dest_ls));
-  } else if (OB_FAIL(arg.init(tenant_id_, task_id, dest_ls))) {
-    LOG_WARN("init ObStartTransferTaskArg failed", KR(ret), K(task_id), K(dest_ls));
+    LOG_WARN("invalid arg", KR(ret), K(task_id), K(src_ls));
+  } else if (OB_FAIL(arg.init(tenant_id_, task_id, src_ls))) {
+    LOG_WARN("init ObStartTransferTaskArg failed", KR(ret), K(task_id), K(src_ls));
   } else if (OB_ISNULL(GCTX.location_service_) || OB_ISNULL(GCTX.srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX has null ptr", KR(ret), K(task_id), K_(tenant_id));
   } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
       GCONF.cluster_id,
       tenant_id_,
-      dest_ls,
+      src_ls,
       leader_addr))) { // default 1s timeout
     LOG_WARN("get leader failed", KR(ret), K(task_id),
-        "cluster_id", GCONF.cluster_id.get_value(), K_(tenant_id), K(dest_ls), K(leader_addr));
+        "cluster_id", GCONF.cluster_id.get_value(), K_(tenant_id), K(src_ls), K(leader_addr));
   } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id_).start_transfer_task(arg))) {
-    LOG_WARN("send rpc failed", KR(ret), K(task_id), K(dest_ls), K(leader_addr), K(arg));
+    LOG_WARN("send rpc failed", KR(ret), K(task_id), K(src_ls), K(leader_addr), K(arg));
   }
-  TTS_INFO("send rpc to storage finished", KR(ret), K(task_id), K(dest_ls), K(leader_addr), K(arg));
+  TTS_INFO("send rpc to storage finished", KR(ret), K(task_id), K(src_ls), K(leader_addr), K(arg));
   return ret;
 }
 

@@ -63,6 +63,10 @@ void *ob_malloc_retry(size_t size)
     SET_USE_500(attr);
     ptr = ob_malloc(size, attr);
     if (OB_ISNULL(ptr)) {
+      attr.tenant_id_ = OB_SERVER_TENANT_ID;
+      ptr = ob_malloc(size, attr);
+    }
+    if (OB_ISNULL(ptr)) {
       ::usleep(10000);  // 10ms
     }
   } while (OB_ISNULL(ptr) && !(size > max_retry_size || 0 == size));

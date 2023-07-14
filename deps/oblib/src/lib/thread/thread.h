@@ -28,12 +28,12 @@ class IRunWrapper
 {
 public:
   virtual ~IRunWrapper() {}
-  virtual int pre_run(Thread*)
+  virtual int pre_run()
   {
     int ret = OB_SUCCESS;
     return ret;
   }
-  virtual int end_run(Thread*)
+  virtual int end_run()
   {
     int ret = OB_SUCCESS;
     return ret;

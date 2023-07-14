@@ -3630,6 +3630,8 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
       || OB_ISNULL(stmt = get_plan()->get_stmt())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("NULL pointer error", K(get_plan()), K(opt_ctx), K(schema_guard), K(ret));
+  } else if (partitions.count() == 0) {
+    // do nothing
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("fail to get index schema", K(ret), K(ref_table_id), K(table_id));
   }
@@ -4518,6 +4520,44 @@ int ObLogicalOperator::add_partition_join_filter_info(
   return ret;
 }
 
+int ObLogicalOperator::cal_runtime_filter_compare_func(
+    ObLogJoinFilter *join_filter_use,
+    ObRawExpr *join_use_expr,
+    ObRawExpr *join_create_expr)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_string_or_lob_type(join_use_expr->get_result_type().get_type())
+      || ob_is_string_or_lob_type(join_create_expr->get_result_type().get_type())) {
+    if (OB_UNLIKELY(join_use_expr->get_collation_type() != join_create_expr->get_collation_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("collation type not match", K(join_use_expr->get_result_type()),
+          K(join_create_expr->get_result_type()));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObCmpFunc cmp_func;
+    const ObScale scale = ObDatumFuncs::max_scale(join_use_expr->get_result_type().get_scale(),
+                                                  join_create_expr->get_result_type().get_scale());
+    bool has_lob_header = is_lob_storage(join_use_expr->get_data_type())
+                          || is_lob_storage(join_create_expr->get_data_type());
+    cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
+                                  join_use_expr->get_data_type(),
+                                  join_create_expr->get_data_type(),
+                                  lib::is_oracle_mode()? NULL_LAST : NULL_FIRST,
+                                  join_use_expr->get_collation_type(),
+                                  scale,
+                                  lib::is_oracle_mode(),
+                                  has_lob_header);
+    if (OB_ISNULL(cmp_func.cmp_func_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cmp_func_ is null", K(join_use_expr->get_result_type()), K(join_create_expr->get_result_type()));
+    } else {
+      join_filter_use->add_join_filter_cmp_funcs(cmp_func.cmp_func_);
+    }
+  }
+  return ret;
+}
+
 int ObLogicalOperator::generate_runtime_filter_expr(
       ObLogicalOperator *op,
       ObLogicalOperator *join_filter_create_op,
@@ -4550,22 +4590,9 @@ int ObLogicalOperator::generate_runtime_filter_expr(
         LOG_WARN("join_use_expr or join_create_expr is NULL!", K(join_use_expr), K(join_create_expr));
       } else if (OB_FAIL(join_filter_expr->add_param_expr(join_use_exprs.at(i)))) {
         LOG_WARN("fail to add param expr", K(ret));
-      } else {
-        CK(join_use_expr->get_collation_type() == join_create_expr->get_collation_type());
-        ObCmpFunc cmp_func;
-        const ObScale scale = ObDatumFuncs::max_scale(join_use_expr->get_result_type().get_scale(),
-                                                      join_create_expr->get_result_type().get_scale());
-        bool has_lob_header = is_lob_storage(join_use_expr->get_data_type())
-                              || is_lob_storage(join_create_expr->get_data_type());
-        cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
-                                      join_use_expr->get_data_type(),
-                                      join_create_expr->get_data_type(),
-                                      lib::is_oracle_mode()? NULL_LAST : NULL_FIRST,
-                                      join_use_expr->get_collation_type(),
-                                      scale,
-                                      lib::is_oracle_mode(),
-                                      has_lob_header);
-        join_filter_use->add_join_filter_cmp_funcs(cmp_func.cmp_func_);
+      } else if (join_filter_use->get_join_filter_cmp_funcs().count() < join_use_exprs.count()
+          && OB_FAIL(cal_runtime_filter_compare_func(join_filter_use, join_use_expr, join_create_expr))) {
+        LOG_WARN("fail to cal compare function", K(ret));
       }
     }
     if (OB_SUCC(ret)) {

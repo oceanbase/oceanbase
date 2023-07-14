@@ -818,7 +818,8 @@ public:
   const share::ObBasicSysVar *get_sys_var(const int64_t idx) const;
   share::ObBasicSysVar *get_sys_var(const int64_t idx);
   int64_t get_sys_var_count() const { return share::ObSysVarFactory::ALL_SYS_VARS_COUNT; }
-  int load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant);
+  // deserialized scene need use base_value as baseline.
+  int load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
   int load_default_configs_in_pc();
   int update_query_sensitive_system_variable(share::schema::ObSchemaGetterGuard &schema_guard);
   int process_variable_for_tenant(const common::ObString &var, common::ObObj &val);
@@ -1204,11 +1205,14 @@ public:
 
   // for SESSION_SYNC_SYS_VAR serialize and deserialize.
   int serialize_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, char *buf, const int64_t &buf_len, int64_t &pos);
-  int deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count, const char *buf, const int64_t &data_len, int64_t &pos);
+  int deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count, const char *buf, const int64_t &data_len, int64_t &pos, bool is_error_sync = false);
+  int deserialize_sync_error_sys_vars(int64_t &deserialize_sys_var_count, const char *buf, const int64_t &data_len, int64_t &pos);
   int sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_, SysVarIncInfo tmp_sys_var_inc_info, bool &is_influence_plan_cache_sys_var);
   int get_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids) const;
+  int get_error_sync_sys_vars(ObIArray<share::ObSysVarClassType> &sys_var_delta_ids) const;
   int get_sync_sys_vars_size(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, int64_t &len) const;
   bool is_sync_sys_var(share::ObSysVarClassType sys_var_id) const;
+  bool is_exist_error_sync_var(share::ObSysVarClassType sys_var_id) const;
 
   // nested session and sql execute for foreign key.
   bool is_nested_session() const { return nested_count_ > 0; }
@@ -1364,8 +1368,8 @@ private:
                              common::ObObj *dest_val_ptr);
   inline int store_query_string_(const ObString &stmt);
   inline int set_session_state_(ObSQLSessionState state);
-  //写入系统变量的默认值
-  int init_system_variables(const bool print_info_log, const bool is_sys_tenant);
+  //写入系统变量的默认值, deserialized scene need use base_value as baseline.
+  int init_system_variables(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
 protected:
   //============注意：下面的成员变量使用时，需要考虑并发控制================================
   struct MultiThreadData
@@ -2201,6 +2205,7 @@ private:
   bool is_password_expired_;
   // timestamp of processing current query. refresh when retry.
   int64_t process_query_time_;
+  int64_t last_update_tz_time_; //timestamp of last attempt to update timezone info
 };
 
 

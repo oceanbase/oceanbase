@@ -147,8 +147,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       labels_(),
       thread_id_(0),
       is_password_expired_(false),
-      process_query_time_(0)
-
+      process_query_time_(0),
+      last_update_tz_time_(0)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -156,6 +156,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
   CHAR_CARRAY_INIT(tenant_);
   CHAR_CARRAY_INIT(effective_tenant_);
   CHAR_CARRAY_INIT(trace_id_buff_);
+  sql_id_[0] = '\0';
   ssl_cipher_buff_[0] = '\0';
   sess_bt_buff_[0] = '\0';
   inc_sys_var_alloc_[0] = &inc_sys_var_alloc1_;
@@ -370,6 +371,9 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   is_first_gen_ = true;
   is_first_gen_config_ = true;
   CHAR_CARRAY_INIT(trace_id_buff_);
+  CHAR_CARRAY_INIT(sql_id_);
+  char *sql_id = sql_id_;
+  sql_id = NULL;
 //consistency_level_ = INVALID_CONSISTENCY;
   next_tx_read_only_ = -1;
   next_tx_isolation_ = transaction::ObTxIsolationLevel::INVALID;
@@ -420,6 +424,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   thread_id_ = 0;
   is_password_expired_ = false;
   process_query_time_ = 0;
+  last_update_tz_time_ = 0;
   sess_bt_buff_pos_ = 0;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
@@ -961,7 +966,8 @@ ObBasicSysVar *ObBasicSessionInfo::get_sys_var(const int64_t idx)
   return var;
 }
 
-int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const bool is_sys_tenant)
+int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const bool is_sys_tenant,
+                                              bool is_deserialized)
 {
   int ret = OB_SUCCESS;
   ObString name;
@@ -985,7 +991,7 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       // Note: 如果已经初始化过 base value，则下面的流程不会执行
       var_type = ObSysVariables::get_type(i);
       var_flag = ObSysVariables::get_flags(i);
-      value.set_varchar(ObSysVariables::get_value(i));
+      value.set_varchar(is_deserialized ? ObSysVariables::get_base_str_value(i) :ObSysVariables::get_value(i));
       value.set_collation_type(ObCharset::get_system_collation());
       min_val.set_varchar(ObSysVariables::get_min(i));
       min_val.set_collation_type(ObCharset::get_system_collation());
@@ -1087,12 +1093,12 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
   return ret;
 }
 
-int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant)
+int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(sys_var_fac_.create_all_sys_vars())) {
     LOG_WARN("fail create all sys variables", K(ret));
-  } else if (OB_FAIL(init_system_variables(print_info_log, is_sys_tenant))) {
+  } else if (OB_FAIL(init_system_variables(print_info_log, is_sys_tenant, is_deserialized))) {
     LOG_WARN("Init system variables failed !", K(ret));
   }
   return ret;
@@ -2044,14 +2050,16 @@ void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
   if (nullptr == sql_id) {
     sql_id_[0] = '\0';
   } else {
-    MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH + 1);
+    MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH);
+    sql_id_[32] = '\0';
   }
 }
 
 void ObBasicSessionInfo::get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const
 {
   if (common::OB_MAX_SQL_ID_LENGTH + 1 <= sql_id_buf_size) {
-    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
+    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH);
+    sql_id_buf[32] = '\0';
   } else {
     sql_id_buf[0] = '\0';
   }
@@ -3747,6 +3755,31 @@ bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) co
   return not_need_serialize;
 }
 
+bool ObBasicSessionInfo::is_exist_error_sync_var(share::ObSysVarClassType sys_var_id) const
+{
+  bool is_exist = false;
+  switch (sys_var_id)
+  {
+    case SYS_VAR_OB_LAST_SCHEMA_VERSION:
+      is_exist = true;
+      break;
+    default:
+      break;
+  }
+  return is_exist;
+}
+
+int ObBasicSessionInfo::get_error_sync_sys_vars(ObIArray<share::ObSysVarClassType>
+                                                &sys_var_delta_ids) const
+{
+  int ret = OB_SUCCESS;
+  sys_var_delta_ids.reset();
+  if (OB_FAIL(sys_var_delta_ids.push_back(SYS_VAR_OB_LAST_SCHEMA_VERSION))) {
+    LOG_WARN("fail to push_back id", K(ret));
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
                                                 &sys_var_delta_ids) const
 {
@@ -3758,10 +3791,10 @@ int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
     if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(ids.at(i), sys_var_idx))) {
       LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_idx), K(ids.at(i)), K(ret));
     } else {
-      if (!ObSysVariables::get_default_value(sys_var_idx).can_compare(
-        sys_vars_[sys_var_idx]->get_value())||ObSysVariables::get_default_value(sys_var_idx) !=
+      if (!ObSysVariables::get_base_value(sys_var_idx).can_compare(
+        sys_vars_[sys_var_idx]->get_value())||ObSysVariables::get_base_value(sys_var_idx) !=
         sys_vars_[sys_var_idx]->get_value() ||
-        ObSysVariables::get_default_value(sys_var_idx).get_scale()
+        ObSysVariables::get_base_value(sys_var_idx).get_scale()
         != sys_vars_[sys_var_idx]->get_value().get_scale()) {
         // need serialize delta vars
         if (is_sync_sys_var(ids.at(i))){
@@ -3772,26 +3805,26 @@ int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
           } else {
             LOG_TRACE("sys var need sync", K(sys_var_idx),
             "val", sys_vars_[sys_var_idx]->get_value(),
-            "def", ObSysVariables::get_default_value(sys_var_idx),
+            "def", ObSysVariables::get_base_value(sys_var_idx),
             K(sessid_), K(proxy_sessid_));
           }
         }
       } else {
          LOG_TRACE("sys var not need sync", K(sys_var_idx),
          "val", sys_vars_[sys_var_idx]->get_value(),
-         "def", ObSysVariables::get_default_value(sys_var_idx),
-         K(sessid_), K(proxy_sessid_));
-      }
-    }
-    if (sys_var_delta_ids.count() == 0) {
-      if (OB_FAIL(sys_var_delta_ids.push_back(ids.at(0)))) {
-        LOG_WARN("fail to push_back id", K(ret));
-      } else {
-        LOG_TRACE("success to get default sync sys vars", K(ret), K(sys_var_delta_ids),
+         "def", ObSysVariables::get_base_value(sys_var_idx),
          K(sessid_), K(proxy_sessid_));
       }
     }
 
+  }
+  if (sys_var_delta_ids.count() == 0) {
+    if (OB_FAIL(sys_var_delta_ids.push_back(ids.at(0)))) {
+      LOG_WARN("fail to push_back id", K(ret));
+    } else {
+      LOG_TRACE("success to get default sync sys vars", K(ret), K(sys_var_delta_ids),
+        K(sessid_), K(proxy_sessid_));
+    }
   }
   return ret;
 }
@@ -3826,7 +3859,7 @@ int ObBasicSessionInfo::serialize_sync_sys_vars(ObIArray<ObSysVarClassType>
         LOG_TRACE("serialize sys vars", K(sys_var_idx),
                   "name", ObSysVariables::get_name(sys_var_idx),
                   "val", sys_vars_[sys_var_idx]->get_value(),
-                  "def", ObSysVariables::get_default_value(sys_var_idx),
+                  "def", ObSysVariables::get_base_value(sys_var_idx),
                   K(sessid_), K(proxy_sessid_));
       }
     }
@@ -3834,8 +3867,22 @@ int ObBasicSessionInfo::serialize_sync_sys_vars(ObIArray<ObSysVarClassType>
   return ret;
 }
 
-int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count,
+int ObBasicSessionInfo::deserialize_sync_error_sys_vars(int64_t &deserialize_sys_var_count,
                               const char *buf, const int64_t &data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  // add is_error_sync for Distinguish between system variable synchronization and
+  // error scenarios that also require synchronization of system variables
+  bool is_error_sync = true;
+  if (OB_FAIL(deserialize_sync_sys_vars(deserialize_sys_var_count, buf, data_len, pos, is_error_sync))) {
+    LOG_WARN("failed to deserialize sys var delta", K(ret), K(deserialize_sys_var_count),
+                                    KPHEX(buf+pos, data_len-pos), K(data_len-pos), K(pos));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count,
+                              const char *buf, const int64_t &data_len, int64_t &pos, bool is_error_sync)
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("before deserialize sync sys vars", "inc var ids", sys_var_inc_info_.get_all_sys_var_ids(),
@@ -3873,7 +3920,7 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         }
       } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
         LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
-      } else if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id) &&
+      } else if (!is_error_sync && !sys_var_inc_info_.all_has_sys_var_id(sys_var_id) &&
                 OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
         LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       } else if (OB_ISNULL(sys_var)) {
@@ -3894,11 +3941,11 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
                    K(sessid_), K(proxy_sessid_));
       }
       // add all deserialize sys_var id.
-      if (OB_SUCC(ret) && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
+      if (OB_SUCC(ret) && !is_error_sync && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
         LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !is_error_sync) {
       if (OB_FAIL(sync_default_sys_vars(sys_var_inc_info_, tmp_sys_var_inc_info,
                                         is_influence_plan_cache_sys_var))) {
         LOG_WARN("fail to sync default sys vars",K(ret));
@@ -3944,7 +3991,7 @@ int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("create sys var is NULL", K(ret));
       } else if (FALSE_IT(sys_vars_[store_idx]->set_value(
-                          ObSysVariables::get_default_value(store_idx)))) {
+                          ObSysVariables::get_base_value(store_idx)))) {
         // do nothing.
       } else if (OB_FAIL(process_session_variable(sys_var_id, sys_vars_[store_idx]->get_value(),
                                                   false))) {
@@ -4610,7 +4657,7 @@ int ObBasicSessionInfo::load_all_sys_vars_default()
 {
   int ret = OB_SUCCESS;
   OZ (clean_all_sys_vars());
-  OZ (load_default_sys_variable(false, false));
+  OZ (load_default_sys_variable(false, false, true));
   return ret;
 }
 
@@ -4661,10 +4708,10 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
       if (sys_vars_[i]->is_influence_plan()) {
         OZ (influence_plan_var_indexs_.push_back(i));
       }
-      if (ObSysVariables::get_default_value(i) != sys_vars_[i]->get_value()) {
+      if (ObSysVariables::get_base_value(i) != sys_vars_[i]->get_value()) {
         OZ (sys_var_inc_info_.add_sys_var_id(sys_var_id));
         LOG_DEBUG("schema and def not identical", K(sys_var_id), "val", sys_vars_[i]->get_value(),
-                  "def", ObSysVariables::get_default_value(i));
+                  "def", ObSysVariables::get_base_value(i));
       }
     }
   }
@@ -5757,10 +5804,17 @@ int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
 int ObBasicSessionInfo::stmt_restore_session(StmtSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
-  OX (thread_data_.cur_query_start_time_ = saved_value.cur_query_start_time_);
-  OZ (tx_result_.merge_result(saved_value.tx_result_));
-  OZ (base_restore_session(saved_value));
-  OX (stmt_type_ = saved_value.stmt_type_);
+  int tmp_ret = OB_SUCCESS;
+  thread_data_.cur_query_start_time_ = saved_value.cur_query_start_time_;
+  if (OB_TMP_FAIL(tx_result_.merge_result(saved_value.tx_result_))) {
+    LOG_WARN("failed to merge trans result", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
+  if (OB_TMP_FAIL(base_restore_session(saved_value))) {
+    LOG_WARN("failed to restore base session", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+	}
+  stmt_type_ = saved_value.stmt_type_;
   return ret;
 }
 
@@ -5780,6 +5834,7 @@ int ObBasicSessionInfo::end_nested_session(StmtSavedValue &saved_value)
 int ObBasicSessionInfo::trans_save_session(TransSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
+  LockGuard lock_guard(thread_data_mutex_);
   OZ (base_save_session(saved_value, false));
   /*
    * save transaction context
@@ -5798,14 +5853,22 @@ int ObBasicSessionInfo::trans_save_session(TransSavedValue &saved_value)
 int ObBasicSessionInfo::trans_restore_session(TransSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
-  OX (nested_count_ = saved_value.nested_count_);
-  OX (trans_flags_ = saved_value.trans_flags_);
+  int tmp_ret = OB_SUCCESS;
+  LockGuard lock_guard(thread_data_mutex_);
+  nested_count_ = saved_value.nested_count_;
+  trans_flags_ = saved_value.trans_flags_;
   /*
    * restore means switch to saved transaction context, drop current one.
    */
-  OZ (tx_result_.assign(saved_value.tx_result_));
-  OX (tx_desc_ = saved_value.tx_desc_);
-  OZ (base_restore_session(saved_value));
+  if (OB_TMP_FAIL(tx_result_.assign(saved_value.tx_result_))) {
+    LOG_WARN("failed to assign trans result", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
+  tx_desc_ = saved_value.tx_desc_;
+  if (OB_TMP_FAIL(base_restore_session(saved_value))) {
+    LOG_WARN("failed to restore base session", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
   return ret;
 }
 
@@ -5954,30 +6017,37 @@ int ObBasicSessionInfo::set_time_zone(const ObString &str_val, const bool is_ora
 int ObBasicSessionInfo::update_timezone_info()
 {
   int ret = OB_SUCCESS;
-  ObTZMapWrap tz_map_wrap;
-  ObTimeZoneInfoManager *tz_info_mgr = NULL;
-  if (OB_FAIL(OTTZ_MGR.get_tenant_timezone(tenant_id_, tz_map_wrap, tz_info_mgr))) {
-    LOG_WARN("get tenant timezone with lock failed", K(ret));
-  } else if (OB_ISNULL(tz_info_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant timezone mgr is null", K(tz_info_mgr));
-  } else if (OB_UNLIKELY(tz_info_wrap_.is_position_class()
-              && tz_info_mgr->get_version() > tz_info_wrap_.get_cur_version())) {
-    ObString tz_name;
-    if (OB_UNLIKELY(!tz_info_wrap_.get_tz_info_pos().is_valid())) {
+  const int64_t UPDATE_PERIOD = 1000 * 1000 * 5; //5s
+  int64_t cur_time = ObTimeUtility::current_time();
+  if (cur_time - last_update_tz_time_ > UPDATE_PERIOD) {
+    ObTZMapWrap tz_map_wrap;
+    ObTimeZoneInfoManager *tz_info_mgr = NULL;
+    if (OB_FAIL(OTTZ_MGR.get_tenant_timezone(tenant_id_, tz_map_wrap, tz_info_mgr))) {
+      LOG_WARN("get tenant timezone with lock failed", K(ret));
+    } else if (OB_ISNULL(tz_info_mgr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("time zone info is invalid", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
-    } else if (OB_FAIL(tz_info_wrap_.get_tz_info_pos().get_tz_name(tz_name))) {
-      LOG_WARN("fal to get time zone name", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
-    } else {//此处需要先更新version，这样可以保证find到的tz_info version >= cur_version
-      int64_t orig_version = tz_info_wrap_.get_cur_version();
-      tz_info_wrap_.set_cur_version(tz_info_mgr->get_version());
-      if (OB_FAIL(tz_info_mgr->find_time_zone_info(tz_name, tz_info_wrap_.get_tz_info_pos()))) {
-        LOG_WARN("fail to find time zone info", K(tz_name), K(ret));
-        tz_info_wrap_.set_cur_version(orig_version);
-      } else {
-        tz_info_wrap_.get_tz_info_pos().set_error_on_overlap_time(tz_info_wrap_.is_error_on_overlap_time());
+      LOG_WARN("tenant timezone mgr is null", K(tz_info_mgr));
+    } else if (OB_UNLIKELY(tz_info_wrap_.is_position_class()
+                && tz_info_mgr->get_version() > tz_info_wrap_.get_cur_version())) {
+      ObString tz_name;
+      if (OB_UNLIKELY(!tz_info_wrap_.get_tz_info_pos().is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("time zone info is invalid", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
+      } else if (OB_FAIL(tz_info_wrap_.get_tz_info_pos().get_tz_name(tz_name))) {
+        LOG_WARN("fal to get time zone name", K(tz_info_wrap_.get_tz_info_pos()), K(ret));
+      } else {//此处需要先更新version，这样可以保证find到的tz_info version >= cur_version
+        int64_t orig_version = tz_info_wrap_.get_cur_version();
+        tz_info_wrap_.set_cur_version(tz_info_mgr->get_version());
+        if (OB_FAIL(tz_info_mgr->find_time_zone_info(tz_name, tz_info_wrap_.get_tz_info_pos()))) {
+          LOG_WARN("fail to find time zone info", K(tz_name), K(ret));
+          tz_info_wrap_.set_cur_version(orig_version);
+        } else {
+          tz_info_wrap_.get_tz_info_pos().set_error_on_overlap_time(tz_info_wrap_.is_error_on_overlap_time());
+        }
       }
+    }
+    if (OB_SUCC(ret)) {
+      last_update_tz_time_ = cur_time;
     }
   }
   return ret;

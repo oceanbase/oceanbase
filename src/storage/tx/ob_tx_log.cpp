@@ -556,7 +556,7 @@ void ObTxRedoLog::reset_mutator_buf()
 //      unused_encrypt_info can work. This may be perfected in the future.
 int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
                                ObAdminMutatorStringArg &arg,
-                               palf::block_id_t block_id,
+                               const char *block_name,
                                palf::LSN lsn,
                                int64_t tx_id,
                                SCN scn,
@@ -592,8 +592,8 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
       has_output = true;
     } else {
       if (!has_dumped_tx_id) {
-        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %ld; LSN:%ld, TxID:%ld; SCN:%s",
-                        block_id, lsn.val_, tx_id, to_cstring(scn));
+        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %s; LSN:%ld, TxID:%ld; SCN:%s",
+                        block_name, lsn.val_, tx_id, to_cstring(scn));
       }
       databuff_printf(arg.buf_, arg.buf_len_, arg.pos_,
                       "<TxRedoLog>: {TxCtxInfo: {%s}; MutatorMeta: {%s}; MutatorRows: {",

@@ -139,7 +139,11 @@ void ObTransferService::run1()
     if (has_set_stop() || wakeup_cnt_ > 0) {
       wakeup_cnt_ = 0;
     } else {
-      int64_t wait_time_ms = GCONF._transfer_service_wakeup_interval / 1000;
+      int64_t wait_time_ms = 10_s;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        wait_time_ms = tenant_config->_transfer_service_wakeup_interval;
+      }
       thread_cond_.wait(wait_time_ms);
     }
   }
@@ -170,6 +174,8 @@ int ObTransferService::get_ls_id_array_()
       } else if (OB_ISNULL(ls)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+      } else if (!(ls->get_log_handler()->is_replay_enabled())) {
+        LOG_INFO("log handler not enable replay, should not schduler transfer hander", "ls_id", ls->get_ls_id());
       } else if (OB_FAIL(ls_id_array_.push_back(ls->get_ls_id()))) {
         LOG_WARN("failed to push ls id into array", K(ret), KPC(ls));
       }

@@ -212,7 +212,7 @@ int ObRemoteBaseExecuteP<T>::auto_start_phy_trans()
     LOG_ERROR("plan_ctx or my_session is NULL", K(ret), K(plan_ctx), K(my_session));
   } else {
     // 远程单partition并且是autocommit的情况下才运行start_trans和start_stmt
-    bool in_trans = my_session->is_in_transaction();
+    // bool in_trans = my_session->is_in_transaction();
     bool ac = true;
     my_session->set_early_lock_release(plan_ctx->get_phy_plan()->stat_.enable_early_lock_release_);
     if (OB_FAIL(my_session->get_autocommit(ac))) {
@@ -223,6 +223,7 @@ int ObRemoteBaseExecuteP<T>::auto_start_phy_trans()
     // NOTE: autocommit modfied by PL cannot sync to remote,
     // use has_start_stmt to test transaction prepared on original node
     if (false == my_session->has_start_stmt()) {
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
       //start Tx on remote node, we need release txDesc deserilized by session
       if (OB_NOT_NULL(my_session->get_tx_desc())) {
         MTL(transaction::ObTransService*)->release_tx(*my_session->get_tx_desc());
@@ -646,7 +647,6 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
 
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
-    ObReqTimeGuard req_timeinfo_guard;
     ObSessionStatEstGuard stat_est_guard(session->get_effective_tenant_id(), session->get_sessid());
     // 初始化ObTask的执行环节
     //

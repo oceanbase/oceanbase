@@ -414,6 +414,7 @@ struct ObStoreCtx
   bool is_read() const { return mvcc_acc_ctx_.is_read(); }
   bool is_write() const { return mvcc_acc_ctx_.is_write(); }
   bool is_replay() const { return mvcc_acc_ctx_.is_replay(); }
+  bool is_read_store_ctx() const { return is_read_store_ctx_; }
   int init_for_read(const share::ObLSID &ls_id,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
@@ -432,7 +433,8 @@ struct ObStoreCtx
                K_(table_version),
                K_(mvcc_acc_ctx),
                K_(tablet_stat),
-               K_(replay_log_scn));
+               K_(replay_log_scn),
+               K_(is_read_store_ctx));
   share::ObLSID ls_id_;
   storage::ObLS *ls_;                              // for performance opt
   common::ObTabletID tablet_id_;
@@ -442,6 +444,7 @@ struct ObStoreCtx
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
   storage::ObTabletStat tablet_stat_;              // used for collecting query statistics
   share::SCN replay_log_scn_;                         // used in replay pass log_ts
+  bool is_read_store_ctx_;
 };
 
 

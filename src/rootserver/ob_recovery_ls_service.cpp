@@ -20,9 +20,10 @@
 #include "logservice/ob_log_handler.h"              //ObLogHandler
 #include "logservice/palf/log_entry.h"              //LogEntry
 #include "logservice/palf/log_define.h"
+#include "logservice/ob_log_service.h"//open_palf
 #include "share/scn.h"//SCN
 #include "logservice/ob_garbage_collector.h"//ObGCLSLog
-#include "logservice/restoreservice/ob_log_restore_handler.h"//ObLogRestoreHandler
+#include "logservice/palf_handle_guard.h"//ObPalfHandleGuard
 #include "observer/ob_server_struct.h"              //GCTX
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_ls_recovery_reportor.h" //ObLSRecoveryReportor
@@ -56,7 +57,7 @@ using namespace storage;
 using namespace palf;
 namespace rootserver
 {
-
+ERRSIM_POINT_DEF(ERRSIM_END_TRANS_ERROR);
 #define RESTORE_EVENT_ADD                                                      \
   int ret_code = OB_SUCCESS;                                                   \
   switch (ret) {                                                               \
@@ -64,6 +65,10 @@ namespace rootserver
       ret_code = OB_PASSWORD_WRONG;                                            \
     case -ER_CONNECT_FAILED:                                                   \
       ret_code = OB_CONNECT_ERROR;                                             \
+    case OB_IN_STOP_STATE:                                                     \
+      ret_code = OB_IN_STOP_STATE;                                             \
+    default:                                                                   \
+      ret_code = ret;                                                          \
   }                                                                            \
   ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",              \
     "tenant_id", tenant_id_, K(ret),                                           \
@@ -112,12 +117,18 @@ void ObRecoveryLSService::do_work()
   } else {
     ObLSRecoveryStatOperator ls_recovery;
     palf::PalfBufferIterator iterator;
+    palf::PalfHandleGuard palf_handle_guard;
     int tmp_ret = OB_SUCCESS;
     int64_t idle_time_us = 100 * 1000L;
     SCN start_scn;
-    while (!has_set_stop()) {
+    uint64_t thread_idx = get_thread_idx();
+    if (0 != thread_idx) {
+      if (OB_FAIL(init_palf_handle_guard_(palf_handle_guard))) {
+        LOG_WARN("failed to init palf handle guard", KR(ret));
+      }
+    }
+    while (!has_set_stop() && OB_SUCC(ret)) {
       ObCurTraceId::init(GCONF.self_addr_);
-      uint64_t thread_idx = get_thread_idx();
       ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
       ObAllTenantInfo tenant_info;
       //two thread for seed log and recovery_ls_manager
@@ -156,7 +167,6 @@ void ObRecoveryLSService::do_work()
         }
       } else {
         DEBUG_SYNC(STOP_RECOVERY_LS_THREAD1);
-
         if (!start_scn.is_valid()) {
           ObLSRecoveryStat ls_recovery_stat;
           if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
@@ -166,12 +176,12 @@ void ObRecoveryLSService::do_work()
                   "report readable_scn while start_scn is invalid"))) {
             //may recovery end, but readable scn need report
             LOG_WARN("failed to report ls recovery stat", KR(ret), K(ls_recovery_stat));
-          } else if (tenant_info.get_recovery_until_scn() == ls_recovery_stat.get_sync_scn()) {
+          } else if (tenant_info.get_recovery_until_scn() <= ls_recovery_stat.get_sync_scn()) {
             ret = OB_EAGAIN;
             if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
               LOG_INFO("has recovered to recovery_until_scn", KR(ret), K(ls_recovery_stat), K(tenant_info));
             }
-          } else if (OB_FAIL(seek_log_iterator_(ls_recovery_stat.get_sync_scn(), iterator))) {
+          } else if (OB_FAIL(seek_log_iterator_(ls_recovery_stat.get_sync_scn(), palf_handle_guard, iterator))) {
             LOG_WARN("failed to seek log iterator", KR(ret), K(ls_recovery_stat));
           } else {
             start_scn = ls_recovery_stat.get_sync_scn();
@@ -187,54 +197,54 @@ void ObRecoveryLSService::do_work()
         if (OB_FAIL(ret)) {
           start_scn.reset();
         }
-
-
-      }
+      }//end thread1
       LOG_INFO("[LS_RECOVERY] finish one round", KR(ret), KR(tmp_ret),
                K(start_scn), K(thread_idx), K(tenant_info), K(idle_time_us));
       idle(idle_time_us);
-    }
+      ret = OB_SUCCESS;
+    }//end while
   }
 }
 
-int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn, PalfBufferIterator &iterator)
+int ObRecoveryLSService::init_palf_handle_guard_(palf::PalfHandleGuard &palf_handle_guard)
 {
   int ret = OB_SUCCESS;
+  palf_handle_guard.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else {
+    logservice::ObLogService *log_service = MTL(logservice::ObLogService *);
+    if (OB_ISNULL(log_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log service is null", KR(ret));
+    } else if (OB_FAIL(log_service->open_palf(SYS_LS, palf_handle_guard))) {
+      LOG_WARN("ObLogService open_palf fail", KR(ret), K(tenant_id_));
+    }
+  }
+
+  return ret;
+}
+
+int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn,
+    palf::PalfHandleGuard &palf_handle_guard,
+    PalfBufferIterator &iterator)
+{
+  int ret = OB_SUCCESS;
+  palf::LSN start_lsn(0);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
   } else if (OB_UNLIKELY(!sync_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sync scn is invalid", KR(ret), K(sync_scn));
-  } else {
-    ObLSService *ls_svr = MTL(ObLSService *);
-    ObLSHandle ls_handle;
-    if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, storage::ObLSGetMod::RS_MOD))) {
-      LOG_WARN("failed to get ls", KR(ret));
-    } else {
-      ObLogHandler *log_handler = NULL;
-      ObLS *ls = NULL;
-      palf::LSN start_lsn(0);
-      if (OB_ISNULL(ls = ls_handle.get_ls())
-          || OB_ISNULL(log_handler = ls->get_log_handler())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ls or log handle is null", KR(ret), KP(ls),
-                     KP(log_handler));
-      } else {
-        if (SCN::base_scn() == sync_scn) {
-          // start_lsn = 0;
-        } else {
-          if (OB_FAIL(log_handler->locate_by_scn_coarsely(sync_scn, start_lsn))) {
-            LOG_WARN("failed to locate lsn", KR(ret), K(sync_scn));
-          }
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(log_handler->seek(start_lsn, iterator))) {
-          LOG_WARN("failed to seek iterator", KR(ret), K(sync_scn), K(start_lsn));
-        }
-      }
-    }
+  } else if (SCN::base_scn() == sync_scn) {
+    // start_lsn = 0;
+  } else if (OB_FAIL(palf_handle_guard.locate_by_scn_coarsely(sync_scn, start_lsn))) {
+    LOG_WARN("failed to locate lsn", KR(ret), K(sync_scn));
+  }
+  if (FAILEDx(palf_handle_guard.seek(start_lsn, iterator))) {
+    LOG_WARN("failed to seek iterator", KR(ret), K(sync_scn), K(start_lsn));
   }
   return ret;
 }
@@ -278,10 +288,6 @@ int ObRecoveryLSService::process_ls_log_(
                 "SYS log scn beyond recovery_until_scn"))) {
           LOG_WARN("failed to report_sys_ls_recovery_stat_", KR(ret), K(sync_scn), K(tenant_info),
                    K(log_entry), K(target_lsn), K(start_scn));
-        // SYS LS has recovered to the recovery_until_scn, need stop iterate SYS LS log and reset start_scn
-        } else if (OB_FAIL(seek_log_iterator_(tenant_info.get_recovery_until_scn(), iterator))) {
-          LOG_WARN("failed to seek log iterator", KR(ret), K(sync_scn), K(tenant_info),
-                    K(log_entry), K(target_lsn), K(start_scn));
         } else {
           ret = OB_ITER_STOP;
           LOG_WARN("SYS LS has recovered to the recovery_until_scn, need stop iterate SYS LS log",
@@ -422,6 +428,7 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
                 "report recovery stat and has multi data source"))) {
           LOG_WARN("failed to report sys ls recovery stat", KR(ret), K(sync_scn));
         }
+        ret = ERRSIM_END_TRANS_ERROR ? : ret;
         END_TRANSACTION(trans)
       }
     }
@@ -584,15 +591,25 @@ int ObRecoveryLSService::process_gc_log_(logservice::ObGCLSLog &gc_log, const SC
   common::ObMySQLTransaction trans;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
   ObLSLifeAgentManager ls_life_agent(*proxy_);
+  ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
+  ObAllTenantInfo tenant_info;
   if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is null", KR(ret));
    } else if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(meta_tenant_id));
-  } else if (OB_FAIL(ls_life_agent.set_ls_offline_in_trans(
-            tenant_id_, SYS_LS, share::OB_LS_TENANT_DROPPING, sync_scn, share::NORMAL_SWITCHOVER_STATUS,
+   } else if (OB_ISNULL(tenant_info_loader)) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("tenant report is null", KR(ret), K(tenant_id_));
+   } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+     LOG_WARN("failed to get tenant info", KR(ret));
+   } else if (OB_UNLIKELY(tenant_info.is_primary())) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("tenant info is primary", KR(ret), K(tenant_info));
+   } else if (OB_FAIL(ls_life_agent.set_ls_offline_in_trans(
+           tenant_id_, SYS_LS, share::OB_LS_TENANT_DROPPING, sync_scn, tenant_info.get_switchover_status(),
             trans))) {
-    LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(sync_scn));
+    LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(sync_scn), K(tenant_info));
   } else if (OB_FAIL(report_sys_ls_recovery_stat_in_trans_(sync_scn, false, trans,
           "report recovery stat and process gc log"))) {
     LOG_WARN("failed to report sys ls recovery stat", KR(ret), K(sync_scn));
@@ -738,13 +755,23 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
     const share::ObLSAttr &ls_attr, const SCN &sync_scn, ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!ls_attr.is_valid() || !trans.is_started())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls attr is invalid", KR(ret), K(ls_attr), "trans_start", trans.is_started());
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is null", KR(ret));
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant report is null", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
+  } else if (OB_UNLIKELY(tenant_info.is_primary())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info is primary", KR(ret), K(tenant_info));
   } else {
     ObLSStatusOperator ls_operator;
     share::ObLSStatusInfo ls_status;
@@ -758,17 +785,18 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
       }
     } else if (share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())) {
       //create new ls;
-      if (OB_FAIL(create_new_ls_(ls_attr, sync_scn, trans))) {
-        LOG_WARN("failed to create new ls", KR(ret), K(sync_scn), K(ls_attr));
+      if (OB_FAIL(create_new_ls_(ls_attr, sync_scn, tenant_info.get_switchover_status(), trans))) {
+        LOG_WARN("failed to create new ls", KR(ret), K(sync_scn), K(ls_attr), K(tenant_info));
       }
     } else if (share::is_ls_create_abort_op(ls_attr.get_ls_operation_type())) {
-      if (OB_FAIL(ls_life_agent.drop_ls_in_trans(tenant_id_, ls_attr.get_ls_id(), share::NORMAL_SWITCHOVER_STATUS, trans))) {
+      if (OB_FAIL(ls_life_agent.drop_ls_in_trans(tenant_id_, ls_attr.get_ls_id(),
+              tenant_info.get_switchover_status(), trans))) {
         LOG_WARN("failed to drop ls", KR(ret), K(tenant_id_), K(ls_attr));
       }
     } else if (share::is_ls_drop_end_op(ls_attr.get_ls_operation_type())) {
       if (OB_FAIL(ls_life_agent.set_ls_offline_in_trans(tenant_id_, ls_attr.get_ls_id(),
-              ls_attr.get_ls_status(), sync_scn, share::NORMAL_SWITCHOVER_STATUS, trans))) {
-        LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(ls_attr), K(sync_scn));
+              ls_attr.get_ls_status(), sync_scn, tenant_info.get_switchover_status(), trans))) {
+        LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(ls_attr), K(sync_scn), K(tenant_info));
       }
     } else {
       ObLSStatus target_status = share::OB_LS_EMPTY;
@@ -791,12 +819,12 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected operation type", KR(ret), K(ls_attr));
       }
-      if (FAILEDx(ls_operator.update_ls_status(tenant_id_, ls_attr.get_ls_id(),
-              ls_status.status_, target_status,
-              share::NORMAL_SWITCHOVER_STATUS, trans))) {
+      if (FAILEDx(ls_operator.update_ls_status_in_trans(tenant_id_, ls_attr.get_ls_id(),
+              ls_status.status_, target_status, tenant_info.get_switchover_status(), trans))) {
         LOG_WARN("failed to update ls status", KR(ret), K(tenant_id_), K(ls_attr),
             K(ls_status), K(target_status));
       }
+      ret = ERRSIM_END_TRANS_ERROR ? : ret;
       LOG_INFO("[LS_RECOVERY] update ls status", KR(ret), K(ls_attr), K(target_status));
     }
   }
@@ -829,12 +857,14 @@ int ObRecoveryLSService::porcess_alter_ls_group_(const share::ObLSAttr &ls_attr,
 
 int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
                                         const SCN &sync_scn,
+                                        const ObTenantSwitchoverStatus &switchover_status,
                                         common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  if (!share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())) {
+  if (!share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())
+      || ! switchover_status.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls not create pre operation", KR(ret), K(ls_attr));
+    LOG_WARN("invalid argument", KR(ret), K(ls_attr), K(switchover_status));
   } else {
     //create new ls;
     DEBUG_SYNC(BEFORE_RECOVER_USER_LS);
@@ -852,12 +882,13 @@ int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
       ret = OB_TENANT_NOT_EXIST;
       LOG_WARN("tenant not exist", KR(ret), K(tenant_id_));
     } else {
-      ObTenantLSInfo tenant_stat(GCTX.sql_proxy_, tenant_schema, tenant_id_);
+      ObTenantLSInfo tenant_stat(GCTX.sql_proxy_, tenant_schema, tenant_id_, &trans);
       ObLSFlag ls_flag = ls_attr.get_ls_flag();
       if (OB_FAIL(ObLSServiceHelper::create_new_ls_in_trans(ls_attr.get_ls_id(),
               ls_attr.get_ls_group_id(), ls_attr.get_create_scn(),
-              share::NORMAL_SWITCHOVER_STATUS, tenant_stat, trans, ls_flag))) {
-        LOG_WARN("failed to add new ls status info", KR(ret), K(ls_attr), K(sync_scn), K(tenant_stat));
+              switchover_status, tenant_stat, trans, ls_flag))) {
+        LOG_WARN("failed to add new ls status info", KR(ret), K(ls_attr), K(sync_scn),
+            K(tenant_stat), K(switchover_status));
       }
     }
     LOG_INFO("[LS_RECOVERY] create new ls", KR(ret), K(ls_attr));

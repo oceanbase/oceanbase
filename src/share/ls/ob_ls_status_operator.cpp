@@ -363,12 +363,13 @@ int ObLSStatusOperator::set_ls_offline(const uint64_t &tenant_id,
 {
   UNUSEDx(drop_scn);
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id)) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id
+        || !working_sw_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid_argument", KR(ret), K(ls_id), K(tenant_id));
-  } else if (OB_FAIL(update_ls_status(tenant_id, ls_id,
+    LOG_WARN("invalid_argument", KR(ret), K(ls_id), K(tenant_id), K(working_sw_status));
+  } else if (OB_FAIL(update_ls_status_in_trans(tenant_id, ls_id,
           ls_status, OB_LS_WAIT_OFFLINE, working_sw_status, trans))) {
-    LOG_WARN("failed to update ls status", KR(ret), K(tenant_id), K(ls_id), K(ls_status));
+    LOG_WARN("failed to update ls status", KR(ret), K(tenant_id), K(ls_id), K(ls_status), K(working_sw_status));
   }
   return ret;
 }
@@ -407,7 +408,7 @@ int ObLSStatusOperator::update_ls_status(
     const ObLSID &id, const ObLSStatus &old_status,
     const ObLSStatus &new_status,
     const ObTenantSwitchoverStatus &switch_status,
-    ObISQLClient &client)
+    ObMySQLProxy &client)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid()
@@ -421,19 +422,12 @@ int ObLSStatusOperator::update_ls_status(
   } else {
     //init_member_list is no need after create success
     ObMySQLTransaction trans;
-    ObAllTenantInfo tenant_info;
     const uint64_t exec_tenant_id =
       ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
     if (OB_FAIL(trans.start(&client, exec_tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
-                   tenant_id, &trans, true, tenant_info))) {
-      LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
-    } else if (switch_status != tenant_info.get_switchover_status()) {
-      ret = OB_NEED_RETRY;
-      LOG_WARN("tenant not expect switchover status", KR(ret), K(tenant_info));
-    } else if (OB_FAIL(update_ls_status_in_trans_(tenant_id, id, old_status, new_status, trans))) {
-      LOG_WARN("failed to update ls status in trans", KR(ret), K(tenant_id), K(id), K(old_status), K(new_status));
+    } else if (OB_FAIL(update_ls_status_in_trans(tenant_id, id, old_status, new_status, switch_status, trans))) {
+      LOG_WARN("failed to update ls status in trans", KR(ret), K(tenant_id), K(id), K(old_status), K(new_status), K(switch_status));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -446,20 +440,29 @@ int ObLSStatusOperator::update_ls_status(
   return ret;
 }
 
-int ObLSStatusOperator::update_ls_status_in_trans_(
+int ObLSStatusOperator::update_ls_status_in_trans(
     const uint64_t tenant_id,
     const ObLSID &id, const ObLSStatus &old_status,
     const ObLSStatus &new_status,
+    const ObTenantSwitchoverStatus &switch_status,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!id.is_valid()
                   || OB_LS_EMPTY == new_status
                   || OB_LS_EMPTY == old_status
-                  || OB_INVALID_TENANT_ID == tenant_id)) {
+                  || OB_INVALID_TENANT_ID == tenant_id
+                  || !switch_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid_argument", KR(ret), K(id), K(new_status), K(old_status),
-             K(tenant_id));
+             K(tenant_id), K(switch_status));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                   tenant_id, &trans, true, tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+  } else if (switch_status != tenant_info.get_switchover_status()) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("tenant not expect switchover status", KR(ret), K(tenant_info));
   } else {
     //init_member_list is no need after create success
     common::ObSqlString sql;
@@ -1641,7 +1644,7 @@ int ObLSStatusOperator::create_abort_ls_in_switch_tenant(
     const uint64_t tenant_id,
     const share::ObTenantSwitchoverStatus &status,
     const int64_t switchover_epoch,
-    ObISQLClient &client)
+    ObMySQLProxy &client)
 {
   int ret = OB_SUCCESS;
   common::ObSqlString sql;

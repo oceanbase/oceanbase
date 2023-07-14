@@ -1229,12 +1229,12 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
           && OB_FAIL(ObJsonExprHelper::ensure_collation(type, cs_type))) {
         // should check collation first
         LOG_WARN("Invalid collation type for input string.", K(ret));
-      } else if (deep_copy) {
-        ret = deep_copy_ob_string(*allocator, datum.get_string(), j_str);
       } else {
         j_str = datum.get_string();
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type, cs_type, has_lob_header, j_str))) {
           LOG_WARN("fail to get real data.", K(ret), K(j_str));
+        } else if (deep_copy) {
+          ret = deep_copy_ob_string(*allocator, j_str, j_str);
         }
       }
 
@@ -1303,6 +1303,7 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
         LOG_WARN("failed: json tree to bin", K(ret));
       }
     } else {
+      json_node->set_allocator(allocator);
       j_base = json_node;
     }
   }

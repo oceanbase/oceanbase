@@ -63,6 +63,7 @@ public:
       const share::schema::ObTableSchema &data_schema,
       share::schema::ObTableSchema &index_schema,
       bool check_data_schema = true);
+  static void del_column_flags_and_default_value(share::schema::ObColumnSchemaV2 &column);
   static int add_column(
       const share::schema::ObColumnSchemaV2 *data_column,
       const bool is_index,

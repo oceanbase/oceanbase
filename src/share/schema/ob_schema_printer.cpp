@@ -1538,7 +1538,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     if (OB_FAIL(share::ObAutoincrementService::get_instance().get_sequence_value(
           table_schema.get_tenant_id(), table_schema.get_table_id(),
           table_schema.get_autoinc_column_id(), table_schema.is_order_auto_increment_mode(),
-          auto_increment))) {
+          table_schema.get_truncate_version(), auto_increment))) {
       SHARE_SCHEMA_LOG(WARN, "fail to get auto_increment value", K(ret));
     } else if (auto_increment > 0) {
       if (table_schema.get_auto_increment() > auto_increment) {
@@ -1882,7 +1882,7 @@ int ObSchemaPrinter::print_interval_if_ness(const ObTableSchema &table_schema,
     OZ (databuff_printf(buf, buf_len, pos, ") "));
   }
   return ret;
-}                                            
+}
 
 int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchema &table_schema,
                                                               char* buf,
@@ -2019,6 +2019,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
                          table_schema.get_table_id(),
                          table_schema.get_autoinc_column_id(),
                          table_schema.is_order_auto_increment_mode(),
+                         table_schema.get_truncate_version(),
                          auto_increment))) {
       OB_LOG(WARN, "fail to get auto_increment value", K(ret));
     } else if (auto_increment > 0) {
@@ -4225,7 +4226,7 @@ int ObSchemaPrinter::print_simple_trigger_definition(const ObTriggerInfo &trigge
         trigger_info.get_trigger_name());
     if (ObTriggerInfo::TriggerType::TT_SIMPLE_DML == trigger_info.get_trigger_type()
         && trigger_info.has_row_point()) {
-      OZ (print_trigger_referencing(trigger_info, buf, buf_len, pos), 
+      OZ (print_trigger_referencing(trigger_info, buf, buf_len, pos),
           trigger_info.get_trigger_name());
     }
     if (trigger_info.has_row_point()) {
@@ -4274,7 +4275,7 @@ int ObSchemaPrinter::print_compound_instead_trigger_definition(const ObTriggerIn
                   false, false, true),
       trigger_info.get_trigger_body());
   CK (OB_NOT_NULL(parse_result.result_tree_) && OB_NOT_NULL(parse_result.result_tree_->children_[0]));
-  OZ (BUF_PRINTF(" %.*s", (int)(parse_result.result_tree_->children_[0]->str_len_), 
+  OZ (BUF_PRINTF(" %.*s", (int)(parse_result.result_tree_->children_[0]->str_len_),
                  parse_result.result_tree_->children_[0]->str_value_));
   if (OB_SUCC(ret) && get_ddl) {
     OZ (print_trigger_status(trigger_info, buf, buf_len, pos));
@@ -4282,7 +4283,7 @@ int ObSchemaPrinter::print_compound_instead_trigger_definition(const ObTriggerIn
   return ret;
 }
 
-int ObSchemaPrinter::print_trigger_status(const ObTriggerInfo &trigger_info, 
+int ObSchemaPrinter::print_trigger_status(const ObTriggerInfo &trigger_info,
                                           char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -4562,7 +4563,7 @@ int ObSchemaPrinter::print_user_definition(uint64_t tenant_id,
   const ObString &host_name = user_info.get_host_name_str();
   const ObString &user_passwd = user_info.get_passwd_str();
   bool is_oracle_mode = lib::is_oracle_mode();
-  
+
   if (!is_role) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos,
         is_oracle_mode ? "create user \"%.*s\" " : "create user if not exists `%.*s` ",

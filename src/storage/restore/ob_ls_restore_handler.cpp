@@ -316,11 +316,8 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   can_do_restore = false;
   bool is_normal = false;
   bool is_exist = true;
+  bool is_in_member_or_learner_list = false;
   if (is_stop()) { 
-    // when remove ls, set ls restore handler stop
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      LOG_WARN("ls is gc, no need to do restore", KPC(ls_));
-    }
   } else if (OB_FAIL(check_meta_tenant_normal_(is_normal))) {
     LOG_WARN("fail to get meta tenant status", K(ret));
   } else if (!is_normal) {
@@ -334,9 +331,6 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
       state_handler_ = nullptr;
     }
   } else if (restore_status.is_restore_failed()) {
-    if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000)) {
-      LOG_WARN("ls restore failed, tenant restore can't continue", K(result_mgr_));
-    }
   } else if (OB_FAIL(check_restore_job_exist_(is_exist))) {
   } else if (!is_exist) {
     if (OB_FAIL(ls_->set_restore_status(ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_FAILED), get_rebuild_seq()))) {
@@ -347,13 +341,31 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
     }
   } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
     LOG_WARN("fail to get migration status", K(ret));
-  } else if (ObMigrationStatusHelper::check_can_restore(migration_status)) {
-    // Migration and restore require serial execution
-    can_do_restore = true;
-  } else {
+  } else if (!ObMigrationStatusHelper::check_can_restore(migration_status)) {
+  } else if (OB_FAIL(check_in_member_or_learner_list_(is_in_member_or_learner_list))) {
+    LOG_WARN("failed to check in member or learner list", K(ret));
+  } else if (!is_in_member_or_learner_list) {
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      LOG_WARN("ls is in migration, restore wait later", KPC(ls_));
+      LOG_INFO("ls is not in member or learner list", KPC(ls_));
     }
+  } else {
+    can_do_restore = true;
+  }
+  return ret;
+}
+
+int ObLSRestoreHandler::check_in_member_or_learner_list_(bool &is_in_member_or_learner_list) const
+{
+  int ret = OB_SUCCESS;
+  int64_t paxos_replica_num = 0;
+  common::ObMemberList member_list;
+  GlobalLearnerList learner_list;
+  ObAddr self_addr = GCONF.self_addr_;
+  is_in_member_or_learner_list = false;
+  if (OB_FAIL(ls_->get_log_handler()->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
+    LOG_WARN("failed to get paxos_member_list_and_learner_list", K(ret));
+  } else {
+    is_in_member_or_learner_list = member_list.contains(self_addr) || learner_list.contains(self_addr);
   }
   return ret;
 }
@@ -1597,6 +1609,7 @@ int ObLSRestoreHandler::fill_restore_arg_()
         ls_restore_arg_.restore_scn_ = job_info.get_restore_scn();
         ls_restore_arg_.consistent_scn_ = job_info.get_consistent_scn();
         ls_restore_arg_.backup_cluster_version_ = job_info.get_source_cluster_version();
+        ls_restore_arg_.backup_data_version_ = job_info.get_source_data_version();
         ls_restore_arg_.backup_set_list_.reset();
         ls_restore_arg_.backup_piece_list_.reset();
         if (OB_FAIL(ls_restore_arg_.backup_piece_list_.assign(
@@ -2073,6 +2086,7 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
 ObLSQuickRestoreState::ObLSQuickRestoreState()
   : ObILSRestoreState(ObLSRestoreStatus::Status::QUICK_RESTORE)
 {
+  has_rechecked_after_clog_recovered_ = false;
 }
 
 ObLSQuickRestoreState::~ObLSQuickRestoreState()
@@ -2130,6 +2144,10 @@ int ObLSQuickRestoreState::leader_quick_restore_()
         LOG_INFO("clog replay not finish, wait later", KPC(ls_));
       }
     } else if (!tablet_mgr_.is_restore_completed()) {
+    } else if (!has_rechecked_after_clog_recovered_) {
+      // Force reload all tablets, ensure all transfer tablets has no transfer table.
+      tablet_mgr_.set_force_reload();
+      has_rechecked_after_clog_recovered_ = true;
     } else if (OB_FAIL(check_tablet_checkpoint_())) {
       LOG_WARN("fail to check tablet clog checkpoint ts", K(ret), KPC(ls_));
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
@@ -2186,6 +2204,10 @@ int ObLSQuickRestoreState::follower_quick_restore_()
         LOG_INFO("clog replay not finish, wait later", KPC(ls_));
       }
     } else if (!tablet_mgr_.is_restore_completed()) {
+    } else if (!has_rechecked_after_clog_recovered_) {
+      // Force reload all tablets, ensure all transfer tablets has no transfer table.
+      tablet_mgr_.set_force_reload();
+      has_rechecked_after_clog_recovered_ = true;
     } else if (OB_FAIL(check_tablet_checkpoint_())) {
       LOG_WARN("fail to check tablet clog checkpoint ts", K(ret), KPC(ls_));
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {

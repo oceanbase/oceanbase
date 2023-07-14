@@ -70,9 +70,12 @@ protected:
     const ObGetMergeTablesResult &result,
     const int64_t schema_version,
     ObMediumCompactionInfo &medium_info);
-  int init_parallel_range(
+  int init_parallel_range_and_schema_changed(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
+  int init_schema_changed(
+    const ObSSTableMeta &sstable_meta,
+    ObMediumCompactionInfo &medium_info);
   static int get_result_for_major(
       ObTablet &tablet,
       const ObMediumCompactionInfo &medium_info,
@@ -128,7 +131,6 @@ protected:
       const ObTabletID &tablet_id,
       const int64_t schema_version,
       uint64_t &table_id);
-  static const int64_t DEFAULT_SYNC_SCHEMA_CLOG_TIMEOUT = 1000L * 1000L; // 1s
   static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60L * 1000L * 1000L; // 60s
   static constexpr double SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD = 0.2;
   static const int64_t SCHEDULE_RANGE_ROW_COUNT_THRESHOLD = 1000 * 1000L; // 100w

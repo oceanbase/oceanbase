@@ -172,15 +172,17 @@ int ObServerCheckpointSlogHandler::try_write_checkpoint_for_compat()
     bool need_svr_ckpt = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_metas.size(); ++i) {
       const ObTenantSuperBlock &super_block = tenant_metas.at(i).super_block_;
-      if (!super_block.is_old_version()) {
-        // nothing to do.
-      } else {
-        MTL_SWITCH(super_block.tenant_id_) {
-          if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->write_checkpoint(true/*is_force*/))) {
-            LOG_WARN("fail to write tenant slog checkpoint", K(ret));
-          } else {
-            need_svr_ckpt = true;
-          }
+      MTL_SWITCH(super_block.tenant_id_) {
+        ObTenantCheckpointSlogHandler *tenant_ckpt_handler = MTL(ObTenantCheckpointSlogHandler*);
+        if (!super_block.is_old_version()) {
+          // nothing to do.
+        } else if (OB_FAIL(tenant_ckpt_handler->write_checkpoint(true/*is_force*/))) {
+          LOG_WARN("fail to write tenant slog checkpoint", K(ret));
+        } else {
+          need_svr_ckpt = true;
+        }
+        if (OB_SUCC(ret) && OB_FAIL(tenant_ckpt_handler->enable_ls_read())) {
+          LOG_WARN("fail to enable ls to read", K(ret));
         }
       }
     }

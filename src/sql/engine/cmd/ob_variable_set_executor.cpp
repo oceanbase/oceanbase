@@ -275,12 +275,10 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
                   if (!addr.ip_to_string(buf, sizeof(buf))) {
                     ret = OB_ERR_UNEXPECTED;
                     LOG_WARN("format leader ip failed", K(ret), K(addr));
-                  } else if (!(0 == ctx.get_my_session()->get_client_ip().compare(buf)
-                               || 0 == client_ip.compare("127.0.0.1")
-                               || 0 == client_ip.compare("::1"))) {
+                  } else if (!(0 == client_ip.compare("unix:"))) {
                     ret = OB_NOT_SUPPORTED;
-                    LOG_WARN("modify SECURE_FILE_PRIV by remote client", K(ret), K(client_ip));
-                    LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify SECURE_FILE_PRIV by remote client");
+                    LOG_WARN("modify SECURE_FILE_PRIV not by unix socket connection", K(ret), K(client_ip));
+                    LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify SECURE_FILE_PRIV not by unix socket connection");
                   }
                 }
               }

@@ -83,7 +83,8 @@ public:
   int update_pending_tablets_with_remote();
   int build_tablets_sstable_info();
   int update_local_tablets();
-
+  int create_all_tablets_with_4_1_rpc(
+      CopyTabletSimpleInfoMap &simple_info_map);
 private:
   int get_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
   int get_tablet_info_restore_reader_(ObICopyTabletInfoReader *&reader);
