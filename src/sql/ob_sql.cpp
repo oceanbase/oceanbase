@@ -4999,7 +4999,8 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
             LOG_WARN("unexpect null", K(ret), K(j));
           } else if (OB_FAIL(hidden_column_item.expr_->extract_info())) {
             LOG_WARN("failed to extract expr info", K(ret));
-          } else if (OB_UNLIKELY(!ObOptEstUtils::is_calculable_expr(*hidden_column_item.expr_, dummy_count))) {
+          } else if (!expr_constraints.at(j).ignore_const_check_ &&
+                     OB_UNLIKELY(!ObOptEstUtils::is_calculable_expr(*hidden_column_item.expr_, dummy_count))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpect calculable expr", K(ret), KPC(hidden_column_item.expr_));
           } else if (OB_FAIL(pre_calc_exprs.push_back(hidden_column_item))) {

@@ -1027,15 +1027,19 @@ struct ObExprConstraint
 {
   ObExprConstraint() :
       pre_calc_expr_(NULL),
-      expect_result_(PRE_CALC_RESULT_NONE) {}
+      expect_result_(PRE_CALC_RESULT_NONE),
+      ignore_const_check_(false) {}
   ObExprConstraint(ObRawExpr *expr, PreCalcExprExpectResult expect_result) :
       pre_calc_expr_(expr),
-      expect_result_(expect_result) {}
+      expect_result_(expect_result),
+      ignore_const_check_(false) {}
   bool operator==(const ObExprConstraint &rhs) const;
   ObRawExpr *pre_calc_expr_;
   PreCalcExprExpectResult expect_result_;
+  bool ignore_const_check_;
   TO_STRING_KV(KP_(pre_calc_expr),
-               K_(expect_result));
+               K_(expect_result),
+               K_(ignore_const_check));
 };
 
 struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstraint>
