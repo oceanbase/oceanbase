@@ -37,12 +37,12 @@ static constexpr char FASTSTACK_SHELL_PATH[] = "tools/callstack.sh";
 static constexpr char MINICORE_SCRIPT[] = "if [ -e bin/minicore.py ]; then\n"
 "  python bin/minicore.py `cat $(pwd)/run/observer.pid` -c -o core.`cat $(pwd)/run/observer.pid`.mini\n"
 "fi\n"
-"[ $(ls -1 core.*.mini 2>/dev/null | wc -l) -gt 5 ] && ls -1 core.*.mini | sort | head -n 1 | xargs rm -f";
+"[ $(ls -1 core.*.mini 2>/dev/null | wc -l) -gt 5 ] && ls -1 core.*.mini -t | tail -n 1 | xargs rm -f";
 
 static constexpr char FASTSTACK_SCRIPT[] = "if [ -x \"$(command -v obstack)\" ]; then\n"
 "  obstack `cat $(pwd)/run/observer.pid` > stack.`cat $(pwd)/run/observer.pid`.`date +%Y%m%d%H%M%S`\n"
 "fi\n"
-"[ $(ls -1 stack.* 2>/dev/null | wc -l) -gt 100 ] && ls -1 stack.* | sort | head -n 1 | xargs rm -f";
+"[ $(ls -1 stack.* 2>/dev/null | wc -l) -gt 100 ] && ls -1 stack.* -t | tail -n 1 | xargs rm -f";
 
 static inline void handler(int sig, siginfo_t *s, void *p)
 {
