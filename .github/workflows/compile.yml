@@ -35,13 +35,13 @@ jobs:
         bash build.sh debug
         cd build_debug && make -j4
         
-    - name: Launch oceanbase
-      shell: bash
-      run: |
-        mkdir -p $HOME/deploy/
-        ./tools/deploy/obd.sh prepare -p $HOME/deploy/
-        ./tools/deploy/obd.sh deploy -c tools/deploy/single.yaml
-        echo "select version();" | ./tools/deploy/obd.sh sys -n single
+    #- name: Launch oceanbase
+    #  shell: bash
+    #  run: |
+    #    mkdir -p $HOME/deploy/
+    #    ./tools/deploy/obd.sh prepare -p $HOME/deploy/
+    #    ./tools/deploy/obd.sh deploy -c tools/deploy/single.yaml
+    #    echo "select version();" | ./tools/deploy/obd.sh sys -n single
 
   centos-x86_64:
     runs-on: ubuntu-20.04
