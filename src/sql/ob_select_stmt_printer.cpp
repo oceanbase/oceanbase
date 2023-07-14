@@ -834,6 +834,7 @@ int ObSelectStmtPrinter::print_for_update()
       const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
       bool has_for_update_ = false;
       int64_t wait_time = -1;
+      bool skip_locked = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
         const TableItem *table = NULL;
         if (OB_ISNULL(table = select_stmt->get_table_item(i))) {
@@ -842,6 +843,7 @@ int ObSelectStmtPrinter::print_for_update()
         } else if (table->for_update_) {
           has_for_update_ = true;
           wait_time = table->for_update_wait_us_;
+          skip_locked = table->skip_locked_;
           break;
         }
       }
@@ -865,6 +867,8 @@ int ObSelectStmtPrinter::print_for_update()
         if (OB_SUCC(ret) && wait_time >= 0) {
           if (wait_time > 0) {
             DATA_PRINTF(" wait %lld", wait_time / 1000000LL);
+          } else if (skip_locked) {
+            DATA_PRINTF(" skip locked");
           } else {
             DATA_PRINTF(" nowait");
           }
