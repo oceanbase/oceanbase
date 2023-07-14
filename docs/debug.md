@@ -1,9 +1,6 @@
 # Abstract
 
-OceanBase is a distributed C++ database, so it is difficult to be developed, debugged and tested. 
-This document describes some methods to debug OceanBase.
-
-We have many ways to debug OceanBase, such as gdb, logging, etc.
+This document describes some methods to debug OceanBase. We have many ways to debug OceanBase, such as gdb, logging, etc.
 
 We suggest you build OceanBase with debug mode as it is easy to debug.
 
@@ -164,6 +161,8 @@ obclient> show trace;
 If you use gdb to debug OceanBase, it maybe cannot work normally because gdb will hang the process and OceanBase depends on the heartbeat to work normally. So we provide a debug sync mechanism to solve this problem.
 
 The specific thread of OceanBase process will hang on the point if you add a debug sync point in the code, and then you can do something to debug the process, such as attach the process by gdb, or execute some SQL commands to get some information.
+
+> Debug Sync can work on release mode, so it is enabled on production envrionment.
 
 ## How to use
 
