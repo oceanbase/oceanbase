@@ -371,7 +371,13 @@ int ObLogSysTableQueryer::parse_record_from_row_(common::sqlclient::ObMySQLResul
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(ip), K(port));
   } else {
-    common::ObZoneType zone_type = str_to_zone_type(zone_type_str.ptr());
+    common::ObZoneType zone_type;
+    if (nullptr == zone_type_str.ptr()) {
+      // After the ObServer of the primary database crashes and restarts, the Zone Type may become an invalid value.
+      // It can be ignored to avoid errors.
+    } else {
+      zone_type = str_to_zone_type(zone_type_str.ptr());
+    }
 
     if (OB_FAIL(units_record.init(server, zone, zone_type, region))) {
       LOG_ERROR("units_record init failed", KR(ret), K(server), K(zone), K(zone_type), K(region));
