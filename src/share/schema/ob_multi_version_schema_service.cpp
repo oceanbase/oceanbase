@@ -3446,13 +3446,15 @@ int ObMultiVersionSchemaService::try_gc_tenant_schema_mgr(ObSchemaMemMgr *&mem_m
   } else {
     ObSchemaMgr *eli_schema_mgr = NULL;
     uint64_t tenant_id = mem_mgr->get_tenant_id();
+    bool need_gc_schema_mgr = false;
     do {
       if (OB_FAIL(schema_mgr_cache->try_gc_tenant_schema_mgr(eli_schema_mgr))) {
         LOG_WARN("fail to eliminate schema mgr", K(ret), K(tenant_id));
+      } else if (FALSE_IT(need_gc_schema_mgr = OB_NOT_NULL(eli_schema_mgr))) {
       } else if (OB_FAIL(mem_mgr->free_schema_mgr(eli_schema_mgr))) {
         LOG_ERROR("free eli schema mgr falied", KR(ret), K(tenant_id));
       }
-    } while (OB_SUCC(ret) && OB_NOT_NULL(eli_schema_mgr));
+    } while (OB_SUCC(ret) && need_gc_schema_mgr);
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(mem_mgr->try_reset_allocator())) {
