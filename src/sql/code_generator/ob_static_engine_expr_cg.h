@@ -69,7 +69,7 @@ class ObStaticEngineExprCG
 {
 public:
   static const int64_t STACK_OVERFLOW_CHECK_DEPTH = 16;
-  static const int64_t OLTP_WORKLOAD_CARDINALITY = 16;
+  static const int64_t OLTP_WORKLOAD_CARDINALITY = 32;
   static const int64_t DATUM_EVAL_INFO_SIZE = sizeof(ObDatum) + sizeof(ObEvalInfo);
   friend class ObRawExpr;
   struct TmpFrameInfo {

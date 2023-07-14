@@ -27,24 +27,24 @@ Query Plan
 =================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=256
       dop=3
-  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=16
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
-  3 - output([t1.c1]), filter(nil), rowset=16
+  3 - output([t1.c1]), filter(nil), rowset=256
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t1.c1)]
-  4 - output([t1.c1]), filter(nil), rowset=16
+  4 - output([t1.c1]), filter(nil), rowset=256
       affinitize
-  5 - output([t1.c1]), filter(nil), rowset=16
+  5 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p[0-9])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  6 - output([t2.c1]), filter(nil), rowset=16
-  7 - output([t2.c1]), filter(nil), rowset=16
+  6 - output([t2.c1]), filter(nil), rowset=256
+  7 - output([t2.c1]), filter(nil), rowset=256
       (#keys=1, [t2.c1]), dop=3
-  8 - output([t2.c1]), filter(nil), rowset=16
-  9 - output([t2.c1]), filter(nil), rowset=16
+  8 - output([t2.c1]), filter(nil), rowset=256
+  9 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p[0-5])
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -86,31 +86,31 @@ Query Plan
 =========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c2, T_FUN_COUNT_SUM(T_FUN_COUNT(*)))]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(a.c2, T_FUN_COUNT_SUM(T_FUN_COUNT(*)))]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c2, T_FUN_COUNT_SUM(T_FUN_COUNT(*)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(a.c2, T_FUN_COUNT_SUM(T_FUN_COUNT(*)))]), filter(nil), rowset=256
       dop=3
-  2 - output([a.c2], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=16
+  2 - output([a.c2], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
       group([a.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
-  3 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=16
-  4 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=16
+  3 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+  4 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256
       (#keys=1, [a.c2]), dop=3
-  5 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=16
+  5 - output([a.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256
       group([a.c2]), agg_func([T_FUN_COUNT(*)])
-  6 - output([a.c2]), filter(nil), rowset=16
+  6 - output([a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.c1]), other_conds(nil)
-  7 - output([b.c1]), filter(nil), rowset=16
+  7 - output([b.c1]), filter(nil), rowset=256
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(b.c1)]
-  8 - output([b.c1]), filter(nil), rowset=16
-  9 - output([b.c1]), filter(nil), rowset=16
+  8 - output([b.c1]), filter(nil), rowset=256
+  9 - output([b.c1]), filter(nil), rowset=256
       (#keys=1, [b.c1]), dop=3
- 10 - output([b.c1]), filter(nil), rowset=16
- 11 - output([b.c1]), filter(nil), rowset=16
+ 10 - output([b.c1]), filter(nil), rowset=256
+ 11 - output([b.c1]), filter(nil), rowset=256
       access([b.c1]), partitions(p[0-5])
       is_index_back=false, is_global_index=false,
       range_key([b.c1]), range(MIN ; MAX)always true
- 12 - output([a.c1], [a.c2]), filter(nil), rowset=16
+ 12 - output([a.c1], [a.c2]), filter(nil), rowset=256
       affinitize
- 13 - output([a.c1], [a.c2]), filter(nil), rowset=16
+ 13 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-9])
       is_index_back=false, is_global_index=false,
       range_key([a.c1]), range(MIN ; MAX)always true

@@ -31,7 +31,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10], [t1.c11], [t1.c12], [t1.c13], [t1.c14], [t1.c15],
-       [t1.c16], [t1.c17], [t1.c18], [t1.c19], [t1.c20], [t1.c21], [t1.c22]), filter(nil), rowset=16
+       [t1.c16], [t1.c17], [t1.c18], [t1.c19], [t1.c20], [t1.c21], [t1.c22]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10], [t1.c11], [t1.c12], [t1.c13], [t1.c14], [t1.c15],
        [t1.c16], [t1.c17], [t1.c18], [t1.c19], [t1.c20], [t1.c21], [t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false,

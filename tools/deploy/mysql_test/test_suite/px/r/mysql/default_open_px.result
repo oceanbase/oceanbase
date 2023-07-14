@@ -17,12 +17,12 @@ Query Plan
 =============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       force partition granule
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -38,12 +38,12 @@ Query Plan
 =============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       force partition granule
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -59,11 +59,11 @@ Query Plan
 =========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
       dop=15
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -79,12 +79,12 @@ Query Plan
 =============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       force partition granule
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -100,12 +100,12 @@ Query Plan
 =============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       force partition granule
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -121,12 +121,12 @@ Query Plan
 =============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       force partition granule
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true

@@ -41,13 +41,13 @@ Query Plan
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t2.a], [t2.b]), filter(nil), rowset=16
+  0 - output([t2.a], [t2.b]), filter(nil), rowset=256
       equal_conds([t2.b = t1.a]), other_conds(nil)
-  1 - output([t1.a]), filter(nil), rowset=16
+  1 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t2.b], [t2.a]), filter(nil), rowset=16
+  2 - output([t2.b], [t2.a]), filter(nil), rowset=256
       access([t2.b], [t2.a]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
@@ -76,13 +76,13 @@ Query Plan
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.a], [t3.b], [t3.pk1], [t3.pk2], [t3.pk3]), filter(nil), rowset=16
+  0 - output([t3.a], [t3.b], [t3.pk1], [t3.pk2], [t3.pk3]), filter(nil), rowset=256
       equal_conds([t3.b = t1.a]), other_conds(nil)
-  1 - output([t1.a]), filter(nil), rowset=16
+  1 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), filter(nil), rowset=16
+  2 - output([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), filter(nil), rowset=256
       access([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t3.pk1], [t3.pk2], [t3.pk3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -149,13 +149,13 @@ Query Plan
 ==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=256
       equal_conds([t1.a = t2.b]), other_conds(nil)
-  1 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  1 - output([t1.a], [t1.b]), filter(nil), rowset=256
       access([t1.a], [t1.b]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t2.b]), filter(nil), rowset=16
+  2 - output([t2.b]), filter(nil), rowset=256
       access([t2.b]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.b], [t2.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
@@ -210,22 +210,22 @@ Query Plan
 ==============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter(nil), rowset=16
+  0 - output([1]), filter(nil), rowset=256
       equal_conds([cast(t2.c1, VARCHAR(1048576)) = cast(cast(t2.c6, CHAR(1)), VARCHAR(1048576))]), other_conds(nil)
-  1 - output([t2.c1]), filter(nil), rowset=16
+  1 - output([t2.c1]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output([t2.c1]), filter([cast(t2.c2, DECIMAL(-1, -1)) = cast(1, DECIMAL(1, 0))]), rowset=16
+  2 - output([t2.c1]), filter([cast(t2.c2, DECIMAL(-1, -1)) = cast(1, DECIMAL(1, 0))]), rowset=256
       access([t2.c2], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  3 - output(nil), filter(nil), rowset=16
-  4 - output(nil), filter(nil), rowset=16
+  3 - output(nil), filter(nil), rowset=256
+  4 - output(nil), filter(nil), rowset=256
       access(nil)
-  5 - output([1]), filter(nil), rowset=16
+  5 - output([1]), filter(nil), rowset=256
       access(nil), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([t2.c6]), filter(nil), rowset=16
+  6 - output([t2.c6]), filter(nil), rowset=256
       access([t2.c6]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true

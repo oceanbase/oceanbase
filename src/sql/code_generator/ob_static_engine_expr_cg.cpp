@@ -148,11 +148,6 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
     batch_size = static_cast<int64_t>(ObExprBatchSize::one);
   }
 
-  if (is_oltp_workload(scan_cardinality)) {
-    // downgrade batchsize to a smaller value to minimize rowsets cost for TP
-    // workload
-    batch_size = min(OLTP_WORKLOAD_CARDINALITY, batch_size);
-  }
   return ret;
 }
 

@@ -48,7 +48,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.tinyint_t]), filter(nil), rowset=16
+  0 - output([NULL = t.tinyint_t]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -67,7 +67,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.smallint_t]), filter(nil), rowset=16
+  0 - output([NULL = t.smallint_t]), filter(nil), rowset=256
       access([t.smallint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -86,7 +86,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.mediumint_t]), filter(nil), rowset=16
+  0 - output([NULL = t.mediumint_t]), filter(nil), rowset=256
       access([t.mediumint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -105,7 +105,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.int32_t]), filter(nil), rowset=16
+  0 - output([NULL = t.int32_t]), filter(nil), rowset=256
       access([t.int32_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -124,7 +124,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.bigint_t]), filter(nil), rowset=16
+  0 - output([NULL = t.bigint_t]), filter(nil), rowset=256
       access([t.bigint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -143,7 +143,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.utinyint_t]), filter(nil), rowset=16
+  0 - output([NULL = t.utinyint_t]), filter(nil), rowset=256
       access([t.utinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -162,7 +162,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.usmallint_t]), filter(nil), rowset=16
+  0 - output([NULL = t.usmallint_t]), filter(nil), rowset=256
       access([t.usmallint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -181,7 +181,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.umedium_t]), filter(nil), rowset=16
+  0 - output([NULL = t.umedium_t]), filter(nil), rowset=256
       access([t.umedium_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -200,7 +200,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.uint32_t]), filter(nil), rowset=16
+  0 - output([NULL = t.uint32_t]), filter(nil), rowset=256
       access([t.uint32_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -219,7 +219,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.ubigint_t]), filter(nil), rowset=16
+  0 - output([NULL = t.ubigint_t]), filter(nil), rowset=256
       access([t.ubigint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -238,7 +238,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.float_t]), filter(nil), rowset=16
+  0 - output([NULL = t.float_t]), filter(nil), rowset=256
       access([t.float_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -257,7 +257,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.ufloat_t]), filter(nil), rowset=16
+  0 - output([NULL = t.ufloat_t]), filter(nil), rowset=256
       access([t.ufloat_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -276,7 +276,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.double_t]), filter(nil), rowset=16
+  0 - output([NULL = t.double_t]), filter(nil), rowset=256
       access([t.double_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -295,7 +295,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.udouble_t]), filter(nil), rowset=16
+  0 - output([NULL = t.udouble_t]), filter(nil), rowset=256
       access([t.udouble_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -314,7 +314,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.number_t]), filter(nil), rowset=16
+  0 - output([NULL = t.number_t]), filter(nil), rowset=256
       access([t.number_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -333,7 +333,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.unumber_t]), filter(nil), rowset=16
+  0 - output([NULL = t.unumber_t]), filter(nil), rowset=256
       access([t.unumber_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -352,7 +352,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.datetime_t]), filter(nil), rowset=16
+  0 - output([NULL = t.datetime_t]), filter(nil), rowset=256
       access([t.datetime_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -371,7 +371,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.timestamp_t]), filter(nil), rowset=16
+  0 - output([NULL = t.timestamp_t]), filter(nil), rowset=256
       access([t.timestamp_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -390,7 +390,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.date_t]), filter(nil), rowset=16
+  0 - output([NULL = t.date_t]), filter(nil), rowset=256
       access([t.date_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -409,7 +409,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.time_t]), filter(nil), rowset=16
+  0 - output([NULL = t.time_t]), filter(nil), rowset=256
       access([t.time_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -428,7 +428,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.year_t]), filter(nil), rowset=16
+  0 - output([NULL = t.year_t]), filter(nil), rowset=256
       access([t.year_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -447,7 +447,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.varchar_t]), filter(nil), rowset=16
+  0 - output([NULL = t.varchar_t]), filter(nil), rowset=256
       access([t.varchar_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -466,7 +466,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.char_t]), filter(nil), rowset=16
+  0 - output([NULL = t.char_t]), filter(nil), rowset=256
       access([t.char_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -485,7 +485,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.tinytext_t]), filter(nil), rowset=16
+  0 - output([NULL = t.tinytext_t]), filter(nil), rowset=256
       access([t.tinytext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -542,7 +542,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.bit_t]), filter(nil), rowset=16
+  0 - output([NULL = t.bit_t]), filter(nil), rowset=256
       access([t.bit_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -561,7 +561,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.enum_t]), filter(nil), rowset=16
+  0 - output([NULL = t.enum_t]), filter(nil), rowset=256
       access([t.enum_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -580,7 +580,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.set_t]), filter(nil), rowset=16
+  0 - output([NULL = t.set_t]), filter(nil), rowset=256
       access([t.set_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -600,7 +600,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.tinyint_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.tinyint_t]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -619,7 +619,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.smallint_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.smallint_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.smallint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -638,7 +638,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.mediumint_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.mediumint_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.mediumint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -657,7 +657,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.int32_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.int32_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.int32_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -676,7 +676,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.bigint_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.bigint_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.bigint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -695,7 +695,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.utinyint_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.utinyint_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.utinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -714,7 +714,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.usmallint_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.usmallint_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.usmallint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -733,7 +733,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.umedium_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.umedium_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.umedium_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -752,7 +752,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.uint32_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.uint32_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.uint32_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -771,7 +771,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.ubigint_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.ubigint_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.ubigint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -790,7 +790,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.float_t, DOUBLE(-1, -1))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.float_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.float_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -809,7 +809,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.ufloat_t, DOUBLE(-1, -1))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.ufloat_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.ufloat_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -828,7 +828,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = t.double_t]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = t.double_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.double_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -847,7 +847,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.udouble_t, DOUBLE(-1, -1))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DOUBLE(-1, -1)) = cast(t.udouble_t, DOUBLE(-1, -1))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.udouble_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -866,7 +866,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = t.number_t]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = t.number_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.number_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -885,7 +885,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.unumber_t, DECIMAL(10, 0))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.unumber_t, DECIMAL(10, 0))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.unumber_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -904,7 +904,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DATETIME(-1, -1)) = t.datetime_t]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DATETIME(-1, -1)) = t.datetime_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.datetime_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -923,7 +923,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, TIMESTAMP(-1, -1)) = t.timestamp_t]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, TIMESTAMP(-1, -1)) = t.timestamp_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.timestamp_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -942,7 +942,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DATE(-1, -1)) = t.date_t]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DATE(-1, -1)) = t.date_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.date_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -961,7 +961,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, TIME(-1, -1)) = t.time_t]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, TIME(-1, -1)) = t.time_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.time_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -980,7 +980,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.year_t, DECIMAL(4, 0))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.year_t, DECIMAL(4, 0))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.year_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -999,7 +999,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.varchar_t, DECIMAL(-1, -1))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.varchar_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.varchar_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1018,7 +1018,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.char_t, DECIMAL(-1, -1))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.char_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.char_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1037,7 +1037,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.tinytext_t, DECIMAL(-1, -1))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.tinytext_t, DECIMAL(-1, -1))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.tinytext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1094,7 +1094,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.bit_t, DECIMAL(1, 0))]), filter(nil), rowset=16
+  0 - output([cast(t.tinyint_t, DECIMAL(4, 0)) = cast(t.bit_t, DECIMAL(1, 0))]), filter(nil), rowset=256
       access([t.tinyint_t], [t.bit_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1113,7 +1113,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.enum_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.enum_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.enum_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1132,7 +1132,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t.tinyint_t = t.set_t]), filter(nil), rowset=16
+  0 - output([t.tinyint_t = t.set_t]), filter(nil), rowset=256
       access([t.tinyint_t], [t.set_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1363,7 +1363,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) = (1, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) = (1, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1382,7 +1382,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) = (2, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) = (2, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1402,7 +1402,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) < (1, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) < (1, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1421,7 +1421,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) < (2, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) < (2, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1441,7 +1441,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) <= (1, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) <= (1, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1460,7 +1460,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) <= (2, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) <= (2, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1480,7 +1480,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) > (1, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) > (1, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1499,7 +1499,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) > (2, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) > (2, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1519,7 +1519,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) >= (1, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) >= (1, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1538,7 +1538,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) >= (2, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) >= (2, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1558,7 +1558,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) != (1, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) != (1, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -1577,7 +1577,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([(1, 1) != (2, t.tinyint_t)]), filter(nil), rowset=16
+  0 - output([(1, 1) != (2, t.tinyint_t)]), filter(nil), rowset=256
       access([t.tinyint_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t.__pk_increment]), range(MIN ; MAX)always true

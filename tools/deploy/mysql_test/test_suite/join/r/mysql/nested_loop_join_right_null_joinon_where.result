@@ -28,15 +28,15 @@ Query Plan
 ==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.id], [t2.id]), filter(nil), rowset=16
+  0 - output([t1.id], [t2.id]), filter(nil), rowset=256
       equal_conds([t2.id = t1.id]), other_conds(nil)
       merge_directions([ASC])
-  1 - output([t1.id]), filter(nil), rowset=16
+  1 - output([t1.id]), filter(nil), rowset=256
       access([t1.id]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.id]), range(200 ; MAX),
       range_cond([t1.id > 200])
-  2 - output([t2.id]), filter(nil), rowset=16
+  2 - output([t2.id]), filter(nil), rowset=256
       access([t2.id]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.id]), range(200 ; MAX),
@@ -58,15 +58,15 @@ Query Plan
 ==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.id], [t2.id]), filter(nil), rowset=16
+  0 - output([t1.id], [t2.id]), filter(nil), rowset=256
       equal_conds([t2.id = t1.id]), other_conds(nil)
       merge_directions([ASC])
-  1 - output([t1.id]), filter(nil), rowset=16
+  1 - output([t1.id]), filter(nil), rowset=256
       access([t1.id]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.id]), range(200 ; MAX),
       range_cond([t1.id > 200])
-  2 - output([t2.id]), filter(nil), rowset=16
+  2 - output([t2.id]), filter(nil), rowset=256
       access([t2.id]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.id]), range(NULL ; 200),
@@ -88,15 +88,15 @@ Query Plan
 ==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.id], [b.id]), filter(nil), rowset=16
+  0 - output([a.id], [b.id]), filter(nil), rowset=256
       equal_conds([a.id = b.id]), other_conds(nil)
       merge_directions([ASC])
-  1 - output([a.id]), filter(nil), rowset=16
+  1 - output([a.id]), filter(nil), rowset=256
       access([a.id]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([a.id]), range(200 ; MAX),
       range_cond([a.id > 200])
-  2 - output([b.id]), filter(nil), rowset=16
+  2 - output([b.id]), filter(nil), rowset=256
       access([b.id]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.id]), range(NULL ; 200),
@@ -119,14 +119,14 @@ Query Plan
 ===========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.id], [b.id]), filter(nil), rowset=16
+  0 - output([a.id], [b.id]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([b.id]), filter(nil), rowset=16
+  1 - output([b.id]), filter(nil), rowset=256
       access([b.id]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.id]), range(MIN ; MAX)always true
-  2 - output([a.id]), filter(nil), rowset=16
-  3 - output([a.id]), filter([a.id = a.id]), rowset=16
+  2 - output([a.id]), filter(nil), rowset=256
+  3 - output([a.id]), filter([a.id = a.id]), rowset=256
       access([a.id]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([a.id]), range(MAX ; MIN)always false,

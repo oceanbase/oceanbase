@@ -24,13 +24,13 @@ Query Plan
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([x.c2], [T_FUN_SUM(x.c1)]), filter(nil), rowset=16
+  0 - output([x.c2], [T_FUN_SUM(x.c1)]), filter(nil), rowset=256
       group([x.c2]), agg_func([T_FUN_SUM(x.c1)])
-  1 - output([x.c2], [x.c1]), filter(nil), rowset=16
+  1 - output([x.c2], [x.c1]), filter(nil), rowset=256
       access([x.c2], [x.c1])
-  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
       distinct([t1.c2], [t1.c1])
-  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
       access([t1.c2], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -55,13 +55,13 @@ Query Plan
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([x.c2], [T_FUN_SUM(x.c1 + x.c2)]), filter(nil), rowset=16
+  0 - output([x.c2], [T_FUN_SUM(x.c1 + x.c2)]), filter(nil), rowset=256
       group([x.c2]), agg_func([T_FUN_SUM(x.c1 + x.c2)])
-  1 - output([x.c2], [x.c1]), filter(nil), rowset=16
+  1 - output([x.c2], [x.c1]), filter(nil), rowset=256
       access([x.c2], [x.c1])
-  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
       distinct([t1.c2], [t1.c1])
-  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
       access([t1.c2], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -86,13 +86,13 @@ Query Plan
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([x.c2], [T_FUN_SUM(x.c1 + x.c2)], [T_FUN_MAX(x.c1 + 2)]), filter(nil), rowset=16
+  0 - output([x.c2], [T_FUN_SUM(x.c1 + x.c2)], [T_FUN_MAX(x.c1 + 2)]), filter(nil), rowset=256
       group([x.c2]), agg_func([T_FUN_SUM(x.c1 + x.c2)], [T_FUN_MAX(x.c1 + 2)])
-  1 - output([x.c1], [x.c2]), filter(nil), rowset=16
+  1 - output([x.c1], [x.c2]), filter(nil), rowset=256
       access([x.c1], [x.c2])
-  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
       distinct([t1.c2], [t1.c1])
-  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
       access([t1.c2], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -114,7 +114,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter([t1.c2 = 1]), rowset=16
+  0 - output([t1.c1], [t1.c2]), filter([t1.c2 = 1]), rowset=256
       access([t1.c2], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true

@@ -7326,7 +7326,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nullif(t1.c1, t1.c2)]), filter(nil), rowset=16
+  0 - output([nullif(t1.c1, t1.c2)]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7345,7 +7345,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nullif(t1.c2, t1.c1)]), filter(nil), rowset=16
+  0 - output([nullif(t1.c2, t1.c1)]), filter(nil), rowset=256
       access([t1.c2], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7364,7 +7364,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nullif(t1.c1, t1.c1)]), filter(nil), rowset=16
+  0 - output([nullif(t1.c1, t1.c1)]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7383,7 +7383,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nullif(t1.c2, t1.c2)]), filter(nil), rowset=16
+  0 - output([nullif(t1.c2, t1.c2)]), filter(nil), rowset=256
       access([t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true

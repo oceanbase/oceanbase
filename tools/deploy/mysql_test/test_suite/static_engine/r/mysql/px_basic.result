@@ -59,12 +59,12 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
       dop=1
-  2 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  2 - output([a.c1], [a.c2]), filter(nil), rowset=256
       force partition granule
-  3 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  3 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.c1]), range(MIN ; MAX)always true
@@ -95,14 +95,14 @@ Query Plan
 ========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c1, a.c2 + a.c1)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2 + a.c1)]), filter(nil), rowset=256
       sort_keys([a.c2 + 1 + a.c1, ASC])
-  1 - output([a.c2 + 1 + a.c1], [INTERNAL_FUNCTION(a.c1, a.c2 + a.c1)]), filter(nil), rowset=16
+  1 - output([a.c2 + 1 + a.c1], [INTERNAL_FUNCTION(a.c1, a.c2 + a.c1)]), filter(nil), rowset=256
       dop=2
-  2 - output([a.c2 + 1 + a.c1], [a.c1], [a.c2]), filter(nil), rowset=16
+  2 - output([a.c2 + 1 + a.c1], [a.c1], [a.c2]), filter(nil), rowset=256
       sort_keys([a.c2 + 1 + a.c1, ASC])
-  3 - output([a.c1], [a.c2], [a.c2 + 1 + a.c1]), filter(nil), rowset=16
-  4 - output([a.c1], [a.c2], [a.c2 + 1 + a.c1]), filter(nil), rowset=16
+  3 - output([a.c1], [a.c2], [a.c2 + 1 + a.c1]), filter(nil), rowset=256
+  4 - output([a.c1], [a.c2], [a.c2 + 1 + a.c1]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.c1]), range(MIN ; MAX)always true
@@ -138,25 +138,25 @@ Query Plan
 =================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [a.c2, ASC])
-  1 - output([a.c1], [a.c2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=16
+  1 - output([a.c1], [a.c2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
       dop=2
-  2 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  2 - output([a.c1], [a.c2]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [a.c2, ASC])
-  3 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  3 - output([a.c1], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c2 = b.c1]), other_conds(nil)
-  4 - output([a.c1], [a.c2]), filter(nil), rowset=16
-  5 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  4 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  5 - output([a.c1], [a.c2]), filter(nil), rowset=256
       (#keys=1, [a.c2]), dop=2
-  6 - output([a.c1], [a.c2]), filter(nil), rowset=16
-  7 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  6 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.c1]), range(MIN ; MAX)always true
-  8 - output([b.c1]), filter(nil), rowset=16
+  8 - output([b.c1]), filter(nil), rowset=256
       affinitize
-  9 - output([b.c1]), filter(nil), rowset=16
+  9 - output([b.c1]), filter(nil), rowset=256
       access([b.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([b.c1]), range(MIN ; MAX)always true
@@ -191,24 +191,24 @@ Query Plan
 ====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [a.c2 + 2, ASC])
-  1 - output([a.c1], [a.c2 + 2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=16
+  1 - output([a.c1], [a.c2 + 2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
       dop=2
-  2 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=16
+  2 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [a.c2 + 2, ASC])
-  3 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=16
+  3 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c2 + 2 = b.c1 + 1]), other_conds(nil)
-  4 - output([a.c1], [a.c2]), filter(nil), rowset=16
-  5 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  4 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  5 - output([a.c1], [a.c2]), filter(nil), rowset=256
       dop=2
-  6 - output([a.c1], [a.c2]), filter(nil), rowset=16
-  7 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  6 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.c1]), range(MIN ; MAX)always true
-  8 - output([b.c1]), filter(nil), rowset=16
-  9 - output([b.c1]), filter(nil), rowset=16
+  8 - output([b.c1]), filter(nil), rowset=256
+  9 - output([b.c1]), filter(nil), rowset=256
       access([b.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([b.c1]), range(MIN ; MAX)always true
@@ -243,25 +243,25 @@ Query Plan
 =================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [a.c2 + 2, ASC])
-  1 - output([a.c1], [a.c2 + 2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=16
+  1 - output([a.c1], [a.c2 + 2], [INTERNAL_FUNCTION(a.c1, a.c2)]), filter(nil), rowset=256
       dop=2
-  2 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=16
+  2 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [a.c2 + 2, ASC])
-  3 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=16
+  3 - output([a.c1], [a.c2 + 2], [a.c2]), filter(nil), rowset=256
       equal_conds([abs(cast(a.c2, BIGINT(-1, 0))) + 2 = b.c1]), other_conds(nil)
-  4 - output([a.c1], [a.c2], [abs(cast(a.c2, BIGINT(-1, 0))) + 2]), filter(nil), rowset=16
-  5 - output([a.c1], [a.c2], [abs(cast(a.c2, BIGINT(-1, 0))) + 2]), filter(nil), rowset=16
+  4 - output([a.c1], [a.c2], [abs(cast(a.c2, BIGINT(-1, 0))) + 2]), filter(nil), rowset=256
+  5 - output([a.c1], [a.c2], [abs(cast(a.c2, BIGINT(-1, 0))) + 2]), filter(nil), rowset=256
       (#keys=1, [abs(cast(a.c2, BIGINT(-1, 0))) + 2]), dop=2
-  6 - output([a.c1], [a.c2]), filter(nil), rowset=16
-  7 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  6 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.c1]), range(MIN ; MAX)always true
-  8 - output([b.c1]), filter(nil), rowset=16
+  8 - output([b.c1]), filter(nil), rowset=256
       affinitize
-  9 - output([b.c1]), filter(nil), rowset=16
+  9 - output([b.c1]), filter(nil), rowset=256
       access([b.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([b.c1]), range(MIN ; MAX)always true
@@ -300,27 +300,27 @@ Query Plan
 ===================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [b.c1, ASC])
-  1 - output([a.c1], [b.c1], [INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=16
+  1 - output([a.c1], [b.c1], [INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
       dop=2
-  2 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=16
+  2 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [b.c1, ASC])
-  3 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=16
+  3 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.c2]), other_conds(nil)
-  4 - output([b.c1], [b.c2]), filter(nil), rowset=16
+  4 - output([b.c1], [b.c2]), filter(nil), rowset=256
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(b.c2)]
-  5 - output([b.c2], [b.c1]), filter(nil), rowset=16
+  5 - output([b.c2], [b.c1]), filter(nil), rowset=256
       affinitize
-  6 - output([b.c2], [b.c1]), filter(nil), rowset=16
+  6 - output([b.c2], [b.c1]), filter(nil), rowset=256
       access([b.c2], [b.c1]), partitions(p[0-5])
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([a.c1], [a.c2]), filter(nil), rowset=16
-  8 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  7 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  8 - output([a.c1], [a.c2]), filter(nil), rowset=256
       (#keys=1, [a.c1]), dop=2
-  9 - output([a.c1], [a.c2]), filter(nil), rowset=16
- 10 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  9 - output([a.c1], [a.c2]), filter(nil), rowset=256
+ 10 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -354,24 +354,24 @@ Query Plan
 ====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [b.c1 + 2, ASC])
-  1 - output([a.c1], [b.c1 + 2], [INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=16
+  1 - output([a.c1], [b.c1 + 2], [INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=256
       dop=2
-  2 - output([a.c1], [b.c1 + 2], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=16
+  2 - output([a.c1], [b.c1 + 2], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
       sort_keys([a.c1, ASC], [b.c1 + 2, ASC])
-  3 - output([a.c1], [b.c1 + 2], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=16
+  3 - output([a.c1], [b.c1 + 2], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 + 2 = b.c2 + 1]), other_conds(nil)
-  4 - output([b.c1], [b.c2]), filter(nil), rowset=16
-  5 - output([b.c1], [b.c2]), filter(nil), rowset=16
+  4 - output([b.c1], [b.c2]), filter(nil), rowset=256
+  5 - output([b.c1], [b.c2]), filter(nil), rowset=256
       dop=2
-  6 - output([b.c2], [b.c1]), filter(nil), rowset=16
-  7 - output([b.c2], [b.c1]), filter(nil), rowset=16
+  6 - output([b.c2], [b.c1]), filter(nil), rowset=256
+  7 - output([b.c2], [b.c1]), filter(nil), rowset=256
       access([b.c2], [b.c1]), partitions(p[0-5])
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([a.c1], [a.c2]), filter(nil), rowset=16
-  9 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  8 - output([a.c1], [a.c2]), filter(nil), rowset=256
+  9 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -407,29 +407,29 @@ Query Plan
 ===================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=256
       sort_keys([b.c2, ASC], [T_FUN_SUM(a.c1), ASC])
-  1 - output([b.c2], [T_FUN_SUM(a.c1)], [INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=16
+  1 - output([b.c2], [T_FUN_SUM(a.c1)], [INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=256
       dop=2
-  2 - output([b.c2], [T_FUN_SUM(a.c1)]), filter(nil), rowset=16
+  2 - output([b.c2], [T_FUN_SUM(a.c1)]), filter(nil), rowset=256
       group([b.c2]), agg_func([T_FUN_SUM(a.c1)])
-  3 - output([b.c2], [a.c1]), filter(nil), rowset=16
+  3 - output([b.c2], [a.c1]), filter(nil), rowset=256
       sort_keys([b.c2, ASC])
-  4 - output([b.c2], [a.c1]), filter(nil), rowset=16
+  4 - output([b.c2], [a.c1]), filter(nil), rowset=256
       equal_conds([a.c1 = b.c2]), other_conds(nil)
-  5 - output([a.c1]), filter(nil), rowset=16
-  6 - output([a.c1]), filter(nil), rowset=16
+  5 - output([a.c1]), filter(nil), rowset=256
+  6 - output([a.c1]), filter(nil), rowset=256
       (#keys=1, [a.c1]), dop=2
-  7 - output([a.c1]), filter(nil), rowset=16
-  8 - output([a.c1]), filter(nil), rowset=16
+  7 - output([a.c1]), filter(nil), rowset=256
+  8 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([a.c1]), range(MIN ; MAX)always true
-  9 - output([b.c2]), filter(nil), rowset=16
- 10 - output([b.c2]), filter(nil), rowset=16
+  9 - output([b.c2]), filter(nil), rowset=256
+ 10 - output([b.c2]), filter(nil), rowset=256
       (#keys=1, [b.c2]), dop=2
- 11 - output([b.c2]), filter(nil), rowset=16
- 12 - output([b.c2]), filter(nil), rowset=16
+ 11 - output([b.c2]), filter(nil), rowset=256
+ 12 - output([b.c2]), filter(nil), rowset=256
       access([b.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.c1]), range(MIN ; MAX)always true
