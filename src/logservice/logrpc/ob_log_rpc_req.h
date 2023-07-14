@@ -123,32 +123,6 @@ public:
   bool is_locked_;
 };
 
-struct LogGetLeaderMaxScnReq {
-  OB_UNIS_VERSION(1);
-public:
-  LogGetLeaderMaxScnReq(): src_(), palf_id_(palf::INVALID_PALF_ID) { }
-  LogGetLeaderMaxScnReq(const common::ObAddr &src,
-                      const int64_t palf_id);
-  ~LogGetLeaderMaxScnReq();
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(src), K_(palf_id));
-  common::ObAddr src_;
-  int64_t palf_id_;
-};
-
-struct LogGetLeaderMaxScnResp {
-  OB_UNIS_VERSION(1);
-public:
-  LogGetLeaderMaxScnResp() : max_scn_()  { }
-  LogGetLeaderMaxScnResp(const share::SCN &max_scn);
-  ~LogGetLeaderMaxScnResp();
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(max_scn));
-  share::SCN max_scn_;
-};
-
 struct LogGetPalfStatReq {
   OB_UNIS_VERSION(1);
 public:

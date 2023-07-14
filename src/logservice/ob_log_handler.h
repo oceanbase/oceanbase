@@ -590,7 +590,6 @@ private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
   int submit_config_change_cmd_(const LogConfigChangeCmd &req,
                                 LogConfigChangeCmdResp &resp);
-  int get_leader_max_scn_(share::SCN &max_scn) const;
   DISALLOW_COPY_AND_ASSIGN(ObLogHandler);
 private:
   common::ObAddr self_;
@@ -604,9 +603,6 @@ private:
   mutable obrpc::ObLogServiceRpcProxy *rpc_proxy_;
   common::ObQSync ls_qs_;
   ObMiniStat::ObStatItem append_cost_stat_;
-  mutable bool cached_is_log_sync_;
-  mutable int64_t last_check_sync_ts_;
-  mutable int64_t last_renew_loc_ts_;
   bool is_offline_;
   mutable int64_t get_max_decided_scn_debug_time_;
 };

@@ -43,7 +43,6 @@ int ObAllVirtualPalfStat::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (false == start_to_read_) {
-    const bool is_cluster_already_4100 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
     auto func_iterate_palf = [&](const palf::PalfHandle &palf_handle) -> int {
       int ret = OB_SUCCESS;
       logservice::ObLogStat log_stat;
@@ -51,9 +50,6 @@ int ObAllVirtualPalfStat::inner_get_next_row(common::ObNewRow *&row)
       palf_handle.get_palf_id(palf_id);
       if (OB_FAIL(palf_handle.stat(log_stat.palf_stat_))) {
         SERVER_LOG(WARN, "PalfHandle stat failed", K(ret), K(palf_id));
-      } else if (false == is_cluster_already_4100 &&
-          OB_FAIL(get_log_handler_stat_(log_stat.palf_stat_, log_stat))){
-        SERVER_LOG(WARN, "get_log_handler_stat_ failed", K(ret), K(palf_id), K(log_stat));
       } else if (OB_FAIL(insert_log_stat_(log_stat, &cur_row_))){
         SERVER_LOG(WARN, "ObAllVirtualPalfStat insert_log_stat_ failed", K(ret), K(palf_id), K(log_stat));
       } else {
@@ -176,8 +172,7 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 10: {
-        const bool is_cluster_already_4100 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
-        const bool is_in_sync = (is_cluster_already_4100)? log_stat.palf_stat_.is_in_sync_: log_stat.in_sync_;
+        const bool is_in_sync = log_stat.palf_stat_.is_in_sync_;
         cur_row_.cells_[i].set_bool(is_in_sync);
         break;
       }
@@ -246,40 +241,6 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
     }
-  }
-  return ret;
-}
-
-int ObAllVirtualPalfStat::get_log_handler_stat_(const palf::PalfStat &palf_stat, logservice::ObLogStat &log_stat)
-{
-  int ret = OB_SUCCESS;
-  const int64_t palf_id = palf_stat.palf_id_;
-  storage::ObLSHandle ls_handle;
-  storage::ObLS *ls = NULL;
-  storage::ObLSService *ls_service = MTL(storage::ObLSService*);
-  share::ObLSID ls_id(palf_id);
-  bool is_in_sync = false;
-  bool need_rebuild = false;
-  common::ObRole log_handler_role = INVALID_ROLE;
-  common::ObRole restore_handler_role = INVALID_ROLE;
-  common::ObRole unused_role = INVALID_ROLE;
-  int64_t unused_pid = -1, log_handler_pid = -1, restore_handler_pid = -1;
-  bool unused_bool = false;
-  if (false == ls_id.is_valid() || OB_ISNULL(ls_service)) {
-    ret = OB_INVALID_ARGUMENT;
-    SERVER_LOG(WARN, "invalid argument", KR(ret), K(ls_id), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))
-             || NULL == (ls = ls_handle.get_ls())) {
-    ret = OB_ENTRY_NOT_EXIST;
-    SERVER_LOG(WARN, "get log stream from ObLSService failed", K(ret), K(ls_id));
-  } else {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ls->get_log_handler()->is_in_sync(is_in_sync, need_rebuild))) {
-      SERVER_LOG(WARN, "is_in_sync failed", K(tmp_ret), K(ls_id));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    log_stat.in_sync_ = is_in_sync;
   }
   return ret;
 }

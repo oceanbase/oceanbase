@@ -184,58 +184,6 @@ void LogConfigChangeCmdResp::reset()
 OB_SERIALIZE_MEMBER(LogConfigChangeCmdResp, ret_, lock_owner_, is_locked_);
 // ============= LogConfigChangeCmdResp end =============
 
-// ============= LogGetLeaderMaxScnReq begin ===========
-LogGetLeaderMaxScnReq::LogGetLeaderMaxScnReq(const common::ObAddr &src,
-                                         const int64_t palf_id)
-  : src_(src), palf_id_(palf_id)
-{
-}
-
-LogGetLeaderMaxScnReq::~LogGetLeaderMaxScnReq()
-{
-  reset();
-}
-
-bool LogGetLeaderMaxScnReq::is_valid() const
-{
-  return src_.is_valid() && palf::is_valid_palf_id(palf_id_);
-}
-
-void LogGetLeaderMaxScnReq::reset()
-{
-  src_.reset();
-  palf_id_ = palf::INVALID_PALF_ID;
-}
-
-OB_SERIALIZE_MEMBER(LogGetLeaderMaxScnReq, src_, palf_id_);
-
-// ============= LogGetLeaderMaxTsNSReq end =============
-
-// ============= LogGetLeaderMaxTsNSResp begin =============
-LogGetLeaderMaxScnResp::LogGetLeaderMaxScnResp(const share::SCN &max_scn)
-{
-  max_scn_ = max_scn;
-}
-
-LogGetLeaderMaxScnResp::~LogGetLeaderMaxScnResp()
-{
-  reset();
-}
-
-bool LogGetLeaderMaxScnResp::is_valid() const
-{
-  return max_scn_.is_valid();
-}
-
-void LogGetLeaderMaxScnResp::reset()
-{
-  max_scn_.reset();
-}
-
-OB_SERIALIZE_MEMBER(LogGetLeaderMaxScnResp, max_scn_);
-// ============= LogGetLeaderMaxTsNSResp end ===============
-//
-
 // ============= LogGetPalfStatReq begin ===========
 LogGetPalfStatReq::LogGetPalfStatReq(
     const common::ObAddr &src_addr,

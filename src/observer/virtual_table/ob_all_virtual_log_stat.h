@@ -37,7 +37,6 @@ public:
   void destroy();
 private:
   int insert_log_stat_(const logservice::ObLogStat &log_stat, common::ObNewRow *row);
-  int get_log_handler_stat_(const palf::PalfStat &palf_stat, logservice::ObLogStat &log_stat);
   int member_list_to_string_(const common::ObMemberList &member_list);
   int learner_list_to_string_(const common::GlobalLearnerList &learner_list, char *output_buf);
 private:

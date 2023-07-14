@@ -46,9 +46,6 @@ ObLogHandler::ObLogHandler() : self_(),
                                lc_cb_(NULL),
                                rpc_proxy_(NULL),
                                append_cost_stat_("[PALF STAT APPEND COST]", 1 * 1000 * 1000),
-                               cached_is_log_sync_(false),
-                               last_check_sync_ts_(OB_INVALID_TIMESTAMP),
-                               last_renew_loc_ts_(OB_INVALID_TIMESTAMP),
                                is_offline_(false),
                                get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP)
 {
@@ -501,78 +498,20 @@ int ObLogHandler::is_in_sync(bool &is_log_sync,
   int ret = OB_SUCCESS;
   is_log_sync = false;
   is_need_rebuild = false;
-  LSN end_lsn;
-  LSN last_rebuild_lsn;
+  palf::PalfStat palf_stat;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(palf_handle_.get_end_lsn(end_lsn)) || !end_lsn.is_valid()) {
-    CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K_(id), K(end_lsn));
-  } else if (OB_FAIL(palf_handle_.get_last_rebuild_lsn(last_rebuild_lsn))) {
-    CLOG_LOG(WARN, "get_last_rebuild_lsn failed", K(ret), K_(id));
-  } else if (last_rebuild_lsn.is_valid() && end_lsn < last_rebuild_lsn) {
-    is_need_rebuild = true;
+  } else if (OB_FAIL(palf_handle_.stat(palf_stat))) {
+    CLOG_LOG(WARN, "palf stat failed", K(ret), K_(id));
   } else {
-    // check is log sync
+    is_log_sync = palf_stat.is_in_sync_;
+    is_need_rebuild = palf_stat.is_need_rebuild_;
   }
-  SCN local_max_scn;
-  SCN leader_max_scn;
-  if (OB_SUCC(ret)) {
-    static const int64_t SYNC_DELAY_TIME_THRESHOLD_US = 3 * 1000 * 1000L;
-    const int64_t SYNC_GET_LEADER_INFO_INTERVAL_US = SYNC_DELAY_TIME_THRESHOLD_US / 2;
-    bool unused_state = false;
-    int64_t unused_id;
-    common::ObRole role;
-    if (OB_FAIL(palf_handle_.get_role(role, unused_id, unused_state))) {
-      CLOG_LOG(WARN, "get_role failed", K(ret), K_(id));
-    } else if (LEADER == role) {
-      is_log_sync = true;
-    } else if (OB_FAIL(palf_handle_.get_max_scn(local_max_scn)) || !local_max_scn.is_valid()) {
-      CLOG_LOG(WARN, "get_max_scn failed", K(ret), K_(id), K(local_max_scn));
-    } else if (palf_reach_time_interval(SYNC_GET_LEADER_INFO_INTERVAL_US, last_check_sync_ts_)) {
-      // if reachs time interval, get max_scn of leader with sync RPC
-      if (OB_FAIL(get_leader_max_scn_(leader_max_scn))) {
-        CLOG_LOG(WARN, "get_palf_max_scn failed", K(ret), K_(id));
-      }
-    } else {
-      is_log_sync = cached_is_log_sync_;
-    }
-    if (OB_SUCC(ret) && leader_max_scn.is_valid()) {
-      is_log_sync = (leader_max_scn.convert_to_ts() - local_max_scn.convert_to_ts() <= SYNC_DELAY_TIME_THRESHOLD_US);
-      cached_is_log_sync_ = is_log_sync;
-    }
-    ret = OB_SUCCESS;
-  }
-
-  if (REACH_TIME_INTERVAL(500 * 1000)) {
-    CLOG_LOG(INFO, "is_in_sync", K(ret), K_(id), K(is_log_sync), K(leader_max_scn), K(local_max_scn),
-        K_(cached_is_log_sync), K(is_need_rebuild), K(end_lsn), K(last_rebuild_lsn));
-  }
-  return ret;
-}
-
-int ObLogHandler::get_leader_max_scn_(SCN &max_scn) const
-{
-  int ret = OB_SUCCESS;
-  common::ObAddr leader;
-  max_scn.reset();
-  LogGetLeaderMaxScnReq req(self_, id_);
-  LogGetLeaderMaxScnResp resp;
-  bool need_renew_leader = false;
-  if (OB_FAIL(lc_cb_->nonblock_get_leader(id_, leader))) {
-    CLOG_LOG(WARN, "get_leader failed", K(ret), K_(id));
-    need_renew_leader = true;
-  } else if (OB_FAIL(rpc_proxy_->to(leader).timeout(500 * 1000).trace_time(true). \
-                     by(MTL_ID()).get_leader_max_scn(req, resp))) {
-    CLOG_LOG(WARN, "get_palf_max_scn failed", K(ret), K_(id));
-    need_renew_leader = true;
-  } else {
-    max_scn = resp.max_scn_;
-  }
-  if (need_renew_leader && palf_reach_time_interval(500 * 1000, last_renew_loc_ts_)) {
-    (void) lc_cb_->nonblock_renew_leader(id_);
+  if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
+    CLOG_LOG(INFO, "is_in_sync", K(ret), K_(id), K(is_log_sync), K(is_need_rebuild));
   }
   return ret;
 }

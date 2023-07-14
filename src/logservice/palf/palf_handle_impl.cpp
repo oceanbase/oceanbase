@@ -4674,7 +4674,7 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.is_need_rebuild_ = (palf_stat.end_lsn_.is_valid() &&
                                   last_rebuild_lsn.is_valid() &&
                                   palf_stat.end_lsn_ < last_rebuild_lsn);
-    palf_stat.is_in_sync_ = cached_is_in_sync_;
+    palf_stat.is_in_sync_ = (LEADER == palf_stat.role_)? true: cached_is_in_sync_;
     PALF_LOG(TRACE, "PalfHandleImpl stat", K(palf_stat));
   }
   return OB_SUCCESS;

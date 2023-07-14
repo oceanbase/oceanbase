@@ -162,38 +162,6 @@ int LogRequestHandler::handle_sync_request<LogConfigChangeCmd, LogConfigChangeCm
 }
 
 template <>
-int LogRequestHandler::handle_sync_request<LogGetLeaderMaxScnReq, LogGetLeaderMaxScnResp>(
-    const LogGetLeaderMaxScnReq &req,
-    LogGetLeaderMaxScnResp &resp)
-{
-  int ret = common::OB_SUCCESS;
-  if (false == req.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "Invalid argument!!!", K(ret), K(req));
-  } else {
-    palf::PalfHandleGuard palf_handle_guard;
-    const int64_t palf_id = req.palf_id_;
-    const common::ObAddr &server = req.src_;
-    common::ObRole role = FOLLOWER;
-    int64_t unused_pid;
-    bool is_pending_state = true;
-    if (OB_FAIL(get_palf_handle_guard_(palf_id, palf_handle_guard))) {
-      CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(ret), K(palf_id));
-    } else if (OB_FAIL(palf_handle_guard.get_role(role, unused_pid, is_pending_state))) {
-      CLOG_LOG(WARN, "palf_handle get_role failed", K(ret), K(palf_id), K(server));
-    } else if ((role != LEADER || true == is_pending_state)) {
-      ret = OB_NOT_MASTER;
-      CLOG_LOG(WARN, "i am not leader, failed", K(ret), K(req), K(role), K(is_pending_state));
-    } else if (OB_FAIL(palf_handle_guard.get_max_scn(resp.max_scn_))) {
-      CLOG_LOG(WARN, "get_max_scn from palf failed", K(ret), K(palf_id), K(server));
-    } else {
-      CLOG_LOG(TRACE, "get_max_scn from palf success", K(ret), K(palf_id), K(server), K(req), K(resp));
-    }
-  }
-  return ret;
-}
-
-template <>
 int LogRequestHandler::handle_sync_request<LogGetPalfStatReq, LogGetPalfStatResp>(
     const LogGetPalfStatReq &req,
     LogGetPalfStatResp &resp)

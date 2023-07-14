@@ -98,12 +98,6 @@ DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogMembershipChangeP,
                                      LogConfigChangeCmdResp,
                                      obrpc::OB_LOG_CONFIG_CHANGE_CMD);
 
-DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogGetLeaderMaxScnP,
-                                     obrpc::ObLogServiceRpcProxy,
-                                     LogGetLeaderMaxScnReq,
-                                     LogGetLeaderMaxScnResp,
-                                     obrpc::OB_LOG_GET_LEADER_MAX_SCN);
-
 DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogGetPalfStatReqP,
                                      obrpc::ObLogServiceRpcProxy,
                                      LogGetPalfStatReq,

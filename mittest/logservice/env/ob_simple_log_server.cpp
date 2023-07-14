@@ -840,10 +840,6 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
       modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogFlashbackMsgP)
     }
-    case obrpc::OB_LOG_GET_LEADER_MAX_SCN: {
-      modify_pkt.set_tenant_id(node_id_);
-      PROCESS(LogGetLeaderMaxScnP)
-    }
     case obrpc::OB_LOG_GET_STAT: {
       modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogGetStatP)
