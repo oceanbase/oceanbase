@@ -611,7 +611,7 @@ int ObTenantIOManager::mtl_init(ObTenantIOManager *&io_service)
   return ret;
 }
 
-void ObTenantIOManager::mtl_destroy(ObTenantIOManager *&io_service)
+void ObTenantIOManager::mtl_stop(ObTenantIOManager *&io_service)
 {
   const uint64_t tenant_id = MTL_ID();
   int ret = OB_SUCCESS;
@@ -621,6 +621,34 @@ void ObTenantIOManager::mtl_destroy(ObTenantIOManager *&io_service)
     } else {
       ret = OB_SUCCESS;
     }
+  }
+}
+
+void ObTenantIOManager::mtl_wait(ObTenantIOManager *&io_service)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  while (OB_NOT_NULL(io_service) && OB_SUCC(ret)) {
+    if (io_service->get_ref_cnt() == 0) {
+      break;
+    } else {
+      if (REACH_TIME_INTERVAL(1000L * 1000L)) { //1s
+        LOG_INFO("wait tenant io manager quit", K(MTL_ID()), K(start_ts), K(io_service->get_ref_cnt()));
+      }
+      ob_usleep((useconds_t)10L * 1000L); //10ms
+    }
+  }
+}
+
+void ObTenantIOManager::mtl_destroy(ObTenantIOManager *&io_service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(io_service) && io_service->get_ref_cnt() == 0) {
+    io_service->~ObTenantIOManager();
+    OB_IO_MANAGER.allocator_.free(io_service);
+  } else if (OB_NOT_NULL(io_service) && io_service->get_ref_cnt() != 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ERROR: tenant io manager ref_cnt is not zero", K(ret));
   }
 }
 
@@ -1337,9 +1365,5 @@ void ObTenantIOManager::dec_ref()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("bug: ref_cnt < 0", K(ret), K(tmp_ref), KCSTRING(lbt()));
     abort();
-  } else if (0 == tmp_ref) {
-    // destroy will be called when free
-    this->~ObTenantIOManager();
-    OB_IO_MANAGER.allocator_.free(this);
   }
 }

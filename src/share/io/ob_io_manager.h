@@ -101,6 +101,8 @@ class ObTenantIOManager final
 {
 public:
   static int mtl_init(ObTenantIOManager *&io_service);
+  static void mtl_stop(ObTenantIOManager *&io_service);
+  static void mtl_wait(ObTenantIOManager *&io_service);
   static void mtl_destroy(ObTenantIOManager *&io_service);
 public:
   ObTenantIOManager();
@@ -150,6 +152,7 @@ public:
   const ObTenantIOConfig &get_io_config();
   int trace_request_if_need(const ObIORequest *req, const char* msg, ObIOTracer::TraceType trace_type);
   int64_t get_group_num();
+  int64_t get_ref_cnt() { return ATOMIC_LOAD(&ref_cnt_); }
   uint64_t get_usage_index(const int64_t group_id);
   ObIOAllocator *get_tenant_io_allocator() { return &io_allocator_; }
   void print_io_status();

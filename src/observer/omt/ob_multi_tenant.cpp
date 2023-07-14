@@ -401,7 +401,7 @@ int ObMultiTenant::init(ObAddr myaddr,
   }
 
   if (OB_SUCC(ret) && mtl_bind_flag) {
-    MTL_BIND(ObTenantIOManager::mtl_init, ObTenantIOManager::mtl_destroy);
+    MTL_BIND2(nullptr, ObTenantIOManager::mtl_init, nullptr, ObTenantIOManager::mtl_stop, ObTenantIOManager::mtl_wait, ObTenantIOManager::mtl_destroy);
 
     // base mtl
     MTL_BIND2(mtl_new_default, storage::mds::ObTenantMdsService::mtl_init, storage::mds::ObTenantMdsService::mtl_start, storage::mds::ObTenantMdsService::mtl_stop, storage::mds::ObTenantMdsService::mtl_wait, mtl_destroy_default);
