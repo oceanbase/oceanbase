@@ -554,9 +554,11 @@ DEF_INT(log_restore_concurrency, OB_TENANT_PARAMETER, "1", "[1, 100]",
         "Range: [1, 100] in integer",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(log_archive_concurrency, OB_TENANT_PARAMETER, "1", "[1, 100]",
-        "log archive concurrency, for both archive fetcher and sender"
-        "Range: [1, 100] in integer",
+DEF_INT(log_archive_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
+        "log archive concurrency, for both archive fetcher and sender. "
+        "If the value is default 0, the database will automatically calculate the number of archive worker threads "
+        "based on the tenant specification, which is tenant max_cpu divided by 4; otherwise set the the worker count equals to the value."
+        "Range: [0, 100] in integer",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(log_disk_utilization_limit_threshold, OB_TENANT_PARAMETER, "95",
