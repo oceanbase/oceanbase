@@ -166,30 +166,28 @@ int ObShardingInfo::set_partition_key(
   return ret;
 }
 
-int ObShardingInfo::is_compatible_partition_key(const ObShardingInfo &first_sharding,
-                                                const ObShardingInfo &second_sharding,
+int ObShardingInfo::is_compatible_partition_key(const ObIArray<ObSEArray<ObRawExpr*, 8>> &first_part_keys_list,
+                                                const ObIArray<ObSEArray<ObRawExpr*, 8>> &second_part_keys_list,
                                                 bool &is_compatible)
 {
   int ret = OB_SUCCESS;
   is_compatible = false;
-  ObSEArray<ObRawExpr*, 8> first_part_keys;
-  ObSEArray<ObRawExpr*, 8> second_part_keys;
-  if (OB_FAIL(first_sharding.get_all_partition_keys(first_part_keys, true))) {
-    LOG_WARN("failed to get sharding partition keys", K(ret));
-  } else if (OB_FAIL(second_sharding.get_all_partition_keys(second_part_keys, true))) {
-    LOG_WARN("failed to get sharding partition keys", K(ret));
-  } else if ((first_part_keys.count() != second_part_keys.count()) || first_part_keys.empty()) {
+  if (first_part_keys_list.count() != second_part_keys_list.count() || first_part_keys_list.empty()) {
     is_compatible = false;
   } else {
     is_compatible = true;
-    for (int64_t i = 0; OB_SUCC(ret) && is_compatible && i < first_part_keys.count(); i++) {
-      if (OB_ISNULL(first_part_keys.at(i)) || OB_ISNULL(second_part_keys.at(i))) {
+    ObRawExpr *l_part_key = NULL;
+    ObRawExpr *r_part_key = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && is_compatible && i < first_part_keys_list.count(); i++) {
+      if (OB_UNLIKELY(first_part_keys_list.at(i).empty() || second_part_keys_list.at(i).empty())
+          || OB_ISNULL(l_part_key = first_part_keys_list.at(i).at(0))
+          || OB_ISNULL(r_part_key = second_part_keys_list.at(i).at(0))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(first_part_keys.at(i)), K(second_part_keys.at(i)), K(ret));
-      } else if (first_part_keys.at(i)->get_data_type() != second_part_keys.at(i)->get_data_type() ||
-                 first_part_keys.at(i)->get_collation_type() != second_part_keys.at(i)->get_collation_type()) {
+        LOG_WARN("get unexpected null", K(l_part_key), K(r_part_key), K(ret));
+      } else if (l_part_key->get_data_type() != r_part_key->get_data_type() ||
+                  l_part_key->get_collation_type() != r_part_key->get_collation_type()) {
         is_compatible = false;
-      } else { /*do nothing*/ }
+      }
     }
   }
   return ret;
@@ -206,6 +204,7 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
   ObSEArray<ObSEArray<ObRawExpr*, 8>, 8> first_part_keys;
   ObSEArray<ObSEArray<ObRawExpr*, 8>, 8> second_part_keys;
   is_cover = false;
+  bool is_compatible = false;
   if (OB_UNLIKELY(first_keys.count() != second_keys.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected array count", K(first_keys.count()), K(second_keys.count()), K(ret));
@@ -215,9 +214,12 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
   } else if (OB_FAIL(extract_partition_key(second_shardings,
                                            second_part_keys))) {
     LOG_WARN("failed to extract partition keys", K(ret));
-  } else if (OB_UNLIKELY(first_part_keys.count() != second_part_keys.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected array count", K(first_part_keys.count()), K(second_part_keys.count()), K(ret));
+  } else if (OB_FAIL(is_compatible_partition_key(first_part_keys,
+                                                 second_part_keys,
+                                                 is_compatible))) {
+    LOG_WARN("failed to check if is comptiable keys", K(ret));
+  } else if (!is_compatible) {
+    /* do nothing */
   } else {
     is_cover = true;
     for (int64_t i = 0; OB_SUCC(ret) && is_cover && i < first_part_keys.count(); i++) {
@@ -291,9 +293,8 @@ int ObShardingInfo::extract_partition_key(const ObIArray<ObShardingInfo *> &inpu
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(input_shardings.at(i)->get_all_partition_keys(partition_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
-    } else if (OB_UNLIKELY(partition_keys.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret));
+    } else if (partition_keys.empty()) {
+      /* do nothing */
     } else if (0 == partition_cnt) {
       partition_cnt = partition_keys.count();
       ObSEArray<ObRawExpr*, 8> temp_keys;
@@ -546,7 +547,6 @@ int ObShardingInfo::check_if_match_partition_wise(const EqualSets &equal_sets,
 {
   int ret = OB_SUCCESS;
   bool is_key_covered = false;
-  bool is_partkey_compatible = false;
   ObShardingInfo *first_left_sharding = NULL;
   ObShardingInfo *first_right_sharding = NULL;
   is_partition_wise = false;
@@ -562,12 +562,6 @@ int ObShardingInfo::check_if_match_partition_wise(const EqualSets &equal_sets,
              first_left_sharding->is_partition_single_ != first_right_sharding->is_partition_single_ ||
              first_left_sharding->is_subpartition_sinlge_ != first_right_sharding->is_subpartition_sinlge_) {
     is_partition_wise = false;
-  } else if (OB_FAIL(is_compatible_partition_key(*first_left_sharding,
-                                                 *first_right_sharding,
-                                                 is_partkey_compatible))) {
-    LOG_WARN("failed to check if is comptiable keys", K(ret));
-  } else if (!is_partkey_compatible) {
-    /*do nothing*/
   } else if (OB_FAIL(is_join_key_cover_partition_key(equal_sets,
                                                      left_keys,
                                                      left_sharding,
@@ -612,7 +606,6 @@ int ObShardingInfo::check_if_match_extended_partition_wise(const EqualSets &equa
 {
   int ret = OB_SUCCESS;
   bool is_key_covered = false;
-  bool is_partkey_compatible = false;
   ObShardingInfo *first_left_sharding = NULL;
   ObShardingInfo *first_right_sharding = NULL;
   is_ext_partition_wise = false;
@@ -627,12 +620,6 @@ int ObShardingInfo::check_if_match_extended_partition_wise(const EqualSets &equa
   } else if (!first_left_sharding->is_distributed_without_table_location_with_partitioning() ||
              !first_right_sharding->is_distributed_without_table_location_with_partitioning()) {
     is_ext_partition_wise = false;
-  } else if (OB_FAIL(is_compatible_partition_key(*first_left_sharding,
-                                                 *first_right_sharding,
-                                                 is_partkey_compatible))) {
-    LOG_WARN("failed to check if is comptiable keys", K(ret));
-  } else if (!is_partkey_compatible) {
-    /*do nothing*/
   } else if (OB_FAIL(is_join_key_cover_partition_key(equal_sets,
                                                      left_keys,
                                                      left_sharding,

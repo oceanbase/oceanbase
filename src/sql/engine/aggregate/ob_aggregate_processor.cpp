@@ -1893,10 +1893,7 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
       break;
     }
     case T_FUN_GROUPING_ID: {
-      if (OB_UNLIKELY(aggr_info.grouping_idxs_.count() == 0)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("param_exprs_ count is not 1", K(aggr_info));
-      } else if (-1 == cur_rollup_group_idx) {
+      if (-1 == cur_rollup_group_idx) {
         rollup_cell.set_tiny_num_uint(aggr_cell.get_tiny_num_uint());
       } else {
         uint64_t new_value = 0;

@@ -217,10 +217,6 @@ struct ObStmtHint
   int set_simple_view_hint(const ObStmtHint *other = NULL);
   int remove_normal_hints(const ObItemType *hint_array, const int64_t num);
   int merge_stmt_hint(const ObStmtHint &other, ObHintMergePolicy policy = HINT_DOMINATED_EQUAL);
-  int merge_other_opt_hint(const ObIArray<ObHint*> &hints,
-                           const bool dominated,
-                           ObIArray<ObItemType> &hint_types,
-                           ObIArray<ObHint*> &final_hints);
   int merge_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
   int merge_normal_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
   int reset_explicit_trans_hint(ObItemType hint_type);
