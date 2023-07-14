@@ -110,8 +110,6 @@ int ObJoinOrder::compute_table_location_for_paths(ObIArray<AccessPath *> &access
     } else if (OB_ISNULL(table_partition_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(tbl_part_infos.push_back(table_partition_info_))) {
-      LOG_WARN("failed to push back table partition info", K(ret));
     }
   } else if (OB_FAIL(tbl_part_infos.push_back(table_partition_info_))) {
     LOG_WARN("failed to push back table partition info", K(ret));
@@ -147,13 +145,19 @@ int ObJoinOrder::compute_table_location_for_paths(ObIArray<AccessPath *> &access
         } else if (OB_ISNULL(table_partition_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(tbl_part_infos.push_back(table_partition_info))) {
-          LOG_WARN("failed to push back table partition info", K(ret));
         } else {
           table_partition_info->get_table_location().set_use_das(path->use_das_);
           path->table_partition_info_ = table_partition_info;
         }
       }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(path->table_partition_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i));
+    } else if (OB_FAIL(add_var_to_array_no_dup(tbl_part_infos, path->table_partition_info_))) {
+      LOG_WARN("failed to add table partition info", K(ret));
     }
   }
   return ret;
