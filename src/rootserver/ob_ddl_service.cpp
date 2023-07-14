@@ -16915,7 +16915,7 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
   if (OB_INVALID_ID != task_id) {
     int tmp_ret = schema_service_->get_ddl_trans_controller().remove_task(task_id);
     if (OB_SUCCESS != tmp_ret) {
-      LOG_WARN("remove_task fail", KR(ret), KR(tmp_ret), K(tenant_id), K(table_id), K(task_id));
+      LOG_WARN("remove_task fail", KR(ret), KR(tmp_ret), K(tenant_id), K(task_id));
     }
   }
   int64_t trans_end = ObTimeUtility::current_time();
@@ -32076,7 +32076,7 @@ int ObDDLSQLTransaction::lock_all_ddl_operation(
       if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id,
                                                       lock_arg,
                                                       conn))) {
-        LOG_WARN("lock table failed", KR(ret), K(table_id), K(tenant_id));
+        LOG_WARN("lock table failed", KR(ret), K(tenant_id));
       }
     } else {
       uint64_t compat_version = 0;
@@ -32097,7 +32097,7 @@ int ObDDLSQLTransaction::lock_all_ddl_operation(
         if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id,
                                                         lock_arg,
                                                         conn))) {
-          LOG_WARN("lock table failed", KR(ret), K(table_id), K(tenant_id));
+          LOG_WARN("lock table failed", KR(ret), K(tenant_id));
         } else if (OB_FAIL(schema_service_->get_ddl_trans_controller().set_enable_ddl_trans_new_lock(tenant_id))) {
           LOG_WARN("set enable_ddl_lock_obj failed", K(ret), K(tenant_id));
         }

@@ -141,7 +141,7 @@ int TestTabletStatusCache::create_tablet(
     LOG_WARN("failed to build table schema");
   } else if (OB_FAIL(TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_,
       ObTabletStatus::Status::NORMAL, create_commit_scn))) {
-    LOG_WARN("failed to create tablet", K(ret), K(ls_id), K(tablet_id), K(create_commit_scn));
+    LOG_WARN("failed to create tablet", K(ret), K(ls->get_ls_id()), K(tablet_id), K(create_commit_scn));
   } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->inner_get_mds_table(mds_table, true/*not_exist_create*/))) {
@@ -547,7 +547,7 @@ TEST_F(TestTabletStatusCache, get_empty_result_tablet)
     LOG_WARN("failed to build table schema");
   } else if (OB_FAIL(TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_,
       ObTabletStatus::Status::MAX, share::SCN::min_scn()))) {
-    LOG_WARN("failed to create tablet", K(ret), K(ls_id), K(tablet_id));
+    LOG_WARN("failed to create tablet", K(ret), K(ls->get_ls_id()), K(tablet_id));
   }
   ASSERT_EQ(OB_SUCCESS, ret);
 

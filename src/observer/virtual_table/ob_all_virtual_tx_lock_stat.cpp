@@ -77,7 +77,7 @@ int ObGVTxLockStat::get_next_tx_lock_stat_(ObTxLockStat &tx_lock_stat)
       } else {
         tx_lock_stat_iter_.reset();
         if (OB_FAIL(txs_->iterate_tx_lock_stat(ls_id_, tx_lock_stat_iter_))) {
-          TRANS_LOG(WARN, "iterate_tx_lock_stat error", K(ret), K(ls_id));
+          TRANS_LOG(WARN, "iterate_tx_lock_stat error", K(ret), K(ls_id_));
         } else if (OB_FAIL(tx_lock_stat_iter_.set_ready())) {
           TRANS_LOG(WARN, "iterate_tx_lock_stat set ready error", KR(ret));
         }

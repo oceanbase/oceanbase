@@ -213,7 +213,7 @@ int ObLSRestoreTaskMgr::remove_restored_tablets(ObIArray<common::ObTabletID> &re
     }
 
     if (FAILEDx(redo_failed_tablets_(high_pri_tablet_need_redo, wait_tablet_need_redo))) {
-      LOG_WARN("failed to redo failed tablets", K(ret), K(task_id));
+      LOG_WARN("failed to redo failed tablets", K(ret));
     } else {
       remove_finished_task_(finish_task);
       LOG_INFO("succeed remove restored tablets", K_(ls_id), K(high_pri_tablet_need_redo), K(wait_tablet_need_redo), K(restored_tablets));

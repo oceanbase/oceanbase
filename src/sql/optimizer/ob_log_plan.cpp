@@ -13811,7 +13811,7 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
   if (NULL != (table_scan = dynamic_cast<ObLogTableScan *>(op))) {
     ObOpPseudoColumnRawExpr *partition_id_expr = nullptr;
     if (OB_FAIL(table_scan->generate_pseudo_partition_id_expr(partition_id_expr))) {
-      LOG_WARN("fail allocate part id expr", K(table_id), K(ret));
+      LOG_WARN("fail allocate part id expr", K(ret));
     } else {
       stat_partition_id_expr_ = partition_id_expr;
       stat_table_scan_ = table_scan;

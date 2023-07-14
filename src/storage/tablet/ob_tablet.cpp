@@ -3730,7 +3730,7 @@ int ObTablet::get_kept_multi_version_start(
   } else if (FALSE_IT(multi_version_start = tablet.get_multi_version_start())) {
   } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(
       tablet_id, max_merged_snapshot, min_reserved_snapshot))) {
-    LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(table_id));
+    LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet_id));
   } else if (!tablet.is_ls_inner_tablet()) {
     ObTabletMediumInfoReader medium_info_reader(tablet);
     if (OB_FAIL(medium_info_reader.init(arena_allocator))) {
@@ -5745,7 +5745,7 @@ int ObTablet::check_schema_version_with_cache(
         } else if (OB_FAIL(check_schema_version(schema_version))) {
           LOG_WARN("fail to check schema version", K(ret), K(ddl_data_cache_));
         } else {
-          LOG_INFO("refresh ddl data cache", K(ret), K(ls_id), K(tablet_id), K(ddl_data_cache_),
+          LOG_INFO("refresh ddl data cache", K(ret), K(tablet_meta_.ls_id_), K(tablet_id), K(ddl_data_cache_),
               K(schema_version), K(timeout), KP(this));
         }
       }
@@ -5804,7 +5804,7 @@ int ObTablet::check_snapshot_readable_with_cache(
         } else if (OB_FAIL(check_snapshot_readable(snapshot_version))) {
           LOG_WARN("fail to check snapshot version", K(ret), K(ddl_data_cache_));
         } else {
-          LOG_INFO("refresh ddl data cache", K(ret), K(ls_id), K(tablet_id), K(ddl_data_cache_),
+          LOG_INFO("refresh ddl data cache", K(ret), K(tablet_meta_.ls_id_), K(tablet_id), K(ddl_data_cache_),
               K(snapshot_version), K(timeout), KP(this));
         }
       }

@@ -1990,14 +1990,14 @@ int ObLS::try_update_uppder_trans_version()
       while (OB_SUCC(ret)) {
         if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
           if (OB_ITER_END != ret) {
-            LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_handle));
+            LOG_WARN("failed to get tablet", K(ret), K(ls_meta_.ls_id_), K(tablet_handle));
           } else {
             ret = OB_SUCCESS;
             break;
           }
         } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid tablet handle", K(ret), K(ls_id), K(tablet_handle));
+          LOG_WARN("invalid tablet handle", K(ret), K(ls_meta_.ls_id_), K(tablet_handle));
         } else if (!tablet_handle.get_obj()->get_tablet_meta().ha_status_.is_data_status_complete()) {
           //no need update upper trans version
         } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_upper_trans_version(*this, is_updated))) {

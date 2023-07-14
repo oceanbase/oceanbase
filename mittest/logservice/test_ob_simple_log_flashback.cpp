@@ -90,7 +90,7 @@ int ObLogFlashbackService::BaseLSOperator::update_leader_()
   log_service = MTL(logservice::ObLogService*);
   palf::PalfHandleGuard palf_handle;
   if (OB_FAIL(log_service->open_palf(ls_id_, palf_handle))) {
-    CLOG_LOG(ERROR, "open_palf failed", K(ret), K(ls_id));
+    CLOG_LOG(ERROR, "open_palf failed", K(ret), K_(ls_id));
   } else {
     palf::PalfHandleImpl *palf_handle_impl = dynamic_cast<palf::PalfHandleImpl*>(palf_handle.palf_handle_.palf_handle_impl_);
     leader_ = palf_handle_impl->state_mgr_.get_leader();

@@ -841,7 +841,7 @@ int ObLSBalanceTaskHelper::construct_ls_merge_task_(
                                             dest_ls_id,
                                             part_list))) {
       LOG_WARN("failed to init task", KR(ret), K(tenant_id_), K(job_),
-                   K(task_id), K(task_type), K(ls_id), K(part_list));
+                   K(task_id), K(task_type), K(dest_ls_id), K(src_ls_id), K(part_list));
     } else if (OB_FAIL(task_array_.push_back(task))) {
       LOG_WARN("failed to push back task", KR(ret), K(task));
     }

@@ -181,7 +181,7 @@ int ObTabletEmptyShellHandler::update_tablets_to_empty_shell(ObLS *ls, const com
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
     const ObTabletID &tablet_id = tablet_ids.at(i);
     if (OB_FAIL(ls->get_tablet_svr()->update_tablet_to_empty_shell(tablet_id))) {
-      STORAGE_LOG(WARN, "failed to update tablet to shell", K(ret), K(ls_id), K(tablet_id));
+      STORAGE_LOG(WARN, "failed to update tablet to shell", K(ret), K(ls->get_ls_id()), K(tablet_id));
     } else {
     #ifdef ERRSIM
       const uint64_t tenant_id = MTL_ID();

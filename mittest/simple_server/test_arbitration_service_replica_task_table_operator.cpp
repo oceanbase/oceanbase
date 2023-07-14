@@ -248,6 +248,7 @@ TEST_F(TestArbitrationServiceReplicaTaskTableOperator, test_operator)
   ObString comment("generated for arbitraiton service");
   bool lock_line = true;
   bool equal = false;
+  int64_t task_id = 1;
   ObArbitrationServiceReplicaTaskInfo arbitration_service_replica_task_info;
   ret = arbitration_service_replica_task_info.build(
         create_time_us, sys_tenant_id, sys_ls_id, task_id, task_type, trace_id,

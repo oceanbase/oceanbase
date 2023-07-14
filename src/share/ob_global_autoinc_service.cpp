@@ -206,13 +206,13 @@ int ObGlobalAutoIncService::handle_next_autoinc_request(
                               request.base_value_, desired_count, request.max_value_)))) {
       OZ(fetch_next_node_(request, cache_node));
     } else if (OB_UNLIKELY(request_version > cache_node.autoinc_version_)) {
-      LOG_INFO("start to reset old global table node", K(tenant_id), K(table_id),
+      LOG_INFO("start to reset old global table node", K(tenant_id), K(key.table_id_),
                                                        K(request_version), K(cache_node.autoinc_version_));
       cache_node.reset();
       OZ(fetch_next_node_(request, cache_node));
     } else if (OB_UNLIKELY(request_version < cache_node.autoinc_version_)) {
       ret = OB_AUTOINC_CACHE_NOT_EQUAL;
-      LOG_WARN("request autoinc_version is less than autoinc_version_ in table_node, it should retry", KR(ret), K(tenant_id), K(table_id),
+      LOG_WARN("request autoinc_version is less than autoinc_version_ in table_node, it should retry", KR(ret), K(tenant_id), K(key.table_id_),
                                                                                                        K(request_version), K(cache_node.autoinc_version_));
     }
     if (OB_SUCC(ret)) {

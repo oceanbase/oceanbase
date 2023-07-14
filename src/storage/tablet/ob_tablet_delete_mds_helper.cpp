@@ -144,7 +144,7 @@ int ObTabletDeleteMdsHelper::delete_tablets(
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   if (CLICK_FAIL(ls_service->get_ls(key.ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
-      LOG_WARN("failed to get ls", K(ret), K(ls_id));
+      LOG_WARN("failed to get ls", K(ret), K(key.ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
   } else {

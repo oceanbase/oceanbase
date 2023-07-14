@@ -393,7 +393,7 @@ int ObTabletChecksumValidator::check_table_compaction_info(
       } else if ((tablet_status != ObTabletCompactionStatus::COMPACTED)
                  && (tablet_status != ObTabletCompactionStatus::CAN_SKIP_VERIFYING)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected tablet status", KR(ret), K(tablet_status), K(table_id));
+        LOG_WARN("unexpected tablet status", KR(ret), K(tablet_status), K(tablet_ids.at(idx)));
       } else if (tablet_status == ObTabletCompactionStatus::CAN_SKIP_VERIFYING) {
         exist_skip_verifying_tablet = true;
       }

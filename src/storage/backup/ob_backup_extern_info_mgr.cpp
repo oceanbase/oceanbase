@@ -724,7 +724,7 @@ int ObExternBackupInfoIdGetter::init(const share::ObBackupDest &backup_set_dest)
     LOG_WARN("ls meta info id getter init twice", K(ret));
   } else if (!backup_set_dest.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(backup_set_dest), K(ls_id));
+    LOG_WARN("invalid argument", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(backup_set_dest_.deep_copy(backup_set_dest))) {
     LOG_WARN("failed to deep copy backup set dest", K(ret));
   } else {

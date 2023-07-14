@@ -601,7 +601,7 @@ int ObMemtable::exist(
         is_exist = mtd->dml_flag_ != blocksstable::ObDmlFlag::DF_DELETE;
       }
     }
-    TRANS_LOG(DEBUG, "Check memtable exist rowkey, ", K(table_id), K(rowkey), K(is_exist),
+    TRANS_LOG(DEBUG, "Check memtable exist rowkey, ", K(rowkey), K(is_exist),
         K(has_found));
   }
   //get_end(context.store_ctx_->mvcc_acc_ctx_, ret);
@@ -1414,7 +1414,7 @@ int64_t ObMemtable::dec_write_ref()
 void ObMemtable::inc_unsynced_cnt()
 {
   int64_t unsynced_cnt = inc_unsynced_cnt_();
-  TRANS_LOG(DEBUG, "inc_unsynced_cnt", K(ls_id), K(unsynced_cnt), KPC(this), K(lbt()));
+  TRANS_LOG(DEBUG, "inc_unsynced_cnt", K(ls_id_), K(unsynced_cnt), KPC(this), K(lbt()));
 }
 
 int ObMemtable::dec_unsynced_cnt()
@@ -1454,7 +1454,7 @@ void ObMemtable::unset_logging_blocked_for_active_memtable()
   if (OB_NOT_NULL(memtable_mgr)) {
     do {
       if (OB_FAIL(memtable_mgr->unset_logging_blocked_for_active_memtable(this))) {
-        TRANS_LOG(ERROR, "fail to unset logging blocked for active memtable", K(ret), K(ls_id), KPC(this));
+        TRANS_LOG(ERROR, "fail to unset logging blocked for active memtable", K(ret), K(ls_id_), KPC(this));
         ob_usleep(100);
       }
     } while (OB_FAIL(ret));
@@ -1471,7 +1471,7 @@ void ObMemtable::resolve_left_boundary_for_active_memtable()
   if (OB_NOT_NULL(memtable_mgr)) {
     do {
       if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, new_start_scn, get_snapshot_version_scn()))) {
-        TRANS_LOG(ERROR, "fail to set start log ts for active memtable", K(ret), K(ls_id), KPC(this));
+        TRANS_LOG(ERROR, "fail to set start log ts for active memtable", K(ret), K(ls_id_), KPC(this));
         ob_usleep(100);
       }
     } while (OB_FAIL(ret));
@@ -2548,7 +2548,7 @@ int ObMemtable::lock_(
         rowkey.get_obj_cnt()  /*column_cnt*/);
     if (OB_FAIL(mvcc_write_(param, context, &mtk, arg, is_new_locked))) {
 	} else if (OB_UNLIKELY(!is_new_locked)) {
-	  TRANS_LOG(DEBUG, "lock twice, no need to store lock trans node", K(table_id));
+	  TRANS_LOG(DEBUG, "lock twice, no need to store lock trans node");
 	}
   }
 

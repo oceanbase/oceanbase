@@ -656,6 +656,7 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
     const uint64_t tenant_id = MTL_ID();
     int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropping_or_dropped = false;
+    ObLSID ls_id = ls_->get_ls_id();
 
     if (OB_SUCCESS != (tmp_ret = check_if_tenant_is_dropping_or_dropped_(tenant_id, is_tenant_dropping_or_dropped))) {
       CLOG_LOG(WARN, "check_if_tenant_has_been_dropped_ failed", K(tmp_ret), K(tenant_id), K(ls_id));
@@ -981,7 +982,7 @@ int ObGCHandler::diagnose(GCDiagnoseInfo &diagnose_info) const
   } else {
     RLockGuard wlock_guard(rwlock_);
     if (OB_FAIL(ls_->get_gc_state(diagnose_info.gc_state_))) {
-      CLOG_LOG(WARN, "get_gc_state failed", K(ls_id));
+      CLOG_LOG(WARN, "get_gc_state failed", K(ls_->get_ls_id()));
     } else {
       diagnose_info.gc_start_ts_ = gc_start_ts_;
     }

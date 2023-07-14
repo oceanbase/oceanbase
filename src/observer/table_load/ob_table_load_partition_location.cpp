@@ -228,7 +228,7 @@ int ObTableLoadPartitionLocation::init_all_partition_location(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(fetch_ls_locations(tenant_id, partition_ids))) {
-    LOG_WARN("fail to fetch locations", KR(ret), K(tenant_id), K(table_id));
+    LOG_WARN("fail to fetch locations", KR(ret), K(tenant_id));
   }
   return ret;
 }

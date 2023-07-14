@@ -1378,7 +1378,7 @@ int ObLSTabletService::no_lock_update_tablet_to_empty_shell(
       LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
     } else if (FALSE_IT(time_guard.click("InitNew"))) {
     } else if (OB_FAIL(ObTabletSlogHelper::write_empty_shell_tablet_slog(new_tablet, disk_addr))) {
-      LOG_WARN("fail to write emtpy shell tablet slog", K(ret), K(ls_id), K(tablet_id), K(disk_addr));
+      LOG_WARN("fail to write emtpy shell tablet slog", K(ret), K(tablet_id), K(disk_addr));
     } else if (FALSE_IT(new_tablet->tablet_addr_ = disk_addr)) {
     } else if (FALSE_IT(time_guard.click("WrSlog"))) {
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, old_tablet_handle, new_tablet_handle))) {

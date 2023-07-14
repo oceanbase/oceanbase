@@ -43,7 +43,7 @@ int ObStorageHASrcProvider::init(const uint64_t tenant_id, const ObMigrationOpTy
   } else if (OB_INVALID_ID == tenant_id || OB_ISNULL(storage_rpc)
       || type < ObMigrationOpType::ADD_LS_OP || type >= ObMigrationOpType::MAX_LS_OP) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), K(type), KP(storage_rpc));
+    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(type), KP(storage_rpc));
   } else {
     tenant_id_ = tenant_id;
     type_ = type;

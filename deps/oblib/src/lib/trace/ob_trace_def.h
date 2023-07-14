@@ -238,7 +238,7 @@ FLT_DEF_TAG(column_id, "place holder")
 
 enum ObTagType
 {
-#define FLT_DEF_TAG(name, comment) name,
+#define FLT_DEF_TAG(name, comment) flt_##name,
 #define __HIGH_LEVEL_TAG
 #define __MIDDLE_LEVEL_TAG
 #define __LOW_LEVEL_TAG
@@ -261,7 +261,7 @@ enum ObSpanType
 #define __HIGH_LEVEL_SPAN
 #define __MIDDLE_LEVEL_SPAN
 #define __LOW_LEVEL_SPAN
-#define FLT_DEF_SPAN(name, comment) name,
+#define FLT_DEF_SPAN(name, comment) flt_##name,
 #include "lib/trace/ob_trace_def.h"
 #undef FLT_DEF_SPAN
 #undef __LOW_LEVEL_SPAN
@@ -306,7 +306,7 @@ class __SpanIdMapper {};
 
 #define FLT_DEF_SPAN(ID, comment)     \
 template <>                           \
-class __SpanIdMapper<ObSpanType::ID>  \
+class __SpanIdMapper<ObSpanType::flt_##ID>  \
 {                                     \
 public:                               \
   static constexpr uint8_t level = 1; \
@@ -318,7 +318,7 @@ public:                               \
 
 #define FLT_DEF_SPAN(ID, comment)     \
 template <>                           \
-class __SpanIdMapper<ObSpanType::ID>  \
+class __SpanIdMapper<ObSpanType::flt_##ID>  \
 {                                     \
 public:                               \
   static constexpr uint8_t level = 2; \
@@ -330,7 +330,7 @@ public:                               \
 
 #define FLT_DEF_SPAN(ID, comment)     \
 template <>                           \
-class __SpanIdMapper<ObSpanType::ID>  \
+class __SpanIdMapper<ObSpanType::flt_##ID>  \
 {                                     \
 public:                               \
   static constexpr uint8_t level = 3; \

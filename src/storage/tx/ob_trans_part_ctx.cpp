@@ -1902,7 +1902,7 @@ int ObPartTransCtx::on_dist_end_(const bool commit)
     elr_handler_.reset_elr_state();
   }
 
-  TRANS_LOG(DEBUG, "trans end", K(ret), K(trans_id_), K(commit), K(commit_version));
+  TRANS_LOG(DEBUG, "trans end", K(ret), K(trans_id_), K(commit));
 
   return ret;
 }
@@ -7527,7 +7527,7 @@ int ObPartTransCtx::on_local_abort_tx_()
   ObTxBufferNodeArray tmp_array;
 
   if (OB_FAIL(tx_end_(false /*commit*/))) {
-    TRANS_LOG(WARN, "trans end error", KR(ret), K(commit_version), "context", *this);
+    TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
   } else if (OB_FAIL(trans_clear_())) {
     TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
   } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {

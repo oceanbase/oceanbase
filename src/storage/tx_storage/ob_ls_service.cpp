@@ -156,7 +156,7 @@ int ObLSService::stop()
         } else if (OB_FAIL(ls->offline())) {
           LOG_WARN("ls offline failed", K(ret), K(ls->get_ls_id()), KP(ls));
         } else if (OB_FAIL(ls->stop())) {
-          LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
+          LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls->get_ls_id()));
         } else if (FALSE_IT(ls->wait())) {
         } else if (OB_FAIL(handle.set_ls(ls_map_, *ls, ObLSGetMod::TXSTORAGE_MOD))) {
           LOG_WARN("get ls handle failed", K(ret), KPC(ls));

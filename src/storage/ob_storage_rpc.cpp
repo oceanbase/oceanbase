@@ -3756,7 +3756,7 @@ int ObStorageRpc::wakeup_transfer_service(
     STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
   } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info));
   } else {
     ObStorageWakeupTransferServiceArg arg;
     arg.tenant_id_ = tenant_id;

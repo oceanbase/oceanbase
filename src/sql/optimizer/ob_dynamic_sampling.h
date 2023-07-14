@@ -36,7 +36,7 @@ struct ObDSFailTabInfo
   uint64_t table_id_;
   ObSEArray<int64_t, 1, common::ModulePageAllocator, true> part_ids_;
   TO_STRING_KV(K(table_id_),
-               K(partition_id));
+               K(part_ids_));
 };
 
 struct ObDSTableParam

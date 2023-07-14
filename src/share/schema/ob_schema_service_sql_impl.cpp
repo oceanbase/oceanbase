@@ -3051,7 +3051,7 @@ int ObSchemaServiceSQLImpl::sql_append_ids_and_truncate_version(
       for (int64_t i = 0; OB_SUCC(ret) && i < ids_size; ++i) {
         if (ids[i].truncate_version_ > schema_version) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("truncate version can not bigger than schema version", KR(ret), K(table_id), K(ids[i].truncate_version_), K(schema_version));
+          LOG_WARN("truncate version can not bigger than schema version", KR(ret), K(ids[i].table_id_), K(ids[i].truncate_version_), K(schema_version));
         } else if (OB_FAIL(sql.append_fmt("%s(table_id = %lu AND schema_version >= %ld)", 0 == i ? "" : "OR ",
                                    fill_extract_schema_id(schema_status, ids[i].table_id_),
                                    ids[i].truncate_version_))) {

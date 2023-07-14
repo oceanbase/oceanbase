@@ -2399,7 +2399,7 @@ int ObPrefetchBackupInfoTask::generate_next_prefetch_dag_()
       LOG_WARN("may exist same dag", K(ret));
     }
   } else {
-    LOG_INFO("success to alloc next prefetch dag", K(ret), K(task_id), K_(param));
+    LOG_INFO("success to alloc next prefetch dag", K(ret), K(prefetch_task_id), K_(param));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
     scheduler->free_dag(*child_dag);

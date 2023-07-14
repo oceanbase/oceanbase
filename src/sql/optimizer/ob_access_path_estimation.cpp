@@ -1259,7 +1259,7 @@ int ObAccessPathEstimation::gen_agent_vt_table_convert_info(const uint64_t vt_ta
           const ObColumnSchemaV2 *col_schema = real_index_schema->get_column_schema_by_idx(j);
           if (OB_ISNULL(col_schema)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("column schema is null", K(ret), K(column_id));
+            LOG_WARN("column schema is null", K(ret), K(j));
           } else if (0 == col_schema->get_column_name_str().case_compare(vt_col_schema->get_column_name_str())) {
             find_it = true;
             ObObjMeta obj_meta;

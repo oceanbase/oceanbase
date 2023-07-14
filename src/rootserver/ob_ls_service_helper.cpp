@@ -252,7 +252,7 @@ int ObLSServiceHelper::construct_ls_status_machine(
             status_info.status_, OB_LS_OP_TENANT_DROP, SCN::base_scn()))) {
       LOG_WARN("failed to mock ls info", KR(ret), K(status_info));
     } else if (OB_FAIL(status_machine.init(SYS_LS, status_info, ls_info))) {
-        LOG_WARN("failed to init status machine", KR(ret), K(ls_id), K(status_info), K(ls_info));
+        LOG_WARN("failed to init status machine", KR(ret), K(ls_info.get_ls_id()), K(status_info), K(ls_info));
     } else if (OB_FAIL(status_machine_array.push_back(status_machine))) {
       LOG_WARN("failed to push back status machine", KR(ret), K(status_machine));
     }

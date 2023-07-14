@@ -23,8 +23,8 @@
 #define FLT_BEGIN_TRACE() (OBTRACE->begin())
 #define FLT_END_TRACE() (OBTRACE->end())
 #define FLT_BEGIN_SPAN(span_type) FLT_BEGIN_CHILD_SPAN(span_type)
-#define FLT_BEGIN_CHILD_SPAN(span_type) (OBTRACE->begin_span(::oceanbase::trace::ObSpanType::span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::span_type), false))
-#define FLT_BEGIN_FOLLOW_SPAN(span_type) (OBTRACE->begin_span(::oceanbase::trace::ObSpanType::span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::span_type), true))
+#define FLT_BEGIN_CHILD_SPAN(span_type) (OBTRACE->begin_span(::oceanbase::trace::ObSpanType::flt_##span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::flt_##span_type), false))
+#define FLT_BEGIN_FOLLOW_SPAN(span_type) (OBTRACE->begin_span(::oceanbase::trace::ObSpanType::flt_##span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::flt_##span_type), true))
 #define FLT_END_SPAN(span)                                      \
 if (OB_NOT_NULL(span)) {                                        \
   OBTRACE->end_span(span);                                      \
@@ -34,18 +34,29 @@ if (OB_NOT_NULL(span)) {                                        \
 }
 #define FLT_RESET_SPAN() (OBTRACE->reset_span())
 #define FLT_END_CURRENT_SPAN() FLT_END_SPAN(OBTRACE->last_active_span_)
-#define FLT_SET_TAG(...) (OBTRACE->set_tag(__VA_ARGS__))
+#define FLT_SET_TAG2(key, value)      OBTRACE->set_tag(flt_##key, value)
+#define FLT_SET_TAG4(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG2(__VA_ARGS__)
+#define FLT_SET_TAG6(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG4(__VA_ARGS__)
+#define FLT_SET_TAG8(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG6(__VA_ARGS__)
+#define FLT_SET_TAG10(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG8(__VA_ARGS__)
+#define FLT_SET_TAG12(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG10(__VA_ARGS__)
+#define FLT_SET_TAG14(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG12(__VA_ARGS__)
+#define FLT_SET_TAG16(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG14(__VA_ARGS__)
+#define FLT_SET_TAG18(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG16(__VA_ARGS__)
+#define FLT_SET_TAG20(key, value, ...) OBTRACE->set_tag(flt_##key, value); FLT_SET_TAG18(__VA_ARGS__)
+#define FLT_SET_TAG(...) CONCAT(FLT_SET_TAG, ARGS_NUM(__VA_ARGS__))(__VA_ARGS__)
+
 #define FLT_SET_LOG()
 #define FLT_SET_TRACE_LEVEL(level) (OBTRACE->set_level(level))
 #define FLT_SET_AUTO_FLUSH(value) (OBTRACE->set_auto_flush(value))
 
 #define FLT_RESTORE_DDL_TRACE_CTX(flt_ctx) (OBTRACE->init(flt_ctx))
-#define FLT_RESTORE_DDL_SPAN(span_type, span_id, start_ts) (OBTRACE->begin_span_by_id(::oceanbase::trace::ObSpanType::span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::span_type), false, span_id, start_ts))
+#define FLT_RESTORE_DDL_SPAN(span_type, span_id, start_ts) (OBTRACE->begin_span_by_id(::oceanbase::trace::ObSpanType::flt_##span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::flt_##span_type), false, span_id, start_ts))
 #define FLT_RELEASE_DDL_SPAN(span) (OBTRACE->release_span(span))
 
 #define FLUSH_TRACE() ::oceanbase::trace::flush_trace();
 
-#define FLTSpanGuard(span_type) ::oceanbase::trace::__ObFLTSpanGuard __##span_type##__LINE__(::oceanbase::trace::ObSpanType::span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::span_type))
+#define FLTSpanGuard(span_type) ::oceanbase::trace::__ObFLTSpanGuard __##span_type##__LINE__(::oceanbase::trace::ObSpanType::flt_##span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::flt_##span_type))
 
 #define OBTRACE ::oceanbase::trace::ObTrace::get_instance()
 
@@ -252,7 +263,7 @@ struct ObTrace
   void end_span(ObSpanCtx* span_id);
   void reset_span();
   template <typename T, typename... Targs>
-  void set_tag(ObTagType tag_type, const T& value, Targs... Fargs)
+  void set_tag(ObTagType tag_type, const T& value)
   {
     if (trace_id_.is_inited()
         && OB_NOT_NULL(last_active_span_)
@@ -261,7 +272,6 @@ struct ObTrace
         FLUSH_TRACE();
         IGNORE_RETURN append_tag(tag_type, value);
       }
-      set_tag(std::forward<Targs>(Fargs)...);
     }
   }
   int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;

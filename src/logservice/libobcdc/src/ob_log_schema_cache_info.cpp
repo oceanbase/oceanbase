@@ -797,7 +797,7 @@ int TableSchemaInfo::get_column_schema_info(
     LOG_ERROR("invalid argument", KR(ret), K(column_idx), K(column_stored_idx), K(is_column_stored_idx), KPC(this));
   } else if (OB_ISNULL(column_schema_info = &column_schema_array_[column_stored_idx])) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("column_schema_info is null", KR(ret), K(column_id), K(column_stored_idx), K(is_column_stored_idx), KPC(this));
+    LOG_ERROR("column_schema_info is null", KR(ret), K(column_idx), K(column_stored_idx), K(is_column_stored_idx), KPC(this));
   } else {
   }
 

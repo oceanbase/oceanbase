@@ -67,7 +67,7 @@ int check_exist(const ObLockTaskBatchRequest &arg,
                                     tablet_handle,
                                     0,
                                     ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-    LOG_WARN("get tablet with timeout failed", K(ret), K(ls_id), K(tablet_id));
+    LOG_WARN("get tablet with timeout failed", K(ret), K(ls->get_ls_id()), K(tablet_id));
   } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
       data, is_commited))) {
     LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret));

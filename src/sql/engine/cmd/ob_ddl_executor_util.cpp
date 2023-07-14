@@ -128,7 +128,7 @@ int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const i
   THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
   share::ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
   is_finish = false;
-  LOG_INFO("wait build index finish", K(table_id), K(task_id));
+  LOG_INFO("wait build index finish", K(task_id));
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id));
