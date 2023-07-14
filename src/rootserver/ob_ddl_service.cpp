@@ -6719,13 +6719,18 @@ int ObDDLService::modify_func_expr_column_name(
       orig_part_expr = sub_part_option.get_part_func_expr_str();
     }
     if (OB_FAIL(ret)) {
+    } else if (part_option.get_part_func_type()
+               == share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT) {
+      // partition by key(), no part func expr need to change
+      // do nothing
     } else if (OB_FAIL(default_session.init(0, 0, &allocator))) {
       LOG_WARN("init empty session failed", K(ret));
     } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
       LOG_WARN("get tenant_schema failed", K(ret));
-    } else if (OB_FAIL(default_session.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
+    } else if (OB_FAIL(
+                 default_session.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
       LOG_WARN("init tenant failed", K(ret));
     } else if (OB_FAIL(default_session.load_all_sys_vars(schema_guard))) {
       LOG_WARN("session load system variable failed", K(ret));
