@@ -22,8 +22,9 @@ jobs:
       env:
         cache-name: cache-deps
       with:
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-el7.x86_64-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
         path: deps/3rd
+        enableCrossOsArchive: true
         
     - name: Build init
       if: steps.cache-deps.outputs.cache-hit != 'true'
@@ -34,14 +35,6 @@ jobs:
       run: |
         bash build.sh debug
         cd build_debug && make -j4
-        
-    #- name: Launch oceanbase
-    #  shell: bash
-    #  run: |
-    #    mkdir -p $HOME/deploy/
-    #    ./tools/deploy/obd.sh prepare -p $HOME/deploy/
-    #    ./tools/deploy/obd.sh deploy -c tools/deploy/single.yaml
-    #    echo "select version();" | ./tools/deploy/obd.sh sys -n single
 
   centos-x86_64:
     runs-on: ubuntu-20.04
@@ -59,8 +52,9 @@ jobs:
       env:
         cache-name: cache-deps
       with:
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-el7.x86_64-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
         path: deps/3rd
+        enableCrossOsArchive: true
         
     - name: Build init
       if: steps.cache-deps.outputs.cache-hit != 'true'
