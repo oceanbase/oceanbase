@@ -2408,7 +2408,11 @@ int PartTransTask::push_fetched_log_entry(const palf::LSN &lsn)
   } else if (OB_FAIL(alloc_log_entry_node_(lsn, log_entry_node))) {
     LOG_ERROR("alloc_log_entry_node_ failed", KR(ret), K(lsn), KPC(this));
   } else if (OB_FAIL(sorted_log_entry_info_.push_fetched_log_entry_node(log_entry_node))) {
-    LOG_ERROR("push_fetched_log_entry_node failed", KR(ret), KPC(log_entry_node), KPC(this));
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_ERROR("push_fetched_log_entry_node failed", KR(ret), KPC(log_entry_node), KPC(this));
+    } else {
+      LOG_DEBUG("duplicate log_entry", KR(ret), KPC(log_entry_node), KPC(this));
+    }
   }
 
   return ret;

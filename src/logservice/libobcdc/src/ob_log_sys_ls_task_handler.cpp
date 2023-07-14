@@ -277,10 +277,14 @@ int ObLogSysLsTaskHandler::get_progress(
   } else if (OB_ISNULL(tenant_mgr)) {
     LOG_ERROR("tenant_mgr_ is NULL", K(tenant_mgr));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(tenant_mgr->get_sys_ls_progress(sys_min_progress_tenant_id, sys_ls_min_progress,
+  } else if (OB_FAIL(tenant_mgr->get_sys_ls_progress(
+      sys_min_progress_tenant_id,
+      sys_ls_min_progress,
       sys_ls_min_handle_log_lsn))) {
-    LOG_ERROR("get_sys_ls_progress fail", KR(ret), K(sys_min_progress_tenant_id),
-        K(sys_ls_min_progress), K(sys_ls_min_handle_log_lsn));
+    if (OB_EMPTY_RESULT != ret) {
+      LOG_ERROR("get_sys_ls_progress fail", KR(ret), K(sys_min_progress_tenant_id),
+          K(sys_ls_min_progress), K(sys_ls_min_handle_log_lsn));
+    }
   } else {
     // success
   }

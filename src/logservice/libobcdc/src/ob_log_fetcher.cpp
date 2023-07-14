@@ -193,9 +193,11 @@ int ObLogFetcher::init(
       IObCDCPartTransResolver::test_mode_on = cfg.test_mode_on;
       IObCDCPartTransResolver::test_mode_ignore_redo_count = cfg.test_mode_ignore_redo_count;
       IObCDCPartTransResolver::test_checkpoint_mode_on = cfg.test_checkpoint_mode_on;
+      IObCDCPartTransResolver::test_mode_ignore_log_type = static_cast<IObCDCPartTransResolver::IgnoreLogType>(cfg.test_mode_ignore_log_type.get());
 
       LOG_INFO("init fetcher succ", K_(is_loading_data_dict_baseline_data),
           "test_mode_on", IObCDCPartTransResolver::test_mode_on,
+          "test_mode_ignore_log_type", IObCDCPartTransResolver::test_mode_ignore_log_type,
           "test_mode_ignore_redo_count", IObCDCPartTransResolver::test_mode_ignore_redo_count,
           "test_checkpoint_mode_on", IObCDCPartTransResolver::test_checkpoint_mode_on);
     }
@@ -696,7 +698,11 @@ void ObLogFetcher::heartbeat_dispatch_routine()
       // Get the next heartbeat timestamp
       if (OB_FAIL(next_heartbeat_timestamp_(heartbeat_tstamp, last_timestamp_))) {
         if (OB_NEED_RETRY != ret) {
-          LOG_ERROR("next_heartbeat_timestamp_ fail", KR(ret), K(heartbeat_tstamp), K_(last_timestamp));
+          if (OB_EMPTY_RESULT != ret) {
+            LOG_ERROR("next_heartbeat_timestamp_ fail", KR(ret), K(heartbeat_tstamp), K_(last_timestamp));
+          } else {
+            ret = OB_SUCCESS;
+          }
         }
       } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == heartbeat_tstamp)) {
         LOG_ERROR("heartbeat timestamp is invalid", K(heartbeat_tstamp));
@@ -877,8 +883,12 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
   // Note: the progress value should not be invalid
   else if (OB_FAIL(sys_ls_handler_->get_progress(ddl_min_progress_tenant_id, ddl_handle_progress,
           ddl_handle_lsn))) {
-    LOG_ERROR("sys_ls_handler get_progress fail", KR(ret), K(ddl_min_progress_tenant_id),
-        K(ddl_handle_progress), K(ddl_handle_lsn));
+    if (OB_EMPTY_RESULT != ret) {
+      LOG_ERROR("sys_ls_handler get_progress fail", KR(ret), K(ddl_min_progress_tenant_id),
+          K(ddl_handle_progress), K(ddl_handle_lsn));
+    } else {
+      LOG_INFO("no valid tenant is in serve, skip get next_heartbeat_timestamp_", KR(ret));
+    }
   }
   else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == ddl_handle_progress)) {
     LOG_ERROR("get DDL handle progress is invalid", K(ddl_handle_progress), K(ddl_handle_lsn));

@@ -853,9 +853,7 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
             }
           } else if (need_reconsume) {
             IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
-            if (missing_info.need_reconsume_commit_log_entry()) {
-              reconsume_miss_info.set_need_reconsume_commit_log_entry();
-            }
+            reconsume_miss_info.set_reconsuming();
 
             // all misslog are handled, and need reconsume trans_state_log in log_entry
             if (OB_FAIL(ls_fetch_ctx_->read_log(

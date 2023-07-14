@@ -22,6 +22,7 @@
 #include "ob_log_fetcher_idle_pool.h"   // IObLogFetcherIdlePool
 #include "ob_log_fetcher_dead_pool.h"   // IObLogFetcherDeadPool
 #include "ob_log_fetcher.h"             // get_fs_container_mgr
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 namespace oceanbase
 {
@@ -314,6 +315,7 @@ int ObLSWorker::handle(void *data,
   int ret = OB_SUCCESS;
   bool is_paused = ATOMIC_LOAD(&stream_paused_);
   FetchStream *task = static_cast<FetchStream *>(data);
+  ObLogTraceIdGuard trace_guard;
 
   LOG_DEBUG("[STAT] [STREAM_WORKER] [HANDLE_STREAM_TASK]", K_(stream_paused), K(thread_index),
       K(task), KPC(task));

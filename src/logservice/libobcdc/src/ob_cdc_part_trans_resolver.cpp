@@ -26,6 +26,7 @@ namespace libobcdc
 bool IObCDCPartTransResolver::test_mode_on = false;
 bool IObCDCPartTransResolver::test_checkpoint_mode_on = false;
 int64_t IObCDCPartTransResolver::test_mode_ignore_redo_count = 0;
+IObCDCPartTransResolver::IgnoreLogType IObCDCPartTransResolver::test_mode_ignore_log_type = IObCDCPartTransResolver::IgnoreLogType::INVALID_TYPE;
 
 // ***************  MissingLogInfo ***************** //
 
@@ -46,6 +47,7 @@ IObCDCPartTransResolver::MissingLogInfo
   this->miss_record_or_state_log_lsn_ = miss_log_info.miss_record_or_state_log_lsn_;
   this->need_reconsume_commit_log_entry_ = miss_log_info.need_reconsume_commit_log_entry_;
   this->is_resolving_miss_log_ = miss_log_info.is_resolving_miss_log_;
+  this->is_reconsuming_ = miss_log_info.is_reconsuming_;
   return *this;
 }
 
@@ -186,30 +188,34 @@ int ObCDCPartTransResolver::read(
     // has redo-like tx_log in log_entry, including
     // ObTxRedoLog/ObTxMultiDataSourceLog/ObTxRollbackToLog
     bool has_redo_in_cur_entry = false;
+    int64_t tx_log_idx_in_entry = -1;
 
     while (OB_SUCC(ret)) {
       transaction::ObTxLogHeader tx_header;
-      //
+      bool stop_resolve_cur_log_entry = false;
+
       if (OB_FAIL(read_trans_header_(
           lsn,
           tx_log_block_header.get_tx_id(),
           missing_info.is_resolving_miss_log(),
           tx_log_block,
-          tx_header))) {
+          tx_header,
+          tx_log_idx_in_entry,
+          has_redo_in_cur_entry))) {
         if (OB_ITER_END != ret) {
           LOG_ERROR("read_trans_header_ from tx_log_block failed", KR(ret), K_(tls_id), K(lsn),
-            K(tx_log_block_header), K(tx_log_block), K(tx_header), K(has_redo_in_cur_entry));
+            K(tx_log_block_header), K(tx_log_block), K(tx_header), K(has_redo_in_cur_entry), K(tx_log_idx_in_entry));
         }
-      } else if (OB_UNLIKELY(transaction::ObTxLogType::TX_BIG_SEGMENT_LOG == tx_header.get_tx_log_type())) {
-        // ignore.
-        LOG_DEBUG("ignore tx_big_segment_log which is not collect complete",
-              K_(tls_id), K(lsn), K(tx_log_block_header), K(tx_header));
-        ret = OB_ITER_END;
-      } else if (missing_info.need_reconsume_commit_log_entry()
-          && ! (transaction::ObTxLogType::TX_COMMIT_LOG == tx_header.get_tx_log_type())) {
-        // ignore tx_log which is not commit_log if is_reconsuming_commit_log_entry.
-        LOG_DEBUG("ignore non_commit_tx_log while reconsuming log_entry contains commit_log",
-            K_(tls_id), K(lsn), K(tx_log_block_header), K(tx_header), K(has_redo_in_cur_entry));
+      } else if (need_ignore_trans_log_(
+          lsn,
+          tx_log_block_header.get_tx_id(),
+          tx_header,
+          missing_info,
+          tx_log_idx_in_entry,
+          stop_resolve_cur_log_entry)) {
+        if (stop_resolve_cur_log_entry) {
+          ret = OB_ITER_END;
+        }
       } else if (OB_FAIL(read_trans_log_(
           tx_log_block_header,
           tx_log_block,
@@ -287,9 +293,12 @@ int ObCDCPartTransResolver::read_trans_header_(
     const transaction::ObTransID &tx_id,
     const bool is_resolving_miss_log,
     transaction::ObTxLogBlock &tx_log_block,
-    transaction::ObTxLogHeader &tx_header)
+    transaction::ObTxLogHeader &tx_header,
+    int64_t &tx_log_idx_in_entry,
+    bool &has_redo_in_cur_entry)
 {
   int ret = OB_SUCCESS;
+  tx_log_idx_in_entry ++;
 
   if (OB_FAIL(tx_log_block.get_next_log(tx_header))) {
     if (OB_LOG_ALREADY_SPLIT == ret) {
@@ -325,11 +334,60 @@ int ObCDCPartTransResolver::read_trans_header_(
         }
       }
     } else if (OB_ITER_END != ret) {
-      LOG_ERROR("get_next_log from tx_log_block failed", KR(ret), K_(tls_id), K(lsn), K(tx_id), K(is_resolving_miss_log), K(tx_header));
+      LOG_ERROR("get_next_log from tx_log_block failed", KR(ret), K_(tls_id), K(lsn), K(tx_id),
+          K(is_resolving_miss_log), K(tx_header), K(tx_log_idx_in_entry));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const transaction::ObTxLogType log_type = tx_header.get_tx_log_type();
+    // RollbackToLog is treated as a special REDO
+    // normally RollbackToLog should occupy a log_entry alone.
+    const bool is_redo_like_log =
+        (transaction::ObTxLogType::TX_REDO_LOG == log_type)
+        || (transaction::ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type)
+        || (transaction::ObTxLogType::TX_ROLLBACK_TO_LOG == log_type);
+    if (is_redo_like_log) {
+      if (OB_UNLIKELY(has_redo_in_cur_entry)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("expected only one redo_log/multi_data_source_log/rollback_to_log in one log_entry",
+            KR(ret), K_(tls_id), K(tx_id), K(lsn), K(tx_header), K(tx_log_idx_in_entry));
+      } else {
+        has_redo_in_cur_entry = true;
+      }
     }
   }
 
   return ret;
+}
+
+bool ObCDCPartTransResolver::need_ignore_trans_log_(
+    const palf::LSN &lsn,
+    const transaction::ObTransID &tx_id,
+    const transaction::ObTxLogHeader &tx_header,
+    const MissingLogInfo &missing_info,
+    const int64_t tx_log_idx_in_entry,
+    bool &stop_resolve_cur_log_entry)
+{
+  bool need_ignore_cur_tx_log = false;
+  const char *reason = "NONE";
+
+  if (OB_UNLIKELY(transaction::ObTxLogType::TX_BIG_SEGMENT_LOG == tx_header.get_tx_log_type())) {
+    need_ignore_cur_tx_log = true;
+    stop_resolve_cur_log_entry = true;
+    reason = "TX_BIG_SEGMENT_LOG NOT COLLECT COMPLETE";
+  } else if (missing_info.is_reconsuming()
+      && ! (transaction::ObTxLogType::TX_COMMIT_LOG == tx_header.get_tx_log_type())) {
+    need_ignore_cur_tx_log = true;
+    reason = "NON_COMMIT_LOG WHILE RECONSUME LOG_ENTRY CONTAINS COMMIT_LOG";
+  }
+
+  if (OB_UNLIKELY(need_ignore_cur_tx_log)) {
+    LOG_INFO("[IGNORE] [TX_LOG]", K(lsn), K(tx_id), K(tx_header), KCSTRING(reason),
+        K(stop_resolve_cur_log_entry), K(tx_log_idx_in_entry), K(missing_info));
+  }
+
+  return need_ignore_cur_tx_log;
 }
 
 int ObCDCPartTransResolver::read_trans_log_(
@@ -352,29 +410,17 @@ int ObCDCPartTransResolver::read_trans_log_(
   switch (log_type) {
     case transaction::ObTxLogType::TX_REDO_LOG:
     {
-      if (OB_UNLIKELY(has_redo_in_cur_entry)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("expected only one redo_log/multi_data_source_log/rollback_to_log in one log_entry",
-            KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts));
-      } else if (OB_FAIL(handle_redo_(tx_id, lsn, submit_ts, handling_miss_log, tx_log_block))) {
+      if (OB_FAIL(handle_redo_(tx_id, lsn, submit_ts, handling_miss_log, tx_log_block))) {
         LOG_ERROR("handle_redo_ fail", KR(ret), K_(tls_id), K(tx_id), K(tx_id), K(lsn), K(tx_log_header),
             K(missing_info));
-      } else {
-        has_redo_in_cur_entry = true;
       }
       break;
     }
     case transaction::ObTxLogType::TX_MULTI_DATA_SOURCE_LOG:
     {
-      if (OB_UNLIKELY(has_redo_in_cur_entry)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("expected only one redo_log/multi_data_source_log/rollback_to_log in one log_entry",
-            KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts));
-      } else if (OB_FAIL(handle_multi_data_source_log_(tx_id, lsn, handling_miss_log, tx_log_block))) {
+      if (OB_FAIL(handle_multi_data_source_log_(tx_id, lsn, handling_miss_log, tx_log_block))) {
         LOG_ERROR("handle_multi_data_source_log_ failed", KR(ret), K_(tls_id), K(tx_id), K(lsn),
-            K(handling_miss_log), K(has_redo_in_cur_entry));
-      } else {
-        has_redo_in_cur_entry = true;
+            K(handling_miss_log));
       }
       break;
     }
@@ -388,17 +434,9 @@ int ObCDCPartTransResolver::read_trans_log_(
     }
     case transaction::ObTxLogType::TX_ROLLBACK_TO_LOG:
     {
-      if (OB_UNLIKELY(has_redo_in_cur_entry)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("expected only one redo_log/multi_data_source_log/rollback_to_log in one log_entry",
-            KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts));
-      } else if (OB_FAIL(handle_rollback_to_(tx_id, lsn, handling_miss_log, tx_log_block))) {
+      if (OB_FAIL(handle_rollback_to_(tx_id, lsn, handling_miss_log, tx_log_block))) {
         LOG_ERROR("handle_rollback_to_ failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(tx_log_header),
             K(handling_miss_log));
-      } else {
-        // RollbackToLog is treated as a special REDO
-        // normally RollbackToLog should occupy a log_entry alone.
-        has_redo_in_cur_entry = true;
       }
       break;
     }
@@ -456,7 +494,7 @@ int ObCDCPartTransResolver::read_trans_log_(
     }
   }
 
-  LOG_DEBUG("resolver_read_tx_log", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts), K(tx_log_header));
+  LOG_DEBUG("resolver_read_tx_log", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts), K(tx_log_header), K(handling_miss_log), "lbt", lbt());
 
   return ret;
 }

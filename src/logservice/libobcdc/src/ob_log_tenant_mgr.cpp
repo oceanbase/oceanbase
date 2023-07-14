@@ -1119,8 +1119,11 @@ int ObLogTenantMgr::get_sys_ls_progress(uint64_t &tenant_id,
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogTenantMgr has not inited");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogTenantMgr has not inited", KR(ret));
+  } else if (OB_UNLIKELY(tenant_id_set_.size() <= 0)) {
+    ret = OB_EMPTY_RESULT;
+    LOG_INFO("no valid tenant is in serve", KR(ret));
   } else {
     TenantDDLProgessGetter getter;
 
