@@ -33,6 +33,7 @@ public:
       ObMySQLTransaction &trans);
   static int lock_for_add_drop_index(
       const share::schema::ObTableSchema &data_table_schema,
+      const common::ObIArray<ObTabletID> *inc_data_tablet_ids,
       const common::ObIArray<ObTabletID> *del_data_tablet_ids,
       const share::schema::ObTableSchema &index_schema,
       const transaction::tablelock::ObTableLockOwnerID lock_owner,
@@ -85,23 +86,23 @@ private:
       const transaction::tablelock::ObTableLockMode lock_mode,
       const int64_t timeout_us,
       ObMySQLTransaction &trans);
-  static int lock_table_lock(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const ObIArray<ObTabletID> &tablet_ids,
-      const transaction::tablelock::ObTableLockMode lock_mode,
-      const transaction::tablelock::ObTableLockOwnerID lock_owner,
-      const int64_t timeout_us,
-      ObMySQLTransaction &trans);
-  static int unlock_table_lock(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const ObIArray<ObTabletID> &tablet_ids,
-      const transaction::tablelock::ObTableLockMode lock_mode,
-      const transaction::tablelock::ObTableLockOwnerID lock_owner,
-      const int64_t timeout_us,
-      ObMySQLTransaction &trans,
-      bool &some_lock_not_exist);
+  static int do_table_lock(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const transaction::tablelock::ObTableLockMode lock_mode,
+    const transaction::tablelock::ObTableLockOwnerID lock_owner,
+    const int64_t timeout_us,
+    const bool is_lock,
+    ObMySQLTransaction &trans);
+  static int do_table_lock(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const transaction::tablelock::ObTableLockMode lock_mode,
+    const transaction::tablelock::ObTableLockOwnerID lock_owner,
+    const int64_t timeout_us,
+    const bool is_lock,
+    ObMySQLTransaction &trans);
   static int check_tablet_in_same_ls(
       const share::schema::ObTableSchema &lhs_schema,
       const share::schema::ObTableSchema &rhs_schema,

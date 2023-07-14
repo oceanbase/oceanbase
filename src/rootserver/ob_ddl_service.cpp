@@ -9932,7 +9932,9 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
     LOG_WARN("split table partitions is not supported", KR(ret), K(orig_table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "split table partitions is");
   } else if (obrpc::ObAlterTableArg::ADD_PARTITION == op_type) {
-    if (OB_FAIL(gen_inc_table_schema_for_add_part(orig_table_schema, inc_table_schema))) {
+    if (OB_FAIL(ObDDLLock::lock_for_add_partition_in_trans(orig_table_schema, trans))) {
+      LOG_WARN("failed to lock for add drop partition", K(ret));
+    } else if (OB_FAIL(gen_inc_table_schema_for_add_part(orig_table_schema, inc_table_schema))) {
       LOG_WARN("fail to gen inc table schema for add part",
                KR(ret), K(orig_table_schema), K(inc_table_schema));
     } else if (OB_FAIL(generate_object_id_for_partition_schema(inc_table_schema))) {
@@ -9946,7 +9948,9 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
       LOG_WARN("failed to add table partitions", KR(ret));
     }
   } else if (obrpc::ObAlterTableArg::ADD_SUB_PARTITION == op_type) {
-    if (OB_FAIL(gen_inc_table_schema_for_add_subpart(orig_table_schema, inc_table_schema))) {
+    if (OB_FAIL(ObDDLLock::lock_for_add_partition_in_trans(orig_table_schema, trans))) {
+      LOG_WARN("failed to lock for add drop partition", K(ret));
+    } else if (OB_FAIL(gen_inc_table_schema_for_add_subpart(orig_table_schema, inc_table_schema))) {
       LOG_WARN("fail to gen inc table schema for add subpart",
                KR(ret), K(orig_table_schema), K(inc_table_schema));
     } else if (OB_FAIL(generate_object_id_for_partition_schema(inc_table_schema, true))) {
@@ -9964,6 +9968,11 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
     if (OB_FAIL(gen_inc_table_schema_for_drop_part(orig_table_schema, inc_table_schema))) {
       LOG_WARN("fail to gen inc table schema for drop part",
                KR(ret), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(lock_partitions(trans, inc_table_schema))) {
+      LOG_WARN("failed to get tablet ids", KR(ret), K(orig_table_schema), K(inc_table_schema));
+      // for ddl retry task, upper layer only focus on `OB_TRY_LOCK_ROW_CONFLICT`, and then retry it.
+      const bool is_ddl_scheduled_task = alter_table_arg.task_id_ > 0 ? true : false;
+      ret = is_ddl_scheduled_task && ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_TRY_LOCK_ROW_CONFLICT : ret;
     } else if (OB_FAIL(ddl_operator.drop_table_partitions(orig_table_schema,
                                                           inc_table_schema,
                                                           new_table_schema,
@@ -9977,6 +9986,11 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
     } else if (OB_FAIL(gen_inc_table_schema_for_drop_subpart(orig_table_schema, inc_table_schema))) {
       LOG_WARN("fail to gen inc table for drop subpart",
                KR(ret), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(lock_partitions(trans, inc_table_schema))) {
+      LOG_WARN("failed to get tablet ids", KR(ret), K(orig_table_schema), K(inc_table_schema));
+      // for ddl retry task, upper layer only focus on `OB_TRY_LOCK_ROW_CONFLICT`, and then retry it.
+      const bool is_ddl_scheduled_task = alter_table_arg.task_id_ > 0 ? true : false;
+      ret = is_ddl_scheduled_task && ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_TRY_LOCK_ROW_CONFLICT : ret;
     } else if (OB_FAIL(ddl_operator.drop_table_subpartitions(orig_table_schema,
                                                    inc_table_schema,
                                                    new_table_schema,
@@ -9987,6 +10001,11 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
     if (OB_FAIL(gen_inc_table_schema_for_trun_part(
                 orig_table_schema, inc_table_schema, del_table_schema))) {
       LOG_WARN("fail to generate inc table schema", KR(ret), K(orig_table_schema));
+    } else if (OB_FAIL(lock_partitions(trans, del_table_schema))) {
+      LOG_WARN("failed to get tablet ids", KR(ret), K(orig_table_schema), K(del_table_schema));
+      // for ddl retry task, upper layer only focus on `OB_TRY_LOCK_ROW_CONFLICT`, and then retry it.
+      const bool is_ddl_scheduled_task = alter_table_arg.task_id_ > 0 ? true : false;
+      ret = is_ddl_scheduled_task && ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_TRY_LOCK_ROW_CONFLICT : ret;
     } else if (OB_FAIL(generate_object_id_for_partition_schema(inc_table_schema))) {
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(inc_table_schema));
     } else if (OB_FAIL(generate_tablet_id(inc_table_schema))) {
@@ -10001,6 +10020,11 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
     if (OB_FAIL(gen_inc_table_schema_for_trun_subpart(
         orig_table_schema, inc_table_schema, del_table_schema))) {
       LOG_WARN("fail to generate inc table schema", KR(ret), K(orig_table_schema));
+    } else if (OB_FAIL(lock_partitions(trans, del_table_schema))) {
+      LOG_WARN("failed to get tablet ids", KR(ret), K(orig_table_schema), K(del_table_schema));
+      // for ddl retry task, upper layer only focus on `OB_TRY_LOCK_ROW_CONFLICT`, and then retry it.
+      const bool is_ddl_scheduled_task = alter_table_arg.task_id_ > 0 ? true : false;
+      ret = is_ddl_scheduled_task && ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_TRY_LOCK_ROW_CONFLICT : ret;
     } else if (OB_FAIL(generate_object_id_for_partition_schema(inc_table_schema, true))) {
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(inc_table_schema));
     } else if (OB_FAIL(generate_tablet_id(inc_table_schema))) {
@@ -10030,27 +10054,6 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
   if (OB_SUCC(ret) && !is_add_and_drop_partition(op_type)) {
     if (OB_FAIL(check_alter_partition_with_tablegroup(&orig_table_schema, new_table_schema, schema_guard))) {
       LOG_WARN("fail to check alter partition with tablegroup", KR(ret), K(orig_table_schema), K(new_table_schema));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (obrpc::ObAlterTableArg::ADD_SUB_PARTITION == op_type
-          || obrpc::ObAlterTableArg::ADD_PARTITION == op_type) {
-    if (OB_FAIL(ObDDLLock::lock_for_add_partition_in_trans(orig_table_schema, trans))) {
-      LOG_WARN("failed to lock for add drop partition", K(ret));
-    }
-  } else if (obrpc::ObAlterTableArg::DROP_PARTITION == op_type
-          || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == op_type
-          || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == op_type
-          || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == op_type) {
-    ObSEArray<ObTabletID, 1> del_tablet_ids;
-    if (OB_FAIL(del_table_schema.get_tablet_ids(del_tablet_ids))) {
-      LOG_WARN("failed to get del tablet ids", K(ret));
-    } else if (OB_FAIL(ObDDLLock::lock_for_drop_partition_in_trans(orig_table_schema, del_tablet_ids, trans))) {
-      LOG_WARN("failed to lock for add drop partition", K(ret), K(alter_table_arg.task_id_));
-      // for ddl retry task, upper layer only focus on `OB_TRY_LOCK_ROW_CONFLICT`, and then retry it.
-      const bool is_ddl_scheduled_task = alter_table_arg.task_id_ > 0 ? true : false;
-      ret = is_ddl_scheduled_task && ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_TRY_LOCK_ROW_CONFLICT : ret;
     }
   }
   return ret;
@@ -10732,7 +10735,20 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
               if (INDEX_TYPE_PRIMARY == create_index_arg->index_type_) {
                 // do nothing
               } else {
+                ObArray<ObTabletID> inc_tablet_ids;
                 ObArray<ObTabletID> del_tablet_ids;
+                if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                    || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+                  for (int64_t i = 0; OB_SUCC(ret) && i < inc_table_schemas.count(); i++) {
+                    ObTableSchema *inc_table_schema = inc_table_schemas[i];
+                    if (inc_table_schema->get_table_id() == new_table_schema.get_table_id()) {
+                      if (OB_FAIL(inc_table_schema->get_tablet_ids(inc_tablet_ids))) {
+                        LOG_WARN("failed to get del tablet ids", K(ret));
+                      }
+                      break;
+                    }
+                  }
+                }
                 if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
                     || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
                     || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
@@ -10751,6 +10767,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                 } else if (OB_FAIL(index_builder.submit_build_index_task(trans,
                                                                     *create_index_arg,
                                                                     orig_table_schema,
+                                                                    &inc_tablet_ids,
                                                                     &del_tablet_ids,
                                                                     &index_schema,
                                                                     alter_table_arg.parallelism_,
@@ -20199,6 +20216,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
         } else if (OB_FAIL(index_builder.submit_build_index_task(trans,
                                                                  create_index_arg,
                                                                  table_schema,
+                                                                 nullptr/*inc_data_tablet_ids*/,
                                                                  nullptr/*del_data_tablet_ids*/,
                                                                  &new_table_schema,
                                                                  arg.parallelism_,

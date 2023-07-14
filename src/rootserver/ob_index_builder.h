@@ -88,6 +88,7 @@ public:
   int submit_build_index_task(common::ObMySQLTransaction &trans,
                               const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema *data_schema,
+                              const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
                               const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
                               const share::schema::ObTableSchema *index_schema,
                               const int64_t parallelism,
