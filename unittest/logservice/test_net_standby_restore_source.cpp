@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "src/share/backup/ob_backup_struct.h"
+#include "src/share/backup/ob_log_restore_struct.h"
 #include <gtest/gtest.h>
 
 namespace oceanbase

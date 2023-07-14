@@ -46,6 +46,8 @@ ob_set_subtarget(ob_share backup
   backup/ob_archive_checkpoint.cpp
   backup/ob_archive_path.cpp
   backup/ob_backup_config.cpp
+  backup/ob_log_restore_config.cpp
+  backup/ob_log_restore_struct.cpp
 )
 
 ob_set_subtarget(ob_share cache

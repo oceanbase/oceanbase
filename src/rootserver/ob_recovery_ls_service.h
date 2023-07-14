@@ -20,7 +20,7 @@
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
 #include "src/share/restore/ob_log_restore_source.h" //ObLogRestoreSourceItem
-#include "src/share/backup/ob_backup_struct.h" //ObRestoreSourceServiceAttr
+#include "src/share/backup/ob_log_restore_struct.h" //ObRestoreSourceServiceAttr
 #include "share/restore/ob_log_restore_source_mgr.h" //ObLogRestoreSourceMgr
 #include "share/ob_log_restore_proxy.h"  // ObLogRestoreProxyUtil
 

@@ -22,6 +22,7 @@
 #include "logservice/palf/lsn.h"
 #include "share/scn.h"
 #include "share/backup/ob_backup_struct.h"     // ObBackupPathString
+#include "share/backup/ob_log_restore_struct.h"
 #include "share/ob_define.h"
 #include "share/ob_ls_id.h"
 #include "share/restore/ob_log_restore_source.h"  // ObLogRestoreSourceType

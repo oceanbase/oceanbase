@@ -14,12 +14,14 @@
 #include "lib/restore/ob_storage.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_log_restore_struct.h"
 #include "ob_log_restore_source_mgr.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/net/ob_addr.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
+
 using namespace oceanbase::share;
 int ObLogRestoreSourceMgr::init(const uint64_t tenant_id, ObISQLClient *proxy)
 {
@@ -105,7 +107,10 @@ int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
 {
   int ret = OB_SUCCESS;
   ObBackupDest dest;
-  char dest_buf[OB_MAX_BACKUP_DEST_LENGTH] = {0};
+  const int64_t MAX_RESTORE_CLUSTER_STR = 10 + 16;                        // CLUSTER_ID=4294967295
+  const int64_t MAX_RESTORE_TENANT_STR = 20 + 16;                         // TENANT_ID=18446744073709551615
+  const int64_t MAX_RESTORE_LOCAION_STR = OB_MAX_BACKUP_DEST_LENGTH + 16; // LOCATION=file:///data/xxxx
+  char dest_buf[MAX_RESTORE_LOCAION_STR + MAX_RESTORE_CLUSTER_STR + MAX_RESTORE_TENANT_STR] = { 0 };
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K(is_inited_));
@@ -115,8 +120,9 @@ int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
   } else if (OB_FAIL(dest.set(archive_dest.ptr()))) {
     // use backup dest to manage oss key
     LOG_WARN("set backup dest failed", K(ret), K(archive_dest));
-  } else if (OB_FAIL(dest.get_backup_dest_str(dest_buf, OB_MAX_BACKUP_DEST_LENGTH))) {
-    LOG_WARN("get backup dest str failed", K(ret), K(dest));
+  } else if (OB_FAIL(dest.get_backup_dest_str_with_primary_attr(dest_buf, sizeof(dest_buf)))) {
+    // store primary cluster id and tenant id in log restore source
+    LOG_WARN("get backup dest str with primary attr failed", K(ret), K(dest));
   } else {
     ObLogRestoreSourceItem item(tenant_id_,
                                 OB_DEFAULT_LOG_RESTORE_SOURCE_ID,
@@ -126,7 +132,7 @@ int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
     if (OB_FAIL(table_operator_.insert_source(item))) {
       LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
     } else {
-      LOG_INFO("add location source succ", K(recovery_until_scn), K(archive_dest));
+      LOG_INFO("add location source succ", K(recovery_until_scn), K(archive_dest), K(item));
     }
   }
   return ret;
@@ -174,10 +180,13 @@ int ObLogRestoreSourceMgr::get_source_for_update(ObLogRestoreSourceItem &item, c
 int ObLogRestoreSourceMgr::get_backup_dest(const ObLogRestoreSourceItem &item, ObBackupDest &dest)
 {
   int ret = OB_SUCCESS;
+  ObRestoreSourceLocationPrimaryAttr location_attr;
   if (OB_UNLIKELY(! item.is_valid() || ! is_location_log_source_type(item.type_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(item));
-  } else if OB_FAIL(dest.set(item.value_)) {
+  } else if (OB_FAIL(location_attr.parse_location_attr_from_str(item.value_))) {
+    LOG_WARN("parse location attr from string failed", K(item));
+  } else if OB_FAIL(dest.set(location_attr.location_.ptr())) {
     LOG_WARN("backup dest set failed", K(ret), K(item));
   }
   return ret;
