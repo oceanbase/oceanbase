@@ -30,6 +30,7 @@ ObBucketLock::ObBucketLock()
 
 ObBucketLock::~ObBucketLock()
 {
+  destroy();
 }
 
 int ObBucketLock::init(
