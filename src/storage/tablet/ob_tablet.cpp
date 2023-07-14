@@ -2282,6 +2282,8 @@ int ObTablet::auto_get_read_tables(
   if (OB_UNLIKELY(tablet_meta_.has_transfer_table())) {
     if (OB_FAIL(get_src_tablet_read_tables_(snapshot_version, allow_no_ready_read, iter, succ_get_src_tables))) {
       LOG_WARN("failed to get src ls read tables", K(ret), K(snapshot_version), K(tablet_meta_));
+    } else {
+      LOG_INFO("get read tables during transfer", K(snapshot_version), K(iter.table_store_iter_.table_ptr_array_));
     }
   }
   if (OB_FAIL(ret)) {
