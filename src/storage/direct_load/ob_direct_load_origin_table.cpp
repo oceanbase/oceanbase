@@ -104,14 +104,13 @@ int ObDirectLoadOriginTable::prepare_tables()
 {
   int ret = OB_SUCCESS;
   ObITable *table = nullptr;
-  ObSSTable *major_sstable = nullptr;
   ObTabletTableIterator tablet_table_iter;
   tablet_table_iter.tablet_handle_ = tablet_handle_;
   if (OB_FAIL(tablet_handle_.get_obj()->get_read_tables(INT64_MAX, tablet_table_iter,
                                                         false /*allow_not_ready*/))) {
     LOG_WARN("fail to get read tables", KR(ret), K(tablet_handle_));
   }
-  // find major sstable
+  // find major sstable or ddl sstables
   while (OB_SUCC(ret)) {
     if (OB_FAIL(tablet_table_iter.table_iter_.get_next(table))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -121,36 +120,46 @@ int ObDirectLoadOriginTable::prepare_tables()
         break;
       }
     } else if (table->is_major_sstable()) {
-      if (nullptr != major_sstable) {
+      if (nullptr != major_sstable_) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected multi major sstable", KR(ret), KPC(major_sstable), KPC(table));
-      } else if (OB_ISNULL(major_sstable = dynamic_cast<ObSSTable *>(table))) {
+        LOG_WARN("unexpected multi major sstable", KR(ret), KPC(major_sstable_), KPC(table));
+      } else if (OB_ISNULL(major_sstable_ = dynamic_cast<ObSSTable *>(table))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected not major sstable", KR(ret), KPC(table));
+        LOG_WARN("unexpected not sstable", KR(ret), KPC(table));
+      }
+    } else if (table->is_ddl_sstable()) {
+      ObSSTable *ddl_sstable = nullptr;
+      if (OB_ISNULL(ddl_sstable = dynamic_cast<ObSSTable *>(table))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected not sstable", KR(ret), KPC(table));
+      } else if (OB_FAIL(ddl_sstables_.push_back(ddl_sstable))) {
+        LOG_WARN("fail to push back ddl sstable", KR(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(major_sstable)) {
+    if (OB_UNLIKELY(nullptr == major_sstable_ && ddl_sstables_.empty())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected not found major sstable", KR(ret), KPC(table));
+      LOG_WARN("unexpected not found major sstable or ddl sstables", KR(ret), K(table_iter_));
+    } else if (OB_UNLIKELY(nullptr != major_sstable_ && !ddl_sstables_.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected both major sstable and ddl sstables exists", KR(ret), K(table_iter_),
+               KPC(major_sstable_), K(ddl_sstables_));
     } else if (OB_FAIL(table_iter_.copy(tablet_table_iter.table_iter_))) {
       LOG_WARN("fail to copy table iter", KR(ret));
-    } else {
-      major_sstable_ = major_sstable;
     }
   }
   return ret;
 }
 
-int ObDirectLoadOriginTable::scan(const blocksstable::ObDatumRange &key_range,
-                                  common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter)
+int ObDirectLoadOriginTable::scan(const ObDatumRange &key_range,
+                                  ObIAllocator &allocator, ObIStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadOriginTable not init", KR(ret), KP(this));
-  } else if (!key_range.is_valid()) {
+  } else if (OB_UNLIKELY(!key_range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", KR(ret), K(key_range));
   } else {
@@ -188,7 +197,7 @@ ObDirectLoadOriginTableScanner::~ObDirectLoadOriginTableScanner()
 }
 
 int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table,
-                                         const blocksstable::ObDatumRange &query_range)
+                                         const ObDatumRange &query_range)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
