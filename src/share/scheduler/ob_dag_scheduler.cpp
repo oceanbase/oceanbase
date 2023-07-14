@@ -1306,7 +1306,7 @@ ObTenantDagWorker::ObTenantDagWorker()
     check_period_(0),
     last_check_time_(0),
     function_type_(0),
-    group_id_(INT64_MAX),
+    group_id_(0),
     tg_id_(-1),
     is_inited_(false)
 {
@@ -1367,7 +1367,7 @@ void ObTenantDagWorker::destroy()
     check_period_ = 0;
     last_check_time_ = 0;
     function_type_ = 0;
-    group_id_ = INT64_MAX;
+    group_id_ = 0;
     self_ = NULL;
     is_inited_ = false;
     TG_DESTROY(tg_id_);
@@ -1401,11 +1401,11 @@ int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
       LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
     }
     if (OB_SUCC(ret) && consumer_group_id != group_id_) {
-      if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), group_id))) {
+      if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), consumer_group_id))) {
         LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
       } else {
-        ATOMIC_SET(&group_id_, group_id);
-        THIS_WORKER.set_group_id(static_cast<int32_t>(group_id));
+        ATOMIC_SET(&group_id_, consumer_group_id);
+        THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
       }
     }
   }
