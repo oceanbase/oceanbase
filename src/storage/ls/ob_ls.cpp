@@ -469,13 +469,7 @@ int ObLS::stop_()
   ls_tablet_svr_.stop();
   is_stopped_ = true;
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(prepare_for_safe_destroy_())) {
-      LOG_WARN("fail to prepare_for_safe_destroy", K(ret));
-    } else {
-      LOG_INFO("stop_ls finish", KR(ret), KPC(this));
-    }
-  }
+  LOG_INFO("stop_ls finish", KR(ret), KPC(this));
 
   return ret;
 }
@@ -520,6 +514,11 @@ void ObLS::wait_()
       }
     }
   } while (!wait_finished);
+}
+
+int ObLS::prepare_for_safe_destroy()
+{
+  return prepare_for_safe_destroy_();
 }
 
 // a class should implement prepare_for_safe_destroy() if it has
@@ -603,6 +602,9 @@ void ObLS::destroy()
     LOG_WARN("ls stop failed.", K(tmp_ret), K(ls_meta_.ls_id_));
   } else {
     wait_();
+    if (OB_TMP_FAIL(prepare_for_safe_destroy_())) {
+      LOG_WARN("failed to prepare for safe destroy", K(ret));
+    }
   }
   UNREGISTER_FROM_LOGSERVICE(logservice::TRANS_SERVICE_LOG_BASE_TYPE, &ls_tx_svr_);
   UNREGISTER_FROM_LOGSERVICE(logservice::STORAGE_SCHEMA_LOG_BASE_TYPE, &ls_tablet_svr_);
