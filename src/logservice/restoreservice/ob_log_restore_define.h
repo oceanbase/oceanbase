@@ -46,6 +46,8 @@ struct ObRestoreLogContext
   void reset();
   TO_STRING_KV(K_(seek_done), K_(lsn));
 };
+
+int64_t get_restore_concurrency_by_max_cpu(const uint64_t tenant_id);
 } // namespace logservice
 } // namespace oceanbase
 

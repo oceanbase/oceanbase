@@ -17,6 +17,8 @@
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "logservice/palf/log_define.h"
+#include "share/rc/ob_tenant_base.h"
+#include "observer/omt/ob_tenant.h"
 #include <cstdint>
 
 namespace oceanbase
@@ -40,6 +42,19 @@ void ObRestoreLogContext::reset()
 {
   seek_done_ = false;
   lsn_ = palf::LSN(palf::LOG_INVALID_LSN_VAL);
+}
+
+int64_t get_restore_concurrency_by_max_cpu(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t concurrency = 0;
+  omt::ObTenant *tenant = NULL;
+  if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
+    CLOG_LOG(WARN, "get tenant failed", K(tenant_id));
+  } else {
+    concurrency = (tenant->unit_max_cpu() + 7) / 8;
+  }
+  return concurrency;
 }
 
 } // namespace logservice

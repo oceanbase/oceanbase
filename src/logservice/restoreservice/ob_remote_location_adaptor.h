@@ -47,6 +47,7 @@ public:
 
 private:
   int do_update_(storage::ObLS &ls);
+  bool is_tenant_primary_();
   int get_source_(share::ObLogRestoreSourceItem &item, bool &exist);
   int check_replica_status_(storage::ObLS &ls, bool &need_update);
   int clean_source_(ObLogRestoreHandler &restore_handler);
@@ -55,8 +56,6 @@ private:
   int add_location_source_(const share::ObLogRestoreSourceItem &item, ObLogRestoreHandler &restore_handler);
   int add_rawpath_source_(const share::ObLogRestoreSourceItem &item, ObLogRestoreHandler &restore_handler);
 
-private:
-  static const int64_t LOCATION_REFRESH_INTERVAL = 5 * 1000 * 1000L;
 private:
   bool inited_;
   uint64_t tenant_id_;

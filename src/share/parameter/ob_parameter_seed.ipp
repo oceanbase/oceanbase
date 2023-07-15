@@ -549,9 +549,11 @@ DEF_STR_WITH_CHECKER(log_transport_compress_func, OB_TENANT_PARAMETER, "lz4_1.0"
 //         "control if enable log archive",
 //         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(log_restore_concurrency, OB_TENANT_PARAMETER, "1", "[1, 100]",
-        "log restore concurrency, for both restore tenant and standby tenant. "
-        "Range: [1, 100] in integer",
+DEF_INT(log_restore_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
+        "log restore concurrency, for both the restore tenant and standby tenant. "
+        "If the value is default 0, the database will automatically calculate the number of restore worker threads "
+        "based on the tenant specification, which is tenant max_cpu; otherwise set the the worker count equals to the value."
+        "Range: [0, 100] in integer",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(log_archive_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",

@@ -22,6 +22,7 @@
 #include "share/restore/ob_ls_restore_status.h" // ObLSRestoreStatus
 #include "share/restore/ob_log_restore_source.h"  // ObLogRestoreSourceItem
 #include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
+#include "share/rc/ob_tenant_base.h"                  // ObTenantRole
 #include "storage/ls/ob_ls.h"                   // ObLS
 #include "storage/tx_storage/ob_ls_service.h"   // ObLSService
 #include "ob_remote_location_adaptor.h"
@@ -82,10 +83,12 @@ int ObRemoteLocationAdaptor::update_upstream()
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRemoteLocationAdaptor not init", K(ret));
-  } else if (cur_ts  - last_refresh_ts_ < LOCATION_REFRESH_INTERVAL) {
-    // skip
   } else if (! is_user_tenant(tenant_id_)) {
     // not user tenant, just skip
+  } else if (is_tenant_primary_()) {
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
+      LOG_INFO("primary tenant, just skip");
+    }
   } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
     LOG_WARN("get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
@@ -113,6 +116,11 @@ int ObRemoteLocationAdaptor::update_upstream()
     }
   }
   return ret;
+}
+
+bool ObRemoteLocationAdaptor::is_tenant_primary_()
+{
+  return MTL_GET_TENANT_ROLE() == share::ObTenantRole::PRIMARY_TENANT;
 }
 
 int ObRemoteLocationAdaptor::do_update_(ObLS &ls)

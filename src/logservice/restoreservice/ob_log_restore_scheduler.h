@@ -14,6 +14,7 @@
 #define OCEANBASE_LOGSERVICE_OB_LOG_RESTORE_SCHEDULER_H_
 
 #include "lib/utility/ob_macro_utils.h"
+#include "share/restore/ob_log_restore_source.h"   // ObLogRestoreSourceType
 #include <cstdint>
 
 namespace oceanbase
