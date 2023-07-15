@@ -100,7 +100,7 @@ See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-
 
 ## How to build
 
-See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a munually compiled observer.
+See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a manually compiled observer.
 
 # Roadmap
 
