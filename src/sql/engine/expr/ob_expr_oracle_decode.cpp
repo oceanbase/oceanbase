@@ -90,7 +90,7 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
         // 兼容Oracle行为, 如果结果是Char类型, 需要转为Varchar
         type.set_varchar();
         type.set_length_semantics(types_stack[RESULT_TYPE_INDEX].is_varchar_or_char() ?  types_stack[RESULT_TYPE_INDEX].get_length_semantics() : default_length_semantics);
-      } else if (lib::is_oracle_mode() && ob_is_nchar(types_stack[RESULT_TYPE_INDEX].get_type())) {
+      } else if (lib::is_oracle_mode() && ob_is_nstring(types_stack[RESULT_TYPE_INDEX].get_type())) {
         type.set_nvarchar2();
         type.set_length_semantics(LS_CHAR);
       } else {
