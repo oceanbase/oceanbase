@@ -22,7 +22,7 @@ const ObLatchDesc OB_LATCHES[] = {
 #undef LATCH_DEF
 };
 
-static_assert(ARRAYSIZEOF(OB_LATCHES) == 308, "DO NOT delete latch defination");
+static_assert(ARRAYSIZEOF(OB_LATCHES) == 311, "DO NOT delete latch defination");
 static_assert(ObLatchIds::LATCH_END == ARRAYSIZEOF(OB_LATCHES) - 1, "update id of LATCH_END before adding your defination");
 
 }

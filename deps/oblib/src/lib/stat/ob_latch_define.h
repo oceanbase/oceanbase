@@ -319,7 +319,11 @@ LATCH_DEF(TENANT_IO_POOL_LOCK, 304, "tenant io allocator lock", LATCH_FIFO, 2000
 LATCH_DEF(DISPLAY_TASKS_LOCK, 305, "display tasks lock", LATCH_READ_PREFER, 2000, 0, DISPLAY_TASKS_LOCK_WAIT, "display tasks lock")
 LATCH_DEF(TMP_FILE_MEM_BLOCK_LOCK, 306, "tmp file mem block lock", LATCH_FIFO, INT64_MAX, 0, TMP_FILE_MEM_BLOCK_LOCK_WAIT, "tmp file mem block lock")
 
-LATCH_DEF(LATCH_END, 307, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
+LATCH_DEF(LOG_EXTERNAL_STORAGE_IO_TASK_LOCK, 307, "log external storage io task condition", LATCH_FIFO, 2000, 0, LOG_EXTERNAL_STORAGE_IO_TASK_WAIT, "log external storage io task condition")
+LATCH_DEF(LOG_EXTERNAL_STORAGE_HANDLER_RW_LOCK, 308, "log external storage handler rw lock", LATCH_FIFO, 2000, 0, LOG_EXTERNAL_STORAGE_HANDLER_RW_WAIT, "log external storage handler rw lock")
+LATCH_DEF(LOG_EXTERNAL_STORAGE_HANDLER_LOCK, 309, "log external storage handler spin lock", LATCH_FIFO, 2000, 0, LOG_EXTERNAL_STORAGE_HANDLER_WAIT, "log external storage handler spin lock")
+
+LATCH_DEF(LATCH_END, 310, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif
 
 #ifndef OB_LATCH_DEFINE_H_

@@ -321,3 +321,12 @@ The read and write operation on hb_responses_ should be mutually exclusive.
 ## latch: all servers info in table lock wait
 
 The read and write operation on all_servers_info_in_table_ should be mutually exclusive.
+
+## thread_cond: log external storage io task lock wait
+The read and write operation on ObLogExternalStorageIOTaskCtx should be mutually exclusive.
+
+## rwlock: log external storage io handler rw lock wait
+The read and write operation on ObLogExternalStorageIOHandler should be mutually exclusive.
+
+## rwlock: log external storage io handler spin lock wait
+The read and write operation on ObLogExternalStorageIOHandler should be mutually exclusive.
