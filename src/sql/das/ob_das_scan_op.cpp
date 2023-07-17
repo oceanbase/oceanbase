@@ -1130,6 +1130,7 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
                       "lookup_group_cnt", get_lookup_group_cnt(),
                       "index_table_id", index_ctdef_->ref_table_id_ ,
                       "data_table_tablet_id", tablet_id_ ,
+                      KPC_(snapshot),
                       KPC_(tx_desc));
       if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
         for (int64_t i = 0; i < trans_info_array_.count(); i++) {

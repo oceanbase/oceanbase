@@ -3354,6 +3354,7 @@ int ObGlobalIndexLookupOpImpl::check_lookup_row_cnt()
                 "index_group_cnt", get_index_group_cnt(),
                 "lookup_group_cnt", get_lookup_group_cnt(),
                 "index_table_id", table_scan_op_->get_tsc_spec().get_ref_table_id(),
+                K(DAS_CTX(table_scan_op_->get_exec_ctx()).get_snapshot()),
                 KPC(my_session->get_tx_desc()));
       //now to dump lookup das task info
       int64_t rownum = 0;
