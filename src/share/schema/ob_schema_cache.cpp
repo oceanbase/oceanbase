@@ -251,6 +251,39 @@ int ObSchemaCacheValue::deep_copy(char *buf,
   return ret;
 }
 
+ObSchemaHistoryCacheValue::ObSchemaHistoryCacheValue()
+  : schema_version_(OB_INVALID_VERSION)
+{
+}
+
+ObSchemaHistoryCacheValue::ObSchemaHistoryCacheValue(
+  const int64_t schema_version)
+  : schema_version_(schema_version)
+{
+}
+
+int64_t ObSchemaHistoryCacheValue::size() const
+{
+  return sizeof(*this);
+}
+
+int ObSchemaHistoryCacheValue::deep_copy(
+    char *buf,
+    const int64_t buf_len,
+    ObIKVCacheValue *&value) const
+{
+  int ret = OB_SUCCESS;
+  ObSchemaHistoryCacheValue *schema_history_value = NULL;
+  if (OB_ISNULL(buf) || buf_len < size()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invaild arg", KR(ret), KP(buf), K(buf_len));
+  } else {
+    schema_history_value = new (buf) ObSchemaHistoryCacheValue(schema_version_);
+    value = schema_history_value;
+  }
+  return ret;
+}
+
 ObTabletCacheKey::ObTabletCacheKey()
   : tenant_id_(OB_INVALID_TENANT_ID),
     tablet_id_(),
@@ -379,11 +412,11 @@ int ObTabletCacheValue::deep_copy(char *buf,
   return ret;
 }
 
-
 ObSchemaCache::ObSchemaCache()
   : mem_context_(nullptr),
     sys_cache_(),
     cache_(),
+    history_cache_(),
     is_inited_(false)
 {
 }
@@ -464,6 +497,8 @@ int ObSchemaCache::init()
   const int64_t priority = 1001;
   if (OB_FAIL(cache_.init(OB_SCHEMA_CACHE_NAME, priority))) {
     LOG_WARN("init schema cache failed", KR(ret));
+  } else if (OB_FAIL(history_cache_.init(OB_SCHEMA_HISTORY_CACHE_NAME, priority))) {
+    LOG_WARN("init schema history cache failed", K(ret));
   } else if (OB_FAIL(tablet_cache_.init(OB_TABLET_TABLE_CACHE_NAME, priority))) {
     LOG_WARN("init tablet-table cache failed", KR(ret));
   } else if (OB_FAIL(sys_cache_.create(OB_SCHEMA_CACHE_SYS_CACHE_MAP_BUCKET_NUM,
@@ -585,7 +620,7 @@ int ObSchemaCache::get_schema(
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(cache_value)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cache_value is NULL", K(cache_value), K(ret));
+        LOG_WARN("cache_value is NULL", KP(cache_value), K(ret));
       } else {
         schema = cache_value->schema_;
       }
@@ -626,18 +661,18 @@ int ObSchemaCache::put_sys_schema(
                  K(deep_copy_size));
       } else if (OB_ISNULL(kv_cache_value)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cache value is NULL", KR(ret), K(kv_cache_value));
+        LOG_WARN("cache value is NULL", KR(ret), KP(kv_cache_value));
       } else {
         ObSchemaCacheValue *cache_value = static_cast<ObSchemaCacheValue *>(kv_cache_value);
         int overwrite_flag = 1;
         int hash_ret = sys_cache_.set_refactored(cache_key, cache_value, overwrite_flag);
         if (OB_SUCCESS == hash_ret) {
           LOG_DEBUG("put value to sys cache succeed", K(hash_ret), K(cache_key),
-                    K(*cache_value));
+                    KPC(cache_value));
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("put value to sys cache failed", KR(ret), K(hash_ret),
-                   K(cache_key), K(*cache_value));
+                   K(cache_key), KPC(cache_value));
         }
       }
     }
@@ -768,6 +803,71 @@ int ObSchemaCache::put_tablet_cache(
     LOG_WARN("fail to put tablet cache", KR(ret), K(key), K(value));
   }
   LOG_TRACE("put tablet-table cache", KR(ret), K(key), K(value));
+  return ret;
+}
+
+int ObSchemaCache::get_schema_history_cache(
+    const ObSchemaType schema_type,
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    const int64_t schema_version,
+    int64_t &precise_schema_version)
+{
+  int ret = OB_SUCCESS;
+  precise_schema_version = OB_INVALID_VERSION;
+  if (OB_UNLIKELY(!check_inner_stat())) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_key(schema_type, tenant_id, schema_id, schema_version))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(schema_type), K(tenant_id), K(schema_id), K(schema_version));
+  } else {
+    ObSchemaCacheKey cache_key(schema_type, tenant_id, schema_id, schema_version);
+    const ObSchemaHistoryCacheValue *cache_value = NULL;
+    ObKVCacheHandle handle;
+    if (OB_FAIL(history_cache_.get(cache_key, cache_value, handle))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("fail to get schema history value", KR(ret), K(cache_key));
+      }
+      EVENT_INC(ObStatEventIds::SCHEMA_HISTORY_CACHE_MISS);
+    } else if (OB_ISNULL(cache_value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cache_value is null", KR(ret), KP(cache_value));
+    } else {
+      precise_schema_version = cache_value->schema_version_;
+      EVENT_INC(ObStatEventIds::SCHEMA_HISTORY_CACHE_HIT);
+      LOG_TRACE("get schema history cache succeed", KR(ret), K(cache_key));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaCache::put_schema_history_cache(
+    const ObSchemaType schema_type,
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    const int64_t schema_version,
+    const int64_t precise_schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!check_inner_stat())) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_UNLIKELY(
+             !is_valid_key(schema_type, tenant_id, schema_id, schema_version)
+             || precise_schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(schema_type), K(tenant_id), K(schema_id),
+             K(schema_version), K(precise_schema_version));
+  } else {
+    ObSchemaCacheKey cache_key(schema_type, tenant_id, schema_id, schema_version);
+    ObSchemaHistoryCacheValue cache_value(precise_schema_version);
+    if (OB_FAIL(history_cache_.put(cache_key, cache_value))) {
+      LOG_WARN("put value to schema cache failed", KR(ret), K(cache_key), K(cache_value));
+    } else {
+      LOG_TRACE("put schema history cache succeed", KR(ret), K(cache_key), K(cache_value));
+    }
+  }
   return ret;
 }
 

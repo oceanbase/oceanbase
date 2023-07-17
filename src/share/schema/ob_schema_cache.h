@@ -86,6 +86,21 @@ public:
   const ObSchema *schema_;
 };
 
+class ObSchemaHistoryCacheValue : public common::ObIKVCacheValue
+{
+public:
+  ObSchemaHistoryCacheValue();
+  ObSchemaHistoryCacheValue(const int64_t schema_version);
+  virtual ~ObSchemaHistoryCacheValue() {}
+  virtual int64_t size() const;
+  virtual int deep_copy(char *buf,
+                        int64_t buf_len,
+                        ObIKVCacheValue *&value) const;
+  TO_STRING_KV(K_(schema_version));
+
+  int64_t schema_version_;
+};
+
 class ObTabletCacheKey : public common::ObIKVCacheKey
 {
 public:
@@ -161,6 +176,16 @@ public:
                            const ObSchema &schema,
                            common::ObKVCacheHandle &handle,
                            const ObSchema *&new_schema);
+  int get_schema_history_cache(const ObSchemaType schema_type,
+                               const uint64_t tenant_id,
+                               const uint64_t schema_id,
+                               const int64_t schema_version,
+                               int64_t &precise_schema_version);
+  int put_schema_history_cache(const ObSchemaType schema_type,
+                               const uint64_t tenant_id,
+                               const uint64_t schema_id,
+                               const int64_t schema_version,
+                               const int64_t precise_schema_version);
   const ObTableSchema *get_all_core_table() const;
   const ObSimpleTenantSchema *get_simple_gts_tenant() const;
   const ObTenantSchema *get_full_gts_tenant() const;
@@ -198,11 +223,13 @@ private:
                                   const ObSchemaCacheValue*,
                                   common::hash::ReadWriteDefendMode> NoSwapCache;
   typedef common::ObKVCache<ObSchemaCacheKey, ObSchemaCacheValue> KVCache;
+  typedef common::ObKVCache<ObSchemaCacheKey, ObSchemaHistoryCacheValue> HistoryCache;
   typedef common::ObKVCache<ObTabletCacheKey, ObTabletCacheValue> TabletCache;
 
   lib::MemoryContext mem_context_;
   NoSwapCache sys_cache_;
   KVCache cache_;
+  HistoryCache history_cache_;
   bool is_inited_;
   ObTableSchema all_core_table_;
   ObSimpleTenantSchema simple_gts_tenant_;
