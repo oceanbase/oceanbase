@@ -2827,6 +2827,9 @@ int ObTenantDagScheduler::loop_blocking_dag_net_list()
       } else {
         tmp = cur;
         cur = cur->get_next();
+        if (OB_TMP_FAIL(tmp->clear_dag_net_ctx())) {
+          COMMON_LOG(ERROR, "failed to clear dag net ctx", K(tmp));
+        }
         if (!blocking_dag_net_list_.remove(tmp)) {
           COMMON_LOG(WARN, "failed to remove dag_net from blocking_dag_net_list", K(tmp));
           ob_abort();

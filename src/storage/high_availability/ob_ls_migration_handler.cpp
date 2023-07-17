@@ -739,6 +739,7 @@ int ObLSMigrationHandler::schedule_build_ls_dag_net_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schedule build ls dag net get invalid argument", K(ret), K(task));
   } else {
+    DEBUG_SYNC(BEFORE_BUILD_LS_MIGRATION_DAG_NET);
     ObTenantDagScheduler *scheduler = nullptr;
     ObMigrationDagNetInitParam param;
     param.arg_ = task.arg_;

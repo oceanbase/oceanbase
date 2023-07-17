@@ -229,6 +229,9 @@ int ObStorageHAUtils::check_ls_deleted(
     LOG_WARN("get ls status from inner table get invalid argument", K(ret), K(ls_id));
   } else if (OB_FAIL(ObLocationService::check_ls_exist(tenant_id, ls_id, state))) {
     LOG_WARN("failed to check ls exist", K(ret), K(tenant_id), K(ls_id));
+    //overwrite ret
+    is_deleted = false;
+    ret = OB_SUCCESS;
   } else if (state.is_deleted()) {
     is_deleted = true;
   } else {

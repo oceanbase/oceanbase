@@ -459,10 +459,10 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
     } else if (OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, kill_trx_threshold, timeout_ctx))) {
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
-    } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
-      LOG_WARN("failed to reset timeout for trans", K(ret));
     } else if (OB_FAIL(check_start_status_transfer_tablets_(task_info))) {
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
+    } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
+      LOG_WARN("failed to reset timeout for trans", K(ret));
     } else if (OB_FAIL(do_trans_transfer_start_(task_info, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
     }
@@ -583,15 +583,19 @@ int ObTransferHandler::reset_timeout_for_trans_(ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  int64_t get_transfer_trans_timeout = 10_s;
   if (tenant_config.is_valid()) {
-    get_transfer_trans_timeout = tenant_config->_transfer_start_trans_timeout;
-  }
-  const int64_t stmt_timeout = get_transfer_trans_timeout;
-  if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
-    LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
-  } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
-    LOG_WARN("set timeout context failed", K(ret));
+    const int64_t left_trans_timeout = timeout_ctx.get_timeout();
+    const int64_t transfer_trans_timeout = tenant_config->_transfer_start_trans_timeout;
+    if (left_trans_timeout > 0) {
+      const int64_t stmt_timeout = std::min(transfer_trans_timeout, left_trans_timeout);
+      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
+        LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
+      } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
+        LOG_WARN("set timeout context failed", K(ret));
+      }
+    }
+  } else {
+    //no need reset timeout for trans
   }
   return ret;
 }
@@ -899,7 +903,7 @@ int ObTransferHandler::start_trans_(
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   int64_t stmt_timeout = 10_s;
   if (tenant_config.is_valid()) {
-    stmt_timeout = tenant_config->_transfer_start_trans_timeout;
+    stmt_timeout = tenant_config->_transfer_start_trans_timeout + tenant_config->_balance_kill_transaction_threshold;
   }
 
   if (!is_inited_) {
@@ -980,6 +984,7 @@ int ObTransferHandler::do_tx_start_transfer_out_(
   ObTXStartTransferOutInfo start_transfer_out_info;
   ObArenaAllocator allocator;
   SCN dest_base_scn;
+  const int64_t start_ts = ObTimeUtil::current_time();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1012,6 +1017,8 @@ int ObTransferHandler::do_tx_start_transfer_out_(
       } else if (OB_FAIL(conn->register_multi_data_source(task_info.tenant_id_, task_info.src_ls_id_,
           transaction::ObTxDataSourceType::START_TRANSFER_OUT, buf, buf_len, flag))) {
         LOG_WARN("failed to register multi data source", K(ret), K(task_info));
+      } else {
+        LOG_INFO("[TRANSFER] success register start transfer out", "cost", ObTimeUtil::current_time() - start_ts);
       }
 #ifdef ERRSIM
       ObTransferEventRecorder::record_transfer_task_event(
@@ -1045,6 +1052,7 @@ int ObTransferHandler::get_start_transfer_out_scn_(
   start_scn.set_min();
   const int64_t OB_CHECK_START_SCN_READY_INTERVAL = 1 * 1000; //1ms
   const int64_t OB_GET_SRC_LS_LEADER_INTERVAL = 2 * 1000 ; //2ms
+  const int64_t start_ts = ObTimeUtil::current_time();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1090,6 +1098,11 @@ int ObTransferHandler::get_start_transfer_out_scn_(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      LOG_INFO("succeed get start transfer scn",
+          K(start_scn), "cost", ObTimeUtil::current_time() - start_ts);
+    }
+
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
       ret = EN_GET_TRANSFER_START_SCN_FAILED ? : OB_SUCCESS;
@@ -1121,6 +1134,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
   hash::ObHashSet<ObAddr> replica_addr_set;
   common::ObMemberList member_list;
   ObArray<ObAddr> member_addr_list;
+  const int64_t start_ts = ObTimeUtil::current_time();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1172,7 +1186,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
       if (OB_SUCC(ret)) {
         if (replica_count == member_addr_list.count()) {
           FLOG_INFO("[TRANSFER] src ls all replicas replay reach start_scn", "src_ls", task_info.src_ls_id_,
-              K(start_scn), K(member_addr_list));
+              K(start_scn), K(member_addr_list), "cost", ObTimeUtil::current_time() - start_ts);
           break;
         }
       }
@@ -1396,6 +1410,8 @@ int ObTransferHandler::update_all_tablet_to_ls_(
   SERVER_EVENT_ADD("TRANSFER", "BEFORE_TRANSFER_UPDATE_TABLET_TO_LS");
 #endif
   DEBUG_SYNC(BEFORE_TRANSFER_UPDATE_TABLET_TO_LS);
+  const int64_t start_ts = ObTimeUtil::current_time();
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
@@ -1423,6 +1439,10 @@ int ObTransferHandler::update_all_tablet_to_ls_(
 
     DEBUG_SYNC(AFTER_UPDATE_TABLET_TO_LS);
 
+    if (OB_SUCC(ret)) {
+      LOG_INFO("[TRANSFER] success update all tablet to ls", "cost", ObTimeUtil::current_time() - start_ts);
+    }
+
   }
   return ret;
 }
@@ -1432,6 +1452,7 @@ int ObTransferHandler::lock_tablet_on_dest_ls_for_table_lock_(
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtil::current_time();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", KR(ret));
@@ -1445,7 +1466,10 @@ int ObTransferHandler::lock_tablet_on_dest_ls_for_table_lock_(
       task_info.table_lock_owner_id_,
       task_info.table_lock_tablet_list_))) {
     LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
+  } else {
+    LOG_INFO("[TRANSFER]success lock tablet on dest ls for table lock", "cost", ObTimeUtil::current_time() - start_ts);
   }
+
   return ret;
 }
 
@@ -1726,6 +1750,7 @@ int ObTransferHandler::block_and_kill_tx_(
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = task_info.tenant_id_;
   const share::ObLSID &src_ls_id = task_info.src_ls_id_;
+  const int64_t start_ts = ObTimeUtil::current_time();
   if (OB_FAIL(block_tx_(tenant_id, src_ls_id))) {
     LOG_WARN("failed to block tx", K(ret), K(task_info));
   } else if (!enable_kill_trx) {
@@ -1736,6 +1761,8 @@ int ObTransferHandler::block_and_kill_tx_(
     LOG_WARN("failed to kill tx", K(ret));
   } else if (OB_FAIL(check_for_kill_(tenant_id, src_ls_id, kill_trx_threshold, true/*is_after_kill*/, timeout_ctx))) {
     LOG_WARN("failed to check after kill", K(ret));
+  } else {
+    LOG_INFO("[TRANSFER] success to block and kill tx", "cost", ObTimeUtil::current_time() - start_ts);
   }
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_TRANSFER_BLOCK_AND_KILL_TX");
