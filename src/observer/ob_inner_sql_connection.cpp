@@ -168,7 +168,10 @@ ObInnerSQLConnection::~ObInnerSQLConnection()
     if (OB_SUCC(guard.switch_to(inner_session_.get_tx_desc()->get_tenant_id(), false))) {
       MTL(transaction::ObTransService*)->release_tx(*inner_session_.get_tx_desc());
     }
-    inner_session_.get_tx_desc() = NULL;
+    {
+      ObSQLSessionInfo::LockGuard guard(inner_session_.get_thread_data_lock());
+      inner_session_.get_tx_desc() = NULL;
+    }
   }
 }
 

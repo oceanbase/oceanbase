@@ -286,6 +286,7 @@ void ObBasicSessionInfo::clean_status()
   sql_scope_flags_.reset();
   trans_spec_status_ = TRANS_SPEC_NOT_SET;
   if (OB_NOT_NULL(tx_desc_)) {
+    LockGuard lock_guard(thread_data_mutex_);
     int ret = OB_SUCCESS;
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
     if (OB_SUCC(guard.switch_to(tx_desc_->get_tenant_id(), false))) {
@@ -3729,7 +3730,7 @@ int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
   bool ac = false;
   get_autocommit(ac),
   J_OBJ_START();
-  J_KV(KP(this), "id", sessid_,
+  J_KV(KP(this), "id", sessid_, "deser", is_deserialized_,
        N_TENANT, get_tenant_name(), "tenant_id", tenant_id_,
        N_EFFECTIVE_TENANT, get_effective_tenant_name(), "effective_tenant_id", effective_tenant_id_,
        N_DATABASE, get_database_name(),

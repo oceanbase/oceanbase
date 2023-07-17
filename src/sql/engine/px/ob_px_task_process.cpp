@@ -544,6 +544,8 @@ int ObPxTaskProcess::record_tx_desc()
   CK (OB_NOT_NULL(cur_exec_ctx = arg_.exec_ctx_));
   CK (OB_NOT_NULL(cur_session = cur_exec_ctx->get_my_session()));
   if (OB_SUCC(ret) && !arg_.sqc_task_ptr_->is_use_local_thread()) {
+    // move session's tx_desc to task, accumulate when sqc report
+    ObSQLSessionInfo::LockGuard guard(cur_session->get_thread_data_lock());
     transaction::ObTxDesc *&cur_tx_desc = cur_session->get_tx_desc();
     if (OB_NOT_NULL(cur_tx_desc)) {
       transaction::ObTxDesc *&task_tx_desc = arg_.sqc_task_ptr_->get_tx_desc();

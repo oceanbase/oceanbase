@@ -1344,6 +1344,8 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
   } else if (false == sess_info->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     MVCC_LOG(WARN, "session info is not valid", K(ret));
+  } else if (sess_info->get_is_deserialized()) {
+    // skip deserialized session, only visit the original
   } else if (MTL_ID() == sess_info->get_effective_tenant_id()) {
     sql::ObSQLSessionInfo::LockGuard data_lock_guard(sess_info->get_thread_data_lock());
     share::SCN snapshot_version(share::SCN::max_scn());

@@ -189,7 +189,10 @@ public:
   sql::ObSQLSessionInfo& get_sess_info() { return sess_info_; }
   const sql::ObSQLSessionInfo& get_sess_info() const { return sess_info_; }
   int init_sess_info();
-  void reset_tx_desc() { sess_info_.get_tx_desc() = nullptr; } // 防止异步提交场景在 session 析构的时候 rollback 事务
+  void reset_tx_desc() { // 防止异步提交场景在 session 析构的时候 rollback 事务
+    sql::ObSQLSessionInfo::LockGuard guard(sess_info_.get_thread_data_lock());
+    sess_info_.get_tx_desc() = nullptr;
+  }
   void give_back_to_free_list();
 private:
   common::ObArenaAllocator allocator_;
