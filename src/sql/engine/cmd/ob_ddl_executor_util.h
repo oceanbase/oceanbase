@@ -66,9 +66,9 @@ public:
       int64_t &affected_rows);
   static int wait_build_index_finish(const uint64_t tenant_id, const int64_t task_id, bool &is_finish);
   static int handle_session_exception(ObSQLSessionInfo &session);
+  static int cancel_ddl_task(const int64_t tenant_id, obrpc::ObCommonRpcProxy *common_rpc_proxy);
 private:
   static inline bool is_server_stopped() { return observer::ObServer::get_instance().is_stopped(); }
-  static int cancel_ddl_task(const int64_t tenant_id, obrpc::ObCommonRpcProxy *common_rpc_proxy);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLExecutorUtil);
 };

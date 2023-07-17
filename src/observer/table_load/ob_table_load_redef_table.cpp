@@ -80,7 +80,7 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
     copy_table_dependents_arg.copy_constraints_ = true;
     copy_table_dependents_arg.copy_triggers_ = false;
     copy_table_dependents_arg.ignore_errors_ = false;
-    if (OB_FAIL(ObDDLServerClient::copy_table_dependents(copy_table_dependents_arg))) {
+    if (OB_FAIL(ObDDLServerClient::copy_table_dependents(copy_table_dependents_arg, session_info))) {
       LOG_WARN("failed to copy table dependents", KR(ret), K(copy_table_dependents_arg));
     } else {
       LOG_INFO("succeed to copy table dependents", K(copy_table_dependents_arg));
