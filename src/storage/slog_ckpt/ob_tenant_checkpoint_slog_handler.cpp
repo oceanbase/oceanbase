@@ -647,7 +647,13 @@ int ObTenantCheckpointSlogHandler::check_is_need_record_transfer_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls srv should not be NULL", K(ret), KP(ls_srv));
   } else if (OB_FAIL(ls_srv->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("failed to get ls", KR(ret), K(src_ls_id));
+    if (OB_LS_NOT_EXIST == ret) {
+      is_need = false;
+      LOG_WARN("source ls is not exist", KR(ret), K(src_ls_id));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ls", KR(ret), K(src_ls_id));
+    }
   } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is NULL", KR(ret), K(src_ls_id));
