@@ -8607,11 +8607,11 @@ static const _error _error_OB_WRONG_USER_NAME_LENGTH = {
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = ER_WRONG_STRING_LENGTH,
       .sqlstate              = "HY000",
-      .str_error             = "String is too long for user_name (should be no longer than 16)",
-      .str_user_error        = "String '%.*s' is too long for user name (should be no longer than 16)",
+      .str_error             = "String is too long for user_name (should be no longer than 64)",
+      .str_user_error        = "String '%.*s' is too long for user name (should be no longer than 64)",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5181, String is too long for user_name (should be no longer than 16)",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5181, String '%.*s' is too long for user name (should be no longer than 16)"
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5181, String is too long for user_name (should be no longer than 64)",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5181, String '%.*s' is too long for user name (should be no longer than 64)"
 };
 static const _error _error_OB_ERR_PRIV_USAGE = {
       .error_name            = "OB_ERR_PRIV_USAGE",
