@@ -501,8 +501,8 @@ int ObAlterTableResolver::check_alter_column_schemas_valid(ObAlterTableStmt &stm
     const AlterTableSchema &alter_table_schema = stmt.get_alter_table_arg().alter_table_schema_;
     ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
     ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
-    ObSEArray<const ObColumnSchemaV2 *, 2> dependent_columns;
-    ObSEArray<const ObColumnSchemaV2 *, 2> drop_columns;
+    ObSEArray<ObString, 2> dependent_columns;
+    ObSEArray<ObString, 2> drop_columns;
     const ObColumnSchemaV2 *col_schema = NULL;
     AlterColumnSchema *alter_column_schema = NULL;
     ObString alter_column_name;
@@ -512,7 +512,7 @@ int ObAlterTableResolver::check_alter_column_schemas_valid(ObAlterTableStmt &stm
         LOG_WARN("alter_column_schema is NULL", K(ret), K(alter_table_schema));
       } else if (OB_DDL_DROP_COLUMN == alter_column_schema->alter_type_) {
         alter_column_name = alter_column_schema->get_origin_column_name();
-        if (OB_FAIL(drop_columns.push_back(col_schema))) {
+        if (OB_FAIL(drop_columns.push_back(alter_column_name))) {
           LOG_WARN("fail to push back column id", K(ret));
         }
       } else if (OB_DDL_ADD_COLUMN == alter_column_schema->alter_type_ &&
@@ -529,23 +529,16 @@ int ObAlterTableResolver::check_alter_column_schemas_valid(ObAlterTableStmt &stm
                                                                           root_expr_type,
                                                                           columns_names))) {
           LOG_WARN("failed to resolve generated column info", K(ret), K(alter_column_name));
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < columns_names.count(); ++i) {
-            col_schema = table_schema_->get_column_schema(columns_names.at(i));
-            if (NULL != col_schema) {
-              if (OB_FAIL(dependent_columns.push_back(col_schema))) {
-                LOG_WARN("fail to push back column id", K(ret));
-              }
-            }
-          }
+        } else if (OB_FAIL(append(dependent_columns, columns_names))) {
+          LOG_WARN("failed to append column names", K(ret), K(columns_names));
         }
       }
     }
     if (OB_SUCC(ret) && !drop_columns.empty() && !dependent_columns.empty()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < drop_columns.count(); ++i) {
         for (int64_t j = 0; OB_SUCC(ret) && j < dependent_columns.count(); ++j) {
-          if (drop_columns.at(i) == dependent_columns.at(j)) {
-            const ObString &column_name = drop_columns.at(i)->get_column_name();
+          if (0 == drop_columns.at(i).compare(dependent_columns.at(j))) {
+            const ObString &column_name = drop_columns.at(i);
             ObString scope_name = "generated column function";
             ret = OB_ERR_BAD_FIELD_ERROR;
             LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
