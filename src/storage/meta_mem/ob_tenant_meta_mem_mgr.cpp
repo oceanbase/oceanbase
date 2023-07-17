@@ -365,14 +365,13 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
     item->table_type_ = table_type;
     if (OB_FAIL(free_tables_queue_.push((ObLink *)item))) {
       LOG_ERROR("fail to push back into free_tables_queue_", K(ret), KPC(item));
-    } else {
-      LOG_INFO("succeed to push table into gc queue", KP(table), K(table_type));
     }
   }
 
   if (OB_FAIL(ret) && nullptr != item) {
     ob_free(item);
   }
+  LOG_DEBUG("push table into gc queue", K(ret), KP(table), K(table_type), K(common::lbt()));
   return ret;
 }
 
@@ -608,7 +607,7 @@ int ObTenantMetaMemMgr::push_memtable_into_gc_map_(memtable::ObMemtable *memtabl
 int ObTenantMetaMemMgr::push_tablet_into_gc_queue(ObTablet *tablet)
 {
   int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(nullptr == tablet)) {
+  if (OB_UNLIKELY(nullptr == tablet)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to push invalid tablet into gc queue", K(ret), KP(tablet));
   } else {
@@ -619,7 +618,7 @@ int ObTenantMetaMemMgr::push_tablet_into_gc_queue(ObTablet *tablet)
     } while (tablet->get_next_tablet() != ATOMIC_VCAS(&gc_head_, tablet->get_next_tablet(), tablet));
     ATOMIC_INC(&wait_gc_tablets_cnt_);
     // can't do anything to tablet as long as tablet has been pushed into gc queue.
-    LOG_INFO("push tablet into gc queue", K(ret), KP(tablet));
+    LOG_DEBUG("push tablet into gc queue", K(ret), KP(tablet));
   }
   return ret;
 }
@@ -667,6 +666,7 @@ int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
   if (OB_SUCC(ret) && OB_FAIL(push_tablet_into_gc_queue(tablet))) {
     LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
   }
+  LOG_DEBUG("gc tablet", K(ret), KP(tablet), K(common::lbt()));
   return ret;
 }
 
