@@ -4432,7 +4432,7 @@ int ObTablet::check_and_set_initial_state()
     if (OB_FAIL(set_initial_state(false/*initial_state*/))) {
       LOG_WARN("failed to set initial state", K(ret));
     } else {
-      FLOG_INFO("set initial state to false", K(ret), K(ls_id), K(tablet_id));
+      LOG_DEBUG("set initial state to false", K(ret), K(ls_id), K(tablet_id));
     }
   }
 
@@ -5638,9 +5638,6 @@ int ObTablet::check_new_mds_with_cache(
         if (OB_TABLET_NOT_EXIST != ret) {
           LOG_WARN("failed to check status for new mds", KR(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(timeout));
         }
-      } else {
-        LOG_INFO("refresh tablet status cache", K(ret), K(ls_id), K(tablet_id), K(tablet_status_cache_),
-            K(snapshot_version), KP(this));
       }
     }
   }

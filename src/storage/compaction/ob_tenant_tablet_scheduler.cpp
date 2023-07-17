@@ -1312,7 +1312,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         int tmp_ret = update_report_scn_as_ls_leader(*ls);
 
 #ifndef ERRSIM
-        LOG_INFO("try to update report scn as ls leader", K(tmp_ret), "ls_id:", ls->get_ls_id()); // low printing frequency
+        LOG_INFO("try to update report scn as ls leader", K(tmp_ret), "ls_id", ls->get_ls_id()); // low printing frequency
 #endif
       }
     } // end while

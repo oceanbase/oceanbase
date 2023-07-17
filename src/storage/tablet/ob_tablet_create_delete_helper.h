@@ -72,16 +72,41 @@ public:
       const int64_t snapshot_version,
       const int64_t timeout_us,
       ObTabletStatusCache &tablet_status_cache);
-  static int check_read_snapshot_by_transfer_scn(
-      const share::SCN &transfer_scn,
-      const bool is_committed,
-      const  share::SCN &snapshot);
   static int check_read_snapshot_by_commit_version(
       ObTablet &tablet,
       const int64_t create_commit_version,
       const int64_t delete_commit_version,
       const int64_t snapshot_version,
       const ObTabletStatus &tablet_status);
+  static int check_read_snapshot_for_normal(
+      ObTablet &tablet,
+      const int64_t snapshot_version,
+      const int64_t timeout_us,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const bool is_committed);
+  static int check_read_snapshot_for_deleted(
+      ObTablet &tablet,
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const bool is_committed);
+  static int check_read_snapshot_for_transfer_in(
+      ObTablet &tablet,
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const bool is_committed);
+  static int check_read_snapshot_for_transfer_out(
+      ObTablet &tablet,
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const bool is_committed);
+  static int check_read_snapshot_for_transfer_out_deleted(
+      ObTablet &tablet,
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data,
+      const bool is_committed);
+  static int check_read_snapshot_by_commit_version(
+      const int64_t snapshot_version,
+      const ObTabletCreateDeleteMdsUserData &user_data);
   static int create_tmp_tablet(
       const ObTabletMapKey &key,
       common::ObArenaAllocator &allocator,
