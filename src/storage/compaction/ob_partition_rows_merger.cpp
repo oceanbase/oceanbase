@@ -598,8 +598,8 @@ int ObPartitionMergeHelper::init_merge_iters(const ObIPartitionMergeFuser &fuser
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected null iter", K(ret), K(i), K(merge_param));
       } else if (OB_UNLIKELY(table->is_remote_logical_minor_sstable())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected remote minor sstable", K(ret), KP(sstable));
+        ret = OB_EAGAIN;
+        LOG_WARN("unexpected remote minor sstable, try later", K(ret), KP(sstable));
       } else if (table->is_sstable()) {
         sstable = static_cast<ObSSTable *>(table);
         if (sstable->get_data_macro_block_count() <= 0) {
