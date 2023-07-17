@@ -196,7 +196,8 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
           LOG_WARN("fail to get log stream info", KR(ret));
         } else if (OB_FAIL(dr_ls_info.build_disaster_ls_info(
                 ls_info,
-                ls_status_info))) {
+                ls_status_info,
+                true/*filter_readonly_replicas_with_flag*/))) {
           LOG_WARN("fail to generate dr log stream info", KR(ret));
         } else if (OB_FAIL(statistic_migrate_unit_by_ls(
                 dr_ls_info,

@@ -70,6 +70,8 @@ enum LogConfigChangeType
   FORCE_SINGLE_MEMBER,
   TRY_LOCK_CONFIG_CHANGE,
   UNLOCK_CONFIG_CHANGE,
+  REPLACE_LEARNERS,
+  SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM,
 };
 
 inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
@@ -92,6 +94,10 @@ inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
     CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
     CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
     CHECK_LOG_CONFIG_TYPE_STR(FORCE_SINGLE_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(TRY_LOCK_CONFIG_CHANGE);
+    CHECK_LOG_CONFIG_TYPE_STR(UNLOCK_CONFIG_CHANGE);
+    CHECK_LOG_CONFIG_TYPE_STR(REPLACE_LEARNERS);
+    CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM);
     default:
       return "Invalid";
   }
@@ -109,13 +115,14 @@ inline bool need_check_config_version(const LogConfigChangeType type)
   const bool is_cluster_already_4200 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
   return (is_cluster_already_4200) &&
          (ADD_MEMBER == type || ADD_MEMBER_AND_NUM == type ||
-          SWITCH_LEARNER_TO_ACCEPTOR == type);
+          SWITCH_LEARNER_TO_ACCEPTOR == type || SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM == type);
 }
 
 inline bool is_add_log_sync_member_list(const LogConfigChangeType type)
 {
   return ADD_MEMBER == type || ADD_MEMBER_AND_NUM == type ||
-         SWITCH_LEARNER_TO_ACCEPTOR == type || UPGRADE_LEARNER_TO_ACCEPTOR == type;
+         SWITCH_LEARNER_TO_ACCEPTOR == type || UPGRADE_LEARNER_TO_ACCEPTOR == type ||
+         SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM == type;
 }
 
 inline bool is_remove_log_sync_member_list(const LogConfigChangeType type)
@@ -141,12 +148,15 @@ inline bool is_arb_member_change_type(const LogConfigChangeType type)
 
 inline bool is_add_learner_list(const LogConfigChangeType type)
 {
-  return ADD_LEARNER == type || SWITCH_ACCEPTOR_TO_LEARNER == type || DEGRADE_ACCEPTOR_TO_LEARNER == type;
+  return ADD_LEARNER == type || SWITCH_ACCEPTOR_TO_LEARNER == type ||
+      DEGRADE_ACCEPTOR_TO_LEARNER == type || REPLACE_LEARNERS == type;
 }
 
 inline bool is_remove_learner_list(const LogConfigChangeType type)
 {
-  return REMOVE_LEARNER == type || SWITCH_LEARNER_TO_ACCEPTOR == type || UPGRADE_LEARNER_TO_ACCEPTOR == type;
+  return REMOVE_LEARNER == type || SWITCH_LEARNER_TO_ACCEPTOR == type ||
+         UPGRADE_LEARNER_TO_ACCEPTOR == type || SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM == type ||
+         REPLACE_LEARNERS == type;
 }
 
 inline bool is_upgrade_or_degrade(const LogConfigChangeType type)
@@ -188,6 +198,16 @@ inline bool is_unlock_config_change(const LogConfigChangeType type)
   return UNLOCK_CONFIG_CHANGE == type;
 }
 
+inline bool is_use_added_list(const LogConfigChangeType type)
+{
+  return REPLACE_LEARNERS == type;
+}
+
+inline bool is_use_removed_list(const LogConfigChangeType type)
+{
+  return REPLACE_LEARNERS == type;
+}
+
 struct LogConfigChangeArgs
 {
 public:
@@ -200,7 +220,9 @@ public:
       ref_scn_(),
       lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
       lock_type_(ConfigChangeLockType::LOCK_NOTHING),
-      type_(INVALID_LOG_CONFIG_CHANGE_TYPE) { }
+      type_(INVALID_LOG_CONFIG_CHANGE_TYPE),
+      added_list_(),
+      removed_list_() { }
 
   LogConfigChangeArgs(const common::ObMember &server,
                       const int64_t new_replica_num,
@@ -208,14 +230,15 @@ public:
                       const LogConfigChangeType type)
     : server_(server), curr_member_list_(), curr_replica_num_(0), new_replica_num_(new_replica_num),
       config_version_(config_version), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
-      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type) { }
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type),
+      added_list_(), removed_list_() { }
 
   LogConfigChangeArgs(const common::ObMember &server,
                       const int64_t new_replica_num,
                       const LogConfigChangeType type)
     : server_(server), curr_member_list_(), curr_replica_num_(0), new_replica_num_(new_replica_num),
       config_version_(), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
-      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type) { }
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type), added_list_(), removed_list_() { }
 
   LogConfigChangeArgs(const common::ObMemberList &member_list,
                       const int64_t curr_replica_num,
@@ -223,14 +246,23 @@ public:
                       const LogConfigChangeType type)
     : server_(), curr_member_list_(member_list), curr_replica_num_(curr_replica_num), new_replica_num_(new_replica_num),
       config_version_(), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
-      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type) { }
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type), added_list_(), removed_list_() { }
 
   LogConfigChangeArgs(const int64_t lock_owner,
                       const int64_t lock_type,
                       const LogConfigChangeType type)
     : server_(), curr_member_list_(), curr_replica_num_(0), new_replica_num_(),
       config_version_(), ref_scn_(), lock_owner_(lock_owner),
-      lock_type_(lock_type), type_(type) { }
+      lock_type_(lock_type), type_(type), added_list_(), removed_list_() { }
+
+  LogConfigChangeArgs(const common::ObMemberList &added_list,
+                      const common::ObMemberList &removed_list,
+                      const LogConfigChangeType type)
+    : server_(), curr_member_list_(), curr_replica_num_(0),
+      new_replica_num_(0), config_version_(), ref_scn_(),
+      lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type),
+      added_list_(added_list), removed_list_(removed_list) { }
 
   ~LogConfigChangeArgs()
   {
@@ -239,34 +271,9 @@ public:
   bool is_valid() const;
   void reset();
 
-  const char *Type2Str(const LogConfigChangeType state) const
-  {
-    #define CHECK_LOG_CONFIG_TYPE_STR(x) case(LogConfigChangeType::x): return #x
-    switch(state)
-    {
-      CHECK_LOG_CONFIG_TYPE_STR(CHANGE_REPLICA_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_ARB_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_ARB_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER_AND_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER_AND_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR);
-      CHECK_LOG_CONFIG_TYPE_STR(SWITCH_ACCEPTOR_TO_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(DEGRADE_ACCEPTOR_TO_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
-      CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
-      CHECK_LOG_CONFIG_TYPE_STR(TRY_LOCK_CONFIG_CHANGE);
-      CHECK_LOG_CONFIG_TYPE_STR(UNLOCK_CONFIG_CHANGE);
-      default:
-        return "Invalid";
-    }
-    #undef CHECK_LOG_CONFIG_TYPE_STR
-  }
   TO_STRING_KV(K_(server), K_(curr_member_list), K_(curr_replica_num), K_(new_replica_num),
-               K_(config_version), K_(ref_scn), K_(lock_owner), K_(lock_type), "type", LogConfigChangeType2Str(type_));
+      K_(config_version), K_(ref_scn), K_(lock_owner), K_(lock_type), K_(added_list),
+      K_(removed_list), "type", LogConfigChangeType2Str(type_));
   common::ObMember server_;
   common::ObMemberList curr_member_list_;
   int64_t curr_replica_num_;
@@ -276,6 +283,8 @@ public:
   int64_t lock_owner_;
   int64_t lock_type_;
   LogConfigChangeType type_;
+  common::ObMemberList added_list_;
+  common::ObMemberList removed_list_;
 };
 
 struct LogReconfigBarrier

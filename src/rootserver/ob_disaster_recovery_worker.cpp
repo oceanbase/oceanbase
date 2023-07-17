@@ -1802,6 +1802,7 @@ int ObDRWorker::check_tenant_locality_match(
       for (int64_t i = 0; OB_SUCC(ret) && i < ls_status_info_array.count() && locality_is_matched; ++i) {
         share::ObLSInfo ls_info;
         share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
+        bool filter_readonly_replicas_with_flag = true;
         DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
                             &unit_mgr,
                             &zone_mgr,
@@ -1818,8 +1819,11 @@ int ObDRWorker::check_tenant_locality_match(
         } else if (OB_FAIL(dr_ls_info.init())) {
           LOG_WARN("fail to init dr log stream info", KR(ret));
         } else if (OB_FAIL(dr_ls_info.build_disaster_ls_info(
-                ls_info, ls_status_info))) {
-          LOG_WARN("fail to generate dr log stream info", KR(ret));
+                               ls_info,
+                               ls_status_info,
+                               filter_readonly_replicas_with_flag))) {
+          LOG_WARN("fail to generate dr log stream info", KR(ret), K(ls_info),
+                   K(ls_status_info), K(filter_readonly_replicas_with_flag));
         } else if (OB_FAIL(check_ls_locality_match_(
                 dr_ls_info, unit_mgr, zone_mgr, locality_is_matched))) {
           LOG_WARN("fail to try log stream disaster recovery", KR(ret));
@@ -1896,10 +1900,8 @@ int ObDRWorker::try_disaster_recovery()
       }
       acc_dr_task += tenant_acc_dr_task;
     }
-   
     statistic_total_dr_task(acc_dr_task);
   }
-  
   return ret;
 }
 
@@ -1931,10 +1933,16 @@ int ObDRWorker::try_tenant_disaster_recovery(
       for (int64_t i = 0; OB_SUCC(ret) && i < ls_status_info_array.count(); ++i) {
         share::ObLSInfo ls_info;
         share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
-        DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
-                            unit_mgr_,
-                            zone_mgr_,
-                            schema_service_);
+        // this structure is used to generate migrtion/locality alignment/shrink unit tasks
+        DRLSInfo dr_ls_info_without_flag(gen_user_tenant_id(tenant_id),
+                                         unit_mgr_,
+                                         zone_mgr_,
+                                         schema_service_);
+        // this structure is used to generate permanent offline tasks
+        DRLSInfo dr_ls_info_with_flag(gen_user_tenant_id(tenant_id),
+                                      unit_mgr_,
+                                      zone_mgr_,
+                                      schema_service_);
         int64_t ls_acc_dr_task = 0;
         int tmp_ret = OB_SUCCESS; // ignore ret for different ls
         LOG_INFO("start try ls disaster recovery", K(ls_status_info));
@@ -1950,13 +1958,18 @@ int ObDRWorker::try_tenant_disaster_recovery(
                   share::ObLSTable::COMPOSITE_MODE,
                   ls_info))) {
             LOG_WARN("fail to get log stream info", KR(tmp_ret));
-          } else if (OB_SUCCESS != (tmp_ret = dr_ls_info.init())) {
+          } else if (OB_SUCCESS != (tmp_ret = dr_ls_info_without_flag.init())) {
             LOG_WARN("fail to init dr log stream info", KR(tmp_ret));
-          } else if (OB_SUCCESS != (tmp_ret = dr_ls_info.build_disaster_ls_info(
-                  ls_info, ls_status_info))) {
+          } else if (OB_SUCCESS != (tmp_ret = dr_ls_info_without_flag.build_disaster_ls_info(
+                  ls_info, ls_status_info, true/*filter_readonly_replica_with_flag*/))) {
             LOG_WARN("fail to generate dr log stream info", KR(tmp_ret));
+          } else if (OB_SUCCESS != (tmp_ret = dr_ls_info_with_flag.init())) {
+            LOG_WARN("fail to init dr log stream info with flag", KR(tmp_ret));
+          } else if (OB_SUCCESS != (tmp_ret = dr_ls_info_with_flag.build_disaster_ls_info(
+                  ls_info, ls_status_info, false/*filter_readonly_replica_with_flag*/))) {
+            LOG_WARN("fail to generate dr log stream info with flag", KR(tmp_ret));
           } else if (OB_SUCCESS != (tmp_ret = try_ls_disaster_recovery(
-                  only_for_display, dr_ls_info, ls_acc_dr_task))) {
+                  only_for_display, dr_ls_info_without_flag, ls_acc_dr_task, dr_ls_info_with_flag))) {
             LOG_WARN("fail to try log stream disaster recovery", KR(tmp_ret), K(only_for_display));
           }
         }
@@ -1981,7 +1994,8 @@ int ObDRWorker::try_assign_unit(
 int ObDRWorker::try_ls_disaster_recovery(
     const bool only_for_display,
     DRLSInfo &dr_ls_info,
-    int64_t &acc_dr_task_cnt)
+    int64_t &acc_dr_task_cnt,
+    DRLSInfo &dr_ls_info_with_flag)
 {
   int ret = OB_SUCCESS;
   ObRootBalanceHelp::BalanceController controller;
@@ -2004,9 +2018,9 @@ int ObDRWorker::try_ls_disaster_recovery(
   if (OB_SUCC(ret)
       && acc_dr_task_cnt <= 0) {
     if (OB_FAIL(try_remove_permanent_offline_replicas(
-            only_for_display, dr_ls_info, acc_dr_task_cnt))) {
+            only_for_display, dr_ls_info_with_flag, acc_dr_task_cnt))) {
       LOG_WARN("fail to try remove permanent offline replicas",
-               KR(ret), K(dr_ls_info));
+               KR(ret), K(dr_ls_info_with_flag));
     }
   }
   // ATTENTION!!!
@@ -2016,12 +2030,15 @@ int ObDRWorker::try_ls_disaster_recovery(
   // regards these replicas as abnormal replicas and can not generate any task
   // for this log stream(locality alignment, replica migration etc.).
   // So we make sure log stream does not have replicas only in member_list AFTER try_remove_permanent_offline
-  // Please DO NOT change the order of try_remove_permanent_offline, check_ls_only_in_member_list_ and other operations.
+  //
+  // Also we DO NOT want to see replicas created during migration or rebuilding.
+  // So we have to make sure those replicas with flag in learner_list not exists.
+  // Please DO NOT change the order of try_remove_permanent_offline, filter_learner_with_flag, check_ls_only_in_member_list_or_with_flag_ and other operations.
   if (OB_SUCC(ret)
       && acc_dr_task_cnt <= 0) {
     bool is_only_in_member_list = true;
-    if (OB_FAIL(check_ls_only_in_member_list_(dr_ls_info))) {
-      LOG_WARN("only_in_memberlist check is failed", KR(ret), K(dr_ls_info));
+    if (OB_FAIL(check_ls_only_in_member_list_or_with_flag_(dr_ls_info))) {
+      LOG_WARN("only_in_memberlist and flag replica check is failed", KR(ret), K(dr_ls_info));
     }
   }
   // step2: replicate to unit
@@ -2438,14 +2455,17 @@ int ObDRWorker::do_single_replica_permanent_offline_(
     const int64_t memstore_percent = 100;
     ObDRTaskKey task_key;
     bool can_generate = false;
-    ObReplicaMember remove_member(member_to_remove.get_server(),
-                                  member_to_remove.get_timestamp(),
-                                  replica_type,
-                                  memstore_percent);
+    ObReplicaMember remove_member(member_to_remove);
+    //ObReplicaMember remove_member(member_to_remove.get_server(),
+    //                              member_to_remove.get_timestamp(),
+    //                              replica_type,
+    //                              memstore_percent);
     ObDRTaskType task_type = ObReplicaTypeCheck::is_paxos_replica_V2(replica_type)
                                ? ObDRTaskType::LS_REMOVE_PAXOS_REPLICA
                                : ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
-    if (OB_FAIL(construct_extra_infos_to_build_remove_replica_task(
+    if (OB_FAIL(remove_member.set_replica_type(replica_type))) {
+      LOG_WARN("fail to set replica type", KR(ret), K(replica_type), K(remove_member));
+    } else if (OB_FAIL(construct_extra_infos_to_build_remove_replica_task(
                     dr_ls_info,
                     task_id,
                     new_paxos_replica_number,
@@ -4878,7 +4898,7 @@ int ObDRWorker::choose_disaster_recovery_data_source(
   return ret;
 }
 
-int ObDRWorker::check_ls_only_in_member_list_(
+int ObDRWorker::check_ls_only_in_member_list_or_with_flag_(
     const DRLSInfo &dr_ls_info)
 {
   int ret = OB_SUCCESS;
@@ -4909,12 +4929,24 @@ int ObDRWorker::check_ls_only_in_member_list_(
     }
     // check learner list
     for (int64_t index = 0; OB_SUCC(ret) && index < leader_replica->get_learner_list().get_member_number(); ++index) {
-      common::ObAddr server_to_check;
+      common::ObMember learner_to_check;
       const share::ObLSReplica *replica = nullptr;
-      if (OB_FAIL(leader_replica->get_learner_list().get_server_by_index(index,server_to_check))) {
+      if (OB_FAIL(leader_replica->get_learner_list().get_member_by_index(index, learner_to_check))) {
         LOG_WARN("fail to get learner by index", KR(ret), K(index));
-      } else if (OB_FAIL(inner_ls_info.find(server_to_check, replica))) {
-        LOG_WARN("fail to find read only replica", KR(ret), K(inner_ls_info), K(server_to_check));
+      } else if (learner_to_check.is_migrating()) {
+        if (OB_FAIL(inner_ls_info.find(learner_to_check.get_server(), replica))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            // good, learner with flag should not appear in inner_ls_info
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to find replica", KR(ret), K(inner_ls_info), K(learner_to_check));
+          }
+        } else {
+          ret = OB_STATE_NOT_MATCH;
+          LOG_WARN("read only replica with flag should not appear in inner_ls_info", KR(ret), K(learner_to_check), K(inner_ls_info));
+        }
+      } else if (OB_FAIL(inner_ls_info.find(learner_to_check.get_server(), replica))) {
+        LOG_WARN("fail to find read only replica", KR(ret), K(inner_ls_info), K(learner_to_check));
       }
     }
   }

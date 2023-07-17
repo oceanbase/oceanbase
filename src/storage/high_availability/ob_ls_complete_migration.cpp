@@ -1240,54 +1240,146 @@ int ObStartCompleteMigrationTask::change_member_list_()
     LOG_WARN("failed to get ls leader", K(ret), KPC(ctx_));
   } else if (OB_FAIL(fake_config_version.generate(0, 0))) {
     LOG_WARN("failed to generate config version", K(ret));
-  } else {
+  } else if (cluster_version < CLUSTER_VERSION_4_2_0_0) {
     const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_) {
-      if (cluster_version < CLUSTER_VERSION_4_2_0_0) {
+      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
         if (OB_FAIL(ls->get_log_handler()->add_member(ctx_->arg_.dst_, ctx_->arg_.paxos_replica_number_,
             fake_config_version, change_member_list_timeout_us))) {
           LOG_WARN("failed to add member", K(ret), KPC(ctx_));
         }
-      } else if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
-        if (OB_FAIL(ls->add_member(ctx_->arg_.dst_,
-                                   ctx_->arg_.paxos_replica_number_,
-                                   change_member_list_timeout_us))) {
-          LOG_WARN("failed to add member", K(ret));
-        }
-      } else {
-        // R-replica
-        if (OB_FAIL(ls->add_learner(ctx_->arg_.dst_, change_member_list_timeout_us))) {
-          LOG_WARN("failed to add learner", K(ret), KPC(ctx_));
-        }
       }
     } else if (ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_) {
-      if (cluster_version < CLUSTER_VERSION_4_2_0_0) {
+      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
         if (OB_FAIL(ls->get_log_handler()->replace_member(ctx_->arg_.dst_, ctx_->arg_.src_,
             fake_config_version, change_member_list_timeout_us))) {
           LOG_WARN("failed to repalce member", K(ret), KPC(ctx_));
-        }
-      } else if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
-        if (OB_FAIL(ls->replace_member(ctx_->arg_.dst_,
-                                       ctx_->arg_.src_,
-                                       change_member_list_timeout_us))) {
-          LOG_WARN("failed to replace member", K(ret));
-        }
-      } else {
-        // R-replica
-        if (OB_FAIL(ls->replace_learner(ctx_->arg_.dst_, ctx_->arg_.src_,
-            change_member_list_timeout_us))) {
-          LOG_WARN("failed to replace_learner", K(ret), KPC(ctx_));
         }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("change member list get invalid type", K(ret), KPC(ctx_));
     }
-
-    if (OB_SUCC(ret)) {
-      const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-      LOG_INFO("succeed change member list", "cost", cost_ts, "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_);
+  } else {
+    const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
+    if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_) {
+      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
+        if (OB_FAIL(switch_learner_to_acceptor_(ls))) {
+          LOG_WARN("failed to switch learner to acceptor", K(ret), K(leader_addr), K(ls_transfer_scn));
+        }
+      } else {
+        // R-replica
+        if (OB_FAIL(replace_learners_for_add_(ls))) {
+          LOG_WARN("failed to replace learners for add", K(ret), K(leader_addr), K(ls_transfer_scn));
+        }
+      }
+    } else if (ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_) {
+      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
+        if (OB_FAIL(replace_member_with_learner_(ls))) {
+          LOG_WARN("failed to replace member with learner", K(ret), K(leader_addr), K(ls_transfer_scn));
+        }
+      } else {
+        // R-replica
+        if (OB_FAIL(replace_learners_for_migration_(ls))) {
+          LOG_WARN("failed to replace learners for migration", K(ret), K(leader_addr), K(ls_transfer_scn));
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("change member list get invalid type", K(ret), KPC(ctx_));
     }
+  }
+  if (OB_SUCC(ret)) {
+    const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+    LOG_INFO("succeed change member list", "cost", cost_ts, "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_);
+  }
+  return ret;
+}
+
+int ObStartCompleteMigrationTask::get_ls_transfer_scn_(ObLS *ls, share::SCN &transfer_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ls)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret));
+  } else if (OB_FAIL(ls->get_transfer_scn(transfer_scn))) {
+    LOG_WARN("failed to get transfer scn", K(ret), KP(ls));
+  }
+  return ret;
+}
+
+int ObStartCompleteMigrationTask::switch_learner_to_acceptor_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  ObMember dst = ctx_->arg_.dst_;
+  dst.set_migrating();
+  if (OB_ISNULL(ls)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->switch_learner_to_acceptor(dst, ctx_->arg_.paxos_replica_number_, timeout))) {
+    LOG_WARN("failed to switch_learner_to_acceptor", K(ret), KPC(ctx_));
+  }
+  return ret;
+}
+
+int ObStartCompleteMigrationTask::replace_member_with_learner_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  ObMember dst = ctx_->arg_.dst_;
+  dst.set_migrating();
+  if (OB_ISNULL(ls)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->replace_member_with_learner(dst, ctx_->arg_.src_, timeout))) {
+    LOG_WARN("failed to replace_member_with_learner", K(ret), KPC(ctx_));
+  }
+  return ret;
+}
+
+int ObStartCompleteMigrationTask::replace_learners_for_add_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  ObMemberList added_learners, removed_learners;
+  ObMember new_dst = ctx_->arg_.dst_;
+  new_dst.reset_migrating();
+  ObMember old_dst = ctx_->arg_.dst_;
+  old_dst.set_migrating();
+  const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  if (OB_FAIL(added_learners.add_member(new_dst))) {
+    LOG_WARN("failed to add member", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(removed_learners.add_member(old_dst))) {
+    LOG_WARN("failed to add member", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ls->replace_learners(added_learners, removed_learners, change_member_list_timeout_us))) {
+    LOG_WARN("failed to replace learners", K(ret), KPC(ctx_));
+  } else {
+    LOG_INFO("replace learners for add", K(added_learners), K(removed_learners));
+  }
+  return ret;
+}
+
+int ObStartCompleteMigrationTask::replace_learners_for_migration_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  ObMemberList added_learners, removed_learners;
+  const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  ObMember new_dst = ctx_->arg_.dst_;
+  new_dst.reset_migrating();
+  ObMember old_dst = ctx_->arg_.dst_;
+  old_dst.set_migrating();
+  ObMember src = ctx_->arg_.src_;
+  src.reset_migrating();
+  if (OB_FAIL(added_learners.add_member(new_dst))) {
+    LOG_WARN("failed to add member", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(removed_learners.add_member(old_dst))) {
+    LOG_WARN("failed to add member", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(removed_learners.add_member(src))) {
+    LOG_WARN("failed to add member", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ls->replace_learners(added_learners, removed_learners, change_member_list_timeout_us))) {
+    LOG_WARN("failed to replace learners", K(ret), KPC(ctx_));
+  } else {
+    LOG_INFO("replace members for migration", K(added_learners), K(removed_learners));
   }
   return ret;
 }

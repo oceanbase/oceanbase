@@ -36,19 +36,24 @@ public:
   const common::ObAddr &get_server() const;
   int64_t get_timestamp() const;
   int64_t get_flag() const;
+  void set_flag(const int64_t &flag) { flag_ = flag; }
   virtual void reset();
   virtual bool is_valid() const;
-  virtual bool need_encrypt() const { return false; /* modify by yaoying */}
 
   friend bool operator==(const ObMember &lhs, const ObMember &rhs);
   friend bool operator<(const ObMember &lhs, const ObMember &rhs);
   ObMember &operator=(const ObMember &rhs);
   int assign(const ObMember &other);
 
+  bool is_migrating() const;
+  void set_migrating();
+  void reset_migrating();
+
   TO_STRING_KV(K_(server), K_(timestamp), K_(flag));
   TO_YSON_KV(OB_Y_(server), OB_ID(t), timestamp_, OB_Y_(flag));
   OB_UNIS_VERSION(1);
 protected:
+  static const int64_t MIGRATING_FLAG_BIT = 1;
   common::ObAddr server_;
   int64_t timestamp_;
   int64_t flag_;

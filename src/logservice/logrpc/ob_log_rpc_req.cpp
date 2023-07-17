@@ -31,7 +31,9 @@ LogConfigChangeCmd::LogConfigChangeCmd()
     cmd_type_(INVALID_CONFIG_CHANGE_CMD),
     timeout_us_(0),
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
-    config_version_() { }
+    config_version_(),
+    added_list_(),
+    removed_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -51,7 +53,9 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     cmd_type_(cmd_type),
     timeout_us_(timeout_us),
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
-    config_version_() { }
+    config_version_(),
+    added_list_(),
+    removed_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -71,7 +75,9 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     cmd_type_(cmd_type),
     timeout_us_(timeout_us),
     lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
-    config_version_() { }
+    config_version_(),
+    added_list_(),
+    removed_list_() { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
                                        const int64_t palf_id,
@@ -79,6 +85,27 @@ LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
                                        const LogConfigChangeCmdType cmd_type,
                                        const int64_t timeout_us)
     : src_(src),
+      palf_id_(palf_id),
+      added_member_(),
+      removed_member_(),
+      curr_member_list_(),
+      curr_replica_num_(0),
+      new_replica_num_(0),
+      cmd_type_(cmd_type),
+      timeout_us_(timeout_us),
+      lock_owner_(lock_owner),
+      config_version_(),
+      added_list_(),
+      removed_list_() { }
+
+LogConfigChangeCmd::LogConfigChangeCmd(
+    const common::ObAddr &src,
+    const int64_t palf_id,
+    const common::ObMemberList &added_list,
+    const common::ObMemberList &removed_list,
+    const LogConfigChangeCmdType cmd_type,
+    const int64_t timeout_us)
+  : src_(src),
     palf_id_(palf_id),
     added_member_(),
     removed_member_(),
@@ -87,7 +114,10 @@ LogConfigChangeCmd::LogConfigChangeCmd(const common::ObAddr &src,
     new_replica_num_(0),
     cmd_type_(cmd_type),
     timeout_us_(timeout_us),
-    lock_owner_(lock_owner){}
+    lock_owner_(palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+    config_version_(),
+    added_list_(added_list),
+    removed_list_(removed_list) { }
 
 LogConfigChangeCmd::~LogConfigChangeCmd()
 {
@@ -113,6 +143,8 @@ bool LogConfigChangeCmd::is_valid() const
       && is_valid_replica_num(curr_replica_num_) && is_valid_replica_num(new_replica_num_): true);\
   bool_ret = bool_ret && ((TRY_LOCK_CONFIG_CHANGE_CMD == cmd_type_ || UNLOCK_CONFIG_CHANGE_CMD == cmd_type_) ? \
       (palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER != lock_owner_) : true);
+  bool_ret = bool_ret && ((REPLACE_LEARNERS_CMD == cmd_type_)? (added_list_.is_valid()    \
+      && removed_list_.is_valid()): true);
   return bool_ret;
 }
 
@@ -120,14 +152,16 @@ bool LogConfigChangeCmd::is_remove_member_list() const
 {
   return REMOVE_MEMBER_CMD == cmd_type_
          || REPLACE_MEMBER_CMD == cmd_type_
-         || SWITCH_TO_LEARNER_CMD == cmd_type_;
+         || SWITCH_TO_LEARNER_CMD == cmd_type_
+         || REPLACE_MEMBER_WITH_LEARNER_CMD == cmd_type_;
 }
 
 bool LogConfigChangeCmd::is_add_member_list() const
 {
   return ADD_MEMBER_CMD == cmd_type_
         || REPLACE_MEMBER_CMD == cmd_type_
-        || SWITCH_TO_ACCEPTOR_CMD == cmd_type_;
+        || SWITCH_TO_ACCEPTOR_CMD == cmd_type_
+        || REPLACE_MEMBER_WITH_LEARNER_CMD == cmd_type_;
 }
 
 bool LogConfigChangeCmd::is_set_new_replica_num() const
@@ -151,10 +185,13 @@ void LogConfigChangeCmd::reset()
   timeout_us_ = 0;
   lock_owner_ = palf::OB_INVALID_CONFIG_CHANGE_LOCK_OWNER;
   config_version_.reset();
+  added_list_.reset();
+  removed_list_.reset();
 }
 
 OB_SERIALIZE_MEMBER(LogConfigChangeCmd, src_, palf_id_, added_member_, removed_member_,
-curr_member_list_, curr_replica_num_, new_replica_num_, cmd_type_, timeout_us_, lock_owner_, config_version_);
+curr_member_list_, curr_replica_num_, new_replica_num_, cmd_type_, timeout_us_, lock_owner_,
+config_version_, added_list_, removed_list_);
 // ============= LogConfigChangeCmd end =============
 
 // ============= LogConfigChangeCmdResp begin ===========

@@ -208,7 +208,7 @@ public:
 
   // @brief, replace old_member with new_member, can be called only in leader
   // @param[in] const common::ObMember &removed_member: member will be removed
-  // @param[in] const common::ObMember &added_member: member wil be added
+  // @param[in] const common::ObMember &added_member: member will be added
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace member successfully

@@ -127,6 +127,13 @@ public:
                              const int64_t timeout_us) = 0;
   virtual int add_learner(const common::ObMember &added_learner, const int64_t timeout_us) = 0;
   virtual int remove_learner(const common::ObMember &removed_learner, const int64_t timeout_us) = 0;
+  virtual int replace_learners(const common::ObMemberList &added_learners,
+                               const common::ObMemberList &removed_learners,
+                               const int64_t timeout_us) = 0;
+  virtual int replace_member_with_learner(const common::ObMember &added_member,
+                                          const common::ObMember &removed_member,
+                                          const palf::LogConfigVersion &config_version,
+                                          const int64_t timeout_us) = 0;
   virtual int switch_learner_to_acceptor(const common::ObMember &learner,
                                          const int64_t paxos_replica_num,
                                          const palf::LogConfigVersion &config_version,
@@ -134,9 +141,6 @@ public:
   virtual int switch_acceptor_to_learner(const common::ObMember &member,
                                          const int64_t paxos_replica_num,
                                          const int64_t timeout_us) = 0;
-  virtual int replace_learner(const common::ObMember &added_learner,
-                             const common::ObMember &removed_learner,
-                             const int64_t timeout_us) = 0;
   virtual int try_lock_config_change(const int64_t lock_owner, const int64_t timeout_us) = 0;
   virtual int unlock_config_change(const int64_t lock_owner, const int64_t timeout_us) = 0;
   virtual int get_config_change_lock_stat(int64_t &lock_owner, bool &is_locked) = 0;
@@ -146,7 +150,7 @@ public:
   virtual int disable_sync() = 0;
   virtual bool is_sync_enabled() const = 0;
   virtual int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild) = 0;
-  virtual int is_valid_member(const common::ObAddr &addr, bool &is_valid) const = 0;
+  virtual int get_member_gc_stat(const common::ObAddr &addr, bool &is_valid_member, obrpc::LogMemberGCStat &stat) const = 0;
   virtual void wait_append_sync() = 0;
   virtual int enable_replay(const palf::LSN &initial_lsn, const share::SCN &initial_scn) = 0;
   virtual int disable_replay() = 0;
@@ -424,7 +428,7 @@ public:
                     const int64_t timeout_us) override final;
 
   // @brief, replace old_member with new_member, can be called in any member
-  // @param[in] const common::ObMember &added_member: member wil be added
+  // @param[in] const common::ObMember &added_member: member will be added
   // @param[in] const common::ObMember &removed_member: member will be removed
   // @param[in] const palf::LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
@@ -448,18 +452,33 @@ public:
   int add_learner(const common::ObMember &added_learner,
                   const int64_t timeout_us) override final;
 
-  // @brief, replace removed_learner with added_learner, can be called in any member
-  // @param[in] const common::ObMember &added_learner: learner wil be added
-  // @param[in] const common::ObMember &removed_learner: learner will be removed
+  // @brief, replace removed_learners with added_learners, can be called in any member
+  // @param[in] const common::ObMemberList &added_learners: learners will be added
+  // @param[in] const common::ObMemberList &removed_learners: learners will be removed
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace learner successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
   // - OB_TIMEOUT: replace learner timeout
   // - other: bug
-  int replace_learner(const common::ObMember &added_learner,
-                      const common::ObMember &removed_learner,
-                      const int64_t timeout_us) override final;
+  int replace_learners(const common::ObMemberList &added_learners,
+                       const common::ObMemberList &removed_learners,
+                       const int64_t timeout_us) override final;
+
+  // @brief, replace removed_member with learner, can be called in any member
+  // @param[in] const common::ObMember &added_member: member will be added
+  // @param[in] const common::ObMember &removed_member: member will be removed
+  // @param[in] const palf::LogConfigVersion &config_version: config_version for leader checking
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS: replace member successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: replace member timeout
+  // - other: bug
+  int replace_member_with_learner(const common::ObMember &added_member,
+                                  const common::ObMember &removed_member,
+                                  const palf::LogConfigVersion &config_version,
+                                  const int64_t timeout_us) override final;
 
   // @brief: remove a learner(read only replica) in this cluster
   // @param[in] const common::ObMember &removed_learner: learner will be removed
@@ -539,8 +558,9 @@ public:
 
   // @breif, check request server is in self member list
   // @param[in] const common::ObAddr, request server.
-  // @param[out] bool&, whether in self member list.
-  int is_valid_member(const common::ObAddr &addr, bool &is_valid) const override final;
+  // @param[out] is_valid_member&, whether in member list or  learner list.
+  // @param[out] obrpc::LogMemberGCStat&, gc stat like learner in migrating.
+  int get_member_gc_stat(const common::ObAddr &addr, bool &is_valid_member, obrpc::LogMemberGCStat &stat) const override final;
   // @breif, wait cb append onto apply service Qsync
   // protect submit log and push cb in Qsync guard
   void wait_append_sync() override final;
@@ -580,12 +600,13 @@ public:
   int diagnose(LogHandlerDiagnoseInfo &diagnose_info) const;
   int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
 
-  TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_env_), K(is_in_stop_state_), K(is_inited_));
+  TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_env_), K(is_in_stop_state_), K(is_inited_), K(id_));
   int offline() override final;
   int online(const palf::LSN &lsn, const share::SCN &scn) override final;
   bool is_offline() const override final;
 private:
   static constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;     // 5s
+  typedef common::TCRWLock::WLockGuardWithTimeout WLockGuardWithTimeout;
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
   int submit_config_change_cmd_(const LogConfigChangeCmd &req,
@@ -598,7 +619,8 @@ private:
   ObLogApplyService *apply_service_;
   ObLogReplayService *replay_service_;
   ObRoleChangeService *rc_service_;
-  ObSpinLock deps_lock_;
+  // Note: using TCRWLock for using WLockGuardWithTimeout
+  common::TCRWLock deps_lock_;
   mutable palf::PalfLocationCacheCb *lc_cb_;
   mutable obrpc::ObLogServiceRpcProxy *rpc_proxy_;
   common::ObQSync ls_qs_;

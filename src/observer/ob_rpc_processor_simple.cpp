@@ -2206,6 +2206,7 @@ int ObQueryLSIsValidMemberP::process()
     for (int64_t index = 0; OB_SUCC(ret) && index < arg_.ls_array_.count(); index++) {
       const share::ObLSID &id = arg_.ls_array_[index];
       bool is_valid_member = true;
+      obrpc::LogMemberGCStat stat = obrpc::LogMemberGCStat::LOG_MEMBER_NORMAL_GC_STAT;
       ObLSHandle handle;
       if (OB_SUCCESS != (tmp_ret = ls_service->get_ls(id, handle, ObLSGetMod::OBSERVER_MOD))) {
         if (OB_LS_NOT_EXIST == tmp_ret || OB_NOT_RUNNING == tmp_ret) {
@@ -2216,18 +2217,20 @@ int ObQueryLSIsValidMemberP::process()
       } else if (OB_ISNULL(ls = handle.get_ls())) {
         tmp_ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(ERROR, " log stream not exist", K(id), K(tmp_ret));
-      } else if (OB_SUCCESS != (tmp_ret = ls->is_valid_member(addr, is_valid_member))) {
+      } else if (OB_SUCCESS != (tmp_ret = ls->get_member_gc_stat(addr, is_valid_member, stat))) {
         if (REACH_TIME_INTERVAL(100 * 1000)) {
-          COMMON_LOG(WARN, "is_valid_member failed", K(tmp_ret), K(id), K(addr));
+          COMMON_LOG(WARN, "get_member_gc_stat failed", K(tmp_ret), K(id), K(addr));
         }
       } else {}
 
       if (OB_FAIL(response.ls_array_.push_back(id))) {
-        COMMON_LOG(WARN, "response partition_array_ push_back failed", K(ret), K(id));
+        COMMON_LOG(WARN, "response partition_array_ push_back failed", K(addr), K(id));
       } else if (OB_FAIL(response.ret_array_.push_back(tmp_ret))) {
-        COMMON_LOG(WARN, "response ret_array push_back failed", K(ret), K(id), K(tmp_ret));
+        COMMON_LOG(WARN, "response ret_array push_back failed", K(addr), K(id), K(tmp_ret));
       } else if (OB_FAIL(response.candidates_status_.push_back(is_valid_member))) {
-        COMMON_LOG(WARN, "response candidates_status_ push_back failed", K(ret), K(id), K(is_valid_member));
+        COMMON_LOG(WARN, "response candidates_status_ push_back failed", K(addr), K(id), K(is_valid_member));
+      } else if (OB_FAIL(response.gc_stat_array_.push_back(stat))) {
+        COMMON_LOG(WARN, "response gc_stat_array_ push_back failed", K(addr), K(id), K(stat));
       } else {
         // do nothing
       }

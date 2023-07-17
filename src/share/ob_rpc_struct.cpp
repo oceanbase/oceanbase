@@ -8005,7 +8005,7 @@ int ObRemoveSysLsArg::assign(const ObRemoveSysLsArg &other)
 OB_SERIALIZE_MEMBER(ObRemoveSysLsArg, server_);
 
 OB_SERIALIZE_MEMBER(ObQueryLSIsValidMemberRequest, tenant_id_, self_addr_, ls_array_);
-OB_SERIALIZE_MEMBER(ObQueryLSIsValidMemberResponse, ret_value_, ls_array_, candidates_status_, ret_array_);
+OB_SERIALIZE_MEMBER(ObQueryLSIsValidMemberResponse, ret_value_, ls_array_, candidates_status_, ret_array_, gc_stat_array_);
 OB_SERIALIZE_MEMBER(ObSwitchSchemaResult, ret_);
 
 int ObTenantConfigArg::assign(const ObTenantConfigArg &other)

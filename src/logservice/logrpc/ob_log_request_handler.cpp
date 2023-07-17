@@ -260,6 +260,12 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
       case GET_CONFIG_CHANGE_LOCK_STAT_CMD:
         ret = palf_handle_->get_config_change_lock_stat(resp.lock_owner_, resp.is_locked_);
         break;
+      case REPLACE_LEARNERS_CMD:
+        ret = palf_handle_->replace_learners(req.added_list_, req.removed_list_, req.timeout_us_);
+        break;
+      case REPLACE_MEMBER_WITH_LEARNER_CMD:
+        ret = palf_handle_->replace_member_with_learner(req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
+        break;
       default:
         break;
     }

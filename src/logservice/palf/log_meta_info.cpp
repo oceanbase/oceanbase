@@ -392,33 +392,26 @@ bool LogConfigInfo::is_valid() const
          config_version_.is_valid();
 }
 
+// IP addresses of all members and learners should be different
 bool LogConfigInfo::is_all_list_unique() const
 {
   int ret = OB_SUCCESS;
-  bool is_all_list_unique = true;
+  bool is_all_list_unique = false;
   GlobalLearnerList server_list;
-  server_list = learnerlist_;
-  if (OB_ENTRY_EXIST == (ret = server_list.append(degraded_learnerlist_))) {
-    is_all_list_unique = false;
-    PALF_LOG(WARN, "learnerlist_ should not overlap with degraded_learnerlist_",
-        K_(learnerlist), K_(degraded_learnerlist));
-  } else if (arbitration_member_.is_valid() &&
-      OB_ENTRY_EXIST == (ret = server_list.add_learner(arbitration_member_))) {
-    is_all_list_unique = false;
-    PALF_LOG(WARN, "learnerlist should not overlap with arb_member",
-        K_(learnerlist), K_(degraded_learnerlist), K_(arbitration_member));
+  if (arbitration_member_.is_valid() &&
+      OB_FAIL(server_list.add_learner(arbitration_member_))) {
+    PALF_LOG(WARN, "add_learner failed", K(server_list), K_(arbitration_member));
+  } else if (OB_FAIL(check_list_unique(server_list, log_sync_memberlist_))) {
+    PALF_LOG(WARN, "serverlist should not overlap with log_sync_memberlist",
+        K_(arbitration_member), K_(log_sync_memberlist));
+  } else if (OB_FAIL(check_list_unique(server_list, degraded_learnerlist_))) {
+    PALF_LOG(WARN, "serverlist should not overlap with log_sync_memberlist",
+        K_(arbitration_member), K_(log_sync_memberlist), K_(degraded_learnerlist));
+  } else if (OB_FAIL(check_list_unique(server_list, learnerlist_))) {
+    PALF_LOG(WARN, "serverlist should not overlap with log_sync_memberlist",
+        K_(arbitration_member), K_(log_sync_memberlist), K_(degraded_learnerlist), K_(learnerlist));
   } else {
-    for (int i = 0; i < log_sync_memberlist_.get_member_number(); i++) {
-      common::ObMember member;
-      if (OB_FAIL(log_sync_memberlist_.get_member_by_index(i, member))) {
-        PALF_LOG(WARN, "get_server_by_index failed", K_(log_sync_memberlist));
-      } else if (OB_ENTRY_EXIST == (ret = server_list.add_learner(member))) {
-        is_all_list_unique = false;
-        PALF_LOG(WARN, "serverlist should not overlap with log_sync_member_list", K_(learnerlist),
-            K_(degraded_learnerlist), K_(log_sync_memberlist), K_(arbitration_member));
-        break;
-      }
-    }
+    is_all_list_unique = true;
   }
   return is_all_list_unique;
 }

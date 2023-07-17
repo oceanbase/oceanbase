@@ -178,6 +178,13 @@ private:
   int wait_trans_tablet_explain_data_();
   int change_member_list_with_retry_();
   int change_member_list_();
+  int get_ls_transfer_scn_(
+      ObLS *ls,
+      share::SCN &transfer_scn);
+  int switch_learner_to_acceptor_(ObLS *ls);
+  int replace_member_with_learner_(ObLS *ls);
+  int replace_learners_for_add_(ObLS *ls);
+  int replace_learners_for_migration_(ObLS *ls);
   int check_need_wait_(
       ObLS *ls,
       bool &need_wait);

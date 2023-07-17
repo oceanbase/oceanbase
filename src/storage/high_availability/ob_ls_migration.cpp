@@ -28,6 +28,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "ob_rebuild_service.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -37,6 +38,7 @@ namespace storage
 
 ERRSIM_POINT_DEF(EN_BUILD_SYS_TABLETS_DAG_FAILED);
 ERRSIM_POINT_DEF(EN_UPDATE_LS_MIGRATION_STATUS_FAILED);
+ERRSIM_POINT_DEF(EN_JOIN_LEARNER_LIST_FAILED);
 
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
@@ -3226,6 +3228,8 @@ int ObDataTabletsMigrationTask::process()
     //do nothing
   } else if (OB_FAIL(try_remove_unneeded_tablets_())) {
     LOG_WARN("failed to try remove unneeded tablets", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(join_learner_list_())) {
+    LOG_WARN("failed to add to learner list", K(ret));
   } else if (OB_FAIL(ls_online_())) {
     LOG_WARN("failed to start replay log", K(ret), K(*ctx_));
   } else if (OB_FAIL(build_tablet_group_info_())) {
@@ -3270,6 +3274,53 @@ int ObDataTabletsMigrationTask::process()
   }
 
   DEBUG_SYNC(AFTER_DATA_TABLETS_MIGRATION);
+  return ret;
+}
+
+int ObDataTabletsMigrationTask::join_learner_list_()
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("data tablets migration task do not init", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+    // do nothing
+  } else if (ObMigrationOpType::ADD_LS_OP != ctx_->arg_.type_
+      && ObMigrationOpType::MIGRATE_LS_OP != ctx_->arg_.type_) {
+    // only join learner list when migration and copy
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else {
+    ctx_->arg_.dst_.set_migrating();
+    const ObMember &dst_member = ctx_->arg_.dst_;
+    if (OB_FAIL(ls->add_learner(dst_member, timeout))) {
+      LOG_WARN("failed to add learner", K(ret), K(dst_member));
+    } else {
+      LOG_INFO("add to learner list succ", KPC(ctx_));
+    }
+  }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_JOIN_LEARNER_LIST_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "fake EN_JOIN_LEARNER_LIST_FAILED", K(ret));
+      SERVER_EVENT_SYNC_ADD("storage_ha", "join_learner_list_failed",
+          "tenant_id", ctx_->tenant_id_,
+          "ls_id", ctx_->arg_.ls_id_.id(),
+          "src", ctx_->arg_.src_.get_server(),
+          "dst", ctx_->arg_.dst_.get_server());
+    }
+  }
+#endif
+  SERVER_EVENT_SYNC_ADD("storage_ha", "after_join_learner_list",
+          "tenant_id", ctx_->tenant_id_,
+          "ls_id", ctx_->arg_.ls_id_.id(),
+          "src", ctx_->arg_.src_.get_server(),
+          "dst", ctx_->arg_.dst_.get_server());
+  DEBUG_SYNC(AFTER_JOIN_LEARNER_LIST);
   return ret;
 }
 

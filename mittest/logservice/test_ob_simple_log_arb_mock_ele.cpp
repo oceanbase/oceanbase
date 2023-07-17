@@ -639,6 +639,59 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
   PALF_LOG(INFO, "end test test_add_remove_lose_logs", K(id));
 }
 
+// 1. 2F1A, the leader degraded B
+// 2. migrate B to D
+TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_migrate)
+{
+  int ret = OB_SUCCESS;
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
+  OB_LOGGER.set_log_level("TRACE");
+  SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_degrade_migrate");
+  PALF_LOG(INFO, "begin test_2f1a_degrade_migrate", K(id));
+  {
+    int64_t leader_idx = 0;
+    int64_t arb_replica_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb_mock_election(id, arb_replica_idx, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
+
+    const int64_t b_idx = (leader_idx + 1) % 4;
+    const int64_t c_idx = (leader_idx + 2) % 4;
+    const int64_t d_idx = (leader_idx + 3) % 4;
+    const common::ObAddr a_addr = get_cluster()[leader_idx]->get_addr();
+    const common::ObAddr b_addr = get_cluster()[b_idx]->get_addr();
+    const common::ObAddr c_addr = get_cluster()[c_idx]->get_addr();
+    const common::ObAddr d_addr = get_cluster()[d_idx]->get_addr();
+    PalfHandleImplGuard *a_handle = palf_list[leader_idx];
+    PalfHandleImplGuard *b_handle = palf_list[b_idx];
+
+    // 1. degrade B
+    block_net(leader_idx, b_idx);
+    EXPECT_TRUE(is_degraded(leader, b_idx));
+
+    // 2. migrate B to D
+    common::ObMember b_member = common::ObMember(b_addr, 1);
+    common::ObMember migrating_d = common::ObMember(d_addr, 1);
+    migrating_d.set_migrating();
+
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(migrating_d, CONFIG_CHANGE_TIMEOUT));
+    LogConfigVersion config_version;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member_with_learner(migrating_d, b_member, config_version, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(0, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.get_member_number());
+    EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number());
+    EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+    unblock_net(leader_idx, b_idx);
+
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test_2f1a_degrade_migrate", K(id));
+}
 } // end unittest
 } // end oceanbase
 

@@ -125,6 +125,34 @@ int ObLSMemberListService::replace_member(
   return ret;
 }
 
+// TODO(yangyi.yyy) :replace member with learner
+int ObLSMemberListService::replace_member_with_learner(
+    const common::ObMember &added_member,
+    const common::ObMember &removed_member,
+    const int64_t replace_member_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  palf::LogConfigVersion leader_config_version;
+  share::SCN leader_transfer_scn;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls is not inited", K(ret));
+  } else if (OB_FAIL(get_leader_config_version_and_transfer_scn_(
+      leader_config_version, leader_transfer_scn))) {
+    STORAGE_LOG(WARN, "failed to get leader config version and transfer scn", K(ret));
+  } else if (OB_FAIL(check_ls_transfer_scn_(leader_transfer_scn))) {
+    STORAGE_LOG(WARN, "failed to check ls transfer scn", K(ret));
+  } else if (OB_FAIL(log_handler_->replace_member_with_learner(added_member,
+                                                               removed_member,
+                                                               leader_config_version,
+                                                               replace_member_timeout_us))) {
+    STORAGE_LOG(WARN, "failed to add member", K(ret));
+  } else {
+    STORAGE_LOG(INFO, "replace member with learner success", K(ret));
+  }
+  return ret;
+}
+
 int ObLSMemberListService::switch_learner_to_acceptor(
     const common::ObMember &learner,
     const int64_t paxos_replica_num,

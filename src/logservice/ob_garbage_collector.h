@@ -24,6 +24,7 @@
 #include "storage/tx_storage/ob_safe_destroy_handler.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_append_callback.h"
+#include "logservice/logrpc/ob_log_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -140,6 +141,7 @@ public:
   int init(storage::ObLSService *ls_service,
            obrpc::ObSrvRpcProxy *rpc_proxy,
            common::ObMySQLProxy *sql_proxy,
+           obrpc::ObLogServiceRpcProxy *log_rpc_proxy,
            const common::ObAddr &self_addr);
   int start();
   void stop();
@@ -221,6 +223,7 @@ private:
   storage::ObLSService *ls_service_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   common::ObMySQLProxy *sql_proxy_;
+  obrpc::ObLogServiceRpcProxy *log_rpc_proxy_;
   common::ObAddr self_addr_;
   int64_t seq_;
   storage::ObSafeDestroyHandler safe_destroy_handler_;
