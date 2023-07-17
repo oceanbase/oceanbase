@@ -2212,10 +2212,14 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
   }
   // 2. handle where conditions
   if (OB_SUCC(ret)) {
+    ObRawExprCopier copier(*expr_factory);
+    ReplaceRownumRowidExpr replacer(left_view_stmt);
     if (OB_FAIL(left_view_stmt->get_condition_exprs().assign(stmt.get_condition_exprs()))) {
       LOG_WARN("failed to assign conditions", K(ret));
-    } else if (OB_FAIL(left_view_stmt->get_start_with_exprs().assign(stmt.get_start_with_exprs()))) {
-      LOG_WARN("failed to assign conditions", K(ret));
+    } else if (OB_FAIL(copier.copy_on_replace(stmt.get_start_with_exprs(),
+                                              left_view_stmt->get_start_with_exprs(),
+                                              &replacer))) {
+      LOG_WARN("failed to copy on replace start with exprs", K(ret));
     } else {
       stmt.get_condition_exprs().reset();
       stmt.get_start_with_exprs().reset();
@@ -2330,6 +2334,8 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
       LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(right_view_stmt->adjust_subquery_list())) {
       LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*left_view_stmt))) {
+      LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*right_view_stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     } else {
