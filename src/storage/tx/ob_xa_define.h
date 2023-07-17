@@ -280,29 +280,57 @@ public:
 class ObXAStatistics
 {
 public:
-  static ObXAStatistics &get_instance()
+  ObXAStatistics() : last_stat_ts_(0), total_active_xa_ctx_count_(0)
   {
-    static ObXAStatistics xa_statistics_;
-    return xa_statistics_;
+    reset();
   }
   ~ObXAStatistics() {}
-public:
+  void reset();
   void inc_ctx_count() { ATOMIC_INC(&total_active_xa_ctx_count_); }
   void dec_ctx_count() { ATOMIC_DEC(&total_active_xa_ctx_count_); }
   void inc_cleanup_tx_count() { ATOMIC_INC(&total_standby_clearup_count_); }
+  void inc_success_xa_start() { ATOMIC_INC(&total_success_xa_start_); }
+  void inc_failure_xa_start() { ATOMIC_INC(&total_failure_xa_start_); }
+  void inc_success_xa_prepare() { ATOMIC_INC(&total_success_xa_prepare_); }
+  void inc_failure_xa_prepare() { ATOMIC_INC(&total_failure_xa_prepare_); }
+  void inc_success_xa_1pc_commit() { ATOMIC_INC(&total_success_xa_1pc_commit_); }
+  void inc_failure_xa_1pc_commit() { ATOMIC_INC(&total_failure_xa_1pc_commit_); }
+  void inc_success_xa_2pc_commit() { ATOMIC_INC(&total_success_xa_2pc_commit_); }
+  void inc_failure_xa_2pc_commit() { ATOMIC_INC(&total_failure_xa_2pc_commit_); }
+  void inc_xa_rollback() { ATOMIC_INC(&total_xa_rollback_); }
+  void inc_success_dblink_promotion() { ATOMIC_INC(&total_success_dblink_promotion_); }
+  void inc_failure_dblink_promotion() { ATOMIC_INC(&total_failure_dblink_promotion_); }
+  void inc_success_dblink() { ATOMIC_INC(&total_success_dblink_); }
+  void inc_failure_dblink() { ATOMIC_INC(&total_failure_dblink_); }
   void print_statistics(int64_t cur_ts);
-public:
-  TO_STRING_KV(K_(total_active_xa_ctx_count), K_(total_standby_clearup_count));
+  TO_STRING_KV(K_(total_active_xa_ctx_count), K_(total_standby_clearup_count),
+               K_(total_success_xa_start), K_(total_failure_xa_start),
+               K_(total_success_xa_prepare), K_(total_failure_xa_prepare),
+               K_(total_success_xa_1pc_commit), K_(total_failure_xa_1pc_commit),
+               K_(total_success_xa_2pc_commit), K_(total_failure_xa_2pc_commit),
+               K_(total_xa_rollback),
+               K_(total_success_dblink_promotion), K_(total_failure_dblink_promotion),
+               K_(total_success_dblink), K_(total_failure_dblink));
+
 private:
-  ObXAStatistics() : last_stat_ts_(0), total_active_xa_ctx_count_(0),
-                     total_standby_clearup_count_(0) {}
   DISALLOW_COPY_AND_ASSIGN(ObXAStatistics);
-private:
   static const int64_t STAT_INTERVAL = 10 * 1000 * 1000;
-private:
   int64_t last_stat_ts_;
   int64_t total_active_xa_ctx_count_;
   int64_t total_standby_clearup_count_;
+  int64_t total_success_xa_start_;
+  int64_t total_failure_xa_start_;
+  int64_t total_success_xa_prepare_;
+  int64_t total_failure_xa_prepare_;
+  int64_t total_success_xa_1pc_commit_;
+  int64_t total_failure_xa_1pc_commit_;
+  int64_t total_success_xa_2pc_commit_;
+  int64_t total_failure_xa_2pc_commit_;
+  int64_t total_xa_rollback_;
+  int64_t total_success_dblink_promotion_;
+  int64_t total_failure_dblink_promotion_;
+  int64_t total_success_dblink_;
+  int64_t total_failure_dblink_;
 };
 
 }//transaction

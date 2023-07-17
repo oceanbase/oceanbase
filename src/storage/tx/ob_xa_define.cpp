@@ -426,12 +426,46 @@ void ObXATimeoutTask::runTimerTask()
   }
 }
 
+void ObXAStatistics::reset()
+{
+  ATOMIC_STORE(&total_standby_clearup_count_, 0);
+  ATOMIC_STORE(&total_success_xa_start_, 0);
+  ATOMIC_STORE(&total_failure_xa_start_, 0);
+  ATOMIC_STORE(&total_success_xa_prepare_, 0);
+  ATOMIC_STORE(&total_failure_xa_prepare_, 0);
+  ATOMIC_STORE(&total_success_xa_1pc_commit_, 0);
+  ATOMIC_STORE(&total_failure_xa_1pc_commit_, 0);
+  ATOMIC_STORE(&total_success_xa_2pc_commit_, 0);
+  ATOMIC_STORE(&total_failure_xa_2pc_commit_, 0);
+  ATOMIC_STORE(&total_xa_rollback_, 0);
+  ATOMIC_STORE(&total_success_dblink_promotion_, 0);
+  ATOMIC_STORE(&total_failure_dblink_promotion_, 0);
+  ATOMIC_STORE(&total_success_dblink_, 0);
+  ATOMIC_STORE(&total_failure_dblink_, 0);
+}
+
 void ObXAStatistics::print_statistics(int64_t cur_ts)
 {
   const int64_t last_stat_ts = ATOMIC_LOAD(&last_stat_ts_);
   if (cur_ts - last_stat_ts >= STAT_INTERVAL) {
     if (ATOMIC_BCAS(&last_stat_ts_, last_stat_ts, cur_ts)) {
-      TRANS_LOG(INFO, "xa statistics", K(*this));
+      TRANS_LOG(INFO, "xa statistics",
+                      "total_active_xa_ctx_count", ATOMIC_LOAD(&total_active_xa_ctx_count_),
+                      "total_standby_clearup_count", ATOMIC_LOAD(&total_standby_clearup_count_),
+                      "total_success_xa_start", ATOMIC_LOAD(&total_success_xa_start_),
+                      "total_failure_xa_start", ATOMIC_LOAD(&total_failure_xa_start_),
+                      "total_success_xa_prepare", ATOMIC_LOAD(&total_success_xa_prepare_),
+                      "total_failure_xa_prepare", ATOMIC_LOAD(&total_failure_xa_prepare_),
+                      "total_success_xa_1pc_commit", ATOMIC_LOAD(&total_success_xa_1pc_commit_),
+                      "total_failure_xa_1pc_commit", ATOMIC_LOAD(&total_failure_xa_1pc_commit_),
+                      "total_success_xa_2pc_commit", ATOMIC_LOAD(&total_success_xa_2pc_commit_),
+                      "total_failure_xa_2pc_commit", ATOMIC_LOAD(&total_failure_xa_2pc_commit_),
+                      "total_failure_xa_rollback", ATOMIC_LOAD(&total_xa_rollback_),
+                      "total_success_dblink_promotion", ATOMIC_LOAD(&total_success_dblink_promotion_),
+                      "total_failure_dblink_promotion", ATOMIC_LOAD(&total_failure_dblink_promotion_),
+                      "total_success_dblink", ATOMIC_LOAD(&total_success_dblink_),
+                      "total_failure_dblink", ATOMIC_LOAD(&total_failure_dblink_));
+      reset();
     }
   }
 }

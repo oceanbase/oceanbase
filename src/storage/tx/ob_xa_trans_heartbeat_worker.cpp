@@ -64,7 +64,7 @@ void ObXATransHeartbeatWorker::run1()
   while (!has_set_stop()) {
     int64_t start_time = ObTimeUtility::current_time();
     loop_count++;
-    ObXAStatistics::get_instance().print_statistics(start_time);
+    MTL(ObXAService *)->get_xa_statistics().print_statistics(start_time);
 
     if (OB_UNLIKELY(!is_inited_)) {
       TRANS_LOG(WARN, "xa trans heartbeat not init");

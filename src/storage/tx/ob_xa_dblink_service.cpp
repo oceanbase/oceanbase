@@ -108,8 +108,10 @@ int ObXAService::xa_start_for_tm_promotion(const int64_t flags,
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start for dblink promotion failed", K(ret), K(xid), K(flags));
+    xa_statistics_.inc_failure_dblink_promotion();
   } else {
     TRANS_LOG(INFO, "xa start for dblink promtion", K(ret), K(xid), K(flags));
+    xa_statistics_.inc_success_dblink_promotion();
   }
 
   return ret;
@@ -240,8 +242,10 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start for dblink failed", K(ret), K(xid), K(flags));
+    xa_statistics_.inc_failure_dblink();
   } else {
     TRANS_LOG(INFO, "xa start for dblink", K(ret), K(xid), K(flags));
+    xa_statistics_.inc_success_dblink();
   }
 
   return ret;

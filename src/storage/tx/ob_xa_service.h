@@ -181,6 +181,7 @@ public:
                                 const ObTransID &trans_id,
                                 const share::ObLSID &coordinator,
                                 const ObAddr &sche_addr);
+  ObXAStatistics &get_xa_statistics() { return xa_statistics_; }
 private:
   int local_one_phase_xa_commit_ (const ObXATransID &xid,
                                   const ObTransID &trans_id,
@@ -281,6 +282,7 @@ private:
   ObXAInnerTableGCWorker xa_inner_table_gc_worker_;
   bool is_running_;
   bool is_inited_;
+  ObXAStatistics xa_statistics_;
 };
 
 }//transaction

@@ -308,7 +308,7 @@ int ObXAService::insert_record_for_standby(const uint64_t tenant_id,
   } else if (OB_FAIL(mysql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute insert record sql failed", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else {
-    ObXAStatistics::get_instance().inc_cleanup_tx_count();
+    xa_statistics_.inc_cleanup_tx_count();
     TRANS_LOG(INFO, "execute insert record sql success", K(exec_tenant_id), K(tenant_id),
               K(sql), K(affected_rows));
   }
@@ -1006,8 +1006,10 @@ int ObXAService::xa_start(const ObXATransID &xid,
     tx_desc->set_xa_start_addr(GCONF.self_addr_);
   }
   if (OB_FAIL(ret)) {
+    xa_statistics_.inc_failure_xa_start();
     TRANS_LOG(WARN, "xa start failed", K(ret), K(xid), K(flags), K(timeout_seconds));
   } else {
+    xa_statistics_.inc_success_xa_start();
     TRANS_LOG(INFO, "xa start", K(ret), K(xid), K(flags), K(timeout_seconds), "tx_id", tx_desc->get_tx_id(), KPC(tx_desc));
   }
 
@@ -1474,10 +1476,16 @@ int ObXAService::xa_commit(const ObXATransID &xid,
     if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_COMMIT)) {
       if (OB_FAIL(two_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table))) {
         TRANS_LOG(WARN, "two phase xa commit failed", K(ret), K(xid));
+        xa_statistics_.inc_failure_xa_2pc_commit();
+      } else {
+        xa_statistics_.inc_success_xa_2pc_commit();
       }
     } else if (ObXAFlag::is_tmonephase(flags)) {
       if (OB_FAIL(one_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table))) {
         TRANS_LOG(WARN, "one phase xa commit failed", K(ret), K(xid));
+        xa_statistics_.inc_failure_xa_1pc_commit();
+      } else {
+        xa_statistics_.inc_success_xa_1pc_commit();
       }
     } else {
       ret = OB_TRANS_XA_INVAL;
@@ -1632,6 +1640,7 @@ int ObXAService::xa_rollback(const ObXATransID &xid,
     }
   }
   TRANS_LOG(INFO, "xa rollback", K(ret), K(xid), K(xa_timeout_seconds));
+  xa_statistics_.inc_xa_rollback();
   return ret;
 }
 
@@ -2154,6 +2163,11 @@ int ObXAService::xa_prepare(const ObXATransID &xid,
     ret = OB_TRANS_XA_RDONLY;
   }
 
+  if (OB_FAIL(ret)) {
+    xa_statistics_.inc_failure_xa_prepare();
+  } else {
+    xa_statistics_.inc_success_xa_prepare();
+  }
   return ret;
 }
 
