@@ -193,6 +193,13 @@ private:
   common::ObMemberList lagged_list_;
 };
 
+inline bool is_need_rebuild(const LSN &end_lsn, const LSN &last_rebuild_lsn)
+{
+  return (end_lsn.is_valid() &&
+          last_rebuild_lsn.is_valid() &&
+          end_lsn < last_rebuild_lsn);
+}
+
 class LogSlidingWindow : public ISlidingCallBack
 {
 public:

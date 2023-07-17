@@ -2352,12 +2352,12 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
         last_slide_log_id))) {
       // PALF_LOG(WARN, "check_servers_lsn_and_version_ failed", K(ret), K(tmp_ret), K_(palf_id), K_(self), K(server),
       //     K(config_version), K(conn_timeout_us), K(force_remote_check), K(max_flushed_end_lsn), K(has_same_version));
-    } else if (false == is_arb_member) {
+    } else if (false == is_arb_member && max_flushed_end_lsn.is_valid()) {
       lsn_array[log_sync_resp_cnt++] = max_flushed_end_lsn;
       paxos_resp_cnt++;
-    } else {
+    } else if (true == is_arb_member) {
       paxos_resp_cnt++;
-    }
+    } else { }
     added_member_has_new_version = (is_added_member)? has_same_version: added_member_has_new_version;
     added_member_flushed_end_lsn = (is_added_member)? max_flushed_end_lsn: added_member_flushed_end_lsn;
     added_member_last_slide_log_id = (is_added_member)? last_slide_log_id: added_member_last_slide_log_id;

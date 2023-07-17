@@ -561,6 +561,12 @@ int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
   int tmp_ret = common::OB_SUCCESS;
   const bool is_vote_enabled = state_mgr_.is_allow_vote();
   const bool is_sync_enabled = state_mgr_.is_sync_enabled();
+  LSN last_rebuild_lsn;
+  do {
+    SpinLockGuard guard(last_rebuild_meta_info_lock_);
+    last_rebuild_lsn = last_rebuild_lsn_;
+  } while (0);
+  const bool need_rebuild = is_need_rebuild(get_end_lsn(), last_rebuild_lsn);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret), K_(palf_id));
@@ -569,10 +575,10 @@ int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
     //       to be added in the Paxos group. Check PalfHandleImpl only
     resp.is_normal_replica_ = false;
     PALF_LOG(WARN, "get tenant data version failed", K(tmp_ret), K(req), K(resp));
-  } else if (false == is_vote_enabled || false == is_sync_enabled) {
+  } else if (false == is_vote_enabled || false == is_sync_enabled || true == need_rebuild) {
     resp.is_normal_replica_ = false;
     PALF_LOG(WARN, "replica has been disabled vote/sync", K(ret), K(req), K(resp),
-        K(is_vote_enabled), K(is_sync_enabled));
+        K(is_vote_enabled), K(is_sync_enabled), K(need_rebuild));
   } else {
     RLockGuard guard(lock_);
     if (req.need_purge_throttling_) {
@@ -582,19 +588,13 @@ int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
         PALF_LOG_RET(WARN, tmp_ret, "failed to submit_purge_throttling_task with handle_config_change_pre_check", K_(palf_id));
       }
     }
-    int64_t curr_proposal_id = state_mgr_.get_proposal_id();
-    resp.msg_proposal_id_ = curr_proposal_id;
+    resp.msg_proposal_id_ = state_mgr_.get_proposal_id();
     LogConfigVersion curr_config_version;
+    sw_.get_max_flushed_end_lsn(resp.max_flushed_end_lsn_);
+    resp.last_slide_log_id_ = sw_.get_last_slide_log_id();
     if (OB_FAIL(config_mgr_.get_config_version(curr_config_version))) {
-    } else if (req.config_version_ != curr_config_version) {
-      resp.need_update_config_meta_ = true;
     } else {
-      LSN max_flushed_end_lsn;
-      sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
-      resp.max_flushed_end_lsn_ = max_flushed_end_lsn;
-      resp.need_update_config_meta_ = false;
-      resp.last_slide_log_id_ = sw_.get_last_slide_log_id();
-
+      resp.need_update_config_meta_ = (req.config_version_ != curr_config_version);
     }
     resp.is_normal_replica_ = true;
 
@@ -605,7 +605,7 @@ int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = sw_.try_fetch_log(FetchTriggerType::ADD_MEMBER_PRE_CHECK))) {
       PALF_LOG(WARN, "try_fetch_log with ADD_MEMBER_PRE_CHECK failed",
-          KR(tmp_ret), KPC(this), K(server), K(curr_proposal_id));
+          KR(tmp_ret), KPC(this), K(server));
     } else {
       PALF_LOG(INFO, "try_fetch_log with ADD_MEMBER_PRE_CHECK success", KR(tmp_ret), KPC(this));
     }
@@ -4671,9 +4671,7 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.end_scn_ = get_end_scn();
     palf_stat.max_lsn_ = get_max_lsn();
     palf_stat.max_scn_ = get_max_scn();
-    palf_stat.is_need_rebuild_ = (palf_stat.end_lsn_.is_valid() &&
-                                  last_rebuild_lsn.is_valid() &&
-                                  palf_stat.end_lsn_ < last_rebuild_lsn);
+    palf_stat.is_need_rebuild_ = is_need_rebuild(palf_stat.end_lsn_, last_rebuild_lsn);
     palf_stat.is_in_sync_ = (LEADER == palf_stat.role_)? true: cached_is_in_sync_;
     PALF_LOG(TRACE, "PalfHandleImpl stat", K(palf_stat));
   }
