@@ -343,6 +343,9 @@ int ObGlobalAutoIncService::handle_push_autoinc_request(
                             && cache_node.need_sync(request.base_value_))
                         // cache node is expired
                         || (request_version > cache_node.autoinc_version_))) {
+      if (request_version > cache_node.autoinc_version_) {
+        cache_node.reset();
+      }
       if (OB_FAIL(sync_value_to_inner_table_(request, cache_node, sync_value))) {
         LOG_WARN("sync to inner table failed", K(ret));
       } else if (OB_FAIL(autoinc_map_.set_refactored(key, cache_node, 1))) {
