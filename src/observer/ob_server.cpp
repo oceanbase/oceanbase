@@ -35,7 +35,6 @@
 #include "lib/thread/thread_mgr.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_rpc_extra_payload.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
 #include "observer/table/ob_table_rpc_processor.h"
@@ -377,8 +376,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (FALSE_IT(common::occam::ObThreadHungDetector::get_instance())) {
     } else if (OB_FAIL(palf::election::GLOBAL_INIT_ELECTION_MODULE())) {
       LOG_ERROR("init election module failed", KR(ret));
-    } else if (OB_FAIL(SAFE_DESTROY_INSTANCE.init())) {
-      LOG_ERROR("init safe to destroy instance failed", K(ret));
     } else if (OB_FAIL(init_multi_tenant())) {
       LOG_ERROR("init multi tenant failed", KR(ret));
     } else if (OB_FAIL(init_ctas_clean_up_task())) {
@@ -672,10 +669,6 @@ void ObServer::destroy()
     multi_tenant_.destroy();
     FLOG_INFO("wait destroy multi tenant success");
 
-    FLOG_INFO("begin to destroy safe destroy instance");
-    SAFE_DESTROY_INSTANCE.destroy();
-    FLOG_INFO("wait destroy safe destroy instance success");
-
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
@@ -787,13 +780,6 @@ int ObServer::start()
       LOG_ERROR("fail to start io manager", KR(ret));
     } else {
       FLOG_INFO("success to start io manager");
-    }
-
-    // safe destroy instance should start before multi tenant
-    if (FAILEDx(SAFE_DESTROY_INSTANCE.start())) {
-      LOG_ERROR("fail to start safe destroy thread", KR(ret));
-    } else {
-      FLOG_INFO("success to start safe destroy thread");
     }
 
     if (FAILEDx(multi_tenant_.start())) {
@@ -1291,12 +1277,6 @@ int ObServer::stop()
     ob_service_.stop();
     FLOG_INFO("ob_service stopped");
 
-    // safe destroy instance should stop after multi_tenant_
-    FLOG_INFO("begin to stop safe destroy instance");
-    SAFE_DESTROY_INSTANCE.stop();
-    FLOG_INFO("safe destroy instance stopped");
-
-
     FLOG_INFO("begin to stop slogger manager");
     SLOGGERMGR.destroy();
     FLOG_INFO("slogger manager stopped");
@@ -1508,12 +1488,6 @@ int ObServer::wait()
     FLOG_INFO("begin to wait multi tenant");
     multi_tenant_.wait();
     FLOG_INFO("wait multi tenant success");
-
-    // safe to destroy
-    FLOG_INFO("begin to wait for safe destroy instance");
-    SAFE_DESTROY_INSTANCE.wait();
-    FLOG_INFO("wait for safe destroy instance success");
-
 
     FLOG_INFO("begin to wait ratelimit manager");
     rl_mgr_.wait();

@@ -33,7 +33,6 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "../mockcontainer/mock_ob_iterator.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
@@ -226,8 +225,6 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   //OK(init_io_device("multi_version_test"));
 
@@ -247,9 +244,6 @@ void ObMultiVersionSSTableTest::TearDownTestCase()
   //ObIODeviceWrapper::get_instance().destroy();
   OB_STORE_CACHE.destroy();
 
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 

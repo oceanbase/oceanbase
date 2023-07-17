@@ -18,7 +18,6 @@
 namespace oceanbase
 {
 using namespace share;
-using namespace observer;
 namespace storage
 {
 
@@ -130,7 +129,7 @@ int ObLSSafeDestroyTask::get_ls_id(ObLSID &ls_id) const
   return ret;
 }
 
-bool ObSafeDestroyCheckLSExist::operator()(const observer::ObSafeDestroyTask *task,
+bool ObSafeDestroyCheckLSExist::operator()(const ObSafeDestroyTask *task,
                                            bool &need_requeue)
 {
   int ret = OB_SUCCESS;

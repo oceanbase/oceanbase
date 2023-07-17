@@ -27,7 +27,6 @@
 #include "storage/multi_data_source/mds_ctx.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tx/ob_trans_define.h"
-#include "observer/ob_safe_destroy_thread.h"
 
 using namespace oceanbase::common;
 
@@ -73,8 +72,6 @@ void TestTabletStatusCache::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
   // create ls
@@ -90,10 +87,6 @@ void TestTabletStatusCache::TearDownTestCase()
   // remove ls
   ret = remove_ls(LS_ID);
   ASSERT_EQ(OB_SUCCESS, ret);
-
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
 
   MockTenantModuleEnv::get_instance().destroy();
 }

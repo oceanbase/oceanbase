@@ -20,7 +20,6 @@
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/init_basic_struct.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "share/ob_master_key_getter.h"
 
 namespace oceanbase
@@ -199,8 +198,6 @@ public:
   {
     TRANS_LOG(INFO, "SetUpTestCase");
     EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-    SAFE_DESTROY_INSTANCE.init();
-    SAFE_DESTROY_INSTANCE.start();
     ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
     // create ls
@@ -217,9 +214,6 @@ public:
     ObLSID ls_id(1001);
     ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
 
-    SAFE_DESTROY_INSTANCE.stop();
-    SAFE_DESTROY_INSTANCE.wait();
-    SAFE_DESTROY_INSTANCE.destroy();
     MockTenantModuleEnv::get_instance().destroy();
     TRANS_LOG(INFO, "TearDownTestCase");
   }

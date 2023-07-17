@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "lib/guard/ob_shared_guard.h"
-#include "observer/ob_safe_destroy_thread.h"
+#include "logservice/ob_garbage_collector.h"
 #include "observer/ob_service.h"
 #include "observer/ob_srv_network_frame.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
@@ -38,6 +38,7 @@ namespace oceanbase
 using namespace share;
 using namespace palf;
 using namespace lib;
+using namespace logservice;
 namespace storage
 {
 
@@ -161,8 +162,12 @@ int ObLSService::stop()
         } else if (OB_FAIL(handle.set_ls(ls_map_, *ls, ObLSGetMod::TXSTORAGE_MOD))) {
           LOG_WARN("get ls handle failed", K(ret), KPC(ls));
         } else {
+          ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
           ObLSLockGuard lock_ls(ls);
-          if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
+          if (OB_ISNULL(gc_service)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("gc service is null", K(ret));
+          } else if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
                                                                "LSSafeDestroy"))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory failed", K(ret));
@@ -174,7 +179,7 @@ int ObLSService::stop()
           } else {
             remove_ls_(ls, remove_from_disk);
             // try until success.
-            while (OB_FAIL(SAFE_DESTROY_INSTANCE.push(*task))) {
+            while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
               if (REACH_TIME_INTERVAL(1_min)) { // every minute
                 LOG_WARN("add safe destroy task failed, retry", K(ret), KPC(task));
               }
@@ -910,10 +915,14 @@ int ObLSService::remove_ls(
                                                   abs_timeout_ts))) {
     LOG_WARN("get timeout ts failed", KR(ret));
   } else {
+    ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
     ObMutexGuardWithTimeout change_guard(change_lock_, abs_timeout_ts);
     if (OB_FAIL(change_guard.get_ret())) {
       LOG_WARN("lock failed, try again later", K(ret));
       ret = OB_EAGAIN;
+    } else if (OB_ISNULL(gc_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("gc service is null", K(ret));
     } else if (OB_FAIL(get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
       if (ret == OB_LS_NOT_EXIST) {
         ret = OB_SUCCESS;
@@ -951,7 +960,7 @@ int ObLSService::remove_ls(
       } else {
         remove_ls_(ls);
         // try until success.
-        while (OB_FAIL(SAFE_DESTROY_INSTANCE.push(*task))) {
+        while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
           if (REACH_TIME_INTERVAL(1_min)) { // every minute
             LOG_WARN("add safe destroy task failed, retry", K(ret), KPC(task));
           }
@@ -1196,8 +1205,12 @@ int ObLSService::check_ls_waiting_safe_destroy(const share::ObLSID &ls_id, bool 
   } else if (ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) == 0) {
     // there is no ls waiting safe destroy
   } else {
+    ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
     ObSafeDestroyCheckLSExist fn(ls_id);
-    if (OB_FAIL(SAFE_DESTROY_INSTANCE.for_each(fn))) {
+    if (OB_ISNULL(gc_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("gc service is null", K(ret));
+    } else if (OB_FAIL(gc_service->safe_destroy_task_for_each(fn))) {
       LOG_WARN("check ls waiting safe destroy failed", K(ret), K(ls_id));
     } else if (OB_FAIL(fn.get_ret_code())) {
       LOG_WARN("the check process failed", K(ret), K(ls_id));

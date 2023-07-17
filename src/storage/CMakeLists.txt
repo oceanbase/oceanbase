@@ -339,6 +339,7 @@ ob_set_subtarget(ob_storage tx_storage
   tx_storage/ob_ls_map.cpp
   tx_storage/ob_ls_safe_destroy_task.cpp
   tx_storage/ob_ls_service.cpp
+  tx_storage/ob_safe_destroy_handler.cpp
   tx_storage/ob_tenant_freezer.cpp
   tx_storage/ob_tenant_freezer_common.cpp
   tx_storage/ob_tenant_freezer_rpc.cpp

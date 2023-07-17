@@ -25,7 +25,6 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/schema_utils.h"
 #include "storage/test_dml_common.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "storage/init_basic_struct.h"
 #include "share/scn.h"
 #include "storage/memtable/ob_memtable.h"
@@ -115,8 +114,6 @@ void TestTabletCreateDeleteHelper::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
   // create ls
@@ -138,10 +135,6 @@ void TestTabletCreateDeleteHelper::TearDownTestCase()
 
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
-
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
 
   MockTenantModuleEnv::get_instance().destroy();
 }

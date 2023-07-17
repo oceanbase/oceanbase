@@ -20,7 +20,6 @@ ob_set_subtarget(ob_server common
   ob_rpc_extra_payload.cpp
   ob_rpc_intrusion_detect.cpp
   ob_rpc_processor_simple.cpp
-  ob_safe_destroy_thread.cpp
   ob_server_event_history_table_operator.cpp
   ob_server_reload_config.cpp
   ob_server_schema_updater.cpp

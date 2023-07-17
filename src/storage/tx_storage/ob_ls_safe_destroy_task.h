@@ -13,15 +13,15 @@
 #ifndef OCEABASE_STORAGE_OB_LS_SAFE_DESTROY_TASK_
 #define OCEABASE_STORAGE_OB_LS_SAFE_DESTROY_TASK_
 
-#include "observer/ob_safe_destroy_thread.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
+#include "storage/tx_storage/ob_safe_destroy_handler.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObLSSafeDestroyTask : public observer::ObSafeDestroyTask
+class ObLSSafeDestroyTask : public ObSafeDestroyTask
 {
 public:
   ObLSSafeDestroyTask();
@@ -32,7 +32,7 @@ public:
   virtual bool safe_to_destroy() override;
   virtual void destroy() override;
   int get_ls_id(share::ObLSID &ls_id) const;
-  INHERIT_TO_STRING_KV("ObSafeDestroyTask", observer::ObSafeDestroyTask, K_(is_inited),
+  INHERIT_TO_STRING_KV("ObSafeDestroyTask", ObSafeDestroyTask, K_(is_inited),
                        K_(tenant_id), K_(ls_handle), KP_(ls_service));
 private:
   bool is_inited_;
@@ -53,7 +53,7 @@ public:
       exist_(false),
       ls_id_(ls_id)
   {}
-  bool operator()(const observer::ObSafeDestroyTask *task, bool &need_requeue);
+  bool operator()(const ObSafeDestroyTask *task, bool &need_requeue);
   int is_exist() const { return exist_; }
   int get_ret_code() const { return err_code_; }
 private:

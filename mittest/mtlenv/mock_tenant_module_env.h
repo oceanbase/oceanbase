@@ -669,6 +669,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);
       MTL_BIND2(ObTenantMetaMemMgr::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTransService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, logservice::ObGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTimestampService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTransIDService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObXAService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -748,7 +749,8 @@ int MockTenantModuleEnv::start_()
     STORAGE_LOG(ERROR, "fail to switch to sys tenant", K(ret));
   } else {
     ObLogService *log_service = MTL(logservice::ObLogService*);
-    if (OB_ISNULL(log_service) || OB_ISNULL(log_service->palf_env_)) {
+    ObGarbageCollector *gc_svr = MTL(logservice::ObGarbageCollector*);
+    if (OB_ISNULL(log_service) || OB_ISNULL(log_service->palf_env_) || OB_ISNULL(gc_svr)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "fail to switch to sys tenant", KP(log_service));
     } else {
@@ -756,6 +758,7 @@ int MockTenantModuleEnv::start_()
       palf::LogIOWorkerWrapper &log_iow_wrapper = palf_env_impl->log_io_worker_wrapper_;
       palf::LogIOWorkerConfig new_config;
       const int64_t mock_tenant_id = 1;
+      gc_svr->stop_create_new_gc_task_ = true;
       palf_env_impl->init_log_io_worker_config_(1, mock_tenant_id, new_config);
       new_config.io_worker_num_ = 4;
       log_iow_wrapper.destory_and_free_log_io_workers_();

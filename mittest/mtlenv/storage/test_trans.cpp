@@ -18,7 +18,6 @@
 #include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
 #include "share/schema/ob_table_dml_param.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "storage/ob_dml_running_ctx.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 
@@ -105,16 +104,11 @@ public:
     ObClusterVersion::get_instance().tenant_config_mgr_ = &omt::ObTenantConfigMgr::get_instance();
 
     ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-    SAFE_DESTROY_INSTANCE.init();
-    SAFE_DESTROY_INSTANCE.start();
     ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   }
   static void TearDownTestCase()
   {
     LOG_INFO("TearDownTestCase");
-    SAFE_DESTROY_INSTANCE.stop();
-    SAFE_DESTROY_INSTANCE.wait();
-    SAFE_DESTROY_INSTANCE.destroy();
     MockTenantModuleEnv::get_instance().destroy();
   }
 

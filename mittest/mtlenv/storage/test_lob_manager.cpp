@@ -26,7 +26,6 @@
 #include "storage/blocksstable/ob_tmp_file.h"
 #include "storage/lob/ob_lob_piece.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "lib/objectpool/ob_server_object_pool.h"
 
 namespace oceanbase
@@ -52,15 +51,10 @@ public:
     EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
     MTL(transaction::ObTransService*)->tx_desc_mgr_.tx_id_allocator_ =
       [](transaction::ObTransID &tx_id) { tx_id = transaction::ObTransID(1001); return OB_SUCCESS; };
-    SAFE_DESTROY_INSTANCE.init();
-    SAFE_DESTROY_INSTANCE.start();
     ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   }
   static void TearDownTestCase()
   {
-    SAFE_DESTROY_INSTANCE.stop();
-    SAFE_DESTROY_INSTANCE.wait();
-    SAFE_DESTROY_INSTANCE.destroy();
     MockTenantModuleEnv::get_instance().destroy();
   }
   virtual void SetUp()

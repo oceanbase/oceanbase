@@ -21,6 +21,7 @@
 #include "share/ob_thread_pool.h"
 #include "share/ob_ls_id.h"
 #include "share/ls/ob_ls_status_operator.h"
+#include "storage/tx_storage/ob_safe_destroy_handler.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_append_callback.h"
 
@@ -185,6 +186,12 @@ public:
   static bool is_tenant_dropping_ls_status(const LSStatus &status);
   int get_ls_status_from_table(const share::ObLSID &ls_id,
                                share::ObLSStatus &ls_status);
+  int add_safe_destroy_task(storage::ObSafeDestroyTask &task);
+  template <typename Function>
+  int safe_destroy_task_for_each(Function &fn)
+  {
+    return safe_destroy_handler_.for_each(fn);
+  }
 private:
   bool is_valid_ls_status_(const LSStatus &status);
   bool is_need_gc_ls_status_(const LSStatus &status);
@@ -216,6 +223,9 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   common::ObAddr self_addr_;
   int64_t seq_;
+  storage::ObSafeDestroyHandler safe_destroy_handler_;
+  // stop push task, but will process the left task.
+  bool stop_create_new_gc_task_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGarbageCollector);
 };

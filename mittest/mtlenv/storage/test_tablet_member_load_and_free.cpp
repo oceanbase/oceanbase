@@ -30,7 +30,6 @@
 #include "unittest/storage/test_tablet_helper.h"
 #include "unittest/storage/test_dml_common.h"
 #include "unittest/storage/schema_utils.h"
-#include "observer/ob_safe_destroy_thread.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -81,8 +80,6 @@ void TestTabletMemberLoadAndFree::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
   // create ls
@@ -98,10 +95,6 @@ void TestTabletMemberLoadAndFree::TearDownTestCase()
   // remove ls
   ret = remove_ls(LS_ID);
   ASSERT_EQ(OB_SUCCESS, ret);
-
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
 
   MockTenantModuleEnv::get_instance().destroy();
 }
