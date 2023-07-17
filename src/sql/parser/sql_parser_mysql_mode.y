@@ -18472,7 +18472,13 @@ void yyerror(void *yylloc, ParseResult *p, char *s, ...)
     p->result_tree_ = 0;
     va_list ap;
     va_start(ap, s);
-    vsnprintf(p->error_msg_, MAX_ERROR_MSG, s, ap);
+    char *escaped_s = NULL;
+    ESCAPE_PERCENT(p, s, escaped_s);
+    if (OB_NOT_NULL(escaped_s)) {
+      vsnprintf(p->error_msg_, MAX_ERROR_MSG, escaped_s, ap);
+    } else {
+      vsnprintf(p->error_msg_, MAX_ERROR_MSG, s, ap);
+    }
     if (OB_LIKELY(NULL != yylloc)) {
       YYLTYPE *yylloc_pointer = (YYLTYPE *)yylloc;
       if (OB_LIKELY(NULL != p->input_sql_) && p->input_sql_[yylloc_pointer->first_column - 1] != '\'') {
