@@ -931,9 +931,12 @@ int ObLogArchivePieceContext::get_piece_meta_info_(const int64_t piece_id)
   bool is_ls_gc = false;
   palf::LSN min_lsn;
   palf::LSN max_lsn;
-  if (piece_id > round_context_.max_piece_id_ || piece_id < round_context_.min_piece_id_) {
+  if (piece_id < round_context_.min_piece_id_) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "piece id out of round range", K(ret), K(piece_id), KPC(this));
+    CLOG_LOG(WARN, "piece id out of round range lower bound", K(ret), K(piece_id), KPC(this));
+  } else if (piece_id > round_context_.max_piece_id_) {
+    ret = OB_ITER_END;
+    CLOG_LOG(WARN, "piece id out of round range upper bound", K(ret), K(piece_id), KPC(this));
   } else if (OB_FAIL(archive_store.init(archive_dest_))) {
     CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
   } else if (OB_FAIL(archive_store.is_single_piece_file_exist(dest_id_, round_id, piece_id, piece_meta_exist))) {
