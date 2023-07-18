@@ -144,7 +144,10 @@ void ObMajorMergeScheduler::run3()
   if (OB_SUCC(ret)) {
     while (!stop_) {
       update_last_run_timestamp();
+      // record if try_update_epoch_and_reload() is failed.
+      bool is_update_epoch_and_reload_failed = false;
       if (OB_FAIL(try_update_epoch_and_reload())) {
+        is_update_epoch_and_reload_failed = true;
         LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), "cur_epoch", get_epoch());
       } else if (OB_FAIL(do_work())) {
         LOG_WARN("fail to do major scheduler work", KR(ret), K_(tenant_id), "cur_epoch", get_epoch());
@@ -154,7 +157,9 @@ void ObMajorMergeScheduler::run3()
       progress_checker_.reset_uncompacted_tablets();
 
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(try_idle(DEFAULT_IDLE_US, ret))) {
+      // If try_update_epoch_and_reload() is failed, idle only DEFAULT_IDLE_US. So as to
+      // succeed to try_update_epoch_and_reload() as soon as possible.
+      if (OB_TMP_FAIL(try_idle(DEFAULT_IDLE_US, is_update_epoch_and_reload_failed ? OB_SUCCESS : ret))) {
         LOG_WARN("fail to try_idle", KR(ret), KR(tmp_ret));
       }
       ret = OB_SUCCESS; // ignore ret, continue
