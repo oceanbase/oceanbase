@@ -329,7 +329,7 @@ public:
   K_(last_slide_log_pid), K_(last_slide_log_accum_checksum), K_(last_fetch_end_lsn),               \
   K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn), K_(last_truncate_lsn),           \
   K_(last_fetch_req_time), K_(is_truncating), K_(is_rebuilding), K_(last_rebuild_lsn),          \
-  K_(last_freeze_end_lsn), "freeze_mode", freeze_mode_2_str(freeze_mode_), \
+  "freeze_mode", freeze_mode_2_str(freeze_mode_), \
   "last_fetch_trigger_type", fetch_trigger_type_2_str(last_fetch_trigger_type_), KP(this));
 private:
   int do_init_mem_(const int64_t palf_id,
@@ -471,9 +471,6 @@ private:
                                 const LSN &lsn,
                                 const LogWriteBuf &log_write_buf);
   bool need_execute_fetch_(const FetchTriggerType &fetch_trigger_type);
-  void get_last_freeze_end_lsn_(LSN &end_lsn);
-  void set_last_freeze_end_lsn_(const LSN &end_lsn);
-  int inc_update_last_freeze_end_lsn_(const LSN &end_lsn);
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
@@ -519,7 +516,6 @@ private:
   LogGroupBuffer group_buffer_;
   // Record the last submit log info.
   // It is used to submit logs sequentially, for restarting, set it as last_replay_log_id.
-  LSN last_freeze_end_lsn_;
   mutable common::ObSpinLock last_submit_info_lock_;
   LSN last_submit_lsn_;
   LSN last_submit_end_lsn_;
