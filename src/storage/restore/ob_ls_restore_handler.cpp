@@ -2044,6 +2044,7 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
     ObTabletHandle tablet_handle;
     ObTablet *tablet = nullptr;
     ObTabletCreateDeleteMdsUserData user_data;
+    bool is_commited = false;
     if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
@@ -2058,13 +2059,10 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
     } else if (tablet->is_empty_shell()) {
       LOG_INFO("skip empty shell", "tablet_id", tablet->get_tablet_meta().tablet_id_);
     } else if (!tablet->get_tablet_meta().has_transfer_table()) {
-    } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
-      if (OB_EMPTY_RESULT == ret) {
-        LOG_INFO("skip tablet which transfer in not commit", KPC(tablet));
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
-      }
+    } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data, is_commited))) {
+      LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
+    } else if (!is_commited && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
+      LOG_INFO("skip tablet which transfer in not commit", "tablet_id", tablet->get_tablet_meta().tablet_id_, K(user_data));
     } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
       LOG_INFO("skip tablet which restore status is not full",
                "tablet_id", tablet->get_tablet_meta().tablet_id_,
@@ -2450,6 +2448,9 @@ int ObLSRestoreMajorState::leader_restore_major_data_()
     LOG_WARN("fail to do restore major", K(ret), K(tablet_need_restore), KPC(ls_));
   }
 
+#if 0
+  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
+
   int tmp_ret = OB_SUCCESS; // try rpc's best
   if (restored_tablets.empty()) {
   } else if (OB_SUCCESS != (tmp_ret = notify_follower_restore_tablet_(restored_tablets))) {
@@ -2457,6 +2458,8 @@ int ObLSRestoreMajorState::leader_restore_major_data_()
   } else {
     LOG_INFO("success send tablets to follower for restore", K(restored_tablets));
   }
+#endif
+
   return ret;
 }
 
@@ -2493,11 +2496,21 @@ int ObLSRestoreMajorState::do_restore_major_(
   ObTabletGroupRestoreArg arg;
   bool reach_dag_limit = false;
   bool is_new_election = false;
+  // No matter is leader or follower, always restore data from backup.
+  if (OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
+    LOG_WARN("fail to fill leader ls restore arg", K(ret));
+  }
+
+#if 0
+  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
   if (!is_follower(role_) && OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
     LOG_WARN("fail to fill ls restore arg", K(ret));
   } else if (is_follower(role_) && OB_FAIL(follower_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
     LOG_WARN("fail to fill ls restore arg", K(ret));
-  } else if (OB_FAIL(check_new_election_(is_new_election))) {
+  }
+#endif
+
+  if (FAILEDx(check_new_election_(is_new_election))) {
     LOG_WARN("fail to check change role", K(ret));
   } else if (is_new_election) {
     ret = OB_EAGAIN;

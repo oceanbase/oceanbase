@@ -667,9 +667,10 @@ int ObLSRestoreTaskMgr::check_need_reload_tablets_(bool &reload)
   } else if (final_reload_) {
     LOG_DEBUG("final reload is set, need not reload", K_(ls_id), K(ls_restore_status), "is_follower", is_follower_());
   } else if (is_follower_()) {
-    // follower can reload tablets only if leader has been restored except at QUICK_RESTORE.
+    // follower can reload tablets only if leader has been restored except at QUICK_RESTORE or RESTORE_MAJOR.
     bool finish = true;
     if (!ls_restore_status.is_quick_restore()
+        && !ls_restore_status.is_restore_major_data()
         && OB_FAIL(restore_state_handler_->check_leader_restore_finish(finish))) {
       LOG_WARN("fail to check leader restore finish", K(ret), KPC_(restore_state_handler));
     } else if (!finish) {
@@ -723,6 +724,7 @@ int ObLSRestoreTaskMgr::check_tablet_need_discard_when_reload_(
       discard = true;
       LOG_DEBUG("skip restored tablet", K(tablet_id), K(ls_restore_status), "ha_status", tablet_meta.ha_status_);
     } else if (ls_restore_status.is_quick_restore()) {
+    } else if (ls_restore_status.is_restore_major_data()) {
     } else if (is_follower && !has_checked_leader_done_) {
       // The follower does not load tablets to restore before leader has been restored.
       discard = true;

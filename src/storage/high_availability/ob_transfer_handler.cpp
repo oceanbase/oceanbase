@@ -465,6 +465,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to reset timeout for trans", K(ret));
     } else if (OB_FAIL(do_trans_transfer_start_(task_info, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
+    } else {
+      DEBUG_SYNC(BEFORE_TRANSFER_START_COMMIT);
     }
     if (OB_TMP_FAIL(commit_trans_(ret, trans))) {
       LOG_WARN("failed to commit trans", K(tmp_ret), K(ret));
