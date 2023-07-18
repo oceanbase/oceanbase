@@ -515,8 +515,9 @@ int ObTenantFreezer::get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_mem_us
     int ls_cnt = 0;
     int64_t ls_tx_data_mem_used = 0;
     for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      if (OB_FAIL(get_ls_tx_data_mem_used_(ls, ls_tx_data_mem_used))) {
-        LOG_WARN("[TenantFreezer] fail to get tx data mem used in one ls", KR(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(get_ls_tx_data_mem_used_(ls, ls_tx_data_mem_used))) {
+        LOG_WARN("[TenantFreezer] fail to get tx data mem used in one ls", KR(ret), K(ls->get_ls_id()));
       } else {
         tenant_tx_data_mem_used += ls_tx_data_mem_used;
       }
@@ -651,12 +652,21 @@ int ObTenantFreezer::check_and_do_freeze()
   } else if (!tenant_info_.is_loaded_) {
     // do nothing
   } else if (FALSE_IT(tenant_info_.get_freeze_ctx(ctx))) {
-  } else if (OB_FAIL(check_and_freeze_normal_data_(ctx))) {
-    LOG_WARN("[TenantFreezer] check and freeze normal data failed.", KR(ret));
-  } else if (OB_FAIL(check_and_freeze_tx_data_())) {
-    LOG_WARN("[TenantFreezer] check and freeze tx data failed.", KR(ret));
-  } else if (OB_FAIL(check_and_freeze_mds_table_())) {
-    LOG_WARN("[TenantFreezer] check and freeze mds table failed.", KR(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(check_and_freeze_normal_data_(ctx))) {
+      LOG_WARN("[TenantFreezer] check and freeze normal data failed.", KR(tmp_ret));
+    }
+
+    tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(check_and_freeze_tx_data_())) {
+      LOG_WARN("[TenantFreezer] check and freeze tx data failed.", KR(tmp_ret));
+    }
+
+    tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(check_and_freeze_mds_table_())) {
+      LOG_WARN("[TenantFreezer] check and freeze mds table failed.", KR(tmp_ret));
+    }
   }
 
   int64_t check_and_freeze_end_ts = ObTimeUtil::current_time();
