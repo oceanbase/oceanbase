@@ -11761,6 +11761,28 @@ TEST_F(TestBatchExecute, atomic_batch_ops)
   table = NULL;
 }
 
+// create table if not exists auto_increment_defensive_test
+// (C1 bigint AUTO_INCREMENT primary key) PARTITION BY KEY(C1) PARTITIONS 16;
+TEST_F(TestBatchExecute, auto_increment_auto_increment_defensive)
+{
+  OB_LOG(INFO, "begin single_insert");
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("auto_increment_defensive_test"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObITableEntity *entity = NULL;
+  entity = entity_factory.alloc();
+  ASSERT_TRUE(NULL != entity);
+  ObObj key;
+  int key_key = 1234;
+  key.set_int(key_key);
+  ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+  ObTableOperation table_operation = ObTableOperation::insert(*entity);
+  ObTableOperationResult r;
+  ASSERT_EQ(OB_NOT_SUPPORTED, the_table->execute(table_operation, r));
+}
+
 int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc,argv);

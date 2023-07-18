@@ -316,7 +316,7 @@ int ObTableCtx::adjust_rowkey()
   if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
-  } else { 
+  } else {
     bool has_auto_inc = false; // only one auto increment column in a table
     const ObRowkeyInfo &rowkey_info = table_schema_->get_rowkey_info();
     const ObColumnSchemaV2 *col_schema = nullptr;
@@ -330,6 +330,10 @@ int ObTableCtx::adjust_rowkey()
         LOG_WARN("fail to get column schema", K(ret), K(column_id));
       } else if (!has_auto_inc && col_schema->is_autoincrement()) {
         has_auto_inc = true;
+        if (col_schema->is_part_key_column()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("auto increment column could not be partition column", K(ret), K(*col_schema));
+        }
       } else if (OB_FAIL(adjust_column(*col_schema, obj_ptr[i]))) {
         LOG_WARN("fail to adjust column", K(ret), K(obj_ptr[i]));
       }
@@ -573,7 +577,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
           } else if (OB_FAIL(query_col_names_.push_back(column_name))) {
             LOG_WARN("fail to push back column name", K(ret), K(column_name));
           } else if (query.is_aggregate_query() && OB_FAIL(add_aggregate_proj(cell_idx, column_name, query.get_aggregations()))) {
-            LOG_WARN("failed to add aggregate projector", K(ret), K(cell_idx), K(column_name));  
+            LOG_WARN("failed to add aggregate projector", K(ret), K(cell_idx), K(column_name));
           } else if (is_index_scan_ && !is_index_back_ &&
               OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
             is_index_back_ = true; // 判断是否需要回表,查询的列不在索引表上即需要回表
@@ -786,7 +790,7 @@ int ObTableCtx::init_insert_up()
       exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
       if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
         LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-      }        
+      }
     }
   }
 
@@ -1144,13 +1148,15 @@ int ObTableCtx::init_agg_cell_proj(int64_t size)
     LOG_WARN("fail to allocate memory", K(ret), K(size));
   } else {
     for (int64_t i = 0; i < agg_cell_proj_.count(); i++) {
-      agg_cell_proj_.at(i) = -1;
-    }    
+      agg_cell_proj_.at(i) = ObTableAggCalculator::INVALID_PROJECT_ID;
+    }
   }
   return ret;
 }
 
-int ObTableCtx::add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObIArray<ObTableAggregation> &aggregations)
+int ObTableCtx::add_aggregate_proj(int64_t cell_idx,
+                                   const common::ObString &column_name,
+                                   const ObIArray<ObTableAggregation> &aggregations)
 {
   int ret = OB_SUCCESS;
   if (aggregations.empty()) {
@@ -1158,8 +1164,9 @@ int ObTableCtx::add_aggregate_proj(int64_t cell_idx, const common::ObString &col
     LOG_WARN("unexpected null aggregations", K(ret));
   } else {
     for (int64_t i = 0; i < aggregations.count(); i++) {
-      if (aggregations.at(i).get_column().case_compare(column_name) == 0 || aggregations.at(i).get_column() == "*") {
-        agg_cell_proj_.at(i) = cell_idx; 
+      if (aggregations.at(i).get_column().case_compare(column_name) == 0
+          || aggregations.at(i).is_agg_all_column()) {
+        agg_cell_proj_.at(i) = cell_idx;
       }
     }
   }
@@ -1170,45 +1177,47 @@ int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx &phy_plan_ctx)
 {
   int ret = OB_SUCCESS;
   ObIArray<share::AutoincParam> &auto_params = phy_plan_ctx.get_autoinc_params();
-  int64_t auto_increment_cache_size = -1;
-  if (OB_FAIL(get_session_info().get_auto_increment_cache_size(auto_increment_cache_size))) {
-    LOG_WARN("fail to get increment factor", K(ret));
-  } else if (OB_FAIL(auto_params.prepare_allocate(1))) { // only one auto inc in a table
-    LOG_WARN("fail to init auto params", K(ret));
-  }
   for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
-    OB_SUCC(ret) && iter != table_schema_->column_end() && !has_auto_inc_; ++iter) {
+      OB_SUCC(ret) && iter != table_schema_->column_end() && !has_auto_inc_; ++iter) {
     const ObColumnSchemaV2 *col_schema = *iter;
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is NULL", K(ret));
     } else if (col_schema->is_autoincrement()) {
       has_auto_inc_ = true;
-      AutoincParam &param = get_auto_inc_param();
-      param.tenant_id_ = tenant_id_;
-      param.autoinc_table_id_ = ref_table_id_;
-      param.autoinc_first_part_num_ = table_schema_->get_first_part_num();
-      param.autoinc_table_part_num_ = table_schema_->get_all_part_num();
-      param.autoinc_col_id_ = col_schema->get_column_id();
-      param.auto_increment_cache_size_ = auto_increment_cache_size;
-      param.part_level_ = table_schema_->get_part_level();
-      ObObjType column_type = col_schema->get_data_type();
-      param.autoinc_col_type_ = column_type;
-      param.autoinc_desired_count_ = 0;
-      param.autoinc_mode_is_order_ = table_schema_->is_order_auto_increment_mode();
-      param.autoinc_version_ = table_schema_->get_truncate_version();
-      param.total_value_count_ = 1;
-      param.autoinc_increment_ = 1;
-      param.autoinc_offset_ = 1;
-      param.part_value_no_order_ = true;
-      // for generate column id when use auto inc
-      set_auto_inc_column_id(col_schema->get_column_id());
-      set_auto_inc_column_name(col_schema->get_column_name_str());
-      if (col_schema->is_tbl_part_key_column()) {
-        // don't keep intra-partition value asc order when partkey column is auto inc
-        param.part_value_no_order_ = true;
+      int64_t auto_increment_cache_size = -1;
+      if (OB_FAIL(get_session_info().get_auto_increment_cache_size(auto_increment_cache_size))) {
+        LOG_WARN("fail to get increment factor", K(ret));
       } else {
-        auto_params.at(0) = param;
+        AutoincParam &param = get_auto_inc_param();
+        param.tenant_id_ = tenant_id_;
+        param.autoinc_table_id_ = ref_table_id_;
+        param.autoinc_first_part_num_ = table_schema_->get_first_part_num();
+        param.autoinc_table_part_num_ = table_schema_->get_all_part_num();
+        param.autoinc_col_id_ = col_schema->get_column_id();
+        param.auto_increment_cache_size_ = auto_increment_cache_size;
+        param.part_level_ = table_schema_->get_part_level();
+        ObObjType column_type = col_schema->get_data_type();
+        param.autoinc_col_type_ = column_type;
+        param.autoinc_desired_count_ = 0;
+        param.autoinc_mode_is_order_ = table_schema_->is_order_auto_increment_mode();
+        param.autoinc_version_ = table_schema_->get_truncate_version();
+        param.total_value_count_ = 1;
+        param.autoinc_increment_ = 1;
+        param.autoinc_offset_ = 1;
+        param.part_value_no_order_ = true;
+        // for generate column id when use auto inc
+        set_auto_inc_column_id(col_schema->get_column_id());
+        set_auto_inc_column_name(col_schema->get_column_name_str());
+        if (col_schema->is_tbl_part_key_column()) {
+          // don't keep intra-partition value asc order when partkey column is auto inc
+          param.part_value_no_order_ = true;
+        }
+        if (OB_FAIL(auto_params.prepare_allocate(1))) { // only one auto inc in a table
+          LOG_WARN("fail to init auto params", K(ret));
+        } else {
+          auto_params.at(0) = param;
+        }
       }
     }
   }
@@ -1219,11 +1228,13 @@ int ObTableCtx::update_auto_inc_value()
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
-  if (OB_FAIL(phy_plan_ctx->sync_last_value_local())) {
-    LOG_WARN("failed to sync last value", K(ret));
-  }
-  if (OB_FAIL(phy_plan_ctx->sync_last_value_global())) {
-    LOG_WARN("failed to sync last value", K(ret));
+  if (OB_ISNULL(phy_plan_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("phy_plan_ctx is null", K(ret));
+  } else if (OB_FAIL(phy_plan_ctx->sync_last_value_local())) {
+    LOG_WARN("fail to sync last value local", K(ret));
+  } else if (OB_FAIL(phy_plan_ctx->sync_last_value_global())) {
+    LOG_WARN("fail to sync last value global", K(ret));
   }
   return ret;
 }

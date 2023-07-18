@@ -642,6 +642,8 @@ public:
   {}
   ObTableAggregationType get_type() const { return type_; }
   const common::ObString &get_column() const { return column_; }
+  bool is_agg_all_column() const { return column_ == "*"; };
+  int deep_copy(common::ObIAllocator &allocator, ObTableAggregation &dst) const;
   TO_STRING_KV(K_(type), K_(column));
 private:
   ObTableAggregationType type_; // e.g. max

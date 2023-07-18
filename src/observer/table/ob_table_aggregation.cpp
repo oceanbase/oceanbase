@@ -14,10 +14,11 @@
 #include "ob_table_aggregation.h"
 #include "common/row/ob_row.h"
 #include "common/object/ob_obj_compare.h"
+#include "sql/engine/expr/ob_expr_add.h" // for ObExprAdd::is_add_out_of_range
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;
-        
+
 int ObTableAggCalculator::init() {
   int ret = OB_SUCCESS;
   if (OB_FAIL(results_.prepare_allocate(size_))) {
@@ -25,36 +26,49 @@ int ObTableAggCalculator::init() {
     LOG_WARN("fail to allocate aggregate result", K(ret), K_(size));
   } else if (OB_FAIL(counts_.prepare_allocate(size_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory for counts", K(ret), K_(counts));
+    LOG_WARN("fail to allocate memory for counts", K(ret), K_(size));
   } else if (OB_FAIL(sums_.prepare_allocate(size_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory for sums", K(ret), K_(sums));
+    LOG_WARN("fail to allocate memory for sums", K(ret), K_(size));
+  } else if (OB_FAIL(deep_copy_buffers_.prepare_allocate(size_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory for deep_copy_buffers_", K(ret), K_(size));
+  } else {
+    for (int64_t i = 0; i < size_; i++) {
+      results_.at(i).set_null();
+    }
   }
   return ret;
 }
 
+// 在min/max字符串类型时，需要不断的替换最大值/最小值，导致中间内存耗费很多
+// 因此使用中间临时内存，临时内存足够大时，可以复用，不够大时，先释放后重新申请
 int ObTableAggCalculator::deep_copy_value(int64_t idx, const ObObj &src, ObObj &dst)
 {
   int ret = OB_SUCCESS;
   int64_t src_deep_copy_size = src.get_deep_copy_size();
   int64_t dst_deep_copy_size = dst.get_deep_copy_size();
-  char *buf = deep_copy_buffers_.at(idx);
+  TempBuffer tmp_buf = deep_copy_buffers_.at(idx);
   int64_t pos = 0;
 
-  if (dst_deep_copy_size >= src_deep_copy_size) { // enough
-    if (OB_FAIL(dst.deep_copy(src, buf, src_deep_copy_size, pos))) {
+  if (tmp_buf.size_ >= src_deep_copy_size && OB_NOT_NULL(tmp_buf.buf_)) { // enough
+    if (OB_FAIL(dst.deep_copy(src, tmp_buf.buf_, src_deep_copy_size, pos))) {
       LOG_WARN("fail deep copy src obj", K(ret), K(src_deep_copy_size));
     }
   } else { // not enough, free old and alloc new
     // free
-    allocator_.free(buf);
+    if (OB_NOT_NULL(tmp_buf.buf_)) {
+      allocator_.free(tmp_buf.buf_);
+    }
     // alloc
-    buf = static_cast<char*>(allocator_.alloc(src_deep_copy_size));
-    if (OB_ISNULL(buf)) {
+    tmp_buf.buf_ = static_cast<char*>(allocator_.alloc(src_deep_copy_size));
+    if (OB_ISNULL(tmp_buf.buf_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ret), K(src_deep_copy_size));
-    } else if (OB_FAIL(dst.deep_copy(src, buf, src_deep_copy_size, pos))) {
+    } else if (OB_FAIL(dst.deep_copy(src, tmp_buf.buf_, src_deep_copy_size, pos))) {
       LOG_WARN("fail deep copy src obj", K(ret), K(src_deep_copy_size));
+    } else {
+      tmp_buf.size_ = src_deep_copy_size;
     }
   }
 
@@ -65,8 +79,10 @@ int ObTableAggCalculator::assign_value(int64_t idx, const ObObj &src, ObObj &dst
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(src.need_deep_copy()) && OB_FAIL(deep_copy_value(idx, src, dst))) {
-    LOG_WARN("fail to deep copy value", K(ret), K(src), K(dst));
+  if (OB_UNLIKELY(src.need_deep_copy())) {
+    if (OB_FAIL(deep_copy_value(idx, src, dst))) {
+      LOG_WARN("fail to deep copy value", K(ret), K(src), K(dst));
+    }
   } else {
     dst = src;
   }
@@ -85,7 +101,7 @@ int ObTableAggCalculator::aggregate_max(uint64_t idx, const ObNewRow &row)
       LOG_WARN("fail to compare", K(ret), K(max_val), K(cur_value));
     } else if (cmp_ret == ObObjCmpFuncs::CR_LT) {
       if (OB_FAIL(assign_value(idx, cur_value, max_val))) {
-        LOG_WARN("fail to assign value", K(ret), K(max_val), K(cur_value)); 
+        LOG_WARN("fail to assign value", K(ret), K(max_val), K(cur_value));
       }
     }
   } else if (!cur_value.is_null() && OB_FAIL(assign_value(idx, cur_value, max_val))) {
@@ -105,7 +121,7 @@ int ObTableAggCalculator::aggregate_min(uint64_t idx, const ObNewRow &row)
       LOG_WARN("fail to compare", K(ret), K(min_val), K(cur_value));
     } else if (cmp_ret == ObObjCmpFuncs::CR_GT) {
       if (OB_FAIL(assign_value(idx, cur_value, min_val))) {
-        LOG_WARN("fail to assign value", K(ret), K(min_val), K(cur_value)); 
+        LOG_WARN("fail to assign value", K(ret), K(min_val), K(cur_value));
       }
     }
   } else if (!cur_value.is_null() && OB_FAIL(assign_value(idx, cur_value, min_val))) {
@@ -120,16 +136,16 @@ void ObTableAggCalculator::aggregate_count(uint64_t idx, const ObNewRow &row, co
   ObObj &count_val = results_.at(idx);
   if (key_word.empty() || key_word == "*") {
     if (!count_val .is_null()) {
-      count_val.set_int(count_val .get_int() + 1); 
+      count_val.set_int(count_val.get_int() + 1);
     } else {
-      count_val.set_int(1); 
+      count_val.set_int(1);
     }
   } else {
     if (!cur_value.is_null()) {
-      if (!count_val .is_null()) {
-        count_val.set_int(count_val.get_int() + 1); 
+      if (!count_val.is_null()) {
+        count_val.set_int(count_val.get_int() + 1);
       } else {
-        count_val.set_int(1); 
+        count_val.set_int(1);
       }
     }
   }
@@ -152,7 +168,13 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
         if (sum_val.is_null()) {
           sum_val.set_int(cur_value.get_int());
         } else {
-          sum_val.set_int(sum_val.get_int() + cur_value.get_int());
+          int64_t res = 0;
+          if (sql::ObExprAdd::is_add_out_of_range(sum_val.get_int(), cur_value.get_int(), res)) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("data out of range", K(ret), K(sum_val), K(cur_value));
+          } else {
+            sum_val.set_int(res);
+          }
         }
         break;
       }
@@ -165,7 +187,13 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
         if (sum_val.is_null()) {
           sum_val.set_uint64(cur_value.get_uint64());
         } else {
-          sum_val.set_uint64(sum_val.get_uint64() + cur_value.get_uint64());
+          uint64_t res = 0;
+          if (sql::ObExprAdd::is_add_out_of_range(sum_val.get_uint64(), cur_value.get_uint64(), res)) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("data out of range", K(ret), K(sum_val), K(cur_value));
+          } else {
+            sum_val.set_uint64(res);
+          }
         }
         break;
       }
@@ -175,7 +203,13 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
         if (sum_val.is_null()) {
           sum_val.set_double(cur_value.get_float());
         } else {
-          sum_val.set_double(sum_val.get_double() + cur_value.get_float());
+          double res = sum_val.get_double() + (double)cur_value.get_float();
+          if (INFINITY == res) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("data out of range", K(ret), K(sum_val), K(cur_value));
+          } else {
+            sum_val.set_double(res);
+          }
         }
         break;
       }
@@ -185,13 +219,19 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
         if (sum_val.is_null()) {
           sum_val.set_double(cur_value.get_double());
         } else {
-          sum_val.set_double(sum_val.get_double() + cur_value.get_double());
+          double res = sum_val.get_double() + cur_value.get_double();
+          if (INFINITY == res) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("data out of range", K(ret), K(sum_val), K(cur_value));
+          } else {
+            sum_val.set_double(res);
+          }
         }
         break;
       }
       default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));  
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));
       }
     }
   }
@@ -214,7 +254,13 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
       case ObMediumIntType:
       case ObInt32Type:
       case ObIntType: {
-        sum += cur_value.get_int();
+        double res = sum + (double)cur_value.get_int();
+        if (INFINITY == res) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("data out of range", K(ret), K(sum), K(cur_value));
+        } else {
+          sum = res;
+        }
         break;
       }
       //unsigned int
@@ -223,24 +269,42 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
       case ObUMediumIntType:
       case ObUInt32Type:
       case ObUInt64Type: {
-        sum += cur_value.get_uint64();
+        double res = sum + (double)cur_value.get_uint64();
+        if (INFINITY == res) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("data out of range", K(ret), K(sum), K(cur_value));
+        } else {
+          sum = res;
+        }
         break;
       }
       //float and ufloat
       case ObFloatType:
       case ObUFloatType: {
-        sum += cur_value.get_float();
+        double res = sum + (double)cur_value.get_float();
+        if (INFINITY == res) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("data out of range", K(ret), K(sum), K(cur_value));
+        } else {
+          sum = res;
+        }
         break;
       }
       //double and udouble
       case ObDoubleType:
       case ObUDoubleType: {
-        sum += cur_value.get_double();
+        double res = sum + cur_value.get_double();
+        if (INFINITY == res) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("data out of range", K(ret), K(sum), K(cur_value));
+        } else {
+          sum = res;
+        }
         break;
       }
       default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("this data type does not support aggregate avg operation", K(ret), K(avg_type));  
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("this data type does not support aggregate avg operation", K(ret), K(avg_type));
       }
     }
   }
@@ -287,7 +351,7 @@ int ObTableAggCalculator::aggregate(const ObNewRow &row) {
           break;
         }
         default: {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_NOT_SUPPORTED;
           LOG_WARN("unexpected agg type", K(ret), K(agg_type));
           break;
         }

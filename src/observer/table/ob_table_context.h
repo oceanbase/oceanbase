@@ -31,13 +31,13 @@ struct ObTableAutoInc
 public:
   ObTableAutoInc()
       : param_(),
-        auto_inc_column_id_(),
+        auto_inc_column_id_(OB_INVALID_ID),
         auto_inc_column_name_()
   {
   }
   TO_STRING_KV(K_(param),
                K_(auto_inc_column_id),
-               K_(auto_inc_column_name))
+               K_(auto_inc_column_name));
   AutoincParam param_;
   uint64_t auto_inc_column_id_;
   ObString auto_inc_column_name_;
@@ -254,6 +254,15 @@ public:
   // for auto inc
   OB_INLINE void set_auto_inc_column_id(const uint64_t &auto_inc_column_id) { auto_inc_param_.auto_inc_column_id_ = auto_inc_column_id; }
   OB_INLINE void set_auto_inc_column_name(const ObString &auto_inc_column_name) { auto_inc_param_.auto_inc_column_name_ = auto_inc_column_name; }
+  OB_INLINE bool need_auto_inc_expr()
+  {
+    // delete/update/get/scan操作只需要生成列引用表达式
+    return has_auto_inc_
+        && operation_type_ != ObTableOperationType::DEL
+        && operation_type_ != ObTableOperationType::UPDATE
+        && operation_type_ != ObTableOperationType::GET
+        && operation_type_ != ObTableOperationType::SCAN;
+  }
 public:
   // 初始化common部分(不包括expr_info_, exec_ctx_, all_exprs_)
   int init_common(ObTableApiCredential &credential,
@@ -319,7 +328,7 @@ private:
   // @param [in]  column_name   The schema cell column name.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObIArray<ObTableAggregation> &aggregations);
-  
+
   AutoincParam &get_auto_inc_param() { return auto_inc_param_.param_; }
 
   // Add auto inc param to phy_plan_ctx.

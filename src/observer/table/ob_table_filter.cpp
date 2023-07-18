@@ -253,15 +253,12 @@ int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryRe
     LOG_WARN("one_result_ should not be null", K(ret));
   } else {
     ObNewRow *row = nullptr;
-    int64_t row_count = 0;
     while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
       if (OB_FAIL(agg_calculator_.aggregate(*row))) {
         LOG_WARN("fail to aggregate", K(ret), K(*row));
-      } else {
-        row_count++;
       }
     }  // end while
-    if (OB_ITER_END == ret && row_count != 0) {
+    if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
       agg_calculator_.final_aggregate(); // agg sum/svg finally
       has_more_rows_ = false;
@@ -391,9 +388,6 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
   if (OB_ISNULL(one_result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("one_result_ should not be null", K(ret));
-  } else if (is_query_sync_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query async is not support when use query filter", K(ret));
   } else {
     const int32_t limit = query_->get_limit();
     const int32_t offset = query_->get_offset();
@@ -401,7 +395,6 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
     bool has_reach_limit = (row_idx_ >= offset + limit);
     const ObIArray<ObString> &select_columns = one_result_->get_select_columns();
     const int64_t N = select_columns.count();
-    int64_t row_count = 0;
     while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
            OB_SUCC(scan_result_->get_next_row(row))) {
       if (N != row->get_count()) {
@@ -417,15 +410,14 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
       } else if (filtered) {
         continue;
       }
-      
+
       if (has_limit && row_idx_ < offset) {
         row_idx_++;
       } else if (OB_FAIL(agg_calculator_.aggregate(*row))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to get aggregate ", K(ret));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get aggregate ", K(ret));
       } else {
         row_idx_++;
-        row_count ++;
       }
       has_reach_limit = (row_idx_ >= offset + limit);
     } // end while
@@ -434,7 +426,7 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
       ret = OB_ITER_END;
     }
 
-    if (OB_ITER_END == ret && row_count != 0) {
+    if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
       agg_calculator_.final_aggregate(); // agg sum/svg finally
       has_more_rows_ = false;
@@ -459,9 +451,6 @@ int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_re
   } else if (OB_ISNULL(one_result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("one_result_ should not be null", K(ret));
-  } else if (is_query_sync_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query async is not support when use query filter", K(ret));
   } else {
     one_result_->reset_except_property();
   }
