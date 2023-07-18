@@ -129,9 +129,7 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         // same row more than once if the sql insert onto duplicate with the
         // same row more than once. It may have no chance to batch the same row.
         // So we need bypass this case.
-      } else if (write_flag.is_insert_up()
-                 && blocksstable::ObDmlFlag::DF_UPDATE == writer_dml_flag
-                 && blocksstable::ObDmlFlag::DF_UPDATE == locker_dml_flag) {
+      } else if (write_flag.is_insert_up()) {
         // bypass the case
       // Case 9: For the case of the write only index, it may operate the same
       // row more than once under the case that main table has two rows pointing
