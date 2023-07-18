@@ -36,7 +36,8 @@ namespace logfetcher
   if (OB_TIMEOUT == arg \
   || OB_TENANT_NOT_EXIST == arg \
   || OB_TENANT_NOT_IN_SERVER == arg \
-  || OB_IN_STOP_STATE == arg) \
+  || OB_IN_STOP_STATE == arg \
+  || OB_SERVER_IS_INIT == arg) \
 
 int64_t FetchStream::g_rpc_timeout = ObLogFetcherConfig::default_fetch_log_rpc_timeout_sec * _SEC_;
 int64_t FetchStream::g_dml_progress_limit = ObLogFetcherConfig::default_progress_limit_sec_for_dml * _SEC_;
