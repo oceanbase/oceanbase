@@ -380,7 +380,7 @@ void ObResourceGroup::check_worker_count()
     {
       ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_->id()));
       enable_dynamic_worker = tenant_config.is_valid() ? tenant_config->_ob_enable_dynamic_worker : true;
-      threshold = tenant_config.is_valid() ? tenant_config->_worker_long_stall_threshold : 3 * 1000;
+      threshold = tenant_config.is_valid() ? tenant_config->_stall_threshold_for_dynamic_worker : 3 * 1000;
     }
     DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
       const auto w = static_cast<ObThWorker*>(wnode->get_data());
@@ -1378,7 +1378,7 @@ void ObTenant::check_worker_count()
     {
       ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
       enable_dynamic_worker = tenant_config.is_valid() ? tenant_config->_ob_enable_dynamic_worker : true;
-      threshold = tenant_config.is_valid() ? tenant_config->_worker_long_stall_threshold : 3 * 1000;
+      threshold = tenant_config.is_valid() ? tenant_config->_stall_threshold_for_dynamic_worker : 3 * 1000;
     }
     // assume that high priority and normal priority were busy.
     DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
