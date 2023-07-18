@@ -11,7 +11,9 @@
  */
 
 #include "ob_archive_io.h"
+#include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_tracepoint.h"            // EventTable
 #include "share/ob_device_manager.h"              // ObIODevice
 #include "share/backup/ob_backup_io_adapter.h"    // ObBackupIoAdapter
@@ -77,6 +79,13 @@ int ObArchiveIO::push_log(const ObString &uri,
   if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
     ARCHIVE_LOG(WARN, "fail to close file and release device!", K(tmp_ret), K(uri), KP(storage_info));
   }
+
+  if (OB_CLOUD_OBJECT_NOT_APPENDABLE == ret) {
+    if (OB_FAIL(check_context_match_in_normal_file_(uri, storage_info, data, data_len, offset))) {
+      ARCHIVE_LOG(WARN, "check_context_match_ failed", K(uri));
+    }
+  }
+
   return ret;
 }
 
@@ -86,5 +95,40 @@ int ObArchiveIO::mkdir(const ObString &uri, const share::ObBackupStorageInfo *st
   return util.mkdir(uri, storage_info);
 }
 
+int ObArchiveIO::check_context_match_in_normal_file_(const ObString &uri,
+    const share::ObBackupStorageInfo *storage_info,
+    char *data,
+    const int64_t data_len,
+    const int64_t offset)
+{
+  int ret = OB_SUCCESS;
+  int64_t length = 0;
+  char *read_buffer = NULL;
+  int64_t read_size = 0;
+  ObBackupIoAdapter reader;
+  ObArenaAllocator allocator;
+
+  if (OB_FAIL(reader.get_file_length(uri, storage_info, length))) {
+    ARCHIVE_LOG(WARN, "get file_length failed", K(uri));
+  } else if (OB_UNLIKELY(length <= offset)) {
+    ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
+    ARCHIVE_LOG(ERROR, "object length smaller than offset", K(uri), K(length), K(offset));
+  } else if (OB_UNLIKELY(length < offset + data_len)) {
+    ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
+    ARCHIVE_LOG(ERROR, "object length smaller than write buffer total offset", K(uri), K(length), K(offset), K(data_len));
+  } else if (OB_ISNULL(read_buffer = static_cast<char*>(allocator.alloc(data_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    ARCHIVE_LOG(WARN, "allocate memory failed", K(uri), K(data_len));
+  } else if (OB_FAIL(reader.read_part_file(uri, storage_info, read_buffer, data_len, offset, read_size))) {
+    ARCHIVE_LOG(WARN, "pread failed", K(uri), K(read_buffer), K(data_len), K(offset));
+  } else if (read_size < data_len) {
+    ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
+    ARCHIVE_LOG(ERROR, "read_size smaller than data_len",  K(uri), K(length), K(offset), K(data_len), K(read_size));
+  } else if (0 != MEMCMP(data, read_buffer, data_len)) {
+    ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
+    ARCHIVE_LOG(ERROR, "data inconsistent", K(uri), K(length), K(offset), K(data_len), K(read_size));
+  }
+  return ret;
+}
 } // namespace archive
 } // namespace oceanbase

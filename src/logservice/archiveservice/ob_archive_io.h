@@ -37,6 +37,13 @@ public:
 
   int mkdir(const ObString &uri,
       const share::ObBackupStorageInfo *storage_info);
+
+private:
+  int check_context_match_in_normal_file_(const ObString &uri,
+      const share::ObBackupStorageInfo *storage_info,
+      char *data,
+      const int64_t data_len,
+      const int64_t offset);
 };
 } // namespace archive
 } // namespace oceanbase
