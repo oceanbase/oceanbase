@@ -10833,6 +10833,7 @@ def_table_schema(
   ('rebuild_seq', 'int'),
   ('tablet_change_checkpoint_scn', 'uint'),
   ('transfer_scn', 'uint'),
+  ('tx_blocked', 'uint'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

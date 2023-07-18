@@ -174,6 +174,9 @@ public:
   int check_in_leader_serving_state(bool& bool_ret);
   int set_max_replay_commit_version(share::SCN commit_version);
   transaction::ObTxRetainCtxMgr *get_retain_ctx_mgr();
+
+  // check tx ls blocked
+  int check_tx_blocked(bool &tx_blocked) const;
 private:
   void reset_();
 

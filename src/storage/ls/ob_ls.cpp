@@ -1218,6 +1218,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
   bool is_log_sync = false;
   bool is_need_rebuild = false;
   ObMigrationStatus migrate_status;
+  bool tx_blocked = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -1228,6 +1229,8 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     LOG_WARN("get ls need rebuild info failed", K(ret), KPC(this));
   } else if (OB_FAIL(ls_meta_.get_migration_status(migrate_status))) {
     LOG_WARN("get ls migrate status failed", K(ret), KPC(this));
+  } else if (OB_FAIL(ls_tx_svr_.check_tx_blocked(tx_blocked))) {
+    LOG_WARN("check tx ls state error", K(ret),KPC(this));
   } else {
     ls_info.ls_id_ = ls_meta_.ls_id_;
     ls_info.replica_type_ = ls_meta_.get_replica_type();
@@ -1241,6 +1244,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
     ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
     ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
+    ls_info.tx_blocked_ = tx_blocked;
   }
   return ret;
 }
