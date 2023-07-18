@@ -46,10 +46,12 @@ jobs:
       shell: bash
       run: |
         rm -rf build_debug
-        deps/3rd/usr/local/oceanbase/devtools/bin/ccache -c
+        export CCACHE_LOGFILE=$PWD/ccache.log
+        deps/3rd/usr/local/oceanbase/devtools/bin/ccache -z
         bash build.sh debug -DOB_USE_CCACHE=ON
         cd build_debug && make -j4 && cd -
         deps/3rd/usr/local/oceanbase/devtools/bin/ccache -s
+        cat $PWD/ccache.log
 
   centos-x86_64:
     runs-on: ubuntu-20.04
@@ -91,7 +93,7 @@ jobs:
       shell: bash
       run: |
         rm -rf build_debug
-        deps/3rd/usr/local/oceanbase/devtools/bin/ccache -c
+        deps/3rd/usr/local/oceanbase/devtools/bin/ccache -z
         bash build.sh debug -DOB_USE_CCACHE=ON
         cd build_debug && make -j4 && cd -
         deps/3rd/usr/local/oceanbase/devtools/bin/ccache -s
