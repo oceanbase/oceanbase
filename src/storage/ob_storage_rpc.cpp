@@ -3546,8 +3546,10 @@ int ObStorageRpc::get_config_version_and_transfer_scn(
     ObStorageChangeMemberRes res;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
+    const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
+                           .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
                            .get_config_version_and_transfer_scn(arg, res))) {
       LOG_WARN("failed to get config version and transfer scn", K(ret), K(src_info), K(arg));
@@ -3668,6 +3670,7 @@ int ObStorageRpc::lock_config_change(
     arg.lock_timeout_ = lock_timeout;
     const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
                            .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
                            .lock_config_change(arg, res))) {
@@ -3701,6 +3704,7 @@ int ObStorageRpc::unlock_config_change(
     arg.lock_timeout_ = lock_timeout;
     const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
                            .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
                            .unlock_config_change(arg, res))) {
