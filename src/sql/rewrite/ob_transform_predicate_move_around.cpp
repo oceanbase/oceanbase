@@ -2028,7 +2028,7 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
                  generalized_columns, stmt.get_group_exprs())) {
       // do nothing
       OPT_TRACE(pred, "has none group by expr, can not pushdown");
-    } else if (is_mysql_mode() && ObOptimizerUtil::subset_exprs(
+    } else if (ObOptimizerUtil::overlap_exprs(
                  generalized_columns, stmt.get_rollup_exprs())) {
       //do nothing
       OPT_TRACE(pred, "has rollup expr in mysql mode, can not pushdown");
