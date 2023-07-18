@@ -3335,7 +3335,6 @@ int ObTableSqlService::gen_column_dml(
   ObString orig_default_value;
   ObString cur_default_value;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
-  char* extended_type_info_buf = NULL;
   
   if (ob_is_json(column.get_data_type()) && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_313) {
     ret = OB_NOT_SUPPORTED;
@@ -3360,17 +3359,15 @@ int ObTableSqlService::gen_column_dml(
     char* cur_default_value_buf = NULL;
     orig_default_value_buf = static_cast<char*>(allocator.alloc(value_buf_len));
     cur_default_value_buf = static_cast<char*>(allocator.alloc(value_buf_len));
-    extended_type_info_buf = static_cast<char*>(allocator.alloc(OB_MAX_VARBINARY_LENGTH));
     ObWorker::CompatMode compat_mode = ObWorker::CompatMode::INVALID;
-    if (OB_ISNULL(orig_default_value_buf) || OB_ISNULL(cur_default_value_buf) || OB_ISNULL(extended_type_info_buf)) {
+    if (OB_ISNULL(orig_default_value_buf) || OB_ISNULL(cur_default_value_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for default value buffer failed");
+      LOG_WARN("allocate memory for default value buffer failed", K(ret));
     } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(column.get_tenant_id(), compat_mode))) {
       LOG_WARN("fail to get tenant mode", K(ret));
     } else {
       MEMSET(orig_default_value_buf, 0, value_buf_len);
       MEMSET(cur_default_value_buf, 0, value_buf_len);
-      MEMSET(extended_type_info_buf, 0, OB_MAX_VARBINARY_LENGTH);
 
       int64_t orig_default_value_len = 0;
       int64_t cur_default_value_len = 0;
@@ -3409,10 +3406,17 @@ int ObTableSqlService::gen_column_dml(
     ObString bin_extended_type_info;
     if (OB_SUCC(ret) && column.is_enum_or_set()) {
       int64_t pos = 0;
-      if (OB_FAIL(column.serialize_extended_type_info(extended_type_info_buf, OB_MAX_VARBINARY_LENGTH, pos))) {
-        LOG_WARN("fail to serialize_extended_type_info", K(ret));
+      char* extended_type_info_buf = static_cast<char *>(allocator.alloc(OB_MAX_VARBINARY_LENGTH));
+      if (OB_ISNULL(extended_type_info_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory for default value buffer failed", K(ret));
       } else {
-        bin_extended_type_info.assign_ptr(extended_type_info_buf, static_cast<int32_t>(pos));
+        MEMSET(extended_type_info_buf, 0, OB_MAX_VARBINARY_LENGTH);
+        if (OB_FAIL(column.serialize_extended_type_info(extended_type_info_buf, OB_MAX_VARBINARY_LENGTH, pos))) {
+          LOG_WARN("fail to serialize_extended_type_info", K(ret));
+        } else {
+          bin_extended_type_info.assign_ptr(extended_type_info_buf, static_cast<int32_t>(pos));
+        }
       }
     }
     if (OB_SUCC(ret) &&
