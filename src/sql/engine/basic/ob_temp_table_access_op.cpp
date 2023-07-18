@@ -203,6 +203,7 @@ void ObTempTableAccessOp::destroy()
 {
   result_info_guard_.reset();
   ObOperator::destroy();
+  interm_result_ids_.reset();
 }
 
 int ObTempTableAccessOp::inner_get_next_row()

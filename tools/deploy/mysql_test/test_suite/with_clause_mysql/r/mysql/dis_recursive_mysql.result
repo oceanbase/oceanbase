@@ -229,9 +229,9 @@ Query Plan
 |2 |  ├─TABLE FULL SCAN      |e   |1       |3           |
 |3 |  └─MERGE JOIN           |    |432     |132         |
 |4 |    │ MATERIAL           |    |14      |7           |
-|5 |    └─│ SORT             |    |14      |5           |
-|6 |      │ └─TABLE FULL SCAN|e   |14      |3           |
-|7 |      SORT               |    |199     |107         |
+|5 |    │ └─SORT             |    |14      |5           |
+|6 |    │   └─TABLE FULL SCAN|e   |14      |3           |
+|7 |    └─SORT               |    |199     |107         |
 |8 |      └─TABLE FULL SCAN  |r   |199     |1           |
 =========================================================
 Outputs & filters:
@@ -400,10 +400,10 @@ Query Plan
 |5 |  │   └─TABLE FULL SCAN  |d   |14      |3           |
 |6 |  └─HASH JOIN            |    |504     |34          |
 |7 |    │ MATERIAL           |    |17      |11          |
-|8 |    └─│ HASH JOIN        |    |17      |9           |
-|9 |      │ ├─TABLE FULL SCAN|d   |14      |3           |
-|10|      │ └─TABLE FULL SCAN|e   |14      |3           |
-|11|      TABLE FULL SCAN    |r   |199     |1           |
+|8 |    │ └─HASH JOIN        |    |17      |9           |
+|9 |    │   ├─TABLE FULL SCAN|d   |14      |3           |
+|10|    │   └─TABLE FULL SCAN|e   |14      |3           |
+|11|    └─TABLE FULL SCAN    |r   |199     |1           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -918,10 +918,10 @@ Query Plan
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
 |8 |    └─HASH JOIN            |    |922     |34          |
 |9 |      │ MATERIAL           |    |22      |10          |
-|10|      └─│ HASH JOIN        |    |22      |8           |
-|11|        │ ├─TABLE FULL SCAN|e   |5       |3           |
-|12|        │ └─TABLE FULL SCAN|n   |17      |3           |
-|13|        TABLE FULL SCAN    |r   |199     |1           |
+|10|      │ └─HASH JOIN        |    |22      |8           |
+|11|      │   ├─TABLE FULL SCAN|e   |5       |3           |
+|12|      │   └─TABLE FULL SCAN|n   |17      |3           |
+|13|      └─TABLE FULL SCAN    |r   |199     |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1025,10 +1025,10 @@ Query Plan
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
 |8 |    └─HASH JOIN            |    |922     |37          |
 |9 |      │ MATERIAL           |    |22      |13          |
-|10|      └─│ HASH JOIN        |    |22      |11          |
-|11|        │ ├─TABLE FULL SCAN|n   |17      |3           |
-|12|        │ └─TABLE FULL SCAN|e   |5       |3           |
-|13|        TABLE FULL SCAN    |r   |199     |1           |
+|10|      │ └─HASH JOIN        |    |22      |11          |
+|11|      │   ├─TABLE FULL SCAN|n   |17      |3           |
+|12|      │   └─TABLE FULL SCAN|e   |5       |3           |
+|13|      └─TABLE FULL SCAN    |r   |199     |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1766,9 +1766,9 @@ Query Plan
 |2 |  ├─TABLE FULL SCAN      |e   |1       |3           |
 |3 |  └─MERGE JOIN           |    |432     |132         |
 |4 |    │ MATERIAL           |    |14      |7           |
-|5 |    └─│ SORT             |    |14      |5           |
-|6 |      │ └─TABLE FULL SCAN|e   |14      |3           |
-|7 |      SORT               |    |199     |107         |
+|5 |    │ └─SORT             |    |14      |5           |
+|6 |    │   └─TABLE FULL SCAN|e   |14      |3           |
+|7 |    └─SORT               |    |199     |107         |
 |8 |      └─TABLE FULL SCAN  |r   |199     |1           |
 =========================================================
 Outputs & filters:
@@ -1937,10 +1937,10 @@ Query Plan
 |5 |  │   └─TABLE FULL SCAN  |d   |14      |3           |
 |6 |  └─HASH JOIN            |    |504     |34          |
 |7 |    │ MATERIAL           |    |17      |11          |
-|8 |    └─│ HASH JOIN        |    |17      |9           |
-|9 |      │ ├─TABLE FULL SCAN|d   |14      |3           |
-|10|      │ └─TABLE FULL SCAN|e   |14      |3           |
-|11|      TABLE FULL SCAN    |r   |199     |1           |
+|8 |    │ └─HASH JOIN        |    |17      |9           |
+|9 |    │   ├─TABLE FULL SCAN|d   |14      |3           |
+|10|    │   └─TABLE FULL SCAN|e   |14      |3           |
+|11|    └─TABLE FULL SCAN    |r   |199     |1           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2455,10 +2455,10 @@ Query Plan
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
 |8 |    └─HASH JOIN            |    |922     |34          |
 |9 |      │ MATERIAL           |    |22      |10          |
-|10|      └─│ HASH JOIN        |    |22      |8           |
-|11|        │ ├─TABLE FULL SCAN|e   |5       |3           |
-|12|        │ └─TABLE FULL SCAN|n   |17      |3           |
-|13|        TABLE FULL SCAN    |r   |199     |1           |
+|10|      │ └─HASH JOIN        |    |22      |8           |
+|11|      │   ├─TABLE FULL SCAN|e   |5       |3           |
+|12|      │   └─TABLE FULL SCAN|n   |17      |3           |
+|13|      └─TABLE FULL SCAN    |r   |199     |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -2562,10 +2562,10 @@ Query Plan
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
 |8 |    └─HASH JOIN            |    |922     |37          |
 |9 |      │ MATERIAL           |    |22      |13          |
-|10|      └─│ HASH JOIN        |    |22      |11          |
-|11|        │ ├─TABLE FULL SCAN|n   |17      |3           |
-|12|        │ └─TABLE FULL SCAN|e   |5       |3           |
-|13|        TABLE FULL SCAN    |r   |199     |1           |
+|10|      │ └─HASH JOIN        |    |22      |11          |
+|11|      │   ├─TABLE FULL SCAN|n   |17      |3           |
+|12|      │   └─TABLE FULL SCAN|e   |5       |3           |
+|13|      └─TABLE FULL SCAN    |r   |199     |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -3304,9 +3304,9 @@ Query Plan
 |2 |  ├─TABLE FULL SCAN      |e   |1       |3           |
 |3 |  └─MERGE JOIN           |    |432     |132         |
 |4 |    │ MATERIAL           |    |14      |7           |
-|5 |    └─│ SORT             |    |14      |5           |
-|6 |      │ └─TABLE FULL SCAN|e   |14      |3           |
-|7 |      SORT               |    |199     |107         |
+|5 |    │ └─SORT             |    |14      |5           |
+|6 |    │   └─TABLE FULL SCAN|e   |14      |3           |
+|7 |    └─SORT               |    |199     |107         |
 |8 |      └─TABLE FULL SCAN  |r   |199     |1           |
 =========================================================
 Outputs & filters:
@@ -3475,10 +3475,10 @@ Query Plan
 |5 |  │   └─TABLE FULL SCAN  |d   |14      |3           |
 |6 |  └─HASH JOIN            |    |504     |34          |
 |7 |    │ MATERIAL           |    |17      |11          |
-|8 |    └─│ HASH JOIN        |    |17      |9           |
-|9 |      │ ├─TABLE FULL SCAN|d   |14      |3           |
-|10|      │ └─TABLE FULL SCAN|e   |14      |3           |
-|11|      TABLE FULL SCAN    |r   |199     |1           |
+|8 |    │ └─HASH JOIN        |    |17      |9           |
+|9 |    │   ├─TABLE FULL SCAN|d   |14      |3           |
+|10|    │   └─TABLE FULL SCAN|e   |14      |3           |
+|11|    └─TABLE FULL SCAN    |r   |199     |1           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -3993,10 +3993,10 @@ Query Plan
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
 |8 |    └─HASH JOIN            |    |922     |34          |
 |9 |      │ MATERIAL           |    |22      |10          |
-|10|      └─│ HASH JOIN        |    |22      |8           |
-|11|        │ ├─TABLE FULL SCAN|e   |5       |3           |
-|12|        │ └─TABLE FULL SCAN|n   |17      |3           |
-|13|        TABLE FULL SCAN    |r   |199     |1           |
+|10|      │ └─HASH JOIN        |    |22      |8           |
+|11|      │   ├─TABLE FULL SCAN|e   |5       |3           |
+|12|      │   └─TABLE FULL SCAN|n   |17      |3           |
+|13|      └─TABLE FULL SCAN    |r   |199     |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -4100,10 +4100,10 @@ Query Plan
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |3           |
 |8 |    └─HASH JOIN            |    |922     |37          |
 |9 |      │ MATERIAL           |    |22      |13          |
-|10|      └─│ HASH JOIN        |    |22      |11          |
-|11|        │ ├─TABLE FULL SCAN|n   |17      |3           |
-|12|        │ └─TABLE FULL SCAN|e   |5       |3           |
-|13|        TABLE FULL SCAN    |r   |199     |1           |
+|10|      │ └─HASH JOIN        |    |22      |11          |
+|11|      │   ├─TABLE FULL SCAN|n   |17      |3           |
+|12|      │   └─TABLE FULL SCAN|e   |5       |3           |
+|13|      └─TABLE FULL SCAN    |r   |199     |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -4767,10 +4767,10 @@ Query Plan
 |8 |    └─NESTED-LOOP SEMI JOIN  |     |1048    |453         |
 |9 |      ├─HASH JOIN            |     |3142    |39          |
 |10|      │ │ MATERIAL           |     |16      |14          |
-|11|      │ └─│ HASH JOIN        |     |16      |10          |
-|12|      │   │ ├─TABLE FULL SCAN|n    |17      |3           |
-|13|      │   │ └─TABLE FULL SCAN|e    |1       |3           |
-|14|      │   TABLE FULL SCAN    |r    |199     |1           |
+|11|      │ │ └─HASH JOIN        |     |16      |10          |
+|12|      │ │   ├─TABLE FULL SCAN|n    |17      |3           |
+|13|      │ │   └─TABLE FULL SCAN|e    |1       |3           |
+|14|      │ └─TABLE FULL SCAN    |r    |199     |1           |
 |15|      └─MATERIAL             |     |7       |4           |
 |16|        └─SUBPLAN SCAN       |VIEW1|7       |4           |
 |17|          └─HASH GROUP BY    |     |7       |4           |
@@ -4883,10 +4883,10 @@ Query Plan
 |9 |      ├─NESTED-LOOP JOIN CARTESIAN |       |3142    |128         |
 |10|      │ ├─HASH JOIN                |       |3142    |39          |
 |11|      │ │ │ MATERIAL               |       |16      |14          |
-|12|      │ │ └─│ HASH JOIN            |       |16      |10          |
-|13|      │ │   │ ├─TABLE FULL SCAN    |n      |17      |3           |
-|14|      │ │   │ └─TABLE FULL SCAN    |e      |1       |3           |
-|15|      │ │   TABLE FULL SCAN        |r      |199     |1           |
+|12|      │ │ │ └─HASH JOIN            |       |16      |10          |
+|13|      │ │ │   ├─TABLE FULL SCAN    |n      |17      |3           |
+|14|      │ │ │   └─TABLE FULL SCAN    |e      |1       |3           |
+|15|      │ │ └─TABLE FULL SCAN        |r      |199     |1           |
 |16|      │ └─MATERIAL                 |       |1       |2           |
 |17|      │   └─SUBPLAN SCAN           |VIEW2  |1       |2           |
 |18|      │     └─TABLE FULL SCAN      |disemp1|1       |2           |

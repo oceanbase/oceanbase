@@ -402,6 +402,9 @@ void ObLogicalOperator::set_child(int64_t child_num,
   if (OB_SUCC(ret) && child_.count() > child_num) {
     child_.at(child_num) = child_op;
   }
+  if (NULL != child_op) {
+    child_op->set_parent(this);
+  }
 }
 
 int ObLogicalOperator::get_parent(ObLogicalOperator *root, ObLogicalOperator *&parent)
