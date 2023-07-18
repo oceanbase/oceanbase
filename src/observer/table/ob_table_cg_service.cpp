@@ -15,6 +15,7 @@
 #include "share/datum/ob_datum_util.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "share/system_variable/ob_system_variable.h" // for ObBinlogRowImage::FULL
+#include "sql/engine/expr/ob_expr_autoinc_nextval.h" // for ObAutoincNextvalExtra
 
 namespace oceanbase
 {
@@ -154,9 +155,15 @@ int ObTableExprCgService::resolve_generated_column_expr(ObTableCtx &ctx)
 
 int ObTableExprCgService::generate_column_ref_raw_expr(ObTableCtx &ctx,
                                                        const ObColumnSchemaV2 &col_schema,
-                                                       ObColumnRefRawExpr *&col_ref_expr)
+                                                       ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
+
+  ObColumnRefRawExpr *col_ref_expr = NULL;
+  // 存储最开始生成的列原生表达式, 用于后续生成主键冲突
+  ObIArray<ObColumnRefRawExpr*> &all_column_exprs = ctx.get_all_column_ref_exprs();
+  // 在update场景下, 会多次调用该函数，我们只需要存最开始生成的列引用表达式，记录下是否存储满
+  bool is_full = (ctx.get_table_schema()->get_column_count() == all_column_exprs.count());
 
   if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(),
                                                 col_schema,
@@ -165,8 +172,33 @@ int ObTableExprCgService::generate_column_ref_raw_expr(ObTableCtx &ctx,
   } else if (OB_ISNULL(col_ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
+  } else {
+    expr = col_ref_expr;
+  } 
+  if (!is_full && OB_FAIL(all_column_exprs.push_back(col_ref_expr))) {
+    LOG_WARN("fail to push back column ref expr to all column exprs", K(ret));  
+  } else {
+    if (col_schema.is_autoincrement() && (ctx.get_opertion_type() != ObTableOperationType::DEL)    // 特判下，若为delete/update/get/scan操作
+                                      && (ctx.get_opertion_type() != ObTableOperationType::UPDATE) // 则走原有的列引用表达式
+                                      && (ctx.get_opertion_type() != ObTableOperationType::GET)    // 自增表达式结构为: con_conv_expr - auto_inc_expr - con_conv_expr
+                                      && (ctx.get_opertion_type() != ObTableOperationType::SCAN)) {
+      if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(ctx.get_expr_factory(),
+                                                        ctx.get_allocator(),
+                                                          *col_ref_expr,
+                                                          expr,
+                                                          &ctx.get_session_info()))) {
+        LOG_WARN("fail to build column conv expr", K(ret), K(*col_ref_expr));
+      } else if (OB_FAIL(generate_autoinc_nextval_expr(ctx, expr, col_schema))) {
+        LOG_WARN("fail to generate auto inc next val expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(ctx.get_expr_factory(),
+                                                                ctx.get_allocator(),
+                                                                *col_ref_expr,
+                                                                expr,
+                                                                &ctx.get_session_info()))) {
+          LOG_WARN("fail to build column conv expr", K(ret));
+      }
+    }
   }
-
   return ret;
 }
 
@@ -202,7 +234,7 @@ int ObTableExprCgService::generate_column_raw_exprs(ObTableCtx &ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(ctx));
   } else {
-    ObColumnRefRawExpr *col_ref_expr = nullptr;
+    ObRawExpr *col_ref_expr = nullptr;
     const ObColumnSchemaV2 *column_schema = nullptr;
     const uint64_t column_cnt = table_schema->get_column_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
@@ -238,7 +270,7 @@ int ObTableExprCgService::generate_full_assign_raw_exprs(ObTableCtx &ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(ctx));
   } else {
-    ObColumnRefRawExpr *col_ref_expr = nullptr;
+    ObRawExpr *col_ref_expr = nullptr;
     const ObColumnSchemaV2 *column_schema = nullptr;
     const uint64_t column_cnt = table_schema->get_column_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
@@ -284,7 +316,7 @@ int ObTableExprCgService::generate_full_assign_raw_exprs(ObTableCtx &ctx)
   // 针对increment和append场景，将对应的列表达式设置为stored生成列表达式，并且构造生成列
   if (OB_SUCC(ret) && is_inc_or_append) {
     const ObColumnSchemaV2 *column_schema = nullptr;
-    ObColumnRefRawExpr *col_ref_expr = nullptr;
+    ObRawExpr *col_ref_expr = nullptr;
     ObIArray<sql::ObRawExpr *> &delta_exprs = ctx.get_delta_exprs();
     const ObIArray<ObString> &expr_strs = ctx.get_expr_strs();
     const ObTableCtx::ObAssignIds &assign_ids = ctx.get_assign_ids();
@@ -295,6 +327,9 @@ int ObTableExprCgService::generate_full_assign_raw_exprs(ObTableCtx &ctx)
       if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_id))) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get column schema", K(ret), K(column_id));
+      } else if (column_schema->is_autoincrement()) { // do not support delta on auto increment column currently
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("auto increment column do not support delta", K(ret), K(*column_schema));
       } else if (OB_FAIL(generate_column_ref_raw_expr(ctx, *column_schema, col_ref_expr))) {
         LOG_WARN("fail to generate column ref raw expr", K(ret), K(*column_schema));
       } else if (OB_FAIL(delta_exprs.push_back(col_ref_expr))) {
@@ -576,28 +611,51 @@ int ObTableExprCgService::refresh_delete_exprs_frame(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableExprCgService::write_datum(ObIAllocator &allocator,
+int ObTableExprCgService::write_datum(ObTableCtx &ctx,
+                                      ObIAllocator &allocator,
                                       const ObExpr &expr,
                                       ObEvalCtx &eval_ctx,
                                       const ObObj &obj)
 {
   int ret = OB_SUCCESS;
+  const ObExpr *write_expr = &expr;
 
-  if (is_lob_storage(obj.get_type())) {
-    if (obj.has_lob_header() != expr.obj_meta_.has_lob_header()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to check lob header", K(ret), K(expr), K(obj));
+  if (is_lob_storage(obj.get_type()) && (obj.has_lob_header() != expr.obj_meta_.has_lob_header())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to check lob header", K(ret), K(expr), K(obj));
+  } else if (expr.type_ == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 为列转换表达式, 且为自增场景下
+    if (expr.arg_cnt_ != 6) {
+      ret = OB_ERR_UNDEFINED;
+      LOG_WARN("invalid arg count for auto inc expr", K(ret), K(expr));
+    } else {
+      const ObExpr *auto_inc_expr = expr.args_[4]; // 取出中间的列自增表达式
+      if (auto_inc_expr->get_eval_info(eval_ctx).evaluated_ == true) {
+        // do nothing
+      } else if (auto_inc_expr->arg_cnt_ != 1) {
+        ret = OB_ERR_UNDEFINED;
+        LOG_WARN("invalid arg count for auto inc expr", K(ret), K(*auto_inc_expr));
+      } else {
+        write_expr = auto_inc_expr->args_[0];  // 取出底部的列转换表达式
+      }
+      // 用于生成自增主键冲突的列引用表达式，在write_datum时刷值
+      ObExpr *auto_inc_ref_col_expr = write_expr->args_[4];  
+      ObDatum &datum = auto_inc_ref_col_expr->locate_datum_for_write(eval_ctx);
+      if (OB_FAIL(datum.from_obj(obj))) {
+        LOG_WARN("fail to convert object from datum", K(ret), K(obj));
+      } else {
+        auto_inc_ref_col_expr->get_eval_info(eval_ctx).evaluated_ = true;
+        auto_inc_ref_col_expr->get_eval_info(eval_ctx).projected_ = true;
+      }  
     }
   }
-  if (OB_FAIL(ret)) {
-    //do nothing
-  } else {
-    ObDatum &datum = expr.locate_datum_for_write(eval_ctx);
+
+  if (OB_SUCC(ret)) {
+    ObDatum &datum = write_expr->locate_datum_for_write(eval_ctx);
     if (OB_FAIL(datum.from_obj(obj))) {
       LOG_WARN("fail to convert object from datum", K(ret), K(obj));
     } else {
-      expr.get_eval_info(eval_ctx).evaluated_ = true;
-      expr.get_eval_info(eval_ctx).projected_ = true;
+      write_expr->get_eval_info(eval_ctx).evaluated_ = true;
+      write_expr->get_eval_info(eval_ctx).projected_ = true;
     }
   }
 
@@ -626,14 +684,23 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
                                                      const ObIArray<ObObj> &rowkey)
 {
   int ret = OB_SUCCESS;
+  // 原定是用户在自增场景下主键可不传数据，而目前的实现是主键传0为自增，暂时保留校验修改
+  ObObj null_obj;
+  null_obj.set_null();
+  int64_t schema_rowkey_cnt = ctx.get_table_schema()->get_rowkey_column_num();
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
-  for (int64_t i = 0; OB_SUCC(ret) && i < rowkey.count(); i++) {
+  bool is_full_filled = schema_rowkey_cnt == rowkey.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
     const ObExpr *expr = exprs.at(i);
-    if (OB_FAIL(write_datum(ctx.get_allocator(), *expr, eval_ctx, rowkey.at(i)))) {
+    if (ctx.has_auto_inc() && !is_full_filled && expr->type_ == T_FUN_COLUMN_CONV) {
+      const ObObj *obj = NULL; // 若不填, 只有自增的列不填, 则写入null值
+      if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, *obj))) {
+        LOG_WARN("fail to write datum", K(ret), K(rowkey.at(i)), K(*expr));
+      } 
+    } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(i)))) {
       LOG_WARN("fail to write datum", K(ret), K(rowkey.at(i)), K(*expr));
     }
   }
-
   return ret;
 }
 
@@ -673,7 +740,7 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
         } else {
           obj = &prop_value;
         }
-        if (OB_FAIL(write_datum(ctx.get_allocator(), *expr, eval_ctx, *obj))) {
+        if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, *obj))) {
           LOG_WARN("fail to write datum", K(ret), K(*obj), K(*expr));
         }
       }
@@ -803,7 +870,7 @@ int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
           LOG_WARN("invalid assign idx", K(ret), K(assign_id), K(new_row.count()));
         } else {
           const ObExpr *expr = new_row.at(assign_id);
-          if (OB_FAIL(write_datum(ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
+          if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
             LOG_WARN("fail to write datum", K(ret), K(prop_value), K(*expr));
           }
         }
@@ -842,7 +909,7 @@ int ObTableExprCgService::refresh_delta_exprs_frame(ObTableCtx &ctx,
         LOG_WARN("fail to get assign propertity value", K(ret), K(col_schema->get_column_name_str()));
       } else {
         const ObExpr *expr = delta_exprs.at(i);
-        if (OB_FAIL(write_datum(ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
+        if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
           LOG_WARN("fail to write datum", K(ret), K(prop_value), K(*expr));
         }
       }
@@ -851,18 +918,14 @@ int ObTableExprCgService::refresh_delta_exprs_frame(ObTableCtx &ctx,
 
   return ret;
 }
-
+	
 int ObTableDmlCgService::replace_exprs_with_dependant(const ObIArray<ObRawExpr *> &src_exprs,
                                                       ObIArray<ObRawExpr *> &dst_exprs)
 {
   int ret = OB_SUCCESS;
-
   for (int64_t i = 0; i < src_exprs.count() && OB_SUCC(ret); i++) {
     ObRawExpr *expr = src_exprs.at(i);
-    if (!expr->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid expr type", K(ret), K(*expr));
-    } else {
+    if (expr->is_column_ref_expr()) {
       ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(expr);
       if (col_ref_expr->is_generated_column()) {
         expr = col_ref_expr->get_dependant_expr();
@@ -870,9 +933,15 @@ int ObTableDmlCgService::replace_exprs_with_dependant(const ObIArray<ObRawExpr *
       if (OB_FAIL(dst_exprs.push_back(expr))) {
         LOG_WARN("fail to push back expr", K(ret), K(dst_exprs));
       }
+    } else if (expr->get_expr_type() == T_FUN_COLUMN_CONV) { // 兼容自增场景下的列转换表达式
+      if (OB_FAIL(dst_exprs.push_back(expr))) {
+        LOG_WARN("fail to push back expr", K(ret), K(dst_exprs));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid expr type", K(ret), K(*expr));
     }
   }
-
   return ret;
 }
 
@@ -939,27 +1008,40 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
     ObColumnRefRawExpr *col_ref_expr = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); i++) {
       ObRawExpr *expr = assign_exprs.at(i);
-      if (!expr->is_column_ref_expr()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected expr type", K(ret), K(*expr));
-      } else if (FALSE_IT(col_ref_expr = static_cast<ObColumnRefRawExpr*>(expr))) {
-      } else if (col_ref_expr->is_generated_column()) {
-        expr = col_ref_expr->get_dependant_expr();
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(full_row.push_back(expr))) {
-        LOG_WARN("fail to add assign expr to full row", K(ret), K(i));
-      } else {
-        ObColumnRefRawExpr *old_col_expr = nullptr;
+      if (expr->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
+        if (OB_FAIL(full_row.push_back(expr))) {
+          LOG_WARN("fail to add assign expr to full row", K(ret), K(i));
+        }
         for (int64_t j = 0; OB_SUCC(ret) && j < old_exprs.count(); j++) {
-          if (!old_exprs.at(i)->is_column_ref_expr()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected expr type", K(ret), K(*old_exprs.at(i)));
-          } else if (FALSE_IT(old_col_expr = static_cast<ObColumnRefRawExpr*>(old_exprs.at(j)))) {
-          } else if (old_col_expr->get_column_id() == col_ref_expr->get_column_id()) {
+          if (old_exprs.at(j)->get_expr_type() == T_FUN_COLUMN_CONV) {
             new_row.at(j) = expr;
           }
         }
+      } else {
+        if (!expr->is_column_ref_expr()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected expr type", K(ret), K(*expr));
+        } else if (FALSE_IT(col_ref_expr = static_cast<ObColumnRefRawExpr*>(expr))) {
+        } else if (col_ref_expr->is_generated_column()) {
+          expr = col_ref_expr->get_dependant_expr();
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(full_row.push_back(expr))) {
+          LOG_WARN("fail to add assign expr to full row", K(ret), K(i));
+        } else {
+          ObColumnRefRawExpr *old_col_expr = nullptr;
+          for (int64_t j = 0; OB_SUCC(ret) && j < old_exprs.count(); j++) {
+            if (!old_exprs.at(j)->is_column_ref_expr() && (old_exprs.at(j)->get_expr_type() != T_FUN_COLUMN_CONV)) { // 兼容自增场景下的列转换表达式
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected expr type", K(ret), K(*old_exprs.at(i)));
+            } else if (old_exprs.at(j)->get_expr_type() == T_FUN_COLUMN_CONV) {
+              // do nothing
+            } else if (FALSE_IT(old_col_expr = static_cast<ObColumnRefRawExpr*>(old_exprs.at(j)))) {
+            } else if (old_col_expr->get_column_id() == col_ref_expr->get_column_id()) {
+              new_row.at(j) = expr;
+            }
+          }
+        }        
       }
     }
   }
@@ -1049,11 +1131,13 @@ int ObTableDmlCgService::generate_das_upd_ctdef(ObTableCtx &ctx,
 
   if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_upd_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_updated_column_ids(assign_exprs,
+  } else if (OB_FAIL(generate_updated_column_ids(ctx,
+                                                 assign_exprs,
                                                  das_upd_ctdef.column_ids_,
                                                  das_upd_ctdef.updated_column_ids_))) {
     LOG_WARN("fail to add updated column ids", K(ret));
-  } else if (OB_FAIL(generate_column_ids(ctx.get_old_row_exprs(),
+  } else if (OB_FAIL(generate_column_ids(ctx,
+                                         ctx.get_old_row_exprs(),
                                          dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(generate_projector(dml_column_ids, // new row and old row's columns id
@@ -1068,7 +1152,8 @@ int ObTableDmlCgService::generate_das_upd_ctdef(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableDmlCgService::generate_updated_column_ids(const ObIArray<ObRawExpr *> &assign_exprs,
+int ObTableDmlCgService::generate_updated_column_ids(ObTableCtx &ctx,
+                                                     const ObIArray<ObRawExpr *> &assign_exprs,
                                                      const ObIArray<uint64_t> &column_ids,
                                                      ObIArray<uint64_t> &updated_column_ids)
 {
@@ -1081,19 +1166,25 @@ int ObTableDmlCgService::generate_updated_column_ids(const ObIArray<ObRawExpr *>
     } else {
       ObColumnRefRawExpr *col_expr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); i++) {
-        if (!assign_exprs.at(i)->is_column_ref_expr()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected expr type", K(ret), K(assign_exprs.at(i)->get_expr_type()));
-        } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(assign_exprs.at(i)))) {
-        } else if (!has_exist_in_array(column_ids, col_expr->get_column_id())) {
-          //not found in column ids, ignore it
-        } else if (OB_FAIL(updated_column_ids.push_back(col_expr->get_column_id()))) {
-          LOG_WARN("fail to add updated column id", K(ret), K(col_expr->get_column_id()));
+        if (assign_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
+          if (OB_FAIL(updated_column_ids.push_back(ctx.get_auto_inc_column_id()))) {
+            LOG_WARN("fail to add updated column id", K(ret), K(ctx.get_auto_inc_column_id()));
+          }
+        } else {
+          if (!assign_exprs.at(i)->is_column_ref_expr()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected expr type", K(ret), K(assign_exprs.at(i)->get_expr_type()));
+          } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(assign_exprs.at(i)))) {
+          } else if (!has_exist_in_array(column_ids, col_expr->get_column_id())) {
+            //not found in column ids, ignore it
+          } else if (OB_FAIL(updated_column_ids.push_back(col_expr->get_column_id()))) {
+            LOG_WARN("fail to add updated column id", K(ret), K(col_expr->get_column_id()));
+          }          
         }
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -1112,23 +1203,42 @@ int ObTableDmlCgService::generate_upd_assign_infos(ObTableCtx &ctx,
   for (int64_t i = 0; OB_SUCC(ret) && i < assign_cnt; ++i) {
     ColumnContent column_content;
     int64_t idx = 0;
-    ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr*>(assign_exprs.at(i));
-    column_content.auto_filled_timestamp_ = col->get_result_type().has_result_flag(ON_UPDATE_NOW_FLAG);
-    column_content.is_nullable_ = !col->get_result_type().is_not_null_for_write();
-    column_content.is_predicate_column_ = false;
-    column_content.is_implicit_ = false;
-    if (OB_FAIL(ob_write_string(allocator,
-                                col->get_column_name(),
-                                column_content.column_name_))) {
-      LOG_WARN("fail to copy column name", K(ret), K(col->get_column_name()));
-    } else if (!has_exist_in_array(udp_ctdef.das_ctdef_.column_ids_, col->get_column_id(), &idx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("assign column not exists in old column", K(ret), KPC(col));
-    } else if (FALSE_IT(column_content.projector_index_ = static_cast<uint64_t>(idx))) {
-      //do nothing
-    } else if (OB_FAIL(assign_infos.push_back(column_content))) {
-      LOG_WARN("fail to store colum content to assign infos", K(ret), K(column_content));
-    }
+    if (assign_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
+      column_content.auto_filled_timestamp_ = false;
+      column_content.is_nullable_ = false;
+      column_content.is_predicate_column_ = false;
+      column_content.is_implicit_ = false;
+      if (OB_FAIL(ob_write_string(allocator,
+                                  ctx.get_auto_inc_column_name(),
+                                  column_content.column_name_))) {
+        LOG_WARN("fail to copy column name", K(ret), K(ctx.get_auto_inc_column_name()));
+      } else if (!has_exist_in_array(udp_ctdef.das_ctdef_.column_ids_, ctx.get_auto_inc_column_id(), &idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column not exists in old column", K(ret), K(ctx.get_auto_inc_column_name()));
+      } else if (FALSE_IT(column_content.projector_index_ = static_cast<uint64_t>(idx))) {
+        //do nothing
+      } else if (OB_FAIL(assign_infos.push_back(column_content))) {
+        LOG_WARN("fail to store colum content to assign infos", K(ret), K(column_content));
+      }
+    } else {
+      ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr*>(assign_exprs.at(i));
+      column_content.auto_filled_timestamp_ = col->get_result_type().has_result_flag(ON_UPDATE_NOW_FLAG);
+      column_content.is_nullable_ = !col->get_result_type().is_not_null_for_write();
+      column_content.is_predicate_column_ = false;
+      column_content.is_implicit_ = false;
+      if (OB_FAIL(ob_write_string(allocator,
+                                  col->get_column_name(),
+                                  column_content.column_name_))) {
+        LOG_WARN("fail to copy column name", K(ret), K(col->get_column_name()));
+      } else if (!has_exist_in_array(udp_ctdef.das_ctdef_.column_ids_, col->get_column_id(), &idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column not exists in old column", K(ret), KPC(col));
+      } else if (FALSE_IT(column_content.projector_index_ = static_cast<uint64_t>(idx))) {
+        //do nothing
+      } else if (OB_FAIL(assign_infos.push_back(column_content))) {
+        LOG_WARN("fail to store colum content to assign infos", K(ret), K(column_content));
+      }
+    }      
   }
   return ret;
 }
@@ -1178,7 +1288,8 @@ int ObTableDmlCgService::generate_das_del_ctdef(ObTableCtx &ctx,
 
   if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_del_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_column_ids(ctx.get_all_exprs().get_expr_array(),
+  } else if (OB_FAIL(generate_column_ids(ctx,
+                                         ctx.get_all_exprs().get_expr_array(),
                                          dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(generate_projector(dml_column_ids,
@@ -1253,16 +1364,24 @@ int ObTableDmlCgService::generate_table_rowkey_info(ObTableCtx &ctx,
 
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
     ObRawExpr *expr = rowkey_exprs.at(i);
-    if (!expr->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr type is not column_ref expr", K(ret), KPC(expr));
+    if (expr->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
+        if (OB_FAIL(rowkey_column_ids.push_back(ctx.get_auto_inc_column_id()))) {
+          LOG_WARN("fail to push base column id", K(ret), K(ctx.get_auto_inc_column_id()));
+        } else if (OB_FAIL(rowkey_column_types.push_back(expr->get_result_type()))) {
+          LOG_WARN("fail to push column type", K(ret), KPC(expr));
+        }
     } else {
-      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr);
-      if (OB_FAIL(rowkey_column_ids.push_back(col_expr->get_column_id()))) {
-        LOG_WARN("fail to push base column id", K(ret), K(col_expr->get_column_id()));
-      } else if (OB_FAIL(rowkey_column_types.push_back(col_expr->get_result_type()))) {
-        LOG_WARN("fail to push column type", K(ret), KPC(col_expr));
-      }
+      if (!expr->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr type is not column_ref expr", K(ret), KPC(expr));
+      } else {
+        ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr);
+        if (OB_FAIL(rowkey_column_ids.push_back(col_expr->get_column_id()))) {
+          LOG_WARN("fail to push base column id", K(ret), K(col_expr->get_column_id()));
+        } else if (OB_FAIL(rowkey_column_types.push_back(col_expr->get_result_type()))) {
+          LOG_WARN("fail to push column type", K(ret), KPC(col_expr));
+        }
+      }      
     }
   }
 
@@ -1328,13 +1447,19 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to init access_column_ids_ ", K(ret));
   } else {
     ARRAY_FOREACH(access_exprs, i) {
-      ObColumnRefRawExpr *ref_col_expr = static_cast<ObColumnRefRawExpr*>(access_exprs.at(i));
-      if (OB_ISNULL(ref_col_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null column ref expr", K(ret), K(i));
-      } else if (OB_FAIL(tsc_ctdef.access_column_ids_.push_back(ref_col_expr->get_column_id()))) {
-        LOG_WARN("fail to add column id", K(ret), K(ref_col_expr->get_column_id()));
-      }
+      if (access_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
+        if (OB_FAIL(tsc_ctdef.access_column_ids_.push_back(ctx.get_auto_inc_column_id()))) {
+          LOG_WARN("fail to add column id", K(ret), K(ctx.get_auto_inc_column_id()));
+        }  
+      } else {
+        ObColumnRefRawExpr *ref_col_expr = static_cast<ObColumnRefRawExpr*>(access_exprs.at(i));
+        if (OB_ISNULL(ref_col_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null column ref expr", K(ret), K(i));
+        } else if (OB_FAIL(tsc_ctdef.access_column_ids_.push_back(ref_col_expr->get_column_id()))) {
+          LOG_WARN("fail to add column id", K(ret), K(ref_col_expr->get_column_id()));
+        }  
+      }      
     }
   }
   if (OB_SUCC(ret)) {
@@ -1375,15 +1500,14 @@ int ObTableDmlCgService::generate_single_constraint_info(ObTableCtx &ctx,
       if (OB_FAIL(rowkey_info.get_column_id(i, rowkey_column_id))) {
         LOG_WARN("fail to get rowkey column id", K(ret));
       } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < all_exprs.count(); j++) {
-          if (all_exprs.at(j)->is_column_ref_expr()) {
-            ObColumnRefRawExpr *ref_expr = static_cast<ObColumnRefRawExpr *>(all_exprs.at(j));
-            if (ref_expr->get_column_id() == rowkey_column_id
-                && OB_FAIL(column_exprs.push_back(ref_expr))) {
-              LOG_WARN("fail to push back column ref expr to constraint columns", K(ret), K(j));
-            }
+        const ObIArray<ObColumnRefRawExpr *> &all_column_exprs = ctx.get_all_column_ref_exprs();
+        for (int64_t j = 0; OB_SUCC(ret) && j < all_column_exprs.count(); j++) {
+          ObColumnRefRawExpr *ref_expr = all_column_exprs.at(j);
+          if (ref_expr->get_column_id() == rowkey_column_id
+              && OB_FAIL(column_exprs.push_back(ref_expr))) {
+            LOG_WARN("fail to push back column ref expr to constraint columns", K(ret), K(j));
           }
-        }
+        } 
       }
     }
   }
@@ -1579,7 +1703,8 @@ int ObTableDmlCgService::generate_das_lock_ctdef(ObTableCtx &ctx,
 
   if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_lock_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_column_ids(ctx.get_all_exprs().get_expr_array(),
+  } else if (OB_FAIL(generate_column_ids(ctx,
+                                         ctx.get_all_exprs().get_expr_array(),
                                          dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(generate_projector(dml_column_ids,
@@ -1604,7 +1729,7 @@ int ObTableDmlCgService::generate_base_ctdef(ObTableCtx &ctx,
   const ObIArray<ObRawExpr *> &exprs = (ctx.is_for_update() || ctx.is_for_insertup()) ?
       ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
 
-  if (OB_FAIL(generate_column_ids(exprs, base_ctdef.column_ids_))) {
+  if (OB_FAIL(generate_column_ids(ctx, exprs, base_ctdef.column_ids_))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(cg.generate_rt_exprs(old_row, base_ctdef.old_row_))) {
     LOG_WARN("fail to generate old row exprs", K(ret));
@@ -1628,7 +1753,8 @@ int ObTableDmlCgService::generate_das_ins_ctdef(ObTableCtx &ctx,
 
   if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_ins_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_column_ids(exprs,
+  } else if (OB_FAIL(generate_column_ids(ctx,
+                                         exprs,
                                          dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(generate_projector(dml_column_ids, // new row and old row's columns id
@@ -1777,7 +1903,8 @@ int ObTableDmlCgService::convert_table_param(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableDmlCgService::generate_column_ids(const ObIArray<ObRawExpr*> &exprs,
+int ObTableDmlCgService::generate_column_ids(ObTableCtx &ctx,
+                                             const ObIArray<ObRawExpr*> &exprs,
                                              ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
@@ -1788,9 +1915,18 @@ int ObTableDmlCgService::generate_column_ids(const ObIArray<ObRawExpr*> &exprs,
       LOG_WARN("fail to reserve column ids capacity", K(ret), K(exprs.count()));
     } else {
       ARRAY_FOREACH(exprs, i) {
-        ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(exprs.at(i));
-        if (OB_FAIL(column_ids.push_back(col_expr->get_column_id()))) {
-          LOG_WARN("fail to push back column id", K(ret), K(col_expr->get_column_id()));
+        if (exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && (ctx.get_opertion_type() != ObTableOperationType::DEL)    // 特判下，若为delete/update/get/scan操作
+                                                              && (ctx.get_opertion_type() != ObTableOperationType::UPDATE) // 则走原有的列引用表达式
+                                                              && (ctx.get_opertion_type() != ObTableOperationType::GET)
+                                                              && (ctx.get_opertion_type() != ObTableOperationType::SCAN)) {
+          if (OB_FAIL(column_ids.push_back(ctx.get_auto_inc_column_id()))) {
+            LOG_WARN("fail to push back column id", K(ret), K(ctx.get_auto_inc_column_id()));
+          }
+        } else {
+          ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(exprs.at(i));
+          if (OB_FAIL(column_ids.push_back(col_expr->get_column_id()))) {
+            LOG_WARN("fail to push back column id", K(ret), K(col_expr->get_column_id()));
+          }  
         }
       }
     }
@@ -2349,5 +2485,35 @@ int ObTableSpecCgService::generate_spec(common::ObIAllocator &alloc,
 
   return ret;
 }
+
+int ObTableExprCgService::generate_autoinc_nextval_expr(ObTableCtx &ctx,
+                                                        ObRawExpr *&expr,
+                                                        const ObColumnSchemaV2 &col_schema)
+{
+  int ret = OB_SUCCESS;
+
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_FAIL(ctx.get_expr_factory().create_raw_expr(T_FUN_SYS_AUTOINC_NEXTVAL, func_expr))) {
+    LOG_WARN("fail to create nextval expr", K(ret));
+  } else {
+    func_expr->set_func_name(ObString::make_string(N_AUTOINC_NEXTVAL));
+    if (OB_NOT_NULL(expr) && OB_FAIL(func_expr->add_param_expr(expr))) { // 将最底部的列转换表达式挂到自增列表达式之下
+      LOG_WARN("fail to add collumn conv expr to function param", K(ret));
+    } else if (OB_FAIL(func_expr->formalize(&ctx.get_session_info()))) {
+      LOG_WARN("fail to extract info", K(ret));
+    } else if (OB_FAIL(ObAutoincNextvalExtra::init_autoinc_nextval_extra(&ctx.get_allocator(),
+                                                                         reinterpret_cast<ObRawExpr *&>(func_expr),
+                                                                         ctx.get_table_id(),
+                                                                         col_schema.get_column_id(),
+                                                                         ctx.get_table_name(),
+                                                                         col_schema.get_column_name()))) {
+      LOG_WARN("fail to init autoinc_nextval_extra", K(ret), K(ctx.get_table_name()), K(col_schema));
+    } else {
+      expr = func_expr;
+    }
+  }
+  return ret;
+}
+
 }  // namespace table
 }  // namespace oceanbase

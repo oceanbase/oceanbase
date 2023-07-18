@@ -250,7 +250,15 @@ int ObTableApiReplaceExecutor::do_insert()
 
   if (OB_FAIL(refresh_exprs_frame(entity))) {
     LOG_WARN("fail to refresh expr frame", K(ret));
-  } else if (OB_FAIL(insert_row_to_das(ctdef.ins_ctdef_, replace_rtdef_.ins_rtdef_))) {
+  }
+  if (tb_ctx_.has_auto_inc()) {
+    for (int64_t i = 0; i < ctdef.ins_ctdef_.new_row_.count(); i++) {       // 在自增的场景下，由于自增列的列引用表达式被用户输入的值覆盖
+      if (ctdef.ins_ctdef_.new_row_.at(i)->type_ == T_FUN_COLUMN_CONV) {    // 故需要手动清空eval的flag
+        ctdef.ins_ctdef_.new_row_.at(i)->get_eval_info(eval_ctx_).evaluated_ = false;
+      }
+    }
+  }
+  if (OB_FAIL(insert_row_to_das(ctdef.ins_ctdef_, replace_rtdef_.ins_rtdef_))) {
     LOG_WARN("shuffle insert row failed", K(ret));
   } else {
     replace_rtdef_.ins_rtdef_.cur_row_num_ = 1;
@@ -335,8 +343,11 @@ int ObTableApiReplaceExecutor::get_next_row()
 
   if (OB_SUCC(ret)) {
     affected_rows_ = replace_rtdef_.ins_rtdef_.cur_row_num_ + replace_rtdef_.del_rtdef_.cur_row_num_;
+    // auto inc 操作中, 同步全局自增值value
+    if (tb_ctx_.has_auto_inc() && OB_FAIL(tb_ctx_.update_auto_inc_value())) {
+      LOG_WARN("fail to update auto inc value", K(ret));
+    } 
   }
-
   return ret;
 }
 

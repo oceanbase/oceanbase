@@ -148,6 +148,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_session_pool.cpp
   table/ob_table_op_wrapper.cpp
   table/ob_table_query_common.cpp
+  table/ob_table_aggregation.cpp
 )
 
 ob_set_subtarget(ob_server table_load

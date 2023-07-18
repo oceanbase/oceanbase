@@ -18,6 +18,7 @@
 #include "ob_table_rpc_processor.h"
 #include "htable_filter_tab.hxx"
 #include "htable_filter_lex.hxx"
+#include "ob_table_aggregation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -214,6 +215,72 @@ int ObTableFilterParser::create_comparator(const SimpleString &bytes, hfilter::C
 int ObNormalTableQueryResultIterator::get_next_result(table::ObTableQueryResult *&next_result)
 {
   int ret = OB_SUCCESS;
+  if (is_aggregate_query()) {
+    if (OB_FAIL(get_aggregate_result(next_result))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failt to get aggregate result", K(ret));
+      }
+    }
+  } else {
+    if (OB_FAIL(get_normal_result(next_result))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get normal result", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObNormalTableQueryResultIterator::has_more_result() const
+{
+  return has_more_rows_;
+}
+
+int ObNormalTableQueryResultIterator::init_aggregation()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_agg_calculator().init())) {
+    LOG_WARN("failed to init agg_calculator", K(ret));
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryResult *&next_result) {
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(one_result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("one_result_ should not be null", K(ret));
+  } else {
+    ObNewRow *row = nullptr;
+    int64_t row_count = 0;
+    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
+      if (OB_FAIL(agg_calculator_.aggregate(*row))) {
+        LOG_WARN("fail to aggregate", K(ret), K(*row));
+      } else {
+        row_count++;
+      }
+    }  // end while
+    if (OB_ITER_END == ret && row_count != 0) {
+      ret = OB_SUCCESS;
+      agg_calculator_.final_aggregate(); // agg sum/svg finally
+      has_more_rows_ = false;
+      one_result_->reset();
+      if (OB_FAIL(one_result_->assign_property_names(get_agg_calculator().get_agg_columns()))) {
+        LOG_WARN("fail to assign property names to one result", K(ret));
+      } else if (OB_FAIL(one_result_->add_row(agg_calculator_.get_aggregate_results()))) {
+        LOG_WARN("fail to add aggregation result", K(ret), K(agg_calculator_.get_aggregate_results()));
+      } else {
+        next_result = one_result_;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResult *&next_result) {
+  int ret = OB_SUCCESS;
   if (OB_ISNULL(one_result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("one_result_ should not be null", K(ret));
@@ -260,11 +327,6 @@ int ObNormalTableQueryResultIterator::get_next_result(table::ObTableQueryResult 
   return ret;
 }
 
-bool ObNormalTableQueryResultIterator::has_more_result() const
-{
-  return has_more_rows_;
-}
-
 int ObTableFilterOperator::parse_filter_string(common::ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
@@ -297,6 +359,99 @@ int ObTableFilterOperator::check_limit_param()
 
 int ObTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
 {
+  int ret = OB_SUCCESS;
+  if (is_aggregate_query()) {
+    if (OB_FAIL(get_aggregate_result(next_result))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failt to get aggregate result", K(ret));
+      }
+    }
+  } else {
+    if (OB_FAIL(get_normal_result(next_result))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get normal result", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableFilterOperator::init_aggregation()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_agg_calculator().init())) {
+    LOG_WARN("failed to init agg_calculator", K(ret));
+  }
+  return ret;
+}
+
+int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next_result) {
+  int ret = OB_SUCCESS;
+  ObNewRow *row = nullptr;
+  if (OB_ISNULL(one_result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("one_result_ should not be null", K(ret));
+  } else if (is_query_sync_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query async is not support when use query filter", K(ret));
+  } else {
+    const int32_t limit = query_->get_limit();
+    const int32_t offset = query_->get_offset();
+    const bool has_limit = (limit != -1);
+    bool has_reach_limit = (row_idx_ >= offset + limit);
+    const ObIArray<ObString> &select_columns = one_result_->get_select_columns();
+    const int64_t N = select_columns.count();
+    int64_t row_count = 0;
+    while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
+           OB_SUCC(scan_result_->get_next_row(row))) {
+      if (N != row->get_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select column count is not equal to row cells count", K(ret), K(select_columns), K(*row));
+        continue;
+      }
+
+      bool filtered = false;
+      if (OB_FAIL(tfilter_->filter_row(select_columns, *row, filtered))) {
+        LOG_WARN("filter row error", K(ret));
+        continue;
+      } else if (filtered) {
+        continue;
+      }
+      
+      if (has_limit && row_idx_ < offset) {
+        row_idx_++;
+      } else if (OB_FAIL(agg_calculator_.aggregate(*row))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get aggregate ", K(ret));
+      } else {
+        row_idx_++;
+        row_count ++;
+      }
+      has_reach_limit = (row_idx_ >= offset + limit);
+    } // end while
+
+    if (OB_SUCC(ret) && (has_limit && has_reach_limit)) {
+      ret = OB_ITER_END;
+    }
+
+    if (OB_ITER_END == ret && row_count != 0) {
+      ret = OB_SUCCESS;
+      agg_calculator_.final_aggregate(); // agg sum/svg finally
+      has_more_rows_ = false;
+      one_result_->reset();
+      if (OB_FAIL(one_result_->assign_property_names(get_agg_calculator().get_agg_columns()))) {
+        LOG_WARN("fail to assign property names to one result", K(ret));
+      } else if (OB_FAIL(one_result_->add_row(agg_calculator_.get_aggregate_results()))) {
+        LOG_WARN("fail to add aggregation result", K(ret), K(agg_calculator_.get_aggregate_results()));
+      } else {
+        next_result = one_result_;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_result) {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(check_limit_param())) {

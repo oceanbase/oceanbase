@@ -103,6 +103,10 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       } else if (OB_FAIL(table_result_iter->parse_filter_string(&allocator))) {
         LOG_WARN("fail to parse table filter string", K(ret));
       } else {
+        if (query.is_aggregate_query()) {
+          table_result_iter->init_aggregation();
+          table_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
+        }
         tmp_result_iter = table_result_iter;
       }
     }
@@ -115,6 +119,10 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc normal query result iterator", K(ret));
     } else {
+      if (query.is_aggregate_query()) {
+        normal_result_iter->init_aggregation();
+        normal_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());
+      }      
       tmp_result_iter = normal_result_iter;
     }
   }

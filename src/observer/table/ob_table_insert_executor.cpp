@@ -107,6 +107,10 @@ int ObTableApiInsertExecutor::ins_rows_post_proc()
     LOG_WARN("fail to execute all insert das task", K(ret));
   } else {
     affected_rows_ = 1;
+    // auto inc 操作中, 同步全局自增值value
+    if (tb_ctx_.has_auto_inc() && OB_FAIL(tb_ctx_.update_auto_inc_value())) {
+      LOG_WARN("fail to update auto inc value", K(ret));
+    }
   }
 
   return ret;

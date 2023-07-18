@@ -109,8 +109,14 @@ private:
   // 构造列引用原生表达式
   static int generate_column_ref_raw_expr(ObTableCtx &ctx,
                                           const ObColumnSchemaV2 &col_schema,
-                                          sql::ObColumnRefRawExpr *&col_ref_expr);
-  static int write_datum(common::ObIAllocator &allocator,
+                                          sql::ObRawExpr *&expr);
+  // 构建列自增表达式
+  static int generate_autoinc_nextval_expr(ObTableCtx &ctx,
+                                           ObRawExpr *&expr,
+                                           const ObColumnSchemaV2 &col_schema);
+
+  static int write_datum(ObTableCtx &ctx,
+                         common::ObIAllocator &allocator,
                          const sql::ObExpr &expr,
                          sql::ObEvalCtx &eval_ctx,
                          const ObObj &obj);
@@ -158,7 +164,8 @@ private:
                                  ObTableDmlBaseCtDef &base_ctdef,
                                  common::ObIArray<sql::ObRawExpr*> &old_row,
                                  common::ObIArray<sql::ObRawExpr*> &new_row);
-  static int generate_column_ids(const common::ObIArray<sql::ObRawExpr*> &exprs,
+  static int generate_column_ids(ObTableCtx &ctx,
+                                 const common::ObIArray<sql::ObRawExpr*> &exprs,
                                  common::ObIArray<uint64_t> &column_ids);
   static int generate_das_ins_ctdef(ObTableCtx &ctx,
                                     uint64_t index_tid,
@@ -179,7 +186,8 @@ private:
                                      uint64_t index_tid,
                                      sql::ObDASLockCtDef &das_lock_ctdef,
                                      const common::ObIArray<sql::ObRawExpr*> &old_row);
-  static int generate_updated_column_ids(const common::ObIArray<sql::ObRawExpr *> &assign_exprs,
+  static int generate_updated_column_ids(ObTableCtx &ctx,
+                                         const common::ObIArray<sql::ObRawExpr *> &assign_exprs,
                                          const common::ObIArray<uint64_t> &column_ids,
                                          common::ObIArray<uint64_t> &updated_column_ids);
   static int generate_upd_assign_infos(ObTableCtx &ctx,
