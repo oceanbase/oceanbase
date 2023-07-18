@@ -17,99 +17,115 @@
 namespace oceanbase {
 namespace backup {
 
-ObILSTabletIdReader *ObLSBackupFactory::get_ls_tablet_id_reader(const ObLSTabletIdReaderType &type)
+ObILSTabletIdReader *ObLSBackupFactory::get_ls_tablet_id_reader(
+  const ObLSTabletIdReaderType &type, const uint64_t tenant_id)
 {
   ObILSTabletIdReader *reader = NULL;
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
   if (LS_TABLET_ID_READER == type) {
-    reader = OB_NEW(ObLSTabletIdReader, ObModIds::BACKUP);
+    reader = OB_NEW(ObLSTabletIdReader, attr);
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown tablet reader type", K(type));
   }
   return reader;
 }
 
-ObITabletLogicMacroIdReader *ObLSBackupFactory::get_tablet_logic_macro_id_reader(const ObTabletLogicIdReaderType &type)
+ObITabletLogicMacroIdReader *ObLSBackupFactory::get_tablet_logic_macro_id_reader(
+  const ObTabletLogicIdReaderType &type, const uint64_t tenant_id)
 {
   ObITabletLogicMacroIdReader *reader = NULL;
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
   if (TABLET_LOGIC_ID_READER == type) {
-    reader = OB_NEW(ObTabletLogicMacroIdReader, ObModIds::BACKUP);
+    reader = OB_NEW(ObTabletLogicMacroIdReader, attr);
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", K(type));
   }
   return reader;
 }
 
-ObIMacroBlockBackupReader *ObLSBackupFactory::get_macro_block_backup_reader(const ObMacroBlockReaderType &type)
+ObIMacroBlockBackupReader *ObLSBackupFactory::get_macro_block_backup_reader(
+  const ObMacroBlockReaderType &type, const uint64_t tenant_id)
 {
   ObIMacroBlockBackupReader *reader = NULL;
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
   if (LOCAL_MACRO_BLOCK_READER == type) {
-    reader = OB_NEW(ObMacroBlockBackupReader, ObModIds::BACKUP);
+    reader = OB_NEW(ObMacroBlockBackupReader, attr);
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", K(type));
   }
   return reader;
 }
 
-ObMultiMacroBlockBackupReader *ObLSBackupFactory::get_multi_macro_block_backup_reader()
+ObMultiMacroBlockBackupReader *ObLSBackupFactory::get_multi_macro_block_backup_reader(const uint64_t tenant_id)
 {
-  return OB_NEW(ObMultiMacroBlockBackupReader, ObModIds::BACKUP);
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
+  return OB_NEW(ObMultiMacroBlockBackupReader, attr);
 }
 
-ObITabletMetaBackupReader *ObLSBackupFactory::get_tablet_meta_backup_reader(const ObTabletMetaReaderType &type)
+ObITabletMetaBackupReader *ObLSBackupFactory::get_tablet_meta_backup_reader(
+  const ObTabletMetaReaderType &type, const uint64_t tenant_id)
 {
   ObITabletMetaBackupReader *reader = NULL;
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
   if (TABLET_META_READER == type) {
-    reader = OB_NEW(ObTabletMetaBackupReader, ObModIds::BACKUP);
+    reader = OB_NEW(ObTabletMetaBackupReader, attr);
   } else if (SSTABLE_META_READER == type) {
-    reader = OB_NEW(ObSSTableMetaBackupReader, ObModIds::BACKUP);
+    reader = OB_NEW(ObSSTableMetaBackupReader, attr);
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", K(type));
   }
   return reader;
 }
 
-ObIBackupIndexIterator *ObLSBackupFactory::get_backup_index_iterator(const ObBackupIndexIteratorType &type)
+ObIBackupIndexIterator *ObLSBackupFactory::get_backup_index_iterator(
+  const ObBackupIndexIteratorType &type, const uint64_t tenant_id)
 {
   ObIBackupIndexIterator *iterator = NULL;
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
   if (BACKUP_MACRO_BLOCK_INDEX_ITERATOR == type) {
-    iterator = OB_NEW(ObBackupMacroBlockIndexIterator, ObModIds::BACKUP);
+    iterator = OB_NEW(ObBackupMacroBlockIndexIterator, attr);
   } else if (BACKUP_MACRO_RANGE_INDEX_ITERATOR == type) {
-    iterator = OB_NEW(ObBackupMacroRangeIndexIterator, ObModIds::BACKUP);
+    iterator = OB_NEW(ObBackupMacroRangeIndexIterator, attr);
   } else if (BACKUP_META_INDEX_ITERATOR == type) {
-    iterator = OB_NEW(ObBackupMetaIndexIterator, ObModIds::BACKUP);
+    iterator = OB_NEW(ObBackupMetaIndexIterator, attr);
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown iterator type", K(type));
   }
   return iterator;
 }
 
-ObIBackupTabletProvider *ObLSBackupFactory::get_backup_tablet_provider(const ObBackupTabletProviderType &type)
+ObIBackupTabletProvider *ObLSBackupFactory::get_backup_tablet_provider(
+  const ObBackupTabletProviderType &type, const uint64_t tenant_id)
 {
   ObIBackupTabletProvider *provider = NULL;
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
   if (BACKUP_TABLET_PROVIDER == type) {
-    provider = OB_NEW(ObBackupTabletProvider, ObModIds::BACKUP);
+    provider = OB_NEW(ObBackupTabletProvider, attr);
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown provider type", K(type));
   }
   return provider;
 }
 
-ObIBackupMacroBlockIndexFuser *ObLSBackupFactory::get_backup_macro_index_fuser(const ObBackupMacroIndexFuserType &type)
+ObIBackupMacroBlockIndexFuser *ObLSBackupFactory::get_backup_macro_index_fuser(
+  const ObBackupMacroIndexFuserType &type, const uint64_t tenant_id)
 {
   ObIBackupMacroBlockIndexFuser *fuser = NULL;
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
   if (type == BACKUP_MACRO_INDEX_MINOR_FUSER) {
-    fuser = OB_NEW(ObBackupMacroIndexMinorFuser, ObModIds::BACKUP);
+    fuser = OB_NEW(ObBackupMacroIndexMinorFuser, attr);
   } else if (type == BACKUP_MACRO_INDEX_MAJOR_FUSER) {
-    fuser = OB_NEW(ObBackupMacroIndexMajorFuser, ObModIds::BACKUP);
+    fuser = OB_NEW(ObBackupMacroIndexMajorFuser, attr);
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown fuser type", K(type));
   }
   return fuser;
 }
 
-ObBackupTabletCtx *ObLSBackupFactory::get_backup_tablet_ctx()
+ObBackupTabletCtx *ObLSBackupFactory::get_backup_tablet_ctx(const uint64_t tenant_id)
 {
-  return OB_NEW(ObBackupTabletCtx, ObModIds::BACKUP);
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
+  return OB_NEW(ObBackupTabletCtx, attr);
 }
 
 void ObLSBackupFactory::free(ObILSTabletIdReader *&reader)

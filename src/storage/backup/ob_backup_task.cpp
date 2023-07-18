@@ -766,7 +766,7 @@ int ObLSBackupDataDagNet::prepare_backup_tablet_provider_(const ObLSBackupParam 
   if (!param.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(param));
-  } else if (OB_ISNULL(tmp_provider = static_cast<ObBackupTabletProvider *>(ObLSBackupFactory::get_backup_tablet_provider(type)))) {
+  } else if (OB_ISNULL(tmp_provider = static_cast<ObBackupTabletProvider *>(ObLSBackupFactory::get_backup_tablet_provider(type, param.tenant_id_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate provider", K(ret), K(param));
   } else if (OB_FAIL(tmp_provider->init(param, backup_data_type, ls_backup_ctx, index_kv_cache, sql_proxy))) {
@@ -2687,7 +2687,7 @@ int ObLSBackupDataTask::do_backup_macro_block_data_()
     LOG_WARN("failed to get macro block id list", K(ret));
   } else if (OB_UNLIKELY(macro_list.empty())) {
     LOG_INFO("no macro list need to backup");
-  } else if (OB_FAIL(prepare_macro_block_reader_(macro_list, reader))) {
+  } else if (OB_FAIL(prepare_macro_block_reader_(param_.tenant_id_, macro_list, reader))) {
     LOG_WARN("failed to prepare macro block reader", K(ret), K(macro_list));
   } else {
     LOG_INFO("start backup macro block data", K(macro_list));
@@ -3004,7 +3004,7 @@ int ObLSBackupDataTask::get_meta_item_list_(common::ObIArray<ObBackupProviderIte
   return ret;
 }
 
-int ObLSBackupDataTask::prepare_macro_block_reader_(
+int ObLSBackupDataTask::prepare_macro_block_reader_(const uint64_t tenant_id,
     const common::ObIArray<ObBackupMacroBlockId> &list, ObMultiMacroBlockBackupReader *&reader)
 {
   int ret = OB_SUCCESS;
@@ -3013,10 +3013,10 @@ int ObLSBackupDataTask::prepare_macro_block_reader_(
   if (OB_UNLIKELY(list.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret));
-  } else if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_multi_macro_block_backup_reader())) {
+  } else if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_multi_macro_block_backup_reader(param_.tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc iterator", K(ret));
-  } else if (OB_FAIL(tmp_reader->init(reader_type, list))) {
+  } else if (OB_FAIL(tmp_reader->init(tenant_id, reader_type, list))) {
     LOG_WARN("failed to init", K(ret), K(list));
   } else {
     reader = tmp_reader;
@@ -3034,7 +3034,7 @@ int ObLSBackupDataTask::prepare_tablet_meta_reader_(const common::ObTabletID &ta
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
-  } else if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_tablet_meta_backup_reader(reader_type))) {
+  } else if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_tablet_meta_backup_reader(reader_type, param_.tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc iterator", K(ret), K(reader_type));
   } else if (OB_FAIL(tmp_reader->init(tablet_id, backup_data_type_, tablet_handle))) {

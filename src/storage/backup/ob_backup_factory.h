@@ -23,15 +23,15 @@ namespace backup {
 
 class ObLSBackupFactory {
 public:
-  static ObILSTabletIdReader *get_ls_tablet_id_reader(const ObLSTabletIdReaderType &type);
-  static ObITabletLogicMacroIdReader *get_tablet_logic_macro_id_reader(const ObTabletLogicIdReaderType &type);
-  static ObIMacroBlockBackupReader *get_macro_block_backup_reader(const ObMacroBlockReaderType &type);
-  static ObMultiMacroBlockBackupReader *get_multi_macro_block_backup_reader();
-  static ObITabletMetaBackupReader *get_tablet_meta_backup_reader(const ObTabletMetaReaderType &type);
-  static ObIBackupIndexIterator *get_backup_index_iterator(const ObBackupIndexIteratorType &type);
-  static ObIBackupTabletProvider *get_backup_tablet_provider(const ObBackupTabletProviderType &type);
-  static ObIBackupMacroBlockIndexFuser *get_backup_macro_index_fuser(const ObBackupMacroIndexFuserType &type);
-  static ObBackupTabletCtx *get_backup_tablet_ctx();
+  static ObILSTabletIdReader *get_ls_tablet_id_reader(const ObLSTabletIdReaderType &type, const uint64_t tenant_id);
+  static ObITabletLogicMacroIdReader *get_tablet_logic_macro_id_reader(const ObTabletLogicIdReaderType &type, const uint64_t tenant_id);
+  static ObIMacroBlockBackupReader *get_macro_block_backup_reader(const ObMacroBlockReaderType &type, const uint64_t tenant_id);
+  static ObMultiMacroBlockBackupReader *get_multi_macro_block_backup_reader(const uint64_t tenant_id);
+  static ObITabletMetaBackupReader *get_tablet_meta_backup_reader(const ObTabletMetaReaderType &type, const uint64_t tenant_id);
+  static ObIBackupIndexIterator *get_backup_index_iterator(const ObBackupIndexIteratorType &type, const uint64_t tenant_id);
+  static ObIBackupTabletProvider *get_backup_tablet_provider(const ObBackupTabletProviderType &type, const uint64_t tenant_id);
+  static ObIBackupMacroBlockIndexFuser *get_backup_macro_index_fuser(const ObBackupMacroIndexFuserType &type, const uint64_t tenant_id);
+  static ObBackupTabletCtx *get_backup_tablet_ctx(const uint64_t tenant_id);
 
   static void free(ObILSTabletIdReader *&reader);
   static void free(ObITabletLogicMacroIdReader *&reader);

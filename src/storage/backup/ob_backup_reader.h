@@ -189,12 +189,12 @@ class ObMultiMacroBlockBackupReader {
 public:
   ObMultiMacroBlockBackupReader();
   virtual ~ObMultiMacroBlockBackupReader();
-  int init(const ObMacroBlockReaderType &reader_type, const common::ObIArray<ObBackupMacroBlockId> &list);
+  int init(const uint64_t tenant_id, const ObMacroBlockReaderType &reader_type, const common::ObIArray<ObBackupMacroBlockId> &list);
   int get_next_macro_block(blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id);
   void reset();
 
 private:
-  int alloc_macro_block_reader_(const ObMacroBlockReaderType &reader_type, ObIMacroBlockBackupReader *&reader);
+  int alloc_macro_block_reader_(const uint64_t tenant_id, const ObMacroBlockReaderType &reader_type, ObIMacroBlockBackupReader *&reader);
   int prepare_macro_block_reader_(const int64_t idx);
   void reset_prev_macro_block_reader_(const int64_t idx);
   int fetch_macro_block_with_retry_(blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id);

@@ -874,7 +874,7 @@ int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no need to prepare if not incremental", K(ret));
   } else if (OB_ISNULL(tmp_iter = static_cast<ObBackupMacroRangeIndexIterator *>(
-                           ObLSBackupFactory::get_backup_index_iterator(type)))) {
+                           ObLSBackupFactory::get_backup_index_iterator(type, merge_param.tenant_id_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to get backup index iterator", K(ret), K(type));
   } else if (OB_FAIL(ObLSBackupOperator::get_prev_backup_set_desc(merge_param.tenant_id_,
@@ -940,7 +940,7 @@ int ObBackupMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_level,
       const ObBackupIndexIteratorType type = BACKUP_MACRO_BLOCK_INDEX_ITERATOR;
       ObBackupMacroBlockIndexIterator *tmp_iter = NULL;
       if (OB_ISNULL(tmp_iter = static_cast<ObBackupMacroBlockIndexIterator *>(
-                        ObLSBackupFactory::get_backup_index_iterator(type)))) {
+                        ObLSBackupFactory::get_backup_index_iterator(type, merge_param.tenant_id_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc iterator", K(ret));
       } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
@@ -959,7 +959,7 @@ int ObBackupMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_level,
       const ObBackupIndexIteratorType type = BACKUP_MACRO_RANGE_INDEX_ITERATOR;
       ObBackupMacroRangeIndexIterator *tmp_iter = NULL;
       if (OB_ISNULL(tmp_iter = static_cast<ObBackupMacroRangeIndexIterator *>(
-                        ObLSBackupFactory::get_backup_index_iterator(type)))) {
+                        ObLSBackupFactory::get_backup_index_iterator(type, merge_param.tenant_id_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc iterator", K(ret));
       } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
@@ -1041,7 +1041,7 @@ int ObBackupMacroBlockIndexMerger::prepare_merge_fuser_(ObIBackupMacroBlockIndex
   } else {
     type = BACKUP_MACRO_INDEX_MINOR_FUSER;
   }
-  if (OB_ISNULL(tmp_fuser = ObLSBackupFactory::get_backup_macro_index_fuser(type))) {
+  if (OB_ISNULL(tmp_fuser = ObLSBackupFactory::get_backup_macro_index_fuser(type, merge_param_.tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate provider", K(ret), K(type));
   } else {
@@ -1354,7 +1354,7 @@ int ObBackupMetaIndexMerger::alloc_merge_iter_(const ObBackupIndexMergeParam &me
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret));
   } else if (OB_ISNULL(tmp_iter = static_cast<ObBackupMetaIndexIterator *>(
-                           ObLSBackupFactory::get_backup_index_iterator(type)))) {
+                           ObLSBackupFactory::get_backup_index_iterator(type, merge_param.tenant_id_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc iterator", K(ret));
   } else if (OB_FAIL(tmp_iter->init(merge_param.task_id_,
