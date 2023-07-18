@@ -1594,6 +1594,8 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       column_id_ = tmp.column_id_;
       database_name_ = tmp.database_name_;
       table_name_ = tmp.table_name_;
+      synonym_name_ = tmp.synonym_name_;
+      synonym_db_name_ = tmp.synonym_db_name_;
       column_name_ = tmp.column_name_;
       column_flags_ = tmp.column_flags_;
       dependant_expr_ = tmp.dependant_expr_;
