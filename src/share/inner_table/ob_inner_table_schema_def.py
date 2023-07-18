@@ -21158,6 +21158,8 @@ def_table_schema(
       CREATE_TIME,
       DIAGNOSE_INFO
     FROM oceanbase.__all_virtual_compaction_diagnose_info
+    WHERE
+      STATUS != "RS_UNCOMPACTED"
 """.replace("\n", " ")
 )
 
@@ -50172,6 +50174,8 @@ def_table_schema(
       CREATE_TIME,
       DIAGNOSE_INFO
     FROM SYS.ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO
+    WHERE
+      STATUS != 'RS_UNCOMPACTED'
 """.replace("\n", " ")
 )
 

@@ -1660,7 +1660,7 @@ int ObInnerTableSchema::gv_ob_compaction_diagnose_info_schema(ObTableSchema &tab
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM oceanbase.__all_virtual_compaction_diagnose_info )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM oceanbase.__all_virtual_compaction_diagnose_info     WHERE       STATUS != "RS_UNCOMPACTED" )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
