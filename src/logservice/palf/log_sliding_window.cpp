@@ -79,6 +79,7 @@ LogSlidingWindow::LogSlidingWindow()
     plugins_(NULL),
     lsn_allocator_(),
     group_buffer_(),
+    last_freeze_end_lsn_(PALF_INITIAL_LSN_VAL),
     last_submit_info_lock_(common::ObLatchIds::PALF_SW_SUBMIT_INFO_LOCK),
     last_submit_lsn_(),
     last_submit_end_lsn_(),
@@ -193,6 +194,9 @@ int LogSlidingWindow::flashback(const PalfBaseInfo &palf_base_info, const int64_
     last_slide_log_accum_checksum_ = prev_log_info.accum_checksum_;
 
     committed_end_lsn_ = palf_base_info.curr_lsn_;
+
+    set_last_freeze_end_lsn_(last_submit_end_lsn_);
+
     reset_match_lsn_map_();
 
     LogGroupEntryHeader group_header;
@@ -522,7 +526,9 @@ int LogSlidingWindow::submit_log(const char *buf,
       LSN last_submit_end_lsn, max_flushed_end_lsn;
       get_last_submit_end_lsn_(last_submit_end_lsn);
       get_max_flushed_end_lsn(max_flushed_end_lsn);
-      if (max_flushed_end_lsn >= last_submit_end_lsn) {
+      LSN last_freeze_end_lsn;
+      get_last_freeze_end_lsn_(last_freeze_end_lsn);
+      if (max_flushed_end_lsn >= last_freeze_end_lsn) {
         // all logs have been flushed, freeze last log in feedback mode
         (void) feedback_freeze_last_log_();
       }
@@ -670,6 +676,7 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
                                               bool &is_need_handle)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   is_need_handle = false;
   LogTaskGuard guard(this);
   LogTask *log_task = NULL;
@@ -707,7 +714,13 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
       PALF_LOG(WARN, "set_initial_header_info failed", K(ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
     } else {
       // The first log is responsible to try freezing self, if its end_lsn_ has been set by next log.
-      log_task->try_freeze_by_myself();
+      if (OB_TMP_FAIL(log_task->try_freeze_by_myself())) {
+        PALF_LOG(WARN, "try_freeze_by_myself failed", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
+      } else if (!log_task->is_freezed()) {
+        PALF_LOG(WARN, "log_task is not freezed", K_(palf_id), K_(self), K(log_id), KPC(log_task));
+      } else {
+        (void) inc_update_last_freeze_end_lsn_(header_info.end_lsn_);
+      }
     }
     log_task->unlock();
 
@@ -1189,6 +1202,7 @@ int LogSlidingWindow::try_freeze_last_log_task_(const int64_t expected_log_id,
       log_task->unlock();
       // check if this log_task can be submitted
       if (log_task->is_freezed()) {
+        inc_update_last_freeze_end_lsn_(expected_end_lsn);
         log_task->set_freeze_ts(ObTimeUtility::current_time());
         is_need_handle = (0 == log_task->get_ref_cnt()) ? true : false;
       }
@@ -3056,6 +3070,13 @@ int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const L
           PALF_LOG(INFO, "truncate max_flushed_log_info_", K_(palf_id), K_(self), K(truncate_log_info), K(log_end_lsn),
               "old flushed_end_lsn", max_flushed_end_lsn);
         }
+        LSN last_freeze_end_lsn;
+        get_last_freeze_end_lsn_(last_freeze_end_lsn);
+        if (last_freeze_end_lsn > truncate_begin_lsn) {
+          set_last_freeze_end_lsn_(truncate_begin_lsn);
+          PALF_LOG(INFO, "reset last_freeze_end_lsn", K_(palf_id), K_(self), K(truncate_log_info), K(log_end_lsn),
+              "last_freeze_end_lsn", last_freeze_end_lsn);
+        }
         PALF_LOG(INFO, "truncate success", K(ret), K_(palf_id), K_(self), K(truncate_log_info), "max_log_id", get_max_log_id(),
             K(log_begin_lsn), K(expected_prev_lsn), K(expected_prev_log_pid), K(prev_accum_checksum));
       }
@@ -4453,6 +4474,39 @@ int LogSlidingWindow::read_data_from_buffer(const LSN &read_begin_lsn,
       PALF_LOG(TRACE, "read_data_from_buffer success", K(ret), K_(palf_id), K(read_begin_lsn),
           K(in_read_size), K(out_read_size));
     }
+  }
+  return ret;
+}
+
+void LogSlidingWindow::get_last_freeze_end_lsn_(LSN &end_lsn)
+{
+  end_lsn.val_ = ATOMIC_LOAD(&last_freeze_end_lsn_.val_);
+}
+
+void LogSlidingWindow::set_last_freeze_end_lsn_(const LSN &end_lsn)
+{
+  ATOMIC_STORE(&last_freeze_end_lsn_.val_, end_lsn.val_);
+}
+
+int LogSlidingWindow::inc_update_last_freeze_end_lsn_(const LSN &end_lsn)
+{
+  int ret = OB_SUCCESS;
+  LSN old_last_freeze_end_lsn;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!end_lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid arguments", K_(palf_id), K_(self), K(end_lsn));
+  } else {
+    get_last_freeze_end_lsn_(old_last_freeze_end_lsn);
+    while (end_lsn > old_last_freeze_end_lsn) {
+      if (ATOMIC_BCAS(&last_freeze_end_lsn_.val_, old_last_freeze_end_lsn.val_, end_lsn.val_)) {
+        break;
+      } else {
+        get_last_freeze_end_lsn_(old_last_freeze_end_lsn);
+      }
+    }
+    PALF_LOG(TRACE, "inc_update_last_freeze_end_lsn_ finished", K_(palf_id), K_(self), K(old_last_freeze_end_lsn), K(end_lsn));
   }
   return ret;
 }
