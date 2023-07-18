@@ -55,7 +55,7 @@ public:
   int get_all_leader_info(table::ObTableLoadArray<LeaderInfo> &info_array) const;
   void reset() {
     tablet_ids_.reset();
-    partition_map_.clear();
+    partition_map_.destroy();
     all_leader_addr_array_.reset();
     all_leader_info_array_.reset();
     is_inited_ = false;
