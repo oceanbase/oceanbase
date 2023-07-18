@@ -45,9 +45,7 @@ jobs:
     - name: Build project
       shell: bash
       run: |
-        export CCACHE_COMPRESS=1
-        export CCACHE_COMPRESSLEVEL=9
-        bash rm -rf build_debug
+        rm -rf build_debug
         deps/3rd/usr/local/oceanbase/devtools/bin/ccache -c
         bash build.sh debug -DOB_USE_CCACHE=ON
         cd build_debug && make -j4 && cd -
