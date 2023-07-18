@@ -1603,6 +1603,7 @@ public:
 
   int range_submitted(ObTxMDSCache &cache);
   void range_sync_failed(ObTxMDSCache &cache);
+  int assign(const ObTxMDSRange &other);
 
   int64_t count() const { return range_array_.count(); };
 
@@ -1612,7 +1613,7 @@ public:
 
 private:
   ObTxBufferNodeArray range_array_;
-  ObPartTransCtx * tx_ctx_;
+  ObPartTransCtx *tx_ctx_;
 
   // ObTxBufferNodeList *list_ptr_;
   // ObTxBufferNodeList::iterator start_iter_;

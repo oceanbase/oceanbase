@@ -126,8 +126,6 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTxLogCb);
 private:
-  void check_warn_() const;
-private:
   bool is_inited_;
   share::ObLSID ls_id_;
   ObTransID trans_id_;
