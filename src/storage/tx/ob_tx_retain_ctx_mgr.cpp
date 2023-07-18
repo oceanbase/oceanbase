@@ -176,9 +176,12 @@ void ObTxRetainCtxMgr::reset()
   reserve_allocator_.reset();
 }
 
-void *ObTxRetainCtxMgr::alloc_object(const int64_t size) { return reserve_allocator_.alloc(size); }
+void *ObTxRetainCtxMgr::alloc_object(const int64_t size)
+{
+  return mtl_malloc(size, "RetainCtxFunc");
+}
 
-void ObTxRetainCtxMgr::free_object(void *ptr) { reserve_allocator_.free(ptr); }
+void ObTxRetainCtxMgr::free_object(void *ptr) { mtl_free(ptr); }
 
 int ObTxRetainCtxMgr::push_retain_ctx(ObIRetainCtxCheckFunctor *retain_func, int64_t timeout_us)
 {
@@ -272,9 +275,12 @@ void ObTxRetainCtxMgr::try_advance_retain_ctx_gc(share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
 
+  const int64_t tenant_id = MTL_ID();
   const int64_t CUR_LS_CNT = MTL(ObLSService *)->get_ls_map()->get_ls_count();
   const int64_t IDLE_GC_INTERVAL = 30 * 60 * 1000 * 1000; // 30 min
-  const int64_t MIN_RETAIN_CTX_GC_THRESHOLD = 1000;
+  // const int64_t MIN_RETAIN_CTX_GC_THRESHOLD = 1000;
+  const int64_t MIN_RETAIN_CTX_GC_THRESHOLD = ::oceanbase::lib::get_tenant_memory_limit(tenant_id)
+                                              / sizeof(ObPartTransCtx) / CUR_LS_CNT / 100;
 
   ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinRLockGuard guard(retain_ctx_lock_);
@@ -284,8 +290,9 @@ void ObTxRetainCtxMgr::try_advance_retain_ctx_gc(share::ObLSID ls_id)
 
   ObAdvanceLSCkptTask *task = nullptr;
   if (retain_ctx_list_.size() <= 0) {
-    //do nothing
-  } else if (retain_ctx_list_.size() <= std::min(MAX_PART_CTX_COUNT / 10 / CUR_LS_CNT, MIN_RETAIN_CTX_GC_THRESHOLD)
+    // do nothing
+  } else if (retain_ctx_list_.size()
+                 <= std::min(MAX_PART_CTX_COUNT / 10 / CUR_LS_CNT, MIN_RETAIN_CTX_GC_THRESHOLD)
              && (OB_INVALID_TIMESTAMP == last_push_gc_task_ts_
                  || (OB_INVALID_TIMESTAMP != last_push_gc_task_ts_
                      && cur_time - last_push_gc_task_ts_ <= IDLE_GC_INTERVAL))) {
@@ -296,11 +303,13 @@ void ObTxRetainCtxMgr::try_advance_retain_ctx_gc(share::ObLSID ls_id)
     TRANS_LOG(WARN, "alloc ObAdvanceLSCkptTask failed", K(ret));
   } else if (OB_FALSE_IT(new (task) ObAdvanceLSCkptTask(ls_id, max_wait_ckpt_ts_))) {
   } else if (MTL(ObTransService *)->push(task)) {
-    TRANS_LOG(INFO, "push ObAdvanceLSCkptTask failed", K(ret), K(retain_ctx_list_.size()),
-              K(last_push_gc_task_ts_), K(ls_id), KPC(this));
+    TRANS_LOG(INFO, "[RetainCtxMgr] push ObAdvanceLSCkptTask failed", K(ret),
+              K(retain_ctx_list_.size()), K(last_push_gc_task_ts_), K(ls_id),
+              K(MIN_RETAIN_CTX_GC_THRESHOLD), KPC(this));
   } else {
-    TRANS_LOG(INFO, "push ObAdvanceLSCkptTask success", K(ret), K(retain_ctx_list_.size()),
-              K(last_push_gc_task_ts_), K(ls_id), KPC(this));
+    TRANS_LOG(INFO, "[RetainCtxMgr] push ObAdvanceLSCkptTask success", K(ret),
+              K(retain_ctx_list_.size()), K(last_push_gc_task_ts_), K(ls_id),
+              K(MIN_RETAIN_CTX_GC_THRESHOLD), KPC(this));
     last_push_gc_task_ts_ = cur_time;
   }
   UNUSED(ret);

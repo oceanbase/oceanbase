@@ -546,6 +546,8 @@ private:
     ATOMIC_STORE(&retain_cause_, static_cast<int16_t>(RetainCause::UNKOWN));
   }
 
+  int try_alloc_retain_ctx_func_();
+  int try_gc_retain_ctx_func_();
   int insert_into_retain_ctx_mgr_(RetainCause cause,
                                   const share::SCN &log_ts,
                                   palf::LSN lsn,
@@ -801,6 +803,7 @@ private:
   // it is transfered to exec_info_.multi_source_data_ when corresponding
   // redo log callbacked.
   ObTxMDSCache mds_cache_;
+  ObIRetainCtxCheckFunctor *retain_ctx_func_ptr_;
   // sub_state_ is volatile
   ObTxSubState sub_state_;
   ObTxLogCb log_cbs_[PREALLOC_LOG_CALLBACK_COUNT];
