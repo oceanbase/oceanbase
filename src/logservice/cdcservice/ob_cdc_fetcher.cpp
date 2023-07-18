@@ -398,7 +398,7 @@ int ObCdcFetcher::set_fetch_mode_before_fetch_log_(const ObLSID &ls_id,
     // set the switch interval to 10s in test switch fetch mode, the unit of measurement of log_ts(scn) is nano second.
     const int64_t SECOND_NS = 1000L * 1000 * 1000;
     SCN end_scn;
-    const int64_t SWITCH_INTERVAL = test_switch_fetch_mode ? 10L * SECOND_NS : 60L * SECOND_NS;
+    const int64_t SWITCH_INTERVAL = test_switch_fetch_mode ? 10L * SECOND_NS : 60 * SECOND_NS; //default 60s
     if (OB_FAIL(palf_guard.get_end_scn(end_scn))) {
       LOG_WARN("get palf end ts failed", KR(ret));
     } else {
@@ -553,7 +553,9 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
             }
           } else {
             // exit
+            resp.set_feedback_type(obrpc::ObCdcLSFetchLogResp::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF);
             reach_max_lsn = true;
+            LOG_INFO("reach max lsn in archive but ls not exists in this server, need switch server", K(ls_id));
           }
         } else if (OB_NEED_RETRY == ret) {
           frt.stop("ArchiveNeedRetry");

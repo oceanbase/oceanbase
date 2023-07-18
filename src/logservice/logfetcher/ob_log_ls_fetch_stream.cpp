@@ -1301,7 +1301,9 @@ bool FetchStream::need_add_into_blacklist_(const KickOutReason reason)
 {
   bool bool_ret = false;
 
-  if ((NEED_SWITCH_SERVER == reason) || (DISCARDED == reason)) {
+  if ((NEED_SWITCH_SERVER == reason) ||
+      (DISCARDED == reason) ||
+      (ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF == reason)) {
     bool_ret = false;
   } else {
     bool_ret = true;
@@ -1468,6 +1470,10 @@ KickOutReason FetchStream::get_feedback_reason_(const Feedback &feedback) const
 
     case ObCdcLSFetchLogResp::LS_OFFLINED:
       reason = LS_OFFLINED;
+      break;
+
+    case ObCdcLSFetchLogResp::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+      reason = ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF;
       break;
 
     default:
