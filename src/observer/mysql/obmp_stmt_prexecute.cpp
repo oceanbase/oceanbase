@@ -137,6 +137,8 @@ int ObMPStmtPrexecute::before_process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is NULL or invalid", K(ret), K(session));
     } else {
+      lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE ?
+                             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
       uint32_t ps_stmt_checksum = DEFAULT_ITERATION_COUNT;
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
       session->set_current_trace_id(ObCurTraceId::get_trace_id());
