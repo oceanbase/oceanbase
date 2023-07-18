@@ -230,7 +230,7 @@ public:
   }
   void get_max_flushed_end_lsn(LSN &end_lsn) const
   {
-    end_lsn = max_flushed_end_lsn_;
+    end_lsn = mock_max_flushed_end_lsn_;
   }
   int get_max_flushed_log_info(LSN &lsn,
                                LSN &end_lsn,

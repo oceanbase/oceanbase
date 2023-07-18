@@ -607,6 +607,7 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
     int tmp_ret = OB_SUCCESS;
     LSN prev_lsn;
     prev_lsn.val_ = PALF_INITIAL_LSN_VAL;
+    mock_sw_->mock_max_flushed_end_lsn_ = prev_lsn;
     tmp_ret = cm.append_config_meta_(1, arg_list[i], already_finished);
     config_version = cm.log_ms_meta_.curr_.config_version_;
     EXPECT_EQ(tmp_ret, expect_ret_list[i]) << "ret failed case: " << (i+1);
@@ -886,7 +887,7 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_log_proposal_id;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_mode_pid;
-    mock_sw_->mock_max_flushed_lsn_ = prev_lsn;
+    mock_sw_->mock_max_flushed_end_lsn_ = prev_lsn;
     mock_sw_->mock_max_flushed_log_pid_ = prev_log_proposal_id;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = prev_mode_pid;
     LogConfigVersion config_version, expect_config_version;
@@ -951,7 +952,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, 1, 1, LSN(0), INVALID_PROPOSAL_ID, cm.log_ms_meta_));
     EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, 1, 1, LSN(0), 1, LogConfigMeta()));
     proposal_id = 1;
-    mock_sw_->mock_max_flushed_lsn_.val_ = PALF_INITIAL_LSN_VAL;
+    mock_sw_->mock_max_flushed_end_lsn_.val_ = PALF_INITIAL_LSN_VAL;
     mock_sw_->mock_max_flushed_log_pid_ = 0;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, INVALID_PROPOSAL_ID, LSN(0), 1, cm.log_ms_meta_));
@@ -974,7 +975,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = INVALID_PROPOSAL_ID;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_pid;
-    mock_sw_->mock_max_flushed_lsn_.val_ = PALF_INITIAL_LSN_VAL;
+    mock_sw_->mock_max_flushed_end_lsn_.val_ = PALF_INITIAL_LSN_VAL;
     mock_sw_->mock_max_flushed_log_pid_ = 0;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = INVALID_PROPOSAL_ID;
     EXPECT_EQ(OB_EAGAIN, cm.change_config_(args, proposal_id, INIT_ELE_EPOCH, config_version));
@@ -1004,7 +1005,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = INVALID_PROPOSAL_ID;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_pid;
-    mock_sw_->mock_max_flushed_lsn_.val_ = PALF_INITIAL_LSN_VAL;
+    mock_sw_->mock_max_flushed_end_lsn_.val_ = PALF_INITIAL_LSN_VAL;
     mock_sw_->mock_max_flushed_log_pid_ = 0;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 0;
     EXPECT_EQ(OB_EAGAIN, cm.change_config_(args, proposal_id, INIT_ELE_EPOCH, config_version));
@@ -1031,12 +1032,14 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_last_submit_pid_ = prev_pid;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_pid;
     mock_sw_->mock_max_flushed_lsn_.val_ = 1000;
+    mock_sw_->mock_max_flushed_end_lsn_.val_ = 1000;
     mock_sw_->mock_max_flushed_log_pid_ = 1;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 3;
     EXPECT_EQ(OB_EAGAIN, cm.change_config_(args, proposal_id, INIT_ELE_EPOCH, config_version));
     EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
     EXPECT_EQ(cm.last_submit_config_log_time_us_, OB_INVALID_TIMESTAMP);
     EXPECT_EQ(cm.state_, 1);
+    mock_sw_->mock_max_flushed_end_lsn_.val_ = 20000;
     mock_sw_->mock_max_flushed_lsn_.val_ = 20000;
     EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
     EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
@@ -1061,6 +1064,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_pid;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_pid;
+    mock_sw_->mock_max_flushed_end_lsn_.val_ = 11000;
     mock_sw_->mock_max_flushed_lsn_.val_ = 11000;
     mock_sw_->mock_max_flushed_log_pid_ = 2;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 3;
@@ -1123,7 +1127,7 @@ TEST_F(TestLogConfigMgr, test_degrade__upgrade_scenario)
     mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_log_proposal_id;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_mode_pid;
-    mock_sw_->mock_max_flushed_lsn_ = prev_lsn;
+    mock_sw_->mock_max_flushed_end_lsn_ = prev_lsn;
     mock_sw_->mock_max_flushed_log_pid_ = prev_log_proposal_id;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = prev_mode_pid;
 

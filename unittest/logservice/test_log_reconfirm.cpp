@@ -168,7 +168,7 @@ TEST_F(TestLogReconfirm, test_try_fetch_log)
 {
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
         &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
-  mock_sw_.max_flushed_end_lsn_.val_ = 100;
+  mock_sw_.mock_max_flushed_end_lsn_.val_ = 100;
   log_reconfirm_.majority_max_lsn_.val_ = 100;
   EXPECT_EQ(true, log_reconfirm_.is_fetch_log_finished_());
   mock_sw_.mock_start_id_ = 1;
