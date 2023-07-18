@@ -717,19 +717,21 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
       CLOG_LOG(INFO, "Tenant is dropped and the log stream can be removed, try_check_and_set_wait_gc_ success",
           K(tenant_id), K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
     } else {
+      const int64_t offline_log_ts_us = offline_scn.convert_to_ts();
+
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
       // The LS delay deletion mechanism will take effect when the tenant is not dropped.
       if (! tenant_config.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         CLOG_LOG(WARN, "tenant_config is not valid", K(ret), K(tenant_id));
-      } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == gc_start_ts_)) {
+      } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == offline_log_ts_us)) {
         ret = OB_INVALID_ARGUMENT;
-        CLOG_LOG(WARN, "gc_start_ts_ is not valid", KR(ret), K(ls_), K(gc_start_ts_));
+        CLOG_LOG(WARN, "offline_log_ts_us is not valid", KR(ret), K(ls_), K(offline_log_ts_us));
       } else {
         const int64_t ls_gc_delay_time = tenant_config->ls_gc_delay_time;
         const int64_t current_time_us = common::ObTimeUtility::current_time();
 
-        if ((current_time_us - gc_start_ts_) >= ls_gc_delay_time) {
+        if ((current_time_us - offline_log_ts_us) >= ls_gc_delay_time) {
           if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
             CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
           }
@@ -738,8 +740,8 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
               K(ls_id), K(gc_state), K(offline_scn), K(readable_scn), K(ls_gc_delay_time));
         } else {
           CLOG_LOG(INFO, "The log stream requires delayed gc", K(ls_id),
-              K(ls_gc_delay_time), K(gc_start_ts_),
-              "gc_start_ts", TS_TO_STR(gc_start_ts_),
+              K(ls_gc_delay_time), K(offline_log_ts_us),
+              "offline_log_time", TS_TO_STR(offline_log_ts_us),
               "current_time", TS_TO_STR(current_time_us));
         }
       }
