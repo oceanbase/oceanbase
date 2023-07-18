@@ -78,21 +78,22 @@ int ObLogRestoreScheduler::modify_thread_count_(const share::ObLogRestoreSourceT
 {
   int ret = OB_SUCCESS;
   int64_t restore_concurrency = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  const int64_t log_restore_concurrency =
-    tenant_config.is_valid() ? tenant_config->log_restore_concurrency : 1L;
-  // primary tenant or log restore source not location type, restore_concurrency is 1
-  // parameter log_restore_concurrency is default zero, set restore_concurrency = max_cpu / 8, rounded up
-  // parameter log_restore_concurrency not zero, set restore_concurrency = log_restore_concurrency
+  // for primary tenant, set restore_concurrency to 1.
+  // otherwise, set restore_concurrency to tenant config.
   if (MTL_GET_TENANT_ROLE() == share::ObTenantRole::PRIMARY_TENANT
       || !share::is_location_log_source_type(source_type)) {
     restore_concurrency = 1;
-  } else if (0 == log_restore_concurrency) {
-    restore_concurrency = get_restore_concurrency_by_max_cpu();
   } else {
-    restore_concurrency = log_restore_concurrency;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (!tenant_config.is_valid()) {
+      restore_concurrency = 1L;
+    } else if (0 == tenant_config->log_restore_concurrency) {
+      restore_concurrency = MTL_CPU_COUNT();
+    } else {
+      restore_concurrency = tenant_config->log_restore_concurrency;
+    }
   }
-  if (OB_FAIL(worker_->modify_thread_count(std::max(1L, restore_concurrency)))) {
+  if (OB_FAIL(worker_->modify_thread_count(restore_concurrency))) {
     CLOG_LOG(WARN, "modify worker thread failed", K(ret));
   }
   return ret;

@@ -39,6 +39,10 @@
 
 namespace oceanbase
 {
+namespace logservice
+{
+class ObLogExternalStorageHandler;
+}
 namespace logfetcher
 {
 
@@ -157,6 +161,8 @@ public:
   int locate_end_lsn(IObLogStartLSNLocator &start_lsn_locator);
 
   int get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_pool);
+
+  int get_log_ext_handler(logservice::ObLogExternalStorageHandler *&log_ext_handler);
 
   int get_fetcher_config(const ObLogFetcherConfig *&cfg);
 
@@ -500,7 +506,6 @@ private:
       IObLogStartLSNLocator &start_lsn_locator);
   int set_end_lsn_and_init_dict_iter_(const palf::LSN &start_lsn);
   int get_log_route_service_(logservice::ObLogRouteService *&log_route_service);
-  int get_large_buffer_pool_(archive::LargeBufferPool *&large_buffer_pool);
 
 protected:
   FetchStreamType         stype_;

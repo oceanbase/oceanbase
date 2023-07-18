@@ -50,7 +50,8 @@ ObCdcService::ObCdcService()
     dest_info_(),
     dest_info_lock_(),
     ls_ctx_map_(),
-    large_buffer_pool_()
+    large_buffer_pool_(),
+    log_ext_handler_()
 {
 }
 
@@ -71,9 +72,11 @@ int ObCdcService::init(const uint64_t tenant_id,
     EXTLOG_LOG(WARN, "ls ctx map init failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(large_buffer_pool_.init("CDCService", 1L * 1024 * 1024 * 1024))) {
     EXTLOG_LOG(WARN, "large buffer pool init failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(locator_.init(tenant_id, &large_buffer_pool_))) {
+  } else if (OB_FAIL(log_ext_handler_.init())) {
+    EXTLOG_LOG(WARN, "log ext handler init failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(locator_.init(tenant_id, &large_buffer_pool_, &log_ext_handler_))) {
     EXTLOG_LOG(WARN, "ObCdcStartLsnLocator init failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(fetcher_.init(tenant_id, ls_service, &large_buffer_pool_))) {
+  } else if (OB_FAIL(fetcher_.init(tenant_id, ls_service, &large_buffer_pool_, &log_ext_handler_))) {
     EXTLOG_LOG(WARN, "ObCdcFetcher init failed", KR(ret), K(tenant_id));
   }  else if (OB_FAIL(create_tenant_tg_(tenant_id))) {
     EXTLOG_LOG(WARN, "cdc thread group create failed", KR(ret), K(tenant_id));
@@ -131,7 +134,6 @@ void ObCdcService::run1()
         large_buffer_pool_.weed_out();
         last_purge_ts = current_ts;
       }
-
       ob_usleep(static_cast<uint32_t>(BASE_INTERVAL));
     }
   }
@@ -144,6 +146,9 @@ int ObCdcService::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     EXTLOG_LOG(WARN, "ObCdcService not init", K(ret));
+    // TODO by wenyue.zxl: change the concurrency of 'log_ext_handler_'(see resize interface)
+  } else if (OB_FAIL(log_ext_handler_.start(0))) {
+    EXTLOG_LOG(WARN, "log ext handler start failed", K(ret));
   } else if (OB_FAIL(start_tenant_tg_(MTL_ID()))) {
     EXTLOG_LOG(ERROR, "start CDCService failed", KR(ret));
   } else {
@@ -157,11 +162,13 @@ void ObCdcService::stop()
 {
   ATOMIC_STORE(&stop_flag_, true);
   stop_tenant_tg_(MTL_ID());
+  log_ext_handler_.stop();
 }
 
 void ObCdcService::wait()
 {
   wait_tenant_tg_(MTL_ID());
+  log_ext_handler_.wait();
   // do nothing
 }
 
@@ -175,6 +182,7 @@ void ObCdcService::destroy()
   dest_info_.reset();
   large_buffer_pool_.destroy();
   ls_ctx_map_.destroy();
+  log_ext_handler_.destroy();
 }
 
 int ObCdcService::req_start_lsn_by_ts_ns(const obrpc::ObCdcReqStartLSNByTsReq &req,

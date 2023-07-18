@@ -24,7 +24,8 @@ namespace cdc
 ObCdcStartLsnLocator::ObCdcStartLsnLocator()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
-    large_buffer_pool_(NULL)
+    large_buffer_pool_(NULL),
+    log_ext_handler_(NULL)
 {
 }
 
@@ -34,7 +35,8 @@ ObCdcStartLsnLocator::~ObCdcStartLsnLocator()
 }
 
 int ObCdcStartLsnLocator::init(const uint64_t tenant_id,
-    archive::LargeBufferPool *buffer_pool)
+    archive::LargeBufferPool *buffer_pool,
+    logservice::ObLogExternalStorageHandler *log_ext_handler)
 {
   int ret = OB_SUCCESS;
 
@@ -48,6 +50,7 @@ int ObCdcStartLsnLocator::init(const uint64_t tenant_id,
     is_inited_ = true;
     tenant_id_ = tenant_id;
     large_buffer_pool_ = buffer_pool;
+    log_ext_handler_ = log_ext_handler;
   }
 
   return ret;
@@ -59,6 +62,7 @@ void ObCdcStartLsnLocator::destroy()
     is_inited_ = false;
     tenant_id_ = OB_INVALID_TENANT_ID;
     large_buffer_pool_ = NULL;
+    log_ext_handler_ = NULL;
   }
 }
 
@@ -252,7 +256,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
       LSN lsn;
 
       if (OB_FAIL(remote_group_iter.init(tenant_id_, ls_id, start_scn,
-              result_lsn, LSN(palf::LOG_MAX_LSN_VAL), large_buffer_pool_))) {
+              result_lsn, LSN(palf::LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_))) {
         LOG_WARN("init remote group iter failed when retriving log group entry in start lsn locator", KR(ret), K(ls_id), K(tenant_id_));
       } else if (OB_FAIL(remote_group_iter.next(log_group_entry, lsn, next_buf, next_buf_size))) {
         LOG_WARN("iterate through archive log failed", KR(ret), K(ls_id), K(tenant_id_));

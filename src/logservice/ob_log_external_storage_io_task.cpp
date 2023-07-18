@@ -129,7 +129,7 @@ int ObLogExternalStorageIOTaskCtx::get_ret_code() const
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < total_task_count_; i++) {
-    if (OB_SUCCESS != running_status_[i].ret_) {
+    if (0 == i && OB_SUCCESS != running_status_[i].ret_) {
       ret = running_status_[i].ret_;
       CLOG_LOG(WARN, "asyn task execute failed", KPC(this));
       break;
@@ -336,7 +336,7 @@ int ObLogExternalStorageIOTaskHandleAdapter::pread(const ObString &uri,
                                                    const int64_t read_buf_size,
                                                    int64_t &real_read_size)
 {
-  ObTimeGuard time_guard("oss pread", 200 * 1000);
+  ObTimeGuard time_guard("oss pread", 100 * 1000);
   int ret = OB_SUCCESS;
   real_read_size = 0;
   ObIODevice *io_device = NULL;
@@ -348,7 +348,7 @@ int ObLogExternalStorageIOTaskHandleAdapter::pread(const ObString &uri,
   } else if (FALSE_IT(time_guard.click("after open_io_fd"))) {
     CLOG_LOG(WARN, "open_io_fd failed", K(io_fd), K(offset), K(read_buf_size), KP(buf), K(real_read_size));
   } else if (OB_FAIL(io_device->pread(io_fd, offset, read_buf_size, buf, real_read_size))) {
-    CLOG_LOG(WARN, "pread failed", K(io_fd), K(offset), K(read_buf_size), KP(buf), K(real_read_size));
+    CLOG_LOG(WARN, "pread failed", K(io_fd), K(offset), K(read_buf_size), KP(buf), K(real_read_size), K(time_guard));
   } else if (FALSE_IT(time_guard.click("after pread"))) {
   } else {
     CLOG_LOG(TRACE, "pread success", K(time_guard), K(io_fd), K(offset), K(read_buf_size), KP(buf), K(real_read_size));
