@@ -34,7 +34,7 @@ jobs:
       with:
         key: ${{ runner.os }}-${{ env.cache-name }}-el7.x86_64-${{ github.ref_name }}
         path: ~/.ccache
-        enableCrossOsArchive: true
+        enableCrossOsArchive: false
         restore-keys: |
           ${{ runner.os }}-${{ env.cache-name }}-el7.x86_64
     
@@ -81,7 +81,7 @@ jobs:
       with:
         key: ${{ runner.os }}-${{ env.cache-name }}-el7.x86_64-${{ github.ref_name }}
         path: ~/.ccache
-        enableCrossOsArchive: true
+        enableCrossOsArchive: false
         restore-keys: |
           ${{ runner.os }}-${{ env.cache-name }}-el7.x86_64
         
