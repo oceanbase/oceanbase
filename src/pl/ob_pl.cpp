@@ -2763,7 +2763,7 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
     OZ (ctx_.exec_ctx_->init_pl_ctx());
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
   }
-  if (OB_SUCC(ret) && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_) {
+  if (OB_SUCC(ret) && top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_) {
     OZ (check_routine_param_legal(const_cast<ParamStore *>(params)));
   }
   OZ (get_params().reserve(func_.get_variables().count()));
