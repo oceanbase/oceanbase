@@ -706,7 +706,7 @@ int MockTenantModuleEnv::init()
       STORAGE_LOG(ERROR, "reload memory config failed", K(ret));
     } else if (OB_FAIL(start_())) {
       STORAGE_LOG(ERROR, "mock env start failed", K(ret));
-    } else if (ObTmpFileManager::get_instance().init()) {
+    } else if (OB_FAIL(ObTmpFileManager::get_instance().init())) {
       STORAGE_LOG(WARN, "init_tmp_file_manager failed", K(ret));
     } else {
       inited_ = true;

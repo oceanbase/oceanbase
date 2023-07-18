@@ -189,7 +189,7 @@ public:
   bool is_empty() const { return page_buddy_.is_empty(); }
   int close(bool &is_all_close);
   int is_extents_closed(bool &is_extents_closed);
-  int give_back_buf_into_cache();
+  int give_back_buf_into_cache(const bool is_wash = false);
 
   TO_STRING_KV(KP_(buffer), K_(page_buddy), K_(handle), K_(macro_block_handle), K_(tmp_file_header),
       K_(io_desc), K_(block_status), K_(is_inited), K_(alloc_time), K_(access_time));
