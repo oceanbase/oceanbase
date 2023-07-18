@@ -71,6 +71,18 @@ jobs:
         path: deps/3rd
         enableCrossOsArchive: true
         
+    - name: cache-build
+      id: cache-build
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-build
+      with:
+        key: ${{ runner.os }}-${{ env.cache-name }}-el7.x86_64-${{ github.ref_name }}
+        path: ~/.ccache
+        enableCrossOsArchive: true
+        restore-keys: |
+          ${{ runner.os }}-${{ env.cache-name }}-el7.x86_64
+        
     - name: Build init
       if: steps.cache-deps.outputs.cache-hit != 'true'
       run: bash build.sh init
@@ -78,5 +90,8 @@ jobs:
     - name: Build project
       shell: bash
       run: |
-        bash build.sh debug
-        cd build_debug && make -j4
+        rm -rf build_debug
+        deps/3rd/usr/local/oceanbase/devtools/bin/ccache -c
+        bash build.sh debug -DOB_USE_CCACHE=ON
+        cd build_debug && make -j4 && cd -
+        deps/3rd/usr/local/oceanbase/devtools/bin/ccache -s
