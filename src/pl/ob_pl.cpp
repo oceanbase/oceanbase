@@ -2659,7 +2659,7 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
         if (OB_FAIL(ret)) {
         } else if (!dest_type.is_composite_type()) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("incorrect argument type", K(ret));
+          LOG_WARN("incorrect argument type", K(ret), K(dest_type), K(udt_id));
         } else if (OB_INVALID_ID == udt_id) { // 匿名数组
           bool need_cast = false;
           const pl::ObPLCollection *src_coll = NULL;
