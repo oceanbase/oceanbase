@@ -251,6 +251,7 @@ public:
   virtual int create_mock_election(const int64_t palf_id, MockElection *&mock_election) = 0;
   virtual int remove_mock_election(const int64_t palf_id) = 0;
   virtual int set_leader(const int64_t palf_id, const common::ObAddr &leader, const int64_t new_epoch = 0) = 0;
+  virtual int update_server_log_disk(const int64_t log_disk_size) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -287,6 +288,7 @@ public:
   virtual int update_disk_opts(const PalfDiskOptions &opts) override final;
   virtual int get_disk_opts(PalfDiskOptions &opts) override final
   {
+    ObSpinLockGuard guard(log_disk_lock_);
     opts = disk_opts_;
     return OB_SUCCESS;
   }
@@ -368,6 +370,7 @@ public:
     }
     return ret;
   }
+  int update_server_log_disk(const int64_t log_disk_size);
   TO_STRING_KV(K_(node_id), K_(addr), KP(palf_env_));
 
 protected:
@@ -375,15 +378,10 @@ protected:
   int init_network_(const common::ObAddr &addr, const bool is_bootstrap);
   int init_log_service_();
   int init_memory_dump_timer_();
-  // 更新log_disk_size的逻辑保持和ObMultiTenant.cpp中维护同名函数一样
-  int construct_allowed_new_log_disk_(const uint64_t tenant_id,
-                                      const int64_t expected_log_disk_size,
-                                      const int64_t old_log_disk_size,
-                                      int64_t &allowed_new_log_disk_size);
   int update_tenant_log_disk_size_(const uint64_t tenant_id,
-                                   const int64_t expected_log_disk_size,
                                    const int64_t old_log_disk_size,
-                                   const int64_t allowed_log_disk_size);
+                                   const int64_t new_log_disk_size,
+                                   int64_t &allowed_log_disk_size);
   int update_disk_opts_no_lock_(const PalfDiskOptions &opts);
 
 private:
@@ -415,8 +413,11 @@ private:
   ObSrvRpcProxy srv_proxy_;
   logservice::coordinator::ObFailureDetector detector_;
   MockElectionMap mock_election_map_;
+  // ObTenantUnit以及__all_unit_configs
   ObSpinLock log_disk_lock_;
+  // 本地已生效日志盘规格
   palf::PalfDiskOptions disk_opts_;
+  // 内部表中记录日志盘规格
   palf::PalfDiskOptions inner_table_disk_opts_;
   ObLooper looper_;
 };

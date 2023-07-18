@@ -153,10 +153,16 @@ public:
       ret = OB_ENTRY_NOT_EXIST;
     } else {
       int64_t old_size = map_[key];
-      ret = this->log_block_mgr_.update_tenant(old_size, new_size);
+      int64_t tmp_min_log_disk_size_for_all_tenants = this->log_block_mgr_.min_log_disk_size_for_all_tenants_;
+      tmp_min_log_disk_size_for_all_tenants -= old_size;
+      tmp_min_log_disk_size_for_all_tenants += new_size;
+      if (tmp_min_log_disk_size_for_all_tenants > this->log_block_mgr_.get_total_size_guarded_by_lock_()) {
+        ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
+      }
       if (OB_SUCCESS != ret) {
         map_[key] = old_size;
       } else {
+        this->log_block_mgr_.min_log_disk_size_for_all_tenants_ = tmp_min_log_disk_size_for_all_tenants;
         map_[key] = new_size;
       }
     }

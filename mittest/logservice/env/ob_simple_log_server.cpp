@@ -163,44 +163,10 @@ int ObSimpleLogServer::simple_init(
   return ret;
 }
 
-int ObSimpleLogServer::construct_allowed_new_log_disk_(const uint64_t tenant_id,
-                                                       const int64_t expected_log_disk_size,
-                                                       const int64_t old_log_disk_size,
-                                                       int64_t &allowed_new_log_disk_size)
-{
-  int ret = OB_SUCCESS;
-  bool can_update_log_disk_size_with_expected_log_disk = true;
-  int64_t palf_log_disk_size = 0;
-  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
-  if (OB_FAIL(guard.switch_to(tenant_id))) {
-    LOG_WARN("failed to switch tenant", K(ret), K(tenant_id));
-  } else {
-    ObLogService *log_service = MTL(ObLogService*);
-    int64_t used_log_disk_size = 0;
-    if (OB_ISNULL(log_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("ObLogService is nullptr", K(ret), KP(log_service));
-    } else if (OB_FAIL(log_service->get_palf_stable_disk_usage(used_log_disk_size, palf_log_disk_size))) {
-      LOG_WARN("failed to update_log_disk_size", K(ret), K(palf_log_disk_size), K(allowed_new_log_disk_size), K(expected_log_disk_size));
-    } else if (FALSE_IT(can_update_log_disk_size_with_expected_log_disk = (expected_log_disk_size >= palf_log_disk_size))) {
-      // For shrinking log disk, we still update log disk size of 'new_unit' to 'old_log_disk_size'.
-    } else if (!can_update_log_disk_size_with_expected_log_disk
-               && FALSE_IT(allowed_new_log_disk_size = old_log_disk_size)) {
-      // For expanding log disk, we update log disk size of 'new_unit' to 'expected_log_disk_size'.
-    } else if (can_update_log_disk_size_with_expected_log_disk
-               && FALSE_IT(allowed_new_log_disk_size = expected_log_disk_size)) {
-    } else {
-      LOG_INFO("construct_new_log_disk success", K(ret), K(tenant_id), K(can_update_log_disk_size_with_expected_log_disk),
-          K(old_log_disk_size), K(allowed_new_log_disk_size), K(expected_log_disk_size));
-    }
-  }
-  return ret;
-}
-
 int ObSimpleLogServer::update_tenant_log_disk_size_(const uint64_t tenant_id,
-                                                    const int64_t expected_log_disk_size,
                                                     const int64_t old_log_disk_size,
-                                                    const int64_t allowed_new_log_disk_size)
+                                                    const int64_t new_log_disk_size,
+                                                    int64_t &allowed_new_log_disk_size)
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
@@ -208,15 +174,15 @@ int ObSimpleLogServer::update_tenant_log_disk_size_(const uint64_t tenant_id,
     ObLogService *log_service = MTL(ObLogService *);
     if (OB_ISNULL(log_service)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(log_service->update_log_disk_usage_limit_size(expected_log_disk_size))) {
-      LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id), K(expected_log_disk_size),
+    } else if (OB_FAIL(log_service->update_log_disk_usage_limit_size(new_log_disk_size))) {
+      LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id), K(new_log_disk_size),
                K(old_log_disk_size), K(allowed_new_log_disk_size));
-    } else if (OB_FAIL(log_block_pool_.update_tenant(old_log_disk_size, allowed_new_log_disk_size))) {
-      LOG_WARN("failed to update teannt int ObServerLogBlockMGR", K(ret), K(tenant_id), K(expected_log_disk_size),
+    } else if (OB_FAIL(log_block_pool_.update_tenant(old_log_disk_size, new_log_disk_size, allowed_new_log_disk_size, log_service))) {
+      LOG_WARN("failed to update teannt int ObServerLogBlockMGR", K(ret), K(tenant_id), K(new_log_disk_size),
                K(old_log_disk_size), K(allowed_new_log_disk_size));
     } else {
       disk_opts_.log_disk_usage_limit_size_ = allowed_new_log_disk_size;
-      LOG_INFO("update_log_disk_usage_limit_size success", K(ret), K(tenant_id), K(expected_log_disk_size),
+      LOG_INFO("update_log_disk_usage_limit_size success", K(ret), K(tenant_id), K(new_log_disk_size),
                K(old_log_disk_size), K(allowed_new_log_disk_size), K(disk_opts_));
     }
   }
@@ -226,26 +192,26 @@ int ObSimpleLogServer::update_tenant_log_disk_size_(const uint64_t tenant_id,
 int ObSimpleLogServer::update_disk_opts_no_lock_(const PalfDiskOptions &opts)
 {
   int ret = OB_SUCCESS;
+  CLOG_LOG(INFO, "begin update_disk_opts_no_lock_", K(opts), K(disk_opts_), K(inner_table_disk_opts_));
   int64_t old_log_disk_size = disk_opts_.log_disk_usage_limit_size_;
-  int64_t expected_log_disk_size = opts.log_disk_usage_limit_size_;
+  int64_t new_log_disk_size = opts.log_disk_usage_limit_size_;
   int64_t allowed_new_log_disk_size = 0;
   // 内部表中的disk_opts立马生效
   inner_table_disk_opts_ = opts;
-  // disk_opts_表示本地持久化最新的disk_opts，在construct_allowed_new_log_disk_中会修改disk_opts_的log_disk_usage_limit_size_
+  // disk_opts_表示本地持久化最新的disk_opts，log_disk_percentage_延迟生效
   disk_opts_ = opts;
+  disk_opts_.log_disk_usage_limit_size_ = old_log_disk_size;
   if (!opts.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(opts));
-  } else if (OB_FAIL(construct_allowed_new_log_disk_(node_id_, expected_log_disk_size,
-                                                     old_log_disk_size, allowed_new_log_disk_size))) {
-    CLOG_LOG(WARN, "construct_allowed_new_log_disk_ failed", K(expected_log_disk_size), K(old_log_disk_size),
-             K(allowed_new_log_disk_size));
-  } else if (OB_FAIL(update_tenant_log_disk_size_(node_id_, expected_log_disk_size,
-                                                  old_log_disk_size, allowed_new_log_disk_size))) {
-    CLOG_LOG(WARN, "update_tenant_log_disk_size_ failed", K(expected_log_disk_size), K(old_log_disk_size),
+  } else if (OB_FAIL(update_tenant_log_disk_size_(node_id_,
+                                                  old_log_disk_size,
+                                                  new_log_disk_size,
+                                                  allowed_new_log_disk_size))) {
+    CLOG_LOG(WARN, "update_tenant_log_disk_size_ failed", K(new_log_disk_size), K(old_log_disk_size),
              K(allowed_new_log_disk_size));
   } else {
-    CLOG_LOG(INFO, "update_disk_opts success", K(opts), K(disk_opts_), K(expected_log_disk_size), K(old_log_disk_size),
+    CLOG_LOG(INFO, "update_disk_opts success", K(opts), K(disk_opts_), K(new_log_disk_size), K(old_log_disk_size),
              K(allowed_new_log_disk_size));
   }
   return ret;
@@ -270,6 +236,12 @@ int ObSimpleLogServer::try_resize()
     }
   }
   return ret;
+}
+
+int ObSimpleLogServer::update_server_log_disk(const int64_t log_disk_size)
+{
+  ObSpinLockGuard guard(log_disk_lock_);
+  return log_block_pool_.resize_(log_disk_size);
 }
 
 int ObSimpleLogServer::init_memory_dump_timer_()
@@ -349,7 +321,8 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     storage_env.default_block_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
     storage_env.data_disk_size_ = 1024 * 1024 * 1024;
     storage_env.data_disk_percentage_ = 0;
-    storage_env.log_disk_size_ = 10LL * 1024 * 1024 * 1024;
+    // 当disk_opts_有效时，使用disk_opts_中记录的log_disk_usage_limit_size_作为log_block_pool_的初始值，否则重启会失败
+    storage_env.log_disk_size_ = disk_opts_.is_valid() ? disk_opts_.log_disk_usage_limit_size_ : 2LL * 1024 * 1024 * 1024;
     storage_env.log_disk_percentage_ = 0;
 
     storage_env.log_spec_.log_dir_ = slog_dir.c_str();
@@ -394,7 +367,7 @@ int ObSimpleLogServer::init_log_service_()
   if (disk_opts_.is_valid()) {
     opts.disk_options_ = disk_opts_;
   } else {
-    opts.disk_options_.log_disk_usage_limit_size_ = 10 * 1024 * 1024 * 1024ul;
+    opts.disk_options_.log_disk_usage_limit_size_ = 2 * 1024 * 1024 * 1024ul;
     opts.disk_options_.log_disk_utilization_threshold_ = 80;
     opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
     opts.disk_options_.log_disk_throttling_percentage_ = 100;

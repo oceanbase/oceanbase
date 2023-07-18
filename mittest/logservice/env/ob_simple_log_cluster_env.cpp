@@ -1480,5 +1480,15 @@ int ObSimpleLogClusterTestEnv::wait_until_disk_space_to(const int64_t server_id,
   return ret;
 }
 
+int ObSimpleLogClusterTestEnv::update_server_log_disk(const int64_t log_disk_size)
+{
+  int ret = OB_SUCCESS;
+  auto cluster = get_cluster();
+  for (auto srv : cluster) {
+    srv->update_server_log_disk(log_disk_size);
+  }
+  return ret;
+}
+
 } // end namespace unittest
 } // end namespace oceanbase

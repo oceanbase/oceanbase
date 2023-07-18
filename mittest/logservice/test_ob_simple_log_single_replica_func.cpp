@@ -97,6 +97,8 @@ void read_padding_entry(PalfHandleImplGuard &leader, SCN padding_scn, LSN paddin
 
 TEST_F(TestObSimpleLogClusterSingleReplica, delete_paxos_group)
 {
+  update_server_log_disk(10*1024*1024*1024ul);
+  update_disk_options(10*1024*1024*1024ul/palf::PALF_PHY_BLOCK_SIZE);
   SET_CASE_LOG_FILE(TEST_NAME, "delete_paxos_group");
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "start test delete_paxos_group", K(id));
