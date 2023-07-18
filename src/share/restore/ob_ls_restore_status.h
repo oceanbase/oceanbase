@@ -107,7 +107,11 @@ public:
   bool can_restore_log() const { return status_ == RESTORE_NONE || (status_ >= RESTORE_TO_CONSISTENT_SCN && status_ < RESTORE_FAILED); }
   bool can_migrate() const
   {
-    return !(status_ >= RESTORE_START && status_ <= WAIT_RESTORE_TO_CONSISTENT_SCN);
+    return !(status_ >= RESTORE_START && status_ <= RESTORE_SYS_TABLETS);
+  }
+  bool is_in_restore_and_before_quick_restore() const
+  {
+    return status_ >= RESTORE_START && status_ <= WAIT_RESTORE_TO_CONSISTENT_SCN;
   }
   Status get_status() const { return status_; }
   int set_status(int32_t status);
