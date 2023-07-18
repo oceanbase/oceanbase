@@ -175,8 +175,8 @@ private:
   const char *root_cgroup_  = "cgroup";
   const char *other_cgroup_ = "cgroup/other";
   // 10:1, 确保系统满负载场景下 SYS 能有足够资源
-  static const int32_t DEFAULT_SYS_SHARE = 10240;
-  static const int32_t DEFAULT_USER_SHARE = 1024;
+  static const int32_t DEFAULT_SYS_SHARE = 1024;
+  static const int32_t DEFAULT_USER_SHARE = 4096;
   static const int32_t PATH_BUFSIZE = 512;
   static const int32_t VALUE_BUFSIZE = 32;
   static const int32_t GROUP_NAME_BUFSIZE = 129;
