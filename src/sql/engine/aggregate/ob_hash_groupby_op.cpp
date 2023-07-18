@@ -978,7 +978,6 @@ int ObHashGroupByOp::load_data()
 
     int64_t nth_dup_data = 0;
     bool last_group = false;
-    bool has_checked = false;
     bool insert_group_ht = false;
     do {
       // one-dup-data
@@ -1015,7 +1014,6 @@ int ObHashGroupByOp::load_data()
       } else {
         if (!is_dump_enabled
             || local_group_rows_.size() < MIN_INMEM_GROUPS
-            || has_checked
             || (!start_dump && !need_start_dump(input_rows, est_part_cnt, check_dump))) {
           ++agged_row_cnt_;
           ++agged_group_cnt_;
@@ -1058,7 +1056,6 @@ int ObHashGroupByOp::load_data()
           }
         }
       }
-      has_checked = true;
     } while (!last_group && OB_SUCC(ret));
   }
 
