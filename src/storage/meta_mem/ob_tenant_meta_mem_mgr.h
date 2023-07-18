@@ -249,10 +249,7 @@ public:
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int has_tablet(const ObTabletMapKey &key, bool &is_exist);
   int del_tablet(const ObTabletMapKey &key);
-  int check_all_meta_mem_released(
-      ObLSService &ls_service,
-      bool &is_released,
-      const char *module);
+  int check_all_meta_mem_released(bool &is_released, const char *module);
   // only used for replay and compat, others mustn't call this func
   int compare_and_swap_tablet(
       const ObTabletMapKey &key,
@@ -272,6 +269,9 @@ public:
   int get_tablet_ddl_kv_mgr(const ObTabletMapKey &key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   ObFullTabletCreator &get_mstx_tablet_creator() { return full_tablet_creator_; }
   OB_INLINE int64_t get_total_tablet_cnt() const { return tablet_map_.count(); }
+
+  int has_meta_wait_gc(bool &is_wait);
+  int dump_tablet_info();
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited), "tablet count", tablet_map_.count());
 private:
@@ -445,8 +445,6 @@ private:
       const int64_t buf_len,
       TabletBufferList &header,
       void *&free_obj);
-  void dump_tablet();
-  void dump_ls(ObLSService &ls_service) const;
   void init_pool_arr();
   void *recycle_tablet(ObTablet *tablet, TabletBufferList *header = nullptr);
   void release_memtable(memtable::ObMemtable *memtable);
@@ -558,16 +556,7 @@ private:
     TabletMap &tablet_map_;
     common::ObIArray<ObTabletMapKey> &items_;
   };
-protected:
-  class GCTabletItemOp final
-  {
-  public:
-    GCTabletItemOp(TabletMap &tablet_map);
-    ~GCTabletItemOp() = default;
-    int operator()(TabletPair &pair);
-  private:
-    TabletMap &tablet_map_;
-  };
+
 protected:
   static const int64_t DEFAULT_TABLET_ITEM_CNT = 8;
 

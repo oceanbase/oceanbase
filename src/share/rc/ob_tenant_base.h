@@ -197,13 +197,13 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      storage::ObTenantMetaMemMgr*,                  \
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
       common::ObTenantIOManager*,                    \
       storage::mds::ObTenantMdsService*,             \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \
-      storage::ObTenantMetaMemMgr*,                  \
       transaction::ObTransService*,                  \
       logservice::coordinator::ObLeaderCoordinator*, \
       logservice::coordinator::ObFailureDetector*,   \

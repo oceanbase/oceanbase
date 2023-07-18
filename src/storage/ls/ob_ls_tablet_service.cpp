@@ -280,8 +280,6 @@ int ObLSTabletService::safe_to_destroy(bool &is_safe)
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  bool all_table_released = false;
-  bool all_tablet_released = false;
   is_safe = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -305,19 +303,12 @@ int ObLSTabletService::safe_to_destroy(bool &is_safe)
       mds_table_mgr_.destroy();
     }
     if (is_safe) {
-      if (OB_FAIL(t3m->gc_tablets_in_queue(all_tablet_released))) {
-        LOG_WARN("failed to check all tablet released", K(ret));
+       bool is_wait_gc = false;
+      if (OB_FAIL(t3m->has_meta_wait_gc(is_wait_gc))) {
+        LOG_WARN("failed to check has_meta_wait_gc", K(ret));
         is_safe = false;
       } else {
-        is_safe = all_tablet_released;
-      }
-    }
-    if (is_safe) {
-      if (OB_FAIL(t3m->gc_tables_in_queue(all_table_released))) {
-        LOG_WARN("failed to check all table released", K(ret));
-        is_safe = false;
-      } else {
-        is_safe = all_table_released;
+        is_safe = !is_wait_gc;
       }
     }
   }

@@ -141,11 +141,14 @@ protected:
   virtual void TearDown() override
   {
     ctx_mt_mgr_->reset();
-    t3m_.destroy();
     ls_tx_ctx_mgr_.reset();
     delete mt_mgr_;
     mt_mgr_ = NULL;
     ctx_mt_mgr_ = NULL;
+
+    bool all_table_cleaned = false; // no use
+    ASSERT_EQ(OB_SUCCESS, t3m_.gc_tables_in_queue(all_table_cleaned));
+    t3m_.destroy();
 
     ASSERT_EQ(0, ref_count_);
 
