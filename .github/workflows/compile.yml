@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix: 
-        image: ["ubuntu:20.04", "centos:7"]
+        image: ['ubuntu:20.04', 'centos:7']
     runs-on: ubuntu-20.04
     container: ${{ matrix.image }}
     steps:
@@ -18,8 +18,8 @@ jobs:
 
     - name: Install ubuntu environment
       shell: bash
-      if: startsWith(${{ matrix.image }}, 'ubuntu')
-      run: apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin
+      if: ${{ startsWith(matrix.image, 'ubuntu') }}
+      run: apt install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin
       
     - name: Install centos environment
       shell: bash
