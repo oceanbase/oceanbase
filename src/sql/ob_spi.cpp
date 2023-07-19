@@ -3789,7 +3789,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                                   ret,
                                                   cli_ret,
                                                   cursor.is_ps_cursor() ? false : true,
-                                                  true,
+                                                  cursor.is_ps_cursor() ? false : true,
                                                   cursor.is_ps_cursor() ? false : true);
               LOG_WARN("failed to fill_cursor, check if need retry",
                       K(ret), K(cli_ret), K(retry_ctrl.need_retry()),
