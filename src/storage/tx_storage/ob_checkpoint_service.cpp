@@ -219,7 +219,7 @@ bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)
   return get_disk_usage_threshold_success;
 }
 
-bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t threshold)
+bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t threshold, const bool need_update_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   ObLSIterator *iter = NULL;
@@ -246,7 +246,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
         STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
         STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
-      } else if (OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
+      } else if (need_update_checkpoint_scn && OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
         STORAGE_LOG(WARN, "update_clog_checkpoint failed", K(ret), K(ls->get_ls_id()));
       } else {
         cannot_recycle_log_size += checkpoint_executor->get_cannot_recycle_log_size();
@@ -257,7 +257,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
         cannot_recycle_log_over_threshold = true;
       }
       STORAGE_LOG(INFO, "cannot_recycle_log_size statistics",
-                  K(cannot_recycle_log_size), K(threshold));
+                  K(cannot_recycle_log_size), K(threshold), K(need_update_checkpoint_scn));
     }
   }
 
@@ -348,8 +348,13 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
   int64_t threshold_size = INT64_MAX;
   bool need_flush = false;
   if (checkpoint_service_.get_disk_usage_threshold_(threshold_size)) {
-    if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size)) {
-      need_flush = true;
+    if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size,
+        false /* not udpate clog_checkpoint_scn */ )) {
+      // update clog_checkpoint_scn, double check
+      if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size,
+          true /* update clog_checkpoint_scn */ )) {
+        need_flush = true;
+      }
     }
   }
 
