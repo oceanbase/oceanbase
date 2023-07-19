@@ -1081,8 +1081,8 @@ int ObIndexBuildTask::update_column_checksum_calc_status(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_id));
   } else if (ObDDLTaskStatus::VALIDATE_CHECKSUM != task_status_) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("task status not match", K(ret), K(task_status_));
+    ret = OB_TASK_EXPIRED;
+    LOG_WARN("task expired", K(ret), K(task_status_));
   } else {
     if (OB_FAIL(wait_column_checksum_ctx_.update_status(tablet_id, ret_code))) {
       LOG_WARN("update column checksum calculation status failed", K(ret), K(tablet_id), K(ret_code));
