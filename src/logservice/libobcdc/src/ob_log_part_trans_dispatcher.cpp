@@ -509,6 +509,7 @@ int PartTransDispatcher::remove_task(const bool is_sys_ls, const transaction::Ob
 
     // ddl revert task
     if (is_sys_ls) {
+      LOG_TRACE("remove_task", K(is_sys_ls), "trans_id", task->get_trans_id());
       task->revert();
       task = NULL;
     } else {

@@ -971,7 +971,9 @@ int ObCDCPartTransResolver::obtain_task_(
         LOG_ERROR("get part_trans_task fail while resolving missing log",
             KR(ret), K(is_resolving_miss_log), K_(tls_id), K(tx_id));
       } else if (OB_FAIL(part_trans_dispatcher_.alloc_task(part_trans_id, part_trans_task))) {
-          LOG_ERROR("alloc part_trans_task fail", KR(ret), K_(tls_id), K(tx_id), K(is_resolving_miss_log));
+        LOG_ERROR("alloc part_trans_task fail", KR(ret), K_(tls_id), K(tx_id), K(is_resolving_miss_log));
+      } else {
+        LOG_DEBUG("alloc part_trans_task succ", K_(tls_id), K(tx_id), K(is_resolving_miss_log));
       }
     } else {
       LOG_ERROR("get part_trans_task fail", KR(ret), K_(tls_id), K(tx_id), K(is_resolving_miss_log));
