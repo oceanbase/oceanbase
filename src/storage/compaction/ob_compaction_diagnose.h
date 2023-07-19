@@ -171,7 +171,7 @@ struct ObScheduleSuspectInfo : public ObIDiagnoseInfo, public ObMergeDagHash
   virtual void shallow_copy(ObIDiagnoseInfo *other) override;
   virtual int64_t get_add_time() const override;
   virtual int64_t get_hash() const override;
-
+  share::ObSuspectInfoType get_suspect_info_type() const;
   static int64_t gen_hash(int64_t tenant_id, int64_t dag_hash);
   TO_STRING_KV(K_(tenant_id), K_(merge_type), K_(ls_id), K_(tablet_id), K_(add_time), K_(hash));
 
@@ -421,6 +421,12 @@ public:
   int diagnose_tenant_tablet();
   int diagnose_tenant_major_merge();
   int64_t get_cnt() { return idx_; }
+  ObCompactionDiagnoseInfo::ObDiagnoseStatus gen_diagnose_status(int64_t scn)
+  {
+    return ObTimeUtility::current_time_ns() > scn + TOLERATE_MEDIUM_SCHEDULE_INTERVAL ?
+        ObCompactionDiagnoseInfo::DIA_STATUS_FAILED :
+        ObCompactionDiagnoseInfo::DIA_STATUS_NOT_SCHEDULE;
+  }
   static int diagnose_dag(
       const storage::ObMergeType merge_type,
       const ObLSID ls_id,
@@ -463,6 +469,7 @@ private:
       const ObLSID ls_id,
       const ObTabletID tablet_id,
       ObScheduleSuspectInfo &info,
+      ObSuspectInfoType &suspect_type,
       char *buf,
       const int64_t buf_len);
 
@@ -480,7 +487,9 @@ public:
   typedef common::hash::ObHashMap<ObLSID, ObLSCheckStatus> LSStatusMap;
 private:
   static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 1000L * 60L * 5; // 5 min // ns
+  static const int64_t TOLERATE_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 1000L * 60L * 60L * 5; // 5 hour
   static const int64_t MAX_LS_TABLET_CNT = 10 * 10000; // TODO(@jingshui): tmp solution
+  static const int64_t DIAGNOSE_TABELT_MAX_COUNT = 10; // same type diagnose info max count
   bool is_inited_;
   ObIAllocator *allocator_;
   storage::ObTenantTabletIterator *tablet_iter_;
@@ -488,6 +497,9 @@ private:
   ObTabletHandle tablet_handle_;
   void *iter_buf_;
   ObCompactionDiagnoseInfo *info_array_;
+  int32_t suspect_tablet_count_[share::ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX]; // limit the suspect info with NOT_SCHEDULE status
+  int32_t medium_not_schedule_count_;
+  int32_t major_not_schedule_count_;
   int64_t max_cnt_;
   int64_t idx_;
 };
