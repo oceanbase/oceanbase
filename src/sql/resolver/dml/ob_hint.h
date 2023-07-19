@@ -944,16 +944,38 @@ public:
       : ObOptHint(hint_type)
   {
   }
-  ObIArray<WinDistAlgo> &get_algos() { return algos_; }
-  const ObIArray<WinDistAlgo> &get_algos() const { return algos_; }
+  struct WinDistOption {
+    WinDistOption() { reset();  }
+    int assign(const WinDistOption& other);
+    void reset();
+    bool is_valid() const;
+    int print_win_dist_option(PlanText &plan_text) const;
+
+    WinDistAlgo algo_;
+    common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> win_func_idxs_;
+    bool use_hash_sort_;  // use hash sort for none/hash dist method
+    bool is_push_down_;  // push down window function for hash dist method
+    TO_STRING_KV(K_(algo), K_(win_func_idxs), K_(use_hash_sort), K_(is_push_down));
+  };
+
+  const ObIArray<WinDistOption> &get_win_dist_options() const { return win_dist_options_; }
+  int set_win_dist_options(const ObIArray<WinDistOption> &win_dist_options) { return win_dist_options_.assign(win_dist_options); }
+  int add_win_dist_option(const ObIArray<ObWinFunRawExpr*> &all_win_funcs,
+                          const ObIArray<ObWinFunRawExpr*> &cur_win_funcs,
+                          const WinDistAlgo algo,
+                          const bool is_push_down,
+                          const bool use_hash_sort);
+  int add_win_dist_option(const ObIArray<int64_t> &win_func_idxs,
+                          const WinDistAlgo algo,
+                          const bool is_push_down,
+                          const bool use_hash_sort);
   static const char* get_dist_algo_str(WinDistAlgo dist_algo);
 
   virtual int print_hint_desc(PlanText &plan_text) const override;
 
-  INHERIT_TO_STRING_KV("hint", ObHint, K_(algos));
+  INHERIT_TO_STRING_KV("hint", ObHint, K_(win_dist_options));
 private:
-  typedef common::ObSEArray<WinDistAlgo, 3,  common::ModulePageAllocator, true> Algos;
-  Algos algos_;
+  common::ObSEArray<WinDistOption, 2, common::ModulePageAllocator, true> win_dist_options_;
 };
 
 class ObAggHint : public ObOptHint

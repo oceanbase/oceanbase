@@ -901,7 +901,7 @@ public:
                                         ObRawExpr *&out);
   static int build_inner_wf_aggr_status_expr(ObRawExprFactory &factory,
                                              const ObSQLSessionInfo &session_info,
-                                             ObRawExpr *&out);
+                                             ObOpPseudoColumnRawExpr *&out);
   static int build_pseudo_rollup_id(ObRawExprFactory &factory,
                                     const ObSQLSessionInfo &session_info,
                                     ObRawExpr *&out);

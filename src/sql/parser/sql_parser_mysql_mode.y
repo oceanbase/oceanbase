@@ -182,6 +182,7 @@ USE_HASH_DISTINCT NO_USE_HASH_DISTINCT
 DISTINCT_PUSHDOWN NO_DISTINCT_PUSHDOWN
 USE_HASH_SET NO_USE_HASH_SET
 USE_DISTRIBUTED_DML NO_USE_DISTRIBUTED_DML
+PUSHDOWN
 // direct load data hint
 DIRECT
 // hint related to optimizer statistics
@@ -384,6 +385,8 @@ END_P SET_VAR DELIMITER
 %type <node> case_expr func_expr in_expr sub_query_flag
 %type <node> case_arg when_clause_list when_clause case_default
 %type <node> window_function opt_partition_by generalized_window_clause win_rows_or_range win_preceding_or_following win_interval win_bounding win_window opt_win_window win_fun_lead_lag_params respect_or_ignore opt_respect_or_ignore_nulls win_fun_first_last_params first_or_last opt_from_first_or_last new_generalized_window_clause new_generalized_window_clause_with_blanket opt_named_windows named_windows named_window
+%type <node> win_dist_list win_dist_desc
+%type <ival> opt_hash_sort_and_pushdown
 %type <node> update_asgn_list update_asgn_factor
 %type <node> update_basic_stmt delete_basic_stmt
 %type <node> table_element_list table_element column_definition column_definition_ref column_definition_list column_name_list
@@ -9427,11 +9430,11 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_MAP, 2, $3, $4);
 }
-| PQ_DISTRIBUTE_WINDOW '('qb_name_option opt_comma distribute_method_list')'
+| PQ_DISTRIBUTE_WINDOW '('qb_name_option opt_comma win_dist_list')'
 {
   (void) $4;
   ParseNode *method_list = NULL;
-  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $5);
+  merge_nodes(method_list, result, T_METHOD_OPT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE_WINDOW, 2, $3, method_list);
 }
 | PQ_SET '(' pq_set_hint_desc ')'
@@ -9481,6 +9484,56 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 | DYNAMIC_SAMPLING '(' dynamic_sampling_hint ')'
 {
   $$ = $3;
+}
+;
+
+win_dist_list:
+win_dist_desc
+{
+  $$ = $1;
+}
+| win_dist_list opt_comma win_dist_desc
+{
+  (void)($2);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+win_dist_desc:
+'(' intnum_list ')' distribute_method opt_hash_sort_and_pushdown
+{
+  ParseNode *win_func_idxs = NULL;
+  merge_nodes(win_func_idxs, result, T_WIN_FUNC_IDX_LIST, $2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_METHOD_OPT, 2, win_func_idxs, $4);
+  $4->value_ = $5[0];
+}
+| distribute_method opt_hash_sort_and_pushdown
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_METHOD_OPT, 2, NULL, $1);
+  $1->value_ = $2[0];
+}
+;
+
+opt_hash_sort_and_pushdown:
+/*empty*/
+{
+  $$[0] = 0;
+}
+| PARTITION_SORT
+{
+  $$[0] = 1;
+}
+| PUSHDOWN
+{
+  $$[0] = 2;
+}
+| PARTITION_SORT PUSHDOWN
+{
+  $$[0] = 3;
+}
+| PUSHDOWN PARTITION_SORT
+{
+  $$[0] = 3;
 }
 ;
 

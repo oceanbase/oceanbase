@@ -8043,7 +8043,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                                  const bool is_local_order,
                                                  ObRawExpr *topn_expr,
                                                  bool is_fetch_with_ties,
-                                                 OrderItem *hash_sortkey)
+                                                 const OrderItem *hash_sortkey)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(top)) {
@@ -8240,7 +8240,7 @@ int ObLogPlan::allocate_sort_as_top(ObLogicalOperator *&top,
                                     const bool is_local_merge_sort,
                                     ObRawExpr *topn_expr,
                                     bool is_fetch_with_ties,
-                                    OrderItem *hash_sortkey)
+                                    const OrderItem *hash_sortkey)
 {
   int ret = OB_SUCCESS;
   ObLogSort *sort = NULL;
